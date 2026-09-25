@@ -21,6 +21,15 @@ adapter side already uses.
 Fail-closed: any missing file, hash mismatch, fetch failure, or malformed
 manifest exits non-zero. Silence is never success.
 
+Second check, same fetch (2026-09-25 code review, Dependencies 3): the seat
+image installs the overlay with ``--no-deps`` after installing
+``operator/requirements/hermes-overlay.txt`` with ``--require-hashes``. Every
+dependency the overlay's ``pyproject.toml`` declares at the pinned ref must
+therefore be either pinned in that file or named in its "excluded from the
+output" block (the packages Hermes' own lock installs, which compile.sh omits
+on purpose). An OVERLAY_REF move that adds a dependency fails here, in CI,
+instead of at the image build's ``uv pip check``.
+
 Usage:
     operator/bin/verify-overlay-pairs.py
     operator/bin/verify-overlay-pairs.py --manifest operator/contracts/overlay-pairs.json
@@ -36,17 +45,65 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_MANIFEST = _REPO_ROOT / "operator" / "contracts" / "overlay-pairs.json"
+_OVERLAY_REQUIREMENTS = _REPO_ROOT / "operator" / "requirements" / "hermes-overlay.txt"
+_EXCLUDED_HEADER = "# The following packages were excluded from the output:"
 
 
 def _sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _normalize(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _declared_dependencies(pyproject: Path) -> set[str]:
+    """The normalized names in the overlay pyproject's [project].dependencies."""
+    data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    names: set[str] = set()
+    for dep in data.get("project", {}).get("dependencies", []):
+        m = re.match(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)", dep)
+        if not m:
+            raise ValueError(f"cannot parse overlay dependency {dep!r}")
+        names.add(_normalize(m.group(1)))
+    return names
+
+
+def _covered_by_requirements(requirements: Path) -> tuple[set[str], set[str]]:
+    """(pinned, hermes-provided) names recorded in hermes-overlay.txt."""
+    pinned: set[str] = set()
+    provided: set[str] = set()
+    in_excluded = False
+    for line in requirements.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==", line)
+        if m:
+            pinned.add(_normalize(m.group(1)))
+            continue
+        if line.strip() == _EXCLUDED_HEADER:
+            in_excluded = True
+            continue
+        if in_excluded:
+            name = line.lstrip("#").strip()
+            if line.startswith("#") and name:
+                provided.add(_normalize(name))
+            else:
+                in_excluded = False
+    return pinned, provided
+
+
+def uncovered_overlay_dependencies(pyproject: Path, requirements: Path) -> list[str]:
+    """Declared overlay dependencies neither pinned nor Hermes-provided (sorted)."""
+    pinned, provided = _covered_by_requirements(requirements)
+    return sorted(_declared_dependencies(pyproject) - pinned - provided)
 
 
 def _load_manifest(manifest_path: Path) -> dict:
@@ -75,6 +132,24 @@ def _fetch_overlay(repo: str, ref: str, dest: Path) -> None:
     run("git", "remote", "add", "origin", repo)
     run("git", "fetch", "--depth", "1", "origin", ref)
     run("git", "checkout", "-q", "FETCH_HEAD")
+
+
+def _dependency_failures(pyproject: Path, ref: str) -> list[str]:
+    """The overlay dependency-coverage check as failure lines (empty on pass)."""
+    try:
+        uncovered = uncovered_overlay_dependencies(pyproject, _OVERLAY_REQUIREMENTS)
+    except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
+        return [f"overlay dependency check could not run: {exc}"]
+    if uncovered:
+        return [
+            f"pyproject.toml at {ref} declares {uncovered}, which "
+            f"operator/requirements/hermes-overlay.txt neither pins nor records as\n"
+            f"    provided by Hermes. The image installs the overlay --no-deps, so the\n"
+            f"    build's `uv pip check` would refuse it. Run operator/requirements/compile.sh\n"
+            f"    and commit hermes-overlay.txt."
+        ]
+    print("  OK  every overlay dependency is pinned or Hermes-provided")
+    return []
 
 
 def main() -> int:
@@ -143,6 +218,8 @@ def main() -> int:
                 )
             else:
                 print(f"  OK  {overlay_path}")
+
+        failures.extend(_dependency_failures(dest / "pyproject.toml", ref))
 
         if failures:
             print("\nFAIL: overlay runtime drift detected:\n", file=sys.stderr)

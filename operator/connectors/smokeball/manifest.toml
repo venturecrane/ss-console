@@ -153,6 +153,17 @@ stage_vendor_invoice = "internal_write"
 # defaulted), which is the fail-closed direction.
 read_attachment_pages = "read"
 file_attachment_pages_to_matter = "internal_write"
+# add_workbook (2026-09-25): builds an .xlsx from JSON rows in code (typed
+# columns, totals summed here, every cell read back before upload) and files it
+# through the same two-stage upload as add_file. internal_write for the same
+# reason add_file is: the firm's own record, nothing sent outside.
+#
+# COORDINATED CHANGE: hermes-smd-overlay shared/action_classes.py must carry
+# mcp_smokeball_add_workbook = ActionClass.INTERNAL_WRITE, and its outbound
+# identifier scan must flatten the `sheets` argument, shipped by the
+# OVERLAY_REF bump in the same change. An unclassified tool fails the seat's
+# boot classification probe, so this entry never lands ahead of the overlay.
+add_workbook = "internal_write"
 get_webhook_subscriptions = "read"
 get_event_types = "read"
 create_webhook_subscription = "internal_write"

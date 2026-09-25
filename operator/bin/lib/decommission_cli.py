@@ -52,6 +52,9 @@ backend unwired and the ``--live`` gate armed):
 * ``AGENTMAIL_API_KEY`` — the org key; deletes the seat's inbox.
 * ``FLY_API_TOKEN`` — ``fly apps destroy``.
 * ``HEALTHCHECKS_API_KEY`` — deletes the seat's healthchecks.io check.
+* ``EVIDENCE_PACKET_SIGNING_KEY_B64`` (with ``CLOUDFLARE_API_TOKEN`` for the
+  chain pin): step 07 builds the signed compliance evidence packet under
+  ``--archive-root`` from the step-02 snapshot.
 """
 
 from __future__ import annotations
@@ -309,11 +312,10 @@ async def _run(args: argparse.Namespace) -> int:
     if seam_client is not None:
         pipeline_kwargs["audit_log_preserver"] = SeamAuditLogPreserver(seam_client)
 
-    # The destructive backends (R2, Vectorize, AgentMail, Fly, observability)
-    # wire themselves from whatever credentials are staged. An absent
-    # credential leaves that backend as its stub, and the #1123 gate below
-    # refuses the --live run naming exactly what is missing.
-    backend_kwargs, wired = backends_from_env(args.slug, customers_root)
+    # Every backend (the deletions and the compliance archiver, whose packet
+    # row lands in this run's trail) wires from staged credentials; an absent
+    # one stays a stub and the #1123 gate below refuses naming what is missing.
+    backend_kwargs, wired = backends_from_env(args.slug, customers_root, audit_writer=audit_writer, actor=args.actor)
     pipeline_kwargs.update(backend_kwargs)
     for name, ok in wired.items():
         print(
@@ -339,10 +341,10 @@ async def _run(args: argparse.Namespace) -> int:
         if unwired and not args.allow_unwired:
             needs = "; ".join(f"{name} needs {BACKEND_REQUIREMENTS.get(name, 'its client')}" for name in unwired)
             print(
-                "[live] REFUSING: destructive backend(s) not wired — "
-                f"{', '.join(unwired)}. A --live run would report a clean "
-                "decommission while that customer data, the Fly Machine, and "
-                f"its secrets remain. Stage the credentials ({needs}), or pass "
+                "[live] REFUSING: backend(s) not wired: "
+                f"{', '.join(unwired)}. A --live run would report a clean decommission while "
+                "customer data, the Fly Machine and its secrets remain, or with no compliance "
+                f"packet. Stage the credentials ({needs}), or pass "
                 "--allow-unwired with a fixture --customers-root for a "
                 "dev/fixture run that explicitly tolerates skipped deletions.",
                 file=sys.stderr,

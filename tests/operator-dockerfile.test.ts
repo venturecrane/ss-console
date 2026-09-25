@@ -1400,7 +1400,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // for the interactive cost meter.
     // 62a4cccb -> a15f0971 (2026-09-23, overlay#381). Classifies the two
     // msgraph staff-mailbox reads and adds mail_spool_message (an email as .eml).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="a15f0971717e94863e09b8774cd4cb3b6af67c77"')
+    // a15f0971 -> 12621343 (2026-09-25, overlay#382). Classifies add_workbook
+    // and flattens its sheet cells for the identifier scan.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="12621343b5c3b5d339c83f75d0837c63a3e09c22"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
@@ -1639,11 +1641,13 @@ describe('Operator Machine profile guards', () => {
  *      with --require-hashes (third-party packages);
  *   2. `--no-deps` over local paths only (our own packages, whose dependencies
  *      shape 1 already pinned; a path cannot carry a hash);
- *   3. the Hermes overlay from git at the OVERLAY_REF SHA, into the Hermes venv
- *      that `uv sync --frozen` already populated from Hermes' own lock. Its
- *      transitive dependencies resolve against that frozen venv; pinning them
- *      separately would mean a second resolver rewriting versions the Hermes
- *      lock chose, so this one stays as the documented exception.
+ *   3. the Hermes overlay from git at the OVERLAY_REF SHA, `--no-deps`, into
+ *      the Hermes venv. Until 2026-09-25 this line resolved the overlay's
+ *      dependencies at build time (boto3 and sentry-sdk from PyPI, unlocked
+ *      and unaudited; code review Dependencies 3). Now its third-party
+ *      dependencies Hermes' lock does not already install come from
+ *      hermes-overlay.txt (shape 1, installed first), and `uv pip check`
+ *      runs after it so an unmet requirement fails the build.
  *
  * A bare package name on an install line is what this guards against: it is
  * how the broker venv shipped three unversioned packages for three months.
@@ -1694,7 +1698,9 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
         operands(cmd).length > 0 &&
         operands(cmd).every((t) => /^(\/app\/|"\$cdir"|-e "\.")/.test(t))
       const overlay =
-        /git\+\$\{OVERLAY_REPO\}@\$\{OVERLAY_REF\}/.test(cmd) && operands(cmd).length === 1
+        /git\+\$\{OVERLAY_REPO\}@\$\{OVERLAY_REF\}/.test(cmd) &&
+        /--no-deps/.test(cmd) &&
+        operands(cmd).length === 1
       if (!hashed && !localOnly && !overlay) offenders.push(cmd)
     }
     expect(offenders, 'an install line names a package without a hash-locked file').toEqual([])
@@ -1730,5 +1736,74 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
     const firstUse = DOCKERFILE_CODE.indexOf('/app/requirements/')
     expect(copyAt).toBeGreaterThan(-1)
     expect(copyAt).toBeLessThanOrEqual(firstUse)
+  })
+
+  it('the overlay installs --no-deps after its hashed dependencies, and uv pip check follows it', () => {
+    const idx = (re: RegExp) => commands.findIndex((c) => re.test(c))
+    const deps = idx(/-r\s+\/app\/requirements\/hermes-overlay\.txt/)
+    const overlay = idx(/git\+\$\{OVERLAY_REPO\}@\$\{OVERLAY_REF\}/)
+    expect(deps, 'hermes-overlay.txt is never installed').toBeGreaterThan(-1)
+    expect(overlay, 'the overlay install line is missing').toBeGreaterThan(-1)
+    expect(deps).toBeLessThan(overlay)
+    expect(commands[deps]).toMatch(/--python \/opt\/hermes\/\.venv\/bin\/python/)
+    expect(commands[deps]).toMatch(/--no-config/)
+    expect(commands[overlay]).toMatch(/--no-deps/)
+    const flat = DOCKERFILE_CODE.replace(/\\\n/g, ' ')
+    const overlayAt = flat.search(/git\+\$\{OVERLAY_REPO\}@\$\{OVERLAY_REF\}/)
+    const checkAt = flat.indexOf('uv pip check --python /opt/hermes/.venv/bin/python')
+    expect(checkAt, 'no uv pip check over the Hermes venv').toBeGreaterThan(overlayAt)
+  })
+
+  it("compile.sh exports Hermes' lock with the same extras the image's uv sync installs", () => {
+    const compile = readFileSync(resolve('operator/requirements/compile.sh'), 'utf8')
+    const extras = (text: string) => [...text.matchAll(/--extra\s+([a-z0-9_-]+)/g)].map((m) => m[1])
+    const syncLine = DOCKERFILE_CODE.split('\n').find((l) => /uv sync --frozen/.test(l))
+    const exportAt = compile.indexOf('uv export --frozen')
+    expect(syncLine, 'no uv sync --frozen line').toBeDefined()
+    expect(exportAt).toBeGreaterThan(-1)
+    const exportLines = compile.slice(exportAt, compile.indexOf(')', exportAt))
+    expect(extras(exportLines).sort()).toEqual(extras(syncLine ?? '').sort())
+    expect(extras(exportLines).length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * npm installs in the seat image go through a lockfile (2026-09-25 code
+ * review, Dependencies 3). `npm install <name>@<version>` pins one package and
+ * floats its transitive closure; `npm install` in a tree re-resolves where the
+ * lock disagrees. Every install must be `npm ci`, which installs the lock or
+ * fails the build.
+ */
+describe('Operator Machine npm installs are lock-pinned', () => {
+  const npmCommands = DOCKERFILE_CODE.replace(/\\\n/g, ' ')
+    .split(/\n|&&|;|\(|\)/)
+    .map((c) => c.trim().replace(/^RUN\s+/, ''))
+    .filter((c) => /^npm (install|i|ci|add)\b/.test(c))
+
+  it('finds the npm install lines it is judging (the check can fail)', () => {
+    expect(npmCommands.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('every npm install is npm ci', () => {
+    expect(npmCommands.filter((c) => !/^npm ci\b/.test(c))).toEqual([])
+  })
+
+  it('the clio-mcp lock the image installs from exists and pins @oktopeak/clio-mcp exactly', () => {
+    expect(DOCKERFILE_CODE).toContain(
+      'COPY operator/npm/clio-mcp/package.json operator/npm/clio-mcp/package-lock.json /opt/clio-mcp/'
+    )
+    const pkg = JSON.parse(readFileSync(resolve('operator/npm/clio-mcp/package.json'), 'utf8')) as {
+      dependencies: Record<string, string>
+    }
+    expect(pkg.dependencies['@oktopeak/clio-mcp']).toMatch(/^\d+\.\d+\.\d+$/)
+    const lock = JSON.parse(
+      readFileSync(resolve('operator/npm/clio-mcp/package-lock.json'), 'utf8')
+    ) as { packages: Record<string, { version?: string; integrity?: string }> }
+    const entry = lock.packages['node_modules/@oktopeak/clio-mcp']
+    expect(entry?.version).toBe(pkg.dependencies['@oktopeak/clio-mcp'])
+    const unhashed = Object.entries(lock.packages)
+      .filter(([k, v]) => k !== '' && !v.integrity)
+      .map(([k]) => k)
+    expect(unhashed, 'lock entries without an integrity hash').toEqual([])
   })
 })

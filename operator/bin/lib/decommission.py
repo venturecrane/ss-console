@@ -37,11 +37,12 @@ Design notes
   ``failed`` row before raising :class:`DecommissionStepFailed`.
 
 * **External services behind Protocols.** Every destructive service
-  (R2, Vectorize, AgentMail, Fly, observability) is a ``Protocol`` with a
-  real implementation in ``bin/lib/decommission_backends.py`` (#2735) and
-  a :class:`NoOpStub` that the pipeline defaults to. The CLI wires each
-  real backend from a staged credential (``backends_from_env``); Fly arms
-  only from ``FLY_API_TOKEN``, never from a logged-in ``fly`` CLI. A
+  (R2, Vectorize, AgentMail, Fly, observability) and the compliance
+  archiver is a ``Protocol`` with a real implementation in
+  ``bin/lib/decommission_backends.py`` (#2735) and a :class:`NoOpStub`
+  that the pipeline defaults to. The CLI wires each real backend from a
+  staged credential (``backends_from_env``); Fly arms only from
+  ``FLY_API_TOKEN``, never from a logged-in ``fly`` CLI. A
   backend whose credential is absent stays the stub, which logs
   "skipped (no client wired)" and returns ``skipped=True``, and the
   ``--live`` gate refuses (exit 5) rather than report a clean
@@ -76,11 +77,13 @@ The steps:
   3. R2: delete the customer's object namespace (everything under the
      ``{slug}/`` prefix EXCEPT the decommission-archive subtree).
   4. Vectorize: delete the per-customer vault + corrections indexes.
-  5. AgentMail: deprovision inbox / forwarding rules (stubbed).
-  6. Fly Machine: stop and destroy ``hermes-{slug}`` (stubbed). This is
-     also the data-destruction step for ALL Machine-local state.
-  7. Compliance evidence packet: generate the final packet and archive
-     it to per-customer cold storage.
+  5. AgentMail: delete the seat's inbox (``AgentMailInboxDeprovisioner``).
+  6. Fly Machine: ``fly apps destroy hermes-{slug}`` (``FlyAppDestroyer``).
+     This is also the data-destruction step for ALL Machine-local state.
+  7. Compliance evidence packet: run the evidence builder over the step-2
+     snapshot and write the signed packet under the archive dir
+     (``EvidencePacketArchiver``); the manifest reports the path, file
+     count and signature read back from disk.
   8. ``operator/customers/{slug}/`` tombstone: rename to
      ``{slug}.decommissioned.{iso-date}`` and write a marker file.
   9. Observability cleanup (healthchecks.io + fleet_status row).
@@ -282,10 +285,13 @@ class VectorizeIndexDeleter(Protocol):
 
 
 class ComplianceArchiver(Protocol):
-    """Generates the compliance evidence packet and copies it to the
-    per-customer cold-storage retention bucket per the spec.
+    """Generates the compliance evidence packet into the per-customer
+    archive dir.
 
-    Returns the archive path written.
+    The real implementation (``bin.lib.decommission_backends.
+    EvidencePacketArchiver``) builds the packet from the machine snapshot
+    step 02 preserved and returns what it read back from disk: the packet
+    path, its file count, and whether its signature verified.
     """
 
     async def archive(self, customer_slug: str, archive_dir: Path) -> dict: ...
@@ -411,52 +417,26 @@ class DefaultDrainCoordinator:
         }
 
 
-class InMemoryComplianceArchiver:
-    """Writes a minimal compliance-packet stub to the archive dir.
+class NoOpComplianceArchiverStub:
+    """No compliance packet: reports the step SKIPPED and writes nothing.
 
-    Production wires this to the ``compliance-audit-export`` skill so the
-    real packet (per ``compliance-evidence-packet.md`` §packet-structure)
-    is generated. For now this writes a manifest JSON that names the
-    customer, the timestamp, and the expected packet contents — enough to
-    prove the archive step ran and to compose with the real generator
-    later without changing the pipeline.
+    The pipeline default until the CLI wires ``EvidencePacketArchiver`` from
+    a staged signing key. It used to write a "manifest" listing the files a
+    packet would contain and report the step EXECUTED, so a live run's
+    report said a packet was archived when none was (2026-09-25 review, top
+    action item 3). ``unwired_destructive_backends()`` names it, so a
+    ``--live`` run with this stub refuses.
     """
 
+    _SKIPPED_REASON = "external_client_not_wired"
+
     async def archive(self, customer_slug: str, archive_dir: Path) -> dict:
-        archive_dir.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
-        manifest_path = archive_dir / f"compliance-packet-manifest-{ts}.json"
-        manifest = {
-            "customer_slug": customer_slug,
-            "generated_at": ts,
-            "packet_contents_expected": [
-                "00-README.md",
-                "01-summary.pdf",
-                "02-architecture-controls.md",
-                "03-audit-log.csv",
-                "04-audit-log-human.md",
-                "05-customer-yaml.redacted.yml",
-                "06-memory-snapshot.json",
-                "07-skill-catalog.json",
-                "08-engagement-letter-clauses",
-                "09-boot-checks.csv",
-                "10-dpa.pdf",
-                "11-baa.pdf",
-                "12-decommission-confirmation.pdf",
-                "manifest.json",
-            ],
-            "note": (
-                "stub manifest from bin/lib/decommission.py InMemoryComplianceArchiver; "
-                "replace with compliance-audit-export skill output when wired"
-            ),
-        }
-        manifest_path.write_text(
-            json.dumps(manifest, sort_keys=True, indent=2),
-            encoding="utf-8",
-        )
+        log.info("compliance.archive skipped (no archiver wired) customer=%s", customer_slug)
         return {
-            "archive_path": str(manifest_path),
-            "stub": True,
+            "skipped": True,
+            "reason": self._SKIPPED_REASON,
+            "archive_path": None,
+            "file_count": 0,
         }
 
 
@@ -662,7 +642,7 @@ class DecommissionPipeline:
     agentmail: AgentMailProvisioner = field(default_factory=NoOpAgentMailStub)
     fly: FlyMachineManager = field(default_factory=NoOpFlyStub)
     observability: ObservabilityCleanup = field(default_factory=NoOpObservabilityCleanupStub)
-    archiver: ComplianceArchiver = field(default_factory=InMemoryComplianceArchiver)
+    archiver: ComplianceArchiver = field(default_factory=NoOpComplianceArchiverStub)
     audit_log_preserver: AuditLogPreserver = field(default_factory=InMemoryAuditLogPreserver)
     tombstoner: Optional[FilesystemTombstoner] = None
     # Parsed customer.yaml (or None when the file is missing/unparseable).
@@ -708,6 +688,11 @@ class DecommissionPipeline:
             unwired.append("agentmail")
         if isinstance(self.fly, NoOpFlyStub):
             unwired.append("fly")
+        # Not destructive, but a live run destroys the Machine the packet is
+        # evidence about; finishing without the packet is the same false
+        # "clean decommission" the #1123 gate exists to refuse.
+        if isinstance(self.archiver, NoOpComplianceArchiverStub):
+            unwired.append("compliance_archiver")
         if isinstance(self.observability, NoOpObservabilityCleanupStub):
             unwired.append("observability")
         return unwired
@@ -773,6 +758,7 @@ class DecommissionPipeline:
                 status=StepStatus.PLANNED,
                 detail={
                     "archive_dir": str(self.archive_root / self.customer_slug),
+                    "archiver_wired": not isinstance(self.archiver, NoOpComplianceArchiverStub),
                 },
             ),
             StepResult(
@@ -1049,8 +1035,8 @@ __all__ = [
     "FilesystemTombstoner",
     "FlyMachineManager",
     "InMemoryAuditLogPreserver",
-    "InMemoryComplianceArchiver",
     "NoOpAgentMailStub",
+    "NoOpComplianceArchiverStub",
     "NoOpFlyStub",
     "NoOpObservabilityCleanupStub",
     "ObservabilityCleanup",
