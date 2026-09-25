@@ -90,9 +90,14 @@ REASON_INCOMPLETE = "incomplete_transcription"
 # on a toxicology report). Distinct from truncation so a refusal is never
 # misread as a page that ran out of room.
 REASON_REFUSED = "model_refused"
+# Another document was being transcribed and did not finish within the wait
+# (``vision.lock_timeout``). Nothing was sent; the same read can simply be asked
+# again, and a cached neighbour costs nothing.
+REASON_BUSY = "busy"
 
 REASONS = frozenset(
     {
+        REASON_BUSY,
         REASON_NOT_ATTEMPTED,
         REASON_NO_CREDENTIAL,
         REASON_DISABLED,

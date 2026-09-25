@@ -161,7 +161,7 @@ def test_only_the_pages_that_need_vision_are_sent_and_they_land_back_in_position
     """
     seen: dict[str, Any] = {}
 
-    def _fake(blob: bytes, *, pages: int) -> Any:
+    def _fake(blob: bytes, *, pages: int, **_kw: Any) -> Any:
         from pypdf import PdfReader
 
         seen["pages"] = pages
@@ -172,7 +172,7 @@ def test_only_the_pages_that_need_vision_are_sent_and_they_land_back_in_position
             stop_reason="end_turn",
         )
 
-    monkeypatch.setattr(lt.vision, "gate", lambda _b, *, pages: None)
+    monkeypatch.setattr(lt.vision, "gate", lambda _b, *, pages, **_kw: None)
     monkeypatch.setattr(lt.vision, "transcribe_pdf", _fake)
 
     blob = _pdf([DIGITAL, "", DIGITAL, ""])
@@ -200,11 +200,11 @@ def test_a_page_of_ocr_noise_is_read_with_vision_not_trusted_as_text(monkeypatch
     """
     sent: dict[str, int] = {}
 
-    def _fake(blob: bytes, *, pages: int) -> Any:
+    def _fake(blob: bytes, *, pages: int, **_kw: Any) -> Any:
         sent["pages"] = pages
         return lt.vision.VisionOutcome(text="[p.1]\nthe handwriting, read", pages_read=1, stop_reason="end_turn")
 
-    monkeypatch.setattr(lt.vision, "gate", lambda _b, *, pages: None)
+    monkeypatch.setattr(lt.vision, "gate", lambda _b, *, pages, **_kw: None)
     monkeypatch.setattr(lt.vision, "transcribe_pdf", _fake)
 
     assert len(OCR_NOISE) > lp.PAGE_TEXT_FLOOR, "the noise must clear the old character floor, or this proves nothing"
@@ -219,7 +219,7 @@ def test_the_page_cap_counts_pages_sent_not_pages_in_the_bundle(monkeypatch: pyt
     pages against a 40-page cap and a refusal; now it is 2."""
     gated: dict[str, int] = {}
 
-    def _gate(_b: bytes, *, pages: int) -> Any:
+    def _gate(_b: bytes, *, pages: int, **_kw: Any) -> Any:
         gated["pages"] = pages
         return "over_page_cap" if pages > 40 else None
 
@@ -227,7 +227,7 @@ def test_the_page_cap_counts_pages_sent_not_pages_in_the_bundle(monkeypatch: pyt
     monkeypatch.setattr(
         lt.vision,
         "transcribe_pdf",
-        lambda _b, *, pages: lt.vision.VisionOutcome(
+        lambda _b, *, pages, **_kw: lt.vision.VisionOutcome(
             text="\n\n".join(f"[p.{n}]\nscan {n}" for n in range(1, pages + 1)), pages_read=pages
         ),
     )
@@ -240,7 +240,7 @@ def test_the_page_cap_counts_pages_sent_not_pages_in_the_bundle(monkeypatch: pyt
 
 
 def test_a_vision_refusal_reads_nothing_and_says_why(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(lt.vision, "gate", lambda _b, *, pages: "over_page_cap")
+    monkeypatch.setattr(lt.vision, "gate", lambda _b, *, pages, **_kw: "over_page_cap")
     out = lt._read_pages(_pdf(["", ""]), "post.pdf")
     assert out["readable"] is False
     assert out["reason"] == "over_page_cap"
@@ -254,11 +254,11 @@ def test_transcribed_text_whose_markers_do_not_run_1_to_n_is_refused(monkeypatch
     Nothing downstream re-checks the numbering, so accepting this text means a
     page range chosen against the wrong pages.
     """
-    monkeypatch.setattr(lt.vision, "gate", lambda _b, *, pages: None)
+    monkeypatch.setattr(lt.vision, "gate", lambda _b, *, pages, **_kw: None)
     monkeypatch.setattr(
         lt.vision,
         "transcribe_pdf",
-        lambda _b, *, pages: lt.vision.VisionOutcome(text="[p.1]\nfirst\n\n[p.3]\nthird", pages_read=2),
+        lambda _b, *, pages, **_kw: lt.vision.VisionOutcome(text="[p.1]\nfirst\n\n[p.3]\nthird", pages_read=2),
     )
     out = lt._read_pages(_pdf(["", ""]), "post.pdf")
     assert out["readable"] is False
@@ -276,6 +276,73 @@ def test_a_bundle_too_long_to_read_whole_is_refused_not_truncated(monkeypatch: p
     assert out["reason"] == "too_long"
     assert out["text"] == ""
     assert out["pageCount"] == 2
+
+
+def test_an_oversize_scan_bundle_is_refused_before_any_spend(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The post-read check refuses too, but only after every page was paid for.
+    The estimate refuses a bundle that cannot fit with vision never called."""
+
+    def _explode(*_a: Any, **_kw: Any) -> Any:
+        raise AssertionError("vision must not be reached for a bundle that cannot fit")
+
+    monkeypatch.setattr(lt.vision, "gate", _explode)
+    monkeypatch.setattr(lt.vision, "transcribe_pdf", _explode)
+    monkeypatch.setattr(lt, "MAX_TEXT_CHARS", 3 * lt.SCANNED_PAGE_CHARS_CEILING)
+    out = lt._read_pages(_pdf([DIGITAL, "", "", ""]), "post.pdf")
+    assert out["readable"] is False
+    assert out["reason"] == "too_long"
+    assert out["pageCount"] == 4
+
+
+def test_a_bundle_that_fits_the_estimate_is_still_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The falsifier for the estimate: it must not refuse what fits."""
+    monkeypatch.setattr(lt.vision, "gate", lambda _b, *, pages, **_kw: None)
+    monkeypatch.setattr(
+        lt.vision,
+        "transcribe_pdf",
+        lambda _b, *, pages, **_kw: lt.vision.VisionOutcome(
+            text="\n\n".join(f"[p.{n}]\nscan {n}" for n in range(1, pages + 1)), pages_read=pages
+        ),
+    )
+    monkeypatch.setattr(lt, "MAX_TEXT_CHARS", 4 * lt.SCANNED_PAGE_CHARS_CEILING)
+    out = lt._read_pages(_pdf([DIGITAL, "", "", ""]), "post.pdf")
+    assert out["readable"] is True, out["reason"]
+
+
+def test_the_post_lane_carries_its_own_page_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sixty scanned pages: over the shared 40-page cap that fences medchron,
+    under this lane's 80. The shared cap and its default are untouched."""
+    from smokeball_connector import vision
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-not-a-real-key")
+    monkeypatch.delenv("SMOKEBALL_VISION_PAGE_CAP", raising=False)
+    monkeypatch.delenv("SMOKEBALL_POST_PAGE_CAP", raising=False)
+    monkeypatch.delenv("SMOKEBALL_VISION_DISABLED", raising=False)
+    caps: list[Any] = []
+    real_gate = vision.gate
+
+    def _gate(blob: bytes, *, pages: int, page_cap: int | None = None) -> Any:
+        caps.append(page_cap)
+        return real_gate(blob, pages=pages, page_cap=page_cap)
+
+    monkeypatch.setattr(lt.vision, "gate", _gate)
+    monkeypatch.setattr(
+        lt.vision,
+        "transcribe_pdf",
+        lambda _b, *, pages, page_cap=None: lt.vision.VisionOutcome(
+            text="\n\n".join(f"[p.{n}]\nscan {n}" for n in range(1, pages + 1)), pages_read=pages
+        ),
+    )
+    out = lt._read_pages(_pdf([""] * 60), "post.pdf")
+    assert out["readable"] is True, out["reason"]
+    assert caps == [lt.DEFAULT_POST_PAGE_CAP]
+    assert vision.page_cap() == vision.DEFAULT_PAGE_CAP == 40
+    assert real_gate(b"%PDF", pages=60) == "over_page_cap", "the shared cap still fences everyone else"
+
+    monkeypatch.setenv("SMOKEBALL_POST_PAGE_CAP", "50")
+    # Different bytes, so the first read's cache entry cannot answer.
+    out = lt._read_pages(_pdf([DIGITAL] + [""] * 59), "post.pdf")
+    assert out["reason"] == "over_page_cap"
 
 
 def test_the_unreadable_vocabulary_matches_the_other_attachment_reader() -> None:

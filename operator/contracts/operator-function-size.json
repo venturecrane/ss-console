@@ -59,7 +59,7 @@
   "complexity": {
     "adapter/trust_ceiling.py::enforce": 20,
     "bin/lib/decommission_cli.py::_run": 16,
-    "connectors/smokeball/smokeball_connector/vision.py::_stream": 19,
+    "connectors/smokeball/smokeball_connector/vision.py::_stream": 16,
     "rehearsal/drivers.py::drive_leg": 18,
     "rehearsal/run.py::run_suite": 16,
     "runners/medchron/medchron/audit/repair.py::run": 20,
