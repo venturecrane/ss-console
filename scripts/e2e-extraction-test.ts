@@ -154,7 +154,10 @@ function loadCache(filename: string): Record<string, unknown> | null {
   const path = resolve(CACHE_DIR, filename)
   if (!existsSync(path)) return null
   try {
-    return JSON.parse(readFileSync(path, 'utf-8')) as Record<string, unknown>
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? { ...parsed }
+      : null
   } catch {
     return null
   }

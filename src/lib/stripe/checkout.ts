@@ -27,6 +27,9 @@
  * as client.ts / resend.ts.
  */
 
+import { captureWarning } from '../observability/sentry'
+import { STRIPE_API_BASE, stripeHeaders } from './client'
+
 /** Published launch pricing (ADR 0067). Cents. */
 const HOSTED_AGENT_PRICE_CENTS = 7900
 const HOSTED_AGENT_FOUNDING_DISCOUNT_CENTS = 3000
@@ -40,19 +43,10 @@ const HOSTED_AGENT_FOUNDING_SEATS = 25
  */
 const SAAS_TAX_CODE = 'txcd_10103000'
 
-const STRIPE_API_BASE = 'https://api.stripe.com/v1'
-
 const PRODUCT_MARKER = { key: 'smd_product', value: 'hosted-agent' } as const
 const PRODUCT_NAME = 'SMD Hosted Agent'
 /** Fixed coupon id — Stripe treats coupon ids as idempotent identities. */
 const FOUNDING_COUPON_ID = 'hosted-agent-founding'
-
-function stripeHeaders(apiKey: string): Record<string, string> {
-  return {
-    Authorization: `Bearer ${apiKey}`,
-    'Content-Type': 'application/x-www-form-urlencoded',
-  }
-}
 
 async function resolveHostedAgentProductId(apiKey: string): Promise<string> {
   const query = `metadata['${PRODUCT_MARKER.key}']:'${PRODUCT_MARKER.value}'`
@@ -215,6 +209,13 @@ export async function createHostedAgentCheckoutSession(
       // Coupon cap can be hit between the read and the create — sell at
       // full price rather than losing the sale.
       console.log('[stripe/checkout] founding coupon rejected, retrying at full price:', err)
+      captureWarning(
+        'founding coupon rejected; checkout retried at full price',
+        'stripe/checkout',
+        {
+          reason: err instanceof Error ? err.message : String(err),
+        }
+      )
     }
   }
   const session = await createSession(apiKey, productId, params, null)

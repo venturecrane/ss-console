@@ -20,6 +20,9 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types'
+import { failedResponse } from '../api/failures'
+import { captureError } from '../observability/sentry'
+import { ok } from './stripe-subscription-shared'
 import { ORG_ID } from '../constants'
 import { EMAIL_IDENTITY_PREDICATE, normalizeEmail } from '../identity/email'
 import { createEntity } from '../db/entities'
@@ -33,19 +36,7 @@ import {
 
 const ALERT_EMAIL = 'team@smd.services'
 
-function ok(): Response {
-  return new Response(JSON.stringify({ ok: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  })
-}
-
-function serverError(): Response {
-  return new Response(JSON.stringify({ error: 'INTERNAL_ERROR' }), {
-    status: 500,
-    headers: { 'Content-Type': 'application/json' },
-  })
-}
+const AREA = 'webhook/stripe/hosted-agent-checkout'
 
 /** The session-payload fields the pipeline consumes. */
 export interface HostedAgentCheckoutSessionPayload {
@@ -277,8 +268,7 @@ export async function handleHostedAgentCheckoutCompleted(
     })
     return ok()
   } catch (err) {
-    console.error('[hosted-agent-checkout] pipeline failed:', err)
-    return serverError() // let Stripe retry
+    return failedResponse(err, AREA) // a 500 lets Stripe retry; Sentry hears each one
   }
 }
 
@@ -301,6 +291,7 @@ async function sendPurchaseEmails(
     })
   } catch (err) {
     console.error('[hosted-agent-checkout] welcome email failed:', err)
+    captureError(err, AREA)
   }
   try {
     const entity = await db
@@ -320,6 +311,7 @@ async function sendPurchaseEmails(
     })
   } catch (err) {
     console.error('[hosted-agent-checkout] team notification failed:', err)
+    captureError(err, AREA)
   }
 }
 
@@ -340,5 +332,6 @@ async function sendUnresolvedBuyerAlert(
     })
   } catch (err) {
     console.error('[hosted-agent-checkout] unresolved-buyer alert failed:', err)
+    captureError(err, AREA)
   }
 }

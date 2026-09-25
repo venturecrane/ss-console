@@ -19,6 +19,7 @@ import { OPERATOR_CHECKOUT_PRODUCT_SLUG } from '../../../lib/stripe/subscription
 import { env } from 'cloudflare:workers'
 import { errorResponse, jsonResponse } from '../../../lib/api/helpers'
 import { misconfiguredResponse } from '../../../lib/api/failures'
+import { captureWarning } from '../../../lib/observability/sentry'
 import { getAdminBaseUrl, getPortalBaseUrl } from '../../../lib/config/app-url'
 
 /**
@@ -318,7 +319,10 @@ export const POST: APIRoute = async ({ request }) => {
 
   const isValid = await verifyStripeSignature(rawBody, signatureHeader, webhookSecret)
   if (!isValid) {
+    // A rotated or mistyped STRIPE_WEBHOOK_SECRET refuses every real event
+    // here, and Stripe's retries are the only other trace: page on it.
     console.error('[webhook/stripe] Invalid webhook signature')
+    captureWarning('Stripe webhook signature did not verify', 'webhook/stripe')
     return errorResponse(401, 'invalid_signature')
   }
 

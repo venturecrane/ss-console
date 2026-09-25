@@ -14,12 +14,18 @@ import { getSowRevisionSignedKey, uploadSignedSowRevisionPdf } from '../storage/
 import { getSignedPdf } from '../signwell/client'
 import type { SignWellWebhookPayload } from '../signwell/types'
 import { normalizeEmail } from '../identity/email'
+import { parseJsonRecord } from '../api/helpers'
+import { failedResponse } from '../api/failures'
+import { describeLineItemsRefusal, readLineItemsExact } from '../db/quote-content'
+import type { LineItem } from '../db/quotes'
 
 import {
   okResponse,
   unknownDocumentResponse,
   processOutboxJobsForSignatureRequest,
 } from './outbox-jobs'
+
+const AREA = 'sow/finalize'
 
 // prettier-ignore
 interface SignerSnapshot { contactId: string; name: string; email: string; title: string | null }
@@ -248,6 +254,43 @@ async function claimSignatureTransition(args: ClaimArgs): Promise<boolean> {
   return false
 }
 
+/**
+ * The signer snapshot the send flow stored, read back field by field. Null
+ * when the column is not the object the send flow writes.
+ */
+function readSignerSnapshot(raw: string): SignerSnapshot | null {
+  const v = parseJsonRecord(raw)
+  if (!v) return null
+  const { contactId, name, email, title } = v
+  if (typeof contactId !== 'string' || typeof name !== 'string' || typeof email !== 'string')
+    return null
+  if (title != null && typeof title !== 'string') return null
+  return { contactId, name, email, title: title ?? null }
+}
+
+/**
+ * Everything the finalization batch reads from stored JSON, validated before
+ * the signed artifact is persisted. One milestone is made per line item, so a
+ * dropped row would schedule the wrong engagement: any unreadable row refuses
+ * the whole finalization (review 2026-09-25, Code Quality 2).
+ */
+function readFinalizationInputs(
+  request: SignatureRequest,
+  quote: Quote
+): { lineItems: LineItem[]; signer: SignerSnapshot } | Error {
+  const lineItems = readLineItemsExact(quote.line_items)
+  if (!lineItems.ok) {
+    return new Error(
+      `Quote ${quote.id} line items are unreadable (${describeLineItemsRefusal(lineItems)}); the signed SOW cannot be finalized`
+    )
+  }
+  const signer = readSignerSnapshot(request.signer_snapshot_json)
+  if (!signer) {
+    return new Error(`Signature request ${request.id} signer snapshot is unreadable`)
+  }
+  return { lineItems: lineItems.items, signer }
+}
+
 async function persistAndFinalizeArtifact(args: {
   db: D1Database
   storage: R2Bucket
@@ -259,6 +302,10 @@ async function persistAndFinalizeArtifact(args: {
   now: string
 }): Promise<Response | null> {
   const { db, storage, apiKey, request, quote, providerRequestId, signedKey, now } = args
+  // A 500 here makes SignWell retry; failedResponse puts each one in Sentry,
+  // so a refusal that keeps retrying is paged on rather than logged.
+  const inputs = readFinalizationInputs(request, quote)
+  if (inputs instanceof Error) return failedResponse(inputs, AREA)
   try {
     const signedPdf = await getSignedPdf(apiKey, providerRequestId)
     await uploadSignedSowRevisionPdf(storage, signedKey, signedPdf, {
@@ -268,15 +315,9 @@ async function persistAndFinalizeArtifact(args: {
       signedAt: now,
     })
   } catch (err) {
-    console.error('[sow/finalize] Failed to persist signed artifact:', err)
-    return new Response(JSON.stringify({ error: 'INTERNAL_ERROR' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return failedResponse(err, AREA)
   }
 
-  const lineItems = JSON.parse(quote.line_items) as Array<{ problem: string; description: string }>
-  const signerSnapshot = JSON.parse(request.signer_snapshot_json) as SignerSnapshot
   const ctx: FinalizeCtx = {
     db,
     orgId: request.org_id,
@@ -289,20 +330,16 @@ async function persistAndFinalizeArtifact(args: {
     serviceId: `svc_${crypto.randomUUID()}`,
     invoiceId: crypto.randomUUID(),
     depositAmount: quote.deposit_amount ?? 0,
-    signer: signerSnapshot,
+    signer: inputs.signer,
     now,
     signedKey,
     revisionId: request.sow_revision_id,
     totalHours: quote.total_hours,
   }
   try {
-    await db.batch(buildFinalizationBatch(ctx, lineItems))
+    await db.batch(buildFinalizationBatch(ctx, inputs.lineItems))
   } catch (err) {
-    console.error('[sow/finalize] Finalization batch failed:', err)
-    return new Response(JSON.stringify({ error: 'INTERNAL_ERROR' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return failedResponse(err, AREA)
   }
   return null
 }

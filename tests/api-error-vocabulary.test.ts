@@ -13,6 +13,8 @@
  *      that cannot be disabled inline).
  *   3. errorResponse() itself emits both keys, with the catalog default when a
  *      site gives no message, and carries extras alongside.
+ *   4. No src/lib module hand-builds an `{ error: ... }` response body either
+ *      (added 2026-09-25: the library layer is where the residue lived).
  *
  * What would make it false: an errorResponse('...') call with a non-catalog
  * literal, a `jsonResponse(4xx, { error` anywhere under the API tree, or the
@@ -45,6 +47,21 @@ const HAND_BUILT = /jsonResponse\(\s*[\w.]+\s*,\s*\{[^}]*\berror\s*:/g
  * capture before they respond.
  */
 const DIRECT_5XX = /errorResponse\(\s*5\d\d\b/g
+
+const LIB_ROOT = resolve('src/lib')
+const LIB_FILES = readdirSync(LIB_ROOT, { recursive: true })
+  .map((entry) => `${LIB_ROOT}/${String(entry)}`)
+  .filter((p) => p.endsWith('.ts') && !p.endsWith('.test.ts') && statSync(p).isFile())
+const rel = (file: string): string => file.replace(`${resolve('.')}/`, '')
+
+/**
+ * An object literal whose first key is `error`, handed to anything that makes
+ * a response body: `new Response(JSON.stringify({ error`, a JSON helper
+ * (`jsonResponse`, `jsonWithCors`, `Response.json`) with or without a leading
+ * status argument.
+ */
+const LIB_HAND_BUILT =
+  /(?:\bnew Response\(\s*JSON\.stringify|\bjson\w*|\bResponse\.json)\(\s*(?:[\w.]+\s*,\s*)?\{\s*error\s*:/gi
 
 describe('API error vocabulary', () => {
   it('every catalog code is snake_case with a non-empty default message', () => {
@@ -92,6 +109,38 @@ describe('API error vocabulary', () => {
       offenders,
       'use failedResponse(err, area, code?) or misconfiguredResponse(area, missing) so the failure is captured'
     ).toEqual([])
+  })
+
+  it('no src/lib module hand-builds an { error } response body either', () => {
+    // Until 2026-09-25 the route rules above stopped at src/pages/api, and the
+    // library layer carried the residue: the admin guard's 401 body for 99
+    // routes was `{ error: 'Unauthorized' }` and six webhook/SOW sites
+    // answered `'INTERNAL_ERROR'` (review 2026-09-25, Code Quality 5).
+    const offenders: string[] = []
+    for (const file of LIB_FILES) {
+      if (LIB_HAND_BUILT.test(readFileSync(file, 'utf8'))) offenders.push(rel(file))
+      LIB_HAND_BUILT.lastIndex = 0
+    }
+    expect(LIB_FILES.length).toBeGreaterThan(250)
+    expect(
+      offenders,
+      'build error bodies with errorResponse / failedResponse / apiErrorBody from src/lib/api'
+    ).toEqual([])
+  })
+
+  it('the src/lib scanner can fail: each hand-built form is caught, apiErrorBody is not', () => {
+    for (const bad of [
+      "new Response(JSON.stringify({ error: 'INTERNAL_ERROR' }), { status: 500 })",
+      "jsonResponse(401, { error: 'Unauthorized' })",
+      "jsonWithCors({ error: 'unauthorized', detail: reason }, 401)",
+    ]) {
+      expect(LIB_HAND_BUILT.test(bad), bad).toBe(true)
+      LIB_HAND_BUILT.lastIndex = 0
+    }
+    expect(LIB_HAND_BUILT.test("jsonWithCors(apiErrorBody('unauthorized', reason), 401)")).toBe(
+      false
+    )
+    LIB_HAND_BUILT.lastIndex = 0
   })
 
   it('the 5xx scanner can fail: a direct 500 and a direct 503 are both caught, a 400 is not', () => {
