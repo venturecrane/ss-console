@@ -97,14 +97,15 @@ const openRow = (over: Record<string, unknown> = {}) => ({
   ...over,
 })
 
-function silence<T>(fn: () => T): { value: T; out: string; err: string } {
+async function silence<T>(fn: () => Promise<T>): Promise<{ value: T; out: string; err: string }> {
   const out: string[] = []
   const err: string[] = []
   const [log, error] = [console.log, console.error]
   console.log = (...a: unknown[]) => void out.push(a.join(' '))
   console.error = (...a: unknown[]) => void err.push(a.join(' '))
   try {
-    return { value: fn(), out: out.join('\n'), err: err.join('\n') }
+    const value = await fn()
+    return { value, out: out.join('\n'), err: err.join('\n') }
   } finally {
     console.log = log
     console.error = error
@@ -251,7 +252,7 @@ describe('validateDelivery', () => {
 describe('register deliver, end to end', () => {
   it('delivers, writes the receipt, and reads it back', async () => {
     const { main } = await loadLib()
-    const { value, out } = silence(() => main(deliverArgs()))
+    const { value, out } = await silence(() => main(deliverArgs()))
     expect(value).toBe(0)
     const db = readDb()
     expect(db.rows[0].state).toBe('delivered')
@@ -269,7 +270,7 @@ describe('register deliver, end to end', () => {
     // "delivered" over a row that still read open.
     const { main } = await loadLib()
     process.env.DELIVER_DROP_WRITE = '1'
-    const { value, err } = silence(() => main(deliverArgs()))
+    const { value, err } = await silence(() => main(deliverArgs()))
     expect(value).toBe(1)
     expect(err).toMatch(/did not land/)
     expect(readDb().rows[0].state).toBe('open')
@@ -277,7 +278,7 @@ describe('register deliver, end to end', () => {
 
   it('refuses an unpushed letter and writes nothing', async () => {
     const { main } = await loadLib()
-    const { value } = silence(() => main(deliverArgs({ evidence: DRAFT })))
+    const { value } = await silence(() => main(deliverArgs({ evidence: DRAFT })))
     expect(value).toBe(1)
     expect(readDb().sql.some((s) => /^UPDATE/i.test(s))).toBe(false)
   })
@@ -285,7 +286,7 @@ describe('register deliver, end to end', () => {
   it('refuses a key that names more than one row', async () => {
     const { main } = await loadLib()
     setRows([openRow(), openRow({ obligation_id: 'o-2', kind: 'request' })])
-    const { value, err } = silence(() => main(deliverArgs()))
+    const { value, err } = await silence(() => main(deliverArgs()))
     expect(value).toBe(1)
     expect(err).toMatch(/ambiguous_key/)
   })
@@ -295,7 +296,7 @@ describe('register list', () => {
   it('no longer counts a verified row as owed', async () => {
     const { main } = await loadLib()
     setRows([])
-    silence(() => main(['list', '--json']))
+    await silence(() => main(['list', '--json']))
     expect(readDb().sql[0]).toMatch(/state NOT IN \('verified','closed','cancelled','void'\)/)
   })
 })

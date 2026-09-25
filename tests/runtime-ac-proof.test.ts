@@ -10,10 +10,15 @@
  * @see docs/doctrine/wired-contract.md
  */
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import {
+  checkRuntimeAcProof,
   findUnprovenRuntimeAcs,
   extractAcSection,
   formatViolations,
+  LOOKUP_BATCH,
+  resolveVerifyIds,
 } from '../scripts/runtime-ac-proof.mjs'
 
 const VERIFY_ID = 'vfy_01KYNVJ4VG90G26SZSYPXF05KY'
@@ -131,6 +136,160 @@ describe('runtime AC proof: section extraction', () => {
   it('is case-insensitive on the heading', () => {
     const body = '## ACCEPTANCE CRITERIA STATUS\n| (repo) X | met | f.ts:1 |'
     expect(extractAcSection(body)).toContain('(repo) X')
+  })
+})
+
+/**
+ * The ledger stage. A fake /verify/lookup that answers the way crane-context's
+ * handleVerifyLookup does: `exists` for every asked ID, `records` for the ones
+ * it holds. Recording the calls lets a test prove when the ledger was NOT asked.
+ */
+function fakeLedger(rows: Record<string, string>, opts: { status?: number; body?: unknown } = {}) {
+  const calls: { url: string; key: string | null }[] = []
+  const fetchImpl = (async (url: string, init?: { headers?: Record<string, string> }) => {
+    calls.push({ url, key: init?.headers?.['X-Relay-Key'] ?? null })
+    const ids = decodeURIComponent(new URL(url).searchParams.get('ids') ?? '').split(',')
+    const body = opts.body ?? {
+      exists: Object.fromEntries(ids.map((id) => [id, id in rows])),
+      records: Object.fromEntries(
+        ids.filter((id) => id in rows).map((id) => [id, { method: rows[id] }])
+      ),
+    }
+    return new Response(JSON.stringify(body), { status: opts.status ?? 200 })
+  }) as unknown as typeof fetch
+  return { fetchImpl, calls }
+}
+
+const OTHER_ID = 'vfy_01M3CS0PTSBKC4QZK6PJHANRQ1'
+const runtimeRow = (evidence: string) =>
+  pr(`| (runtime) Ruleset requires the check | met | ${evidence} |`)
+
+describe('runtime AC proof: the ID is resolved, not pattern-matched', () => {
+  it('passes an ID the ledger holds as a live observation', async () => {
+    const { fetchImpl, calls } = fakeLedger({ [VERIFY_ID]: 'live_state' })
+    const result = await checkRuntimeAcProof(runtimeRow(VERIFY_ID), { relayKey: 'k', fetchImpl })
+    expect(result).toEqual({ violations: [], ledgerError: null, checked: 1 })
+    expect(calls).toHaveLength(1)
+    expect(calls[0].key).toBe('k')
+    expect(calls[0].url).toContain('/verify/lookup?ids=')
+  })
+
+  it('fails a well-formed ID the ledger has never seen', async () => {
+    // The case the regex could not catch: an ID-shaped string that was never
+    // recorded, whether typed from memory or pasted from another PR's template.
+    const { fetchImpl } = fakeLedger({})
+    const result = await checkRuntimeAcProof(runtimeRow(VERIFY_ID), { relayKey: 'k', fetchImpl })
+    expect(result.violations).toHaveLength(1)
+    expect(result.violations[0].reason).toMatch(/not in the verify ledger/)
+  })
+
+  it('fails an ID that is a doc read rather than an observation', async () => {
+    const { fetchImpl } = fakeLedger({ [VERIFY_ID]: 'vendor_docs' })
+    const result = await checkRuntimeAcProof(runtimeRow(VERIFY_ID), { relayKey: 'k', fetchImpl })
+    expect(result.violations[0].reason).toMatch(/vendor_docs/)
+  })
+
+  it('passes when any one cited ID is an observation', async () => {
+    const { fetchImpl } = fakeLedger({ [VERIFY_ID]: 'vendor_docs', [OTHER_ID]: 'fresh_process' })
+    const result = await checkRuntimeAcProof(runtimeRow(`${VERIFY_ID}, ${OTHER_ID}`), {
+      relayKey: 'k',
+      fetchImpl,
+    })
+    expect(result.violations).toEqual([])
+    expect(result.checked).toBe(2)
+  })
+
+  it('fails a lowercase or wrong-alphabet ID at the format stage without asking the ledger', async () => {
+    // A ULID never contains I, L, O or U; `vfy_` + 26 of the wrong alphabet is a typo.
+    const { fetchImpl, calls } = fakeLedger({})
+    const bad = 'vfy_01m3cs0ptsbkc4qzk6pjhanrqI'
+    const result = await checkRuntimeAcProof(runtimeRow(bad), { relayKey: 'k', fetchImpl })
+    expect(result.violations[0].reason).toMatch(/malformed ID/)
+    expect(calls).toHaveLength(0)
+  })
+})
+
+describe('runtime AC proof: fails closed when the ledger cannot answer', () => {
+  it('is red, with a reason, when no relay key reaches the run', async () => {
+    const { fetchImpl, calls } = fakeLedger({ [VERIFY_ID]: 'live_state' })
+    const result = await checkRuntimeAcProof(runtimeRow(VERIFY_ID), { fetchImpl })
+    expect(result.ledgerError).toMatch(/CRANE_RELAY_KEY/)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('is red when the ledger answers non-200', async () => {
+    const { fetchImpl } = fakeLedger({}, { status: 401 })
+    const result = await checkRuntimeAcProof(runtimeRow(VERIFY_ID), { relayKey: 'k', fetchImpl })
+    expect(result.ledgerError).toMatch(/HTTP 401/)
+  })
+
+  it('is red when the ledger is unreachable', async () => {
+    const fetchImpl = (async () => {
+      throw new Error('getaddrinfo ENOTFOUND')
+    }) as unknown as typeof fetch
+    const result = await checkRuntimeAcProof(runtimeRow(VERIFY_ID), { relayKey: 'k', fetchImpl })
+    expect(result.ledgerError).toMatch(/unreachable.*ENOTFOUND/)
+  })
+
+  it('is red when the answer has the wrong shape, rather than reading it as "absent"', async () => {
+    const { fetchImpl } = fakeLedger({}, { body: { ok: true } })
+    const result = await checkRuntimeAcProof(runtimeRow(VERIFY_ID), { relayKey: 'k', fetchImpl })
+    expect(result.ledgerError).toMatch(/exists/)
+  })
+
+  it('is red when an ID exists but the ledger omits its method', async () => {
+    const { fetchImpl } = fakeLedger({}, { body: { exists: { [VERIFY_ID]: true } } })
+    const result = await checkRuntimeAcProof(runtimeRow(VERIFY_ID), { relayKey: 'k', fetchImpl })
+    expect(result.ledgerError).toMatch(/no method/)
+  })
+})
+
+describe('runtime AC proof: a required check must report green on PRs that claim nothing', () => {
+  // The ruleset requires this check, so it has to report on every PR. These
+  // are the paths Dependabot and fork PRs take: no secret, no ledger.
+  it.each([
+    ['no body', ''],
+    ['no AC section', '## Summary\n\nBumped a dependency.'],
+    ['only repo-layer rows', pr('| (repo) Parser handles tabs | met | src/x.ts:1 |')],
+    ['a runtime row deferred', pr('| (runtime) Seat adopts it | deferred | next reprovision |')],
+  ])('%s: green without a key or a ledger call', async (_name, body) => {
+    const { fetchImpl, calls } = fakeLedger({})
+    const result = await checkRuntimeAcProof(body, { fetchImpl })
+    expect(result).toEqual({ violations: [], ledgerError: null, checked: 0 })
+    expect(calls).toHaveLength(0)
+  })
+
+  it('batches past the worker cap rather than sending one oversized request', async () => {
+    const { fetchImpl, calls } = fakeLedger({})
+    const ids = Array.from(
+      { length: LOOKUP_BATCH + 1 },
+      (_, i) => `vfy_${String(i).padStart(26, '0')}`
+    )
+    await resolveVerifyIds(ids, { relayKey: 'k', fetchImpl })
+    expect(calls).toHaveLength(2)
+  })
+})
+
+describe('runtime AC proof: the workflow wires the ledger stage', () => {
+  // The script is only half the gate; a workflow still calling the format-only
+  // function would pass every ID-shaped string, which is what this replaced.
+  const workflow = readFileSync(
+    resolve(__dirname, '../.github/workflows/runtime-ac-proof.yml'),
+    'utf8'
+  )
+
+  it('calls the resolving entry point with the relay key', () => {
+    expect(workflow).toContain('checkRuntimeAcProof')
+    expect(workflow).toContain('CRANE_RELAY_KEY: ${{ secrets.CRANE_RELAY_KEY }}')
+  })
+
+  it('runs on every PR event a body change can arrive on, with no paths filter', () => {
+    expect(workflow).toMatch(/types: \[opened, synchronize, reopened, edited/)
+    expect(workflow).not.toMatch(/^\s+paths:/m)
+  })
+
+  it('keeps the job name the ruleset requires', () => {
+    expect(workflow).toContain('name: Runtime ACs carry a verification ID')
   })
 })
 

@@ -68,6 +68,47 @@ function highSeverityGhsas(dir) {
   return found
 }
 
+/** Count non-allowlisted advisories (printing each) and collect the suppressed ones. */
+function classify(dirs, allowIds, expired) {
+  let blocking = 0
+  const suppressed = new Set()
+  for (const dir of dirs) {
+    for (const [ghsa, info] of highSeverityGhsas(dir)) {
+      if (!expired && allowIds.has(ghsa)) {
+        suppressed.add(ghsa)
+        continue
+      }
+      blocking += 1
+      console.log(
+        `::error::${dir}: ${info.severity} advisory ${ghsa} not allowlisted — ${info.title}`
+      )
+    }
+  }
+  return { blocking, suppressed }
+}
+
+function reportSuppressed(suppressed, allow, expires, tracking) {
+  if (suppressed.size === 0) return
+  console.log(`\nAllowlisted (tolerated until ${expires}, tracked in ${tracking ?? 'n/a'}):`)
+  for (const ghsa of suppressed) {
+    console.log(`  - ${ghsa}: ${allow[ghsa]}`)
+  }
+}
+
+// Hygiene: flag allowlist entries that no longer match any live advisory so
+// stale exceptions get pruned rather than lingering silently.
+function warnStaleEntries(dirs, allowIds) {
+  const live = new Set()
+  for (const dir of dirs) for (const g of highSeverityGhsas(dir).keys()) live.add(g)
+  for (const ghsa of allowIds) {
+    if (!live.has(ghsa)) {
+      console.log(
+        `::warning::allowlist entry ${ghsa} matches no current advisory — remove it from .github/audit-allowlist.json`
+      )
+    }
+  }
+}
+
 function main() {
   const dirs = process.argv.slice(2)
   if (dirs.length === 0) dirs.push('.')
@@ -81,42 +122,9 @@ function main() {
     )
   }
 
-  let blocking = 0
-  const suppressed = new Set()
-
-  for (const dir of dirs) {
-    const highs = highSeverityGhsas(dir)
-    for (const [ghsa, info] of highs) {
-      const allowed = !expired && allowIds.has(ghsa)
-      if (allowed) {
-        suppressed.add(ghsa)
-        continue
-      }
-      blocking += 1
-      console.log(
-        `::error::${dir}: ${info.severity} advisory ${ghsa} not allowlisted — ${info.title}`
-      )
-    }
-  }
-
-  if (suppressed.size > 0) {
-    console.log(`\nAllowlisted (tolerated until ${expires}, tracked in ${tracking ?? 'n/a'}):`)
-    for (const ghsa of suppressed) {
-      console.log(`  - ${ghsa}: ${allow[ghsa]}`)
-    }
-  }
-
-  // Hygiene: flag allowlist entries that no longer match any live advisory so
-  // stale exceptions get pruned rather than lingering silently.
-  const live = new Set()
-  for (const dir of dirs) for (const g of highSeverityGhsas(dir).keys()) live.add(g)
-  for (const ghsa of allowIds) {
-    if (!live.has(ghsa)) {
-      console.log(
-        `::warning::allowlist entry ${ghsa} matches no current advisory — remove it from .github/audit-allowlist.json`
-      )
-    }
-  }
+  const { blocking, suppressed } = classify(dirs, allowIds, expired)
+  reportSuppressed(suppressed, allow, expires, tracking)
+  warnStaleEntries(dirs, allowIds)
 
   if (blocking > 0) {
     console.log(`\n${blocking} non-allowlisted high/critical advisory(ies) — failing.`)

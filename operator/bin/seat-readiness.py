@@ -41,6 +41,7 @@ Exit codes: 0 = every blocker row passed; 1 = a blocker row FAILED or is UNKNOWN
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import subprocess
@@ -445,6 +446,21 @@ def check_initiation_card(rep: Report, slug: str, cfg: dict) -> None:
         )
 
 
+# -------------------------------------------------------- deadline replies
+def check_deadline_replies(rep: Report, cfg: dict) -> None:
+    """Can a reader answer the deadline digest in plain words, and will it land?
+    The rows live in ``lib/deadline_replies.py`` (module-size ceiling)."""
+    spec = importlib.util.spec_from_file_location(
+        "readiness_deadline_replies", Path(__file__).resolve().parent / "lib" / "deadline_replies.py"
+    )
+    if spec is None or spec.loader is None:
+        raise SystemExit("FATAL: cannot load lib/deadline_replies.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for row in module.rows(cfg, REPO_ROOT):
+        rep.add(**row)
+
+
 # ------------------------------------------------------------------ coverage
 def coverage_rows(slug: str, cfg: dict) -> list[dict]:
     """One row per routine the FIRM was promised, generated from routine-grid.yaml.
@@ -562,6 +578,7 @@ def main() -> int:
     check_routines(rep, cfg, raw)
     check_channel(rep, cfg)
     check_initiation_card(rep, args.slug, cfg)
+    check_deadline_replies(rep, cfg)
 
     cov = coverage_rows(args.slug, cfg) if args.coverage else []
 

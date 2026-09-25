@@ -1,9 +1,10 @@
 /**
  * The three modules the reconciler and the register CLI share.
  *
- * They are `.mjs` rather than `.ts` for one structural reason: the reconciler
- * runs under `tsx` in CI, and `.claude/hooks/lib/register.mjs` is run by bare
- * `node` from a bash wrapper with no build step. Before they existed, each rule
+ * They are `.mjs` because `.claude/hooks/lib/register.mjs` was, until
+ * 2026-09-25, run by bare `node`. Both callers now run under the repo's pinned
+ * tsx (the CLI so it can write through src/lib/db/obligations.ts), so the
+ * extension is history rather than a constraint. Before they existed, each rule
  * was written twice and the copies had already drifted -- the envelope parse
  * threw on garbage in one copy and returned empty in the other, so CI read "the
  * database is broken" where the CLI read "no such customer".

@@ -144,74 +144,41 @@ function listMarkdown(dir) {
     .map((e) => e.name)
 }
 
+/** The index-size block every result carries, for a given index size. */
+function indexStats(bytes, lines) {
+  return {
+    bytes,
+    lines,
+    byteCap: BYTE_CAP,
+    byteTarget: TARGET_BYTES,
+    lineCap: LINE_CAP,
+    bytesRemaining: TARGET_BYTES - bytes,
+    bytesRemainingToReadLimit: READ_LIMIT_BYTES - bytes,
+    linesRemaining: LINE_CAP - lines,
+  }
+}
+
+/** The result for a store that cannot be audited at all. */
+function missingResult(dir, problem) {
+  return {
+    ok: false,
+    missing: true,
+    dir,
+    total: 0,
+    reachable: 0,
+    orphans: [],
+    dangling: [],
+    attic: 0,
+    index: indexStats(0, 0),
+    problems: [problem],
+  }
+}
+
 /**
- * @returns {{ok: boolean, missing?: true, dir: string, total: number,
- *   reachable: number, orphans: string[], dangling: string[], attic: number,
- *   index: {bytes: number, lines: number, byteCap: number, byteTarget: number,
- *   lineCap: number, bytesRemaining: number, bytesRemainingToReadLimit: number,
- *   linesRemaining: number}, problems: string[], warnings?: string[]}}
+ * Fixed-point walk from the index, following only into files that exist as
+ * top-level memories. Attic entries are terminal: retired, still addressable.
  */
-function auditStore(dir) {
-  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
-    return {
-      ok: false,
-      missing: true,
-      dir,
-      total: 0,
-      reachable: 0,
-      orphans: [],
-      dangling: [],
-      attic: 0,
-      index: {
-        bytes: 0,
-        lines: 0,
-        byteCap: BYTE_CAP,
-        byteTarget: TARGET_BYTES,
-        lineCap: LINE_CAP,
-        bytesRemaining: TARGET_BYTES,
-        bytesRemainingToReadLimit: READ_LIMIT_BYTES,
-        linesRemaining: LINE_CAP,
-      },
-      problems: [`memory store not found at ${dir}`],
-    }
-  }
-
-  const indexPath = path.join(dir, INDEX)
-  if (!fs.existsSync(indexPath)) {
-    return {
-      ok: false,
-      missing: true,
-      dir,
-      total: 0,
-      reachable: 0,
-      orphans: [],
-      dangling: [],
-      attic: 0,
-      index: {
-        bytes: 0,
-        lines: 0,
-        byteCap: BYTE_CAP,
-        byteTarget: TARGET_BYTES,
-        lineCap: LINE_CAP,
-        bytesRemaining: TARGET_BYTES,
-        bytesRemainingToReadLimit: READ_LIMIT_BYTES,
-        linesRemaining: LINE_CAP,
-      },
-      problems: [`no ${INDEX} at ${dir}`],
-    }
-  }
-
-  const memories = listMarkdown(dir).filter((n) => !NOT_A_MEMORY.has(n))
-  const memorySet = new Set(memories)
-
-  const atticDir = path.join(dir, ATTIC)
-  const atticFiles = fs.existsSync(atticDir) ? listMarkdown(atticDir) : []
-  const atticSet = new Set(atticFiles)
-
-  const indexRaw = fs.readFileSync(indexPath, 'utf8')
-
-  // Fixed-point walk from the index, following only into files that exist as
-  // top-level memories. Attic entries are terminal: retired, still addressable.
+function walkFromIndex(dir, indexRaw, memorySet) {
   const reachable = new Set()
   const referenced = new Set()
   const queue = linkTargets(indexRaw)
@@ -220,7 +187,7 @@ function auditStore(dir) {
     const name = queue.shift()
     if (!memorySet.has(name) || reachable.has(name)) continue
     reachable.add(name)
-    let body = ''
+    let body
     try {
       body = fs.readFileSync(path.join(dir, name), 'utf8')
     } catch {
@@ -231,6 +198,55 @@ function auditStore(dir) {
       if (memorySet.has(t) && !reachable.has(t)) queue.push(t)
     }
   }
+  return { reachable, referenced }
+}
+
+function storeProblems(orphans, dangling, bytes, lines) {
+  const problems = []
+  if (orphans.length) problems.push(`${orphans.length} orphan(s): reachable from no index`)
+  if (dangling.length) problems.push(`${dangling.length} dangling reference(s): indexed, absent`)
+  if (bytes > BYTE_CAP) problems.push(`${INDEX} is ${bytes} bytes, over the ${BYTE_CAP} read limit`)
+  if (lines > LINE_CAP) problems.push(`${INDEX} is ${lines} lines, over the ${LINE_CAP} cap`)
+  return problems
+}
+
+/**
+ * Warnings do not fail the audit. Exceeding the recommended target is a compaction
+ * cue, not a broken store, and an audit that exits non-zero on a soft cue teaches
+ * people to stop reading it.
+ */
+function storeWarnings(bytes) {
+  if (bytes <= TARGET_BYTES) return []
+  return [
+    `${INDEX} is ${bytes} bytes, over the ${TARGET_BYTES} recommended target ` +
+      `(read limit is ${READ_LIMIT_BYTES}); archive a settled row WITH its annotation`,
+  ]
+}
+
+/**
+ * @returns {{ok: boolean, missing?: true, dir: string, total: number,
+ *   reachable: number, orphans: string[], dangling: string[], attic: number,
+ *   index: {bytes: number, lines: number, byteCap: number, byteTarget: number,
+ *   lineCap: number, bytesRemaining: number, bytesRemainingToReadLimit: number,
+ *   linesRemaining: number}, problems: string[], warnings?: string[]}}
+ */
+function auditStore(dir) {
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+    return missingResult(dir, `memory store not found at ${dir}`)
+  }
+
+  const indexPath = path.join(dir, INDEX)
+  if (!fs.existsSync(indexPath)) return missingResult(dir, `no ${INDEX} at ${dir}`)
+
+  const memories = listMarkdown(dir).filter((n) => !NOT_A_MEMORY.has(n))
+  const memorySet = new Set(memories)
+
+  const atticDir = path.join(dir, ATTIC)
+  const atticFiles = fs.existsSync(atticDir) ? listMarkdown(atticDir) : []
+  const atticSet = new Set(atticFiles)
+
+  const indexRaw = fs.readFileSync(indexPath, 'utf8')
+  const { reachable, referenced } = walkFromIndex(dir, indexRaw, memorySet)
 
   const orphans = memories.filter((n) => !reachable.has(n)).sort()
   /**
@@ -245,25 +261,7 @@ function auditStore(dir) {
 
   const bytes = Buffer.byteLength(indexRaw, 'utf8')
   const lines = indexRaw.split('\n').length
-
-  const problems = []
-  if (orphans.length) problems.push(`${orphans.length} orphan(s): reachable from no index`)
-  if (dangling.length) problems.push(`${dangling.length} dangling reference(s): indexed, absent`)
-  if (bytes > BYTE_CAP) problems.push(`${INDEX} is ${bytes} bytes, over the ${BYTE_CAP} read limit`)
-  if (lines > LINE_CAP) problems.push(`${INDEX} is ${lines} lines, over the ${LINE_CAP} cap`)
-
-  /**
-   * Warnings do not fail the audit. Exceeding the recommended target is a compaction
-   * cue, not a broken store, and an audit that exits non-zero on a soft cue teaches
-   * people to stop reading it.
-   */
-  const warnings = []
-  if (bytes > TARGET_BYTES) {
-    warnings.push(
-      `${INDEX} is ${bytes} bytes, over the ${TARGET_BYTES} recommended target ` +
-        `(read limit is ${READ_LIMIT_BYTES}); archive a settled row WITH its annotation`
-    )
-  }
+  const problems = storeProblems(orphans, dangling, bytes, lines)
 
   return {
     ok: problems.length === 0,
@@ -273,18 +271,9 @@ function auditStore(dir) {
     orphans,
     dangling,
     attic: atticFiles.length,
-    index: {
-      bytes,
-      lines,
-      byteCap: BYTE_CAP,
-      byteTarget: TARGET_BYTES,
-      lineCap: LINE_CAP,
-      bytesRemaining: TARGET_BYTES - bytes,
-      bytesRemainingToReadLimit: READ_LIMIT_BYTES - bytes,
-      linesRemaining: LINE_CAP - lines,
-    },
+    index: indexStats(bytes, lines),
     problems,
-    warnings,
+    warnings: storeWarnings(bytes),
   }
 }
 
@@ -314,6 +303,21 @@ function readReceipt(dir) {
   }
 }
 
+/** Session transcripts in the project directory, or null when it cannot be read. */
+function listSessions(projectDir) {
+  try {
+    return fs
+      .readdirSync(projectDir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.jsonl'))
+      .map((e) => {
+        const s = fs.statSync(path.join(projectDir, e.name))
+        return { name: e.name, startedMs: (s.birthtime ?? s.mtime).getTime() }
+      })
+  } catch {
+    return null
+  }
+}
+
 /**
  * Is the SessionStart hook actually firing?
  *
@@ -328,18 +332,10 @@ function readReceipt(dir) {
  * so its mtime is always newer than any receipt and mtime would report every
  * healthy session as a failure.
  */
-function auditWiring(dir, now = Date.now(), projectDir = path.dirname(dir)) {
+function auditWiring(dir, _now = Date.now(), projectDir = path.dirname(dir)) {
   const receipt = readReceipt(dir)
-  let sessions = []
-  try {
-    sessions = fs
-      .readdirSync(projectDir, { withFileTypes: true })
-      .filter((e) => e.isFile() && e.name.endsWith('.jsonl'))
-      .map((e) => {
-        const s = fs.statSync(path.join(projectDir, e.name))
-        return { name: e.name, startedMs: (s.birthtime ?? s.mtime).getTime() }
-      })
-  } catch {
+  const sessions = listSessions(projectDir)
+  if (!sessions) {
     return {
       ok: true,
       unknown: true,

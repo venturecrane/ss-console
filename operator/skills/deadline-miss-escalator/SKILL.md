@@ -39,7 +39,7 @@ Three rungs, chosen by proximity (arithmetic on authored dates only). All rungs 
 
 1. **Re-surface** (outer window) - refresh the date on the firm-internal surface with an elevated flag, so it stands out from the standing tracker view.
 2. **Re-route** (near window) - flag the matter to the responsible humans on the internal surface. Smokeball returns the responsible attorney directly (`personResponsibleStaffId`, resolved via `get_staff`), so re-route can target the matter's responsible attorney; it falls back to the firm's authored `escalation.red_flag_recipients` when no responsible attorney is set.
-3. **Notify** (within the notify window, or overdue) - deliver a triaged alert to a person. Recipient selection follows the case-alert routing rule (`references/case-alert-routing.md`): under `matter_staff` routing each item routes to its matter's assigned staff (grouped one alert per recipient); under `central` routing (or when the routing block is unauthored) delivery goes to the firm's authored `escalation.red_flag_recipients`, exactly as before. Each item carries a per-item `ACK-XXXXXX` code. This is an **internal alert to a person inside the firm**, not a client message - there is no external send.
+3. **Notify** (within the notify window, or overdue) - deliver a triaged alert to a person. Recipient selection follows the case-alert routing rule (`references/case-alert-routing.md`): under `matter_staff` routing each item routes to its matter's assigned staff (grouped one alert per recipient); under `central` routing (or when the routing block is unauthored) delivery goes to the firm's authored `escalation.red_flag_recipients`, exactly as before. Each item is numbered, and the reader answers in plain words ("got it on 1"); no code appears in the email. This is an **internal alert to a person inside the firm**, not a client message - there is no external send.
 
 **Held matters** route to **clearance**, not the ladder: a matter on CONFLICT-HOLD with an approaching date is surfaced for human clearance and never gets a client-facing step.
 
@@ -50,14 +50,26 @@ An alert fires **once**, then re-fires only after the firm's authored
 escalation ledger (`references/algorithm.md`): a broker-owned append-only JSONL
 the agent reads but never writes directly.
 
-Acknowledgement is **per item**. Each notify line carries its own `ACK-XXXXXX`
-code, keyed on the Smokeball task id, so acking one item suppresses only that
-item. The blanket `ESCALATION_ACKNOWLEDGED` is redefined: it acks exactly the
-items **quoted** in the message being replied to; items not quoted stay open (the
-footer says so). An ack is a **snooze, not a tombstone**: the item goes quiet for
+Acknowledgement is **per number**, in plain words. Each needs-you item carries
+its own number; each "Also open" matter and each matter under "Open without a
+task id" carries one number that covers all of its items. The reader replies in
+the digest's own thread ("got it on 1 and 3", or "all"). The number on the
+page is the `n` on the item's `fired` rows, and the broker ties those rows to
+the thread the digest went out in (`references/algorithm.md`), so a reply can
+only quiet items from the digest it answers. Reading the numbers out of the
+reply, matching them to rows, writing the `acked` rows, and wording the
+confirmation are all done in code by `escalation_reply_ack`; the turn chooses
+nothing and sends the tool's `confirmation_text` verbatim. A reply that names no
+number ("thanks") or an unknown number writes nothing and gets a question back.
+
+An ack is a **snooze, not a tombstone**: the item goes quiet for
 `escalation.ack_snooze_days` (pack default 7), then re-surfaces if it is still
-open in Smokeball. Only resolution in Smokeball closes an item. Items with no
-stable task id carry no code and can be cleared only by a blanket ack.
+open in Smokeball. Only resolution in Smokeball closes an item.
+
+**Codes already sent keep working.** Digests sent before 2026-09-25 carried
+per-item `ACK-XXXXXX` codes and a blanket `ESCALATION_ACKNOWLEDGED`. The rows
+still carry those codes (`token`), so a reply quoting them takes the legacy
+path below. New digests print no code.
 
 ## Prerequisites
 
@@ -79,9 +91,11 @@ Reads Smokeball (`list_tasks` `due_date`) for authored task deadlines and the ma
 
    This changed because the instruction alone did not hold. On 2026-09-02 the Smokeball credential expired, this exact fail-open path fired, and the turn composed a digest body out of nothing and sent it instead of the one line above. An instruction to you is not a control; a rendered envelope is. Treat everything in this paragraph as a backstop to the envelope, never as the primary path.
 
-   **Provenance boundary (unchanged).** `last_raised` in the wake payload records what THE OPERATOR raised, and only after a send succeeded: a null value is "no prior raise on this item", never "not raised". `ACK` codes remain the #1935 class: in any reply you write (step 3), print only a code a tool call this run returned or the reader quoted.
+   **Provenance boundary (unchanged).** `last_raised` in the wake payload records what THE OPERATOR raised, and only after a send succeeded: a null value is "no prior raise on this item", never "not raised". `ACK` codes remain the #1935 class: in any legacy reply you write (step 3), print only a code a tool call this run returned or the reader quoted.
 
-3. **On a rostered internal reply (routed here by the inbox skill):** run the per-item ack procedure - extract the `ACK` codes (resolve them against `escalation_state` output), emit an `acked` event per code with `escalation_append`, and reply enumerating what was acked and counting what remains, per the confirmation-reply template in `references/output-format.md`.
+3. **On a rostered internal reply (routed here by the inbox skill):**
+   - **A reply in a `[Deadlines]` thread in plain words** (numbers, "all", or no number at all): call `escalation_reply_ack` with no arguments, then send its `confirmation_text` to the replier verbatim, and nothing else. **An empty `confirmation_text` means send no reply at all** (the tool found no verified reply, an automatic reply, or a sender who is not rostered); never compose one to fill the gap. The tool reads the reply and the thread from the verified inbound message itself; you never pass it a number, an item, or a thread. If it refuses (no digest rows in this thread, an unknown number, nothing named), its `confirmation_text` is the question to send back; send that verbatim too. Never write an `acked` row yourself for a plain-word reply.
+   - **A reply quoting legacy `ACK-XXXXXX` codes or `ESCALATION_ACKNOWLEDGED`** (a digest sent before the numbered format): run the per-code procedure - resolve each code against `escalation_state` output, emit an `acked` event per code with `escalation_append` (`ack_token`), and reply enumerating what was acked and counting what remains, per the legacy confirmation template in `references/output-format.md`.
 4. **Never compute, never send to a client.** No date is produced; no client/tribunal-bound message is drafted or sent.
 
 **Manual firing.** Post-render, an interactive invocation of this skill is a deliberate no-op: the alert exists only as the pre_run's rendered dispatch, so manual firing means forcing the cron job itself - `hermes -p operator cron run <jobid>` via seat-probe - never composing an alert in a chat turn.
@@ -90,7 +104,7 @@ Reads Smokeball (`list_tasks` `due_date`) for authored task deadlines and the ma
 
 **Read + internal surface + internal named-human notify; zero date computation; zero external send.**
 
-The agent MAY: read authored dates; compare them to today; read the escalation ledger (`escalation_state`); emit the triaged alert to the firm's authored red-flag channel; append `fired`/`acked` escalation events **with the `escalation_append` tool through the broker's validated `escalation_event_append` verb** (the broker rejects an `acked` with no prior `fired`).
+The agent MAY: read authored dates; compare them to today; read the escalation ledger (`escalation_state`); emit the triaged alert to the firm's authored red-flag channel; append `fired`/`acked` escalation events **with the `escalation_append` tool (or, for a plain-word reply, `escalation_reply_ack`, which appends in code) through the broker's validated `escalation_event_append` verb** (the broker rejects an `acked` with no prior `fired`).
 
 The agent MUST NOT: compute or infer a deadline; send anything to a client or tribunal; move or author a date; escalate a held matter into a client-facing step; write the escalation ledger file directly (every event goes through the broker seam, so an injected reply cannot silence an alarm that never rang). **Fail-closed (ADR 0035):** if the firm has authored no `red_flag_recipients`, the notify rung has nowhere to fire - the escalator raises no named-human alert and never invents a recipient.
 
@@ -116,7 +130,7 @@ Computing "X from the incident" to decide what is overdue (the cardinal sin - ov
 3. `ESCALATION_FIRED` targets the authored red-flag recipient; with none authored, no alert fires.
 4. Held matters surface for clearance, no client step.
 5. No date is computed; overdue is decided by an authored date passing today.
-6. Every rendered matter number equals a `matter_number` the wake payload or a this-turn read carries; an absent number renders explicit absence ("no number on record" / "matter number unavailable"), never a GUID and never a supplied value.
+6. Every rendered matter number equals a `matter_number` the wake payload or a this-turn read carries; an absent number renders explicit absence ("matter with no number on record" / "matter number unavailable"), never a GUID and never a supplied value.
 
 ## References
 

@@ -998,7 +998,14 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # shared/customer_config.py, shared/msgraph_broker.py, plugins/hermes-smd-reply.
 # No overlay-pairs file or audit schema changed (git diff --stat 12621343
 # 8757e374), so only overlayRef moves.
-ARG OVERLAY_REF="8757e374f724c5f45a72d013a3e4fdbab1d08fd1"
+# 2026-09-25 (48726abb, overlay #384). Plain-word replies to a numbered
+# deadline digest: escalation_reply_ack resolves "got it on 1" to the digest's
+# raise rows by thread and number in code; prerendered_dispatch stamps
+# dispatch_ref on the send and n/snooze_days on each raise (the broker's
+# digest_ref.py stamps thread_ref, same ss-console PR #2942). No overlay-pairs
+# file or audit schema changed (git diff --stat 8757e374 48726abb), so only
+# overlayRef moves.
+ARG OVERLAY_REF="48726abbbd9da1c746a63ac0a7d5800fa910a65a"
 
 ARG CUSTOMER_SLUG=customer-zero
 

@@ -24,6 +24,14 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'child_process'
+
+// Every case spawns `npx tsx scripts/ci-reconcile-obligations.ts`, a cold
+// TypeScript compile per invocation that takes 3 to 7 seconds depending on
+// machine load. vitest's default 5 s timeout is below that cost, so the suite
+// went red on a loaded laptop (18 timeouts at 5.0 to 6.7 s in the 2026-09-25
+// pre-push verify) while every assertion was true. The timeout is a property
+// of the instrument, not of the code under test; size it to the instrument.
+vi.setConfig({ testTimeout: 60_000 })
 import { mkdtempSync, writeFileSync, rmSync, chmodSync, readFileSync, existsSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
@@ -31,9 +39,9 @@ import { join, resolve } from 'path'
 const SCRIPT = resolve(process.cwd(), 'scripts/ci-reconcile-obligations.ts')
 
 // Every case boots the real script in a fresh subprocess through `npx tsx`
-// (tsx is not a local dependency, so npx resolves it from its cache each
-// time). That is over a second idle and several seconds when the machine is
-// busy, which the 5s unit-test default does not cover: on 2026-09-25 the file
+// (the repo's pinned devDependency since 2026-09-25). That is over a second
+// idle and several seconds when the machine is busy, which the 5s unit-test
+// default does not cover: on 2026-09-25 the file
 // failed 12 of 37 cases on timeouts alone under a load average of 12, with
 // the same tree passing when the machine was quiet. A subprocess-per-case
 // integration file gets an integration budget.

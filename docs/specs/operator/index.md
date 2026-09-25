@@ -43,6 +43,12 @@ Build agents consuming these specs should treat each spec as the **implementatio
 | -------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | [demand-drafting-routine.md](demand-drafting-routine.md) | Design; first firm's terms decided 09-24, not yet accepted | On-request time-limited demand as a queued seat job: premise preflight, streamed drafting, filing with read-back; the low-limit watch |
 
+## Product redesigns
+
+| Spec                                                           | Status                                        | Scope                                                                                                                                                                                      |
+| -------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [case-manager-deadline-work.md](case-manager-deadline-work.md) | Captain-directed 2026-09-25; Phase 1 building | Deadline work judged by "would a great case manager have sent this?": plain-word replies instead of ACK codes, the Operator closing its own tasks, a trustworthy task list, prep for dates |
+
 ## Open ambiguities requiring Captain decision
 
 These were flagged as `[AMBIGUITY: ...]` markers in the specs. Listed here for triage:

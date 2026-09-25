@@ -36,7 +36,7 @@ A layer that survives a redeploy is exactly the layer a merge cannot reach. Thos
 
 ## The merge gate
 
-`.github/workflows/runtime-ac-proof.yml` blocks a PR that marks a `(runtime)`-tagged acceptance criterion `met` without a `crane_verify` ID in the Evidence column. `(repo)` ACs still take a file:line, because that is the right evidence for code. Parser: `scripts/runtime-ac-proof.mjs`, tested in `tests/runtime-ac-proof.test.ts`.
+`.github/workflows/runtime-ac-proof.yml` blocks a PR that marks a `(runtime)`-tagged acceptance criterion `met` without a `crane_verify` ID in the Evidence column. The ID is resolved against the verify ledger (crane-context `GET /verify/lookup`, with the repo's `CRANE_RELAY_KEY`): it must exist and be a `live_state` or `fresh_process` observation, and a ledger the run cannot reach fails the check rather than passing it. The check is a required context in the main ruleset since 2026-09-25, so it blocks the merge rather than annotating it. `(repo)` ACs still take a file:line, because that is the right evidence for code. Parser: `scripts/runtime-ac-proof.mjs`, tested in `tests/runtime-ac-proof.test.ts`.
 
 It exists because the acceptance-criteria machinery otherwise certifies the author's own definition of done. `tick-acs-on-merge` parses the merging PR's own status table to tick the linked issue, and `unmet-ac-on-close` skips PR-driven closes, so a slice that declares itself met is what closes the epic (`vfy_01KYNVJ4VG90G26SZSYPXF05KY`).
 
