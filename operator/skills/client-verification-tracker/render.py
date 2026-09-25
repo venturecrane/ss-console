@@ -24,23 +24,9 @@ Stdlib only; path-loaded sibling of ``pre_run.py``.
 
 from __future__ import annotations
 
-import hashlib
-
-# ---------------------------------------------------------------------------
-# canonical_body_sha256 — the ONE hash function (cross-workstream contract).
-# Same definition as the escalator's render.py and the console verifier;
-# arbiter fixture: operator/contracts/fixtures/body-canon-vectors.json.
-# ---------------------------------------------------------------------------
-
-
-def canonical_body_sha256(text: str) -> str:
-    """CRLF->LF, per-line trailing whitespace stripped, trailing newlines
-    stripped, sha256 over utf-8."""
-    normalized = text.replace("\r\n", "\n")
-    lines = [line.rstrip(" \t") for line in normalized.split("\n")]
-    canonical = "\n".join(lines).rstrip("\n")
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
+# canonical_body_sha256, the ONE body hash, lives in skill_helpers.py (shared
+# with the escalator; arbiter fixture operator/contracts/fixtures/
+# body-canon-vectors.json). dispatch_envelope.py stamps it.
 
 # ---------------------------------------------------------------------------
 # The situation map — CLOSED, authored. Keyed by the pre_run plan's action

@@ -320,3 +320,93 @@ async def try_write_emitted_wake(
         )
     except Exception as exc:  # noqa: BLE001 - observability never gates the wake; the failure is written to stderr and the wake proceeds
         warn_observability_failure(exc, "emitted-wake row")
+
+
+# ---------------------------------------------------------------------------
+# The two templated senders' sibling-module plumbing (client-verification-
+# tracker, deadline-miss-escalator). Their ``dispatch_envelope.py`` and
+# ``render.py`` each carried these four bodies AST-identical and ungated
+# (code review 2026-09-25, Architecture 8); they live here now, so the
+# sync gate covers them like every other shared helper.
+# ---------------------------------------------------------------------------
+
+
+def load_sibling(skill_dirname: str, anchor: str, filename: str, module_name: str) -> Any | None:
+    """Path-load a module shipped in the same skill directory as ``anchor``.
+
+    Looked up beside ``anchor`` first, then under ``/opt/data/skills`` and
+    ``/app/skills`` (the scheduler may stage a file alone; those are where the
+    volume seed and the image put a skill's files). ``None`` when no copy is
+    found: the caller decides whether that degrades or refuses.
+    """
+    import importlib.util
+
+    candidates = [Path(anchor).resolve().parent]
+    for base in ("/opt/data/skills", "/app/skills"):
+        candidates.append(Path(base) / skill_dirname)
+    for cand in candidates:
+        module_path = cand / filename
+        if module_path.is_file():
+            spec = importlib.util.spec_from_file_location(module_name, module_path)
+            if spec is None or spec.loader is None:
+                continue
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = module
+            spec.loader.exec_module(module)
+            return module
+    return None
+
+
+def load_customer_yaml(customer_yaml_path: str | None) -> dict:
+    """The parsed customer.yaml, or ``{}``: unreadable config reads as unauthored routing."""
+    path = customer_yaml_path or os.environ.get("SMD_CUSTOMER_YAML_PATH")
+    if not path:
+        return {}
+    try:
+        import yaml
+    except ImportError:
+        return {}
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+    except Exception:  # noqa: BLE001 - unreadable config = unauthored routing, which every caller renders as such
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def write_dispatch_envelope(skill_name: str, payload: dict) -> bool:
+    """Atomic 0600 write of the skill's dispatch envelope beside the provenance
+    handoff. ``False`` on any failure: an envelope that cannot be written must
+    never change the wake."""
+    try:
+        directory = Path(os.environ.get("HERMES_HOME") or "/opt/data") / ".smd" / "pre_run"
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        tmp = directory / ("." + skill_name + ".dispatch.json.tmp")
+        tmp.unlink(missing_ok=True)
+        handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(handle, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+        os.replace(tmp, directory / (skill_name + ".dispatch.json"))
+        return True
+    except Exception as exc:  # noqa: BLE001 - never change the wake; the failure goes to stderr and the caller sends the failure note
+        sys.stderr.write("[pre_run] dispatch envelope write failed (" + str(exc) + ")\n")
+        return False
+
+
+def canonical_body_sha256(text: str) -> str:
+    """THE canonical body hash (cross-workstream contract): CRLF->LF, per-line
+    trailing whitespace stripped, trailing newlines stripped, sha256 over utf-8.
+
+    Stamped on the dispatch envelope and EMITTED_WAKE; the overlay's
+    CONFIRM_SEND_DISPATCHED stamp and the console verifier
+    (``operator/bin/lib/send_verify.py``) compute the SAME function. Every
+    implementation is tested against ``operator/contracts/fixtures/
+    body-canon-vectors.json``: change the definition nowhere without changing
+    it everywhere.
+    """
+    import hashlib
+
+    normalized = text.replace("\r\n", "\n")
+    lines = [line.rstrip(" \t") for line in normalized.split("\n")]
+    canonical = "\n".join(lines).rstrip("\n")
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

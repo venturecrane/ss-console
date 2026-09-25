@@ -44,10 +44,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from .broker_context import BrokerContext
 from .corrections import PROPOSED_STATUS, build_correction_row
 
 
-def _ledger(broker: Any) -> Any:
+def _ledger(broker: BrokerContext) -> Any:
     if broker.ledger is None:
         raise ValueError("audit ledger not configured on this broker")
     return broker.ledger
@@ -62,39 +63,41 @@ def _pinned_row(action: str, request: dict[str, Any], action_type: str) -> dict[
     return row
 
 
-def _append_pinned(broker: Any, action: str, request: dict[str, Any], action_type: str) -> dict[str, Any]:
+def _append_pinned(broker: BrokerContext, action: str, request: dict[str, Any], action_type: str) -> dict[str, Any]:
     ledger = _ledger(broker)
     row = _pinned_row(action, request, action_type)
     return {"ok": True, "id": ledger.append(row)}
 
 
 def suppressed_wake_append(
-    broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+    broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
 ) -> dict[str, Any]:
     return _append_pinned(broker, action, request, "SUPPRESSED_WAKE")
 
 
 def emitted_wake_append(
-    broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+    broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
 ) -> dict[str, Any]:
     return _append_pinned(broker, action, request, "EMITTED_WAKE")
 
 
 def webhook_suppressed_append(
-    broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+    broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
 ) -> dict[str, Any]:
     return _append_pinned(broker, action, request, "WEBHOOK_SUPPRESSED")
 
 
 def correction_propose(
-    broker: Any, _action: str, request: dict[str, Any], _pid: int, _uid: int | None
+    broker: BrokerContext, _action: str, request: dict[str, Any], _pid: int, _uid: int | None
 ) -> dict[str, Any]:
     ledger = _ledger(broker)
     row = build_correction_row(request.get("proposal"))
     return {"ok": True, "id": ledger.append(row), "status": PROPOSED_STATUS}
 
 
-def audit_append(broker: Any, _action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def audit_append(
+    broker: BrokerContext, _action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     ledger = _ledger(broker)
     row = request.get("row")
     if not isinstance(row, dict):

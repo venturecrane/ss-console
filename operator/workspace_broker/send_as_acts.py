@@ -42,6 +42,7 @@ from typing import Any
 
 import yaml
 
+from .broker_context import BrokerContext
 from .canon import canonical
 from .send_as_links import SEND_AS_TTL_SECONDS as _LINK_TTL_SECONDS
 from .send_as_links import (
@@ -53,7 +54,12 @@ from .send_as_links import (
 )
 from .msgraph_ops import MsGraphRefused, MsGraphTransportError, collect_recipients
 from .recipient_policy import authored_policy, domain_of, normalize_address, split_blocks
-from .transmit_verbs import append_send_row, dispatch_transmit
+from .send_as_transport import NOT_CONFIGURED as _NOT_CONFIGURED
+from .send_as_transport import audit as _audit
+from .send_as_transport import audited_send as _audited_send
+from .send_as_transport import graph_of as _graph
+from .send_as_transport import notice as _notice
+from .send_as_transport import require_configured as _require_configured
 
 #: How long a staff member has to answer. Its own constant, deliberately not the
 #: act TTL: the act window was authorized for matter creation and widening it
@@ -290,55 +296,23 @@ class SendAsStore:
         return dict(found) if found else None
 
 
-def _audited_send(broker: Any, payload: dict[str, Any], session_id: str = "") -> dict[str, Any]:
-    """A seat-mailbox send (approval email or notice) through the SAME audited
-    transmit every other broker send uses: recipient-fenced, and written to the
-    ledger as CONFIRM_SEND_DISPATCHED with its audit header, so the console's
-    send reconciler (operator/bin/reconcile-sends.py) joins it by identity
-    rather than flagging the Operator's own approval mail as unaudited."""
-    keep_copy = not payload.pop("no_sent_copy", False)
-    return dispatch_transmit(
-        broker,
-        "msgraph_send",
-        {"payload": payload, "session_id": session_id},
-        send=lambda message: broker.msgraph.send(message, save_to_sent_items=keep_copy),
-        reply=broker.msgraph.reply,
-        refused=MsGraphRefused,
-        transport=MsGraphTransportError,
-        attempted_for_send=collect_recipients,
-        identity_key="mailbox",
-    )
-
-
-def _notice(broker: Any, to: str, subject: str, text: str) -> None:
-    """A fixed-recipient notice to a staff member, through the audited send."""
-    _audited_send(broker, {"to": [to], "subject": subject, "body_text": text})
-
-
-def _require_configured(broker: Any) -> None:
-    if broker.msgraph is None or broker.ledger is None or not getattr(broker, "audit_db_path", None):
-        raise ValueError("send-as is not configured on this broker (needs msgraph, an audit ledger, and an audit db)")
-
-
-def _store(broker: Any) -> SendAsStore:
+def _store(broker: BrokerContext) -> SendAsStore:
+    if not broker.audit_db_path:
+        raise ValueError(_NOT_CONFIGURED)
     return SendAsStore(broker.audit_db_path, now=getattr(broker, "send_as_now", None))
-
-
-def _audit(broker: Any, action_type: str, verb: str, meta: dict[str, Any], session_id: str = "") -> None:
-    append_send_row(broker, action_type, verb, meta, session_id=session_id)
 
 
 def _clean(value: Any, limit: int = 320) -> str:
     return value.strip()[:limit] if isinstance(value, str) else ""
 
 
-def _validated_draft(broker: Any, request: dict[str, Any], instructed_by: str) -> tuple[dict[str, Any], str]:
+def _validated_draft(broker: BrokerContext, request: dict[str, Any], instructed_by: str) -> tuple[dict[str, Any], str]:
     """The canonical draft and the approver's name, or ``SendAsRefused`` naming why."""
     data = _seat(broker.customer_path)
     if not _authors_confirm(data):
         raise SendAsRefused("this seat authors no persona with exposure.external_send_as_staff: confirm")
     roster = staff_roster(data)
-    msg = canonical_payload(_mapping(request.get("payload")), broker.msgraph.mailbox())
+    msg = canonical_payload(_mapping(request.get("payload")), _graph(broker).mailbox())
     if msg["from"] not in roster:
         raise SendAsRefused(f"{msg['from']} is not on scope.staff_send_as")
     if not instructed_by or (instructed_by != msg["from"] and instructed_by not in _admins(data)):
@@ -379,7 +353,7 @@ def _insert_draft(
     return act_id, now
 
 
-def propose(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
+def propose(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any]:
     """Store a draft for a staff member's approval and email it to them."""
     _require_configured(broker)
     session_id = _clean(request.get("session_id"), 200)
@@ -467,7 +441,9 @@ def _open_row(store: SendAsStore, request: dict[str, Any]) -> tuple[dict[str, An
     return (None, {**_BASE, **ended}) if ended is not None else (row, None)
 
 
-def _authority_refusal(broker: Any, row: dict[str, Any], request: dict[str, Any], meta: dict[str, Any]) -> str | None:
+def _authority_refusal(
+    broker: BrokerContext, row: dict[str, Any], request: dict[str, Any], meta: dict[str, Any]
+) -> str | None:
     """Why this person may not give this answer, or None. Audits a refusal.
 
     The approver alone may send or change; the approver or an administrator may
@@ -485,7 +461,7 @@ def _authority_refusal(broker: Any, row: dict[str, Any], request: dict[str, Any]
         _audit(broker, "SEND_AS_REFUSED", "send_as_decide", {**meta, "stage": "authority", "reason": reason})
         return reason
     try:
-        if broker.msgraph.sent_items_holds(_clean(request.get("internet_message_id"), 998)):
+        if _graph(broker).sent_items_holds(_clean(request.get("internet_message_id"), 998)):
             raise SendAsRefused("that answer was sent from the Operator's own mailbox")
     except (SendAsRefused, MsGraphTransportError, MsGraphRefused) as exc:
         reason = f"the answer's origin could not be confirmed: {exc}"
@@ -495,7 +471,7 @@ def _authority_refusal(broker: Any, row: dict[str, Any], request: dict[str, Any]
 
 
 def _apply_cancel(
-    broker: Any, store: SendAsStore, row: dict[str, Any], decided_by: str, meta: dict[str, Any]
+    broker: BrokerContext, store: SendAsStore, row: dict[str, Any], decided_by: str, meta: dict[str, Any]
 ) -> dict[str, Any]:
     store.claim(
         row["id"],
@@ -508,7 +484,12 @@ def _apply_cancel(
 
 
 def _apply_change(
-    broker: Any, store: SendAsStore, row: dict[str, Any], decided_by: str, instruction: str, meta: dict[str, Any]
+    broker: BrokerContext,
+    store: SendAsStore,
+    row: dict[str, Any],
+    decided_by: str,
+    instruction: str,
+    meta: dict[str, Any],
 ) -> dict[str, Any]:
     if not instruction:
         return _refused("say what to change after 'change:'")
@@ -541,7 +522,12 @@ def _apply_change(
 
 
 def _report_failure(
-    broker: Any, store: SendAsStore, row: dict[str, Any], msg: dict[str, Any], exc: Exception, meta: dict[str, Any]
+    broker: BrokerContext,
+    store: SendAsStore,
+    row: dict[str, Any],
+    msg: dict[str, Any],
+    exc: Exception,
+    meta: dict[str, Any],
 ) -> dict[str, Any]:
     """No automatic retry: a transport failure's outcome is unknown and a retry
     could deliver twice. The approver is told, never left guessing."""
@@ -560,7 +546,7 @@ def _report_failure(
 
 
 def _apply_send(
-    broker: Any, store: SendAsStore, row: dict[str, Any], decided_by: str, meta: dict[str, Any]
+    broker: BrokerContext, store: SendAsStore, row: dict[str, Any], decided_by: str, meta: dict[str, Any]
 ) -> dict[str, Any]:
     approver = row["approver"]
     msg = json.loads(row["payload_json"])
@@ -580,10 +566,10 @@ def _apply_send(
     ):
         return _refused("this draft was answered already")
     try:
-        result = broker.msgraph.send_as_staff(msg, approver)
+        result = _graph(broker).send_as_staff(msg, approver)
     except (MsGraphRefused, MsGraphTransportError) as exc:
         return _report_failure(broker, store, row, msg, exc, meta)
-    conversation = broker.msgraph.conversation_of(result.get("graph_message_id") or "")
+    conversation = _graph(broker).conversation_of(result.get("graph_message_id") or "")
     fields = {"conversation_id": conversation, "result": result.get("lookup") or ""}
     store.claim(row["id"], from_status=STATUS_SENDING, to_status=STATUS_DISPATCHED, fields=fields)
     # The reconciler's exact joins (reconcile-sends.py pass 1): the header value
@@ -604,7 +590,7 @@ def _apply_send(
     return {**_BASE, "status": "DISPATCHED", "reason": f"sent from {approver}"}
 
 
-def decide(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
+def decide(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any]:
     """Apply a staff member's answer: send it as them, revise it, or cancel it."""
     _require_configured(broker)
     store = _store(broker)
@@ -624,7 +610,7 @@ def decide(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
     return _apply_send(broker, store, row, decided_by, meta)
 
 
-def decide_link(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
+def decide_link(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any]:
     """Apply an approve-link click (ADR 0089 amendment 5a).
 
     The token names the row, the verb and the expiry and is signed with a key
@@ -662,7 +648,7 @@ def decide_link(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
     return outcome
 
 
-def match_reply(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
+def match_reply(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any]:
     """Tell the approver when an outside party answers a draft sent as them."""
     _require_configured(broker)
     conversation = _clean(request.get("conversation_id"), 500)
@@ -690,7 +676,9 @@ def match_reply(broker: Any, request: dict[str, Any]) -> dict[str, Any]:
 
 
 def _verb(fn: Any) -> Any:
-    def handler(broker: Any, _action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+    def handler(
+        broker: BrokerContext, _action: str, request: dict[str, Any], _pid: int, _uid: int | None
+    ) -> dict[str, Any]:
         return fn(broker, request)
 
     return handler
