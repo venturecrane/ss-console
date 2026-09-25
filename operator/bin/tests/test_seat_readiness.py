@@ -312,6 +312,56 @@ def test_a_blank_schedule_is_not_a_digest() -> None:
     assert _deadline_rows(cfg)["every deadline recipient may reply"].status == sr.INFO
 
 
+def _casework_cfg(*, skill="date-prep-brief", block=None, mode="matter_staff", posture="autonomous") -> dict:
+    cfg = _digest_cfg(posture=posture, cron=False)
+    cfg["personas"][0]["cron"] = [{"skill": skill, "schedule": "5 8-11 * * 1-5"}]
+    cfg["escalation"]["case_alert_routing"] = {"mode": mode}
+    if block is not None:
+        cfg["case_manager"] = block
+    return cfg
+
+
+def test_no_casework_cron_adds_no_rows() -> None:
+    assert list(_deadline_rows(_digest_cfg())) == [
+        "every deadline recipient may reply",
+        "deadline digest sends with rows behind its numbers",
+    ]
+
+
+def test_an_armed_casework_routine_with_its_job_passes() -> None:
+    rows = _deadline_rows(_casework_cfg(block={"date_prep": {"level": "prepares", "window_days": 14}}))
+    casework = {k: v for k, v in rows.items() if k != "every deadline recipient may reply"}
+    assert set(casework) == {
+        "every armed case-manager routine has a job authored",
+        "the date-prep brief reaches the matter's own staff",
+        "case-manager messages send with rows behind their numbers",
+    }
+    assert all(r.status == sr.PASS for r in casework.values())
+
+
+def test_an_armed_casework_routine_with_no_job_fails() -> None:
+    """Armed with its job off: every tick suppresses, and nobody would know."""
+    row = _deadline_rows(_casework_cfg(skill="task-list-keeper", block={"date_prep": {"level": "prepares"}}))[
+        "every armed case-manager routine has a job authored"
+    ]
+    assert row.status == sr.FAIL and row.blocker and "task-list-keeper" in row.detail
+
+
+def test_a_date_prep_brief_needs_matter_staff_routing() -> None:
+    row = _deadline_rows(_casework_cfg(block={"date_prep": {}}, mode="central"))[
+        "the date-prep brief reaches the matter's own staff"
+    ]
+    assert row.status == sr.FAIL and "central" in row.detail
+
+
+@pytest.mark.parametrize("posture", ["confirm", "draft_for_review"])
+def test_a_casework_message_held_or_drafted_fails(posture: str) -> None:
+    row = _deadline_rows(_casework_cfg(block={"date_prep": {}}, posture=posture))[
+        "case-manager messages send with rows behind their numbers"
+    ]
+    assert row.status == sr.FAIL and posture in row.detail
+
+
 @pytest.mark.parametrize("slug", ["ashton-price", "pilot-smokeball"])
 def test_real_seats_pass_the_deadline_reply_checks(slug: str) -> None:
     rep = sr.Report(slug)

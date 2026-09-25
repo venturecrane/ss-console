@@ -609,6 +609,26 @@ personas:
           scheduled: true
           webhook: false
         enabled: true
+      # ---- case manager, not the alarm (docs/specs/operator/case-manager-deadline-work.md) ----
+      # Two scheduled routines that do what a case manager does with the task
+      # list and the calendar; each runs only at the levels the case_manager
+      # block below authors (absent block = both routines do nothing). No
+      # routine-grid row: a product rehearsal on the proving seat, not a
+      # routine any agreement names.
+      - name: task-list-keeper # weekly: the Operator's own tasks closed or handed over once; cleanup proposal per attorney
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+      - name: date-prep-brief # a date entering its window starts the prep; one done-plus-decisions brief per matter
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
       # ---- work-product drafting lane (law-firm/pi@0.3.0, staged 2026-07-28) ----
       # ON-DEMAND, ATTORNEY-INITIATED ONLY: manual initiation, never scheduled,
       # never webhook — no routine may produce work product (the routine lanes
@@ -748,6 +768,14 @@ personas:
         wake_policy: pre_run_decides
       - skill: trial-binder-assembler
         schedule: '19 9 * * 1' # weekly Mon 0919 seat-local — trial-prep deadline sweep
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      - skill: task-list-keeper
+        schedule: '37 6 * * 1' # weekly Mon 0637 seat-local: staggered off :00, and ahead of the 0700 escalator so its "in Monday's task review" line points at a proposal already sent
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      - skill: date-prep-brief
+        schedule: '5 8-11 * * 1-5' # weekdays at 0805, 0905, 1005, 1105 seat-local: one matter per tick (the matter-mixing fence), so up to four briefs a morning
         pre_run: pre_run.py
         wake_policy: pre_run_decides
       - skill: connector-auth-check
@@ -1090,6 +1118,58 @@ escalation:
     mode: matter_staff
     fallback_recipients:
       - scott@smd.services
+
+# ---- CASE MANAGER (docs/specs/operator/case-manager-deadline-work.md) ----
+# The deadline jobs a case manager owns, each at the level the firm chose, in
+# the portal's tier language: surfaces (says so, does nothing), prepares (a
+# draft or a proposal a person approves), handles (does it). ABSENT BLOCK =
+# every job off and the escalator renders exactly as before; an absent
+# sub-block turns off that one job. Read at run time off this file by the
+# task-list-keeper, date-prep-brief and deadline-miss-escalator pre_runs.
+# Validated by src/lib/operator/customer-yaml/sections-case-manager.ts.
+# STAGING REHEARSAL VALUES: this seat proves the jobs; no client seat authors
+# the block until its agreement names the routines.
+case_manager:
+  own_tasks:
+    level: handles
+    # The Operator's own July rehearsal tasks, created before the [Operator]
+    # subject stamp existed (2026-08-01, 7d676b9a). A Smokeball task read never
+    # carries its creator (connector task_update.py: the read does not echo
+    # staffId), so this list is the only other signal. Each id is DERIVED, not
+    # recalled: the three open tasks due 2026-07-08 on 2026-PI-101 in the
+    # 2026-08-24 live pull (operator/skills/deadline-miss-escalator/tests/
+    # fixtures/live-pull-2026-08-24.json), whose ack tokens reproduce the codes
+    # the digest re-sent every three days (escalation_ledger.token_for).
+    legacy_task_ids:
+      # "Discovery scan: 7 served files need proof-of-service review..."; the
+      # DISC-1 run created it (grading run 2026-07-05-disc-1-run-01.md:24). ACK-DR8B8W.
+      - 1f5546c6-2e64-4879-b5c8-8fb7c09d0038
+      # "CONFIRM: Amended Special Interrogatories Set Two served by mail June 27..."
+      # (DISC-2's per-capture confirm tasks, 2026-07-06-l2-round-2.md:41). ACK-K96VZS.
+      - 1ec31561-1136-4986-9692-1457dae9513a
+      # "CONFIRM: Form Interrogatories Set One served by electronic service June 23..."
+      # (the same DISC-2 capture set). ACK-45ABZC.
+      - 95de85b8-7b9e-4d06-89f8-0ad88c8ce1ad
+  task_cleanup:
+    level: prepares # a proposal per attorney; nothing changes until a person approves
+    keep_quiet_days: 30
+    max_lines: 30
+  date_prep:
+    level: prepares
+    window_days: 14
+    # A received provider whose newest record on file is older than this is
+    # offered an updated-records request before the date. Unauthored = no such
+    # offer (how old is too old is the firm's call, no pack default).
+    records_stale_days: 60 # PLACEHOLDER(rehearsal): staging value; a client seat authors its own
+    steps:
+      binder_assemble: prepares
+      witness_list_finalize: prepares
+      exhibit_list_finalize: prepares
+      records_refresh: prepares
+      motion_calendar_refresh: prepares
+      discovery_status_refresh: prepares
+  quiet:
+    level: handles
 
 # ---- ROUTINE NAMES (firm-legible; #2222) ----
 # Skill slug -> the routine's name in the FIRM'S language, exactly as the

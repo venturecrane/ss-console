@@ -428,6 +428,14 @@ skill_bindings:
       - { artifact: task, seam: smokeball_task, class: record }
       - { artifact: heartbeat_row, seam: local_file, class: record }
     outbound: none # the review goes to firm staff only; a reply is answered by matter-inbox-router
+  # Date prep brief (case-manager spec Job 2): one brief per matter to its own
+  # staff, rendered by the overlay's casework_brief from turn-supplied
+  # done lines and at most two catalog questions. The steps it runs at
+  # "handles" write through their own routines' bindings, not this one.
+  date-prep-brief:
+    internal:
+      - { artifact: file_status, seam: session_output, class: staff }
+    outbound: derived # the brief to the matter's responsible attorney, assisting staff copied
   mediation-settlement-tracker:
     internal:
       - { artifact: brief_inputs, seam: session_output, class: staff }

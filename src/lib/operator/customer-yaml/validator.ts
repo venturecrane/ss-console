@@ -77,6 +77,7 @@ import { checkMcpConnector } from './sections-mcp-connector'
 import { checkGoogleAuth } from './sections-google-auth'
 import { checkAuthority } from './sections-authority'
 import { checkRelationship } from './sections-relationship'
+import { checkCaseManager } from './sections-case-manager'
 import type { AuthorityPosture } from '../authority'
 import type { CredentialCustody } from '../credential-custody'
 
@@ -130,6 +131,9 @@ export type {
   LogLevel,
   LogShip,
   SchemaVersion,
+  CaseManager,
+  CaseManagerLevel,
+  DatePrepStep,
 } from './types'
 export {
   ACCEPTED_VERTICALS,
@@ -145,6 +149,8 @@ export {
   ACCEPTED_GOOGLE_AUTH_MODES,
   ACCEPTED_SCHEMA_VERSIONS,
   ACCEPTED_WAKE_POLICIES,
+  ACCEPTED_CASE_MANAGER_LEVELS,
+  ACCEPTED_DATE_PREP_STEPS,
   AUDIT_LOG_DAYS_MAX,
   BASE_VOICE_COHORTS,
   OBSERVABILITY_DEFAULTS,
@@ -262,6 +268,7 @@ interface ParsedSections {
   credentialCustodyDefault: CredentialCustody
   mcpConnector: ReturnType<typeof checkMcpConnector>
   relationship: ReturnType<typeof checkRelationship>
+  caseManager: ReturnType<typeof checkCaseManager>
 }
 
 function validateSections(
@@ -330,6 +337,7 @@ function validateSections(
     credentialCustodyDefault: checkCredentialCustodyDefault(root, errors),
     mcpConnector,
     relationship: checkRelationship(root, errors),
+    caseManager: checkCaseManager(root, errors),
   }
 }
 
@@ -373,5 +381,6 @@ function assembleCustomerYaml(root: Record<string, unknown>, p: ParsedSections):
     credential_custody_default: p.credentialCustodyDefault,
     mcp_connector: p.mcpConnector,
     relationship: p.relationship,
+    case_manager: p.caseManager,
   }
 }

@@ -199,6 +199,14 @@ skills:
       dispatch out of turn. The client chase (Shape B) is fail-closed while
       settings.return_link is unauthored; Shapes A/C (prepare-and-route,
       signed-and-close) stay in-turn under SKILL.md's templates.
+  date-prep-brief:
+    render: compositional
+    note: >-
+      Case-manager Job 2. The frame (subject, Done, Needs you, the reply line)
+      is rendered by the overlay's casework_brief; the turn supplies the
+      done lines and at most two questions chosen from the pre_run's closed
+      catalog, because only the turn has read the documents they are about.
+      Recipients come from the envelope pre_run wrote, never from the turn.
   medical-records-chaser:
     render: compositional
     note: Vendor records chase; wave-1 authored state.

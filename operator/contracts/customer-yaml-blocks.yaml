@@ -217,6 +217,29 @@ top_level:
       OPS-OPERATOR-LIBRARY, when no `matter_number` is authored. Changing which
       matter the Operator would create is an edit HERE, in a PR, never a value
       taken from an email.
+  case_manager:
+    status: implemented
+    materializer: >-
+      no translate step by design, the self_initiation shape: three skills'
+      pre_run scripts read the block directly off the seat's own
+      /var/lib/smd-config/customer.yaml (SMD_CUSTOMER_YAML_PATH) at every tick:
+      date-prep-brief (operator/skills/date-prep-brief/pre_run.py
+      date_prep_config), task-list-keeper (own_tasks, task_cleanup, quiet),
+      and deadline-miss-escalator (the block's PRESENCE switches on its
+      casework exclusions; absent, its output is unchanged). Reaches the seat
+      through the existing R2 publish -> boot fetch of customer.yaml itself.
+    note: >-
+      The case-manager deadline jobs (docs/specs/operator/case-manager-deadline-work.md),
+      each at a level in the portal's tier language (surfaces | prepares |
+      handles): own_tasks {level, legacy_task_ids}, task_cleanup {level,
+      keep_quiet_days, max_lines}, date_prep {level, window_days, records_stale_days,
+      steps {step: level}} and quiet {level}. ABSENT = every job off (ADR 0035);
+      an absent sub-block turns off that job alone. Validated console-side by
+      checkCaseManager (src/lib/operator/customer-yaml/sections-case-manager.ts),
+      strict on unknown keys so a misspelled job cannot read as "off"; the
+      overlay's on-box validator does not inspect unknown top-level blocks.
+      Authored on pilot-smokeball only; a client seat authors it when its
+      agreement names the routines.
   firm_identity:
     status: implemented
     materializer: >-

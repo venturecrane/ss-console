@@ -465,9 +465,14 @@ function lockedFromCurrent(current: CustomerYaml): Pick<
   // reply send-rate caps (#2070) bound SMD's own exposure on the reply channel;
   // tuning them is an SMD act, not a client one — never portal-editable
   | 'send_policy'
+  // case-manager job levels (docs/specs/operator/case-manager-deadline-work.md)
+  // decide what the Operator does to the firm's task list unasked; they change
+  // by PR until the portal carries the levels as their own control
+  | 'case_manager'
 > {
   return {
     schema_version: current.schema_version,
+    case_manager: current.case_manager,
     custody_exceptions: current.custody_exceptions,
     send_policy: current.send_policy,
     customer_id: current.customer_id,
