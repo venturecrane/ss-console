@@ -380,15 +380,19 @@ def _compute_counts(
 class EvidencePacketBuilder:
     """Compose a digest-verified evidence packet for one customer + period.
 
-    The manifest is NOT yet cryptographically signed -- it self-discloses
-    ``signature="unsigned-stub"``; integrity rests on per-artifact SHA-256
-    digests plus the manifest hash recorded in the append-only audit log.
-    Detached signing is a tracked follow-on.
+    The manifest is signed with a detached Ed25519 signature
+    (``manifest.sig``) when ``EVIDENCE_PACKET_SIGNING_KEY_B64`` is staged, and
+    self-discloses ``signature="unsigned-stub"`` when it is not; see
+    ``adapter/evidence/signing.py`` for why a configured but unusable key
+    raises instead of degrading to unsigned.
 
     Construction wires the read executor + audit writer + (optional)
     yaml parser. ``yaml_loader`` defaults to a minimal JSON-ish parser
     that accepts either JSON or simple YAML; production CLI passes
-    ``yaml.safe_load`` directly.
+    ``yaml.safe_load`` directly. ``signing_env`` is the environment the
+    signing key is read from; ``None`` means the process environment, and a
+    caller that was handed its credentials explicitly (the decommission
+    archiver) passes the same mapping so the key it checked is the key used.
 
     Call :meth:`build` to produce a tar.gz at ``request.output_path``.
     The builder writes to ``<output>.tmp``, fsyncs, and renames into
@@ -399,6 +403,7 @@ class EvidencePacketBuilder:
     audit_writer: object  # adapter.audit_log.AuditLogWriter; kept loose
     yaml_loader: Optional[object] = None  # callable parsing yaml bytes
     yaml_dumper: Optional[object] = None  # callable dumping back to yaml
+    signing_env: Optional[dict] = None  # where load_signer reads the key; None = os.environ
 
     async def build(self, request: PacketRequest) -> EvidencePacketResult:
         request.validate()
@@ -515,7 +520,7 @@ class EvidencePacketBuilder:
         # explains why it cannot be embedded). load_signer raises rather than
         # degrading when a key is configured but unusable: an unsigned packet is
         # an honest artifact, a falsely-signed one is a lie in a legal record.
-        signer = load_signer()
+        signer = load_signer(self.signing_env)
 
         readme_bytes = _readme_text(
             customer_slug=request.customer_slug,
