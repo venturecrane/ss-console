@@ -370,6 +370,9 @@ export function applyEditableChanges(
     // SMD. It changes through a PR or it does not change.
     // staff_send_as (ADR 0089) is preserved because it names whose name the
     // Operator may put on outside mail; that is a commitment, changed by PR.
+    // device_senders is preserved because it redirects replies to somebody
+    // other than who wrote in, and is validated against admins: a save that
+    // dropped it would silently send a scanner's replies back to the scanner.
     scope: {
       ...changes.scope,
       outbound_roster: current.scope.outbound_roster,
@@ -377,6 +380,7 @@ export function applyEditableChanges(
       rule_requests_to: current.scope.rule_requests_to,
       ops_reply_from: current.scope.ops_reply_from,
       staff_send_as: current.scope.staff_send_as,
+      device_senders: current.scope.device_senders,
     },
     // case_alert_routing (#2004) is governance-sensitive (it decides who at
     // the firm receives case alerts) and NOT portal-editable; preserve the

@@ -883,6 +883,24 @@ export interface Scope {
    * which is fail-closed: no draft carries a From. See {@link StaffSendAsEntry}.
    */
   staff_send_as: StaffSendAsEntry[]
+  /**
+   * Mailboxes that are devices (an office scanner emailing its scans), each
+   * mapped to the person the reply lane answers instead, because a reply sent
+   * back to a device reaches nobody. Empty when unauthored: every reply goes to
+   * whoever wrote in. See {@link DeviceSenderEntry}.
+   */
+  device_senders: DeviceSenderEntry[]
+}
+
+/**
+ * One entry in `scope.device_senders`. `address` is the device's exact
+ * mailbox (covered by `inbound_allow_from`); `replies_to` is the exact address
+ * of the person on `scope.admins` who receives the reply. Both canonical
+ * (NFC, lowercased).
+ */
+export interface DeviceSenderEntry {
+  address: string
+  replies_to: string
 }
 
 /**
@@ -1422,6 +1440,9 @@ export type ValidationErrorCode =
    * address, or sits outside SMD's own mail domains. */
   | 'InvalidOpsReplyFrom'
   | 'InvalidStaffSendAs'
+  /** `scope.device_senders` names a domain, a device the seat does not answer,
+   * a target off `scope.admins`, an unknown key, or a device twice. */
+  | 'InvalidDeviceSenders'
   | 'LegacyEntitlementField'
   | 'UnknownAuthorityDomain'
   | 'DuplicateRelationshipPersonId'

@@ -69,6 +69,7 @@ from typing import Any
 
 from .audit_ledger import new_row_token
 from .msgraph_auth import load_credential, seat_mailbox
+from .msgraph_redirect import send_redirected
 from .recipient_policy import RecipientPolicy, authored_policy, normalize_address, sender_key
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
@@ -703,25 +704,22 @@ class MsGraphOps:
                 "this seat may not answer it. Anyone can email this mailbox; only "
                 "authored senders get replies (ss#2258)"
             )
+        redirect = self._device_redirect(payload.get("to"), sender, policy)
         conversation_id = str(source.get("conversationId") or "")
         audit_token = new_row_token()
-        reply_path = self._mail_path("messages", message_id, "reply")
-        stamped = True
-        try:
-            self._request(reply_path, "POST", self._reply_body(comment, html, audit_token))
-        except MsGraphTransportError as exc:
-            # ONE retry, and only on 400. Graph's reference says the ``message``
-            # parameter takes "any writeable properties for the reply", and
-            # ``internetMessageHeaders`` is writeable at creation -- but the
-            # combination has never been observed on the wire from this seat, and
-            # the reply lane is a client-facing path. A 400 means Graph rejected
-            # the request BODY and sent nothing, which is the only failure it is
-            # safe to re-shape and repeat; every other failure may have delivered,
-            # so it propagates rather than risking the same message twice.
-            if getattr(exc, "status", None) != 400:
-                raise
-            stamped = False
-            self._request(reply_path, "POST", self._reply_body(comment, html, ""))
+        if redirect:
+            stamped = send_redirected(
+                self,
+                message_id,
+                redirect,
+                comment,
+                html,
+                audit_token,
+                transport_error=MsGraphTransportError,
+                refused=MsGraphRefused,
+            )
+        else:
+            stamped = self._post_reply(message_id, comment, html, audit_token)
         located = (
             self._locate_sent(audit_token, conversation_id=conversation_id)
             if stamped
@@ -734,7 +732,9 @@ class MsGraphOps:
         )
         return {
             "message_id": "",
-            "recipients": [sender],
+            # For a device redirect, the person it went to. ``sender_key`` below
+            # still names the device, which is who wrote in.
+            "recipients": [redirect or sender],
             "mailbox": self.mailbox(),
             # Empty when the header was refused, so the row never claims a key
             # that is not on the message. The reconciler reads a blank token as
@@ -748,6 +748,53 @@ class MsGraphOps:
             # hashed because the ledger must not hold an address.
             "sender_key": sender_key(sender),
         }
+
+    @staticmethod
+    def _device_redirect(requested: Any, sender: str, policy: RecipientPolicy) -> str:
+        """The address a reply to ``sender`` is redirected to, or ``""`` for none.
+
+        ``requested`` is the caller's ``to``. It is a REQUEST: the redirect
+        happens only when the seat's own config names that exact address as the
+        ``replies_to`` of the sender this broker fetched from the source message
+        (``scope.device_senders``), and that address is an admin. A caller can
+        therefore ask for the authored person and nothing else; any other value,
+        or more than one address, is refused rather than quietly ignored,
+        because ignoring it would answer the device and report success.
+        """
+        if requested is None or (isinstance(requested, str) and not requested.strip()):
+            return ""
+        target = normalize_address(requested) if isinstance(requested, str) else ""
+        if not target or "@" not in target:
+            raise MsGraphRefused("reply 'to' must be one email address")
+        if target == sender:
+            return ""
+        if not policy.allows_device_redirect(sender, target):
+            raise MsGraphRefused(
+                "a reply may be redirected only to the person scope.device_senders "
+                "names for the sender of that message; this seat authors no such "
+                "pairing, so the reply is refused rather than sent elsewhere"
+            )
+        return target
+
+    def _post_reply(self, message_id: str, comment: str, html: str, audit_token: str) -> bool:
+        """``POST /messages/{id}/reply`` to the derived sender. True iff stamped."""
+        reply_path = self._mail_path("messages", message_id, "reply")
+        try:
+            self._request(reply_path, "POST", self._reply_body(comment, html, audit_token))
+            return True
+        except MsGraphTransportError as exc:
+            # ONE retry, and only on 400. Graph's reference says the ``message``
+            # parameter takes "any writeable properties for the reply", and
+            # ``internetMessageHeaders`` is writeable at creation -- but the
+            # combination has never been observed on the wire from this seat, and
+            # the reply lane is a client-facing path. A 400 means Graph rejected
+            # the request BODY and sent nothing, which is the only failure it is
+            # safe to re-shape and repeat; every other failure may have delivered,
+            # so it propagates rather than risking the same message twice.
+            if getattr(exc, "status", None) != 400:
+                raise
+        self._request(reply_path, "POST", self._reply_body(comment, html, ""))
+        return False
 
     @staticmethod
     def _reply_body(comment: str, html: str, audit_token: str = "") -> dict[str, Any]:
