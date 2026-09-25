@@ -1507,3 +1507,255 @@ def test_an_agentmail_shaped_result_writes_exactly_the_row_it_writes_today(
     meta = _meta(broker)
     assert meta["message_id"] == "<am-1>"
     assert not [k for k in ("vendor_message_id", "audit_row_token", "lookup") if k in meta]
+
+
+# ---------------------------------------------------------------------------
+# Device redirect (scope.device_senders): a scanner's reply reaches a person
+# ---------------------------------------------------------------------------
+
+DEVICE = "scanner@examplefirm.example"
+PERSON = "chris@examplefirm.example"
+
+# FIRM_YAML's shape plus one authored device whose replies go to the admin.
+DEVICE_YAML = (
+    FIRM_YAML
+    + f"""  device_senders:
+    - address: {DEVICE}
+      replies_to: {PERSON}
+"""
+)
+
+
+class DraftingGraph(FakeGraph):
+    """FakeGraph plus the createReply draft lifecycle.
+
+    ``createReply`` answers with a draft whose recipients are the SOURCE SENDER
+    (what Graph builds), PATCH replaces whichever collections it names, the
+    read-back GET serves the draft as it now stands, ``/send`` transmits the
+    headers the draft was created with, and DELETE removes it. ``readback_extra``
+    injects an address into the read-back, as a draft edited between PATCH and
+    GET would carry.
+    """
+
+    DRAFT_ID = "AAMkDRAFT1="
+
+    def __init__(self, *, readback_extra: str = "", send_status: int | None = None, **kw) -> None:
+        super().__init__(**kw)
+        self.draft: dict | None = None
+        self.deleted: list[str] = []
+        self._readback_extra = readback_extra
+        self._send_status = send_status
+
+    def __call__(self, request, timeout=None):
+        url = request.full_url
+        if url.endswith("/token"):
+            return super().__call__(request, timeout)
+        body = json.loads(request.data.decode()) if request.data else None
+        if request.method == "POST" and url.endswith("/createReply"):
+            self.calls.append((request.method, url, body))
+            self.auths.append((url, request.get_header("Authorization") or ""))
+            message = (body or {}).get("message") or {}
+            self.draft = {
+                "id": self.DRAFT_ID,
+                "headers": list(message.get("internetMessageHeaders") or []),
+                "toRecipients": [{"emailAddress": {"address": self._source_from}}],
+                "ccRecipients": [],
+                "bccRecipients": [],
+            }
+            return _Response(json.dumps({"id": self.DRAFT_ID}))
+        if f"/messages/{self.DRAFT_ID}" in url:
+            self.calls.append((request.method, url, body))
+            self.auths.append((url, request.get_header("Authorization") or ""))
+            assert self.draft is not None
+            if request.method == "PATCH":
+                self.draft.update(body or {})
+                return _Response("")
+            if request.method == "GET":
+                to = list(self.draft["toRecipients"])
+                if self._readback_extra:
+                    to.append({"emailAddress": {"address": self._readback_extra}})
+                return _Response(json.dumps({**self.draft, "toRecipients": to}))
+            if request.method == "DELETE":
+                self.deleted.append(self.DRAFT_ID)
+                return _Response("")
+            if url.endswith("/send"):
+                if self._send_status is not None:
+                    raise urllib.error.HTTPError(url, self._send_status, "no", {}, None)  # type: ignore[arg-type]
+                self.transmitted_headers.append(list(self.draft["headers"]))
+                return _Response("")
+        return super().__call__(request, timeout)
+
+    def sent_to(self) -> list[str]:
+        assert self.draft is not None
+        return [r["emailAddress"]["address"] for r in self.draft["toRecipients"]]
+
+
+def _reply(ops: MsGraphOps, **extra) -> dict:
+    return ops.reply({"message_id": "AAMk123", "comment": "Filed the scan.", **extra})
+
+
+def test_a_device_reply_goes_to_its_authored_person(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("SMD_MSGRAPH_DEVICE_REPLY_MODE", raising=False)
+    http = DraftingGraph(source_from=DEVICE)
+    result = _reply(_ops(tmp_path, http, DEVICE_YAML), to=PERSON)
+    assert result["recipients"] == [PERSON]
+    # Replaced, not appended: the scanner is off the draft that was sent.
+    assert http.sent_to() == [PERSON]
+    assert http.draft["ccRecipients"] == [] and http.draft["bccRecipients"] == []
+    posts = [c[1] for c in http.graph_posts()]
+    assert any(u.endswith("/createReply") for u in posts)
+    assert any(u.endswith(f"/messages/{DraftingGraph.DRAFT_ID}/send") for u in posts)
+    assert not any(u.endswith("/AAMk123/reply") for u in posts)
+    # sender_key still names who wrote in: the device.
+    assert result["sender_key"] == sender_key(DEVICE)
+    # The audit header rode on the draft, so the Sent Items lookup finds it.
+    assert result["audit_row_token"] and result["lookup"] == "ok"
+
+
+def test_the_draft_is_written_on_the_read_app_and_sent_on_the_send_app(tmp_path: Path) -> None:
+    http = DraftingGraph(source_from=DEVICE)
+    _reply(_ops(tmp_path, http, DEVICE_YAML), to=PERSON)
+    by_url = dict(http.auths)
+    create = next(u for u in by_url if u.endswith("/createReply"))
+    send = next(u for u in by_url if u.endswith("/send"))
+    patch = next(u for u in by_url if u.endswith(f"/messages/{DraftingGraph.DRAFT_ID}"))
+    assert by_url[create] == "Bearer tok-cid-read"
+    assert by_url[patch] == "Bearer tok-cid-read"
+    assert by_url[send] == "Bearer tok-cid-send"
+
+
+def test_the_patch_replaces_every_recipient_collection(tmp_path: Path) -> None:
+    http = DraftingGraph(source_from=DEVICE)
+    _reply(_ops(tmp_path, http, DEVICE_YAML), to=PERSON)
+    patch = next(c for c in http.calls if c[0] == "PATCH")
+    assert patch[2] == {
+        "toRecipients": [{"emailAddress": {"address": PERSON}}],
+        "ccRecipients": [],
+        "bccRecipients": [],
+    }
+
+
+def test_a_draft_that_reads_back_wrong_is_never_sent_and_is_removed(tmp_path: Path) -> None:
+    http = DraftingGraph(source_from=DEVICE, readback_extra="attacker@evil.example")
+    with pytest.raises(MsGraphRefused):
+        _reply(_ops(tmp_path, http, DEVICE_YAML), to=PERSON)
+    assert not any(c[1].endswith("/send") for c in http.calls)
+    assert http.deleted == [DraftingGraph.DRAFT_ID]
+
+
+def test_a_refused_send_removes_the_draft(tmp_path: Path) -> None:
+    http = DraftingGraph(source_from=DEVICE, send_status=403)
+    with pytest.raises(MsGraphTransportError):
+        _reply(_ops(tmp_path, http, DEVICE_YAML), to=PERSON)
+    assert http.deleted == [DraftingGraph.DRAFT_ID]
+
+
+def test_an_unknown_send_outcome_keeps_the_draft(tmp_path: Path) -> None:
+    """A 5xx may have sent; deleting then could remove the only record."""
+    http = DraftingGraph(source_from=DEVICE, send_status=503)
+    with pytest.raises(MsGraphTransportError):
+        _reply(_ops(tmp_path, http, DEVICE_YAML), to=PERSON)
+    assert http.deleted == []
+
+
+@pytest.mark.parametrize(
+    ("to", "why"),
+    [
+        (UNAUTHORED, "an address the seat never names"),
+        ("someone@examplefirm.example", "a colleague, on the roster but not the device's person"),
+        (["chris@examplefirm.example"], "a list, not one address"),
+        ("not-an-address", "garbage"),
+    ],
+)
+def test_a_to_the_config_does_not_pair_with_the_sender_is_refused(tmp_path: Path, to, why) -> None:
+    http = DraftingGraph(source_from=DEVICE)
+    with pytest.raises(MsGraphRefused):
+        _reply(_ops(tmp_path, http, DEVICE_YAML), to=to)
+    assert http.graph_posts() == [], why
+
+
+def test_a_person_cannot_borrow_the_device_mapping(tmp_path: Path) -> None:
+    """The pairing is keyed on the FETCHED sender: an email from anyone else,
+    asking to be redirected to the device's person, is refused."""
+    http = DraftingGraph(source_from="someone@examplefirm.example")
+    with pytest.raises(MsGraphRefused):
+        _reply(_ops(tmp_path, http, DEVICE_YAML), to=PERSON)
+    assert http.graph_posts() == []
+
+
+def test_a_seat_with_no_device_authored_refuses_any_to(tmp_path: Path) -> None:
+    http = DraftingGraph(source_from=DEVICE)
+    with pytest.raises(MsGraphRefused):
+        _reply(_ops(tmp_path, http, FIRM_YAML), to=PERSON)
+    assert http.graph_posts() == []
+
+
+def test_to_equal_to_the_sender_is_an_ordinary_reply(tmp_path: Path) -> None:
+    http = DraftingGraph(source_from=DEVICE)
+    result = _reply(_ops(tmp_path, http, DEVICE_YAML), to=DEVICE.upper())
+    assert result["recipients"] == [DEVICE]
+    assert http.graph_posts()[0][1].endswith("/AAMk123/reply")
+
+
+def test_no_to_is_byte_identical_to_the_ordinary_reply(tmp_path: Path) -> None:
+    """Control: the same seat and sender with no ``to`` replies to the device."""
+    http = DraftingGraph(source_from=DEVICE)
+    result = _reply(_ops(tmp_path, http, DEVICE_YAML))
+    assert result["recipients"] == [DEVICE]
+    (post,) = http.graph_posts()
+    assert post[1].endswith("/AAMk123/reply")
+    assert _without_audit_header(post[2]) == {"comment": "Filed the scan."}
+
+
+def test_the_reply_mode_sets_to_recipients_on_the_reply_body(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("SMD_MSGRAPH_DEVICE_REPLY_MODE", "reply")
+    http = DraftingGraph(source_from=DEVICE)
+    result = _reply(_ops(tmp_path, http, DEVICE_YAML), to=PERSON, html="<p>Filed.</p>")
+    assert result["recipients"] == [PERSON]
+    (post,) = http.graph_posts()
+    assert post[1].endswith("/AAMk123/reply")
+    message = post[2]["message"]
+    assert message["toRecipients"] == [{"emailAddress": {"address": PERSON}}]
+    assert message["body"] == {"contentType": "HTML", "content": "<p>Filed.</p>"}
+    # comment and message.body stay mutually exclusive.
+    assert "comment" not in post[2]
+
+
+def test_the_reply_mode_on_the_comment_path_keeps_the_comment(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("SMD_MSGRAPH_DEVICE_REPLY_MODE", "reply")
+    http = DraftingGraph(source_from=DEVICE)
+    _reply(_ops(tmp_path, http, DEVICE_YAML), to=PERSON)
+    (post,) = http.graph_posts()
+    assert post[2]["comment"] == "Filed the scan."
+    assert post[2]["message"]["toRecipients"] == [{"emailAddress": {"address": PERSON}}]
+
+
+def test_the_device_reply_row_names_the_person_and_the_device(tmp_path: Path) -> None:
+    broker = _broker(tmp_path, DraftingGraph(source_from=DEVICE), DEVICE_YAML)
+    broker.handle(
+        {
+            "action": "msgraph_reply",
+            "payload": {"message_id": "AAMk123", "comment": "Filed.", "to": PERSON},
+        },
+        peer_pid=GATEWAY_PID,
+        peer_uid=AGENT_UID,
+    )
+    meta = _meta(broker)
+    assert meta["outcome"] == "sent"
+    assert meta["recipients"] == [PERSON]
+    assert meta["sender_key"] == sender_key(DEVICE)
+    assert "Filed." not in json.dumps(meta)
+
+
+def test_a_refused_redirect_is_audited(tmp_path: Path) -> None:
+    broker = _broker(tmp_path, DraftingGraph(source_from=DEVICE), DEVICE_YAML)
+    with pytest.raises(Exception):
+        broker.handle(
+            {
+                "action": "msgraph_reply",
+                "payload": {"message_id": "AAMk123", "comment": "Filed.", "to": UNAUTHORED},
+            },
+            peer_pid=GATEWAY_PID,
+            peer_uid=AGENT_UID,
+        )
+    assert _meta(broker)["outcome"] == "refused"
