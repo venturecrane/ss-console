@@ -22,13 +22,22 @@
  *     register's own silence.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'child_process'
 import { mkdtempSync, writeFileSync, rmSync, chmodSync, readFileSync, existsSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 
 const SCRIPT = resolve(process.cwd(), 'scripts/ci-reconcile-obligations.ts')
+
+// Every case boots the real script in a fresh subprocess through `npx tsx`
+// (tsx is not a local dependency, so npx resolves it from its cache each
+// time). That is over a second idle and several seconds when the machine is
+// busy, which the 5s unit-test default does not cover: on 2026-09-25 the file
+// failed 12 of 37 cases on timeouts alone under a load average of 12, with
+// the same tree passing when the machine was quiet. A subprocess-per-case
+// integration file gets an integration budget.
+vi.setConfig({ testTimeout: 30_000 })
 
 let dir: string
 let statePath: string
