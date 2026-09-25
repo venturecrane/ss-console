@@ -52,9 +52,29 @@ WHAT IT REFUSES TO DO, and why each one is load-bearing:
 COST AND CONCURRENCY. ``read_document`` is a sync tool on the MCP server's thread pool
 and parallel tool calls are on by default, so N concurrent scans would be N
 concurrent transcription runs on a 1 vCPU / 1 GB seat. A module-level semaphore
-serialises them, held across a whole document so two documents never interleave
-their page calls. The caps are the spend fence: at most ``page_cap`` calls per
-document (default 40), each bounded by ``PAGE_MAX_TOKENS``. The credential is
+serialises DOCUMENTS, held across a whole document so two documents never
+interleave their page calls. A second document waits at most
+``lock_timeout()`` seconds for it and is then refused ``busy``, rather than
+queueing past the caller's own tool timeout.
+
+WITHIN one document the pages go out ``workers()`` at a time (default 4). A
+2026-09-25 read-only replay of the post lane measured ~9.8 s a page serially:
+24 image pages took 240 s and 44 took 431 s, against a 300 s MCP tool timeout,
+so a one-page-at-a-time read of a normal day's post could not finish inside
+the call that asked for it. The work per page is a network wait, not CPU, so a
+small pool is cheap on the seat. Order is preserved: every page lands in the
+slot of the page that was SENT, which keeps the ``[p.N]`` provenance
+structural. A failure worth retrying (HTTP 429, 529, 5xx, a transport fault,
+an overloaded stream) is retried up to ``PAGE_RETRIES`` times inside the
+page's own ``TIMEOUT_SECONDS`` budget. The first page that fails for good
+stops the document: pages not yet started are cancelled, pages in flight are
+aborted at their next stream line, and the result is the same closed reason,
+with the same empty text, as before.
+
+The caps are the spend fence: at most ``page_cap`` calls per document
+(default 40), each bounded by ``PAGE_MAX_TOKENS``. A caller with its own lane
+cap (the combined-post reader) passes ``page_cap=`` explicitly; the shared
+cap, and every other caller, is unchanged. The credential is
 the seat's OWN ``ANTHROPIC_API_KEY``, delivered to this subprocess by the
 overlay registry: ADR 0062 §2 makes that a per-customer Anthropic WORKSPACE
 key, so a transcription bills, caps, and revokes exactly like every other model
@@ -68,10 +88,13 @@ import io
 import json
 import os
 import threading
+import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 
 from .extract import (
     REASON_API_ERROR,
+    REASON_BUSY,
     REASON_DISABLED,
     REASON_INCOMPLETE,
     REASON_NO_CREDENTIAL,
@@ -106,6 +129,24 @@ TIMEOUT_SECONDS = 90
 #: Serialises transcriptions across the MCP server's thread pool (see module docstring).
 #: Held for a whole document, so two documents never interleave page calls.
 _LOCK = threading.Semaphore(1)
+
+#: How long a second document waits for the one being read before it is
+#: refused ``busy``. Short on purpose: the caller's tool call is on a 300 s
+#: clock, and a wait it cannot see the end of is worse than a clear "try again".
+DEFAULT_LOCK_TIMEOUT_SECONDS = 30
+#: Pages in flight at once, per document. Bounded both ways: 1 is the old
+#: serial read, and 8 is as many concurrent calls as one seat's key should carry.
+DEFAULT_WORKERS = 4
+MAX_WORKERS = 8
+#: Retries per page after the first attempt, for a failure worth retrying.
+PAGE_RETRIES = 2
+#: Backoff before retry n (0-based) is ``BACKOFF_BASE_SECONDS * 2**n``, or the
+#: server's ``retry-after`` when it sent one, never more than
+#: ``RETRY_AFTER_CAP_SECONDS``, and never past the page's own budget.
+BACKOFF_BASE_SECONDS = 2.0
+RETRY_AFTER_CAP_SECONDS = 20.0
+#: A retry with less than this left of the page's budget is not attempted.
+MIN_ATTEMPT_SECONDS = 5.0
 
 #: What the model is told to return for a page it cannot read. Composed into
 #: ``[p.N: no legible content]`` by :func:`_compose`, so an unreadable page and
@@ -169,6 +210,19 @@ def page_cap() -> int:
     return _env_int("SMOKEBALL_VISION_PAGE_CAP", DEFAULT_PAGE_CAP)
 
 
+#: ``gate`` and ``transcribe_pdf`` take a ``page_cap`` argument that shadows
+#: the function above inside them.
+_shared_page_cap = page_cap
+
+
+def workers() -> int:
+    return max(1, min(_env_int("SMOKEBALL_VISION_WORKERS", DEFAULT_WORKERS), MAX_WORKERS))
+
+
+def lock_timeout() -> float:
+    return float(_env_int("SMOKEBALL_VISION_LOCK_TIMEOUT_SECONDS", DEFAULT_LOCK_TIMEOUT_SECONDS))
+
+
 def max_bytes() -> int:
     return min(_env_int("SMOKEBALL_VISION_MAX_BYTES", DEFAULT_MAX_BYTES), HARD_MAX_BYTES)
 
@@ -185,14 +239,16 @@ def disabled() -> bool:
     return bool(raw) and raw not in ("0", "false", "no", "off")
 
 
-def gate(blob: bytes, *, pages: int) -> str | None:
+def gate(blob: bytes, *, pages: int, page_cap: int | None = None) -> str | None:
     """The reason NOT to transcribe, or None. Every gate is checked before any
-    money is spent and before any bytes are base64'd."""
+    money is spent and before any bytes are base64'd.
+
+    ``page_cap`` is a caller's OWN lane cap; None means the shared one."""
     if disabled():
         return REASON_DISABLED
     if not (os.environ.get("ANTHROPIC_API_KEY") or "").strip():
         return REASON_NO_CREDENTIAL
-    if pages > page_cap():
+    if pages > (page_cap if page_cap is not None else _shared_page_cap()):
         return REASON_OVER_PAGE_CAP
     if len(blob) > max_bytes():
         return REASON_OVER_BYTE_CAP
@@ -230,10 +286,11 @@ def build_request(page_b64: str) -> dict:
     }
 
 
-def transcribe_pdf(blob: bytes, *, pages: int) -> VisionOutcome:
+def transcribe_pdf(blob: bytes, *, pages: int, page_cap: int | None = None) -> VisionOutcome:
     """Transcribe ``blob`` (a scanned PDF of ``pages`` pages), one page per API
-    call. Never raises. Any page that fails fails the whole document."""
-    refusal = gate(blob, pages=pages)
+    call, ``workers()`` pages at a time. Never raises. Any page that fails
+    fails the whole document."""
+    refusal = gate(blob, pages=pages, page_cap=page_cap)
     if refusal is not None:
         return VisionOutcome(reason=refusal)
 
@@ -247,15 +304,19 @@ def transcribe_pdf(blob: bytes, *, pages: int) -> VisionOutcome:
         # document we were asked to read.
         return VisionOutcome(reason=REASON_INCOMPLETE)
 
-    transcripts: list[str] = []
-    with _LOCK:
-        for page_pdf in page_pdfs:
-            if len(page_pdf) > max_bytes():
-                return VisionOutcome(reason=REASON_OVER_BYTE_CAP)
-            text, stop_reason, failed = _transcribe_page(page_pdf)
-            if failed is not None:
-                return VisionOutcome(reason=failed, stop_reason=stop_reason)
-            transcripts.append(text)
+    # Every page's size is checked BEFORE the first call, so an oversize page
+    # late in the document never costs the pages ahead of it.
+    if any(len(page_pdf) > max_bytes() for page_pdf in page_pdfs):
+        return VisionOutcome(reason=REASON_OVER_BYTE_CAP)
+
+    if not _LOCK.acquire(timeout=lock_timeout()):
+        return VisionOutcome(reason=REASON_BUSY)
+    try:
+        transcripts, failure = _transcribe_pages(page_pdfs)
+    finally:
+        _LOCK.release()
+    if failure is not None:
+        return VisionOutcome(reason=failure[0], stop_reason=failure[1])
 
     if not any(_is_legible(t) for t in transcripts):
         # Every page came back blank. An artifact made only of markers is not a
@@ -265,9 +326,56 @@ def transcribe_pdf(blob: bytes, *, pages: int) -> VisionOutcome:
     return VisionOutcome(text=_compose(transcripts), pages_read=len(transcripts), stop_reason="end_turn")
 
 
-def _transcribe_page(page_pdf: bytes) -> tuple[str, str | None, str | None]:
-    """One page. Returns ``(text, stop_reason, failure_reason)``; on failure the
-    text is empty and the reason is from the closed set."""
+def _transcribe_pages(page_pdfs: list[bytes]) -> tuple[list[str], tuple[str, str | None] | None]:
+    """Every page through a bounded pool, each result in its SENT position.
+
+    Returns ``(transcripts, None)``, or ``([], (reason, stop_reason))`` for the
+    first page that failed for good. On that failure the pages not yet started
+    are cancelled and the ones in flight are told to stop, so a failed document
+    stops spending as soon as it is known to be failed."""
+    abort = threading.Event()
+    first_failure: list[tuple[str, str | None]] = []
+    guard = threading.Lock()
+
+    def _job(page_pdf: bytes) -> tuple[str, str | None, str | None]:
+        # The page that fails raises the flag ITSELF, before its worker can pick
+        # up the next queued page, and records the reason. Pages stopped by the
+        # flag also come back failed, so the reason reported is the one kept
+        # here: the first real failure, never an abort it caused.
+        text, stop_reason, failed = _transcribe_page(page_pdf, abort)
+        if failed is not None:
+            with guard:
+                if not abort.is_set():
+                    first_failure.append((failed, stop_reason))
+                    abort.set()
+        return text, stop_reason, failed
+
+    transcripts: list[str] = [""] * len(page_pdfs)
+    pool = ThreadPoolExecutor(max_workers=max(1, min(workers(), len(page_pdfs))), thread_name_prefix="vision-page")
+    try:
+        slots = {pool.submit(_job, page_pdf): index for index, page_pdf in enumerate(page_pdfs)}
+        pending = set(slots)
+        while pending and not abort.is_set():
+            done, pending = wait(pending, return_when=FIRST_COMPLETED)
+            for future in done:
+                text, _stop, failed = future.result()
+                if failed is None:
+                    transcripts[slots[future]] = text
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
+    if first_failure:
+        return [], first_failure[0]
+    return transcripts, None
+
+
+def _transcribe_page(page_pdf: bytes, abort: threading.Event | None = None) -> tuple[str, str | None, str | None]:
+    """One page, with retries. Returns ``(text, stop_reason, failure_reason)``;
+    on failure the text is empty and the reason is from the closed set.
+
+    Retried: a failure ``_stream`` marks retryable (HTTP 429, 529, 5xx, a
+    transport fault, an overloaded stream), at most ``PAGE_RETRIES`` times, and
+    only while this page's ``TIMEOUT_SECONDS`` budget has room for another
+    attempt. Never retried: any other status, a refusal, a truncation."""
     import base64
 
     body = json.dumps(build_request(base64.b64encode(page_pdf).decode("ascii"))).encode("utf-8")
@@ -277,10 +385,24 @@ def _transcribe_page(page_pdf: bytes) -> tuple[str, str | None, str | None]:
         "anthropic-version": API_VERSION,
         "x-api-key": os.environ["ANTHROPIC_API_KEY"].strip(),
     }
+    deadline = time.monotonic() + TIMEOUT_SECONDS
     try:
-        text, stop_reason = _stream(body, headers)
-    except _StreamFailed:
-        return "", None, REASON_API_ERROR
+        attempt = 0
+        while True:
+            if abort is not None and abort.is_set():
+                return "", None, REASON_API_ERROR
+            try:
+                text, stop_reason = _stream(body, headers, timeout=max(1.0, deadline - time.monotonic()), abort=abort)
+                break
+            except _StreamFailed as exc:
+                delay = _retry_delay(exc, attempt, deadline)
+                if delay is None:
+                    return "", None, REASON_API_ERROR
+                if abort is not None and abort.wait(delay):
+                    return "", None, REASON_API_ERROR
+                if abort is None and delay > 0:
+                    time.sleep(delay)
+                attempt += 1
     finally:
         del body, headers
     if stop_reason == "refusal":
@@ -290,6 +412,17 @@ def _transcribe_page(page_pdf: bytes) -> tuple[str, str | None, str | None]:
         # in it.
         return "", stop_reason, REASON_TRUNCATED
     return text, stop_reason, None
+
+
+def _retry_delay(exc: _StreamFailed, attempt: int, deadline: float) -> float | None:
+    """Seconds to wait before retry ``attempt``, or None when the failure is final."""
+    if not exc.retryable or attempt >= PAGE_RETRIES:
+        return None
+    delay = exc.retry_after if exc.retry_after is not None else BACKOFF_BASE_SECONDS * (2**attempt)
+    delay = max(0.0, min(delay, RETRY_AFTER_CAP_SECONDS))
+    if time.monotonic() + delay + MIN_ATTEMPT_SECONDS > deadline:
+        return None
+    return delay
 
 
 def _split_pages(blob: bytes) -> list[bytes]:
@@ -311,22 +444,65 @@ class _StreamFailed(RuntimeError):
     """Transport, status, or protocol fault. The detail never leaves this module
     — an API error body is not a reason a caller can branch on, and a raw
     exception string is exactly the kind of text that must never be mistaken
-    for document content."""
+    for document content.
+
+    ``retryable`` says whether the same request could succeed if sent again;
+    ``retry_after`` is the server's own hint in seconds, when it gave one."""
+
+    def __init__(self, detail: str, *, retryable: bool = False, retry_after: float | None = None) -> None:
+        super().__init__(detail)
+        self.retryable = retryable
+        self.retry_after = retry_after
 
 
-def _stream(body: bytes, headers: dict[str, str]) -> tuple[str, str | None]:
+def _retryable_status(status: int) -> bool:
+    """Rate limited (429), overloaded (529), or a server fault (5xx)."""
+    return status == 429 or 500 <= status < 600
+
+
+#: Stream ``error`` event types that mean "the service", not "this request".
+_RETRYABLE_ERROR_TYPES = frozenset({"overloaded_error", "api_error", "rate_limit_error"})
+
+
+def _retry_after(response: object) -> float | None:
+    headers = getattr(response, "headers", None)
+    raw = headers.get("retry-after") if headers is not None else None
+    if raw is None:
+        return None
+    try:
+        value = float(str(raw).strip())
+    except ValueError:
+        return None
+    return value if value >= 0 else None
+
+
+def _stream(
+    body: bytes,
+    headers: dict[str, str],
+    *,
+    timeout: float = TIMEOUT_SECONDS,
+    abort: threading.Event | None = None,
+) -> tuple[str, str | None]:
     """POST one page and reassemble the SSE stream into ``(text, stop_reason)``."""
+    import httpx
+
     chunks: list[str] = []
     stop_reason: str | None = None
     text_blocks: set[object] = set()
 
-    client = _http_client(TIMEOUT_SECONDS)
+    client = _http_client(timeout)
     try:
         with client.stream("POST", API_URL, content=body, headers=headers) as response:
             if response.status_code != 200:
                 response.read()
-                raise _StreamFailed(f"HTTP {response.status_code}")
+                raise _StreamFailed(
+                    f"HTTP {response.status_code}",
+                    retryable=_retryable_status(response.status_code),
+                    retry_after=_retry_after(response),
+                )
             for line in response.iter_lines():
+                if abort is not None and abort.is_set():
+                    raise _StreamFailed("aborted: another page of this document failed")
                 if not line.startswith("data:"):
                     continue
                 raw = line[len("data:") :].strip()
@@ -340,7 +516,9 @@ def _stream(body: bytes, headers: dict[str, str]) -> tuple[str, str | None]:
                     continue
                 kind = event.get("type")
                 if kind == "error":
-                    raise _StreamFailed("error event")
+                    error = event.get("error")
+                    kind_of_error = error.get("type") if isinstance(error, dict) else None
+                    raise _StreamFailed("error event", retryable=kind_of_error in _RETRYABLE_ERROR_TYPES)
                 if kind == "content_block_start":
                     block = event.get("content_block") or {}
                     if isinstance(block, dict) and block.get("type") == "text":
@@ -359,6 +537,8 @@ def _stream(body: bytes, headers: dict[str, str]) -> tuple[str, str | None]:
                         stop_reason = str(delta.get("stop_reason"))
     except _StreamFailed:
         raise
+    except httpx.TransportError as exc:
+        raise _StreamFailed(exc.__class__.__name__, retryable=True) from exc
     except Exception as exc:
         raise _StreamFailed(exc.__class__.__name__) from exc
     finally:
