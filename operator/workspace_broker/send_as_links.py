@@ -20,8 +20,13 @@ import hmac
 import html
 import os
 import json
+import logging
 import time
 from typing import Any
+
+from .broker_context import BrokerContext
+
+_log = logging.getLogger(__name__)
 
 #: The window a draft, and so its links, stay answerable. Mirrors
 #: ``send_as_acts.SEND_AS_TTL_SECONDS``; kept here so this module needs nothing
@@ -196,7 +201,7 @@ def approval_email(
     return email
 
 
-def notify_link_decision(broker: Any, row: dict[str, Any], outcome: dict[str, Any], notice: Any) -> None:
+def notify_link_decision(broker: BrokerContext, row: dict[str, Any], outcome: dict[str, Any], notice: Any) -> None:
     """Tell the approver what a click just did, so a click they did not make is
     visible to them rather than only to an audit reader."""
     status = str(outcome.get("status") or "").upper()
@@ -216,5 +221,7 @@ def notify_link_decision(broker: Any, row: dict[str, Any], outcome: dict[str, An
             f"Using the button in the approval email, {tag_for(row['id'])} {said}. "
             "If that was not you, tell your Operator administrator now.",
         )
-    except Exception:  # noqa: BLE001 - the decision stands; the notice is best effort
-        pass
+    except Exception as exc:  # noqa: BLE001 - the decision stands; the notice is best effort
+        # The approver not hearing about a click is the case this notice exists
+        # to prevent, so a failure to send it is logged with the act's row id.
+        _log.warning("send-as decision notice for %s not sent: %s: %s", row["id"], type(exc).__name__, exc)

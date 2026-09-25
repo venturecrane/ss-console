@@ -19,6 +19,8 @@
  * or logged.
  */
 
+import { base64UrlEncode } from '../security/signed-payload'
+
 const TOKEN_BYTES = 32
 
 /**
@@ -54,15 +56,6 @@ export function computeManageTokenExpiry(slotEndUtc: string, ttlHours: number): 
 // ---------------------------------------------------------------------------
 // Encoding helpers (kept private — exported for tests via the named exports)
 // ---------------------------------------------------------------------------
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  // Workers don't have Buffer; use btoa over a binary string
-  let bin = ''
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
-  const b64 = btoa(bin)
-  // URL-safe variant: replace +/ with -_, strip padding
-  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
 
 function bytesToHex(bytes: Uint8Array): string {
   let hex = ''

@@ -469,3 +469,117 @@ def test_a_page_that_is_neither_full_nor_empty_costs_one_query() -> None:
     tenant = DuplicateNameTenant()
     mr._contacts_by_name(tenant.client(), "Maria Alvarez")
     assert len(tenant.queries("/contacts")) == 1
+
+
+# ---- Names with a middle, a hyphen, or a suffix (2026-09-25) ------------------
+#
+# A read-only replay of the post lane on a client seat returned verdict `none`
+# with ZERO candidates for four letters whose client the firm has: a hyphenated
+# first name, and three names carrying a middle initial or a middle name the
+# firm did not record. The old match required every caller token on the record
+# and kept `.` and `-` inside tokens, so "R." and "Rosa-Linda" could never be
+# found. The names below are invented.
+
+
+class PersonTenant(Tenant):
+    """Person-shaped records; the search returns every contact whose recorded
+    name (first, middle, last) contains the probe, case-insensitively."""
+
+    def __init__(self, people: dict[str, tuple[str, str, str]], contact_matters: dict[str, list[str]]) -> None:
+        contacts: dict[str, dict[str, Any]] = {}
+        for cid, (first, middle, last) in people.items():
+            person = {"firstName": first, "lastName": last}
+            if middle:
+                person["middleName"] = middle
+            contacts[cid] = {"id": cid, "person": person}
+        super().__init__(contact_matters=contact_matters, contacts=contacts)
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/contacts":
+            self.requests.append(request)
+            want = request.url.params.get("Search", "").removeprefix("name:*").removesuffix("*").casefold()
+            rows = []
+            for c in self.contacts.values():
+                p = c.get("person") or {}
+                full = " ".join(str(p.get(k) or "") for k in ("firstName", "middleName", "lastName")).casefold()
+                if want and want in full:
+                    rows.append(c)
+            return httpx.Response(200, json={"value": rows})
+        return super().handle(request)
+
+
+def _one(first: str, middle: str, last: str) -> PersonTenant:
+    return PersonTenant({CONTACT: (first, middle, last)}, {CONTACT: [M101]})
+
+
+def _kept(tenant: PersonTenant, name: str) -> list[str]:
+    return [c["id"] for c in mr._contacts_by_name(tenant.client(), name)]
+
+
+def test_a_hyphenated_first_name_matches_a_two_word_record() -> None:
+    assert _kept(_one("Rosa Linda", "", "Quill"), "Rosa-Linda Quill") == [CONTACT]
+
+
+@pytest.mark.parametrize("middle", ["", "Rupert", "R"])
+def test_a_middle_initial_matches_a_record_with_no_middle_or_an_agreeing_one(middle: str) -> None:
+    assert _kept(_one("Tobias", middle, "Wren"), "Tobias R. Wren") == [CONTACT]
+
+
+def test_a_contradicting_middle_initial_excludes_the_record() -> None:
+    assert _kept(_one("Tobias", "T", "Wren"), "Tobias R. Wren") == []
+
+
+def test_a_lone_record_with_a_contradicting_middle_is_none_with_no_candidate() -> None:
+    """Not a lone candidate: offering "Maria B." for a letter to "Maria A."
+    invites a one-word yes that misfiles."""
+    out = _resolve(_one("Maria", "B", "Lopez"), client_name="Maria A. Lopez")
+    assert out["verdict"] == mr.VERDICT_NONE
+    assert not out.get("candidates")
+    assert _minted() == 0
+
+
+def test_a_middle_name_and_initial_match_a_record_with_neither() -> None:
+    assert _kept(_one("Lucia", "", "Fenn"), "Lucia Beatriz A. Fenn") == [CONTACT]
+
+
+def test_two_contacts_matching_a_name_with_an_initial_are_ambiguous() -> None:
+    tenant = PersonTenant(
+        {CONTACT: ("Oren", "", "Halvard"), OTHER_CONTACT: ("Oren", "James", "Halvard")},
+        {CONTACT: [M101], OTHER_CONTACT: [M107]},
+    )
+    out = _resolve(tenant, client_name="Oren J. Halvard")
+    assert out["verdict"] == mr.VERDICT_AMBIGUOUS, out.get("reason")
+    assert out["candidate_count"] == 2
+    assert _minted() == 0
+
+
+def test_two_identical_names_are_still_ambiguous() -> None:
+    tenant = PersonTenant(
+        {CONTACT: ("Maria", "", "Alvarez"), OTHER_CONTACT: ("Maria", "", "Alvarez")},
+        {CONTACT: [M101], OTHER_CONTACT: [M107]},
+    )
+    assert _resolve(tenant, client_name="Maria Alvarez")["verdict"] == mr.VERDICT_AMBIGUOUS
+
+
+def test_a_generational_suffix_is_not_required() -> None:
+    assert _kept(_one("John", "", "Smith"), "John Smith Jr.") == [CONTACT]
+
+
+def test_the_comma_form_reads_as_first_and_last() -> None:
+    assert _kept(_one("Tobias", "Rupert", "Wren"), "Wren, Tobias R.") == [CONTACT]
+    assert _kept(_one("Tobias", "T", "Wren"), "Wren, Tobias R.") == []
+
+
+def test_a_company_name_still_needs_every_token() -> None:
+    record = {"id": CONTACT, "name": "Smith Holdings Trust", "company": {"name": "Smith Holdings Trust"}}
+    tenant = Tenant(contact_matters={CONTACT: [M101]}, contacts={CONTACT: record})
+    assert [c["id"] for c in mr._contacts_by_name(tenant.client(), "Smith Family Trust")] == []
+    assert [c["id"] for c in mr._contacts_by_name(tenant.client(), "Smith Holdings Trust")] == [CONTACT]
+
+
+def test_the_probe_is_a_normalized_token() -> None:
+    """The search must not send "Rosa-Linda" or "R." as a probe: the record
+    holds neither spelling."""
+    tenant = _one("Rosa Linda", "", "Quill")
+    mr._contacts_by_name(tenant.client(), "Rosa-Linda Quill")
+    assert tenant.queries("/contacts")[0]["Search"] == "name:*Quill*"

@@ -37,6 +37,7 @@ import json
 import re
 from typing import Any
 
+from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
 from .medchron_ledger import (
     ALLOWANCE_KEY,
@@ -125,18 +126,28 @@ class MedchronVerbs:
         self._resolve_agent_uid = resolve_agent_uid
 
     @classmethod
-    def build(cls, broker: Any, *, audit_db_path: str | None, queue_dir: str | None) -> MedchronVerbs:
+    def build(cls, broker: BrokerContext, *, audit_db_path: str | None, queue_dir: str | None) -> MedchronVerbs:
         """From a live Broker. The ledger is enabled only when the audit ledger
         is (a job that cannot be recorded must not be queued) and the entrypoint
         exported the queue dir; otherwise the verbs answer fail-closed."""
         ledger = None
-        if audit_db_path and queue_dir and broker.ledger is not None:
+        audit_writer = broker.ledger
+        if audit_db_path and queue_dir and audit_writer is not None:
             ledger = MedchronLedger(audit_db_path, queue_dir)
+
+        def audit_append(row: dict[str, Any]) -> Any:
+            # Unreachable without a ledger: the job ledger above exists only
+            # when the audit ledger does, and every verb refuses first when
+            # the job ledger is absent. Refuse rather than AttributeError.
+            if audit_writer is None:
+                raise ValueError("medchron verbs have no audit ledger on this broker")
+            return audit_writer.append(row)
+
         return cls(
             ledger,
             customer_yaml=str(broker.customer_path),
             customer_slug=broker.customer_slug,
-            audit_append=lambda row: broker.ledger.append(row),
+            audit_append=audit_append,
             gateway_pid=broker.gateway_pid,
             resolve_agent_uid=broker._resolve_agent_uid,
         )

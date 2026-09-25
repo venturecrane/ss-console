@@ -1100,7 +1100,7 @@ def get_file(matter_id: str, file_id: str) -> Any:
 
 @server.tool()
 def read_document(matter_id: str, file_id: str, max_chars: int = 40000, offset: int = 0) -> Any:
-    """Return a matter document's extracted TEXT (PDF, DOCX, or plain text) so
+    """Return a matter document's extracted TEXT (PDF, DOCX, Excel, or plain text) so
     document-reading skills — served-discovery capture, deficiency review,
     separate-statement assembly, document review — can actually read matter
     files. Before this tool existed the connector could only mint a presigned
@@ -1124,7 +1124,12 @@ def read_document(matter_id: str, file_id: str, max_chars: int = 40000, offset: 
     names ITS matter, which is not always this one).
 
     **``extraction`` names the road the text came from, and it is part of the
-    read.** ``pypdf``/``docx``/``plain`` is the document's own text layer.
+    read.** ``pypdf``/``docx``/``plain``/``xlsx`` is the document's own text layer.
+    An Excel workbook reads as one ``## Sheet: <name>`` block per sheet, one
+    row per line, cells separated by `` | ``; ``[formula, no saved value]`` is a
+    formula the file never computed (a gap, never a zero). ``xlsx_operator`` is a
+    workbook the Operator itself built with ``add_workbook``: its figures are
+    the Operator's, not the firm's record.
     ``vision``/``vision_cached`` is a MACHINE TRANSCRIPTION of a scan that no
     human has read: cite it as a transcription, never as the document verbatim
     in anything filed, and check any passage you quote against the scan itself.
@@ -1132,7 +1137,8 @@ def read_document(matter_id: str, file_id: str, max_chars: int = 40000, offset: 
     it is a gap for a person to fill, never something to infer. ``none_scanned``
     means the file is paper this tool could not read at all; ``extractionReason``
     says why (``no_credential``, ``over_page_cap``, ``over_byte_cap``,
-    ``api_error``, ``truncated``, ``incomplete_transcription``, ``disabled``)
+    ``api_error``, ``truncated``, ``incomplete_transcription``, ``disabled``,
+    ``busy`` — another scan was being read; ask again in a few minutes)
     and ``needsHumanRead`` is true. That is never an empty document — say so
     rather than treating silence as content."""
     from .extract import METHOD_NONE_SCANNED, UnsupportedDocumentError, extract_text_ex
@@ -1652,16 +1658,8 @@ def _collect_matter_sources(
     Discipline: a scanned matter's draft path opens only after a person
     deliberately read each scan, so an uncached scan still lands in
     ``unextractable`` and still hard-refuses the draft, exactly as before."""
-    from .extract import (
-        METHOD_DOCX,
-        METHOD_PLAIN,
-        METHOD_PYPDF,
-        METHOD_VISION_CACHED,
-        extract_text_ex,
-    )
+    from .extract import MECHANICAL_METHODS, METHOD_VISION_CACHED, METHOD_XLSX_OPERATOR, extract_text_ex
     from .library import find_folder_id, is_library_file, load_library_config
-
-    mechanical = (METHOD_PYPDF, METHOD_DOCX, METHOD_PLAIN)
 
     client = _get_client()
     listing = client.get(f"/matters/{matter_id}/documents/files", Limit=500, Offset=0)
@@ -1691,9 +1689,11 @@ def _collect_matter_sources(
             continue
         # Branch on the METHOD, never on whether the text is truthy: which road
         # the text came from is what decides how it may be used.
+        if result.method == METHOD_XLSX_OPERATOR:
+            continue  # the Operator's own workbook is not the firm's record
         if result.method == METHOD_VISION_CACHED:
             vision_sources.append((name, result.text))
-        elif result.method in mechanical and result.text.strip():
+        elif result.method in MECHANICAL_METHODS and result.text.strip():
             sources.append((name, result.text))
         else:
             unextractable.append(name)

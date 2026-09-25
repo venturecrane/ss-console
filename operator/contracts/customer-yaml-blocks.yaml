@@ -270,7 +270,10 @@ top_level:
       all. Read-only: no send, draft, move or delete reaches a staff mailbox.
       Takes effect only once the firm ALSO adds the mailbox to the READ app's
       Exchange ApplicationAccessPolicy scope group; until then Graph answers
-      403 and the read fails closed.
+      403 and the read fails closed. Never an address on scope.staff_send_as:
+      an approver's inbox holds the approve links (ADR 0089 amendment 5a), so
+      the console validator refuses the overlap, the connector refuses the
+      read, and boot smoke asks Microsoft about every approver.
   voice_library:
     status: implemented
     materializer: bootstrap Step 2a (R2 voice-vault sync) + translate _persona_config (config.yaml)

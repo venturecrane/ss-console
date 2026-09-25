@@ -33,6 +33,8 @@ import {
   parseSchedule,
   parseDeliverables,
   parseLineItems,
+  readLineItemsExact,
+  describeLineItemsRefusal,
   getMissingAuthoredContent,
 } from '../src/lib/db/quote-content'
 import type { Quote } from '../src/lib/db/quotes'
@@ -187,6 +189,46 @@ describe('parseLineItems', () => {
     expect(parseLineItems(json)).toEqual([
       { problem: 'Good', description: 'ok', estimated_hours: 4 },
     ])
+  })
+
+  it('drops a row whose hours are negative', () => {
+    const json = JSON.stringify([{ problem: 'P', description: 'd', estimated_hours: -2 }])
+    expect(parseLineItems(json)).toEqual([])
+  })
+})
+
+describe('readLineItemsExact: the money-path reading', () => {
+  const good = { problem: 'P', description: 'd', estimated_hours: 4 }
+
+  it('returns every row when every row is well shaped', () => {
+    expect(readLineItemsExact(JSON.stringify([good, { ...good, estimated_hours: 0 }]))).toEqual({
+      ok: true,
+      items: [good, { ...good, estimated_hours: 0 }],
+    })
+  })
+
+  it('refuses the whole read, naming the first bad row, when any row lacks numeric hours', () => {
+    expect(
+      readLineItemsExact(JSON.stringify([good, { problem: 'P', description: 'd' }, good]))
+    ).toEqual({ ok: false, reason: 'invalid_row', index: 1 })
+    expect(readLineItemsExact(JSON.stringify([{ ...good, estimated_hours: '4' }]))).toMatchObject({
+      ok: false,
+      reason: 'invalid_row',
+      index: 0,
+    })
+  })
+
+  it('refuses a missing, malformed, or non-array column with the reason', () => {
+    expect(readLineItemsExact(null)).toEqual({ ok: false, reason: 'missing' })
+    expect(readLineItemsExact('{ truncated')).toEqual({ ok: false, reason: 'malformed_json' })
+    expect(readLineItemsExact('{}')).toEqual({ ok: false, reason: 'not_an_array' })
+  })
+
+  it('describes a refusal in one line', () => {
+    expect(describeLineItemsRefusal({ ok: false, reason: 'invalid_row', index: 2 })).toBe(
+      'invalid_row at row 2'
+    )
+    expect(describeLineItemsRefusal({ ok: false, reason: 'missing' })).toBe('missing')
   })
 })
 

@@ -3,9 +3,10 @@
 # (issue #894) for one customer + period. Output is a digest-verified
 # tar.gz (per-artifact SHA-256 + a manifest SHA-256 recorded in the
 # append-only COMPLIANCE_PACKET_EXPORTED audit row) containing a PDF,
-# JSON manifest, and per-spec evidence files. The manifest is NOT yet
-# cryptographically signed -- it self-discloses signature="unsigned-stub";
-# detached Ed25519 signing is a tracked follow-on gated on /captain/signing-key.
+# JSON manifest, and per-spec evidence files. The manifest carries a
+# detached Ed25519 signature (manifest.sig) when EVIDENCE_PACKET_SIGNING_KEY_B64
+# is staged (Infisical /ss), and self-discloses signature="unsigned-stub" when
+# it is not (adapter/evidence/signing.py).
 #
 # Usage:
 #   operator/bin/generate-evidence-packet.sh \

@@ -36,17 +36,10 @@
  * naturally. We don't try to be clever here.
  */
 
-import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
+import { jsonResponse, errorResponse, isRecord } from '../../../lib/api/helpers'
 import { misconfiguredResponse } from '../../../lib/api/failures'
 import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
-
-interface HealthchecksWebhookPayload {
-  tenant?: string
-  check_name?: string
-  status?: 'up' | 'down'
-  raw_url?: string
-}
 
 export const POST: APIRoute = async ({ request }) => {
   const expected = env.HEALTHCHECKS_WEBHOOK_SECRET
@@ -58,18 +51,20 @@ export const POST: APIRoute = async ({ request }) => {
     return errorResponse(401, 'unauthorized')
   }
 
-  let payload: HealthchecksWebhookPayload
+  let payload: unknown
   try {
-    payload = await request.json<HealthchecksWebhookPayload>()
+    payload = await request.json()
   } catch {
     return errorResponse(400, 'invalid_json')
   }
+  if (!isRecord(payload)) return errorResponse(400, 'invalid_json')
 
-  const tenant = payload.tenant?.trim()
+  const tenant = typeof payload.tenant === 'string' ? payload.tenant.trim() : ''
   const status = payload.status
   if (!tenant || (status !== 'up' && status !== 'down')) {
     return errorResponse(400, 'missing_tenant_or_status')
   }
+  const checkName = typeof payload.check_name === 'string' ? payload.check_name : tenant
 
   const entityRow = await env.DB.prepare(
     'SELECT entity_id FROM customer_configs WHERE customer_slug = ?'
@@ -82,8 +77,8 @@ export const POST: APIRoute = async ({ request }) => {
 
   const summary =
     status === 'down'
-      ? `Heartbeat grace expired: ${payload.check_name ?? tenant}`
-      : `Heartbeat recovered: ${payload.check_name ?? tenant}`
+      ? `Heartbeat grace expired: ${checkName}`
+      : `Heartbeat recovered: ${checkName}`
   const alertDate = new Date().toISOString().slice(0, 10)
 
   await env.DB.prepare(

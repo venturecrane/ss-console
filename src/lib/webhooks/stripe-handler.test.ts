@@ -34,9 +34,15 @@ import { handleInvoicePaid, handleInvoicePaymentFailed } from './stripe-handler'
 import { POST } from '../../pages/api/webhooks/stripe'
 import type { StripeInvoice, StripeWebhookEvent } from '../stripe/types'
 import { sendEmail } from '../email/resend'
+import { captureError } from '../observability/sentry'
 
 vi.mock('../email/resend', () => ({
   sendEmail: vi.fn().mockResolvedValue({ success: true, id: 'test-email-id' }),
+}))
+
+vi.mock('../observability/sentry', () => ({
+  captureError: vi.fn(),
+  captureWarning: vi.fn(),
 }))
 
 installWorkerdPolyfills()
@@ -349,12 +355,38 @@ describe('handleInvoicePaid — confirmation email', () => {
 
   it('still returns 200 with the invoice paid when the email send throws (best-effort Phase 2)', async () => {
     vi.mocked(sendEmail).mockRejectedValueOnce(new Error('resend down'))
+    vi.mocked(captureError).mockClear()
 
     const res = await handleInvoicePaid(db, 'resend-key', makeEvent(STRIPE_DEPOSIT_ID))
     expect(res.status).toBe(200)
 
     const invoice = await getInvoiceRow(db, DEPOSIT_INVOICE_ID)
     expect(invoice?.status).toBe('paid')
+    // Best-effort is not silent: the owed thank-you reaches Sentry.
+    expect(captureError).toHaveBeenCalledWith(expect.any(Error), 'webhook/stripe/invoice')
+  })
+})
+
+describe('handleInvoicePaid: Phase 1 failure', () => {
+  it('answers 500 so Stripe retries, leaves the invoice as sent, and reaches Sentry', async () => {
+    vi.mocked(captureError).mockClear()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const boom = new Error('D1 batch unavailable')
+    const failingBatch = new Proxy(db, {
+      get(target, prop, receiver) {
+        if (prop === 'batch') return () => Promise.reject(boom)
+        const value: unknown = Reflect.get(target, prop, receiver)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    })
+
+    const res = await handleInvoicePaid(failingBatch, undefined, makeEvent(STRIPE_DEPOSIT_ID))
+
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: 'internal_error', message: 'Internal server error.' })
+    expect(captureError).toHaveBeenCalledWith(boom, 'webhook/stripe/invoice')
+    expect((await getInvoiceRow(db, DEPOSIT_INVOICE_ID))?.status).toBe('sent')
+    expect(vi.mocked(sendEmail)).not.toHaveBeenCalled()
   })
 })
 

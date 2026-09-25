@@ -41,11 +41,23 @@
 # that has the connector installed. Proven by a reprovision (boot smoke step 8
 # is the invariant run).
 #
-# STILL SHIMMED, on purpose, and why:
+# STILL SHIMMED, on purpose, and why (recounted 2026-09-25, code review
+# Architecture 9: `grep -rn "sys.path.insert" --include=*.py . | grep -v
+# /tests/`; the two voice CLIs also still inserted this tree's root, which
+# Stage 2 said was gone, and that insert is removed now):
 #   * bin/voice-fetch-corpus.py and bin/voice-survey-corpus.py put
 #     connectors/smokeball on the path for the real extractor: that is a
 #     separate distributable (connectors/smokeball/pyproject.toml), not this
 #     project, so those two go with the connector install story.
+#   * bin/medchron-backfill-covered.py puts runners/medchron on the path so
+#     the covered-set computation it writes back is the SHIPPED one, never a
+#     reimplementation. The runner is its own distributable
+#     (runners/medchron/pyproject.toml), so this goes with the runner's
+#     install story, like the connector above.
+#   * bin/seed-staging-matter.py inserts /app/connectors/smokeball inside
+#     _client(), lazily: that path exists only on a Machine, where the
+#     connector ships, so a module-level import would make its consistency
+#     tests skip everywhere they actually run.
 #   * customers/pilot-smokeball's seed and l2 scripts insert their own
 #     directory to import a sibling: the ordinary run-as-a-file idiom under a
 #     dashed customer directory that cannot be a package path, not a packaging

@@ -15,6 +15,7 @@
 import { deriveRuntimeReadKey } from '../runtime-read-transport'
 import { machineBaseUrl } from '../machine-url'
 import { resolveCustomerFlyApp } from '../fly-app-registry'
+import { isRecord } from '../../api/helpers'
 
 export interface MachineWebhookEnv {
   /** Same Machine base URL template as the runtime-read path
@@ -136,7 +137,8 @@ export function createMachineTurnTransport(env: MachineWebhookEnv): MachineTurnT
       })
       if (!resp.ok) throw new Error(`turn delivery failed: ${resp.status}`)
 
-      const data = await resp.json<{ reply?: unknown; thread_id?: unknown }>()
+      const parsed: unknown = await resp.json()
+      const data = isRecord(parsed) ? parsed : {}
       return {
         reply: typeof data.reply === 'string' ? data.reply : '',
         thread_id: typeof data.thread_id === 'string' ? data.thread_id : undefined,

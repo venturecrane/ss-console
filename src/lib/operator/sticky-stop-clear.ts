@@ -14,9 +14,9 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types'
-import { machineBaseUrl } from '../operator/machine-url'
-import { deriveRuntimeReadKey } from '../operator/runtime-read-transport'
-import { resolveCustomerFlyApp } from '../operator/fly-app-registry'
+import { machineBaseUrl } from './machine-url'
+import { deriveRuntimeReadKey } from './runtime-read-transport'
+import { resolveCustomerFlyApp } from './fly-app-registry'
 
 export interface StickyStopClearEnv {
   OPERATOR_MCP_WEBHOOK_SECRET?: string

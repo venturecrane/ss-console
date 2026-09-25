@@ -41,8 +41,7 @@
 
 import { CARD_FEE_LINE_DESCRIPTION, cardProcessingFeeCents } from '../pricing/card-fee'
 import type { OperatorPaymentMethod } from '../db/services'
-
-const STRIPE_API_BASE = 'https://api.stripe.com/v1'
+import { STRIPE_API_BASE, stripeHeaders } from './client'
 
 /** Metadata marker that identifies the shared retainer product. */
 const RETAINER_PRODUCT_MARKER = { key: 'smd_product', value: 'operator-retainer' } as const
@@ -58,13 +57,6 @@ const CARD_FEE_PRODUCT_NAME = CARD_FEE_LINE_DESCRIPTION
 
 /** The checkout-session metadata key + value the webhook routes on. */
 export const OPERATOR_CHECKOUT_PRODUCT_SLUG = 'operator'
-
-function stripeHeaders(apiKey: string): Record<string, string> {
-  return {
-    Authorization: `Bearer ${apiKey}`,
-    'Content-Type': 'application/x-www-form-urlencoded',
-  }
-}
 
 export interface StripeSubscriptionResult {
   id: string

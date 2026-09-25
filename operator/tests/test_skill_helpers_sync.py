@@ -85,6 +85,10 @@ def test_canonical_exists_and_exports_the_shared_set() -> None:
         "write_pre_run_handoff",
         "writer_factory",
         "warn_observability_failure",
+        "load_sibling",
+        "load_customer_yaml",
+        "write_dispatch_envelope",
+        "canonical_body_sha256",
     ):
         assert expected in names, f"canonical no longer exports {expected}"
 
@@ -109,11 +113,26 @@ def test_every_adopting_pre_run_loads_the_shared_module_and_names_its_own_dir() 
         )
 
 
-def test_no_pre_run_carries_a_private_copy_of_a_shared_helper() -> None:
+def _skill_modules() -> list[Path]:
+    """Every non-test module a skill ships, minus the vendored copy itself.
+
+    Widened from ``pre_run.py`` alone on 2026-09-25 (code review, Architecture
+    8): the two tracker skills' ``dispatch_envelope.py`` and ``render.py``
+    carried four AST-identical helpers that no gate looked at, because the scan
+    only read ``pre_run.py``.
+    """
+    return sorted(
+        p
+        for p in _SKILLS.glob("*/*.py")
+        if p.name != "skill_helpers.py" and not p.name.startswith("test_") and p.name != "conftest.py"
+    )
+
+
+def test_no_skill_module_carries_a_private_copy_of_a_shared_helper() -> None:
     canonical_hashes = {h: name for name, h in _canonical_body_hashes().items()}
     offenders: list[str] = []
-    for pre_run in sorted(_SKILLS.glob("*/pre_run.py")):
-        src = pre_run.read_text(encoding="utf-8")
+    for module in _skill_modules():
+        src = module.read_text(encoding="utf-8")
         tree = ast.parse(src)
         for node in tree.body:
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -121,7 +140,7 @@ def test_no_pre_run_carries_a_private_copy_of_a_shared_helper() -> None:
             match = canonical_hashes.get(_body_hash(src, node))
             if match:
                 offenders.append(
-                    f"{pre_run.relative_to(_OPERATOR_ROOT)}::{node.name} is a copy of skill_helpers.{match}"
+                    f"{module.relative_to(_OPERATOR_ROOT)}::{node.name} is a copy of skill_helpers.{match}"
                 )
     assert not offenders, "private copies of shared helpers crept back:\n" + "\n".join(offenders)
 

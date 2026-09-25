@@ -46,8 +46,8 @@ from bin.lib.decommission import (  # noqa: E402 - the import needs the sys.path
     DecommissionPipeline,
     DecommissionStepFailed,
     FilesystemTombstoner,
-    InMemoryComplianceArchiver,
     NoOpAgentMailStub,
+    NoOpComplianceArchiverStub,
     NoOpFlyStub,
     StepStatus,
 )
@@ -233,9 +233,12 @@ def test_live_runs_full_sequence_and_writes_audit_trail(tmp_path):
     assert len(tomb) == 1
     assert (tomb[0] / "DECOMMISSIONED.md").exists()
     assert (tomb[0] / "customer.yaml").exists()
-    # Compliance archive manifest written.
-    archive = list((tmp_path / "archive" / "smd").glob("compliance-packet-manifest-*.json"))
-    assert len(archive) == 1
+    # No archiver wired: step 07 says SKIPPED and writes nothing, rather than
+    # reporting a packet that was never built (2026-09-25 review).
+    step7 = next(r for r in results if r.name == "07_compliance_archive")
+    assert step7.status == StepStatus.SKIPPED
+    assert step7.detail["reason"] == "external_client_not_wired"
+    assert not list((tmp_path / "archive" / "smd").glob("compliance-packet*"))
     # Audit rows: begin/end per step + DECOMMISSION_FINAL.
     rows = conn.execute("SELECT action_type FROM audit_log ORDER BY id").fetchall()
     action_types = [r[0] for r in rows]
@@ -425,6 +428,11 @@ class _FakeFly:
         return {"skipped": False, "app_destroyed": True}
 
 
+class _FakeArchiver:
+    async def archive(self, customer_slug: str, archive_dir) -> dict:
+        return {"skipped": False, "archive_path": str(archive_dir / "p.tar.gz"), "file_count": 14}
+
+
 def test_unwired_backends_lists_all_stubs_by_default(tmp_path):
     customers_root = _copy_fixture(tmp_path)
     writer, _conn = _make_audit(tmp_path)
@@ -442,6 +450,7 @@ def test_unwired_backends_lists_all_stubs_by_default(tmp_path):
         "vectorize_deleter",
         "agentmail",
         "fly",
+        "compliance_archiver",
         "observability",
     ]
 
@@ -460,6 +469,7 @@ def test_unwired_backends_empty_when_all_wired(tmp_path):
         fly=_FakeFly(),
         observability=_RecordingObservabilityCleanup(),
         audit_log_preserver=_RecordingPreserver(),
+        archiver=_FakeArchiver(),
     )
     assert pipeline.unwired_destructive_backends() == []
 
@@ -475,7 +485,7 @@ def _no_ambient_backends(monkeypatch):
     monkeypatch.setattr(
         decommission_cli,
         "backends_from_env",
-        lambda slug, root: ({}, {n: False for n in decommission_cli.BACKEND_REQUIREMENTS}),
+        lambda slug, root, **_: ({}, {n: False for n in decommission_cli.BACKEND_REQUIREMENTS}),
     )
     # Same discipline for the seam preserver: a shell with the runtime-read
     # env staged would otherwise make this unit test dial a real Machine.
@@ -659,16 +669,70 @@ def test_noop_stubs_return_skipped_manifests():
 
 
 # ---------------------------------------------------------------------------
-# Tests: compliance archiver writes a manifest
+# Tests: the compliance archiver stub reports SKIPPED and refuses a live run
 # ---------------------------------------------------------------------------
 
 
-def test_compliance_archiver_writes_manifest(tmp_path):
-    archiver = InMemoryComplianceArchiver()
+def test_noop_compliance_archiver_skips_and_writes_nothing(tmp_path):
     archive_dir = tmp_path / "archive" / "smd"
-    result = _run(archiver.archive("smd", archive_dir))
-    assert Path(result["archive_path"]).exists()
-    assert result["stub"] is True
+    result = _run(NoOpComplianceArchiverStub().archive("smd", archive_dir))
+    assert result["skipped"] is True
+    assert result["reason"] == "external_client_not_wired"
+    assert result["archive_path"] is None and result["file_count"] == 0
+    assert not archive_dir.exists()
+
+
+def test_plan_reports_whether_the_archiver_is_wired(tmp_path):
+    customers_root = _copy_fixture(tmp_path)
+    writer, _conn = _make_audit(tmp_path)
+    common = dict(customer_slug="smd", customers_root=customers_root, archive_root=tmp_path / "a", audit_writer=writer)
+    stub_plan = _run(DecommissionPipeline(**common).plan())
+    wired_plan = _run(DecommissionPipeline(**common, archiver=_FakeArchiver()).plan())
+    step = "07_compliance_archive"
+    assert next(r for r in stub_plan if r.name == step).detail["archiver_wired"] is False
+    assert next(r for r in wired_plan if r.name == step).detail["archiver_wired"] is True
+
+
+def test_cli_live_refuses_when_only_the_archiver_is_unwired(tmp_path, monkeypatch, capsys):
+    """Every deletion wired, no signing key staged: a live run must refuse
+    (exit 5) naming the archiver and its credential, and touch nothing. The
+    Machine is the thing the packet is evidence about; destroying it and then
+    skipping the packet is the false clean decommission #1123 refuses."""
+    from bin.lib import decommission_cli
+
+    everything_but_the_archiver = {
+        "audit_log_preserver": _RecordingPreserver(),
+        "r2_deleter": _RecordingR2Deleter(),
+        "vectorize_deleter": _RecordingVectorizeDeleter(),
+        "agentmail": _FakeAgentMail(),
+        "fly": _FakeFly(),
+        "observability": _RecordingObservabilityCleanup(),
+    }
+    wired = {n: n != "compliance_archiver" for n in decommission_cli.BACKEND_REQUIREMENTS}
+    monkeypatch.setattr(
+        decommission_cli, "backends_from_env", lambda slug, root, **_: (everything_but_the_archiver, wired)
+    )
+    monkeypatch.setattr(decommission_cli, "seam_client_from_env", lambda slug: None)
+    customers_root = _copy_fixture(tmp_path)
+    rc = decommission_cli.main(
+        [
+            "smd",
+            "--live",
+            "--confirm-slug",
+            "smd",
+            "--customers-root",
+            str(customers_root),
+            "--archive-root",
+            str(tmp_path / "archive"),
+            "--audit-db",
+            str(tmp_path / "audit.sqlite"),
+        ]
+    )
+    err = capsys.readouterr().err
+    assert rc == 5
+    assert "compliance_archiver" in err
+    assert "EVIDENCE_PACKET_SIGNING_KEY_B64" in err
+    assert _untouched(customers_root)
 
 
 # ---------------------------------------------------------------------------

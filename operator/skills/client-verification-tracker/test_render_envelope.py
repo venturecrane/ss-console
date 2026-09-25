@@ -22,6 +22,7 @@ def _load(filename: str, name: str):
 
 
 render = _load("render.py", "cvt_render_under_test")
+helpers = _load("skill_helpers.py", "cvt_skill_helpers_under_test")
 envelope = _load("dispatch_envelope.py", "cvt_envelope_under_test")
 ledger = _load("escalation_ledger.py", "cvt_ledger_under_test")
 pre_run = _load("pre_run.py", "cvt_pre_run_under_test")
@@ -30,7 +31,7 @@ pre_run = _load("pre_run.py", "cvt_pre_run_under_test")
 def test_canonical_hash_matches_arbiter_vectors():
     vectors = json.loads((OPERATOR_DIR / "contracts" / "fixtures" / "body-canon-vectors.json").read_text())["vectors"]
     for vector in vectors:
-        assert render.canonical_body_sha256(vector["input"]) == vector["sha256"], vector["name"]
+        assert helpers.canonical_body_sha256(vector["input"]) == vector["sha256"], vector["name"]
 
 
 def test_situation_map_is_closed():
@@ -194,7 +195,7 @@ def test_envelope_hold_surface_dispatch(tmp_path, monkeypatch):
         "attempt": 1,
         "token": None,
     }
-    assert dispatch["body_sha256_full"] == render.canonical_body_sha256(dispatch["full_body"])
+    assert dispatch["body_sha256_full"] == helpers.canonical_body_sha256(dispatch["full_body"])
     # The CVT in-turn check ships dark (Shape A is a legitimate free send).
     assert written["in_turn_enforce"] is False
 

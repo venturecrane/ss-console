@@ -10,6 +10,7 @@ import { recordMcpAudit } from './mcp-audit'
 import { jitIssueGrant, MCP_OPEN_GRANT_TTL_DAYS } from './grant-store'
 import { domainAllowed } from './jit-grant'
 import { buildWwwAuthenticate } from './oauth-metadata'
+import { apiErrorBody } from '../../api/errors'
 import {
   extractBearerToken,
   validateMcpToken,
@@ -83,7 +84,7 @@ function unauthorized(
   reason: string
 ): Response {
   const metadataUrl = new URL(buildMcpMetadataPath(customerSlug), url.origin).toString()
-  return jsonWithCors({ error: 'unauthorized', detail: reason }, 401, {
+  return jsonWithCors(apiErrorBody('unauthorized', reason), 401, {
     'WWW-Authenticate': buildWwwAuthenticate(metadataUrl, requireOrganization),
   })
 }
@@ -211,7 +212,7 @@ export async function handleMcpPost(
 
 export function handleMcpGet(): Response {
   return jsonWithCors(
-    { error: 'method_not_allowed', detail: 'MCP GET/SSE not supported (stateless)' },
+    apiErrorBody('method_not_allowed', 'MCP GET/SSE not supported (stateless)'),
     405,
     { Allow: 'POST, OPTIONS' }
   )

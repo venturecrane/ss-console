@@ -11,22 +11,15 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import { sendEmail } from '../email/resend'
 import type { SubscriptionBillingRow } from '../db/subscriptions'
+import { jsonResponse } from '../api/helpers'
+import { captureError } from '../observability/sentry'
 
 /** SMD operational-alert address (CLAUDE.md Contact Addresses). */
 export const ALERT_EMAIL = 'team@smd.services'
 
+/** The acknowledgement every Stripe webhook handler answers with. */
 export function ok(): Response {
-  return new Response(JSON.stringify({ ok: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  })
-}
-
-export function serverError(): Response {
-  return new Response(JSON.stringify({ error: 'INTERNAL_ERROR' }), {
-    status: 500,
-    headers: { 'Content-Type': 'application/json' },
-  })
+  return jsonResponse(200, { ok: true })
 }
 
 export function unixToIso(unix: number | null): string | null {
@@ -41,7 +34,9 @@ export async function entityName(db: D1Database, sub: SubscriptionBillingRow): P
       .bind(sub.entity_id, sub.org_id)
       .first<{ name: string }>()
     return entity?.name ?? sub.entity_id
-  } catch {
+  } catch (err) {
+    // Alert copy falls back to the id; the lookup failure still pages.
+    captureError(err, 'webhook/stripe/subscription')
     return sub.entity_id
   }
 }
@@ -58,5 +53,6 @@ export async function alertTeam(
     await sendEmail(resendApiKey, { to: ALERT_EMAIL, subject, html })
   } catch (err) {
     console.error('[stripe-subscription] alert email failed:', subject, err)
+    captureError(err, 'webhook/stripe/alert-team')
   }
 }

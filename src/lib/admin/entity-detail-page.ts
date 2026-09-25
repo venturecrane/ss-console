@@ -1,4 +1,5 @@
 import { hasOpenQuoteForEntity, listQuotes } from '../db/quotes'
+import { parseJsonRecord } from '../api/helpers'
 import { getEntity } from '../db/entities'
 import type { EntityStage } from '../db/entities'
 import { listContext } from '../db/context'
@@ -54,12 +55,7 @@ export function formatDate(iso: string): string {
 }
 
 export function parseMetadata(json: string | null): Record<string, unknown> | null {
-  if (!json) return null
-  try {
-    return JSON.parse(json) as Record<string, unknown>
-  } catch {
-    return null
-  }
+  return parseJsonRecord(json)
 }
 
 /**
@@ -146,17 +142,12 @@ function resolveLostReason(
 ): { code: string; detail: string | null } | null {
   if (entity.stage !== 'lost') return null
   for (const entry of [...contextEntries].reverse().filter((e) => e.type === 'stage_change')) {
-    if (!entry.metadata) continue
-    try {
-      const meta = JSON.parse(entry.metadata) as Record<string, unknown>
-      if (meta.to === 'lost' && typeof meta.lost_reason === 'string') {
-        return {
-          code: meta.lost_reason,
-          detail: typeof meta.lost_detail === 'string' ? meta.lost_detail : null,
-        }
+    const meta = parseJsonRecord(entry.metadata)
+    if (meta?.to === 'lost' && typeof meta.lost_reason === 'string') {
+      return {
+        code: meta.lost_reason,
+        detail: typeof meta.lost_detail === 'string' ? meta.lost_detail : null,
       }
-    } catch {
-      continue
     }
   }
   return null

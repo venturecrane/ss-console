@@ -53,7 +53,7 @@ from typing import TYPE_CHECKING, Callable, Optional
 if TYPE_CHECKING:  # pragma: no cover -- type names only; send_verify imports us
     from datetime import datetime
 
-    from send_verify import DispatchStamp, RenderDecl, WakeStamp
+    from .send_verify import DispatchStamp, RenderDecl, WakeStamp
 
 #: Metadata keys that carry a vendor message id on an audited send (any key
 #: containing this substring), and the audit-header key stamped on the message
