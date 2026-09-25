@@ -146,10 +146,15 @@ Every change is written to the enterprise coding standards (global
 
 - **Parse, don't cast.** At every trust boundary - HTTP bodies, webhook
   payloads, D1/KV JSON columns, external API responses, cursor tokens - parse the
-  input with a schema (Zod), never `JSON.parse(x) as T`. TypeScript types are
-  compile-time only; unvalidated external data propagates wrong values until
-  something crashes far from the source. This is review-enforced and called the
-  most important rule in the document.
+  input with a schema (Zod) or into `unknown` narrowed field by field
+  (`parseJsonRecord` and `isRecord` in `src/lib/api/helpers.ts`,
+  `readLineItemsExact` in `src/lib/db/quote-content.ts`), never
+  `JSON.parse(x) as T`. TypeScript types are compile-time only; unvalidated
+  external data propagates wrong values until something crashes far from the
+  source. It is called the most important rule in the document, and since
+  2026-09-25 it is lint-enforced at error under `src/`: a `no-restricted-syntax`
+  guard in `eslint.config.js` refuses `JSON.parse(...) as T`,
+  `(await r.json()) as T` and `r.json<T>()`.
 - **No floating Promises.** Every Promise is `await`ed, `return`ed, passed to
   `ctx.waitUntil()`, or explicitly `void`ed with a comment. In Workers the
   isolate can terminate before an unawaited Promise resolves, so the write never

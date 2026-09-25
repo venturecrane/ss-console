@@ -19,7 +19,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { canonRosterAddress } from '../src/lib/operator/customer-yaml/sections-scope'
+import { canonRosterAddress } from '../src/lib/operator/customer-yaml/helpers'
 
 type Case = { name: string; input: string; expected: string | null }
 

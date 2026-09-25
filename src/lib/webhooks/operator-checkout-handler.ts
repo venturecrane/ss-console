@@ -57,21 +57,11 @@ import {
   detachStripeSubscription,
 } from '../db/subscriptions'
 import { OPERATOR_CHECKOUT_PRODUCT_SLUG, cancelOperatorSubscription } from '../stripe/subscriptions'
-import { alertTeam } from './stripe-subscription-shared'
+import { failedResponse } from '../api/failures'
+import { captureError } from '../observability/sentry'
+import { alertTeam, ok } from './stripe-subscription-shared'
 
-function ok(): Response {
-  return new Response(JSON.stringify({ ok: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  })
-}
-
-function serverError(): Response {
-  return new Response(JSON.stringify({ error: 'INTERNAL_ERROR' }), {
-    status: 500,
-    headers: { 'Content-Type': 'application/json' },
-  })
-}
+const AREA = 'webhook/stripe/operator-checkout'
 
 /** Stripe's Checkout Session `payment_status` vocabulary. */
 export type CheckoutPaymentStatus = 'paid' | 'unpaid' | 'no_payment_required'
@@ -235,8 +225,7 @@ export async function handleOperatorCheckoutCompleted(
     await markOrderProcessed(db, payload.id)
     return ok()
   } catch (err) {
-    console.error('[operator-checkout] pipeline failed:', err)
-    return serverError() // let Stripe retry
+    return failedResponse(err, AREA) // a 500 lets Stripe retry; Sentry hears each one
   }
 }
 
@@ -281,8 +270,7 @@ export async function handleOperatorCheckoutAsyncPaymentFailed(
   try {
     transition = await recordFailedPayment(db, payload)
   } catch (err) {
-    console.error('[operator-checkout] async_payment_failed pipeline failed:', err)
-    return serverError() // let Stripe retry
+    return failedResponse(err, AREA) // a 500 lets Stripe retry; Sentry hears each one
   }
   if (transition === null) return ok() // already processed: nothing to unwind
   if (!transition.detached && !transition.marked) {
@@ -297,6 +285,7 @@ export async function handleOperatorCheckoutAsyncPaymentFailed(
     } catch (err) {
       cancelError = err instanceof Error ? err.message : String(err)
       console.error('[operator-checkout] cancel after failed payment failed:', err)
+      captureError(err, AREA)
     }
   }
 

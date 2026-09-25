@@ -7,7 +7,11 @@ import {
   updateMilestoneStatus,
   deleteMilestone,
 } from '../../../../../lib/db/milestones'
-import { completeMilestoneWithInvoicing } from '../../../../../lib/stripe/milestone-invoicing'
+import {
+  completeMilestoneWithInvoicing,
+  MilestoneInvoiceRefusal,
+} from '../../../../../lib/stripe/milestone-invoicing'
+import { captureError } from '../../../../../lib/observability/sentry'
 import type { MilestoneStatus } from '../../../../../lib/db/milestones'
 import { env } from 'cloudflare:workers'
 import { requireAdminSession } from '../../../../../lib/auth/admin-session'
@@ -133,6 +137,12 @@ async function handleTransitionStatus(args: TransitionStatusArgs): Promise<Respo
       await updateMilestoneStatus(env.DB, orgId, milestoneId.trim(), newStatus as MilestoneStatus)
     }
   } catch (err) {
+    if (err instanceof MilestoneInvoiceRefusal) {
+      // A data fault on the money path, not an admin mistake: page on it.
+      console.error('[api/admin/engagements/[id]/milestones]', err)
+      captureError(err, 'api/admin/engagements/milestones')
+      return redirect(`${detailUrl}?error=${err.code}`, 302)
+    }
     console.error('[api/admin/engagements/[id]/milestones] Status transition error:', err)
     return redirect(`${detailUrl}?error=invalid_transition`, 302)
   }

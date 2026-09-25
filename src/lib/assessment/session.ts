@@ -32,7 +32,8 @@
  *   touch KV or crypto); the signed-session ceiling is the backstop that
  *   survives IP rotation.
  *
- * Encoding (matches src/lib/oauth/state.ts and src/lib/booking/signed-link.ts):
+ * Encoding (the shared codec in src/lib/security/signed-payload.ts, as OAuth
+ * state and signed booking links use):
  *
  *   `<base64url(json-payload)>.<base64url(hmac-sha256)>`
  *
@@ -50,9 +51,9 @@
  */
 
 import { env } from 'cloudflare:workers'
+import { isRecord } from '../api/helpers'
+import { importSigningKey, signPayload, verifySignedPayload } from '../security/signed-payload'
 
-const ALGORITHM: HmacImportParams = { name: 'HMAC', hash: 'SHA-256' }
-const ENCODER = new TextEncoder()
 const SCHEMA_VERSION = 1
 
 /**
@@ -101,18 +102,14 @@ export type ConsumeTurnResult =
 export async function issueAssessmentSession(
   ttlSeconds: number = SESSION_TTL_SECONDS
 ): Promise<IssueSessionResult> {
-  const key = await importSigningKey()
+  const key = await sessionSigningKey()
   const exp = Math.floor(Date.now() / 1000) + ttlSeconds
   const payload: AssessmentSessionPayload = {
     v: SCHEMA_VERSION,
     sid: crypto.randomUUID(),
     exp,
   }
-
-  const payloadB64 = base64UrlEncode(ENCODER.encode(JSON.stringify(payload)))
-  const sigBuf = await crypto.subtle.sign(ALGORITHM, key, ENCODER.encode(payloadB64))
-  const sigB64 = base64UrlEncode(new Uint8Array(sigBuf))
-  return { token: `${payloadB64}.${sigB64}`, payload }
+  return { token: await signPayload(key, payload), payload }
 }
 
 /**
@@ -121,55 +118,24 @@ export async function issueAssessmentSession(
  * every other input.
  */
 export async function verifyAssessmentSession(token: unknown): Promise<VerifySessionResult> {
-  if (typeof token !== 'string' || token.length === 0) {
-    return { ok: false, error: 'malformed' }
-  }
+  const verified = await verifySignedPayload(token, sessionSigningKey)
+  if (!verified.ok) return verified
+  const p = verified.payload
+  if (!isRecord(p)) return { ok: false, error: 'malformed' }
 
-  const dot = token.indexOf('.')
-  if (dot <= 0 || dot === token.length - 1) {
-    return { ok: false, error: 'malformed' }
-  }
-
-  const payloadB64 = token.slice(0, dot)
-  const sigB64 = token.slice(dot + 1)
-
-  let sigBytes: Uint8Array
-  try {
-    sigBytes = base64UrlDecode(sigB64)
-  } catch {
-    return { ok: false, error: 'malformed' }
-  }
-
-  const key = await importSigningKey()
-  const valid = await crypto.subtle.verify(
-    ALGORITHM,
-    key,
-    sigBytes as unknown as ArrayBuffer,
-    ENCODER.encode(payloadB64)
-  )
-  if (!valid) return { ok: false, error: 'bad_signature' }
-
-  let payload: AssessmentSessionPayload
-  try {
-    const json = new TextDecoder().decode(base64UrlDecode(payloadB64))
-    payload = JSON.parse(json) as AssessmentSessionPayload
-  } catch {
-    return { ok: false, error: 'malformed' }
-  }
-
-  if (payload.v !== SCHEMA_VERSION) {
+  if (p.v !== SCHEMA_VERSION) {
     return { ok: false, error: 'unknown_version' }
   }
-  if (typeof payload.sid !== 'string' || payload.sid.length === 0) {
+  if (typeof p.sid !== 'string' || p.sid.length === 0) {
     return { ok: false, error: 'malformed' }
   }
 
   const now = Math.floor(Date.now() / 1000)
-  if (typeof payload.exp !== 'number' || payload.exp < now) {
+  if (typeof p.exp !== 'number' || p.exp < now) {
     return { ok: false, error: 'expired' }
   }
 
-  return { ok: true, payload }
+  return { ok: true, payload: { v: SCHEMA_VERSION, sid: p.sid, exp: p.exp } }
 }
 
 /**
@@ -217,36 +183,10 @@ export async function consumeSessionTurn(
 // Internals
 // ---------------------------------------------------------------------------
 
-async function importSigningKey(): Promise<CryptoKey> {
-  const raw = env.ASSESSMENT_SESSION_SIGNING_KEY
-  if (!raw || typeof raw !== 'string' || raw.trim().length === 0) {
-    throw new Error(
-      'ASSESSMENT_SESSION_SIGNING_KEY is not configured. Set it in wrangler env (32 random bytes, base64-encoded) before issuing assessment sessions.'
-    )
-  }
-  let bin: string
-  try {
-    bin = atob(raw)
-  } catch {
-    throw new Error('ASSESSMENT_SESSION_SIGNING_KEY is not valid base64.')
-  }
-  const keyBytes = Uint8Array.from(bin, (c) => c.charCodeAt(0))
-  return crypto.subtle.importKey('raw', keyBytes, ALGORITHM, false, ['sign', 'verify'])
-}
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  let bin = ''
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
-  const b64 = btoa(bin)
-  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-function base64UrlDecode(s: string): Uint8Array {
-  const padded = s.replace(/-/g, '+').replace(/_/g, '/')
-  const padLen = (4 - (padded.length % 4)) % 4
-  const b64 = padded + '='.repeat(padLen)
-  const bin = atob(b64)
-  const bytes = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-  return bytes
+function sessionSigningKey(): Promise<CryptoKey> {
+  return importSigningKey(
+    env.ASSESSMENT_SESSION_SIGNING_KEY,
+    'ASSESSMENT_SESSION_SIGNING_KEY',
+    'issuing assessment sessions'
+  )
 }

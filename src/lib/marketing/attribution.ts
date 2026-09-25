@@ -50,7 +50,7 @@ export const ATTRIBUTION_COOKIE_MAX_AGE_S = 90 * 24 * 60 * 60
 
 const MAX_VALUE_CHARS = 200
 
-// eslint-disable-next-line no-control-regex
+// eslint-disable-next-line no-control-regex -- stripping control characters from a cookie value IS the rule
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/g
 
 function sanitizeValue(raw: string): string | null {

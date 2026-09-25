@@ -21,6 +21,11 @@ vi.mock('../db/context', () => ({
   appendContext: vi.fn(),
 }))
 
+vi.mock('../observability/sentry', () => ({
+  captureError: vi.fn(),
+  captureWarning: vi.fn(),
+}))
+
 vi.mock('./client', () => ({
   createStripeInvoice: vi.fn(),
   sendStripeInvoice: vi.fn(),
@@ -29,6 +34,8 @@ vi.mock('./client', () => ({
 import { createInvoice, updateInvoice, updateInvoiceStatus } from '../db/invoices'
 import { appendContext } from '../db/context'
 import { createStripeInvoice, sendStripeInvoice } from './client'
+import { captureError } from '../observability/sentry'
+import { MilestoneInvoiceRefusal } from './milestone-invoicing'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -186,8 +193,9 @@ describe('completeMilestoneWithInvoicing', () => {
   it('creates invoice and calls Stripe when payment_trigger=true', async () => {
     const qr = standardQueryResults()
     const db = buildMockDb(qr, [
-      makeMilestone(), // first read: in_progress (validation)
-      makeCompletedMilestone(), // second read: completed (after UPDATE)
+      makeMilestone(), // first read: in_progress (pricing, before any write)
+      makeMilestone(), // second read: in_progress (transition validation)
+      makeCompletedMilestone(), // third read: completed (after UPDATE)
     ])
 
     const result = await completeMilestoneWithInvoicing({
@@ -230,6 +238,7 @@ describe('completeMilestoneWithInvoicing', () => {
   it('does not create invoice when payment_trigger=false', async () => {
     const db = buildMockDb({}, [
       makeMilestone({ payment_trigger: 0 }),
+      makeMilestone({ payment_trigger: 0 }),
       makeCompletedMilestone({ payment_trigger: 0 }),
     ])
 
@@ -259,7 +268,11 @@ describe('completeMilestoneWithInvoicing', () => {
       },
     })
 
-    const db = buildMockDb(qr, [makeMilestone({ sort_order: 0 }), singleMilestone])
+    const db = buildMockDb(qr, [
+      makeMilestone({ sort_order: 0 }),
+      makeMilestone({ sort_order: 0 }),
+      singleMilestone,
+    ])
 
     await completeMilestoneWithInvoicing({
       db,
@@ -285,6 +298,7 @@ describe('completeMilestoneWithInvoicing', () => {
     const qr = standardQueryResults()
     const db = buildMockDb(qr, [
       makeMilestone({ sort_order: 0 }),
+      makeMilestone({ sort_order: 0 }),
       makeCompletedMilestone({ sort_order: 0 }),
     ])
 
@@ -309,7 +323,7 @@ describe('completeMilestoneWithInvoicing', () => {
 
   it('leaves invoice at draft when STRIPE_API_KEY is missing', async () => {
     const qr = standardQueryResults()
-    const db = buildMockDb(qr, [makeMilestone(), makeCompletedMilestone()])
+    const db = buildMockDb(qr, [makeMilestone(), makeMilestone(), makeCompletedMilestone()])
 
     const result = await completeMilestoneWithInvoicing({
       db,
@@ -325,5 +339,83 @@ describe('completeMilestoneWithInvoicing', () => {
     expect(updateInvoiceStatus).not.toHaveBeenCalled()
     expect(result.invoice).not.toBeNull()
     expect(result.invoice!.status).toBe('draft')
+  })
+
+  describe('a quote whose line items cannot be read row for row', () => {
+    const cases: Array<[string, string]> = [
+      [
+        'a row without estimated_hours',
+        JSON.stringify([
+          { problem: 'Phase 1', description: 'Phase 1 work' },
+          { problem: 'Phase 2', description: 'Phase 2 work', estimated_hours: 10 },
+        ]),
+      ],
+      [
+        'a row with non-numeric estimated_hours',
+        JSON.stringify([
+          { problem: 'Phase 1', description: 'Phase 1 work', estimated_hours: 'ten' },
+          { problem: 'Phase 2', description: 'Phase 2 work', estimated_hours: 10 },
+        ]),
+      ],
+      ['a column that is not JSON', '{ truncated'],
+    ]
+
+    for (const [label, lineItems] of cases) {
+      it(`refuses on ${label}: no NaN invoice, and the milestone is not completed`, async () => {
+        const qr = standardQueryResults({
+          quote: { total_price: 3000, rate: 150, line_items: lineItems },
+        })
+        const db = buildMockDb(qr, [makeMilestone({ sort_order: 0 })])
+
+        await expect(
+          completeMilestoneWithInvoicing({
+            db,
+            orgId: ORG_ID,
+            milestoneId: MILESTONE_ID,
+            stripeApiKey: 'sk_test_123',
+            customerEmail: 'client@example.com',
+          })
+        ).rejects.toBeInstanceOf(MilestoneInvoiceRefusal)
+
+        expect(createInvoice).not.toHaveBeenCalled()
+        expect(createStripeInvoice).not.toHaveBeenCalled()
+        const prepared = vi.mocked(db.prepare).mock.calls.map(([sql]) => sql)
+        expect(prepared.some((sql) => sql.startsWith('UPDATE milestones'))).toBe(false)
+      })
+    }
+
+    it('the refusal carries the admin-facing code the route redirects with', async () => {
+      const qr = standardQueryResults({
+        quote: { total_price: 3000, rate: 150, line_items: '[{"problem":"P","description":"d"}]' },
+      })
+      const db = buildMockDb(qr, [makeMilestone({ sort_order: 0 })])
+      const err = await completeMilestoneWithInvoicing({
+        db,
+        orgId: ORG_ID,
+        milestoneId: MILESTONE_ID,
+        stripeApiKey: undefined,
+        customerEmail: null,
+      }).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(MilestoneInvoiceRefusal)
+      expect((err as MilestoneInvoiceRefusal).code).toBe('line_items_unreadable')
+      expect((err as Error).message).toContain('invalid_row at row 0')
+    })
+  })
+
+  it('a Stripe failure leaves the invoice at draft and reaches Sentry', async () => {
+    vi.mocked(createStripeInvoice).mockRejectedValueOnce(new Error('stripe down'))
+    const qr = standardQueryResults()
+    const db = buildMockDb(qr, [makeMilestone(), makeMilestone(), makeCompletedMilestone()])
+
+    const result = await completeMilestoneWithInvoicing({
+      db,
+      orgId: ORG_ID,
+      milestoneId: MILESTONE_ID,
+      stripeApiKey: 'sk_test_123',
+      customerEmail: 'client@example.com',
+    })
+
+    expect(result.invoice?.status).toBe('draft')
+    expect(captureError).toHaveBeenCalledWith(expect.any(Error), 'stripe/milestone-invoicing')
   })
 })

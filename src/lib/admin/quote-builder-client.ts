@@ -1,3 +1,5 @@
+import { parseLineItems } from '../db/quote-content'
+
 type QuoteLineItem = {
   problem: string
   description: string
@@ -289,7 +291,7 @@ export function initQuoteBuilderPage(rootId = 'quote-builder-page'): void {
   if (!(body instanceof HTMLElement)) return
 
   const rate = Number(root.dataset.rate ?? '0')
-  const initialLineItems = JSON.parse(root.dataset.lineItems ?? '[]') as QuoteLineItem[]
+  const initialLineItems: QuoteLineItem[] = parseLineItems(root.dataset.lineItems ?? null)
 
   const els: QuoteBuilderElements = {
     root,
