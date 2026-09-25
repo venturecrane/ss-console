@@ -989,7 +989,16 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # shared/action_classes.py, plugins/hermes-smd-trust/outbound.py. No
 # overlay-pairs file or audit schema changed (diff --stat a15f0971..12621343),
 # so only overlayRef moves.
-ARG OVERLAY_REF="12621343b5c3b5d339c83f75d0837c63a3e09c22"
+# 2026-09-25 (8757e374, overlay #383). Device senders: when the verified sender
+# is authored under scope.device_senders (an office scanner nobody reads), the
+# reply lane answers the authored person instead, and the broker's msgraph
+# reply (operator/workspace_broker/msgraph_ops.py + msgraph_redirect.py, same
+# PR) sends it there only when the seat's own customer.yaml pairs that person
+# with the fetched sender. Runtime files: bootstrap/validate.py,
+# shared/customer_config.py, shared/msgraph_broker.py, plugins/hermes-smd-reply.
+# No overlay-pairs file or audit schema changed (git diff --stat 12621343
+# 8757e374), so only overlayRef moves.
+ARG OVERLAY_REF="8757e374f724c5f45a72d013a3e4fdbab1d08fd1"
 
 ARG CUSTOMER_SLUG=customer-zero
 
