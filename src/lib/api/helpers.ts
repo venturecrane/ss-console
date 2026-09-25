@@ -33,6 +33,23 @@ export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
+/**
+ * Parse a stored or received JSON string that must be an object, as
+ * `unknown` narrowed by isRecord: the caller then checks each field it reads.
+ * Null on absent input, malformed JSON, or a non-object; never throws, never
+ * casts. The shared first step of the parse-and-validate sites that replaced
+ * `JSON.parse(x) as T` (review 2026-09-25, Code Quality 2).
+ */
+export function parseJsonRecord(raw: string | null | undefined): Record<string, unknown> | null {
+  if (!raw) return null
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return isRecord(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
 export function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')

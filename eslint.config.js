@@ -9,7 +9,7 @@
 import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 import globals from 'globals'
-import importPlugin from 'eslint-plugin-import-x'
+import importPlugin, { createNodeResolver } from 'eslint-plugin-import-x'
 import eslintPluginAstro from 'eslint-plugin-astro'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
@@ -54,14 +54,14 @@ const TYPE_AWARE_ERROR_RULES = {
 }
 
 // Sequenced at warn until Zod boundary validation rolls out portfolio-wide.
-// Warn-tier is capped: `npm run lint` runs with `--max-warnings 13`, the
-// 2026-08-09 baseline. That number only ever ratchets DOWN. Raising it to
-// admit new warnings defeats the cap; fix the boundary instead.
+// Warn-tier is capped at zero: `npm run lint` runs with `--max-warnings 0`
+// (the 2026-08-09 baseline of 13 ratcheted to 0 by 2026-09-25). A warning is
+// a failure; fix the boundary rather than raising the cap.
 //
 // The count assumes `.astro/types.d.ts` exists. Without it the Clerk-derived
-// types go unresolved and the same tree reports 75. `npm run verify` and
-// verify.yml both run `astro check` (which syncs those types) before lint, so
-// 13 is the number both see. On a fresh clone, run `npx astro sync` first.
+// types go unresolved and the tree reports warnings that are not real.
+// `npm run verify` and verify.yml both run `astro check` (which syncs those
+// types) before lint. On a fresh clone, run `npx astro sync` first.
 const TYPE_AWARE_WARN_RULES = {
   '@typescript-eslint/no-unsafe-assignment': 'warn',
   '@typescript-eslint/no-unsafe-member-access': 'warn',
@@ -79,6 +79,25 @@ const HYGIENE_RULES = {
   'no-throw-literal': 'error',
   'import-x/no-default-export': 'error',
 }
+
+// A value-import cycle between two modules. ES modules tolerate one while every
+// use sits inside a function, which is how the one the 2026-09-25 review found
+// (customer-yaml sections-scope <-> sections-staff-send-as) went unnoticed;
+// the first top-level use turns it into an undefined at load time. `import
+// type` edges are erased and ignored. Scoped to src/lib, where the layers are:
+// over all of src/ it cost 8.5% of rule time (`TIMING=all npx eslint src`,
+// 2026-09-25), scoped 5.5% (1.2 s of 21.9 s), and a page or component is a
+// leaf nothing imports back.
+const IMPORT_CYCLE_RULES = { 'import-x/no-cycle': ['error', { ignoreExternal: true }] }
+
+const IMPORT_CYCLE_FILES = ['src/lib/**/*.ts']
+
+// Resolve relative TypeScript imports the way the bundler does: extensionless
+// specifiers find .ts/.tsx, and a `.js` specifier finds its .ts source.
+const IMPORT_RESOLVER = createNodeResolver({
+  extensions: ['.ts', '.tsx', '.mjs', '.js', '.json'],
+  extensionAlias: { '.js': ['.ts', '.js'] },
+})
 
 const TEST_FILE_OVERRIDES = {
   '@typescript-eslint/no-explicit-any': 'off',
@@ -105,6 +124,103 @@ const TEST_FILE_OVERRIDES = {
   '@typescript-eslint/no-base-to-string': 'off',
   // Vitest spy/mock patterns regularly pass bound methods as arguments.
   '@typescript-eslint/unbound-method': 'off',
+}
+
+/**
+ * Declarations that have one home, and the parse-then-cast pattern. Each
+ * entry is a `no-restricted-syntax` guard; `name` ties it to its home module
+ * in GUARD_HOMES, which is exempt from that guard alone.
+ *
+ * Helpers: the 2026-06-30 and 2026-09-10 reviews found byte-identical private
+ * copies of each (up to eight per helper; several jsonResponse copies had
+ * inverted the (status, data) argument order). The 2026-09-25 review added
+ * the Stripe request headers (three copies) and the signed-token codec (four).
+ *
+ * Casts: `JSON.parse(x) as T` and `(await r.json()) as T` assert a shape
+ * nothing checked. The tree was brought to zero on 2026-09-25 (review, Code
+ * Quality 2): parse into `unknown` and narrow field by field, as
+ * src/lib/db/quote-content.ts and src/lib/api/helpers.ts parseJsonRecord do.
+ * `as unknown` is allowed; it is the first step of that narrowing.
+ */
+/** @typedef {{ name: string, selector: string, message: string }} Guard */
+
+/**
+ * @param {string[]} names
+ * @param {string} message
+ * @returns {Guard}
+ */
+const declaredOnce = (names, message) => {
+  const pattern = `/^(${names.join('|')})$/`
+  return {
+    name: names.join(','),
+    selector: `FunctionDeclaration[id.name=${pattern}], VariableDeclarator[id.name=${pattern}]`,
+    message,
+  }
+}
+
+/** @type {Guard[]} */
+const SRC_GUARDS = [
+  declaredOnce(
+    ['jsonResponse'],
+    'Import jsonResponse from src/lib/api/helpers instead of re-declaring it — local copies drift (several inverted the canonical (status, data) arg order).'
+  ),
+  declaredOnce(
+    ['escapeHtml', 'trimString', 'isRecord', 'isValidEmail'],
+    'Import this helper from src/lib/api/helpers instead of re-declaring it — the 2026-09-10 review found up to eight byte-identical private copies per helper.'
+  ),
+  declaredOnce(
+    ['machineBaseUrl'],
+    'Import machineBaseUrl from src/lib/operator/machine-url — it addresses the live Operator Machine and had five identical copies (2026-09-10 review).'
+  ),
+  declaredOnce(
+    ['jsonError'],
+    'Call errorResponse(status, message) from src/lib/api/helpers directly — jsonError was a one-line alias of it in seven files (2026-09-10 review).'
+  ),
+  declaredOnce(
+    ['stripeHeaders', 'STRIPE_API_BASE'],
+    'Import stripeHeaders and STRIPE_API_BASE from src/lib/stripe/client: there were three byte-identical copies until the 2026-09-25 review.'
+  ),
+  declaredOnce(
+    [
+      'base64UrlEncode',
+      'base64UrlDecode',
+      'importSigningKey',
+      'signPayload',
+      'verifySignedPayload',
+    ],
+    'Import the signed-token codec from src/lib/security/signed-payload: OAuth state, booking links and assessment sessions each hand-rolled it until the 2026-09-25 review.'
+  ),
+  {
+    name: 'json-cast',
+    selector: [
+      ":matches(TSAsExpression, TSTypeAssertion)[expression.callee.object.name='JSON'][expression.callee.property.name='parse']:not([typeAnnotation.type='TSUnknownKeyword'])",
+      ":matches(TSAsExpression, TSTypeAssertion)[expression.type='AwaitExpression'][expression.argument.callee.property.name='json']:not([typeAnnotation.type='TSUnknownKeyword'])",
+      "TSAsExpression[expression.type='TSAsExpression'][expression.expression.callee.property.name=/^(parse|json)$/]",
+      "TSAsExpression[expression.type='TSAsExpression'][expression.expression.argument.callee.property.name='json']",
+      "CallExpression[callee.property.name='json'][typeArguments]",
+    ].join(', '),
+    message:
+      'Parse external or stored JSON into `unknown` and narrow it field by field (parseJsonRecord / isRecord in src/lib/api/helpers, parseLineItems in src/lib/db/quote-content); never cast it to a type (review 2026-09-25, Code Quality 2).',
+  },
+]
+
+/**
+ * The rule's options take only selector + message; `name` is ours.
+ * @param {Guard[]} guards
+ */
+const guardOptions = (guards) => guards.map(({ selector, message }) => ({ selector, message }))
+
+/**
+ * Each guard's home module, exempt from that guard only.
+ * @type {Record<string, string[]>}
+ */
+const GUARD_HOMES = {
+  'src/lib/api/helpers.ts': ['jsonResponse', 'escapeHtml,trimString,isRecord,isValidEmail'],
+  'src/lib/operator/machine-url.ts': ['machineBaseUrl'],
+  'src/lib/stripe/client.ts': ['stripeHeaders,STRIPE_API_BASE'],
+  'src/lib/security/signed-payload.ts': [
+    'base64UrlEncode,base64UrlDecode,importSigningKey,signPayload,verifySignedPayload',
+  ],
 }
 
 const DEFAULT_EXPORT_ALLOW_PATTERNS = [
@@ -168,81 +284,43 @@ export default tseslint.config(
     files: DEFAULT_EXPORT_ALLOW_PATTERNS,
     rules: { 'import-x/no-default-export': 'off' },
   },
-  // The API JSON helper must be imported from src/lib/api/helpers, never
-  // re-declared locally. Local copies drifted — several inverted the canonical
-  // (status, data) arg order, a latent copy-paste bug hazard (2026-06-30 code
-  // review). Scoped to src/ so the workers/* subprojects (separate tsconfig,
-  // cannot import the shared helper) are exempt; helpers.ts itself is ignored.
+  {
+    files: IMPORT_CYCLE_FILES,
+    ignores: ['**/*.test.ts'],
+    settings: {
+      'import-x/resolver-next': [IMPORT_RESOLVER],
+      // Without these the rule resolves a .ts import and then declines to
+      // parse it, so it walks no edges and passes every cycle (probed).
+      'import-x/extensions': ['.ts', '.tsx', '.mjs', '.js'],
+      'import-x/parsers': { '@typescript-eslint/parser': ['.ts', '.tsx'] },
+    },
+    rules: IMPORT_CYCLE_RULES,
+  },
+  // One home per shared helper, and no parse-then-cast. The guards live in
+  // SRC_GUARDS above; each home module is exempt only from its own guard.
   {
     files: ['src/**/*.ts', 'src/**/*.tsx'],
-    ignores: ['src/lib/api/helpers.ts', 'src/lib/operator/machine-url.ts'],
+    rules: { 'no-restricted-syntax': ['error', ...guardOptions(SRC_GUARDS)] },
+  },
+  ...Object.entries(GUARD_HOMES).map(([home, names]) => ({
+    files: [home],
     rules: {
       'no-restricted-syntax': [
         'error',
-        {
-          selector:
-            "FunctionDeclaration[id.name='jsonResponse'], VariableDeclarator[id.name='jsonResponse']",
-          message:
-            'Import jsonResponse from src/lib/api/helpers instead of re-declaring it — local copies drift (several inverted the canonical (status, data) arg order).',
-        },
-        // The 2026-09-10 review found byte-identical private copies of these
-        // in up to eight files each. One home per helper: helpers.ts for the
-        // small guards, machine-url.ts for the function that addresses the
-        // live Machine. jsonError was seven one-line aliases of errorResponse.
-        {
-          selector:
-            'FunctionDeclaration[id.name=/^(escapeHtml|trimString|isRecord|isValidEmail)$/], VariableDeclarator[id.name=/^(escapeHtml|trimString|isRecord|isValidEmail)$/]',
-          message:
-            'Import this helper from src/lib/api/helpers instead of re-declaring it — the 2026-09-10 review found up to eight byte-identical private copies per helper.',
-        },
-        {
-          selector:
-            "FunctionDeclaration[id.name='machineBaseUrl'], VariableDeclarator[id.name='machineBaseUrl']",
-          message:
-            'Import machineBaseUrl from src/lib/operator/machine-url — it addresses the live Operator Machine and had five identical copies (2026-09-10 review).',
-        },
-        {
-          selector:
-            "FunctionDeclaration[id.name='jsonError'], VariableDeclarator[id.name='jsonError']",
-          message:
-            'Call errorResponse(status, message) from src/lib/api/helpers directly — jsonError was a one-line alias of it in seven files (2026-09-10 review).',
-        },
+        ...guardOptions(SRC_GUARDS.filter((g) => !names.includes(g.name))),
       ],
     },
-  },
+  })),
   // API routes must build JSON responses through the shared helpers so error
   // body shape and Content-Type stay uniform (code review 2026-07-02 §1.7).
   // This block overrides the src/** no-restricted-syntax config for API files,
-  // so it re-declares the jsonResponse-redeclaration guard above.
+  // so it carries SRC_GUARDS forward and adds the two route-only rules.
   {
     files: ['src/pages/api/**/*.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',
-        {
-          selector:
-            "FunctionDeclaration[id.name='jsonResponse'], VariableDeclarator[id.name='jsonResponse']",
-          message:
-            'Import jsonResponse from src/lib/api/helpers instead of re-declaring it — local copies drift (several inverted the canonical (status, data) arg order).',
-        },
-        {
-          selector:
-            'FunctionDeclaration[id.name=/^(escapeHtml|trimString|isRecord|isValidEmail)$/], VariableDeclarator[id.name=/^(escapeHtml|trimString|isRecord|isValidEmail)$/]',
-          message:
-            'Import this helper from src/lib/api/helpers instead of re-declaring it — the 2026-09-10 review found up to eight byte-identical private copies per helper.',
-        },
-        {
-          selector:
-            "FunctionDeclaration[id.name='machineBaseUrl'], VariableDeclarator[id.name='machineBaseUrl']",
-          message:
-            'Import machineBaseUrl from src/lib/operator/machine-url — it addresses the live Operator Machine and had five identical copies (2026-09-10 review).',
-        },
-        {
-          selector:
-            "FunctionDeclaration[id.name='jsonError'], VariableDeclarator[id.name='jsonError']",
-          message:
-            'Call errorResponse(status, message) from src/lib/api/helpers directly — jsonError was a one-line alias of it in seven files (2026-09-10 review).',
-        },
+        ...guardOptions(SRC_GUARDS),
         // Error bodies are built only by errorResponse(status, code, message?,
         // extra?), so `error` is always a code from src/lib/api/errors.ts and
         // `message` is always the prose. Before 2026-09-11 the same key carried

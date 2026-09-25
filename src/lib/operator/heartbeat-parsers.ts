@@ -15,11 +15,11 @@
 
 export interface HeartbeatBody {
   heartbeat_ts: string
-  last_audit_ts?: string
-  last_skill_ts?: string
-  process_uptime_seconds?: number
-  version?: string
-  sticky_stop_level?: string
+  last_audit_ts?: unknown
+  last_skill_ts?: unknown
+  process_uptime_seconds?: unknown
+  version?: unknown
+  sticky_stop_level?: unknown
   sticky_stop_reason?: unknown
   sticky_stop_condition?: unknown
   scheduler_ok?: unknown

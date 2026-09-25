@@ -1,7 +1,8 @@
 # Combined Post Intake: the reply
 
 One reply per inbound message, to the sender only, in the same thread. One line
-per letter, in page order, then one reconciling count. No greeting, no summary
+per letter: first any court paper or vendor's bill that was filed (the flagged
+lines), then every other letter in page order, then one reconciling count. No greeting, no summary
 paragraph, no sign-off beyond the persona's authored one.
 
 Every letter in the bundle gets a line. The reply is the firm's only record of
@@ -39,13 +40,18 @@ Held: pages 9-11, letter from Mercury Insurance. Two matters match that client, 
 Held: pages 3-4, letter from Radiology Associates. I could not find a matter for the client it names. Reply with the matter number and I will file it.
 ```
 
-**Held, another lane.** Formal service and vendor bills are named, never filed
-here, even when they would resolve cleanly.
+**Filed, and flagged** (a court paper or a vendor's bill that resolved). Filed
+on its matter by the same rules as any letter, and placed at the TOP of the
+reply, because each one needs a person: a court paper to be calendared, a bill
+to be entered. The Operator does neither.
 
 ```
-Held: pages 12-13, a summons. Formal service is not filed here; it needs routing.
-Held: page 14, what looks like a vendor invoice. Invoices are handled separately; forward it on its own and it will be entered.
+Needs a word from you: pages 12-13, a summons, filed on matter <matter-number>; court paper, needs calendaring.
+Needs a word from you: page 14, what looks like a vendor bill from a copy service, filed on matter <matter-number>; looks like a vendor bill, not entered as an expense.
 ```
+
+A court paper or a bill that did not resolve is held on the ordinary held line
+for its verdict, with the same flag words after it, and stays in page order.
 
 **Held, a step failed** (`search_failed`). The shape every failed tool call
 takes: what was being attempted, and that nothing was filed. Never "no matter
@@ -66,10 +72,12 @@ Held: pages 2-3, letter from Kaiser. The filing step refused it (<reason, in pla
 ## The reconciling count
 
 Always the last line. Pages and letters must add up: every page is in exactly
-one letter, and filed plus waiting equals the letter count.
+one letter, and filed plus flagged filings plus waiting equals the letter
+count. A flagged filing is named on its own, never folded into "filed".
 
 ```
-13 pages, 5 letters, 3 filed, 2 waiting on you.
+13 pages, 5 letters, 3 filed, 1 court paper filed and needs calendaring, 1 waiting on you.
+14 pages, 6 letters, 3 filed, 1 court paper filed and needs calendaring, 1 vendor bill filed, not entered as an expense, 1 waiting on you.
 ```
 
 ## Nothing could be separated
@@ -86,14 +94,16 @@ I could not tell where one letter ends and the next begins in this scan, so noth
 When `readable` is false, nothing was read and nothing was filed.
 
 ```
-This scan is 62 pages, longer than I read in one go. Sending it in parts will let me file it.
+This scan is 92 pages, longer than I read in one go. Sending it in parts will let me file it.
 I could not read this scan all the way through, so nothing was filed.
+Another scan is being read right now. Sending this one again in a few minutes will let me file it.
 ```
 
 ## What a line never contains
 
 - What a letter SAYS. Not a summary, not a deadline in it, not what it means
-  for the case, not what anyone should do about it.
+  for the case, not what anyone should do about it. "Needs calendaring" names
+  the kind of paper; it never states a date from it.
 - A matter's case caption, a client's date of birth, or a claim number.
 - A matter number that did not come from a resolve this turn.
 - "Filed" for anything the filing tool did not return `filed` for.

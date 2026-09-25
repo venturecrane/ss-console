@@ -30,21 +30,29 @@
 # Smokeball download is https-checked, and the reconciler's Graph GET refuses
 # a URL off the Graph base (the one place Graph, not this tree, writes the URL).
 #
-# WHAT IS STILL NOT SELECTED, AND WHY (counts as ALL / NON-TEST, 2026-08-24
-# unless noted). Each fires today, so selecting it needs a reason at every
-# uncovered site, not an allowlist:
+# WHAT IS STILL NOT SELECTED, AND WHY (counts as ALL / NON-TEST, 2026-09-25,
+# ruff 0.15.17). Each fires today, so selecting it needs a reason at every
+# uncovered site, not an allowlist. Reproduce with:
 #
-#   S101   4889 / —     assert. Correct in pytest; would need a test-file carve-out.
-#   E501   2119 / —     line-too-long. `ruff format` at line-length 120 now runs
-#                       (wave 2b); selecting E501 is the follow-up once the
-#                       long string literals it would flag are decided.
-#   ANN001 1287 / —     missing arg annotations. pyright (pyproject.toml,
+#   ruff check --select S101,E501,ANN001,SLF001,S106,ARG002,S105,S110,S112,S103 \
+#     --statistics --exit-zero .                       # ALL
+#   ... --extend-exclude '**/tests/**,**/test_*.py,**/conftest.py'   # NON-TEST
+#
+#   S101   7682 / 8     assert. Correct in pytest; would need a test-file carve-out.
+#   ANN001 2163 / 351   missing arg annotations. pyright (pyproject.toml,
 #                       ratcheted) is the type gate now.
-#   SLF001  166 / 9     private-member-access.
-#   S106     62 / 0     hardcoded-password-func-arg — every hit is in a test.
-#   ARG002   36 / 5     unused method argument.
-#   S105     21 / 13    hardcoded-password-string.
-#   S110     14 / 14    try-except-pass.
+#   SLF001  341 / 47    private-member-access.
+#   E501    127 / 105   line-too-long. `ruff format` at line-length 120 runs
+#                       (wave 2b); what is left is long string literals.
+#   S106     74 / 0     hardcoded-password-func-arg: every hit is in a test.
+#   ARG002   65 / 11    unused method argument.
+#   S105     32 / 17    hardcoded-password-string.
+#   S110     13 / 12    try-except-pass. Down from 16 non-test on 2026-09-25:
+#   S112      2 / 2     try-except-continue (from 3). The five that dropped a
+#                       failure with no trace now log it (review 2026-09-25,
+#                       Code Quality 7); every one left carries a noqa reason
+#                       naming why the swallow is right (a close in `finally`,
+#                       a probe whose pass condition IS the exception).
 #   S103      6 / 1     bad-file-permissions.
 #
 # CI pins ruff 0.15.17 (operator-substrate.yml). Check locally with the same

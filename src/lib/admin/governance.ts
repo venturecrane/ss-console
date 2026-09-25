@@ -10,8 +10,10 @@
  * Defensive parse: a malformed row degrades to an explicit error, not a crash.
  *
  * The floor lookup and the restrictiveness ordering are the frozen governance
- * foundation (config-governance.ts); this module imports them read-only and adds
- * no new floor source.
+ * foundation (src/lib/operator/vertical-floors.ts, which the portal's
+ * config-governance.ts re-exports); this module imports them read-only from
+ * that neutral home, so the admin layer does not reach into the portal for
+ * them (review 2026-09-25, Architecture 6), and adds no new floor source.
  */
 
 import type { D1Database } from '@cloudflare/workers-types'
@@ -20,7 +22,7 @@ import {
   restrictiveness,
   isCeiling,
   type Ceiling,
-} from '../portal/operator/config-governance'
+} from '../operator/vertical-floors'
 import {
   ACCEPTED_ACTION_CLASSES,
   type ActionClass,

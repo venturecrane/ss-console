@@ -18,8 +18,6 @@ import {
 import { resolve } from 'path'
 import type { D1Database } from '@cloudflare/workers-types'
 import {
-  restrictiveness,
-  getVerticalFloor,
   applyExposureChange,
   applySkillToggle,
   isCeiling,
@@ -27,6 +25,8 @@ import {
 import {
   changeDirection,
   checkFloor,
+  getVerticalFloor,
+  restrictiveness,
   VERTICAL_FLOORS,
   verticalFloorActionClasses,
 } from '../src/lib/operator/vertical-floors'

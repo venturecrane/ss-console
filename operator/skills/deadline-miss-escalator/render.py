@@ -25,29 +25,11 @@ volume carries the siblings).
 
 from __future__ import annotations
 
-import hashlib
 import re
 
-
-# ---------------------------------------------------------------------------
-# canonical_body_sha256 — ONE hash function, one arbiter (the cross-workstream
-# contract). sha256 over utf-8 of (CRLF -> LF, per-line trailing whitespace
-# stripped, trailing newlines stripped). Stamped on the dispatch envelope +
-# EMITTED_WAKE here; the overlay's CONFIRM_SEND_DISPATCHED stamp and the
-# console verifier (operator/bin/lib/send_verify.py) compute the SAME
-# function. The arbiter fixture every implementation is tested against is
-# operator/contracts/fixtures/body-canon-vectors.json — change the definition
-# nowhere without changing it everywhere, proven by the shared vectors.
-# ---------------------------------------------------------------------------
-
-
-def canonical_body_sha256(text: str) -> str:
-    """The canonical body hash: CRLF->LF, per-line trailing whitespace
-    stripped, trailing newlines stripped, sha256 over utf-8."""
-    normalized = text.replace("\r\n", "\n")
-    lines = [line.rstrip(" \t") for line in normalized.split("\n")]
-    canonical = "\n".join(lines).rstrip("\n")
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+# canonical_body_sha256, the ONE body hash, lives in skill_helpers.py (shared
+# with the verification tracker; arbiter fixture operator/contracts/fixtures/
+# body-canon-vectors.json). dispatch_envelope.py stamps it.
 
 
 # ---------------------------------------------------------------------------

@@ -859,12 +859,7 @@ async def run_once(
 
     deadlines = enrich_with_ledger(deadlines, today=today, policy=fire_policy, ledger_events=ledger_events)
 
-    decision = decide(
-        deadlines,
-        windows,
-        raw_inputs_for_digest=raw_input_blob,
-        today=today,
-    )
+    decision = decide(deadlines, windows, raw_inputs_for_digest=raw_input_blob, today=today)
     if decision.wake:
         # ss #2405: project the digest from the FULL enriched universe (never
         # the capped plan list). Ledger unavailable → no projection; the turn
@@ -923,8 +918,8 @@ async def run_once(
                         },
                     )
                     return _emit_suppress()
-                except Exception:  # noqa: BLE001 — fall through to the stripped wake
-                    pass
+                except Exception as exc:  # noqa: BLE001 - fall through to the stripped wake, but record first that the suppress row (and so its page) never landed
+                    _H.warn_observability_failure(exc, "degraded-suppress audit row")
             # The audit write failed (or no writer is wired). Falling open WITH
             # the digest would ship the degraded artifact the suppress just
             # withheld; staying silent would break the dead-man's-switch. So the
@@ -973,11 +968,12 @@ async def run_once(
         # The row goes in BEFORE the wake line, and cannot stop it (#2253).
         mod = _load_sibling_module("blind_wake.py", "escalator_blind_wake")
         if mod is not None:
-            await mod.try_write_emitted_wake(
+            await _H.try_write_emitted_wake(
                 audit_writer_factory,
                 decision,
                 skill_name=skill_name,
                 next_scheduled_at=_next_scheduled_at(now),
+                plan_counts=mod.plan_counts,
             )
         return _emit_wake(decision)
 

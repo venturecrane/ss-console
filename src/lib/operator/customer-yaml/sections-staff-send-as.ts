@@ -1,6 +1,5 @@
 import type { OutboundRosterEntry, StaffSendAsEntry, ValidationError } from './types'
-import { isPlainObject } from './helpers'
-import { canonRosterAddress } from './sections-scope'
+import { canonRosterAddress, isPlainObject } from './helpers'
 
 /**
  * Validate `scope.staff_send_as` (ADR 0089): the staff members the Operator may

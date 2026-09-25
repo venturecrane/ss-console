@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import io
 import json
+from collections.abc import Callable
 
 import httpx
 import pytest
@@ -125,8 +126,14 @@ def _isolated_env(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
         "SMOKEBALL_VISION_MODEL",
         "SMOKEBALL_VISION_PAGE_CAP",
         "SMOKEBALL_VISION_MAX_BYTES",
+        "SMOKEBALL_VISION_LOCK_TIMEOUT_SECONDS",
     ):
         monkeypatch.delenv(name, raising=False)
+    # ``_install_pages`` answers calls in CALL order, which is page order only
+    # when one page is in flight at a time. The pool tests below set their own
+    # worker count and key each answer to the page actually sent.
+    monkeypatch.setenv("SMOKEBALL_VISION_WORKERS", "1")
+    monkeypatch.setattr(vision, "BACKOFF_BASE_SECONDS", 0.0)
 
 
 def _sse(events: list[dict]) -> bytes:
@@ -384,8 +391,9 @@ def test_a_truncated_page_fails_the_whole_document(monkeypatch: pytest.MonkeyPat
 
 
 def test_one_failing_page_fails_the_whole_document(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Page 5 of 5 500s. The first four transcribed fine and are thrown away."""
-    captured = _install_pages(monkeypatch, ["one", "two", "three", "four", 500])
+    """Page 5 of 5 fails for good (a 400 is not worth retrying). The first four
+    transcribed fine and are thrown away."""
+    captured = _install_pages(monkeypatch, ["one", "two", "three", "four", 400])
     result = extract_text_ex(SCANNED_5, file_extension=".pdf", allow_vision=True)
     assert result.method == METHOD_NONE_SCANNED
     assert result.reason == extract.REASON_API_ERROR
@@ -394,11 +402,184 @@ def test_one_failing_page_fails_the_whole_document(monkeypatch: pytest.MonkeyPat
 
 
 def test_a_page_that_fails_stops_the_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Page 1 of 5 fails: pages 2-5 are never billed."""
-    captured = _install_pages(monkeypatch, [500, "two", "three", "four", "five"])
+    """Page 1 of 5 fails for good: pages 2-5 are never billed."""
+    captured = _install_pages(monkeypatch, [400, "two", "three", "four", "five"])
     result = extract_text_ex(SCANNED_5, file_extension=".pdf", allow_vision=True)
     assert result.reason == extract.REASON_API_ERROR
     assert len(captured) == 1
+
+
+# ---- pages in parallel, retries, and a second document (2026-09-25) ---------
+#
+# A replay of the post lane measured ~9.8 s a page read one at a time: 44 pages
+# took 431 s against a 300 s tool timeout. So pages now go out a few at a time.
+# These tests key every answer to the page actually SENT, never to call order,
+# because under a pool the two differ, and the [p.N] header must follow the page.
+
+SCANNED_8_DISTINCT = _pdf(
+    [""] * 8,
+    raw_ops=[f"{10 + i} {10 + i} {50 + i * 3} {60 + i * 4} re f" for i in range(8)],
+)
+
+
+def _install_by_page(
+    monkeypatch: pytest.MonkeyPatch,
+    blob: bytes,
+    answer,
+    *,
+    delay: float | Callable[[int], float] = 0.0,
+):
+    """A mock API that answers by WHICH page it was sent. ``answer(index,
+    attempt)`` returns a page's text or an ``int`` HTTP status (or a
+    ``(status, headers)`` pair). Records the peak number of calls in flight."""
+    import threading
+    import time
+
+    originals = [_first_page_bytes(blob, i) for i in range(len(vision._split_pages(blob)))]
+    state = {"in_flight": 0, "peak": 0, "calls": [], "attempts": {}}
+    lock = threading.Lock()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        index = originals.index(_sent_page(request))
+        with lock:
+            state["in_flight"] += 1
+            state["peak"] = max(state["peak"], state["in_flight"])
+            attempt = state["attempts"].get(index, 0)
+            state["attempts"][index] = attempt + 1
+            state["calls"].append(index)
+        try:
+            pause = delay(index) if callable(delay) else delay
+            if pause:
+                time.sleep(pause)
+            item = answer(index, attempt)
+        finally:
+            with lock:
+                state["in_flight"] -= 1
+        if isinstance(item, tuple):
+            status, headers = item
+            return httpx.Response(status, headers=headers, json={"error": {"message": "nope"}})
+        if isinstance(item, int):
+            return httpx.Response(item, json={"error": {"message": "nope"}})
+        return httpx.Response(200, content=_sse(_page_events(item)))
+
+    monkeypatch.setattr(vision, "_http_client", lambda _timeout: httpx.Client(transport=httpx.MockTransport(handler)))
+    return state
+
+
+def test_pages_go_out_four_at_a_time_and_land_in_page_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The timing and concurrency falsifier. Eight pages at 0.2 s each is 1.6 s
+    one at a time; four in flight is two rounds. The text still reads 1..8 in
+    the order the pages SIT, whatever order the calls finished in."""
+    import time
+
+    monkeypatch.delenv("SMOKEBALL_VISION_WORKERS", raising=False)
+    assert vision.workers() == vision.DEFAULT_WORKERS == 4
+    state = _install_by_page(monkeypatch, SCANNED_8_DISTINCT, lambda i, _a: f"page {i + 1} text", delay=0.2)
+    started = time.monotonic()
+    outcome = vision.transcribe_pdf(SCANNED_8_DISTINCT, pages=8)
+    elapsed = time.monotonic() - started
+    assert outcome.reason is None
+    assert state["peak"] == 4, f"peak in flight was {state['peak']}"
+    assert elapsed < 1.2, f"eight pages took {elapsed:.2f}s; a serial read takes 1.6s"
+    assert outcome.text == "\n\n".join(f"[p.{n}]\npage {n} text" for n in range(1, 9))
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("", 4), ("1", 1), ("8", 8), ("99", 8), ("0", 4), ("x", 4)])
+def test_the_worker_count_is_bounded(monkeypatch: pytest.MonkeyPatch, raw: str, expected: int) -> None:
+    monkeypatch.setenv("SMOKEBALL_VISION_WORKERS", raw)
+    assert vision.workers() == expected
+
+
+@pytest.mark.parametrize("status", [429, 529, 500, 503])
+def test_a_transient_failure_is_retried_and_the_document_completes(
+    monkeypatch: pytest.MonkeyPatch, status: int
+) -> None:
+    state = _install_by_page(
+        monkeypatch, SCANNED_5_DISTINCT, lambda i, attempt: status if (i == 2 and attempt < 2) else f"p{i + 1}"
+    )
+    outcome = vision.transcribe_pdf(SCANNED_5_DISTINCT, pages=5)
+    assert outcome.reason is None
+    assert state["attempts"][2] == 3, "two retries, then the answer"
+    assert "[p.3]\np3" in outcome.text
+
+
+def test_a_page_that_stays_down_fails_after_two_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = _install_by_page(monkeypatch, SCANNED, lambda i, _a: 529 if i == 0 else "fine")
+    outcome = vision.transcribe_pdf(SCANNED, pages=2)
+    assert outcome.reason == extract.REASON_API_ERROR and outcome.text == ""
+    assert state["attempts"][0] == 3
+
+
+def test_a_client_error_is_not_retried(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = _install_by_page(monkeypatch, SCANNED, lambda i, _a: 400 if i == 0 else "fine")
+    assert vision.transcribe_pdf(SCANNED, pages=2).reason == extract.REASON_API_ERROR
+    assert state["attempts"][0] == 1
+
+
+def test_retry_after_is_honoured_and_capped(monkeypatch: pytest.MonkeyPatch) -> None:
+    waits: list[float] = []
+    real_wait = vision.threading.Event.wait
+
+    def _wait(self, timeout=None):
+        waits.append(timeout)
+        return real_wait(self, 0)
+
+    monkeypatch.setattr(vision.threading.Event, "wait", _wait)
+    _install_by_page(
+        monkeypatch,
+        SCANNED,
+        lambda i, attempt: (
+            (429, {"retry-after": "3"} if attempt == 0 else {"retry-after": "600"})
+            if (i == 0 and attempt < 2)
+            else "fine"
+        ),
+    )
+    assert vision.transcribe_pdf(SCANNED, pages=2).reason is None
+    assert 3.0 in waits
+    assert vision.RETRY_AFTER_CAP_SECONDS in waits, "a 600 s hint is capped, never obeyed"
+
+
+def test_no_retry_is_started_past_the_pages_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The per-page budget is the 90 s it always was; retries live inside it."""
+    monkeypatch.setattr(vision, "TIMEOUT_SECONDS", 1)
+    state = _install_by_page(monkeypatch, SCANNED, lambda i, _a: 503 if i == 0 else "fine")
+    assert vision.transcribe_pdf(SCANNED, pages=2).reason == extract.REASON_API_ERROR
+    assert state["attempts"][0] == 1
+
+
+def test_the_first_hard_failure_cancels_pages_not_yet_started(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Page 1 fails for good while three others are in flight: the four pages
+    behind them are never sent, and nothing of the document is returned."""
+    monkeypatch.setenv("SMOKEBALL_VISION_WORKERS", "4")
+    state = _install_by_page(
+        monkeypatch,
+        SCANNED_8_DISTINCT,
+        lambda i, _a: 400 if i == 0 else f"p{i + 1}",
+        delay=lambda i: 0.0 if i == 0 else 0.3,
+    )
+    outcome = vision.transcribe_pdf(SCANNED_8_DISTINCT, pages=8)
+    assert outcome.reason == extract.REASON_API_ERROR
+    assert outcome.text == ""
+    assert not set(state["calls"]) & {4, 5, 6, 7}, f"pages behind the failure were billed: {state['calls']}"
+
+
+def test_a_second_document_waits_then_is_refused_busy_without_spending(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _forbid_http(monkeypatch)
+    monkeypatch.setenv("SMOKEBALL_VISION_LOCK_TIMEOUT_SECONDS", "1")
+    assert vision._LOCK.acquire(timeout=1)
+    try:
+        outcome = vision.transcribe_pdf(SCANNED, pages=2)
+    finally:
+        vision._LOCK.release()
+    assert outcome.reason == extract.REASON_BUSY == "busy"
+    assert outcome.text == ""
+    assert calls == []
+
+
+def test_the_lane_cap_argument_overrides_only_its_own_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert vision.gate(SCANNED_5, pages=41) == extract.REASON_OVER_PAGE_CAP
+    assert vision.gate(SCANNED_5, pages=41, page_cap=80) is None
+    assert vision.gate(SCANNED_5, pages=81, page_cap=80) == extract.REASON_OVER_PAGE_CAP
 
 
 def test_an_unreadable_page_is_marked_not_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -453,6 +634,7 @@ def test_every_reason_is_in_the_closed_set() -> None:
         extract.REASON_TRUNCATED,
         extract.REASON_INCOMPLETE,
         extract.REASON_REFUSED,
+        extract.REASON_BUSY,
     ):
         assert reason in REASONS
 

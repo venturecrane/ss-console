@@ -27,19 +27,21 @@
  * is rejected (400) rather than misattributed.
  */
 
-import { jsonResponse, errorResponse } from '../../../lib/api/helpers'
+import { jsonResponse, errorResponse, isRecord, parseJsonRecord } from '../../../lib/api/helpers'
 import { misconfiguredResponse } from '../../../lib/api/failures'
 import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 
 const MAX_WEBHOOK_AGE_SECONDS = 300
 
-interface SentryWebhookPayload {
-  action?: string
-  data?: {
-    event?: { tags?: Array<[string, string]>; event_id?: string; title?: string }
-    issue?: { id?: string; shortId?: string; title?: string }
-  }
+/** Step into a parsed JSON value by key; undefined when it is not an object. */
+function field(value: unknown, key: string): unknown {
+  return isRecord(value) ? value[key] : undefined
+}
+
+function stringField(value: unknown, key: string): string | undefined {
+  const v = field(value, key)
+  return typeof v === 'string' ? v : undefined
 }
 
 export const POST: APIRoute = async ({ request }) => {
@@ -76,12 +78,10 @@ export const POST: APIRoute = async ({ request }) => {
     return errorResponse(401, 'stale')
   }
 
-  let payload: SentryWebhookPayload
-  try {
-    payload = JSON.parse(rawBody) as SentryWebhookPayload
-  } catch {
-    return errorResponse(400, 'invalid_json')
-  }
+  // Parsed as unknown and read field by field (review 2026-09-25, Code
+  // Quality 2): the signature proves Sentry sent it, not its shape.
+  const payload = parseJsonRecord(rawBody)
+  if (!payload) return errorResponse(400, 'invalid_json')
 
   const tenant = extractTenantTag(payload)
   if (!tenant) {
@@ -119,10 +119,11 @@ export const POST: APIRoute = async ({ request }) => {
   return jsonResponse(200, { ok: true, source: 'sentry', tenant })
 }
 
-function extractTenantTag(payload: SentryWebhookPayload): string | null {
-  const tags = payload.data?.event?.tags
+function extractTenantTag(payload: Record<string, unknown>): string | null {
+  const tags = field(field(field(payload, 'data'), 'event'), 'tags')
   if (!Array.isArray(tags)) return null
-  for (const entry of tags) {
+  const entries: unknown[] = tags
+  for (const entry of entries) {
     if (Array.isArray(entry) && entry[0] === 'tenant' && typeof entry[1] === 'string') {
       return entry[1]
     }
@@ -130,12 +131,14 @@ function extractTenantTag(payload: SentryWebhookPayload): string | null {
   return null
 }
 
-function buildSummary(payload: SentryWebhookPayload): string {
-  const issueTitle = payload.data?.issue?.title ?? payload.data?.event?.title
-  const shortId = payload.data?.issue?.shortId
+function buildSummary(payload: Record<string, unknown>): string {
+  const data = field(payload, 'data')
+  const issue = field(data, 'issue')
+  const issueTitle = stringField(issue, 'title') ?? stringField(field(data, 'event'), 'title')
+  const shortId = stringField(issue, 'shortId')
   if (issueTitle && shortId) return `Sentry ${shortId}: ${issueTitle}`
   if (issueTitle) return `Sentry alert: ${issueTitle}`
-  return `Sentry alert (action: ${payload.action ?? 'unknown'})`
+  return `Sentry alert (action: ${stringField(payload, 'action') ?? 'unknown'})`
 }
 
 async function verifyHmac(rawBody: string, signatureHex: string, secret: string): Promise<boolean> {

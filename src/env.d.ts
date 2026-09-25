@@ -1,4 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/triple-slash-reference
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference -- Astro generates .astro/types.d.ts as a script, not a module; a reference is the only way to load it
 /// <reference path="../.astro/types.d.ts" />
 
 /** WASM module imports — handled by Cloudflare adapter at build time */

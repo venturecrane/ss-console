@@ -158,6 +158,47 @@ def _matters_by_number(client: Any, number: str, records: dict[str, dict[str, An
     return found
 
 
+#: Generational suffixes. Never REQUIRED on either side: "John Smith Jr." is
+#: the same person as a record carrying "John Smith", and a record carrying the
+#: suffix is not contradicted by a name that leaves it off.
+_SUFFIXES = frozenset({"jr", "sr", "ii", "iii", "iv"})
+
+
+def _name_tokens(text: Any) -> list[str]:
+    """One side of a name comparison, as tokens in order, casing kept.
+
+    The same normalization runs on BOTH sides -- the caller's name and every
+    record's -- so a spelling difference that is not a difference in the person
+    cannot decide a match: ``.`` and ``,`` never sit inside a token ("R." is
+    "R"), a hyphen joins two tokens ("Rosa-Linda" is "Rosa" "Linda"), and a
+    generational suffix is dropped. "Last, First" is reordered to "First Last"
+    when both sides of the comma carry a name, so first-and-last below means the
+    same thing in either form.
+    """
+    if not isinstance(text, str):
+        return []
+    safe = _SEARCH_META.sub(" ", text)
+    head, comma, tail = safe.partition(",")
+
+    def _split(part: str) -> list[str]:
+        return [t for t in re.split(r"[\s.,\-]+", part) if t and t.lower() not in _SUFFIXES]
+
+    first, second = _split(head), _split(tail)
+    if comma and first and second:
+        return second + first
+    return first + second
+
+
+def _is_initial_of(short: str, long: str) -> bool:
+    return len(short) == 1 and long.startswith(short)
+
+
+def _agrees(a: str, b: str) -> bool:
+    """Two middle tokens name the same middle: equal, or one is the other's
+    initial ("R" and "Rupert")."""
+    return a == b or _is_initial_of(a, b) or _is_initial_of(b, a)
+
+
 def _contact_tokens(contact: dict[str, Any]) -> set[str]:
     """The lowercased name tokens a contact record carries, from either shape."""
     person = contact.get("person") if isinstance(contact.get("person"), dict) else {}
@@ -171,9 +212,42 @@ def _contact_tokens(contact: dict[str, Any]) -> set[str]:
     ]
     tokens: set[str] = set()
     for part in parts:
-        if isinstance(part, str):
-            tokens.update(_SEARCH_META.sub(" ", part).lower().split())
+        tokens.update(t.lower() for t in _name_tokens(part))
     return tokens
+
+
+def _name_matches(wanted: list[str], contact: dict[str, Any]) -> bool:
+    """Does this record carry the caller's name? ``wanted`` is lowercased
+    ``_name_tokens`` output, in order.
+
+    A COMPANY record (and any record without a ``person`` block) keeps the rule
+    it always had: every token of the caller's name must be on the record, so
+    "Smith Family Trust" never matches "Smith Holdings Trust".
+
+    A PERSON record is matched as COMPATIBLE, NOT CONTRADICTING. The first and
+    last tokens are required. A middle token the caller gave and the record does
+    not carry is optional when the record has no middle of its own -- a letter
+    that says "Tobias R. Wren" is about the "Tobias Wren" the firm recorded --
+    but when the record DOES carry a middle, the two must agree (equal, or an
+    initial of it), and a middle that contradicts excludes the record: "Maria A.
+    Lopez" is not the firm's "Maria B. Lopez", and a lone record that
+    contradicts is not offered as a candidate either.
+    """
+    record = _contact_tokens(contact)
+    if not wanted:
+        return False
+    if not isinstance(contact.get("person"), dict) or len(wanted) < 3:
+        return set(wanted).issubset(record)
+    first, last, middles = wanted[0], wanted[-1], wanted[1:-1]
+    if first not in record or last not in record:
+        return False
+    unused = record - {first, last} - set(middles)
+    for middle in middles:
+        if middle in record or not unused:
+            continue
+        if not any(_agrees(middle, other) for other in unused):
+            return False
+    return True
 
 
 def _probe_order(tokens: list[str]) -> list[str]:
@@ -203,15 +277,19 @@ def _contacts_by_name(client: Any, name: str) -> list[dict[str, Any]]:
     client's correspondence onto their own other file.
 
     So: search the LONGEST token (the most selective single term, a surname in
-    western order and the company word otherwise), then require every token of
-    the caller's name to appear on the record. That is never looser than the
-    old behaviour — a record the full-name search matched carries all the
-    tokens — and it recovers the duplicates the vendor drops.
+    western order and the company word otherwise), then match the caller's name
+    against each record here (``_name_matches``). It recovers the duplicates the
+    vendor drops.
+
+    NAMES WITH A MIDDLE (2026-09-25). The first form of the match required
+    EVERY caller token on the record, with ``.`` and ``-`` kept inside tokens.
+    A letter naming "Tobias R. Wren" then never matched the firm's "Tobias
+    Wren" ("r." is on neither), and "Rosa-Linda" never matched a record whose
+    first name is "Rosa Linda": verdict ``none``, zero candidates, for clients
+    the firm has. Both sides are now normalized the same way, and a person's
+    middle is optional unless both sides carry one, when they must agree.
     """
-    safe = _SEARCH_META.sub(" ", name).strip()[:_MAX_NAME_CHARS].strip()
-    if not safe:
-        return []
-    tokens = [t for t in safe.split() if t]
+    tokens = _name_tokens(name[:_MAX_NAME_CHARS] if isinstance(name, str) else name)
     if not tokens:
         return []
     # The probe keeps the caller's CASING: the vendor's search is case
@@ -224,10 +302,10 @@ def _contacts_by_name(client: Any, name: str) -> list[dict[str, Any]]:
     # returned "no matter" for a client who has one (a client seat, 2026-09-23). In
     # western order the later token is the surname, which is the selective one.
     probes = _probe_order(tokens)
-    wanted = {t.lower() for t in tokens}
+    wanted = [t.lower() for t in tokens]
 
     def _matching(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return [c for c in rows if isinstance(c.get("id"), str) and c["id"] and wanted.issubset(_contact_tokens(c))]
+        return [c for c in rows if isinstance(c.get("id"), str) and c["id"] and _name_matches(wanted, c)]
 
     rows = _get(client, "/contacts", Search=[f"name:*{probes[0]}*"], Limit=_SEARCH_LIMIT)
     matched = _matching(rows)
