@@ -123,8 +123,8 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
             "period (issue 894). Output is a digest-verified tar.gz "
             "(per-artifact SHA-256; manifest hash recorded in the append-only "
             "audit log) containing a PDF, JSON manifest, and per-spec evidence "
-            "files. The manifest is NOT yet cryptographically signed "
-            "(signature=unsigned-stub); detached signing is a tracked follow-on."
+            "files, signed (manifest.sig) when EVIDENCE_PACKET_SIGNING_KEY_B64 "
+            "is staged and marked signature=unsigned-stub on its face when not."
         ),
     )
     p.add_argument("--customer", required=True, help="Customer slug")

@@ -160,6 +160,19 @@ class Signer:
         except Exception as exc:  # pragma: no cover - defensive
             raise EvidenceSigningError(f"Ed25519 signing failed: {exc}") from exc
 
+    def verifies(self, payload: bytes, signature: bytes) -> bool:
+        """True when ``signature`` is this key's signature over ``payload``.
+
+        For a caller that must report a packet it read back from disk as
+        signed only after checking it (the decommission archiver), not on the
+        builder's word.
+        """
+        try:
+            self._key.public_key().verify(signature, payload)  # type: ignore[attr-defined]
+        except Exception:  # noqa: BLE001 - InvalidSignature and a malformed signature are the same observation: it does not verify
+            return False
+        return True
+
 
 def load_signer(env: Optional[dict] = None) -> Optional[Signer]:
     """Load the configured signing key, or ``None`` when none is configured.
