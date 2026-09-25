@@ -23,10 +23,11 @@ Rough "if you change X, update Y":
 
 | You changed... | Update... |
 |---|---|
-| An ADR / a locked decision | `decision-stack.md`, `adr-index.md`, and the topic page |
+| An ADR / a locked decision | `docs/adr/index.md` (its entry is the summary), then regenerate `adr-index.md` with `npm run handbook:adr-index -- --write`; update `decision-stack.md` and the topic page. `tests/handbook-integrity.test.ts` blocks merge while `adr-index.md` and the ADR corpus disagree |
 | Pricing, rate ladder, payment terms | `pricing-economics.md` |
 | The Operator architecture / ceilings / memory | `operator-platform.md`, `autonomy-governance.md`, `knowledge-memory.md` |
 | A connector or delivery channel | `connectors-channels.md` |
+| A tool in `operator/connectors/<name>/manifest.toml` (added, removed, reclassified) or a new `*_tools.py` module | Regenerate the inventory block in `connectors-channels.md` with `npm run handbook:connectors -- --write`, and update the prose around it in the same PR; `tests/handbook-integrity.test.ts` blocks merge until the block matches the tree |
 | An admin surface | `admin-console.md`, and `customer-lifecycle.md` if the motion changed |
 | A consulting portal surface | `client-portal.md` |
 | A client-facing Operator surface | `operator-console.md` |
@@ -89,7 +90,9 @@ Three mechanisms, in order of strength:
    `/admin/playbook/<slug>` cross-link, a cited same-repo source file that no longer exists
    (the check that forces a doc update when a source is moved, renamed, or deleted), two pages
    colliding on one `(section, order)` slot, or an em dash. Deterministic, so it is safe to
-   block on.
+   block on. It also holds the generated content to its sources: `adr-index.md` must equal
+   what `docs/adr/` renders, and the connector inventory block in `connectors-channels.md`
+   must equal what `operator/connectors/*/manifest.toml` renders.
 
 3. **The drift radar (advisory).** `npm run handbook:drift` compares each page's last-commit
    time to its cited sources' last-commit times and reports pages whose sources changed after

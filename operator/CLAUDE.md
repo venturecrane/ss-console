@@ -39,6 +39,19 @@ Load these ADRs before any Operator architectural work:
 - **ADR 0020** — Connector strategy (MCP-first; BUILD only where no acceptable MCP)
 - **ADR 0021** — Leverage Hermes native primitives (`execute_code`, `delegate_task`, no-agent cron, skill bundles, webhook gateway via `pre_gateway_dispatch`, MCP-first connector retirement)
 
+Decided since, and shaping code that exists today (load the ones your change touches):
+
+- **ADR 0050**: Task-execution framework: six execution classes (N/C/R/D/A/O) and `execution_class` frontmatter; decides how any new job runs and what it may cost
+- **ADR 0052**: The client portal is a management console (Direct / Account / Administer), never a data surface; no portal action touches client work
+- **ADR 0053**: Author-built connectors are MCP servers in `operator/connectors/`, installed per customer; the overlay stays substrate-only
+- **ADR 0056**: Persona exposure plus skill initiation replace `trust_ceiling` and the other scalar ceilings; the entitlement model every gate reads
+- **ADR 0057**: Claude-connector access: Clerk proves who, the `mcp_issued_grants` row read per request decides whether (the kill switch)
+- **ADR 0086**: Matter identity binds at the send-scan seam through provenance pairs; the control against matter-A content reaching matter-B's recipient
+- **ADR 0088**: The obligation register (`client_obligations`): what SMD owes a client is derived from source systems and closed only by a probe
+- **ADR 0089**: Staff send-as on approval: the broker sends as a named staff member only on that person's emailed approval of the exact draft
+
+The complete, maintained list with every amendment is `docs/adr/index.md` (`tests/adr-integrity.test.ts` fails when a numbered ADR is missing from it); this list is the load-first subset, not the canon.
+
 Connectors are wired by `customer.yaml.connectors{}` backend prefix: `mcp:` (vendor or vetted-community MCP server), `build:` (Python adapter we maintain), `synthetic:` (no_pm substrate). Composio is dropped (ADR 0020, 2026-05-30 revision) — we connect to MCPs directly, and long-tail vendors with no first-party MCP get a `build:` adapter.
 
 The 2026-05-24 realignment burial is complete. Removed: `smd.hooks.*` dual-surface scaffolding, Honcho interceptor, Curator interceptor, GEPA boot-check (ADR 0018 superseded), in-tree YAML validator, the pre-realignment MS Graph adapter, and the `clio/` / `dotloop/` / `shipstation/` connector dirs whose MCP-first decisions superseded them. Author-built connectors we must write ourselves (no vendor/community MCP exists) are MCP servers living in `operator/connectors/` in this tree, per ADR 0053 — Smokeball is the first. The overlay repo (`venturecrane/hermes-smd-overlay`) stays substrate-only.

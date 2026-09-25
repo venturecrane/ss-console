@@ -1,3 +1,10 @@
+/**
+ * Retired shared MCP endpoint: every method answers 410 Gone.
+ *
+ * MCP access is per customer at /api/operator/:customer/mcp (ADR 0057); this
+ * path stays so an old connector configuration gets a clear answer naming the
+ * replacement instead of a 404.
+ */
 import type { APIRoute } from 'astro'
 import { errorResponse } from '../../lib/api/helpers'
 

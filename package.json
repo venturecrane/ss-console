@@ -24,6 +24,8 @@
     "test:workers": "for dir in workers/*/; do [ -f \"${dir}package.json\" ] || continue; echo \"Testing $dir\" && npm run test --prefix \"$dir\" || exit 1; done",
     "verify": "npm run typecheck && npm run typecheck:workers && npm run format:check && npm run lint && npm run deadcode && npm run build && npm run test && npm run test:workers",
     "handbook:drift": "node scripts/handbook-drift.mjs",
+    "handbook:adr-index": "npx tsx scripts/handbook-adr-index.ts",
+    "handbook:connectors": "npx tsx scripts/handbook-connector-inventory.ts",
     "db:migrate:local": "wrangler d1 migrations apply ss-console-db --local",
     "prepare": "node -e \"if(process.env.CI)process.exit(0)\" && husky"
   },
