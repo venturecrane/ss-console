@@ -1,6 +1,5 @@
 import type { DeviceSenderEntry, ValidationError } from './types'
-import { isPlainObject } from './helpers'
-import { canonRosterAddress } from './sections-scope'
+import { canonRosterAddress, isPlainObject } from './helpers'
 
 const DEVICE_SENDER_KEYS = new Set(['address', 'replies_to'])
 
