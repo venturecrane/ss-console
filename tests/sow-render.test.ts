@@ -45,7 +45,11 @@ function fixture(
       sowNumber: 'SOW-209901-042',
     },
     engagement: {
-      overview: 'Fixture overview text for the render test.',
+      // Three sentences: the spec's overview runs three to four (4.2).
+      overview:
+        'Based on our conversation, we identified three areas where the operation can improve. ' +
+        'This engagement scopes the work to address those areas together. ' +
+        'We work alongside the team in the order that matters most to the owner.',
       startDate: 'October 5, 2026',
       endDate: 'November 20, 2026',
     },
@@ -154,14 +158,23 @@ async function assertSignable(props: SOWTemplateProps): Promise<string[]> {
 }
 
 describe('SOW PDF: the rendered pages carry what a client signs', () => {
-  it('a typical SOW (two-part, three one-line deliverables) is three pages with the price on page 1', async () => {
-    const props = fixture('two_part', 3, false)
-    const pages = await assertSignable(props)
-    expect(pages).toHaveLength(3)
-    for (const s of paymentStrings(props)) expect(pages[0]).toContain(s)
-  })
+  // docs/templates/sow-template.md: page 1 carries the header, scope,
+  // timeline and price (4); three to six deliverables are typical and eight
+  // must still fit, with tighter row padding past six (4.3, 7.3).
+  for (const [schedule, items] of [
+    ['two_part', 3],
+    ['three_milestone', 6],
+    ['two_part', 8],
+  ] as const) {
+    it(`${items} deliverables (${schedule}): three pages, the price and its schedule on page 1`, async () => {
+      const props = fixture(schedule, items, false)
+      const pages = await assertSignable(props)
+      expect(pages).toHaveLength(3)
+      for (const s of paymentStrings(props)) expect(pages[0], `page 1 lacks "${s}"`).toContain(s)
+    })
+  }
 
-  it('the largest SOW (three milestones, eight two-line deliverables) keeps the price whole and the numbering true', async () => {
+  it('past what page 1 holds (eight two-line deliverables), the price stays whole and every page is numbered true', async () => {
     await assertSignable(fixture('three_milestone', 8, true))
   })
 

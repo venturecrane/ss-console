@@ -75,7 +75,7 @@ export const fonts = { heading: 'Plus Jakarta Sans', body: 'Inter' }
 // prettier-ignore
 export const sectionHeadingStyle = {
   fontFamily: fonts.heading, fontWeight: 700 as const, fontSize: 12, color: colors.primary,
-  textTransform: 'uppercase' as const, marginBottom: 12, paddingLeft: 8, borderLeft: `3px solid ${colors.primary}`,
+  textTransform: 'uppercase' as const, marginBottom: 8, paddingLeft: 8, borderLeft: `3px solid ${colors.primary}`,
 }
 // prettier-ignore
 export const bodyTextStyle = { fontFamily: fonts.body, fontWeight: 400 as const, fontSize: 10, color: colors.textBody, lineHeight: 1.4 }
@@ -83,8 +83,12 @@ export const bodyTextStyle = { fontFamily: fonts.body, fontWeight: 400 as const,
 export const labelStyle = { fontFamily: fonts.body, fontWeight: 500 as const, fontSize: 8, color: colors.textMuted }
 // prettier-ignore
 export const finePrintStyle = { fontFamily: fonts.body, fontWeight: 400 as const, fontSize: 8, color: colors.textMuted }
+// Top and bottom are 40pt, not the spec's original 54pt: with the header and
+// price rendering again (2026-09-25), 54pt left page 1 room for three
+// deliverables, and the spec requires eight (docs/templates/sow-template.md
+// 7.3). tests/sow-render.test.ts holds eight on page 1.
 // prettier-ignore
-export const pageMargins = { top: 54, bottom: 54, left: 72, right: 72 }
+export const pageMargins = { top: 40, bottom: 40, left: 72, right: 72 }
 
 /**
  * The footer, as a fixed region the engine repeats on every page it lays out,
