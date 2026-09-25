@@ -33,6 +33,6 @@ jobs:
     if: |
       contains(github.event.issue.labels.*.name, 'regression') ||
       github.event.label.name == 'regression'
-    uses: venturecrane/crane-console/.github/workflows/regression-claim-origin-reusable.yml@8dade7d54460b08bfecb6e0ae303f11e3be9f95d # main
+    uses: venturecrane/crane-console/.github/workflows/regression-claim-origin-reusable.yml@305c0c7df0b44863fe472f6520fb17d7e4a37aab # main
     secrets:
       CRANE_RELAY_KEY: ${{ secrets.CRANE_RELAY_KEY }}
