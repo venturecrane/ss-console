@@ -245,3 +245,75 @@ def test_real_seats_parse(slug: str) -> None:
     sr.check_channel(rep, cfg)
     sr.check_initiation_card(rep, slug, cfg)
     assert {r.section for r in rep.rows} >= {"credentials", "routines", "channel", "card"}
+
+
+# ------------------------------------------------------------ deadline replies
+
+
+def _digest_cfg(*, posture="autonomous", red=("ops@firm.example",), fallback=(), grants=("@firm.example",), cron=True):
+    persona = {
+        "name": "Operator",
+        "entitlements": {"exposure": {"external_send_internal": posture}},
+        "cron": [{"skill": "deadline-miss-escalator", "schedule": "0 7 * * *"}] if cron else [],
+    }
+    esc: dict = {"red_flag_recipients": list(red)}
+    if fallback:
+        esc["case_alert_routing"] = {"mode": "matter_staff", "fallback_recipients": list(fallback)}
+    return {"personas": [persona], "escalation": esc, "scope": {"inbound_allow_from": list(grants)}}
+
+
+def _deadline_rows(cfg: dict) -> dict:
+    rep = _report()
+    sr.check_deadline_replies(rep, cfg)
+    return {r.check: r for r in rep.rows}
+
+
+def test_a_granted_autonomous_digest_passes() -> None:
+    rows = _deadline_rows(_digest_cfg())
+    assert [r.status for r in rows.values()] == [sr.PASS, sr.PASS]
+
+
+@pytest.mark.parametrize("field", ["red", "fallback"])
+def test_a_recipient_who_cannot_reply_fails(field: str) -> None:
+    """The digest invites a reply; an ungranted recipient's reply is refused and
+    the item keeps firing. Both recipient lists count."""
+    kwargs = {"red": ("ops@firm.example",), "fallback": ("ops@firm.example",)}
+    kwargs[field] = ("outsider@elsewhere.example",)
+    row = _deadline_rows(_digest_cfg(**kwargs))["every deadline recipient may reply"]
+    assert row.status == sr.FAIL and row.blocker
+    assert "outsider@elsewhere.example" in row.detail
+
+
+def test_grant_semantics_are_the_routing_modules() -> None:
+    """A domain grant covers the domain exactly; a lookalike domain is not it."""
+    ok = _deadline_rows(_digest_cfg(red=("Amy@Firm.Example",)))["every deadline recipient may reply"]
+    assert ok.status == sr.PASS
+    bad = _deadline_rows(_digest_cfg(red=("amy@notfirm.example",)))["every deadline recipient may reply"]
+    assert bad.status == sr.FAIL
+
+
+@pytest.mark.parametrize("posture", ["confirm", "draft_for_review"])
+def test_a_digest_held_or_drafted_fails(posture: str) -> None:
+    """Held or drafted, the digest goes out with no fired rows behind its numbers."""
+    row = _deadline_rows(_digest_cfg(posture=posture))["deadline digest sends with rows behind its numbers"]
+    assert row.status == sr.FAIL and posture in row.detail
+
+
+def test_no_escalator_cron_is_informational_only() -> None:
+    rows = _deadline_rows(_digest_cfg(cron=False, red=("outsider@elsewhere.example",), posture="confirm"))
+    assert list(rows) == ["every deadline recipient may reply"]
+    row = rows["every deadline recipient may reply"]
+    assert row.status == sr.INFO and not row.blocker
+
+
+def test_a_blank_schedule_is_not_a_digest() -> None:
+    cfg = _digest_cfg(posture="confirm")
+    cfg["personas"][0]["cron"][0]["schedule"] = ""
+    assert _deadline_rows(cfg)["every deadline recipient may reply"].status == sr.INFO
+
+
+@pytest.mark.parametrize("slug", ["ashton-price", "pilot-smokeball"])
+def test_real_seats_pass_the_deadline_reply_checks(slug: str) -> None:
+    rep = sr.Report(slug)
+    sr.check_deadline_replies(rep, sr.load_customer(slug))
+    assert not rep.blocking, [(r.check, r.detail) for r in rep.blocking]

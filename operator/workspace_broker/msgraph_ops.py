@@ -650,6 +650,10 @@ class MsGraphOps:
                 "lookup": "ok",
             }
             thread = str(found.get("conversationId") or "")
+            if thread:
+                # The thread a reply to this message will arrive in; the digest's
+                # numbered map is scoped by it (digest_ref.py).
+                located["conversation_id"] = thread
             if conversation_id and thread and thread != conversation_id:
                 located["lookup"] = "ok: matched a message on a different conversation"
             return located

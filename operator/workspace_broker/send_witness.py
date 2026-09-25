@@ -32,7 +32,7 @@ import time
 from typing import Any
 
 from .broker_context import BrokerContext
-from . import escalation_ledger
+from . import digest_ref, escalation_ledger
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +136,10 @@ def append_escalation_event(broker: BrokerContext, request: dict[str, Any], peer
     event = request.get("event")
     if not isinstance(event, dict):
         raise ValueError("escalation_event_append requires an 'event' object")
+    # The digest's numbered map: the caller may name the item's number and the
+    # dispatch it rode, never the thread; the broker derives that from its own
+    # confirm row, and strips a number it cannot tie to one (digest_ref.py).
+    digest_ref.stamp_thread_ref(broker.audit_db_path, event)
     with broker._escalation_lock:
         existing = escalation_ledger.read_ledger(broker.escalation_ledger_path)
         escalation_ledger.validate_append(

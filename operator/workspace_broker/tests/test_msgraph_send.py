@@ -1759,3 +1759,31 @@ def test_a_refused_redirect_is_audited(tmp_path: Path) -> None:
             peer_uid=AGENT_UID,
         )
     assert _meta(broker)["outcome"] == "refused"
+
+
+def test_the_located_conversation_reaches_the_row(tmp_path: Path) -> None:
+    """A reply to a numbered digest arrives in the sent message's conversation,
+    and digest_ref.py reads it off THIS row. It comes from the Sent Items
+    lookup (Graph's 202 carries nothing), so it is the located message's own
+    conversation. FALSIFIER: drop "conversation_id" from
+    transmit_verbs._OPS_AUDIT_KEYS and the metadata assertion fails."""
+    broker = _broker(tmp_path, FakeGraph(conversation_id="AAQkDIGESTTHREAD="))
+    response = broker.handle(
+        {"action": "msgraph_send", "payload": {"to": ["scott@smd.services"], "body_text": "hi"}},
+        peer_pid=GATEWAY_PID,
+        peer_uid=AGENT_UID,
+    )
+    assert response["conversation_id"] == "AAQkDIGESTTHREAD="
+    assert _meta(broker)["conversation_id"] == "AAQkDIGESTTHREAD="
+
+
+def test_a_failed_lookup_records_no_conversation(tmp_path: Path) -> None:
+    broker = _broker(tmp_path, FakeGraph(conversation_id="AAQkX=", sent_items_status=403))
+    broker.handle(
+        {"action": "msgraph_send", "payload": {"to": ["scott@smd.services"], "body_text": "hi"}},
+        peer_pid=GATEWAY_PID,
+        peer_uid=AGENT_UID,
+    )
+    meta = _meta(broker)
+    assert meta["lookup"].startswith("failed")
+    assert "conversation_id" not in meta
