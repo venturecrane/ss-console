@@ -15,17 +15,22 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import io
 import json
 import sqlite3
+import ssl
+import urllib.error
 from pathlib import Path
 from typing import Optional
 
 import pytest
 
+import bin.lib.seam_pull as seam_pull_mod
 from bin.lib.seam_pull import (
     AUDIT_COLUMNS,
     MEMORY_EXPORT_TABLES,
     SeamAuditLogPreserver,
+    SeamClient,
     _write_memory_snapshot,
     derive_runtime_read_key,
     seam_client_from_env,
@@ -224,3 +229,111 @@ def test_memory_export_tables_match_overlay_allowlist():
         "agent_skills_inventory",
         "peer_preferences",
     }
+
+
+# ---------------------------------------------------------------------------
+# Transient transport failures retry; real refusals do not
+# ---------------------------------------------------------------------------
+# The class: a single dropped TLS connection held a whole day's control
+# (unaudited-send 2026-09-24, audit-chain-verify 2026-09-25). Each retry test has
+# a twin that must NOT retry, so a retry-everything implementation fails.
+
+
+class _Resp(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+        return False
+
+
+def _page(entries, cursor=None):
+    return _Resp(json.dumps({"entries": entries, "cursor": cursor}).encode("utf-8"))
+
+
+def _client(sleeps):
+    return SeamClient(
+        base_url="https://hermes-x.fly.dev",
+        slug="x",
+        key="k",
+        retry_delays=(2.0, 6.0),
+        sleep=sleeps.append,
+    )
+
+
+def _script(monkeypatch, outcomes):
+    calls = []
+
+    def fake_urlopen(req, timeout):
+        calls.append(req.full_url)
+        out = outcomes.pop(0)
+        if isinstance(out, BaseException):
+            raise out
+        return out
+
+    monkeypatch.setattr(seam_pull_mod.urllib.request, "urlopen", fake_urlopen)
+    return calls
+
+
+def _tls_eof():
+    return urllib.error.URLError(ssl.SSLEOFError(8, "UNEXPECTED_EOF_WHILE_READING"))
+
+
+def test_tls_eof_is_retried_and_the_pull_completes(monkeypatch):
+    sleeps: list[float] = []
+    calls = _script(monkeypatch, [_tls_eof(), _page([{"id": 1}])])
+    assert _client(sleeps).read_all("audit_export") == [{"id": 1}]
+    assert len(calls) == 2
+    assert sleeps == [2.0]
+
+
+def test_retry_is_per_page_not_per_drain(monkeypatch):
+    # A blip on page two must re-request page two, never restart page one.
+    sleeps: list[float] = []
+    calls = _script(
+        monkeypatch,
+        [_page([{"id": 1}], cursor="c1"), ConnectionResetError(), _page([{"id": 2}])],
+    )
+    assert _client(sleeps).read_all("audit_export") == [{"id": 1}, {"id": 2}]
+    assert len(calls) == 3
+    assert "cursor=c1" not in calls[0]
+    assert "cursor=c1" in calls[1] and "cursor=c1" in calls[2]
+
+
+def test_exhausted_retries_raise_the_last_error(monkeypatch):
+    # Fail-loud contract holds: three transient failures are still a failure.
+    sleeps: list[float] = []
+    calls = _script(monkeypatch, [_tls_eof(), TimeoutError(), _tls_eof()])
+    with pytest.raises(urllib.error.URLError):
+        _client(sleeps).read_all("audit_export")
+    assert len(calls) == 3
+    assert sleeps == [2.0, 6.0]
+
+
+def test_503_is_retried(monkeypatch):
+    sleeps: list[float] = []
+    err = urllib.error.HTTPError("u", 503, "unavailable", {}, None)
+    calls = _script(monkeypatch, [err, _page([])])
+    assert _client(sleeps).read_all("audit_export") == []
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("code", [401, 403, 404])
+def test_auth_and_not_found_are_not_retried(monkeypatch, code):
+    # A wrong key or a missing route is real; retrying only delays the alarm.
+    sleeps: list[float] = []
+    err = urllib.error.HTTPError("u", code, "no", {}, None)
+    calls = _script(monkeypatch, [err, _page([])])
+    with pytest.raises(urllib.error.HTTPError):
+        _client(sleeps).read_all("audit_export")
+    assert len(calls) == 1
+    assert sleeps == []
+
+
+def test_malformed_payload_is_not_retried(monkeypatch):
+    sleeps: list[float] = []
+    calls = _script(monkeypatch, [_Resp(b"not json"), _page([])])
+    with pytest.raises(ValueError):
+        _client(sleeps).read_all("audit_export")
+    assert len(calls) == 1
