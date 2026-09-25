@@ -35,6 +35,11 @@ what the account actually holds (listed read-only 2026-09-10):
   deleted by uuid) and the console D1 rows in ``fleet_status`` and
   ``operator_runtime_summary`` (through ``ConsoleD1``, the same
   ``wrangler d1 execute`` path every console-side reconciler uses).
+* **Compliance packet** (not a deletion): ``EvidencePacketArchiver`` in
+  ``bin/lib/decommission_archiver.py`` builds the signed evidence packet from
+  the step-02 snapshot and reports what it read back from disk. Wired from
+  ``EVIDENCE_PACKET_SIGNING_KEY_B64`` plus the wrangler token that reads the
+  seat's chain pin; unwired, the ``--live`` gate refuses like any other.
 
 Every backend is idempotent: absence is reported as ``skipped`` with a reason,
 never raised. Every backend takes its transport (an HTTP opener or a
@@ -58,7 +63,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
+from adapter.evidence.signing import SIGNING_KEY_ENV
 from bin.lib.console_d1 import ConsoleD1, sql_text
+from bin.lib.decommission_archiver import EvidencePacketArchiver
 
 # ---------------------------------------------------------------------------
 # Transports
@@ -500,8 +507,24 @@ BACKEND_REQUIREMENTS: dict[str, str] = {
     "vectorize_deleter": "CLOUDFLARE_API_TOKEN (wrangler reads it)",
     "agentmail": "AGENTMAIL_API_KEY (the org key, not a seat key)",
     "fly": "FLY_API_TOKEN (a staged token; a logged-in `fly` CLI does not count)",
+    "compliance_archiver": (
+        f"{SIGNING_KEY_ENV} (signs the packet) + CLOUDFLARE_API_TOKEN (wrangler d1 reads the chain pin)"
+    ),
     "observability": "HEALTHCHECKS_API_KEY + CLOUDFLARE_API_TOKEN (wrangler d1)",
 }
+
+
+def _console_pin_source(d1: ConsoleD1) -> Callable[[str], Optional[str]]:
+    """The newest ``audit_head_history`` head the console recorded for a seat:
+    the packet's truncation pin. ``None`` when the seat never heartbeated one,
+    which the packet then states on its face."""
+
+    def pin(slug: str) -> Optional[str]:
+        row = d1.newest_pin(slug)
+        head = row.get("audit_head") if row else None
+        return head if isinstance(head, str) and head else None
+
+    return pin
 
 
 def _fly_authenticated(env: dict) -> bool:
@@ -524,6 +547,8 @@ def backends_from_env(
     *,
     runner: Runner = run_subprocess,
     http: Http = http_request,
+    audit_writer: Optional[object] = None,
+    actor: str = "captain",
 ) -> tuple[dict, dict[str, bool]]:
     """Construct every backend whose credentials are staged.
 
@@ -532,6 +557,10 @@ def backends_from_env(
     CLI's report. A backend with no credentials is simply absent, so the
     pipeline keeps its stub and ``unwired_destructive_backends()`` refuses a
     ``--live`` run exactly as before; nothing here weakens that gate.
+
+    ``audit_writer`` is the decommission trail the compliance archiver writes
+    the packet's ``COMPLIANCE_PACKET_EXPORTED`` row to, so the record of the
+    decommission also records the packet it produced.
     """
     env = dict(os.environ) if env is None else env
     kwargs: dict = {}
@@ -558,6 +587,15 @@ def backends_from_env(
     if hc_key and wrangler_token:
         kwargs["observability"] = HealthchecksAndFleetStatusCleanup(hc_key, ConsoleD1(runner=runner), http=http)
         wired["observability"] = True
+    if (env.get(SIGNING_KEY_ENV) or "").strip() and wrangler_token:
+        kwargs["archiver"] = EvidencePacketArchiver(
+            customers_root=customers_root,
+            signing_env={SIGNING_KEY_ENV: env[SIGNING_KEY_ENV]},
+            audit_writer=audit_writer,
+            pin_source=_console_pin_source(ConsoleD1(runner=runner)),
+            actor=actor,
+        )
+        wired["compliance_archiver"] = True
     return kwargs, wired
 
 
@@ -566,6 +604,7 @@ __all__ = [
     "AgentMailInboxDeprovisioner",
     "BACKEND_REQUIREMENTS",
     "CloudflareR2NamespaceDeleter",
+    "EvidencePacketArchiver",
     "FlyAppDestroyer",
     "HealthchecksAndFleetStatusCleanup",
     "HttpResponse",
