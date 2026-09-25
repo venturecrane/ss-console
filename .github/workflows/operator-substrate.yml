@@ -211,6 +211,32 @@ jobs:
         if: steps.changes.outputs.relevant == 'true'
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
+      # Every hash-locked requirements file installs, the way the image
+      # installs it: the seat interpreter (3.13), --no-config, --require-hashes.
+      # Until 2026-09-25 no CI job installed these files at all; the venvs
+      # below resolved each pyproject's ranges instead. So a pin set that could
+      # never install was green: four Dependabot PRs moved pydantic-core past
+      # the exact version pydantic==2.13.5 requires (#2760, which broke every
+      # seat build until #2787, then #2812, #2897, #2932), and the failure
+      # surfaced only at a reprovision. Fails closed: a file that does not
+      # resolve fails the job. hermes-overlay.txt is --no-deps because its
+      # closure is the Hermes venv's (the image runs `uv pip check` there).
+      - name: Every hash-locked requirements file installs
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator/requirements
+        run: |
+          set -euo pipefail
+          uv venv --python 3.13 /tmp/reqcheck
+          checked=0
+          for f in *.txt; do
+            deps=()
+            [ "$f" = "hermes-overlay.txt" ] && deps=(--no-deps)
+            echo "== ${f} =="
+            uv pip install --python /tmp/reqcheck/bin/python --dry-run --no-config --require-hashes ${deps[@]+"${deps[@]}"} -r "$f"
+            checked=$((checked + 1))
+          done
+          [ "$checked" -gt 0 ] || { echo "::error::no requirements files found"; exit 1; }
+
       - name: Author-built connector conformance
         if: steps.changes.outputs.relevant == 'true'
         working-directory: operator/connectors
@@ -220,31 +246,38 @@ jobs:
           uv venv /tmp/sdkv
           uv pip install --python /tmp/sdkv/bin/python ./_sdk pytest
           /tmp/sdkv/bin/python -m pytest _sdk/tests -q
-          # Each connector: isolated venv with the shared SDK + itself, run its
-          # tests with the console-script on PATH so the live stdio round-trip
-          # exercises the real `<name>-mcp` entry point.
+          # Each connector: its own venv built exactly as the image builds it
+          # (seat interpreter, its hash-locked requirements file, then the SDK
+          # and the connector --no-deps), so the tests run against the pinned
+          # versions a seat runs, not whatever the ranges resolve to today. The
+          # console-script is on PATH so the live stdio round-trip exercises the
+          # real `<name>-mcp` entry point.
           for cdir in */; do
             name="${cdir%/}"
             [ "$name" = "_sdk" ] && continue
             [ -f "${cdir}pyproject.toml" ] || continue
             echo "== conformance: ${name} =="
             venv="/tmp/connv-${name}"
-            uv venv "$venv"
-            uv pip install --python "$venv/bin/python" ./_sdk "$cdir" pytest
+            uv venv --python 3.13 "$venv"
+            uv pip install --python "$venv/bin/python" --no-config --require-hashes -r "../requirements/connector-${name}.txt"
+            uv pip install --python "$venv/bin/python" --no-deps ./_sdk "$cdir"
+            uv pip install --python "$venv/bin/python" pytest
             PATH="$venv/bin:$PATH" "$venv/bin/python" -m pytest "${cdir}tests" -q
           done
 
-      # ss#2613: the medchron runner is installed exactly as the seat image will
-      # install it (the explicit three-path form: sdk, connector, runner), and
-      # its tests run against that artifact. Not the bare env: the runner's
-      # seat access imports the connector's client.
+      # ss#2613: the medchron runner is installed exactly as the seat image
+      # installs it (its hash-locked file, then sdk, connector, runner
+      # --no-deps), and its tests run against that artifact. Not the bare env:
+      # the runner's seat access imports the connector's client.
       - name: medchron runner tests (own venv)
         if: steps.changes.outputs.relevant == 'true'
         working-directory: operator
         run: |
           set -euo pipefail
-          uv venv /tmp/medchronv
-          uv pip install --python /tmp/medchronv/bin/python ./connectors/_sdk ./connectors/smokeball ./runners/medchron pytest
+          uv venv --python 3.13 /tmp/medchronv
+          uv pip install --python /tmp/medchronv/bin/python --no-config --require-hashes -r requirements/medchron.txt
+          uv pip install --python /tmp/medchronv/bin/python --no-deps ./connectors/_sdk ./connectors/smokeball ./runners/medchron
+          uv pip install --python /tmp/medchronv/bin/python pytest
           /tmp/medchronv/bin/python -m pytest -c runners/medchron/pyproject.toml runners/medchron/tests -q
 
       - name: No substrate paths changed

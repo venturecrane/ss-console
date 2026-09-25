@@ -1281,8 +1281,9 @@ RUN uv venv /opt/workspace-broker/.venv \
 # `npm install -g name@version` (2026-09-25 code review, Dependencies 3): the
 # old line pinned the package and let its ~120 transitive packages float to
 # whatever the registry served that day. The lock fixes every version and
-# integrity hash; security.yml's npm audit reads it and Dependabot's npm entry
-# for that directory keeps it current. The bin is linked onto PATH at the
+# integrity hash; security.yml's npm audit reads it and Dependabot security
+# updates act on it (the top-level pin moves only by a deliberate edit, see
+# .github/dependabot.yml). The bin is linked onto PATH at the
 # same /usr/local/bin a global install used. Presence checks prove the
 # install so a regression fails the BUILD, not a seat; it is a stdio MCP
 # server, so invoking it here would block on stdin.
