@@ -22,8 +22,16 @@
  *     register's own silence.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'child_process'
+
+// Every case spawns `npx tsx scripts/ci-reconcile-obligations.ts`, a cold
+// TypeScript compile per invocation that takes 3 to 7 seconds depending on
+// machine load. vitest's default 5 s timeout is below that cost, so the suite
+// went red on a loaded laptop (18 timeouts at 5.0 to 6.7 s in the 2026-09-25
+// pre-push verify) while every assertion was true. The timeout is a property
+// of the instrument, not of the code under test; size it to the instrument.
+vi.setConfig({ testTimeout: 60_000 })
 import { mkdtempSync, writeFileSync, rmSync, chmodSync, readFileSync, existsSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
