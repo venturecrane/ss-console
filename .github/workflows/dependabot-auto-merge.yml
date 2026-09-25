@@ -1,9 +1,18 @@
 name: Dependabot auto-merge
 
 # Auto-enable squash-merge on Dependabot PRs when the bump is low-risk:
-#   - any patch bump (semver says backwards-compatible)
+#   - any patch bump (semver says backwards-compatible), which is also how
+#     almost every security update arrives
 #   - dev-dep minor bumps (tooling, can't reach production)
-#   - security patch updates (CVE-driven, usually a patch anyway)
+#
+# There is no separate "security update" clause. fetch-metadata's
+# `update-type` only ever reports semver-major/minor/patch, so the
+# `version-update:semver-security` value this used to test never occurs (review
+# 2026-09-25). The field that does mark a security update, `ghsa-id`, is filled
+# only with `alert-lookup: true` and a PAT or GitHub App token holding
+# "Dependabot alerts: read"; the workflow GITHUB_TOKEN cannot read alerts, and
+# no such credential is staged. A security patch is merged by the patch clause;
+# a security minor or major waits for review like any other.
 #
 # GitHub's native auto-merge means the PR lands only after every required
 # check passes — there's no "skip CI" path. If CI goes red, the PR just
@@ -20,9 +29,15 @@ permissions:
 
 # NO `concurrency:` here, deliberately. Cancelling a superseded run could leave
 # a dependabot PR neither merged nor reported. It is a ~1-minute job, so there
-# is nothing to save. (Separately: this runs `pull_request_target` with write
-# permissions — the classic public-repo escalation surface. It needs a hard
-# review before this repo is ever made public again. See the Phase 5 gate.)
+# is nothing to save.
+#
+# PUBLIC REPO, `pull_request_target`, WRITE TOKEN. That combination is the
+# classic escalation surface, and this repo is public. It is safe here for
+# three reasons, and a change that breaks any of them reopens it: the job runs
+# only when the triggering actor is dependabot[bot] (a re-run by anyone else
+# skips it); it never checks out or executes code from the PR; and its only
+# inputs are fetch-metadata's parsed fields and the PR URL, passed through
+# `env:` rather than interpolated into the script.
 
 jobs:
   auto-merge:
@@ -38,7 +53,6 @@ jobs:
       - name: Enable auto-merge for safe bumps
         if: |
           steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-security' ||
           (steps.metadata.outputs.update-type == 'version-update:semver-minor' &&
            steps.metadata.outputs.dependency-type == 'direct:development')
         run: gh pr merge --auto --squash "$PR_URL"

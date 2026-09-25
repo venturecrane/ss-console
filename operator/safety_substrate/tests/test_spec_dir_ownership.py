@@ -40,6 +40,7 @@ def tree(tmp_path):
     body = root / "classes" / "staff" / "voice.md"
     body.write_text("Lead with the answer.\n")
     for d in (root, root / "classes", root / "classes" / "staff"):
+        # Fixture setup: ordinary 0755 directories, the baseline the ownership check accepts.
         os.chmod(d, 0o755)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     os.chmod(body, 0o644)
     return root
@@ -88,6 +89,7 @@ def test_a_file_owned_and_writable_by_the_agent_is_refused(tree):
 def test_a_world_writable_body_is_refused(tree):
     """Mode alone is enough — ownership does not have to be the agent's."""
     body = tree / "classes" / "staff" / "voice.md"
+    # Deliberately world-writable: the test proves the verifier refuses this mode.
     os.chmod(body, 0o666)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     result = sdo.verify_spec_dir(str(tree), agent_user="root")
     assert not result.passed
@@ -99,6 +101,7 @@ def test_a_world_writable_directory_is_refused(tree):
     write permits CREATE, REPLACE, and RENAME even when every file inside is
     read-only. A spec the agent cannot edit but can replace wholesale is not
     protected."""
+    # Deliberately world-writable directory: the test proves the verifier refuses it.
     # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     os.chmod(tree / "classes" / "staff", 0o777)
     result = sdo.verify_spec_dir(str(tree), agent_user="root")
@@ -154,6 +157,7 @@ def test_verify_at_boot_returns_zero_on_a_clean_tree(tree):
 
 def test_verify_at_boot_returns_three_on_a_writable_tree(tree, capsys):
     body = tree / "classes" / "staff" / "voice.md"
+    # Deliberately world-writable: the test proves boot verification exits 3 on it.
     os.chmod(body, 0o666)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     assert sdo.verify_at_boot({sdo.SPEC_DIR_ENV: str(tree)}, agent_user="root") == 3
     err = capsys.readouterr().err
@@ -166,6 +170,7 @@ def test_verify_at_boot_returns_zero_when_unset():
 
 
 def test_refusal_message_names_why_it_matters(tree):
+    # Deliberately world-writable: the test reads the refusal message it produces.
     # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     os.chmod(tree / "classes" / "staff" / "voice.md", 0o666)
     msg = sdo.verify_spec_dir(str(tree), agent_user="root").refusal_message()

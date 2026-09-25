@@ -25,4 +25,14 @@ ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "register: not in a 
 LIB="$DIR/hooks/lib/register.mjs"
 [ -f "$LIB" ] || LIB="$ROOT/.claude/hooks/lib/register.mjs"
 
-exec node "$LIB" "$@"
+# tsx, not bare node: register.mjs writes through src/lib/db/obligations.ts, the
+# same upsert the reconciler and the console use, and tsx loads that TypeScript
+# directly with no build step. It is the repo's pinned devDependency, resolved
+# from the checkout the library lives in, never an `npx` download.
+TSX="$(cd "$(dirname "$LIB")/../../.." && pwd)/node_modules/.bin/tsx"
+if [ ! -x "$TSX" ]; then
+  echo "register: $TSX is missing; run \`npm ci\` in this checkout first." >&2
+  exit 1
+fi
+
+exec "$TSX" "$LIB" "$@"

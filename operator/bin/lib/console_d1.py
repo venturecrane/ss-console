@@ -228,6 +228,7 @@ class ConsoleD1:
         and it is an equality match on the full driver string rather than a LIKE
         so no pattern character in a slug can widen it.
         """
+        # The only interpolation is sql_text's hex blob literal of a REHEARSAL_DRIVER_PREFIX driver.
         # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
         self.execute(f"DELETE FROM cost_anomaly_alerts WHERE driver = {sql_text(f'{REHEARSAL_DRIVER_PREFIX}{slug}')}")  # noqa: S608 - the driver is sql_text's hex blob literal pinned to REHEARSAL_DRIVER_PREFIX
 

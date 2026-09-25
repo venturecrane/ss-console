@@ -13,6 +13,17 @@ name: Runtime AC proof
 # This narrows self-certification for runtime layers only. Repo-layer ACs keep
 # taking a file:line, because that is the right evidence for code.
 #
+# REQUIRED CHECK. "Runtime ACs carry a verification ID" is a required context
+# in ruleset 15555219 (added 2026-09-25, review action item 2). Before that the
+# gate reported and could not block. Two properties keep a required check from
+# stranding a PR at "Expected": the trigger has no paths filter and includes
+# `edited`, so every PR gets a run and a body edit re-runs it; and a body with
+# no AC section or no `(runtime)` row passes without touching the ledger.
+#
+# LEDGER LOOKUP. Each cited vfy_ ID is resolved against crane-context's
+# GET /verify/lookup (the endpoint crane-console's own pr-verify-gate uses) and
+# must exist as a live_state or fresh_process row. Unreachable ledger = red.
+#
 # Parser lives in scripts/runtime-ac-proof.mjs and is unit-tested in
 # tests/runtime-ac-proof.test.ts, so the gate's logic is not untestable inline
 # JavaScript.
@@ -38,22 +49,43 @@ jobs:
       - name: Check out the parser
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Inspect the AC status table
+      - name: Inspect the AC status table and resolve its IDs
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          # The same relay key regression-claim-origin.yml passes to crane-console.
+          # Read only when a runtime row cites an ID; a PR that claims nothing at
+          # runtime passes without it, which is what lets Dependabot and fork PRs
+          # (no secrets) report success on a check the ruleset requires.
+          CRANE_RELAY_KEY: ${{ secrets.CRANE_RELAY_KEY }}
         with:
           script: |
-            const { findUnprovenRuntimeAcs, formatViolations } = await import(
+            const { checkRuntimeAcProof, formatViolations } = await import(
               `${process.env.GITHUB_WORKSPACE}/scripts/runtime-ac-proof.mjs`
             );
 
             const body = context.payload.pull_request.body || '';
-            const violations = findUnprovenRuntimeAcs(body);
+            const result = await checkRuntimeAcProof(body, {
+              relayKey: process.env.CRANE_RELAY_KEY,
+            });
 
-            if (violations.length === 0) {
-              core.info('No runtime ACs marked met without a verification ID.');
+            const failures = [];
+            if (result.violations.length > 0) failures.push(formatViolations(result.violations));
+            if (result.ledgerError) {
+              failures.push(
+                `Cannot resolve ${result.checked} verification ID(s): ${result.ledgerError}\n` +
+                  'The gate fails closed: an ID it could not look up is not an ID it found.'
+              );
+            }
+
+            if (failures.length === 0) {
+              core.info(
+                result.checked === 0
+                  ? 'No runtime ACs claimed met; nothing to resolve.'
+                  : `All ${result.checked} cited verification ID(s) resolved to observations.`
+              );
               return;
             }
 
-            const message = formatViolations(violations);
-            core.summary.addHeading('Runtime AC proof', 2).addCodeBlock(message).write();
+            const message = failures.join('\n\n');
+            await core.summary.addHeading('Runtime AC proof', 2).addCodeBlock(message).write();
             core.setFailed(message);

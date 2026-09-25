@@ -10,6 +10,8 @@ Code review records and platform audit reports for the SMD Services codebase.
 
 - [operator-strategic-review-2026-07-04-evidence.md](./operator-strategic-review-2026-07-04-evidence.md) - Evidence audit: every wave claim re-observed cold from live state; one red finding (#1681 reopened by the AC gate)
 - [operator-strategic-review-2026-07-04.md](./operator-strategic-review-2026-07-04.md) - Operator strategic & architectural review: grades, competitive landscape, recommendation set (2026-07-04)
+- [code-review-2026-09-25.md](./code-review-2026-09-25.md) - Full codebase code review (2026-09-25): Overall B-, up from C+; every 09-10 carried finding closed or moved; six new mediums, mostly where the gates do not look
+- [code-review-2026-09-25-agent-reports.md](./code-review-2026-09-25-agent-reports.md) - The four agent reports behind the 2026-09-25 review, verbatim
 - [code-review-2026-09-10.md](./code-review-2026-09-10.md) - Full codebase code review (2026-09-10): Overall C+, up from C-; all six prior action items closed or moved; four new mediums in the window's own code
 - [code-review-2026-09-10-agent-reports.md](./code-review-2026-09-10-agent-reports.md) - The four agent reports behind the 2026-09-10 review, verbatim
 - [code-review-2026-09-09.md](./code-review-2026-09-09.md) - Full codebase code review (2026-09-09): Overall C-, up from D+; both prior HIGHs closed at runtime; Dependencies D on a time-boxed audit allowlist

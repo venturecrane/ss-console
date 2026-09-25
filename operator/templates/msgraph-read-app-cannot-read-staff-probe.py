@@ -106,6 +106,7 @@ def _urllib_mint(tenant: str, client_id: str, secret: str) -> str:
     ).encode()
     url = f"https://login.microsoftonline.com/{urllib.parse.quote(tenant, safe='')}/oauth2/v2.0/token"
     request = urllib.request.Request(url, data=data, method="POST")  # noqa: S310 - fixed https login host; tenant id is url-quoted
+    # Fixed https login host; the tenant id is url-quoted.
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
     with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310 - fixed https login host; tenant id is url-quoted
         return str(json.loads(response.read().decode("utf-8")).get("access_token") or "")
@@ -120,6 +121,7 @@ def _urllib_ask(token: str, mailbox: str) -> int:
     )
     request = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})  # noqa: S310 - fixed https graph host; mailbox is url-quoted
     try:
+        # Fixed https graph host; the mailbox address is url-quoted.
         # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310 - fixed https graph host; mailbox is url-quoted
             return int(response.status)
