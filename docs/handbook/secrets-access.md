@@ -37,7 +37,7 @@ environment. On an Operator seat both carry live credentials, so these are never
 debugging conveniences there.
 
 `operator/bin/seat-probe.sh` reaches the seat by re-execing the probe as
-`runuser -- env ${ENVV} ...`, which puts the gateway's whole environment on the wrapper's
+`runuser -- env -i ${ENVV} ...`, which puts the gateway's whole environment on the wrapper's
 own argv. That is by design and it is how the probe gets the credentials it needs. It also
 means the wrapper matches loose process patterns. On 2026-08-10 a probe ran
 `pgrep -af establish_intake`, matched its own wrapper, and printed
@@ -46,6 +46,12 @@ means the wrapper matches loose process patterns. On 2026-08-10 a probe ran
 
 Match on a pattern that cannot match the wrapper, and print pids only. The script carries
 the same warning at the line where the env is assembled.
+
+The probe's environment is an allowlist: `env -i` starts it empty, and it receives only the
+keys the hermes-uid gateway process holds. The ssh session inherits the Machine's PID 1
+environment, root-only secrets included, and naming those secrets one at a time failed
+twice (the Graph send credential in #2879, the account-wide R2 keys in #2902, each found by
+boot smoke on a live seat). The named list survives only as a second filter on the copy.
 
 ## Where secrets live
 

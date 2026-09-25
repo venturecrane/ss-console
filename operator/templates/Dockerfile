@@ -980,7 +980,16 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # shared/staff_mailboxes.py, shared/provenance.py, plugins/hermes-smd-inbound,
 # plugins/hermes-smd-mail-attachments. No overlay-pairs file or audit schema
 # changed (git diff --stat 62a4cccb a15f0971), so only overlayRef moves.
-ARG OVERLAY_REF="a15f0971717e94863e09b8774cd4cb3b6af67c77"
+# 2026-09-25 (12621343, overlay #382). Classifies mcp_smokeball_add_workbook
+# (INTERNAL_WRITE), which the connector adds in the same ss-console change
+# (#2922): it builds an .xlsx from JSON rows and files it on the matter. The
+# outbound identifier scan now flattens the tool's nested `sheets` cells rather
+# than repr'ing them, in the default blocking posture. Without this ref the
+# seat's boot classification probe FATALs on the baked manifest. Runtime files:
+# shared/action_classes.py, plugins/hermes-smd-trust/outbound.py. No
+# overlay-pairs file or audit schema changed (diff --stat a15f0971..12621343),
+# so only overlayRef moves.
+ARG OVERLAY_REF="12621343b5c3b5d339c83f75d0837c63a3e09c22"
 
 ARG CUSTOMER_SLUG=customer-zero
 

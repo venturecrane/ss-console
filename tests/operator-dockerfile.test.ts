@@ -1400,7 +1400,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // for the interactive cost meter.
     // 62a4cccb -> a15f0971 (2026-09-23, overlay#381). Classifies the two
     // msgraph staff-mailbox reads and adds mail_spool_message (an email as .eml).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="a15f0971717e94863e09b8774cd4cb3b6af67c77"')
+    // a15f0971 -> 12621343 (2026-09-25, overlay#382). Classifies add_workbook
+    // and flattens its sheet cells for the identifier scan.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="12621343b5c3b5d339c83f75d0837c63a3e09c22"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

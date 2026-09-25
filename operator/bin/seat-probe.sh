@@ -69,33 +69,46 @@ done
 # Match on a pattern that cannot match this wrapper (as the gateway resolve
 # below does), and print pids only — never `-a`, never `-f` with output.
 #
-# The SEND credentials are stripped TWICE below, because they arrive by two
-# independent paths and removing either one alone leaves the leak intact:
+# THE AGENT ENVIRONMENT IS AN ALLOWLIST: the hermes-uid gateway's own environ,
+# and nothing else. The probe starts from `env -i` (empty) and receives exactly
+# the keys the gateway process holds, plus PATH. Anything this ssh session
+# carries that the gateway does not is dropped by construction, so a secret
+# staged root-only on the Machine tomorrow cannot ride into an agent-uid process
+# through here, whether or not anyone remembers to name it.
 #
-#   1. `grep -vE` on the ENVV build, so the gateway's copy of them never lands
-#      on this wrapper's argv (where any `ps`-shaped command would print them).
-#   2. `env -u` on the exec, because `fly ssh` inherits the Machine's PID 1
-#      environment and `env` starts from the CALLER's environment. The hallpass
-#      session is already holding them before ENVV is assembled at all.
+# Why that and not a deny-list. Root-only secrets reached probes by two paths:
 #
-# Measured on ashton-price 2026-09-22: with only the grep in place, a probe
-# launched through this wrapper still reported all three MSGRAPH_SEND_* present
-# in its own environ. The `-u` flags must come BEFORE ${ENVV}, since a later
-# assignment would win over an earlier -u.
+#   1. The ENVV copy of the gateway's environ, which also puts them on this
+#      wrapper's argv, where any `ps`-shaped command prints them (ss#2218).
+#   2. The ssh session itself: `fly ssh` inherits the Machine's PID 1
+#      environment, and a plain `env` starts from the CALLER's environment, so
+#      the session held them before ENVV was assembled at all.
 #
-# entrypoint.sh unsets them before its own exec-drop, but an unset cannot reach
-# a process launched later by a different path, and this wrapper is that path.
-# The result was the one credential holding Mail.Send on a seat with Send As for
-# real staff, sitting in an environ any same-uid sibling can read (ADR 0044
-# Decision 8). Boot smoke checks for exactly this
-# (`msgraph-send-credential-stripped-from-agent`), and a probe that needs to
+# Path 2 was closed twice by naming variables with `env -u`: #2879 (the Graph
+# SEND credential, ashton-price 2026-09-22, three MSGRAPH_SEND_* measured present
+# in a probe's environ with only the grep in place) and #2902 (the account-wide
+# R2 keys, 2026-09-24). Each fix was right and each came after boot smoke caught
+# a live leak; a deny-list is correct only for the secrets someone has already
+# leaked. `env -i` closes path 2 for every name. It must stay the first flag,
+# before ${ENVV}: the assignments after it are the whole environment.
+#
+# The named grep exclusion on ENVV stays as the belt for path 1. entrypoint.sh
+# unsets these before its exec-drop, so the gateway should never hold them; if
+# a regression ever put one there, the grep keeps it off this argv and out of
+# the probe. Boot smoke checks the result (`msgraph-send-credential-stripped-
+# from-agent`, `r2-account-key-stripped-from-agent`), and a probe that needs to
 # send should run as a gateway turn, not as a hermes-uid one-shot.
+#
+# The gateway is matched by uid as well as pattern (`pgrep -u hermes`): the
+# allowlist is the AGENT-uid process's environ (entrypoint.sh drops to hermes
+# before bootstrap.sh execs the gateway), never a root process's that happens to
+# match the pattern.
 exec fly ssh console -a "${APP_NAME}" -C "sh -c '
-GPID=\$(pgrep -f \"hermes.*gateway run\" | head -1)
+GPID=\$(pgrep -u hermes -f \"hermes.*gateway run\" | head -1)
 if [ -z \"\${GPID}\" ]; then
-  echo \"seat-probe: no gateway process found on ${APP_NAME}\" >&2
+  echo \"seat-probe: no hermes-uid gateway process found on ${APP_NAME}\" >&2
   exit 1
 fi
 ENVV=\$(tr \"\\0\" \"\\n\" < /proc/\${GPID}/environ | grep -vE \"^(PWD|SHLVL|_|MSGRAPH_SEND_TENANT_ID|MSGRAPH_SEND_CLIENT_ID|MSGRAPH_SEND_CLIENT_SECRET|AGENTMAIL_SEND_API_KEY|AGENTMAIL_WEBHOOK_READ_API_KEY|R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY)=\" | tr \"\\n\" \" \")
-exec runuser -u hermes -- env -u MSGRAPH_SEND_TENANT_ID -u MSGRAPH_SEND_CLIENT_ID -u MSGRAPH_SEND_CLIENT_SECRET -u AGENTMAIL_SEND_API_KEY -u AGENTMAIL_WEBHOOK_READ_API_KEY -u R2_ACCESS_KEY_ID -u R2_SECRET_ACCESS_KEY \${ENVV} PATH=/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin ${QUOTED}
+exec runuser -u hermes -- env -i \${ENVV} PATH=/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin ${QUOTED}
 '"
