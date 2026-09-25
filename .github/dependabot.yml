@@ -109,25 +109,14 @@ updates:
     commit-message:
       prefix: chore(deps)
 
-  # The seat image's lock-pinned npm installs (operator/npm/<name>/, one
-  # directory per tool the Dockerfile installs with `npm ci`; clio-mcp since
-  # the 2026-09-25 code review). The Dockerfile pins the top-level version in
-  # package.json, so a major is a deliberate edit there; Dependabot keeps the
-  # transitive closure current.
-  - package-ecosystem: npm
-    directory: /operator/npm/clio-mcp
-    schedule:
-      interval: weekly
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 5
-    groups:
-      npm-minor-patch:
-        update-types:
-          - minor
-          - patch
-    commit-message:
-      prefix: chore(deps)
+  # No version-update entry for operator/npm/clio-mcp, on purpose. Its one
+  # direct dependency is @oktopeak/clio-mcp pinned exactly at 2.0.0, the
+  # version the connector reality-check and live loop test ran against, and
+  # version updates only ever move a direct dependency: the entry this
+  # replaced opened #2934 (2.0.0 -> 2.3.0) within the hour, which is a
+  # re-verification decision, not upkeep. The lock's transitive closure is
+  # still watched: Dependabot security updates (enabled 2026-09-25) act on any
+  # lockfile in the dependency graph, and security.yml's npm audit reads it.
 
   # The seat image's Python. Until 2026-09-11 no pip ecosystem existed, so the
   # Python that runs on every customer Machine had neither currency nor
@@ -148,6 +137,14 @@ updates:
   # and #2898, 2026-09-25 code review, Dependencies 4). `exclude-paths`
   # (repo-root relative) keeps /operator's pyproject covered and hands the
   # .txt files to the entry above alone.
+  #
+  # pydantic-core is ignored here. pydantic pins its core EXACTLY, and this
+  # entry edits each .txt pin on its own, so a pydantic-core bump without the
+  # matching pydantic can never install: #2760 (broke every seat build until
+  # #2787), #2812, #2897 and #2932 were all that PR. It moves with pydantic
+  # when compile.sh re-resolves. Security updates ignore this list, and the
+  # substrate job now installs every file the way the image does, so any
+  # other unsatisfiable bump goes red instead of green.
   - package-ecosystem: pip
     directory: /operator/requirements
     schedule:
@@ -155,6 +152,8 @@ updates:
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: pydantic-core
     groups:
       pip-minor-patch:
         update-types:
