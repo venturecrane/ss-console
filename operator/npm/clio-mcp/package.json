@@ -3,6 +3,6 @@
   "private": true,
   "description": "The seat image's @oktopeak/clio-mcp install, lock-pinned. operator/templates/Dockerfile runs `npm ci` here; package-lock.json fixes every transitive version and integrity hash.",
   "dependencies": {
-    "@oktopeak/clio-mcp": "2.0.0"
+    "@oktopeak/clio-mcp": "2.3.0"
   }
 }
