@@ -85,13 +85,20 @@ interface Seat {
 
 export type Verdict =
   | { verdict: 'verified' }
+  | { verdict: 'withdrawn' }
   | { verdict: 'still_open' }
   | { verdict: 'overdue'; days: number }
   | { verdict: 'stale'; days: number }
   | { verdict: 'cannot_evaluate'; class: 'probeable' | 'attested' }
   | { verdict: 'unverifiable' }
 
-export type ProbeResult = { status: 'present' | 'absent' | 'unreachable' }
+/**
+ * `withdrawn` is the source saying nothing is owed any more (a declined change
+ * request), as distinct from `present` (the work was done). The two end in
+ * different states -- `cancelled` versus `verified` -- because recording a
+ * refusal as a delivery would put work in the ledger that nobody did.
+ */
+export type ProbeResult = { status: 'present' | 'withdrawn' | 'absent' | 'unreachable' }
 
 // ---------------------------------------------------------------- pure logic
 
@@ -112,6 +119,7 @@ export function classifyRow(row: Obligation, probe: ProbeResult, now: Date): Ver
     }
   }
   if (probe.status === 'present') return { verdict: 'verified' }
+  if (probe.status === 'withdrawn') return { verdict: 'withdrawn' }
   if (row.due_at) {
     const due = new Date(row.due_at)
     if (!Number.isNaN(due.getTime()) && due < now) {
@@ -406,6 +414,11 @@ export async function probeEvidence(row: Obligation, db: D1Database): Promise<Pr
       })
       if (!found.ok) return { status: 'unreachable' }
       const status = found.rows[0]?.status
+      // A declined change request is settled too, just not by delivery. Before
+      // 2026-09-25 only resolved/completed counted, so a declined request
+      // stayed on the owed list forever (cr-3: a July test of the portal form,
+      // declined, still listed as A&P work 72 days later).
+      if (status === 'declined') return { status: 'withdrawn' }
       return { status: status === 'resolved' || status === 'completed' ? 'present' : 'absent' }
     }
     default:
@@ -451,6 +464,22 @@ async function certify(db: D1Database, row: Obligation, runId: string): Promise<
     obligationId: row.obligation_id,
     to: 'verified',
     reconcileRunId: runId,
+  })
+  return done.ok ? null : done.error
+}
+
+/**
+ * Move an imported row whose source withdrew the ask into `cancelled`.
+ *
+ * Imported rows only: a captured row is a promise stated in a letter, and only
+ * the Captain retires one of those. Returns null on success, or the refusal.
+ */
+async function withdraw(db: D1Database, row: Obligation): Promise<string | null> {
+  if (row.origin !== 'imported') return `a ${row.origin} row probed withdrawn`
+  const done = await transitionObligation(db, {
+    obligationId: row.obligation_id,
+    to: 'cancelled',
+    disposition: `source withdrew the ask: ${row.source_ref}`,
   })
   return done.ok ? null : done.error
 }
@@ -654,6 +683,7 @@ export async function main(): Promise<number> {
   const findings: string[] = []
   const alerts: AlertInsert[] = []
   let verified = 0
+  let withdrawn = 0
   let overdue = 0
   let cannotProbeable = 0
   let cannotAttested = 0
@@ -670,6 +700,16 @@ export async function main(): Promise<number> {
         if (refused) {
           findings.push(
             `::error::${row.obligation_id} ${row.customer_slug} not certified: ${refused}`
+          )
+        }
+      }
+    } else if (verdict.verdict === 'withdrawn') {
+      withdrawn += 1
+      if (!DRY_RUN) {
+        const refused = await withdraw(db, row)
+        if (refused) {
+          findings.push(
+            `::error::${row.obligation_id} ${row.customer_slug} not cancelled: ${refused}`
           )
         }
       }
@@ -779,6 +819,7 @@ export async function main(): Promise<number> {
     `obligations total:       ${String(total).padStart(5)}`,
     `universe (non-terminal): ${String(universe).padStart(5)}`,
     `  verified this run:     ${String(verified).padStart(5)}`,
+    `  withdrawn this run:    ${String(withdrawn).padStart(5)}`,
     `  still open (in window):${String(stillOpen).padStart(5)}`,
     `  overdue:               ${String(overdue).padStart(5)}`,
     `  stale (undated, ${UNDATED_STALE_DAYS}d+):${String(stale).padStart(4)}`,
