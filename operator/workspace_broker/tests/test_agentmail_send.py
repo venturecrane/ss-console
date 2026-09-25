@@ -744,3 +744,55 @@ def test_absent_audit_extra_writes_exactly_todays_row(tmp_path: Path) -> None:
     # column, which is what the console's tri-state attribution keys on.
     assert "skill_name" not in broker.ledger.rows[0]
     assert "skill_name" not in meta
+
+
+# ---------------------------------------------------------------------------
+# The digest's numbered map: thread capture and the dispatch nonce
+# ---------------------------------------------------------------------------
+
+DISPATCH_REF = "0123456789abcdef0123456789abcdef"
+
+
+def test_the_send_thread_id_reaches_the_row_under_either_spelling(tmp_path: Path) -> None:
+    """A reply to a numbered digest arrives in the digest's thread, and
+    digest_ref.py reads that thread off THIS row. FALSIFIER: drop "thread_id"
+    from transmit_verbs._OPS_AUDIT_KEYS and the metadata assertion fails."""
+    for spelling in ("thread_id", "threadId"):
+        http = FakeHTTP({"/messages/send": {"message_id": "msg_1", spelling: "thr_digest"}})
+        broker = _broker(tmp_path, http)
+        response = broker.handle(
+            {"action": "agentmail_send", "payload": {"to": ["scott@smd.services"], "text": "hi"}},
+            peer_pid=GATEWAY_PID,
+            peer_uid=AGENT_UID,
+        )
+        assert response["thread_id"] == "thr_digest"
+        assert _meta(broker)["thread_id"] == "thr_digest"
+
+
+def test_a_send_without_a_thread_id_writes_none(tmp_path: Path) -> None:
+    broker = _broker(tmp_path, FakeHTTP())
+    broker.handle(
+        {"action": "agentmail_send", "payload": {"to": ["scott@smd.services"], "text": "hi"}},
+        peer_pid=GATEWAY_PID,
+        peer_uid=AGENT_UID,
+    )
+    assert "thread_id" not in _meta(broker)
+
+
+def test_dispatch_ref_rides_the_row_only_in_its_one_shape(tmp_path: Path) -> None:
+    """The overlay's per-dispatch nonce (uuid4 hex) is admitted through the
+    closed allowlist; anything not 32 lowercase hex is dropped like an unnamed
+    key, so a malformed nonce can never be joined to."""
+    broker = _broker(tmp_path, FakeHTTP())
+    for value in (DISPATCH_REF, DISPATCH_REF.upper(), DISPATCH_REF[:-1], "not-a-nonce"):
+        broker.handle(
+            {
+                "action": "agentmail_send",
+                "payload": {"to": ["scott@smd.services"], "text": "hi"},
+                "audit_extra": {"dispatch_ref": value},
+            },
+            peer_pid=GATEWAY_PID,
+            peer_uid=AGENT_UID,
+        )
+    stamped = [_meta(broker, i).get("dispatch_ref") for i in range(4)]
+    assert stamped == [DISPATCH_REF, None, None, None]

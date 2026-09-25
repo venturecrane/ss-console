@@ -244,3 +244,65 @@ def need_you_count(digest: dict) -> int:
     needs-you plus blanket-ack-only. A recipient whose only items are blanket
     ones must never read "0 need you"."""
     return len(digest.get("needs_you") or []) + len(digest.get("blanket_ack_only") or [])
+
+
+# ---------------------------------------------------------------------------
+# The numbered map (plain-word replies,
+# docs/specs/operator/case-manager-deadline-work.md).
+# ---------------------------------------------------------------------------
+
+
+def matter_runs(items: list[dict]) -> list[list[dict]]:
+    """Items grouped per matter, in order of each matter's first appearance."""
+    runs: dict[object, list[dict]] = {}
+    for item in items:
+        runs.setdefault(item.get("matter_id"), []).append(item)
+    return list(runs.values())
+
+
+def number_firing(sub: dict, cap: int) -> dict:
+    """A copy of ``sub`` whose firing items carry the number a reader answers with.
+
+    The reader replies "got it on 1"; the overlay resolves 1 to the ledger rows
+    whose ``n`` is 1 in that thread. So the number shown and the ``n`` on the
+    row are the same value, assigned HERE, once, and copied by
+    ``dispatch_envelope`` onto each append.
+
+    Order is the firing order the appends are written in (``_firing_items``):
+    each needs-you item gets its own number; each "Also open" matter group and
+    each blanket matter group gets ONE number shared by every item in it, so
+    answering the number quiets the whole group. Blanket items are reordered so
+    each matter's items are contiguous, which is what lets the group render as
+    one numbered line.
+
+    ``cap`` is the append cap. A unit (an item, or a whole group) is numbered
+    only if every row it covers fits under the cap; the first unit that does
+    not fit ends the numbering, so no number is ever shown without a row behind
+    it. Numbers are continuous from 1. The input is not mutated."""
+    out = dict(sub)
+    state = {"n": 0, "room": cap, "open": True}
+
+    def claim(size: int) -> int | None:
+        if not state["open"] or size > state["room"]:
+            state["open"] = False
+            return None
+        state["n"] += 1
+        state["room"] -= size
+        return state["n"]
+
+    def stamp(items: list[dict], n: int | None) -> list[dict]:
+        return [{**item, "n": n} if n is not None else dict(item) for item in items]
+
+    out["needs_you"] = [stamp([item], claim(1))[0] for item in sub.get("needs_you") or []]
+    admin = sub.get("admin_confirms")
+    if isinstance(admin, dict) and admin.get("matters"):
+        groups = []
+        for group in admin["matters"]:
+            items = list(group.get("items") or [])
+            n = claim(len(items))
+            groups.append({**group, "items": stamp(items, n), **({"n": n} if n is not None else {})})
+        out["admin_confirms"] = {**admin, "matters": groups}
+    blanket = sub.get("blanket_ack_only")
+    if blanket:
+        out["blanket_ack_only"] = [item for run in matter_runs(blanket) for item in stamp(run, claim(len(run)))]
+    return out
