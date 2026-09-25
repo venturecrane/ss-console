@@ -139,13 +139,62 @@ def test_create_event_forces_normal_type(rec: _Recorder) -> None:
     }
 
 
-def test_update_event_partial(rec: _Recorder) -> None:
-    server.update_event(event_id="e-2", start_time="2026-08-01T09:00:00")
-    assert rec.calls[0] == {
-        "method": "PUT",
-        "path": "/events/e-2",
-        "json": {"startTime": "2026-08-01T09:00:00"},
+_LINKED_EVENT = {
+    "id": "e-2",
+    "type": "Normal",
+    "subject": "[Operator] Discovery: responses due",
+    "description": "From the firm's discovery chart.",
+    "startTime": "2026-09-25T00:00:00",
+    "endTime": "2026-09-26T00:00:00",
+    "allDay": True,
+    "timeZone": "America/Los_Angeles",
+    "matter": {"id": "m-9", "href": "https://api.smokeball.com/matters/m-9", "rel": "Matters"},
+    "attendees": [{"id": "s-1", "href": "https://api.smokeball.com/staff/s-1", "rel": "Staff"}],
+}
+
+
+def test_update_event_moving_a_date_keeps_the_matter_link(rec: _Recorder) -> None:
+    """PUT /events is a full replace (proven live 2026-09-24 on the A&P tenant,
+    vfy_01M3AYM2WQ7BT99SJF7M6JXBKZ): a PUT without matterId set the event's
+    matter to null, so a moved deadline dropped off the matter's calendar. The
+    tool must read the event and re-send its matter link, attendees, and every
+    other field the caller did not change."""
+    rec.responses["/events/e-2"] = dict(_LINKED_EVENT)
+    server.update_event(event_id="e-2", start_time="2026-10-09T00:00:00", end_time="2026-10-10T00:00:00")
+    assert rec.calls[0] == {"method": "GET", "path": "/events/e-2", "params": {}}
+    put = rec.calls[-1]
+    assert put["method"] == "PUT" and put["path"] == "/events/e-2"
+    assert put["json"] == {
+        "subject": "[Operator] Discovery: responses due",
+        "startTime": "2026-10-09T00:00:00",
+        "endTime": "2026-10-10T00:00:00",
+        "description": "From the firm's discovery chart.",
+        "allDay": True,
+        "timeZone": "America/Los_Angeles",
+        "matterId": "m-9",
+        "attendees": ["s-1"],
+        "type": "Normal",
     }
+
+
+def test_update_event_explicit_matter_id_relinks(rec: _Recorder) -> None:
+    rec.responses["/events/e-2"] = {**_LINKED_EVENT, "matter": None}
+    server.update_event(event_id="e-2", matter_id="m-9")
+    assert rec.calls[-1]["json"]["matterId"] == "m-9"
+
+
+def test_update_event_recurring_refuses_before_the_wire(rec: _Recorder) -> None:
+    rec.responses["/events/e-2"] = {**_LINKED_EVENT, "type": "Recurring"}
+    with pytest.raises(ValueError, match="recurring"):
+        server.update_event(event_id="e-2", start_time="2026-10-09T00:00:00")
+    assert [c for c in rec.calls if c["method"] == "PUT"] == []
+
+
+def test_update_event_without_any_attendee_refuses_before_the_wire(rec: _Recorder) -> None:
+    rec.responses["/events/e-2"] = {**_LINKED_EVENT, "attendees": []}
+    with pytest.raises(ValueError, match="attendee"):
+        server.update_event(event_id="e-2", start_time="2026-10-09T00:00:00")
+    assert [c for c in rec.calls if c["method"] == "PUT"] == []
 
 
 def test_create_event_reminder(rec: _Recorder) -> None:

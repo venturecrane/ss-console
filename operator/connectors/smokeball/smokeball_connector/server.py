@@ -35,6 +35,7 @@ from typing import Any
 from operator_connector_sdk.server import ConnectorServer
 
 from .client import SmokeballApiError, SmokeballClient, build_client_from_env
+from .event_update import put_event_update
 from .expense_ledger import drop_deleted as drop_deleted_expenses
 from .library import LOOKUP_FAILED, lookup_matter
 from .listing import contact_listing_is_complete as _contact_listing_is_complete
@@ -969,23 +970,19 @@ def update_event(
     all_day: bool | None = None,
     attendees: list[str] | None = None,
     time_zone: str | None = None,
+    matter_id: str | None = None,
 ) -> Any:
     """Update a calendar event — e.g. recompute a deadline when a trial date moves.
-    Only the supplied fields change. Non-recurring events only. INTERNAL_WRITE."""
-    return _get_client().request(
-        "PUT",
-        f"/events/{event_id}",
-        json=_body(
-            subject=subject,
-            startTime=start_time,
-            endTime=end_time,
-            description=description,
-            location=location,
-            allDay=all_day,
-            attendees=attendees,
-            timeZone=time_zone,
-        ),
-    )
+    Only the supplied fields change. Non-recurring events only. INTERNAL_WRITE.
+
+    Smokeball's ``PUT /events/{id}`` is a FULL REPLACE (proven live 2026-09-24,
+    vfy_01M3AYM2WQ7BT99SJF7M6JXBKZ): a PUT without ``matterId`` unlinked a moved
+    deadline from its matter. So this tool reads the event and re-sends its
+    matter link, attendees and every unchanged field (``event_update``).
+    ``matter_id`` changes the link only when passed."""
+    changes = dict(subject=subject, start_time=start_time, end_time=end_time, description=description)
+    changes.update(location=location, all_day=all_day, attendees=attendees, time_zone=time_zone)
+    return put_event_update(_get_client(), event_id, _verify_matter_reference, matter_id=matter_id, **changes)
 
 
 @server.tool()
