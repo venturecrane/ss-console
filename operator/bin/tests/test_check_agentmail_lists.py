@@ -317,6 +317,41 @@ def test_org_scope_non_403_failure_still_holds(monkeypatch, capsys):
 # ---------------------------------------------------------------------------
 
 
+def test_seat_inbox_prefers_the_authored_address_over_the_slug_convention():
+    # ss#2803: the scott seat's inbox is agentcrane@, not scott@. The vendor
+    # answers a lists GET on a non-existent inbox with an empty 200 page, so
+    # grading the derived address graded a phantom and could never find
+    # anything. The authored address is the one the broker sends from.
+    authored = {"connectors": {"Email": {"inbox_address": " AgentCrane@agentmail.to "}}}
+    assert lists.seat_inbox("scott", authored) == "agentcrane@agentmail.to"
+    assert lists.seat_inbox("pilot-smokeball", {}) == "pilot-smokeball@agentmail.to"
+    assert lists.seat_inbox("pilot-smokeball", {"connectors": {"Email": {"inbox_address": ""}}}) == (
+        "pilot-smokeball@agentmail.to"
+    )
+    assert lists.seat_inbox("pilot-smokeball", {"connectors": "not-a-map"}) == "pilot-smokeball@agentmail.to"
+
+
+def test_check_seat_reads_the_authored_inbox_not_the_derived_one(monkeypatch):
+    read: list[str] = []
+
+    def _fake_fetch(api_key, direction, kind, *, inbox=None, opener=None):
+        if inbox is not None:
+            read.append(inbox)
+        return []
+
+    monkeypatch.setattr(lists, "fetch_list", _fake_fetch)
+    monkeypatch.setattr(
+        lists,
+        "load_config",
+        lambda slug: {**_MINIMAL_CONFIG, "connectors": {"Email": {"inbox_address": "agentcrane@agentmail.to"}}},
+    )
+    monkeypatch.delenv("AGENTMAIL_API_KEY__SCOTT", raising=False)
+    report = lists.check_seat("scott", "shared-key", ([], []))
+    assert report.inbox == "agentcrane@agentmail.to"
+    assert read and set(read) == {"agentcrane@agentmail.to"}
+    assert "ok    agentcrane@agentmail.to [scott]" in lists.render([report])
+
+
 def test_seat_key_env_follows_the_provisioner_convention():
     assert lists.seat_key_env("pilot-smokeball") == "AGENTMAIL_API_KEY__PILOT_SMOKEBALL"
     assert lists.seat_key_env("scott") == "AGENTMAIL_API_KEY__SCOTT"

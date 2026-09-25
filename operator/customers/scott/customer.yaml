@@ -174,8 +174,12 @@ scope:
   domain_blocks: []
   # ADR 0067 channel constraint: the allowlist IS the inbound surface.
   # Exact addresses from the intake row; no domain wildcards at this tier.
+  # smdurgan@smdurgan.com added 2026-09-25 by the seat owner: the open-house
+  # POC proofs (#2793) are observed from the Gmail account the agents can
+  # read; the iCloud address from intake stays, and nothing else is widened.
   inbound_allow_from:
     - smdurgan@icloud.com
+    - smdurgan@smdurgan.com
 
 # ---- ESCALATION ----
 escalation:

@@ -612,7 +612,9 @@ ssh_exec "msgraph-read-app-cannot-send-on-send-as-seat" \
 # one-decision links, and the broker keeps no Sent Items copy of that email so
 # the only mailbox holding them is the approver's. That is worth nothing if the
 # agent's read app can read the approver's mailbox, which it can unless the
-# tenant scopes it with an ApplicationAccessPolicy. Ask Microsoft.
+# tenant scopes it with an ApplicationAccessPolicy. Ask Microsoft, about EVERY
+# approver: the scope group may hold staff mailboxes the firm authored for
+# reading, so one approver being out of it says nothing about the next.
 ssh_exec "msgraph-read-app-cannot-read-staff-mailbox" \
   "/opt/hermes/.venv/bin/python3 /app/msgraph-read-app-cannot-read-staff-probe.py /var/lib/smd-config/customer.yaml hermes"
 
