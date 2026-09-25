@@ -97,9 +97,10 @@ def write_row(
 
 
 # ---------------------------------------------------------------------------
-# The DECISION path's row, moved here from pre_run.py so that every
-# EMITTED_WAKE write -- blind and decided -- lives in one module. pre_run
-# keeps the deciding and the stdout wake line.
+# The DECISION path's accounting. The row itself is written by
+# skill_helpers.try_write_emitted_wake (shared with the verification tracker
+# since the 2026-09-25 review); this skill hands it ``plan_counts`` below,
+# which caps the way the wake line caps and fingerprints the digest.
 # ---------------------------------------------------------------------------
 
 #: Mirrors pre_run._MAX_SERIALIZED_PLANS. Duplicated deliberately: the
@@ -136,52 +137,3 @@ def plan_counts(decision: "WakeDecision") -> dict:
         admin = decision.digest.get("admin_confirms") or {}
         counts["digest_admin_total"] = int(admin.get("total") or 0)
     return counts
-
-
-async def try_write_emitted_wake(
-    audit_writer_factory,
-    decision,
-    *,
-    skill_name: str,
-    next_scheduled_at: str,
-) -> None:
-    """Best-effort EMITTED_WAKE row for a real-decision wake (#2253).
-
-    The suppress path logged its reasoning and the wake path logged nothing, so
-    the ledger held a record of every tick the gate stayed quiet and no record
-    of the ticks it fired. On 2026-08-10 the escalator woke with the Smokeball
-    connector down and sent an alert stating a date it could not read; the only
-    way anyone found it was reading the mailbox.
-
-    BEST-EFFORT IS THE CONTRACT, and it inverts the suppress path's on purpose.
-    Below, an audit failure escalates to a wake, because a silent suppress is
-    indistinguishable from a broken gate. Here the wake is already the decision,
-    so every failure — no writer wired, socket down, broker refusal, a writer
-    object too old to have the method — is swallowed. A wake that a failed audit
-    write could suppress or delay would be a gate made of observability.
-
-    It is not free, and the cost is stated rather than assumed away: the
-    broker-socket writer blocks for up to `_HEARTBEAT_TIMEOUT_SECONDS` against a
-    hung broker — the same bound the suppress path already accepts. Bounded, and
-    never a change of decision.
-
-    This is the DECIDED path. The decision-less path is ``write_row`` above,
-    which used to write nothing at all -- see this module's header for the
-    2026-09-02 tick that exposed it. The only wakes that still leave no row are
-    ``UNWRITABLE_BASES``, where the writer itself is the thing that failed.
-    """
-    try:
-        writer = audit_writer_factory()
-        if writer is None:
-            return
-        await writer.write_emitted_wake(
-            skill_name=skill_name,
-            pre_run_inputs=decision.pre_run_inputs_digest,
-            decision_basis=decision.decision_basis,
-            next_scheduled_at=next_scheduled_at,
-            extra_metadata={**decision.extra_metadata, **plan_counts(decision)},
-        )
-    except Exception as exc:  # noqa: BLE001 - observability never gates the wake; the failure is written to stderr and the wake proceeds
-        sys.stderr.write(
-            "[pre_run] blind-wake emitted-wake row write failed (" + type(exc).__name__ + ": " + str(exc) + ")\n"
-        )

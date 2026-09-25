@@ -6,29 +6,16 @@ No I/O, no state: every function here maps an untrusted payload value to a
 typed value or None, which is why they were the safe thing to move.
 
 Sibling module, path-loaded like ``blind_wake.py`` and ``handoff_writer.py``.
+
+``parse_iso_date`` and ``first_date`` lived here too, as copies of the shared
+``skill_helpers`` bodies; the pre_run calls ``_H.first_date`` now (code review
+2026-09-25, found when the sync gate's private-copy scan was widened from
+``pre_run.py`` to every skill module).
 """
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Sequence
-
-
-def parse_iso_date(value) -> date | None:
-    if not isinstance(value, str) or len(value) < 10:
-        return None
-    try:
-        return date.fromisoformat(value[:10])
-    except ValueError:
-        return None
-
-
-def first_date(item: dict, keys: Sequence[str]) -> date | None:
-    for key in keys:
-        parsed = parse_iso_date(item.get(key))
-        if parsed is not None:
-            return parsed
-    return None
 
 
 def first_str(item: dict, keys: Sequence[str]) -> str:

@@ -25,7 +25,11 @@
 import type { StripeWebhookEvent } from '../stripe/types'
 import { sendEmail } from '../email/resend'
 import { paymentConfirmationEmailHtml } from '../email/templates'
-import { alertTeam } from './stripe-subscription-shared'
+import { failedResponse } from '../api/failures'
+import { captureError } from '../observability/sentry'
+import { alertTeam, ok } from './stripe-subscription-shared'
+
+const AREA = 'webhook/stripe/invoice'
 
 /**
  * Look up an invoice by its Stripe invoice ID.
@@ -114,19 +118,13 @@ export async function handleInvoicePaid(
   const invoice = await getInvoiceByStripeId(db, stripeInvoiceId)
   if (!invoice) {
     console.log(`[stripe-handler] Unknown Stripe invoice: ${stripeInvoiceId}`)
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return ok()
   }
 
   // 2. Idempotency guard — if already paid, skip processing
   if (invoice.status === 'paid') {
     console.log(`[stripe-handler] Invoice ${invoice.id} already paid, skipping`)
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return ok()
   }
 
   // --- Phase 1: Atomic D1 batch ---
@@ -156,22 +154,16 @@ export async function handleInvoicePaid(
 
     await db.batch(batchStatements)
   } catch (err) {
-    // Batch failed — all changes rolled back. Safe to let the webhook retry.
-    console.error('[stripe-handler] Phase 1 batch failed:', err)
-    return new Response(JSON.stringify({ error: 'INTERNAL_ERROR' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    // Batch failed: all changes rolled back. Safe to let the webhook retry;
+    // Sentry hears each attempt.
+    return failedResponse(err, AREA)
   }
 
   // --- Phase 2: Side effects (best-effort) ---
 
   await announcePayment(db, resendApiKey, invoice, stripeInvoiceId)
 
-  return new Response(JSON.stringify({ ok: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  })
+  return ok()
 }
 
 /**
@@ -203,8 +195,9 @@ async function announcePayment(
       })
     }
   } catch (err) {
+    // Non-fatal: admin can send manually, and Sentry says one is owed.
     console.error('[stripe-handler] Failed to send payment confirmation email:', err)
-    // Non-fatal: admin can send manually
+    captureError(err, AREA)
   }
 
   await alertTeam(
@@ -233,18 +226,12 @@ export async function handleInvoicePaymentFailed(
   const invoice = await getInvoiceByStripeId(db, stripeInvoiceId)
   if (!invoice) {
     console.log(`[stripe-handler] Unknown Stripe invoice (payment_failed): ${stripeInvoiceId}`)
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return ok()
   }
 
   console.error(
     `[stripe-handler] Payment failed for invoice ${invoice.id} (Stripe: ${stripeInvoiceId}), amount: $${invoice.amount}`
   )
 
-  return new Response(JSON.stringify({ ok: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  })
+  return ok()
 }

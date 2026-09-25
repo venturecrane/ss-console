@@ -327,6 +327,31 @@ vars:
       Per-file page ceiling for a transcription (default 40). A file above it is
       refused EXPLICITLY (extraction none_scanned / over_page_cap), never read
       partially. The cost fence.
+  SMOKEBALL_POST_PAGE_CAP:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: infra
+    note: >-
+      The combined-post reader's OWN ceiling on pages sent to transcription from
+      one bundle (default 80). Only read_attachment_pages uses it; the shared
+      SMOKEBALL_VISION_PAGE_CAP still fences every other caller.
+  SMOKEBALL_VISION_WORKERS:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: infra
+    note: >-
+      Pages of one document transcribed at once (default 4, bounded 1..8). A
+      network wait, not CPU. Documents stay serialised by the connector's lock.
+  SMOKEBALL_VISION_LOCK_TIMEOUT_SECONDS:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: infra
+    note: >-
+      How long a second document waits for the one being transcribed (default
+      30) before it is refused explicitly with reason busy, having spent nothing.
   SMOKEBALL_VISION_MAX_BYTES:
     stage: mcp-subprocess
     requirement: optional

@@ -12,7 +12,8 @@
  * future Worker/CI context.
  *
  * Critical correctness invariant (see the #1308 critique): the portal reads
- * `personas_json` with `parseJsonRequired`, which THROWS on a shape mismatch —
+ * `personas_json` with `parsePersonas` (field-checked by ./persona-config-shape.ts
+ * since 2026-09-25), which THROWS on a shape mismatch —
  * a subtly-wrong row turns a safe "being configured" empty state into a 500 on
  * the live client portal. Two defenses live here:
  *   1. `personas_json` is narrowed to the exact read-side `PersonaConfig` shape

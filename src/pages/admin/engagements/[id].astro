@@ -99,7 +99,9 @@ const {
                               ? 'That contact already holds this role on the engagement.'
                               : error === 'not_found'
                                 ? 'Resource not found.'
-                                : 'An error occurred.'
+                                : error === 'line_items_unreadable'
+                                  ? "The quote's line items could not be read, so no invoice was created and the milestone is unchanged. Correct the quote's line items and try again."
+                                  : 'An error occurred.'
           }
         />
       )

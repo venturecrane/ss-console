@@ -13,6 +13,28 @@ import { listOutboxJobsForSignatureRequest, type OutboxJob, type SignatureReques
 import { sendEmail } from '../email/resend'
 import { portalWelcomeEmailHtml, signatureConfirmationEmailHtml } from '../email/templates'
 import { createStripeInvoice, sendStripeInvoice } from '../stripe/client'
+import { captureError } from '../observability/sentry'
+import { parseJsonRecord } from '../api/helpers'
+
+/**
+ * Read an outbox row's payload as a JSON object. The rows are written by the
+ * finalize batch, but a payload that does not carry what a job reads throws
+ * here, so the loop below marks the job failed with the reason instead of
+ * sending to `undefined` (review 2026-09-25, Code Quality 2).
+ */
+function readJobPayload(job: OutboxJob): Record<string, unknown> {
+  const payload = parseJsonRecord(job.payload_json)
+  if (!payload) throw new Error(`Outbox job ${job.id} (${job.type}) payload is not a JSON object`)
+  return payload
+}
+
+function requireString(job: OutboxJob, payload: Record<string, unknown>, key: string): string {
+  const value = payload[key]
+  if (typeof value !== 'string') {
+    throw new Error(`Outbox job ${job.id} (${job.type}) payload is missing ${key}`)
+  }
+  return value
+}
 
 // prettier-ignore
 export function okResponse(): Response {
@@ -26,7 +48,7 @@ export function unknownDocumentResponse(documentId: string): Response {
 
 // prettier-ignore
 export async function handleSignedEmailJob(db: D1Database, orgId: string, resendApiKey: string | undefined, job: OutboxJob): Promise<void> {
-  const payload = JSON.parse(job.payload_json) as { entity_id: string }
+  const payload = { entity_id: requireString(job, readJobPayload(job), 'entity_id') }
   const contact = await db
     .prepare(
       'SELECT email FROM contacts WHERE org_id = ? AND entity_id = ? AND email IS NOT NULL ORDER BY created_at ASC LIMIT 1'
@@ -57,9 +79,10 @@ export async function handleSignedEmailJob(db: D1Database, orgId: string, resend
 
 // prettier-ignore
 export async function handlePortalInvitationJob(_db: D1Database, _orgId: string, resendApiKey: string | undefined, appBaseUrl: string | undefined, job: OutboxJob): Promise<void> {
-  const payload = JSON.parse(job.payload_json) as {
-    user_email: string
-    user_name: string
+  const raw = readJobPayload(job)
+  const payload = {
+    user_email: requireString(job, raw, 'user_email'),
+    user_name: requireString(job, raw, 'user_name'),
   }
 
   if (!resendApiKey) {
@@ -91,12 +114,17 @@ export async function handleDepositInvoiceJob(
   stripeApiKey: string | undefined,
   job: OutboxJob
 ): Promise<void> {
-  const payload = JSON.parse(job.payload_json) as {
-    entity_id: string
-    quote_id: string
-    engagement_id: string
-    invoice_id: string
-    amount: number
+  const raw = readJobPayload(job)
+  const amount = raw.amount
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) {
+    throw new Error(`Outbox job ${job.id} (${job.type}) payload amount is not a number`)
+  }
+  const payload = {
+    entity_id: requireString(job, raw, 'entity_id'),
+    quote_id: requireString(job, raw, 'quote_id'),
+    engagement_id: requireString(job, raw, 'engagement_id'),
+    invoice_id: requireString(job, raw, 'invoice_id'),
+    amount,
   }
 
   if (!stripeApiKey) return
@@ -124,7 +152,7 @@ export async function handleDepositInvoiceJob(
   const invoiceDescription =
     authoredOverview && authoredOverview.length > 0 ? authoredOverview : 'Deposit invoice'
 
-  const amountCents = Math.round((payload.amount ?? 0) * 100)
+  const amountCents = Math.round(payload.amount * 100)
   const stripeResult = await createStripeInvoice(stripeApiKey, {
     customer_email: contact.email,
     description: invoiceDescription,
@@ -195,6 +223,7 @@ export async function processOutboxJobsForSignatureRequest(db: D1Database, reque
         .run()
     } catch (err) {
       console.error('[sow/outbox] Job failed:', job.type, err)
+      captureError(err, 'sow/outbox')
       await db
         .prepare(
           `UPDATE outbox_jobs

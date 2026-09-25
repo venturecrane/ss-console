@@ -35,14 +35,11 @@ import {
 // unchanged; VERTICAL_FLOORS, checkFloor, changeDirection,
 // verticalFloorActionClasses and FloorCheck have no production importer via
 // this path and are imported from
-// src/lib/operator/vertical-floors directly (tests included).
-export {
-  getVerticalFloor,
-  isCeiling,
-  restrictiveness,
-  type Ceiling,
-  type ChangeDirection,
-} from '../../operator/vertical-floors'
+// src/lib/operator/vertical-floors directly (tests included). getVerticalFloor
+// and restrictiveness left this list on 2026-09-25, when their last production
+// importer through here (admin/governance.ts) moved to the neutral home
+// (review 2026-09-25, Architecture 6).
+export { isCeiling, type Ceiling, type ChangeDirection } from '../../operator/vertical-floors'
 
 export type ConfigChangeType = 'entitlement_exposure' | 'entitlement_initiation' | 'skill_enabled'
 export type ConfigChangeOutcome = 'accepted' | 'rejected_floor' | 'rejected_invalid'

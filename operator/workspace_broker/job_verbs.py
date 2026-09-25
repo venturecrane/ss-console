@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .broker_context import BrokerContext
 from .job_ledger import LEASE_TTL_SECONDS, now_and_lease_cutoff
 
 VERBS: tuple[str, ...] = (
@@ -31,7 +32,7 @@ VERBS: tuple[str, ...] = (
 )
 
 
-def _ledger(broker: Any) -> Any:
+def _ledger(broker: BrokerContext) -> Any:
     if broker.job_ledger is None:
         raise ValueError("job ledger not configured on this broker")
     return broker.job_ledger
@@ -58,7 +59,9 @@ def _step_key(action: str, request: dict[str, Any]) -> str:
     return step_key
 
 
-def job_create(broker: Any, _action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def job_create(
+    broker: BrokerContext, _action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     row = request.get("row")
     if not isinstance(row, dict):
         raise ValueError("job_create requires a 'row' object")
@@ -66,31 +69,39 @@ def job_create(broker: Any, _action: str, request: dict[str, Any], _pid: int, _u
 
 
 def job_list_claimable(
-    broker: Any, _action: str, _request: dict[str, Any], _pid: int, _uid: int | None
+    broker: BrokerContext, _action: str, _request: dict[str, Any], _pid: int, _uid: int | None
 ) -> dict[str, Any]:
     now, cutoff = now_and_lease_cutoff(LEASE_TTL_SECONDS)
     return {"ok": True, "jobs": _ledger(broker).list_claimable(now, cutoff)}
 
 
-def job_list(broker: Any, _action: str, _request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def job_list(
+    broker: BrokerContext, _action: str, _request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     # Observability read: every job row (terminal + live), newest first. Powers
     # the console's ``jobs`` runtime-read kind so the worker is verifiable end
     # to end over HTTPS. Read-only; no lease filter.
     return {"ok": True, "jobs": _ledger(broker).list_all()}
 
 
-def job_read(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def job_read(
+    broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     return {"ok": True, "job": _ledger(broker).read(_job_id(action, request))}
 
 
-def job_cancel(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def job_cancel(
+    broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     # ``ok`` == request processed; ``result`` == the verb's boolean outcome.
     # Keeping them separate lets a legitimately-false outcome (a fenced-out
     # record) return False instead of reading as a transport refusal.
     return {"ok": True, "result": _ledger(broker).request_cancel(_job_id(action, request))}
 
 
-def job_claim(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def job_claim(
+    broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     ledger = _ledger(broker)
     job_id = _job_id(action, request)
     worker_id = str(request.get("worker_id") or "")
@@ -100,7 +111,9 @@ def job_claim(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid
     return {"ok": True, "lease_epoch": ledger.claim(job_id, worker_id, now, cutoff)}
 
 
-def job_heartbeat(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def job_heartbeat(
+    broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     ledger = _ledger(broker)
     job_id = _job_id(action, request)
     epoch = _epoch(action, request)
@@ -108,7 +121,9 @@ def job_heartbeat(broker: Any, action: str, request: dict[str, Any], _pid: int, 
     return {"ok": True, "result": ledger.heartbeat(job_id, epoch, now)}
 
 
-def job_record(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def job_record(
+    broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     ledger = _ledger(broker)
     job_id = _job_id(action, request)
     epoch = _epoch(action, request)
@@ -118,7 +133,9 @@ def job_record(broker: Any, action: str, request: dict[str, Any], _pid: int, _ui
     return {"ok": True, "result": ledger.record(job_id, epoch, fields)}
 
 
-def job_idem_begin(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def job_idem_begin(
+    broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     ledger = _ledger(broker)
     job_id = _job_id(action, request)
     epoch = _epoch(action, request)
@@ -126,7 +143,9 @@ def job_idem_begin(broker: Any, action: str, request: dict[str, Any], _pid: int,
     return {"ok": True, "decision": ledger.idempotency_begin(job_id, step_key, epoch)}
 
 
-def job_idem_complete(broker: Any, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def job_idem_complete(
+    broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     ledger = _ledger(broker)
     job_id = _job_id(action, request)
     epoch = _epoch(action, request)
@@ -135,7 +154,7 @@ def job_idem_complete(broker: Any, action: str, request: dict[str, Any], _pid: i
 
 
 def unknown_job_action(
-    broker: Any, action: str, _request: dict[str, Any], _pid: int, _uid: int | None
+    broker: BrokerContext, action: str, _request: dict[str, Any], _pid: int, _uid: int | None
 ) -> dict[str, Any]:
     """A ``job_*`` name the table does not carry: the old prefix dispatcher's
     vocabulary, kept so a misspelt job verb still names itself in the reply."""

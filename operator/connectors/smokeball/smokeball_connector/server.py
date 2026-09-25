@@ -1137,7 +1137,8 @@ def read_document(matter_id: str, file_id: str, max_chars: int = 40000, offset: 
     it is a gap for a person to fill, never something to infer. ``none_scanned``
     means the file is paper this tool could not read at all; ``extractionReason``
     says why (``no_credential``, ``over_page_cap``, ``over_byte_cap``,
-    ``api_error``, ``truncated``, ``incomplete_transcription``, ``disabled``)
+    ``api_error``, ``truncated``, ``incomplete_transcription``, ``disabled``,
+    ``busy`` — another scan was being read; ask again in a few minutes)
     and ``needsHumanRead`` is true. That is never an empty document — say so
     rather than treating silence as content."""
     from .extract import METHOD_NONE_SCANNED, UnsupportedDocumentError, extract_text_ex

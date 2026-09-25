@@ -20,6 +20,9 @@ import { recordBookingError } from '../booking/alerts'
 import { getMeeting } from '../db/meetings'
 import { ORG_ID } from '../constants'
 import type { ResendWebhookPayload } from './resend-handler'
+import { captureError } from '../observability/sentry'
+
+const AREA = 'webhook/resend/booking-failure'
 
 /** Resend event types that mean the guest did not receive the email. */
 const FAILURE_EVENT_TYPES = new Set([
@@ -103,6 +106,7 @@ export async function handleBookingEmailDeliveryFailure(
       entityId = meeting?.entity_id
     } catch (err) {
       console.error('[webhook/resend] booking-failure: meeting lookup failed:', err)
+      captureError(err, AREA)
     }
   }
 
@@ -119,6 +123,7 @@ export async function handleBookingEmailDeliveryFailure(
     })
   } catch (err) {
     console.error('[webhook/resend] booking-failure: recordBookingError failed:', err)
+    captureError(err, AREA)
   }
 
   return { handled: true, entityId: entityId ?? null }

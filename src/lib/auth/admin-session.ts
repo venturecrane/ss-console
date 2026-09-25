@@ -11,6 +11,7 @@
  *     only as a portal fallback for in-flight client invitations.
  */
 import { resolveAdminSessionFromClerk } from './admin-session-shim'
+import { errorResponse } from '../api/helpers'
 
 export interface AdminSession {
   userId: string
@@ -62,9 +63,12 @@ export async function resolveAdminSessionForRoute(
   return resolved ? { ...resolved, role: 'admin' } : null
 }
 
+/**
+ * The 401 every admin API route answers with, in the catalog vocabulary
+ * (src/lib/api/errors.ts). It was `{ error: 'Unauthorized' }` until
+ * 2026-09-25, a sentence in the code slot for the 99 routes that share it
+ * (review 2026-09-25, Code Quality 5).
+ */
 function adminUnauthorizedResponse(): Response {
-  return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-    status: 401,
-    headers: { 'Content-Type': 'application/json' },
-  })
+  return errorResponse(401, 'unauthorized')
 }

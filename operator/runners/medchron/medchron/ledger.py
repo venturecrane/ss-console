@@ -18,6 +18,7 @@ Best-effort by design: a ledger failure must never kill a paid call.
 from __future__ import annotations
 
 import json
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -80,8 +81,10 @@ class Ledger:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with self.path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(rec) + "\n")
-        except Exception:  # noqa: BLE001 - never kill a paid call over its receipt
-            pass
+        except Exception as exc:  # noqa: BLE001 - never kill a paid call over its receipt
+            # The receipt is how spend is reconciled against the budget; a
+            # lost one is an undercount, so it is never lost silently.
+            sys.stderr.write(f"medchron: usage receipt not written to {self.path} ({type(exc).__name__}: {exc})\n")
 
 
 def read_rows(path: Path) -> list[dict[str, Any]]:
