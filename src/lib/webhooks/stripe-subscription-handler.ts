@@ -35,14 +35,11 @@ import {
   type SubscriptionBillingRow,
 } from '../db/subscriptions'
 
-import {
-  ALERT_EMAIL,
-  alertTeam,
-  entityName,
-  ok,
-  serverError,
-  unixToIso,
-} from './stripe-subscription-shared'
+import { failedResponse } from '../api/failures'
+import { captureError } from '../observability/sentry'
+import { ALERT_EMAIL, alertTeam, entityName, ok, unixToIso } from './stripe-subscription-shared'
+
+const AREA = 'webhook/stripe/subscription'
 
 /**
  * Whether an invoice belongs to a subscription, and — when it does not read
@@ -140,8 +137,8 @@ function subscriptionSignal(
 /**
  * An invoice signalled a subscription linkage this code cannot read.
  *
- * Loud on three surfaces, because each catches a different reader: an error
- * log (Sentry), an operational alert to the firm, and a non-2xx so the
+ * Loud on three surfaces, because each catches a different reader: a Sentry
+ * event, an operational alert to the firm, and a non-2xx so the
  * delivery shows as FAILED in Stripe's own dashboard. Acking would leave a
  * retainer invoice unmirrored with nothing anywhere saying so.
  *
@@ -156,8 +153,8 @@ export async function handleUnrecognizedInvoiceLinkage(
   invoiceId: string,
   reason: string
 ): Promise<Response> {
-  console.error(
-    `[stripe-subscription] UNRECOGNIZED subscription linkage on ${eventType} for invoice ${invoiceId}: ${reason}. Invoice NOT mirrored.`
+  const unrecognized = new Error(
+    `UNRECOGNIZED subscription linkage on ${eventType} for invoice ${invoiceId}: ${reason}. Invoice NOT mirrored.`
   )
   try {
     await sendEmail(resendApiKey, {
@@ -173,8 +170,9 @@ export async function handleUnrecognizedInvoiceLinkage(
     })
   } catch (err) {
     console.error('[stripe-subscription] unrecognized-linkage alert failed:', err)
+    captureError(err, AREA)
   }
-  return serverError()
+  return failedResponse(unrecognized, AREA)
 }
 
 /** The subscription-metadata snapshot Stripe stamps on every invoice a
@@ -290,8 +288,7 @@ export async function handleRetainerInvoiceFinalized(
       .run()
     return ok()
   } catch (err) {
-    console.error('[stripe-subscription] finalized mirror failed:', err)
-    return serverError() // let Stripe retry
+    return failedResponse(err, AREA) // a 500 lets Stripe retry; Sentry hears each one
   }
 }
 
@@ -403,8 +400,7 @@ export async function handleRetainerInvoicePaid(
     try {
       sub = await bindSubscriptionFromInvoiceMetadata(db, stripeSubscriptionId, invoice)
     } catch (err) {
-      console.error('[stripe-subscription] ordering-fallback bind failed:', err)
-      return serverError() // let Stripe retry
+      return failedResponse(err, AREA) // a 500 lets Stripe retry; Sentry hears each one
     }
   }
   if (!sub) {
@@ -429,8 +425,7 @@ export async function handleRetainerInvoicePaid(
       await activateOperatorSubscriptionForBilling(db, sub.id)
     }
   } catch (err) {
-    console.error('[stripe-subscription] paid mirror failed:', err)
-    return serverError() // let Stripe retry
+    return failedResponse(err, AREA) // a 500 lets Stripe retry; Sentry hears each one
   }
 
   // Phase 2: emails, best-effort. The client is thanked; team@ is told the
@@ -479,6 +474,7 @@ async function sendRetainerConfirmationEmail(
     })
   } catch (err) {
     console.error('[stripe-subscription] confirmation email failed:', err)
+    captureError(err, AREA)
   }
 }
 
@@ -505,8 +501,7 @@ export async function handleRetainerInvoicePaymentFailed(
       .bind(invoice.id)
       .run()
   } catch (err) {
-    console.error('[stripe-subscription] overdue update failed:', err)
-    return serverError()
+    return failedResponse(err, AREA)
   }
 
   try {
@@ -528,6 +523,7 @@ export async function handleRetainerInvoicePaymentFailed(
     })
   } catch (err) {
     console.error('[stripe-subscription] failure alert email failed:', err)
+    captureError(err, AREA)
   }
 
   return ok()

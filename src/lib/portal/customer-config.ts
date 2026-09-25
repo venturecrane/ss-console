@@ -20,6 +20,7 @@
  */
 
 import { parseMcpConnector } from '../operator/mcp/connector-projection'
+import { readPersonaConfigs } from './persona-config-shape'
 import { parseAuthorityPosture, type AuthorityPosture } from '../operator/authority'
 import { validateRoutineGrid, type RoutineGrid } from '../operator/routine-grid'
 import {
@@ -210,24 +211,37 @@ export interface CustomerConfigDbRow {
  * for ensuring the projection is well-formed; a malformed JSON column is a
  * corruption signal, not a routine condition to recover from.
  */
-function parseJsonNullable<T>(value: string | null | undefined): T | null {
+function parseJsonNullable(value: string | null | undefined): unknown {
   // null = column is SQL NULL; undefined = column absent from the row (e.g. a
   // freshly-added projection column a row predates, or a partial test row).
   // Both mean "no value" — only a present, malformed JSON string is corruption.
   if (value === null || value === undefined) return null
-  return JSON.parse(value) as T
+  const parsed: unknown = JSON.parse(value)
+  return parsed
 }
 
 /**
- * Parse a required JSON column. Throws on null OR malformed JSON — both are
- * corruption signals at the projection layer.
+ * Parse the required personas column and check it against the projected
+ * shape. Throws on null, malformed JSON, or a shape mismatch: all three are
+ * corruption signals at the projection layer (persona-config-shape.ts).
  */
-function parseJsonRequired<T>(value: string, column: string, entityId: string): T {
+function parsePersonas(value: string, entityId: string): PersonaConfig[] {
+  let parsed: unknown
   try {
-    return JSON.parse(value) as T
+    parsed = JSON.parse(value)
   } catch (err) {
     throw new Error(
-      `customer_configs.${column} is malformed JSON for entity_id=${entityId}: ${
+      `customer_configs.personas_json is malformed JSON for entity_id=${entityId}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+      { cause: err }
+    )
+  }
+  try {
+    return readPersonaConfigs(parsed)
+  } catch (err) {
+    throw new Error(
+      `customer_configs.personas_json does not match the projected shape for entity_id=${entityId}: ${
         err instanceof Error ? err.message : String(err)
       }`,
       { cause: err }
@@ -244,7 +258,7 @@ export { parseMcpConnector }
 /**
  * Resolve the projected `routine_grid_json` column into a runtime `RoutineGrid`.
  *
- * DELIBERATELY FAIL-SOFT, unlike `parseJsonRequired` (used for personas_json,
+ * DELIBERATELY FAIL-SOFT, unlike `parsePersonas` (used for personas_json,
  * which THROWS): a null column, malformed JSON, or a value that fails the
  * routine-grid validator all resolve to `null` rather than throwing. Two
  * reasons, the same shape as `parseMcpConnector`:
@@ -275,7 +289,7 @@ export function projectRow(row: CustomerConfigDbRow): CustomerConfigRow {
     org_id: row.org_id,
     customer_slug: row.customer_slug,
     schema_version: row.schema_version,
-    personas: parseJsonRequired<PersonaConfig[]>(row.personas_json, 'personas_json', row.entity_id),
+    personas: parsePersonas(row.personas_json, row.entity_id),
     voice_library: parseJsonNullable(row.voice_library_json),
     seat: parseJsonNullable(row.seat_json),
     output_classes: parseJsonNullable(row.output_classes_json),

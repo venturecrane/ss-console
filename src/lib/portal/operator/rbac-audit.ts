@@ -159,7 +159,7 @@ export function buildInviteAuditEvent(input: BuildInviteEventInput): InviteSentA
  * Async to match the eventual bridge shape so callers stay stable
  * when #821 lands. The Promise.resolve keeps the body sync today.
  */
-// eslint-disable-next-line @typescript-eslint/require-await
+// eslint-disable-next-line @typescript-eslint/require-await -- async on purpose: this is the #821 bridge signature, so callers do not change when it lands
 export async function recordRbacAuditEvent(event: RbacAuditEvent): Promise<void> {
   console.info(JSON.stringify(event))
 }

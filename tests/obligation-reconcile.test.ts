@@ -733,6 +733,52 @@ describe('closing: a row whose evidence reads true actually moves', () => {
     expect(obligationWrites()).toHaveLength(0)
   })
 
+  const changeRequestRow = (over: Record<string, unknown> = {}) =>
+    row({
+      origin: 'imported',
+      kind: 'external_dependency',
+      state: 'open',
+      source_ref: 'operator_change_requests:3',
+      evidence_class: 'probeable',
+      evidence_surface: 'd1',
+      evidence_locator: 'operator_change_requests:3',
+      ...over,
+    })
+
+  it('cancels, not verifies, an imported row whose change request was declined', () => {
+    // A declined request is settled but nothing was delivered. Walking it to
+    // verified would record work nobody did; leaving it open kept it owed
+    // forever, which is what cr-3 did for 72 days.
+    setState({ obligations: [changeRequestRow()], change_requests: [{ status: 'declined' }] })
+    const result = run()
+    expect(statesWritten()).toEqual(['cancelled'])
+    expect(readState().obligations[0].state).toBe('cancelled')
+    expect(obligationWrites()[0]).toMatch(/source withdrew the ask: operator_change_requests:3/)
+    expect(result.stdout).toMatch(/withdrawn this run:\s+1/)
+  })
+
+  it('still verifies an imported row whose change request was resolved', () => {
+    setState({ obligations: [changeRequestRow()], change_requests: [{ status: 'resolved' }] })
+    run()
+    expect(statesWritten()).toEqual(['delivered', 'verified'])
+  })
+
+  it('leaves an imported row open while its change request is open', () => {
+    setState({ obligations: [changeRequestRow()], change_requests: [{ status: 'open' }] })
+    run()
+    expect(obligationWrites()).toHaveLength(0)
+  })
+
+  it('never cancels a captured row on a withdrawn probe', () => {
+    setState({
+      obligations: [changeRequestRow({ origin: 'captured' })],
+      change_requests: [{ status: 'declined' }],
+    })
+    const result = run()
+    expect(obligationWrites()).toHaveLength(0)
+    expect(result.stdout).toMatch(/not cancelled: a captured row probed withdrawn/)
+  })
+
   it('does not recount a row that is already verified', () => {
     const verified = { ...clearedAlertRow('verified'), reconcile_run_id: 'r0' }
     setState({ obligations: [verified], alert_probe: [] })

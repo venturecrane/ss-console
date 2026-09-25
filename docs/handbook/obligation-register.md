@@ -117,7 +117,7 @@ The second form matters as much as the first. Without it, "we looked and owe not
 
 A row leaves the list when the nightly run moves it to `verified`. It gets there two ways, depending on where it came from.
 
-**A derived row closes from its source.** When the issue closes, the alert condition clears, or the change request is completed, the run walks the row through `delivered` to `verified` on its own. Nobody marks it. Because a closed `client:<slug>` issue is taken as the evidence, close one only when that client can actually do the thing, not when the PR merges.
+**A derived row closes from its source.** When the issue closes, the alert condition clears, or the change request is completed, the run walks the row through `delivered` to `verified` on its own. Nobody marks it. A declined change request is settled differently: nothing was delivered, so the run moves its row to `cancelled`, never to `verified`. Because a closed `client:<slug>` issue is taken as the evidence, close one only when that client can actually do the thing, not when the PR merges.
 
 **A letter row closes from the letter that kept it.** When a session sends the letter that delivers on a promise, it records the delivery:
 

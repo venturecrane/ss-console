@@ -2,7 +2,7 @@
 
 ``_canonicalize_roster_entry`` decides who a roster line names when a send is
 classified on the seat. ``canonRosterAddress``
-(``src/lib/operator/customer-yaml/sections-scope.ts``) decides whether two
+(``src/lib/operator/customer-yaml/helpers.ts``) decides whether two
 authored spellings are "the same address" for the console validator's collision
 rules. When they disagree, a config passes validation as two addresses and
 resolves at runtime to one -- one human holding two silent exposure classes.

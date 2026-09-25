@@ -8,7 +8,7 @@
  * Bearer HMAC-SHA256(OPERATOR_MCP_WEBHOOK_SECRET, slug), the same
  * console-proxy key as /mcp/turn), and records the governance row in
  * `operator_pause_events`. Resume rides the existing clear transport
- * (`src/lib/admin/sticky-stop-clear.ts`) — the state machine's only
+ * (`src/lib/operator/sticky-stop-clear.ts`) — the state machine's only
  * backward transition — and records through the same table so pause and
  * resume land in one client-readable record.
  *
@@ -27,7 +27,7 @@ import {
   clearStopOnMachine,
   type GateClearResult,
   type StickyStopClearEnv,
-} from '../../admin/sticky-stop-clear'
+} from '../../operator/sticky-stop-clear'
 
 export type PauseAction = 'pause' | 'resume'
 

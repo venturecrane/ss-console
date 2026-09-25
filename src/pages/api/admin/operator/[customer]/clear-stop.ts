@@ -18,7 +18,7 @@ import type { APIContext, APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 import { resolveEntityIdBySlug } from '../../../../../lib/admin/operator-overview'
 import { requireAdminSession } from '../../../../../lib/auth/admin-session'
-import { clearStopOnMachine, recordStopClear } from '../../../../../lib/admin/sticky-stop-clear'
+import { clearStopOnMachine, recordStopClear } from '../../../../../lib/operator/sticky-stop-clear'
 
 function redirect(slug: string, status: string): Response {
   const target = `/admin/operator/${encodeURIComponent(slug)}?clear=${encodeURIComponent(status)}`

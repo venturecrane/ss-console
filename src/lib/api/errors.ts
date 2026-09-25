@@ -27,6 +27,7 @@ export const API_ERROR_CATALOG = {
   invalid_body: 'The request body is not valid.',
   invalid_email: 'Invalid email address.',
   invalid_action: 'Unknown action.',
+  method_not_allowed: 'Method not allowed.',
   invalid_action_class: 'Unknown action class.',
   invalid_level: 'Unknown level.',
   invalid_profile: 'Unknown profile.',

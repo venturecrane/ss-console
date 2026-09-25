@@ -178,19 +178,26 @@ function locationOf(res: Response): string {
 }
 
 async function seedConfig(vertical: string | null): Promise<void> {
+  // The projected shape (customer-config-projection.ts toPersonaConfig):
+  // getCustomerConfig checks every field of it on read.
   const personas = [
     {
       slug: 'marcus',
       status: 'active',
       name: 'Marcus',
+      title: null,
+      signature_html: null,
+      tone: [],
+      send_as: null,
       entitlements: { exposure: { external_send: 'draft_for_review' } },
       skills: [
         {
           name: 'inbox-triage',
-          enabled: true,
           initiation: { manual: true, scheduled: false, webhook: false },
         },
       ],
+      cron: [],
+      channel_bindings: [],
     },
   ]
   await testEnv.DB.prepare(

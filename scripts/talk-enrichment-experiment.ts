@@ -52,28 +52,34 @@ async function lookupPlaces(
     }),
   })
   if (!response.ok) return null
-  const data = (await response.json()) as {
-    places?: Array<{
-      displayName?: { text?: string }
-      nationalPhoneNumber?: string
-      websiteUri?: string
-      rating?: number
-      userRatingCount?: number
-      businessStatus?: string
-      formattedAddress?: string
-    }>
-  }
-  const place = data.places?.[0]
-  if (!place) return null
+  const data: unknown = await response.json()
+  const places = isObject(data) ? data.places : undefined
+  const place: unknown = Array.isArray(places) ? places[0] : undefined
+  if (!isObject(place)) return null
+  const displayName = isObject(place.displayName) ? place.displayName.text : undefined
   return {
-    displayName: place.displayName?.text ?? null,
-    phone: place.nationalPhoneNumber ?? null,
-    website: place.websiteUri ?? null,
-    address: place.formattedAddress ?? null,
-    rating: place.rating ?? null,
-    reviewCount: place.userRatingCount ?? null,
-    businessStatus: place.businessStatus ?? null,
+    displayName: typeof displayName === 'string' ? displayName : null,
+    phone: stringOrNull(place.nationalPhoneNumber),
+    website: stringOrNull(place.websiteUri),
+    address: stringOrNull(place.formattedAddress),
+    rating: numberOrNull(place.rating),
+    reviewCount: numberOrNull(place.userRatingCount),
+    businessStatus: stringOrNull(place.businessStatus),
   }
+}
+
+// The Places response is read field by field, never cast (review 2026-09-25,
+// Code Quality 2).
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+function stringOrNull(v: unknown): string | null {
+  return typeof v === 'string' ? v : null
+}
+
+function numberOrNull(v: unknown): number | null {
+  return typeof v === 'number' ? v : null
 }
 
 interface TestCase {
