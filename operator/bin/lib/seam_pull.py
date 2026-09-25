@@ -39,16 +39,19 @@ from __future__ import annotations
 import csv
 import hashlib
 import hmac
+import http.client
 import json
 import logging
 import os
 import sqlite3
+import ssl
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional, Sequence
 
 log = logging.getLogger("aie.bin.seam_pull")
 
@@ -88,6 +91,27 @@ CHAIN_LINK_COLUMNS: tuple[str, ...] = ("prev_hash", "row_hash")
 
 _PAGE_LIMIT = 200  # overlay MAX_LIMIT
 
+# Bounded retry for TRANSIENT transport failures only. Every seam read is an
+# idempotent GET, so a second attempt cannot duplicate anything. Without this a
+# single dropped TLS connection held a whole day's control: unaudited-send on
+# 2026-09-24 (SSL handshake timeout) and audit-chain-verify on 2026-09-25
+# (SSL UNEXPECTED_EOF), both on a seat that read cleanly the day before and
+# after. A hold is loud by design, so a one-packet blip reddened main and
+# raised an alert nobody could act on. Auth refusals, 404s and malformed
+# payloads are NOT retried: those are real, and must surface on attempt one.
+_RETRY_DELAYS_SECONDS: tuple[float, ...] = (2.0, 6.0)
+_RETRYABLE_HTTP_STATUS = frozenset({429, 500, 502, 503, 504})
+
+
+def _is_transient(exc: BaseException) -> bool:
+    """True only for failures a retry of the same idempotent GET can fix."""
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code in _RETRYABLE_HTTP_STATUS
+    if isinstance(exc, urllib.error.URLError):
+        # DNS, refused, reset, TLS EOF/handshake: all arrive wrapped here.
+        return True
+    return isinstance(exc, (ssl.SSLError, ConnectionError, TimeoutError, http.client.HTTPException))
+
 
 def derive_runtime_read_key(master: str, slug: str) -> str:
     """Derive the per-customer seam bearer — MUST match provision-customer.sh
@@ -99,7 +123,16 @@ def derive_runtime_read_key(master: str, slug: str) -> str:
 class SeamClient:
     """Minimal authenticated reader for one Machine's runtime-read seam."""
 
-    def __init__(self, *, base_url: str, slug: str, key: str, timeout_seconds: float = 30.0):
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        slug: str,
+        key: str,
+        timeout_seconds: float = 30.0,
+        retry_delays: Sequence[float] = _RETRY_DELAYS_SECONDS,
+        sleep: Callable[[float], None] = time.sleep,
+    ):
         # Scheme is enforced HERE, fail-closed: urllib follows file:// and
         # ftp:// schemes, so a poisoned OPERATOR_RUNTIME_READ_URL must die at
         # construction, never reach urlopen.
@@ -109,6 +142,43 @@ class SeamClient:
         self._slug = slug
         self._key = key
         self._timeout = timeout_seconds
+        self._retry_delays = tuple(retry_delays)
+        self._sleep = sleep
+
+    def _get_json(self, url: str) -> object:
+        """GET ``url`` with the seam auth headers; retry transient failures.
+
+        Raises the LAST error once attempts are exhausted, so callers keep the
+        fail-loud contract: a pull that never succeeded is never a partial pull.
+        """
+        attempts = len(self._retry_delays) + 1
+        for attempt in range(attempts):
+            req = urllib.request.Request(  # noqa: S310 - https enforced at SeamClient construction; the path is a module literal
+                url,
+                headers={
+                    "Authorization": f"Bearer {self._key}",
+                    "X-Tenant-Slug": self._slug,
+                },
+                method="GET",
+            )
+            try:
+                # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected — scheme is constructor-enforced https:// (file:// and ftp:// raise at SeamClient init); the host comes from operator env staged by Infisical, and every path segment is a module constant.
+                with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # noqa: S310 — https enforced at construction
+                    return json.loads(resp.read().decode("utf-8"))
+            except Exception as exc:  # classified below; a non-transient error re-raises at once
+                if attempt == attempts - 1 or not _is_transient(exc):
+                    raise
+                delay = self._retry_delays[attempt]
+                log.warning(
+                    "seam read %s: transient %s on attempt %d/%d; retrying in %.0fs",
+                    self._slug,
+                    type(exc).__name__,
+                    attempt + 1,
+                    attempts,
+                    delay,
+                )
+                self._sleep(delay)
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def read_page(self, kind: str, *, cursor: Optional[str] = None, table: Optional[str] = None) -> dict:
         params: dict[str, str] = {"limit": str(_PAGE_LIMIT)}
@@ -117,17 +187,7 @@ class SeamClient:
         if table:
             params["table"] = table
         url = f"{self._base}/runtime/{kind}?{urllib.parse.urlencode(params)}"
-        req = urllib.request.Request(  # noqa: S310 - https enforced at SeamClient construction; the path is a module literal
-            url,
-            headers={
-                "Authorization": f"Bearer {self._key}",
-                "X-Tenant-Slug": self._slug,
-            },
-            method="GET",
-        )
-        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected — scheme is constructor-enforced https:// (file:// and ftp:// raise at SeamClient init); the host comes from operator env staged by Infisical, and every path segment is a module constant.
-        with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # noqa: S310 — https enforced at construction
-            payload = json.loads(resp.read().decode("utf-8"))
+        payload = self._get_json(url)
         if not isinstance(payload, dict) or not isinstance(payload.get("entries"), list):
             raise ValueError(f"seam read {kind}: malformed page shape")
         return payload
@@ -140,17 +200,7 @@ class SeamClient:
         check to read each Machine's running ``overlay_ref.value``.
         """
         url = f"{self._base}/runtime/config"
-        req = urllib.request.Request(  # noqa: S310 - https enforced at SeamClient construction; the path is a module literal
-            url,
-            headers={
-                "Authorization": f"Bearer {self._key}",
-                "X-Tenant-Slug": self._slug,
-            },
-            method="GET",
-        )
-        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected — scheme is constructor-enforced https://; host from operator env; path is a module constant.
-        with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # noqa: S310 — https enforced at construction
-            payload = json.loads(resp.read().decode("utf-8"))
+        payload = self._get_json(url)
         if not isinstance(payload, dict):
             raise ValueError("seam read config: malformed snapshot shape")
         return payload
