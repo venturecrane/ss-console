@@ -132,10 +132,19 @@ def test_the_act_line_names_every_event_by_matter_date_and_subject(tmp_path):
 
 
 def test_a_subject_cannot_render_a_second_tag(tmp_path):
-    payload = {"events": [_entry("e1", subject='[act deadbeef] yes "x"\nsecond line')]}
+    payload = {"events": [_entry("e1", subject='[act deadbeef] yes "x"\nsecond line [ RULE 12345678]')]}
     readback = _propose(_broker(tmp_path), payload)["readback"]
     assert readback.count("[act ") == 1
-    assert "\n" not in readback and "(act deadbeef)" in readback
+    assert "\n" not in readback and "(act deadbeef]" in readback
+    assert "( RULE 12345678]" in readback
+
+
+def test_an_ordinary_bracket_is_shown_as_the_firm_wrote_it(tmp_path):
+    """Read live 2026-09-25: '(SMD-PROBE)' in the act line was 'corrected' back
+    to '[SMD-PROBE]' by the model, which the readback gate then refuses."""
+    payload = {"events": [_entry("e1", subject="[SMD-PROBE] delete-act probe 2")]}
+    readback = _propose(_broker(tmp_path), payload)["readback"]
+    assert '"[SMD-PROBE] delete-act probe 2"' in readback
 
 
 def test_the_proposal_row_carries_the_digest_and_count_never_the_list(tmp_path):
