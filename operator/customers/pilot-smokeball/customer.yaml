@@ -194,7 +194,14 @@ personas:
         external_send_internal: autonomous
         external_send_client: draft_for_review # day-one grid posture (graduation proven config-correct; see ADR 0075 + the send-delivery follow-on)
         external_send_vendor: draft_for_review # day-one grid posture
-        destructive: autonomous
+        # Deleting Smokeball calendar events as an admin-confirmed act
+        # (ss-console#2944, overlay#385): the gate withholds delete_events and an
+        # administrator's emailed yes to the [act ...] line performs it. It is
+        # the only destructive tool with an act shape; every other destructive
+        # tool (delete_file) refuses at confirm. Was `autonomous`, which still
+        # required a current-turn approval no email turn could supply.
+        # Captain-directed 2026-09-25 for the pilot proof; this seat only.
+        destructive: confirm
         # The Operator's own internal matter (ss-console#2536), rehearsing the
         # A&P posture: an admin-confirmed act proposal is the only path, never
         # autonomous. No exposure_ceiling entry, so the entitlement dial cannot
@@ -1010,7 +1017,7 @@ scope:
   # This is SMD's own STAGING TEST seat (not a client). The Operator manages its
   # own sample matters for testing, so it gets full document-write autonomy here:
   #   - internal_write (add_file save-back, create_memo, drafts) -> autonomous
-  #   - destructive   (delete_file)                              -> autonomous
+  #   - destructive   (delete_events as an admin-confirmed act)  -> confirm
   # destructive stays taint-gated regardless of this ceiling, so an untrusted-fed
   # turn can NEVER trigger a delete. A real client seat authors its own posture
   # (a firm would typically leave destructive refused/draft).
