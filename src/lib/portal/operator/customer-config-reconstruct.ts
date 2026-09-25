@@ -44,6 +44,8 @@
  */
 
 import type { CustomerConfigRow, PersonaConfig } from '../customer-config'
+import type { DeviceSenderEntry } from '../../operator/customer-yaml/types'
+import { parseDeviceSenders } from './configure'
 
 /**
  * Structurally-valid stand-in for the upstream pin the projection does not
@@ -99,6 +101,10 @@ interface ProjectedScope {
   // reads it against a closed set of SMD domains, so reconstructing a document
   // without it would validate something the authored file is not.
   ops_reply_from?: string[]
+  // Device redirects (scope.device_senders). Carried because the validator
+  // reads them against inbound_allow_from and admins, and because a round trip
+  // that dropped them would send a scanner's replies back to the scanner.
+  device_senders?: DeviceSenderEntry[]
 }
 
 interface ProjectedEscalation {
@@ -154,6 +160,7 @@ function reconstructScope(raw: unknown): Required<ProjectedScope> {
     admins: scope.admins ?? [],
     rule_requests_to: scope.rule_requests_to ?? [],
     ops_reply_from: scope.ops_reply_from ?? [],
+    device_senders: parseDeviceSenders(scope.device_senders),
   }
 }
 
