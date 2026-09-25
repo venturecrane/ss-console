@@ -56,19 +56,22 @@ from typing import Any, Callable
 
 from .attachment_source import fetch_bytes
 from .client import SmokeballApiError, SmokeballWriteError
+from .extract import MECHANICAL_METHODS, METHOD_XLSX_OPERATOR
 from .expense_ledger import classify_against_ledger, read_whole_ledger, row_amount
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML, find_folder_id
 from .resolution_token import ResolutionRefused
 from .resolution_token import consume as consume_resolution
 from .resolution_token import verify as verify_resolution
 from .task_update import MatterReferenceMismatch
+from .xlsx_io import is_xlsx
 
 # ---- Reading the attachment -----------------------------------------------
 
-#: The only extraction roads whose text may feed a money write: the file's own
-#: text layer. A machine transcription of a scan (``vision``/``vision_cached``)
-#: is never one of them, however it got into the cache.
-_READABLE_METHODS = frozenset({"pypdf", "docx", "plain"})
+#: The extraction roads whose text is returned as readable: the file's own text
+#: layer. A machine transcription of a scan (``vision``/``vision_cached``) is
+#: never one of them, however it got into the cache. A spreadsheet is readable
+#: but can never feed a money write: ``stage_vendor_invoice`` refuses one below.
+_READABLE_METHODS = frozenset({*MECHANICAL_METHODS, METHOD_XLSX_OPERATOR})
 
 #: Why an attachment is unreadable. Closed set; the skill turns each into a
 #: flag line, never into a guess at the content.
@@ -444,6 +447,8 @@ def stage_vendor_invoice(
         return _refused(f"the attachment could not be fetched again: {exc}")
     if hashlib.sha256(blob).hexdigest() != _clean(sha256):
         return _refused("the attachment's bytes changed since it was read; read it again before staging")
+    if is_xlsx(blob):
+        return _refused("a spreadsheet is never staged as an invoice; route it to a person")
     try:
         consume_resolution(matter_resolution, matter_id)
     except ResolutionRefused as exc:  # a concurrent turn spent it between the two checks

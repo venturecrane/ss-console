@@ -19,12 +19,18 @@ from typing import Any
 
 from .letter_tools import register as _register_letter_tools
 from .vendor_invoice_tools import register as _register_vendor_invoice_tools
+from .workbook_tools import register as _register_workbook_tools
 
 
 def register(server: Any) -> None:
-    """Register every attachment-rooted tool surface, in the original order."""
+    """Register every attachment-rooted tool surface, in the original order.
+
+    ``add_workbook`` is not attachment-rooted. It registers here because this
+    is the one registrar the size-ratcheted ``server.py`` already calls, and it
+    goes LAST so the earlier tools keep their positions."""
     _register_vendor_invoice_tools(server)
     _register_letter_tools(server)
+    _register_workbook_tools(server)
 
 
 __all__ = ["register"]
