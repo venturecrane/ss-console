@@ -63,12 +63,14 @@ jobs:
       # (min-release-age) does not freeze all merges to main via the required
       # Security Summary gate. Each entry is triaged non-reachable and expires
       # on a date; past that date the gate re-fails, forcing the tracked fix.
-      # Covers the root project plus every workers/* package.
+      # Covers the root project, every workers/* package, and every
+      # operator/npm/* lock the seat image installs from (npm audit reads the
+      # lockfile; no install needed there).
       - name: Audit (fail on non-allowlisted high or critical)
         run: |
           set -euo pipefail
           dirs=(.)
-          for dir in workers/*/; do
+          for dir in workers/*/ operator/npm/*/; do
             [ -f "${dir}package.json" ] && dirs+=("${dir%/}")
           done
           node scripts/audit-allowlist.mjs "${dirs[@]}"
@@ -135,6 +137,17 @@ jobs:
       # before our call arrives, causing a 403 and a flaky Secret Detection
       # failure. With authentication the rate limit is 5000/hr per token,
       # more than sufficient. Fleet-lint rule #11 enforces this pattern.
+      #
+      # Integrity (2026-09-25 code review, Golden Path 4): "latest" decides the
+      # VERSION, never the bytes. The tarball is checked twice before tar
+      # touches it, and any miss fails the gate closed: against the release's
+      # own gitleaks_<ver>_checksums.txt (the publisher's statement, fetched
+      # from beside the tarball), and against the sha256 `digest` GitHub
+      # computed for the asset at upload (from the release metadata already
+      # fetched for the tag, so a CDN or transfer substitution cannot satisfy
+      # both). gitleaks publishes no signatures, so this is the strongest
+      # check its releases allow; a repo that SHA-pins all its actions should
+      # not run an unverified binary inside a required gate.
       - name: Install Gitleaks (latest release)
         env:
           GH_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -170,7 +183,11 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -o gitleaks-release.json \
             https://api.github.com/repos/gitleaks/gitleaks/releases/latest
-          GITLEAKS_VERSION=$(grep '"tag_name"' gitleaks-release.json | head -1 | sed -E 's/.*"v?([^"]+)".*/\1/')
+          GITLEAKS_VERSION=$(jq -r '.tag_name | ltrimstr("v")' gitleaks-release.json)
+          TARBALL="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          SUMS="gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          # GitHub's own digest for the tarball asset, as "sha256:<hex>".
+          API_DIGEST=$(jq -r --arg n "$TARBALL" '.assets[] | select(.name == $n) | .digest // empty' gitleaks-release.json)
           rm -f gitleaks-release.json
           echo "Installing gitleaks v${GITLEAKS_VERSION}"
 
@@ -183,7 +200,31 @@ jobs:
           retry curl -fsSL \
             -H "Authorization: Bearer $GH_API_TOKEN" \
             -o gitleaks.tar.gz \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${TARBALL}"
+          retry curl -fsSL \
+            -H "Authorization: Bearer $GH_API_TOKEN" \
+            -o gitleaks-checksums.txt \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${SUMS}"
+
+          # Verify before extracting. Exact filename match on the checksums
+          # line; an absent line, an absent digest, or a mismatch all fail.
+          EXPECTED=$(awk -v f="$TARBALL" '$2 == f { print $1 }' gitleaks-checksums.txt)
+          ACTUAL=$(sha256sum gitleaks.tar.gz | awk '{ print $1 }')
+          rm -f gitleaks-checksums.txt
+          if [ -z "$EXPECTED" ]; then
+            echo "::error::${SUMS} has no line for ${TARBALL}; refusing an unverified binary"
+            exit 1
+          fi
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::${TARBALL} sha256 ${ACTUAL} does not match ${SUMS} (${EXPECTED})"
+            exit 1
+          fi
+          if [ "$API_DIGEST" != "sha256:${ACTUAL}" ]; then
+            echo "::error::${TARBALL} sha256 ${ACTUAL} does not match the release asset digest (${API_DIGEST:-absent})"
+            exit 1
+          fi
+          echo "gitleaks v${GITLEAKS_VERSION}: sha256 ${ACTUAL} matches ${SUMS} and the asset digest"
+
           tar -xzf gitleaks.tar.gz gitleaks
           rm -f gitleaks.tar.gz
           chmod +x gitleaks

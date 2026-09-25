@@ -1132,7 +1132,17 @@ ENV npm_config_install_links=false
 # nothing, and only installs apt deps. The timeout+retry loop stays as the
 # backstop so NO variant of this step can wedge the seat-rebuild path:
 # rollback-by-rebuild depends on this Dockerfile finishing.
-RUN npm install --prefer-offline --no-audit \
+#
+# `npm ci`, not `npm install` (2026-09-25 code review, Dependencies 3): Hermes
+# ships a root package-lock.json whose workspaces include web/ and ui-tui/, and
+# `npm ci` installs exactly that lock or fails the build if it disagrees with
+# package.json, where `npm install` would quietly re-resolve. Checked against
+# v2026.9.14 (345cd2b0): `npm ci` on the lock as committed adds 1,340 packages
+# and both `npm run build`s below succeed with nothing else installed, which is
+# why the former `(cd web && npm install)` and `(cd ui-tui && npm install)`
+# lines are gone (inherited from an older upstream Dockerfile; upstream's own
+# at this SHA runs only the root install).
+RUN npm ci --prefer-offline --no-audit \
  && npx playwright install --dry-run chromium --only-shell > /tmp/pw-plan.txt \
  && cat /tmp/pw-plan.txt \
  && awk '/Install location:/{loc=$3} /Download url:/{print loc" "$3}' /tmp/pw-plan.txt > /tmp/pw-pairs.txt \
@@ -1150,8 +1160,6 @@ RUN npm install --prefer-offline --no-audit \
       { [ "$i" = 3 ] && exit 1; echo "playwright install failed/wedged (attempt $i); retrying in 10s" >&2; sleep 10; }; \
     done \
  && rm -f /tmp/pw-plan.txt /tmp/pw-pairs.txt \
- && (cd web && npm install --prefer-offline --no-audit) \
- && (cd ui-tui && npm install --prefer-offline --no-audit) \
  && npm cache clean --force
 
 # `--extra all` deliberately EXCLUDES the `messaging` extra (python-telegram-bot,
@@ -1182,14 +1190,6 @@ RUN uv pip install --no-cache-dir --no-deps --python /opt/hermes/.venv/bin/pytho
 # vendors it the same way upstream Hermes is vendored above (clone at a pinned
 # tag, own venv). Phase 1 runs on Hermes' flat-file memory core.
 
-# ---------- hermes-smd overlay (plugins + CLI) ----------
-# Pip-install the overlay (provides `hermes-smd` console script for the
-# bootstrap translator and customer-sync sidecar) and then register the
-# plugin pack with Hermes. Plugins land under ~/.hermes/plugins/ where the
-# Hermes plugin loader discovers them at runtime.
-RUN uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
-      "git+${OVERLAY_REPO}@${OVERLAY_REF}"
-
 # ---------- Pinned third-party Python (every venv built below) ----------
 # Every `uv pip install` of a third-party package below installs from one of
 # these hash-locked files with --require-hashes, so a seat built today and a
@@ -1205,6 +1205,33 @@ RUN uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
 # package without going through a file. Our own local packages install
 # afterwards with --no-deps (a path cannot carry a hash).
 COPY operator/requirements/ /app/requirements/
+
+# ---------- hermes-smd overlay (plugins + CLI) ----------
+# Pip-install the overlay (provides `hermes-smd` console script for the
+# bootstrap translator and customer-sync sidecar) and then register the
+# plugin pack with Hermes. Plugins land under ~/.hermes/plugins/ where the
+# Hermes plugin loader discovers them at runtime.
+#
+# Three steps, so nothing here resolves from PyPI at build time (2026-09-25
+# code review, Dependencies 3; before it this line let uv pick boto3 and
+# sentry-sdk on every build, outside any lock and outside pip_audit_gate.py):
+#   1. the overlay's third-party dependencies that Hermes' own lock does not
+#      already install, hash-locked in hermes-overlay.txt (compile.sh derives
+#      it from the overlay's pyproject at OVERLAY_REF, constrained to Hermes'
+#      uv.lock at HERMES_UPSTREAM_SHA, so no Hermes-locked version moves).
+#      --no-config for the same reason as the broker venv below: this runs in
+#      /opt/hermes, whose [tool.uv] overrides cannot carry a hash;
+#   2. the overlay itself at the OVERLAY_REF commit, --no-deps (a git URL
+#      cannot carry a hash; the commit SHA is the pin);
+#   3. `uv pip check`, which fails the BUILD, not a seat, if any requirement
+#      the overlay (or anything else in the venv) declares is unmet. That is
+#      the backstop for an overlay that grows a dependency before compile.sh
+#      is re-run; substrate's verify-overlay-pairs.py catches it earlier.
+RUN uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
+      --no-config --require-hashes --no-deps -r /app/requirements/hermes-overlay.txt \
+ && uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
+      --no-deps "git+${OVERLAY_REPO}@${OVERLAY_REF}" \
+ && uv pip check --python /opt/hermes/.venv/bin/python
 
 # ---------- Workspace capability broker ----------
 # Google libraries and credentials live in a broker-only venv. The Hermes venv
@@ -1229,19 +1256,26 @@ RUN uv venv /opt/workspace-broker/.venv \
 # ---------- Clio MCP server (law vertical practice-management connector) ----------
 # @oktopeak/clio-mcp (MIT) is a LOCAL stdio MCP server. The overlay (v0.4.6+)
 # materializes customer.yaml `mcp:clio-oktopeak` into the profile mcp_servers
-# block as a `clio-mcp` command server; install it globally so the binary is on
-# PATH for the gateway to launch. Pinned to 2.0.0 — the version the connector
-# reality-check and live loop test ran against. It reads its OAuth token from
+# block as a `clio-mcp` command server, so the binary must be on PATH for the
+# gateway to launch. Pinned to 2.0.0, the version the connector reality-check
+# and live loop test ran against. It reads its OAuth token from
 # ~/.clio-mcp/tokens.enc (seeded by bootstrap.sh) under ENCRYPTION_KEY.
-# Run from a neutral cwd (npm ignores a project .npmrc in -g mode, but the
-# Hermes tree's npm policy should never govern a third-party global install),
-# then prove the bin resolves on PATH and the package landed under the Node 26
-# global prefix (/usr/local/lib/node_modules) so a regression fails the BUILD,
-# not a seat. Presence checks only: it is a stdio MCP server, so invoking it
-# here would block on stdin.
-RUN cd /tmp && npm install -g @oktopeak/clio-mcp@2.0.0 \
+#
+# Installed with `npm ci` from operator/npm/clio-mcp/package-lock.json, not
+# `npm install -g name@version` (2026-09-25 code review, Dependencies 3): the
+# old line pinned the package and let its ~120 transitive packages float to
+# whatever the registry served that day. The lock fixes every version and
+# integrity hash; security.yml's npm audit reads it and Dependabot's npm entry
+# for that directory keeps it current. The bin is linked onto PATH at the
+# same /usr/local/bin a global install used. Presence checks prove the
+# install so a regression fails the BUILD, not a seat; it is a stdio MCP
+# server, so invoking it here would block on stdin.
+COPY operator/npm/clio-mcp/package.json operator/npm/clio-mcp/package-lock.json /opt/clio-mcp/
+RUN cd /opt/clio-mcp && npm ci --omit=dev --no-audit --no-fund \
+ && ln -s /opt/clio-mcp/node_modules/.bin/clio-mcp /usr/local/bin/clio-mcp \
  && test -x "$(command -v clio-mcp)" \
- && test -f /usr/local/lib/node_modules/@oktopeak/clio-mcp/package.json
+ && test -f /opt/clio-mcp/node_modules/@oktopeak/clio-mcp/package.json \
+ && npm cache clean --force
 
 # NOTE: web search needs NO installed binary. It is Hermes' NATIVE brave-free
 # provider (plugins/web/brave_free, bundled in the pinned Hermes), selected by

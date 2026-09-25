@@ -109,6 +109,26 @@ updates:
     commit-message:
       prefix: chore(deps)
 
+  # The seat image's lock-pinned npm installs (operator/npm/<name>/, one
+  # directory per tool the Dockerfile installs with `npm ci`; clio-mcp since
+  # the 2026-09-25 code review). The Dockerfile pins the top-level version in
+  # package.json, so a major is a deliberate edit there; Dependabot keeps the
+  # transitive closure current.
+  - package-ecosystem: npm
+    directory: /operator/npm/clio-mcp
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: chore(deps)
+
   # The seat image's Python. Until 2026-09-11 no pip ecosystem existed, so the
   # Python that runs on every customer Machine had neither currency nor
   # security bumps surfacing anywhere (2026-09-10 code review, Dependencies
@@ -119,6 +139,15 @@ updates:
   # bump alone changes nothing on a seat until compile.sh re-resolves it, and
   # bin/tests/test_requirements_pins.py fails when a declared dependency has
   # no pin. Majors separated for manual review, as with npm.
+  #
+  # ONE OWNER PER FILE SET. The first entry owns operator/requirements/*.txt.
+  # The second entry owns the pyproject ranges, and it must not see the
+  # requirements files: Dependabot's pip scanner reads a `requirements/`
+  # child of every directory it is given, so with /operator in its list the
+  # second entry opened a byte-identical twin of every hash-lock PR (#2897
+  # and #2898, 2026-09-25 code review, Dependencies 4). `exclude-paths`
+  # (repo-root relative) keeps /operator's pyproject covered and hands the
+  # .txt files to the entry above alone.
   - package-ecosystem: pip
     directory: /operator/requirements
     schedule:
@@ -142,6 +171,8 @@ updates:
       - /operator/connectors/msgraph-mail
       - /operator/connectors/smokeball
       - /operator/runners/medchron
+    exclude-paths:
+      - 'operator/requirements/**'
     schedule:
       interval: weekly
     cooldown:

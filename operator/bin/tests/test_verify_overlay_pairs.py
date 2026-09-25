@@ -111,3 +111,63 @@ def test_sha256_file_matches_known_value(tmp_path):
     f.write_bytes(b"hello")
     # sha256("hello")
     assert mod._sha256_file(f) == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+
+
+# ---------------------------------------------------------------------------
+# Overlay dependency coverage (2026-09-25 code review, Dependencies 3)
+# ---------------------------------------------------------------------------
+
+_PYPROJECT = """\
+[project]
+name = "hermes-smd-overlay"
+dependencies = [
+    "pyyaml>=6.0",
+    "boto3>=1.34",
+    "PyJWT[crypto]>=2.12",
+    "sentry-sdk>=2.0,<3",
+]
+"""
+
+_REQUIREMENTS = """\
+boto3==1.43.102 \\
+    --hash=sha256:aa
+    # via hermes-smd-overlay (overlay/pyproject.toml)
+sentry-sdk==2.70.0 \\
+    --hash=sha256:bb
+
+# The following packages were excluded from the output:
+# pyjwt
+# pyyaml
+"""
+
+
+def _write(tmp_path, pyproject: str, requirements: str) -> tuple[Path, Path]:
+    p = tmp_path / "pyproject.toml"
+    r = tmp_path / "hermes-overlay.txt"
+    p.write_text(pyproject)
+    r.write_text(requirements)
+    return p, r
+
+
+def test_overlay_dependencies_pinned_or_hermes_provided_pass(tmp_path):
+    p, r = _write(tmp_path, _PYPROJECT, _REQUIREMENTS)
+    assert mod.uncovered_overlay_dependencies(p, r) == []
+
+
+def test_a_new_overlay_dependency_fails_until_compiled(tmp_path):
+    grown = _PYPROJECT.replace('"sentry-sdk>=2.0,<3",', '"sentry-sdk>=2.0,<3",\n    "httpx>=0.27",')
+    p, r = _write(tmp_path, grown, _REQUIREMENTS)
+    assert mod.uncovered_overlay_dependencies(p, r) == ["httpx"]
+
+
+def test_a_comment_outside_the_excluded_block_covers_nothing(tmp_path):
+    # "# via ..." lines and any other comment must not read as Hermes-provided.
+    reqs = _REQUIREMENTS.replace("# pyjwt\n", "") + "\n# pyjwt\n"
+    p, r = _write(tmp_path, _PYPROJECT, reqs)
+    assert mod.uncovered_overlay_dependencies(p, r) == ["pyjwt"]
+
+
+def test_the_committed_file_names_a_hermes_provided_block():
+    pinned, provided = mod._covered_by_requirements(mod._OVERLAY_REQUIREMENTS)
+    assert {"boto3", "sentry-sdk"} <= pinned
+    assert {"pyyaml", "pyjwt"} <= provided
