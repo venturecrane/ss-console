@@ -25,6 +25,8 @@
 # any Graph call, every mailbox the firm has not authored in the seat's
 # customer.yaml `staff_mailbox_reads` block. The firm must ALSO add that mailbox to
 # the READ app's ApplicationAccessPolicy scope group; either missing, the read fails.
+# A person on scope.staff_send_as is refused even when authored: their inbox holds
+# the approve links for drafts sent in their name (ADR 0089 amendment 5a).
 # COORDINATED CHANGE (staff reads): overlay action_classes (read), the inbound fence
 # list and provenance seeding set take mcp_msgraph_mail_list_staff_messages and
 # mcp_msgraph_mail_read_staff_message, exactly as they take list/read_message.

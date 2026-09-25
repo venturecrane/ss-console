@@ -14,12 +14,17 @@ its own button. No plugin fence can prevent that; only the tenant can.
 
 WHAT THIS DOES. Runs as ROOT under boot-smoke. Reads the agent-uid gateway's
 environ for the msgraph read credential, mints an app-only token, and asks Graph
-for the INBOX METADATA (id only, never a message, never a body) of the first
-address in ``scope.staff_send_as``. A 403 or 404 is the pass: the policy is
-scoping this app. A 200 is the failure, and it names the mailbox.
+for the INBOX METADATA (id only, never a message, never a body) of EVERY
+address in ``scope.staff_send_as``, in authored order. Each approver must answer
+403 or 404: the policy is scoping this app away from that inbox. The first
+approver answering anything else is the failure, and it names the mailbox. Every
+approver, not the first: the scope group may lawfully hold named staff
+mailboxes (``staff_mailbox_reads``), so one refused approver says nothing about
+the next.
 
 WHAT MAKES IT ABLE TO FAIL. Remove the ApplicationAccessPolicy for the read app
-in the tenant and this exits 1. A seat that authors staff_send_as and carries no
+in the tenant, or add any approver to the read app's scope group, and this
+exits 1. A seat that authors staff_send_as and carries no
 msgraph credential exits 1, because "could not ask" must never read as "cannot
 read". A failed token mint exits 1, for the same reason.
 
@@ -159,17 +164,23 @@ def run(
     if not token:
         print("FAIL: the tenant returned no token; cannot ask")
         return 1
-    mailbox = staff[0]
-    status = ask(token, mailbox)
-    if status in (403, 404):
-        print(f"pass: the read app is refused {mailbox}'s mailbox (HTTP {status})")
-        return 0
-    print(
-        f"FAIL: the read app can read {mailbox}'s mailbox (HTTP {status}). "
-        "An ApplicationAccessPolicy must scope it to the Operator's own mailbox, or the "
-        "agent can lift its own approve link out of the approver's inbox."
-    )
-    return 1
+    answers: list[str] = []
+    for mailbox in staff:
+        status = ask(token, mailbox)
+        if status not in (403, 404):
+            print(
+                f"FAIL: the read app can read {mailbox}'s mailbox (HTTP {status}), and "
+                f"{mailbox} approves drafts sent in their name. The read app's "
+                "ApplicationAccessPolicy scope group may hold the Operator's own mailbox and "
+                "the staff mailboxes the firm authored under staff_mailbox_reads, never a "
+                "person on scope.staff_send_as: their inbox holds the approve links, and "
+                "the agent could lift its own link and press it. Take this approver out of "
+                "the scope group."
+            )
+            return 1
+        answers.append(f"{mailbox} HTTP {status}")
+    print(f"pass: the read app is refused every approver's mailbox ({'; '.join(answers)})")
+    return 0
 
 
 def main(argv: list[str]) -> int:

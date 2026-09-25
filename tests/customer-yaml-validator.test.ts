@@ -3950,3 +3950,58 @@ describe('personas[].signature', () => {
     expect(r.errors.map((e) => e.path)).toContain('personas[0].signature.firm_line')
   })
 })
+
+describe('staff_mailbox_reads never includes a send-as approver (ADR 0089 amendment 5a)', () => {
+  // An approver's inbox is the only place an approve link exists. A person on
+  // both lists would let the Operator read its own link and press it.
+  const APPROVER = 'paralegal@firm.example'
+
+  function withSendAsAndReads(mailboxes: unknown): Record<string, unknown> {
+    const f = validFixture()
+    const scope = f['scope'] as Record<string, unknown>
+    scope['inbound_allow_from'] = ['@firm.example']
+    scope['staff_send_as'] = [
+      { address: 'associate@firm.example', name: 'Sam' },
+      { address: APPROVER, name: 'Pat' },
+    ]
+    f['staff_mailbox_reads'] = { mailboxes }
+    return f
+  }
+
+  it('accepts disjoint lists', () => {
+    const r = validate(withSendAsAndReads(['manager@firm.example']))
+    if (!r.ok) throw new Error(JSON.stringify(r.errors))
+  })
+
+  it('refuses an approver on the read list, in any case and position', () => {
+    const r = validate(withSendAsAndReads(['manager@firm.example', ' Paralegal@FIRM.example ']))
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    const hit = r.errors.find((e) => e.path === 'staff_mailbox_reads.mailboxes[1]')
+    expect(hit?.code).toBe('InvalidStaffSendAs')
+    expect(hit?.message).toContain(APPROVER)
+    expect(hit?.message).toContain('approve links')
+  })
+
+  it('refuses a malformed block, which the connector would read as nothing', () => {
+    for (const bad of ['manager@firm.example', [7]]) {
+      const r = validate(withSendAsAndReads(bad))
+      expect(r.ok).toBe(false)
+      if (r.ok) return
+      expect(r.errors.map((e) => e.path)).toContain('staff_mailbox_reads.mailboxes')
+    }
+    const f = validFixture()
+    f['staff_mailbox_reads'] = ['manager@firm.example']
+    const r = validate(f)
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.errors.map((e) => e.path)).toContain('staff_mailbox_reads')
+  })
+
+  it('an absent block is valid', () => {
+    const f = validFixture()
+    delete f['staff_mailbox_reads']
+    const r = validate(f)
+    if (!r.ok) throw new Error(JSON.stringify(r.errors))
+  })
+})

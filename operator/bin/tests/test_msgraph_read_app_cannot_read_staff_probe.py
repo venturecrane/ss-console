@@ -86,6 +86,48 @@ def test_an_unscoped_read_app_fails_and_names_the_fix(tmp_path: Path, capsys) ->
     assert "can read" in out and "ApplicationAccessPolicy" in out
 
 
+SECOND = "associate@firm.example"
+TWO_APPROVERS = WITH_STAFF + f"    - address: {SECOND}\n      name: Sam\n"
+
+
+def _run_per_mailbox(tmp_path: Path, yaml_text: str, statuses: dict[str, int]):
+    yaml_path, proc = _seat(tmp_path, yaml_text)
+    asked: list[str] = []
+
+    def ask(_token: str, mailbox: str) -> int:
+        asked.append(mailbox)
+        return statuses[mailbox]
+
+    rc = probe.run(yaml_path, _user(), proc, mint=lambda *_: "token", ask=ask)
+    return rc, asked
+
+
+def test_every_approver_is_asked_and_all_refused_passes(tmp_path: Path, capsys) -> None:
+    rc, asked = _run_per_mailbox(tmp_path, TWO_APPROVERS, {STAFF: 403, SECOND: 404})
+    out = capsys.readouterr().out
+    assert (rc, asked) == (0, [STAFF, SECOND])
+    assert "every approver" in out and STAFF in out and SECOND in out
+
+
+def test_a_readable_second_approver_fails_though_the_first_is_refused(tmp_path: Path, capsys) -> None:
+    # The shape the first cut could not see: approver one is out of the read
+    # app's scope group, approver two is in it (say, added alongside a named
+    # staff mailbox). Asking only the first would pass this seat.
+    rc, asked = _run_per_mailbox(tmp_path, TWO_APPROVERS, {STAFF: 403, SECOND: 200})
+    out = capsys.readouterr().out
+    assert (rc, asked) == (1, [STAFF, SECOND])
+    assert f"can read {SECOND}'s mailbox" in out
+    # The failure states the authored policy: named staff mailboxes may be in
+    # the scope group, approvers may not.
+    assert "staff_mailbox_reads" in out and "never a person on scope.staff_send_as" in out
+
+
+def test_the_first_readable_approver_stops_the_probe(tmp_path: Path, capsys) -> None:
+    rc, asked = _run_per_mailbox(tmp_path, TWO_APPROVERS, {STAFF: 200, SECOND: 403})
+    assert (rc, asked) == (1, [STAFF])
+    assert f"can read {STAFF}'s mailbox" in capsys.readouterr().out
+
+
 def test_a_seat_without_staff_send_as_passes_vacuously(tmp_path: Path, capsys) -> None:
     rc, asked = _run(tmp_path, WITHOUT_STAFF, 200, env=False)
     assert (rc, asked) == (0, [])
