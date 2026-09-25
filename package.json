@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
-    "build:staging": "CLOUDFLARE_ENV=staging astro build",
+    "build": "env -u CLERK_SECRET_KEY -u CLERK_MACHINE_SECRET_KEY astro build",
+    "postbuild": "node scripts/assert-no-inlined-secrets.mjs",
+    "build:staging": "env -u CLERK_SECRET_KEY -u CLERK_MACHINE_SECRET_KEY CLOUDFLARE_ENV=staging astro build",
+    "postbuild:staging": "node scripts/assert-no-inlined-secrets.mjs",
     "deploy:staging": "npm run build:staging && wrangler deploy",
     "preview": "wrangler dev",
     "test": "vitest run",

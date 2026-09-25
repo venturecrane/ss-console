@@ -106,6 +106,7 @@ def http_request(method: str, url: str, headers: dict, body: Optional[dict]) -> 
     if data is not None:
         req.add_header("Content-Type", "application/json")
     try:
+        # Scheme checked above: https:// only, so no file:// or ftp:// URL reaches urlopen.
         # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310 - scheme checked above: https:// only, so no file:// or ftp:// can reach urlopen
             return HttpResponse(resp.status, _parse(resp.read()))
