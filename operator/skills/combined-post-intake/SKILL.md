@@ -249,6 +249,10 @@ paper or a vendor's bill that was FILED goes at the TOP, in the "needs a word
 from you" group, with its flag; every other line follows in page order. End
 with the reconciling count, which names the flagged filings separately.
 
+If the sender is the office scanner (an address on `scope.device_senders`),
+still address the draft to the sender; the reply lane delivers it to the person
+the seat's config names for that scanner, so never re-address it yourself.
+
 ```
 Needs a word from you: pages 12-13, a summons, filed on matter <matter-number>; court paper, needs calendaring.
 Filed: pages 1-3, letter from Allstate, on matter <matter-number>.
