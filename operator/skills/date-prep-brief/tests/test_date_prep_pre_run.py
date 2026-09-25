@@ -83,6 +83,8 @@ def _status_client() -> StubClient:
         },
         {"id": "f-el", "name": "Exhibit List", "fileExtension": ".docx", "dateModified": "2026-09-10"},
         {"id": "f-new", "name": "Trial Order", "fileExtension": ".pdf", "dateCreated": "2026-09-22"},
+        {"id": "f-kp1", "name": "Kaiser - records", "fileExtension": ".pdf", "dateCreated": "2026-04-02"},
+        {"id": "f-kp2", "name": "KAISER records (supplemental)", "fileExtension": ".pdf", "dateCreated": "2026-05-01"},
     ]
     open_tasks = [
         {"id": "t-reyes", "subject": "Medical records outstanding - Dr. Reyes (request roster)"},
@@ -108,14 +110,14 @@ def _status_client() -> StubClient:
 def test_matter_status_is_facts_only():
     status = file_status.pull_matter_status(_status_client(), M105)
     assert status["unread"] == []
-    assert [f["file_id"] for f in status["files"]] == ["f-new", "f-el", "f-wl"]
+    assert [f["file_id"] for f in status["files"]] == ["f-new", "f-el", "f-wl", "f-kp2", "f-kp1"]
     assert status["files"][2] == {"file_id": "f-wl", "name": "Witness List (draft).docx", "date": "2026-06-18"}
     # Only [Operator] memos count, and only the latest day per marker leaves.
     assert status["memo_markers"] == {"binder_assembled": "2026-09-20", "motion_calendar": "2026-09-01"}
     assert "Trial binder" not in json.dumps(status["memo_markers"])
     assert status["records"] == [
         {"roster_task_id": "t-reyes", "provider": "Dr. Reyes", "state": "outstanding"},
-        {"roster_task_id": "t-kaiser", "provider": "Kaiser", "state": "received"},
+        {"roster_task_id": "t-kaiser", "provider": "Kaiser", "state": "received", "newest_record": "2026-05-01"},
     ]
 
 
@@ -181,7 +183,11 @@ def test_catalog_offers_only_what_the_facts_and_levels_support():
     assert by_id["witness_list_finalize"]["params"] == {"file_id": "f-wl"}
     assert by_id["witness_list_finalize"]["skill"] == "trial-binder-assembler"
     assert by_id["binder_assemble"]["level"] == "handles"
-    assert by_id["records_refresh:t-reyes"]["params"] == {"roster_task_id": "t-reyes", "provider": "Dr. Reyes"}
+    assert by_id["records_refresh:t-reyes"]["params"] == {
+        "roster_task_id": "t-reyes",
+        "provider": "Dr. Reyes",
+        "mode": "chase",
+    }
     assert all(e["basis"] for e in built)
 
 
@@ -197,6 +203,63 @@ def test_records_chase_respects_the_authored_cadence_and_invents_none():
     assert len(catalog.build_catalog(_status(), steps, stale, cadence_days=7, today=TODAY)) == 1
     # No authored cadence: a provider already chased is not re-offered.
     assert catalog.build_catalog(_status(), steps, stale, cadence_days=None, today=TODAY) == []
+
+
+def test_newest_record_matches_distinctive_name_words_only():
+    files = [
+        {"name": "Valley Imaging - MRI.pdf", "date": "2026-03-01"},
+        {"name": "Valley Orthopedics.pdf", "date": "2026-08-01"},
+        {"name": "Dr Reyes records.pdf", "date": "2026-06-01"},
+        {"name": "Reyes (undated).pdf", "date": None},
+    ]
+    assert file_status.newest_record("Valley Imaging Center", files) == "2026-03-01"
+    assert file_status.newest_record("Dr. Reyes", files) == "2026-06-01"
+    assert file_status.newest_record("Northgate Pediatrics", files) is None
+    assert file_status.newest_record("Dr.", files) is None  # nothing distinctive to match on
+
+
+def _update_ids(stale_days, chases=None):
+    steps = {"records_refresh": "prepares"}
+    built = catalog.build_catalog(_status(), steps, chases or {}, cadence_days=7, today=TODAY, stale_days=stale_days)
+    return {e["catalog_id"]: e for e in built if e["params"].get("mode") == "update"}
+
+
+def test_a_received_provider_with_stale_records_is_offered_an_update():
+    got = _update_ids(60)
+    assert list(got) == ["records_refresh:t-kaiser"]
+    entry = got["records_refresh:t-kaiser"]
+    assert entry["skill"] == "medical-records-chaser"
+    assert entry["params"] == {
+        "roster_task_id": "t-kaiser",
+        "provider": "Kaiser",
+        "mode": "update",
+        "newest_record": "2026-05-01",
+    }
+    casework._validate_step(catalog.envelope_catalog([entry])[0])
+
+
+def test_the_update_offer_is_off_without_an_authored_threshold():
+    assert _update_ids(None) == {}
+
+
+def test_records_newer_than_the_threshold_are_not_stale():
+    assert _update_ids(200) == {}  # 2026-05-01 is 147 days before 2026-09-25
+
+
+def test_a_provider_asked_since_the_newest_record_is_not_asked_again():
+    asked = {"t-kaiser": {"attempts": 3, "last_chased": "2026-06-10"}}
+    assert _update_ids(60, asked) == {}
+    before = {"t-kaiser": {"attempts": 2, "last_chased": "2026-04-20"}}
+    assert list(_update_ids(60, before)) == ["records_refresh:t-kaiser"]
+
+
+def test_the_chaser_can_run_the_update_step():
+    """The catalog offers an update the chaser's own procedure names, with the
+    same params, so a "yes" routes to a step the routine knows how to run."""
+    text = (_DIR.parent / "medical-records-chaser" / "SKILL.md").read_text()
+    assert "## Updated-records request (a routed step)" in text
+    for token in ("`mode: update`", "`newest_record`", "`roster_task_id`", "`prepares`", "`handles`"):
+        assert token in text, token
 
 
 def test_a_failed_read_offers_nothing_on_that_part():

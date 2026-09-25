@@ -136,7 +136,8 @@ def date_prep_config(cfg: dict) -> dict | None:
     if isinstance(window, bool) or not isinstance(window, int) or window < 1:
         return None
     steps = prep.get("steps") if isinstance(prep.get("steps"), dict) else {}
-    return {"level": prep["level"], "window_days": window, "steps": steps}
+    stale = _H.pos_int_or_none(prep.get("records_stale_days"))
+    return {"level": prep["level"], "window_days": window, "records_stale_days": stale, "steps": steps}
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +274,14 @@ def prepare(candidate: dict, cfg: dict, prep: dict, staff: dict, ledger_events: 
     if not isinstance(status, dict):
         return None
     chases = chase_states(status.get("records") or [], candidate["matter_id"], ledger_events)
-    catalog = _CATALOG.build_catalog(status, prep["steps"], chases, cadence_days=chase_cadence(cfg), today=today)
+    catalog = _CATALOG.build_catalog(
+        status,
+        prep["steps"],
+        chases,
+        cadence_days=chase_cadence(cfg),
+        today=today,
+        stale_days=prep["records_stale_days"],
+    )
     if not catalog:
         return None
     return {

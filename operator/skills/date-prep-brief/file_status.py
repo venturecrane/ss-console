@@ -14,7 +14,8 @@ Two reads, both returning FACTS, never prose:
   per-matter filter is the only proof an event belongs to a matter.
 * :func:`pull_matter_status` - one matter's file status: file names and days,
   the DAY of each ``[Operator]`` memo that carries a prep routine's own marker,
-  and its records-request roster tasks. Memo bodies are read HERE and never
+  and its records-request roster tasks, each received provider with the day of
+  its newest record on file (matched on the file NAME, never its content). Memo bodies are read HERE and never
   leave: only the marker kind and its day cross the process boundary, so no
   memo prose reaches the scheduled session (the matter-mixing fence refuses a
   second matter's content in one session; code reading across matters and
@@ -170,7 +171,30 @@ def _files(client, matter_id: str) -> tuple[list[dict], bool]:
         day = _day(record, ("dateModified", "dateCreated", "createdDate"))
         files.append({"file_id": file_id, "name": (name + ext)[:160], "date": day})
     files.sort(key=lambda f: f["date"] or "", reverse=True)
-    return files[:FILE_CAP], len(listed) >= PAGE_LIMIT
+    return files, len(listed) >= PAGE_LIMIT
+
+
+#: Words too generic to tell one provider from another in a file name.
+_GENERIC = frozenset(
+    {"dr", "md", "do", "the", "of", "and", "center", "centre", "medical", "group", "clinic", "hospital", "inc", "llc"}
+)
+_WORD = re.compile(r"[a-z0-9]+")
+
+
+def _words(text: str) -> set[str]:
+    return set(_WORD.findall(text.lower()))
+
+
+def newest_record(provider: str, files: list[dict]) -> str | None:
+    """The newest dated file whose name carries every distinctive word of the
+    provider's name ("Dr. Reyes" -> reyes; "Valley Imaging Center" -> valley,
+    imaging). A name match on metadata only, the records chaser's own receipt
+    rule; no match or no date is None, which means unknown, never stale."""
+    wanted = {w for w in _words(provider) if w not in _GENERIC and len(w) > 1}
+    if not wanted:
+        return None
+    days = [f["date"] for f in files if f.get("date") and wanted <= _words(f.get("name") or "")]
+    return max(days) if days else None
 
 
 def memo_markers(memos: list) -> dict[str, str]:
@@ -213,11 +237,13 @@ def pull_matter_status(client, matter_id: str) -> dict:
     """One matter's file status as facts. Each part degrades on its own, and
     says so: an unread part is ``unknown``, never an empty result."""
     status: dict = {"matter_id": matter_id, "unread": []}
+    every_file: list[dict] = []
     try:
-        status["files"], status["files_truncated"] = _files(client, matter_id)
+        every_file, status["files_truncated"] = _files(client, matter_id)
     except Exception as exc:  # noqa: BLE001 - an unread part is reported, not guessed
         _warn("file read", exc)
-        status["files"], status["unread"] = [], status["unread"] + ["files"]
+        status["unread"] = status["unread"] + ["files"]
+    status["files"] = every_file[:FILE_CAP]
     try:
         memos = _listed(client.get("/matters/" + matter_id + "/memos", Limit=PAGE_LIMIT))
         if memos is None:
@@ -235,5 +261,8 @@ def pull_matter_status(client, matter_id: str) -> dict:
             _warn("task read", exc)
             if "tasks" not in status["unread"]:
                 status["unread"] = status["unread"] + ["tasks"]
+    for record in records:
+        if record["state"] == "received" and "files" not in status["unread"]:
+            record["newest_record"] = newest_record(record["provider"], every_file)
     status["records"] = records
     return status

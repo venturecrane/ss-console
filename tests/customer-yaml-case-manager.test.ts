@@ -128,6 +128,18 @@ describe('case_manager', () => {
     ])
   })
 
+  it('records_stale_days is optional (the update offer is off without it) and bounded', () => {
+    const off = withBlock({ date_prep: { level: 'prepares', window_days: 14 } })
+    expect(off.ok && off.value.case_manager?.date_prep?.records_stale_days).toBeNull()
+    const on = withBlock({
+      date_prep: { level: 'prepares', window_days: 14, records_stale_days: 60 },
+    })
+    expect(on.ok && on.value.case_manager?.date_prep?.records_stale_days).toBe(60)
+    expect(
+      errorPaths({ date_prep: { level: 'prepares', window_days: 14, records_stale_days: 0 } })
+    ).toEqual(['case_manager.date_prep.records_stale_days'])
+  })
+
   it('task_cleanup bounds keep_quiet_days and max_lines', () => {
     expect(errorPaths({ task_cleanup: { level: 'prepares', max_lines: 31 } })).toEqual([
       'case_manager.task_cleanup.max_lines',

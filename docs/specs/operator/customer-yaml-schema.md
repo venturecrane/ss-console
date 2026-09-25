@@ -532,6 +532,7 @@ case_manager: # OPTIONAL; absent = every job off
   date_prep: # OPTIONAL; prepare for a date entering its window (Job 2)
     level: <surfaces|prepares|handles> # required
     window_days: <int 1..90> # required; no pack default
+    records_stale_days: <int 1..730> # optional; absent = no updated-records offer
     steps: # optional; an unlisted step is never offered
       <step>: <surfaces|prepares|handles> # never above date_prep.level
   quiet: # OPTIONAL; routine work done and mentioned in one line (Job 3)
@@ -545,6 +546,7 @@ Field rules:
 - **Absent is a state, not an error.** No block: every job is off, and `deadline-miss-escalator` renders exactly as it did before the block existed. An absent sub-block turns off that job alone (ADR 0035, no imposed default).
 - **Strict keys.** An unknown key at any level is refused (`InvalidCaseManager`), because a misspelled job (`date_perp:`) would otherwise read as "that job is off" and nobody would learn why the prep never arrived.
 - **`legacy_task_ids`** names tasks the Operator created before its `[Operator]` subject stamp existed (2026-08-01). A Smokeball task read carries no creator, so this authored list is the only other signal that a task is the Operator's own.
+- **`records_stale_days`** turns on the updated-records offer: a provider whose records were received, and whose newest record on file is older than this many days, is offered an updated-records request (`records_refresh`, `mode: update`, run by `medical-records-chaser`). Absent, no received provider is offered one; how old is too old is the firm's call.
 - **A step never exceeds its job.** A step authored above `date_prep.level` is refused: a firm that chose "Prepares it for you" for prep has not chosen "Handles it" for any part of it.
 - Materialization is config-as-data: the `task-list-keeper`, `date-prep-brief` and `deadline-miss-escalator` pre_runs read the block off the seat's own `/var/lib/smd-config/customer.yaml` at each tick (`operator/contracts/customer-yaml-blocks.yaml`, `case_manager`). Not portal-editable yet: the levels change by PR (`src/lib/portal/operator/customer-yaml-editor.ts` keeps them locked).
 

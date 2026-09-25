@@ -247,6 +247,49 @@ logged and closed, reachable only on a confident match), or **C** (surface to a 
    the chase item's key**: attempts count every raise, so a stall `fired` on the
    chase key would inflate the "chase N" numerator the email copies.
 
+## Updated-records request (a routed step)
+
+Before a court date, a firm often wants a provider's newest treatment records even
+though that provider's first request was answered long ago. `date-prep-brief` offers
+this as a numbered decision when a **received** provider's newest record on file is
+older than the firm's authored `case_manager.date_prep.records_stale_days`; a person's
+"yes" reaches this skill through `matter-inbox-router` as a step with
+`mode: update`. At the firm's `handles` level the brief's own turn runs it.
+
+**When it runs.** Only as that step (params `roster_task_id`, `provider`,
+`newest_record`, `mode: update`), or when a person asks for it directly on one
+matter. Never on the scheduled scan: the gate enumerates open roster tasks only, so a
+received provider never enters the scheduled plans.
+
+1. **Verify live, on the one matter.** The roster task `roster_task_id` exists and is
+   completed (`list_tasks(matter_id, is_completed=true)`), and its authored roster
+   entry names the provider and a deliverable address. Re-read the file listing
+   (`get_files_on_matter`): if a record from this provider dated after
+   `newest_record` is now on file, there is nothing to ask; say so in one line and
+   stop. No authored address → surface, exactly as for a chase.
+2. **Prepare the request through the chase's own path.** Compose it from the chase
+   template (`references/voice.md`), with one difference in substance: it says the
+   firm holds this provider's records through `newest_record` and asks for any
+   records dated after it. It names the provider and the date and nothing else about
+   the records; it characterizes no treatment (the line above holds unchanged). The
+   recipient is the authored roster contact only.
+3. **Act at the step's level.**
+   - `prepares`: nothing leaves the firm. Write the request as a draft on the matter
+     (`create_memo`, headed `[Operator] Draft updated-records request - <provider> (not sent)`)
+     and tell the person who approved it where the draft is.
+   - `handles`: issue it with `mcp_agentmail_send_message`, exactly as a chase: the
+     firm's `external_send` ceiling, the recipient classifier and the floors decide
+     sent or held. Log it (`create_memo`).
+4. **Record it only if it went out.** After a successful `send_message` (sent, or held
+   as a draft by the ceiling), append a `chased` ledger event on the roster task's
+   identity (`matter_id`, `roster_task_id`, label `records-chase`, `authored_date`
+   null), the same two-step as a chase. That row is what stops the brief offering the
+   same request again: it offers an update only when nobody has asked since the
+   newest record arrived. A `prepares` draft appends nothing, because nothing was sent.
+
+The roster task stays completed; this step does not reopen it or open a new roster
+item, so the scheduled chase does not take it over.
+
 ## The state ledger (ss #2404) - the email copies it, never recalls it
 
 The chase's history lives in the shared **escalation ledger** (vendored

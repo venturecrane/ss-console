@@ -1006,6 +1006,12 @@ export interface CaseManagerDatePrep {
   level: CaseManagerLevel
   /** A court date or deadline this many days out starts the prep. Required: no pack default. */
   window_days: number
+  /**
+   * A provider whose newest received record is older than this many days is
+   * offered an updated-records request (`records_refresh` in `update` mode).
+   * Null = that offer is off: no pack default for how old is too old.
+   */
+  records_stale_days: number | null
   /** Per step, the level the firm chose. Never above `level`; an unlisted step is never offered. */
   steps: Partial<Record<DatePrepStep, CaseManagerLevel>>
 }

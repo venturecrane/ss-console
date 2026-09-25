@@ -1157,6 +1157,10 @@ case_manager:
   date_prep:
     level: prepares
     window_days: 14
+    # A received provider whose newest record on file is older than this is
+    # offered an updated-records request before the date. Unauthored = no such
+    # offer (how old is too old is the firm's call, no pack default).
+    records_stale_days: 60 # PLACEHOLDER(rehearsal): staging value; a client seat authors its own
     steps:
       binder_assemble: prepares
       witness_list_finalize: prepares

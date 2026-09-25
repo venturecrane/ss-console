@@ -75,6 +75,14 @@ motion picture from `motion-calendar-tracker`), does the steps the firm has turn
 on, and then writes one message: what is done, what is not, and the one or two
 decisions left.
 
+Records currency covers both kinds of provider. One still outstanding is chased on
+the chaser's cadence. One already received, whose newest record on file is older
+than the firm's authored `records_stale_days`, is offered an updated-records request
+("Dr. Reyes's newest records are dated [date]. Want me to request an update before
+trial?"); on a yes, `medical-records-chaser` prepares that request through its own
+request path, as a draft at "Prepares it for you" or sent under the firm's send
+ceiling at "Handles it". No threshold authored, no such offer.
+
 ### Job 3. Handle the routine quietly
 
 Confirmations and housekeeping the Operator can do are done and mentioned in one
@@ -242,7 +250,3 @@ router's existing skill path, reading the routine's own procedure.
   edit. Until then its `cron: []` and its escalator are untouched.
 - **The first cleanup.** Whether a firm's first task-list cleanup is part of
   onboarding or a separately quoted engagement.
-- **Records already received.** The spec's example A asks whether to request an
-  update of records already on file. The records chaser works its open roster only,
-  so the brief does not offer that step today (it would promise one no routine can
-  run). Adding it is a change to the chaser, if the Captain wants it.

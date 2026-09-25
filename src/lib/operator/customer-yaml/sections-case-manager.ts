@@ -34,6 +34,7 @@ const TOP_KEYS = ['own_tasks', 'task_cleanup', 'date_prep', 'quiet'] as const
 
 /** Ceilings. Past these a value is a typo, not a posture. */
 const MAX_WINDOW_DAYS = 90
+const MAX_RECORDS_STALE_DAYS = 730
 const MAX_KEEP_QUIET_DAYS = 365
 const MAX_LINES = 30
 const MAX_LEGACY_TASK_IDS = 200
@@ -174,10 +175,16 @@ function checkDatePrep(
   root: Record<string, unknown>,
   errors: ValidationError[]
 ): CaseManagerDatePrep | null {
-  const raw = subBlock(root, 'date_prep', ['level', 'window_days', 'steps'], errors)
+  const raw = subBlock(
+    root,
+    'date_prep',
+    ['level', 'window_days', 'records_stale_days', 'steps'],
+    errors
+  )
   if (raw === null) return null
   const base = `${ROOT}.date_prep`
   const lvl = level(raw['level'], `${base}.level`, errors)
+  const before = errors.length
   const windowDays = posInt(
     raw['window_days'],
     MAX_WINDOW_DAYS,
@@ -185,9 +192,16 @@ function checkDatePrep(
     errors,
     true
   )
+  const staleDays = posInt(
+    raw['records_stale_days'],
+    MAX_RECORDS_STALE_DAYS,
+    `${base}.records_stale_days`,
+    errors,
+    false
+  )
   const steps = checkSteps(raw['steps'], lvl, errors)
-  if (lvl === null || windowDays === null || steps === null) return null
-  return { level: lvl, window_days: windowDays, steps }
+  if (lvl === null || windowDays === null || steps === null || errors.length > before) return null
+  return { level: lvl, window_days: windowDays, records_stale_days: staleDays, steps }
 }
 
 function checkQuiet(

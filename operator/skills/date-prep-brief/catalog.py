@@ -91,27 +91,60 @@ def status_entries(step: str, level: str, markers: dict, files: list[dict]) -> l
     return [_entry(step, level, {}, basis)]
 
 
-def records_entries(level: str, records: list[dict], chases: dict, cadence_days: int | None, today: date) -> list[dict]:
-    """An OUTSTANDING provider on the records roster whose chase is due: never
-    chased, or last chased at least ``cadence_days`` ago. With no authored
-    cadence only a never-chased provider is offered (no invented interval).
+def _chase_entry(level: str, record: dict, chase: dict, cadence_days: int | None, today: date) -> dict | None:
+    """An OUTSTANDING provider whose chase is due: never chased, or last chased
+    at least ``cadence_days`` ago. With no authored cadence only a never-chased
+    provider is offered (no invented interval)."""
+    last = chase.get("last_chased")
+    if last is not None and (cadence_days is None or (today - date.fromisoformat(last)).days < cadence_days):
+        return None
+    basis = ["outstanding, chased " + str(chase.get("attempts", 0)) + "x, last " + (last or "never")]
+    params = {"roster_task_id": record["roster_task_id"], "provider": record["provider"], "mode": "chase"}
+    return _entry("records_refresh", level, params, basis, suffix=record["roster_task_id"])
 
-    Received providers are listed in the file status but never offered: the
-    chaser works its open roster only, so "request an update of records already
-    received" is not a step any routine can run today, and offering it would
-    promise one."""
+
+def _update_entry(level: str, record: dict, chase: dict, stale_days: int | None, today: date) -> dict | None:
+    """A RECEIVED provider whose newest record on file is older than the firm's
+    ``records_stale_days``, and who has not been asked since that record
+    arrived. No authored threshold, no offer; an unknown newest record (no file
+    name matched) is unknown, never stale."""
+    newest = record.get("newest_record")
+    if stale_days is None or newest is None or (today - date.fromisoformat(newest)).days <= stale_days:
+        return None
+    last = chase.get("last_chased")
+    if last is not None and last >= newest:
+        return None
+    basis = ["received, newest record " + newest + ", last asked " + (last or "never")]
+    params = {
+        "roster_task_id": record["roster_task_id"],
+        "provider": record["provider"],
+        "mode": "update",
+        "newest_record": newest,
+    }
+    return _entry("records_refresh", level, params, basis, suffix=record["roster_task_id"])
+
+
+def records_entries(
+    level: str,
+    records: list[dict],
+    chases: dict,
+    cadence_days: int | None,
+    today: date,
+    stale_days: int | None = None,
+) -> list[dict]:
+    """One ``records_refresh`` entry per roster provider that needs asking: a
+    chase for an outstanding provider (``mode: chase``), or an updated-records
+    request for a received provider whose records have gone stale
+    (``mode: update``). Both run through medical-records-chaser's request path."""
     out = []
     for record in records:
-        if record.get("state") != "outstanding":
-            continue
         chase = chases.get(record["roster_task_id"]) or {}
-        last = chase.get("last_chased")
-        if last is not None:
-            if cadence_days is None or (today - date.fromisoformat(last)).days < cadence_days:
-                continue
-        basis = ["outstanding, chased " + str(chase.get("attempts", 0)) + "x, last " + (last or "never")]
-        params = {"roster_task_id": record["roster_task_id"], "provider": record["provider"]}
-        out.append(_entry("records_refresh", level, params, basis, suffix=record["roster_task_id"]))
+        if record.get("state") == "outstanding":
+            entry = _chase_entry(level, record, chase, cadence_days, today)
+        else:
+            entry = _update_entry(level, record, chase, stale_days, today)
+        if entry is not None:
+            out.append(entry)
     return out[:MAX_RECORDS_ENTRIES]
 
 
@@ -122,6 +155,7 @@ def build_catalog(
     *,
     cadence_days: int | None,
     today: date,
+    stale_days: int | None = None,
 ) -> list[dict]:
     """The closed catalog for one matter. ``steps`` is the authored
     ``case_manager.date_prep.steps`` map; an unlisted step is never offered."""
@@ -140,7 +174,7 @@ def build_catalog(
         elif step in _STATUS_STEPS and not unread & {"files", "memos"}:
             catalog.extend(status_entries(step, level, markers, files))
         elif step == "records_refresh" and "tasks" not in unread:
-            catalog.extend(records_entries(level, status.get("records") or [], chases, cadence_days, today))
+            catalog.extend(records_entries(level, status.get("records") or [], chases, cadence_days, today, stale_days))
     return catalog[:MAX_ENTRIES]
 
 
