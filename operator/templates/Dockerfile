@@ -1005,7 +1005,15 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # digest_ref.py stamps thread_ref, same ss-console PR #2942). No overlay-pairs
 # file or audit schema changed (git diff --stat 8757e374 48726abb), so only
 # overlayRef moves.
-ARG OVERLAY_REF="48726abbbd9da1c746a63ac0a7d5800fa910a65a"
+# 2026-09-25 (ed60de15, overlay #385). Calendar-event deletion as an
+# administrator-confirmed act: mcp_smokeball_prepare_event_deletion READ,
+# mcp_smokeball_delete_events DESTRUCTIVE, and the confirm branch admits
+# DESTRUCTIVE only for a tool with a call-payload act shape
+# (shared/act_broker.py CALL_PAYLOAD_ACTS). The validator accepts
+# `destructive: confirm` in exposure; the SOUL line names the two calls. No
+# overlay-pairs file or audit schema changed (git diff --stat 48726abb
+# ed60de15), so only overlayRef moves.
+ARG OVERLAY_REF="ed60de15ac6c9d2349c89060ffa7dd42bf2e7c98"
 
 ARG CUSTOMER_SLUG=customer-zero
 

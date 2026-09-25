@@ -11,6 +11,7 @@ import json
 import secrets
 from typing import Any
 
+from . import act_event_set
 from .establishment_constants import (
     ACT_COMMITTED_ACTION_TYPE,
     ACT_CONFIG_KEYS,
@@ -160,9 +161,10 @@ class ActProposals(ProposalLifecycle):
     @staticmethod
     def _require_act_tool(value: Any) -> str:
         tool = _require_text(value, "tool", _MAX_SHORT_TEXT)
-        if tool not in ACT_TOOLS:
+        if tool not in ACT_TOOLS and tool not in act_event_set.CALL_PAYLOAD_ACTS:
+            vocabulary = sorted(set(ACT_TOOLS) | set(act_event_set.CALL_PAYLOAD_ACTS))
             raise EstablishmentValidationError(
-                f"{tool!r} is not an act this broker can propose; the closed vocabulary is {sorted(ACT_TOOLS)}"
+                f"{tool!r} is not an act this broker can propose; the closed vocabulary is {vocabulary}"
             )
         return tool
 
@@ -211,6 +213,8 @@ class ActProposals(ProposalLifecycle):
         """
         pending = self._require_pending()
         tool = self._require_act_tool(request.get("tool"))
+        if tool in act_event_set.CALL_PAYLOAD_ACTS:
+            return self._propose_call_payload_act(request, tool)
         payload = self._require_act_payload(request.get("payload"), tool)
         instructed_by = require_address(request.get("instructed_by"), "instructed_by")
         source_ref = _require_text(request.get("source_ref"), "source_ref", _MAX_SHORT_TEXT)
@@ -313,6 +317,60 @@ class ActProposals(ProposalLifecycle):
             "readback": readback_for(row["proposal_id"], text, "tool_call"),
         }
 
+    def _propose_call_payload_act(self, request: dict[str, Any], tool: str) -> dict[str, Any]:
+        """Propose an act whose payload rides on the withheld call (the calendar
+        deletion, :mod:`.act_event_set`). Same row, same tag, same ledger types
+        as an authored act; the difference is only where the values come from,
+        and the connector re-verifies every one of them against the vendor
+        before it deletes anything."""
+        pending = self._require_pending()
+        payload = act_event_set.require_event_set(request.get("payload"))
+        instructed_by = require_address(request.get("instructed_by"), "instructed_by")
+        source_ref = _require_text(request.get("source_ref"), "source_ref", _MAX_SHORT_TEXT)
+        act_event_set.require_exposure(self._seat_config(), tool)
+        text = act_event_set.event_set_readback(payload)
+        payload_sha256 = act_event_set.payload_digest(payload)
+        row = pending.create(
+            scope="act",
+            subject={"tool": tool, "payload_sha256": payload_sha256},
+            text=text,
+            instructed_by=instructed_by,
+            for_admin=True,
+            kind="tool_call",
+            payload=payload,
+        )
+        self.ledger.append(
+            {
+                "action_type": ACT_PROPOSED_ACTION_TYPE,
+                "actor": "operator",
+                "actor_role": "agent",
+                "metadata": json.dumps(
+                    {
+                        "proposal_id": row["proposal_id"],
+                        "kind": "tool_call",
+                        "tool": tool,
+                        "instructed_by": instructed_by,
+                        "source_ref": source_ref,
+                        "payload_sha256": payload_sha256,
+                        "event_count": len(payload["events"]),
+                    },
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+            }
+        )
+        return {
+            "ok": True,
+            "proposal_id": row["proposal_id"],
+            "kind": "tool_call",
+            "tool": tool,
+            "payload": payload,
+            "payload_sha256": payload_sha256,
+            "for_admin": True,
+            "expires_at": row["expires_at"],
+            "readback": readback_for(row["proposal_id"], text, "tool_call"),
+        }
+
     def act_commit(self, request: dict[str, Any]) -> dict[str, Any]:
         """Record that a proposed act was performed. Consumes the row exactly once.
 
@@ -336,8 +394,12 @@ class ActProposals(ProposalLifecycle):
                 f"act {row['proposal_id']} holds no payload; nothing can be committed under it"
             )
         supplied = request.get("payload")
+        call_payload = tool in act_event_set.CALL_PAYLOAD_ACTS
         if supplied is not None:
-            if self._require_act_payload(supplied, tool) != stored_payload:
+            normalized = (
+                act_event_set.require_event_set(supplied) if call_payload else self._require_act_payload(supplied, tool)
+            )
+            if normalized != stored_payload:
                 raise EstablishmentValidationError(
                     f"payload does not match act {row['proposal_id']} as it was proposed "
                     "and confirmed; the act carries the proposal's values, not this "
@@ -376,6 +438,9 @@ class ActProposals(ProposalLifecycle):
             "pending": bool(outcome.get("pending")),
             "matter_id": _bounded_str(outcome.get("matter_id")),
         }
+        if call_payload:
+            metadata["event_count"] = len(stored_payload.get("events") or [])
+            metadata["outcome_counts"] = act_event_set.outcome_counts(outcome)
         self.ledger.append(
             {
                 "action_type": ACT_COMMITTED_ACTION_TYPE,
