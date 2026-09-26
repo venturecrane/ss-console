@@ -224,6 +224,11 @@ def main() -> int:
     ap.add_argument("customer_yaml")
     ap.add_argument("--trigger", choices=("boot", "connect"), default="boot")
     args = ap.parse_args()
+    # Its subscription writes reach the firm's Smokeball through the connector
+    # client, which records every write in the ledger and refuses one whose
+    # writer is unnamed (write_record.py). The per-vendor subprocess inherits
+    # this, so the rows say it was the reconciler and which trigger ran it.
+    os.environ.setdefault("SMD_DIRECT_WRITE_ACTOR", f"webhook-reconciler:{args.trigger}")
     try:
         return reconcile_all(args.customer_yaml, args.trigger)
     except Exception as exc:  # noqa: BLE001 — never crash the boot/callback path

@@ -45,6 +45,8 @@ from typing import Any
 
 import httpx
 
+from .write_record import WriteRecord
+
 # /matters/{id} paths take the matter's UUID, never its human matter number.
 # Guarded in request() - see the docstring there for the 2026-09-01 incident.
 # Deliberately narrow (#2673 doctrine): refuse only a segment that CANNOT be an
@@ -338,6 +340,10 @@ class SmokeballClient:
             )
         prefix = f"/{self._account_id}" if self._account_id else ""
         url = f"{self.api_host}{prefix}{path}"
+        # A write is recorded in the seat's audit ledger before it is sent, or it
+        # is not sent (write_record.py). Reads pass straight through.
+        record = WriteRecord(method, path, seg.group(1) if seg else None, json)
+        record.begin()
         refreshed = False
         last: httpx.Response | None = None
         for attempt in range(_MAX_ATTEMPTS):
@@ -346,7 +352,11 @@ class SmokeballClient:
                 "Authorization": f"Bearer {self._bearer()}",
                 "Accept": "application/json",
             }
-            last = self._http.request(method, url, params=_clean(params), json=json, headers=headers)
+            try:
+                last = self._http.request(method, url, params=_clean(params), json=json, headers=headers)
+            except httpx.HTTPError as exc:
+                record.finish(None, error=f"{type(exc).__name__}: {exc}")
+                raise
             if last.status_code == 429:
                 time.sleep(min(2**attempt, 8))
                 continue
@@ -355,12 +365,17 @@ class SmokeballClient:
                 refreshed = True
                 continue
             if last.status_code >= 400:
+                record.finish(last.status_code, error=_truncate_body(last.text))
                 raise SmokeballApiError(method, path, last.status_code, _truncate_body(last.text))
             if last.status_code == 204 or not last.content:
+                record.finish(last.status_code)
                 return None
-            return last.json()
+            result = last.json()
+            record.finish(last.status_code, result)
+            return result
         assert last is not None
         # Attempts exhausted (e.g. a persistent 429) — surface the last status+body.
+        record.finish(last.status_code, error=_truncate_body(last.text))
         raise SmokeballApiError(method, path, last.status_code, _truncate_body(last.text))
 
     def get(self, path: str, **params: Any) -> Any:

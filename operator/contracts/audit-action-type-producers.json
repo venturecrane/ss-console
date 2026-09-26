@@ -496,6 +496,11 @@
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/casework_verbs.py",
       "reason": "The Operator closes a task it created itself because the matter record already shows it done, at a level the firm set. The metadata carries the evidence atoms it read; a close on money or a court date is refused before this row can exist."
+    },
+    "SMOKEBALL_WRITE": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/audit_verbs.py",
+      "reason": "Every write to a firm's Smokeball, recorded by the connector client before it is sent (intent) and after (result), whichever process holds the client: the Operator's MCP server or SMD working directly over seat-probe. The client refuses a write whose intent row did not land. The row names the actor, method, path, matter, a body digest, and the vendor's returned id; the broker stamps the peer uid and pid."
     }
   }
 }

@@ -325,6 +325,11 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "CASEWORK_APPROVED",
         "CASEWORK_HELD",
         "CASEWORK_CLOSED_BY_RECORD",
+        # Every write to a firm's Smokeball, by the Operator or by SMD directly,
+        # recorded by the connector client before it is sent and refused when the
+        # row cannot land (A&P 2026-09-26). Broker-side
+        # (operator/workspace_broker/audit_verbs.py smokeball_write_append).
+        "SMOKEBALL_WRITE",
         # ss#2546 (the operations half). The three beats of a change only SMD
         # makes -- a routine, a schedule, a channel, a memory setting, an
         # autonomy level, an on/off. Recorded when somebody at the firm asks and

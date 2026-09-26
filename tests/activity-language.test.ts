@@ -61,6 +61,10 @@ describe('activity-language exhaustiveness (writer parity)', () => {
         'CASEWORK_APPROVED',
         'CASEWORK_HELD',
         'CASEWORK_CLOSED_BY_RECORD',
+        // Every write to the firm's Smokeball, the Operator's and SMD's direct
+        // ones alike. It renders: a change to the firm's records that shows
+        // nothing on the feed is the silence the row exists to end.
+        'SMOKEBALL_WRITE',
         // ss#2546 (the operations half). A routine, a schedule, a channel, a
         // memory setting, an autonomy level, an on/off: the firm asks, SMD
         // decides. All three render, because a request whose answer shows

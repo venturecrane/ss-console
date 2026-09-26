@@ -119,6 +119,7 @@ export const CLIENT_ACTIVITY_CATEGORIES: readonly ClientActivityCategory[] = [
       'CASEWORK_APPROVED',
       'CASEWORK_HELD',
       'CASEWORK_CLOSED_BY_RECORD',
+      'SMOKEBALL_WRITE',
     ],
   },
   {
@@ -332,6 +333,12 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   CASEWORK_APPROVED: () => 'Recorded your go-ahead on a task change',
   CASEWORK_HELD: () => 'Left a task as it is, as you asked',
   CASEWORK_CLOSED_BY_RECORD: () => 'Closed a task the matter record shows is done',
+  // Every write to the firm's Smokeball. Who wrote is the fact that matters:
+  // the Operator, or SMD working directly on the firm's behalf.
+  SMOKEBALL_WRITE: (entry) =>
+    entry.actorRole === 'agent'
+      ? 'Made a change in Smokeball'
+      : 'SMD made a change in Smokeball directly',
   // ss#2546 (the operations half). Three lines for a change the firm asked for
   // and SMD makes. Written from the reader's side, and the middle one stays
   // deliberately vague about WHICH answer: the outcome the client cares about

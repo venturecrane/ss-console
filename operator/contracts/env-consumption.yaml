@@ -96,6 +96,12 @@ vars:
     agent_env: held
     custody: infra
     note: from fly.toml [env]; set => overlay routes audit writes through the broker's append-only audit_append (OP-P1-4); the broker-side ledger path (SMD_AUDIT_DB_PATH) is entrypoint-computed and broker-only, like SMD_WORKSPACE_BROKER_SOCKET
+  SMD_DIRECT_WRITE_ACTOR:
+    stage: agent
+    requirement: optional
+    agent_env: held
+    custody: infra
+    note: names who is writing to a firm's Smokeball when the writer is not the Operator (smokeball_connector/write_record.py). Never in the gateway's environment; set per process by operator/bin/seat-probe.sh (seat-probe:<login>@<host>) and by operator/bin/webhook_reconcile.py (webhook-reconciler:<trigger>). A non-Operator write with it unset is refused, and no row, no write
   SMD_GATEWAY_PID:
     stage: agent
     requirement: optional

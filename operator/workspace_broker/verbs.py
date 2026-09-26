@@ -125,6 +125,10 @@ VERBS: tuple[Verb, ...] = (
     Verb("emitted_wake_append", _only(AGENT), audit_verbs.emitted_wake_append),
     Verb("webhook_suppressed_append", _only(AGENT), audit_verbs.webhook_suppressed_append),
     Verb("correction_propose", _only(AGENT), audit_verbs.correction_propose),
+    # Every write to a firm's Smokeball, recorded before it is sent (the
+    # connector's write_record.py). Agent uid for the Operator's MCP server and
+    # seat-probe scripts; root for a raw ssh session and the boot reconciler.
+    Verb("smokeball_write_append", ROOT_OR_AGENT, audit_verbs.smokeball_write_append),
     Verb("escalation_event_append", _only(AGENT), _escalation),
     # Case-manager casework ledger (proposals, verdicts, task writes).
     Verb("casework_event_append", _only(AGENT), casework_verbs.append_casework_event),
