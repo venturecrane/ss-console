@@ -21,7 +21,6 @@ from datetime import date
 #: to the label-free wording rather than risk it.
 ITEM_MAX = 240
 CLOSE_MAX = 160
-DONE_SINCE_MAX = 160
 LEAD_MAX = 600
 MEMO_MAX = 600
 
@@ -113,13 +112,6 @@ def close_line(head: str, label: str | None, due: date, evidence: str | None) ->
         f"{head}: {task_phrase(None, due, start=False)}{why}",
         CLOSE_MAX,
     )
-
-
-def done_since_line(head: str, closed_on: date | None, evidence: str | None) -> str:
-    """A close from an earlier run, told once (Job 3)."""
-    when = f" on {closed_on.isoformat()}" if closed_on else ""
-    why = f", {evidence} was on file" if evidence else ""
-    return _fit(f"{head}: a task I closed{when}{why}", f"{head}: a task I closed{when}", DONE_SINCE_MAX)
 
 
 def memo_text(evidences: list[str | None]) -> str:

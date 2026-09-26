@@ -363,6 +363,8 @@ def test_done_since_last_time_and_its_memo(tmp_path, monkeypatch):
         {
             "item_key": key,
             "matter_id": M001,
+            "kind": "task",
+            "source_id": task_id,
             "task_id": task_id,
             "line": "matter PI-2026-0001: a task I closed on 2026-09-21, a proof of service dated 2026-07-09 was on file",
         }
@@ -373,6 +375,56 @@ def test_done_since_last_time_and_its_memo(tmp_path, monkeypatch):
             "text": "Task list upkeep: I closed 1 task on this matter that the record showed were done (a proof of service dated 2026-07-09).",
         }
     ]
+
+
+def test_a_step_the_operator_ran_itself_is_told_once_without_a_memo(tmp_path, monkeypatch):
+    event_id = "evt-0001-status-conference"
+    key = ledger.item_key(matter_id=M001, kind="date", source_id=event_id)
+    step = {
+        "catalog_id": "records_refresh:rt-7",
+        "skill": "medical-records-chaser",
+        "level": "handles",
+        "params": {"provider": "Valley Imaging", "mode": "update", "newest_record": "2026-06-20"},
+    }
+    rows = [
+        {
+            "item_key": key,
+            "matter_id": M001,
+            "kind": "date",
+            "source_id": event_id,
+            "event": "step_ran",
+            "payload": {"action": "step", "class": "open", "step": step},
+            "tool_call_id": "call-memo",
+            "ts": "2026-09-25T15:05:00Z",
+        }
+    ]
+    _out, envelope, _ = _run(_raw(), _yaml(), tmp_path, monkeypatch, casework_events=rows)
+    since = [d for m in envelope["messages"] for d in m["done_since"]]
+    assert since == [
+        {
+            "item_key": key,
+            "matter_id": M001,
+            "kind": "date",
+            "source_id": event_id,
+            "line": "matter PI-2026-0001: on 2026-09-25 I asked Valley Imaging for records dated after 2026-06-20",
+        }
+    ]
+    assert not envelope.get("memos")
+    mentioned = [
+        *rows,
+        {
+            **{k: rows[0][k] for k in ("item_key", "matter_id", "kind", "source_id")},
+            "event": "mentioned",
+            "ts": "2026-09-26T13:00:00Z",
+        },
+    ]
+    _out, envelope, _ = _run(_raw(), _yaml(), tmp_path, monkeypatch, casework_events=mentioned)
+    assert not [d for m in envelope["messages"] for d in m["done_since"]]
+
+
+def test_done_since_uses_the_review_close_words():
+    since = _load("done_since.py", "tlk_done_since_under_test")
+    assert since.EVIDENCE_PHRASES == lines._EVIDENCE_PHRASES
 
 
 def test_unroutable_matters_send_nothing(tmp_path, monkeypatch):

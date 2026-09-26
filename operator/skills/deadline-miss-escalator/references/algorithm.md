@@ -110,6 +110,17 @@ and `dispatch_envelope.split_digest` runs `digest_items.extract_task_review`
 per recipient after re-banding: overdue tasks past the top five become the
 count on the review line and get no `fired` append.
 
+When `quiet` is authored the projected digest also carries `done_since`: the
+casework ledger's untold closes and `step_ran` rows (`casework_ledger.needs_mention`),
+rendered by the vendored `done_since.py`, for every matter whose number this
+pull read. Each row carries `seed` nodes (matter number and every day its line
+renders), so the provenance handoff pairs those days with that matter.
+`split_digest` gives a recipient the rows for its matters, plus matters with
+nothing in the digest whose routing lands on that same recipient
+(`dispatch_envelope._since_routes`); a done line never creates a dispatch, a
+memo duty or an unroutable entry. The dispatch's `casework_mentions` lists the
+items so the overlay marks them told after a full send.
+
 ## Writing the ledger (through the validated broker seam)
 
 The ledger file is broker-owned; the agent reads it but never writes it

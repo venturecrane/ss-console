@@ -1758,6 +1758,14 @@ def test_failure_note_envelope_passes_the_pinned_dispatchers_validator(tmp_path,
     func = re.search(r"^def _valid_dispatch\(entry: object\) -> bool:\n(?:[ \t].*\n|\n)+", source, re.M)
     assert func, "could not lift _valid_dispatch out of the pinned dispatcher"
     required = set(re.findall(r'entry\.get\("(\w+)"', func.group(0)))
+    # Keys the pinned validator reads but accepts ABSENT, each named with why.
+    # casework_mentions (overlay#388): the case-manager digest's done-line
+    # items, validated by ``casework_mentions.valid(entry.get(...))``, whose
+    # first line is ``if value is None: return True``. Only a case-manager
+    # seat with ``quiet`` authored writes it; every other envelope omits it.
+    # Named here rather than filtered by shape so a NEW optional key still
+    # fails this test until someone reads the pinned code and says so.
+    required -= {"casework_mentions"}
     # A regex that silently matched nothing would make every assertion below
     # vacuous -- the exact hole this repo keeps finding in its own gates.
     assert {"recipients", "subject", "full_body"} <= required, required

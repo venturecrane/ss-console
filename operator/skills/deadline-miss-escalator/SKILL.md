@@ -82,6 +82,8 @@ A firm that turns on the case-manager jobs (`docs/specs/operator/case-manager-de
 - **A court date with a date-prep brief leaves the digest, with a backstop.** Once every decision in the brief is answered, the date is the brief's. While any is unanswered, the date comes back here as soon as it is inside `notify_days`: an unanswered brief never silences a court date.
 - **The overflow line.** When `case_manager.task_cleanup` is authored, a recipient's overdue tasks past the top five collapse into one line, "N more overdue tasks are in Monday's task review." (the day read from the firm's own `task-list-keeper` cron entry; "the next task review" when the schedule names no single day). Those tasks are not raised here (no `fired` row): they are the review's. Court dates and not-yet-overdue tasks past the top five stay in "Also open".
 
+- **Done since last time.** When `case_manager.quiet` is authored, the digest opens with one line naming the work the Operator finished without asking and has told nobody about: a task it closed on the record's evidence, or a date-prep step it ran at "Handles it". It rides a recipient's digest only when that digest is going out anyway (never a message of its own), covers that recipient's matters, and is rendered from the casework ledger rows by `done_since.py`. After a full send the overlay records each item `mentioned`, so it is told once.
+
 A seat with no `case_manager:` block (ashton-price today) sees none of this.
 
 ## Prerequisites
@@ -150,7 +152,7 @@ Computing "X from the incident" to decide what is overdue (the cardinal sin - ov
 - `references/algorithm.md` - the in-range test, the ledger join + fire policy, the item identity + ack token, the broker append seam, and the never-computes line in code
 - `references/output-format.md` - the triaged alert (Needs you today / Also open / dedup pointers) and the confirmation reply
 - `casework_filter.py` + `test_case_manager_escalator.py` - the case-manager drops, the brief backstop, and the task-review line; `test_case_manager_golden.py` pins the unconfigured path byte for byte
-- `casework_ledger.py` / `casework_view.py` - vendored copies (the ledger's canonical is `operator/workspace_broker/casework_ledger.py`; the view's lives in the task-list-keeper skill); do not edit the copies
+- `casework_ledger.py` / `casework_view.py` / `done_since.py` - vendored copies (the ledger's canonical is `operator/workspace_broker/casework_ledger.py`; the view's lives in the task-list-keeper skill); do not edit the copies
 - `escalation_ledger.py` - the shared ledger module (byte-identical to `operator/workspace_broker/escalation_ledger.py`; item_key, token, state, fire policy). Do not edit the copy; edit the canonical and restamp.
 - `tests/selector_test.md` - selector targets this skill for "a deadline is slipping / escalate," not the standing tracker view
 - `pre_run.py` + `test_escalator_pre_run.py` - the no-agent cron decision (arithmetic + ledger join) + the `SUPPRESSED_WAKE` heartbeat and its fallback-to-wake

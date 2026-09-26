@@ -245,6 +245,17 @@ def _task_review_block(review: dict | None) -> list[str]:
     return [f"{count} more {noun} in {where}.", ""]
 
 
+def _done_since_block(rows: list[dict]) -> list[str]:
+    """Work the Operator finished without asking, told once (case-manager
+    seats with ``quiet`` authored; the key is absent everywhere else). The
+    lines are ``done_since.py``'s, rendered from the casework ledger rows."""
+    lines = [str(r.get("line") or "").strip().rstrip(". ") for r in rows or []]
+    lines = [line for line in lines if line]
+    if not lines:
+        return []
+    return ["Done since last time: " + "; ".join(lines) + ".", ""]
+
+
 def _elsewhere_block(band: dict | None) -> list[str]:
     if not (isinstance(band, dict) and band.get("matters")):
         return []
@@ -337,6 +348,8 @@ def render_digest(
     lines: list[str] = []
     if rekey_count > 0:
         lines += [_REKEY_NOTICE.format(n=rekey_count, s="" if rekey_count == 1 else "s"), ""]
+    # Done, then needs you (case-manager spec, rule 4).
+    lines += _done_since_block(digest.get("done_since") or [])
     lines += _needs_you_block(digest.get("needs_you") or [])
     lines += _overflow_block(digest.get("admin_confirms"))
     lines += _task_review_block(digest.get("task_review"))

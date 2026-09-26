@@ -238,7 +238,7 @@ def test_completed_needs_the_update_task_call_on_file_once() -> None:
     other = _base(source_id="task-two")
     rows = _ledger(_raise(), _verdict(), _done(), {**_raise(), **other}, {**_verdict(), **other})
     _check(rows, {**other, "event": "completed", "tool_call_id": "toolu_02"})
-    with pytest.raises(ValueError, match="already completed another item"):
+    with pytest.raises(ValueError, match="already backs another casework row"):
         _check(rows, {**other, "event": "completed", "tool_call_id": "toolu_01"})
 
 
@@ -267,7 +267,7 @@ def test_kept_needs_a_hold_and_quiets_for_the_window() -> None:
 
 def test_mention_follows_a_record_close_once() -> None:
     mention = {**_base(), "event": "mentioned"}
-    with pytest.raises(ValueError, match="was not"):
+    with pytest.raises(ValueError, match="has neither"):
         _check([], mention)
     rows = _ledger({**_base(), "event": "closed_by_record", "payload": _payload()}, _done())
     state = cl.derive_state(rows)[rows[0]["item_key"]]

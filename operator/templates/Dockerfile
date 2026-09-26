@@ -1029,7 +1029,19 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # and the casework_finish, casework_brief and reply_verdicts tools.
 # plugins/hermes-smd-audit/schemas.py is untouched and every other tracked
 # twin re-hashes identical (git diff --stat 822d9573 6b1f5751).
-ARG OVERLAY_REF="6b1f5751e919428eeb5892763a1493e2190a8ce2"
+# 2026-09-25 (fca804de, the overlay #388 merge commit). Case-manager
+# "Done since last time": shared/casework_ledger.py restamped (step_ran, and
+# mentioned closes a date item's untold steps; sha 75308878 on both sides),
+# shared/casework_mentions.py (the digest's mentioned rows after a full send),
+# shared/casework_steps.py and the casework_step_done tool (a date-prep step
+# the turn ran at handles, witnessed by its create_memo call). The casework
+# ledger is the only tracked twin in the range (git diff --stat 6b1f5751
+# fca804de); plugins/hermes-smd-audit/schemas.py is untouched.
+# 2026-09-25 (70334084, the overlay #389 merge commit). The casework ledger
+# twin splits _validate_payload under the console's complexity ceiling (rules
+# and refusal text unchanged; sha 228f5a20 on both sides). It is the only
+# tracked twin in the range (git diff --stat fca804de 70334084).
+ARG OVERLAY_REF="70334084ccbd3ca00ac7c75cec71cbb5eb523d09"
 
 ARG CUSTOMER_SLUG=customer-zero
 

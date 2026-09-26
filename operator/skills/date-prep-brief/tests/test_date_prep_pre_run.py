@@ -438,3 +438,57 @@ def test_the_pilot_config_arms_the_job():
     assert prep is not None and prep["window_days"] >= 7
     ap = yaml.safe_load((_DIR.parents[1] / "customers" / "ashton-price" / "customer.yaml").read_text())
     assert pre_run.date_prep_config(ap) is None
+
+
+# ---------------------------------------------------------------------------
+# Done lines: a step the turn runs itself, and work from earlier runs
+# ---------------------------------------------------------------------------
+
+
+def _step_ran_row(event_id="e-earlier"):
+    step = {
+        "catalog_id": "records_refresh:t-reyes",
+        "skill": "medical-records-chaser",
+        "level": "handles",
+        "params": {"provider": "Valley Imaging", "mode": "update", "newest_record": "2026-06-20"},
+    }
+    return {
+        "item_key": casework.item_key(matter_id=M105, kind="date", source_id=event_id),
+        "matter_id": M105,
+        "kind": "date",
+        "source_id": event_id,
+        "event": "step_ran",
+        "payload": {"action": "step", "class": "open", "step": step},
+        "tool_call_id": "call-memo",
+        "ts": "2026-09-24T15:05:00Z",
+    }
+
+
+def test_a_handles_step_carries_its_done_line(seat):
+    home, _ = seat
+    _run(CFG)
+    envelope = json.loads((home / ".smd" / "pre_run" / "date-prep-brief.brief.json").read_text())
+    by_id = {e["catalog_id"]: e for e in envelope["catalog"]}
+    assert by_id["binder_assemble"]["done_line"] == "I assembled the trial binder index"
+    assert all("done_line" not in e for e in envelope["catalog"] if e["level"] != "handles")
+    assert "done_since" not in envelope, "no quiet authored, no earlier work told"
+
+
+def test_quiet_brings_this_matters_untold_work_into_the_brief(seat):
+    home, _ = seat
+    (home / "casework.jsonl").write_text(json.dumps(_step_ran_row()) + "\n", encoding="utf-8")
+    cfg = {**CFG, "case_manager": {**CFG["case_manager"], "quiet": {"level": "surfaces"}}}
+    _run(cfg)
+    envelope = json.loads((home / ".smd" / "pre_run" / "date-prep-brief.brief.json").read_text())
+    assert envelope["done_since"] == [
+        {
+            "item_key": _step_ran_row()["item_key"],
+            "matter_id": M105,
+            "kind": "date",
+            "source_id": "e-earlier",
+            "line": "matter 2026-PI-105: on 2026-09-24 I asked Valley Imaging for records dated after 2026-06-20",
+        }
+    ]
+    handoff = json.loads((home / ".smd" / "pre_run" / "date-prep-brief.json").read_text())
+    for day in ("2026-09-24", "2026-06-20"):
+        assert day in handoff["dates"] and day in handoff["records"][0]["dates"]
