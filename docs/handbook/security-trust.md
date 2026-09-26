@@ -86,6 +86,8 @@ This is the claim a firm's insurer, the State Bar, or opposing counsel would tes
 
 **The agent cannot alter or erase the record.** One process writes the ledger (the capability broker), the agent's user account has read-only access to the file, and the write surface exposes no update or delete verb. That part is structural.
 
+**Only the gateway may act, because only the gateway is recorded.** The broker accepts general audit rows from the gateway process alone. A second Operator runtime started on the machine (a `hermes -p operator` command over ssh) has every row refused, and on 2026-09-21 one ran tools on the pilot with nothing written down. Since then the trust plugin asks the broker whether it is talking to the gateway before any tool runs, and outside the gateway no tool runs. Such a runtime can still reach a model; those refused rows are counted in the seat's `audit_write_failures`, which now sums the seat's tally and every profile's (the gateway itself writes under its profile home, so until 2026-09-26 its own lost rows were never counted).
+
 **The chain catches a row changed, removed, or inserted before the end of the log.** Every row's hash commits to the row before it, so any of those breaks the chain at a point a verifier can name.
 
 **The chain alone does not catch rows cut off the end of the log.** What remains after such a cut is itself a valid chain, and a verifier reading only the export says so. This was measured on 2026-08-20 against a copy of a live 1,473-row export, not reasoned about: deleting the last fifty rows, deleting the last one row, and altering a row then recomputing every hash after it all reported the chain intact.

@@ -132,12 +132,30 @@ def test_health_is_the_only_ungated_verb_and_answers_any_peer(tmp_path: Path) ->
     reply = verbs.dispatch(broker, {"action": "health"}, STRANGER_PID, STRANGER_UID)
     assert reply == {
         "ok": True,
+        "caller_is_gateway": False,
         "credential_ready": False,
         "customer_ready": True,
         "audit_ready": False,
         "jobs_ready": False,
         "supported_ops": ["workspace_noop"],
     }
+
+
+def test_health_tells_the_gateway_it_is_the_gateway(tmp_path: Path) -> None:
+    """The overlay walls tools off in any process this answers False for, so the
+    gateway itself must get True, from its peer PID and nothing it sends."""
+    broker = _bare_broker()
+    broker.credential_path = tmp_path / "credential.json"
+    broker.customer_path = tmp_path / "customer.yaml"
+
+    class _Ops:
+        def supported_operations(self) -> list[str]:
+            return []
+
+    broker.operations = _Ops()
+    assert verbs.dispatch(broker, {"action": "health"}, GATEWAY_PID, AGENT_UID)["caller_is_gateway"] is True
+    forged = {"action": "health", "caller_is_gateway": True}
+    assert verbs.dispatch(broker, forged, STRANGER_PID, AGENT_UID)["caller_is_gateway"] is False
 
 
 def test_an_unknown_action_is_gateway_gated_then_refused_by_name() -> None:

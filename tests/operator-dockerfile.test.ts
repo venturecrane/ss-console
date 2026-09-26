@@ -1416,7 +1416,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // last time" in the digest; date-prep steps the Operator ran itself.
     // fca804de -> 70334084 (2026-09-25, overlay#389 merge commit). The ledger
     // twin splits _validate_payload under the complexity ceiling.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="70334084ccbd3ca00ac7c75cec71cbb5eb523d09"')
+    // 70334084 -> 340c82e4 (2026-09-26, overlay#390 merge commit). The gateway's
+    // lost rows are counted, non-gateway runtimes run no tools, and a
+    // spec_not_read refusal names the installed file.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="340c82e4afa0fbc76807c8d0ac2a8469ef5384dd"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

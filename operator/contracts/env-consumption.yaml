@@ -96,6 +96,12 @@ vars:
     agent_env: held
     custody: infra
     note: from fly.toml [env]; set => overlay routes audit writes through the broker's append-only audit_append (OP-P1-4); the broker-side ledger path (SMD_AUDIT_DB_PATH) is entrypoint-computed and broker-only, like SMD_WORKSPACE_BROKER_SOCKET
+  SMD_GATEWAY_PID:
+    stage: agent
+    requirement: optional
+    agent_env: held
+    custody: infra
+    note: exported by entrypoint.sh for the container main that execs into the gateway; the broker gates audit_append on it. The overlay's non-gateway tool wall (shared/gateway_identity.py) reads it only as a fallback when the broker's health cannot answer caller_is_gateway, and fails closed when it is unset
   R2_SKILL_BODIES_BUCKET:
     stage: agent
     requirement: required

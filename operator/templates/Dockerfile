@@ -1041,7 +1041,7 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # twin splits _validate_payload under the console's complexity ceiling (rules
 # and refusal text unchanged; sha 228f5a20 on both sides). It is the only
 # tracked twin in the range (git diff --stat fca804de 70334084).
-ARG OVERLAY_REF="70334084ccbd3ca00ac7c75cec71cbb5eb523d09"
+ARG OVERLAY_REF="340c82e4afa0fbc76807c8d0ac2a8469ef5384dd"
 
 ARG CUSTOMER_SLUG=customer-zero
 
