@@ -108,7 +108,7 @@ def _provider(params: dict) -> str:
     raw = params.get("provider")
     if not isinstance(raw, str):
         return _SOME_PROVIDER
-    text = _SPACES.sub(" ", raw.replace("—", " ").replace("–", " ")).strip()
+    text = _SPACES.sub(" ", raw.replace("\u2014", " ").replace("\u2013", " ")).strip()
     return text if text and len(text) <= _PROVIDER_MAX else _SOME_PROVIDER
 
 
