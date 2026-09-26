@@ -1412,7 +1412,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // delivers an act line the turn did not send.
     // 822d9573 -> 6b1f5751 (2026-09-25, overlay#386 merge commit).
     // Case-manager casework tools and the casework ledger twin.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="6b1f5751e919428eeb5892763a1493e2190a8ce2"')
+    // 6b1f5751 -> fca804de (2026-09-25, overlay#388 merge commit). "Done since
+    // last time" in the digest; date-prep steps the Operator ran itself.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="fca804debe7f99d078956f792dac23ebf6d129cf"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
