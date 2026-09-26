@@ -68,25 +68,30 @@ All of it is on the Script Output line under `date_prep`: `matter_number`,
    `handles`, read that routine's procedure with `read_file` on
    `/app/skills/<skill>/SKILL.md` and carry it out on this matter with the entry's
    `params` (see `references/decision-catalog.md` for what each step is). Internal
-   writes only, under the routine's own rules and ceilings. If you cannot read the
-   skill file, or the step fails, say so as a done line ("I could not finish the
-   binder: ...") rather than approximating it.
+   writes only, under the routine's own rules and ceilings. Run them in the order
+   the catalog lists them, and **right after each one finishes, call
+   `casework_step_done`** (no arguments): it records that step, backed by the memo
+   its routine filed on this matter, so a person hears it was done even when no
+   brief goes out. If it says no memo was filed, the step did not finish; do not
+   call it again for that step. If you cannot read the skill file, or the step
+   fails, say so as a done line ("I could not finish the binder: ...") rather
+   than approximating it.
 3. **Choose at most two decisions** from the catalog entries at `prepares`: the one
    or two a great case manager would actually bring the attorney. Each question is
    one plain sentence the attorney can answer in words, naming what the Operator
    will do on a yes ("If yes, I'll finalize it for your paralegal to serve."). Never offer
    anything not in the catalog; the tool refuses it.
-4. **Call `casework_brief` once** with `done` (short lines, what is ready or
-   what you did in step 2, each a fact you read this turn) and `decisions`
+4. **Call `casework_brief` once** with `done` (short lines, what is ready, each a
+   fact you read this turn; a step you recorded with `casework_step_done` is
+   listed for you in the catalog's own words, so do not repeat it) and `decisions`
    (`[{catalog_id, question}]`, one or two). Code renders the subject, the frame
    and "Reply here and I'll take it from there." You write no greeting and no
    sign-off.
 5. **If no decision remains** after step 2, call nothing. No decision, no message:
-   the spec's rule 7. The gate will not wake again for this date today. The step's
-   own routine left its trace on the matter (its `[Operator]` memo), and that is how
-   the next brief on this matter knows: a prep routine's run since the last brief
-   shows in `file_status.memo_markers`, and it belongs in that brief's `done` lines
-   ("The trial binder was reassembled on Sep 25.").
+   the spec's rule 7. The gate will not wake again for this date today. The steps
+   you recorded are not lost: the next message the attorney gets (the daily
+   deadline digest, the task review, or the next brief on this matter) carries
+   them as one "Done since last time" line, rendered from the record.
 
 Full brief shape and wording rules: `references/output-format.md`.
 

@@ -93,6 +93,16 @@ raises none of them. `<Day>` is the weekday of the firm's own review schedule;
 with no single day it reads "the next task review". Court dates and tasks not
 yet overdue stay in "Also open". Unconfigured seats never render this line.
 
+Done since last time: <line>; <line>. [case-manager seats with quiet only; first in the body; omit if none]
+
+On a seat that authored `case_manager.quiet`, the body opens with this line
+(done, then needs you): one `done_since.py` line per task the Operator closed on
+the record's evidence or date-prep step it ran at "Handles it" that nobody has
+been told about, for this recipient's matters. The skeleton never carries it,
+and it never makes a digest of its own. The dispatch lists the items as
+`casework_mentions`; the overlay writes each `mentioned` row after a FULL send
+only. Unconfigured seats never render this line.
+
 ## Under active escalation elsewhere (<count> across <M> matter(s)) [omit section if 0]
 
 Already raised, shown so it is not double-counted. No action here.

@@ -21,6 +21,12 @@ With the block:
 * When ``task_cleanup`` is authored, the digest carries a ``task_review``
   marker, and each recipient's overdue tasks past the top five collapse into
   one line naming the review (``digest_items.extract_task_review``).
+* When ``quiet`` is authored, the digest carries ``done_since``: one row per
+  piece of work the Operator finished without asking and has not yet told
+  anyone about (a task closed on the record's evidence, a date-prep step it
+  ran at "Handles it"), rendered by the vendored ``done_since.py`` from the
+  ledger rows alone. ``dispatch_envelope`` gives each recipient the rows for
+  its matters, and the overlay marks them ``mentioned`` after a full send.
 
 Nothing here is written anywhere: the filter reads the casework ledger (the
 agent-readable JSONL the broker writes) and the trusted customer.yaml.
@@ -40,6 +46,7 @@ class Filtered:
     deadlines: list
     task_review: dict | None = None
     stats: dict = field(default_factory=dict)
+    done_since: list = field(default_factory=list)
 
     def annotate(self, decision):
         """The wake decision with the review marker on its digest (read by
@@ -47,6 +54,8 @@ class Filtered:
         Unconfigured seats have neither, and the decision comes back as is."""
         if self.task_review is not None and decision.digest is not None:
             decision.digest["task_review"] = self.task_review
+        if self.done_since and decision.digest is not None:
+            decision.digest["done_since"] = self.done_since
         if self.stats:
             return replace(decision, extra_metadata={**decision.extra_metadata, **self.stats})
         return decision
@@ -101,4 +110,25 @@ def apply(
         else:
             stats[reason] = stats.get(reason, 0) + 1
     review = {"day": cm.review_day} if cm.cleanup_level else None
-    return Filtered(kept, review, {"casework_dropped": stats} if stats else {})
+    since = _done_since(helpers, anchor, cm, ledger, states, deadlines)
+    return Filtered(kept, review, {"casework_dropped": stats} if stats else {}, since)
+
+
+def _done_since(helpers, anchor: str, cm, ledger, states: dict, deadlines) -> list:
+    """Job 3 rows for the digest, when ``quiet`` is authored. A matter is this
+    run's to tell only when the pull read its number (an item on it, kept or
+    dropped above); the rest wait for a message that reads theirs."""
+    if not cm.quiet_level:
+        return []
+    since = helpers.load_sibling(SKILL, anchor, "done_since.py", "escalator_done_since")
+    if since is None:
+        sys.stderr.write("[pre_run] done_since.py missing; no done-since lines\n")
+        return []
+    numbers = {d.matter_id: d.matter_number for d in deadlines if getattr(d, "matter_number", None)}
+    rows = []
+    for row in since.rows(ledger, states, numbers):
+        out = since.public(row)
+        out["matter_number"] = row["_number"]
+        out["seed"] = since.seed_nodes(row)
+        rows.append(out)
+    return rows

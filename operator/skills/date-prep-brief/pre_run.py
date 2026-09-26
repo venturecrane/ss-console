@@ -119,6 +119,7 @@ _CASEWORK = _H.load_sibling(SKILL, __file__, "casework_ledger.py", "date_prep_ca
 _ESCALATION = _H.load_sibling(SKILL, __file__, "escalation_ledger.py", "date_prep_escalation_ledger")
 _ROUTING = _H.load_sibling(SKILL, __file__, "routing.py", "date_prep_routing")
 _BRIEF = _H.load_sibling(SKILL, __file__, "brief_envelope.py", "date_prep_brief_envelope")
+_SINCE = _H.load_sibling(SKILL, __file__, "done_since.py", "date_prep_done_since")
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +295,44 @@ def prepare(candidate: dict, cfg: dict, prep: dict, staff: dict, ledger_events: 
     }
 
 
+def quiet_authored(cfg: dict) -> bool:
+    """``case_manager.quiet`` is authored at a known level (Job 3 is on)."""
+    block = cfg.get("case_manager") if isinstance(cfg, dict) else None
+    quiet = block.get("quiet") if isinstance(block, dict) else None
+    return isinstance(quiet, dict) and quiet.get("level") in LEVELS
+
+
+def add_done(plan: dict, cfg: dict, states: dict) -> None:
+    """What the brief tells as already done, from records only (``done_since.py``).
+
+    * Each ``handles`` catalog entry carries ``done_line``: the closed phrase
+      for that step. When the turn runs the step and records it
+      (``casework_step_done``), the brief lists it under Done in these words
+      and marks it told; a step never recorded is never listed.
+    * With ``quiet`` authored, ``done_since`` holds this matter's untold work
+      from earlier runs (a close on the record's evidence, a step the Operator
+      ran with no brief to carry it). Only this matter's: a brief is one
+      matter's, and the fence refuses another's content in the session.
+
+    Every day those lines render is added to the handoff (``seed_days``)."""
+    catalog = _CATALOG.envelope_catalog(plan["catalog"])
+    days: list = []
+    rows: list = []
+    if _SINCE is not None:
+        for entry in catalog:
+            phrase = _SINCE.step_phrase(entry) if entry.get("level") == "handles" else None
+            if phrase:
+                entry["done_line"] = phrase
+                days += _SINCE.step_days(entry)
+        if quiet_authored(cfg):
+            candidate = plan["candidate"]
+            rows = _SINCE.rows(_CASEWORK, states, {candidate["matter_id"]: candidate.get("matter_number")})
+            days += [d for row in rows for d in row["_days"]]
+    plan["envelope_catalog"] = catalog
+    plan["done_since"] = [_SINCE.public(row) for row in rows] if _SINCE is not None else []
+    plan["seed_days"] = [d.isoformat() for d in days]
+
+
 def run(cfg: dict, today: date) -> int:
     prep = date_prep_config(cfg)
     if prep is None:
@@ -316,7 +355,8 @@ def run(cfg: dict, today: date) -> int:
     for candidate in tried:
         plan = prepare(candidate, cfg, prep, staff, ledger_events, today)
         if plan is not None:
-            if not _BRIEF.write_all(plan, SKILL, _STARTED_AT, _CATALOG.envelope_catalog(plan["catalog"])):
+            add_done(plan, cfg, states)
+            if not _BRIEF.write_all(plan, SKILL, _STARTED_AT, plan["envelope_catalog"]):
                 return suppress("degraded:envelope_write_failed")
             return wake(_BRIEF.facts(plan))
     return suppress("no_briefable_date:unroutable_or_nothing_to_offer")

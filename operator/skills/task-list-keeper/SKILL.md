@@ -94,6 +94,7 @@ Treating Smokeball's creator field as "the Operator made this" (it records the c
 - `references/output-format.md` - the proposal, the handover, the closes and the "Done since last time" line
 - `casework_ledger.py` - vendored, byte-identical to `operator/workspace_broker/casework_ledger.py`
 - `casework_view.py` - canonical here; the deadline-miss-escalator carries the copy so both routines read the ledger the same way
+- `done_since.py` - canonical here; the deadline-miss-escalator and date-prep-brief carry copies, so the "Done since last time" line reads the same in the review, the digest and the brief (pinned by its sync gate)
 - `escalation_ledger.py`, `routing.py`, `digest_items.py`, `broker_writer.py`, `skill_helpers.py` - vendored copies, pinned by their sync gates
 - `tests/selector_test.md` - selector targets this skill for "clean up the task list", not the deadline alarm
 - `pre_run.py` + `test_task_list_keeper.py` - the no-agent decision and its tests

@@ -95,7 +95,7 @@ def _filter_grouped(band: dict, matter_ids: set[str]) -> dict | None:
     }
 
 
-def split_digest(digest: dict, matter_ids: set[str], today_iso: str) -> dict:
+def split_digest(digest: dict, matter_ids: set[str], today_iso: str, since_ids: set[str] | None = None) -> dict:
     """The sub-digest for one recipient set: only ``matter_ids``'s items, every
     count recomputed as a list length, then RE-BANDED for this recipient
     (``digest_items.rebalance_bands``): the top five of THIS recipient's items
@@ -107,7 +107,12 @@ def split_digest(digest: dict, matter_ids: set[str], today_iso: str) -> dict:
     The bands sent therefore differ from the seat-wide projection that
     ``blind_wake.plan_counts`` fingerprints as ``digest_sha256``; that
     fingerprint records what the gate projected for the seat, and the
-    envelope's per-dispatch body hashes record what each recipient was sent."""
+    envelope's per-dispatch body hashes record what each recipient was sent.
+
+    ``done_since`` (case-manager seats with ``quiet`` authored; absent
+    otherwise) keeps the rows for this recipient's matters plus ``since_ids``:
+    matters with nothing in the digest whose work this recipient is owed a
+    line about. The rows never raise and never count toward the subject."""
     out: dict = {}
     out["needs_you"] = [i for i in (digest.get("needs_you") or []) if i.get("matter_id") in matter_ids]
     admin = digest.get("admin_confirms")
@@ -137,8 +142,36 @@ def split_digest(digest: dict, matter_ids: set[str], today_iso: str) -> dict:
         # recipient's overdue tasks past the top five are in the task review.
         out["task_review"] = digest["task_review"]
         _DIGEST_ITEMS.extract_task_review(out)
+    told = matter_ids | (since_ids or set())
+    since = [r for r in (digest.get("done_since") or []) if r.get("matter_id") in told]
+    if since:
+        out["done_since"] = since
     out["subject"] = f"[Deadlines] {_DIGEST_ITEMS.need_you_count(out)} need you, {today_iso}"
     return out
+
+
+def _mentions(sub_digest: dict) -> list[dict]:
+    """The casework rows a successful FULL send tells a person about: the
+    overlay writes one ``mentioned`` row for each, so a line is told once."""
+    keys = ("item_key", "matter_id", "kind", "source_id")
+    return [{k: r[k] for k in keys} for r in sub_digest.get("done_since") or []]
+
+
+def _since_routes(digest: dict, matter_ids: list[str], customer_yaml, routing, mode, staff_pull, matter_staff):
+    """Where each done-since matter with nothing in the digest would be routed,
+    as ``{matter_id: (emails, leg)}``. Used only to join an existing recipient
+    group: a done-since line never makes a message, a memo or an unroutable
+    entry of its own. Empty (and no extra staff pull) on every seat without
+    ``quiet`` authored."""
+    extra = [m for m in dict.fromkeys(r.get("matter_id") for r in digest.get("done_since") or []) if m]
+    extra = [m for m in extra if m not in matter_ids]
+    if not extra:
+        return {}
+    staff = dict(matter_staff)
+    if mode == "matter_staff":
+        staff.update(staff_pull(extra, routing.staff_lookup_budget(customer_yaml)))
+    result = routing.resolve_case_alert_routing(customer_yaml, staff, extra)
+    return {m: (r.emails, r.routing_leg) for m, r in result.routed.items()}
 
 
 def _firing_items(sub_digest: dict) -> list[dict]:
@@ -364,6 +397,7 @@ def build_and_write(
         if mode == "matter_staff":
             matter_staff = staff_pull(matter_ids, routing.staff_lookup_budget(customer_yaml))
         result = routing.resolve_case_alert_routing(customer_yaml, matter_staff, matter_ids)
+        since_routes = _since_routes(digest, matter_ids, customer_yaml, routing, mode, staff_pull, matter_staff)
 
         # Group matters by resolved recipient set -> one dispatch per set.
         by_recipients: dict[tuple, dict] = {}
@@ -371,6 +405,9 @@ def build_and_write(
             key = (routed.emails, routed.routing_leg)
             group = by_recipients.setdefault(key, {"matter_ids": set()})
             group["matter_ids"].add(matter_id)
+        for matter_id, key in since_routes.items():
+            if key in by_recipients:
+                by_recipients[key].setdefault("since_ids", set()).add(matter_id)
 
         today_iso = today.isoformat()
         dispatches: list[dict] = []
@@ -385,7 +422,9 @@ def build_and_write(
                 # alert did not go (the review's finding 8).
                 overflow_matters |= group["matter_ids"]
                 continue
-            sub = _DIGEST_ITEMS.number_firing(split_digest(digest, group["matter_ids"], today_iso), _append_cap())
+            sub = _DIGEST_ITEMS.number_firing(
+                split_digest(digest, group["matter_ids"], today_iso, group.get("since_ids")), _append_cap()
+            )
             firing = _firing_items(sub)
             if not firing:
                 # An alert with nothing in the needs-a-person universe is not
@@ -407,6 +446,7 @@ def build_and_write(
                     "body_sha256_full": _H.canonical_body_sha256(full_body),
                     "body_sha256_skeleton": _H.canonical_body_sha256(skeleton_body),
                     "appends": appends,
+                    **({"casework_mentions": _mentions(sub)} if sub.get("done_since") else {}),
                 }
             )
             wake_hashes.append(

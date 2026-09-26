@@ -15,9 +15,11 @@ casework_brief({
 })
 ```
 
-- `done`: up to 8 lines. What is ready, or what a `handles` step just did. Each
-  line is a fact the turn read this run ("The draft trial binder is in the matter.",
-  "The exhibit list matches the documents on file.").
+- `done`: up to 8 lines. What is ready. Each line is a fact the turn read this
+  run ("The draft trial binder is in the matter.", "The exhibit list matches the
+  documents on file."). A `handles` step recorded with `casework_step_done` is
+  listed by code, first, in its catalog entry's `done_line`
+  (`done_since.STEP_PHRASES`); the turn does not repeat it.
 - `decisions`: one or two. Never zero (no decision, no message: call nothing). Each
   question says what the Operator will do on a yes.
 
@@ -27,7 +29,10 @@ casework_brief({
 Subject: <matter number>: <event subject>, <Mon D>, two questions for you
 
 Done:
+- <done_line of each step recorded this run>
 - <done line>
+
+Done since last time: <line>; <line>. [quiet authored, this matter's untold earlier work only]
 
 Needs you:
 1. <question>

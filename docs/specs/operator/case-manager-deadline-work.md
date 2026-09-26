@@ -224,10 +224,13 @@ proves it (the reachability rule in CLAUDE.md).
   at most two numbered decisions from a closed catalog. A "yes" runs that step's
   routine through the router. Proved when the Okafor status conference produces a
   brief before Oct 2 and "yes on 2" leaves an `approved` row and the routine's draft.
-- **The routine handled quietly (Job 3)**: work closed on the record becomes one
-  "Done since last time" line in the next message that person gets, and a memo on
-  the matter; never a message of its own. Proved when that line appears and the
-  digest carries no "Also open" band.
+- **The routine handled quietly (Job 3)**: work closed on the record, and a
+  date-prep step the Operator ran itself at "Handles it", becomes one "Done since
+  last time" line in the next message that person gets (the task review, the
+  date-prep brief, or the daily deadline digest), and a close earns a memo on the
+  matter; never a message of its own. A step is recorded only on the memo its
+  routine filed in that session, checked by the broker against its audit log.
+  Proved when that line appears and the digest carries no "Also open" band.
 - **One ledger of what was proposed, decided and done**, the casework ledger,
   written only through the broker, which refuses a close on money or court work,
   an approval with no raise behind it, and a raise nobody witnessed reach a person.

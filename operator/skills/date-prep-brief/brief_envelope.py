@@ -91,6 +91,7 @@ def _dates(plan: dict) -> list[str]:
     days += [f["date"] for f in status.get("files") or [] if f.get("date")]
     days += list((status.get("memo_markers") or {}).values())
     days += [c["last_chased"] for c in plan["chases"].values() if c.get("last_chased")]
+    days += list(plan.get("seed_days") or [])
     return list(dict.fromkeys(days))[:_HANDOFF_MAX_DATES]
 
 
@@ -132,6 +133,8 @@ def write_all(plan: dict, skill: str, started_at: str, catalog: list[dict]) -> b
         "routing_leg": "matter_staff",
         "catalog": catalog,
     }
+    if plan.get("done_since"):
+        envelope["done_since"] = plan["done_since"]
     dates = _dates(plan)
     handoff = {
         "skill": skill,

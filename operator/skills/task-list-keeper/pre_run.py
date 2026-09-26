@@ -180,6 +180,7 @@ def plan_review(*, raw: dict, customer_yaml: dict, today: date, casework_events=
         classify=_sibling("classify.py"),
         view=view,
         lines=_sibling("lines.py"),
+        since=_sibling("done_since.py"),
         today=today,
         window_days=_H.pos_int(esc_block.get("escalation_window_days"), _DEFAULT_WINDOW_DAYS),
     )

@@ -199,3 +199,109 @@ def test_review_line_names_no_day_when_the_schedule_names_none():
         == "1 more overdue task is in Monday's task review."
     )
     assert _render._task_review_block({"day": "Monday"}) == []
+
+
+# ---------------------------------------------------------------------------
+# Job 3: "Done since last time" in the daily digest
+# ---------------------------------------------------------------------------
+
+QUIET = {**CM, "quiet": {"level": "handles"}}
+OTHER = "m-102"
+
+
+def _closed(task_id="t-closed", matter=MATTER):
+    key = _cw.item_key(matter_id=matter, kind="task", source_id=task_id)
+    base = {"item_key": key, "matter_id": matter, "kind": "task", "source_id": task_id}
+    payload = {"action": "close", "class": "done", "evidence": ["document:proof_of_service:2026-07-09"]}
+    return [
+        {**base, "event": "closed_by_record", "payload": payload, "ts": "2026-09-21T14:00:00Z"},
+        {**base, "event": "completed", "tool_call_id": "call-1", "ts": "2026-09-21T14:01:00Z"},
+    ]
+
+
+def _stepped(event_id="ev-7", matter=MATTER):
+    key = _cw.item_key(matter_id=matter, kind="date", source_id=event_id)
+    step = {
+        "catalog_id": "records_refresh:rt-7",
+        "skill": "medical-records-chaser",
+        "level": "handles",
+        "params": {"provider": "Valley Imaging", "mode": "update", "newest_record": "2026-06-20"},
+    }
+    return [
+        {
+            "item_key": key,
+            "matter_id": matter,
+            "kind": "date",
+            "source_id": event_id,
+            "event": "step_ran",
+            "payload": {"action": "step", "class": "open", "step": step},
+            "tool_call_id": "call-memo",
+            "ts": "2026-09-25T15:05:00Z",
+        }
+    ]
+
+
+def _handoff(tmp_path):
+    return json.loads((tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.json").read_text())
+
+
+def test_the_digest_says_what_was_done_since_last_time(tmp_path, monkeypatch):
+    rows = _closed() + _stepped()
+    wake, envelope = _run(tmp_path, monkeypatch, [_task("t-firm", -5)], QUIET, rows)
+    dispatch = envelope["dispatches"][0]
+    body = dispatch["full_body"]
+    assert body.startswith(
+        "Done since last time: matter 2026-PI-101: a task I closed on 2026-09-21, a proof of service "
+        "dated 2026-07-09 was on file; matter 2026-PI-101: on 2026-09-25 I asked Valley Imaging for "
+        "records dated after 2026-06-20.\n\n"
+    )
+    assert "Done since" not in dispatch["skeleton_body"], "the skeleton stays identifier-free"
+    assert dispatch["casework_mentions"] == [
+        {k: r[k] for k in ("item_key", "matter_id", "kind", "source_id")} for r in (rows[0], rows[2])
+    ]
+    assert "Done since last time" not in dispatch["subject"]
+    assert "—" not in body
+    # Every day a done line renders is seeded with its matter, so the send gate
+    # traces it to this run's read.
+    paired = {r["matterNumber"]: r["dates"] for r in _handoff(tmp_path)["records"]}
+    for day in ("2026-09-21", "2026-07-09", "2026-09-25", "2026-06-20"):
+        assert day in paired["2026-PI-101"], day
+    assert [r["line"] for r in wake["digest"]["done_since"]][1].endswith("2026-06-20")
+
+
+def test_done_since_needs_quiet_and_a_message_to_ride(tmp_path, monkeypatch):
+    rows = _closed() + _stepped()
+    _wake, no_quiet = _run(tmp_path / "a", monkeypatch, [_task("t-firm", -5)], CM, rows)
+    assert "Done since" not in no_quiet["dispatches"][0]["full_body"]
+    assert "casework_mentions" not in no_quiet["dispatches"][0]
+    # Nothing else to say: a done line is never a message of its own.
+    wake, alone = _run(tmp_path / "b", monkeypatch, [_task(LEGACY, -80)], QUIET, rows)
+    assert alone is None or not alone.get("dispatches")
+
+
+def test_a_matter_with_nothing_in_the_digest_rides_its_recipients_message(tmp_path, monkeypatch):
+    other = _pre_run.MatterDeadline(
+        matter_id=OTHER,
+        matter_number="2026-PI-102",
+        authored_date=TODAY - timedelta(days=80),
+        label="task-deadline",
+        task_id=LEGACY,
+    )
+    rows = _closed(matter=OTHER)
+    _wake, envelope = _run(tmp_path, monkeypatch, [_task("t-firm", -5), other], QUIET, rows)
+    dispatch = envelope["dispatches"][0]
+    assert dispatch["full_body"].startswith("Done since last time: matter 2026-PI-102: a task I closed")
+    assert [m["matter_id"] for m in dispatch["casework_mentions"]] == [OTHER]
+    assert OTHER not in envelope["memo_matters"]
+    assert not [u for u in envelope["unroutable"] if u["matter_id"] == OTHER]
+
+
+def test_a_mentioned_item_is_not_told_again(tmp_path, monkeypatch):
+    rows = _closed() + _stepped()
+    told = [
+        {**{k: r[k] for k in ("item_key", "matter_id", "kind", "source_id")}, "event": "mentioned"}
+        | {"ts": "2026-09-26T13:00:00Z"}
+        for r in (rows[0], rows[2])
+    ]
+    _wake, envelope = _run(tmp_path, monkeypatch, [_task("t-firm", -5)], QUIET, rows + told)
+    assert "Done since" not in envelope["dispatches"][0]["full_body"]

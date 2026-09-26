@@ -94,11 +94,13 @@ class _Ctx:
         lines,
         today,
         window_days,
+        since=None,
     ):
         self.snapshot, self.cm, self.ledger, self.states = snapshot, cm, ledger, states
         self.chaser_resolved, self.yaml, self.routing = chaser_resolved, customer_yaml, routing
         self.label, self.classify, self.view, self.lines = label, classify, view, lines
         self.today, self.window_days = today, window_days
+        self.since = since
         raw_scope = customer_yaml.get("scope")
         scope: dict = raw_scope if isinstance(raw_scope, dict) else {}
         grants = scope.get("inbound_allow_from")
@@ -236,33 +238,19 @@ def _payload(e: Entry) -> dict:
 
 
 def _done_since(ctx: _Ctx, recipients_by_matter: dict) -> tuple[dict, dict]:
-    """Job 3: unmentioned record-closes, routed to the person who gets this
-    run's message on that matter, and the per-matter memos they earn."""
-    if not ctx.cm.quiet_level:
+    """Job 3: unmentioned record-closes and date-prep steps the Operator ran
+    itself (``done_since.rows``), routed to the person who gets this run's
+    message on that matter, and the per-matter memos the closes earn (a step's
+    own routine already filed its memo, so a step earns none here)."""
+    if not ctx.cm.quiet_level or ctx.since is None:
         return {}, {}
     by_recipient: dict = {}
     memos: dict = {}
-    for state in ctx.view.unmentioned_closes(ctx.ledger, ctx.states):
-        target = recipients_by_matter.get(state.matter_id)
-        if target is None:
-            continue  # not this run's reader; waits for a message on that matter
-        number = target[1]
-        atoms = (state.record_payload or {}).get("evidence") or []
-        evidence = ctx.lines.evidence_text(atoms)
-        line = ctx.lines.done_since_line(ctx.lines.matter_head(number, None), state.last_completed_date, evidence)
-        days = [state.last_completed_date, ctx.lines.evidence_day(atoms)]
-        by_recipient.setdefault(target[0], []).append(
-            {
-                "item_key": state.item_key,
-                "matter_id": state.matter_id,
-                "task_id": state.source_id,
-                "line": line,
-                "_number": number,
-                "_days": days,
-            }
-        )
-        if ctx.cm.quiet_level == "handles":
-            memos.setdefault(state.matter_id, []).append(evidence)
+    numbers = {mid: target[1] for mid, target in recipients_by_matter.items()}
+    for row in ctx.since.rows(ctx.ledger, ctx.states, numbers):
+        by_recipient.setdefault(recipients_by_matter[row["matter_id"]][0], []).append(row)
+        if row["kind"] == "task" and ctx.cm.quiet_level == "handles":
+            memos.setdefault(row["matter_id"], []).append(row.get("_evidence"))
     return by_recipient, memos
 
 

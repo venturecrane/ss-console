@@ -12,7 +12,8 @@ this broker sent to a person (``send_witness.dispatched_to_a_person``), which
 thread that message went out on (``digest_ref``, joined by ``dispatch_ref``
 within the session; a caller's ``thread_ref`` on a raise is always dropped),
 and that a ``completed`` names a successful update_task call in this session's
-own audit log (``update_task_witnessed``).
+own audit log (``update_task_witnessed``), and that a ``step_ran`` names the
+create_memo call the step's routine made in this session (same witness).
 
 Three kinds of row also go into the hash-chained audit log, because each is a
 decision about the firm's record that a person may later ask about:
@@ -64,8 +65,10 @@ def casework_ledger_path(broker: BrokerContext) -> str | None:
 
 
 def update_task_witnessed(audit_db_path: str | None, event: dict[str, Any]) -> bool:
-    """True iff the audit log holds a successful update_task call with this
-    event's ``tool_call_id`` in this event's session.
+    """True iff the audit log holds a successful call of the tool that backs
+    this event kind (``casework_ledger.WITNESS_TOOLS``: update_task for a
+    ``completed``, create_memo for a ``step_ran``) with this event's
+    ``tool_call_id`` in this event's session.
 
     Same failure posture as the send witness: an audit-disabled broker has no
     witness and never had one, so it allows; an unreadable DB allows with a
@@ -99,7 +102,8 @@ def update_task_witnessed(audit_db_path: str | None, event: dict[str, Any]) -> b
             continue
         if not isinstance(meta, dict) or meta.get("tool_call_id") != call_id:
             continue
-        if meta.get("tool") != casework_ledger.UPDATE_TASK_TOOL or meta.get("outcome") != "ok":
+        tool = casework_ledger.WITNESS_TOOLS.get(str(event.get("event")), casework_ledger.UPDATE_TASK_TOOL)
+        if meta.get("tool") != tool or meta.get("outcome") != "ok":
             continue
         if session_id and str(meta.get("session_id") or "").strip() != session_id:
             continue

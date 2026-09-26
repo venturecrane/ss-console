@@ -213,3 +213,57 @@ def test_bookkeeping_rows_write_no_audit_row(tmp_path: Path) -> None:
     before = len(_audit_types(broker))
     _append(broker, _proposal())
     assert len(_audit_types(broker)) == before
+
+
+EVENT = "evt-0f3c-okafor-fsc"
+
+
+def _step_ran(**over) -> dict:
+    step = {"catalog_id": "records_refresh:rt-9", "skill": "medical-records-chaser", "level": "handles"}
+    step["params"] = {"provider": "Valley Imaging", "mode": "update", "newest_record": "2026-06-20"}
+    base = {**_base(), "kind": "date", "source_id": EVENT}
+    base["item_key"] = cl.item_key(matter_id=MATTER, kind="date", source_id=EVENT)
+    payload = {"action": "step", "class": "open", "step": step}
+    return {**base, "skill": "date-prep-brief", "event": "step_ran", "payload": payload, **over}
+
+
+def _memo(broker: Broker, *, call: str = "toolu_memo", session_id: str = SESSION) -> None:
+    meta = {"tool": cl.STEP_WITNESS_TOOL, "outcome": "ok", "tool_call_id": call, "session_id": session_id}
+    _insert(broker, "TOOL_CALL_COMPLETED", meta)
+
+
+def test_a_step_ran_needs_this_sessions_memo_and_then_a_mention(tmp_path: Path) -> None:
+    broker = _broker(tmp_path)
+    _update_task(broker, call="toolu_task")  # an update_task call is not a step's trace
+    _memo(broker, call="toolu_peer", session_id=OTHER_SESSION)
+    for call in ("toolu_task", "toolu_peer", "toolu_none"):
+        with pytest.raises(ValueError, match="holds no successful"):
+            _append(broker, _step_ran(tool_call_id=call))
+    _memo(broker)
+    _append(broker, _step_ran(tool_call_id="toolu_memo"))
+    with pytest.raises(ValueError, match="already backs"):
+        _append(broker, _step_ran(tool_call_id="toolu_memo"))
+    key = _step_ran()["item_key"]
+    state = cl.derive_state(_rows(broker))[key]
+    assert cl.needs_mention(state)
+    assert state.unmentioned_steps[0]["step"]["catalog_id"] == "records_refresh:rt-9"
+    mention = {k: v for k, v in _step_ran().items() if k != "payload"} | {"event": "mentioned"}
+    with pytest.raises(ValueError, match="dispatched no message"):
+        _append(broker, mention)
+    _confirm(broker)
+    _append(broker, mention)
+    assert not cl.needs_mention(cl.derive_state(_rows(broker))[key])
+
+
+def test_a_step_ran_is_only_a_handles_step_on_a_date(tmp_path: Path) -> None:
+    broker = _broker(tmp_path)
+    _memo(broker)
+    prepares = _step_ran(tool_call_id="toolu_memo")
+    prepares["payload"] = {**prepares["payload"], "step": {**prepares["payload"]["step"], "level": "prepares"}}
+    with pytest.raises(ValueError, match="level handles"):
+        _append(broker, prepares)
+    on_task = {**_step_ran(tool_call_id="toolu_memo"), "kind": "task", "item_key": _base()["item_key"]}
+    on_task["source_id"] = TASK
+    with pytest.raises(ValueError, match="kind date"):
+        _append(broker, on_task)
+    assert _rows(broker) == []

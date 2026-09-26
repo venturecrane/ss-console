@@ -54,9 +54,14 @@ drops the label; digits and dates are masked).
 ## Done since last time (Job 3)
 
 `matter <number>: a task I closed on <day>, <evidence> was on file`, joined on
-one line after "Done since last time:". Each close is told once; the overlay
-writes the `mentioned` row after the send. At `quiet: handles` the matter also
-gets a memo: `Task list upkeep: I closed <n> tasks on this matter that the
+one line after "Done since last time:". A date-prep step the Operator ran itself
+at "Handles it" is told the same way, in the step's closed phrase from
+`done_since.py`: `matter <number>: on <day> I asked <provider> for records dated
+after <day>` (or "I assembled the trial binder index", "I refreshed the motion
+calendar", and the rest of `STEP_PHRASES`). A step with no phrase there is never
+rendered. Each item is told once; the overlay writes the `mentioned` row after
+the send. At `quiet: handles` a matter with closes also gets a memo (a step's own
+routine already filed one): `Task list upkeep: I closed <n> tasks on this matter that the
 record showed were done (<evidence>; ...).`
 
 ## Footer
