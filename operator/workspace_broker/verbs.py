@@ -97,10 +97,15 @@ def _escalation(
 
 
 def _health(
-    broker: BrokerContext, _action: str, _request: dict[str, Any], _pid: int, _uid: int | None
+    broker: BrokerContext, _action: str, _request: dict[str, Any], pid: int, _uid: int | None
 ) -> dict[str, Any]:
     return {
         "ok": True,
+        # Answered from the socket's peer credentials, so a process cannot claim
+        # it. The overlay's non-gateway tool wall (shared/gateway_identity.py)
+        # asks this: a Hermes runtime that is not the gateway has every
+        # audit_append refused, so it may not run tools (pilot 2026-09-21).
+        "caller_is_gateway": pid == broker.gateway_pid,
         "credential_ready": broker.credential_path.is_file(),
         "customer_ready": broker.customer_path.is_file(),
         "audit_ready": broker.ledger is not None,

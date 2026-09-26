@@ -21,7 +21,7 @@
     "re-reads build_payload at the new ref and re-stamps this file. Read the",
     "limits of that in the test's header before trusting it further than it goes."
   ],
-  "overlay_ref": "70334084ccbd3ca00ac7c75cec71cbb5eb523d09",
+  "overlay_ref": "340c82e4afa0fbc76807c8d0ac2a8469ef5384dd",
   "fields": [
     {
       "name": "heartbeat_ts",
@@ -137,7 +137,7 @@
       "sample": 1
     },
     {
-      "_comment": "ss#2498, hermes-smd-overlay#292. Ahead of the pin, same as cron_containment above. Cumulative count of audit rows the seat could not persist, from the volume tally at $HERMES_HOME/.smd/audit_write_failures.tally. 0 is the load-bearing value: it is what says the writer is up and has lost nothing, and the only thing that distinguishes a quiet ledger from a broken one -- so the sample is deliberately 0 and the parity probe asserts the column is written, not that it is truthy.",
+      "_comment": "ss#2498, hermes-smd-overlay#292. Ahead of the pin, same as cron_containment above. Cumulative count of audit rows the seat could not persist, from the volume tallies: the seat's $HERMES_HOME/.smd/audit_write_failures.tally PLUS every profiles/*/.smd tally (overlay#390, 2026-09-26; the gateway runs under -p operator and tallies into its profile home, which was never counted before). 0 is the load-bearing value: it is what says the writer is up and has lost nothing, and the only thing that distinguishes a quiet ledger from a broken one -- so the sample is deliberately 0 and the parity probe asserts the column is written, not that it is truthy.",
       "name": "audit_write_failures",
       "column": "audit_write_failures",
       "sample": 0

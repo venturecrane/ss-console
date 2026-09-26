@@ -81,6 +81,12 @@ push startup past the line once. Full write-up, including the captured thread
 dump and the upstream ask:
 `docs/runbooks/operator/incidents/2026-09-01-gateway-startup-watchdog-collision.md`.
 
+**It also cannot act.** Since 2026-09-26 the trust plugin refuses every tool in
+a hermes process the broker does not recognise as the gateway
+(`shared/gateway_identity.py` in the overlay), because the broker refuses that
+process's audit rows: a one-shot on 2026-09-21 ran tools on the pilot with
+nothing recorded. The wall stops the unrecorded action, not the CPU cost below.
+
 The seat cannot defend itself here. The entrypoint supervisor deliberately will
 not restart a slow-starting gateway (killing one is what sustained the loop), and
 the watchdog budget is not configurable at the pin we run. The only control is
