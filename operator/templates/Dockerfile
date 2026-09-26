@@ -1041,6 +1041,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # twin splits _validate_payload under the console's complexity ceiling (rules
 # and refusal text unchanged; sha 228f5a20 on both sides). It is the only
 # tracked twin in the range (git diff --stat fca804de 70334084).
+# 2026-09-26 (340c82e4, the overlay #390 merge commit). audit_write_failures
+# sums the seat tally and every profile tally (the gateway runs under
+# -p operator, so its own lost rows were never counted); a Hermes runtime the
+# broker does not recognise as the gateway runs no tools (health
+# caller_is_gateway, this repo's workspace_broker/verbs.py); a spec_not_read
+# refusal names the installed spec file. No tracked twin moves;
+# plugins/hermes-smd-audit/schemas.py is untouched.
 ARG OVERLAY_REF="340c82e4afa0fbc76807c8d0ac2a8469ef5384dd"
 
 ARG CUSTOMER_SLUG=customer-zero
