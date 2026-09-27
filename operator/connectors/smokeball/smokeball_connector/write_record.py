@@ -25,9 +25,11 @@ WHO IS WRITING. Decided from the process, never from anything the model sends:
 * anyone else: ``SMD_DIRECT_WRITE_ACTOR`` must name them. ``seat-probe.sh``
   sets it for every script it runs, and the boot/connect webhook reconciler sets
   its own. A process with neither is refused;
-* the chronology runner (the ``medchron`` uid) is exempt: it cannot reach the
-  broker socket by design, and its daemon records each job's delivery as
-  ``MEDCHRON_JOB_*`` rows that name the folder and every file.
+* the chronology runner is exempt when BOTH hold: it runs as the ``medchron``
+  uid AND the daemon stamped ``MEDCHRON_DAEMON_JOB_ID`` on the job. It cannot
+  reach the broker socket by design, and its daemon records each job as
+  ``MEDCHRON_JOB_*`` rows (a delivery names the folder and every file). A person
+  running as medchron by hand has no marker and is treated like anyone else.
 
 OFF A SEAT (no ``SMD_AUDIT_BROKER_SOCKET`` and no socket at the seat's fixed
 path: tests, local development) nothing is recorded and nothing is refused. The firm's credentials live only on the seat's
@@ -52,9 +54,16 @@ _GATEWAY_MARK = "gateway run"
 ACTOR_ENV = "SMD_DIRECT_WRITE_ACTOR"
 VERB = "smokeball_write_append"
 ACTION_TYPE = "SMOKEBALL_WRITE"
-EXEMPT_USERS = frozenset({"medchron"})
+#: The chronology runner's own uid, exempt ONLY when the daemon launched this
+#: job (it stamps MEDCHRON_JOB_MARKER_ENV in the job's filtered environment,
+#: operator/runners/medchron/medchron/daemon.py). A person running as medchron by
+#: hand has no marker and must name themselves like anyone else.
+EXEMPT_USER = "medchron"
+MEDCHRON_JOB_MARKER_ENV = "MEDCHRON_DAEMON_JOB_ID"
 _READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
-_TIMEOUT_SECONDS = 5.0
+#: Above the broker's 5 s sqlite busy timeout (workspace_broker/audit_ledger.py),
+#: so a slow lock is waited out rather than refused after the row landed.
+_TIMEOUT_SECONDS = 10.0
 
 
 class WriteNotRecorded(RuntimeError):
@@ -98,6 +107,10 @@ def _user() -> str:
         return str(os.getuid())
 
 
+def _exempt() -> bool:
+    return _user() == EXEMPT_USER and bool(os.environ.get(MEDCHRON_JOB_MARKER_ENV, "").strip())
+
+
 def resolve_actor() -> str | None:
     """Who is making this write, or None when nobody has said."""
     if _is_operator():
@@ -121,7 +134,7 @@ def _send(socket_path: str, row: dict[str, Any]) -> None:
     reply = json.loads(buf)
     if not isinstance(reply, dict) or reply.get("ok") is not True:
         message = reply.get("message") or reply.get("error") if isinstance(reply, dict) else None
-        raise WriteNotRecorded(f"the audit broker refused the row: {message or 'unknown error'}")
+        raise WriteNotRecorded(f"audit broker refused the row: {str(message or 'unknown error')[:160]}")
 
 
 def body_digest(json_body: Any) -> str | None:
@@ -132,8 +145,10 @@ def body_digest(json_body: Any) -> str | None:
 
 
 def _returned_id(result: Any) -> str | None:
+    """The id Smokeball gave the thing written. A file POST answers ``fileId``, a
+    folder create can answer ``folderId`` (the 52 hand-filed documents were both)."""
     if isinstance(result, dict):
-        for key in ("id", "Id"):
+        for key in ("id", "Id", "fileId", "folderId", "documentId"):
             value = result.get(key)
             if isinstance(value, str) and value:
                 return value[:80]
@@ -145,7 +160,7 @@ class WriteRecord:
 
     def __init__(self, method: str, path: str, matter_id: str | None, json_body: Any) -> None:
         self.socket_path = socket_path()
-        self.active = bool(self.socket_path) and method.upper() not in _READ_METHODS and _user() not in EXEMPT_USERS
+        self.active = bool(self.socket_path) and method.upper() not in _READ_METHODS and not _exempt()
         self.base = {
             "action_type": ACTION_TYPE,
             "write_id": uuid.uuid4().hex,
@@ -172,8 +187,13 @@ class WriteRecord:
         except WriteNotRecorded as exc:
             raise WriteNotRecorded(f"{exc}. Nothing was sent to Smokeball.") from exc
         except (OSError, ValueError) as exc:
+            # The exception TYPE only, never its text: an OS socket message ("timed
+            # out", "Connection refused") is on the overlay's connection-class list
+            # (shared/connector_signatures.py), so it would page "Smokeball down" and
+            # open the MCP circuit for reads too, over an audit-broker problem.
             raise WriteNotRecorded(
-                f"refused: the audit row could not be written ({exc}). Nothing was sent to Smokeball."
+                f"refused: audit broker unreachable ({type(exc).__name__}); the row for this "
+                "write could not be written. Nothing was sent to Smokeball."
             ) from exc
 
     def finish(self, status: int | None, result: Any = None, error: str | None = None) -> None:

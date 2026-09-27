@@ -119,7 +119,6 @@ export const CLIENT_ACTIVITY_CATEGORIES: readonly ClientActivityCategory[] = [
       'CASEWORK_APPROVED',
       'CASEWORK_HELD',
       'CASEWORK_CLOSED_BY_RECORD',
-      'SMOKEBALL_WRITE',
     ],
   },
   {
@@ -202,6 +201,8 @@ export const SUPPRESSED_ACTION_REASONS: Readonly<Record<string, string>> = {
   BROKER_DECISION_ALLOWED:
     'TELEMETRY. Capability-broker decision row written before a mediated-connector grant is redeemed.',
   BROKER_EXECUTED: 'TELEMETRY. Capability-broker execution row paired with a signed receipt.',
+  SMOKEBALL_WRITE:
+    'INTERNAL. The audit record of every write to the firm’s Smokeball is recorded twice (intent before it is sent, result after), by the Operator or SMD. The act already shows on this feed through its own line, and a raw intent/result pair would show a refused write as a change. Complete in the audit record and its export.',
   INBOUND_RECEIVED:
     'TELEMETRY. One row per untrusted inbound item as it lands in quarantine (ADR 0027). Arrival is not yet an act.',
   SUBAGENT_STOPPED: 'TELEMETRY. One row per child subagent completion (ADR 0021).',
@@ -333,12 +334,6 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   CASEWORK_APPROVED: () => 'Recorded your go-ahead on a task change',
   CASEWORK_HELD: () => 'Left a task as it is, as you asked',
   CASEWORK_CLOSED_BY_RECORD: () => 'Closed a task the matter record shows is done',
-  // Every write to the firm's Smokeball. Who wrote is the fact that matters:
-  // the Operator, or SMD working directly on the firm's behalf.
-  SMOKEBALL_WRITE: (entry) =>
-    entry.actorRole === 'agent'
-      ? 'Made a change in Smokeball'
-      : 'SMD made a change in Smokeball directly',
   // ss#2546 (the operations half). Three lines for a change the firm asked for
   // and SMD makes. Written from the reader's side, and the middle one stays
   // deliberately vague about WHICH answer: the outcome the client cares about

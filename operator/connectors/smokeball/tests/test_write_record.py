@@ -165,3 +165,38 @@ def test_the_operators_mcp_server_is_recorded_with_no_smd_environment(monkeypatc
     assert len(sent) == 1
     assert [r["phase"] for r in broker.rows] == ["intent", "result"]
     assert broker.rows[0]["actor"] == "operator"
+
+
+def test_the_medchron_user_is_exempt_only_on_a_daemon_launched_job(monkeypatch):
+    """A person running as medchron by hand has no marker and is refused like
+    anyone unnamed. Falsifier: exempt on the uid alone and the hand-run write
+    goes out with no row."""
+    broker = _Broker()
+    monkeypatch.setenv(wr.SOCKET_ENV, broker.path)
+    monkeypatch.setattr(wr, "_user", lambda: "medchron")
+    sent: list[httpx.Request] = []
+    with pytest.raises(wr.WriteNotRecorded):
+        _client(sent).request("POST", "/tasks", json={"subject": "x"})
+    assert sent == []
+    monkeypatch.setenv(wr.MEDCHRON_JOB_MARKER_ENV, "01JOB")
+    _client(sent).request("POST", "/tasks", json={"subject": "x"})
+    assert len(sent) == 1
+    assert broker.rows == []
+
+
+@pytest.mark.parametrize("key", ["fileId", "folderId", "documentId", "id"])
+def test_the_result_row_names_the_object_smokeball_returned(key):
+    assert wr._returned_id({key: "abc-123"}) == "abc-123"
+
+
+def test_an_unreachable_broker_never_reads_as_a_smokeball_outage(monkeypatch):
+    """The overlay pages "Smokeball down" and opens the MCP circuit on these
+    phrases (shared/connector_signatures.py). An audit-broker problem must not."""
+    monkeypatch.setenv(wr.SOCKET_ENV, "/tmp/wr-nothing-listens.sock")
+    monkeypatch.setenv(wr.ACTOR_ENV, "seat-probe:scott@laptop")
+    with pytest.raises(wr.WriteNotRecorded) as err:
+        _client([]).request("POST", "/tasks", json={"subject": "x"})
+    text = str(err.value)
+    assert "audit broker unreachable" in text
+    for marker in ("timed out", "Connection refused", "All connection attempts failed", "Errno"):
+        assert marker not in text

@@ -400,7 +400,12 @@ class Daemon:
             logger.warning("could not record running for %s: %s", job_id, exc)
             return "deferred"
         env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS}
-        env.update(self.child_env)
+        # The job marker: the Smokeball connector exempts the medchron uid from
+        # recording each write in the audit ledger ONLY on a job this daemon
+        # launched, because this job's own MEDCHRON_JOB_* rows record it. A person
+        # running as medchron by hand has no marker and must name themselves or
+        # is refused (smokeball_connector/write_record.py).
+        env.update(self.child_env, MEDCHRON_DAEMON_JOB_ID=str(job_id))
         env.setdefault("MEDCHRON_SEAT", "client")
         env.setdefault("PATH", "/usr/bin:/bin")
         env.setdefault("HOME", str(jd))
