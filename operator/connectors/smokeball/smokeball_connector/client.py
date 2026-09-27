@@ -36,6 +36,7 @@ ASSUMED list), and encoding a guess here would be the wrong kind of certainty.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import re
@@ -370,7 +371,12 @@ class SmokeballClient:
             if last.status_code == 204 or not last.content:
                 record.finish(last.status_code)
                 return None
-            result = last.json()
+            try:
+                result = last.json()
+            except ValueError:
+                # The write happened; its result row must still say so.
+                record.finish(last.status_code, error="response body was not JSON")
+                raise
             record.finish(last.status_code, result)
             return result
         assert last is not None
@@ -409,7 +415,25 @@ class SmokeballClient:
             raise SmokeballWriteError(
                 f"add_file: metadata POST did not return an uploadUrl (matter {matter_id!r}, file {file_name!r})"
             )
-        self._put_presigned(info["uploadUrl"], data)
+        # The bytes are the filing itself, and they go to a presigned URL rather
+        # than through request(), so they get their own recorded pair: intent
+        # before the PUT, the outcome after, keyed by the fileId the metadata
+        # call returned and carrying a digest of the bytes actually sent.
+        file_id = info.get("fileId")
+        upload = WriteRecord(
+            "PUT",
+            f"/matters/{matter_id}/documents/files/{file_id}/content",
+            matter_id,
+            None,
+            body_sha256=hashlib.sha256(data).hexdigest(),
+        )
+        upload.begin()
+        try:
+            self._put_presigned(info["uploadUrl"], data)
+        except Exception as exc:
+            upload.finish(None, error=f"{type(exc).__name__}: {exc}")
+            raise
+        upload.finish(200, {"fileId": file_id})
         return {
             "fileId": info.get("fileId"),
             "matterId": matter_id,

@@ -70,10 +70,36 @@ def test_a_seat_probe_script_write_is_recorded_as_smd(tmp_path: Path) -> None:
     assert meta["phase"] == "intent" and meta["method"] == "POST" and meta["peer_uid"] == AGENT_UID
 
 
-def test_the_operators_own_write_is_recorded_as_the_agent(tmp_path: Path) -> None:
+def test_the_operators_own_write_is_recorded_as_the_agent(tmp_path: Path, monkeypatch) -> None:
+    from workspace_broker import audit_verbs
+
+    monkeypatch.setattr(audit_verbs, "peer_parent_pid", lambda pid: GATEWAY_PID)
     broker = _broker(tmp_path)
     broker.handle({"action": "smokeball_write_append", "row": _row(actor="operator")}, peer_pid=9999, peer_uid=AGENT_UID)
     assert _stored(tmp_path)[2] == "agent"
+
+
+def test_an_operator_claim_from_a_process_the_gateway_did_not_start_is_refused(tmp_path: Path, monkeypatch) -> None:
+    """Every agent-uid process can reach this verb. Only the broker's own read of
+    the peer's parent can make a row say the Operator did it. Falsifier: trust
+    the caller's actor and this row lands as the Operator's."""
+    from workspace_broker import audit_verbs
+
+    monkeypatch.setattr(audit_verbs, "peer_parent_pid", lambda pid: 31337)
+    broker = _broker(tmp_path)
+    with pytest.raises(ValueError, match="only accepted from a child of the gateway"):
+        broker.handle({"action": "smokeball_write_append", "row": _row(actor="operator")}, peer_pid=9999, peer_uid=AGENT_UID)
+    assert broker.ledger.count() == 0
+
+
+def test_the_broker_reads_a_real_parent_pid_from_proc() -> None:
+    import os
+
+    from workspace_broker.audit_verbs import peer_parent_pid
+
+    if not os.path.exists(f"/proc/{os.getpid()}/stat"):
+        pytest.skip("no /proc on this platform")
+    assert peer_parent_pid(os.getpid()) == os.getppid()
 
 
 def test_root_may_record_a_write(tmp_path: Path) -> None:

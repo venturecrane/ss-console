@@ -81,7 +81,9 @@ done
 #
 # THE AGENT ENVIRONMENT IS AN ALLOWLIST: the hermes-uid gateway's own environ,
 # and nothing else. The probe starts from `env -i` (empty) and receives exactly
-# the keys the gateway process holds, plus PATH. Anything this ssh session
+# the keys the gateway process holds, plus PATH, plus SMD_DIRECT_WRITE_ACTOR (a
+# non-secret login@host label computed on the caller's side above, sanitized to
+# a safe charset; it names who wrote on the firm's audit record). Anything this ssh session
 # carries that the gateway does not is dropped by construction, so a secret
 # staged root-only on the Machine tomorrow cannot ride into an agent-uid process
 # through here, whether or not anyone remembers to name it.

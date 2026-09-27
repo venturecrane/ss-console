@@ -158,7 +158,15 @@ def _returned_id(result: Any) -> str | None:
 class WriteRecord:
     """One write's two rows. ``begin`` before the request, ``finish`` after it."""
 
-    def __init__(self, method: str, path: str, matter_id: str | None, json_body: Any) -> None:
+    def __init__(
+        self,
+        method: str,
+        path: str,
+        matter_id: str | None,
+        json_body: Any,
+        *,
+        body_sha256: str | None = None,
+    ) -> None:
         self.socket_path = socket_path()
         self.active = bool(self.socket_path) and method.upper() not in _READ_METHODS and not _exempt()
         self.base = {
@@ -167,7 +175,7 @@ class WriteRecord:
             "method": method.upper(),
             "path": path[:300],
             "matter_id": matter_id,
-            "body_sha256": body_digest(json_body),
+            "body_sha256": body_sha256 or body_digest(json_body),
         }
 
     def begin(self) -> None:

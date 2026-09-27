@@ -15,7 +15,9 @@ What it holds itself to:
 * A crash mid-job resumes at the same job: the driver's state file skips the
   stages that finished; the daemon re-runs `medchron run` on restart.
 * The child gets an allow-listed env: the Anthropic key (the seat's workspace,
-  ADR 0062), the Smokeball credentials, the firm config path. Nothing else.
+  ADR 0062), the Smokeball credentials, the firm config path, and the job
+  marker MEDCHRON_DAEMON_JOB_ID (the Smokeball connector's audit-record
+  exemption keys on it). Nothing else.
 * Workdirs are wiped 72 h after a terminal state, and after a longer window
   when a job stopped and waited (`retention.py`) -- never before either.
 * Liveness is a tick file and a heartbeat json (`memory_cap` says whether the

@@ -184,6 +184,32 @@ def test_the_medchron_user_is_exempt_only_on_a_daemon_launched_job(monkeypatch):
     assert broker.rows == []
 
 
+def test_a_document_upload_records_the_bytes_leg_too(monkeypatch):
+    """The filing is the byte PUT to the presigned URL, not the metadata POST.
+    Falsifier: drop the upload record in add_file and only two rows land."""
+    broker = _Broker()
+    monkeypatch.setenv(wr.SOCKET_ENV, broker.path)
+    monkeypatch.setenv(wr.ACTOR_ENV, "seat-probe:scott@laptop")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(202, json={"fileId": "f-9", "uploadUrl": "https://s3.test/up"})
+        return httpx.Response(200)
+
+    client = _client([])
+    client._http = httpx.Client(transport=httpx.MockTransport(handler))
+    mid = "0d3fffa2-03aa-4cf5-8e8c-2f77cb3c9d46"
+    client.add_file(mid, "scan", b"PDFBYTES", folder_id="fold-1")
+    phases = [(r["method"], r["phase"]) for r in broker.rows]
+    assert phases == [("POST", "intent"), ("POST", "result"), ("PUT", "intent"), ("PUT", "result")]
+    put_intent = broker.rows[2]
+    assert put_intent["path"].endswith("/documents/files/f-9/content")
+    import hashlib
+
+    assert put_intent["body_sha256"] == hashlib.sha256(b"PDFBYTES").hexdigest()
+    assert broker.rows[3]["returned_id"] == "f-9"
+
+
 @pytest.mark.parametrize("key", ["fileId", "folderId", "documentId", "id"])
 def test_the_result_row_names_the_object_smokeball_returned(key):
     assert wr._returned_id({key: "abc-123"}) == "abc-123"

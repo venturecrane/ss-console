@@ -97,7 +97,7 @@ vars:
     custody: infra
     note: from fly.toml [env]; set => overlay routes audit writes through the broker's append-only audit_append (OP-P1-4); the broker-side ledger path (SMD_AUDIT_DB_PATH) is entrypoint-computed and broker-only, like SMD_WORKSPACE_BROKER_SOCKET
   SMD_DIRECT_WRITE_ACTOR:
-    stage: agent
+    stage: mcp-subprocess
     requirement: optional
     agent_env: held
     custody: infra
