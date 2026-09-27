@@ -65,7 +65,13 @@ def test_a_seat_probe_script_write_is_recorded_as_smd(tmp_path: Path) -> None:
     resp = broker.handle({"action": "smokeball_write_append", "row": _row()}, peer_pid=9999, peer_uid=AGENT_UID)
     assert resp["ok"] is True
     action, actor, role, matter, digest, metadata = _stored(tmp_path)
-    assert (action, actor, role, matter, digest) == ("SMOKEBALL_WRITE", "seat-probe:scott@laptop", "captain", MATTER, "f" * 64)
+    assert (action, actor, role, matter, digest) == (
+        "SMOKEBALL_WRITE",
+        "seat-probe:scott@laptop",
+        "captain",
+        MATTER,
+        "f" * 64,
+    )
     meta = json.loads(metadata)
     assert meta["phase"] == "intent" and meta["method"] == "POST" and meta["peer_uid"] == AGENT_UID
 
@@ -75,7 +81,9 @@ def test_the_operators_own_write_is_recorded_as_the_agent(tmp_path: Path, monkey
 
     monkeypatch.setattr(audit_verbs, "peer_parent_pid", lambda pid: GATEWAY_PID)
     broker = _broker(tmp_path)
-    broker.handle({"action": "smokeball_write_append", "row": _row(actor="operator")}, peer_pid=9999, peer_uid=AGENT_UID)
+    broker.handle(
+        {"action": "smokeball_write_append", "row": _row(actor="operator")}, peer_pid=9999, peer_uid=AGENT_UID
+    )
     assert _stored(tmp_path)[2] == "agent"
 
 
@@ -88,7 +96,9 @@ def test_an_operator_claim_from_a_process_the_gateway_did_not_start_is_refused(t
     monkeypatch.setattr(audit_verbs, "peer_parent_pid", lambda pid: 31337)
     broker = _broker(tmp_path)
     with pytest.raises(ValueError, match="only accepted from a child of the gateway"):
-        broker.handle({"action": "smokeball_write_append", "row": _row(actor="operator")}, peer_pid=9999, peer_uid=AGENT_UID)
+        broker.handle(
+            {"action": "smokeball_write_append", "row": _row(actor="operator")}, peer_pid=9999, peer_uid=AGENT_UID
+        )
     assert broker.ledger.count() == 0
 
 

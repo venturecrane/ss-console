@@ -148,7 +148,11 @@ def test_only_a_child_of_the_running_gateway_is_the_operator(monkeypatch):
     not the Operator, so it must name itself like any other writer."""
     monkeypatch.setattr(wr, "_proc_cmdline", lambda pid: "bash /app/bootstrap.sh")
     assert wr.resolve_actor() is None
-    monkeypatch.setattr(wr, "_proc_cmdline", lambda pid: "/opt/hermes/.venv/bin/python /opt/hermes/.venv/bin/hermes -p operator gateway run")
+    monkeypatch.setattr(
+        wr,
+        "_proc_cmdline",
+        lambda pid: "/opt/hermes/.venv/bin/python /opt/hermes/.venv/bin/hermes -p operator gateway run",
+    )
     assert wr.resolve_actor() == "operator"
 
 
