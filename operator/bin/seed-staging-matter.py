@@ -22,7 +22,11 @@ the seat volume (ADR 0010) and must not cross the wire:
     B64=$(base64 < operator/bin/seed-staging-matter.py | tr -d '\\n')
     flyctl ssh console --app hermes-pilot-smokeball -C "sh -c 'echo $B64 |
       base64 -d > /tmp/seed.py && chmod 644 /tmp/seed.py &&
-      su hermes -c \\"/opt/hermes/.venv/bin/python /tmp/seed.py <slug>\\"'"
+      su hermes -c \\"env SMD_DIRECT_WRITE_ACTOR=seed-staging-matter /opt/hermes/.venv/bin/python /tmp/seed.py <slug>\\"'"
+
+SMD_DIRECT_WRITE_ACTOR is required: every Smokeball write is recorded in the
+seat's audit ledger first, and a write whose writer is unnamed is refused
+(smokeball_connector/write_record.py).
 
 ...but the fixture package has to reach the seat too, so in practice ship the
 whole ``lib/seed_fixtures/`` directory alongside it or run from a checkout.

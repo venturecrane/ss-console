@@ -213,6 +213,8 @@ export const SUPPRESSED_ACTION_REASONS: Readonly<Record<string, string>> = {
   EMITTED_WAKE: 'TELEMETRY. A gated cron woke. Scheduler bookkeeping.',
 
   // --- INTERNAL: our operations on our own infrastructure -------------------
+  SMOKEBALL_WRITE:
+    'INTERNAL. Every write to the firm’s Smokeball is recorded twice (intent before it is sent, result after), by the Operator or SMD. The act already shows on this feed through its own line, and a raw intent/result pair would show a refused write as a change. Complete in the audit record and its export.',
   MEMORY_RULE_ADDED:
     'INTERNAL. Memory rules live in the per-customer store on the Machine; the portal teach-a-rule producer was removed per ADR 0052.',
   MEMORY_RULE_EDITED: 'INTERNAL. Machine-side memory store edit; no client-initiated producer.',

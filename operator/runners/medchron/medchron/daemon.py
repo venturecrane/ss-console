@@ -15,7 +15,9 @@ What it holds itself to:
 * A crash mid-job resumes at the same job: the driver's state file skips the
   stages that finished; the daemon re-runs `medchron run` on restart.
 * The child gets an allow-listed env: the Anthropic key (the seat's workspace,
-  ADR 0062), the Smokeball credentials, the firm config path. Nothing else.
+  ADR 0062), the Smokeball credentials, the firm config path, and the job
+  marker MEDCHRON_DAEMON_JOB_ID (the Smokeball connector's audit-record
+  exemption keys on it). Nothing else.
 * Workdirs are wiped 72 h after a terminal state, and after a longer window
   when a job stopped and waited (`retention.py`) -- never before either.
 * Liveness is a tick file and a heartbeat json (`memory_cap` says whether the
@@ -400,7 +402,12 @@ class Daemon:
             logger.warning("could not record running for %s: %s", job_id, exc)
             return "deferred"
         env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS}
-        env.update(self.child_env)
+        # The job marker: the Smokeball connector exempts the medchron uid from
+        # recording each write in the audit ledger ONLY on a job this daemon
+        # launched, because this job's own MEDCHRON_JOB_* rows record it. A person
+        # running as medchron by hand has no marker and must name themselves or
+        # is refused (smokeball_connector/write_record.py).
+        env.update(self.child_env, MEDCHRON_DAEMON_JOB_ID=str(job_id))
         env.setdefault("MEDCHRON_SEAT", "client")
         env.setdefault("PATH", "/usr/bin:/bin")
         env.setdefault("HOME", str(jd))

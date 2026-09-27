@@ -30,6 +30,12 @@ Row provenance, per verb:
     dropped rather than stored, and ``status`` is a broker-side constant.
     Nothing here reaches a spec; promotion is portal-side by a Named
     Administrator.
+``smokeball_write_append`` (A&P audit read, 2026-09-26)
+    Every write to a firm's Smokeball, recorded by the connector client
+    before it is sent (intent) and after (result), by the Operator or by SMD
+    directly; the client refuses a write whose intent row did not land.
+    Locked to SMOKEBALL_WRITE, rebuilt from bounded fields, and an "operator"
+    attribution is accepted only when the peer's parent is the gateway.
 ``audit_append`` (OP-P1-4)
     The generic append, gateway-PID-gated: only the gateway may write;
     execute_code/terminal children get a different peer PID. The broker
@@ -42,6 +48,7 @@ id/ts; chain intact).
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from .broker_context import BrokerContext
@@ -102,4 +109,94 @@ def audit_append(
     row = request.get("row")
     if not isinstance(row, dict):
         raise ValueError("audit_append requires a 'row' object")
+    return {"ok": True, "id": ledger.append(row)}
+
+
+# ``smokeball_write_append`` (A&P, 2026-09-26)
+#     Every write to a firm's Smokeball is recorded here BEFORE it is sent, by the
+#     connector client itself (operator/connectors/smokeball/smokeball_connector/
+#     write_record.py), whichever process holds it: the Operator's MCP server, a
+#     script run over seat-probe, the boot/connect webhook reconciler. On
+#     2026-09-25 SMD filed 52 documents on 31 of the firm's matters by hand with
+#     no row at all; this verb is how that becomes impossible, because the client
+#     refuses a write whose intent row did not land. REBUILT, NOT FORWARDED, like
+#     correction_propose: only the bounded fields below are read off the request,
+#     and the peer's uid and pid are stamped by the broker. The one attribution
+#     that matters most, "the Operator did this", is verified here from the
+#     peer's parent pid, not taken from the caller (see build_smokeball_write_row).
+_SMOKEBALL_WRITE_PHASES = frozenset({"intent", "result"})
+_SMOKEBALL_WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _bounded(value: Any, limit: int) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text[:limit] if text else None
+
+
+def peer_parent_pid(pid: int) -> int | None:
+    """The parent of the process on the other end of the socket, read by the
+    broker itself from /proc/<pid>/stat (field 4, after the comm in parens)."""
+    try:
+        with open(f"/proc/{pid}/stat", encoding="utf-8", errors="replace") as f:
+            stat = f.read()
+        return int(stat.rsplit(")", 1)[1].split()[1])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def build_smokeball_write_row(
+    row: Any, peer_pid: int, peer_uid: int | None, *, gateway_pid: int | None = None
+) -> dict[str, Any]:
+    if not isinstance(row, dict) or row.get("action_type") != "SMOKEBALL_WRITE":
+        raise ValueError("smokeball_write_append only accepts action_type=SMOKEBALL_WRITE")
+    phase = row.get("phase")
+    if phase not in _SMOKEBALL_WRITE_PHASES:
+        raise ValueError("smokeball_write_append requires phase 'intent' or 'result'")
+    method = str(row.get("method") or "").upper()
+    if method not in _SMOKEBALL_WRITE_METHODS:
+        raise ValueError("smokeball_write_append records writes only (POST, PUT, PATCH, DELETE)")
+    actor = _bounded(row.get("actor"), 200)
+    path = _bounded(row.get("path"), 300)
+    write_id = _bounded(row.get("write_id"), 64)
+    if not actor or not path or not write_id:
+        raise ValueError("smokeball_write_append requires actor, path and write_id")
+    # The Operator's attribution is VERIFIED here, never taken from the caller.
+    # Every agent-uid process can reach this verb (seat-probe scripts, cron
+    # pre_run children, an execute_code turn), so a caller's "operator" is a
+    # claim; the broker accepts it only when the peer's parent is the gateway,
+    # the same fact the client read from /proc. A claim it cannot confirm is
+    # refused, and the client refuses the write with it.
+    if actor == "operator" and (gateway_pid is None or peer_parent_pid(peer_pid) != gateway_pid):
+        raise ValueError("smokeball_write_append: 'operator' is only accepted from a child of the gateway")
+    status = row.get("status")
+    metadata = {
+        "write_id": write_id,
+        "phase": phase,
+        "method": method,
+        "path": path,
+        "status": status if isinstance(status, int) else None,
+        "returned_id": _bounded(row.get("returned_id"), 80),
+        "error": _bounded(row.get("error"), 300),
+        "peer_pid": peer_pid,
+        "peer_uid": peer_uid,
+    }
+    return {
+        "action_type": "SMOKEBALL_WRITE",
+        "actor": actor,
+        # The portal's role vocabulary (src/lib/portal/operator/audit.ts): the
+        # Operator is the agent; anyone else writing directly is SMD's side.
+        "actor_role": "agent" if actor == "operator" else "captain",
+        "matter_ref": _bounded(row.get("matter_id"), 80),
+        "input_digest": _bounded(row.get("body_sha256"), 64),
+        "metadata": json.dumps({k: v for k, v in metadata.items() if v is not None}, sort_keys=True),
+    }
+
+
+def smokeball_write_append(
+    broker: BrokerContext, _action: str, request: dict[str, Any], pid: int, uid: int | None
+) -> dict[str, Any]:
+    ledger = _ledger(broker)
+    row = build_smokeball_write_row(request.get("row"), pid, uid, gateway_pid=getattr(broker, "gateway_pid", None))
     return {"ok": True, "id": ledger.append(row)}

@@ -189,6 +189,9 @@ export const AUDIT_ACTION_TYPES = [
   'CASEWORK_APPROVED',
   'CASEWORK_HELD',
   'CASEWORK_CLOSED_BY_RECORD',
+  // Every write to the firm's Smokeball, by the Operator or by SMD directly,
+  // recorded before it is sent (the connector's write_record.py).
+  'SMOKEBALL_WRITE',
 ] as const
 
 /**

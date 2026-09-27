@@ -36,6 +36,7 @@ ASSUMED list), and encoding a guess here would be the wrong kind of certainty.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import re
@@ -44,6 +45,8 @@ import urllib.parse
 from typing import Any
 
 import httpx
+
+from .write_record import WriteRecord
 
 # /matters/{id} paths take the matter's UUID, never its human matter number.
 # Guarded in request() - see the docstring there for the 2026-09-01 incident.
@@ -338,6 +341,10 @@ class SmokeballClient:
             )
         prefix = f"/{self._account_id}" if self._account_id else ""
         url = f"{self.api_host}{prefix}{path}"
+        # A write is recorded in the seat's audit ledger before it is sent, or it
+        # is not sent (write_record.py). Reads pass straight through.
+        record = WriteRecord(method, path, seg.group(1) if seg else None, json)
+        record.begin()
         refreshed = False
         last: httpx.Response | None = None
         for attempt in range(_MAX_ATTEMPTS):
@@ -346,7 +353,11 @@ class SmokeballClient:
                 "Authorization": f"Bearer {self._bearer()}",
                 "Accept": "application/json",
             }
-            last = self._http.request(method, url, params=_clean(params), json=json, headers=headers)
+            try:
+                last = self._http.request(method, url, params=_clean(params), json=json, headers=headers)
+            except httpx.HTTPError as exc:
+                record.finish(None, error=f"{type(exc).__name__}: {exc}")
+                raise
             if last.status_code == 429:
                 time.sleep(min(2**attempt, 8))
                 continue
@@ -355,12 +366,22 @@ class SmokeballClient:
                 refreshed = True
                 continue
             if last.status_code >= 400:
+                record.finish(last.status_code, error=_truncate_body(last.text))
                 raise SmokeballApiError(method, path, last.status_code, _truncate_body(last.text))
             if last.status_code == 204 or not last.content:
+                record.finish(last.status_code)
                 return None
-            return last.json()
+            try:
+                result = last.json()
+            except ValueError:
+                # The write happened; its result row must still say so.
+                record.finish(last.status_code, error="response body was not JSON")
+                raise
+            record.finish(last.status_code, result)
+            return result
         assert last is not None
         # Attempts exhausted (e.g. a persistent 429) — surface the last status+body.
+        record.finish(last.status_code, error=_truncate_body(last.text))
         raise SmokeballApiError(method, path, last.status_code, _truncate_body(last.text))
 
     def get(self, path: str, **params: Any) -> Any:
@@ -394,7 +415,25 @@ class SmokeballClient:
             raise SmokeballWriteError(
                 f"add_file: metadata POST did not return an uploadUrl (matter {matter_id!r}, file {file_name!r})"
             )
-        self._put_presigned(info["uploadUrl"], data)
+        # The bytes are the filing itself, and they go to a presigned URL rather
+        # than through request(), so they get their own recorded pair: intent
+        # before the PUT, the outcome after, keyed by the fileId the metadata
+        # call returned and carrying a digest of the bytes actually sent.
+        file_id = info.get("fileId")
+        upload = WriteRecord(
+            "PUT",
+            f"/matters/{matter_id}/documents/files/{file_id}/content",
+            matter_id,
+            None,
+            body_sha256=hashlib.sha256(data).hexdigest(),
+        )
+        upload.begin()
+        try:
+            self._put_presigned(info["uploadUrl"], data)
+        except Exception as exc:
+            upload.finish(None, error=f"{type(exc).__name__}: {exc}")
+            raise
+        upload.finish(200, {"fileId": file_id})
         return {
             "fileId": info.get("fileId"),
             "matterId": matter_id,

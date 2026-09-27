@@ -128,6 +128,9 @@ const EXPECTED_VERBS = [
   'send_as_decide_link',
   'send_as_match_reply',
   'send_as_propose',
+  // Every write to a firm's Smokeball, recorded before it is sent (the
+  // connector's write_record.py refuses a write whose row did not land).
+  'smokeball_write_append',
   'suppressed_wake_append',
   'webhook_suppressed_append',
 ]

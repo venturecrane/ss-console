@@ -277,3 +277,11 @@ describe('mappedActionsForCategories', () => {
     ])
   })
 })
+
+describe('SMOKEBALL_WRITE stays off the activity feed', () => {
+  it('is suppressed with a stated reason, so a refused write never reads as a change', async () => {
+    const mod = await import('../src/lib/portal/operator/activity-language')
+    expect(mod.activityDisposition('SMOKEBALL_WRITE')).toBe('suppressed')
+    expect(mod.SUPPRESSED_ACTION_REASONS['SMOKEBALL_WRITE']).toMatch(/audit record/i)
+  })
+})

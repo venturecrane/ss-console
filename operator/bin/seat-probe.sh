@@ -46,6 +46,16 @@ if [[ ! "${SLUG}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]]; then
 fi
 APP_NAME="hermes-${SLUG}"
 
+# Who is at the keyboard, stamped on every write this probe makes to the firm's
+# Smokeball (SMD_DIRECT_WRITE_ACTOR, read by the connector's write_record.py).
+# The connector refuses a write from a process that is not the Operator and
+# names nobody, so this is what lets SMD work on a seat directly AND leaves a
+# ledger row saying it was SMD (A&P 2026-09-26: 52 hand-filed documents on
+# 09-25 left no row). Set SMD_ACTOR to name yourself; the default is the local
+# login. Sanitized to a safe token set because it rides the remote sh -c.
+ACTOR_RAW="seat-probe:${SMD_ACTOR:-$(whoami)}@$(hostname -s 2>/dev/null || echo unknown)"
+DIRECT_WRITE_ACTOR="$(printf '%s' "${ACTOR_RAW}" | tr -cd 'A-Za-z0-9@._:+-' | cut -c1-120)"
+
 # Quote the argv safely for transport through the remote sh -c.
 QUOTED=""
 for arg in "$@"; do
@@ -71,7 +81,9 @@ done
 #
 # THE AGENT ENVIRONMENT IS AN ALLOWLIST: the hermes-uid gateway's own environ,
 # and nothing else. The probe starts from `env -i` (empty) and receives exactly
-# the keys the gateway process holds, plus PATH. Anything this ssh session
+# the keys the gateway process holds, plus PATH, plus SMD_DIRECT_WRITE_ACTOR (a
+# non-secret login@host label computed on the caller's side above, sanitized to
+# a safe charset; it names who wrote on the firm's audit record). Anything this ssh session
 # carries that the gateway does not is dropped by construction, so a secret
 # staged root-only on the Machine tomorrow cannot ride into an agent-uid process
 # through here, whether or not anyone remembers to name it.
@@ -110,5 +122,5 @@ if [ -z \"\${GPID}\" ]; then
   exit 1
 fi
 ENVV=\$(tr \"\\0\" \"\\n\" < /proc/\${GPID}/environ | grep -vE \"^(PWD|SHLVL|_|MSGRAPH_SEND_TENANT_ID|MSGRAPH_SEND_CLIENT_ID|MSGRAPH_SEND_CLIENT_SECRET|AGENTMAIL_SEND_API_KEY|AGENTMAIL_WEBHOOK_READ_API_KEY|R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY)=\" | tr \"\\n\" \" \")
-exec runuser -u hermes -- env -i \${ENVV} PATH=/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin ${QUOTED}
+exec runuser -u hermes -- env -i \${ENVV} PATH=/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin SMD_DIRECT_WRITE_ACTOR=${DIRECT_WRITE_ACTOR} ${QUOTED}
 '"
