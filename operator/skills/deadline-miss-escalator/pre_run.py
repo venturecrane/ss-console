@@ -135,11 +135,20 @@ class MatterDeadline:
     # the renderer's consequence map renders NOTHING for None (never invented
     # urgency). WS-RENDER.
     priority_marker: str | None = None
-    # The task subject reduced to a label the send gate passes
-    # (``digest_items.display_label``), built in ``parse_pull`` for TASKS only:
-    # an event title is often a case caption and never renders. None renders no
-    # label. The raw subject never leaves ``parse_pull``.
+    # The task subject or calendar title reduced to a label the send gate
+    # passes (``digest_items.display_label``: gate shapes masked, a caption
+    # segment cut off, a caption up front refuses the label), built in
+    # ``parse_pull``. None renders a plain noun. The raw subject never leaves
+    # ``parse_pull``.
     subject_display: str | None = None
+    # The client's surname read off the matter's own title, beside the number
+    # it belongs to (``digest_items.matter_name``). None names the matter by
+    # number alone.
+    matter_name: str | None = None
+    # Case-manager seats with ``date_prep`` authored: a calendar date inside
+    # the prep window that no date-prep brief has gone out for
+    # (``casework_filter.py``). The digest says so in plain words.
+    prep_note_missing: bool = False
     # The subject starts with the connector's "[Operator]" provenance stamp:
     # the Operator created this task. Read only by casework_filter.py, and only
     # on a seat that authored ``case_manager.own_tasks``.
@@ -421,6 +430,8 @@ def _digest_item(d: MatterDeadline, today: date, ack_code: str | None) -> dict:
         "last_raised": d.last_raised,
         "priority_marker": d.priority_marker,
         "subject_display": d.subject_display,
+        "matter_name": d.matter_name,
+        **({"prep_note_missing": True} if d.prep_note_missing else {}),
     }
 
 
@@ -490,7 +501,7 @@ def project_digest(
     if blanket:
         blanket.sort(key=lambda d: ((d.authored_date - today).days, d.matter_id))
         digest["blanket_ack_only"] = [_digest_item(d, today, None) for d in blanket]
-    digest["subject"] = f"[Deadlines] {_DI.need_you_count(digest)} need you, {today.isoformat()}"
+    digest["subject"] = _DI.subject_line(digest, today)
     if probe_stats and (probe_stats.get("excluded") or probe_stats.get("stale")):
         # ss #2403's daily loud channel: probe artifacts present on the tenant
         # are stated in the digest (excluded from work, and stale ones named for
@@ -883,16 +894,8 @@ async def run_once(
         ledger = _load_ledger_module()
         if ledger is not None:
             probe_stats = _probe_stats(sources)
-            decision = replace(
-                decision,
-                digest=project_digest(
-                    deadlines,
-                    windows,
-                    ledger,
-                    today=today,
-                    probe_stats=probe_stats or None,
-                ),
-            )
+            digest = project_digest(deadlines, windows, ledger, today=today, probe_stats=probe_stats or None)
+            decision = replace(decision, digest=digest)
         decision = casework.annotate(decision)
         resolved, failed, degraded_reason = _degradation(deadlines, today)
         if resolved == 0 and failed > 0:
@@ -1238,7 +1241,8 @@ def parse_pull(raw: dict, *, now: datetime | None = None) -> tuple[list[MatterDe
                     acknowledged=False,
                     task_id=_source_id_of(item),
                     priority_marker=_priority_marker_of(item),
-                    subject_display=_DI.display_label(_subject_of(item)) if label == "task-deadline" else None,
+                    subject_display=_DI.display_label(_subject_of(item)),
+                    matter_name=_DI.matter_name(item.get("matterTitle"), number),
                     operator_stamped=_subject_of(item).lstrip().upper().startswith(_PROVENANCE_MARK.upper()),
                 )
             )

@@ -86,7 +86,7 @@ def _digest(**overrides):
 def test_render_digest_carries_template_markup_and_values():
     body = render.render_digest(_digest(), ack_snooze_days=7)
     assert "## Needs you today (1)" in body
-    assert "1. matter 2026-PI-101, due 2026-08-29 (overdue by 2 days)" in body
+    assert "1. 2026-PI-101: a task, due Aug 29, 2026 (overdue 2 days)" in body
     # Plain-word replies: no code of any kind reaches the reader.
     assert "ACK-" not in body
     assert "ESCALATION_ACKNOWLEDGED" not in body
@@ -109,7 +109,7 @@ def test_a_body_with_no_numbered_unit_invites_no_reply():
     """A body rendered without rows behind it (no ``n`` anywhere) must not ask
     for numbers: a reply would find nothing to quiet."""
     body = render.render_digest(_digest(needs_you=[_item(n=None)]), ack_snooze_days=7)
-    assert "- matter 2026-PI-101, due 2026-08-29 (overdue by 2 days)" in body
+    assert "- 2026-PI-101: a task, due Aug 29, 2026 (overdue 2 days)" in body
     assert "Reply to this email" not in body
     assert not re.search(r"^\s*\d+\. ", body, re.MULTILINE)
     assert body.rstrip("\n").endswith(render.UNNUMBERED_FOOTER)
@@ -173,11 +173,11 @@ def test_admin_and_elsewhere_render_grouped_lines():
     body = render.render_digest(digest, ack_snooze_days=7)
     assert "## Also open (3 across 2 matters)" in body
     assert "More open items past the top five, one line per matter." in body
-    assert "2. matter 2026-PI-102: 2 more open items" in body
+    assert "2. 2026-PI-102: 2 more open items" in body
     assert "3. matter with no number on record: 1 more open item" in body
     assert "ACK-" not in body
     assert "## Under active escalation elsewhere (2 across 1 matter)" in body
-    assert "- matter 2026-PI-103: 2 items under active escalation (last raised 2026-08-28)." in body
+    assert "- 2026-PI-103: 2 items under active escalation (last raised 2026-08-28)." in body
 
 
 def test_matter_number_absences_render_exact_phrases_never_guid():
@@ -190,14 +190,19 @@ def test_matter_number_absences_render_exact_phrases_never_guid():
     digest["needs_you"][0]["matter_number"] = None
     digest["needs_you"][1]["matter_number"] = None
     body = render.render_digest(digest, ack_snooze_days=7)
-    assert "matter with no number on record, due" in body
-    assert "matter number unavailable, due" in body
+    assert "1. matter with no number on record: a task, due" in body
+    assert "matter number unavailable: a task, due" in body
     assert "m-None" not in body
 
 
 def test_consequence_map_is_closed():
     assert render.consequence_line({"priority_marker": "CRITICAL"}) == ("the task is marked CRITICAL in Smokeball")
-    assert render.consequence_line({"label": "court-date"}) == "a court date the firm authored"
+    # A calendar date says what it still needs, not what kind of item it is.
+    assert render.consequence_line({"label": "court-date"}) is None
+    assert (
+        render.consequence_line({"label": "court-date", "prep_note_missing": True})
+        == "No prep note has gone out for this yet."
+    )
     # Unknown signal renders nothing — never a sentinel, never invented urgency.
     assert render.consequence_line({"label": "task-deadline"}) is None
     assert render.consequence_line({"priority_marker": "SUPER URGENT!!"}) is None
@@ -457,7 +462,7 @@ def test_matter_staff_split_one_dispatch_per_recipient_set(tmp_path, monkeypatch
     # A fallback-delivered matter is a memo duty for the woken turn.
     assert written["memo_matters"] == ["m-2"]
     # Each subject counts ONLY its own needs-you band (Law 11).
-    assert by_leg["fallback"]["subject"].startswith("[Deadlines] 1 need you")
+    assert by_leg["fallback"]["subject"] == "[Deadlines] 2026-PI-102: a task overdue since Aug 29"
 
 
 def test_unknown_matter_never_reaches_memo_or_unroutable_lists(tmp_path, monkeypatch):
@@ -651,8 +656,8 @@ def test_body_numbers_equal_append_numbers_one_for_one(tmp_path, monkeypatch):
     # Each needs-you number has one row; each Also-open group number has one
     # row per item in the group, all sharing it.
     assert _numbers_by_n(dispatch["appends"]) == {1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 2, 7: 3}
-    assert "6. matter 2026-PI-106: 2 more open items" in body
-    assert "7. matter 2026-PI-107: 3 more open items" in body
+    assert "6. 2026-PI-106: 2 more open items" in body
+    assert "7. 2026-PI-107: 3 more open items" in body
     assert "ACK-" not in body and "ESCALATION_ACKNOWLEDGED" not in body
     # The legacy code still rides the row: codes already sent keep working.
     assert all(a["token"] and a["token"].startswith("ACK-") for a in dispatch["appends"])
@@ -660,10 +665,12 @@ def test_body_numbers_equal_append_numbers_one_for_one(tmp_path, monkeypatch):
     assert {a["snooze_days"] for a in dispatch["appends"]} == {7}
 
 
-# The overlay's quoted-digest detector (hermes-smd-overlay#384): a numbered
-# digest line is ``N. matter ...``. A line that breaks the shape would let a
-# reply quoting the digest be read as an answer.
-_OVERLAY_DIGEST_LINE = re.compile(r"^\d{1,3}\.\s+matter\b")
+# The overlay's quoted-digest detector, copied verbatim from
+# hermes-smd-overlay plugins/hermes-smd-escalation/reply_items.py:189 at the
+# pinned OVERLAY_REF c280ed1: a numbered line is ``N. matter ...`` or
+# ``N. <four digits>-...`` (the casework list's shape). A line that breaks it
+# would let a reply quoting the digest be read as an answer.
+_OVERLAY_DIGEST_LINE = re.compile(r"^[\s>]*\d{1,3}\.\s+(?:matter\b|\d{4}-)", re.MULTILINE)
 _ANY_NUMBERED = re.compile(r"^\s*\d+\.")
 
 
@@ -703,7 +710,7 @@ def test_no_number_is_shown_past_the_append_cap(tmp_path, monkeypatch):
     assert len(dispatch["appends"]) == 8
     assert _numbers_by_n(dispatch["appends"]) == {1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 2}
     assert "n" not in dispatch["appends"][-1] and "snooze_days" not in dispatch["appends"][-1]
-    assert "- matter 2026-PI-107: 3 more open items" in body
+    assert "- 2026-PI-107: 3 more open items" in body
     # A number is still shown, so the reply invitation stands.
     assert "Reply to this email with the numbers you have" in body
 
@@ -719,9 +726,9 @@ def test_blanket_items_share_one_number_per_matter(tmp_path, monkeypatch):
     [dispatch] = written["dispatches"]
     body = dispatch["full_body"]
     assert [int(n) for n in _NUMBERED_LINE.findall(body)] == [1, 2, 3]
-    assert "2. matter 2026-PI-102: 2 open items with no task id" in body
-    assert "3. matter 2026-PI-103: 1 open item with no task id" in body
-    assert "   - matter 2026-PI-102, court-date 2026-08-27 (overdue by 4 days)" in body
+    assert "2. 2026-PI-102: 2 open items with no task id" in body
+    assert "3. 2026-PI-103: 1 open item with no task id" in body
+    assert "   - 2026-PI-102: a calendar date, Thu Aug 27, 2026 (overdue 4 days)" in body
     blanket_rows = [a for a in dispatch["appends"] if a["matter_id"] in ("m-2", "m-3")]
     assert [(a["matter_id"], a["n"]) for a in blanket_rows] == [("m-2", 2), ("m-2", 2), ("m-3", 3)]
     assert all(a["token"] is None for a in blanket_rows)

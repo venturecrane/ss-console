@@ -14,18 +14,40 @@ template text mirroring ``references/output-format.md``) and the values come
 from the digest projection, which reads them off the firm's own records. An
 unknown signal renders NOTHING — never a sentinel, never invented urgency.
 
-No em dashes anywhere; matter by number, never caption; plain words, never a
-citation (the law-seat first-draft rules; the spec gate still checks the
-rendered text).
+No em dashes anywhere; a matter by its number and the client's surname read
+off its title, never a caption; plain words, never a citation, never our own
+vocabulary ("court-date", "task-deadline") (the law-seat first-draft rules;
+the spec gate still checks the rendered text).
 
 Stdlib only, loaded by absolute path from ``pre_run.py`` like the vendored
 ledger (the scheduler may stage ``pre_run.py`` alone; the skill dir on the
-volume carries the siblings).
+volume carries the siblings). The item words (``head_words``, ``what_words``,
+``when_words``) live in the sibling ``digest_items.py``, loaded by path here,
+because the subject line is built from the same words.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import re
+import sys
+from pathlib import Path
+
+
+def _load_digest_items():
+    name = "escalator_render_digest_items"
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / "digest_items.py")
+    if spec is None or spec.loader is None:
+        raise RuntimeError("digest_items.py is missing beside render.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_DI = _load_digest_items()
 
 # canonical_body_sha256, the ONE body hash, lives in skill_helpers.py (shared
 # with the verification tracker; arbiter fixture operator/contracts/fixtures/
@@ -53,20 +75,25 @@ _PRIORITY_PHRASES = {
     "HIGH PRIORITY": "the task is marked HIGH PRIORITY in Smokeball",
 }
 
-_COURT_DATE_PHRASE = "a court date the firm authored"
+#: What a calendar date inside the firm's date-prep window still lacks: no
+#: date-prep brief has gone out for it (``prep_note_missing``, set by
+#: ``casework_filter.py`` on seats that authored ``case_manager.date_prep``).
+#: Replaced "a court date the firm authored" (2026-09-28): that told the reader
+#: what the item WAS, in our words, and asked nothing of them.
+_PREP_NOTE_PHRASE = "No prep note has gone out for this yet."
 
 
 def consequence_line(item: dict) -> str | None:
-    """The one plain line of why an item is consequential, or None.
+    """The one plain line of what an item still needs, or None.
 
-    Authored signal only: a task-priority marker the record carries, else the
-    court-date label. Anything else renders nothing (rule 7: no invented
-    urgency)."""
+    Authored signal only: a task-priority marker the record carries, else a
+    date in the prep window with no brief out. Anything else renders nothing
+    (rule 7: no invented urgency)."""
     marker = item.get("priority_marker")
     if isinstance(marker, str) and marker in _PRIORITY_PHRASES:
         return _PRIORITY_PHRASES[marker]
-    if item.get("label") == "court-date":
-        return _COURT_DATE_PHRASE
+    if item.get("prep_note_missing") is True:
+        return _PREP_NOTE_PHRASE
     return None
 
 
@@ -76,47 +103,23 @@ def consequence_line(item: dict) -> str | None:
 
 
 def _matter_head(item_or_group: dict) -> str:
-    """``matter <number>``, or the exact authored absence phrase.
+    """ "2026-PI-105 Okafor", "matter 201520 Crawford", or the exact authored
+    absence phrase (``digest_items.head_words``).
 
-    ``no_number_on_record`` is authored absence (the firm's record carries no
-    number); every other absence is a resolution failure and renders the
-    generic phrase. Never a GUID, never a supplied value (ss #2390).
-
-    Every form starts with the word "matter": a numbered line must read
-    ``N. matter ...``, the shape the overlay's reply parser uses to recognize
-    quoted digest text in a reply and refuse to read numbers from it."""
-    number = item_or_group.get("matter_number")
-    if isinstance(number, str) and number:
-        return f"matter {number}"
-    if item_or_group.get("matter_number_absent") == "no_number_on_record":
-        return "matter with no number on record"
-    return "matter number unavailable"
-
-
-def _due_phrase(days_out: int) -> str:
-    if days_out < 0:
-        n = -days_out
-        return f"overdue by {n} day" + ("" if n == 1 else "s")
-    if days_out == 0:
-        return "due today"
-    return f"due in {days_out} day" + ("" if days_out == 1 else "s")
+    Every numbered line starts either with the word "matter" or with a number
+    of the ``NNNN-`` shape: those are the two forms the overlay's reply parser
+    (``reply_items._DIGEST_ITEM_LINE``) uses to recognize quoted digest text in
+    a reply and refuse to read numbers from it."""
+    return _DI.head_words(item_or_group)
 
 
 def _item_line(item: dict) -> str:
-    """``<matter head>, "<task label>", due <date> (<due phrase>)``, the
-    shared core of a needs-you and blanket line. Values verbatim from the
-    digest item; the quoted task label renders only for a task deadline that
-    carries one (``subject_display``, masked at parse time). A task deadline
-    reads "due <date>"; any other kind keeps its label ("court-date <date>").
-    An event title never renders: it is often a case caption."""
-    is_task = item.get("label") == "task-deadline"
-    task = item.get("subject_display") if is_task else None
-    named = f'"{task}", ' if isinstance(task, str) and task else ""
-    kind = "due" if is_task else item.get("label")
-    return (
-        f"{_matter_head(item)}, {named}{kind} {item.get('authored_date')} "
-        f"({_due_phrase(int(item.get('days_out') or 0))})"
-    )
+    """``<matter head>: <what>, <when> (<relative>)``, the shared core of a
+    needs-you and blanket line: "2026-PI-105 Okafor: Final Status Conference,
+    Fri Oct 2, 2026 (in 4 days)". What the item is comes from the record (the
+    task subject or calendar title, masked at parse time), else a plain noun;
+    the date is the authored one, spelled out."""
+    return f"{_matter_head(item)}: {_DI.what_words(item)}, {_DI.when_words(item)}"
 
 
 def _day_of(ts: str | None) -> str | None:
@@ -285,9 +288,7 @@ def _clearance_block(items: list[dict]) -> list[str]:
         "",
     ]
     for item in items:
-        lines.append(
-            f"- {_matter_head(item)}: on CONFLICT-HOLD with {item.get('label')} {item.get('authored_date')} approaching."
-        )
+        lines.append(f"- {_item_line(item)}. The matter is on CONFLICT-HOLD.")
     return lines + [""]
 
 

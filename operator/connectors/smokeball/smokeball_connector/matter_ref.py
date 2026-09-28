@@ -9,11 +9,16 @@ ever produced could only say "matter number unavailable". ss #2390's contract
 is that this join is performed IN THE CONNECTOR for the surfaces skills
 consume; this module is the connector-side join for the raw-client surface.
 
-It deliberately resolves NUMBERS ONLY. ``server.py``'s ``_resolve_matter_ref``
-also composes captions (party lookups, surname joins) because the MCP surfaces
-need them; a digest never renders a caption (the skill contract bans it), and a
-pre-run subprocess should not pay N party lookups per matter for a field it
-must not use.
+It resolves NUMBERS, and carries the matter's own ``title`` from the SAME
+read. ``server.py``'s ``_resolve_matter_ref`` also composes captions (party
+lookups, surname joins) because the MCP surfaces need them; a digest never
+renders a caption (the send gate refuses a "Smith v. Jones" it cannot trace to
+a read inside the session, and a pre-run's read is not one), and a pre-run
+subprocess should not pay N party lookups per matter for a field it must not
+use. The title costs nothing extra: it is on the ``/matters/{id}`` record the
+number already comes from, and the escalator reduces it to the client's
+surname in code (``digest_items.matter_name``) so an alert can say which case
+it means (2026-09-28: "matter 2026-PI-105" alone told a reader nothing).
 
 ABSENCE IS TYPED, NOT COLLAPSED (2026-08-24 critique). "This matter's record
 has no number" and "the lookup failed" are different facts with different
@@ -31,6 +36,10 @@ it can only fail to supply a number, never supply a wrong one.
 from __future__ import annotations
 
 from typing import Any
+
+#: Item annotation key for the matter record's own ``title``, verbatim, set
+#: only beside a resolved ``matterNumber`` and only when the record carries one.
+TITLE_KEY = "matterTitle"
 
 #: Item annotation key for a typed absence. Never set alongside
 #: ``matterNumber``; consumers branch on exactly one of the two.
@@ -68,6 +77,7 @@ def resolve_matter_number(
     matter_id: str,
     cache: dict[str, tuple[str, str | None]],
     budget: list[int] | None,
+    titles: dict[str, str] | None = None,
 ) -> tuple[str, str | None]:
     """``(status, number)`` for one matter, memoized in ``cache``.
 
@@ -75,7 +85,8 @@ def resolve_matter_number(
     ``LOOKUP_FAILED``, or ``BUDGET_EXHAUSTED`` (number is None for all three).
     ``budget`` is a 1-element list capping LIVE lookups; cache hits are free.
     A budget miss is not cached — a later call with budget remaining may still
-    resolve it.
+    resolve it. ``titles``, when given, receives the record's ``title`` (a
+    non-empty string only) from the same GET: no extra read.
     """
     if matter_id in cache:
         return cache[matter_id]
@@ -90,6 +101,9 @@ def resolve_matter_number(
         cache[matter_id] = result
         return result
     number = matter.get("number") if isinstance(matter, dict) else None
+    title = matter.get("title") if isinstance(matter, dict) else None
+    if titles is not None and isinstance(title, str) and title.strip():
+        titles[matter_id] = title
     if isinstance(number, str) and number:
         result = ("resolved", number)
     else:
@@ -115,6 +129,7 @@ def attach_matter_numbers(
     """
     if cache is None:
         cache = {}
+    titles: dict[str, str] = {}
     remaining = [max(0, int(budget))]
     counts = {
         "resolved": 0,
@@ -131,9 +146,11 @@ def attach_matter_numbers(
             item[ABSENT_KEY] = NO_MATTER_LINK
             counts[NO_MATTER_LINK] += 1
             continue
-        status, number = resolve_matter_number(client, matter_id, cache, remaining)
+        status, number = resolve_matter_number(client, matter_id, cache, remaining, titles)
         if status == "resolved" and number:
             item["matterNumber"] = number
+            if matter_id in titles:
+                item[TITLE_KEY] = titles[matter_id]
             counts["resolved"] += 1
         else:
             item[ABSENT_KEY] = status

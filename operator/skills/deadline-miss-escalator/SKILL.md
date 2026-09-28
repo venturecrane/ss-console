@@ -80,6 +80,7 @@ A firm that turns on the case-manager jobs (`docs/specs/operator/case-manager-de
 - **The Operator's own tasks leave the digest** (when `case_manager.own_tasks` is authored): a task whose subject carries the `[Operator]` stamp, or whose id is in `own_tasks.legacy_task_ids`, is closed or handed over once by `task-list-keeper`, never re-alarmed here.
 - **A task the review holds leaves the digest**: a proposal is out, a person said to leave it (held, a kept row, or an approved keep, for `keep_quiet_days`), an approved write is on its way, or the task was handed over.
 - **A court date with a date-prep brief leaves the digest, with a backstop.** Once every decision in the brief is answered, the date is the brief's. While any is unanswered, the date comes back here as soon as it is inside `notify_days`: an unanswered brief never silences a court date.
+- **A date with no prep note says so.** When `case_manager.date_prep` is authored at a level, a court date inside its `window_days` that no date-prep brief has gone out for carries one line under it in the digest: "No prep note has gone out for this yet." A date whose brief is out never carries it.
 - **The overflow line.** When `case_manager.task_cleanup` is authored, a recipient's overdue tasks past the top five collapse into one line, "N more overdue tasks are in Monday's task review." (the day read from the firm's own `task-list-keeper` cron entry; "the next task review" when the schedule names no single day). Those tasks are not raised here (no `fired` row): they are the review's. Court dates and not-yet-overdue tasks past the top five stay in "Also open".
 
 - **Done since last time.** When `case_manager.quiet` is authored, the digest opens with one line naming the work the Operator finished without asking and has told nobody about: a task it closed on the record's evidence, or a date-prep step it ran at "Handles it". It rides a recipient's digest only when that digest is going out anyway (never a message of its own), covers that recipient's matters, and is rendered from the casework ledger rows by `done_since.py`. After a full send the overlay records each item `mentioned`, so it is told once.
@@ -184,6 +185,9 @@ the first time):
   `matterNumber`, write "matter number unavailable" rather than supplying one.
   Never refer to the matter by its case caption. The matter's own caption is
   acceptable inside matter memos; cited case law is never acceptable anywhere.
+  (The rendered digest names each matter by number plus the client's surname,
+  which the pre-run reads in code off the matter record's own `title`; it never
+  renders a caption, because the send gate refuses one in a pre-rendered body.)
 - State a specific dollar figure only when it exists in an authored source
   on the matter, and name that source in the same sentence ("per the MedFin
   payoff letter dated..."). Never total, estimate, or round figures into

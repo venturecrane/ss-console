@@ -131,3 +131,33 @@ def test_item_matter_id_reads_both_api_shapes_and_nothing_else():
     assert matter_ref.item_matter_id({"matter": {"id": "abc"}}) == "abc"
     assert matter_ref.item_matter_id({"matterId": "def"}) == "def"
     assert matter_ref.item_matter_id({"subject": "PI-2026-0001"}) is None
+
+
+def test_the_title_rides_the_same_read_and_costs_no_extra_lookup():
+    """The escalator names a case from the matter's own ``title`` (2026-09-28).
+    It comes off the ``/matters/{id}`` record the number already came from:
+    one GET per matter, as before, and the title attached verbatim beside the
+    number it belongs to."""
+    data = _load()
+    tasks = data["tasks"]["value"]
+    matters = {k: dict(v) for k, v in data["matters"].items()}
+    first = tasks[0]["matter"]["id"]
+    title = f"{matters[first]['number']} - Okafor, Denise - Personal Injury - Plaintiff - Grand Valley Market, Inc."
+    matters[first]["title"] = title
+    client = FakeClient(matters)
+    matter_ref.attach_matter_numbers(client, tasks)
+    assert len(client.calls) == len({t["matter"]["id"] for t in tasks})
+    for task in tasks:
+        if task["matter"]["id"] == first:
+            assert task[matter_ref.TITLE_KEY] == title
+        else:
+            # The captured records carry no title: nothing is attached.
+            assert matter_ref.TITLE_KEY not in task
+
+
+def test_no_title_is_attached_without_a_resolved_number():
+    data = _load()
+    tasks = data["tasks"]["value"]
+    matters = {k: {**v, "number": "", "title": "X - Doe, Jane - PI"} for k, v in data["matters"].items()}
+    matter_ref.attach_matter_numbers(FakeClient(matters), tasks)
+    assert all(matter_ref.TITLE_KEY not in t for t in tasks)
