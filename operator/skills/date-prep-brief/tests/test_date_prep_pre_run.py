@@ -351,6 +351,37 @@ def test_no_brief_without_matter_staff_routing_or_a_granted_owner():
     assert brief.recipients(pre_run._ROUTING, CFG, None) is None
 
 
+FALLBACK_CFG = {
+    **CFG,
+    "escalation": {"case_alert_routing": {"mode": "matter_staff", "fallback_recipients": ["office@firm.test"]}},
+}
+
+
+def test_a_matter_with_no_owner_goes_to_the_authored_fallback_and_says_why():
+    no_owner = {"responsible": None, "assisting": []}
+    got = brief.recipients(pre_run._ROUTING, FALLBACK_CFG, no_owner)
+    assert got == {"to": ["office@firm.test"], "cc": [], "leg": "fallback", "why": "no_owner_in_record"}
+    off_roster = {**STAFF, "responsible": {"email": "atty@elsewhere.test"}}
+    assert brief.recipients(pre_run._ROUTING, FALLBACK_CFG, off_roster)["why"] == "owner_not_on_roster"
+    assert brief.recipients(pre_run._ROUTING, FALLBACK_CFG, None)["why"] == "staff_unread"
+    # A routable owner always beats the fallback.
+    assert brief.recipients(pre_run._ROUTING, FALLBACK_CFG, STAFF)["leg"] == "matter_staff_responsible"
+
+
+def test_the_fallback_is_roster_granted_and_matter_staff_only():
+    no_owner = {"responsible": None, "assisting": []}
+    ungranted = {
+        **CFG,
+        "escalation": {"case_alert_routing": {"mode": "matter_staff", "fallback_recipients": ["x@elsewhere.test"]}},
+    }
+    assert brief.recipients(pre_run._ROUTING, ungranted, no_owner) is None
+    central = {
+        **CFG,
+        "escalation": {"case_alert_routing": {"mode": "central", "fallback_recipients": ["office@firm.test"]}},
+    }
+    assert brief.recipients(pre_run._ROUTING, central, no_owner) is None
+
+
 # ---------------------------------------------------------------------------
 # The gate end to end
 # ---------------------------------------------------------------------------
@@ -428,6 +459,31 @@ def test_nothing_to_offer_sends_nothing(seat):
     }
     assert _run(cfg) == {"wakeAgent": False}
     assert beats == [("SUPPRESSED_WAKE", "case_manager:no_step_offered")]
+
+
+def test_an_unowned_matter_is_briefed_to_the_fallback(seat, monkeypatch):
+    home, beats = seat
+    monkeypatch.setattr(pre_run._ROUTING, "pull_matter_staff", lambda ids, budget: {M105: {"responsible": None}})
+    line = _run(FALLBACK_CFG)
+    assert line["wakeAgent"] is True
+    assert line["date_prep"]["recipients"] == {"to": "firm fallback contact", "cc": 0, "why": "no_owner_in_record"}
+    envelope = json.loads((home / ".smd" / "pre_run" / "date-prep-brief.brief.json").read_text())
+    assert envelope["recipients"] == ["office@firm.test"] and envelope["routing_leg"] == "fallback"
+    assert envelope["routing_why"] == "no_owner_in_record"
+
+
+def test_an_owned_matter_carries_no_routing_note(seat):
+    home, _ = seat
+    assert _run(FALLBACK_CFG)["wakeAgent"] is True
+    envelope = json.loads((home / ".smd" / "pre_run" / "date-prep-brief.brief.json").read_text())
+    assert "routing_why" not in envelope and envelope["routing_leg"] == "matter_staff"
+
+
+def test_a_skipped_date_names_the_gate_that_held_it(seat, monkeypatch):
+    _, beats = seat
+    monkeypatch.setattr(pre_run._ROUTING, "pull_matter_staff", lambda ids, budget: {M105: {"responsible": None}})
+    assert _run(CFG) == {"wakeAgent": False}
+    assert beats == [("SUPPRESSED_WAKE", "no_briefable_date:unroutable")]
 
 
 def test_the_pilot_config_arms_the_job():

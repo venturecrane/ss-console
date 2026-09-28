@@ -14,11 +14,16 @@ rename, ``O_EXCL`` temp: the dispatch-envelope writer discipline):
   so a date whose only steps run at ``handles`` (and leave no decision) wakes
   once a day at most, not on every hourly tick.
 
-Recipients are ``matter_staff`` routing only (case-manager spec §5 rule 1):
-the matter's responsible attorney, with its assisting staff copied, each
-address covered by an authored roster grant. No fallback and no central leg:
-a brief is the matter owner's, and a matter with no routable owner is left to
-the escalator, which has its own fallback and hold rules.
+Recipients are ``matter_staff`` routing (case-manager spec §5 rule 1, which
+cites ``references/case-alert-routing.md``): the matter's responsible attorney,
+with its assisting staff copied, each address covered by an authored roster
+grant. A matter with no routable owner (no attorney or paralegal set in the
+record, an owner off the roster, or a staff read that failed) goes to the
+firm's authored ``fallback_recipients``, the same leg the deadline digest uses,
+filtered to roster grants so a reply can be answered. The brief says why it
+came to them (``routing_why``, rendered in code by ``casework_brief``). No
+central leg, and no fallback authored means no brief: the escalator keeps its
+own backstop for the date.
 """
 
 from __future__ import annotations
@@ -58,13 +63,29 @@ def _mapping(value: object) -> dict:
     return value if isinstance(value, dict) else {}
 
 
+#: Why a brief went down the fallback leg; the brief's first line says it.
+WHY_NO_OWNER = "no_owner_in_record"
+WHY_OWNER_OFF_ROSTER = "owner_not_on_roster"
+WHY_STAFF_UNREAD = "staff_unread"
+
+
+def _fallback(routing, routing_cfg: dict, grants: list[str], why: str) -> dict | None:
+    authored = [a.strip() for a in (routing_cfg.get("fallback_recipients") or []) if isinstance(a, str) and a.strip()]
+    granted = [a for a in dict.fromkeys(authored) if routing._granted(a, grants)]
+    if not granted:
+        return None
+    return {"to": granted, "cc": [], "leg": routing.LEG_FALLBACK, "why": why}
+
+
 def recipients(routing, cfg: dict, staff: dict | None) -> dict | None:
-    """``{"to": [...], "cc": [...], "leg": ...}`` for one matter, or None."""
-    mode = _mapping(_mapping(cfg.get("escalation")).get("case_alert_routing")).get("mode")
-    if mode != "matter_staff" or not isinstance(staff, dict):
+    """``{"to": [...], "cc": [...], "leg": ..., "why"?: ...}`` for one matter, or None."""
+    routing_cfg = _mapping(_mapping(cfg.get("escalation")).get("case_alert_routing"))
+    if routing_cfg.get("mode") != "matter_staff":
         return None
     scope = _mapping(cfg.get("scope"))
     grants = [g for g in (scope.get("inbound_allow_from") or []) if isinstance(g, str)]
+    if not isinstance(staff, dict):
+        return _fallback(routing, routing_cfg, grants, WHY_STAFF_UNREAD)
     responsible = routing._usable_staff_email(staff.get("responsible"))
     assisting = [
         email
@@ -76,7 +97,15 @@ def recipients(routing, cfg: dict, staff: dict | None) -> dict | None:
         return {"to": [responsible], "cc": cc, "leg": routing.LEG_RESPONSIBLE}
     if responsible is None and assisting:
         return {"to": list(dict.fromkeys(assisting)), "cc": [], "leg": routing.LEG_ASSISTING}
-    return None
+    why = WHY_NO_OWNER if responsible is None else WHY_OWNER_OFF_ROSTER
+    return _fallback(routing, routing_cfg, grants, why)
+
+
+_TO_WORDS = {
+    "matter_staff_responsible": "responsible attorney",
+    "matter_staff_assisting": "assisting staff",
+    "fallback": "firm fallback contact",
+}
 
 
 def subject_label(candidate: dict) -> str:
@@ -130,9 +159,11 @@ def write_all(plan: dict, skill: str, started_at: str, catalog: list[dict]) -> b
         "subject_label": subject_label(candidate),
         "recipients": plan["recipients"]["to"],
         "cc": plan["recipients"]["cc"],
-        "routing_leg": "matter_staff",
+        "routing_leg": "fallback" if plan["recipients"]["leg"] == "fallback" else "matter_staff",
         "catalog": catalog,
     }
+    if plan["recipients"].get("why"):
+        envelope["routing_why"] = plan["recipients"]["why"]
     if plan.get("done_since"):
         envelope["done_since"] = plan["done_since"]
     dates = _dates(plan)
@@ -169,7 +200,8 @@ def facts(plan: dict) -> dict:
         },
         "catalog": plan["catalog"],
         "recipients": {
-            "to": "responsible attorney" if plan["recipients"]["leg"].endswith("responsible") else "assisting staff",
+            "to": _TO_WORDS.get(plan["recipients"]["leg"], "assisting staff"),
             "cc": len(plan["recipients"]["cc"]),
+            **({"why": plan["recipients"]["why"]} if plan["recipients"].get("why") else {}),
         },
     }
