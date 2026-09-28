@@ -162,6 +162,70 @@ def test_dates_come_from_the_per_matter_event_filter():
     ]
 
 
+def _one_event(event: dict) -> dict:
+    client = StubClient({"/matters": {"value": [{"id": M105, "number": "2026-PI-105"}]}, "/events": {"value": [event]}})
+    return file_status.pull_dates(client, "2026-09-25", "2026-10-09")["events"][0]
+
+
+def test_an_event_carries_its_own_local_time_and_place():
+    """Smokeball reads startTime back in UTC with no offset, beside the event's
+    zone (probed 2026-09-28): the 9:30 a.m. hearing reads 16:30. The brief's
+    first Done line says when and where, so the facts carry both as the event
+    states them."""
+    row = _one_event(
+        {
+            "id": "e-h",
+            "subject": "Hearing",
+            "startTime": "2026-10-06T16:30:00",
+            "timeZone": "America/Los_Angeles",
+            "location": "Department 3",
+            "allDay": False,
+        }
+    )
+    assert (row["date"], row["time"], row["location"]) == ("2026-10-06", "9:30 a.m.", "Department 3")
+    # A late local hour belongs to the local day, not the UTC one.
+    late = _one_event(
+        {"id": "e-l", "subject": "H", "startTime": "2026-10-07T01:15:00", "timeZone": "America/Los_Angeles"}
+    )
+    assert (late["date"], late["time"]) == ("2026-10-06", "6:15 p.m.")
+
+
+def test_the_facts_line_passes_the_time_and_place_to_the_turn():
+    candidate = {**_event("e-h", "2026-10-06"), "time": "9:30 a.m.", "location": "Department 3", "days_out": 11}
+    plan = {
+        "candidate": candidate,
+        "status": {},
+        "chases": {},
+        "catalog": [],
+        "recipients": {"leg": "matter_staff_responsible", "cc": []},
+    }
+    assert brief.facts(plan)["event"] == {
+        "event_id": "e-h",
+        "date": "2026-10-06",
+        "time": "9:30 a.m.",
+        "location": "Department 3",
+        "subject": "Hearing",
+        "days_out": 11,
+    }
+
+
+def test_no_zone_no_clock_or_all_day_means_no_time_never_a_utc_guess():
+    no_zone = _one_event({"id": "e-a", "subject": "H", "startTime": "2026-10-02T15:30:00Z"})
+    assert no_zone["date"] == "2026-10-02" and "time" not in no_zone and "location" not in no_zone
+    bad_zone = _one_event({"id": "e-b", "subject": "H", "startTime": "2026-10-02T15:30:00", "timeZone": "Mars/Base"})
+    assert "time" not in bad_zone
+    all_day = _one_event(
+        {
+            "id": "e-c",
+            "subject": "H",
+            "startTime": "2026-10-02T00:00:00",
+            "timeZone": "America/Los_Angeles",
+            "allDay": True,
+        }
+    )
+    assert all_day["date"] == "2026-10-02" and "time" not in all_day
+
+
 # ---------------------------------------------------------------------------
 # catalog: closed, level-bound, basis-carrying
 # ---------------------------------------------------------------------------
@@ -180,10 +244,12 @@ def test_catalog_offers_only_what_the_facts_and_levels_support():
     # Reyes is outstanding and never chased; Kaiser was received (not offered).
     assert ids == ["binder_assemble", "witness_list_finalize", "records_refresh:t-reyes"]
     by_id = {e["catalog_id"]: e for e in built}
-    assert by_id["witness_list_finalize"]["params"] == {"file_id": "f-wl"}
+    assert by_id["witness_list_finalize"]["params"] == {"job": "finalize_witness_list", "file_id": "f-wl"}
+    assert by_id["binder_assemble"]["params"] == {"job": "assemble_binder"}
     assert by_id["witness_list_finalize"]["skill"] == "trial-binder-assembler"
     assert by_id["binder_assemble"]["level"] == "handles"
     assert by_id["records_refresh:t-reyes"]["params"] == {
+        "job": "chase_records",
         "roster_task_id": "t-reyes",
         "provider": "Dr. Reyes",
         "mode": "chase",
@@ -230,6 +296,7 @@ def test_a_received_provider_with_stale_records_is_offered_an_update():
     entry = got["records_refresh:t-kaiser"]
     assert entry["skill"] == "medical-records-chaser"
     assert entry["params"] == {
+        "job": "request_updated_records",
         "roster_task_id": "t-kaiser",
         "provider": "Kaiser",
         "mode": "update",
@@ -274,6 +341,76 @@ def test_the_envelope_catalog_matches_the_ledger_step_shape():
     for entry in catalog.envelope_catalog(built):
         assert set(entry) == {"catalog_id", "skill", "level", "params"}
         casework._validate_step(entry)  # the broker's own check accepts it
+        # The job rides in params, which the ledger carries whole into
+        # reply_verdicts' steps_to_run: the reply turn reads it there.
+        assert entry["params"]["job"] in catalog.JOB_SKILLS
+        assert catalog.JOB_SKILLS[entry["params"]["job"]] == entry["skill"]
+
+
+# ---------------------------------------------------------------------------
+# jobs: a yes runs exactly the job it approved (2026-09-28: a yes to finalize
+# the exhibit list ran the binder, because both share one routine)
+# ---------------------------------------------------------------------------
+
+
+def test_every_step_names_a_closed_job_in_its_own_routine():
+    assert set(catalog.STEP_JOBS) | {"records_refresh"} == set(catalog.STEP_SKILLS)
+    assert set(catalog.RECORDS_JOBS) == {"chase", "update"}
+    jobs = list(catalog.STEP_JOBS.values()) + list(catalog.RECORDS_JOBS.values())
+    assert len(jobs) == len(set(jobs)) == len(catalog.JOB_SKILLS)
+    for job in jobs:
+        assert job.replace("_", "").isalpha() and job.islower(), job
+
+
+def test_steps_sharing_a_routine_name_different_jobs():
+    built = catalog.build_catalog(
+        {"files": [{"file_id": "f-el", "name": "Exhibit List (draft).pdf", "date": "2026-09-01"}]},
+        {"binder_assemble": "prepares", "exhibit_list_finalize": "prepares"},
+        {},
+        cadence_days=7,
+        today=TODAY,
+    )
+    by_id = {e["catalog_id"]: e for e in built}
+    assert by_id["binder_assemble"]["skill"] == by_id["exhibit_list_finalize"]["skill"]
+    assert by_id["binder_assemble"]["params"]["job"] == "assemble_binder"
+    assert by_id["exhibit_list_finalize"]["params"] == {"job": "finalize_exhibit_list", "file_id": "f-el"}
+
+
+def _job_sections(skill: str) -> list[str]:
+    text = (_DIR.parent / skill / "SKILL.md").read_text()
+    return [line for line in text.splitlines() if line.startswith("### Job: ")]
+
+
+def test_every_job_has_its_own_section_in_its_routine():
+    """The router runs the ``### Job: `<job>``` section the step names. A job
+    with no section, or two, would leave the turn to guess."""
+    for job, skill in catalog.JOB_SKILLS.items():
+        sections = _job_sections(skill)
+        assert sections.count("### Job: `" + job + "`") == 1, (skill, job)
+    # And no routine carries a section for a job the catalog cannot name.
+    for skill in set(catalog.JOB_SKILLS.values()):
+        for heading in _job_sections(skill):
+            job = heading[len("### Job: `") : -1]
+            assert catalog.JOB_SKILLS.get(job) == skill, (skill, heading)
+
+
+def test_the_router_runs_exactly_the_named_job_and_carries_the_answer_in():
+    text = (_DIR.parent / "matter-inbox-router" / "SKILL.md").read_text()
+    rule = next(line for line in text.splitlines() if "When it returns `steps_to_run`" in line)
+    for token in (
+        "`params.job`",
+        "run **exactly the job the entry names and nothing else**",
+        "`### Job: <job>`",
+        "run nothing and say so plainly",
+        "the yes IS that confirmation",
+        "never asks for it again",
+        "leads with what was approved, in the approved item's own words",
+    ):
+        assert token in rule, token
+    reference = (_DIR / "references" / "decision-catalog.md").read_text()
+    for job in catalog.JOB_SKILLS:
+        assert "`" + job + "`" in reference, job
+    assert "The yes IS that confirmation" in reference
 
 
 # ---------------------------------------------------------------------------
@@ -427,6 +564,7 @@ def test_a_date_in_window_wakes_with_facts_and_writes_the_envelope(seat):
     assert line["wakeAgent"] is True
     facts = line["date_prep"]
     assert facts["event"] == {"event_id": "e-fsc", "date": "2026-10-02", "subject": "Hearing", "days_out": 7}
+    assert all(e["params"]["job"] for e in facts["catalog"])
     assert "atty@firm.test" not in json.dumps(facts)  # addresses stay with the tool
     envelope = json.loads((home / ".smd" / "pre_run" / "date-prep-brief.brief.json").read_text())
     assert envelope["recipients"] == ["atty@firm.test"] and envelope["cc"] == ["para@firm.test"]

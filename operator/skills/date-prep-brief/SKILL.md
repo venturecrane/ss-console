@@ -57,7 +57,9 @@ window, nothing to offer, or no routable owner, and you would not be running.
   `firm fallback contact` and `recipients.why` says which gap sent it there.
 
 All of it is on the Script Output line under `date_prep`: `matter_number`,
-`event` (`event_id`, `date`, `subject`, `days_out`), `file_status`, and `catalog`.
+`event` (`event_id`, `date`, `subject`, `days_out`, and `time` and `location`
+when the calendar event states them), `file_status`, and `catalog`. Each catalog
+entry's `params.job` names which of its routine's jobs a yes runs.
 
 ## What you do
 
@@ -68,8 +70,9 @@ All of it is on the Script Output line under `date_prep`: `matter_number`,
    `get_memos_on_matter` on this matter is allowed when a question needs it.
 2. **Run the steps at `handles`.** For each catalog entry whose `level` is
    `handles`, read that routine's procedure with `read_file` on
-   `/app/skills/<skill>/SKILL.md` and carry it out on this matter with the entry's
-   `params` (see `references/decision-catalog.md` for what each step is). Internal
+   `/app/skills/<skill>/SKILL.md` and carry out exactly its `### Job: <params.job>`
+   section on this matter with the entry's `params`, nothing else from that routine
+   (see `references/decision-catalog.md` for what each job is). Internal
    writes only, under the routine's own rules and ceilings. Run them in the order
    the catalog lists them, and **right after each one finishes, call
    `casework_step_done`** (no arguments): it records that step, backed by the memo
@@ -121,4 +124,7 @@ punctuation, no ids).
 
 The attorney's reply is handled by `matter-inbox-router` through `reply_verdicts`: a
 "yes" writes an `approved` row carrying the step, and the router runs that step's
-routine on this matter with its `params`. You do not wait for it.
+job (`params.job`, one section of the routine) on this matter with its `params`.
+A question that asks the attorney to confirm a fact ("Are the figures confirmed?")
+is answered by the yes itself: the step proceeds on that confirmation. So write
+each question so that a yes is everything the step needs. You do not wait for it.

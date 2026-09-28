@@ -20,7 +20,10 @@ casework_brief({
   matter.", "The exhibit list matches the documents on file."). The first line
   says when and where the date is and what follows it, when the event or trial
   order gives them ("The Final Status Conference is Oct 2 at 8:30 in Dept 47;
-  trial starts Oct 13."). A gap is not done: what is missing belongs inside the
+  trial starts Oct 13."). The gate line's `event.time` and `event.location` are
+  the event's own time (already in the event's time zone) and place: when either
+  is there, the first line carries it as given. When neither is there, the line
+  says the date only; never supply a time or a courtroom from anywhere else. A gap is not done: what is missing belongs inside the
   question it bears on ("The exhibit list and deposition summaries are not in the
   matter yet. ..."), or nowhere. A `handles` step recorded with `casework_step_done` is
   listed by code, first, in its catalog entry's `done_line`

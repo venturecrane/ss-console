@@ -30,7 +30,34 @@ DATE_PREP_EVENTS: dict[str, dict] = {
         "timeZone": "America/Los_Angeles",
         "location": "Department 3",
     },
+    # Added 2026-09-28 (second fresh date): proves a yes to "finalize the
+    # witness list" runs that job, not the binder, and that a yes to a confirm
+    # question is the confirmation. 2026-PI-107 has no open task and no other
+    # date in the window. Stored in UTC; the brief must say 8:30 a.m., Dept 14.
+    "final-status-conference-alvarez-draper": {
+        "matter": "lookalike-alvarez",
+        "subject": "Final Status Conference",
+        "startTime": "2026-10-08T15:30:00Z",  # 8:30 a.m. Pacific
+        "endTime": "2026-10-08T16:30:00Z",
+        "timeZone": "America/Los_Angeles",
+        "location": "Department 14",
+    },
 }
+
+
+def _witness_list_alvarez_draper() -> list[str]:
+    return [
+        "PLAINTIFF'S WITNESS LIST (DRAFT)",
+        "Alvarez v. Draper Logistics",
+        "",
+        "1. Maria Alvarez, plaintiff",
+        "2. Tomas Alvarez, plaintiff's husband, damages",
+        "3. Kevin Osei, Draper Logistics warehouse supervisor on duty",
+        "4. Dr. Priya Natarajan, treating orthopedist",
+        "5. Linda Ferreira, records custodian, Harbor Community Hospital",
+        "",
+        "DRAFT: confirm Dr. Natarajan will testify live, not by deposition, before serving.",
+    ]
 
 
 def _exhibit_list_ramirez() -> list[str]:
@@ -56,5 +83,10 @@ def build_date_prep_documents() -> dict[str, tuple[str, str, list[str]]]:
             "minor-ramirez",
             "2026-09-28 Petitioner Exhibit List (draft) - Ramirez.pdf",
             _exhibit_list_ramirez(),
+        ),
+        "witness-list-draft-alvarez-draper": (
+            "lookalike-alvarez",
+            "2026-09-24 Plaintiff Witness List (draft) - Alvarez.pdf",
+            _witness_list_alvarez_draper(),
         ),
     }
