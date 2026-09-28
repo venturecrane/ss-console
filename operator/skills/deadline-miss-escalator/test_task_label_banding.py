@@ -144,21 +144,30 @@ def _parsed_digest(task_subject: str, event_title: str = "Status conference") ->
 def test_a_task_line_names_the_task_masked():
     digest = _parsed_digest(HOSTILE_SUBJECT)
     body = render.render_digest(digest, ack_snooze_days=7)
-    assert '1. matter 2026-PI-101, "Pay \u2026 by \u2026 on \u2026 now", due 2026-09-20 (overdue by 2 days)' in body
+    assert "1. 2026-PI-101: Pay \u2026 by \u2026 on \u2026 now, due Sep 20, 2026 (overdue 2 days)" in body
 
 
-def test_an_event_title_never_renders():
-    digest = _parsed_digest("Call client", event_title="Status conference with Judge Alvarez")
+def test_an_event_title_renders_up_to_its_caption():
+    """2026-09-28: the pilot's calendar title "Final Status Conference - Okafor
+    v. Grand Valley Market (Dept 47)" is what the date IS, in the firm's words,
+    up to the caption. The caption segment and everything after it is cut; the
+    send gate refuses a caption in a pre-rendered body."""
+    digest = _parsed_digest(
+        "Call client", event_title="Final Status Conference - Okafor v. Grand Valley Market (Dept 47)"
+    )
     body = render.render_digest(digest, ack_snooze_days=7)
-    assert "Status conference" not in body
-    assert "Alvarez" not in body
-    assert "matter 2026-PI-102, court-date 2026-09-25" in body
-    # Parse builds no label for an event at all (the first of two guards).
+    assert "2026-PI-102: Final Status Conference, Fri Sep 25, 2026 (in 3 days)" in body
+    for leaked in ("Okafor", "Grand Valley", " v. ", "Dept"):
+        assert leaked not in body
+
+
+def test_an_event_title_that_opens_with_a_caption_renders_a_plain_noun():
+    digest = _parsed_digest("Call client", event_title="Smith v. Jones status conference")
+    body = render.render_digest(digest, ack_snooze_days=7)
+    assert "2026-PI-102: a calendar date, Fri Sep 25, 2026 (in 3 days)" in body
+    assert "Smith" not in body and "Jones" not in body
     event = next(i for i in digest["needs_you"] if i["label"] == "court-date")
     assert event["subject_display"] is None
-    # Even a digest item that somehow carried a label for an event renders none.
-    forged = dict(digest["needs_you"][0], label="court-date", subject_display="Status conference")
-    assert "Status conference" not in render._item_line(forged)
 
 
 def test_the_raw_subject_never_reaches_the_digest():
@@ -171,7 +180,7 @@ def test_the_raw_subject_never_reaches_the_digest():
 def test_a_caption_task_renders_without_a_label():
     digest = _parsed_digest(CAPTION_SUBJECT)
     body = render.render_digest(digest, ack_snooze_days=7)
-    assert "1. matter 2026-PI-101, due 2026-09-20 (overdue by 2 days)" in body
+    assert "1. 2026-PI-101: a task, due Sep 20, 2026 (overdue 2 days)" in body
     assert "Smith" not in body and "Jones" not in body
     first = next(line for line in body.split("\n") if line.startswith("1. "))
     assert '"' not in first
@@ -195,8 +204,8 @@ def test_blanket_lines_carry_the_label_too():
         },
         ack_snooze_days=7,
     )
-    assert "1. matter 2026-PI-101: 1 open item with no task id" in body
-    assert '   - matter 2026-PI-101, "Call client", due 2026-09-20 (overdue by 2 days)' in body
+    assert "1. 2026-PI-101: 1 open item with no task id" in body
+    assert "   - 2026-PI-101: Call client, due Sep 20, 2026 (overdue 2 days)" in body
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +264,7 @@ def test_a_recipient_whose_items_rank_sixth_seat_wide_still_gets_them_as_needs_y
     written = json.loads((tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.dispatch.json").read_text())
     by_who = {d["recipients"][0]: d for d in written["dispatches"]}
     bob = by_who["bob@firm.example"]
-    assert bob["subject"] == "[Deadlines] 2 need you, 2026-09-22"
+    assert bob["subject"] == "[Deadlines] 2 dates need you, Sep 22"
     assert "## Needs you today (2)" in bob["full_body"]
     assert "## Also open" not in bob["full_body"]
     assert "t-b1" not in bob["full_body"]  # task ids never render
@@ -293,9 +302,10 @@ def test_a_blanket_only_recipient_never_reads_zero():
     ]
     digest = pre_run.project_digest(deadlines, pre_run.EscalationWindows(), ledger, today=TODAY)
     assert digest["needs_you"] == []
-    assert digest["subject"] == "[Deadlines] 1 need you, 2026-09-22"
+    # One item: the subject names it rather than counting it.
+    assert digest["subject"] == "[Deadlines] 2026-PI-101: a task overdue since Sep 20"
     sub = envelope.split_digest(digest, {"m-1"}, "2026-09-22")
-    assert sub["subject"] == "[Deadlines] 1 need you, 2026-09-22"
+    assert sub["subject"] == "[Deadlines] 2026-PI-101: a task overdue since Sep 20"
 
 
 # ---------------------------------------------------------------------------

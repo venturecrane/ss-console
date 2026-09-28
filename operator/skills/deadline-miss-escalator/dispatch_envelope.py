@@ -102,7 +102,8 @@ def split_digest(digest: dict, matter_ids: set[str], today_iso: str, since_ids: 
     need them today, whatever their seat-wide rank. Before the re-band a
     recipient whose items ranked sixth or lower seat-wide got "0 need you"
     over a band of their own overdue deadlines (2026-09-22). The subject
-    counts needs-you plus blanket-ack-only for this sub-digest (Law 11).
+    counts needs-you plus blanket-ack-only for this sub-digest (Law 11), or
+    names the one item by case and date (``digest_items.subject_line``).
 
     The bands sent therefore differ from the seat-wide projection that
     ``blind_wake.plan_counts`` fingerprints as ``digest_sha256``; that
@@ -146,7 +147,7 @@ def split_digest(digest: dict, matter_ids: set[str], today_iso: str, since_ids: 
     since = [r for r in (digest.get("done_since") or []) if r.get("matter_id") in told]
     if since:
         out["done_since"] = since
-    out["subject"] = f"[Deadlines] {_DIGEST_ITEMS.need_you_count(out)} need you, {today_iso}"
+    out["subject"] = _DIGEST_ITEMS.subject_line(out, today_iso)
     return out
 
 

@@ -252,7 +252,7 @@ def test_run_once_wakes_on_in_range_no_audit_written(tmp_path, monkeypatch):
         "plans_emitted": 1,
         "plans_truncated": False,
     }
-    assert digest["subject"].startswith("[Deadlines] 1 need you")
+    assert digest["subject"].startswith("[Deadlines] 1 date needs you")
     # The wake leaves a row too (#2253). Before this, the gate logged why it did
     # NOT act and logged nothing when it did — which is why the 2026-08-10
     # fabricated escalation email was findable only by reading the mailbox.
@@ -849,7 +849,7 @@ def test_digest_counts_equal_list_lengths_per_matter():
     ]
     d = _project(items)
     assert len(d["needs_you"]) == 5
-    assert d["subject"] == "[Deadlines] 5 need you, 2026-06-08"
+    assert d["subject"] == "[Deadlines] 5 dates need you, Jun 8"
     admin = d["admin_confirms"]
     assert admin["total"] == 2
     assert admin["matter_count"] == 1
@@ -867,7 +867,7 @@ def test_digest_needs_you_is_most_overdue_first_and_subject_counts_only_it():
     ]
     d = _project(items)
     assert [i["task_id"] for i in d["needs_you"]] == ["t-overdue", "t-near"]
-    assert d["subject"].startswith("[Deadlines] 2 need you")
+    assert d["subject"].startswith("[Deadlines] 2 dates need you")
     assert "admin_confirms" not in d  # empty sections omitted whole (rule 9)
 
 
@@ -992,7 +992,7 @@ def test_run_once_wake_line_carries_the_digest():
     payload = json.loads(out)
     assert payload["wakeAgent"] is True
     digest = payload["digest"]
-    assert digest["subject"].startswith("[Deadlines] 1 need you")
+    assert digest["subject"].startswith("[Deadlines] 1 date needs you")
     (item,) = digest["needs_you"]
     assert item["task_id"] == "task-9"
     assert item["ack_code"].startswith("ACK-")

@@ -28,6 +28,7 @@ the skill dir on the volume carries this file).
 from __future__ import annotations
 
 import re
+from datetime import date
 
 #: Top of the needs-you band per alert (output-format rule 2).
 NEEDS_YOU_MAX = 5
@@ -141,16 +142,36 @@ _MARKDOWN_TRANSLATE = str.maketrans(
 )
 
 
-def display_label(subject: object) -> str | None:
-    """The task subject reduced to a label the send gate will pass, or None.
+def _before_caption(text: str) -> str:
+    """``text`` cut at the first ``" - "`` segment that reads as a caption.
 
-    None means "render no label": no subject, a caption, a fabrication marker,
-    or nothing left once the gate's shapes are masked."""
+    Smokeball calendar titles are commonly "<what> - <caption> (<room>)", e.g.
+    "Final Status Conference - Okafor v. Grand Valley Market (Dept 47)". The
+    part before the caption says what the date is and is the firm's own words;
+    the caption refuses (see ``_CAPTION_RE``). A caption in the FIRST segment
+    leaves nothing, and the label is refused whole."""
+    kept: list[str] = []
+    for segment in text.split(" - "):
+        if _CAPTION_RE.search(segment):
+            break
+        kept.append(segment)
+    return " - ".join(kept).strip()
+
+
+def display_label(subject: object) -> str | None:
+    """A task subject or calendar title reduced to a label the send gate will
+    pass, or None.
+
+    None means "render no label": no subject, a caption in its first segment,
+    a fabrication marker, or nothing left once the gate's shapes are masked.
+    A caption in a LATER ``" - "`` segment is cut off with everything after it
+    (``_before_caption``)."""
     if not isinstance(subject, str):
         return None
     text = " ".join(subject.split())
     if text.lower().startswith(_PROVENANCE_MARK):
         text = text[len(_PROVENANCE_MARK) :].strip()
+    text = _before_caption(text)
     if not text or _CAPTION_RE.search(text) or _MARKER_RE.search(text):
         return None
     for shape in _MASKED_SHAPES:
@@ -193,7 +214,7 @@ def group_by_matter(items: list[dict]) -> dict:
         by_matter.setdefault(item["matter_id"], []).append(item)
     groups = [
         {
-            **{k: g[0].get(k) for k in ("matter_id", "matter_number", "matter_number_absent")},
+            **{k: g[0].get(k) for k in ("matter_id", "matter_number", "matter_number_absent", "matter_name")},
             "count": len(g),
             "ack_codes": [i["ack_code"] for i in g if i.get("ack_code")],
             "last_raised": max((i["last_raised"] for i in g if i.get("last_raised")), default=None),
@@ -270,6 +291,152 @@ def need_you_count(digest: dict) -> int:
     needs-you plus blanket-ack-only. A recipient whose only items are blanket
     ones must never read "0 need you"."""
     return len(digest.get("needs_you") or []) + len(digest.get("blanket_ack_only") or [])
+
+
+# ---------------------------------------------------------------------------
+# The words an item is named by (2026-09-28). The Captain's read of the pilot
+# digest: "1. matter 2026-PI-105, court-date 2026-10-02 (due in 4 days) / a
+# court date the firm authored" said neither which case nor what the date was,
+# and its vocabulary was ours, not the firm's. Every word below is read from
+# the record (the matter's title, the task subject, the calendar title) or is
+# a fixed plain word; nothing is composed about the case.
+# ---------------------------------------------------------------------------
+
+#: A client surname as the matter title carries it: letters, then letters,
+#: spaces, apostrophes, hyphens and periods ("O'Neil", "Cruz-Hernandez",
+#: "St. John"). Anything else (a digit, a comma, a slash) is not a name.
+_SURNAME_RE = re.compile(r"[A-Za-z][A-Za-z' .\-]{0,39}")
+
+#: A matter number the overlay's reply parser recognizes on its own at the
+#: start of a numbered line (``reply_items._DIGEST_ITEM_LINE``: ``N. matter``
+#: or ``N. <four digits>-``). Any other number keeps the word "matter" in front
+#: of it, so a quoted digest line is never read as the reader's answer.
+_BARE_NUMBER_RE = re.compile(r"\d{4}-")
+
+_WEEKDAY_WORDS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_MONTH_WORDS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def matter_name(title: object, number: object) -> str | None:
+    """The client's surname from the matter's own ``title``, or None.
+
+    Smokeball titles read "<number> - <Surname>, <Given> - <type> - ...". The
+    first segment must BE the matter's number (a title in another layout is not
+    guessed at), the second is the client and nothing else is. A multi-client
+    segment, a caption, a marker, or anything that is not a plain surname gives
+    None, and the line names the matter by number alone. Never a caption: the
+    send gate refuses "Okafor v. Grand Valley" in a pre-rendered body, because
+    nothing read inside the session registers it."""
+    if not (isinstance(title, str) and isinstance(number, str) and number.strip()):
+        return None
+    segments = [s.strip() for s in " ".join(title.split()).split(" - ")]
+    if len(segments) < 2 or segments[0] != number.strip():
+        return None
+    client = segments[1]
+    if any(mark in client for mark in ("|", "&", ";", "/")) or " and " in client.lower():
+        return None
+    surname = client.split(",")[0].strip()
+    separators = {"v", "v.", "vs", "vs.", "versus", "in", "re"}
+    if not _SURNAME_RE.fullmatch(surname) or separators & set(surname.lower().split()):
+        return None
+    if _CAPTION_RE.search(surname) or _MARKER_RE.search(surname):
+        return None
+    return surname
+
+
+def _day(iso: object) -> date | None:
+    try:
+        return date.fromisoformat(str(iso)[:10])
+    except ValueError:
+        return None
+
+
+def day_words(iso: object, *, weekday: bool, year: bool) -> str:
+    """ "Fri Oct 2, 2026" (or a shorter form) for an authored ISO day. The value
+    is the authored date, only spelled out; an unparseable one renders as read.
+    With the year, the send gate's per-line matter/date pairing still sees the
+    date; without it (the subject line) there is no matter number beside it."""
+    day = _day(iso)
+    if day is None:
+        return str(iso)
+    words = f"{_MONTH_WORDS[day.month - 1]} {day.day}"
+    if year:
+        words += f", {day.year}"
+    return f"{_WEEKDAY_WORDS[day.weekday()]} {words}" if weekday else words
+
+
+def relative_words(days_out: int) -> str:
+    if days_out < 0:
+        return f"overdue {-days_out} day" + ("" if days_out == -1 else "s")
+    if days_out == 0:
+        return "today"
+    if days_out == 1:
+        return "tomorrow"
+    return f"in {days_out} days"
+
+
+def is_task(item: dict) -> bool:
+    return item.get("label") == "task-deadline"
+
+
+def what_words(item: dict) -> str:
+    """What the item is, in the record's words: the task subject or calendar
+    title (masked by ``display_label``), else a plain noun."""
+    label = item.get("subject_display")
+    if isinstance(label, str) and label:
+        return label
+    return "a task" if is_task(item) else "a calendar date"
+
+
+def when_words(item: dict) -> str:
+    """ "due Jul 8, 2026 (overdue 82 days)" for a task, "Fri Oct 2, 2026 (in 4
+    days)" for a calendar date."""
+    days_out = int(item.get("days_out") or 0)
+    if is_task(item):
+        day = "due " + day_words(item.get("authored_date"), weekday=False, year=True)
+    else:
+        day = day_words(item.get("authored_date"), weekday=True, year=True)
+    return f"{day} ({relative_words(days_out)})"
+
+
+def head_words(unit: dict) -> str:
+    """The matter an item or group is about: "2026-PI-105 Okafor", or the
+    exact authored absence phrase. Never a GUID, never a supplied value (ss
+    #2390). A number the reply parser would not recognize at the start of a
+    line keeps the word "matter" in front of it."""
+    number = unit.get("matter_number")
+    if isinstance(number, str) and number:
+        head = number if _BARE_NUMBER_RE.match(number) else f"matter {number}"
+    elif unit.get("matter_number_absent") == "no_number_on_record":
+        head = "matter with no number on record"
+    else:
+        head = "matter number unavailable"
+    name = unit.get("matter_name")
+    return f"{head} {name}" if isinstance(name, str) and name else head
+
+
+def subject_line(digest: dict, today: object) -> str:
+    """The subject: the one item by case and date, or a count and the day.
+
+    "[Deadlines] Okafor: Final Status Conference Fri Oct 2", or "[Deadlines]
+    3 dates need you, Sep 28". The "[Deadlines]" prefix is what inbox routing
+    reads (matter-inbox-router). Counts are ``need_you_count`` (Law 11)."""
+    items = list(digest.get("needs_you") or []) + list(digest.get("blanket_ack_only") or [])
+    today_iso = today if isinstance(today, str) else getattr(today, "isoformat", lambda: str(today))()
+    if len(items) == 1:
+        item = items[0]
+        who = item.get("matter_name") or item.get("matter_number")
+        if isinstance(who, str) and who:
+            what = what_words(item)
+            day = day_words(item.get("authored_date"), weekday=not is_task(item), year=False)
+            if is_task(item):
+                day = ("overdue since " if int(item.get("days_out") or 0) < 0 else "due ") + day
+            return f"[Deadlines] {who}: {what} {day}"
+    count = len(items)
+    on = day_words(today_iso, weekday=False, year=False)
+    if count == 0:
+        return f"[Deadlines] No dates need you today, {on}"
+    return f"[Deadlines] {count} date{'' if count == 1 else 's'} need{'s' if count == 1 else ''} you, {on}"
 
 
 # ---------------------------------------------------------------------------

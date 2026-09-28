@@ -132,6 +132,16 @@ After (bracketed values are what the prep read would supply):
 Source for the dates and witness list: the pilot seed trial order and draft
 witness list (`operator/customers/pilot-smokeball/seed/seed_data.py:516-541`).
 
+Until that brief goes out, the date stays in the daily deadline digest, named
+the same way (2026-09-28; the matter's title supplies the surname, the calendar
+title up to its caption supplies the event):
+
+> 1. 2026-PI-105 Okafor: Final Status Conference, Fri Oct 2, 2026 (in 4 days)
+>    No prep note has gone out for this yet.
+
+The digest cannot say "Okafor v. Grand Valley": it is dispatched before the turn
+reads anything, and the send gate refuses a caption nothing in the session read.
+
 **B. The Operator's own overdue tasks (2026-09-24, matter 2026-PI-101).**
 Before: three lines of `task-deadline 2026-07-08 (overdue by 78 days) [ACK-...]`,
 re-sent every 3 days. The three are the July DISC-1/DISC-2 rehearsal tasks on

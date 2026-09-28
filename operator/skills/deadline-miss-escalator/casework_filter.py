@@ -109,9 +109,37 @@ def apply(
             kept.append(d)
         else:
             stats[reason] = stats.get(reason, 0) + 1
+    window = _prep_window(doc["case_manager"].get("date_prep"))
+    if window is not None:
+        kept = [_mark_prep(d, view=view, ledger=ledger, states=states, today=today, window=window) for d in kept]
     review = {"day": cm.review_day} if cm.cleanup_level else None
     since = _done_since(helpers, anchor, cm, ledger, states, deadlines)
     return Filtered(kept, review, {"casework_dropped": stats} if stats else {}, since)
+
+
+def _prep_window(block) -> int | None:
+    """``case_manager.date_prep.window_days`` when the firm authored the job at
+    a level, else None (no prep is expected, so no line says one is missing).
+    Read the way date-prep-brief/pre_run.py reads it."""
+    if not isinstance(block, dict) or block.get("level") not in ("surfaces", "prepares", "handles"):
+        return None
+    window = block.get("window_days")
+    if isinstance(window, bool) or not isinstance(window, int) or window < 1:
+        return None
+    return window
+
+
+def _mark_prep(d, *, view, ledger, states, today: date, window: int):
+    """A calendar date inside the prep window with no brief out gets
+    ``prep_note_missing``: the digest line then says "No prep note has gone
+    out for this yet." instead of naming the date's kind in our vocabulary."""
+    if d.label != "court-date":
+        return d
+    if not 0 <= (d.authored_date - today).days <= window:
+        return d
+    if view.brief_status(view.date_state(ledger, states, d.matter_id, d.task_id)) != "none":
+        return d
+    return replace(d, prep_note_missing=True)
 
 
 def _done_since(helpers, anchor: str, cm, ledger, states: dict, deadlines) -> list:
