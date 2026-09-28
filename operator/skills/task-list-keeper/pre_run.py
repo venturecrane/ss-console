@@ -246,7 +246,7 @@ def main() -> int:
     try:
         return asyncio.run(
             run_once(
-                pull_fn=lambda: pull.run_pull(today, window),
+                pull_fn=lambda: pull.run_pull(today, window, fallback=pull.fallback_emails(customer_yaml)),
                 customer_yaml=customer_yaml,
                 writer_factory=factory,
                 today=today,

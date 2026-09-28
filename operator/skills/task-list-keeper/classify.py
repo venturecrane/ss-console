@@ -211,7 +211,7 @@ REASON_TEXT = {
     "court_event": "It is tied to a court date.",
     "court_date_in_window": "The matter has a court date coming up.",
     "calendar_unread": "I could not read the matter's calendar.",
-    "document_on_file": "Looks done: {phrase} dated {day} is on the matter.",
+    "document_on_file": "Looks done: {phrase} is on the matter (added {day}).",
     "records_chase_resolved": "Looks done: the records chase for it is resolved.",
     "matter_closed": "The matter is closed.",
     "duplicate": "Same task as another open one on this matter.",

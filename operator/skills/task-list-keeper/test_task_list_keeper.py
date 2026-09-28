@@ -361,7 +361,7 @@ def test_firm_open_task_is_a_keep_proposal_and_done_is_a_close(tmp_path, monkeyp
     by_id = {i["task_id"]: i for i in _items(envelope)}
     records = by_id["57d7a3b8-a91b-4465-ad44-335e88dc4934"]
     assert records["payload"]["action"] == "close" and records["payload"]["class"] == "done"
-    assert "a records file dated 2026-07-03 is on the matter" in records["line"]
+    assert "a records file is on the matter (added Jul 3)" in records["line"]
     verification = by_id["be08487c-1d5c-4c29-a52b-987876336ad9"]
     assert verification["payload"]["action"] == "keep" and "30 days" in verification["line"]
     # Service of a summons carries a court deadline: at_stake, never listed.
@@ -441,13 +441,13 @@ def test_done_since_last_time_and_its_memo(tmp_path, monkeypatch):
             "kind": "task",
             "source_id": task_id,
             "task_id": task_id,
-            "line": "matter PI-2026-0001: a task I closed on 2026-09-21, a proof of service dated 2026-07-09 was on file",
+            "line": "matter PI-2026-0001: a task I closed on 2026-09-21, a proof of service added Jul 9 was on file",
         }
     ]
     assert envelope["memos"] == [
         {
             "matter_id": M001,
-            "text": "Task list upkeep: I closed 1 task on this matter that the record showed were done (a proof of service dated 2026-07-09).",
+            "text": "Task list upkeep: I closed 1 task on this matter that the record showed were done (a proof of service added Jul 9).",
         }
     ]
 

@@ -20,6 +20,11 @@ WHAT GOES WHERE (references/classification.md):
   ``keep_quiet_days``). At ``surfaces``: done/stale only, as named notices,
   and nothing is ever offered for writing. ``at_stake``: never listed; the
   escalator keeps it.
+* A firm task on a matter with NO responsible staff: routed where case-alert
+  routing sends it (the authored fallback). Open: a proposed keep, always.
+  Done or stale: a proposed close carrying the fallback contact's own staff id
+  when the pull found an enabled staff record for that address; otherwise a
+  ``named`` notice (a close with no staff behind it cannot be written).
 
 Nothing changes on a firm task without a person's answer, at any level: the
 spec's "propose, then act" holds for ``handles`` too. Only the Operator's own
@@ -53,6 +58,7 @@ class Entry:
     cc: tuple = ()
     leg: str = ""
     handover: bool = False
+    ownerless: bool = False  # a firm task on a matter with no responsible staff
     text: str = ""
     key: str = ""
 
@@ -161,12 +167,37 @@ def _entry(ctx: _Ctx, task, verdict) -> Entry | None:
         return Entry(task, verdict, True, "named", "keep", owner, None, handover=True)
     if not cm.cleanup_level or verdict.klass == "at_stake":
         return None
-    if cm.cleanup_level == "surfaces" or not owner:
+    if cm.cleanup_level == "surfaces":
         if verdict.klass == "open":
             return None
         return Entry(task, verdict, False, "named", "keep", owner, None)
+    if not owner:
+        # No responsible staff: the review goes where case-alert routing sends
+        # it (the authored fallback). An open task is listed as a keep either
+        # way, so an overdue task never silently vanishes; a done or stale one
+        # is named here and becomes a proposed close in _route only when the
+        # fallback recipient has a staff record whose "yes" can close it.
+        if verdict.klass == "open":
+            return Entry(task, verdict, False, "proposed", "keep", None, None, ownerless=True)
+        return Entry(task, verdict, False, "named", "keep", None, None, ownerless=True)
     action = "keep" if verdict.klass == "open" else "close"
     return Entry(task, verdict, False, "proposed", action, owner, None)
+
+
+def _fallback_closer(ctx: _Ctx, e: Entry) -> None:
+    """On a matter with no responsible staff, the fallback recipient stands in
+    for the owner: when one of the routed fallback addresses matches an enabled
+    staff record, that staff id is the close's owner and completed-by, and a
+    done or stale task becomes a proposed close their "yes" carries out. No
+    matching record: the task stays named ("you can close it"), because a close
+    with no staff behind it cannot be written."""
+    for email in e.recipients:
+        staff = ctx.snapshot.fallback_staff.get(email.strip().lower())
+        if staff is not None and ctx.routing._usable_staff_email(staff.as_routing_record()):
+            e.staff_id = staff.staff_id
+            if e.verdict.klass in ("done", "stale"):
+                e.event, e.action = "proposed", "close"
+            return
 
 
 def _route(ctx: _Ctx, entries: list[Entry]) -> list[Entry]:
@@ -204,6 +235,8 @@ def _route(ctx: _Ctx, entries: list[Entry]) -> list[Entry]:
                 e.event, e.action, e.to_staff_id = "proposed", "reassign", m.responsible.staff_id
             if routed.routing_leg == ctx.routing.LEG_RESPONSIBLE and assistant is not None:
                 e.cc = tuple(x for x in (assistant[1],) if x not in e.recipients)
+            if e.ownerless and routed.routing_leg == ctx.routing.LEG_FALLBACK:
+                _fallback_closer(ctx, e)
         else:
             continue  # unroutable: the fail-closed floor; counted, never sent
         routed_entries.append(e)
@@ -222,7 +255,8 @@ def _text(ctx: _Ctx, e: Entry) -> None:
         suggest = L.SUGGEST["reassign_you"] if e.action == "reassign" else None
         e.text = L.handover_line(label, t.due, ctx.classify.cant_finish_reason(t.subject), suggest)
     else:
-        why = ctx.classify.REASON_TEXT[v.reason].format(phrase=v.evidence_phrase, day=v.evidence_day)
+        day = L.month_day(v.evidence_day) if v.evidence_day else None
+        why = ctx.classify.REASON_TEXT[v.reason].format(phrase=v.evidence_phrase, day=day)
         if e.own:
             why = "I opened this task. " + why
         if e.event == "named":
@@ -339,12 +373,13 @@ def _message(ctx: _Ctx, group_key, es: list[Entry], since: list, plan: Plan) -> 
     if not items and not closes:
         return None
     review = f"The next review is on {ctx.cm.review_day}." if ctx.cm.review_day and overflow else None
+    fallback = leg == ctx.routing.LEG_FALLBACK
     return {
         "recipients": list(recipients),
         "cc": list(cc),
         "routing_leg": leg,
-        "subject": ctx.lines.subject_line(len(items)),
-        "lead": ctx.lines.lead_text(overflow, review, handover_only=all(e.handover for e in listed)),
+        "subject": ctx.lines.subject_line(len(items), fallback=fallback),
+        "lead": ctx.lines.lead_text(overflow, review, handover_only=all(e.handover for e in listed), fallback=fallback),
         "closes": [
             {
                 "item_key": e.key,

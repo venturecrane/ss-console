@@ -74,7 +74,7 @@
         "recipients": ["triage@example-firm.test"],
         "routing_leg": "central",
         "skeleton_body": "## Deadline digest (details unavailable)\n\n5 items need a person now and 2 more open items are tracked, but the detailed digest could not be delivered this run. Open Smokeball or the tracker view for the items; the next run will retry the full digest.\n\nThis is an internal alert to a person at the firm; no client message has been sent.\n",
-        "subject": "[Deadlines] 5 dates need you, Jul 20"
+        "subject": "[Deadlines] 5 tasks need you, Jul 20"
       }
     ],
     "in_turn": [
@@ -220,7 +220,7 @@
           "task_id": "95de85b8-7b9e-4d06-89f8-0ad88c8ce1ad"
         }
       ],
-      "subject": "[Deadlines] 5 dates need you, Jul 20",
+      "subject": "[Deadlines] 5 tasks need you, Jul 20",
       "under_active_escalation_elsewhere": {
         "matter_count": 1,
         "matters": [

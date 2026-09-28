@@ -187,9 +187,10 @@ def save_manifest(m: dict) -> None:
 
 def main() -> None:
     from seed_data import CONTACTS, MATTERS, build_documents, TASKS
+    from seed_date_prep import DATE_PREP_EVENTS, build_date_prep_documents
     from seed_keeper_overdue import KEEPER_TASKS, build_keeper_documents
 
-    documents = {**build_documents(), **build_keeper_documents()}
+    documents = {**build_documents(), **build_keeper_documents(), **build_date_prep_documents()}
     tasks = {**TASKS, **KEEPER_TASKS}
 
     api = Api()
@@ -266,9 +267,23 @@ def main() -> None:
         save_manifest(manifest)
         print(f"task {key}: {task_id}")
 
+    # 5. calendar events (a court date the date-prep brief can prep for)
+    events = manifest.setdefault("events", {})
+    for key, spec in DATE_PREP_EVENTS.items():
+        if key in events:
+            print(f"event {key}: exists ({events[key]})")
+            continue
+        body = {k: v for k, v in spec.items() if k != "matter"}
+        body.update({"matterId": manifest["matters"][spec["matter"]], "attendees": [staff_id], "type": "Normal"})
+        resource = api.create_async("/events", body, f"event {key}")
+        events[key] = resource["id"]
+        save_manifest(manifest)
+        print(f"event {key}: created {resource['id']}")
+
     print(
         f"DONE: {len(manifest['contacts'])} contacts, {len(manifest['matters'])} matters, "
-        f"{len(manifest['documents'])} documents, {len(manifest['tasks'])} tasks (manifest.json updated)"
+        f"{len(manifest['documents'])} documents, {len(manifest['tasks'])} tasks, "
+        f"{len(events)} events (manifest.json updated)"
     )
 
 

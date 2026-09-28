@@ -74,12 +74,24 @@ def _iso(value) -> date | None:
         return None
 
 
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def added_words(value) -> str:
+    """ "added Sep 28" for a document's day. The day is when the document was
+    ADDED to the matter (Smokeball's ``dateCreated``), not the document's own
+    date: a proof of service executed Sep 15 and uploaded Sep 28 is not "dated
+    Sep 28" (2026-09-28). An unparseable day renders as read."""
+    day = _iso(value)
+    return f"added {_MONTHS[day.month - 1]} {day.day}" if day else f"added {value}"
+
+
 def evidence_text(atoms) -> str | None:
-    """The first document atom as words ("a proof of service dated D")."""
+    """The first document atom as words ("a proof of service added Sep 28")."""
     for atom in atoms or ():
         parts = str(atom).split(":")
         if len(parts) == 3 and parts[0] == "document" and parts[1] in EVIDENCE_PHRASES:
-            return f"{EVIDENCE_PHRASES[parts[1]]} dated {parts[2]}"
+            return f"{EVIDENCE_PHRASES[parts[1]]} {added_words(parts[2])}"
     return None
 
 
