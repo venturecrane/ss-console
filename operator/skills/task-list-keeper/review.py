@@ -128,9 +128,16 @@ def _facts(ctx: _Ctx, task):
     if matter is None:
         # Unread matter: no calendar, no documents. Cautious by construction.
         return tfacts, c.MatterFacts(task.matter_id, calendar_read=False)
-    files = tuple(c.FileRef(name, day) for name, day in matter.files)
+    files = tuple(c.FileRef(name, day, read, found) for name, day, read, found in matter.files)
     return tfacts, c.MatterFacts(
-        task.matter_id, matter.status, files, matter.court_days, matter.court_event_ids, matter.calendar_read
+        task.matter_id,
+        matter.status,
+        files,
+        matter.court_days,
+        matter.court_event_ids,
+        matter.calendar_read,
+        matter.client_surnames,
+        matter.clients_complete,
     )
 
 

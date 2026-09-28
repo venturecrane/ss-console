@@ -4,14 +4,21 @@ The read runs in the Smokeball connector's own venv (the connector package is
 not importable from the Hermes venv the pre_run runs in), the same subprocess
 seam the escalator and the verification tracker use. It reads, per matter that
 holds an overdue open task: the matter (status, responsible and assisting
-staff), its document listing (names and days only), and its calendar inside
-the court window. Nothing it reads is written anywhere but this process.
+staff, the client contacts' surnames), its document listing, and its calendar
+inside the court window. For a document that could be a task's evidence (its
+name is of a kind an overdue task on the matter names) it also reads the
+document's OWN text, text layer or cached transcription only (never a billed
+vision read), and reports which client surnames the text contains: a name
+alone never proves a task done. Reads are capped per run
+(``SMD_CASEWORK_READ_BUDGET``); a document past the cap is reported unread.
+Nothing it reads is written anywhere but this process.
 
 FAILURE DIRECTION. A failed task pull is a problem the caller reports and the
 run ends without a message. A failed read of ONE matter degrades that matter
 toward caution, never toward action: an unread calendar makes every task on
 the matter ``at_stake`` (never proposed for closure), an unread document list
-yields no "looks done" evidence, and an unread matter has no staff to route to.
+yields no "looks done" evidence, an unread document or an unresolved client
+list yields none either, and an unread matter has no staff to route to.
 
 ``parse_pull`` is pure and unit-tested over captured shapes.
 """
@@ -34,13 +41,24 @@ DEFAULT_MATTER_BUDGET = 60
 _PULL_SNIPPET = """\
 import json
 import os
+import re
 import sys
 
 from smokeball_connector.client import build_client_from_env
+from smokeball_connector.extract import METHOD_NONE_SCANNED, extract_text_ex
 from smokeball_connector.matter_ref import attach_matter_numbers
+from smokeball_connector.parties import _party_surname
 
 today, to = sys.argv[1], sys.argv[2]
 budget = int(os.environ.get("SMD_CASEWORK_MATTER_BUDGET", "60"))
+read_budget = [int(os.environ.get("SMD_CASEWORK_READ_BUDGET", "40"))]
+# The same topic pairs as classify._TOPICS (a test pins them equal): a task's
+# subject names the topic, a document's name is of that kind.
+TOPICS = (
+    (re.compile(r"\\bserv(?:e|ed|ice)\\b", re.I), re.compile(r"proof[\\s_-]+of[\\s_-]+service", re.I)),
+    (re.compile(r"\\bverif(?:y|ied|ication)\\b", re.I), re.compile(r"\\bverification\\b", re.I)),
+    (re.compile(r"\\brecords?\\b", re.I), re.compile(r"\\brecords?\\b", re.I)),
+)
 client = build_client_from_env()
 out = {"tasks": [], "matters": {}}
 
@@ -111,8 +129,33 @@ def staff(sid):
     return staff_cache[sid]
 
 
+def subject_of(task):
+    for key in ("subject", "Subject", "name", "title"):
+        value = task.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return ""
+
+
+def read_names(mid, f, surnames):
+    # (read, names_found) for one document: its own text, never a billed read.
+    if read_budget[0] <= 0:
+        return None, []
+    read_budget[0] -= 1
+    info, blob = client.download_file(mid, f["id"])
+    result = extract_text_ex(
+        blob, file_name=str(info.get("name") or ""), file_extension=str(info.get("fileExtension") or ""), allow_vision=False
+    )
+    text = (result.text or "").lower()
+    if result.method == METHOD_NONE_SCANNED or len(text.strip()) < 100:
+        return False, []
+    found = [s for s in surnames if re.search("(?<![a-z])" + re.escape(s) + "(?![a-z])", text)]
+    return True, found
+
+
 for mid in matter_ids[:budget]:
     entry = {}
+    surnames = []
     try:
         matter = client.get("/matters/" + mid)
         matter = matter if isinstance(matter, dict) else {}
@@ -126,15 +169,34 @@ for mid in matter_ids[:budget]:
                 if isinstance(sid, str) and sid and sid not in assisting:
                     assisting.append(sid)
         entry["assisting"] = [staff(sid) for sid in assisting]
+        client_ids = [cid for cid in (matter.get("clientIds") or []) if isinstance(cid, str) and cid]
+        for cid in client_ids:
+            try:
+                label = _party_surname(client.get("/contacts/" + cid))
+            except Exception:
+                label = None
+            if label:
+                surnames.append(label.lower())
+        entry["clientSurnames"] = surnames
+        entry["clientsComplete"] = bool(client_ids) and len(surnames) == len(client_ids)
     except Exception as exc:
         entry["matterError"] = str(exc)[:200]
     try:
         files = rows_of(client.get("/matters/" + mid + "/documents/files", Limit=500)) or []
-        entry["files"] = [
-            {"name": f.get("name") or f.get("fileName"), "date": f.get("dateCreated") or f.get("createdDate")}
-            for f in files
-            if isinstance(f, dict)
-        ]
+        subjects = [subject_of(t) for t in overdue if matter_of(t) == mid]
+        kinds = [file_re for subject_re, file_re in TOPICS if any(subject_re.search(s) for s in subjects)]
+        entry["files"] = []
+        for f in files:
+            if not isinstance(f, dict):
+                continue
+            name = f.get("name") or f.get("fileName")
+            row = {"name": name, "date": f.get("dateCreated") or f.get("createdDate")}
+            if name and f.get("id") and surnames and any(k.search(name) for k in kinds):
+                try:
+                    row["read"], row["namesFound"] = read_names(mid, f, surnames)
+                except Exception as exc:
+                    row["read"], row["readError"] = False, str(exc)[:120]
+            entry["files"].append(row)
     except Exception as exc:
         entry["filesError"] = str(exc)[:200]
     try:
@@ -171,10 +233,13 @@ class MatterPull:
     status: str | None
     responsible: StaffRecord | None
     assisting: tuple[StaffRecord, ...]
-    files: tuple[tuple[str, date], ...]
+    #: (name, day, read, client surnames found in the document's own text)
+    files: tuple[tuple[str, date, bool | None, tuple[str, ...]], ...]
     court_days: tuple[date, ...]
     court_event_ids: tuple[str, ...]
     calendar_read: bool
+    client_surnames: tuple[str, ...] = ()
+    clients_complete: bool = False
 
 
 @dataclass(frozen=True)
@@ -240,11 +305,15 @@ def _is_probe(subject: str) -> bool:
 
 
 def _parse_matter(matter_id: str, raw: dict) -> MatterPull:
-    files: list[tuple[str, date]] = []
+    files: list[tuple[str, date, bool | None, tuple[str, ...]]] = []
     for f in raw.get("files") or []:
         name, day = (_str(f.get("name")), _day(f.get("date"))) if isinstance(f, dict) else (None, None)
         if name and day:
-            files.append((name, day))
+            # Only a literal True is a read; anything else is no evidence.
+            read = True if f.get("read") is True else (False if f.get("read") is False else None)
+            found = tuple(s.lower() for s in f.get("namesFound") or [] if isinstance(s, str) and s)
+            files.append((name, day, read, found))
+    surnames = tuple(s.lower() for s in raw.get("clientSurnames") or [] if isinstance(s, str) and s)
     days: list[date] = []
     ids: list[str] = []
     for e in raw.get("events") or []:
@@ -262,6 +331,8 @@ def _parse_matter(matter_id: str, raw: dict) -> MatterPull:
         court_days=tuple(days),
         court_event_ids=tuple(ids),
         calendar_read="eventsError" not in raw and isinstance(raw.get("events"), list),
+        client_surnames=surnames,
+        clients_complete=raw.get("clientsComplete") is True and bool(surnames),
     )
 
 

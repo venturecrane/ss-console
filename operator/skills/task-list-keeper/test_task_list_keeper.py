@@ -97,6 +97,8 @@ def _raw(files=None, events=None, status=None, extra_tasks=()) -> dict:
             "assisting": [PARA],
             "files": (files or {}).get(mid, []),
             "events": (events or {}).get(mid, []),
+            "clientSurnames": ["Rivera"],
+            "clientsComplete": True,
         }
     return {"tasks": tasks, "matters": matters, "openTaskCount": len(tasks), "matterCount": len(matters)}
 
@@ -136,7 +138,19 @@ def _items(envelope):
     return [i for m in envelope["messages"] for i in m["items"]]
 
 
-POS_FILE = {"name": "Proof of Service - Amended Special Interrogatories Set Two.pdf", "date": "2026-07-09T10:00:00Z"}
+#: Read by the pull: its own text names the matter's client (see ``_raw``).
+POS_FILE = {
+    "name": "Proof of Service - Amended Special Interrogatories Set Two.pdf",
+    "date": "2026-07-09T10:00:00Z",
+    "read": True,
+    "namesFound": ["rivera"],
+}
+RECORDS_FILE = {
+    "name": "Valley Imaging certified records.pdf",
+    "date": "2026-07-03",
+    "read": True,
+    "namesFound": ["rivera"],
+}
 
 #: A firm task on the closed-matter test matter, with no money or court word.
 INTAKE = {
@@ -186,13 +200,74 @@ def test_classify_court_date_in_window_is_at_stake():
     assert classify.classify(task, matter, today=TODAY, window_days=14, duplicates=set()).klass == "at_stake"
 
 
+def _read(name: str, day: date, *found: str, read: bool | None = True):
+    return classify.FileRef(name, day, read, tuple(found))
+
+
+def _matter(*files, surnames=("rivera",), complete=True):
+    return classify.MatterFacts("m1", files=files, client_surnames=surnames, clients_complete=complete)
+
+
+def _klass(task, matter) -> str:
+    return classify.classify(task, matter, today=TODAY, window_days=14, duplicates=set()).klass
+
+
 def test_classify_records_evidence_needs_a_shared_word():
     task = classify.TaskFacts("t1", "m1", "Request certified medical records from Valley Imaging", date(2026, 6, 30))
-    other = classify.MatterFacts("m1", files=(classify.FileRef("Coastal Imaging records.pdf", date(2026, 7, 2)),))
-    mine = classify.MatterFacts("m1", files=(classify.FileRef("Valley Imaging records.pdf", date(2026, 7, 2)),))
-    assert classify.classify(task, other, today=TODAY, window_days=14, duplicates=set()).klass == "open"
+    other = _matter(_read("Coastal Imaging records.pdf", date(2026, 7, 2), "rivera"))
+    mine = _matter(_read("Valley Imaging records.pdf", date(2026, 7, 2), "rivera"))
+    assert _klass(task, other) == "open"
     verdict = classify.classify(task, mine, today=TODAY, window_days=14, duplicates=set())
     assert verdict.klass == "done" and verdict.evidence == ("document:records:2026-07-02",)
+
+
+def test_a_matching_name_alone_never_proves_done():
+    """2026-09-22: a file review closed 9 of 82 tasks on a document's NAME (the
+    client's own dec page for a 3rd party one, a coverage letter for a ledger).
+    The name only nominates; the document's own text must name the client."""
+    task = classify.TaskFacts("t1", "m1", "Request certified medical records from Valley Imaging", date(2026, 6, 30))
+    day = date(2026, 7, 2)
+    assert _klass(task, _matter(_read("Valley Imaging records.pdf", day, read=None))) == "open"  # never read
+    assert _klass(task, _matter(_read("Valley Imaging records.pdf", day, read=False))) == "open"  # unreadable
+    assert _klass(task, _matter(_read("Valley Imaging records.pdf", day))) == "open"  # names nobody
+    assert _klass(task, _matter(_read("Valley Imaging records.pdf", day, "rivera"), complete=False)) == "open"
+    assert _klass(task, _matter(_read("Valley Imaging records.pdf", day, "rivera"), surnames=())) == "open"
+    assert _klass(task, _matter(_read("Valley Imaging records.pdf", day, "rivera"))) == "done"
+
+
+def test_paperwork_about_records_is_not_the_records():
+    task = classify.TaskFacts("t1", "m1", "Request certified medical records from Valley Imaging", date(2026, 6, 30))
+    day = date(2026, 7, 2)
+    for name in (
+        "Valley Imaging records request.pdf",
+        "Valley Imaging records req.pdf",
+        "Valley Imaging records auth.pdf",
+        "Valley Imaging records invoice.pdf",
+        "Valley Imaging no records statement.pdf",
+    ):
+        assert _klass(task, _matter(_read(name, day, "rivera"))) == "open", name
+
+
+def test_several_clients_need_the_task_and_the_text_to_name_the_same_one():
+    day = date(2026, 7, 2)
+    doc = _read("Valley Imaging records.pdf", day, "chen")
+    both = ("rivera", "chen")
+    unnamed = classify.TaskFacts("t1", "m1", "Request records from Valley Imaging", date(2026, 6, 30))
+    rivera = classify.TaskFacts("t2", "m1", "Request records from Valley Imaging - Rivera", date(2026, 6, 30))
+    chen = classify.TaskFacts("t3", "m1", "Request records from Valley Imaging - Chen", date(2026, 6, 30))
+    assert _klass(unnamed, _matter(doc, surnames=both)) == "open"
+    assert _klass(rivera, _matter(doc, surnames=both)) == "open"
+    assert _klass(chen, _matter(doc, surnames=both)) == "done"
+
+
+def test_the_pull_reads_the_same_topics_classify_judges():
+    """The pull snippet decides which documents to read; classify decides what
+    they prove. The two topic tables must stay the same pairs."""
+    pull = _load("pull.py", "tlk_pull_under_test")
+    table = pull._PULL_SNIPPET.split("TOPICS = ", 1)[1].split("\n)\n", 1)[0]
+    patterns = re.findall(r're\.compile\(r"([^"]+)"', table)
+    snippet = list(zip(patterns[0::2], patterns[1::2]))
+    assert snippet and snippet == [(s.pattern, f.pattern) for _t, s, f, _p in classify._TOPICS]
 
 
 def test_classify_document_before_the_task_is_not_evidence():
@@ -281,7 +356,7 @@ def test_a_held_line_keeps_the_task_quiet(tmp_path, monkeypatch):
 
 
 def test_firm_open_task_is_a_keep_proposal_and_done_is_a_close(tmp_path, monkeypatch):
-    raw = _raw(files={M001: [{"name": "Valley Imaging certified records.pdf", "date": "2026-07-03"}]})
+    raw = _raw(files={M001: [RECORDS_FILE]})
     _out, envelope, _ = _run(raw, _yaml(), tmp_path, monkeypatch)
     by_id = {i["task_id"]: i for i in _items(envelope)}
     records = by_id["57d7a3b8-a91b-4465-ad44-335e88dc4934"]
@@ -455,8 +530,7 @@ def test_every_row_the_envelope_implies_passes_the_ledger_validator(tmp_path, mo
     """The overlay refuses a whole envelope when one payload fails the casework
     ledger's own validator; run that validator (the vendored twin) over every
     item and every close this skill writes."""
-    records = {"name": "Valley Imaging certified records.pdf", "date": "2026-07-03"}
-    _out, envelope, _ = _run(_raw(files={M101: [POS_FILE], M001: [records]}), _yaml(), tmp_path, monkeypatch)
+    _out, envelope, _ = _run(_raw(files={M101: [POS_FILE], M001: [RECORDS_FILE]}), _yaml(), tmp_path, monkeypatch)
     checked = 0
     for message in envelope["messages"]:
         numbers = [i["n"] for i in message["items"]]
