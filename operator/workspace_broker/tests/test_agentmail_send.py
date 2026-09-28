@@ -727,6 +727,26 @@ def test_audit_extra_rides_the_refusal_row_too(tmp_path: Path) -> None:
     assert "skill_name" not in meta
 
 
+@pytest.mark.parametrize(("value", "kept"), [("code_fixed_recipients", True), ("anything_else", False)])
+def test_taint_exempt_marker_is_kept_only_by_its_known_value(tmp_path: Path, value: str, kept: bool) -> None:
+    """hermes-smd-overlay#393 stamps a brief sent on a tainted turn; the row says
+    which exemption let it through, and a value nobody authored is dropped."""
+    broker = _broker(tmp_path, FakeHTTP())
+    broker.handle(
+        {
+            "action": "agentmail_send",
+            "payload": {"to": ["scott@smd.services"], "text": "hi"},
+            "audit_extra": {"taint_exempt": value, "routing_leg": "fallback"},
+        },
+        peer_pid=GATEWAY_PID,
+        peer_uid=AGENT_UID,
+    )
+    meta = _meta(broker)
+    assert meta["routing_leg"] == "fallback"
+    assert (meta.get("taint_exempt") == value) is kept
+    assert ("taint_exempt" in meta) is kept
+
+
 def test_absent_audit_extra_writes_exactly_todays_row(tmp_path: Path) -> None:
     """Optional at both ends: a caller that predates the stamps writes the row
     it writes today (deploy-order freedom, same as session_id/matter_ref)."""

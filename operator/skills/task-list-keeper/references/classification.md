@@ -38,7 +38,19 @@ A line nobody answered is offered again at the next review.
      - verification (verify, verified, verification) and a "verification"
        document: `document:verification:<day>`;
      - records (record, records) and a "records" document:
-       `document:records:<day>`;
+       `document:records:<day>`; a document named as a request, an
+       authorization, an invoice, a receipt or a no-records statement is
+       paperwork about records, not the records, and never counts;
+   - AND the document's own text was read (its text layer or a cached
+     transcription; never a billed read) and names the matter's client: with
+     one client, that surname is in the text; with several, the task names
+     exactly one of them and the text names that one. An unread or unreadable
+     document, a client list that did not fully resolve, or a read past the
+     run's cap (`SMD_CASEWORK_READ_BUDGET`, default 40) is no evidence. A
+     name alone never proves a task done: on 2026-09-22 a file review closed
+     9 of 82 tasks against documents whose names matched and whose contents
+     did not (the client's own dec page for a 3rd party one, a coverage letter
+     for a ledger, an auto insurance card for a health card);
    - the records chase for this task is resolved in the escalation ledger:
      `ledger:records_chase_resolved`.
 3. **stale**:

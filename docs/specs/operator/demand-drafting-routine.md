@@ -12,12 +12,12 @@ A firm administrator asks the Operator, by email or through Claude, for a demand
 
 ## Scope
 
-| In                                                                                                                                                                  | Out (for now)                                                                                            |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| The pre-suit time-limited demand to the liability carrier, in the firm's authored skeleton (for the first firm: the CCP § 999.1 form derived from its own exemplar) | UIM demands (a different instrument, sent to the client's own carrier). The first addition to offer.     |
-| One demand per claimant; a multi-plaintiff matter produces one per client                                                                                           | Property-damage demands                                                                                  |
-| A coverage report instead of a demand when the premise check fails                                                                                                  | Litigation-stage settlement demands to defense counsel (a separate skeleton exists; not in this routine) |
-| The settlement statement, which belongs to the settlement-statement routine: on request at any stage, built by script from the firm's own entries                   | Sending anything to a carrier. The Operator drafts, and an attorney reviews and sends.                   |
+| In                                                                                                                                                                                           | Out (for now)                                                                                            |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| The pre-suit time-limited demand to the liability carrier, in the firm's own house demand format (for the first firm: the in-house demand writer's `Demand.<Client>.docx`, see Format below) | UIM demands (a different instrument, sent to the client's own carrier). The first addition to offer.     |
+| One demand per claimant; a multi-plaintiff matter produces one per client                                                                                                                    | Property-damage demands                                                                                  |
+| A coverage report instead of a demand when the premise check fails                                                                                                                           | Litigation-stage settlement demands to defense counsel (a separate skeleton exists; not in this routine) |
+| The settlement statement, which belongs to the settlement-statement routine: on request at any stage, built by script from the firm's own entries                                            | Sending anything to a carrier. The Operator drafts, and an attorney reviews and sends.                   |
 
 **Signature:** by default the responsible attorney on the file, unless the request names another. Each firm authors its default.
 
@@ -36,7 +36,7 @@ Stages, in order. Nothing paid runs before stage 3 passes.
 4. **Summarise the record** in parallel, **streamed live** (not Batch), in chunks of about 120K characters.
 5. **Compose** the demand (streamed).
 6. **Audit** every factual sentence against the summary (live), then **repair** the flagged sections, then **re-audit**. The auditor receives the skeleton, so the firm's standing boilerplate is not flagged as invented.
-7. **Render** `.docx` in the firm's format, with the attorney-reserved and to-be-supplied markers highlighted.
+7. **Render** into the firm's own demand file and **check the format** before filing: `house_docx.py` renders into the content-free copy of a firm demand, and `format_check.py` must pass (engagements `operator/customers/ashton-price/tools/drafting/`). The connector's generic `render_docx_draft` is not the demand renderer: its layout is not the firm's and it refuses the em dashes the firm's demands use.
 8. **File and read back:** create the matter folder, register each file and upload its bytes, then poll until the stored name and size match.
 9. **Reply** to the requester with the folder name and the items that need the attorney.
 
@@ -61,6 +61,12 @@ Included in the monthly fee up to 25 demands per billing cycle; anything beyond 
 
 A list of the firm's files where the other side's carrier is on a client-authored low-limit list and billed medicals exceed a client-authored threshold, sent weekly to the named administrator. It drafts only on the administrator's reply, never automatically at the threshold, because an attorney decides when a demand is timely. It reads fields only, with no model calls. Running weekly makes it a scheduled routine, so it runs only once the firm approves it; until then it runs on request.
 
+## Format (2026-09-28)
+
+The first firm's demands are its in-house demand writer's Word files, `Demand.<Client>.docx`: date, Attn block, RE block (Our Client / Your Insured / Claim Number / Date of Loss), a navy two-row "Time-Limited Policy Limits Demand" banner with the expiry, then Summary of Injuries (ICD-10 table), Liability, Damages (provider sub-heads, a specials table), Prior Records, Unique Pain and Suffering Analysis, Demand (Category / Description / Amount), "Cordially," and Exhibits, with a "Confidential / Settlement Communication" footer. Every demand SMD produced from 9/1 to 9/28 followed the single exemplar the firm named on 9/1 instead (rendered from `demand-999.1.md`), and on 9/28 the firm said "The format isn't similar to what we do." The firm was asked the same day to confirm that format as the standard.
+
+The format is enforced, not remembered: the laptop pipeline renders through `house_docx.py`, and its filing script refuses any demand `.docx` that fails `format_check.py` before it writes anything (engagements #159). This routine inherits both: the seat job renders the same way, and the runtime acceptance test (build item 7) asserts `format_check.py` passes on the filed file, read back from the matter.
+
 ## Build items (from the 2026-09-24 incident)
 
 1. `llm.py`: the `batch_call` live path streams (`llm.py:441` calls without `stream=True`, and the SDK refuses a 64K-output non-streaming request). Drafting requests use Batch for nothing.
@@ -69,7 +75,8 @@ A list of the firm's files where the other side's carrier is on a client-authore
 4. The free preflight, stage 2, including the control-character detector.
 5. Seat helpers installed on the image, so no seat call sends a long command (`fly ssh -C` commands of about 3 KB hung repeatedly; ~500 bytes returned in seconds).
 6. Batch ids carry a content hash (resume keyed only on a positional id served stale answers after the input changed); scoped repair can repair the letterhead block.
-7. A runtime acceptance test: an administrator's email request on a rehearsal matter produces a filed demand, read back from the matter.
+7. A runtime acceptance test: an administrator's email request on a rehearsal matter produces a filed demand, read back from the matter, that passes `format_check.py`.
+8. The house renderer and format check on the seat image (the reference `.docx` and both scripts), with python-docx in the job's venv.
 
 ## Pitfalls already paid for
 

@@ -9,8 +9,11 @@ a firm's record:
   lien task "looks done" can never close it.
 * ``done`` - the record shows the work happened: a document of the task's
   kind, dated on or after the task, every distinctive word of whose name the
-  task also names (the provider, the set, the party), or the records chase for
-  this task resolved.
+  task also names (the provider, the set, the party), AND whose own text was
+  read and names this matter's client; or the records chase for this task
+  resolved. A name alone is never proof: on 2026-09-22 a file review closed
+  tasks against the client's OWN dec page, a coverage letter and an auto
+  insurance card because their names matched (9 of 82 wrong, all reopened).
 * ``stale`` - the matter is closed, or the task repeats another open task on
   the same matter.
 * ``open`` - everything else.
@@ -106,6 +109,14 @@ _CANT_FINISH: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 CANT_FINISH_DEFAULT = "it needs a person to decide the next step"
 
+#: A "records" document named as a request, an authorization, an invoice, a
+#: receipt or a no-records statement is paperwork ABOUT records, not the records.
+_NOT_RECORDS = re.compile(
+    r"(?<![a-z])(?:req|reqs|request|requested|auth|auths|authorization|invoice|inv|receipt)(?![a-z])"
+    r"|no[\s_-]+records?",
+    re.I,
+)
+
 #: Words that name the TOPIC (or are filler) and so cannot tie a document to a
 #: task: "proof of service" shares "service" with every service task.
 _STOP = frozenset(
@@ -151,6 +162,12 @@ _STOP = frozenset(
 class FileRef:
     name: str
     day: date | None
+    #: True only when the pull read the document's own text (a text layer or a
+    #: cached transcription); None = not read, False = unreadable. Anything but
+    #: True is no evidence.
+    read: bool | None = None
+    #: The matter's client surnames found in that text (lowercase).
+    names_found: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -161,6 +178,10 @@ class MatterFacts:
     court_days: tuple[date, ...] = ()
     court_event_ids: tuple[str, ...] = ()
     calendar_read: bool = True
+    #: The matter's client surnames (lowercase), and whether every client
+    #: contact resolved. An unresolved client list yields no document evidence.
+    client_surnames: tuple[str, ...] = ()
+    clients_complete: bool = False
 
 
 @dataclass(frozen=True)
@@ -227,6 +248,24 @@ def _tokens(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z]{3,}", text.lower()) if w not in _STOP}
 
 
+def _names_this_client(task: TaskFacts, matter: MatterFacts, doc: FileRef) -> bool:
+    """The document's own text names the client the task is about. One client:
+    that surname is in the text. Several clients with different surnames: the
+    task names exactly one of them and the text names that one. Anything the
+    pull could not establish (unread text, unresolved clients) is False."""
+    if doc.read is not True or not matter.clients_complete:
+        return False
+    surnames = {s.lower() for s in matter.client_surnames if s}
+    if not surnames:
+        return False
+    found = {s.lower() for s in doc.names_found}
+    if len(surnames) == 1:
+        return surnames <= found
+    subject_words = set(re.findall(r"[a-z][a-z'-]*", task.subject.lower()))
+    named = {s for s in surnames if s in subject_words}
+    return len(named) == 1 and named <= found
+
+
 def _document_evidence(task: TaskFacts, matter: MatterFacts) -> Verdict | None:
     reference = task.created or task.due
     for topic, subject_re, file_re, phrase in _TOPICS:
@@ -241,6 +280,13 @@ def _document_evidence(task: TaskFacts, matter: MatterFacts) -> Verdict | None:
             # must not close "Set One".
             named = _tokens(doc.name)
             if not named or not named <= _tokens(task.subject):
+                continue
+            if topic == "records" and _NOT_RECORDS.search(doc.name):
+                continue
+            # The name only nominates the document; its own text must name
+            # this matter's client (2026-09-22: the client's own dec page
+            # "proved" a 3rd party dec page task by name alone).
+            if not _names_this_client(task, matter, doc):
                 continue
             atom = f"document:{topic}:{doc.day.isoformat()}"
             return Verdict("done", "document_on_file", (atom,), phrase, doc.day)

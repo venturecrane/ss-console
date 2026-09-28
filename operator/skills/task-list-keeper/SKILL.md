@@ -71,14 +71,14 @@ The agent MUST NOT: compose or edit a review message; pass its own arguments to 
 
 1. **Nothing at stake is closed.** A task whose subject names money or a court step, carries a priority marker, ties to a court event, or sits on a matter with a court date in the window (or an unread calendar) is `at_stake`, and the broker refuses a close proposed or closed by record on it.
 2. **A firm task changes only on a person's yes.** At every level. The approval, the thread and the number are joined by code; the model never supplies a task id.
-3. **The record is the evidence.** A "looks done" line names a document of the task's kind, dated on or after the task, whose every distinctive word the task also names. The atoms ride the row.
+3. **The record is the evidence, and a name is not the record.** A "looks done" line names a document of the task's kind, dated on or after the task, whose every distinctive word the task also names, AND whose own text the pull read and found naming the matter's client (the task's own client when a matter has several). An unread or unreadable document is no evidence. The atoms ride the row.
 4. **Once means once.** A handover is never repeated (the broker refuses a second `named`); a line a person held stays quiet for `keep_quiet_days`.
 5. **No invented content.** Every value in every line was read this run; every sentence is a constant in `lines.py`. A value the record lacks renders as its authored absence.
 6. **Heartbeat integrity.** Every quiet run writes a `SUPPRESSED_WAKE` row; a heartbeat that cannot land wakes.
 
 ## Pitfalls
 
-Treating Smokeball's creator field as "the Operator made this" (it records the consenting human for every write; the provenance stamp or the authored `own_tasks.legacy_task_ids` list is the only signal); closing a task because some document of its kind exists on the matter (one proof of service must not close every service task); offering a close on a lien or a court task; re-sending a handover.
+Treating Smokeball's creator field as "the Operator made this" (it records the consenting human for every write; the provenance stamp or the authored `own_tasks.legacy_task_ids` list is the only signal); closing a task because some document of its kind exists on the matter (one proof of service must not close every service task); closing a task on a document's NAME without its content (2026-09-22: the client's own dec page closed a 3rd party dec page task; a records request is not the records); offering a close on a lien or a court task; re-sending a handover.
 
 ## Verification
 
