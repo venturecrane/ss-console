@@ -151,3 +151,46 @@ export async function markDeliveredAttested(
   }
   return { ok: true }
 }
+
+/**
+ * Retire a captured row the CLIENT withdrew, on ATTESTED evidence, then READ IT
+ * BACK.
+ *
+ * The inverse of `markDeliveredAttested`: nothing was delivered, so the row
+ * goes to `cancelled`, never through `delivered`. The evidence is the client's
+ * own letter withdrawing the ask, read off the archive's main, and the
+ * disposition names it so a later reader can tell "we dropped it" from "they
+ * did". The reconciler's `withdraw` covers imported rows whose source cleared;
+ * this is the hand-captured half, and it is a Captain act (found 2026-09-28:
+ * A&P scratched a request two hours after the scope went out and the register
+ * had no way to record that the promise was released).
+ */
+export async function markCancelledAttested(
+  db: D1Database,
+  input: {
+    obligationId: string
+    fromState: ObligationState
+    surface: string
+    locator: string
+    disposition: string
+  }
+): Promise<DeliveryWrite> {
+  const legal = checkTransition(input.fromState, 'cancelled', null)
+  if (!legal.ok) return { ok: false, error: 'illegal_transition' }
+
+  await db
+    .prepare(
+      `UPDATE client_obligations SET state = 'cancelled', evidence_class = 'attested', ` +
+        `evidence_surface = ?, evidence_locator = ?, disposition = ?, ` +
+        `evidence_last_verified_at = datetime('now') ` +
+        `WHERE obligation_id = ? AND state = ?`
+    )
+    .bind(input.surface, input.locator, input.disposition, input.obligationId, input.fromState)
+    .run()
+
+  const after = await getObligation(db, input.obligationId)
+  if (!after || after.state !== 'cancelled' || after.evidence_locator !== input.locator) {
+    return { ok: false, error: 'did_not_land', reads: after?.state ?? null }
+  }
+  return { ok: true }
+}

@@ -165,6 +165,8 @@ Without this a kept promise stays on the list forever: a letter row has no other
 
 **This check RECORDS; it never BLOCKS.** It is explicitly **not** a Ship Gate item and its output never becomes an external blocker. Client obligations legitimately span sessions — that is what a register is for. Wiring them into the Ship Gate would make every promise a reason a session cannot close, and within a week people would be inventing blockers to get out of it. Surface it, act on it, move on.
 
+**Released, too.** If a client letter this session read WITHDREW an ask that is on the register, record the release on the Captain's word once that letter's archive has merged: `.claude/bin/register cancel --client <slug> --key <stable-key> --evidence <the client's letter> --quote "<verbatim from it>"`. Nothing was delivered, so the row goes to `cancelled`, never through `delivered`.
+
 **It cannot fabricate.** `register add` refuses any row whose quote is not found in its source file, after normalization, with no `--force`. A check that could invent a client obligation would be worse than no check.
 
 **Known blind spot, stated rather than discovered.** `read-tracker.mjs` is PostToolUse on matcher `Read` only. A letter opened with Bash `cat`/`grep`, reached via Grep or Glob, or pasted into the prompt leaves no trace. So a positive signal here is trustworthy and a negative one means nothing: absence of a flagged slug is not evidence that nothing was promised. Do not report it as such.

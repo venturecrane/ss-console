@@ -128,6 +128,15 @@ A row leaves the list when the nightly run moves it to `verified`. It gets there
 
 The command reads the letter off the engagements repo's `origin/main`, never the file on disk, because a letter in a working tree may be a draft that never went out. It refuses a letter that is not merged, the letter that made the promise, an archive it could not fetch, and a quote the letter does not contain. It moves the row to `delivered` and reads the write back. It cannot go further: `verified` needs a reconcile run, so the nightly run is still what certifies.
 
+**A letter row is retired by the client letter that withdrew the ask.** A promise the client releases was never kept, so it does not pass through `delivered`; it goes to `cancelled`, and only on the Captain's word, because the register records that the client said so, it does not decide it:
+
+```
+.claude/bin/register cancel --client ashton-price --key <stable-key> \
+  --evidence <path of the CLIENT's withdrawing letter> --quote "<verbatim from it>"
+```
+
+Same evidence line as `deliver`: the letter is read off `origin/main`, it cannot be the letter that made the promise, the quote must be in it, and the write is read back. The disposition names the client's letter, so a later reader can tell "they dropped it" from "we did". Added 2026-09-28, the day a client scratched a request two hours after the scope went out and the row had no way to leave `open` but the age ladder or a hand-written UPDATE.
+
 CI holds no credential for the private engagements repo, so this evidence is **attested**, the same class as a Smokeball filing. The command is the thing that can see the archive, and the receipt it leaves (the letter pinned to the commit it was read at, plus the time it was read) is what CI certifies against. The receipt proves the letter was archived as sent. It does not prove the email left the mailbox; the archive is the venture's record of what was sent.
 
 Until 2026-09-19 neither route existed. Nothing moved any row out of `open`, the run counted derived rows whose source had cleared as "verified this run" while leaving them open, and a promise kept in a sent letter stayed on the list forever. `/eos` Check I now asks for deliveries as well as captures.
@@ -147,6 +156,6 @@ So an undated obligation that stays open becomes a finding on age alone - a warn
 | The alert conditions | `migrations/0118` CHECK, `src/lib/admin/fleet-alerts.ts`, and "How you hear about it" |
 | The grounding rules | `.claude/hooks/lib/register.mjs` and "What makes a row trustworthy" |
 | Who captures, and when | `.claude/skills/eos/SKILL.md` Check I, `CLAUDE.md`, and "Who records what we owe" below |
-| How a row closes, or what counts as delivery evidence | `.claude/hooks/lib/register.mjs` (`deliver`), `certify` in `scripts/ci-reconcile-obligations.ts`, `tests/register-deliver.test.ts`, and "How a row closes" |
+| How a row closes, or what counts as delivery evidence | `.claude/hooks/lib/register.mjs` (`deliver`, `cancel`), `certify` in `scripts/ci-reconcile-obligations.ts`, `tests/register-deliver.test.ts`, `tests/register-cancel.test.ts`, and "How a row closes" |
 | Which seats roll up to which client | `scripts/lib/seat-clients.mjs` and "Who records what we owe" below |
 | What the session-start line says | `.claude/skills/sos/SKILL.md` Step 4 and the `--json` allowlist in `.claude/hooks/lib/register.mjs` |
