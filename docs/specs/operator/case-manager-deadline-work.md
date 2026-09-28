@@ -96,6 +96,9 @@ Rules, all of them tested against "would a great case manager have sent this?":
    attorney, with the assigned paralegal copied (existing `matter_staff` routing,
    `references/case-alert-routing.md`). The firm's office manager may be an early
    recipient while the firm shapes it; that is configuration, not the design.
+   A matter with no routable owner (none set in the record, or an owner not yet
+   on the roster) goes to the firm's authored fallback contact, the same leg the
+   deadline digest uses, and the message's first line says why it came to them.
 2. **Subject says the matter and the ask**, in words: "Okafor v. Grand Valley:
    status conference next Friday (Oct 2), two questions for you".
 3. **Every item says what the task is.** Not "task-deadline 2026-07-08". The

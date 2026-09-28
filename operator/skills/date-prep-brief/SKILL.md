@@ -52,7 +52,9 @@ window, nothing to offer, or no routable owner, and you would not be running.
   the level the firm set and the facts (`basis`) that made code offer it.
 - It resolved the recipients (the matter's responsible attorney, assisting staff
   copied) and wrote the envelope `casework_brief` reads. You never see or
-  type an address.
+  type an address. When the matter has no routable owner, the brief goes to the
+  firm's authored fallback contact instead: `recipients.to` reads
+  `firm fallback contact` and `recipients.why` says which gap sent it there.
 
 All of it is on the Script Output line under `date_prep`: `matter_number`,
 `event` (`event_id`, `date`, `subject`, `days_out`), `file_status`, and `catalog`.
@@ -86,7 +88,8 @@ All of it is on the Script Output line under `date_prep`: `matter_number`,
    listed for you in the catalog's own words, so do not repeat it) and `decisions`
    (`[{catalog_id, question}]`, one or two). Code renders the subject, the frame
    and "Reply here and I'll take it from there." You write no greeting and no
-   sign-off.
+   sign-off. When `recipients.to` is `firm fallback contact`, code also renders the
+   first line saying why it came to them; do not repeat it in `done`.
 5. **If no decision remains** after step 2, call nothing. No decision, no message:
    the spec's rule 7. The gate will not wake again for this date today. The steps
    you recorded are not lost: the next message the attorney gets (the daily

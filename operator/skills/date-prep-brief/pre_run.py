@@ -265,15 +265,17 @@ def wake(facts: dict) -> int:
 # ---------------------------------------------------------------------------
 
 
-def prepare(candidate: dict, cfg: dict, prep: dict, staff: dict, ledger_events: list, today: date) -> dict | None:
-    """One candidate date to a brief plan, or None (unroutable, unread, or nothing to offer)."""
+def prepare(candidate: dict, cfg: dict, prep: dict, staff: dict, ledger_events: list, today: date) -> dict | str:
+    """One candidate date to a brief plan, or the reason it has none: ``unroutable``
+    (no owner and no granted fallback), ``status_unread``, or ``nothing_to_offer``.
+    The reasons reach the heartbeat, so a skipped date says which gate held it."""
     recipients = _BRIEF.recipients(_ROUTING, cfg, staff.get(candidate["matter_id"]))
     if recipients is None:
-        return None
+        return "unroutable"
     pulled = connector_pull({"op": "status", "matter_id": candidate["matter_id"]})
     status = pulled.get("status") if isinstance(pulled, dict) else None
     if not isinstance(status, dict):
-        return None
+        return "status_unread"
     chases = chase_states(status.get("records") or [], candidate["matter_id"], ledger_events)
     catalog = _CATALOG.build_catalog(
         status,
@@ -284,7 +286,7 @@ def prepare(candidate: dict, cfg: dict, prep: dict, staff: dict, ledger_events: 
         stale_days=prep["records_stale_days"],
     )
     if not catalog:
-        return None
+        return "nothing_to_offer"
     return {
         "candidate": candidate,
         "status": status,
@@ -352,14 +354,17 @@ def run(cfg: dict, today: date) -> int:
     tried = todo[:MAX_MATTERS_TRIED]
     staff = _ROUTING.pull_matter_staff([c["matter_id"] for c in tried], _ROUTING.staff_lookup_budget(cfg))
     ledger_events = _ESCALATION.read_ledger()
+    reasons: list[str] = []
     for candidate in tried:
         plan = prepare(candidate, cfg, prep, staff, ledger_events, today)
-        if plan is not None:
-            add_done(plan, cfg, states)
-            if not _BRIEF.write_all(plan, SKILL, _STARTED_AT, plan["envelope_catalog"]):
-                return suppress("degraded:envelope_write_failed")
-            return wake(_BRIEF.facts(plan))
-    return suppress("no_briefable_date:unroutable_or_nothing_to_offer")
+        if isinstance(plan, str):
+            reasons.append(plan)
+            continue
+        add_done(plan, cfg, states)
+        if not _BRIEF.write_all(plan, SKILL, _STARTED_AT, plan["envelope_catalog"]):
+            return suppress("degraded:envelope_write_failed")
+        return wake(_BRIEF.facts(plan))
+    return suppress("no_briefable_date:" + ",".join(dict.fromkeys(reasons)))
 
 
 def main(argv: list[str] | None = None) -> int:
