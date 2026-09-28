@@ -49,7 +49,7 @@ method).
 
 **Good - surface both facts (substituted service, effective date differs):**
 
-> The service confirmation came back on Okafor for the defendant, Delta Logistics. Per
+> The service confirmation came back on Doe for the defendant, Delta Logistics. Per
 > the proof of service: left with a person in charge and mailed on 2026-06-25, which is
 > substituted service. The date the clock runs from can differ from the drop-off date
 > for substituted service, so confirm which served date governs before the

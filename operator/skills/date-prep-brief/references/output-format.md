@@ -48,25 +48,25 @@ Needs you:
 Reply here and I'll take it from there.
 ```
 
-## Example (the pilot's Okafor status conference, illustrative)
+## Example (illustrative only: invented names, never facts about any matter)
 
 ```
-Subject: 2026-PI-105: Final Status Conference, Oct 2, two questions for you
+Subject: 2026-PI-999: Final Status Conference, Oct 2, two questions for you
 
 Done:
 - The Final Status Conference is Oct 2 at 8:30 in Dept 47; trial starts Oct 13.
 - The draft trial binder is in the matter.
 
 Needs you:
-1. The witness list on file is the June 18 draft. Is Priya Natarajan (biomechanics) still testifying? If yes, I'll finalize it for your paralegal to serve.
-2. Dr. Reyes's records are still outstanding after two requests. Want me to chase them again before trial?
+1. The witness list on file is the June 18 draft. Is the accident reconstruction expert still testifying? If yes, I'll finalize it for your paralegal to serve.
+2. The treating doctor's records are still outstanding after two requests. Want me to chase them again before trial?
 
 Reply here and I'll take it from there.
 ```
 
-Every value in that example comes from a read on the one matter (the pilot seed
-trial order and draft witness list, `operator/customers/pilot-smokeball/seed/seed_data.py`).
-A value the turn did not read is left out, never filled.
+In a real brief every value comes from a read on the one matter. A value the turn
+did not read is left out, never filled, and nothing in this example is ever a fact
+about a matter.
 
 ## Wording rules
 
