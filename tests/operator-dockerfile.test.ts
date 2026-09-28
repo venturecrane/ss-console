@@ -1421,7 +1421,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // spec_not_read refusal names the installed file.
     // 340c82e4 -> c280ed12 (2026-09-28, overlay#391 merge commit). A date-prep
     // brief sent to the fallback contact says why, in code.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="c280ed12579855682cf64caca73d3cf4e1f81952"')
+    // c280ed12 -> 3bca203f (2026-09-28, overlay#393 merge commit, carries #392).
+    // A brief sends on a turn that read the file; a too-long line is named.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="3bca203f5c4f8eedc7d9cf71786e9dceb8e85e7b"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

@@ -108,6 +108,14 @@ _AUDIT_ONLY_KEYS = frozenset({"sender_key", "audit_row_token"})
 #:                          (``digest_ref.DISPATCH_REF_RE``); a malformed value
 #:                          is dropped like any unnamed key.
 #:
+#: ``taint_exempt``         the send went out on a turn that ingested untrusted
+#:                          content, under the overlay's one exemption
+#:                          (hermes-smd-overlay#393, Captain decision
+#:                          2026-09-28): a date-prep brief whose recipients code
+#:                          fixed before the turn. Only the values in
+#:                          ``_TAINT_EXEMPT_VALUES`` are kept, so the row says
+#:                          exactly which exemption, or nothing.
+#:
 #: CLOSED ALLOWLIST, AND SILENTLY SO. The filter below drops any key not named
 #: here with no error and no log, which is the right posture for an untrusted
 #: caller-supplied dict but means a stamp the overlay adds WITHOUT a matching
@@ -122,7 +130,9 @@ _CALLER_AUDIT_KEYS: tuple[str, ...] = (
     "body_variant",
     "skill_name",
     "dispatch_ref",
+    "taint_exempt",
 )
+_TAINT_EXEMPT_VALUES: tuple[str, ...] = ("code_fixed_recipients",)
 
 
 def append_send_row(
@@ -205,6 +215,8 @@ def _audit_extra(request: dict[str, Any]) -> dict[str, str]:
     }
     if "dispatch_ref" in extra and not valid_dispatch_ref(extra["dispatch_ref"]):
         del extra["dispatch_ref"]
+    if extra.get("taint_exempt") not in (None, *_TAINT_EXEMPT_VALUES):
+        del extra["taint_exempt"]
     return extra
 
 
