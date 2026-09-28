@@ -1052,7 +1052,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # routed to the firm's fallback contact renders, in code, why it came to them
 # (casework_rules ROUTING_NOTES, keyed by the envelope's routing_why). No
 # tracked twin moves; plugins/hermes-smd-audit/schemas.py is untouched.
-ARG OVERLAY_REF="c280ed12579855682cf64caca73d3cf4e1f81952"
+# 2026-09-28 (3bca203f, the overlay #393 merge commit; carries #392). A
+# too-long brief line is named and the limit is 200; a date-prep brief sends on
+# a turn that read the matter's documents because code fixed its recipients
+# (Captain decision 2026-09-28; audit marker taint_exempt, kept by this repo's
+# transmit_verbs). No tracked twin moves; schemas.py is untouched.
+ARG OVERLAY_REF="3bca203f5c4f8eedc7d9cf71786e9dceb8e85e7b"
 
 ARG CUSTOMER_SLUG=customer-zero
 
