@@ -240,10 +240,10 @@ One Astro app on Cloudflare Workers, one Worker (`ss-web`), three custom domains
 
 ## Local Dev
 
-`.mcp.json` is user-local and gitignored; create it with at least the `crane` entry. Also register Sentry so agents can read `smd-operator` issues directly (remote server, OAuth 2.1 + PKCE, no token to vault; the first call opens a browser consent):
+MCP servers are registered at **user scope**, never in this repo's `.mcp.json`. A server declared in the primary checkout's `.mcp.json` is killed by Claude Code when a session that moved into a worktree runs `/clear` ("declared under a previous workspace root"), and nothing restarts it; that is how sessions lost crane and Sentry mid-day. `crane ss` registers crane at user scope itself (crane-console #1316) and strips it from `.mcp.json`. Register Sentry once, so agents can read `smd-operator` issues directly (remote server, OAuth 2.1 + PKCE, no token to vault; the first call opens a browser consent):
 
 ```bash
-claude mcp add --transport http -s project sentry https://mcp.sentry.dev/mcp/smdurgan-llc
+claude mcp add --transport http -s user sentry https://mcp.sentry.dev/mcp/smdurgan-llc
 ```
 
 Subdomain routing does not fire at `localhost:4321`; hit `/admin/*` and `/portal/*` directly. For full-fidelity testing add `127.0.0.1 admin.localhost` and `127.0.0.1 portal.localhost` to `/etc/hosts` and set matching `ADMIN_BASE_URL` / `PORTAL_BASE_URL` in `.dev.vars`.
