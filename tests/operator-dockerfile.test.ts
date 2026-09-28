@@ -1419,7 +1419,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // 70334084 -> 340c82e4 (2026-09-26, overlay#390 merge commit). The gateway's
     // lost rows are counted, non-gateway runtimes run no tools, and a
     // spec_not_read refusal names the installed file.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="340c82e4afa0fbc76807c8d0ac2a8469ef5384dd"')
+    // 340c82e4 -> c280ed12 (2026-09-28, overlay#391 merge commit). A date-prep
+    // brief sent to the fallback contact says why, in code.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="c280ed12579855682cf64caca73d3cf4e1f81952"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

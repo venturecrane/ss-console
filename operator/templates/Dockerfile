@@ -1048,7 +1048,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # caller_is_gateway, this repo's workspace_broker/verbs.py); a spec_not_read
 # refusal names the installed spec file. No tracked twin moves;
 # plugins/hermes-smd-audit/schemas.py is untouched.
-ARG OVERLAY_REF="340c82e4afa0fbc76807c8d0ac2a8469ef5384dd"
+# 2026-09-28 (c280ed12, the overlay #391 merge commit). A date-prep brief
+# routed to the firm's fallback contact renders, in code, why it came to them
+# (casework_rules ROUTING_NOTES, keyed by the envelope's routing_why). No
+# tracked twin moves; plugins/hermes-smd-audit/schemas.py is untouched.
+ARG OVERLAY_REF="c280ed12579855682cf64caca73d3cf4e1f81952"
 
 ARG CUSTOMER_SLUG=customer-zero
 
