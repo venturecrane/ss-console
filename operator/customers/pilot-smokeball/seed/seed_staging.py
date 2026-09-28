@@ -187,6 +187,10 @@ def save_manifest(m: dict) -> None:
 
 def main() -> None:
     from seed_data import CONTACTS, MATTERS, build_documents, TASKS
+    from seed_keeper_overdue import KEEPER_TASKS, build_keeper_documents
+
+    documents = {**build_documents(), **build_keeper_documents()}
+    tasks = {**TASKS, **KEEPER_TASKS}
 
     api = Api()
     manifest = load_manifest()
@@ -230,7 +234,7 @@ def main() -> None:
         print(f"matter {key}: created {resource['id']} (number {spec['number']})")
 
     # 3. documents
-    for doc_key, (matter_key, file_name, lines) in build_documents().items():
+    for doc_key, (matter_key, file_name, lines) in documents.items():
         if doc_key in manifest["documents"]:
             print(f"document {doc_key}: exists ({manifest['documents'][doc_key]})")
             continue
@@ -240,7 +244,7 @@ def main() -> None:
         print(f"document {doc_key}: uploaded {file_name} ({file_id})")
 
     # 4. tasks
-    for key, spec in TASKS.items():
+    for key, spec in tasks.items():
         if key in manifest["tasks"]:
             print(f"task {key}: exists ({manifest['tasks'][key]})")
             continue
