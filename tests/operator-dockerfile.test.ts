@@ -1425,7 +1425,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // A brief sends on a turn that read the file; a too-long line is named.
     // 3bca203f -> fde181ef (2026-09-28, overlay#394 merge commit). A reply's
     // confirmation names what it quieted or closed.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="fde181ef396343222a6816dce1c708791570b38d"')
+    // fde181ef -> 4dd29643 (2026-09-28, overlay#395 merge commit). A spaced
+    // hyphen in a task title no longer leaves the confirmation bare.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="4dd29643bf2b511650fa56fac26717760bb387d7"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
