@@ -1061,7 +1061,9 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # confirmation names what it quieted or closed, from the labels of the message
 # replied to (shared/sent_lines.py). No tracked twin moves; schemas.py is
 # untouched.
-ARG OVERLAY_REF="fde181ef396343222a6816dce1c708791570b38d"
+# 2026-09-28 (4dd29643, the overlay #395 merge commit). A confirmation names
+# a task whose title has a spaced hyphen. No tracked twin moves.
+ARG OVERLAY_REF="4dd29643bf2b511650fa56fac26717760bb387d7"
 
 ARG CUSTOMER_SLUG=customer-zero
 
