@@ -1057,7 +1057,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # a turn that read the matter's documents because code fixed its recipients
 # (Captain decision 2026-09-28; audit marker taint_exempt, kept by this repo's
 # transmit_verbs). No tracked twin moves; schemas.py is untouched.
-ARG OVERLAY_REF="3bca203f5c4f8eedc7d9cf71786e9dceb8e85e7b"
+# 2026-09-28 (fde181ef, the overlay #394 merge commit). A reply's
+# confirmation names what it quieted or closed, from the labels of the message
+# replied to (shared/sent_lines.py). No tracked twin moves; schemas.py is
+# untouched.
+ARG OVERLAY_REF="fde181ef396343222a6816dce1c708791570b38d"
 
 ARG CUSTOMER_SLUG=customer-zero
 
