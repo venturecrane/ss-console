@@ -43,9 +43,11 @@
     "summons-chen": "3cc2d5ff-624f-4f6f-a35f-f77b51e7f0f8",
     "trial-order": "8239dab8-0666-4f44-9b35-bdba2d65d9eb",
     "verification-rfp-two-alvarez": "d1b1709d-d50c-44df-9325-586cb3d4c231",
-    "witness-list": "3061ca2e-d97e-4604-a1a5-812afa70c2c4"
+    "witness-list": "3061ca2e-d97e-4604-a1a5-812afa70c2c4",
+    "witness-list-draft-alvarez-draper": "3b923717-c5f9-4987-8643-8f8f698e8457"
   },
   "events": {
+    "final-status-conference-alvarez-draper": "fe00bbb3-efd5-4a3e-8caf-b561689bb370",
     "hearing-minors-compromise-ramirez": "cef69a47-cd74-4824-b439-2f4d1f4dd490"
   },
   "matters": {
