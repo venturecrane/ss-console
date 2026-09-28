@@ -25,7 +25,8 @@ The catalog adds no instruction of its own.
   for the attorney to finalize. Collates; never authors.
 - **Finalize the witness or exhibit list**: a finalized version of the named draft,
   staged for review. Entries come from the draft and the matter's documents only; a
-  change the attorney answered ("drop Natarajan") is applied as the attorney said it.
+  change the attorney wrote in the reply ("take the second witness off") is applied as
+  written. Nothing is attributed to anyone that their reply does not say.
 - **Refresh records**: for an outstanding provider (`mode: chase`), the records
   chaser's chase for that one roster provider, on its own cadence rules and voice. For
   a received provider (`mode: update`), the chaser's "Updated-records request (a

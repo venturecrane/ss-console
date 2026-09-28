@@ -61,11 +61,11 @@ Sarah
 From: Tom Reeves <tom@reevescontracting.com>
 To: owner@example.com
 Date: Tue, 2026-05-13 11:02
-Subject: Referral from David Chen - operations help
+Subject: Referral from David Park - operations help
 
 Hi Scott,
 
-David Chen mentioned you a few weeks ago when I was complaining about
+David Park mentioned you a few weeks ago when I was complaining about
 my office running on three spreadsheets and a prayer. He said you do
 the kind of work I've been wanting to find someone to do.
 
@@ -182,7 +182,7 @@ Megan
 
 ```
 From: Scott Durgan <owner@example.com>
-To: David Chen <david@chencpa.com>
+To: David Park <david@parkcpa.com>
 Date: Fri, 2026-05-09 17:22
 Subject: Re: Bookkeeping referrals
 
@@ -196,7 +196,7 @@ Scott
 > Want to grab lunch Tuesday or Wednesday next week?
 ```
 
-**Expected:** WAIT · P1 · HIGH. One line: "Waiting on David Chen - Tuesday 5/13 lunch unconfirmed." Note that this is a sent message in the thread, not unread inbound. The agent should be smart enough to either skip these or surface them as WAIT items rather than reply candidates.
+**Expected:** WAIT · P1 · HIGH. One line: "Waiting on David Park - Tuesday 5/13 lunch unconfirmed." Note that this is a sent message in the thread, not unread inbound. The agent should be smart enough to either skip these or surface them as WAIT items rather than reply candidates.
 
 ---
 

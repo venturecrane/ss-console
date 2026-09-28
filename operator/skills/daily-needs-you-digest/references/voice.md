@@ -72,7 +72,7 @@ citation gate. The old example taught the one form the substrate rejects.
 
 **Bad - manufactures urgency to look useful:**
 
-> Quiet day, but the Okafor defense responses are due in three weeks so I flagged it as
+> Quiet day, but the Doe defense responses are due in three weeks so I flagged it as
 > needing attention now.
 
 (A future date beyond the window is waiting, not needs-a-person-now. Padding a quiet

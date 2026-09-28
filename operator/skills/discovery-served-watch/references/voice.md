@@ -54,7 +54,7 @@ claims about timing (only the POS governs the date/method).
 
 **Good - surface both facets (records deposition notice carrying a document demand):**
 
-> A deposition notice was served on Okafor, and it carries a document demand (a records
+> A deposition notice was served on Doe, and it carries a document demand (a records
 > deposition). Two things ride it: the deposition itself, for calendar and prep
 > (deponent and date on the notice), and a document-production objection window
 > separate from the deposition date. Confirm the type and service so both get set. I

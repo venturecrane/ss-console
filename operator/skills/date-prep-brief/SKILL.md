@@ -96,7 +96,9 @@ All of it is on the Script Output line under `date_prep`: `matter_number`,
    deadline digest, the task review, or the next brief on this matter) carries
    them as one "Done since last time" line, rendered from the record.
 
-Full brief shape and wording rules: `references/output-format.md`.
+Before step 4, read `/app/skills/date-prep-brief/references/output-format.md` with `read_file`: its wording
+rules bind the brief (what counts as done, how a question is shaped, no dashes as
+punctuation, no ids).
 
 ## Rules that do not bend
 

@@ -53,7 +53,7 @@ by name, "Needs you today" plus "Open without a task id", and never the "Also op
 overflow (ss #2405: the 2026-08-14 subject said "37 need you" when 5 needed a
 person; 2026-09-24: a recipient holding only blanket items read "0 need you").
 When that count is exactly one, the subject names the item instead of counting
-it ("[Deadlines] Okafor: Final Status Conference Fri Oct 2"), falling back to
+it ("[Deadlines] Doe: Final Status Conference Fri Oct 2"), falling back to
 the count ("1 date needs you") only when the item has neither a surname nor a
 number (`digest_items.subject_line`). The `[Deadlines]` prefix never changes:
 inbox routing reads it (`matter-inbox-router`).
@@ -181,7 +181,7 @@ are indistinguishable. `<M> matter(s)` is singular for one matter.
 parse time (`digest_items.display_label`) to what the send gate will pass: the
 `[Operator]` stamp stripped; a `" - "` segment carrying a case caption (`v.`,
 `vs.`, `versus`, `in re`) cut off with everything after it, so "Final Status
-Conference - Okafor v. Grand Valley Market (Dept 47)" reads "Final Status
+Conference - Doe v. Acme Grocers (Dept 47)" reads "Final Status
 Conference"; any date, dollar figure, case or matter number, other identifier,
 or run of three or more digits masked as `…`; markdown characters neutralized;
 capped at 100 characters. A caption in the first segment, a legal citation, or
@@ -192,12 +192,12 @@ task labels.
 
 **`<surname>`** is the client's surname read in code off the matter record's
 own `title` (`digest_items.matter_name`): the title's first `" - "` segment
-must be the matter's number, the second is the client ("Okafor, Denise" reads
-"Okafor"). The connector's pull attaches the title from the same `/matters/{id}`
+must be the matter's number, the second is the client ("Doe, Jane" reads
+"Doe"). The connector's pull attaches the title from the same `/matters/{id}`
 read that supplies the number, so it costs no extra call. A title in any other
 layout, several clients, or anything that is not a plain surname renders no
 surname, and the line names the matter by number alone. Never the caption:
-"Okafor v. Grand Valley Market" is exactly what the send gate's citation scan
+"Doe v. Acme Grocers" is exactly what the send gate's citation scan
 refuses in a pre-rendered body, because the dispatch runs before the turn reads
 anything and the handoff seeds no captions; a refused full body falls back to
 the counts-only skeleton.

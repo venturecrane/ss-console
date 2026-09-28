@@ -122,7 +122,7 @@ Expected:
 ```yaml
 client: 'Mike Industries'
 primary_contact: 'Sarah Tan (CMO)'
-cc_list: ['Bob Lee (CFO)', 'Alice Chen (CEO)']
+cc_list: ['Bob Lee (CFO)', 'Alice Park (CEO)']
 inputs: standard healthy week, 3 shipped, 4 metrics, 1 blocker, 3 next-week
 ```
 

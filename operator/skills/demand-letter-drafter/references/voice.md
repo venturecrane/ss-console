@@ -77,7 +77,7 @@ anything.
 
 **Good: opening, limits disclosed, exceeds-limits reserved because the record does not compute it:**
 
-> This firm represents Maria Alvarez for injuries sustained on <date>. Your insured
+> This firm represents Jane Doe for injuries sustained on <date>. Your insured
 > <name> was cited as the party at fault following the collision at <location> (<agency>
 > Report No. <n>, p. 2).
 >
