@@ -550,3 +550,91 @@ def test_every_row_the_envelope_implies_passes_the_ledger_validator(tmp_path, mo
             ledger._validate_payload("closed_by_record", payload, "task")
             checked += 1
     assert checked >= 3
+
+
+def test_the_pilot_overdue_seed_sorts_into_four_classes(monkeypatch):
+    """The pilot rehearsal tenant's overdue seed tasks (pilot-smokeball/seed/
+    seed_keeper_overdue.py, 2026-09-28) must each land in their intended class,
+    so the live run's outcome is proven before it runs. The pull shape is built
+    from the seed itself: each document's Smokeball name (extensionless), its
+    upload day (the seed day, the same as the tasks' created day), and the
+    client surnames its own text contains, found the way the pull snippet finds
+    them."""
+    monkeypatch.syspath_prepend(str(_HERE.parents[1] / "customers" / "pilot-smokeball" / "seed"))
+    seed = importlib.import_module("seed_data")
+    keeper_seed = importlib.import_module("seed_keeper_overdue")
+    documents = {**seed.build_documents(), **keeper_seed.build_keeper_documents()}
+    tasks = keeper_seed.KEEPER_TASKS
+
+    seed_day = "2026-09-28T19:30:00Z"
+    new_docs = set(keeper_seed.build_keeper_documents())
+    expected = {
+        "overdue-verification-alvarez": ("done", ("document:verification:2026-09-28",)),
+        "overdue-service-bell": ("done", ("document:proof_of_service:2026-09-28",)),
+        "overdue-preservation-chen": ("open", ()),
+        "overdue-exhibits-okafor": ("at_stake", ("court_date:2026-10-02",)),
+    }
+
+    def surnames(matter_key: str) -> list[str]:
+        return [seed.CONTACTS[c]["person"]["lastName"].lower() for c in seed.MATTERS[matter_key]["clients"]]
+
+    matters: dict[str, dict] = {}
+    for doc_key, (matter_key, file_name, text_lines) in documents.items():
+        entry = matters.setdefault(
+            matter_key,
+            {
+                "status": "Open",
+                "clientSurnames": surnames(matter_key),
+                "clientsComplete": True,
+                "files": [],
+                "events": [],
+            },
+        )
+        text = "\n".join(text_lines).lower()
+        found = [s for s in surnames(matter_key) if re.search("(?<![a-z])" + re.escape(s) + "(?![a-z])", text)]
+        # July's documents carry their July upload day; the new ones the seed day.
+        day = seed_day if doc_key in new_docs else "2026-07-04"
+        entry["files"].append({"name": file_name.removesuffix(".pdf"), "date": day, "read": True, "namesFound": found})
+    matters["trial-okafor"]["events"] = [{"id": "fsc-okafor", "start": "2026-10-02T08:30:00"}]
+
+    raw = {
+        "tasks": [
+            {
+                "id": key,
+                "matter": {"id": tasks[key]["matter"]},
+                "subject": tasks[key]["subject"],
+                "dueDate": tasks[key]["due"],
+                "createdDate": seed_day,
+            }
+            for key in tasks
+        ],
+        "matters": matters,
+        "openTaskCount": len(expected),
+        "matterCount": len(matters),
+    }
+    snapshot, problem = _load("pull.py", "tlk_pull_seed_under_test").parse_pull(raw)
+    assert problem is None and snapshot is not None
+    assert {t.task_id for t in snapshot.tasks} == set(expected)
+    duplicates = classify.duplicate_ids(
+        [classify.TaskFacts(t.task_id, t.matter_id, t.subject, t.due) for t in snapshot.tasks]
+    )
+    for task in snapshot.tasks:
+        assert date(2026, 8, 1) <= task.due <= date(2026, 9, 20) < TODAY, task.task_id
+        m = snapshot.matters[task.matter_id]
+        verdict = classify.classify(
+            classify.TaskFacts(task.task_id, task.matter_id, task.subject, task.due, task.created, task.event_id),
+            classify.MatterFacts(
+                m.matter_id,
+                status=m.status,
+                files=tuple(classify.FileRef(n, d, r, f) for n, d, r, f in m.files),
+                court_days=m.court_days,
+                court_event_ids=m.court_event_ids,
+                calendar_read=m.calendar_read,
+                client_surnames=m.client_surnames,
+                clients_complete=m.clients_complete,
+            ),
+            today=TODAY,
+            window_days=14,
+            duplicates=duplicates,
+        )
+        assert (verdict.klass, verdict.evidence) == expected[task.task_id], task.task_id
