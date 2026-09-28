@@ -379,12 +379,27 @@ def is_task(item: dict) -> bool:
     return item.get("label") == "task-deadline"
 
 
+def _without_name_suffix(label: str, name: object) -> str:
+    """``label`` less a trailing " - <name>" when ``name`` is the client surname
+    the line already shows beside the matter number. Firms end task subjects
+    with the client ("Send the preservation letter - Doe"); under "2026-PI-900
+    Doe" the suffix only repeats the name (2026-09-28). A label that is
+    nothing but the name keeps it."""
+    if not (isinstance(name, str) and name):
+        return label
+    head, sep, tail = label.rpartition(" - ")
+    if sep and head.strip() and tail.strip().lower() == name.strip().lower():
+        return head.rstrip()
+    return label
+
+
 def what_words(item: dict) -> str:
     """What the item is, in the record's words: the task subject or calendar
-    title (masked by ``display_label``), else a plain noun."""
+    title (masked by ``display_label``), else a plain noun. A trailing
+    " - <surname>" the matter head already names is dropped."""
     label = item.get("subject_display")
     if isinstance(label, str) and label:
-        return label
+        return _without_name_suffix(label, item.get("matter_name"))
     return "a task" if is_task(item) else "a calendar date"
 
 
@@ -419,7 +434,7 @@ def subject_line(digest: dict, today: object) -> str:
     """The subject: the one item by case and date, or a count and the day.
 
     "[Deadlines] Okafor: Final Status Conference Fri Oct 2", or "[Deadlines]
-    3 dates need you, Sep 28". The "[Deadlines]" prefix is what inbox routing
+    2 tasks need you, Sep 28". The "[Deadlines]" prefix is what inbox routing
     reads (matter-inbox-router). Counts are ``need_you_count`` (Law 11)."""
     items = list(digest.get("needs_you") or []) + list(digest.get("blanket_ack_only") or [])
     today_iso = today if isinstance(today, str) else getattr(today, "isoformat", lambda: str(today))()
@@ -432,11 +447,21 @@ def subject_line(digest: dict, today: object) -> str:
             if is_task(item):
                 day = ("overdue since " if int(item.get("days_out") or 0) < 0 else "due ") + day
             return f"[Deadlines] {who}: {what} {day}"
-    count = len(items)
     on = day_words(today_iso, weekday=False, year=False)
-    if count == 0:
+    if not items:
         return f"[Deadlines] No dates need you today, {on}"
-    return f"[Deadlines] {count} date{'' if count == 1 else 's'} need{'s' if count == 1 else ''} you, {on}"
+    return f"[Deadlines] {_count_words(items)} you, {on}"
+
+
+def _count_words(items: list[dict]) -> str:
+    """ "2 tasks need", "1 task and 1 date need", "1 date needs": what the
+    items ARE, counted. A task is not a date (2026-09-28: two overdue tasks
+    went out as "2 dates need you")."""
+    tasks = sum(1 for item in items if is_task(item))
+    dates = len(items) - tasks
+    parts = [f"{n} {noun}{'' if n == 1 else 's'}" for n, noun in ((tasks, "task"), (dates, "date")) if n]
+    verb = "needs" if len(items) == 1 else "need"
+    return " and ".join(parts) + " " + verb
 
 
 # ---------------------------------------------------------------------------

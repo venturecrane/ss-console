@@ -264,7 +264,7 @@ def test_a_recipient_whose_items_rank_sixth_seat_wide_still_gets_them_as_needs_y
     written = json.loads((tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.dispatch.json").read_text())
     by_who = {d["recipients"][0]: d for d in written["dispatches"]}
     bob = by_who["bob@firm.example"]
-    assert bob["subject"] == "[Deadlines] 2 dates need you, Sep 22"
+    assert bob["subject"] == "[Deadlines] 2 tasks need you, Sep 22"
     assert "## Needs you today (2)" in bob["full_body"]
     assert "## Also open" not in bob["full_body"]
     assert "t-b1" not in bob["full_body"]  # task ids never render

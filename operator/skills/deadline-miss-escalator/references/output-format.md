@@ -55,7 +55,9 @@ person; 2026-09-24: a recipient holding only blanket items read "0 need you").
 When that count is exactly one, the subject names the item instead of counting
 it ("[Deadlines] Doe: Final Status Conference Fri Oct 2"), falling back to
 the count ("1 date needs you") only when the item has neither a surname nor a
-number (`digest_items.subject_line`). The `[Deadlines]` prefix never changes:
+number (`digest_items.subject_line`). The count says what the items are:
+"2 tasks need you", "1 task and 1 date need you", "2 dates need you" (2026-09-28:
+two overdue tasks went out as "2 dates need you"). The `[Deadlines]` prefix never changes:
 inbox routing reads it (`matter-inbox-router`).
 Membership in the top band is deterministic and PER RECIPIENT: the digest is
 split by recipient, then each recipient's stable firing items are re-banded,
@@ -77,13 +79,13 @@ band with no items has nothing to disclose. See rule 9.
 
 ```markdown
 Subject: [Deadlines] <surname or number>: <what> <when> [exactly one item]
-Subject: [Deadlines] <N> dates need you, <Mon D> [any other count]
+Subject: [Deadlines] <N tasks | N dates | N tasks and N dates> need you, <Mon D> [any other count]
 
 ## Needs you today (<count>)
 
 <preamble, one of three; see below>
 
-1. <number> <surname>: <what>, <when> (<overdue N days | today | tomorrow | in N days>)
+1. <number> <surname>: <what, less a trailing " - <surname>">, <when> (<overdue N days | today | tomorrow | in N days>)
    <one plain line of what it still needs: the authored signal only, e.g.
    "the task is marked URGENT in Smokeball" / "No prep note has gone out for
    this yet.">

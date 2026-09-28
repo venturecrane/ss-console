@@ -57,6 +57,8 @@ Runs **scheduled** (Hermes no-agent cron, weekly on the firm's authored schedule
 - **stale**: a close is proposed.
 - **open**: "leave it open" is proposed; answering it quiets the task for `keep_quiet_days`.
 
+**A matter with no responsible staff** still gets its review: it goes where case-alert routing sends it (the firm's authored fallback contact, whose message says why it came to them). The pull reads that contact's own Smokeball staff record by email; when one is enabled, their "yes" closes a done or stale task exactly as the responsible attorney's would, with their staff id as the close's owner. With no such record, a done or stale task is named ("You can close it in Smokeball"). An open task is listed as "leave it open" either way, so an overdue task never drops out of the review because nobody owns the matter.
+
 An Operator-own task it cannot finish is handed over **once**, to the matter's assisting staff when one is on the matter and on the roster (else the routed recipient), as a numbered "assign it to you" line. It is never raised again.
 
 ## Trust Ceiling

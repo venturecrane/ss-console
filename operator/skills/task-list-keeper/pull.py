@@ -28,7 +28,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 _CONNECTOR_PYTHON_DEFAULT = "/opt/connectors/smokeball/.venv/bin/python"
@@ -211,6 +211,37 @@ for mid in matter_ids[:budget]:
     except Exception as exc:
         entry["eventsError"] = str(exc)[:200]
     out["matters"][mid] = entry
+
+# The authored fallback recipients' own staff records, for matters with no
+# responsible staff: their "yes" closes a task the way the responsible
+# attorney's would. One paged /staff list (read-only, at most two pages),
+# read only when a matter lacks a responsible attorney; matched by email.
+try:
+    wanted = {
+        e.strip().lower()
+        for e in json.loads(os.environ.get("SMD_CASEWORK_FALLBACK_EMAILS") or "[]")
+        if isinstance(e, str) and e.strip()
+    }
+except ValueError:
+    wanted = set()
+if wanted and any(not m.get("responsible") and "matterError" not in m for m in out["matters"].values()):
+    try:
+        found = []
+        for page in range(2):
+            batch = rows_of(client.get("/staff", Limit=500, Offset=page * 500))
+            if batch is None:
+                raise ValueError("unrecognized /staff envelope")
+            for rec in batch:
+                email = rec.get("email") if isinstance(rec, dict) else None
+                if isinstance(email, str) and email.strip().lower() in wanted and isinstance(rec.get("id"), str):
+                    found.append(
+                        {"staff_id": rec["id"], "email": email, "enabled": rec.get("enabled"), "former": rec.get("former")}
+                    )
+            if len(batch) < 500:
+                break
+        out["fallbackStaff"] = found
+    except Exception as exc:
+        out["fallbackStaffError"] = str(exc)[:200]
 print(json.dumps(out, default=str))
 """
 
@@ -261,6 +292,10 @@ class Snapshot:
     open_task_count: int
     matters_skipped: int
     probe_excluded: int
+    #: The authored fallback recipients' staff records, by lowercased email.
+    #: Empty when none was read or none matched: a fallback recipient with no
+    #: staff record can be told about a task but cannot have it closed for them.
+    fallback_staff: dict = field(default_factory=dict)
 
 
 def _day(value) -> date | None:
@@ -375,20 +410,37 @@ def parse_pull(raw: dict) -> tuple[Snapshot | None, str | None]:
     count = raw.get("matterCount")
     skipped = max(0, count - len(matters)) if isinstance(count, int) else 0
     opened = raw.get("openTaskCount")
+    fallback = {}
+    for record in raw.get("fallbackStaff") or []:
+        staff = _staff(record)
+        if staff is not None and staff.email:
+            fallback[staff.email.strip().lower()] = staff
     return (
-        Snapshot(tuple(tasks), matters, opened if isinstance(opened, int) else len(tasks), skipped, probes),
+        Snapshot(tuple(tasks), matters, opened if isinstance(opened, int) else len(tasks), skipped, probes, fallback),
         None,
     )
 
 
-def run_pull(today: date, window_days: int, budget: int = DEFAULT_MATTER_BUDGET) -> dict:
+def fallback_emails(customer_yaml: dict) -> list[str]:
+    """The authored ``escalation.case_alert_routing.fallback_recipients``."""
+    esc = customer_yaml.get("escalation") if isinstance(customer_yaml, dict) else None
+    routing = esc.get("case_alert_routing") if isinstance(esc, dict) else None
+    raw = routing.get("fallback_recipients") if isinstance(routing, dict) else None
+    return [e.strip() for e in raw if isinstance(e, str) and e.strip()] if isinstance(raw, list) else []
+
+
+def run_pull(
+    today: date, window_days: int, budget: int = DEFAULT_MATTER_BUDGET, fallback: list[str] | None = None
+) -> dict:
     """Run the connector-venv read and return its raw JSON. Raises on a failed
-    subprocess; the caller turns that into a reported problem."""
+    subprocess; the caller turns that into a reported problem. ``fallback`` is
+    the authored fallback recipients, whose staff records the read resolves."""
     from datetime import timedelta
 
     connector_python = os.environ.get("SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT)
     env = dict(os.environ)
     env["SMD_CASEWORK_MATTER_BUDGET"] = str(max(0, budget))
+    env["SMD_CASEWORK_FALLBACK_EMAILS"] = json.dumps(fallback or [])
     result = subprocess.run(  # noqa: S603 - connector-venv interpreter, a module-constant snippet, two isoformat dates; no shell
         # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args — argv[0] is the module-constant connector-venv interpreter, overridable only via SMD_CONNECTOR_VENV_PYTHON from the Machine's own boot env (same trust domain; the test seam). The snippet is a module constant; the two dates are date.isoformat() strings computed here, never external input.
         [connector_python, "-c", _PULL_SNIPPET, today.isoformat(), (today + timedelta(days=window_days)).isoformat()],

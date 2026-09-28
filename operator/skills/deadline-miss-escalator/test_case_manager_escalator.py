@@ -252,7 +252,7 @@ def test_the_digest_says_what_was_done_since_last_time(tmp_path, monkeypatch):
     body = dispatch["full_body"]
     assert body.startswith(
         "Done since last time: matter 2026-PI-101: a task I closed on 2026-09-21, a proof of service "
-        "dated 2026-07-09 was on file; matter 2026-PI-101: on 2026-09-25 I asked Valley Imaging for "
+        "added Jul 9 was on file; matter 2026-PI-101: on 2026-09-25 I asked Valley Imaging for "
         "records dated after 2026-06-20.\n\n"
     )
     assert "Done since" not in dispatch["skeleton_body"], "the skeleton stays identifier-free"

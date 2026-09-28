@@ -15,6 +15,10 @@ One message per recipient set, at most ten a run:
   assisting staff copied when they are on the roster;
 - a handover of an Operator-own task goes to the matter's assisting staff when
   one is on the roster, else to the routed recipient;
+- a matter with no responsible staff goes where that routing sends it (the
+  authored fallback contact); the fallback contact's own staff record, read by
+  email at pull time, stands in for the owner on a close, and with no such
+  record a done task is named instead of proposed;
 - a matter no authored route reaches gets no message (the fail-closed floor);
   its tasks are counted as `unroutable` on the heartbeat row.
 
@@ -22,11 +26,14 @@ A message with no numbered line is not sent: no decision, no message.
 
 ## Subject
 
-`[Tasks] <count> tasks to review on your matters`
+`[Tasks] <count> tasks to review on your matters`, or `[Tasks] <count> tasks to
+review` to the fallback contact (the matters are not theirs).
 
 ## Lead
 
-`These tasks on your matters are past due. Each has my suggested call.`, or,
+`These tasks on your matters are past due. Each has my suggested call.`; to the
+fallback contact, `These tasks are past due on matters with no responsible
+person I can send them to, so they came to you. Each has my suggested call.`; or,
 when every line is a handover, `I opened these tasks and can't finish them.
 Each has my suggested call.` When more than `max_lines` lines were due, it
 adds `<n> more tasks wait for the next review.` and, when the firm's schedule
@@ -39,13 +46,13 @@ reading order. The label is the task subject reduced by
 `digest_items.display_label` (a caption, a citation or a fabrication marker
 drops the label; digits and dates are masked).
 
-- Done: `"<label>", due <day>. Looks done: <a proof of service | a verification | a records file> dated <day> is on the matter. Suggest: close it.`
+- Done: `"<label>", due <day>. Looks done: <a proof of service | a verification | a records file> is on the matter (added <Mon D>). Suggest: close it.` The day is when the document was added to the matter, never read as the document's own date.
 - Records chase resolved: `... Looks done: the records chase for it is resolved. Suggest: close it.`
 - Stale: `... The matter is closed. Suggest: close it.` / `... Same task as another open one on this matter. Suggest: close it.`
 - Open: `... Still open. Suggest: leave it open, and I won't list it again for <keep_quiet_days> days.`
 - An Operator-own task: the same, prefixed `I opened this task.`
 - Handover: `I opened "<label>", due <day> and can't finish it: <closed reason>. Suggest: assign it to you.` (or `It needs an owner at the firm.` when nobody can be named)
-- At `surfaces`: the done or stale line ending `You can close it in Smokeball.`
+- At `surfaces`, or on a matter with no responsible staff whose fallback contact has no staff record: the done or stale line ending `You can close it in Smokeball.`
 
 ## Closed just now (Operator-own, level handles)
 

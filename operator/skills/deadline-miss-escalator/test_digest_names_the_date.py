@@ -186,7 +186,7 @@ def test_several_items_count_in_the_subject_and_each_line_names_its_own(tmp_path
         events=[OKAFOR_EVENT],
         case_manager=DATE_PREP,
     )
-    assert dispatch["subject"] == "[Deadlines] 3 dates need you, Sep 28"
+    assert dispatch["subject"] == "[Deadlines] 2 tasks and 1 date need you, Sep 28"
     assert dispatch["full_body"] == (
         "## Needs you today (3)\n\n"
         "Most overdue first.\n\n"
@@ -308,5 +308,33 @@ def test_the_subject_reads_as_a_sentence_at_every_count():
     nameless = {"needs_you": [{"matter_number_absent": "lookup_failed", "label": "court-date"}]}
     assert _items.subject_line(nameless, TODAY) == "[Deadlines] 1 date needs you, Sep 28"
     two = {"needs_you": one["needs_you"], "blanket_ack_only": due["needs_you"]}
-    assert _items.subject_line(two, TODAY) == "[Deadlines] 2 dates need you, Sep 28"
+    assert _items.subject_line(two, TODAY) == "[Deadlines] 2 tasks need you, Sep 28"
+    dates = {"needs_you": [dict(nameless["needs_you"][0]), dict(nameless["needs_you"][0])]}
+    assert _items.subject_line(dates, TODAY) == "[Deadlines] 2 dates need you, Sep 28"
+    mixed = {"needs_you": [one["needs_you"][0], nameless["needs_you"][0]]}
+    assert _items.subject_line(mixed, TODAY) == "[Deadlines] 1 task and 1 date need you, Sep 28"
+    lone_task = {"needs_you": [{"matter_number_absent": "lookup_failed", "label": "task-deadline"}]}
+    assert _items.subject_line(lone_task, TODAY) == "[Deadlines] 1 task needs you, Sep 28"
     assert _items.subject_line({}, TODAY) == "[Deadlines] No dates need you today, Sep 28"
+
+
+def test_a_task_label_does_not_repeat_the_client_the_line_already_names():
+    """2026-09-28: "2026-PI-102 <Surname>: Send preservation letter ... - <Surname>".
+    The trailing " - <surname>" the matter head already shows is dropped; any
+    other suffix, or a label that is only the name, is kept."""
+    item = {
+        "matter_number": "2026-PI-900",
+        "matter_name": "Doe",
+        "label": "task-deadline",
+        "subject_display": "Send preservation letter to Acme Plaza - Doe",
+        "authored_date": "2026-08-21",
+        "days_out": -38,
+    }
+    assert _items.what_words(item) == "Send preservation letter to Acme Plaza"
+    assert _items.what_words(dict(item, subject_display="Send preservation letter - DOE")) == "Send preservation letter"
+    assert _items.what_words(dict(item, subject_display="Call Roe - Acme")) == "Call Roe - Acme"
+    assert _items.what_words(dict(item, subject_display="Doe")) == "Doe"
+    assert _items.what_words(dict(item, matter_name=None)) == "Send preservation letter to Acme Plaza - Doe"
+    assert _items.subject_line({"needs_you": [item]}, TODAY) == (
+        "[Deadlines] Doe: Send preservation letter to Acme Plaza overdue since Aug 21"
+    )

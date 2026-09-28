@@ -59,13 +59,29 @@ def task_phrase(label: str | None, due: date, *, start: bool = True) -> str:
     return f"{'A' if start else 'a'} task due {due.isoformat()}"
 
 
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def month_day(value) -> str:
+    """ "Sep 28" for a day, the digest's plain month-day. An unparseable value
+    renders as read."""
+    try:
+        day = value if isinstance(value, date) else date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return str(value)
+    return f"{_MONTHS[day.month - 1]} {day.day}"
+
+
 def evidence_text(atoms, fallback: str | None = None) -> str | None:
-    """The first document atom as words ("a proof of service dated D"), or
-    ``fallback`` (e.g. the records-chase phrase) when no document shows it."""
+    """The first document atom as words ("a proof of service added Sep 28"), or
+    ``fallback`` (e.g. the records-chase phrase) when no document shows it.
+    The atom's day is when the document was ADDED to the matter (Smokeball's
+    ``dateCreated``), never the document's own date (2026-09-28: a Sep 15
+    proof of service uploaded Sep 28 read "dated 2026-09-28")."""
     for atom in atoms or ():
         parts = str(atom).split(":")
         if len(parts) == 3 and parts[0] == "document" and parts[1] in _EVIDENCE_PHRASES:
-            return f"{_EVIDENCE_PHRASES[parts[1]]} dated {parts[2]}"
+            return f"{_EVIDENCE_PHRASES[parts[1]]} added {month_day(parts[2])}"
     return fallback
 
 
@@ -131,11 +147,20 @@ def memo_text(evidences: list[str | None]) -> str:
 
 LEAD_REVIEW = "These tasks on your matters are past due. Each has my suggested call."
 LEAD_HANDOVER = "I opened these tasks and can't finish them. Each has my suggested call."
+#: The firm's authored fallback contact gets the tasks on matters no owner can
+#: be reached for; the first line says why they came to this person (spec §5
+#: rule 1), because "your matters" would be false.
+LEAD_FALLBACK = (
+    "These tasks are past due on matters with no responsible person I can send them to, "
+    "so they came to you. Each has my suggested call."
+)
 
 
-def lead_text(overflow: int, review_note: str | None, *, handover_only: bool = False) -> str | None:
+def lead_text(
+    overflow: int, review_note: str | None, *, handover_only: bool = False, fallback: bool = False
+) -> str | None:
     """The opening paragraph: what this list is, and how many wait for next time."""
-    parts = [LEAD_HANDOVER if handover_only else LEAD_REVIEW]
+    parts = [LEAD_HANDOVER if handover_only else LEAD_FALLBACK if fallback else LEAD_REVIEW]
     if review_note:
         parts.append(review_note)
     if overflow:
@@ -145,6 +170,7 @@ def lead_text(overflow: int, review_note: str | None, *, handover_only: bool = F
     return text[:LEAD_MAX]
 
 
-def subject_line(count: int) -> str:
+def subject_line(count: int, *, fallback: bool = False) -> str:
     noun = "task" if count == 1 else "tasks"
-    return f"[Tasks] {count} {noun} to review on your matters"
+    # The fallback contact's matters are not "yours"; the lead says why they came.
+    return f"[Tasks] {count} {noun} to review" + ("" if fallback else " on your matters")
