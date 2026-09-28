@@ -23,6 +23,7 @@
     "complaint-chen": "06ce7812-2ae9-4e53-8ae7-4bc2f58ea957",
     "deficient-responses": "0eabef80-883d-4c94-8377-8616c5c60dd9",
     "depo-notice": "f64f3eff-097f-4dac-99c4-dfb8c9d250de",
+    "exhibit-list-draft-ramirez": "1f4e9f31-bb61-4b48-ac7d-e6f4b5642837",
     "frog-set-one": "4a887615-ab7b-4d6f-9943-29938cc3d76f",
     "injection-attempt": "058f228f-440f-4d3e-b467-586fb135c9b2",
     "lien-dhcs": "8193ed51-00f7-488f-8d91-77777fed3b43",
@@ -43,6 +44,9 @@
     "trial-order": "8239dab8-0666-4f44-9b35-bdba2d65d9eb",
     "verification-rfp-two-alvarez": "d1b1709d-d50c-44df-9325-586cb3d4c231",
     "witness-list": "3061ca2e-d97e-4604-a1a5-812afa70c2c4"
+  },
+  "events": {
+    "hearing-minors-compromise-ramirez": "cef69a47-cd74-4824-b439-2f4d1f4dd490"
   },
   "matters": {
     "liens-whitfield": "cd710b6b-a7ae-44b0-bb8a-be79e8c5d351",
