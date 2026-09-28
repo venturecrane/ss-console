@@ -220,6 +220,77 @@ surfaces** (Shape B), not a set it composes.
    deadlines with `create_memo`. It does not file the binder, does not serve anything,
    and does not assert any write it has not confirmed by a read.
 
+## Routed jobs (a step approved from a date-prep brief)
+
+A person's yes to a date-prep brief reaches this routine through
+`matter-inbox-router` as a step whose `params.job` names ONE of the jobs below. Run
+exactly that job's section and nothing else from this routine: a yes to finalize a
+list never assembles a binder, and a yes to assemble the binder never rewrites a list.
+If `params.job` is missing or names a job not listed here, run nothing and say so in
+one plain line. Every rule above (no authoring, traceable values, staged for the
+attorney, gated writes confirmed by a read) binds each job.
+
+When the approved question asked the attorney to confirm a fact before the job could
+run ("The draft notes the final figures need confirming. Are they confirmed?"), the
+yes is that confirmation: the job proceeds on it and never asks for it again. It
+confirms only what the question asked; it supplies no value the draft does not hold.
+
+Each job's report to the attorney leads with what was approved, in the approved item's
+own words and number ("Finalizing the exhibit list (item 1) as you confirmed the
+figures."), then what was done and where it is in the matter (the file name). It adds
+no to-do list unless the job hit a real gap it must name.
+
+### Job: `assemble_binder`
+
+The binder: steps 1 through 6 of "How it works" above, on the step's matter. Produces
+the assembled binder index (Shape A in `references/output-format.md`) staged into the
+matter with `add_file`, and the "Trial binder index assembled" memo. It does not
+finalize, edit or re-file any exhibit or witness list.
+
+### Job: `finalize_witness_list`
+
+The finalized witness list, made from the draft the step names (`params.file_id`).
+Produces one document and one memo; no binder, no deadline capture, no tracking task.
+
+1. **Read the draft.** Read `params.file_id` on the step's matter (`read_document`,
+   or `get_file` / `get_download_url`). It must be on this matter and named as a
+   witness list draft. If it cannot be read, say so and stop.
+2. **Make the final version from the draft alone.** Every witness exactly as the draft
+   lists them, in the draft's order, with the draft's own words. Apply only a change
+   the attorney wrote in the reply ("take the second witness off"), as written. Drop
+   the draft markings: the word "draft" in the title, and a pending note the approved
+   question asked about and the attorney confirmed. Any other open note or blank in the
+   draft stays open and is named in the report. Never add, remove, reorder or describe
+   a witness on your own.
+3. **Stage it.** `add_file` (`content_text`) in the draft's folder, named like the
+   draft with today's date and "final" in place of "draft" (no "draft" in the name, so
+   the next brief sees the list is done). Confirm it with `get_files_on_matter`.
+4. **Log it.** `create_memo`: "Witness list finalized for review from the draft dated
+   <draft date>: <file name>." plus any change applied from the reply, quoted.
+
+### Job: `finalize_exhibit_list`
+
+The finalized exhibit list, made from the draft the step names (`params.file_id`).
+Produces one document and one memo; no binder, no deadline capture, no tracking task.
+
+1. **Read the draft.** Read `params.file_id` on the step's matter (`read_document`,
+   or `get_file` / `get_download_url`). It must be on this matter and named as an
+   exhibit list draft. If it cannot be read, say so and stop.
+2. **Make the final version from the draft alone.** Every exhibit exactly as the
+   draft lists it, in the draft's order and numbering, with the draft's own words and
+   any figures exactly as the draft states them. Apply only a change the attorney
+   wrote in the reply, as written. Drop the draft markings: the word "draft" in the
+   title, and a pending note the approved question asked about and the attorney
+   confirmed (a yes to "are the figures confirmed" confirms the figures the draft
+   holds; the note asking to confirm them goes). Any other open note or blank figure
+   stays open and is named in the report. Never add, remove, renumber or describe an
+   exhibit on your own, and never total or compute a figure.
+3. **Stage it.** `add_file` (`content_text`) in the draft's folder, named like the
+   draft with today's date and "final" in place of "draft" (no "draft" in the name, so
+   the next brief sees the list is done). Confirm it with `get_files_on_matter`.
+4. **Log it.** `create_memo`: "Exhibit list finalized for review from the draft dated
+   <draft date>: <file name>." plus any change applied from the reply, quoted.
+
 ## Boundaries (never)
 
 - **Never write the trial brief, the trial memorandum, a motion in limine, jury

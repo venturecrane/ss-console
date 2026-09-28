@@ -103,6 +103,38 @@ def _warn(what: str, exc: Exception) -> None:
     sys.stderr.write("[date-prep] " + what + " failed: " + type(exc).__name__ + "\n")
 
 
+def _clock(hour: int, minute: int) -> str:
+    """``9:30 a.m.``: the way a brief says a time."""
+    suffix = "a.m." if hour < 12 else "p.m."
+    return str(hour % 12 or 12) + ":" + format(minute, "02d") + " " + suffix
+
+
+def _when(event: dict) -> tuple[str | None, str | None]:
+    """The event's local ``(day, time)`` in its own time zone.
+
+    Smokeball stores ``startTime`` in UTC with no offset and names the event's
+    zone in ``timeZone`` (probed 2026-09-28: a hearing posted as 16:30Z with
+    ``America/Los_Angeles`` reads back ``2026-10-06T16:30:00``, the 9:30 a.m.
+    hearing). An all-day event, a start with no clock, or a zone this host
+    cannot resolve has no time: ``(None, None)``, and the day stays the stored
+    one. A UTC clock is never shown as if it were local."""
+    raw = _first(event, ("startTime", "StartTime"))
+    zone = _first(event, ("timeZone", "TimeZone"))
+    if raw is None or zone is None or event.get("allDay") is True or len(raw) < 16 or raw[10] != "T":
+        return None, None
+    try:
+        from datetime import datetime, timezone
+        from zoneinfo import ZoneInfo
+
+        stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        local = stamp.astimezone(ZoneInfo(zone))
+    except Exception:  # noqa: BLE001 - an unreadable start or unknown zone is no time, never a guess
+        return None, None
+    return local.date().isoformat(), _clock(local.hour, local.minute)
+
+
 def matter_events(client, matter: dict, frm: str, to: str) -> list[dict] | None:
     """One matter's events in ``[frm, to]``, or None when the read failed."""
     matter_id = _id(matter)
@@ -129,15 +161,22 @@ def matter_events(client, matter: dict, frm: str, to: str) -> list[dict] | None:
         )
         if event_id is None or day is None or _is_probe(subject):
             continue
-        rows.append(
-            {
-                "event_id": event_id,
-                "date": day,
-                "subject": subject[:120],
-                "matter_id": matter_id,
-                "matter_number": number,
-            }
-        )
+        local_day, time = _when(event)
+        row = {
+            "event_id": event_id,
+            "date": local_day or day,
+            "subject": subject[:120],
+            "matter_id": matter_id,
+            "matter_number": number,
+        }
+        # When and where, as the event states them: the brief's first Done line
+        # says both, and only the event may supply them.
+        location = _first(event, ("location", "Location"))
+        if time is not None:
+            row["time"] = time
+        if location is not None:
+            row["location"] = location[:120]
+        rows.append(row)
     return rows
 
 

@@ -190,7 +190,11 @@ def facts(plan: dict) -> dict:
     return {
         "matter_id": candidate["matter_id"],
         "matter_number": candidate.get("matter_number"),
-        "event": {k: candidate[k] for k in ("event_id", "date", "subject", "days_out")},
+        # ``time`` and ``location`` only when the event states them: the first
+        # Done line says when and where, and nothing else may supply either.
+        "event": {
+            k: candidate[k] for k in ("event_id", "date", "time", "location", "subject", "days_out") if k in candidate
+        },
         "file_status": {
             "files": status.get("files") or [],
             "files_truncated": bool(status.get("files_truncated")),

@@ -247,6 +247,36 @@ logged and closed, reachable only on a confident match), or **C** (surface to a 
    the chase item's key**: attempts count every raise, so a stall `fired` on the
    chase key would inflate the "chase N" numerator the email copies.
 
+## Routed jobs (a step approved from a date-prep brief)
+
+A person's yes to a date-prep brief reaches this routine through
+`matter-inbox-router` as a step whose `params.job` names ONE of the jobs below, for
+ONE roster provider (`params.roster_task_id`, `params.provider`). Run exactly that
+job and nothing else from this routine: no scan of the matter's other providers, no
+other chase. If `params.job` is missing or names a job not listed here, run nothing
+and say so in one plain line. The report to the attorney leads with what was approved,
+in the approved item's own words and number, then what was done and where it is (the
+draft memo, or that the request went out); no to-do list unless the job hit a real
+gap it must name (no authored address, a record that already landed).
+
+### Job: `chase_records`
+
+The chase for the one OUTSTANDING provider the step names (`params.mode: chase`).
+Verify live that the roster task is still open and no matching record has landed
+(`list_tasks(matter_id, is_completed=false)`, `get_files_on_matter`); a record that
+landed means say so in one line and stop. Otherwise compose the chase exactly as step
+4 of "How it works" does, to the authored roster contact only, and act at the step's
+level as step 3 of the updated-records request below does: `prepares` writes it as a
+draft memo on the matter (`[Operator] Draft records chase - <provider> (not sent)`),
+nothing sent; `handles` issues it with `mcp_agentmail_send_message` under the firm's
+ceiling. Append the `chased` ledger event only after a send (step 4 of the updated-records
+request below; a `prepares` draft appends nothing).
+
+### Job: `request_updated_records`
+
+The updated-records request for the one RECEIVED provider the step names
+(`params.mode: update`): the section that follows, exactly.
+
 ## Updated-records request (a routed step)
 
 Before a court date, a firm often wants a provider's newest treatment records even

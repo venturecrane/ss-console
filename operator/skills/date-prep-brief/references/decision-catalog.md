@@ -15,26 +15,49 @@ list is never derived. A step at `surfaces` is never offered.
 | `motion_calendar_refresh`   | `motion-calendar-tracker`    | the motion calendar never ran on this matter, or its last run predates the newest file                                                                                                                                                                     | none                                                                    |
 | `discovery_status_refresh`  | `discovery-response-tracker` | the discovery tracker never ran on this matter, or its last run predates the newest file                                                                                                                                                                   | none                                                                    |
 
-## What each step does when it runs
+Every entry's `params` also carries `job` (below).
 
-Each step runs its routine's own procedure (`/app/skills/<skill>/SKILL.md`) on the
-brief's matter, under that routine's rules, content ceiling and exposure ceilings.
-The catalog adds no instruction of its own.
+## Every entry names its job
 
-- **Assemble the binder**: the trial binder index from the authored components, staged
-  for the attorney to finalize. Collates; never authors.
-- **Finalize the witness or exhibit list**: a finalized version of the named draft,
-  staged for review. Entries come from the draft and the matter's documents only; a
-  change the attorney wrote in the reply ("take the second witness off") is applied as
-  written. Nothing is attributed to anyone that their reply does not say.
-- **Refresh records**: for an outstanding provider (`mode: chase`), the records
-  chaser's chase for that one roster provider, on its own cadence rules and voice. For
-  a received provider (`mode: update`), the chaser's "Updated-records request (a
-  routed step)": a request for records dated after `newest_record`, through the same
-  request path; at `prepares` it is a draft on the matter, at `handles` it is sent
-  under the firm's send ceiling.
-- **Refresh the motion calendar / discovery status**: the tracker's own pass on this
-  matter, with its own memo.
+Several steps share one routine (the trial binder routine assembles the binder AND
+finalizes the lists), so the routine alone cannot say what a yes asked for. Every
+entry's `params` carries `job`, one of a closed set (`catalog.py` `JOB_SKILLS`), and
+the routine's SKILL.md has a `### Job: <job>` section for each job it owns (pinned by
+the tests). A step runs exactly that section, nothing else from the routine. A routine
+with no section for the job runs nothing and says so plainly.
+
+| `job`                      | Step                       | Routine                      | What it produces                                                                                                                  |
+| -------------------------- | -------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `assemble_binder`          | `binder_assemble`          | `trial-binder-assembler`     | the trial binder index from the authored components, staged for the attorney to finalize. Collates; never authors.                |
+| `finalize_witness_list`    | `witness_list_finalize`    | `trial-binder-assembler`     | a finalized witness list from the named draft (`file_id`), staged in the matter for review and filing. No binder.                 |
+| `finalize_exhibit_list`    | `exhibit_list_finalize`    | `trial-binder-assembler`     | a finalized exhibit list from the named draft (`file_id`), staged in the matter for review and filing. No binder.                 |
+| `chase_records`            | `records_refresh` (chase)  | `medical-records-chaser`     | the chase for that one outstanding roster provider, on the chaser's own cadence rules and voice.                                  |
+| `request_updated_records`  | `records_refresh` (update) | `medical-records-chaser`     | a request for records dated after `newest_record`: at `prepares` a draft on the matter, at `handles` sent under the send ceiling. |
+| `refresh_motion_calendar`  | `motion_calendar_refresh`  | `motion-calendar-tracker`    | the tracker's own pass on this matter, with its own memo.                                                                         |
+| `refresh_discovery_status` | `discovery_status_refresh` | `discovery-response-tracker` | the tracker's own pass on this matter, with its own memo.                                                                         |
+
+Each job runs under its routine's rules, content ceiling and exposure ceilings. The
+catalog adds no instruction of its own.
+
+## The question's answer carries into the step
+
+A brief's question often asks the attorney to confirm a fact before the step can run
+("The draft notes the final figures need confirming. Are they confirmed? If yes, I'll
+finalize the list."). The yes IS that confirmation. The step proceeds on it, the
+finalized document drops the pending-confirmation note the draft carried, and the reply
+never asks the attorney for the same confirmation again. The confirmation extends only
+as far as the question's own words: a yes to "are the figures confirmed" confirms the
+figures already in the draft; it does not supply a figure the draft does not hold. A
+change the attorney wrote in the reply ("take the second witness off") is applied as
+written. Nothing is attributed to anyone that their reply does not say.
+
+## The reply after a step
+
+The step's report to the attorney leads with what was approved, in the approved item's
+own words ("Finalizing the exhibit list (item 1) as you confirmed the figures."), then
+says what was done and where it is in the matter. No to-do list for the attorney unless
+the job hit a real gap it must name (a draft that could not be read, a blank the draft
+leaves open).
 
 ## Levels
 

@@ -368,6 +368,26 @@ Outbound:
    file." Never assert the compel section or day-count. Log via `create_memo`. Hand the
    letter to `meet-and-confer-drafter` if the attorney chooses a letter.
 
+## Routed jobs (a step approved from a date-prep brief)
+
+A person's yes to a date-prep brief reaches this routine through
+`matter-inbox-router` as a step whose `params.job` names the job below. Run exactly
+that job and nothing else; a missing or unknown `params.job` means run nothing and
+say so in one plain line.
+
+### Job: `refresh_discovery_status`
+
+The on-demand status pass on the step's one matter, reading only: the served sets'
+response deadlines already recorded (inbound, `list_events` / `list_tasks` /
+`get_memos_on_matter`) and the propounded sets' opposing deadlines with any recorded
+extension (outbound, step 2 above, for this one matter). Produces one status memo on
+the matter (`create_memo`, in the inbound or outbound shape of
+`references/output-format.md`). It computes no new deadline, creates no event or
+task, and sends nothing; a deadline it would have to compute is named as a gap for the
+attorney. The report to the attorney leads with what was approved, in the approved
+item's own words and number, then what the status shows and that the memo is on the
+matter.
+
 ## Training output (built into every run)
 
 Every action carries, in the matter memo and the attorney-facing surface, a short note a

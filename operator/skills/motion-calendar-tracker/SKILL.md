@@ -173,6 +173,23 @@ no invented tool, no assumed status API.
    `false` or `"unknown"`, surface the write failure and never re-create the memo -
    never assert the log persisted. Do not call `get_memos_on_matter` to confirm.
 
+## Routed jobs (a step approved from a date-prep brief)
+
+A person's yes to a date-prep brief reaches this routine through
+`matter-inbox-router` as a step whose `params.job` names the job below. Run exactly
+that job and nothing else; a missing or unknown `params.job` means run nothing and
+say so in one plain line.
+
+### Job: `refresh_motion_calendar`
+
+The on-demand pass on the step's one matter: steps 1 through 6 of "How it works"
+above (the prior-surface diff of step 4 is allowed, since this is one matter a person
+named). Produces the Filed / Due / Hearings surface and its "Motion calendar
+assembled" memo. It sets no date and writes no task. The report to the attorney leads
+with what was approved, in the approved item's own words and number, then what the
+surface shows and that the memo is on the matter; no to-do list unless a gap must be
+named.
+
 ## The due-date seam - surface for confirm, never assert (READ THIS)
 
 This is where a tracker is tempted to become a calculator. It must not.

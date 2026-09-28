@@ -33,6 +33,36 @@ STEP_SKILLS: dict[str, str] = {
     "discovery_status_refresh": "discovery-response-tracker",
 }
 
+#: Which of its routine's jobs each step is. Several steps share one routine
+#: (the trial binder routine assembles the binder AND finalizes the lists), so
+#: the skill alone cannot say what a "yes" asked for: the job does. Closed:
+#: each job has its own ``### Job: `<job>``` section in its routine's SKILL.md
+#: (pinned by the tests), and the router runs exactly that section.
+STEP_JOBS: dict[str, str] = {
+    "binder_assemble": "assemble_binder",
+    "witness_list_finalize": "finalize_witness_list",
+    "exhibit_list_finalize": "finalize_exhibit_list",
+    "motion_calendar_refresh": "refresh_motion_calendar",
+    "discovery_status_refresh": "refresh_discovery_status",
+}
+#: ``records_refresh`` is two jobs, told apart by the entry's ``mode``.
+RECORDS_JOBS: dict[str, str] = {"chase": "chase_records", "update": "request_updated_records"}
+
+#: Every job the catalog can name, with the routine that owns it.
+JOB_SKILLS: dict[str, str] = {
+    **{job: STEP_SKILLS[step] for step, job in STEP_JOBS.items()},
+    **{job: STEP_SKILLS["records_refresh"] for job in RECORDS_JOBS.values()},
+}
+
+
+def job_for(step: str, params: dict) -> str:
+    """The closed job a step entry runs. A records entry with no known mode is a
+    defect in this file, never a guess (KeyError)."""
+    if step == "records_refresh":
+        return RECORDS_JOBS[params["mode"]]
+    return STEP_JOBS[step]
+
+
 #: Offered levels. ``surfaces`` is authored but never offered.
 OFFERED_LEVELS = ("prepares", "handles")
 
@@ -59,7 +89,7 @@ def _entry(step: str, level: str, params: dict, basis: list[str], suffix: str = 
         "catalog_id": step + (":" + suffix if suffix else ""),
         "skill": STEP_SKILLS[step],
         "level": level,
-        "params": params,
+        "params": {"job": job_for(step, params), **params},
         "basis": basis,
     }
 
