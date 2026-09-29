@@ -131,6 +131,7 @@ _MARKER_RE = re.compile(r"\{\{.*?\}\}", re.DOTALL)
 
 _HEADING_RE = re.compile(r"^(#{1,3})\s+(.*)$")
 _BULLET_RE = re.compile(r"^[-*]\s+(.*)$")
+_ORDERED_RE = re.compile(r"^(\d{1,3})\.\s+(.*)$")
 # Split on emphasis spans, keeping them (capturing group). ``[^*]+`` keeps the
 # match tight so ``**a** and **b**`` yields two bold runs, not one.
 _EMPHASIS_RE = re.compile(r"(\*\*[^*]+\*\*|\*[^*]+\*)")
@@ -537,8 +538,7 @@ def render_markdown_to_docx(markdown: str) -> bytes:
 
     doc = Document()
     table_rows: list[list[str]] = []
-    for raw_line in markdown.splitlines():
-        line = raw_line.strip()
+    for line in _number_ordered_runs(markdown.splitlines()):
         row = _table_row(line)
         if row is not None:
             if not _is_separator_row(row):
@@ -562,6 +562,29 @@ def render_markdown_to_docx(markdown: str) -> bytes:
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
+
+
+def _number_ordered_runs(raw_lines: list[str]) -> list[str]:
+    """Stripped lines, with each run of ``N. item`` lines numbered in sequence
+    from its first item's number. Markdown writes an ordered list as
+    ``1. 1. 1.`` and means 1, 2, 3; this renderer prints numbers as literal
+    text, so on 2026-09-28 a finalized witness list reached the pilot matter
+    numbered 1, 1, 1. Blank lines inside a run keep it going; any other line
+    ends it."""
+    out: list[str] = []
+    next_n: int | None = None
+    for raw in raw_lines:
+        line = raw.strip()
+        item = _ORDERED_RE.match(line)
+        if item:
+            next_n = int(item.group(1)) if next_n is None else next_n
+            out.append(f"{next_n}. {item.group(2)}")
+            next_n += 1
+            continue
+        if line:
+            next_n = None
+        out.append(line)
+    return out
 
 
 def _table_row(line: str) -> list[str] | None:

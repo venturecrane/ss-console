@@ -399,6 +399,28 @@ def test_a_pipe_table_renders_as_a_word_table_with_every_cell() -> None:
     assert "PLAINTIFF'S EXHIBIT LIST" in [p.text for p in doc.paragraphs]
 
 
+def test_a_markdown_ordered_list_is_numbered_in_sequence() -> None:
+    """2026-09-28: a finalized witness list reached the pilot matter numbered
+    1, 1, 1 because the draft markdown wrote every item as ``1.``."""
+    import io
+
+    from docx import Document
+
+    markdown = (
+        "WITNESSES\n\n1. Jane Doe, plaintiff\n1. Officer Roe\n\n1. Dr. Poe\n\nAfter the list.\n\n3. Restarts here\n"
+    )
+    doc = Document(io.BytesIO(render_markdown_to_docx(markdown)))
+    texts = [p.text for p in doc.paragraphs if p.text.strip()]
+    assert texts == [
+        "WITNESSES",
+        "1. Jane Doe, plaintiff",
+        "2. Officer Roe",
+        "3. Dr. Poe",
+        "After the list.",
+        "3. Restarts here",
+    ]
+
+
 def test_an_escaped_pipe_stays_inside_its_cell() -> None:
     import io
 
