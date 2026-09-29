@@ -185,9 +185,9 @@ say so in one plain line.
 The on-demand pass on the step's one matter: steps 1 through 6 of "How it works"
 above (the prior-surface diff of step 4 is allowed, since this is one matter a person
 named). Produces the Filed / Due / Hearings surface and its "Motion calendar
-assembled" memo. It sets no date and writes no task. The report to the attorney leads
-with what was approved, in the approved item's own words and number, then what the
-surface shows and that the memo is on the matter; no to-do list unless a gap must be
+assembled" memo. It sets no date and writes no task. The report to the attorney never
+restates the approval (the reply already opens with code's line naming it); it starts
+with what the surface shows and that the memo is on the matter; no to-do list unless a gap must be
 named.
 
 ## The due-date seam - surface for confirm, never assert (READ THIS)

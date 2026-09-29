@@ -384,8 +384,8 @@ extension (outbound, step 2 above, for this one matter). Produces one status mem
 the matter (`create_memo`, in the inbound or outbound shape of
 `references/output-format.md`). It computes no new deadline, creates no event or
 task, and sends nothing; a deadline it would have to compute is named as a gap for the
-attorney. The report to the attorney leads with what was approved, in the approved
-item's own words and number, then what the status shows and that the memo is on the
+attorney. The report to the attorney never restates the approval (the reply
+already opens with code's line naming it); it starts with what the status shows and that the memo is on the
 matter.
 
 ## Training output (built into every run)
