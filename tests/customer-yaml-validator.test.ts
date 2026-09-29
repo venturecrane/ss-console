@@ -2708,6 +2708,37 @@ describe('validate — record_stores block (#2793)', () => {
     ).toBe(true)
   })
 
+  it('accepts the broker-view posture: owner_field, readers, index (#2793 follow-on)', () => {
+    const f = validFixture()
+    f['record_stores'] = [
+      {
+        name: 'open-house-visitors',
+        path: '/opt/data/open-house/visitors',
+        owner_field: 'agent',
+        readers: ['broker@firm.example'],
+        index: ['visitor', 'property', 'visit_date', 'contact'],
+      },
+    ]
+    expect(validate(f).ok).toBe(true)
+  })
+
+  it.each([
+    [{ readers: ['tim@x.example'] }, 'readers', /needs owner_field/],
+    [{ owner_field: 'agent', readers: ['tim'] }, 'readers', /not an email address/],
+    [{ owner_field: 'agent', readers: 'tim@x.example' }, 'readers', /list of non-empty strings/],
+    [{ owner_field: 'Agent Name' }, 'owner_field', /frontmatter key/],
+    [{ index: ['Visitor Name'] }, 'index', /not a frontmatter key/],
+  ])('refuses a bad posture key by name: %j', (extra, field, pattern) => {
+    const f = validFixture()
+    f['record_stores'] = [{ name: 's', path: '/opt/data/s', ...extra }]
+    const r = validate(f)
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(
+      r.errors.some((e) => e.path === `record_stores[0].${field}` && pattern.test(e.message))
+    ).toBe(true)
+  })
+
   it('refuses a block that is not a list, and an entry that is not a mapping', () => {
     const f = validFixture()
     f['record_stores'] = '/opt/data/x'

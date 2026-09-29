@@ -326,7 +326,10 @@ top_level:
       and registers record_store_list / read / write only when a store is authored;
       validated on-box by bootstrap/validate.py _validate_record_stores and in the
       console by src/lib/operator/customer-yaml/sections-record-stores.ts on the
-      same path rule (#2793, overlay#396).
+      same path rule (#2793, overlay#396). A store may author its access posture
+      (owner_field / readers / index, overlay#402): the plugin fences reads and
+      rewrites per owner by the verified inbound sender, readers see every owner's
+      records read-only, and the listing exposes the index fields.
   custody_exceptions:
     status: implemented
     materializer: >-

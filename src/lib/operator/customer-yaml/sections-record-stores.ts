@@ -18,7 +18,14 @@
  *     the runtime-owned prefixes (profile homes, the attachment spool, the
  *     extraction cache, `.smd`, medchron). A store on a profile home would put
  *     a cron store or a skill body one record name away.
- *   - exactly those two keys.
+ *   - the access posture, optional (ss#2793 follow-on, the broker view):
+ *     `owner_field` names the frontmatter key that says whose a record is
+ *     (present = private per owner, absent = shared by the roster);
+ *     `readers` are addresses that may open every owner's records, read only;
+ *     `index` are frontmatter keys the listing exposes so a capture can notice
+ *     a colleague already holds this visitor without opening their notes.
+ *     `readers` needs `owner_field`: a shared store has nothing to grant.
+ *   - no other keys.
  *
  * Validate-only (pushes errors); the block is materialized by the overlay and
  * read by the plugin at boot, not consumed from the parsed CustomerYaml.
@@ -28,6 +35,10 @@ import type { ValidationError } from './types'
 import { isPlainObject } from './helpers'
 
 const STORE_NAME = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/
+// A frontmatter key, as the overlay's FIELD_RE spells it.
+const FIELD_NAME = /^[a-z][a-z0-9_]{0,63}$/
+const POLICY_KEYS = ['owner_field', 'readers', 'index'] as const
+const ALLOWED_KEYS = new Set<string>(['name', 'path', ...POLICY_KEYS])
 const VOLUME_ROOT = '/opt/data'
 const RESERVED_PREFIXES = [
   '/opt/data/profiles',
@@ -84,15 +95,16 @@ export function checkRecordStores(root: Record<string, unknown>, errors: Validat
       return
     }
     const extra = Object.keys(entry)
-      .filter((k) => k !== 'name' && k !== 'path')
+      .filter((k) => !ALLOWED_KEYS.has(k))
       .sort()
     if (extra.length > 0) {
       errors.push({
         code: 'InvalidFormat',
         path: prefix,
-        message: `${prefix}: unknown key(s) ${JSON.stringify(extra)}; only name and path`,
+        message: `${prefix}: unknown key(s) ${JSON.stringify(extra)}; only name, path, ${POLICY_KEYS.join(', ')}`,
       })
     }
+    checkStorePolicy(entry, prefix, errors)
     const name = entry['name']
     if (typeof name !== 'string' || !STORE_NAME.test(name)) {
       errors.push({
@@ -127,4 +139,66 @@ export function checkRecordStores(root: Record<string, unknown>, errors: Validat
       })
     }
   })
+}
+
+/**
+ * The access posture keys, judged as the overlay's `policy_problems` judges
+ * them: same faults, same words, so a config the console accepts is one the
+ * seat will serve.
+ */
+function checkStorePolicy(
+  entry: Record<string, unknown>,
+  prefix: string,
+  errors: ValidationError[]
+): void {
+  if ('owner_field' in entry) {
+    const owner = entry['owner_field']
+    if (typeof owner !== 'string' || !FIELD_NAME.test(owner)) {
+      errors.push({
+        code: 'InvalidFormat',
+        path: `${prefix}.owner_field`,
+        message: `${prefix}.owner_field: must be a frontmatter key (a-z, 0-9, _)`,
+      })
+    }
+  }
+  for (const key of ['readers', 'index'] as const) {
+    if (!(key in entry)) continue
+    const value = entry[key]
+    if (!Array.isArray(value) || !value.every((v) => typeof v === 'string' && v.length > 0)) {
+      errors.push({
+        code: 'TypeMismatch',
+        path: `${prefix}.${key}`,
+        message: `${prefix}.${key}: must be a list of non-empty strings`,
+      })
+      continue
+    }
+    if (key === 'readers') {
+      if (!('owner_field' in entry)) {
+        errors.push({
+          code: 'InvalidFormat',
+          path: `${prefix}.readers`,
+          message: `${prefix}.readers: needs owner_field (a shared store has nothing to grant)`,
+        })
+      }
+      for (const v of value as string[]) {
+        if (!v.includes('@') || v.trim() !== v) {
+          errors.push({
+            code: 'InvalidFormat',
+            path: `${prefix}.readers`,
+            message: `${prefix}.readers: '${v}' is not an email address`,
+          })
+        }
+      }
+    } else {
+      for (const v of value as string[]) {
+        if (!FIELD_NAME.test(v)) {
+          errors.push({
+            code: 'InvalidFormat',
+            path: `${prefix}.index`,
+            message: `${prefix}.index: '${v}' is not a frontmatter key (a-z, 0-9, _)`,
+          })
+        }
+      }
+    }
+  }
 }
