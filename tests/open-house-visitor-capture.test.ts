@@ -81,6 +81,37 @@ describe('open-house-visitor-capture: the skill contract', () => {
     expect(capture).toMatch(/read it back with\s+`record_store_read` before you reply/)
   })
 
+  it('a correction edits the one record the agent meant, or writes nothing and asks', () => {
+    const correction = section(skill, 'Correction')
+    // Ambiguity is a question, never a guess: the no-write branch is explicit.
+    expect(correction).toMatch(/none or\s+several match, \*\*write nothing\*\*/)
+    expect(correction).toMatch(/Never guess which record a correction belongs to/)
+    // The edit starts from the read, changes only the named field, and keeps
+    // the agent's words: the original notes are never rewritten.
+    expect(correction).toMatch(/Change only what the agent said/)
+    expect(correction).toMatch(/The original notes are never deleted or rewritten/)
+    expect(correction).toMatch(/Agent's correction, verbatim/)
+    // Same read-back rule as Capture: nothing repeated that was not read.
+    expect(correction).toMatch(
+      /Read every record you wrote with\s+`record_store_read` before you reply/
+    )
+    // In-place edits overwrite the record just read; a rename never overwrites
+    // the new name, and the old record is retired second so it is never lost.
+    expect(correction).toMatch(/`overwrite: true`/)
+    expect(correction).toMatch(/no `overwrite`, since that name\s+must not already exist/)
+    expect(correction).toMatch(/Two writes, in that order/)
+  })
+
+  it('retired records (withdrawn or superseded) are read past by Recall and Follow-up', () => {
+    for (const heading of ['Recall', 'Follow-up (scheduled)']) {
+      const text = section(skill, heading)
+      expect(text, `${heading} does not skip retired records`).toMatch(/status: withdrawn/)
+      expect(text, `${heading} does not skip retired records`).toMatch(/status: superseded/)
+    }
+    // There is no delete tool and the skill does not pretend there is.
+    expect(skill).not.toMatch(/record_store_delete|record_store_remove/)
+  })
+
   it('never names a visitor as a recipient', () => {
     const never = section(skill, 'What this skill never does')
     expect(never).toMatch(/never contacts a visitor/i)

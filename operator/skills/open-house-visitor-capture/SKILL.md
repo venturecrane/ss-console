@@ -64,6 +64,12 @@ body and the transcript together and classify by shape:
   Run **Capture** below, once per visitor described.
 - **A question about past visitors.** "Who did I meet at ...", "which visitors said
   ...", "what did the Nguyens tell me". Run **Recall** below.
+- **A correction, a stop, or a withdrawal.** The agent says something already
+  stored is wrong ("Priya's number is 0178, not 0177", "that was Chandler, not
+  Tempe", "her name is Pryia"), tells you to stop following up with a visitor, or
+  says a record should not exist ("scrap the Derek one, that was a duplicate").
+  Run **Correction** below. A reply in the capture thread is the usual shape,
+  but a fresh email counts too.
 - **Anything else.** Answer it the way you would any message from your principal,
   briefly, in the same reply. If it is plainly not about open houses, say so in one
   line and help with what was asked. Do not force it into Capture.
@@ -124,6 +130,11 @@ his mother and asked about a casita or a guest suite. Liked the kitchen, thought
 the backyard was small.
 ```
 
+A record may also carry `status: withdrawn` or `status: superseded` (with
+`superseded_by: <record name>`) in its frontmatter; **Correction** writes those.
+A record with either status is retired: Recall and Follow-up read past it. A
+record with no `status` line is live.
+
 ## Capture
 
 1. Identify each visitor the dictation describes. One record per visitor or party.
@@ -152,7 +163,10 @@ the backyard was small.
    match the question with `record_store_read`: by property, by date or date
    range, by name, or by a phrase. Only records
    whose `agent` is the sender's address are theirs; a record another rostered
-   agent dictated is not part of the answer and is never mentioned.
+   agent dictated is not part of the answer and is never mentioned. A retired
+   record (`status: withdrawn` or `status: superseded`) is not part of the answer
+   either; if the agent asks about that visitor by name, say the record was
+   withdrawn, or replaced by the named record, on the date the correction says.
 2. Answer from the records only. Quote the agent's note text where it answers the
    question, and name the visit date and property for each match.
 3. If nothing matches, say there is no record, and say what you searched (dates,
@@ -163,6 +177,58 @@ the backyard was small.
    plainly that it will list the visitors and their notes instead. See **What
    this skill never does**.
 
+## Correction
+
+The agent is the only person who can change a record, and they do it by saying
+so. Every change comes from their words; nothing is corrected on your own
+initiative, and a correction never becomes a reason to tidy anything else.
+
+1. **Find the one record.** List the store, then read the records that could be
+   the one the agent means: by the visitor's name, the property, or the date they
+   named. Only records whose `agent` is the sender's address count, and retired
+   records do not. If exactly one live record matches, continue. If none or
+   several match, **write nothing**: reply naming what you searched and, when
+   there are candidates, list each one by visitor, property, visit date, and
+   record name, and ask which. Never guess which record a correction belongs to.
+2. **Read it** with `record_store_read`. The text you read is the only starting
+   point; you are editing that, not composing a new record.
+3. **Change only what the agent said.** A correction names a field and a new
+   value: `visitor`, `property`, `contact`, `stated_intent`, or `visit_date`.
+   Replace that value with the agent's, exactly as given. Every other line stays
+   as read: `agent`, `follow_ups`, every `drafted` stamp, and the original notes.
+   If the agent says a value is wrong but does not give the new one, change
+   nothing and ask for it in one line.
+4. **Keep the correction as their words.** Below the original notes add a block
+   headed `Agent's correction, verbatim (<today>):` holding what they wrote or
+   said, unedited. The original notes are never deleted or rewritten; the record
+   is the agent's memory, corrections included.
+5. **A changed visit date moves the cadence.** Recompute the three `due` dates
+   from the new `visit_date` per **Cadence**. Each step keeps the `drafted` value
+   it had; a step already drafted is not drafted again.
+6. **A stop.** "Stop following up with the Nguyens" sets every step whose
+   `drafted` is null to `drafted: stopped`. Nothing else on the record changes.
+7. **A withdrawal.** "Scrap that record", "that was a duplicate", "delete
+   Derek": add `status: withdrawn` to the frontmatter, set every undrafted step
+   to `drafted: stopped`, and add the agent's words under the correction heading.
+   The store has no delete, and a withdrawn record stays as the agent's own
+   account of why. Recall and Follow-up read past it.
+8. **A changed name or property changes the record name.** The record name is
+   built from the visit date, the property, and the visitor, so when any of
+   those changes the corrected record gets the new name: write it with
+   `record_store_write` under the new name (no `overwrite`, since that name
+   must not already exist; if it does, stop and ask), then rewrite the old
+   record with `overwrite: true` as a stub holding its original frontmatter
+   plus `status: superseded` and `superseded_by: <new record name>`, with
+   every undrafted step set to `drafted: stopped`. Two writes, in that order,
+   so a failure between them leaves the old record live rather than lost.
+   When only `contact` or `stated_intent` changes, the name stays and the
+   record is written back in place with `overwrite: true`.
+9. **Read back, then reply.** Read every record you wrote with
+   `record_store_read` before you reply. The reply names the record, and for
+   each field that changed, the old value and the new one, both taken from what
+   you read. For a stop or a withdrawal, say which record and what it now
+   holds. Say which mode you ran.
+
 ## Follow-up (scheduled)
 
 On this turn you touch exactly four tools: `record_store_list`,
@@ -171,8 +237,9 @@ the mailbox on a scheduled turn, not a thread, a message, an inbox listing, or a
 attachment: the send address is already on every record, and a mailbox read
 taints the turn so the send is refused and nothing goes out.
 
-1. List the store and read every record. A step is **due** when `due <= today`
-   and `drafted` is null.
+1. List the store and read every record. A retired record (`status: withdrawn`
+   or `status: superseded`) is skipped whole. A step is **due** when
+   `due <= today` and `drafted` is null.
    Group the due steps by the record's `agent`: each agent gets their own email,
    holding only their own visitors.
 2. For each due step, compose one draft the agent could send to that visitor:
@@ -203,8 +270,8 @@ The cadence is a function of the visit date and nothing else. Three calendar
 steps after the visit date: **day 2, day 7, day 30**. Every visitor gets the same
 three steps. Nothing in the agent's notes, and nothing in `stated_intent`, moves a
 date, adds a step, or removes one. The agent can stop a visitor's follow-ups by
-saying so in an email, in which case set every remaining `drafted` to `stopped`
-and confirm.
+saying so in an email; that is a **Correction**, and it sets every remaining
+`drafted` to `stopped`.
 
 ## What this skill never does
 
@@ -233,5 +300,9 @@ and confirm.
   and the reply names it.
 - Recall: the answer quotes record text and names visit date and property, or
   says there is no record and what was searched.
+- Correction: the one record the agent meant holds their new value and their
+  words under the correction heading, nothing else on it moved, and the reply
+  names the record with each old and new value; or nothing was written and the
+  reply asks which record.
 - Follow-up: the agent's inbox holds one email for the day listing every due
   draft, and each drafted step is stamped in its record.
