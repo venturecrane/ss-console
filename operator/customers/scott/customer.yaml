@@ -180,6 +180,10 @@ scope:
   inbound_allow_from:
     - smdurgan@icloud.com
     - smdurgan@smdurgan.com
+    # Open-house POC tester (real estate broker), added 2026-09-29 by the seat
+    # owner: submits dictated open-house notes and asks recall questions. The
+    # skill scopes recall and follow-up drafts to the sender's own records.
+    - tim@thebrokery.com
 
 # ---- ESCALATION ----
 escalation:
