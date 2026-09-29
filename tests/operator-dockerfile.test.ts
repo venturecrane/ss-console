@@ -1439,7 +1439,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // banned.
     // 314ffec8 -> 430f8129 (2026-09-29, overlay#400 merge commit, ss#2793). The voice
     // note tool hands the transcriber a path with the recording's real extension.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="430f8129147f04f1cf31acfe599df07951ed870f"')
+    // 430f8129 -> 8ecdf371 (2026-09-29, overlay#399 merge commit, Option B). The output
+    // checklist gate on emails, file notes and Word documents; a withheld staff
+    // message produces a notice, never silence; update_memo is classified.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="8ecdf371bae6b853f9582ea1055ad1397f32f94f"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

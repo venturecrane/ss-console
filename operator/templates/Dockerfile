@@ -1080,7 +1080,14 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # hands the transcriber a path with the recording's real extension; the spool
 # stores bytes as .bin, which Hermes refuses by extension (ss#2793). No
 # tracked twin moves.
-ARG OVERLAY_REF="430f8129147f04f1cf31acfe599df07951ed870f"
+# 2026-09-29e (8ecdf371, the overlay #399 merge commit). The output checklist:
+# an Operator email, file note or Word document that carries a UTC clock, an
+# internal id or a table is refused with a remedy; a staff message refused three
+# times is withheld and the same people get a fixed notice instead of silence;
+# an approved out-of-band send meets the same scans; mcp_smokeball_update_memo
+# is classified (ss-console Option B, PRs #2991 #2992 #2993). No tracked twin
+# moves (the casework twin was carried and then reverted inside the PR).
+ARG OVERLAY_REF="8ecdf371bae6b853f9582ea1055ad1397f32f94f"
 
 ARG CUSTOMER_SLUG=customer-zero
 
