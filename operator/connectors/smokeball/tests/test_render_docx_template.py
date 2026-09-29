@@ -365,10 +365,47 @@ def test_render_shows_unsupported_constructs_rather_than_dropping_them() -> None
     """A construct this renderer does not understand is shown to the reader
     verbatim. Silent loss in a document an attorney reviews is the one
     unacceptable failure."""
-    markdown = "#### Deep heading\n\n| Provider | Dates |\n\n---\n\n> quoted line\n"
+    markdown = "#### Deep heading\n\n---\n\n> quoted line\n"
     text = _docx_text(render_markdown_to_docx(markdown))
-    for construct in ("#### Deep heading", "| Provider | Dates |", "---", "> quoted line"):
+    for construct in ("#### Deep heading", "---", "> quoted line"):
         assert construct in text
+
+
+def test_a_pipe_table_renders_as_a_word_table_with_every_cell() -> None:
+    """2026-09-28: a finalized exhibit list's court caption reached the pilot
+    matter as twelve literal pipes. A caption is a table; it must be one."""
+    import io
+
+    from docx import Document
+
+    markdown = (
+        "| James Doe, Plaintiff | Case No. 25STCV00000 |\n"
+        "| --- | --- |\n"
+        "| v. Acme Freight, Defendant | Department 22 |\n"
+        "| Superior Court of California | |\n"
+        "\n"
+        "PLAINTIFF'S EXHIBIT LIST\n"
+    )
+    blob = render_markdown_to_docx(markdown)
+    doc = Document(io.BytesIO(blob))
+    assert len(doc.tables) == 1
+    cells = [[c.text for c in row.cells] for row in doc.tables[0].rows]
+    assert cells == [
+        ["James Doe, Plaintiff", "Case No. 25STCV00000"],
+        ["v. Acme Freight, Defendant", "Department 22"],
+        ["Superior Court of California", ""],
+    ]
+    assert not any("|" in p.text for p in doc.paragraphs)
+    assert "PLAINTIFF'S EXHIBIT LIST" in [p.text for p in doc.paragraphs]
+
+
+def test_an_escaped_pipe_stays_inside_its_cell() -> None:
+    import io
+
+    from docx import Document
+
+    doc = Document(io.BytesIO(render_markdown_to_docx("| a \\| b | c |\n")))
+    assert [c.text for c in doc.tables[0].rows[0].cells] == ["a | b", "c"]
 
 
 # ---- The tool: upload shape + return shape ---------------------------------
