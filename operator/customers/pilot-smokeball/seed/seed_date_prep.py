@@ -53,6 +53,17 @@ DATE_PREP_EVENTS: dict[str, dict] = {
         "timeZone": "America/Los_Angeles",
         "location": "Department 22",
     },
+    # Added 2026-09-28 (fourth fresh date): proves the caption renders as a
+    # real Word table (#2976) on a finalized witness list. 2026-PI-101 has no
+    # overdue open task and no other date in the window.
+    "trial-readiness-conference-alvarez": {
+        "matter": "mva-alvarez",
+        "subject": "Trial Readiness Conference",
+        "startTime": "2026-10-07T16:00:00Z",  # 9:00 a.m. Pacific
+        "endTime": "2026-10-07T17:00:00Z",
+        "timeZone": "America/Los_Angeles",
+        "location": "Department 31",
+    },
 }
 
 
@@ -109,6 +120,27 @@ def _exhibit_list_whitfield() -> list[str]:
     ]
 
 
+def _witness_list_alvarez_mva() -> list[str]:
+    return [
+        "SUPERIOR COURT OF CALIFORNIA, COUNTY OF LOS ANGELES",
+        "",
+        "Maria Alvarez, Plaintiff,",
+        "v.",
+        "Kenneth Draper, Defendant.",
+        "",
+        "Case No. 24STCV18223",
+        "Department 31",
+        "",
+        "PLAINTIFF'S TRIAL WITNESS LIST (DRAFT)",
+        "",
+        "1. Maria Alvarez, plaintiff",
+        "2. Officer R. Chavez, investigating officer",
+        "3. Dr. Samuel Ikeda, treating chiropractor",
+        "",
+        "DRAFT: confirm Officer Chavez has been subpoenaed before serving.",
+    ]
+
+
 def build_date_prep_documents() -> dict[str, tuple[str, str, list[str]]]:
     """doc_key -> (matter_key, file_name, text lines), the seed_data shape."""
     return {
@@ -126,5 +158,10 @@ def build_date_prep_documents() -> dict[str, tuple[str, str, list[str]]]:
             "liens-whitfield",
             "2026-09-25 Plaintiff MSC Exhibit List (draft) - Whitfield.pdf",
             _exhibit_list_whitfield(),
+        ),
+        "witness-list-draft-alvarez-mva": (
+            "mva-alvarez",
+            "2026-09-26 Plaintiff Trial Witness List (draft) - Alvarez.pdf",
+            _witness_list_alvarez_mva(),
         ),
     }
