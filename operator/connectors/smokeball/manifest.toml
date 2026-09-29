@@ -187,3 +187,16 @@ get_webhook_subscriptions = "read"
 get_event_types = "read"
 create_webhook_subscription = "internal_write"
 create_memo = "internal_write"
+# update_memo (2026-09-29, one file note per routine per matter): PUT over an
+# existing memo on the matter, the same record create_memo writes, read back by
+# id. internal_write for the same reason create_memo is. create_memo itself now
+# updates a routine's note in place (memo_tools.upsert_memo), so both tool names
+# witness a prep step (workspace_broker/casework_ledger.py STEP_WITNESS_TOOLS).
+#
+# COORDINATED CHANGE: hermes-smd-overlay shared/action_classes.py must carry
+# mcp_smokeball_update_memo = ActionClass.INTERNAL_WRITE, and the overlay's
+# memo gates (identifier provenance, fabrication markers, output checklist)
+# must treat it as they treat mcp_smokeball_create_memo, shipped by the
+# OVERLAY_REF bump in the same change. An unclassified tool fails the seat's
+# boot classification probe, so this entry never lands ahead of the overlay.
+update_memo = "internal_write"

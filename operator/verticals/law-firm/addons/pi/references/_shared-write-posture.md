@@ -93,14 +93,33 @@ every skill's `references/output-format.md`:
 - **One note per routine per matter.** The note opens with the header line.
   `<Routine name>` is this skill's label in the seat's `routine_names` map (the
   firm's own words for the routine); `<localDate>` is today's date in the firm's time
-  zone, written the way the firm writes a date (Sep 29, 2026). The connector finds
-  the routine's existing note on the matter by that header and updates it in place;
-  when nothing changed it writes nothing new and returns `unchanged: true`, which is
-  a success, never a failure to report.
+  zone, written the way the firm writes a date (Sep 29, 2026). Call `create_memo`
+  every run; never look for the old note first. The connector finds the routine's
+  latest `[Operator]` note on the matter by that header's routine name and updates it
+  in place, so the matter holds one note per routine:
+  - **Nothing changed:** only the note's "as of" date moves to today, and the result
+    says `unchanged: true`. That is a success; report it as "checked, nothing new",
+    never as a failure and never by writing again. A date that stops moving is how a
+    person sees the routine stopped.
+  - **Something changed:** the note's lines are replaced with the new ones, and the
+    note keeps a short `Previously (<date>): <old first line>` trail (the last three)
+    so the firm can see what it said before. The result says `updated: true`.
+  - **No note yet:** a new one is written (`created: true`).
+  - **Dedup keys a skill's own output-format names** (`fileId <id> recorded`, the
+    `op-mmou:` change key, the chronology's `Package job: ...; covered document ids:`
+    line) are kept on every update, so a later run still finds them in the note.
+
+  A note with no header is written as a new note every time; use that only for a
+  one-off record, never for a routine. `update_memo(matter_id, memo_id, text)`
+  replaces a particular note whose id you hold, under the same rules; a routine never
+  needs it.
+
 - **Plain text.** No `>` quote marks, no `**`, no `#`, no tables, no bullets inside
   the note. At most 15 lines. Anything longer, and any table or list of exhibits or
   witnesses, is a Word document filed with `render_docx_draft`, and the note names
-  the file.
+  the file. The connector enforces this: it removes `#`, `>`, `**`, backticks and
+  bullet marks, numbers a list 1, 2, 3, and refuses a note holding a table with that
+  remedy.
 - **Times and dates are the firm's.** A court time is the event's `localTime` on its
   `localDate` ("Oct 6 at 9:30 a.m."), a task's day is its `localDueDate`; never a
   `startTime` or `dueDate`, which are UTC.

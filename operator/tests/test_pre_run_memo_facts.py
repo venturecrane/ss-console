@@ -120,6 +120,23 @@ def test_motion_tracker_gets_the_day_of_its_own_latest_surface() -> None:
     assert gate.derive_matter_facts("motion-calendar-tracker", payload) == {"last_surface": "2026-09-14"}
 
 
+def test_a_note_updated_in_place_surfaces_on_its_last_update_day() -> None:
+    # Since 2026-09-29 a routine's note is updated in place (connector
+    # memo_tools.upsert_memo): its createdDate is the FIRST surface, and the
+    # latest is max(createdDate, lastUpdated).
+    gate = _load_gate()
+    note = "[Operator] Motion calendar as of 2026-09-28\nMotion calendar assembled: 1 hearing."
+    payload = {
+        "value": [
+            memo(id="m1", createdDate="2026-09-01T09:00:00Z", lastUpdated="2026-09-28T15:00:00Z", plainText=note),
+            memo(id="m2", createdDate="2026-09-14T09:00:00Z", plainText="[Operator] Motion calendar assembled for ..."),
+        ]
+    }
+    assert gate.derive_matter_facts("motion-calendar-tracker", payload) == {"last_surface": "2026-09-28"}
+    assert gate._memo_day({"createdDate": "2026-09-20T00:00:00Z", "lastUpdated": "garbage"}) == "2026-09-20"
+    assert gate._memo_day({"lastUpdated": "2026-09-21T00:00:00Z"}) == "2026-09-21"
+
+
 def test_motion_tracker_reports_no_prior_surface_as_none() -> None:
     gate = _load_gate()
     payload = {

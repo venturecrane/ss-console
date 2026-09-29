@@ -255,6 +255,16 @@ def test_a_step_ran_needs_this_sessions_memo_and_then_a_mention(tmp_path: Path) 
     assert not cl.needs_mention(cl.derive_state(_rows(broker))[key])
 
 
+def test_an_update_memo_call_also_witnesses_a_step(tmp_path: Path) -> None:
+    # A routine's note is updated in place (memo_tools.upsert_memo); the
+    # explicit update_memo tool is the same write under a second name.
+    broker = _broker(tmp_path)
+    meta = {"tool": "mcp_smokeball_update_memo", "outcome": "ok", "tool_call_id": "toolu_upd", "session_id": SESSION}
+    _insert(broker, "TOOL_CALL_COMPLETED", meta)
+    _append(broker, _step_ran(tool_call_id="toolu_upd"))
+    assert cl.WITNESS_TOOLS["step_ran"] == ("mcp_smokeball_create_memo", "mcp_smokeball_update_memo")
+
+
 def test_a_step_ran_is_only_a_handles_step_on_a_date(tmp_path: Path) -> None:
     broker = _broker(tmp_path)
     _memo(broker)

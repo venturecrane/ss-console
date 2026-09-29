@@ -68,6 +68,7 @@ EXPECTED_TOOLS = {
     "get_event_types",
     "create_webhook_subscription",
     "create_memo",
+    "update_memo",
     "render_docx_template",
     "render_docx_draft",
 }
@@ -130,6 +131,8 @@ def test_write_surface_is_memo_document_and_deadline_engine() -> None:
     writes = {t: c for t, c in m.tool_classes.items() if c != "read"}
     assert writes == {
         "create_memo": "internal_write",
+        # The same file note, updated in place (memo_tools.py).
+        "update_memo": "internal_write",
         "create_webhook_subscription": "internal_write",
         "add_file": "internal_write",
         "file_attachment_to_matter": "internal_write",

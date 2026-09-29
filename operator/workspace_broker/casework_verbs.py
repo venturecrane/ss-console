@@ -67,7 +67,7 @@ def casework_ledger_path(broker: BrokerContext) -> str | None:
 def update_task_witnessed(audit_db_path: str | None, event: dict[str, Any]) -> bool:
     """True iff the audit log holds a successful call of the tool that backs
     this event kind (``casework_ledger.WITNESS_TOOLS``: update_task for a
-    ``completed``, create_memo for a ``step_ran``) with this event's
+    ``completed``, create_memo or update_memo for a ``step_ran``) with this event's
     ``tool_call_id`` in this event's session.
 
     Same failure posture as the send witness: an audit-disabled broker has no
@@ -102,8 +102,8 @@ def update_task_witnessed(audit_db_path: str | None, event: dict[str, Any]) -> b
             continue
         if not isinstance(meta, dict) or meta.get("tool_call_id") != call_id:
             continue
-        tool = casework_ledger.WITNESS_TOOLS.get(str(event.get("event")), casework_ledger.UPDATE_TASK_TOOL)
-        if meta.get("tool") != tool or meta.get("outcome") != "ok":
+        tools = casework_ledger.WITNESS_TOOLS.get(str(event.get("event")), (casework_ledger.UPDATE_TASK_TOOL,))
+        if meta.get("tool") not in tools or meta.get("outcome") != "ok":
             continue
         if session_id and str(meta.get("session_id") or "").strip() != session_id:
             continue
