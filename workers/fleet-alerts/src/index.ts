@@ -76,6 +76,7 @@ import { notifySendRefusals, type SendRefusedNotification } from './send-refused
 import { getOpenSpecControlKeys, specControlConditions } from './spec-control'
 import { getStaleHolds } from './stale-holds'
 import { tokenExpiryConditions } from './token-expiry'
+import { toolFailingConditions } from './tool-failing'
 import { getOpenWebhookSurfaceKeys, webhookSurfaceConditions } from './webhook-surface'
 import { gatewayLoopConditions, gatewayLoopRedSeconds } from './gateway-loop'
 import { conditionLabel, hardStopDetail } from './conditions'
@@ -175,6 +176,8 @@ export type FleetCondition =
   | `connector_token_expiring:${string}`
   | `spec_control_broken:${string}`
   | `webhook_surface_missing:${string}`
+  // ss#2793 follow-on. Keyed by the watched tool's name. See ./tool-failing.
+  | `tool_failing:${string}`
 
 /** One per-server entry from the seat's connectors map (writer-side ages). */
 export interface ConnectorEntry {
@@ -433,6 +436,7 @@ export function evaluateConditions(
     out.push(...specControlConditions(row, openSpecControlKeys[row.customer_slug]))
     out.push(...webhookSurfaceConditions(row, openWebhookSurfaceKeys[row.customer_slug]))
     out.push(...gatewayLoopConditions(row, loopRed))
+    out.push(...toolFailingConditions(row))
   }
   return out
 }

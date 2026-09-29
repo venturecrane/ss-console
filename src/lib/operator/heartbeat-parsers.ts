@@ -43,6 +43,7 @@ export interface HeartbeatBody {
   send_refusals?: unknown
   send_refusals_last_ts?: unknown
   send_refusals_json?: unknown
+  tool_failures?: unknown
 }
 
 // The breaker ladder vocabulary (overlay shared/cost_breaker.read_stop_state).
@@ -327,6 +328,50 @@ function parseSendRefusalsJson(value: unknown): string | null {
   return json.length > SEND_REFUSAL_MAX_CHARS ? null : json
 }
 
+// ss#2793 follow-on: the watched-tool failure map (overlay
+// shared/heartbeat.count_tool_failures). Keyed by tool name, so the key shape
+// is a python identifier like the webhook-surface map. Same three-tier rule as
+// the connectors map: a structurally-invalid MAP → NULL (nothing this beat is
+// trusted, every open tool_failing alert holds); an entry that cannot supply
+// consecutive_failures is dropped (that tool holds); an EMPTY map is preserved
+// as `{}` because it is the seat's real "watched, nothing ran today".
+//
+// `last_error` is the tool's own refusal text carried from a customer Machine
+// into an ops inbox, so it is bounded here by the receiver, not trusted by size.
+const TOOL_FAILURES_MAX_TOOLS = 32
+const TOOL_FAILURES_TOOL_RE = /^[a-z][a-z0-9_]{0,63}$/
+const TOOL_FAILURES_ERROR_CHARS = 200
+
+function parseToolFailureEntry(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const raw = value as Record<string, unknown>
+  const count = parseNonNegInt(raw.consecutive_failures)
+  if (count === null) return null
+  const entry: Record<string, unknown> = { consecutive_failures: count }
+  for (const field of ['first_error_ts', 'last_error_ts', 'last_ok_ts'] as const) {
+    const ts = parseIsoInstant(raw[field])
+    if (ts !== null) entry[field] = ts
+  }
+  if (typeof raw.last_error === 'string' && raw.last_error.length > 0) {
+    entry.last_error = raw.last_error.slice(0, TOOL_FAILURES_ERROR_CHARS)
+  }
+  return entry
+}
+
+function parseToolFailuresJson(value: unknown): string | null {
+  if (value === undefined) return null
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const entries = Object.entries(value as Record<string, unknown>)
+  if (entries.length > TOOL_FAILURES_MAX_TOOLS) return null
+  const parsed: Record<string, unknown> = {}
+  for (const [tool, raw] of entries) {
+    if (!TOOL_FAILURES_TOOL_RE.test(tool)) continue
+    const entry = parseToolFailureEntry(raw)
+    if (entry !== null) parsed[tool] = entry
+  }
+  return JSON.stringify(parsed)
+}
+
 /**
  * Every alert-driving field, parsed-not-cast.
  *
@@ -390,6 +435,11 @@ export function parseObservability(body: HeartbeatBody) {
     sendRefusals: parseNonNegInt(body.send_refusals),
     sendRefusalsLastTs: parseIsoInstant(body.send_refusals_last_ts),
     sendRefusalsJson: parseSendRefusalsJson(body.send_refusals_json),
+    // ss#2793 follow-on: per watched tool, the run of consecutive failures at
+    // its newest call. Map-shaped like connectors, and stored the same way
+    // (plain overwrite, NULL = hold): a zero entry resolves, an absent key
+    // holds, and a seat that cannot read its ledger omits the field.
+    toolFailuresJson: parseToolFailuresJson(body.tool_failures),
   }
 }
 

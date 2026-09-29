@@ -34,6 +34,7 @@ import {
   CONNECTOR_TOKEN_EXPIRING_PREFIX,
   EDGE_DOWN_CONDITION,
   SPEC_CONTROL_BROKEN_PREFIX,
+  TOOL_FAILING_PREFIX,
   WEBHOOK_SURFACE_MISSING_PREFIX,
 } from './conditions'
 import type { StaleHold } from './index'
@@ -95,6 +96,13 @@ export const STALE_HOLDS_SQL = `SELECT s.customer_slug AS customer_slug, s.condi
             OR (s.condition = 'gateway_restarted' AND f.gateway_restarts_last_hour IS NULL)
             OR (s.condition = 'gateway_supervisor_refusing' AND f.gateway_supervisor_state IS NULL)
             OR (s.condition = 'gateway_supervisor_inert' AND f.gateway_supervisor_state IS NULL)
+            -- ss#2793 follow-on: a watched-tool alert strands when the map
+            -- is NULL (the seat cannot read its ledger) OR the tool's key is
+            -- gone from it: the run aged out of the seat's window without a
+            -- success, so nothing will ever resolve it. Same clause shape as
+            -- the connector map, for the same reason. (The prefix is bound,
+            -- never written here; see ./conditions.)
+            OR ${strandedKeyClause('tool_failures_json')}
             -- ss#2547 has NO clause here on purpose. send_refused is
             -- event-shaped: its row is written with status='resolved' the
             -- moment it pages and is never open, so the s.status = 'open'
@@ -121,6 +129,8 @@ export const STALE_HOLDS_BINDINGS: readonly string[] = [
   CONNECTOR_TOKEN_EXPIRING_PREFIX,
   SPEC_CONTROL_BROKEN_PREFIX,
   WEBHOOK_SURFACE_MISSING_PREFIX,
+  TOOL_FAILING_PREFIX,
+  TOOL_FAILING_PREFIX,
   EDGE_DOWN_CONDITION,
 ]
 
