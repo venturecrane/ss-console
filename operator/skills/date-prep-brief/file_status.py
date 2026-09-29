@@ -250,6 +250,9 @@ def newest_record(provider: str, files: list[dict]) -> str | None:
     return max(days) if days else None
 
 
+_UPDATED = ("lastUpdated", "LastUpdated", "updatedDate", "dateModified")
+
+
 def memo_markers(memos: list) -> dict[str, str]:
     """``{marker kind: latest day}`` over ``[Operator]`` memos. The body is read
     and dropped; only the kind and the day are returned."""
@@ -258,7 +261,10 @@ def memo_markers(memos: list) -> dict[str, str]:
         if not isinstance(memo, dict):
             continue
         body = _first(memo, ("plainText", "PlainText", "text", "Text")) or ""
-        day = _day(memo, ("createdDate", "CreatedDate", "dateCreated", "created"))
+        # max(createdDate, lastUpdated): a routine's note is updated in place
+        # (connector memo_tools, 2026-09-29), so its creation day is its first run.
+        stamps = [_day(memo, ("createdDate", "CreatedDate", "dateCreated", "created")), _day(memo, _UPDATED)]
+        day = max((d for d in stamps if d), default=None)
         if day is None or not body.lstrip().startswith(PROVENANCE_MARK):
             continue
         lowered = body.lower()

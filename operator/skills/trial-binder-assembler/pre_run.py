@@ -321,14 +321,27 @@ def _memo_id(memo: dict) -> str | None:
     return None
 
 
+#: A memo's creation and last-update stamps, each under the spellings seen.
+_MEMO_DAY_KEYS = (
+    ("createdDate", "CreatedDate", "dateCreated", "created"),
+    ("lastUpdated", "LastUpdated", "updatedDate", "dateModified"),
+)
+
+
 def _memo_day(memo: dict) -> str | None:
-    """The memo's creation DAY. The day is what a surface renders and what the
-    identifier gate reads as a date; a timestamp would be neither."""
-    for key in ("createdDate", "CreatedDate", "dateCreated", "created"):
-        value = memo.get(key)
-        if isinstance(value, str) and _is_iso_day(value[:10]):
-            return value[:10]
-    return None
+    """The memo's latest DAY: ``max(createdDate, lastUpdated)``. A routine's note
+    is updated in place since 2026-09-29 (the connector's ``memo_tools``), so its
+    creation day is its first surface, not its last. With in-place notes,
+    last_surface is the last day the routine checked the matter, including a day
+    it found nothing new, which is the intended meaning. The day is what a surface
+    renders and what the identifier gate reads as a date; a timestamp would be
+    neither."""
+    days = []
+    for keys in _MEMO_DAY_KEYS:
+        value = next((memo.get(k) for k in keys if isinstance(memo.get(k), str)), None)
+        if value is not None and _is_iso_day(value[:10]):
+            days.append(value[:10])
+    return max(days) if days else None
 
 
 def _is_operator_memo(body: str) -> bool:

@@ -38,6 +38,8 @@ _BACKOFF = (0.5, 1.5)
 
 _WS = re.compile(r"\s+")
 
+_MISMATCH = "read back by id; the stored text differs from what was sent"
+
 
 def _norm(text: Any) -> str:
     return _WS.sub(" ", text).strip() if isinstance(text, str) else ""
@@ -52,11 +54,34 @@ def post_and_confirm(client: Any, matter_id: str, body: str, *, sleep: Any = tim
     memo_id = resp.get("id") if isinstance(resp, dict) else None
     if not memo_id:
         return _with(resp, "unknown", "the write returned no memo id to read back")
+    confirmed, detail = _readback(client, matter_id, memo_id, body, sleep=sleep)
+    return _with(resp, confirmed, detail)
+
+
+def _readback(
+    client: Any,
+    matter_id: str,
+    memo_id: str,
+    body: str,
+    *,
+    sleep: Any = time.sleep,
+    attempts: int = _ATTEMPTS,
+    backoff: tuple = _BACKOFF,
+    retry_mismatch: bool = False,
+) -> tuple[Any, str]:
+    """Read memo ``memo_id`` back until its ``plainText`` matches ``body``.
+
+    ``(True, detail)`` on a match, ``(False, detail)`` on a proven mismatch,
+    ``("unknown", detail)`` when no read-back completed. Shared by the create
+    (POST) and the in-place update (PUT, ``memo_tools.put_and_confirm``), which
+    passes a longer backoff and ``retry_mismatch`` because the vendor applies a
+    PUT asynchronously: until it lands, the read returns the OLD text, which is
+    lag, not a mismatch. A mismatch that outlasts every attempt is ``False``."""
     want = _norm(body)
     last = "no read-back attempted"
-    for attempt in range(_ATTEMPTS):
+    for attempt in range(attempts):
         if attempt:
-            sleep(_BACKOFF[min(attempt - 1, len(_BACKOFF) - 1)])
+            sleep(backoff[min(attempt - 1, len(backoff) - 1)])
         try:
             memo = client.get(f"/matters/{matter_id}/memos/{memo_id}")
         except Exception as exc:  # noqa: BLE001 - a failed read is "unknown", never a failed write
@@ -70,9 +95,11 @@ def post_and_confirm(client: Any, matter_id: str, body: str, *, sleep: Any = tim
             last = "read-back carried no plainText"
             continue
         if got == want:
-            return _with(resp, True, "read back by id; text matches")
-        return _with(resp, False, "read back by id; the stored text differs from what was sent")
-    return _with(resp, "unknown", last)
+            return True, "read back by id; text matches"
+        if not retry_mismatch:
+            return False, _MISMATCH
+        last = _MISMATCH
+    return (False if last == _MISMATCH else "unknown"), last
 
 
 def _with(resp: Any, confirmed: Any, detail: str) -> Any:

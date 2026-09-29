@@ -208,8 +208,11 @@ delta from this ledger. It follows the pack write posture
   `get_memos_on_matter(matter_id)` and report the ledger written only once the read
   shows it. If the read does not show it, surface the failure plainly; never claim a
   write you cannot see.
-- **Append-only.** `create_memo` has no update tool, so a new ledger entry supersedes
-  nothing and deletes nothing; the ledger is the list of entries, oldest first.
+- **One ledger note, every job kept.** The ledger opens with the file-note header, so
+  `create_memo` updates the matter's one ledger note in place. The connector carries
+  every earlier `Package job: ...; covered document ids: ...` line forward on each
+  update, so no job's covered set is ever lost; the ledger is those lines, oldest
+  first. UPDATE reads all of them.
 - **No move, no delete** of any document the firm did not direct. Never `delete_file`.
 
 ## How it works (the request path)

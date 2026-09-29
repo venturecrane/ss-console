@@ -145,6 +145,19 @@ def test_plain_headed_notes_still_mark_their_step():
     }
 
 
+def test_a_note_updated_in_place_marks_its_step_on_the_update_day():
+    # The connector updates a routine's note in place (memo_tools.upsert_memo),
+    # so the step's latest day is max(createdDate, lastUpdated).
+    memos = [
+        {
+            "plainText": "[Operator] Motion calendar as of Sep 28, 2026\nMotion calendar assembled: 1 motions filed.\nNothing to do.",
+            "createdDate": "2026-09-01T12:00:00Z",
+            "lastUpdated": "2026-09-28T15:00:00Z",
+        },
+    ]
+    assert file_status.memo_markers(memos) == {"motion_calendar": "2026-09-28"}
+
+
 def test_an_enriched_event_uses_the_connectors_local_day_and_time():
     # An event the connector already enriched carries its local day and clock;
     # the brief uses them even where its own recompute cannot (no zone here).

@@ -50,7 +50,8 @@ from .parties import (
     _role_contact_id,
 )
 from .task_update import PROVENANCE_MARK as _PROVENANCE_MARK
-from .task_update import MatterReferenceMismatch, post_and_confirm, verify_unless_digest_home
+from .memo_tools import _slim_memo, _slim_memos, upsert_memo  # noqa: F401 - _slim_memo re-exported for tests
+from .task_update import MatterReferenceMismatch, verify_unless_digest_home
 from .task_update import drop_probe_tasks as _drop_probe_tasks
 from .task_update import merge_task_update
 
@@ -1866,35 +1867,8 @@ def render_docx_draft(
 
 
 # ---- Memos ----------------------------------------------------------------
-#
-# Lean lossless representation (context-cost fix): Smokeball returns BOTH an RTF
-# `text` rendering AND a `plainText` rendering of every memo — the same content
-# twice, with the RTF markup adding ~half the payload and nothing the agent needs
-# (it reads plainText). get_memos_on_matter is the seat's single biggest retained
-# tool-result (a full memo list is ~20k tokens and is re-read many times a
-# session), so dropping the redundant rendering is a large, LOSSLESS per-turn
-# context reduction. This is instance #1 of the general connector convention:
-# return the leanest lossless form, never a second copy of the same content.
-
-
-def _slim_memo(memo: Any) -> Any:
-    """Drop the redundant RTF ``text`` field when ``plainText`` carries the same
-    content. LOSSLESS + fail-safe: keep ``text`` whenever ``plainText`` is
-    absent/empty, so a memo can never lose its only body."""
-    if isinstance(memo, dict) and (memo.get("plainText") or "").strip() and "text" in memo:
-        return {k: v for k, v in memo.items() if k != "text"}
-    return memo
-
-
-def _slim_memos(resp: Any) -> Any:
-    """Apply :func:`_slim_memo` across a memos HATEOAS envelope (or bare list).
-    Best-effort: an unexpected shape is returned untouched."""
-    if isinstance(resp, dict) and isinstance(resp.get("value"), list):
-        resp["value"] = [_slim_memo(m) for m in resp["value"]]
-        return resp
-    if isinstance(resp, list):
-        return [_slim_memo(m) for m in resp]
-    return resp
+# The lossless memo slimming (_slim_memo, _slim_memos) and the file-note write
+# (upsert_memo) live in memo_tools.py; imported above.
 
 
 @server.tool()
@@ -1916,17 +1890,20 @@ def get_memos_on_matter(matter_id: str, limit: int = 500, offset: int = 0) -> An
 
 @server.tool()
 def create_memo(matter_id: str, text: str) -> Any:
-    """Create an internal-log memo on a matter; classified INTERNAL_WRITE. The
-    result carries ``confirmed``: true when the memo was read back by id and
-    matches, false on a proven mismatch, "unknown" when it could not be read
-    back (do NOT re-create then; report the id as unconfirmed).
+    """Write a file note on a matter; classified INTERNAL_WRITE. The result
+    carries ``confirmed``: true when read back by id and matching, false on a
+    proven mismatch, "unknown" when it could not be read back (do NOT write it
+    again then; report the id as unconfirmed).
 
-    Refuses if ``text`` cites a matter number other than ``matter_id``'s own, and
-    stamps the body so a human reading the matter can tell machine from person.
-    See the write-side verification block."""
+    A note opening ``[Operator] <Routine name> as of <day>`` is the routine's ONE
+    note on the matter: the existing one is updated in place (``updated: true``),
+    and when nothing changed only its day moves (``unchanged: true``, a success).
+    Written plain; a table is refused (file it with ``render_docx_draft`` and
+    name the file in the note). Refuses a text citing another matter's number.
+    See memo_tools.py and the write-side verification block."""
     client = _get_client()
     verify_unless_digest_home(_verify_matter_reference, client, matter_id, text)
-    return post_and_confirm(client, matter_id, _stamp(text))  # self-confirming write (memo_confirm.py)
+    return upsert_memo(client, matter_id, text)
 
 
 # ---- Trust / bank accounts (READS ONLY — fund movement is hard-banned) -----
