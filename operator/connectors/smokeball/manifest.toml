@@ -190,8 +190,9 @@ create_memo = "internal_write"
 # update_memo (2026-09-29, one file note per routine per matter): PUT over an
 # existing memo on the matter, the same record create_memo writes, read back by
 # id. internal_write for the same reason create_memo is. create_memo itself now
-# updates a routine's note in place (memo_tools.upsert_memo), so both tool names
-# witness a prep step (workspace_broker/casework_ledger.py STEP_WITNESS_TOOLS).
+# updates a routine's note in place (memo_tools.upsert_memo), so only create_memo
+# witnesses a prep step (workspace_broker/casework_ledger.py STEP_WITNESS_TOOL):
+# an update_memo correction to an unrelated note must never count as a step run.
 #
 # COORDINATED CHANGE: hermes-smd-overlay shared/action_classes.py must carry
 # mcp_smokeball_update_memo = ActionClass.INTERNAL_WRITE, and the overlay's

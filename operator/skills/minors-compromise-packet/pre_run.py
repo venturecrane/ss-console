@@ -331,7 +331,9 @@ _MEMO_DAY_KEYS = (
 def _memo_day(memo: dict) -> str | None:
     """The memo's latest DAY: ``max(createdDate, lastUpdated)``. A routine's note
     is updated in place since 2026-09-29 (the connector's ``memo_tools``), so its
-    creation day is its first surface, not its last. The day is what a surface
+    creation day is its first surface, not its last. With in-place notes,
+    last_surface is the last day the routine checked the matter, including a day
+    it found nothing new, which is the intended meaning. The day is what a surface
     renders and what the identifier gate reads as a date; a timestamp would be
     neither."""
     days = []

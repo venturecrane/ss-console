@@ -118,6 +118,15 @@ def test_a_bare_stamp_line_joins_the_header() -> None:
     )
 
 
+def test_a_bare_stamp_never_joins_a_marker_line() -> None:
+    # matter-memo-on-update can write the change key straight after the stamp;
+    # joining them would destroy the key and the note would lose its dedup.
+    text = f"[Operator]\nop-mmou:{GUID}:638609288928990639\nMatter updated."
+    out = mt.normalize_memo_text(text)
+    assert out.splitlines() == ["[Operator]", f"op-mmou:{GUID}:638609288928990639", "Matter updated."]
+    assert mt.memo_header(out) is None
+
+
 def test_header_needs_the_stamp() -> None:
     assert mt.memo_header("Motion calendar as of 2026-09-29") is None
     assert mt.memo_header(OLD) == ("Motion calendar", "2026-09-28")

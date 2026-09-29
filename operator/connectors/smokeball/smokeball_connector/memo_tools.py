@@ -126,12 +126,14 @@ def _collapse_blanks(lines: list[str]) -> list[str]:
 
 def _join_bare_stamp(lines: list[str]) -> list[str]:
     """``[Operator]`` alone on the first line joins the next non-empty line, so
-    the header is always one line (the one a later run matches)."""
+    the header is always one line (the one a later run matches). Never onto a
+    marker line: ``[Operator] op-mmou:...`` would be neither a marker nor a
+    header, and the dedup key would be lost."""
     first = next((i for i, line in enumerate(lines) if line.strip()), None)
     if first is None or lines[first].strip() != PROVENANCE_MARK:
         return lines
     rest = next((i for i in range(first + 1, len(lines)) if lines[i].strip()), None)
-    if rest is None:
+    if rest is None or is_marker(lines[rest]):
         return lines
     return [*lines[:first], f"{PROVENANCE_MARK} {lines[rest].strip()}", *lines[rest + 1 :]]
 
