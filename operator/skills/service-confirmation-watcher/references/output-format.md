@@ -32,11 +32,11 @@ Every capture is keyed to `(matter, defendant, service-confirmation)`.
 > (POS located). Confirm the defendant, served date, and method so the
 > responsive-pleading deadline is set. I have not calendared it.
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Captured the service confirmation on matter <id> for <defendant>: served <date> by
-> <method>, read off the POS. fileId <...> recorded. Surfaced to <attorney> to confirm.
-> Responsive-pleading deadline owned by the rules engine / confirmed by hand; not computed here.
+[Operator] <Routine name> as of <localDate>
+Service on <defendant> confirmed on matter <matter number>: served <date> by <method>, read off the proof of service (fileId <file id> recorded). The responsive pleading deadline comes from the rules engine or is confirmed by hand, not computed here.
+<Attorney> to confirm the service date and method.
 ```
 
 ## Shape B - Multiple defendants, different service dates (one capture per defendant)

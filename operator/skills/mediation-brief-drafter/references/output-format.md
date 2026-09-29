@@ -4,14 +4,32 @@ Every run is keyed to one `(matter, mediation date)` and one skeleton. Every
 output goes to the **requesting attorney, internal only**. Nothing here is ever
 addressed to a mediator, a provider, opposing counsel, or a client.
 
-The brief text lives in the matter (`create_memo` or a staged document, where
-citations belong). The email to the attorney is a citation-free pointer, per the
-law seat delivery rule. The brief body is never pasted into an email.
+The brief is a Word document filed in the matter with
+`mcp_smokeball_render_docx_draft(..., document_class="mediation_brief")`, where
+citations belong; one file note names it. The email to the attorney is a
+citation-free pointer, per the law seat delivery rule. The brief body is never pasted
+into an email or a note.
 
 ## Shape A - Draft delivered (the main path)
 
+The brief, eight sections per the skeleton, is the `draft_markdown` of
+`render_docx_draft`, confirmed with `get_file` and a `read_document` spot check. File
+name: "<today> Mediation Brief - <case name> (draft).docx". Then one file note
+(`create_memo`; act on its `confirmed` field):
+
 ```markdown
-# Mediation Brief (DRAFT) - <case name> - matter <id> - mediation <date> - YYYY-MM-DD
+## File note (create_memo)
+
+[Operator] <Routine name> as of <localDate>
+Mediation brief for the <date> mediation drafted and filed as <file name>: <n> gaps marked in place, <n> decisions reserved for the attorney, <n> documents held out for privilege review, <n> characterizations flagged.
+<Requesting attorney> to review the draft and decide the reserved points before the brief goes anywhere.
+```
+
+The run's report to the attorney (this run's output, never the note) carries the
+lists:
+
+```markdown
+# Mediation Brief (DRAFT) - <case name> - matter <matter number> - mediation <date> - YYYY-MM-DD
 
 **Skeleton:** <firm's authored skeleton | SMD default, mediation-brief-skeleton.md>
 **Voice:** <firm voice profile applied | neutral professional register, no voice profile authored on this seat>
@@ -20,9 +38,9 @@ law seat delivery rule. The brief body is never pasted into an email.
 
 ## The draft
 
-> <the brief, eight sections per the skeleton, confidentiality legend in the caption
-> block, every factual sentence cited, every unfillable marker left visible, every
-> reserved decision left standing>
+In the matter as <file name>: eight sections per the skeleton, confidentiality legend
+in the caption block, every factual sentence cited, every unfillable marker left
+visible, every reserved decision left standing.
 
 ## What was done (itemized)
 

@@ -216,11 +216,13 @@ columns.
    matching request, any pairing that is not unambiguous, any unreadable document: list
    it in the Gaps section (Shape B if it blocks assembly). Never invent the missing
    piece.
-5. **Stage + log** - return the assembled statement as a **draft staged for the
-   attorney to finalize and file**; log the assembly with `create_memo` (what was
-   assembled, from which documents, and the gaps). It does not file it, serve it, or
-   place it as a matter document on its own (a document write is gated and surfaced for
-   confirm, not autonomous).
+5. **File and log** - The assembled artifact is a Word document: file it with
+   `mcp_smokeball_render_docx_draft` (Shape A in `references/output-format.md` is the
+   `draft_markdown`) and confirm it with `get_file` and a `read_document` spot check;
+   the note names the file. Log the assembly with one file note
+   (`create_memo`: what was assembled into which file, and the gaps). The statement is
+   a draft staged for the attorney to finalize; it is never filed with the court or
+   served.
 
 ## Boundaries (never)
 

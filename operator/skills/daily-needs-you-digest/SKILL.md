@@ -187,14 +187,15 @@ Per `references/output-format.md`:
    event within `escalation.refire_days`) renders as a one-line pointer, not a
    full band entry, so the digest and the escalator do not double-hand the reader
    the same item (`references/output-format.md`).
-3. **Attach the training note.** Per `operator/verticals/law-firm/addons/pi/references/_shared-training-output.md` (pack
-   shared): a short note per item on what needs doing, why it matters (the governing
-   rule where the owning step has one), which step owns it, and when to bring the
-   attorney in. Short; explanatory, not advisory.
+3. **Carry the training note in the lines.** Per `operator/verticals/law-firm/addons/pi/references/_shared-training-output.md` (pack
+   shared): each item line names the routine that owns the next step, and the last
+   line says what needs doing first and when to bring the attorney in. Short;
+   explanatory, not advisory; no separate training block.
 4. **Write the digest** to the firm's internal digest home - the matter your
    SOUL's "Digest home" section names (materialized from the seat's authored
-   `digest.home_matter_id`, #1742): the full digest text goes there as one
-   `create_memo`. No imposed default: if your SOUL has no Digest home section,
+   `digest.home_matter_id`, #1742): the digest goes there as one file note
+   (`create_memo`, the header line and plain lines per `references/output-format.md`,
+   at most 15 lines). No imposed default: if your SOUL has no Digest home section,
    the seat has not authored one - the digest exists in this run's output plus
    the heartbeat row, and the run output says so explicitly. Internal only. **Attempt this run's write fresh, every
    run:** a prior run's write failure is history, not this run's truth - never

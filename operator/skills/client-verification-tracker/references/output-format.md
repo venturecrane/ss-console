@@ -39,10 +39,11 @@ Shapes A and C remain the turn's own work, under the templates below.
 > The verification for <plaintiff> / <response-set> is ready. Approve to send it to
 > <signer> by <firm method>. <one-time approval token / bound to this verification>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Verification for <plaintiff>/<response-set> v<version> prepared, routed to <attorney>
-> for approval; not yet sent. Response deadline <date, from the deadline lane>.
+[Operator] <Routine name> as of <localDate>
+Verification for <plaintiff>, <response set> version <version>, prepared and sent to <attorney> for approval; not yet sent to the signer. Response deadline <date>, from the calendar.
+<Attorney> to approve the verification so it can go to the signer.
 ```
 
 ## Shape B - Chase (open, unsigned, authored cadence due, attempt ceiling not yet reached)
@@ -66,9 +67,11 @@ unanswered chase on a ceiling of 3 reads `nudge 3 of 3`.
 > floor-clean per #1878: "complete and return" not "sign", "due date" not
 > "deadline", "the team" not "attorney">
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Verification chase nudge <this attempt> of <escalate_after_attempts> for <plaintiff>/<response-set>; still open. Sent via send_message.
+[Operator] <Routine name> as of <localDate>
+Verification for <plaintiff>, <response set> is still unsigned; reminder <this attempt> of <escalate_after_attempts> sent to the signer.
+Nothing to do.
 
 ## Ledger write (after the send succeeds - see SKILL.md "The escalation ledger")
 
@@ -87,9 +90,11 @@ State-read note: this turn reads matter metadata only (`list_tasks`, `get_files_
 **Decision:** signed verification observed in the matter and matched with confidence
 to <response-set> v<version>; item closed; cadence stopped.
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Verification for <plaintiff>/<response-set> v<version> signed <date>; item closed.
+[Operator] <Routine name> as of <localDate>
+Verification for <plaintiff>, <response set> version <version> signed <date>; item closed.
+Nothing to do.
 
 ## Ledger write (on close)
 

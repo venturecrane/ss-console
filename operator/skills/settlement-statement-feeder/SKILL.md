@@ -188,10 +188,14 @@ Shape B).
 4. **Surface gaps.** Any missing or unconfirmed figure (no authored gross, a lien
    with no final payoff, fee or costs not recorded, funds not yet in trust) is called
    out. A missing core input yields Shape B (cannot assemble the net), never a guess.
-5. **Log internally.** Write the audit and training-output note with `create_memo`,
-   then confirm by reading `get_memos_on_matter` (write-posture rule 1: confirm by
-   read, never assert an unconfirmed write). If the memo cannot be confirmed, surface
-   the write failure rather than claim it logged.
+5. **File and log.** The assembled artifact is a Word document: file it with
+   `mcp_smokeball_render_docx_draft` (Shape A in `references/output-format.md` is the
+   `draft_markdown`) and confirm it with `get_file` and a `read_document` spot check;
+   the note names the file. Then write the file note
+   (`create_memo`: the header line and two plain lines, per `references/output-format.md`)
+   and act on its `confirmed` field (write-posture rule 1: never assert an unconfirmed
+   write). If the note cannot be confirmed, surface the write failure rather than claim
+   it logged.
 6. **Stop at the seam.** The assembled statement is staged for the responsible person
    to verify and execute in Smokeball. The skill never executes, never moves money,
    never sends anything externally.

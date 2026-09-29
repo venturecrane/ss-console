@@ -16,9 +16,11 @@ The decision determines the shape.
 > to complete and return the letter; offers to answer questions with the team;
 > interprets nothing>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Engagement nudge <#> drafted for matter <id>; letter sent <date>, still unsigned.
+[Operator] <Routine name> as of <localDate>
+Engagement letter on matter <matter number>, sent <date>, is still unsigned; reminder <#> drafted.
+Review and send the reminder.
 ```
 
 ## Shape B - Signed (log + stop)
@@ -28,9 +30,11 @@ The decision determines the shape.
 
 **Decision:** signature logged; cadence stopped; matter advances to active.
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Engagement letter for matter <id> signed <signed_date>; chase cadence stopped; matter active.
+[Operator] <Routine name> as of <localDate>
+Engagement letter on matter <matter number> signed <signed date>; reminders stopped and the matter is active.
+Nothing to do.
 ```
 
 ## Shape C - Wait

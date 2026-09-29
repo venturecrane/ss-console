@@ -38,6 +38,7 @@ from .client import SmokeballApiError, SmokeballClient, build_client_from_env
 from .event_update import put_event_update
 from .expense_ledger import drop_deleted as drop_deleted_expenses
 from .library import LOOKUP_FAILED, lookup_matter
+from .local_time import _next_day, enrich_events, enrich_task, enrich_tasks
 from .listing import contact_listing_is_complete as _contact_listing_is_complete
 from .listing import with_listing_completeness
 from .parties import (
@@ -747,7 +748,12 @@ def list_tasks(
     Each item is enriched with ``matterNumber`` and ``matterCaption`` resolved
     from its own ``matter.id`` (best-effort, bounded). Cite those fields — never
     compose a matter number from context; an item without them has no number to
-    cite. See the matter-ref enrichment block."""
+    cite. See the matter-ref enrichment block.
+
+    Each item also carries ``localDueDate`` (YYYY-MM-DD), the firm's day the
+    task is due: ``dueDateOnly`` when set, else ``dueDate`` converted to the
+    firm's zone (``localDueDateSource`` says which). Write ``localDueDate``;
+    never print ``dueDate``, a UTC stamp that can read as the wrong day."""
     client = _get_client()
     resp = client.get(
         "/tasks",
@@ -760,7 +766,7 @@ def list_tasks(
     if not include_probe_artifacts:
         resp = _drop_probe_tasks(resp)
     _attach_matter_refs_to_list(client, resp)
-    return resp
+    return enrich_tasks(resp)
 
 
 @server.tool()
@@ -768,11 +774,12 @@ def get_task(task_id: str) -> Any:
     """Get one task by id.
 
     Enriched with ``matterNumber`` and ``matterCaption`` resolved from the task's
-    own ``matter.id`` (best-effort; absent if the matter cannot be resolved)."""
+    own ``matter.id`` (best-effort; absent if the matter cannot be resolved).
+    Carries ``localDueDate`` like ``list_tasks``: write that, never ``dueDate``."""
     client = _get_client()
     task = client.get(f"/tasks/{task_id}")
     _attach_matter_ref(client, task)
-    return task
+    return enrich_task(task)
 
 
 @server.tool()
@@ -872,7 +879,14 @@ def list_events(
 
     Each item is enriched with ``matterNumber`` and ``matterCaption`` resolved
     from its own ``matter.id`` (best-effort, bounded) — so a dedupe read compares
-    against a resolved number rather than a recomposed one."""
+    against a resolved number rather than a recomposed one.
+
+    Each timed event also carries ``localDate`` (YYYY-MM-DD) and ``localTime``
+    ("9:30 a.m.") in the event's own ``timeZone``. Write those. Never print
+    ``startTime``: it is a UTC clock and reads as the wrong time (a 9:30 a.m.
+    hearing reads 4:30 PM). An all-day event, or one whose zone cannot be
+    resolved, has neither key: write its date from the calendar entry and no
+    time."""
     client = _get_client()
     resp = client.get(
         "/events",
@@ -885,15 +899,7 @@ def list_events(
         Offset=offset,
     )
     _attach_matter_refs_to_list(client, resp)
-    return resp
-
-
-def _next_day(date_str: str) -> str:
-    """YYYY-MM-DD -> the following day's YYYY-MM-DD (all-day span normalization)."""
-    from datetime import date, timedelta
-
-    y, m, d = (int(p) for p in date_str.split("-"))
-    return (date(y, m, d) + timedelta(days=1)).isoformat()
+    return enrich_events(resp)
 
 
 @server.tool()

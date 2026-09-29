@@ -1053,6 +1053,13 @@ try:
 except Exception as exc:
     out["eventsError"] = str(exc)[:300]
 try:
+    from smokeball_connector.local_time import enrich_events, enrich_tasks
+
+    enrich_events(out.get("events"))
+    enrich_tasks(out.get("tasks"))
+except Exception as exc:
+    out["localTimeError"] = str(exc)[:300]
+try:
     budget = int(os.environ.get("SMD_MATTER_LOOKUP_BUDGET", "100"))
     items = []
     for key in ("tasks", "events"):
@@ -1067,8 +1074,11 @@ except Exception as exc:
 print(json.dumps(out, default=str))
 """
 
-_TASK_DATE_KEYS = ("dueDate", "DueDate", "due_date")
-_EVENT_DATE_KEYS = ("startTime", "StartTime", "startDate", "start", "from")
+# Key order is preference: the connector's local day (``localDate``,
+# ``dueDateOnly``/``localDueDate``) comes before the UTC stamp, whose date can
+# be the next day for an afternoon court time in the firm's zone.
+_TASK_DATE_KEYS = ("dueDateOnly", "localDueDate", "dueDate", "DueDate", "due_date")
+_EVENT_DATE_KEYS = ("localDate", "startTime", "StartTime", "startDate", "start", "from")
 _SUBJECT_KEYS = ("subject", "Subject", "name", "Name", "title", "Title")
 
 # Rehearsal/self-test artifacts carry "[SMD-PROBE <stamp>]" at the start of the

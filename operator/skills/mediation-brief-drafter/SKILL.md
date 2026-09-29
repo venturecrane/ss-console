@@ -419,8 +419,9 @@ held_out_file_names, document_class="mediation_brief")`: the tool runs the recor
    list, the NOT IN RECORD list, the ATTORNEY-marker list, and one honest sentence
    from the tool's `formatApplied` (the firm's template, or the starter and why; which
    roles took the template's own styles, and which were formatted inline and so will
-   not follow a later edit to the template). Log the run with `create_memo` and confirm the
-   write by read-back per the pack write posture. The draft is staged for the
+   not follow a later edit to the template). Log the run with one file note (`create_memo`,
+   per `references/output-format.md`: the header line and two plain lines naming the
+   file) and act on its `confirmed` field per the pack write posture. The draft is staged for the
    attorney; it is not filed with any tribunal, not submitted, and not exchanged.
 
 ## Boundaries (never)

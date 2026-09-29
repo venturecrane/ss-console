@@ -15,10 +15,11 @@ in any shape; only holder-stated, attorney-provided, or document-observed amount
 **Source of figure:** <adjuster email | DHCS lien letter in matter | responsible attorney>
 **Decision:** logged as a tracked task (confirm-by <near-term admin date>); confirmed by read.
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> <lien-type> lien for <holder> logged at <amount> (per <source>), status <status>.
-> Amount recorded as stated; not computed. Disbursement not performed (attorney/Smokeball).
+[Operator] <Routine name> as of <localDate>
+<Lien type> lien for <holder> recorded at <amount>, per <source>; status <status>. The amount is recorded as stated, not computed; no funds moved.
+Nothing to do.
 ```
 
 ## Shape B - Chase (open payoff or reduction, cadence due)
@@ -34,9 +35,11 @@ in any shape; only holder-stated, attorney-provided, or document-observed amount
 > <short, professional request for the outstanding payoff figure or reduction
 > response per voice.md - no number stated, no reduction proposed, no consequence invented>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Chase <#> for <holder>/<lien-type>; payoff/reduction still outstanding.
+[Operator] <Routine name> as of <localDate>
+Follow-up <#> to <holder> on the <lien type> lien drafted; the payoff or reduction is still outstanding.
+Review and send the follow-up to <holder>.
 ```
 
 ## Shape C - Ledger snapshot (read only, no write)

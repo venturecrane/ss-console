@@ -408,6 +408,32 @@ def test_parse_pull_clean_tasks_and_events() -> None:
     }
 
 
+def test_parse_pull_prefers_the_firms_local_day() -> None:
+    # A 5 p.m. Pacific hearing is 00:00Z the next day: the connector's
+    # localDate is the court day, and it wins over startTime[:10]. A task's
+    # dueDateOnly / localDueDate wins over its UTC dueDate the same way.
+    raw = {
+        "tasks": {
+            "items": [
+                {"matterId": "m-1", "dueDate": "2026-07-21T03:00:00Z", "localDueDate": "2026-07-20"},
+                {"matterId": "m-3", "dueDate": "2026-07-23T07:00:00Z", "dueDateOnly": "2026-07-22"},
+            ]
+        },
+        "events": {"items": [{"matterId": "m-2", "startTime": "2026-07-10T00:00:00", "localDate": "2026-07-09"}]},
+    }
+    deadlines, problem, _probe = parse_pull(raw)
+    assert problem is None
+    assert {(d.matter_id, d.authored_date.isoformat()) for d in deadlines} == {
+        ("m-1", "2026-07-20"),
+        ("m-3", "2026-07-22"),
+        ("m-2", "2026-07-09"),
+    }
+
+
+def test_pull_snippet_enriches_with_the_connectors_local_time() -> None:
+    assert "from smokeball_connector.local_time import enrich_events, enrich_tasks" in _pre_run._PULL_SNIPPET
+
+
 def test_parse_pull_reads_nested_matter_link_object() -> None:
     # The live Smokeball /tasks payload nests the matter as a link object —
     # the flat-key miss put "unknown-matter" (or worse, the task's own id via

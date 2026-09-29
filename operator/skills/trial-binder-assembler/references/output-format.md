@@ -8,6 +8,15 @@ surfaced, never presented as computed-final.
 
 ## Shape A - Assembled binder index + captured deadlines (staged for attorney finalization)
 
+The block below, down to its File note, is the `draft_markdown` of
+`mcp_smokeball_render_docx_draft(matter_id, file_name, draft_markdown, folder_id)`: a Word
+document filed in the matter (omit `document_class`; tables belong here, never in a
+note), named "<today> Trial Binder Index (draft) - <Client>" (the tool adds `.docx`) and confirmed
+with `get_file` and a `read_document` spot check. It is never written into a note and
+never filed as text with `add_file`. A `refusals` list back means nothing was filed: fix
+what it names and call again. The File note is the separate `create_memo`, and it
+names the file.
+
 ```markdown
 # Trial Binder - <matter descriptor> - matter <id> - trial <date, court-set> - YYYY-MM-DD
 
@@ -54,12 +63,11 @@ _Tracking tasks opened/updated for the captured deadlines (create_task); the cou
 unreadable exhibit; a missing/unreadable trial-setting order or trial date; the
 firm's PDF tool not configured at connect - listed, never guessed>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Trial binder index assembled for matter <id> from <N> exhibits, <M> witnesses, <K>
-> deposition summaries (read from <docs>). Bates/PDF assembly routed to the firm's PDF
-> tool. Trial-prep deadlines captured and surfaced for <attorney>; tracking tasks
-> opened. Staged to finalize. Gaps: <...>.
+[Operator] <Routine name> as of <localDate>
+Trial binder index assembled for matter <matter number> and filed as <file name>: <N> exhibits, <M> witnesses, <K> deposition summaries, and the pretrial deadlines from the trial setting order. Bates stamping is for the firm's PDF tool. Gaps: <gaps, or none>.
+<Attorney> to confirm the pretrial deadlines and finalize <file name>.
 ```
 
 ## Shape B - Cannot assemble (missing / unreadable components)
@@ -94,6 +102,7 @@ exhibit, witness, summary, Bates range, or deadline was fabricated to fill the g
    The court's order and the deadline lane own the authoritative date.
 5. **Scope is the attorney's.** The skill collates the authored exhibit and witness
    lists; it never decides which exhibits or witnesses belong in the binder.
-6. **Staged, never filed or served.** The binder index is a draft for the attorney to
-   finalize. Staging it as a matter document is a gated `add_file` write, surfaced for
-   confirm and confirmed by a read, not autonomous.
+6. **Staged, never filed with the court or served.** The binder index is a draft
+   Word document for the attorney to finalize, filed in the matter with
+   `render_docx_draft` and confirmed by a read; never a `.txt` through `add_file`, and
+   never a table in a note.

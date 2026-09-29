@@ -79,6 +79,22 @@ def test_bullets_numbered_and_rules() -> None:
     assert blocks[2].label == "1." and blocks[3].label == "2)"
 
 
+def test_numbered_runs_count_in_sequence() -> None:
+    # Markdown's 1. 1. 1. means 1, 2, 3; a blank line keeps the run going.
+    blocks = parse_document("1. a\n1. b\n\n1. c")
+    assert [b.label for b in blocks] == ["1.", "2.", "3."]
+
+
+def test_a_paragraph_between_numbered_runs_restarts_the_count() -> None:
+    blocks = parse_document("1. a\n1. b\nBetween.\n1. c\n1. d")
+    assert [b.label for b in blocks if isinstance(b, Numbered)] == ["1.", "2.", "1.", "2."]
+
+
+def test_a_run_keeps_its_first_labels_number_and_punctuation() -> None:
+    blocks = parse_document("3) a\n3) b\n9) c")
+    assert [b.label for b in blocks] == ["3)", "4)", "5)"]
+
+
 def test_four_or_deeper_hashes_and_unknown_syntax_degrade_to_paragraphs() -> None:
     blocks = parse_document("#### too deep\n> quote")
     assert all(isinstance(b, Paragraph) for b in blocks)

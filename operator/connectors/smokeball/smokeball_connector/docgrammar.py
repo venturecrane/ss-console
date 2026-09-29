@@ -231,7 +231,33 @@ def parse_document(markdown: str) -> list[Block]:
             continue
         blocks.append(Paragraph(inline_runs(line)))
         i += 1
-    return blocks
+    return _renumber(blocks)
+
+
+def _renumber(blocks: list[Block]) -> list[Block]:
+    """Number each run of ``Numbered`` blocks in sequence from its first label.
+
+    Markdown writes an ordered list as ``1. 1. 1.`` and means 1, 2, 3; a label
+    is printed literally, so without this a class-styled draft printed 1, 1, 1
+    (the same rule as ``render._number_ordered_runs``). Blank lines were already
+    dropped, so consecutive blocks are one run; any other block ends it, and so
+    does a change of delimiter (``1.`` then ``2)``), as in CommonMark. The run
+    keeps its first label's punctuation."""
+    out: list[Block] = []
+    next_n: int | None = None
+    delim: str | None = None
+    for block in blocks:
+        if isinstance(block, Numbered) and (next_n is None or block.label[-1] == delim):
+            if next_n is None:
+                next_n, delim = int(block.label[:-1]), block.label[-1]
+            out.append(Numbered(f"{next_n}{delim}", block.runs))
+            next_n += 1
+            continue
+        next_n, delim = None, None
+        if isinstance(block, Numbered):
+            next_n, delim = int(block.label[:-1]) + 1, block.label[-1]
+        out.append(block)
+    return out
 
 
 __all__ = [

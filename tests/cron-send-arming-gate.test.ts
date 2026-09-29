@@ -92,7 +92,9 @@ describe('cron-send arming gate', () => {
     // here the gate is measuring nothing.
     const pilot = seats.find((seat) => seat.slug === 'pilot-smokeball')
     expect(pilot).toBeDefined()
-    expect(pilot!.cron.length).toBeGreaterThanOrEqual(6)
+    // Five since 2026-09-29: nine trackers run on request until the output
+    // checklist is met on the pilot; the five that stay scheduled still join.
+    expect(pilot!.cron.length).toBeGreaterThanOrEqual(5)
     expect(renders.size).toBeGreaterThanOrEqual(7)
   })
 

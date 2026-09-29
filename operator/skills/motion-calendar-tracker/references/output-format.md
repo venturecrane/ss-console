@@ -57,22 +57,16 @@ hearing | status reported in a note but unconfirmed | event too ambiguous to pla
 judgment the skill does not make on its own.
 ```
 
-## Internal log (create_memo body)
+## File note (create_memo)
+
+One note per matter. The tables above are this run's report, never the note: a
+note carries no table. Every hearing time is the event's `localTime` on its
+`localDate` ("Oct 6 at 9:30 a.m."), never its `startTime`.
 
 ```markdown
-> Motion calendar assembled for <matter> as of <date>: <X> filed, <Y> due (Z
-> authored, W un-calendared anchors surfaced), <V> hearings. Gaps surfaced: <list>.
-> Source: <N> events, <M> tasks. No deadline computed; no outcome asserted.
->
-> **What:** refreshed the motion-calendar surface for this matter from the record.
-> **Why:** an un-calendared opposition window or a mis-linked hearing is how a motion
-> slips; opposition/reply windows run off the hearing under a rule that depends on the
-> motion type (§1005(b) for a regular noticed motion; §437c for MSJ/MSA) - confirm the
-> governing rule for the motion type.
-> **Next:** the deadline lane / attorney confirms and calendars any un-authored
-> windows; the drafter prepares the opposition/reply.
-> **Attorney if:** a hearing has no filed motion, a motion has no hearing, a window is
-> un-calendared as the hearing nears, or a status is reported but unconfirmed.
+[Operator] <Routine name> as of <localDate>
+Motion calendar assembled: <X> motions filed, <Y> due, <V> hearings (next: <motion> on <date> at <time>, Dept <dept>); gaps: <gaps, or none>. Opposition and reply windows run off the hearing under the rule for the motion type (§1005(b) for a noticed motion, §437c for summary judgment).
+<Attorney> to confirm and calendar <the un-calendared windows, or the gap named above>, or: Nothing to do.
 ```
 
 ## Rules

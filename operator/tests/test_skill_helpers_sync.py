@@ -68,6 +68,7 @@ def test_canonical_exists_and_exports_the_shared_set() -> None:
         "extract_items",
         "find_skill_settings",
         "first_date",
+        "local_day",
         "handoff_values",
         "hold_active",
         "is_iso_day",

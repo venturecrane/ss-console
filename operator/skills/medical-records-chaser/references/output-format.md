@@ -26,10 +26,11 @@ reviewer/firm sends by its method)
 > patient, the request/date, and that the records are still outstanding, asks for
 > status or an expected date, offers to resend the authorization; characterizes no treatment>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Records chase <#> for <patient> / <provider>; still outstanding. Requested <date>.
-> Confirm-by task set for <responsible staff>, due <near-term admin date>.
+[Operator] <Routine name> as of <localDate>
+Records from <provider> for <patient>, requested <date>, are still outstanding; follow-up <#> drafted and a task set for <responsible staff> due <date>.
+Review and send the follow-up to <provider>.
 ```
 
 ## Shape B - Received, logged & closed (ONLY on a confident match)
@@ -40,10 +41,11 @@ reviewer/firm sends by its method)
 **Decision:** a matching record for <provider> observed in the matter and matched
 with confidence to the request; item closed; cadence stopped.
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> <provider> records for <patient> observed in the matter <date>; request closed.
-> (No read of clinical content; matched on document metadata only.)
+[Operator] <Routine name> as of <localDate>
+Records from <provider> for <patient> are in the matter as of <date>; request closed. Matched on the document's name and date, not its contents.
+Nothing to do.
 ```
 
 ## Shape C - Surface to a human (say-so / ambiguous / unconfirmed / no roster)

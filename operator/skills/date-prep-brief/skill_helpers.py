@@ -87,6 +87,23 @@ def first_date(item: dict, keys: Sequence[str]) -> date | None:
     return None
 
 
+def local_day(
+    item: dict,
+    fallback_keys: Sequence[str] = (),
+    local_keys: Sequence[str] = ("localDate", "dueDateOnly", "localDueDate"),
+) -> date | None:
+    """The firm's day for an event or task: the connector's local field first.
+
+    The Smokeball connector adds ``localDate`` to every timed event and
+    ``localDueDate`` to every task, computed in the firm's zone; the raw
+    ``startTime``/``dueDate`` are UTC and can land on the next day. Only when no
+    local field is present does this fall back to ``fallback_keys``."""
+    found = first_date(item, local_keys)
+    if found is not None:
+        return found
+    return first_date(item, fallback_keys)
+
+
 def handoff_values(node: Any, key: str, out: list) -> list:
     """Every ``key`` string in a nested payload, deduped, first-seen order."""
     if isinstance(node, dict):

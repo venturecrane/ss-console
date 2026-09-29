@@ -2,31 +2,37 @@
 
 One output: a single `create_memo` body, or nothing. There is no client-facing text - the memo is an internal Smokeball record a supervising attorney reads. A duplicate delivery produces **no** output; that silence is correct.
 
-## The memo body
+## File note (create_memo)
 
-Two lines. A factual one-line record (who / when / how), then the hidden change-key tag on its own final line. Plain ASCII, terse, no prose, no interpretation.
+The pack's one file-note shape: the header line, what it found, what a person needs to do, then the hidden change-key tag on its own final line. Plain ASCII, terse, no prose, no interpretation. `<Routine name>` is this skill's `routine_names` label on the seat, or "Matter updates" when the seat authors none.
 
 ```
-Matter updated by <actor> on <YYYY-MM-DD> (<source>).
+[Operator] <Routine name> as of <localDate>
+Matter updated by <actor> on <date> (<source>).
+Nothing to do.
 op-mmou:<matterId>:<timestamp>
 ```
 
 - **`<actor>`** = the resolved staff name, or **"an unidentified user"** when `userId` is absent or unresolvable. Never a guessed name.
 - **`<source>`** = `in-app` (`source: Smokeball`) or `via an integration` (`source: API`).
-- **`<YYYY-MM-DD>`** = the event `timestamp` (.NET ticks) converted to a calendar date. Date only - do not invent a precise clock time you are unsure of.
+- **`<date>`** = the event `timestamp` (.NET ticks) converted to the firm's local calendar date, written the way the firm writes a date (Sep 29). Date only - do not invent a precise clock time you are unsure of. `<localDate>` in the header is today's date in the firm's zone.
 - **`op-mmou:<matterId>:<timestamp>`** = the idempotency tag. `<timestamp>` is the raw `.NET ticks` value, verbatim. It lets the next delivery detect that this exact change is already logged. Keep it on its own final line.
 
 Worked example:
 
 ```
-Matter updated by Jane Smith on 2026-06-14 (in-app).
+[Operator] Matter updates as of Jun 14, 2026
+Matter updated by Jane Smith on Jun 14 (in-app).
+Nothing to do.
 op-mmou:6f6a1c2d-...:638609288928990639
 ```
 
 `userId`-absent / unresolvable example:
 
 ```
-Matter updated by an unidentified user on 2026-06-14 (via an integration).
+[Operator] Matter updates as of Jun 14, 2026
+Matter updated by an unidentified user on Jun 14 (via an integration).
+Nothing to do.
 op-mmou:6f6a1c2d-...:638609300000000000
 ```
 

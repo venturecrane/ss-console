@@ -40,7 +40,7 @@ metadata:
     vertical: law-firm
     addon: pi
     weight: medium # a bounded collation across several authored component lists plus a deadline-capture pass; the read/organize work is the bulk, the Bates/PDF assembly is routed out
-    action_class: read + internal_write # reads matter documents and calendar; the writes are the internal log (create_memo), gated tracking tasks (create_task), the gated staging of the binder index (add_file), and a finalized witness or exhibit list rendered as a Word document (render_docx_draft). No external send.
+    action_class: read + internal_write # reads matter documents and calendar; the writes are the internal log (create_memo), gated tracking tasks (create_task), the binder index as a Word document (render_docx_draft), and a finalized witness or exhibit list rendered as a Word document (render_docx_draft). No external send.
     content_ceiling: connective # collates authored components into an organized structure and tracks dates; never legal work product, never the trial brief, never argument, never a deposition summary
     connectors:
       - smokeball # PracticeManagement - matter, folders/files (the component documents + exhibits), calendar events (trial-prep dates), tasks (deadline tracking), memo (internal log)
@@ -116,9 +116,9 @@ the skill fails closed here and does two things, never a third:
 - **It stages into Smokeball only what Smokeball can hold**: the assembled binder
   index (as a document), the exhibit/witness/deposition-summary lists it collated,
   and pointers to the exhibit files where they already sit in the matter
-  (`get_files_on_matter`, `list_folders`). Placing the binder index as a matter
-  document is a gated `add_file` write, surfaced for confirm and confirmed by a read,
-  never an autonomous or asserted write (see Write posture).
+  (`get_files_on_matter`, `list_folders`). The binder index is a Word document
+  filed with `mcp_smokeball_render_docx_draft` and confirmed by a read (`get_file`,
+  `read_document`), never a `.txt` through `add_file` and never a table in a note.
 
 So the binder index the skill produces marks the Bates/PDF step as **routed to the
 firm's PDF tool** (with the exhibit ordering it collated, ready for stamping), rather
@@ -214,10 +214,12 @@ surfaces** (Shape B), not a set it composes.
    document), surface them for attorney confirm (labeled not-final where anchored to a
    statutory window such as CCP §2024.020), and open or update tracking tasks
    (`create_task`) so they stay visible.
-6. **Stage + log** - return the assembled binder index as a **draft staged for the
-   attorney to finalize**; stage it into the matter as a gated `add_file` write
-   surfaced for confirm (confirmed by a read); log the assembly and the captured
-   deadlines with `create_memo`. It does not file the binder, does not serve anything,
+6. **File + log** - the assembled binder index is a **draft staged for the
+   attorney to finalize**. The assembled artifact is a Word document: file it with
+   `mcp_smokeball_render_docx_draft` (Shape A in `references/output-format.md` is the
+   `draft_markdown`) and confirm it with `get_file` and a `read_document` spot check;
+   the note names the file. Log the assembly and the captured
+   deadlines with one file note (`create_memo`). It does not file the binder, does not serve anything,
    and does not assert any write it has not confirmed by a read.
 
 ## Routed jobs (a step approved from a date-prep brief)
@@ -277,8 +279,8 @@ never route around it through `add_file`. Confirm the file with `get_file` and a
 ### Job: `assemble_binder`
 
 The binder: steps 1 through 6 of "How it works" above, on the step's matter. Produces
-the assembled binder index (Shape A in `references/output-format.md`) staged into the
-matter with `add_file`, and the "Trial binder index assembled" memo. It does not
+the assembled binder index (Shape A in `references/output-format.md`) filed in the
+matter as a Word document with `render_docx_draft`, and the file note naming it. It does not
 finalize, edit or re-file any exhibit or witness list.
 
 ### Job: `finalize_witness_list`
@@ -355,9 +357,8 @@ Produces one document and one memo; no binder, no deadline capture, no tracking 
 - **Never compute a deadline as final** - it captures and surfaces the court-set and
   statutory-window dates for confirm; the deadline lane and the court's order own the
   authoritative date.
-- **Never file, serve, or place the binder as a final matter document autonomously** -
-  the binder index is staged for the attorney; the `add_file` write is gated and
-  surfaced for confirm.
+- **Never file with the court, serve, or mark the binder final** - the binder index
+  is a draft Word document staged for the attorney to finalize.
 
 ## Training output (built into every run)
 

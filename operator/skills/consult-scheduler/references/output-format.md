@@ -30,9 +30,11 @@ _Client preference:_ <stated preference> - <honored / nearest valid alternative 
 
 > <plain-text confirmation, per voice.md - scheduling only>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Consult proposed for matter <id>; <N> rule-valid times offered; confirmation drafted; calendar write surfaced for confirm.
+[Operator] <Routine name> as of <localDate>
+Consult proposed on matter <matter number>: <N> open times offered and a confirmation drafted; the calendar entry is not made yet.
+Confirm a time so the calendar entry and the confirmation can go out.
 ```
 
 ## Shape B - Blocked on conflict

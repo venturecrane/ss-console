@@ -417,14 +417,14 @@ personas:
         version: pending
         initiation:
           manual: true
-          scheduled: true
+          scheduled: false # on request since 2026-09-29 (no cron row)
           webhook: false
         enabled: true
       - name: client-verification-tracker # the firm's #1 slip; chase cadence
         version: pending
         initiation:
           manual: true
-          scheduled: true
+          scheduled: false # on request since 2026-09-29 (no cron row)
           webhook: false
         enabled: true
         # PLACEHOLDER(christa): the client-verification chase numbers await the
@@ -481,7 +481,7 @@ personas:
         version: pending
         initiation:
           manual: true
-          scheduled: true
+          scheduled: false # on request since 2026-09-29 (no cron row)
           webhook: false
         enabled: true
       # medical records + chronology
@@ -489,7 +489,7 @@ personas:
         version: pending
         initiation:
           manual: true
-          scheduled: true
+          scheduled: false # on request since 2026-09-29 (no cron row)
           webhook: false
         enabled: true
         # PLACEHOLDER(christa): the chase cadence awaits the firm's answer. The
@@ -537,7 +537,7 @@ personas:
         version: pending
         initiation:
           manual: true
-          scheduled: true
+          scheduled: false # on request since 2026-09-29 (no cron row)
           webhook: false
         enabled: true
       - name: motion-package-assembler # person-invoked assembly/staging
@@ -552,7 +552,7 @@ personas:
         version: pending
         initiation:
           manual: true
-          scheduled: true
+          scheduled: false # on request since 2026-09-29 (no cron row)
           webhook: false
         enabled: true
       # trial preparation
@@ -560,7 +560,7 @@ personas:
         version: pending
         initiation:
           manual: true
-          scheduled: true
+          scheduled: false # on request since 2026-09-29 (no cron row)
           webhook: false
         enabled: true
       # mediation, settlement, liens
@@ -568,14 +568,14 @@ personas:
         version: pending
         initiation:
           manual: true
-          scheduled: true
+          scheduled: false # on request since 2026-09-29 (no cron row)
           webhook: false
         enabled: true
       - name: lien-ledger-tracker # weekly obligation sweep + provider chase
         version: pending
         initiation:
           manual: true
-          scheduled: true
+          scheduled: false # on request since 2026-09-29 (no cron row)
           webhook: false
         enabled: true
         settings:
@@ -725,6 +725,7 @@ personas:
     # classes — see ADR 0075 verification). Deeper zero-delta wake suppression
     # stays a follow-on gated on verifying Smokeball's updated_since wire
     # format at connect (see pre_run_gate.py docstring).
+    # 2026-09-29: nine trackers run on request until the output checklist is met on the pilot
     cron:
       - skill: deadline-miss-escalator
         schedule: '0 7 * * *' # daily 0700 seat-local (America/Los_Angeles via business_hours; was silently UTC = midnight PT before HERMES_TIMEZONE landed)
@@ -732,42 +733,6 @@ personas:
         wake_policy: pre_run_decides
       - skill: daily-needs-you-digest
         schedule: '23 6 * * 1-5' # weekday 0623 seat-local — the morning digest
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: discovery-response-tracker
-        schedule: '17 7 * * 1-5' # weekday 0717 seat-local
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: client-verification-tracker
-        schedule: '41 7 * * 1-5' # weekday 0741 seat-local
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: motion-calendar-tracker
-        schedule: '27 7 * * 1-5' # weekday 0727 seat-local
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: service-confirmation-watcher
-        schedule: '51 7 * * 1-5' # weekday 0751 seat-local
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: medical-records-chaser
-        schedule: '9 8 * * 2' # weekly Tue 0809 seat-local — production slot (the */17 ADR 0073 proof cadence is retired)
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: lien-ledger-tracker
-        schedule: '13 9 * * 2' # weekly Tue 0913 seat-local
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: mediation-settlement-tracker
-        schedule: '43 9 * * 2' # weekly Tue 0943 seat-local
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: minors-compromise-packet
-        schedule: '3 9 * * 3' # weekly Wed 0903 seat-local — GAL/hearing/lien-figure track
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: trial-binder-assembler
-        schedule: '19 9 * * 1' # weekly Mon 0919 seat-local — trial-prep deadline sweep
         pre_run: pre_run.py
         wake_policy: pre_run_decides
       - skill: task-list-keeper

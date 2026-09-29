@@ -26,9 +26,11 @@ from authored config or is surfaced to confirm.
 - **Route SOL to <attorney> to compute** (task; title foregrounds the action, confirm-by is administrative, NOT the SOL date): inputs read - incident/accrual date <if read>, minor plaintiff <yes/no>, government defendant <yes/no>. Governing rule (reference, confirm at connect): CCP §335.1 and any modifier (§352 minor tolling, Gov. Code §911.2 claim gate, §340.5 MICRA). No date stated; confirm-by never SOL-derivable.
 - **Route service window to <attorney>/engine to confirm**, one per named defendant (title foregrounds the action, confirm-by is administrative, NOT the service date): <defendant> [original complaint - 60-day | added by amendment - 30-day] - reference CRC 3.110(b) (confirm at connect) + general forward final-day roll CCP §12 / §12a (NOT the Discovery Act's §2016.060). Proposed for attorney/engine confirm; not calendared.
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Set up matter <id> (<type>): <N> folders + <M> tasks created and confirmed; SOL and <K> per-defendant service items scaffolded to confirm. No date computed; nothing filed or served.
+[Operator] <Routine name> as of <localDate>
+Matter <matter number> (<type>) set up: <N> folders and <M> tasks created and confirmed; the limitations date and <K> service items are set out for confirmation. No date computed; nothing filed or served.
+<Attorney> to confirm the limitations date and the service items.
 ```
 
 ## Shape B - Filing package staged (on request)
@@ -40,9 +42,11 @@ from authored config or is surfaced to confirm.
 **Package (each read from the matter):** <complaint / summons / civil case cover sheet CM-010 / ...>
 **Package completeness:** <complete as far as read | ⚠ apparently incomplete - <summons / CM-010 / ...> not found on the matter; staged what is present and surfaced the gap; missing form NOT generated - confirm before filing>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Filing package for <venue> staged into <folder> for matter <id>; confirmed present. A person files through the firm's filing path; the skill did not file or serve.
+[Operator] <Routine name> as of <localDate>
+Filing package for <venue> collected into <folder> on matter <matter number>; every document confirmed in the matter. Nothing filed or served.
+File the package through the firm's filing path.
 ```
 
 ## Shape C - Surface to a human (convention unknown, write unconfirmed, party unresolved, special-timeline flag)

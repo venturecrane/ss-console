@@ -36,10 +36,11 @@ artifact, never the email body.
 > Proposed response deadline <date>: <plain words, e.g. "30 days from service by mail plus five calendar days for mail service">. Not final until you confirm.
 > Confirm the type, service date, and method so the deadline is set. <RFA: flag in plain words that an unanswered set risks the requests being deemed admitted.>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Captured served <type> on matter <id>: service <date> by <method>, read off the POS.
-> Surfaced to <attorney> to confirm. Deadline owned by the rules engine / confirmed by hand; not computed here.
+[Operator] <Routine name> as of <localDate>
+Served <type> captured on matter <matter number>: served <date> by <method>, read off the proof of service (fileId <file id> recorded). The response deadline comes from the rules engine or is confirmed by hand, not computed here.
+<Attorney> to confirm the service date and method.
 ```
 
 ## Shape B - Bare deposition notice captured (calendar + prep, not a response clock)
@@ -54,9 +55,11 @@ carries a document rider, use Shape C.
 **Read off the notice:** deponent <name/role>, date/time <...>, place/remote <...>
 **Decision:** surfaced for scheduling and prep; this is not a response-verification and starts no response clock.
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Captured a bare deposition notice on matter <id> (deponent <...>, <date/place>), no document demand. fileId <...> recorded. Surfaced for calendar + prep.
+[Operator] <Routine name> as of <localDate>
+Deposition notice captured on matter <matter number>: <deponent>, <date> at <time>, <place>; no document demand (fileId <file id> recorded).
+Put the deposition on the calendar and start prep.
 ```
 
 ## Shape C - Deposition notice WITH an embedded document demand (compound - both facets)
@@ -78,10 +81,11 @@ read cleanly, fall back to Shape D rather than dropping the production obligatio
 
 > <the POS text located and read>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Captured a records deposition notice on matter <id> (deponent <...>, <date/place>) carrying a document demand.
-> Surfaced BOTH the calendar/prep facet and the §2025.410 document-objection window. fileId <...> recorded. Not calendared here.
+[Operator] <Routine name> as of <localDate>
+Records deposition notice captured on matter <matter number>: <deponent>, <date>, <place>, with a document demand (fileId <file id> recorded). The objection window for the document demand (§2025.410) is open; nothing is on the calendar yet.
+Put the deposition on the calendar, and <attorney> to decide on objections to the document demand.
 ```
 
 ## Shape D - Surface & ask (fail-closed: cannot read / classify / match / one method)

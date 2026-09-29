@@ -46,15 +46,14 @@ Each date line also carries its **provenance**. A human-authored date is shown s
 ## Confirmation memo (`create_memo` body, written ONLY on attorney confirm of an engine-read date)
 
 ```markdown
-# Deadline confirmed - <matter number> - <source label>
-
-**Confirmed by:** <responsible attorney full name> (from `get_staff` on `personResponsibleStaffId`)
-**Confirmed at:** <ISO-8601 timestamp, e.g. 2026-07-14T16:32:05Z>
-**Confirmed date:** <the engine date the attorney confirmed>
-**Source:** Smokeball court-rules engine
+[Operator] <Routine name> as of <localDate>
+<Source label> on matter <matter number> confirmed by <responsible attorney full name> on <date confirmed>: <the engine date the attorney confirmed>. Source: Smokeball court-rules engine.
+Nothing to do.
 ```
 
-The four fields are mandatory. The `Source` is always `Smokeball court-rules engine` for this skill (it never computes or proposes a date, so it never records `proposed by Operator`). Nothing is written before the attorney confirms, and the memo is bookkeeping only - this skill does not calendar.
+The attorney's full name comes from `get_staff` on `personResponsibleStaffId`. The day
+it was confirmed is the firm's local day, never an ISO timestamp or a UTC clock. The
+four facts (who, the day, the date, the source) are mandatory. The `Source` is always `Smokeball court-rules engine` for this skill (it never computes or proposes a date, so it never records `proposed by Operator`). Nothing is written before the attorney confirms, and the memo is bookkeeping only - this skill does not calendar.
 
 ## Source labels
 
@@ -62,7 +61,7 @@ Each date carries the label the human authored, never one the skill inferred: `c
 
 ## Rules
 
-1. **Every date traces to a read** (a Smokeball task `due_date`, a calendar-binding entry, or a court-rules-engine entry) with its source label and provenance. No computed dates - ever; reading the engine's already-computed number is not computing one. (Invariant #1; the cardinal line.) **Engine-computed dates are shown unconfirmed** with "confirm with the responsible attorney," never as settled; the confirmation memo (name, ISO-8601 timestamp, date, source) is written only on the attorney's confirm, never before, and the skill writes no calendar entry.
+1. **Every date traces to a read** (a Smokeball task `due_date`, a calendar-binding entry, or a court-rules-engine entry) with its source label and provenance. No computed dates - ever; reading the engine's already-computed number is not computing one. (Invariant #1; the cardinal line.) **Engine-computed dates are shown unconfirmed** with "confirm with the responsible attorney," never as settled; the confirmation memo (name, the day confirmed, date, source) is written only on the attorney's confirm, never before, and the skill writes no calendar entry.
 2. **Buckets are date arithmetic only** - authored date vs. the run date. No arithmetic that produces a deadline.
 3. **A bare calendar entry is a plain calendar date,** shown in the "Plain calendar" section - never promoted to a deadline because the context looks deadline-ish.
 4. **Missing-where-expected points at the gap;** it never supplies a plausible date. The line says "none authored on file," not a guessed date.

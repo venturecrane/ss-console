@@ -212,8 +212,12 @@ posture; an unconfirmed write is surfaced, never reported as done.
    or stale, draft a payoff chase to the lienholder (surfaced for a human to send).
 6. **Surface the fund handling** - note that a post-approval disposition must be
    decided; if authored, prepare the matching MC-355 / MC-356 for finalization.
-7. **Log** - `create_memo` records what was assembled, from which reads, the gaps
-   surfaced, and the training-output note. Confirm the memo landed from the
+7. **File and log** - The assembled artifact is a Word document: file it with
+   `mcp_smokeball_render_docx_draft` (Shape A in `references/output-format.md` is the
+   `draft_markdown`) and confirm it with `get_file` and a `read_document` spot check;
+   the note names the file. Then `create_memo` writes the
+   file note (the header line and two plain lines: what was assembled into which file
+   and the gaps; what the attorney needs to do). Confirm the note landed from the
    `confirmed` field `create_memo` returns; unless it is `true`, surface the log failure.
 
 ## Boundaries (never)

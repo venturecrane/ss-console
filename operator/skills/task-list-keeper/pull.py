@@ -46,6 +46,7 @@ import sys
 
 from smokeball_connector.client import build_client_from_env
 from smokeball_connector.extract import METHOD_NONE_SCANNED, extract_text_ex
+from smokeball_connector.local_time import enrich_event
 from smokeball_connector.matter_ref import attach_matter_numbers
 from smokeball_connector.parties import _party_surname
 
@@ -203,9 +204,15 @@ for mid in matter_ids[:budget]:
         events = rows_of(client.get("/events", MatterId=mid, From=today, To=to, ExcludeDeletedEvents=True, Limit=500))
         if events is None:
             raise ValueError("unrecognized /events envelope")
+        # The court day is the firm's local day (localDate), never the UTC
+        # startTime's date: a 5 p.m. Pacific hearing is the next day in UTC.
         entry["events"] = [
-            {"id": e.get("id"), "start": e.get("startTime") or e.get("startDate") or e.get("start")}
-            for e in events
+            {
+                "id": e.get("id"),
+                "start": e.get("localDate") or e.get("startTime") or e.get("startDate") or e.get("start"),
+                "time": e.get("localTime"),
+            }
+            for e in (enrich_event(x) for x in events)
             if isinstance(e, dict)
         ]
     except Exception as exc:
