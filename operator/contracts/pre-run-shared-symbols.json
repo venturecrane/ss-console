@@ -7,17 +7,47 @@
     "_append_wake_row": {
       "copies": 7
     },
-    "_capped_plan_counts": {
-      "copies": 2
+    "_atoms_only": {
+      "copies": 7
+    },
+    "_capped": {
+      "copies": 7
+    },
+    "_captured_file_ids": {
+      "copies": 7
     },
     "_emit": {
+      "copies": 7
+    },
+    "_extension_candidates": {
       "copies": 7
     },
     "_find_skill_settings": {
       "copies": 3
     },
+    "_handoff_projection": {
+      "copies": 7
+    },
+    "_is_iso_day": {
+      "copies": 7
+    },
+    "_is_operator_memo": {
+      "copies": 7
+    },
     "_is_probe_subject": {
       "copies": 2
+    },
+    "_iso_days": {
+      "copies": 7
+    },
+    "_iter_days": {
+      "copies": 7
+    },
+    "_latest_surface_day": {
+      "copies": 7
+    },
+    "_listed": {
+      "copies": 7
     },
     "_load_skill_helpers": {
       "copies": 6
@@ -28,11 +58,29 @@
     "_matter_number_of": {
       "copies": 2
     },
+    "_matter_row": {
+      "copies": 7
+    },
+    "_memo_body": {
+      "copies": 7
+    },
+    "_memo_day": {
+      "copies": 7
+    },
+    "_memo_id": {
+      "copies": 7
+    },
+    "_row_days": {
+      "copies": 7
+    },
     "_skill_name": {
       "copies": 7
     },
     "_source_id_of": {
       "copies": 3
+    },
+    "_try_write_emitted_wake": {
+      "copies": 2
     },
     "_writer_factory": {
       "copies": 2
@@ -40,10 +88,22 @@
     "decide_and_emit": {
       "copies": 7
     },
+    "derive_matter_facts": {
+      "copies": 7
+    },
+    "fetch_memo_facts": {
+      "copies": 7
+    },
     "probe_open_matter_count": {
       "copies": 7
     },
+    "pull_facts_payload": {
+      "copies": 7
+    },
     "write_emitted_wake_heartbeat": {
+      "copies": 7
+    },
+    "write_pre_run_handoff": {
       "copies": 7
     },
     "write_suppressed_wake_heartbeat": {

@@ -492,8 +492,9 @@ export interface PersonaChannelBinding {
 /**
  * Skill bundle declaration. Hermes ships skill bundles natively
  * (`~/.hermes/skill-bundles/<slug>.yaml`) — multiple skills load under one
- * slash command. ADR 0021 Stream D wires three bundles per persona:
- * `/pi-intake`, `/pi-matter-prep`, `/weekly-client-pulse`.
+ * slash command. ADR 0021 Stream D wired three bundles per persona:
+ * `/pi-intake`, `/pi-matter-prep`, `/weekly-client-pulse` (the last retired
+ * 2026-09-29 with retainer-hours-reconciler).
  *
  * The `hermes-smd bootstrap` CLI (overlay) translates this entry into the
  * per-profile `~/.hermes/skill-bundles/<slug>.yaml` file at Machine boot.

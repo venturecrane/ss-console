@@ -429,15 +429,6 @@ describe('shipped skills cite only runtime paths the image carries', () => {
  * the debt is greppable and shrinks one line at a time.
  */
 const KNOWN_MISSING_SKILL_REFERENCES: readonly string[] = [
-  'operator/skills/ar-chaser/references/categorization-rubric.md',
-  'operator/skills/ar-chaser/references/output-format.md',
-  'operator/skills/ar-chaser/references/test-cases.md',
-  'operator/skills/ar-chaser/references/voice.md',
-  'operator/skills/assessment-findings-draft/references/coverage-model.md',
-  'operator/skills/asset-collection-follower/references/categorization-rubric.md',
-  'operator/skills/asset-collection-follower/references/output-format.md',
-  'operator/skills/asset-collection-follower/references/test-cases.md',
-  'operator/skills/asset-collection-follower/references/voice.md',
   'operator/skills/client-matter-digest/references/output-format.md',
   'operator/skills/client-matter-digest/references/test-cases.md',
   'operator/skills/client-matter-digest/references/voice.md',
@@ -451,21 +442,9 @@ const KNOWN_MISSING_SKILL_REFERENCES: readonly string[] = [
   'operator/skills/matter-inbox-router/references/test-cases.md',
   'operator/skills/matter-status-digest/references/output-format.md',
   'operator/skills/matter-status-digest/references/test-cases.md',
-  'operator/skills/paid-media-anomaly-watcher/references/categorization-rubric.md',
-  'operator/skills/paid-media-anomaly-watcher/references/output-format.md',
-  'operator/skills/paid-media-anomaly-watcher/references/test-cases.md',
-  'operator/skills/paid-media-anomaly-watcher/references/voice.md',
-  'operator/skills/proposal-drafter/references/categorization-rubric.md',
-  'operator/skills/proposal-drafter/references/output-format.md',
-  'operator/skills/proposal-drafter/references/test-cases.md',
-  'operator/skills/proposal-drafter/references/voice.md',
   'operator/skills/referral-source-acknowledgment/references/output-format.md',
   'operator/skills/referral-source-acknowledgment/references/test-cases.md',
   'operator/skills/referral-source-acknowledgment/references/voice.md',
-  'operator/skills/scope-creep-flagger/references/categorization-rubric.md',
-  'operator/skills/scope-creep-flagger/references/output-format.md',
-  'operator/skills/scope-creep-flagger/references/test-cases.md',
-  'operator/skills/scope-creep-flagger/references/voice.md',
 ]
 
 // ===========================================================================

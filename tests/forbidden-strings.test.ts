@@ -1058,6 +1058,65 @@ describe('retired persona name stays retired (Captain directive 2026-07-13)', ()
   })
 })
 
+describe('retired repo skills stay retired (operator/templates/retired-skills.txt)', () => {
+  // A retired skill is pruned from every seat volume at boot by the list in
+  // operator/templates/retired-skills.txt, and bootstrap only LOGS (never dies)
+  // when a listed name is still in the image catalog. This guard is where that
+  // conflict fails instead: a listed name may not come back as a skill dir, and
+  // no surviving skill may name one (a skill that cites a retired sibling is a
+  // dangling instruction to the agent). The list has one home; this reads it.
+  const LIST = resolve('operator/templates/retired-skills.txt')
+  const SKILLS_ROOT = resolve('operator/skills')
+  const NAME_RE = /^[a-z0-9][a-z0-9-]*$/
+  const retired = readFileSync(LIST, 'utf-8')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l !== '' && !l.startsWith('#'))
+
+  it('the list is non-empty and every line is a skill-name shape', () => {
+    expect(retired.length).toBeGreaterThan(0)
+    expect(retired.filter((n) => !NAME_RE.test(n))).toEqual([])
+  })
+
+  function filesUnder(dir: string): string[] {
+    const out: string[] = []
+    for (const entry of readdirSync(dir)) {
+      // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- dir is the hardcoded skills root; entry is readdirSync output, not user input.
+      const full = join(dir, entry)
+      const st = statSync(full)
+      if (st.isDirectory()) {
+        if (entry === '__pycache__' || entry === 'node_modules') continue
+        out.push(...filesUnder(full))
+      } else {
+        out.push(full)
+      }
+    }
+    return out
+  }
+
+  it('no retired name is a skill directory under operator/skills', () => {
+    const present = readdirSync(SKILLS_ROOT).filter((d) => retired.includes(d))
+    expect(
+      present,
+      'these skills are listed in operator/templates/retired-skills.txt; remove the dir ' +
+        'or take the name off the list (bootstrap would otherwise seed then prune it)'
+    ).toEqual([])
+  })
+
+  it('no file under operator/skills names a retired skill', () => {
+    const offenders: string[] = []
+    for (const file of filesUnder(SKILLS_ROOT)) {
+      const text = readFileSync(file, 'utf-8')
+      for (const name of retired) {
+        if (new RegExp(`(^|[^a-z0-9-])${name}($|[^a-z0-9-])`).test(text)) {
+          offenders.push(`${file.replace(resolve('.') + '/', '')}: ${name}`)
+        }
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+})
+
 // ---------------------------------------------------------------------------
 // Console vocabulary guard (console blueprint §6 — locked once, then enforced).
 // The §6 table is decided by Captain exactly once; this guard keeps the retired

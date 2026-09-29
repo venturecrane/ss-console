@@ -22,9 +22,9 @@ import interviewerSkill from '../../../operator/assessment-eval/fixtures/intervi
 import coverageModel from '../../../operator/assessment-eval/fixtures/interviewer-skill/references/coverage-model.md?raw'
 import probeRepertoire from '../../../operator/assessment-eval/fixtures/interviewer-skill/references/probe-repertoire.md?raw'
 // Node [2] — the findings-draft skill + its references.
-import findingsSkill from '../../../operator/skills/assessment-findings-draft/SKILL.md?raw'
-import findingsOutputFormat from '../../../operator/skills/assessment-findings-draft/references/output-format.md?raw'
-import findingsDiscipline from '../../../operator/skills/assessment-findings-draft/references/discipline.md?raw'
+import findingsSkill from '../../../operator/assessment-eval/fixtures/findings-skill/SKILL.md?raw'
+import findingsOutputFormat from '../../../operator/assessment-eval/fixtures/findings-skill/references/output-format.md?raw'
+import findingsDiscipline from '../../../operator/assessment-eval/fixtures/findings-skill/references/discipline.md?raw'
 
 /** The raw operator skill/reference bodies, loaded verbatim from operator/. */
 export const operatorSkillSources = {
@@ -48,7 +48,7 @@ export const OPERATOR_SKILL_SOURCE_PATHS = [
   'operator/assessment-eval/fixtures/interviewer-skill/SKILL.md',
   'operator/assessment-eval/fixtures/interviewer-skill/references/coverage-model.md',
   'operator/assessment-eval/fixtures/interviewer-skill/references/probe-repertoire.md',
-  'operator/skills/assessment-findings-draft/SKILL.md',
-  'operator/skills/assessment-findings-draft/references/output-format.md',
-  'operator/skills/assessment-findings-draft/references/discipline.md',
+  'operator/assessment-eval/fixtures/findings-skill/SKILL.md',
+  'operator/assessment-eval/fixtures/findings-skill/references/output-format.md',
+  'operator/assessment-eval/fixtures/findings-skill/references/discipline.md',
 ] as const

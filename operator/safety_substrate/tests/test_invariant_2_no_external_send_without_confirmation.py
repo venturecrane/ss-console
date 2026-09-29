@@ -56,7 +56,7 @@ def run() -> tuple[bool, str]:
     decision = enforce(
         ceiling=Ceiling.AUTONOMOUS,
         action=ActionClass.EXTERNAL_SEND,
-        skill_name="ar-chaser",
+        skill_name="email-reply",
         tool_name="gmail.send",
         current_turn_approval=False,
     )
@@ -73,7 +73,7 @@ def run() -> tuple[bool, str]:
     decision = enforce(
         ceiling=Ceiling.AUTONOMOUS,
         action=ActionClass.EXTERNAL_SEND,
-        skill_name="ar-chaser",
+        skill_name="email-reply",
         tool_name="gmail.send",
         current_turn_approval=False,
         action_ceilings={ActionClass.EXTERNAL_SEND: Ceiling.DRAFT_FOR_REVIEW},
@@ -89,7 +89,7 @@ def run() -> tuple[bool, str]:
     decision = enforce(
         ceiling=Ceiling.DRAFT_FOR_REVIEW,
         action=ActionClass.EXTERNAL_SEND,
-        skill_name="ar-chaser",
+        skill_name="email-reply",
         tool_name="gmail.send",
         current_turn_approval=False,
         action_ceilings={ActionClass.EXTERNAL_SEND: Ceiling.AUTONOMOUS},
@@ -105,7 +105,7 @@ def run() -> tuple[bool, str]:
     decision = enforce(
         ceiling=Ceiling.AUTONOMOUS,
         action=ActionClass.EXTERNAL_SEND,
-        skill_name="ar-chaser",
+        skill_name="email-reply",
         tool_name="gmail.send",
         current_turn_approval=False,
         action_ceilings={ActionClass.EXTERNAL_SEND: Ceiling.REFUSED},
@@ -121,7 +121,7 @@ def run() -> tuple[bool, str]:
     decision = enforce(
         ceiling=Ceiling.AUTONOMOUS,
         action=ActionClass.EXTERNAL_SEND,
-        skill_name="ar-chaser",
+        skill_name="email-reply",
         tool_name="gmail.send",
         current_turn_approval=False,
         action_ceilings={ActionClass.EXTERNAL_SEND: Ceiling.AUTONOMOUS},
@@ -155,7 +155,7 @@ def run() -> tuple[bool, str]:
     decision = enforce(
         ceiling=Ceiling.DRAFT_FOR_REVIEW,
         action=ActionClass.EXTERNAL_SEND,
-        skill_name="ar-chaser",
+        skill_name="email-reply",
         tool_name="gmail.send",
         current_turn_approval=False,
         action_ceilings={ActionClass.EXTERNAL_SEND: Ceiling.CONFIRM},
@@ -172,7 +172,7 @@ def run() -> tuple[bool, str]:
     decision = enforce(
         ceiling=Ceiling.DRAFT_FOR_REVIEW,
         action=ActionClass.EXTERNAL_SEND,
-        skill_name="ar-chaser",
+        skill_name="email-reply",
         tool_name="gmail.send",
         current_turn_approval=True,
         action_ceilings={ActionClass.EXTERNAL_SEND: Ceiling.CONFIRM},
@@ -190,7 +190,7 @@ def run() -> tuple[bool, str]:
     decision = enforce(
         ceiling=Ceiling.DRAFT_FOR_REVIEW,
         action=ActionClass.EXTERNAL_SEND,
-        skill_name="ar-chaser",
+        skill_name="email-reply",
         tool_name="gmail.send",
         current_turn_approval=True,
         action_ceilings={ActionClass.EXTERNAL_SEND: Ceiling.CONFIRM},

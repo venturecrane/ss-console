@@ -242,8 +242,10 @@ json.dump({
         JSON.stringify(
           {
             _comment:
-              'Symbols vendored identically into multiple operator/skills/*/pre_run.py: the eight ' +
-              'stamps of templates/pre_run_gate.py, the inline heartbeat writer classes, and the ' +
+              'Symbols vendored identically into multiple operator/skills/*/pre_run.py: the seven ' +
+              'stamps of templates/pre_run_gate.py (eight until 2026-09-17, when routine 11 lost ' +
+              'its schedule and medical-chronology-maintainer/pre_run.py was deleted), the inline ' +
+              'heartbeat writer classes, and the ' +
               'one-line wrappers over templates/skill_helpers.py (the shared library bodies live ' +
               'there since 2026-09-11, gated by operator/tests/test_skill_helpers_sync.py). This ' +
               'contract is what keeps the remaining copies honest. Hashes are over a docstring-stripped ast.dump, ' +
