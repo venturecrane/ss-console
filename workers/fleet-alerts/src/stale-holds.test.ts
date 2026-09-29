@@ -22,6 +22,7 @@ import {
   CONNECTOR_DOWN_PREFIX,
   CONNECTOR_TOKEN_EXPIRING_PREFIX,
   SPEC_CONTROL_BROKEN_PREFIX,
+  TOOL_FAILING_PREFIX,
   WEBHOOK_SURFACE_MISSING_PREFIX,
   CONDITION_PREFIXES,
 } from './conditions'
@@ -40,6 +41,8 @@ interface StatusSeed {
   gateway_loop_age_seconds?: number | null
   gateway_supervisor_state?: string | null
   gateway_restarts_last_hour?: number | null
+  // ss#2793 follow-on. Same map shape and stranding rule as connectors_json.
+  tool_failures_json?: string | null
 }
 
 /**
@@ -71,7 +74,8 @@ function runQuery(
              gateway_loop_ok INTEGER,
              gateway_loop_age_seconds INTEGER,
              gateway_supervisor_state TEXT,
-             gateway_restarts_last_hour INTEGER)`)
+             gateway_restarts_last_hour INTEGER,
+             tool_failures_json TEXT)`)
 
   const insertAlert = db.prepare(
     `INSERT INTO fleet_alert_state (customer_slug, condition, status) VALUES (?, ?, 'open')`
@@ -83,8 +87,8 @@ function runQuery(
        scheduler_ok, scheduler_max_overdue_seconds, connector_check_ok, spec_control_ok,
        webhook_surface_ok, connectors_json, connector_token_age_json, spec_control_json,
        webhook_surface_json, gateway_loop_ok, gateway_loop_age_seconds,
-       gateway_supervisor_state, gateway_restarts_last_hour)
-     VALUES (?, '2026-08-11T00:00:00Z', 'OK', 1, 0, 1, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?)`
+       gateway_supervisor_state, gateway_restarts_last_hour, tool_failures_json)
+     VALUES (?, '2026-08-11T00:00:00Z', 'OK', 1, 0, 1, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
   for (const s of statuses) {
     insertStatus.run(
@@ -96,7 +100,8 @@ function runQuery(
       s.gateway_loop_ok ?? null,
       s.gateway_loop_age_seconds ?? null,
       s.gateway_supervisor_state ?? null,
-      s.gateway_restarts_last_hour ?? null
+      s.gateway_restarts_last_hour ?? null,
+      s.tool_failures_json ?? null
     )
   }
 
@@ -115,6 +120,24 @@ describe('stale-holds SQL (executed against real SQLite)', () => {
       [{ customer_slug: 'smd', connectors_json: healthy('smokeball') }]
     )
     expect(rows).toEqual([{ customer_slug: 'smd', condition: `${CONNECTOR_DOWN_PREFIX}gmail` }])
+  })
+
+  it('strands a tool_failing whose tool key is absent from the map (the run aged out)', () => {
+    const rows = runQuery(
+      [{ customer_slug: 'smd', condition: `${TOOL_FAILING_PREFIX}voice_note_transcribe` }],
+      [{ customer_slug: 'smd', tool_failures_json: healthy('record_store_write') }]
+    )
+    expect(rows).toEqual([
+      { customer_slug: 'smd', condition: `${TOOL_FAILING_PREFIX}voice_note_transcribe` },
+    ])
+  })
+
+  it('does NOT strand a tool_failing whose tool key is present (a 0 entry resolves it instead)', () => {
+    const rows = runQuery(
+      [{ customer_slug: 'smd', condition: `${TOOL_FAILING_PREFIX}voice_note_transcribe` }],
+      [{ customer_slug: 'smd', tool_failures_json: healthy('voice_note_transcribe') }]
+    )
+    expect(rows).toEqual([])
   })
 
   it('does NOT strand a connector_down whose server key is present and live', () => {

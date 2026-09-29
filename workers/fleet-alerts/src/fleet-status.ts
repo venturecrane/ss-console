@@ -47,6 +47,12 @@ export interface FleetStatusRow {
   send_refusals?: number | null
   send_refusals_last_ts?: string | null
   send_refusals_json?: string | null
+  /**
+   * ss#2793 follow-on (migration 0119). Per watched tool, the run of
+   * consecutive failures at its newest call, in the connectors-map shape.
+   * Optional on the type for the same reason as the 0109 trio.
+   */
+  tool_failures_json?: string | null
 }
 
 export async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]> {
@@ -60,7 +66,8 @@ export async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]>
               webhook_surface_json, webhook_surface_ok,
               gateway_loop_ok, gateway_loop_age_seconds,
               gateway_supervisor_state, gateway_restarts_last_hour,
-              send_refusals, send_refusals_last_ts, send_refusals_json
+              send_refusals, send_refusals_last_ts, send_refusals_json,
+              tool_failures_json
          FROM fleet_status`
     )
     .all<FleetStatusRow>()
