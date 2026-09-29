@@ -1063,7 +1063,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # untouched.
 # 2026-09-28 (4dd29643, the overlay #395 merge commit). A confirmation names
 # a task whose title has a spaced hyphen. No tracked twin moves.
-ARG OVERLAY_REF="4dd29643bf2b511650fa56fac26717760bb387d7"
+# 2026-09-29 (a3bd40db, the overlay #396 merge commit). The record-store tool
+# trio: the one write an inbound-email turn is offered, fenced to a directory
+# the seat authors as record_stores (ss#2793). Registered only on a seat that
+# authors a store; every other seat's surface is unchanged. No tracked twin
+# moves.
+ARG OVERLAY_REF="a3bd40dbf89ad890939bbea9336027b50aea29dc"
 
 ARG CUSTOMER_SLUG=customer-zero
 

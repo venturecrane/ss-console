@@ -10,9 +10,11 @@
  *      the contract; this pins that its text names the visit date and names
  *      none of the protected-class vocabulary. A future edit that makes the
  *      cadence "smarter" by reading the notes fails here.
- *   2. The record path is one absolute path, stated in the skill, so a record
- *      written on an inbound turn is found on a scheduled turn (the two run
- *      under different HERMES_HOME roots; a relative path is the known trap).
+ *   2. The record store is one authored store, named in the skill and authored on
+ *      the seat at one absolute path under the volume, reached only through the
+ *      record store tools (never write_file, which inbound turns are not offered;
+ *      #2793). A record written on an inbound turn is then found on a scheduled
+ *      turn, whatever HERMES_HOME either runs under.
  *
  * And the seat binding that makes the act reachable (the /wired chain): the
  * scott seat enables the skill with webhook + scheduled initiation, routes the
@@ -26,7 +28,8 @@ import { parse as parseYaml } from 'yaml'
 
 const SKILL = resolve('operator/skills/open-house-visitor-capture/SKILL.md')
 const SEAT = resolve('operator/customers/scott/customer.yaml')
-const RECORD_DIR = '/opt/data/open-house/visitors/'
+const STORE_NAME = 'open-house-visitors'
+const STORE_PATH = '/opt/data/open-house/visitors'
 
 const skill = readFileSync(SKILL, 'utf8')
 
@@ -60,9 +63,22 @@ describe('open-house-visitor-capture: the skill contract', () => {
     }
   })
 
-  it('states one absolute record path and never a home-relative one', () => {
-    expect(skill).toContain(RECORD_DIR)
+  it('keeps records through the named store tools, never through write_file or a path', () => {
+    const store = section(skill, 'The record store')
+    expect(store).toContain(`\`${STORE_NAME}\``)
+    for (const tool of ['record_store_list', 'record_store_read', 'record_store_write']) {
+      expect(store).toContain(tool)
+    }
+    // The skill names no filesystem path and no file tool: inbound turns have
+    // neither, and the 2026-09-25 capture failed on exactly that.
+    expect(skill).not.toContain(STORE_PATH)
     expect(skill).not.toMatch(/~\/\.hermes\/open-house|\$HERMES_HOME\/open-house/)
+    expect(skill).not.toMatch(/`write_file`(?! is not available)/)
+  })
+
+  it('reads a record back before repeating anything from it', () => {
+    const capture = section(skill, 'Capture')
+    expect(capture).toMatch(/read it back with\s+`record_store_read` before you reply/)
   })
 
   it('never names a visitor as a recipient', () => {
@@ -87,6 +103,12 @@ describe('open-house-visitor-capture: the scott seat binds it (the /wired chain)
     send_policy?: { reply?: { internal_exempt?: boolean }; held_release?: { enabled?: boolean } }
   }
   const persona = seat.personas.find((p) => p.slug === 'agent-crane')!
+
+  it('authors the record store the skill names, at one absolute path under the volume', () => {
+    const stores = (seat as unknown as { record_stores?: { name: string; path: string }[] })
+      .record_stores
+    expect(stores?.find((s) => s.name === STORE_NAME)?.path).toBe(STORE_PATH)
+  })
 
   it('one persona carries it; no second profile was opened for the POC', () => {
     expect(seat.personas).toHaveLength(1)

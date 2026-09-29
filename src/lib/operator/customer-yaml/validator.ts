@@ -66,6 +66,7 @@ import { checkCredentialCustodyDefault } from './sections-connectors'
 import { checkGmailPush } from './sections-gmail-push'
 import { checkFirmIdentity } from './sections-firm-identity'
 import { checkTelegram } from './sections-telegram'
+import { checkRecordStores } from './sections-record-stores'
 import { checkObservability } from './sections-observability'
 import { checkVoiceCohorts } from './sections-voice'
 import { checkSeat } from './sections-seat'
@@ -295,6 +296,7 @@ function validateSections(
   const scope = checkScope(root, errors)
   checkStaffMailboxReads(root, scope.staff_send_as, errors) // ADR 0089 5a; validate-only
   checkTelegram(root, errors) // optional telegram block; validate-only (ADR 0033)
+  checkRecordStores(root, errors) // optional record_stores block; validate-only (#2793)
   checkGmailPush(root, errors) // optional gmail_push block; validate-only
   checkFirmIdentity(root, errors) // optional firm_identity (letterhead); validate-only
   const escalation = checkEscalation(root, errors)
