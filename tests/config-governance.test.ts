@@ -192,7 +192,7 @@ describe('applyExposureChange (D1)', () => {
       entity_id: 'entity-1',
       actor: ACTOR,
       persona_slug: 'marcus',
-      skill_name: 'ar-chaser',
+      skill_name: 'email-reply',
       action_class: 'external_send',
       vertical: 'law-firm',
       old_value: 'draft_for_review',
@@ -219,7 +219,7 @@ describe('applyExposureChange (D1)', () => {
         entity_id: 'entity-1',
         actor: ACTOR,
         persona_slug: 'marcus',
-        skill_name: 'ar-chaser',
+        skill_name: 'email-reply',
         action_class: 'external_send',
         vertical: 'floored-test-vertical',
         old_value: 'draft_for_review',
@@ -296,7 +296,7 @@ describe('applySkillToggle (D1)', () => {
       entity_id: 'entity-4',
       actor: ACTOR,
       persona_slug: 'marcus',
-      skill_name: 'ar-chaser',
+      skill_name: 'email-reply',
       next_enabled: false,
     })
     const rows = await configChangeAudit(db, 'entity-4')

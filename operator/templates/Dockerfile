@@ -1603,6 +1603,9 @@ COPY operator/templates/entrypoint.sh /app/entrypoint.sh
 # REQUIRED_ENV / OPTIONAL_ENV, generated from operator/contracts/env-consumption.yaml
 # (operator/bin/gen-env-arrays.py); bootstrap.sh sources this instead of hardcoding them.
 COPY operator/templates/_env-arrays.generated.sh /app/_env-arrays.generated.sh
+# The retired repo-skill names bootstrap.sh prunes from the volume after the
+# additive skill seed (one home: operator/templates/retired-skills.txt).
+COPY operator/templates/retired-skills.txt /app/retired-skills.txt
 RUN chmod +x /app/bootstrap.sh /app/entrypoint.sh
 
 # Curator disable guard (ADR 0017). bootstrap.sh step 7b runs this after the

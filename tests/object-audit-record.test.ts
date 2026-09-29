@@ -260,7 +260,9 @@ describe('authorizationOf', () => {
   })
 
   it('a routine wins over a bare agent actor', () => {
-    expect(authorizationOf(row({ routine: 'ar-chaser', actor: 'agent' })).basis).toBe('routine')
+    expect(authorizationOf(row({ routine: 'deadline-miss-escalator', actor: 'agent' })).basis).toBe(
+      'routine'
+    )
   })
 })
 
@@ -293,7 +295,7 @@ describe('scopeToRef', () => {
 
 describe('toObjectAuditCsv', () => {
   it('emits the stable column order with a derived authorization column', () => {
-    const rec = scopeToRef([row({ routine: 'ar-chaser' })], {
+    const rec = scopeToRef([row({ routine: 'deadline-miss-escalator' })], {
       ref: 'M-1',
       from: null,
       to: null,
@@ -301,7 +303,7 @@ describe('toObjectAuditCsv', () => {
     const csv = toObjectAuditCsv(rec)
     const lines = csv.trimEnd().split('\n')
     expect(lines[0]).toBe(OBJECT_AUDIT_CSV_COLUMNS.join(','))
-    expect(lines[1]).toContain('Scheduled routine ""ar-chaser""')
+    expect(lines[1]).toContain('Scheduled routine ""deadline-miss-escalator""')
     expect(lines[1]).toContain(',routine,')
   })
 

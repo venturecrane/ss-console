@@ -106,7 +106,7 @@ personas:
     #
     # ---- OPTIONAL: per-skill cron schedules (ADR 0021 Stream B) ----
     # cron:
-    #   - skill: paid-media-anomaly-watcher
+    #   - skill: deadline-miss-escalator
     #     schedule: '0 7 * * *'        # daily 0700 PT
     #     pre_run: pre_run.py          # required when wake_policy is pre_run_decides
     #     wake_policy: pre_run_decides # pre_run.py decides wakeAgent; MUST emit

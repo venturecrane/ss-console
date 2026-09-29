@@ -43,7 +43,7 @@ def test_injected_send_refused_even_with_autonomous_skill_scalar():
     decision = enforce(
         ceiling=Ceiling.AUTONOMOUS,
         action=ActionClass.EXTERNAL_SEND,
-        skill_name="ar-chaser",
+        skill_name="email-reply",
         tool_name="gmail.send",
         current_turn_approval=False,
     )

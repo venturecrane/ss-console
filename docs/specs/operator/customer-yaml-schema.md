@@ -351,10 +351,10 @@ personas:
     # ... other persona fields ...
     bundles:
       - slug: inbox-sweep
-        description: 'Triage inbox + flag scope creep for a draft pass'
+        description: 'Triage inbox + draft replies in one pass'
         skills:
           - inbox-triage
-          - scope-creep-flagger
+          - email-reply
         instruction: 'Optional shared context prepended to every bundled skill invocation'
 ```
 
@@ -374,7 +374,7 @@ Validation rules:
 personas:
   - slug: marcus
     cron:
-      - skill: paid-media-anomaly-watcher
+      - skill: deadline-miss-escalator
         schedule: '0 7 * * *' # daily 0700 in Hermes' configured timezone
         pre_run: pre_run.py # path relative to the skill directory
         wake_policy: pre_run_decides
@@ -419,7 +419,7 @@ webhook_triggers:
     persona: marcus
   - source: filevine
     event_type: document.added
-    skill: scope-creep-flagger
+    skill: document-receipt-logger
     persona: marcus
 ```
 

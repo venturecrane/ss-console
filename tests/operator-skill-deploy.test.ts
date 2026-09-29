@@ -166,8 +166,8 @@ describe('bootstrap.sh: skill-catalog seed is additive (#1206)', () => {
       // Repo (image) catalog: two skills.
       mkdirSync(join(appSkills, 'inbox-triage'), { recursive: true })
       writeFileSync(join(appSkills, 'inbox-triage', 'SKILL.md'), '# repo body v2\n')
-      mkdirSync(join(appSkills, 'proposal-drafter'), { recursive: true })
-      writeFileSync(join(appSkills, 'proposal-drafter', 'SKILL.md'), '# proposal repo body\n')
+      mkdirSync(join(appSkills, 'email-reply'), { recursive: true })
+      writeFileSync(join(appSkills, 'email-reply', 'SKILL.md'), '# email-reply repo body\n')
       // Volume preexisting state:
       mkdirSync(volSkills, { recursive: true })
       //  (a) a stale SYMLINK alias to the image copy — the exact shape that made a
@@ -198,8 +198,8 @@ describe('bootstrap.sh: skill-catalog seed is additive (#1206)', () => {
         'repo body v2'
       )
       // The other repo skill landed on the volume.
-      expect(readFileSync(join(volSkills, 'proposal-drafter', 'SKILL.md'), 'utf8')).toContain(
-        'proposal repo body'
+      expect(readFileSync(join(volSkills, 'email-reply', 'SKILL.md'), 'utf8')).toContain(
+        'email-reply repo body'
       )
       // The agent-authored skill was preserved, not wiped.
       expect(readFileSync(join(volSkills, 'agent-authored-skill', 'SKILL.md'), 'utf8')).toContain(
@@ -230,6 +230,115 @@ describe('bootstrap.sh: skill-catalog seed is additive (#1206)', () => {
       // its children are never globbed away.
       expect(script).not.toMatch(/rm\s+-rf\s+["']?\$\{HERMES_HOME\}\/skills["'\s]/)
       expect(script).not.toMatch(/rm\s+-rf\s+["']?\$\{HERMES_HOME\}\/skills\/\*/)
+    },
+    SUBPROCESS_TIMEOUT_MS
+  )
+})
+
+describe('bootstrap.sh: retired repo skills are pruned from the volume (retired-skills.txt)', () => {
+  const RETIRED_LIST = join(REPO_ROOT, 'operator', 'templates', 'retired-skills.txt')
+
+  /**
+   * The prune block exactly as bootstrap.sh ships it, cut at its markers, with
+   * only the two image paths pointed at the fixture. Extracting (not copying)
+   * means an edit to the shipped block is what this test runs.
+   */
+  function pruneScript(hermesHome: string, appSkills: string, list: string): string {
+    const src = readFileSync(BOOTSTRAP_SH, 'utf8')
+    const begin = src.indexOf('# retired-skill-prune:begin')
+    const end = src.indexOf('# retired-skill-prune:end')
+    expect(begin, 'retired-skill-prune markers missing from bootstrap.sh').toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(begin)
+    const block = src.slice(begin, end)
+    expect(block).toContain('_app_skills=/app/skills\n')
+    expect(block).toContain('_retired_list=/app/retired-skills.txt\n')
+    return [
+      'set -euo pipefail',
+      'log() { printf "%s\\n" "$*" >&2; }',
+      `HERMES_HOME='${hermesHome}'`,
+      block
+        .replace('_app_skills=/app/skills\n', `_app_skills='${appSkills}'\n`)
+        .replace('_retired_list=/app/retired-skills.txt\n', `_retired_list='${list}'\n`),
+    ].join('\n')
+  }
+
+  function exists(p: string): boolean {
+    try {
+      lstatSync(p)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  it(
+    'removes listed dirs and aliases, keeps unlisted and agent-authored skills, skips a name still in the image',
+    () => {
+      const dir = makeTmpDir()
+      const hermesHome = join(dir, 'opt', 'data')
+      const appSkills = join(dir, 'app', 'skills')
+      const volSkills = join(hermesHome, 'skills')
+      mkdirSync(join(appSkills, 'inbox-triage'), { recursive: true })
+      mkdirSync(join(appSkills, 'still-in-image'), { recursive: true })
+      mkdirSync(join(appSkills, 'link-target'), { recursive: true })
+      writeFileSync(join(appSkills, 'link-target', 'SKILL.md'), '# image body\n')
+      for (const name of ['inbox-triage', 'retired-a', 'still-in-image', 'agent-authored-skill']) {
+        mkdirSync(join(volSkills, name), { recursive: true })
+        writeFileSync(join(volSkills, name, 'SKILL.md'), `# ${name}\n`)
+      }
+      symlinkSync(join(appSkills, 'link-target'), join(volSkills, 'retired-link'))
+      const list = join(dir, 'retired-skills.txt')
+      writeFileSync(
+        list,
+        '# header comment\n\nretired-a\nretired-link\nstill-in-image\nnever-on-volume\n../escape'
+      )
+
+      const out = execFileSync('bash', ['-c', pruneScript(hermesHome, appSkills, list)], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      expect(out).toBe('')
+
+      // Listed and on the volume: gone, the alias as a LINK (its image target intact).
+      expect(exists(join(volSkills, 'retired-a'))).toBe(false)
+      expect(exists(join(volSkills, 'retired-link'))).toBe(false)
+      expect(readFileSync(join(appSkills, 'link-target', 'SKILL.md'), 'utf8')).toContain('image')
+      // Listed but still in the image catalog: logged and left alone, never a die.
+      expect(exists(join(volSkills, 'still-in-image'))).toBe(true)
+      // Unlisted repo skill and the agent-authored skill (ADR 0017): untouched.
+      expect(exists(join(volSkills, 'inbox-triage'))).toBe(true)
+      expect(readFileSync(join(volSkills, 'agent-authored-skill', 'SKILL.md'), 'utf8')).toContain(
+        'agent-authored-skill'
+      )
+      // A malformed line is ignored, never used as a path.
+      expect(exists(join(dir, 'opt', 'escape'))).toBe(false)
+    },
+    SUBPROCESS_TIMEOUT_MS
+  )
+
+  it(
+    'the shipped list prunes every name on it',
+    () => {
+      const names = readFileSync(RETIRED_LIST, 'utf8')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l !== '' && !l.startsWith('#'))
+      expect(names.length).toBeGreaterThan(0)
+      const dir = makeTmpDir()
+      const hermesHome = join(dir, 'opt', 'data')
+      const appSkills = join(dir, 'app', 'skills')
+      mkdirSync(appSkills, { recursive: true })
+      for (const name of [...names, 'agent-authored-skill']) {
+        mkdirSync(join(hermesHome, 'skills', name, '__pycache__'), { recursive: true })
+        writeFileSync(join(hermesHome, 'skills', name, 'SKILL.md'), `# ${name}\n`)
+      }
+      execFileSync('bash', ['-c', pruneScript(hermesHome, appSkills, RETIRED_LIST)], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      for (const name of names) {
+        expect(exists(join(hermesHome, 'skills', name)), name).toBe(false)
+      }
+      expect(exists(join(hermesHome, 'skills', 'agent-authored-skill'))).toBe(true)
     },
     SUBPROCESS_TIMEOUT_MS
   )

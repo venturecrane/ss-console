@@ -4,16 +4,12 @@ Source of truth for per-skill ship readiness across the SMD Operator skill libra
 
 ## Marketing-agency vertical pack (v1: 8 skills)
 
-| Skill                      | Authored      | Fixtures  | Runs     | Current verdict      | Notes                                                                                                                                                                                            |
-| -------------------------- | ------------- | --------- | -------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| smd-inbox-triage           | ✅ full       | synthetic | 1 (real) | `draft_for_review`\* | Real Gmail run [2026-05-19](runs/smd-inbox-triage/2026-05-19-run-01-real-gmail.md). One voice violation (em dashes). Iterate prompt to enforce voice; expect promotion to `autonomous` next run. |
-| retainer-hours-reconciler  | ✅ full       | —         | 0        | —                    | Authored with full anatomy. Awaiting fixtures + first run.                                                                                                                                       |
-| status-report-assembler    | ✅ full       | —         | 0        | —                    | Authored with full anatomy. Awaiting fixtures + first run.                                                                                                                                       |
-| proposal-drafter           | SKILL.md only | —         | 0        | —                    | References pending Captain calibration of first 3.                                                                                                                                               |
-| ar-chaser                  | SKILL.md only | —         | 0        | —                    | References pending.                                                                                                                                                                              |
-| asset-collection-follower  | SKILL.md only | —         | 0        | —                    | References pending.                                                                                                                                                                              |
-| paid-media-anomaly-watcher | SKILL.md only | —         | 0        | —                    | References pending.                                                                                                                                                                              |
-| scope-creep-flagger        | SKILL.md only | —         | 0        | —                    | References pending.                                                                                                                                                                              |
+Six of the eight (retainer-hours-reconciler, proposal-drafter, ar-chaser, asset-collection-follower, paid-media-anomaly-watcher, scope-creep-flagger) were retired 2026-09-29: no client ran them. Their rows are gone; the two that remain in the library are below.
+
+| Skill                   | Authored | Fixtures  | Runs     | Current verdict      | Notes                                                                                                                                                                                            |
+| ----------------------- | -------- | --------- | -------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| smd-inbox-triage        | ✅ full  | synthetic | 1 (real) | `draft_for_review`\* | Real Gmail run [2026-05-19](runs/smd-inbox-triage/2026-05-19-run-01-real-gmail.md). One voice violation (em dashes). Iterate prompt to enforce voice; expect promotion to `autonomous` next run. |
+| status-report-assembler | ✅ full  | —         | 0        | —                    | Authored with full anatomy. Awaiting fixtures + first run.                                                                                                                                       |
 
 \* One real run with voice violation; below the rubric's "no safety-invariant violations + autonomous-shippable" bar but well within draft_for_review.
 
@@ -97,7 +93,7 @@ Authored: 0/12. Deferred per Captain (partner-program gates 30-90 days).
 
 ## Captain calibration status
 
-- Calibration set authored: 3/3 (inbox-triage, retainer-hours-reconciler, status-report-assembler all have full anatomy)
+- Calibration set authored: 3/3 (inbox-triage, retainer-hours-reconciler, status-report-assembler all had full anatomy; retainer-hours-reconciler retired 2026-09-29)
 - Calibration round complete: 0/3 (Captain has not yet labeled sample outputs)
 - Rubric locked: no
 
