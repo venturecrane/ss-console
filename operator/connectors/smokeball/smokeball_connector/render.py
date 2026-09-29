@@ -520,19 +520,31 @@ def render_markdown_to_docx(markdown: str) -> bytes:
     """Render gated skeleton markdown to .docx bytes.
 
     Supported: ``#``/``##``/``###`` -> Heading 1/2/3; ``-``/``*`` bullets ->
-    List Bullet; ``**bold**`` / ``*italic*`` inline; blank lines separate
-    paragraphs. Anything else (deeper headings, tables, rules, links, code
-    fences) renders as plain paragraph text with its markdown characters intact:
-    the reader sees it, which is the only failure mode acceptable in a document
-    an attorney reviews.
+    List Bullet; ``**bold**`` / ``*italic*`` inline; a pipe table (consecutive
+    ``| a | b |`` lines, its ``---`` separator row dropped) -> a Word table;
+    blank lines separate paragraphs. Anything else (deeper headings, rules,
+    links, code fences) renders as plain paragraph text with its markdown
+    characters intact: the reader sees it, which is the only failure mode
+    acceptable in a document an attorney reviews.
+
+    Tables were passed through as text until 2026-09-28, when a finalized
+    exhibit list's court caption reached the pilot matter as twelve literal
+    pipes; a caption is a table in every court document the firm files.
 
     Markers are emitted as their own literal runs with no formatting applied, so
     a marker is never restyled, hidden, or split by the emphasis pass."""
     from docx import Document
 
     doc = Document()
+    table_rows: list[list[str]] = []
     for raw_line in markdown.splitlines():
         line = raw_line.strip()
+        row = _table_row(line)
+        if row is not None:
+            if not _is_separator_row(row):
+                table_rows.append(row)
+            continue
+        _flush_table(doc, table_rows)
         if not line:
             continue
         heading = _HEADING_RE.match(line)
@@ -546,9 +558,35 @@ def render_markdown_to_docx(markdown: str) -> bytes:
             _add_runs(para, bullet.group(1).strip())
             continue
         _add_runs(doc.add_paragraph(), line)
+    _flush_table(doc, table_rows)
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
+
+
+def _table_row(line: str) -> list[str] | None:
+    """The cells of a ``| a | b |`` line, or None. An escaped pipe (``\\|``)
+    stays inside its cell."""
+    if len(line) < 2 or not line.startswith("|") or not line.endswith("|") or line.endswith("\\|"):
+        return None
+    cells = re.split(r"(?<!\\)\|", line[1:-1])
+    return [cell.strip().replace("\\|", "|") for cell in cells]
+
+
+def _is_separator_row(row: list[str]) -> bool:
+    return all(cell and set(cell) <= set("-: ") and "-" in cell for cell in row)
+
+
+def _flush_table(doc, rows: list[list[str]]) -> None:
+    """Write the collected rows as one Word table, then clear them."""
+    if not rows:
+        return
+    ncols = max(len(r) for r in rows)
+    table = doc.add_table(rows=len(rows), cols=ncols)
+    for r_idx, row in enumerate(rows):
+        for c_idx, text in enumerate(row):
+            _add_runs(table.cell(r_idx, c_idx).paragraphs[0], text)
+    rows.clear()
 
 
 def _add_runs(paragraph, text: str) -> None:
