@@ -42,6 +42,17 @@ DATE_PREP_EVENTS: dict[str, dict] = {
         "timeZone": "America/Los_Angeles",
         "location": "Department 14",
     },
+    # Added 2026-09-28 (third fresh date): proves a finalize step renders a
+    # Word document carrying the draft's own caption (#2974). 2026-PI-104 has
+    # no other date in the window. Stored in UTC; 10:00 a.m. Pacific, Dept 22.
+    "mandatory-settlement-conference-whitfield": {
+        "matter": "liens-whitfield",
+        "subject": "Mandatory Settlement Conference",
+        "startTime": "2026-10-09T17:00:00Z",  # 10:00 a.m. Pacific
+        "endTime": "2026-10-09T19:00:00Z",
+        "timeZone": "America/Los_Angeles",
+        "location": "Department 22",
+    },
 }
 
 
@@ -76,6 +87,28 @@ def _exhibit_list_ramirez() -> list[str]:
     ]
 
 
+def _exhibit_list_whitfield() -> list[str]:
+    return [
+        "SUPERIOR COURT OF CALIFORNIA, COUNTY OF LOS ANGELES",
+        "",
+        "James Whitfield, Plaintiff,",
+        "v.",
+        "Pacific Freight, Defendant.",
+        "",
+        "Case No. 25STCV40712",
+        "Department 22",
+        "",
+        "PLAINTIFF'S EXHIBIT LIST FOR MANDATORY SETTLEMENT CONFERENCE (DRAFT)",
+        "",
+        "Exhibit 1. Police traffic collision report",
+        "Exhibit 2. Treating physician narrative report",
+        "Exhibit 3. Itemized medical specials summary",
+        "Exhibit 4. Medi-Cal (DHCS) lien itemization",
+        "",
+        "DRAFT: confirm Exhibit 4 should be included before serving.",
+    ]
+
+
 def build_date_prep_documents() -> dict[str, tuple[str, str, list[str]]]:
     """doc_key -> (matter_key, file_name, text lines), the seed_data shape."""
     return {
@@ -88,5 +121,10 @@ def build_date_prep_documents() -> dict[str, tuple[str, str, list[str]]]:
             "lookalike-alvarez",
             "2026-09-24 Plaintiff Witness List (draft) - Alvarez.pdf",
             _witness_list_alvarez_draper(),
+        ),
+        "exhibit-list-draft-whitfield": (
+            "liens-whitfield",
+            "2026-09-25 Plaintiff MSC Exhibit List (draft) - Whitfield.pdf",
+            _exhibit_list_whitfield(),
         ),
     }
