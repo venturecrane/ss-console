@@ -4,9 +4,12 @@ Reference bundle definitions for the SMD Operator. Each catalog
 entry combines two or more skills under a single slash command so a
 common multi-step workflow becomes one user-facing invocation.
 
-| Bundle                     | Slash command          | Skills                                                  | Vertical         |
-| -------------------------- | ---------------------- | ------------------------------------------------------- | ---------------- |
-| `weekly-client-pulse.yaml` | `/weekly-client-pulse` | `status-report-assembler` + `retainer-hours-reconciler` | marketing-agency |
+The catalog is empty. Its one entry, `weekly-client-pulse.yaml`
+(`status-report-assembler` + `retainer-hours-reconciler`), was retired
+2026-09-29 with the retainer-hours-reconciler skill.
+
+| Bundle | Slash command | Skills | Vertical |
+| ------ | ------------- | ------ | -------- |
 
 ## How bundles flow from catalog to runtime
 

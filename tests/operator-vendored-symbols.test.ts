@@ -242,13 +242,20 @@ json.dump({
         JSON.stringify(
           {
             _comment:
-              'Symbols vendored identically into multiple operator/skills/*/pre_run.py: the eight ' +
-              'stamps of templates/pre_run_gate.py, the inline heartbeat writer classes, and the ' +
+              'Symbols vendored identically into multiple operator/skills/*/pre_run.py: the seven ' +
+              'stamps of templates/pre_run_gate.py (eight until 2026-09-17, when routine 11 lost ' +
+              'its schedule and medical-chronology-maintainer/pre_run.py was deleted), the inline ' +
+              'heartbeat writer classes, and the ' +
               'one-line wrappers over templates/skill_helpers.py (the shared library bodies live ' +
               'there since 2026-09-11, gated by operator/tests/test_skill_helpers_sync.py). This ' +
-              'contract is what keeps the remaining copies honest. Hashes are over a docstring-stripped ast.dump, ' +
+              'contract is what keeps the remaining copies honest. The 2026-09-29 regeneration ' +
+              '(retirement of the orphan-vertical skills) also pinned 21 previously uncatalogued ' +
+              'shared symbols the regenerator discovered: 20 identical across the 7 stamped ' +
+              'pre_runs and _try_write_emitted_wake across lien-ledger-tracker and ' +
+              'medical-records-chaser; no code changed. It dropped _capped_plan_counts, whose two ' +
+              'copies left with paid-media-anomaly-watcher and retainer-hours-reconciler. Hashes are over a docstring-stripped ast.dump, ' +
               'so prose and formatting are ignored and structure is not. Generated and enforced by ' +
-              'tests/operator-vendored-symbols.test.ts — do not hand-edit. Regenerate with ' +
+              'tests/operator-vendored-symbols.test.ts; do not hand-edit. Regenerate with ' +
               'UPDATE_PRE_RUN_SHARED_SYMBOLS=1 after changing a shared symbol in EVERY copy.',
             symbols,
           },

@@ -49,7 +49,7 @@ Fail conditions:
 
 ### Classification / categorization skills
 
-Skill reads an item, assigns it to a category. Examples: inbox-triage (REPLY/ACT/WAIT/FYI/JUNK), scope-creep-flagger (IN_SCOPE/AMBIGUOUS/OUT_OF_SCOPE).
+Skill reads an item, assigns it to a category. Examples: inbox-triage (REPLY/ACT/WAIT/FYI/JUNK), matter-inbox-router (which skill handles an inbound message).
 
 Pass conditions:
 
@@ -65,7 +65,7 @@ Fail conditions:
 
 ### Drafting skills
 
-Skill produces customer-facing or user-facing text. Examples: ar-chaser drafts, status-report drafts, proposal-drafter outputs.
+Skill produces customer-facing or user-facing text. Examples: email-reply drafts, status-report drafts, client-matter-digest outputs.
 
 Pass conditions (in priority order):
 
@@ -84,7 +84,7 @@ Fail conditions:
 
 ### Decision / surfacing skills
 
-Skill watches a stream, surfaces things worth attention. Examples: paid-media-anomaly-watcher, scope-creep-flagger surfacing.
+Skill watches a stream, surfaces things worth attention. Examples: stalled-matter-nudge, daily-needs-you-digest surfacing.
 
 Pass conditions:
 
@@ -101,7 +101,7 @@ Fail conditions:
 
 ### Action skills (autonomous internal)
 
-Skill takes an action — write to internal note, post Slack, log to a tracking file. Examples: asset-collection-follower internal log updates, retainer-hours weekly Slack post.
+Skill takes an action: write to internal note, post Slack, log to a tracking file. Examples: matter-memo-on-update internal memos, document-receipt-logger receipt entries.
 
 Pass conditions:
 
@@ -120,7 +120,7 @@ Fail conditions:
 
 Per the plan, the first 3 skills get a Captain calibration pass before the rubric propagates to skills 4-58:
 
-1. Author the SKILL.md + references for 3 skills (inbox-triage, retainer-hours-reconciler, status-report-assembler).
+1. Author the SKILL.md + references for 3 skills (inbox-triage, retainer-hours-reconciler, status-report-assembler). retainer-hours-reconciler was retired 2026-09-29.
 2. Run each against its full fixture set.
 3. Surface 5 fixture-output samples per skill to Captain.
 4. Captain reads each output and labels it autonomous / draft / fails using gut + the rubric above.
@@ -154,7 +154,7 @@ Every test run logs the following to `operator/grading/runs/<skill>/<fixture-id>
 }
 ```
 
-The audit trail is what makes the grading matrix defensible: when Captain asks "why is ar-chaser at draft_for_review?", we point at the verdict reasoning across the fixture set.
+The audit trail is what makes the grading matrix defensible: when Captain asks "why is inbox-triage at draft_for_review?", we point at the verdict reasoning across the fixture set.
 
 ## Cost-per-customer rollup
 

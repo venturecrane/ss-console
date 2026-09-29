@@ -23,11 +23,6 @@
  */
 
 export const SKILL_SUMMARIES: Record<string, string> = {
-  'ar-chaser': 'Drafts accounts-receivable follow-ups from QuickBooks for your review.',
-  'assessment-findings-draft':
-    'Drafts evidence-bound findings from an assessment interview transcript.',
-  'asset-collection-follower':
-    'Drafts the new-client onboarding checklist and chases the missing items.',
   'client-matter-digest':
     'Drafts a per-matter status update for a client, in your voice. Reports status, never advises.',
   'client-verification-tracker':
@@ -113,12 +108,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Runs a one-page self-check on request: connections, a counted read, document output, and a live demonstration that it refuses identifiers it has not read. Reports to the requester only.',
   'opposing-response-deficiency-review':
     "Reads the opposing side's discovery responses and surfaces candidate gaps for an attorney. An assist, never a legal finding.",
-  'paid-media-anomaly-watcher': 'Scans paid-media accounts daily for anomalies and alerts you.',
-  'proposal-drafter': 'Drafts a proposal from a meeting transcript and your SOW templates.',
   'referral-source-acknowledgment':
     'Drafts a courtesy thank-you to whoever referred a new matter. Never discloses client identity. Drafted for review, never auto-sent.',
-  'retainer-hours-reconciler': 'Reconciles tracked hours against retainer caps for your review.',
-  'scope-creep-flagger': 'Flags out-of-scope requests in Slack or email for your reply.',
   'separate-statement-assembler':
     'Assembles the Rule 3.1345 separate statement for a motion to compel by collating requests and responses. Staged for your attorney, authors no argument.',
   'service-confirmation-watcher':

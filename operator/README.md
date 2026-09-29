@@ -6,7 +6,7 @@ The v1 Operator SKU — a single product configured per customer for any vertica
 
 One product, many configurations. Vertical-specific content lives only in:
 
-- `skills/` — recipes the agent runs (some are vertical-tagged, e.g. `paid-media-anomaly-watcher`; others horizontal, e.g. `inbox-triage`)
+- `skills/`: recipes the agent runs (some are vertical-tagged, e.g. `medical-records-chaser`; others horizontal, e.g. `inbox-triage`)
 - `connectors/` — BUILD wrappers per the ADR 0020 decision table only (see "Where connector code lives" below)
 - `fixtures/` — synthetic data per vertical, structured `fixtures/<vertical>/<sub-vertical>/<type>/`
 - `customers/<slug>/customer.yaml` — per-customer configuration

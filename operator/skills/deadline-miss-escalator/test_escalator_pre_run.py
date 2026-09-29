@@ -5,8 +5,9 @@ heartbeat emission, and the mirror-don't-gate fallback (audit failure → wake �
 the dead-man's-switch the plan critique flagged). Fake source + fake executor;
 no network, no OAuth, no D1.
 
-Mirrors `retainer-hours-reconciler/test_retainer_pre_run.py` — same harness,
-adapted for authored-deadline proximity instead of utilization buckets.
+Mirrored the harness of the retainer-hours pre_run test (that skill was
+retired 2026-09-29), adapted for authored-deadline proximity instead of
+utilization buckets.
 
 Run from repo root:
 

@@ -1076,7 +1076,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # leaves the outbound draft gate (its follow-up schedule is computed by design;
 # the store is never outbound; drafts composed from it stay gated), and the
 # vendor's agent_attach_human is banned (ss#2793). No tracked twin moves.
-ARG OVERLAY_REF="314ffec84034efeda6dd887a02fa0aaf9e5915bc"
+# 2026-09-29d (430f8129, the overlay #400 merge commit). voice_note_transcribe
+# hands the transcriber a path with the recording's real extension; the spool
+# stores bytes as .bin, which Hermes refuses by extension (ss#2793). No
+# tracked twin moves.
+ARG OVERLAY_REF="430f8129147f04f1cf31acfe599df07951ed870f"
 
 ARG CUSTOMER_SLUG=customer-zero
 
@@ -1599,6 +1603,9 @@ COPY operator/templates/entrypoint.sh /app/entrypoint.sh
 # REQUIRED_ENV / OPTIONAL_ENV, generated from operator/contracts/env-consumption.yaml
 # (operator/bin/gen-env-arrays.py); bootstrap.sh sources this instead of hardcoding them.
 COPY operator/templates/_env-arrays.generated.sh /app/_env-arrays.generated.sh
+# The retired repo-skill names bootstrap.sh prunes from the volume after the
+# additive skill seed (one home: operator/templates/retired-skills.txt).
+COPY operator/templates/retired-skills.txt /app/retired-skills.txt
 RUN chmod +x /app/bootstrap.sh /app/entrypoint.sh
 
 # Curator disable guard (ADR 0017). bootstrap.sh step 7b runs this after the

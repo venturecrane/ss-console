@@ -6,6 +6,8 @@
 
 > **Status banner (read first).** This document is the design source-of-truth. It is honest about three things that are NOT yet true: (a) the cost case is a _method_, not a proven number — every dollar figure other than Anthropic's published rates is flagged ILLUSTRATIVE or ESTIMATED; (b) the marquee "unattended employee that delivers a retrievable result" claim is blocked on an unbuilt durable runner (B1); (c) the recommended bulk-data primitive (delegate_task, B2a) **defeats the taint gate as written** and must not ship before the child-session taint fix (B0) lands. The framework's shape is sound; its gaps are named, not hidden.
 
+> **Retired skills (2026-09-29).** `ar-chaser`, `retainer-hours-reconciler`, `scope-creep-flagger` and `proposal-drafter` were retired from `operator/skills/` on 2026-09-29 (no client ran them). The citations to them below, including the `ar-chaser` token figures, are historical: they record the skill bodies as read on 2026-06-18.
+
 ---
 
 ## 1. Executive Summary
