@@ -1437,7 +1437,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // 65ff3f01 -> 314ffec8 (2026-09-29, overlay#398 merge commit, ss#2793). The
     // record-store write leaves the outbound draft gate; agent_attach_human is
     // banned.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="314ffec84034efeda6dd887a02fa0aaf9e5915bc"')
+    // 314ffec8 -> 430f8129 (2026-09-29, overlay#400 merge commit, ss#2793). The voice
+    // note tool hands the transcriber a path with the recording's real extension.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="430f8129147f04f1cf31acfe599df07951ed870f"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

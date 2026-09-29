@@ -1076,7 +1076,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # leaves the outbound draft gate (its follow-up schedule is computed by design;
 # the store is never outbound; drafts composed from it stay gated), and the
 # vendor's agent_attach_human is banned (ss#2793). No tracked twin moves.
-ARG OVERLAY_REF="314ffec84034efeda6dd887a02fa0aaf9e5915bc"
+# 2026-09-29d (430f8129, the overlay #400 merge commit). voice_note_transcribe
+# hands the transcriber a path with the recording's real extension; the spool
+# stores bytes as .bin, which Hermes refuses by extension (ss#2793). No
+# tracked twin moves.
+ARG OVERLAY_REF="430f8129147f04f1cf31acfe599df07951ed870f"
 
 ARG CUSTOMER_SLUG=customer-zero
 
