@@ -45,12 +45,14 @@
     "trial-order": "8239dab8-0666-4f44-9b35-bdba2d65d9eb",
     "verification-rfp-two-alvarez": "d1b1709d-d50c-44df-9325-586cb3d4c231",
     "witness-list": "3061ca2e-d97e-4604-a1a5-812afa70c2c4",
-    "witness-list-draft-alvarez-draper": "3b923717-c5f9-4987-8643-8f8f698e8457"
+    "witness-list-draft-alvarez-draper": "3b923717-c5f9-4987-8643-8f8f698e8457",
+    "witness-list-draft-alvarez-mva": "b174a543-9a8d-4419-8f6e-bb565bf93590"
   },
   "events": {
     "final-status-conference-alvarez-draper": "fe00bbb3-efd5-4a3e-8caf-b561689bb370",
     "hearing-minors-compromise-ramirez": "cef69a47-cd74-4824-b439-2f4d1f4dd490",
-    "mandatory-settlement-conference-whitfield": "7fbb2b08-4d1b-4c5a-91b0-7a9595be2cfb"
+    "mandatory-settlement-conference-whitfield": "7fbb2b08-4d1b-4c5a-91b0-7a9595be2cfb",
+    "trial-readiness-conference-alvarez": "cb082ffb-10e2-48ba-8d94-0676e25c2fd3"
   },
   "matters": {
     "liens-whitfield": "cd710b6b-a7ae-44b0-bb8a-be79e8c5d351",
