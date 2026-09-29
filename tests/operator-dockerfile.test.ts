@@ -1434,7 +1434,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // a3bd40db -> 65ff3f01 (2026-09-29, overlay#397 merge commit, ss#2793). A rostered
     // sender's emailed voice memo becomes their words through the seat's
     // speech-to-text, without tainting the turn.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="65ff3f01e7d57028be30fb42c6efd3639a25d4c7"')
+    // 65ff3f01 -> 314ffec8 (2026-09-29, overlay#398 merge commit, ss#2793). The
+    // record-store write leaves the outbound draft gate; agent_attach_human is
+    // banned.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="314ffec84034efeda6dd887a02fa0aaf9e5915bc"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
