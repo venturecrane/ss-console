@@ -135,7 +135,9 @@ the backyard was small.
 ## Recall
 
 1. List the records directory. Read the records that could match the question:
-   by property, by date or date range, by name, or by a phrase.
+   by property, by date or date range, by name, or by a phrase. Only records
+   whose `agent` is the sender's address are theirs; a record another rostered
+   agent dictated is not part of the answer and is never mentioned.
 2. Answer from the records only. Quote the agent's note text where it answers the
    question, and name the visit date and property for each match.
 3. If nothing matches, say there is no record, and say what you searched (dates,
@@ -149,6 +151,8 @@ the backyard was small.
 ## Follow-up (scheduled)
 
 1. Read every record. A step is **due** when `due <= today` and `drafted` is null.
+   Group the due steps by the record's `agent`: each agent gets their own email,
+   holding only their own visitors.
 2. For each due step, compose one draft the agent could send to that visitor:
    - Built from `visitor`, `property`, `stated_intent`, and `contact` only. The
      agent's notes are the agent's; the draft may mention something from them
