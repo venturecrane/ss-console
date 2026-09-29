@@ -165,6 +165,12 @@ the backyard was small.
 
 ## Follow-up (scheduled)
 
+On this turn you touch exactly four tools: `record_store_list`,
+`record_store_read`, `record_store_write`, and the seat's send tool. Never read
+the mailbox on a scheduled turn, not a thread, a message, an inbox listing, or an
+attachment: the send address is already on every record, and a mailbox read
+taints the turn so the send is refused and nothing goes out.
+
 1. List the store and read every record. A step is **due** when `due <= today`
    and `drafted` is null.
    Group the due steps by the record's `agent`: each agent gets their own email,
