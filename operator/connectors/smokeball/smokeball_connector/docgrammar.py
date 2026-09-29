@@ -14,7 +14,11 @@ drafting-discipline.md`` Part IV):
 * paragraphs (blank-line separated) with ``**bold**`` / ``*italic*`` runs,
 * ``-`` / ``*`` bullets,
 * literal ``1.`` numbered items (the number is content; discovery item numbers
-  come from the propounded set, never from a counter),
+  come from the propounded set, never from a counter). The one exception is
+  markdown's own ``1. 1. 1.``: a run whose labels are ALL identical is numbered
+  in sequence from that label (the pattern that printed 1, 1, 1 on a finalized
+  list). A run whose labels already differ (1, 2, 3 or 7, 9, 12) is left
+  exactly as written,
 * pipe tables (``| a | b |``; an optional ``| --- | --- |`` separator after the
   first row marks it as a header row),
 * a line that is exactly ``---`` outside a table is a horizontal rule,
@@ -235,28 +239,33 @@ def parse_document(markdown: str) -> list[Block]:
 
 
 def _renumber(blocks: list[Block]) -> list[Block]:
-    """Number each run of ``Numbered`` blocks in sequence from its first label.
+    """Number a run of ``Numbered`` blocks in sequence ONLY when every label in
+    the run is identical (markdown's ``1. 1. 1.``, which printed 1, 1, 1).
 
-    Markdown writes an ordered list as ``1. 1. 1.`` and means 1, 2, 3; a label
-    is printed literally, so without this a class-styled draft printed 1, 1, 1
-    (the same rule as ``render._number_ordered_runs``). Blank lines were already
-    dropped, so consecutive blocks are one run; any other block ends it, and so
-    does a change of delimiter (``1.`` then ``2)``), as in CommonMark. The run
-    keeps its first label's punctuation."""
+    A run is consecutive ``Numbered`` blocks (blank lines were already dropped);
+    any other block ends it. A run whose labels already differ is content and is
+    left exactly as written: a discovery response set can legitimately run 7, 9,
+    12, and its numbers come from the propounded set, never from a counter."""
     out: list[Block] = []
-    next_n: int | None = None
-    delim: str | None = None
+    run: list[Numbered] = []
+
+    def flush() -> None:
+        labels = {b.label for b in run}
+        if len(run) > 1 and len(labels) == 1:
+            first = run[0].label
+            n, delim = int(first[:-1]), first[-1]
+            out.extend(Numbered(f"{n + k}{delim}", b.runs) for k, b in enumerate(run))
+        else:
+            out.extend(run)
+        run.clear()
+
     for block in blocks:
-        if isinstance(block, Numbered) and (next_n is None or block.label[-1] == delim):
-            if next_n is None:
-                next_n, delim = int(block.label[:-1]), block.label[-1]
-            out.append(Numbered(f"{next_n}{delim}", block.runs))
-            next_n += 1
-            continue
-        next_n, delim = None, None
         if isinstance(block, Numbered):
-            next_n, delim = int(block.label[:-1]) + 1, block.label[-1]
+            run.append(block)
+            continue
+        flush()
         out.append(block)
+    flush()
     return out
 
 

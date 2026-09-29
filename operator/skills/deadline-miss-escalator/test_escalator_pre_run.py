@@ -1805,3 +1805,63 @@ def test_failure_note_envelope_passes_the_pinned_dispatchers_validator(tmp_path,
         assert isinstance(entry["recipients"], list) and entry["recipients"]
         assert isinstance(entry["subject"], str) and entry["subject"].strip()
         assert isinstance(entry["full_body"], str) and entry["full_body"].strip()
+
+
+# ---------------------------------------------------------------------------
+# Ledger identity does not move with the local day (history review of #2992):
+# the item_key's date is the raw stamp's day as written, exactly as before, so
+# an existing ack/snooze row keeps matching; only the window, the rung and the
+# printed line use the firm's local day.
+# ---------------------------------------------------------------------------
+
+_LOCAL_EVENT = {
+    "id": "e-local",
+    "matterId": "m-2",
+    "startTime": "2026-07-10T00:00:00",
+    "localDate": "2026-07-09",
+}
+
+
+def _local_deadline():
+    deadlines, problem, _probe = parse_pull({"tasks": {"items": []}, "events": {"items": [dict(_LOCAL_EVENT)]}})
+    assert problem is None
+    return deadlines[0]
+
+
+def test_item_key_keeps_the_stamps_day_while_the_line_prints_the_local_day() -> None:
+    d = _local_deadline()
+    assert d.authored_date == date(2026, 7, 9)
+    # What origin/main keyed this event on: startTime[:10], as written.
+    before = _ledger.item_key("m-2", "e-local", "court-date", date(2026, 7, 10))
+    assert _ledger.item_key(d.matter_id, d.task_id, d.label, d.identity_date or d.authored_date) == before
+    item = _pre_run._digest_item(d, date(2026, 7, 6), None)
+    assert item["authored_date"] == "2026-07-09"
+    assert item["identity_date"] == "2026-07-10"
+    assert _pre_run._DI.day_words(item["authored_date"], weekday=False, year=False) == "Jul 9"
+    assert _envelope._fired_append(item, _ledger, {}, 7)["item_key"] == before
+
+
+def test_a_snoozed_row_keeps_matching_after_the_local_day_change() -> None:
+    d = _local_deadline()
+    key = _ledger.item_key("m-2", "e-local", "court-date", date(2026, 7, 10))
+    events = [
+        _ledger.make_event(
+            skill="deadline-miss-escalator",
+            matter_id="m-2",
+            item_key=key,
+            event=kind,
+            attempt=1,
+            token=_ledger.token_for(key),
+            ts=ts,
+        )
+        for kind, ts in (("fired", "2026-07-05T07:00:00.000Z"), ("acked", "2026-07-05T09:00:00.000Z"))
+    ]
+    enriched = enrich_with_ledger([d], today=date(2026, 7, 7), policy=_POLICY, ledger_events=events)
+    assert enriched[0].acknowledged is True
+    assert enriched[0].acked is True
+
+
+def test_an_item_whose_days_agree_carries_no_identity_date() -> None:
+    event = {"id": "e-1", "matterId": "m-1", "startTime": "2026-07-09T16:30:00", "localDate": "2026-07-09"}
+    d = parse_pull({"tasks": {"items": []}, "events": {"items": [event]}})[0][0]
+    assert "identity_date" not in _pre_run._digest_item(d, date(2026, 7, 6), None)

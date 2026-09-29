@@ -39,9 +39,14 @@ artifact, never the email body.
 ## File note (create_memo)
 
 [Operator] <Routine name> as of <localDate>
-Served <type> captured on matter <matter number>: served <date> by <method>, read off the proof of service (fileId <file id> recorded). The response deadline comes from the rules engine or is confirmed by hand, not computed here.
+Served <type> captured on matter <matter number>: served <date> by <method>, read off the proof of service. The response deadline comes from the rules engine or is confirmed by hand, not computed here.
 <Attorney> to confirm the service date and method.
+fileId <file id> recorded
 ```
+
+The last line is machine-read (a later scan dedups on it) and stands alone on its own
+line, exactly `fileId <file id> recorded`; never fold it into a sentence. The same
+holds in every shape below.
 
 ## Shape B - Bare deposition notice captured (calendar + prep, not a response clock)
 
@@ -58,8 +63,9 @@ carries a document rider, use Shape C.
 ## File note (create_memo)
 
 [Operator] <Routine name> as of <localDate>
-Deposition notice captured on matter <matter number>: <deponent>, <date> at <time>, <place>; no document demand (fileId <file id> recorded).
+Deposition notice captured on matter <matter number>: <deponent>, <date> at <time>, <place>; no document demand.
 Put the deposition on the calendar and start prep.
+fileId <file id> recorded
 ```
 
 ## Shape C - Deposition notice WITH an embedded document demand (compound - both facets)
@@ -84,8 +90,9 @@ read cleanly, fall back to Shape D rather than dropping the production obligatio
 ## File note (create_memo)
 
 [Operator] <Routine name> as of <localDate>
-Records deposition notice captured on matter <matter number>: <deponent>, <date>, <place>, with a document demand (fileId <file id> recorded). The objection window for the document demand (§2025.410) is open; nothing is on the calendar yet.
+Records deposition notice captured on matter <matter number>: <deponent>, <date>, <place>, with a document demand. The objection window for the document demand (§2025.410) is open; nothing is on the calendar yet.
 Put the deposition on the calendar, and <attorney> to decide on objections to the document demand.
+fileId <file id> recorded
 ```
 
 ## Shape D - Surface & ask (fail-closed: cannot read / classify / match / one method)
@@ -127,7 +134,8 @@ service date/method/type is not guessed.
    only on a single unique existing Smokeball match; the surface names the caption as
    the untrusted source of the search.
 7. **Dedup on `(matter, fileId)`.** A scan does not re-surface a document whose `fileId`
-   already appears in a prior capture memo; every capture memo records its `fileId`.
+   already appears in a prior capture memo; every capture memo records its `fileId` on
+   its own last line, `fileId <file id> recorded`.
 8. **Writes are surfaced as done only after a confirming read** (`get_memos_on_matter`
    after `create_memo`; `list_tasks` / `get_task` after `create_task`); otherwise the
    write failure is surfaced.

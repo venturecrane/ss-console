@@ -2,7 +2,7 @@
 
 This skill has **no outbound voice**. It sends nothing to a client, to opposing
 counsel, to a mediator, or to the court. It produces internal artifacts only: the
-staged brief-inputs packet, the tracked task, an internal log, and a training note. So
+staged brief-inputs packet, the tracked task, a file note, and a training note. So
 there is no client-facing tone to tune here; there is a discipline to hold about the
 text it does and does not write.
 
@@ -14,9 +14,12 @@ text it does and does not write.
   liability summary, the chronology, the specials, the demand/offer figures, and the
   §998 offer terms are **verbatim quotations or pointers**, never rewritten,
   summarized, sharpened, or valued.
-- **The internal log (create_memo body)** - crisp and factual. States what was
-  assembled, from which documents, that the brief was left for the attorney/co-counsel,
-  and that the deadlines were surfaced as proposed-confirm. One or two sentences. It
+- **The file note (create_memo)** - crisp and factual, in the pack's one shape (`_shared-write-posture.md`, section 5): the header line
+  `[Operator] <Routine name> as of <localDate>`, one plain line of what it found, one
+  plain line of what a person needs to do (or "Nothing to do."). No `>` quote marks, no
+  `**`, no headings, no tables. The training note rides in those two lines.
+  It states what was assembled, from which documents, that the brief was left for the
+  attorney/co-counsel, and that the deadlines were surfaced as proposed-confirm. It
   records; it does not opine or value.
 - **The training note** - plain, explanatory, per `_shared-training-output.md`. Teaches
   the step (what/why/next/attorney-if) and cites the governing rule (CCP §998 for the
@@ -43,13 +46,13 @@ text it does and does not write.
 
 ## Good / bad
 
-**Good - internal log:**
+**Good - file note:**
 
-> Assembled the mediation brief inputs for Vega (liability summary, medical chronology
-> and specials, damages figures, and demand/offer history read from the matter);
-> staged for co-counsel to write the brief. §998 offer (served 2026-06-20) acceptance
-> window and the mediation date (read from the calendar) surfaced as proposed-confirm,
-> not finalized. No gaps.
+```
+[Operator] Mediation and settlement as of Jul 1, 2026
+Mediation brief inputs for the Vega matter assembled from the liability summary, the medical chronology and specials, the damages figures and the demand and offer history; the §998 offer served Jun 20 and the mediation date are proposed, not final. No gaps.
+Co-counsel to write the brief; the attorney to confirm the §998 window and the mediation date.
+```
 
 **Bad - writes the brief / values the case (violates the floor):**
 

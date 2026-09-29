@@ -153,6 +153,14 @@ class MatterDeadline:
     # the Operator created this task. Read only by casework_filter.py, and only
     # on a seat that authored ``case_manager.own_tasks``.
     operator_stamped: bool = False
+    # The date the escalation ledger keys this item on: the raw stamp's day,
+    # exactly as written (``dueDate``/``startTime``[:10]), never converted.
+    # ``authored_date`` is the firm's local day (the window, the rung and the
+    # printed line); the ledger identity must not move with it, or every row
+    # whose local day differs from the stamp's day forks a new key and loses
+    # its ack/snooze state (#2257, #2301; escalation_ledger.item_key).
+    # ``None`` falls back to ``authored_date`` (an item with no raw stamp).
+    identity_date: date | None = None
 
 
 class DeadlineSource(Protocol):
@@ -342,7 +350,7 @@ def enrich_with_ledger(
     states = ledger.derive_state(ledger_events)
     enriched: list[MatterDeadline] = []
     for d in deadlines:
-        key = ledger.item_key(d.matter_id, d.task_id, d.label, d.authored_date)
+        key = ledger.item_key(d.matter_id, d.task_id, d.label, d.identity_date or d.authored_date)
         state = states.get(key)
         fire = ledger.should_fire(
             state,
@@ -432,6 +440,9 @@ def _digest_item(d: MatterDeadline, today: date, ack_code: str | None) -> dict:
         "subject_display": d.subject_display,
         "matter_name": d.matter_name,
         **({"prep_note_missing": True} if d.prep_note_missing else {}),
+        # The ledger identity day, only when it differs from the printed local
+        # day: the dispatch's ``fired`` row must key on it (see identity_date).
+        **({"identity_date": str(d.identity_date)} if d.identity_date not in (None, d.authored_date) else {}),
     }
 
 
@@ -473,7 +484,7 @@ def project_digest(
     def code_for(d: MatterDeadline) -> str | None:
         if not ledger.has_stable_identity(d.task_id, d.matter_id):
             return None
-        key = ledger.item_key(d.matter_id, d.task_id, d.label, d.authored_date)
+        key = ledger.item_key(d.matter_id, d.task_id, d.label, d.identity_date or d.authored_date)
         return ledger.token_for(key)
 
     stable = [d for d in firing if ledger.has_stable_identity(d.task_id, d.matter_id)]
@@ -1241,14 +1252,14 @@ def parse_pull(raw: dict, *, now: datetime | None = None) -> tuple[list[MatterDe
                     matter_number=number,
                     matter_number_absent=number_absent,
                     authored_date=authored,
+                    # The ledger identity: the raw stamp's day, the pre-2026-09-29 key order.
+                    identity_date=_first_date(item, [k for k in keys if not k.startswith(("local", "dueDateOnly"))]),
                     label=label,
-                    matter_open=True,
-                    conflict_hold=False,
-                    # ``acknowledged`` here is the pure-parse default; the real
-                    # per-item state is joined from the escalation ledger in
-                    # run_once (see enrich_with_ledger). Carrying the stable
-                    # source id makes that join collision-safe.
-                    acknowledged=False,
+                    # matter_open / conflict_hold / acknowledged take their
+                    # pure-parse defaults; the real per-item state is joined
+                    # from the escalation ledger in run_once (see
+                    # enrich_with_ledger). Carrying the stable source id makes
+                    # that join collision-safe.
                     task_id=_source_id_of(item),
                     priority_marker=_priority_marker_of(item),
                     subject_display=_DI.display_label(_subject_of(item)),

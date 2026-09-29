@@ -106,6 +106,7 @@ every skill's `references/output-format.md`:
   `startTime` or `dueDate`, which are UTC.
 - **The matter by its number**, never an internal id, except a dedup key a skill's
   own output-format names (for example `fileId <id> recorded`), which stays exactly
-  as that skill writes it because a later run reads it back.
+  as that skill writes it, alone on its own line, because a later run reads it back
+  and the seat passes a machine-marker line only when it stands alone.
 - The training note (`_shared-training-output.md`) rides in the two lines: what and
   why in the first, what next and when to bring in the attorney in the second.

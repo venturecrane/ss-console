@@ -54,6 +54,36 @@ export function noteProblems(text: string): string[] {
       if (/^\s*[>#|]/.test(note) || note.includes('**')) {
         problems.push(`note line ${j + 1} carries markup: ${note.slice(0, 60)}`)
       }
+      // A machine-read marker passes the seat's note gate only when it is the
+      // whole line (the overlay anchors its exemption).
+      if (note.includes('fileId') && !/^fileId \S.* recorded\.?$/.test(note)) {
+        problems.push(`note line ${j + 1} folds the fileId marker into prose`)
+      }
+    }
+  })
+  return problems
+}
+
+function voiceFiles(): string[] {
+  return readdirSync(SKILLS)
+    .map((skill) => join(SKILLS, skill, 'references', 'voice.md'))
+    .filter((path) => existsSync(path))
+}
+
+/**
+ * A voice.md teaches tone by example, and the model copies its examples. It
+ * must not teach the retired "internal log (create_memo body)" or show a
+ * file-note example as a `>` quote.
+ */
+export function voiceProblems(text: string): string[] {
+  const problems: string[] = []
+  if (/internal log/i.test(text)) problems.push('names the retired "internal log"')
+  const lines = text.split('\n')
+  lines.forEach((line, i) => {
+    if (!/^\*\*(Good|Bad)[^*]*(file note|internal log)[^*]*:\*\*/i.test(line)) return
+    const next = lines.slice(i + 1).find((l) => l.trim() !== '')
+    if (next !== undefined && next.startsWith('>')) {
+      problems.push(`the example after line ${i + 1} is a ">" quote`)
     }
   })
   return problems
@@ -71,6 +101,16 @@ describe('the one file-note shape', () => {
       'create_memo\n[Operator] Records chase as of <localDate>\n> **What:** chased the provider.\n'
     expect(noteProblems(quoted)).toContain('an old "**What:**" training block')
     expect(noteProblems('create_memo\n[Operator] X as of <localDate>\n| a | b |\n').length).toBe(1)
+    expect(
+      noteProblems(
+        'create_memo\n[Operator] X as of <localDate>\nServed (fileId <file id> recorded).\n'
+      )
+    ).toHaveLength(1)
+    expect(
+      noteProblems(
+        'create_memo\n[Operator] X as of <localDate>\nServed.\nfileId <file id> recorded\n'
+      )
+    ).toEqual([])
     const plain =
       'create_memo\n[Operator] Records chase as of <localDate>\nRecords still outstanding.\nNothing to do.\n'
     expect(noteProblems(plain)).toEqual([])
@@ -79,6 +119,22 @@ describe('the one file-note shape', () => {
   for (const path of outputFormats()) {
     it(path, () => {
       expect(noteProblems(readFileSync(path, 'utf8'))).toEqual([])
+    })
+  }
+
+  it('the voice check fires on the retired voice shape', () => {
+    const old =
+      '## The internal log (create_memo body)\n\n**Good - internal log:**\n\n> Assembled it.\n'
+    expect(voiceProblems(old).length).toBeGreaterThan(0)
+    expect(voiceProblems('**Good - file note:**\n\n> Assembled it.\n')).toHaveLength(1)
+    expect(
+      voiceProblems('**Good - file note:**\n\n```\n[Operator] X as of <localDate>\n```\n')
+    ).toEqual([])
+  })
+
+  for (const path of voiceFiles()) {
+    it(path, () => {
+      expect(voiceProblems(readFileSync(path, 'utf8'))).toEqual([])
     })
   }
 

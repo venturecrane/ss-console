@@ -35,9 +35,13 @@ Every capture is keyed to `(matter, defendant, service-confirmation)`.
 ## File note (create_memo)
 
 [Operator] <Routine name> as of <localDate>
-Service on <defendant> confirmed on matter <matter number>: served <date> by <method>, read off the proof of service (fileId <file id> recorded). The responsive pleading deadline comes from the rules engine or is confirmed by hand, not computed here.
+Service on <defendant> confirmed on matter <matter number>: served <date> by <method>, read off the proof of service. The responsive pleading deadline comes from the rules engine or is confirmed by hand, not computed here.
 <Attorney> to confirm the service date and method.
+fileId <file id> recorded
 ```
+
+The last line is machine-read (a later scan dedups on it) and stands alone on its own
+line, exactly `fileId <file id> recorded`; never fold it into a sentence.
 
 ## Shape B - Multiple defendants, different service dates (one capture per defendant)
 
@@ -107,7 +111,8 @@ served date / method / defendant is not guessed.
    contents (a proof of service of summons), not from a filename; the defendant from the
    matter's roles, not from a name typed in the body.
 9. **Dedup on `(matter, defendant, fileId)`.** A scan does not re-surface a confirmation
-   whose `fileId` + resolved defendant already appears in a prior capture memo.
+   whose `fileId` + resolved defendant already appears in a prior capture memo (the
+   note's own `fileId <file id> recorded` line).
 10. **Writes are surfaced as done only after confirmation** (`create_memo`'s own
     `confirmed` field is `true`; `list_tasks` / `get_task` after `create_task`); otherwise
     the write failure is surfaced.

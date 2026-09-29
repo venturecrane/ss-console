@@ -234,8 +234,9 @@ document says:
 5. **Resolve the responsible attorney.** `get_matter` → `personResponsibleStaffId` is
    the attorney the capture is surfaced to.
 6. **Surface for confirmation (both writes are unverified - confirm by read).** Write an
-   internal log (`create_memo`) recording the served **defendant**, the served **date**
-   and **method** (with the POS located and the `fileId` recorded for dedup), and open a
+   file note (`create_memo`, per `references/output-format.md`) recording the served
+   **defendant**, the served **date** and **method** (with the POS located), what the
+   attorney confirms, and `fileId <id> recorded` alone on its own last line for dedup, and open a
    tracked confirm task (`create_task`). `create_task` requires **`staffId`** (=
    `personResponsibleStaffId`) and **`dueDateOnly`** (per `_shared-write-posture.md`):
    set `dueDateOnly` to a **near-term administrative "confirm-by" date** (1-2 business

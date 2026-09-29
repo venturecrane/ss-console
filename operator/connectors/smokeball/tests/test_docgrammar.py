@@ -90,9 +90,16 @@ def test_a_paragraph_between_numbered_runs_restarts_the_count() -> None:
     assert [b.label for b in blocks if isinstance(b, Numbered)] == ["1.", "2.", "1.", "2."]
 
 
-def test_a_run_keeps_its_first_labels_number_and_punctuation() -> None:
-    blocks = parse_document("3) a\n3) b\n9) c")
-    assert [b.label for b in blocks] == ["3)", "4)", "5)"]
+def test_identical_labels_count_from_the_first_and_keep_its_punctuation() -> None:
+    assert [b.label for b in parse_document("1. a\n1. b\n1. c")] == ["1.", "2.", "3."]
+    assert [b.label for b in parse_document("3) a\n3) b")] == ["3)", "4)"]
+
+
+def test_a_run_whose_labels_already_differ_is_left_as_written() -> None:
+    # Discovery numbers come from the propounded set: 7, 9, 12 is content.
+    assert [b.label for b in parse_document("7. a\n9. b\n12. c")] == ["7.", "9.", "12."]
+    assert [b.label for b in parse_document("1. a\n2. b")] == ["1.", "2."]
+    assert [b.label for b in parse_document("1. a\n1. b\n2. c")] == ["1.", "1.", "2."]
 
 
 def test_four_or_deeper_hashes_and_unknown_syntax_degrade_to_paragraphs() -> None:

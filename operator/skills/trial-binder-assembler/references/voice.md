@@ -2,7 +2,7 @@
 
 This skill has **no outbound voice**. It sends nothing to a client, to opposing
 counsel, or to the court. It produces one internal artifact (the staged trial binder
-index) plus an internal log and a training note. So there is no client-facing tone to
+index) plus a file note and a training note. So there is no client-facing tone to
 tune here; there is a discipline to hold about the text it does and does not write.
 
 ## The things it writes are internal, and all are factual, not argumentative
@@ -13,10 +13,13 @@ tune here; there is a discipline to hold about the text it does and does not wri
   exhibit numbering, the "to be stamped in the firm's PDF tool" marker, the "captured,
   attorney to confirm" and "not final" deadline markers). The component text is quoted
   as authored, never rewritten.
-- **The internal log (create_memo body)** - crisp and factual. States what was
-  assembled, from which documents it was read, that the Bates/PDF step was routed to
-  the firm's PDF tool, and which deadlines it captured. One or two sentences. It
-  records; it does not opine.
+- **The file note (create_memo)** - crisp and factual, in the pack's one shape (`_shared-write-posture.md`, section 5): the header line
+  `[Operator] <Routine name> as of <localDate>`, one plain line of what it found, one
+  plain line of what a person needs to do (or "Nothing to do."). No `>` quote marks, no
+  `**`, no headings, no tables. The training note rides in those two lines.
+  It states what was assembled into which file, from which documents, that the
+  Bates/PDF step was routed to the firm's PDF tool, and which deadlines it captured.
+  It records; it does not opine.
 - **The training note** - plain, explanatory, per `_shared-training-output.md`. Teaches
   the step (what/why/next/attorney-if) and cites the governing rule (CCP §2024.020 for
   the general discovery cutoff and CCP §2024.030 for the expert-discovery cutoff; the
@@ -50,14 +53,13 @@ characterization of its own (an exhibit is not called "key," a witness is not ca
 
 ## Good / bad
 
-**Good - internal log:**
+**Good - file note:**
 
-> Assembled the trial binder index for Reyes v. Doe (trial set 2026-09-14): 14 exhibits
-> from "Exhibit List - trial.pdf", 6 witnesses from "Witness List - trial.pdf", 4
-> deposition summaries from the Depositions folder. Bates/PDF assembly routed to the
-> firm's PDF tool. Captured the discovery cutoff (CCP §2024.020 window vs. trial date,
-> surfaced for confirm) and the in-limine, list-exchange, and trial-brief dates from the
-> trial-setting order; tracking tasks opened. Staged to finalize. No gaps.
+```
+[Operator] Trial binder as of Sep 1, 2026
+Trial binder index assembled for the Reyes matter (trial set Sep 14, 2026) and filed as the binder index document: 14 exhibits, 6 witnesses and 4 deposition summaries; Bates stamping is for the firm's PDF tool. The discovery cutoff (CCP §2024.020) is proposed, and the in-limine, list-exchange and trial-brief dates are from the trial setting order. No gaps.
+The attorney to confirm the pretrial dates and finalize the binder index.
+```
 
 **Bad - authors substance / characterizes (violates the floor):**
 

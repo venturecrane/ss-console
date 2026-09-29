@@ -218,7 +218,9 @@ def legacy_rekey_count(deadlines, states, ledger) -> int:
     for d in deadlines:
         if d.matter_id != "unknown-matter" or not d.task_id:
             continue
-        legacy_key = ledger.item_key(d.task_id, d.task_id, d.label, d.authored_date)
+        legacy_key = ledger.item_key(
+            d.task_id, d.task_id, d.label, getattr(d, "identity_date", None) or d.authored_date
+        )
         state = states.get(legacy_key)
         if state is not None and (state.attempts > 0 or state.acked):
             count += 1
@@ -242,7 +244,9 @@ def _fired_append(item: dict, ledger, states: dict, snooze_days: int) -> dict:
         item.get("matter_id"),
         item.get("task_id"),
         item.get("label"),
-        item.get("authored_date"),
+        # The ledger identity day (the raw stamp's day as written) when the
+        # printed local day differs from it; the pre_run keyed the item on it.
+        item.get("identity_date") or item.get("authored_date"),
     )
     row = {
         "item_key": key_hex,
