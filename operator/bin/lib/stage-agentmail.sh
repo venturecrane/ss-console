@@ -34,6 +34,14 @@ if authored_channel '^adapter=agentmail$|^backend=mcp:agentmail$'; then
   stage_secret_from_env AGENTMAIL_API_KEY "${!_AGENTMAIL_READ_NAME:-${AGENTMAIL_API_KEY:-}}" "AgentMail read/draft credential for the gateway (inbox-scoped, NO send permission; per-seat ${_AGENTMAIL_READ_NAME}, else global)"
   stage_secret_from_env AGENTMAIL_SEND_API_KEY "${!_AGENTMAIL_SEND_NAME:-${AGENTMAIL_SEND_API_KEY:-}}" "AgentMail send credential for the broker ONLY (inbox-scoped, message_send; stripped from agent env; per-seat ${_AGENTMAIL_SEND_NAME}, else global)"
   unset _AGENTMAIL_CID _AGENTMAIL_READ_NAME _AGENTMAIL_SEND_NAME
+  # Speech-to-text for voice notes (ss#2793, plugins/hermes-smd-voice-notes).
+  # GROQ_API_KEY is the env var Hermes' own transcription path reads for its
+  # Groq Whisper provider; with it set and no local whisper installed, Hermes'
+  # auto-detect picks Groq and a rostered sender's emailed voice memo becomes
+  # text. One shared, SMD-owned key across every seat that has a mailbox (infra
+  # custody, like Brave). Missing at boot => the tool reports "no speech-to-text
+  # provider configured" and the seat keeps serving; no crashloop.
+  stage_secret_from_env GROQ_API_KEY "${GROQ_API_KEY:-}" "Groq Whisper key (Hermes speech-to-text for voice notes; shared, SMD-owned)"
   # The webhook-READ key, for boot smoke's proof and nothing else. ORG-scoped
   # (webhook_read alone) and therefore ACCOUNT-wide by design, which is the one
   # place a shared value is correct here: AgentMail's webhooks are org-level
@@ -85,5 +93,5 @@ else
   # state, never on what a previous run happened to leave behind.
   # SMD_WEBHOOK_SIGNING_SECRET is NOT touched here: the msgraph block below
   # stages its own value on an msgraph seat.
-  unset_stale "no agentmail adapter authored" WEBHOOK_SECRET_AGENTMAIL AGENTMAIL_API_KEY AGENTMAIL_SEND_API_KEY AGENTMAIL_WEBHOOK_READ_API_KEY
+  unset_stale "no agentmail adapter authored" WEBHOOK_SECRET_AGENTMAIL AGENTMAIL_API_KEY AGENTMAIL_SEND_API_KEY AGENTMAIL_WEBHOOK_READ_API_KEY GROQ_API_KEY
 fi

@@ -2655,6 +2655,73 @@ describe('validate — telegram block (ADR 0033)', () => {
 })
 
 // -----------------------------------------------------------------------------
+// record_stores (the one write an inbound-email turn is offered) — #2793
+// -----------------------------------------------------------------------------
+
+describe('validate — record_stores block (#2793)', () => {
+  it('accepts an authored store under the volume, and absence', () => {
+    const f = validFixture()
+    f['record_stores'] = [{ name: 'open-house-visitors', path: '/opt/data/open-house/visitors' }]
+    expect(validate(f).ok).toBe(true)
+    expect(validate(validFixture()).ok).toBe(true)
+  })
+
+  it.each([
+    ['/opt/data', 'not /opt/data itself'],
+    ['/tmp/records', 'must live under /opt/data'],
+    ['/opt/data/profiles/agent-crane/cron', 'owned by the runtime'],
+    ['/opt/data/attachment-spool/x', 'owned by the runtime'],
+    ['/opt/data/.smd/x', 'owned by the runtime'],
+    ['/opt/data/open-house/../customer', 'normalized'],
+    ['/opt/data/open-house/', 'normalized'],
+    ['relative/x', 'absolute'],
+  ])('refuses a store path that reaches past the agent-owned volume: %s', (path, fragment) => {
+    const f = validFixture()
+    f['record_stores'] = [{ name: 'a', path }]
+    const r = validate(f)
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(
+      r.errors.some((e) => e.path === 'record_stores[0].path' && e.message.includes(fragment))
+    ).toBe(true)
+  })
+
+  it('refuses a name that is not kebab-case, a duplicate name, and an extra key', () => {
+    const f = validFixture()
+    f['record_stores'] = [
+      { name: 'Open House', path: '/opt/data/a' },
+      { name: 'b', path: '/opt/data/b' },
+      { name: 'b', path: '/opt/data/c' },
+      { name: 'd', path: '/opt/data/d', mode: 'rw' },
+    ]
+    const r = validate(f)
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(
+      r.errors.some((e) => e.path === 'record_stores[0].name' && e.code === 'InvalidSlug')
+    ).toBe(true)
+    expect(
+      r.errors.some((e) => e.path === 'record_stores[2].name' && /twice/.test(e.message))
+    ).toBe(true)
+    expect(
+      r.errors.some((e) => e.path === 'record_stores[3]' && /unknown key/.test(e.message))
+    ).toBe(true)
+  })
+
+  it('refuses a block that is not a list, and an entry that is not a mapping', () => {
+    const f = validFixture()
+    f['record_stores'] = '/opt/data/x'
+    const r1 = validate(f)
+    expect(r1.ok).toBe(false)
+    if (!r1.ok) expect(r1.errors.some((e) => e.path === 'record_stores')).toBe(true)
+    f['record_stores'] = ['/opt/data/x']
+    const r2 = validate(f)
+    expect(r2.ok).toBe(false)
+    if (!r2.ok) expect(r2.errors.some((e) => e.path === 'record_stores[0]')).toBe(true)
+  })
+})
+
+// -----------------------------------------------------------------------------
 // google_auth (DWD vs user-OAuth) — ss-console #1213
 // -----------------------------------------------------------------------------
 

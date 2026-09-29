@@ -53,7 +53,12 @@ nowhere else.
 
 You reach this skill three ways. Decide which one you are in before doing anything.
 
-**1. An inbound email arrived (webhook).** Read the body and classify it by shape:
+**1. An inbound email arrived (webhook).** If the email may carry a voice
+recording (a short body or none, or the body says a recording is attached), call
+`voice_note_transcribe` with the message id first. It returns the transcript of
+each recording from a rostered sender, or refuses and says why. Treat the
+transcript as the dictation, exactly as if the agent had typed it. Then read the
+body and the transcript together and classify by shape:
 
 - **A dictation.** Prose describing one or more people the agent met at a property.
   Run **Capture** below, once per visitor described.
@@ -76,18 +81,24 @@ they asked in the mode that fits, and reply on that channel.
 
 ## The record store
 
-Every visitor is one markdown file. The path is fixed and absolute, the same for
-the agent process and for any scheduled turn, so a record written today is found
-tomorrow:
+Every visitor is one markdown record in the seat's authored record store named
+`open-house-visitors`. You reach it through three tools and nothing else:
+`record_store_list`, `record_store_read`, and `record_store_write`. You name the
+store and the record; you never write a path, and `write_file` is not available
+on the turns this skill runs on. The store is the same for an inbound turn and a
+scheduled one, so a record written today is found tomorrow, and it survives a
+reprovision.
+
+Record names:
 
 ```
-/opt/data/open-house/visitors/<visit_date>_<property-slug>_<visitor-slug>.md
+<visit_date>_<property-slug>_<visitor-slug>.md
 ```
 
 `visit_date` is `YYYY-MM-DD`. Slugs are lowercase, hyphenated, ASCII. An unnamed
 visitor gets a slug from how the agent described them (`man-with-two-daughters`).
-Write with `write_file`. Read the directory with the file tools you have. This
-directory lives on the seat's persistent volume and survives a reprovision.
+`record_store_write` refuses to replace a record that exists unless you pass
+`overwrite: true`; do that only when you are updating a record you just read.
 
 Record shape:
 
@@ -127,15 +138,19 @@ the backyard was small.
 4. Compute `follow_ups` from **Cadence** below.
 5. Put the agent's description in the body, verbatim, under the heading shown. Do
    not clean it up, rank it, or tag it. It is the agent's memory, not yours.
-6. Reply with exactly what you stored: visitor, property, contact, stated intent,
-   the three follow-up dates, and the file name. If you stored several visitors,
-   list them all. Ask at most one clarifying question, and only when a record is
-   missing its property.
+6. Write each record with `record_store_write`, then read it back with
+   `record_store_read` before you reply. Everything you repeat in the reply, the
+   dates included, comes from that read, not from your own composition.
+7. Reply with exactly what you stored: visitor, property, contact, stated intent,
+   the three follow-up dates, and the record name. If you stored several
+   visitors, list them all. Ask at most one clarifying question, and only when a
+   record is missing its property.
 
 ## Recall
 
-1. List the records directory. Read the records that could match the question:
-   by property, by date or date range, by name, or by a phrase. Only records
+1. List the store with `record_store_list`, then read the records that could
+   match the question with `record_store_read`: by property, by date or date
+   range, by name, or by a phrase. Only records
    whose `agent` is the sender's address are theirs; a record another rostered
    agent dictated is not part of the answer and is never mentioned.
 2. Answer from the records only. Quote the agent's note text where it answers the
@@ -150,7 +165,8 @@ the backyard was small.
 
 ## Follow-up (scheduled)
 
-1. Read every record. A step is **due** when `due <= today` and `drafted` is null.
+1. List the store and read every record. A step is **due** when `due <= today`
+   and `drafted` is null.
    Group the due steps by the record's `agent`: each agent gets their own email,
    holding only their own visitors.
 2. For each due step, compose one draft the agent could send to that visitor:
@@ -170,7 +186,8 @@ the backyard was small.
    recipient is the rostered agent, so the send is internal. The visitor's
    address or number is never a recipient of anything.
 4. After the email is sent, stamp each drafted step with `drafted: <today>` in its
-   record, using the file tools. If the send did not go out, stamp nothing, so the
+   record: write the whole record back with `record_store_write` and
+   `overwrite: true`. If the send did not go out, stamp nothing, so the
    step is due again tomorrow.
 5. Nothing due: no email, no write, no reply.
 
@@ -200,13 +217,13 @@ and confirm.
   say. A missing field stays blank.
 - **Never sends on a turn that read untrusted content.** The trust gate withholds
   it anyway; do not work around a withheld send.
-- **Never uses `execute_code`, `terminal`, or any tool other than the file tools,
-  the AgentMail draft tool on an inbound turn, and the seat's send tool on a
+- **Never uses `execute_code`, `terminal`, or any tool other than the three
+  record store tools, `voice_note_transcribe`, the AgentMail draft tool on an inbound turn, and the seat's send tool on a
   scheduled turn.**
 
 ## Definition of done, per mode
 
-- Capture: the file exists at the fixed path with the agent's words in the body,
+- Capture: the record exists in the `open-house-visitors` store with the agent's words in the body,
   and the reply names it.
 - Recall: the answer quotes record text and names visit date and property, or
   says there is no record and what was searched.

@@ -318,6 +318,15 @@ top_level:
   telegram:
     status: implemented
     materializer: translate _materialize_telegram_platform (config.yaml platforms)
+  record_stores:
+    status: implemented
+    materializer: >-
+      overlay plugins/hermes-smd-record-store register() reads the block from the
+      seat's customer.yaml at plugin load (shared/record_store.py authored_stores)
+      and registers record_store_list / read / write only when a store is authored;
+      validated on-box by bootstrap/validate.py _validate_record_stores and in the
+      console by src/lib/operator/customer-yaml/sections-record-stores.ts on the
+      same path rule (#2793, overlay#396).
   custody_exceptions:
     status: implemented
     materializer: >-

@@ -149,6 +149,13 @@ _INFRA_EXACT: frozenset[str] = frozenset(
         # customer's credential — so it is infra, safe to be real/emulated in a
         # keyless build and never gated behind the customer-handoff door.
         "BRAVE_SEARCH_API_KEY",
+        # Speech-to-text for voice notes (provision-customer.sh, the Email
+        # connector block; ss#2793). GROQ_API_KEY is SMD's SHARED account key for
+        # Hermes' Groq Whisper provider, one key across every seat that has a
+        # mailbox, SMD-owned, never a customer's credential: infra, like Brave.
+        # It sits in the agent env because Hermes' transcription runs in the
+        # agent process; the key can transcribe audio and nothing else.
+        "GROQ_API_KEY",
         # Per-customer keys DERIVED from an infra HMAC master (never the master).
         "OPERATOR_RUNTIME_READ_KEY",  # from OPERATOR_RUNTIME_READ_SECRET (:439)
         "WEBHOOK_SECRET_MCP",  # from OPERATOR_MCP_WEBHOOK_SECRET (:454)

@@ -1427,7 +1427,14 @@ describe('Operator customer Machine Dockerfile', () => {
     // confirmation names what it quieted or closed.
     // fde181ef -> 4dd29643 (2026-09-28, overlay#395 merge commit). A spaced
     // hyphen in a task title no longer leaves the confirmation bare.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="4dd29643bf2b511650fa56fac26717760bb387d7"')
+    // 4dd29643 -> a3bd40db (2026-09-29, overlay#396 merge commit, ss#2793). The
+    // record-store tool trio: the one write an inbound-email turn is offered,
+    // fenced to a directory the seat authors. Registered only where a store is
+    // authored; every other seat's surface is unchanged.
+    // a3bd40db -> 65ff3f01 (2026-09-29, overlay#397 merge commit, ss#2793). A rostered
+    // sender's emailed voice memo becomes their words through the seat's
+    // speech-to-text, without tainting the turn.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="65ff3f01e7d57028be30fb42c6efd3639a25d4c7"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

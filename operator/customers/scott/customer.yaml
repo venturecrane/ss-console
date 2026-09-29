@@ -185,6 +185,15 @@ scope:
     # skill scopes recall and follow-up drafts to the sender's own records.
     - tim@thebrokery.com
 
+# ---- RECORD STORES ----
+# The directories an inbound-email turn may write into, by name (#2793). The
+# open-house skill keeps each dictated visitor as one record here through
+# record_store_write; the model never passes a path, and a seat that authors
+# no store gets no write tool at all. Survives a reprovision (volume).
+record_stores:
+  - name: open-house-visitors
+    path: /opt/data/open-house/visitors
+
 # ---- ESCALATION ----
 escalation:
   red_flag_recipients:
