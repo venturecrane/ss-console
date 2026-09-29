@@ -1087,7 +1087,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # an approved out-of-band send meets the same scans; mcp_smokeball_update_memo
 # is classified (ss-console Option B, PRs #2991 #2992 #2993). No tracked twin
 # moves (the casework twin was carried and then reverted inside the PR).
-ARG OVERLAY_REF="8ecdf371bae6b853f9582ea1055ad1397f32f94f"
+# 2026-09-29f (f1ae58aa, the overlay #401 merge commit). The heartbeat carries
+# tool_failures: per watched tool (voice_note_transcribe, record_store_write)
+# the run of consecutive failures at its newest call, so a transcriber that
+# keeps refusing a rostered agent pages team@ (ss#2793 follow-on; console
+# migration 0119 + fleet-alerts tool_failing:<tool>). shared/heartbeat.py and
+# its test only; no tracked twin moves.
+ARG OVERLAY_REF="f1ae58aafc1813d536211170a76c609a729a2213"
 
 ARG CUSTOMER_SLUG=customer-zero
 

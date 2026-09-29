@@ -224,6 +224,31 @@ ADR 0079's accepted-gaps list: the "job fires and fails every run" class is
 now partially closed — the connector subclass (this ADR) pages; pure
 business-logic job failures remain Sentry/runtime-summary territory.
 
+**2026-09-29 (ss#2793 follow-on, overlay#401, migration 0119): watched tools
+page on the same shape.** The gap this closes: a rostered real estate agent
+emailed a voice memo, the transcriber refused, the agent read "could not
+transcribe" in their own thread, and nobody at SMD knew. The sticky-stop
+ladder halts a seat at eight tool failures in ten minutes and pages nothing
+before that; `send_refused` watches a cron turn's external sends; this ADR's
+condition watches MCP servers. A seat-side tool that fails three people in a
+row was invisible from the console, because no per-tool outcome left the
+Machine in real time.
+
+The seat now reads its own audit ledger each beat and ships `tool_failures`
+(overlay `shared/heartbeat.count_tool_failures`): per watched tool
+(`WATCHED_TOOLS`, today `voice_note_transcribe` and `record_store_write`),
+the run of consecutive non-ok outcomes ending at the tool's newest call in the
+trailing day, in this ADR's connectors-map shape. The console stores it as
+`fleet_status.tool_failures_json` (plain overwrite, NULL holds) and the
+fleet-alerts Worker evaluates `tool_failing:<tool>` with the connector
+tri-state minus the age gate: 0 resolves, three or more opens, one or two
+hold, an absent key holds. No age gate because a tool refusing three people
+in a row is not a burst that self-heals inside a breaker cooldown; it is the
+product dark for each of them. The map is keyed by tool name, so adding a
+tool to the overlay's list is the whole act of watching it. Stale holds
+surface the same way as `connector_down` when a run ages out of the window
+without a success.
+
 ## Verification
 
 Overlay: 4 test modules (signatures fixtures, ledger semantics, check reader,

@@ -31,6 +31,12 @@ export const SPEC_CONTROL_BROKEN_PREFIX = 'spec_control_broken:'
 export const WEBHOOK_SURFACE_MISSING_PREFIX = 'webhook_surface_missing:'
 
 /**
+ * A watched tool failing on every recent call (ss#2793 follow-on, migration
+ * 0119). Payload: the tool name, as the overlay's WATCHED_TOOLS spells it.
+ */
+export const TOOL_FAILING_PREFIX = 'tool_failing:'
+
+/**
  * The web Worker's own edge failing its outside-in probe (review 2026-09-10,
  * wave 8.2). Not prefixed: the target rides in `customer_slug`, because there
  * is no seat behind this alert. stale-holds.ts excludes it by this constant.
@@ -49,6 +55,7 @@ export const CONDITION_PREFIXES = [
   CONNECTOR_TOKEN_EXPIRING_PREFIX,
   SPEC_CONTROL_BROKEN_PREFIX,
   WEBHOOK_SURFACE_MISSING_PREFIX,
+  TOOL_FAILING_PREFIX,
 ] as const
 
 /**
@@ -150,5 +157,7 @@ export function conditionLabel(condition: FleetCondition): string {
   if (spec !== null) return `Authored spec declared but not installed: ${spec}`
   const tool = conditionPayload(condition, WEBHOOK_SURFACE_MISSING_PREFIX)
   if (tool !== null) return `Webhook tool expected but not offered: ${tool}`
+  const failing = conditionPayload(condition, TOOL_FAILING_PREFIX)
+  if (failing !== null) return `Tool failing on every recent call: ${failing}`
   return CONDITION_LABEL[condition] ?? condition
 }

@@ -1442,7 +1442,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // 430f8129 -> 8ecdf371 (2026-09-29, overlay#399 merge commit, Option B). The output
     // checklist gate on emails, file notes and Word documents; a withheld staff
     // message produces a notice, never silence; update_memo is classified.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="8ecdf371bae6b853f9582ea1055ad1397f32f94f"')
+    // 8ecdf371 -> f1ae58aa (2026-09-29, overlay#401 merge commit, ss#2793 follow-on). The
+    // heartbeat carries the watched-tool failure map, so a transcriber that keeps
+    // refusing a rostered agent pages team@ through fleet-alerts tool_failing:<tool>.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="f1ae58aafc1813d536211170a76c609a729a2213"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
