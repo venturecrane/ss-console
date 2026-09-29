@@ -84,7 +84,7 @@ confirms it. The read-not-compute invariant is untouched.
    engine-read date, the skill writes one `create_memo` on the matter recording, exactly:
    - the **confirming attorney's full name**, resolved from `personResponsibleStaffId` via
      `get_staff` (never a bare staff id, never a guessed name);
-   - an **ISO-8601 timestamp** of when the confirmation was captured;
+   - the **day it was confirmed**, the firm's local day (never an ISO timestamp or a UTC clock);
    - the **confirmed date**;
    - the **source**: `Smokeball court-rules engine` for an engine-read date. (The shared
      confirmation-memo vocabulary also defines `proposed by Operator` for a by-hand-proposed
@@ -104,7 +104,7 @@ engine-computed or human-authored, rather than silently treating an engine date 
 **Read + assemble + surface autonomous; internal-only; zero date computation. On the
 responsible attorney's confirmation of an engine-read date, one internal bookkeeping memo.**
 
-The agent MAY: read authored calendar entries and task due dates; read an engine-computed date and present it unconfirmed for the responsible attorney to confirm; bucket dates by proximity; flag a matter that lacks an expected authored deadline; write the surface to the firm-internal notes surface; on the responsible attorney's confirmation of an engine-read date, write one internal bookkeeping memo (name, ISO-8601 timestamp, confirmed date, source).
+The agent MAY: read authored calendar entries and task due dates; read an engine-computed date and present it unconfirmed for the responsible attorney to confirm; bucket dates by proximity; flag a matter that lacks an expected authored deadline; write the surface to the firm-internal notes surface; on the responsible attorney's confirmation of an engine-read date, write one internal bookkeeping memo (name, the day confirmed, confirmed date, source).
 
 The agent MUST NOT: compute, infer, or estimate a limitation period or any deadline; propose a date of its own; advise on timeliness; move a date; send anything to a client; present a computed date as if authored; present an engine-computed date as settled rather than unconfirmed; write any confirmation memo before the attorney confirms.
 
@@ -115,7 +115,7 @@ The agent MUST NOT: compute, infer, or estimate a limitation period or any deadl
 3. **Missing is flagged, not filled.** An absent expected deadline is surfaced as absent; the skill never supplies a plausible date.
 4. **No fabrication.** Every date traces to a read with its source label and provenance - a Smokeball `list_tasks` `due_date`, a calendar-binding `list_calendar_entries` entry, or a court-rules-engine entry (surfaced unconfirmed).
 5. **Internal + privilege.** The surface is for the firm; it stays on firm surfaces.
-6. **Engine dates are unconfirmed until the attorney confirms.** An engine-computed date is surfaced "unconfirmed: confirm with the responsible attorney," never as a settled deadline; the confirmation memo (name, ISO-8601 timestamp, date, source) is written only on the attorney's confirm, never before.
+6. **Engine dates are unconfirmed until the attorney confirms.** An engine-computed date is surfaced "unconfirmed: confirm with the responsible attorney," never as a settled deadline; the confirmation memo (name, the day confirmed, date, source) is written only on the attorney's confirm, never before.
 
 ## Pitfalls
 
@@ -128,7 +128,7 @@ Computing "X years from the incident" - the cardinal sin here; inferring a filin
 3. Source labels match how the human authored each date; no date is self-classified as an SOL.
 4. Matters missing an expected authored deadline are flagged as missing, not filled.
 5. Nothing is sent to a client; the surface is firm-internal.
-6. Engine-computed dates are surfaced "unconfirmed: confirm with the responsible attorney," never as settled; a confirmation memo (attorney full name, ISO-8601 timestamp, confirmed date, source) is written only on the attorney's confirm, never before, and only ever with `source: Smokeball court-rules engine`.
+6. Engine-computed dates are surfaced "unconfirmed: confirm with the responsible attorney," never as settled; a confirmation memo (attorney full name, the day confirmed, confirmed date, source) is written only on the attorney's confirm, never before, and only ever with `source: Smokeball court-rules engine`.
 
 ## References
 

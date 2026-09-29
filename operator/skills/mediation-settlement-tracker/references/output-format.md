@@ -65,11 +65,11 @@ final.
 <any missing or unreadable brief-input component; an unreadable §998 offer or trial
 date; more than one candidate conference event - listed, never guessed>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Mediation/MSC prep for matter <id>: brief inputs assembled from <N> components
-> (<docs>), staged for <attorney/co-counsel>; §998 window and conference date surfaced
-> as proposed-confirm, not finalized. Gaps: <...>.
+[Operator] <Routine name> as of <localDate>
+Mediation prep on matter <matter number>: brief inputs collected from <N> documents for <attorney>; the §998 window and the conference date are set out for confirmation, not final. Gaps: <gaps, or none>.
+<Attorney> to confirm the §998 window and the conference date.
 ```
 
 ## Shape B - Cannot assemble / cannot resolve (missing or unreadable components)

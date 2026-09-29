@@ -19,7 +19,7 @@ for each read_date d on an open matter:
         on attorney_confirm(d):
             create_memo(matter, {
                 confirmed_by: get_staff(matter.personResponsibleStaffId).name,  # full name
-                confirmed_at: <ISO-8601 timestamp>,
+                confirmed_on: <the firm's local day>,
                 confirmed_date: d,
                 source: "Smokeball court-rules engine",   # this skill never records "proposed by Operator"
             })

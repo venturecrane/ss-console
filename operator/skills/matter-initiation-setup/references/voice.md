@@ -2,7 +2,7 @@
 
 This skill sends nothing to a client, a party, or the court. Its only authored text is
 **internal**: the task bodies it opens, a short setup note to the responsible attorney or
-paralegal, and the matter memo / internal log (including the training-output note). All
+paralegal, and the file note (`create_memo`, including the training-output note). All
 of it is connective, never work product, never a legal date. Derived from the pack chase
 voice (`operator/verticals/law-firm/addons/pi/references/_shared-chase-voice.md`),
 internal register.
@@ -25,10 +25,12 @@ service date; calendar or assert a legal deadline; characterize the merits, valu
 legal posture of the matter; assert a folder was created, a task opened, or a document
 staged unless a matter read confirmed it; instruct the attorney on the legal substance.
 
-## The internal log (create_memo body)
+## The file note (create_memo)
 
-Factual record of the setup plus the training-output note (what / why / next /
-attorney-if). Every created item traces to a confirming read. A write is logged as done
+Factual record of the setup in the pack's one shape (`_shared-write-posture.md`, section 5): the header line
+`[Operator] <Routine name> as of <localDate>`, one plain line of what it found, one
+plain line of what a person needs to do (or "Nothing to do."). No `>` quote marks, no
+`**`, no headings, no tables. The training note rides in those two lines. Every created item traces to a confirming read. A write is logged as done
 only when a follow-up read confirmed it. No date is ever logged as computed.
 
 ## Hard rules (both)

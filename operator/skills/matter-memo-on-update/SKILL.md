@@ -76,20 +76,24 @@ This skill uses only three connector calls and your own reasoning. In order:
 
 ### Phase 3 - Write the memo (internal, factual, autonomous)
 
-8. Compose the body in the format in `references/output-format.md`: one factual line, plus the hidden change-key tag on its own final line. **Plain ASCII only - no em-dashes** (see "Hard rules" below).
+8. Compose the file note in the format in `references/output-format.md`: the header line, one factual line, "Nothing to do.", then the hidden change-key tag on its own final line. **Plain ASCII only - no em-dashes** (see "Hard rules" below).
 9. `create_memo(matterId, body)`. This is the only write. It is `INTERNAL_WRITE` and runs autonomously - it stays entirely inside the firm's Smokeball record, sends nothing, moves no funds, drafts no work product.
 
 Example body:
 
 ```
-Matter updated by Jane Smith on 2026-06-14 (in-app).
+[Operator] Matter updates as of Jun 14, 2026
+Matter updated by Jane Smith on Jun 14 (in-app).
+Nothing to do.
 op-mmou:6f6a...:638609288928990639
 ```
 
 `userId`-absent / unresolvable example:
 
 ```
-Matter updated by an unidentified user on 2026-06-14 (via an integration).
+[Operator] Matter updates as of Jun 14, 2026
+Matter updated by an unidentified user on Jun 14 (via an integration).
+Nothing to do.
 op-mmou:6f6a...:638609300000000000
 ```
 

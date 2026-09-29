@@ -1,18 +1,16 @@
 # Medical Chronology Maintainer - Output Format
 
-One output: an **internal, structured, cited treatment chronology** written to the
-matter as a memo and kept current across runs. There is no client-facing text and no
-external send. Every row cites its source. When an ask crosses the content ceiling
-(draft the demand, characterize causation, value the case), the output is the
-**decline-to-draft** response at the bottom of this file.
+Two outputs, per `SKILL.md`. **The chronology itself is a document**: the runner builds
+it under the extractive floor and files it in its own dated folder on the matter (the
+chronology with its Records Reviewed and Limitations section up front, the exhibit
+volumes, and a billing worksheet where the file holds billing ledgers). **The one memo
+this skill writes is a delivery ledger note**, never a chronology: no row, no page, no
+figure of the chronology is ever composed into a memo. There is no client-facing text
+and no external send. When an ask crosses the content ceiling (draft the demand,
+characterize causation, value the case), the output is the **decline-to-draft**
+response at the bottom of this file.
 
-The memo is also the matter's **covered-set record**: it names every document the
-running chronology has read, and, when a chronology package (the requested document
-set built by the runner and filed in its own folder on the matter) exists, it names
-that folder. A reader who opens the memo learns what has been read, what has been
-delivered, and where the figures live.
-
-## The memo must pass the seat's content gates. Write it to pass on the first try.
+## The ledger note and every reply must pass the seat's content gates. Write them to pass on the first try.
 
 The seat refuses a memo write that carries (1) a dollar figure the gate cannot trace
 to a document read this session, (2) text shaped like a legal citation, or (3) a date
@@ -53,55 +51,27 @@ chronology. These rules make the memo pass by construction; they are not style.
    begins with `[SMD-PROBE` is a rehearsal artifact; the skill never folds it in as
    the prior chronology and never supersedes it.
 
-## The running chronology (create_memo body)
+## The delivery ledger note (create_memo)
+
+One entry per delivered job, written on DELIVER and confirmed by read. It carries
+identifiers and counts only: the request, the delivered folder, the file count, and
+the covered set that an UPDATE later subtracts from the listing.
 
 ```markdown
-# Medical Chronology - <matter title, from get_matter this turn>
+## File note (create_memo)
 
-**Matter number:** <as projected by the connector this turn>
-**Run:** <YYYY-MM-DD, today> - supersedes the prior chronology memo on this matter
-**Prior chronology:** <folded in / first build>
-**Treatment-gap threshold (authored):** <N days | not authored - treatment gaps not flagged this run>
-
-## Records covered
-
-<N> documents read by the running chronology to date:
-
-- <document title>
-- <document title>
-
-**Chronology package on the matter:** <folder name and file count, from get_files_on_matter this turn | none filed>
-**Package job:** <job id | none> - covered document ids: <the ids the delivered
-package read, recorded by the deliver mode; this line is the APPEND delta
-instrument (current listing minus these ids), so it is exact ids, never a count>
-
-## Treatment timeline
-
-| Date       | Provider / facility | Visit type      | Body part / complaint | Diagnosis (as recorded) | Treatment / procedure | Billed (as printed) and codes                                      | Source            |
-| ---------- | ------------------- | --------------- | --------------------- | ----------------------- | --------------------- | ------------------------------------------------------------------ | ----------------- |
-| YYYY-MM-DD | <name, as recorded> | <ED / PT / ...> | <as recorded>         | <as recorded>           | <as recorded>         | <$ exactly as printed, read this run / see <document>, p.<n> / --> | <document, p.<n>> |
-
-## Gaps / conflicts / missing records
-
-- <treatment gap: <N> days between <date> and <date>, exceeds the authored threshold> - _<source>_ (this line appears only when the interval exceeds `treatment_gap_flag_days`; below-threshold intervals are not flagged, and when the threshold is unauthored no treatment-gap line appears and the header carries "not authored")
-- <conflict: <doc A, p.n> records <date/diagnosis>; <doc B, p.n> records <other>> - surfaced, not resolved (not threshold-gated)
-- <referenced but absent: <ordered study> ordered <doc, p.n>, no report in the file> (not threshold-gated)
-
-## Could not read
-
-- <document, p.<n>> - <scanned/handwritten/illegible>; not extracted, needs a human read
-
-## Training note
-
-**What:** extracted <N> treatment events from <records> into the running chronology.
-**Why:** the cited treatment timeline is what the demand and case valuation are built
-on; it is the piece that decays as records arrive in pieces.
-**Next:** the attorney / CoCounsel works from it; further records will extend it.
-**Attorney if:** a record is unreadable; two records conflict on a material date or
-diagnosis; a treatment gap needs a clinical explanation.
+[Operator] <Routine name> as of <localDate>
+Chronology <run | update> delivered in <folder name>: <file count> files; <documents read> documents and <pages> pages read.
+<Responsible attorney> to review the chronology in <folder name>.
+Package job: <job id>; covered document ids: <the ids the job was given to read, or "covered set unrecorded">
 ```
 
-## Rules
+The last line is the covered-set record `SKILL.md` names (the UPDATE cross-check);
+when the ids are not available on this turn it says "covered set unrecorded", so a
+later update stops instead of guessing. No dollar figure, no date other than the
+header's, and no chronology content ever appears in the note.
+
+## Rules (the chronology document holds to these; the runner builds it under this floor)
 
 1. **Cited or absent.** Every cell traces to a document and page. A cell the skill
    cannot cite is not written; it becomes a **Could not read** or **Gaps** entry. No
@@ -132,11 +102,11 @@ diagnosis; a treatment gap needs a clinical explanation.
    legible with "not legible" for the rest.
 6. **Conflicts are surfaced, not resolved.** Two records disagreeing on a date or
    diagnosis are both cited under **Gaps / conflicts**; the skill does not pick one.
-7. **Running, not duplicated.** The memo states it supersedes the prior chronology
-   and lists every record it now covers, so the matter carries one current timeline,
-   not a pile of partial ones. It never deletes the prior memo.
-8. **Confirm by read.** The chronology is reported as written only after
-   `get_memos_on_matter` shows it landed; otherwise the run surfaces the write
+7. **One ledger entry per job.** The ledger note records a delivered job once; a
+   second DELIVER for the same job writes nothing (the idempotency pre-check in
+   `SKILL.md`). It never deletes an earlier entry.
+8. **Confirm by read.** The ledger entry is reported as written only when
+   `create_memo` returns `confirmed: true`; otherwise the run surfaces the write
    failure and asserts nothing.
 9. **Treatment-gap flags are threshold-gated.** A treatment-gap line is raised only
    when the interval between two consecutive treatment dates exceeds the authored
@@ -145,65 +115,6 @@ diagnosis; a treatment gap needs a clinical explanation.
    unauthored, no treatment-gap line is raised at all and the header states
    "treatment-gap threshold not authored." The threshold never gates conflict or
    referenced-but-absent flags, and never licenses any characterization of a gap.
-
-## Worked example
-
-```markdown
-# Medical Chronology - Reyes | Auto Accident
-
-**Matter number:** 10042
-**Run:** 2026-06-30 - supersedes the prior chronology memo on this matter
-**Prior chronology:** first build
-**Treatment-gap threshold (authored):** 30 days
-
-## Records covered
-
-3 documents read by the running chronology to date:
-
-- Sutter ED records
-- Dignity PT notes
-- Almasi ortho consult
-
-**Chronology package on the matter:** none filed
-
-## Treatment timeline
-
-| Date       | Provider / facility | Visit type | Body part / complaint | Diagnosis (as recorded)    | Treatment / procedure          | Billed (as printed) and codes | Source                    |
-| ---------- | ------------------- | ---------- | --------------------- | -------------------------- | ------------------------------ | ----------------------------- | ------------------------- |
-| 2026-02-03 | Sutter ED           | ED visit   | Neck                  | Cervical strain            | Exam; imaging ordered          | --                            | Sutter ED records, p.2    |
-| 2026-02-18 | Dignity PT          | PT (start) | Neck                  | Cervical strain            | PT, 2x/week                    | $180/visit                    | Dignity PT notes, p.1     |
-| 2026-04-30 | Dignity PT          | PT (last)  | Neck                  | Cervical strain            | PT, last note in file          | --                            | Dignity PT notes, p.12    |
-| 2026-05-14 | Dr. Almasi (ortho)  | Consult    | Neck                  | Cervical strain; MMI noted | Consult; no further tx planned | --                            | Almasi ortho consult, p.1 |
-
-## Gaps / conflicts / missing records
-
-- No treatment gap flagged: the longest interval (2026-04-30 to 2026-05-14, 14 days) is at or below the authored 30-day threshold - dates stay in the timeline, no gap line raised
-- MRI referenced as "to follow" but no MRI report in the file - _Sutter ED records, p.3_ (referenced-but-absent; not threshold-gated)
-
-## Could not read
-
-- (none this run)
-
-## Training note
-
-**What:** extracted 4 treatment events from the Sutter, Dignity, and Almasi records
-into the running chronology.
-**Why:** the cited treatment timeline is what the demand and case valuation are built
-on; it decays as records arrive in pieces.
-**Next:** the attorney / CoCounsel works from it; further records will extend it.
-**Attorney if:** the ordered MRI report is needed before the demand.
-```
-
-Note what the example does **not** do: it extracts "MMI noted" as the record's own
-words, and it does **not** conclude the plaintiff has reached MMI, does **not** say
-the strain was caused by the accident, and attaches **no** value. The PT charge is
-carried exactly as the Dignity notes print it (`Charge: $180/visit` on the page read
-this run), never reworked into a rate or a course total; had the skill not read that
-page this run, the cell would be `see Dignity PT notes, p.1`. Every date in the table
-was read from a cited record this run; the matter number
-sits alone on its line. No treatment-gap line is raised because the longest interval
-sits below the authored 30-day threshold; had it exceeded the threshold, the flag
-would still be a plain time interval, never "a gap that weakens the case."
 
 ## Lines that would be refused, and their passing form
 

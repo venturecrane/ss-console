@@ -1,9 +1,12 @@
 # Follow-Up Discovery Drafter: output format
 
 Every run keys to a specific `(matter, attorney request, target set)`. The drafted
-instruments and the plan live in the matter memo, where citations belong. The email to
-the requesting attorney is a citation-free pointer, never the instruments. Nothing is
-served, filed, or sent outside the firm.
+sets are a Word document filed in the matter with
+`mcp_smokeball_render_docx_draft(..., document_class="discovery_set")`, confirmed with
+`get_file` and a `read_document` spot check; the plan and the itemized report go into
+the matter memo, where citations belong (SKILL.md step 8). The email to the requesting
+attorney is a citation-free pointer, never the instruments. Nothing is served, filed,
+or sent outside the firm.
 
 ## Shape A: the draft package (the main path)
 
@@ -69,7 +72,7 @@ every strategic choice, with the record laid out beneath and nothing resolved>
 
 ```markdown
 Matter <number>: the follow-up discovery you asked for is drafted and in the matter
-memo dated <date>. It has requests for production, requests for admission, and special
+as <file name>. It has requests for production, requests for admission, and special
 interrogatories, plus a short plan of what the record still does not establish.
 
 Two things are waiting on you: <the reserved decisions, in plain words, for example
@@ -103,7 +106,7 @@ judgment this skill does not make on its own.
 opposing counsel | to file it | to send it outside the firm>
 **Decision:** not served, not filed, not sent. Drafted discovery is work product
 prepared for attorney review; the firm serves under its own identity by its own method.
-The draft is in the matter memo and the requesting attorney has the pointer. Surfaced,
+The draft is in the matter as <file name> and the requesting attorney has the pointer. Surfaced,
 held.
 ```
 
@@ -122,7 +125,8 @@ the gate ran in the skill or on the delivery path (not built for this lane).
 
 ## Rules
 
-1. **Only Shape A carries the instruments,** and only into the matter memo. The email
+1. **Only Shape A carries the instruments,** and only into the Word document
+   `render_docx_draft` files in the matter, never into a memo. The email
    is Shape B and carries no instrument text and no citations.
 2. **No target from the attorney is Shape C,** never a set drafted to a theory the skill
    picked.

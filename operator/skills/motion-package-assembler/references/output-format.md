@@ -8,6 +8,15 @@ hearing date is attorney-supplied, never invented.
 
 ## Shape A - Assembled package (staged for attorney finalization)
 
+The block below, down to its File note, is the `draft_markdown` of
+`mcp_smokeball_render_docx_draft(matter_id, file_name, draft_markdown, folder_id)`: a Word
+document filed in the matter (omit `document_class`; tables belong here, never in a
+note), named "<today> Motion Package Index (draft) - <Client>" (the tool adds `.docx`) and confirmed
+with `get_file` and a `read_document` spot check. It is never written into a note and
+never filed as text with `add_file`. A `refusals` list back means nothing was filed: fix
+what it names and call again. The File note is the separate `create_memo`, and it
+names the file.
+
 ```markdown
 # Motion Package - <motion descriptor, e.g. Motion to Compel Further RFP Responses> - <matter descriptor> - matter <id> - YYYY-MM-DD
 
@@ -71,13 +80,11 @@ ruling.
 file-naming convention; an unconfirmed department format; a missing reserved hearing date;
 an unknown tentative-ruling posting channel - listed, never guessed or filled.>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Motion package for <motion> on matter <id> assembled from <N> present components
-> (read from <docs>); <M> components surfaced as missing. Department format surfaced for
-> <attorney> to confirm (not asserted). Hearing <recorded from attorney-supplied
-> reservation | surfaced as gap>. Tentative-ruling check scheduled. Staged to finalize
-> and file. Gaps: <...>.
+[Operator] <Routine name> as of <localDate>
+Motion package for <motion> on matter <matter number> assembled from <N> documents in the matter and filed as <file name>; <M> components missing. The department format is for <attorney> to confirm. Hearing: <date and time, from the reservation, or not yet recorded>.
+<Attorney> to confirm the format, supply any missing component, and finalize <file name>.
 ```
 
 ## Shape B - Cannot assemble (missing / unpairable components)

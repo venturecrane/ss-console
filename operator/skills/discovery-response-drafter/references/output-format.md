@@ -4,27 +4,36 @@ Every run is keyed to a specific `(matter, served set or sets)` and ends in one 
 shapes. The draft is always a DRAFT: it lands in the matter, a pointer goes to the
 requesting attorney, and nothing is served, filed, or sent outside the firm.
 
-The split is authored, not discovered at refusal time: **the draft text and its statute
-citations live in the matter memo; the email is a citation-free pointer.** Emailing the
-draft body fights the mail channel's citation filter by construction.
+The split is authored, not discovered at refusal time: **the draft is a Word document
+filed in the matter, the file note names it, and the email is a citation-free pointer.**
+Emailing the draft body fights the mail channel's citation filter by construction, and a
+draft in a memo is not a document an attorney can edit.
 
 ## Shape A: draft delivered (the main path)
 
-Written into the matter (`create_memo`, confirmed by `get_memos_on_matter`):
+The draft is filed in the matter with
+`mcp_smokeball_render_docx_draft(matter_id, file_name, draft_markdown, folder_id,
+held_out_file_names, document_class="discovery_response")` and confirmed with `get_file`
+and a `read_document` spot check. The `draft_markdown` is the full consolidated draft,
+set by set, request by request, per the skeleton: the caption, the labels with the set's
+own numbers, the responses, the signature block and the proof of service, exactly as
+the shell shows. File name: "<today> Responses to <set caption> (draft).docx".
+
+Then one file note (`create_memo`), which reads itself back; act on its `confirmed`
+field:
 
 ```markdown
-# Responses to Served Discovery: DRAFT for attorney review: matter <id>: YYYY-MM-DD
+## File note (create_memo)
 
-**Requested by:** <requesting attorney>
-**Sets drafted:** <exact caption of each served set, as served>
-**Skeleton:** <firm shell | SMD default discovery-response-shell, replaced at onboarding>
-**Gate check:** passed, <checker version/run id>
-**Status:** DRAFT. Not served, not filed, not verified. No objection adopted.
+[Operator] <Routine name> as of <localDate>
+Responses to <set captions> drafted and filed as <file name>: <n> items, <n> with a response; <n> objections proposed, none adopted; <n> gaps marked in place; <n> documents held out for privilege review (<file names>).
+<Requesting attorney> to review the draft, decide the objections and the held-out documents, and confirm the response date (<date>, from service on <date> by <method>).
+```
 
-## Draft
+The run's own report (this run's output, never the note and never the document) keeps
+the itemized detail:
 
-<the full consolidated draft, set by set, request by request, per the skeleton>
-
+```markdown
 ## What was done (itemized)
 
 - Requests drafted: <n> across <n> sets, itemized by set and number
@@ -52,22 +61,14 @@ References only. No content from these documents appears in the draft.
 
 ## Response deadline (trigger facts, NOT a final date)
 
-|                 |                                                           |
-| --------------- | --------------------------------------------------------- |
-| Set served      | <date, per the proof of service>                          |
-| Method          | <method, per the proof of service>                        |
-| Base period     | 30 days                                                   |
-| Extension basis | <statutory basis for the service method>                  |
-| Deadline        | <date from the deadline lane> OR proposed <date>, CONFIRM |
-
-## Training note
-
-<what it did / why it matters / what comes next / when to bring the attorney in>
+Set served <date, per the proof of service> by <method>; base period 30 days; extension
+basis <statutory basis for the service method>; deadline <date from the deadline lane>
+OR proposed <date>, CONFIRM.
 ```
 
 Then the pointer email to the requesting attorney (internal, citation-free):
 
-> The responses to the sets served on <matter number> are drafted and in the matter memo.
+> The responses to the sets served on <matter number> are drafted and in the matter as <file name>.
 > Coverage: every item in both sets has a response, <n> items total. <n> candidate
 > objections are proposed for you to adopt, narrow, or strike; none are adopted. <n>
 > documents are held out for your privilege call, listed with the draft. <n> points the
@@ -77,12 +78,13 @@ Then the pointer email to the requesting attorney (internal, citation-free):
 
 ## Shape B: draft delivered with material gaps
 
-Same as Shape A, with the gaps promoted to the top of both the memo and the pointer,
+Same as Shape A, with the gaps promoted to the front of both the file note and the pointer,
 because a draft that is mostly markers needs the attorney to know that before opening it.
 
 ```markdown
-**Status:** DRAFT with <n> unresolved record gaps. <n> of <n> requests could not be
-answered from the file. The gaps are marked in place, by request number, below.
+[Operator] <Routine name> as of <localDate>
+Responses to <set captions> drafted with <n> unresolved gaps and filed as <file name>: <n> of <n> requests could not be answered from the file; the gaps are marked in place by request number.
+<Requesting attorney> to review the gaps before relying on the draft.
 ```
 
 The pointer says the same in plain words. It never rounds the gap count down and never

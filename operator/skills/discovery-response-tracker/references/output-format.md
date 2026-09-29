@@ -18,7 +18,11 @@ the stated confirm.
 > The engine's response deadline for <type> on <matter> is <date>. Confirm to place it on
 > the calendar and the matter task. <one-click confirm, bound to this set>
 
-## Internal log (create_memo body - includes the training note)
+## File note (create_memo)
+
+[Operator] <Routine name> as of <localDate>
+Response deadline for <type> served <date> on matter <matter number>: the court-rules engine shows <date>; not on the calendar yet.
+<Attorney> to confirm the date so it goes on the calendar and the matter task.
 ```
 
 ## Shape B (inbound) - Present the response deadline for confirm, computed by hand
@@ -38,7 +42,11 @@ count / local rule not applied here.">
 > Proposed response deadline for <type> on <matter>: <date> (30 days + <extension>,
 > §<...>). Confirm to calendar it, or correct the date. <one-click confirm>
 
-## Internal log (create_memo body - includes the training note)
+## File note (create_memo)
+
+[Operator] <Routine name> as of <localDate>
+Proposed response deadline for <type> served <date> on matter <matter number>: <date> (30 days plus <extension>, <statute>); not on the calendar yet.
+<Attorney> to confirm or correct the date.
 ```
 
 ## Shape C (outbound) - Surface the compel track for a decision (past due or thin)
@@ -66,30 +74,30 @@ received <date> appears thin: <what was observed, factual, not a sufficiency rul
   the compel-section citation). **This skill does not send anything, does not write the
   letter, and does not assert the compel section or the day-count.**
 
-## Internal log (create_memo body - includes the training note)
+## File note (create_memo)
+
+[Operator] <Routine name> as of <localDate>
+Opposing discovery: <type> on matter <matter number>, <no response by <date> | a response received <date> looks thin>, unless an extension is on file.
+<Attorney> to decide: informal meet-and-confer first, or a meet-and-confer letter.
 ```
 
 ## The confirmation memo (inbound, `create_memo` body written ON attorney confirm)
 
 When the responsible attorney confirms an inbound deadline (Shape A or Shape B), the
 skill writes the calendar event and matter task and, in the same step, a `create_memo`
-that records the confirmation as an auditable bookkeeping entry. The memo MUST carry all
-four fields, exactly:
+that records the confirmation as an auditable bookkeeping entry, in the file-note shape.
+The memo MUST carry all four facts: who confirmed, the day, the date, the source:
 
 ```markdown
-# Deadline confirmed - <matter number> - <discovery type> - inbound
-
-**Confirmed by:** <responsible attorney full name> (resolved from `personResponsibleStaffId` via `get_staff`)
-**Confirmed at:** <ISO-8601 timestamp, e.g. 2026-07-14T16:32:05Z>
-**Confirmed date:** <the response deadline date the attorney confirmed>
-**Source:** <"Smokeball court-rules engine" (engine-read branch) | "proposed by Operator" (by-hand branch)>
-
-<training note>
+[Operator] <Routine name> as of <localDate>
+Response deadline for <discovery type> on matter <matter number> confirmed by <responsible attorney full name> on <date confirmed>: <the confirmed deadline>. Source: <Smokeball court-rules engine | proposed by Operator>.
+Nothing to do.
 ```
 
 - **Confirming attorney's full name** comes from the roster (`get_staff` on the matter's
   `personResponsibleStaffId`), never a bare staff id and never a guessed name.
-- **The timestamp is ISO-8601** and records when the confirmation was captured.
+- **The day it was confirmed** is the firm's local day, written the way the firm
+  writes a date; never an ISO timestamp or a UTC clock.
 - **The confirmed date** is the date the attorney approved, verbatim.
 - **The source** names which branch produced the date: `Smokeball court-rules engine`
   when the engine's date was read (Shape A), `proposed by Operator` when the skill
@@ -143,6 +151,6 @@ nothing sent. This is a judgment the skill does not make on its own.
    verified response). The compel section and day-count belong to `meet-and-confer-drafter`.
 9. **The inbound confirmation memo carries all four fields.** On attorney confirm, the
    `create_memo` records the confirming attorney's full name (from `get_staff`), an
-   ISO-8601 timestamp, the confirmed date, and the source branch (`Smokeball court-rules
+   day it was confirmed (the firm's local day), the confirmed date, and the source branch (`Smokeball court-rules
 engine` vs `proposed by Operator`). A confirmation logged without any one of the four
    is incomplete. Nothing is logged before the confirm.

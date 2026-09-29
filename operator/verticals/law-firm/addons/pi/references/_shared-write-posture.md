@@ -78,3 +78,35 @@ The internal `create_memo` (the audit/training-output record) has an ASSUMED bod
 schema. A failed memo means the action has no logged record even though a human may
 already have the surfaced note. Treat it under rule 1: act on the `confirmed` field
 the write returns; do not assume the log persisted.
+
+## 5. One file note per routine per matter, plain and headed
+
+Every memo a skill writes (`create_memo`) is a **file note** in one shape, the same in
+every skill's `references/output-format.md`:
+
+```
+[Operator] <Routine name> as of <localDate>
+<one line: what it found>
+<one line: what a person needs to do, or "Nothing to do.">
+```
+
+- **One note per routine per matter.** The note opens with the header line.
+  `<Routine name>` is this skill's label in the seat's `routine_names` map (the
+  firm's own words for the routine); `<localDate>` is today's date in the firm's time
+  zone, written the way the firm writes a date (Sep 29, 2026). The connector finds
+  the routine's existing note on the matter by that header and updates it in place;
+  when nothing changed it writes nothing new and returns `unchanged: true`, which is
+  a success, never a failure to report.
+- **Plain text.** No `>` quote marks, no `**`, no `#`, no tables, no bullets inside
+  the note. At most 15 lines. Anything longer, and any table or list of exhibits or
+  witnesses, is a Word document filed with `render_docx_draft`, and the note names
+  the file.
+- **Times and dates are the firm's.** A court time is the event's `localTime` on its
+  `localDate` ("Oct 6 at 9:30 a.m."), a task's day is its `localDueDate`; never a
+  `startTime` or `dueDate`, which are UTC.
+- **The matter by its number**, never an internal id, except a dedup key a skill's
+  own output-format names (for example `fileId <id> recorded`), which stays exactly
+  as that skill writes it, alone on its own line, because a later run reads it back
+  and the seat passes a machine-marker line only when it stands alone.
+- The training note (`_shared-training-output.md`) rides in the two lines: what and
+  why in the first, what next and when to bring in the attorney in the second.

@@ -47,10 +47,19 @@ PROVENANCE_MARK = "[Operator]"
 
 #: The prep routines' own memo markers (each routine's references/output-format.md).
 #: Only [Operator] memos count: the marker is the routine saying it ran.
+#: Since 2026-09-29 a note is plain text headed "[Operator] <Routine name> as of
+#: <day>" with no "#" heading, so each kind also matches its plain found line;
+#: the "#" forms stay for the notes already on the matters.
 MEMO_MARKERS: dict[str, tuple[str, ...]] = {
     "binder_assembled": ("trial binder index assembled", "# trial binder -"),
     "motion_calendar": ("motion calendar assembled", "# motion calendar"),
-    "discovery_status": ("# response deadline", "# deadline confirmed", "# opposing discovery"),
+    "discovery_status": (
+        "# response deadline",
+        "# deadline confirmed",
+        "# opposing discovery",
+        "response deadline for",
+        "opposing discovery:",
+    ),
 }
 
 #: The records-request roster convention medical-records-chaser keys on.
@@ -162,6 +171,11 @@ def matter_events(client, matter: dict, frm: str, to: str) -> list[dict] | None:
         if event_id is None or day is None or _is_probe(subject):
             continue
         local_day, time = _when(event)
+        # An event already enriched by the connector (local_time.enrich_event)
+        # carries its own local day and clock; those win over this recompute.
+        if _first(event, ("localDate",)) is not None:
+            local_day = _first(event, ("localDate",))
+            time = _first(event, ("localTime",)) or time
         row = {
             "event_id": event_id,
             "date": local_day or day,

@@ -231,9 +231,12 @@ checklist and marks each item for the attorney to confirm; it never silently sel
    the attorney's to confirm for this venue. Never assert a ruling.
 6. **Stage + log** - return the assembled package as a **draft staged for the attorney to
    finalize and file**, with the component checklist, the format-confirm prompts, the
-   staged hearing, and the tentative-ruling reminder. Log with `create_memo`. It does not
-   file, serve, or reserve. Placing a component or a package cover as a matter document is
-   a gated write, surfaced for confirm, not autonomous.
+   staged hearing, and the tentative-ruling reminder. The assembled artifact is a Word document: file it with
+   `mcp_smokeball_render_docx_draft` (Shape A in `references/output-format.md` is the
+   `draft_markdown`) and confirm it with `get_file` and a `read_document` spot check;
+   the note names the file. Log with
+   one file note (`create_memo`). It does not file with the court, serve, or reserve,
+   and it never re-files a component document the firm authored.
 
 **Confirm every write by read.** Per
 `operator/verticals/law-firm/addons/pi/references/_shared-write-posture.md`, every

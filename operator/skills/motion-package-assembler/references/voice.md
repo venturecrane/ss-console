@@ -2,7 +2,7 @@
 
 This skill has **no outbound voice**. It sends nothing to a client, to opposing counsel,
 or to the court. It produces one internal artifact (the staged motion package) plus
-internal calendar/task writes, an internal log, and a training note. So there is no
+internal calendar/task writes, a file note, and a training note. So there is no
 client-facing tone to tune here; there is a discipline to hold about what it writes and,
 above all, what it does not.
 
@@ -16,9 +16,12 @@ above all, what it does not.
 - **The hearing and tentative-ruling entries** - factual records only. The hearing entry
   records the attorney-supplied reserved date, time, and department. The tentative-ruling
   entry is a reminder for a human to check the posting; it never states a ruling.
-- **The internal log (create_memo body)** - crisp and factual. States what was assembled,
-  from which documents, what was surfaced as missing or for confirmation, and what was
-  staged. One or two sentences. It records; it does not opine.
+- **The file note (create_memo)** - crisp and factual, in the pack's one shape (`_shared-write-posture.md`, section 5): the header line
+  `[Operator] <Routine name> as of <localDate>`, one plain line of what it found, one
+  plain line of what a person needs to do (or "Nothing to do."). No `>` quote marks, no
+  `**`, no headings, no tables. The training note rides in those two lines.
+  It states what was assembled, from which documents, what was surfaced as missing or
+  for confirmation, and which file it is in. It records; it does not opine.
 - **The training note** - plain and explanatory, per `_shared-training-output.md`. Teaches
   the step (what/why/next/attorney-if) and cites the governing rules (rule 3.1112, rule
   3.1110, rule 3.1113, rule 3.1345, rule 3.1350; the deadline lane owns rule 3.1300). It
@@ -29,7 +32,7 @@ above all, what it does not.
 The words of the notice of motion, the points and authorities, a declaration, or the
 reasons-to-compel in a separate statement never come from this skill. Its own words appear
 only in the structural labels (component names, the checklist, the filing order, the
-confirm prompts) and the internal log and training note. It quotes a component's title or
+confirm prompts) and the file note and training note. It quotes a component's title or
 identity to confirm presence; it never rewrites, extends, or composes a component's
 substance.
 
@@ -54,14 +57,13 @@ substance.
 
 ## Good / bad
 
-**Good - internal log:**
+**Good - file note:**
 
-> Assembled the motion-to-compel-further RFP package on Vega from 5 present components
-> (notice/motion, P&A, Kessler declaration + exhibits, separate statement, proof of
-> service, read from the Motions folder). Proposed order surfaced as missing. Department
-> filing order and page limit surfaced for the responsible attorney to confirm. Hearing
-> recorded from the attorney-supplied reservation (Dept and date as supplied); a
-> tentative-ruling check scheduled the court day before. Staged to finalize and file.
+```
+[Operator] Motion package as of Jul 1, 2026
+Motion to compel further RFP responses on the Vega matter assembled from 5 documents in the Motions folder and filed as the package index; the proposed order is missing. Hearing as the attorney reserved it; a tentative-ruling check is set for the court day before.
+The attorney to confirm the department's filing order and page limit and supply the proposed order.
+```
 
 **Bad - drafts a component (violates the floor):**
 

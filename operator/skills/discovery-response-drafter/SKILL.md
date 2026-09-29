@@ -38,7 +38,7 @@ metadata:
     action_class: read + internal_write # reads the matter and the served sets; writes the draft into the matter and a pointer note to the requesting attorney's inbox; NOTHING external
     content_ceiling: work_product # ON-DEMAND ATTORNEY-INITIATED ONLY, draft-for-review; never routine-initiated, never served/filed/sent by the Operator by any path
     connectors:
-      - smokeball # PracticeManagement, Documents: matter, roles, the served sets, the matter record the responses are built from, memo (where the draft and its citations live), task
+      - smokeball # PracticeManagement, Documents: matter, roles, the served sets, the matter record the responses are built from, Word document (render_docx_draft: the draft and its citations), memo (the file note naming it), task
       - agentmail # Email: the Operator's own inbox; carries a citation-free pointer to the requesting attorney (internal). Never opposing counsel, never the client, never the court
 ---
 
@@ -322,8 +322,10 @@ held_out_file_names, document_class="discovery_response")`. The tool runs the
   exactly as the shell shows). A refusal comes back with the gate's findings and
   `fileId: null`; fix the draft and call again. Never route around a refusal by
   filing the same text through `add_file` or `create_memo`.
-- **The itemized report and the held-out list go into the matter memo**
-  (`create_memo`), where citations belong.
+- **One file note names the document** (`create_memo`, the header line and two
+  plain lines per `references/output-format.md`): the counts, the held-out file names,
+  and what the attorney needs to do. The itemized report and the coverage diff are
+  this run's report, never the note.
 - **The email to the requesting attorney is a citation-free pointer**: the matter by
   number, the sets drafted, where the draft lives, and the plain-words state of the
   coverage diff, the held-out list, and any unresolved markers, plus one honest
@@ -392,9 +394,10 @@ was sought, where you looked}}`.
    gate whose result cannot be established, stop and report the itemized failures
    instead of the draft.
 7. **Confirm the file landed** with a bounded poll of `get_file` and a `read_document`
-   spot check (materialization is asynchronous), and **write the report memo**
-   (`create_memo`) with the itemized report, the held-out list, and the coverage
-   diff; confirm it with `get_memos_on_matter`. Open a review item
+   spot check (materialization is asynchronous), and **write the file note**
+   (`create_memo`, per `references/output-format.md`) naming the file with the counts
+   and the held-out file names; act on its `confirmed` field (it reads itself back).
+   Open a review item
    (`create_task`, assigned to the requesting attorney, keyed to the matter and the
    sets, with a near-term administrative confirm-by date stated as such and explicitly
    distinct from the response deadline), and confirm it with `list_tasks` or `get_task`.
@@ -432,7 +435,7 @@ was sought, where you looked}}`.
 
 ## Training output (built into every run)
 
-Every run carries, in the matter memo and in the attorney pointer, a short note a junior
+Every run carries, in the file note and in the attorney pointer, a short note a junior
 paralegal learns from (`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`):
 _what_ it did (drafted responses to the named sets, proposed N candidate objections, held
 out N documents, left N record gaps marked), _why it matters_ (a response set is verified

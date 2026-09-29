@@ -121,6 +121,46 @@ def test_matter_status_is_facts_only():
     ]
 
 
+def test_plain_headed_notes_still_mark_their_step():
+    # The one file-note pattern (2026-09-29): a header line, then plain lines; no
+    # "#" heading. Each prep routine's found line still names the step.
+    memos = [
+        {
+            "plainText": "[Operator] Trial binder as of Sep 28, 2026\nTrial binder index assembled for matter 2026-PI-105 and filed as x.docx.\nNothing to do.",
+            "createdDate": "2026-09-28",
+        },
+        {
+            "plainText": "[Operator] Motion calendar as of Sep 27, 2026\nMotion calendar assembled: 1 motions filed.\nNothing to do.",
+            "createdDate": "2026-09-27",
+        },
+        {
+            "plainText": "[Operator] Response deadlines as of Sep 26, 2026\nProposed response deadline for RFP Set One served Sep 1 on matter 2026-PI-105.\nConfirm.",
+            "createdDate": "2026-09-26",
+        },
+    ]
+    assert file_status.memo_markers(memos) == {
+        "binder_assembled": "2026-09-28",
+        "motion_calendar": "2026-09-27",
+        "discovery_status": "2026-09-26",
+    }
+
+
+def test_an_enriched_event_uses_the_connectors_local_day_and_time():
+    # An event the connector already enriched carries its local day and clock;
+    # the brief uses them even where its own recompute cannot (no zone here).
+    event = {
+        "id": "e1",
+        "subject": "Hearing",
+        "startTime": "2026-10-07T03:00:00",
+        "localDate": "2026-10-06",
+        "localTime": "8:00 p.m.",
+    }
+    client = StubClient({"/events": {"value": [event]}})
+    rows = file_status.matter_events(client, {"id": M105, "number": "2026-PI-105"}, "2026-10-01", "2026-10-31")
+    assert rows[0]["date"] == "2026-10-06"
+    assert rows[0]["time"] == "8:00 p.m."
+
+
 def test_an_unread_part_is_named_not_emptied():
     client = _status_client()
     client.routes["/matters/" + M105 + "/memos"] = RuntimeError("boom")

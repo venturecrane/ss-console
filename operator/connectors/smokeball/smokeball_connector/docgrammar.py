@@ -14,7 +14,11 @@ drafting-discipline.md`` Part IV):
 * paragraphs (blank-line separated) with ``**bold**`` / ``*italic*`` runs,
 * ``-`` / ``*`` bullets,
 * literal ``1.`` numbered items (the number is content; discovery item numbers
-  come from the propounded set, never from a counter),
+  come from the propounded set, never from a counter). The one exception is
+  markdown's own ``1. 1. 1.``: a run whose labels are ALL identical is numbered
+  in sequence from that label (the pattern that printed 1, 1, 1 on a finalized
+  list). A run whose labels already differ (1, 2, 3 or 7, 9, 12) is left
+  exactly as written,
 * pipe tables (``| a | b |``; an optional ``| --- | --- |`` separator after the
   first row marks it as a header row),
 * a line that is exactly ``---`` outside a table is a horizontal rule,
@@ -231,7 +235,38 @@ def parse_document(markdown: str) -> list[Block]:
             continue
         blocks.append(Paragraph(inline_runs(line)))
         i += 1
-    return blocks
+    return _renumber(blocks)
+
+
+def _renumber(blocks: list[Block]) -> list[Block]:
+    """Number a run of ``Numbered`` blocks in sequence ONLY when every label in
+    the run is identical (markdown's ``1. 1. 1.``, which printed 1, 1, 1).
+
+    A run is consecutive ``Numbered`` blocks (blank lines were already dropped);
+    any other block ends it. A run whose labels already differ is content and is
+    left exactly as written: a discovery response set can legitimately run 7, 9,
+    12, and its numbers come from the propounded set, never from a counter."""
+    out: list[Block] = []
+    run: list[Numbered] = []
+
+    def flush() -> None:
+        labels = {b.label for b in run}
+        if len(run) > 1 and len(labels) == 1:
+            first = run[0].label
+            n, delim = int(first[:-1]), first[-1]
+            out.extend(Numbered(f"{n + k}{delim}", b.runs) for k, b in enumerate(run))
+        else:
+            out.extend(run)
+        run.clear()
+
+    for block in blocks:
+        if isinstance(block, Numbered):
+            run.append(block)
+            continue
+        flush()
+        out.append(block)
+    flush()
+    return out
 
 
 __all__ = [

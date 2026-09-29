@@ -13,9 +13,11 @@
 > <factual, respectful request per voice.md - available balance, floor, shortfall, how to
 > replenish; authored terms only; no invented consequence>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Trust balance $<balance> below floor $<floor> on matter <id>; replenishment request drafted; no funds moved.
+[Operator] <Routine name> as of <localDate>
+Trust balance on matter <matter number> is <balance>, below the floor of <floor>; a replenishment request is drafted. No funds moved.
+Review and send the replenishment request.
 ```
 
 ## Shape B - No action (at/above floor)

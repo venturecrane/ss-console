@@ -166,8 +166,9 @@ no invented tool, no assumed status API.
    **Hearings** per `references/output-format.md`; attach each item's source id;
    name every gap and ambiguity in its own section. Never compute a missing due date;
    never invent a missing hearing; never assert a missing outcome.
-6. **Log internally** - write the surface (plus the training-output note) with
-   `create_memo`. Per `operator/verticals/law-firm/addons/pi/references/_shared-write-posture.md`,
+6. **Log internally** - write the file note (`references/output-format.md`, "File
+   note": the header line and two plain lines, no table) with `create_memo`, one note
+   per matter; the surface itself is this run's report, not the note. Per `operator/verticals/law-firm/addons/pi/references/_shared-write-posture.md`,
    the memo write is **unverified at connect**: act on the `confirmed` field
    `create_memo` returns (it reads its own memo back); only `true` means logged. On
    `false` or `"unknown"`, surface the write failure and never re-create the memo -

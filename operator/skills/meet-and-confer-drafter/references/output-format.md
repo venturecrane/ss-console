@@ -7,6 +7,11 @@ go/no-go, never sent to opposing counsel by the skill.
 
 ## Shape A - Draft & surface the go/no-go (the main path)
 
+The letter is filed in the matter as a Word document with
+`mcp_smokeball_render_docx_draft(..., document_class="letter")` and confirmed with
+`get_file` and a `read_document` spot check (SKILL.md step 5); the letter block below
+is its `draft_markdown`, never a memo. The file note names the file.
+
 ```markdown
 # Meet-and-Confer - <case name> - <device: interrogatories | RFP | RFA>, <set> - matter <id> - YYYY-MM-DD
 
@@ -30,11 +35,11 @@ go/no-go, never sent to opposing counsel by the skill.
 > first (I'll hold the draft), or hold. When you decide to send, the firm sends it
 > under its own identity and method; the Operator does not send it.
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Meet-and-confer drafted for <case>/<set> from <attorney>'s flagged deficiencies;
-> routed for go/no-go; not sent. Compel-further window <date/proposed> (<statute>).
-> <training-output note>
+[Operator] <Routine name> as of <localDate>
+Meet-and-confer letter drafted for <case>, <set>, from <attorney>'s flagged deficiencies and filed as <file name>; not sent. Motion to compel further window: <date>, <proposed or confirmed> (<statute>).
+<Attorney> to decide go or no-go on the letter before the window closes.
 ```
 
 ## Shape B - Re-surface a held / informal-first letter as the window approaches

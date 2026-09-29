@@ -164,7 +164,7 @@ attorney to confirm; it is **never final without that confirm**; it is **never w
 the calendar silently**. On confirm, the skill writes the calendar event and matter task
 (`create_event`, `create_task`) and logs a confirmation memo (`create_memo`). That memo
 records four fields, exactly: the **confirming attorney's full name** (resolved from
-`personResponsibleStaffId` via `get_staff`, never a bare id), an **ISO-8601 timestamp**,
+`personResponsibleStaffId` via `get_staff`, never a bare id), the **day it was confirmed** (the firm's local day, never an ISO timestamp),
 the **confirmed date**, and the **source branch** it came from (`Smokeball court-rules
 engine` for Branch 1, `proposed by Operator` for Branch 2) - the shape is pinned in
 `references/output-format.md`. Nothing is written before the confirm.
@@ -344,8 +344,8 @@ Inbound:
    `get_matter`). No write yet.
 4. **On confirm**, `create_event` + `create_task` (keyed to the matter and set), and
    the `create_memo` confirmation bookkeeping (confirming attorney's full name via
-   `get_staff`, ISO-8601 timestamp, confirmed date, source branch) plus the training
-   note. See `references/output-format.md`.
+   `get_staff`, the day confirmed, confirmed date, source branch) in the file-note shape
+   (the training note rides in its two lines). See `references/output-format.md`.
 
 Outbound:
 

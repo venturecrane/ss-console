@@ -79,6 +79,29 @@ def test_bullets_numbered_and_rules() -> None:
     assert blocks[2].label == "1." and blocks[3].label == "2)"
 
 
+def test_numbered_runs_count_in_sequence() -> None:
+    # Markdown's 1. 1. 1. means 1, 2, 3; a blank line keeps the run going.
+    blocks = parse_document("1. a\n1. b\n\n1. c")
+    assert [b.label for b in blocks] == ["1.", "2.", "3."]
+
+
+def test_a_paragraph_between_numbered_runs_restarts_the_count() -> None:
+    blocks = parse_document("1. a\n1. b\nBetween.\n1. c\n1. d")
+    assert [b.label for b in blocks if isinstance(b, Numbered)] == ["1.", "2.", "1.", "2."]
+
+
+def test_identical_labels_count_from_the_first_and_keep_its_punctuation() -> None:
+    assert [b.label for b in parse_document("1. a\n1. b\n1. c")] == ["1.", "2.", "3."]
+    assert [b.label for b in parse_document("3) a\n3) b")] == ["3)", "4)"]
+
+
+def test_a_run_whose_labels_already_differ_is_left_as_written() -> None:
+    # Discovery numbers come from the propounded set: 7, 9, 12 is content.
+    assert [b.label for b in parse_document("7. a\n9. b\n12. c")] == ["7.", "9.", "12."]
+    assert [b.label for b in parse_document("1. a\n2. b")] == ["1.", "2."]
+    assert [b.label for b in parse_document("1. a\n1. b\n2. c")] == ["1.", "1.", "2."]
+
+
 def test_four_or_deeper_hashes_and_unknown_syntax_degrade_to_paragraphs() -> None:
     blocks = parse_document("#### too deep\n> quote")
     assert all(isinstance(b, Paragraph) for b in blocks)

@@ -28,9 +28,11 @@ Two output shapes. The conflict-check result decides which. Both are internal ar
 
 > <plain-text acknowledgment body, per voice.md>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> New inquiry received <date>; matter drafted; conflict check clear; acknowledgment drafted for review.
+[Operator] <Routine name> as of <localDate>
+New inquiry received <date>; matter drafted, conflict check clear, and an acknowledgment drafted for review.
+Review and send the acknowledgment.
 ```
 
 ## Shape B - CONFLICT-HOLD (any hit)

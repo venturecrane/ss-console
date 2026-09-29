@@ -9,6 +9,15 @@ The decision determines the shape.
 
 ## Shape A - Packet assembled (staged for attorney finalization)
 
+The block below, down to its File note, is the `draft_markdown` of
+`mcp_smokeball_render_docx_draft(matter_id, file_name, draft_markdown, folder_id)`: a Word
+document filed in the matter (omit `document_class`; tables belong here, never in a
+note), named "<today> Minor's Compromise Packet (draft) - <Client>" (the tool adds `.docx`) and confirmed
+with `get_file` and a `read_document` spot check. It is never written into a note and
+never filed as text with `add_file`. A `refusals` list back means nothing was filed: fix
+what it names and call again. The File note is the separate `create_memo`, and it
+names the file.
+
 ```markdown
 # Minor's Compromise Packet - <minor> - matter <id> - YYYY-MM-DD
 
@@ -52,10 +61,11 @@ The decision determines the shape.
 
 > <missing figures, missing net, no GAL, outstanding lien payoff, undecided fund handling>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Minor's compromise packet assembled for matter <id> from <N> authored figures;
-> staged for <attorney>. Net placed as authored, not computed. Gaps: <...>.
+[Operator] <Routine name> as of <localDate>
+Minor's compromise packet assembled on matter <matter number> from <N> recorded figures and filed as <file name>; the net is placed as recorded, not computed. Gaps: <gaps, or none>.
+<Attorney> to review and finalize <file name>.
 ```
 
 ## Shape B - Track / chase (open item, cadence due)
@@ -71,9 +81,11 @@ The decision determines the shape.
 > <short, professional request to <lienholder> for a current payoff figure for <minor>;
 > per \_shared-chase-voice; states no legal consequence, estimates no figure>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Track pass on matter <id>: <what is outstanding and what was drafted/surfaced>.
+[Operator] <Routine name> as of <localDate>
+Minor's compromise on matter <matter number>: <what is outstanding>.
+<What a person needs to do, or Nothing to do.>
 ```
 
 ## Shape C - Cannot assemble (missing required figures or no GAL)

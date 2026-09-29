@@ -32,12 +32,16 @@ Every capture is keyed to `(matter, defendant, service-confirmation)`.
 > (POS located). Confirm the defendant, served date, and method so the
 > responsive-pleading deadline is set. I have not calendared it.
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Captured the service confirmation on matter <id> for <defendant>: served <date> by
-> <method>, read off the POS. fileId <...> recorded. Surfaced to <attorney> to confirm.
-> Responsive-pleading deadline owned by the rules engine / confirmed by hand; not computed here.
+[Operator] <Routine name> as of <localDate>
+Service on <defendant> confirmed on matter <matter number>: served <date> by <method>, read off the proof of service. The responsive pleading deadline comes from the rules engine or is confirmed by hand, not computed here.
+<Attorney> to confirm the service date and method.
+fileId <file id> recorded
 ```
+
+The last line is machine-read (a later scan dedups on it) and stands alone on its own
+line, exactly `fileId <file id> recorded`; never fold it into a sentence.
 
 ## Shape B - Multiple defendants, different service dates (one capture per defendant)
 
@@ -107,7 +111,8 @@ served date / method / defendant is not guessed.
    contents (a proof of service of summons), not from a filename; the defendant from the
    matter's roles, not from a name typed in the body.
 9. **Dedup on `(matter, defendant, fileId)`.** A scan does not re-surface a confirmation
-   whose `fileId` + resolved defendant already appears in a prior capture memo.
+   whose `fileId` + resolved defendant already appears in a prior capture memo (the
+   note's own `fileId <file id> recorded` line).
 10. **Writes are surfaced as done only after confirmation** (`create_memo`'s own
     `confirmed` field is `true`; `list_tasks` / `get_task` after `create_task`); otherwise
     the write failure is surfaced.

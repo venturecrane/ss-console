@@ -7,6 +7,15 @@ labeled blank for the attorney and is never filled.
 
 ## Shape A - Assembled separate statement (staged for attorney finalization)
 
+The block below, down to its File note, is the `draft_markdown` of
+`mcp_smokeball_render_docx_draft(matter_id, file_name, draft_markdown, folder_id)`: a Word
+document filed in the matter (omit `document_class`; tables belong here, never in a
+note), named "<today> Separate Statement (draft) - <Client>" (the tool adds `.docx`) and confirmed
+with `get_file` and a `read_document` spot check. It is never written into a note and
+never filed as text with `add_file`. A `refusals` list back means nothing was filed: fix
+what it names and call again. The File note is the separate `create_memo`, and it
+names the file.
+
 ```markdown
 # Separate Statement (CRC 3.1345) - <discovery set, e.g. RFP Set One> - <matter descriptor> - matter <id> - YYYY-MM-DD
 
@@ -55,11 +64,11 @@ labeled blank for the attorney and is never filled.
 <any request with no matching response; any response with no matching request; any
 ambiguous request/response pairing; any unreadable document - listed, never guessed>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Separate statement (CRC 3.1345) assembled for <set> on matter <id> from <N> items
-> (requests read from <doc>, responses from <doc>); reasons-to-compel left for
-> <attorney>; staged to finalize/file. Gaps: <...>.
+[Operator] <Routine name> as of <localDate>
+Separate statement (CRC 3.1345) for <set> on matter <matter number> assembled from <N> items and filed as <file name>; the reasons to compel are left for <attorney>. Gaps: <gaps, or none>.
+<Attorney> to write the reasons to compel and finalize <file name>.
 ```
 
 ## Shape B - Cannot assemble (missing / unpairable components)

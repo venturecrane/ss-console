@@ -74,7 +74,7 @@ rows:
     start_verbatim: 'Prepare-and-route'
     ceiling_verbatim: 'Prepare-and-route (capped: deadline)'
     enforcement:
-      initiation: 'manual + scheduled (weekday deadline sweep)'
+      initiation: 'manual (on request)' # 2026-09-29: was 'manual + scheduled (weekday deadline sweep)'; on request until the output checklist is met on the pilot
       exposure_keys:
         internal_write: autonomous
       content_floor: true
@@ -96,7 +96,7 @@ rows:
     start_verbatim: 'Prepare-and-route'
     ceiling_verbatim: 'Auto-handle (once you are comfortable)'
     enforcement:
-      initiation: 'manual + scheduled (chase cadence)'
+      initiation: 'manual (on request)' # 2026-09-29: was 'manual + scheduled (chase cadence)'; on request until the output checklist is met on the pilot
       exposure_keys:
         external_send_client: draft_for_review
       content_floor: false
@@ -230,7 +230,7 @@ rows:
     start_verbatim: 'Flag-only'
     ceiling_verbatim: 'Flag-only (capped: deadline)'
     enforcement:
-      initiation: 'manual + scheduled (weekday sweep)'
+      initiation: 'manual (on request)' # 2026-09-29: was 'manual + scheduled (weekday sweep)'; on request until the output checklist is met on the pilot
       exposure_keys:
         internal_write: autonomous
       content_floor: true
@@ -252,7 +252,7 @@ rows:
     start_verbatim: 'Prepare-and-route'
     ceiling_verbatim: 'Auto-handle (once you are comfortable)'
     enforcement:
-      initiation: 'manual + scheduled (weekly provider chase)'
+      initiation: 'manual (on request)' # 2026-09-29: was 'manual + scheduled (weekly provider chase)'; on request until the output checklist is met on the pilot
       exposure_keys:
         external_send_vendor: draft_for_review
       content_floor: false
@@ -303,7 +303,7 @@ rows:
     start_verbatim: 'Flag-only'
     ceiling_verbatim: 'Flag-only (only surfaces)'
     enforcement:
-      initiation: 'manual + scheduled (weekday sweep)'
+      initiation: 'manual (on request)' # 2026-09-29: was 'manual + scheduled (weekday sweep)'; on request until the output checklist is met on the pilot
       exposure_keys:
         internal_write: autonomous
       content_floor: false
@@ -343,7 +343,7 @@ rows:
     start_verbatim: 'Prepare-and-route'
     ceiling_verbatim: 'Prepare-and-route (capped: money and court forms)'
     enforcement:
-      initiation: 'manual + scheduled (packet manual; GAL/hearing/lien-figure tracking scheduled)'
+      initiation: 'manual (on request)' # 2026-09-29: was 'manual + scheduled (packet manual; GAL/hearing/lien-figure tracking scheduled)'; on request until the output checklist is met on the pilot
       exposure_keys:
         external_send: draft_for_review
       content_floor: true
@@ -366,7 +366,7 @@ rows:
     start_verbatim: 'Prepare-and-route'
     ceiling_verbatim: 'Prepare-and-route (capped: deadlines and court)'
     enforcement:
-      initiation: 'manual + scheduled (binder manual; weekly trial-prep deadline sweep)'
+      initiation: 'manual (on request)' # 2026-09-29: was 'manual + scheduled (binder manual; weekly trial-prep deadline sweep)'; on request until the output checklist is met on the pilot
       exposure_keys:
         external_send: draft_for_review
       content_floor: true
@@ -387,7 +387,7 @@ rows:
     start_verbatim: 'Prepare-and-route'
     ceiling_verbatim: 'Prepare-and-route (capped: deadline and settlement)'
     enforcement:
-      initiation: 'manual + scheduled (weekly conference/998 deadline sweep)'
+      initiation: 'manual (on request)' # 2026-09-29: was 'manual + scheduled (weekly conference/998 deadline sweep)'; on request until the output checklist is met on the pilot
       exposure_keys:
         internal_write: autonomous
       content_floor: true
@@ -415,7 +415,7 @@ rows:
       row carries the graduation.
     ceiling_verbatim: 'Prepare-and-route (capped: money)'
     enforcement:
-      initiation: 'manual + scheduled (weekly open-payoff chase)'
+      initiation: 'manual (on request)' # 2026-09-29: was 'manual + scheduled (weekly open-payoff chase)'; on request until the output checklist is met on the pilot
       exposure_keys:
         internal_write: autonomous
       content_floor: true

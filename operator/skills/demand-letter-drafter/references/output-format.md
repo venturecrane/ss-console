@@ -62,10 +62,11 @@ an adjuster, opposing counsel, or the client, by any shape.
 
 <no completeness or compliance certification appears here or anywhere in the draft>
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Demand drafted for <case> against <skeleton>; <n> attorney decision points and <n>
-> record gaps; not transmitted. <training-output note>
+[Operator] <Routine name> as of <localDate>
+Demand drafted for <case> from <skeleton>: <n> decisions reserved for the attorney and <n> gaps in the record; not sent.
+<Attorney> to decide the reserved points and review the draft before anything is sent.
 ```
 
 **Pointer email to the requesting attorney (citation-free, no letter body):**

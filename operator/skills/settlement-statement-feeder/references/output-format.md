@@ -11,6 +11,15 @@ The situation determines the shape.
 
 ## Shape A - Statement assembled (all inputs read; staged for a person to execute)
 
+The block below, down to its File note, is the `draft_markdown` of
+`mcp_smokeball_render_docx_draft(matter_id, file_name, draft_markdown, folder_id)`: a Word
+document filed in the matter (omit `document_class`; tables belong here, never in a
+note), named "<today> Settlement Statement (draft) - <Client>" (the tool adds `.docx`) and confirmed
+with `get_file` and a `read_document` spot check. It is never written into a note and
+never filed as text with `add_file`. A `refusals` list back means nothing was filed: fix
+what it names and call again. The File note is the separate `create_memo`, and it
+names the file.
+
 ```markdown
 # Settlement Statement - <plaintiff> - matter <id> - YYYY-MM-DD
 
@@ -61,9 +70,11 @@ skill to read. A person verifies these before executing.
 
 <anything missing, unconfirmed, or requiring judgment - surfaced, never guessed. If empty, say "none.">
 
-## Internal log (create_memo body)
+## File note (create_memo)
 
-> Settlement statement assembled for matter <id> from recorded figures; staged for <attorney> to verify and execute. Net shown is an arithmetic laydown of the read figures; Smokeball runs the math. Gaps: <...>. No funds moved.
+[Operator] <Routine name> as of <localDate>
+Settlement statement on matter <matter number> assembled from the recorded figures and filed as <file name>; the net is the recorded figures laid out, and Smokeball runs the math. No funds moved. Gaps: <gaps, or none>.
+<Attorney> to verify the figures and finalize <file name>.
 ```
 
 ## Shape B - Cannot finalize the net (a core figure is missing or unconfirmed)
