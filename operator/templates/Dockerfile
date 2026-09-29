@@ -1072,7 +1072,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # a rostered sender's emailed voice memo becomes their words through the
 # seat's speech-to-text, without tainting the turn (ss#2793). No tracked twin
 # moves.
-ARG OVERLAY_REF="65ff3f01e7d57028be30fb42c6efd3639a25d4c7"
+# 2026-09-29c (314ffec8, the overlay #398 merge commit). The record-store write
+# leaves the outbound draft gate (its follow-up schedule is computed by design;
+# the store is never outbound; drafts composed from it stay gated), and the
+# vendor's agent_attach_human is banned (ss#2793). No tracked twin moves.
+ARG OVERLAY_REF="314ffec84034efeda6dd887a02fa0aaf9e5915bc"
 
 ARG CUSTOMER_SLUG=customer-zero
 
