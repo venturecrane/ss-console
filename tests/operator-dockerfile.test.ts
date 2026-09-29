@@ -1431,7 +1431,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // record-store tool trio: the one write an inbound-email turn is offered,
     // fenced to a directory the seat authors. Registered only where a store is
     // authored; every other seat's surface is unchanged.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="a3bd40dbf89ad890939bbea9336027b50aea29dc"')
+    // a3bd40db -> 65ff3f01 (2026-09-29, overlay#397 merge commit, ss#2793). A rostered
+    // sender's emailed voice memo becomes their words through the seat's
+    // speech-to-text, without tainting the turn.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="65ff3f01e7d57028be30fb42c6efd3639a25d4c7"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

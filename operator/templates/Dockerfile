@@ -1068,7 +1068,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # the seat authors as record_stores (ss#2793). Registered only on a seat that
 # authors a store; every other seat's surface is unchanged. No tracked twin
 # moves.
-ARG OVERLAY_REF="a3bd40dbf89ad890939bbea9336027b50aea29dc"
+# 2026-09-29b (65ff3f01, the overlay #397 merge commit). voice_note_transcribe:
+# a rostered sender's emailed voice memo becomes their words through the
+# seat's speech-to-text, without tainting the turn (ss#2793). No tracked twin
+# moves.
+ARG OVERLAY_REF="65ff3f01e7d57028be30fb42c6efd3639a25d4c7"
 
 ARG CUSTOMER_SLUG=customer-zero
 
