@@ -48,6 +48,9 @@ The main model is the lighter, capable default (Sonnet-class). It runs the high-
 **The escalation behavior is authored once, not per skill.** It lives as a standing instruction in every persona's `SOUL.md` — rendered by `translate.py` (`_escalation_soul_section`) and gated on the seat having an `escalation_model`, so a single-tier seat omits it and a two-tier seat receives it. The instruction tells the agent to hand work heavier than it can reliably give to a sub-agent on its escalation model. Putting it in identity rather than in a skill is what makes the design hold up:
 
 - **Skills stay tier-unaware.** A skill never names a model or carries delegation boilerplate; at most it declares `metadata.smd.weight: heavy`. That marker is a property of the _work_ (it's heavy), not of the roster (which model) — so it stays tier-unaware. The convention is **default-light**: a skill is light unless it declares `weight: heavy`, which the SOUL instruction reads as a definite escalate signal (everything else escalates on the agent's judgment). The pack skills are **pre-weighted** — today `matter-document-review`, `assessment-findings-draft`, and `proposal-drafter` — so a new Machine ships with correct escalation out of the box. The _same_ pack runs on every roster: the SOUL adapts, not the skill. No double packs.
+
+  _2026-09-29: assessment-findings-draft and proposal-drafter retired; see operator/templates/retired-skills.txt._
+
 - **Agent-created skills inherit it.** `skill_manage` stays enabled (ADR 0017 — only the autonomous _curator_ is disabled, and it never touches bundled packs anyway); a skill the Operator authors through real work gets the escalation behavior for free, because the behavior is not in any skill.
 - **One-off requests are covered.** The agent escalates on judged heaviness whether or not a skill matched.
 

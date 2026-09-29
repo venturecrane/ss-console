@@ -22,16 +22,17 @@ _OPERATOR_ROOT = Path(__file__).resolve().parents[1]
 _TEMPLATE = _OPERATOR_ROOT / "templates" / "pre_run_gate.py"
 
 # The empty-seat gate is stamped into skill dirs under the name pre_run.py, so
-# its copies cannot be found by filename alone: six skills carry a bespoke
+# its copies cannot be found by filename alone: four skills carry a bespoke
 # pre_run.py that is not a stamp. deadline-miss-escalator kept its deadline
 # gate; client-verification-tracker graduated to its own cadence gate (WP-B,
 # #1889), medical-records-chaser to its ledger-backed cadence gate (ss #2404),
-# lien-ledger-tracker to its settlement-closeout obligation ledger (ss #2455);
-# paid-media-anomaly-watcher and retainer-hours-reconciler never used it.
+# lien-ledger-tracker to its settlement-closeout obligation ledger (ss #2455).
+# Two more bespoke files (paid-media-anomaly-watcher, retainer-hours-reconciler)
+# left with their skills when those were retired on 2026-09-29.
 #
 # The stamps are DISCOVERED, not listed: a pre_run.py that shares a function
 # body with the template is a stamp, pristine or edited, and must equal it
-# byte-for-byte. The six bespoke files share no body with it (probed
+# byte-for-byte. The bespoke files share no body with it (probed
 # 2026-09-11), so they are not stamps; a ninth stamp is under the gate the
 # moment it is written. Until 2026-09-11 this was a hand-maintained tuple
 # (code review 2026-09-10, Architecture 5).

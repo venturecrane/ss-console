@@ -320,6 +320,21 @@ ssh_exec "hermes-profiles-dir" "test -d /opt/data/profiles && [ -n \"\$(ls -A /o
 # was broken). Python strings below are double-quoted only, one line.
 ssh_exec "no-unauthored-profile-homes" "/opt/hermes/.venv/bin/python3 -c \"import sys, yaml, pathlib; a = {p[\\\"slug\\\"] for p in (yaml.safe_load(open(\\\"/var/lib/smd-config/customer.yaml\\\")) or {}).get(\\\"personas\\\", [])}; d = {e.name for e in pathlib.Path(\\\"/opt/data/profiles\\\").iterdir() if e.is_dir() and not e.name.startswith(\\\".\\\")}; drift = sorted(d - a) + sorted(a - d); sys.stderr.write(f\\\"profile-home drift: orphans={sorted(d - a)} missing={sorted(a - d)}\\n\\\") if drift else None; sys.exit(1 if drift else 0)\""
 
+# ---------- Step 6c: retired repo skills absent from the volume ----------
+# The skill seed in bootstrap.sh is additive, so a skill deleted from the repo
+# keeps its old copy on /opt/data/skills unless bootstrap prunes it by name.
+# operator/templates/retired-skills.txt is the one home for those names; the
+# list is read HERE, from this checkout, not from the image, so a Machine running
+# an image that lacks the list (or the prune) fails instead of passing on an
+# empty list. A dangling alias counts as present.
+RETIRED_SKILLS_LIST="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/operator/templates/retired-skills.txt"
+RETIRED_SKILL_NAMES="$(grep -vE '^[[:space:]]*(#|$)' "${RETIRED_SKILLS_LIST}" 2>/dev/null | tr -s '[:space:]' ' ' || true)"
+if [ -z "${RETIRED_SKILL_NAMES// /}" ]; then
+  check_fail "retired-skills-absent: cannot read any name from ${RETIRED_SKILLS_LIST}"
+else
+  ssh_exec "retired-skills-absent" "for n in ${RETIRED_SKILL_NAMES}; do if test -e /opt/data/skills/\$n || test -L /opt/data/skills/\$n; then echo retired skill still on volume: \$n >&2; exit 1; fi; done"
+fi
+
 # ---------- Step 7: overlay plugins installed ----------
 # `hermes plugins list` should include the four hermes-smd-* plugins
 # installed at image-build time via `hermes plugins install venturecrane/hermes-smd-overlay`.

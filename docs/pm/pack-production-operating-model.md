@@ -26,7 +26,7 @@ The spec (1) drives all the others. Build it first.
 
 ## The shared spine (reuse, don't rebuild)
 
-Generic connective skills already exist in `operator/skills/`: `inbox-triage`, `status-report-assembler`, `ar-chaser`, `asset-collection-follower`, `retainer-hours-reconciler`, `scope-creep-flagger`. A pack is the spine plus a vertical skin. The vertical-specific skill **bodies** live in `hermes-smd-overlay`; the manifest only declares their identifiers.
+Generic connective skills already exist in `operator/skills/`: `inbox-triage`, `email-reply`, `status-report-assembler`. (Four more generic skills, ar-chaser, asset-collection-follower, retainer-hours-reconciler and scope-creep-flagger, were retired 2026-09-29: no client ran them.) A pack is the spine plus a vertical skin. The vertical-specific skill **bodies** live in `hermes-smd-overlay`; the manifest only declares their identifiers.
 
 ## Repo boundary
 

@@ -24,8 +24,7 @@ personas:
     title: '[Coordinator Title]'
 
 # Reuse the shared spine where it fits (inbox-triage, status-report-assembler,
-# ar-chaser, asset-collection-follower, retainer-hours-reconciler,
-# scope-creep-flagger). Add vertical-specific skill identifiers; their bodies
+# email-reply). Add vertical-specific skill identifiers; their bodies
 # live in hermes-smd-overlay (the first hand-off).
 skills: []
 

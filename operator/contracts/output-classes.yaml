@@ -535,45 +535,13 @@ skill_bindings:
     outbound: derived # the follow-up drafts email and the in-thread replies go to the rostered agent only
 
   # ---- SMD's own vertical (the venture operating on itself) ----
-  ar-chaser:
-    internal:
-      - { artifact: draft_file, seam: local_file, class: staff }
-      - { artifact: slack_summary, seam: slack, class: staff }
-      - { artifact: escalation, seam: slack, class: staff }
-    outbound: derived
-  asset-collection-follower:
-    internal:
-      - { artifact: tracking_note, seam: local_file, class: record }
-      - { artifact: escalation, seam: slack, class: staff }
-    outbound: derived
+  # ar-chaser, asset-collection-follower, proposal-drafter,
+  # assessment-findings-draft, scope-creep-flagger, paid-media-anomaly-watcher
+  # and retainer-hours-reconciler were retired 2026-09-29: no client ran them.
   status-report-assembler:
     internal:
       - { artifact: slack_summary, seam: slack, class: staff }
     outbound: derived # per-client report drafts
-  proposal-drafter:
-    internal:
-      - { artifact: proposal, seam: local_file, class: staff }
-      - { artifact: slack_thread, seam: slack, class: staff }
-    outbound: none # the owner sends; the skill writes a file
-  assessment-findings-draft:
-    internal:
-      - { artifact: findings_doc, seam: local_file, class: staff }
-      - { artifact: customer_yaml_seed, seam: local_file, class: record }
-    outbound: none
-  scope-creep-flagger:
-    internal:
-      - { artifact: scope_flag, seam: slack, class: staff }
-      - { artifact: am_response_draft, seam: slack, class: staff }
-    outbound: none # the draft is surfaced in Slack, never addressed
-  paid-media-anomaly-watcher:
-    internal:
-      - { artifact: slack_digest, seam: slack, class: staff }
-      - { artifact: client_note, seam: slack, class: staff }
-    outbound: none # the client note is owner-triggered and owner-sent
-  retainer-hours-reconciler:
-    internal:
-      - { artifact: slack_post, seam: slack, class: staff }
-    outbound: none
 
   # ---- tool surface, authors no content of its own ----
   workspace:

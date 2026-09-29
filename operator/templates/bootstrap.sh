@@ -409,6 +409,48 @@ else
   log "WARNING: /app/skills absent from image; skipping catalog seed (bound skills must already be on the volume)"
 fi
 
+# Prune RETIRED repo skills from the volume. The seed above is additive by
+# design, so a skill deleted from the repo keeps its old copy on the volume on
+# every seat forever (the seed never iterates a name the image no longer has).
+# operator/templates/retired-skills.txt is the one home for the names that must
+# go; it ships at /app/retired-skills.txt. Only LISTED names are touched, so an
+# agent-authored skill (ADR 0017) is never pruned. Never a `die`: a boot that
+# cannot prune a dead skill is still a working seat. A listed name still present
+# in the image catalog is logged and skipped here; tests/forbidden-strings.test.ts
+# is where that conflict fails, before an image is built. boot-smoke-test.sh
+# step 6c asserts the absence on the seat.
+# retired-skill-prune:begin (tests/operator-skill-deploy.test.ts runs this block)
+_app_skills=/app/skills
+_retired_list=/app/retired-skills.txt
+if [ -f "${_retired_list}" ]; then
+  while IFS= read -r _name || [ -n "${_name}" ]; do
+    _name=$(printf '%s' "${_name}" | tr -d '[:space:]')
+    case "${_name}" in
+      '' | '#'*) continue ;;
+      *[!a-z0-9-]*)
+        log "WARNING: retired-skills list: ignoring malformed name '${_name}'"
+        continue
+        ;;
+    esac
+    if [ -e "${_app_skills}/${_name}" ]; then
+      log "WARNING: retired skill ${_name} is still in the image catalog; not pruning it"
+      continue
+    fi
+    _dst="${HERMES_HOME}/skills/${_name}"
+    if [ -L "${_dst}" ]; then
+      rm -f "${_dst}" || { log "WARNING: cannot prune retired skill alias ${_dst}"; continue; }
+    elif [ -e "${_dst}" ]; then
+      rm -rf "${_dst}" || { log "WARNING: cannot prune retired skill ${_dst}"; continue; }
+    else
+      continue
+    fi
+    log "Pruned retired skill ${_name} from ${HERMES_HOME}/skills"
+  done < "${_retired_list}"
+else
+  log "WARNING: ${_retired_list} absent from image; retired skills not pruned"
+fi
+# retired-skill-prune:end
+
 # Publish the seat's timezone on the env channel Hermes' clock resolves first
 # (hermes_time._resolve_timezone_name: HERMES_TIMEZONE env > global config.yaml
 # `timezone` > server local). The container clock is UTC, so without this every
