@@ -40,7 +40,7 @@ metadata:
     vertical: law-firm
     addon: pi
     weight: medium # a bounded collation across several authored component lists plus a deadline-capture pass; the read/organize work is the bulk, the Bates/PDF assembly is routed out
-    action_class: read + internal_write # reads matter documents and calendar; the writes are the internal log (create_memo), gated tracking tasks (create_task), and the gated staging of the binder index (add_file). No external send.
+    action_class: read + internal_write # reads matter documents and calendar; the writes are the internal log (create_memo), gated tracking tasks (create_task), the gated staging of the binder index (add_file), and a finalized witness or exhibit list rendered as a Word document (render_docx_draft). No external send.
     content_ceiling: connective # collates authored components into an organized structure and tracks dates; never legal work product, never the trial brief, never argument, never a deposition summary
     connectors:
       - smokeball # PracticeManagement - matter, folders/files (the component documents + exhibits), calendar events (trial-prep dates), tasks (deadline tracking), memo (internal log)
@@ -235,10 +235,44 @@ run ("The draft notes the final figures need confirming. Are they confirmed?"), 
 yes is that confirmation: the job proceeds on it and never asks for it again. It
 confirms only what the question asked; it supplies no value the draft does not hold.
 
-Each job's report to the attorney leads with what was approved, in the approved item's
-own words and number ("Finalizing the exhibit list (item 1) as you confirmed the
-figures."), then what was done and where it is in the matter (the file name). It adds
-no to-do list unless the job hit a real gap it must name.
+The reply this job's report joins already opens with code's own line naming what was
+approved ("Got it. I'll prepare 1 (...)"), so the report never restates the approval,
+the item or its number. It starts with what was done and where it is in the matter:
+"The final witness list is in the matter as <file name>." It adds no to-do list
+unless the job hit a real gap it must name.
+
+**A finalized list is a Word document, rendered, never a text file.** Both finalize
+jobs file the final list with `mcp_smokeball_render_docx_draft(matter_id, file_name,
+draft_markdown, folder_id)`, the same render path the drafting routines use to file
+a Word document, and never with `add_file` / `content_text`: a `.txt` final list is
+not the deliverable,
+because an attorney cannot edit it in Word and it carries no caption. Omit
+`document_class`: there is no witness- or exhibit-list class, and a discovery or
+brief template would dress the list as a document it is not. The `draft_markdown`
+is, in order, and only from the draft:
+
+- **The caption block, carried from the draft.** Every caption field the draft
+  states, in the draft's own words: the court, the parties, the case number, the
+  department, the judge, the trial date. Write it as the first pipe table (parties on
+  the left, case number and department on the right), which the renderer styles as
+  the caption. A field the draft does not state is left out, never filled from the
+  matter, the calendar or anywhere else, and never marked as if the draft held it:
+  absent means absent. A draft that carries no caption at all gives a list with no
+  caption, and the report says so in one plain line.
+- **The title**, as the draft has it, minus the draft marking ("PLAINTIFF'S WITNESS
+  LIST", not "PLAINTIFF'S WITNESS LIST (DRAFT)").
+- **Every entry**, exactly as the draft states it (literal `1.` numbered items, or the
+  draft's own "Exhibit 1." numbering), minus only the confirmed draft note.
+- **The firm's signature placeholder**: a line `{{ATTORNEY: signature block}}` after
+  the entries, which the renderer keeps visible for the attorney. Never type an
+  attorney's name, bar number or the firm's address as a signature.
+
+The file name keeps the firm's convention, the draft's name with today's date and
+"(final)" in place of "(draft)", and the render's extension:
+"<today> <Party> Witness List (final) - <Client>.docx" (the tool adds `.docx`).
+A `refusals` list back means nothing was filed: fix what it names and call again,
+never route around it through `add_file`. Confirm the file with `get_file` and a
+`read_document` spot check before reporting it in the matter.
 
 ### Job: `assemble_binder`
 
@@ -262,9 +296,13 @@ Produces one document and one memo; no binder, no deadline capture, no tracking 
    question asked about and the attorney confirmed. Any other open note or blank in the
    draft stays open and is named in the report. Never add, remove, reorder or describe
    a witness on your own.
-3. **Stage it.** `add_file` (`content_text`) in the draft's folder, named like the
-   draft with today's date and "final" in place of "draft" (no "draft" in the name, so
-   the next brief sees the list is done). Confirm it with `get_files_on_matter`.
+3. **Render it as a Word document.** `mcp_smokeball_render_docx_draft` in the draft's
+   folder, per "A finalized list is a Word document" above: the draft's caption block,
+   the title without the draft marking, every entry, and the signature placeholder
+   `{{ATTORNEY: signature block}}`. Named as the draft is named, with today's date
+   and "(final)" in place of "(draft)" ("<today> <Party> Witness List (final) -
+   <Client>.docx"; no "draft" in the name, so the next brief sees the list is done).
+   Never a `.txt`, never `add_file`. Confirm it with `get_file` and `read_document`.
 4. **Log it.** `create_memo`: "Witness list finalized for review from the draft dated
    <draft date>: <file name>." plus any change applied from the reply, quoted.
 
@@ -285,9 +323,13 @@ Produces one document and one memo; no binder, no deadline capture, no tracking 
    holds; the note asking to confirm them goes). Any other open note or blank figure
    stays open and is named in the report. Never add, remove, renumber or describe an
    exhibit on your own, and never total or compute a figure.
-3. **Stage it.** `add_file` (`content_text`) in the draft's folder, named like the
-   draft with today's date and "final" in place of "draft" (no "draft" in the name, so
-   the next brief sees the list is done). Confirm it with `get_files_on_matter`.
+3. **Render it as a Word document.** `mcp_smokeball_render_docx_draft` in the draft's
+   folder, per "A finalized list is a Word document" above: the draft's caption block,
+   the title without the draft marking, every entry, and the signature placeholder
+   `{{ATTORNEY: signature block}}`. Named as the draft is named, with today's date
+   and "(final)" in place of "(draft)" ("<today> <Party> Exhibit List (final) -
+   <Client>.docx"; no "draft" in the name, so the next brief sees the list is done).
+   Never a `.txt`, never `add_file`. Confirm it with `get_file` and `read_document`.
 4. **Log it.** `create_memo`: "Exhibit list finalized for review from the draft dated
    <draft date>: <file name>." plus any change applied from the reply, quoted.
 

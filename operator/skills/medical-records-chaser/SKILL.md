@@ -254,8 +254,9 @@ A person's yes to a date-prep brief reaches this routine through
 ONE roster provider (`params.roster_task_id`, `params.provider`). Run exactly that
 job and nothing else from this routine: no scan of the matter's other providers, no
 other chase. If `params.job` is missing or names a job not listed here, run nothing
-and say so in one plain line. The report to the attorney leads with what was approved,
-in the approved item's own words and number, then what was done and where it is (the
+and say so in one plain line. The report to the attorney never restates the approval
+(the reply already opens with code's line naming it); it starts with what was done and
+where it is (the
 draft memo, or that the request went out); no to-do list unless the job hit a real
 gap it must name (no authored address, a record that already landed).
 

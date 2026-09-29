@@ -53,9 +53,10 @@ written. Nothing is attributed to anyone that their reply does not say.
 
 ## The reply after a step
 
-The step's report to the attorney leads with what was approved, in the approved item's
-own words ("Finalizing the exhibit list (item 1) as you confirmed the figures."), then
-says what was done and where it is in the matter. No to-do list for the attorney unless
+The step's report never restates the approval: the reply already opens with code's
+line naming what was approved ("Got it. I'll prepare 1 (...)"). The report starts with
+what was done and where it is in the matter ("The final exhibit list is in the matter
+as <file name>."). No to-do list for the attorney unless
 the job hit a real gap it must name (a draft that could not be read, a blank the draft
 leaves open).
 

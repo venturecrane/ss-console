@@ -404,13 +404,56 @@ def test_the_router_runs_exactly_the_named_job_and_carries_the_answer_in():
         "run nothing and say so plainly",
         "the yes IS that confirmation",
         "never asks for it again",
-        "leads with what was approved, in the approved item's own words",
+        "never restates the approval",
+        "It starts with what was done and where it is in the matter",
     ):
         assert token in rule, token
+    # Code's confirmation already names the approved item ("Got it. I'll
+    # prepare 1 (...)"); a report that leads with the approval again gives the
+    # reply two leads (live, 2026-09-29). The old lead rule is gone everywhere.
+    assert "leads with what was approved" not in rule
     reference = (_DIR / "references" / "decision-catalog.md").read_text()
     for job in catalog.JOB_SKILLS:
         assert "`" + job + "`" in reference, job
     assert "The yes IS that confirmation" in reference
+    assert "never restates the approval" in reference
+    for skill in set(catalog.JOB_SKILLS.values()):
+        text = " ".join((_DIR.parent / skill / "SKILL.md").read_text().split())
+        assert "leads with what was approved" not in text, skill
+        assert "never restates the approval" in text, skill
+
+
+def _job_section(skill: str, job: str) -> str:
+    text = (_DIR.parent / skill / "SKILL.md").read_text()
+    start = text.index("### Job: `" + job + "`")
+    end = text.find("\n### ", start + 1)
+    nxt = text.find("\n## ", start + 1)
+    ends = [e for e in (end, nxt) if e != -1]
+    return text[start : min(ends)] if ends else text[start:]
+
+
+def test_every_finalize_job_renders_a_word_document_never_a_text_file():
+    """Live 2026-09-29: the finalized witness list was filed as a caption-less
+    .txt through add_file. A final list is a Word document rendered through
+    render_docx_draft, carrying the draft's caption and a signature marker."""
+    finalize = [job for job in catalog.JOB_SKILLS if job.startswith("finalize_")]
+    assert sorted(finalize) == ["finalize_exhibit_list", "finalize_witness_list"]
+    for job in finalize:
+        section = _job_section(catalog.JOB_SKILLS[job], job)
+        assert "`mcp_smokeball_render_docx_draft`" in section, job
+        assert "Never a `.txt`, never `add_file`" in section, job
+        assert "`content_text`" not in section, job
+        assert "caption block" in section, job
+        assert "{{ATTORNEY: signature block}}" in section, job
+        assert "(final)" in section and ".docx" in section, job
+    text = " ".join((_DIR.parent / "trial-binder-assembler" / "SKILL.md").read_text().split())
+    for token in (
+        "**A finalized list is a Word document, rendered, never a text file.**",
+        "never with `add_file` / `content_text`",
+        "absent means absent",
+        "Omit `document_class`",
+    ):
+        assert token in text, token
 
 
 # ---------------------------------------------------------------------------
