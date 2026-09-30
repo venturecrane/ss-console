@@ -8,9 +8,9 @@ separate skill. Every skill in the pack can do it.
 ## Where the explanation goes: to the person who asks, never into a note
 
 A file note never carries a training paragraph. On 2026-09-29 a paralegal reading the
-pilot's notes found the same "Training note: A trial binder collects and organizes..."
-paragraph on the trial-binder note, and the same two-sentence rule paragraph on every
-motion-calendar note, including matters with no motions. A note read forty times is
+pilot's notes found a ten-line explanation of what a trial binder is at the end of the
+trial-binder note, and the same two-sentence rule paragraph on every motion-calendar
+note, including matters with no motions. A note read forty times is
 not where a lesson belongs, and a lesson repeated on every note stops being read.
 
 So:

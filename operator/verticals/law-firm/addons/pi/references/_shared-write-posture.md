@@ -2,14 +2,14 @@
 
 Every skill that writes to Smokeball must follow this. It encodes what the
 connector surface (`operator/verticals/law-firm/smokeball-surface.md`) actually
-guarantees today — which is: **not much is verified against a live tenant.** Fix the
+guarantees today, which is: **not much is verified against a live tenant.** Fix the
 posture here; every skill inherits it.
 
-## 1. ALL writes are unverified-at-connect — confirm by read, never assert success
+## 1. ALL writes are unverified-at-connect: confirm by read, never assert success
 
-`smokeball-surface.md` marks the write bodies — `create_task`/`update_task`,
+`smokeball-surface.md` marks the write bodies (`create_task`/`update_task`,
 `create_event`/`update_event`, `create_folder`, `add_file`/`delete_file`, and the
-`create_memo` body field — as **UNVERIFIED against a live tenant** ("re-confirm ALL
+`create_memo` body field) as **UNVERIFIED against a live tenant** ("re-confirm ALL
 writes at the A&P prod connect"). Since then `create_folder` and `add_file` have
 delivered sixteen chronology packages into the A&P production tenant (August 2026,
 runner-side through the connector), and the task DTO was verified on prod
@@ -33,19 +33,19 @@ So the rule is uniform, not scoped to one write:
   failure** ("the draft is in the matter but I could not confirm the review task was
   created"), never a Shape that asserts the action completed.
 - **Escalation** covers a failure of ANY write (routing task, log memo, calendar,
-  file, folder) — not just the staging write.
+  file, folder), not just the staging write.
 - This is the same fail-closed discipline across the pack: never assert an
   unconfirmed write.
 
-## 2. `create_task` requires `staffId` + `dueDateOnly` — and the date must not cross the deadline lane
+## 2. `create_task` requires `staffId` + `dueDateOnly`, and the date must not cross the deadline lane
 
 The surface pins `TaskDto` as requiring **`staffId`** and **`dueDateOnly`**. A skill
 that opens a confirm/review/routing task must supply both. But most pack skills are
 forbidden to assert a legal deadline. Resolve it explicitly:
 
 - The task's `dueDateOnly` is a **near-term administrative "confirm-by" date**
-  (e.g. 1-2 business days out) — the date by which a human should act on the
-  surfaced item — and it is stated in the task body as such, **distinct from any
+  (e.g. 1-2 business days out): the date by which a human should act on the
+  surfaced item, and it is stated in the task body as such, **distinct from any
   discovery/response/court deadline** (which stays with the deadline lane, presented
   for attorney confirm, never silently calendared).
 - `staffId` is the responsible staff resolved from the matter
@@ -72,7 +72,7 @@ reports `deleted`, `pending` (accepted, not yet applied: never delete again),
 `skipped` with the reason (changed, moved, or already gone since the proposal)
 and `failed`. Recurring events are never deleted.
 
-## 4. `create_memo` is the audit log — but it too can fail
+## 4. `create_memo` is the audit log, but it too can fail
 
 The internal `create_memo` (the audit/training-output record) has an ASSUMED body
 schema. A failed memo means the action has no logged record even though a human may
@@ -130,28 +130,28 @@ every skill's `references/output-format.md`:
 - **Name a record the way a person finds it, never by its id.** A calendar entry by
   its subject and date ("the MSJ hearing on Oct 6 at 9:30 a.m."), a task by its title
   and due date ("the task Serve notice, due Oct 1"), a document by its file name, a
-  note by its date. Never "(event <id>)", "(task <id>)", "file <id>", "memo <id>",
-  "event id" or "task id" in a note, an email or a document: a paralegal cannot look
-  an id up, and the audit log already holds every id. The machine-marker lines above
-  are the only exception.
+  note by its date, in every note, email and document. A paralegal finds a record by
+  what it says, and the audit log already holds every id. The machine-marker lines
+  above are the only lines that carry one.
 - **Nothing to report is two short lines.** A matter where this routine found
   nothing (no motions, no open discovery, no lien, nothing served) gets exactly two
   lines after the header: what is absent, in the skill's own words ("No motions on
-  file."), then "Nothing to do." Never a rule explanation, never "attorney to confirm"
-  when there is nothing to confirm, and never an internal phrase such as "Prior
-  surface: <date>", "last surfaced", "memo_facts" or "wake".
+  file."), then "Nothing to do." Nothing else: no rule explanation, no request to
+  confirm when there is nothing to confirm, and no word about this routine's own
+  earlier runs or how the Operator works inside.
 - **A rule is named only where it bears on an item on this matter**, once, in plain
   words ("the opposition is due 9 court days before the hearing; confirm the date"),
   never as a standing paragraph on every note.
 - **A person or the Operator does the work, never a routine.** Write "Pat Lee to
-  confirm" or "the Operator will check again tomorrow", never a skill's name
-  (`trial-binder-assembler`, "the deadline lane") as the owner or actor of anything.
-- **No capitals for emphasis** in a note, an email or a document ("CRITICAL",
-  "URGENT", "DO NOT"). The date and the plain words carry the weight. Headings and
-  the firm's own capitalized names are not emphasis.
-- **No training paragraph.** A file note never carries a "Training note:" line or a
-  paragraph explaining what the step is and why it matters. That explanation is given
-  when a person asks (`_shared-training-output.md`), never written into the note.
+  confirm" or "the Operator will check again tomorrow": the owner or actor of anything
+  is a named person or the Operator.
+- **No capitals for emphasis** in a note, an email or a document. Words are written in
+  ordinary case, and the date and the plain words carry the weight: "Trial is October
+  13, 2026, 9:00 a.m., Dept. 47." Headings, a court's caption title and the firm's own
+  names keep their own capitals.
+- **No training paragraph.** A file note holds what was found and what to do, and
+  nothing that explains what the step is or why it matters. That explanation is given
+  when a person asks (`_shared-training-output.md`).
 - **The facts line.** When the wake line gives the matter a `facts_digest`, the last
   line of the note is exactly `facts <digest>`, the twelve characters copied verbatim
   from the wake line, alone on the line. Never compute it, never change it, never

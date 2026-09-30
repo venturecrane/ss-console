@@ -8,8 +8,8 @@ skill only surfaces and writes a file note.
 **Name a record by what a person sees, never by its id** (`_shared-write-posture.md`,
 section 5): a calendar entry by its subject and date ("the MSJ hearing entry on Oct 6"),
 a task by its title and due date ("the task File opposition, due Sep 22"), a note by
-its date ("the note of Sep 14"). Never "(event <id>)", "task <id>" or "memo <id>". A
-paralegal cannot look an id up; the audit log holds them.
+its date ("the note of Sep 14"). A paralegal finds a record by what it says; the
+audit log holds the ids.
 
 ## Shape A - Motion calendar surface (this run's report, never the note)
 
@@ -94,8 +94,8 @@ facts <facts_digest from the wake line, only when it gives one>
 
 The `facts` line is the wake line's `facts_digest` for this matter, copied exactly
 (`_shared-write-posture.md`, section 5). No `facts_digest` on the wake line, no facts
-line. Never "Prior surface: <date>", "last surfaced" or any other word about this
-routine's own earlier runs in a note: that belongs in the report, not the file.
+line. What this routine did on earlier runs belongs in the report, not the file:
+the note speaks only about the matter.
 
 ## Rules
 
@@ -118,5 +118,5 @@ routine's own earlier runs in a note: that belongs in the report, not the file.
    and never "granted" or "denied."
 6. **A reported-but-unstructured status is surfaced as "reported in the note of
    <date>, unconfirmed,"** never re-asserted in the skill's own voice.
-7. **Nothing to report is two lines.** No rule sentence, no "attorney to confirm", no
-   internal words ("Prior surface", "last surfaced", "memo_facts") in a note.
+7. **Nothing to report is two lines**, the header aside: "No motions on file." and
+   "Nothing to do." The note speaks only about the matter.

@@ -31,8 +31,8 @@ not a gap to fill.
 
 - No em dashes.
 - No "just circling back," "just following up," "touching base," "quick heads-up."
-- No urgency words the record does not earn (no "urgent," "critical," "ASAP" unless the
-  sourced date/age actually places the item there).
+- Urgency comes from the sourced date and age, in plain words and ordinary case, and
+  only as much as the record places the item there.
 - Points, never prescribes. "Unsigned 17 days. Owner: the Operator," not "you need to
   call the client and get this signed."
 - Dates the firm's way ("Oct 2"), never "2026-10-02".
@@ -48,14 +48,11 @@ not a gap to fill.
 Unsigned: matter <matter number>, interrogatory verification, sent <date the firm's way>, unsigned <N> days. Owner: <person, or the Operator>.
 ```
 
-Placeholders, not sample values, and this line is why. It previously read
-"Roe v. Doe (7a11...5001) - interrogatory verification, sent 2026-06-14,
-unsigned (17 days)", which put four separately-refused classes into the one
-example the model is asked to copy: a case caption (`case-name`, tier 2), a
-date (`date:####-##-##`, the largest single refusal shape), a matter-id
-fragment, and a derived interval. A later version also named a routine
-("owns: client-verification-tracker") as the owner, which a paralegal cannot act on
-(2026-09-29): the owner is a person or the Operator. Every value in a digest line has to come
+Placeholders, not sample values, and this line is why. An earlier version carried
+sample values, and four of them were refused by the seat's gates when the model
+copied them: a case caption, an ISO date, a fragment of a matter id, and a derived
+interval. A later version named a routine as the owner, which a paralegal cannot
+act on (2026-09-29): the owner is a person or the Operator. Every value in a digest line has to come
 from a read of the firm's records, and a sample value in the template is the
 easiest thing in the file to reach for when a read comes up short.
 

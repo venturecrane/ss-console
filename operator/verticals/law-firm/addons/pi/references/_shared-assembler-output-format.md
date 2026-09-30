@@ -68,8 +68,9 @@ Matter <matter number>, <matter descriptor>. Prepared <today, the firm's way> fo
 4. The mechanical structure (columns, form fields, index order) is the skill-specific
    part; author it precisely in the skill's own `references/output-format.md`.
 5. **The document reads like a paralegal wrote it.** Its first line is its title.
-   No "Decision:" line and no other internal label of how it was made. No capitals
-   for emphasis ("CRITICAL: Trial is ..."): a date paragraph says "Trial is set for
-   Oct 13, 2026 in Dept 31", and the date carries the weight. A court's own caption
-   title in capitals is the form, not emphasis. Dates the firm's way, never
-   "2026-10-13". A record is named by its file name, never by an id.
+   The next line says which matter it is for and who finalizes it; nothing says how
+   the document was made. A date paragraph says "Trial is October 13, 2026, 9:00
+   a.m., Dept. 47." and the deadlines paragraph names what is missing, in ordinary
+   case: no capitals for emphasis. A court's own caption title keeps its capitals.
+   Dates are written the firm's way (October 13, 2026). A record is named by its file
+   name.

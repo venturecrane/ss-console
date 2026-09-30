@@ -261,8 +261,8 @@ is, in order, and only from the draft:
   matter, the calendar or anywhere else, and never marked as if the draft held it:
   absent means absent. A draft that carries no caption at all gives a list with no
   caption, and the report says so in one plain line.
-- **The title**, as the draft has it, minus the draft marking ("PLAINTIFF'S WITNESS
-  LIST", not "PLAINTIFF'S WITNESS LIST (DRAFT)").
+- **The title**, as the draft has it, with its draft marking removed (a title ending
+  in "(Draft)" loses those words and keeps the rest exactly).
 - **Every entry**, exactly as the draft states it (literal `1.` numbered items, or the
   draft's own "Exhibit 1." numbering), minus only the confirmed draft note.
 - **The firm's signature placeholder**: a line `{{ATTORNEY: signature block}}` after

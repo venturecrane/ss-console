@@ -6,7 +6,7 @@ The first boot is **Captain-gated**: it spends on a real Fly.io org, stages real
 
 ## What "first boot" verifies (and what it does not)
 
-The boot smoke test (`operator/bin/boot-smoke-test.sh`, run automatically as the last step of provisioning) confirms the **dependency chain comes up cleanly**: Machine `started` → Postgres → Redis → Honcho health → `customer.yaml` on the volume → Hermes profiles materialized → overlay plugins registered (`hermes plugins list | grep hermes-smd-`) → curator disabled ([ADR 0017](../../adr/0017-skill-curator-disposition.md)).
+The boot smoke test (`operator/bin/boot-smoke-test.sh`, run automatically as the last step of provisioning) confirms the **dependency chain comes up cleanly**: Machine `started` → Postgres → Redis → Honcho health → `customer.yaml` on the volume → Hermes profiles materialized → every staged cron script under `profiles/*/scripts/` byte-identical to its skill copy (`staged-scripts-current`, step 6d; a stale staged `pre_run.py` fails with its path) → overlay plugins registered (`hermes plugins list | grep hermes-smd-`) → curator disabled ([ADR 0017](../../adr/0017-skill-curator-disposition.md)).
 
 It does **not** exercise a real agent turn, a live LLM call, or a connector write. Those need the customer's OAuth tokens and are the next step after a clean boot (see "After a clean boot" below). The first boot proves the substrate stands up; it does not prove a task runs end to end.
 

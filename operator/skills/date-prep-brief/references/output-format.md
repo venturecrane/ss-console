@@ -78,8 +78,8 @@ about a matter.
   done line or question only when read from the matter this turn.
 - No dashes as punctuation: no em dash, and no "--" or " - " standing in for one.
   Use a period or a comma. No greeting, no sign-off (code frames the message).
-- No ids, hashes, or shortened ids (a task id like "223145b9" is our record, not
-  the attorney's). Name a task by its subject.
-- No capitals for emphasis ("DRAFT"); say "a draft".
+- Name a task by its subject and a calendar entry by its subject and date; ids,
+  hashes and shortened ids are our records, not the attorney's.
+- Ordinary case throughout, no capitals for emphasis: say "a draft".
 - No legal judgment: ask, never advise ("Is she still testifying?", not "You should
   drop her.").
