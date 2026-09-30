@@ -160,9 +160,11 @@ def _verdict(payload: dict) -> int:
 
 
 def _quiet(status: str, counts: dict, *, dry: bool) -> int:
-    """No email this run. Recorded (unless dry), then ``wakeAgent: false``."""
-    if not dry:
-        _heartbeat("suppressed_wake_append", "SUPPRESSED_WAKE", status, counts)
+    """No email this run. Recorded (unless dry), then ``wakeAgent: false``.
+    A heartbeat that did not land leaves one stderr line naming the status, so
+    a suppressed run is never traceless."""
+    if not dry and not _heartbeat("suppressed_wake_append", "SUPPRESSED_WAKE", status, counts):
+        sys.stderr.write("[pre_run] statute-watch: no report this run (" + status + "); heartbeat not recorded\n")
     return _verdict({"wakeAgent": False, "status": status, "dry_run": dry, **counts})
 
 
@@ -194,6 +196,8 @@ def run(cfg: dict, *, pull_matters, pull_details, clock=_utc_now, dry: bool = Fa
         return _quiet("recipient_unauthored", {}, dry=dry)
     try:
         selection = _REPORT.select(pull_matters(), today)
+    except _REPORT.StatuteFieldAbsent:
+        return _quiet("statute_field_absent", {}, dry=dry)
     except _REPORT.PullFailed:
         return _quiet("matter_list_failed", {}, dry=dry)
     listed = selection.cases[: _REPORT.RENDER_CAP]

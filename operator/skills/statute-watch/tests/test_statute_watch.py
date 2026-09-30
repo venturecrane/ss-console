@@ -425,3 +425,59 @@ def test_main_with_no_connector_sends_nothing(tmp_path, monkeypatch) -> None:
     assert json.loads(out.getvalue().strip())["status"] == "matter_list_failed"
     assert _smd_files(tmp_path) == []
     assert not os.path.exists(tmp_path / ".smd")
+
+
+# ---------------------------------------------------------------------------
+# Review fixes: the silent-zero guard, a traceless suppress, template parity
+# ---------------------------------------------------------------------------
+
+
+def _no_statute_fleet(count: int = 20) -> dict:
+    return {"matters": [_matter("z-%02d" % i, str(40000 + i), None) for i in range(count)]}
+
+
+def test_many_matters_and_no_statute_field_is_a_failed_read(tmp_path, monkeypatch) -> None:
+    verdict, _stdout, beats = _run(tmp_path, monkeypatch, raw=_no_statute_fleet())
+    assert verdict == {"wakeAgent": False, "status": "statute_field_absent", "dry_run": False}
+    assert _smd_files(tmp_path) == []
+    assert [b[1] for b in beats] == ["SUPPRESSED_WAKE"] and beats[0][2] == "statute_field_absent"
+
+
+def test_the_same_fleet_with_one_statute_date_sends_normally(tmp_path, monkeypatch) -> None:
+    raw = _no_statute_fleet()
+    raw["matters"][7]["statute"] = _iso(200)  # readable, outside the window: an empty report, not a failure
+    verdict, _stdout, beats = _run(tmp_path, monkeypatch, raw=raw)
+    assert verdict["status"] == "report_ready" and verdict["cases"] == 0
+    env = json.loads((tmp_path / ".smd" / "pre_run" / "statute-watch.dispatch.json").read_text())
+    assert env["dispatches"][0]["full_body"] == render.EMPTY_LINE + "\n"
+    assert [b[1] for b in beats] == ["EMITTED_WAKE"]
+
+
+def test_a_short_list_with_no_statutes_is_an_empty_report_not_a_failure() -> None:
+    sel = report.select(_no_statute_fleet(report.SILENT_ZERO_FLOOR - 1), TODAY)
+    assert sel.cases == () and sel.unreadable == 0
+
+
+def test_a_suppress_whose_heartbeat_did_not_land_says_so_on_stderr(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    monkeypatch.delenv("SMD_WORKSPACE_BROKER_SOCKET", raising=False)
+    monkeypatch.delenv("SMD_AUDIT_BROKER_SOCKET", raising=False)
+    pre_run.run(CFG, pull_matters=lambda: {"listError": "x"}, pull_details=lambda cases: {}, clock=_Clock())
+    captured = capsys.readouterr()
+    assert "matter_list_failed" in captured.err and "heartbeat not recorded" in captured.err
+    assert json.loads(captured.out)["status"] == "matter_list_failed"
+
+
+def test_output_format_carries_every_authored_phrase_render_uses() -> None:
+    """The template page and the renderer cannot drift: each authored phrase
+    render.py prints appears verbatim (placeholders for values) in the spec."""
+    spec = (_DIR / "references" / "output-format.md").read_text()
+    phrases = [
+        render.INTRO,
+        render.EMPTY_LINE,
+        render.SKELETON_TEMPLATE.format(count="<N>", cases="cases have"),
+        render.unreadable_line(2).replace("2", "<N>", 1),
+        render.more_line(2).replace("2", "<N>", 1),
+        render.SUBJECT_TEMPLATE.format(month="<Month>", year="<Year>"),
+    ]
+    assert [p for p in phrases if p not in spec] == []

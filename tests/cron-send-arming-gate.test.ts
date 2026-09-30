@@ -7,8 +7,8 @@
  * routine email nobody declared a render mode for. The durable fix renders
  * templated bodies deterministically; this gate is what keeps the NEXT armed
  * routine from shipping undeclared. It runs in `npm run verify`, so the exact
- * PR that uncomments a seat's cron rows (ashton-price is sitting at `cron: []`
- * with 12 commented rows today) runs this join.
+ * PR that uncomments a seat's cron rows (ashton-price carries one armed row,
+ * statute-watch per letter 156, with 11 commented rows) runs this join.
  *
  * The join itself lives ONCE in src/lib/operator/send-render.ts and is shared
  * with the provision-time backstop in scripts/validate-customer-yaml.ts.

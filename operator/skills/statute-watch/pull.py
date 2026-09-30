@@ -31,7 +31,8 @@ import sys
 
 _CONNECTOR_PYTHON_DEFAULT = "/opt/connectors/smokeball/.venv/bin/python"
 
-#: The scheduler kills a pre_run at one hour. The layout pass was measured at
+#: The scheduler kills a pre_run at one hour: hermes cron/scheduler.py
+#: _DEFAULT_SCRIPT_TIMEOUT = 3600 (read on the seat 2026-09-30). The layout pass was measured at
 #: about twelve minutes on 2026-09-30; the budgets leave room for both reads.
 _MATTERS_TIMEOUT_SECONDS = 2700
 _DETAILS_TIMEOUT_SECONDS = 600
@@ -79,6 +80,8 @@ client = build_client_from_env()
 MATTERS_SNIPPET = (
     _SHARED
     + """\
+# Layout keys observed on the live tenant 2026-09-30,
+# vfy_01M3SS85C9TX1XH2JXYECRH3XH (883 of 902 live matters carry the statute date).
 SOL = "Matter/CaseDetails/StandardCaseDetails/StatuteOfLimitationDate"
 CASE_NUMBER = "Matter/CaseDetails/StandardCaseDetails/CaseNumber"
 FILED = "Matter/CaseDetails/PleadingsDetails/FiledDate"

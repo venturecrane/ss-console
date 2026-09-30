@@ -73,6 +73,10 @@ counts. Compose nothing, send nothing, read nothing, and end the turn. Do not
 write a report of your own if a dispatch note says delivery failed: the run is
 recorded and the next run is the retry.
 
+**Woken without `dispatch_expected`** (no dispatch was prepared, whatever the
+status says): do nothing and end the turn. Never compose a report, a failure
+note, or any message to cover the gap; the run is already recorded.
+
 ## Manual firing
 
 An interactive request for this report is not this skill's job: the report

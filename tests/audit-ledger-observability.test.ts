@@ -3,7 +3,8 @@
  *
  * THE STATE THIS SEPARATES. `fleet_status` carried `last_audit_ts` and nothing
  * else about the ledger, so three different seats arrived as one picture:
- * routines deliberately off (ashton-price since #2332), routines awake with
+ * routines deliberately off (ashton-price since #2332, bar the monthly
+ * statute-watch row armed on letter 156), routines awake with
  * nothing to do, and an audit writer that has been failing. Every audit hook on
  * the Machine swallows a write failure by design — the ledger is observability
  * and an enforced decision is not rolled back because its row failed to

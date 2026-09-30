@@ -36,8 +36,19 @@ _CAPTION_TOKENS = frozenset({"v", "vs", "versus"})
 _NAME_MAX_CHARS = 40
 
 
+#: A matter list at least this long in which NO matter carries a readable
+#: statute date is not a firm with no statutes: it is a read that came back
+#: without the field (a renamed layout key, a changed payload). Reported as a
+#: failure rather than rendered as "no cases", which would be a silent zero.
+SILENT_ZERO_FLOOR = 20
+
+
 class PullFailed(Exception):
     """The matter list itself could not be read: there is nothing to report."""
+
+
+class StatuteFieldAbsent(PullFailed):
+    """Many matters were read and none carried a statute date at all."""
 
 
 @dataclass(frozen=True)
@@ -111,12 +122,15 @@ def _in_window(matter: dict, today: date, window_days: int) -> tuple[bool, date 
 def select(raw: object, today: date, window_days: int = WINDOW_DAYS) -> Selection:
     """The in-window unfiled cases, soonest first (ties by matter number).
 
-    Raises ``PullFailed`` when the matter list was not read."""
+    Raises ``PullFailed`` when the matter list was not read, and
+    ``StatuteFieldAbsent`` when ``SILENT_ZERO_FLOOR`` or more matters were read
+    and not one carried a readable statute date."""
     if not isinstance(raw, dict) or raw.get("listError") or not isinstance(raw.get("matters"), list):
         raise PullFailed("matter list unavailable")
     cases: list[Case] = []
     unreadable = 0
     seen: set[str] = set()
+    dated = 0
     for matter in raw["matters"]:
         if not isinstance(matter, dict):
             unreadable += 1
@@ -125,6 +139,8 @@ def select(raw: object, today: date, window_days: int = WINDOW_DAYS) -> Selectio
         if matter_id is None or matter_id in seen:
             continue
         seen.add(matter_id)
+        if iso_day(matter.get("statute")) is not None:
+            dated += 1
         readable, day = _in_window(matter, today, window_days)
         if not readable:
             unreadable += 1
@@ -142,6 +158,8 @@ def select(raw: object, today: date, window_days: int = WINDOW_DAYS) -> Selectio
                 staff_id=_text(matter.get("staffId")),
             )
         )
+    if len(seen) >= SILENT_ZERO_FLOOR and dated == 0:
+        raise StatuteFieldAbsent("no matter carried a statute date")
     cases.sort(key=lambda c: (c.statute, c.matter_number or "", c.matter_id))
     return Selection(open_matters=len(seen), unreadable=unreadable, cases=tuple(cases))
 
