@@ -69,22 +69,16 @@ No motions on file.
 Nothing to do.
 ```
 
-**Bad - file note, the same rule paragraph on every matter and an id:**
+**Good - file note, a hearing whose opposition is not on the calendar:**
 
 ```
 [Operator] Motion calendar as of Sep 29, 2026
-No motions found. Opposition and reply windows run off the hearing date under the rule for the motion type; confirm the governing rule. Prior surface: Sep 28.
-Attorney to confirm if any motion is pending not yet entered.
+One motion: motion to compel, hearing Oct 6 at 9:30 a.m., Dept 3 (the calendar entry "MTC hearing"). The opposition and reply are not on the calendar; they are counted back from the hearing date.
+Pat Lee to confirm the dates and calendar the opposition and reply.
 ```
 
-(Nothing to confirm, so nothing to ask; a rule paragraph on a matter with no hearing;
-an internal phrase about the routine's own earlier run.)
-
-**Bad - names a record by its id:**
-
-> Hearing Oct 6 at 9:30 a.m., Dept 3 (event cef69a47).
-
-(A paralegal cannot look up an id. Name the calendar entry by its subject and date.)
+(The calendar entry is named by its subject, the time is the firm's, and the rule
+sentence appears because this matter has a hearing with a window missing.)
 
 **Bad - invents a hearing date:**
 

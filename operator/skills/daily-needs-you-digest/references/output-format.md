@@ -65,9 +65,9 @@ Matter <matter number>, <item>: escalated; the Operator is following up.
 The line names no person. The escalation ledger row records the item, the event and
 the attempt, never who the escalation went to, so naming anyone (even the matter's
 responsible person) could attribute an escalation to someone who never received it.
-Never the escalating routine's name either ("under active escalation by
-deadline-miss-escalator" is the wording a paralegal read on 2026-09-29 and could not
-act on). If the ledger row ever carries the recipient, name that person, from the row.
+The line names no routine either: on 2026-09-29 a paralegal could not act on a line
+that named one. If the ledger row ever carries the recipient, name that person, from
+the row.
 
 The pointer carries **no date from the ledger**. The ledger is the Operator's own
 record of what it sent, not the firm's record, and the identifier gate certifies

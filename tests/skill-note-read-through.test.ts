@@ -334,3 +334,68 @@ export function documentProblems(lines: string[]): string[] {
     problems.push('capitals for emphasis')
   return problems
 }
+
+/**
+ * A rule never quotes the thing it bans (2026-09-29, the #2860 trap again).
+ *
+ * After the fix round the pilot's binder index still opened with a capitalised
+ * warning line, because the shared assembler rule quoted exactly that phrase
+ * as the thing not to write, and the model reproduced it. Skills that forbade
+ * em dashes while showing one had the same effect (#2860). A rule states the
+ * positive form; it does not show the banned form in quotes.
+ *
+ * Checked on every model-read skill file and shared reference: an all-caps
+ * word of five or more letters inside quotes, next to a ban word ("no",
+ * "never", "not", "avoid", "without") or a mention of emphasis; an em dash
+ * anywhere; an entry id shown as "(event <id>)" or similar.
+ */
+const BANNED_CAPS_QUOTE =
+  /(?:\b(?:no|never|not|avoid|without)\b[^"\n]{0,30}|emphasis[^"\n]{0,60})"[^"\n]*"/gi
+const CAPS_WORD = /\b[A-Z][A-Z']{4,}\b/
+const QUOTED_ID = /"\(?(?:event|task|memo|file|document) (?:<id>|[0-9a-f]{8}|ev-\d+)\)?"/
+
+export function antiExampleProblems(text: string): string[] {
+  const out: string[] = []
+  text.split('\n').forEach((line, i) => {
+    // The ban word is matched case-insensitively, the capitals are not: a
+    // lower-case quote next to "no" is ordinary prose.
+    for (const m of line.matchAll(BANNED_CAPS_QUOTE)) {
+      if (CAPS_WORD.test(m[0].slice(m[0].indexOf('"')))) {
+        out.push(`line ${i + 1}: quotes a capitalised word as the thing to avoid`)
+        break
+      }
+    }
+    if (line.includes('—')) out.push(`line ${i + 1}: an em dash`)
+    if (QUOTED_ID.test(line)) out.push(`line ${i + 1}: shows an entry id as the thing to avoid`)
+  })
+  return out
+}
+
+describe('a rule never quotes the thing it bans', () => {
+  it('the check fires on the rule lines that taught the defect (a check that cannot fail measures nothing)', () => {
+    const old = [
+      '   for emphasis ("CRITICAL: Trial is ..."): a date paragraph says',
+      '- No capitals for emphasis ("DRAFT"); say "a draft".',
+      '- No "URGENT," no guilt, no manufactured deadline.',
+      '- **No capitals for emphasis** in a note, an email or a document ("CRITICAL",',
+      '  its date. Never "(event <id>)", "task <id>" or "memo <id>". A',
+      '  human can check it. Never by id: a paralegal cannot look up "event cef69a47".',
+      'this — copy it and add only what is skill-specific.',
+    ].join('\n')
+    expect(antiExampleProblems(old)).toHaveLength(7)
+    // Not a ban: a file name, a caption title, a quoted firm label with no ban word.
+    const fine = [
+      'the requests read from "RFP SET ONE RESPONSES - served by defendant.pdf".',
+      'title "SEPARATE STATEMENT IN SUPPORT OF MOTION TO COMPEL FURTHER RESPONSES"',
+      '   "the task is marked URGENT in Smokeball" / "the next line"',
+      '- Ordinary case throughout, no capitals for emphasis: say "a draft".',
+    ].join('\n')
+    expect(antiExampleProblems(fine)).toEqual([])
+  })
+
+  for (const path of skillFiles()) {
+    it(path, () => {
+      expect(antiExampleProblems(readFileSync(path, 'utf8'))).toEqual([])
+    })
+  }
+})

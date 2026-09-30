@@ -3,15 +3,15 @@
 Canonical voice for every **chase** skill in the pack (client-verification-tracker,
 medical-records-chaser, lien-ledger-tracker payoff dunning, and the chase legs of the
 discovery-response-tracker). Each chase skill's own `references/voice.md` derives from
-this — copy it and add only what is skill-specific. Fix the voice here first.
+this, copy it and add only what is skill-specific. Fix the voice here first.
 
-## Floor-clean by construction (READ THIS — #1878)
+## Floor-clean by construction (READ THIS, #1878)
 
 A graduated chase to a rostered client or vendor is re-scanned by the
 content-sensitivity floor (ADR 0031) before it delivers. A chase body carrying a
 floor trigger word is HELD as a draft even under an authored autonomous send, so
 the "auto-handle" commitment does not deliver (issue #1878). Chase bodies are
-authored to clear the floor without weakening the ask — the legal weight lives in
+authored to clear the floor without weakening the ask, the legal weight lives in
 the document the recipient completes, never in the cover message. Substitutions
 every chase body keeps (tune the template, never the floor):
 
@@ -25,7 +25,7 @@ every chase body keeps (tune the template, never the floor):
 
 This table governs the OUTBOUND chase body only. Internal surfaces (memos, task
 text, decision lines, status headers) keep the precise words ("unsigned",
-"signed", "attorney") — the floor scans what leaves the firm, not the matter file.
+"signed", "attorney"), the floor scans what leaves the firm, not the matter file.
 
 ## The line
 

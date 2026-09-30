@@ -11,7 +11,7 @@ The request MAY NOT: invent a consequence ("we'll stop work today") the firm did
 ## Hard rules
 
 - No em dashes.
-- No "URGENT," no guilt, no manufactured deadline.
+- Calm and factual: no capitals for emphasis, no guilt, no manufactured deadline.
 - No legalese.
 - Factual, respectful, plain. Signs in the firm's reviewer voice.
 
