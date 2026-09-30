@@ -239,7 +239,7 @@ def test_the_previously_tail_carries_no_internal_id() -> None:
     # The marker the tail held is now a machine line of its own; every line a
     # person reads is id-free.
     assert f"fileId {GUID} recorded" in lines
-    assert not mt._ID_RE.search("\n".join(l for l in lines if not mt.is_marker(l)))
+    assert not mt._ID_RE.search("\n".join(line for line in lines if not mt.is_marker(line)))
 
 
 def test_without_ids_leaves_a_clean_line_alone() -> None:
