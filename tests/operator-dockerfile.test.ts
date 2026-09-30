@@ -1448,7 +1448,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // f1ae58aa -> c2cd8941 (2026-09-29, overlay#402 merge commit, ss#2793 follow-on). The
     // record store is private per owner with readers who see across (the broker
     // view); the plugin fences reads and rewrites by the verified inbound sender.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="c2cd89412520eeb408ab28e79dc646820074a498"')
+    // c2cd8941 -> 9d689629 (2026-09-29, overlay#403 merge commit, Option B). The output
+    // checklist refuses short entry ids in notes and mail; a facts digest line is a
+    // machine marker on a note.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="9d6896298adfaa224df31c9fbb861112af35ac19"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

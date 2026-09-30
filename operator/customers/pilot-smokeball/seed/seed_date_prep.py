@@ -15,6 +15,14 @@ The draft exhibit list is what makes a step offerable
 (``operator/skills/date-prep-brief/catalog.py``: a witness or exhibit list on
 file only as a draft offers ``exhibit_list_finalize``). Standing synthetic seed
 data; every name here is fictional.
+
+TIMES ARE LOCAL. Smokeball's ``startTime``/``endTime`` are the firm's wall
+clock in ``timeZone``, never UTC (vendor create-event: "date and time will
+correlate with the time zone provided"). So every time below is written as the
+firm reads it, with no ``Z``: ``2026-10-06T09:30:00`` is 9:30 a.m. in
+Los Angeles. (Until 2026-09-29 these were posted UTC-shifted with a ``Z``, and
+Smokeball showed the firm 4:30 p.m. for the 9:30 a.m. hearing.) A test pins
+that no seed event time carries a ``Z``.
 """
 
 from __future__ import annotations
@@ -25,31 +33,31 @@ DATE_PREP_EVENTS: dict[str, dict] = {
     "hearing-minors-compromise-ramirez": {
         "matter": "minor-ramirez",
         "subject": "Hearing on Petition to Approve Compromise of Minor's Claim",
-        "startTime": "2026-10-06T16:30:00Z",  # 9:30 a.m. Pacific
-        "endTime": "2026-10-06T17:30:00Z",
+        "startTime": "2026-10-06T09:30:00",  # 9:30 a.m. local
+        "endTime": "2026-10-06T10:30:00",
         "timeZone": "America/Los_Angeles",
         "location": "Department 3",
     },
     # Added 2026-09-28 (second fresh date): proves a yes to "finalize the
     # witness list" runs that job, not the binder, and that a yes to a confirm
     # question is the confirmation. 2026-PI-107 has no open task and no other
-    # date in the window. Stored in UTC; the brief must say 8:30 a.m., Dept 14.
+    # date in the window. Stored as local time; the brief must say 8:30 a.m., Dept 14.
     "final-status-conference-alvarez-draper": {
         "matter": "lookalike-alvarez",
         "subject": "Final Status Conference",
-        "startTime": "2026-10-08T15:30:00Z",  # 8:30 a.m. Pacific
-        "endTime": "2026-10-08T16:30:00Z",
+        "startTime": "2026-10-08T08:30:00",  # 8:30 a.m. local
+        "endTime": "2026-10-08T09:30:00",
         "timeZone": "America/Los_Angeles",
         "location": "Department 14",
     },
     # Added 2026-09-28 (third fresh date): proves a finalize step renders a
     # Word document carrying the draft's own caption (#2974). 2026-PI-104 has
-    # no other date in the window. Stored in UTC; 10:00 a.m. Pacific, Dept 22.
+    # no other date in the window. Stored as local time; 10:00 a.m., Dept 22.
     "mandatory-settlement-conference-whitfield": {
         "matter": "liens-whitfield",
         "subject": "Mandatory Settlement Conference",
-        "startTime": "2026-10-09T17:00:00Z",  # 10:00 a.m. Pacific
-        "endTime": "2026-10-09T19:00:00Z",
+        "startTime": "2026-10-09T10:00:00",  # 10:00 a.m. local
+        "endTime": "2026-10-09T12:00:00",
         "timeZone": "America/Los_Angeles",
         "location": "Department 22",
     },
@@ -59,8 +67,8 @@ DATE_PREP_EVENTS: dict[str, dict] = {
     "trial-readiness-conference-alvarez": {
         "matter": "mva-alvarez",
         "subject": "Trial Readiness Conference",
-        "startTime": "2026-10-07T16:00:00Z",  # 9:00 a.m. Pacific
-        "endTime": "2026-10-07T17:00:00Z",
+        "startTime": "2026-10-07T09:00:00",  # 9:00 a.m. local
+        "endTime": "2026-10-07T10:00:00",
         "timeZone": "America/Los_Angeles",
         "location": "Department 31",
     },

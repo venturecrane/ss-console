@@ -1099,7 +1099,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # see every owner's records read-only, and the listing carries the index
 # fields (ss#2793 follow-on, the broker view). shared/record_store.py, the
 # record-store plugin, bootstrap/validate.py and tests; no tracked twin moves.
-ARG OVERLAY_REF="c2cd89412520eeb408ab28e79dc646820074a498"
+# 2026-09-29h (9d689629, the overlay #403 merge commit). The output checklist
+# refuses a short entry id in a note or email ("event cef69a47", "task
+# 98570c78", "file 3061ca2e") with the remedy to name the entry by subject,
+# title or file name, and a whole-line "facts <12 hex>" digest is a machine
+# marker on a note (ss-console Option B read-through). shared/output_checklist.py
+# and its test only; no tracked twin moves; schemas.py untouched.
+ARG OVERLAY_REF="9d6896298adfaa224df31c9fbb861112af35ac19"
 
 ARG CUSTOMER_SLUG=customer-zero
 
