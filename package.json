@@ -82,7 +82,7 @@
     "esbuild": "0.28.1",
     "ws": "8.21.0",
     "yaml": "$yaml",
-    "brace-expansion": "^5.0.9",
+    "brace-expansion": "^5.0.12",
     "js-yaml": "^4.3.2",
     "postcss": "8.5.23",
     "postcss-selector-parser": "7.1.5",
