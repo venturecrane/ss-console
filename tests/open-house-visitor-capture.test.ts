@@ -135,6 +135,10 @@ describe('open-house-visitor-capture: the skill contract', () => {
     expect(capture).toMatch(/\*\*Same person, another day\.\*\*/)
     expect(capture).toMatch(/see_also: <that record name>/)
     expect(capture).toMatch(/Only the index is compared; a colleague's notes are never opened/)
+    // the same agent re-sending a visitor they already hold is a correction, not a
+    // second record and not a refused write
+    expect(capture).toMatch(/\*\*Your own record already\.\*\*/)
+    expect(capture).toMatch(/Write no second\s+record/)
     // one follow-up sequence per visitor across the office
     expect(capture).toMatch(/one visitor gets one follow-up sequence from this office/)
   })

@@ -189,6 +189,13 @@ name>`: one visitor gets one follow-up sequence from this office, and the
      other live record, or the same visitor name at the same property on a
      different date. Write the sender's record with its normal cadence and add
      `see_also: <that record name>`.
+   - **Your own record already.** The match is the sender's own record: same
+     visitor, same property, same visit date, their address. Write no second
+     record. Treat the new dictation as a **Correction** to that record: read
+     it, add the new words under a dated correction heading, change a field
+     only if the new words change it, keep the cadence and its stamps, and say
+     in the reply that the visitor was already on file and what, if anything,
+     changed.
      Only the index is compared; a colleague's notes are never opened for this.
 6. Put the agent's description in the body, verbatim, under the heading shown. Do
    not clean it up, rank it, or tag it. It is the agent's memory, not yours.
