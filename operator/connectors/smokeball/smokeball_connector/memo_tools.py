@@ -86,15 +86,16 @@ _MAX_PREVIOUSLY = 3
 #: written before the gate existed would carry its id forward for three more
 #: changes. The tail is history for a person: the id leaves, the sentence stays.
 _INTERNAL_ID = (
-    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
     r"|\b[0-9a-f]{32,64}\b"
     r"|\b[0-9A-HJKMNP-TV-Z]{26}\b"
     r"|\b(?:event|task|file|memo|document|doc|job|matter|id|facts)\s+(?=[0-9a-f]{0,11}[a-f])[0-9a-f]{8,12}\b(?!-)"
 )
 #: The short handle needs a hex LETTER: "file 84930211" is a firm's own number
-#: and stays; "file 788e0854" is ours and goes.
-_ID_RE = re.compile(_INTERNAL_ID)
-_ID_PAREN_RE = re.compile(rf"\s*\([^()]*(?:{_INTERNAL_ID})[^()]*\)")
+#: and stays; "file 788e0854" is ours and goes. Case-blind: a superseded line
+#: is a sentence, so its first word ("File 788e0854 ...") is capitalised.
+_ID_RE = re.compile(_INTERNAL_ID, re.IGNORECASE)
+_ID_PAREN_RE = re.compile(rf"\s*\([^()]*(?:{_INTERNAL_ID})[^()]*\)", re.IGNORECASE)
 
 _HEADING_RE = re.compile(r"^#{1,6}\s+")
 _QUOTE_RE = re.compile(r"^(?:>\s?)+")
@@ -238,6 +239,12 @@ class _Parts:
     def embedded(self) -> list[str]:
         return [m.group(0) for line in self.content for p in _EMBEDDED_MARKERS for m in p.finditer(line)]
 
+    def embedded_in_tail(self) -> list[str]:
+        """Markers a Previously line still holds. The tail loses its ids on
+        every compose, so a marker found only there is promoted to a line of
+        its own first; the watcher's dedup reads the whole note."""
+        return [m.group(0) for line in self.previously for p in _EMBEDDED_MARKERS for m in p.finditer(line)]
+
 
 def _dedupe(items: list[str]) -> list[str]:
     return list(dict.fromkeys(items))
@@ -254,7 +261,7 @@ def _carried_markers(old: _Parts, new: _Parts, facts: str | None) -> list[str]:
     new content no longer holds becomes a line of its own. A facts line is never
     carried: ``facts`` (or nothing) takes its place, last."""
     new_text = "\n".join(new.content)
-    embedded = [m for m in old.embedded() if m not in new_text]
+    embedded = [m for m in [*old.embedded(), *old.embedded_in_tail()] if m not in new_text]
     kept = [m for m in _dedupe([*old.markers, *embedded, *new.markers]) if not _FACTS_RE.fullmatch(m)]
     return [*kept, facts] if facts else kept
 
