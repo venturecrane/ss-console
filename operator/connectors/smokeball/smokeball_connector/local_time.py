@@ -59,6 +59,45 @@ def local_when(raw_start: str | None, zone: str | None, all_day: bool = False) -
     return day, clock(int(hour), int(minute))
 
 
+_LOCAL_CLOCK_HINT = "post the firm's local clock, YYYY-MM-DDThh:mm:ss, no Z"
+
+
+def refuse_shifted_clock(tool: str, name: str, value: str | None) -> None:
+    """Raise when a timed event stamp carries ``Z`` or a numeric offset.
+
+    Smokeball reads ``startTime``/``endTime`` as the firm's wall clock in the
+    event's ``timeZone``; it keeps the digits and drops the suffix, so a UTC
+    stamp lands hours off (the seed's ``16:30:00Z`` showed the firm 4:30 p.m.
+    for a 9:30 a.m. hearing). Refused before any HTTP is spent."""
+    if value is None or len(value) < 16 or value[10] != "T":
+        return
+    tail = value[16:]
+    if tail.endswith(("Z", "z")) or "+" in tail or "-" in tail:
+        raise ValueError(tool + ": " + name + " " + repr(value) + " carries a zone suffix; " + _LOCAL_CLOCK_HINT + ".")
+
+
+def refuse_shifted_clocks(tool: str, all_day: bool | None, *stamps: str | None) -> None:
+    """``refuse_shifted_clock`` for each timed stamp; an all-day span is exempt."""
+    if not all_day:
+        for name, value in zip(("start_time", "end_time"), stamps, strict=False):
+            refuse_shifted_clock(tool, name, value)
+
+
+def event_span(tool: str, start: str, end: str, all_day: bool | None) -> tuple[str, str]:
+    """The ``(startTime, endTime)`` to POST.
+
+    All-day: the local midnight span the API requires (exact 24-hour
+    boundaries), with no ``Z``. Timed: the stamps unchanged, after refusing any
+    ``Z`` or offset."""
+    if all_day:
+        start_date, end_date = start[:10], end[:10]
+        if end_date <= start_date:
+            end_date = _next_day(start_date)
+        return start_date + "T00:00:00", end_date + "T00:00:00"
+    refuse_shifted_clocks(tool, all_day, start, end)
+    return start, end
+
+
 def enrich_event(event: Any) -> Any:
     """Add ``localDate`` and ``localTime`` to one event when both resolve.
 

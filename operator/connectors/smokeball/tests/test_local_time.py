@@ -53,6 +53,12 @@ def test_an_unknown_zone_does_not_hide_the_time() -> None:
     assert out["timeZone"] == "Mars/Olympus"
 
 
+def test_a_malformed_date_or_clock_has_no_time() -> None:
+    assert local_time.local_when("2026-13-45T09:30:00", LA) == (None, None)
+    assert local_time.local_when("2026-10-06T25:30:00", LA) == (None, None)
+    assert local_time.local_when("2026-10-06Tab:cd:00", LA) == (None, None)
+
+
 def test_clock_noon_and_midnight() -> None:
     assert local_time.clock(12, 0) == "12:00 p.m."
     assert local_time.clock(0, 5) == "12:05 a.m."
@@ -90,22 +96,19 @@ def test_list_events_enriches_items_and_leaves_start_time(monkeypatch) -> None:
     assert "localDate" not in second and "localTime" not in second
 
 
-def test_task_due_date_only_wins(monkeypatch) -> None:
-    monkeypatch.setenv("HERMES_TIMEZONE", LA)
+def test_task_due_date_only_wins() -> None:
     task = local_time.enrich_task({"dueDateOnly": "2026-10-08", "dueDate": "2026-10-09T07:00:00Z"})
     assert task["localDueDate"] == "2026-10-08"
     assert "localDueDateSource" not in task
 
 
-def test_task_due_date_is_taken_as_written(monkeypatch) -> None:
-    monkeypatch.setenv("HERMES_TIMEZONE", LA)
+def test_task_due_date_is_taken_as_written() -> None:
     task = local_time.enrich_task({"dueDate": "2026-10-09T03:00:00Z"})
     assert task["localDueDate"] == "2026-10-09"
     assert task["localDueDateSource"] == "dueDate"
 
 
 def test_list_and_get_task_are_enriched(monkeypatch) -> None:
-    monkeypatch.setenv("HERMES_TIMEZONE", LA)
     rec = _Recorder(
         {
             "/tasks": {"value": [{"id": "t1", "dueDate": "2026-10-09T03:00:00Z"}]},

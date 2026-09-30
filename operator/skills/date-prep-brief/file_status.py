@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import re
 import sys
+from datetime import date
 
 #: Matters whose calendars one tick reads. Past it the view says truncated.
 MATTER_CAP = 40
@@ -135,7 +136,11 @@ def _when(event: dict) -> tuple[str | None, str | None]:
     hour, minute = raw[11:13], raw[14:16]
     if not (hour.isdigit() and minute.isdigit()) or int(hour) > 23 or int(minute) > 59:
         return None, None
-    return raw[:10], _clock(int(hour), int(minute))
+    try:
+        day = date.fromisoformat(raw[:10]).isoformat()
+    except ValueError:
+        return None, None
+    return day, _clock(int(hour), int(minute))
 
 
 def matter_events(client, matter: dict, frm: str, to: str) -> list[dict] | None:

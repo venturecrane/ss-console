@@ -73,8 +73,9 @@ def test_all_day_normalizes_to_midnight_span(capture: _CapturingClient) -> None:
     )
     ((_, path, body),) = capture.calls
     assert path == "/events"
-    assert body["startTime"] == "2026-07-27T00:00:00Z"
-    assert body["endTime"] == "2026-07-28T00:00:00Z"
+    assert body["startTime"] == "2026-07-27T00:00:00"
+    assert body["endTime"] == "2026-07-28T00:00:00"
+    assert "Z" not in body["startTime"] and "Z" not in body["endTime"]
     assert body["allDay"] is True
     assert body["attendees"] == ["staff-1"]
     assert body["timeZone"] == "America/Los_Angeles"
@@ -91,23 +92,52 @@ def test_all_day_multi_day_span_kept(capture: _CapturingClient) -> None:
         all_day=True,
     )
     ((_, _, body),) = capture.calls
-    assert body["startTime"] == "2026-10-13T00:00:00Z"
-    assert body["endTime"] == "2026-10-17T00:00:00Z"
+    assert body["startTime"] == "2026-10-13T00:00:00"
+    assert body["endTime"] == "2026-10-17T00:00:00"
 
 
 def test_timed_event_passes_through_untouched(capture: _CapturingClient) -> None:
     create_event(
-        subject="Deposition of Maria Alvarez",
-        start_time="2026-08-06T17:00:00Z",
-        end_time="2026-08-06T21:00:00Z",
+        subject="Hearing",
+        start_time="2026-10-06T09:30:00",
+        end_time="2026-10-06T10:30:00",
         attendees=["staff-1"],
         time_zone="America/Los_Angeles",
         matter_id="m-1",
     )
     ((_, _, body),) = capture.calls
-    assert body["startTime"] == "2026-08-06T17:00:00Z"
-    assert body["endTime"] == "2026-08-06T21:00:00Z"
+    assert body["startTime"] == "2026-10-06T09:30:00"
+    assert body["endTime"] == "2026-10-06T10:30:00"
     assert "allDay" not in body or not body["allDay"]
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        ("2026-10-06T09:30:00Z", "2026-10-06T10:30:00"),
+        ("2026-10-06T09:30:00", "2026-10-06T10:30:00-07:00"),
+        ("2026-10-06T09:30:00+00:00", "2026-10-06T10:30:00"),
+    ],
+)
+def test_a_timed_stamp_with_a_zone_suffix_is_refused(capture: _CapturingClient, start: str, end: str) -> None:
+    with pytest.raises(ValueError, match="post the firm's local clock, YYYY-MM-DDThh:mm:ss, no Z"):
+        create_event(
+            subject="Hearing",
+            start_time=start,
+            end_time=end,
+            attendees=["staff-1"],
+            time_zone="America/Los_Angeles",
+        )
+    assert capture.calls == []
+
+
+def test_update_event_refuses_a_zone_suffix_before_any_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom():
+        raise AssertionError("no client call may happen")
+
+    monkeypatch.setattr(server, "_get_client", _boom)
+    with pytest.raises(ValueError, match="no Z"):
+        server.update_event("evt-1", start_time="2026-10-06T09:30:00Z")
 
 
 def test_next_day_rolls_month_and_year() -> None:

@@ -275,6 +275,11 @@ def test_the_zone_is_never_arithmetic_and_all_day_or_no_clock_means_no_time():
     assert bad_zone["time"] == "9:30 a.m."
     no_clock = _one_event({"id": "e-d", "subject": "H", "startTime": "2026-10-02", "timeZone": "America/Los_Angeles"})
     assert no_clock["date"] == "2026-10-02" and "time" not in no_clock
+
+
+def test_a_malformed_start_date_has_no_time_like_the_connector():
+    for raw in ("2026-13-45T09:30:00", "2026-10-02T25:30:00", "2026-10-02Tab:cd:00"):
+        assert file_status._when({"startTime": raw, "timeZone": "America/Los_Angeles"}) == (None, None)
     all_day = _one_event(
         {
             "id": "e-c",

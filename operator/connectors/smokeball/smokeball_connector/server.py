@@ -38,7 +38,8 @@ from .client import SmokeballApiError, SmokeballClient, build_client_from_env
 from .event_update import put_event_update
 from .expense_ledger import drop_deleted as drop_deleted_expenses
 from .library import LOOKUP_FAILED, lookup_matter
-from .local_time import _next_day, enrich_events, enrich_task, enrich_tasks
+from .local_time import _next_day  # noqa: F401 - re-exported; tests import it from the server
+from .local_time import enrich_events, enrich_task, enrich_tasks, event_span, refuse_shifted_clocks
 from .listing import contact_listing_is_complete as _contact_listing_is_complete
 from .listing import with_listing_completeness
 from .parties import (
@@ -930,7 +931,8 @@ def create_event(
     - ``start_time`` / ``end_time``: ``YYYY-MM-DDThh:mm:ss`` as the FIRM'S
       LOCAL clock in ``time_zone``, never UTC (vendor: "date and time will
       correlate with the time zone provided"): a 9:00 a.m. hearing is
-      ``...T09:00:00``. For ``all_day=True`` the API
+      ``...T09:00:00``. A timed stamp with ``Z`` or an offset is refused.
+      For ``all_day=True`` the API
       requires exact 24-hour boundaries; this tool normalizes both to the
       date's midnight span, so passing the deadline DATE is enough.
     """
@@ -944,12 +946,7 @@ def create_event(
             "create_event: Smokeball requires an IANA time_zone "
             "(e.g. 'America/Los_Angeles'). Use the firm's authored zone."
         )
-    if all_day:
-        start_date, end_date = start_time[:10], end_time[:10]
-        start_time = f"{start_date}T00:00:00Z"
-        if end_date <= start_date:
-            end_date = _next_day(start_date)
-        end_time = f"{end_date}T00:00:00Z"
+    start_time, end_time = event_span("create_event", start_time, end_time, all_day)
     client = _get_client()
     _verify_matter_reference(client, matter_id or "", subject, description)
     return client.request(
@@ -991,6 +988,7 @@ def update_event(
     deadline from its matter. So this tool reads the event and re-sends its
     matter link, attendees and every unchanged field (``event_update``).
     ``matter_id`` changes the link only when passed."""
+    refuse_shifted_clocks("update_event", all_day, start_time, end_time)
     changes = dict(subject=subject, start_time=start_time, end_time=end_time, description=description)
     changes.update(location=location, all_day=all_day, attendees=attendees, time_zone=time_zone)
     return put_event_update(_get_client(), event_id, _verify_matter_reference, matter_id=matter_id, **changes)

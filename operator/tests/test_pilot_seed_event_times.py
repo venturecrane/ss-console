@@ -57,3 +57,10 @@ def test_date_prep_events_are_the_local_times_the_brief_must_say() -> None:
     for event in events.values():
         assert event["timeZone"] == "America/Los_Angeles"
         assert "Z" not in event["startTime"] and "Z" not in event["endTime"]
+
+
+def test_create_event_cannot_regain_a_utc_all_day_span() -> None:
+    server = (
+        pathlib.Path(__file__).resolve().parents[1] / "connectors/smokeball/smokeball_connector/server.py"
+    ).read_text(encoding="utf-8")
+    assert "T00:00:00Z" not in server, "all-day spans post the local midnight, no Z"
