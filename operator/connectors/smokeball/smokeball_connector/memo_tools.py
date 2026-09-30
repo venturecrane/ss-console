@@ -78,6 +78,21 @@ _HEADER_RE = re.compile(rf"^(?P<routine>\S.*?) as of (?P<day>{_DAY})\s*$")
 _PREVIOUSLY_RE = re.compile(r"^Previously \((?P<day>[^)]{1,40})\): ")
 _MAX_PREVIOUSLY = 3
 
+#: An internal identifier a person should never read: a GUID, a long hex or
+#: ULID token, or a short hex handle after a record noun ("file 788e0854").
+#: The output gate refuses these in the note the model writes; the Previously
+#: tail is composed HERE, after that gate, from the superseded body, so a line
+#: written before the gate existed would carry its id forward for three more
+#: changes. The tail is history for a person: the id leaves, the sentence stays.
+_INTERNAL_ID = (
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    r"|\b[0-9a-f]{32,64}\b"
+    r"|\b[0-9A-HJKMNP-TV-Z]{26}\b"
+    r"|\b(?:event|task|file|memo|document|doc|job|matter|id|facts)\s+[0-9a-f]{8,12}\b(?!-)"
+)
+_ID_RE = re.compile(_INTERNAL_ID)
+_ID_PAREN_RE = re.compile(rf"\s*\([^()]*(?:{_INTERNAL_ID})[^()]*\)")
+
 _HEADING_RE = re.compile(r"^#{1,6}\s+")
 _QUOTE_RE = re.compile(r"^(?:>\s?)+")
 _BULLET_RE = re.compile(r"^[-*]\s+")
@@ -241,8 +256,22 @@ def _carried_markers(old: _Parts, new: _Parts, facts: str | None) -> list[str]:
     return [*kept, facts] if facts else kept
 
 
+def _without_ids(line: str) -> str:
+    """The line with every internal id gone: a parenthetical holding one goes
+    whole ("(file 788e0854, 12 pages)"), a bare id goes on its own."""
+    text = _ID_PAREN_RE.sub("", line)
+    text = _ID_RE.sub("", text)
+    text = re.sub(r"\s+([,.;:])", r"\1", re.sub(r"[ \t]{2,}", " ", text))
+    return text.strip()
+
+
+def _tail(previously: list[str]) -> list[str]:
+    """The Previously tail as a person reads it: bounded, no internal ids."""
+    return [_without_ids(line) for line in previously[:_MAX_PREVIOUSLY]]
+
+
 def _compose(header: str, content: list[str], markers: list[str], previously: list[str]) -> str:
-    return "\n".join([header, *content, *markers, *previously]).strip()
+    return "\n".join([header, *content, *markers, *_tail(previously)]).strip()
 
 
 # ---- reads ------------------------------------------------------------------

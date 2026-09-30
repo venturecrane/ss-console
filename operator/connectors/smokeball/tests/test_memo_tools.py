@@ -220,6 +220,30 @@ def test_an_embedded_file_id_survives_its_sentence_being_superseded() -> None:
     assert "fileId f-1 recorded" in text and "fileId f-2 recorded" in text
 
 
+def test_the_previously_tail_carries_no_internal_id() -> None:
+    # The pilot's binder note on 2026-09-29: a body written before the output
+    # gate existed cited "(file 788e0854, 12 pages)"; superseded, that sentence
+    # became a Previously line and the id went with it, past the gate.
+    old = (
+        "[Operator] Trial binder as of 2026-09-28\n"
+        f"Index filed as Binder Index (draft).docx (file 788e0854, 12 pages) on matter {GUID}.\n"
+        f"Previously (2026-09-27): Index refreshed (fileId {GUID} recorded); 4 witnesses."
+    )
+    c = _Fake([_memo("m1", old)])
+    mt.upsert_memo(c, M, "[Operator] Trial binder as of 2026-09-29\nIndex current; nothing to do.", sleep=_nosleep)
+    lines = c.memos["m1"]["plainText"].splitlines()
+    assert lines[-2:] == [
+        "Previously (2026-09-28): Index filed as Binder Index (draft).docx on matter.",
+        "Previously (2026-09-27): Index refreshed; 4 witnesses.",
+    ]
+    assert not mt._ID_RE.search("\n".join(lines[1:]))
+
+
+def test_without_ids_leaves_a_clean_line_alone() -> None:
+    line = "Trial is October 13, 2026, 9:00 a.m., Dept. 47; MSJ hearing Oct 6 at 9:30 a.m.; matter 2026-PI-105."
+    assert mt._without_ids(line) == line
+
+
 def test_a_new_marker_with_the_same_content_is_kept() -> None:
     old = f"[Operator] Matter updates as of Sep 28, 2026\nMatter updated.\nop-mmou:{GUID}:1"
     c = _Fake([_memo("m1", old)])
