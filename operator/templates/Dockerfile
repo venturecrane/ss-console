@@ -1105,7 +1105,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # title or file name, and a whole-line "facts <12 hex>" digest is a machine
 # marker on a note (ss-console Option B read-through). shared/output_checklist.py
 # and its test only; no tracked twin moves; schemas.py untouched.
-ARG OVERLAY_REF="9d6896298adfaa224df31c9fbb861112af35ac19"
+# 2026-09-29i (881563e9, the overlay #404 merge commit). Every staged pre_run
+# script under a persona's scripts/ is refreshed from its skill copy at boot,
+# and a staged script whose skill is gone is removed, so a skill taken off the
+# schedule never runs stale code on request (the pilot ran a pre-#3003 copy of
+# six trackers on 2026-09-29). bootstrap/translate.py and its test only; no
+# tracked twin moves; schemas.py untouched.
+ARG OVERLAY_REF="881563e9bf2befe7b21ccae09b8287feb567f9dd"
 
 ARG CUSTOMER_SLUG=customer-zero
 
