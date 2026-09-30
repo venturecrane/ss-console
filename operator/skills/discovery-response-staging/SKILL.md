@@ -62,7 +62,7 @@ for internal review, never legal argument. For this skill that line is absolute:
   attorney's and the drafting engine's calls. The initiating signal (or the matter)
   names the request and the supporting documents; the skill carries them.
 - Its only authored text is the internal note that routes and logs (see
-  `references/voice.md`), plus the training-output note. Both are connective, not
+  `references/voice.md`), plus the file note. Both are connective, not
   work product.
 
 This is the pack floor `discovery-response-staging-no-drafting`.
@@ -226,11 +226,11 @@ on a real tenant. It is a calibrated posture, not an immutable invariant.
   (the review task points at the returned draft where it sits). Internal placement and
   routing only.
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every action carries, in the matter memo, a short note a junior paralegal learns from
-(`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`):
-_what_ it did (staged the request and supporting docs into the drafting folder; routed
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
+(`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): _what_ it did (staged the request and supporting docs into the drafting folder; routed
 the returned draft to the attorney), _why it matters_ (the drafting engine can only
 draft from what is in front of it; a complete matter folder is what makes the response
 draft complete), _what comes next_ (the engine drafts; the attorney reviews the routed

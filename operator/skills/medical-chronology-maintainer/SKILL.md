@@ -423,7 +423,7 @@ valuation) is an invariant, not a dial, no matter how it is asked or configured.
 - **Never assert a ledger entry or task was written** without a confirming read.
   Never move or delete a document.
 
-## Training output (built into every delivery)
+## Training output (in the review task, never in the file note)
 
 The review task carries a short note a junior paralegal learns from, per
 `operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`:

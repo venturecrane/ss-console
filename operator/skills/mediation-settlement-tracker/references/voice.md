@@ -2,7 +2,7 @@
 
 This skill has **no outbound voice**. It sends nothing to a client, to opposing
 counsel, to a mediator, or to the court. It produces internal artifacts only: the
-staged brief-inputs packet, the tracked task, a file note, and a training note. So
+staged brief-inputs packet, the tracked task, and a file note. So
 there is no client-facing tone to tune here; there is a discipline to hold about the
 text it does and does not write.
 
@@ -17,11 +17,11 @@ text it does and does not write.
 - **The file note (create_memo)** - crisp and factual, in the pack's one shape (`_shared-write-posture.md`, section 5): the header line
   `[Operator] <Routine name> as of <localDate>`, one plain line of what it found, one
   plain line of what a person needs to do (or "Nothing to do."). No `>` quote marks, no
-  `**`, no headings, no tables. The training note rides in those two lines.
+  `**`, no headings, no tables. No training paragraph: the why is given when a person asks.
   It states what was assembled, from which documents, that the brief was left for the
   attorney/co-counsel, and that the deadlines were surfaced as proposed-confirm. It
   records; it does not opine or value.
-- **The training note** - plain, explanatory, per `_shared-training-output.md`. Teaches
+- **The explanation, given when a person asks** (never written into the note or a document) - plain, explanatory, per `_shared-training-output.md`. Teaches
   the step (what/why/next/attorney-if) and cites the governing rule (CCP §998 for the
   offer window). It never advises on the case, never states the case value, never
   characterizes the matter's position.
@@ -40,7 +40,7 @@ text it does and does not write.
 - **Never characterize the matter's strength, the offer's adequacy, or a party's
   position** - no "strong liability," no "the offer is low," no "we should settle."
   Quote and stage; do not judge.
-- No legalese in the log or training note; no "execute," no "heretofore."
+- No legalese in the note or an explanation; no "execute," no "heretofore."
 - Never state or imply the brief was written, filed, or served, or that a deadline was
   calendared, unless that is an observed fact. It is staged and surfaced.
 

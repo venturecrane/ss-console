@@ -13,7 +13,7 @@ merit of an objection, and never tells the attorney what to do about it.
 The artifact MAY: name a candidate category for a request; cite the response text and the
 request text; give a one-line, neutral, factual reason a pattern was flagged ("stock
 objection with no substantive answer following"); note where a candidate is unclear or a
-pairing is ambiguous; carry the training-output note.
+pairing is ambiguous. The why of the step is given when a person asks, never in the artifact.
 
 The artifact MAY NOT: say a response _is_ deficient, insufficient, improper, or evasive as
 a conclusion (it may name "evasive/incomplete" as a _candidate category_, which is a flag

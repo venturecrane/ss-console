@@ -19,7 +19,13 @@
     "_emit": {
       "copies": 7
     },
+    "_event_fact": {
+      "copies": 7
+    },
     "_extension_candidates": {
+      "copies": 7
+    },
+    "_field": {
       "copies": 7
     },
     "_find_skill_settings": {
@@ -29,6 +35,9 @@
       "copies": 7
     },
     "_is_iso_day": {
+      "copies": 7
+    },
+    "_is_motion_header": {
       "copies": 7
     },
     "_is_operator_memo": {
@@ -51,6 +60,9 @@
     },
     "_load_skill_helpers": {
       "copies": 6
+    },
+    "_matter_digest": {
+      "copies": 7
     },
     "_matter_id_of": {
       "copies": 3
@@ -79,8 +91,17 @@
     "_source_id_of": {
       "copies": 3
     },
+    "_task_fact": {
+      "copies": 7
+    },
+    "_text": {
+      "copies": 7
+    },
     "_try_write_emitted_wake": {
       "copies": 2
+    },
+    "_utc_instant": {
+      "copies": 7
     },
     "_writer_factory": {
       "copies": 2
@@ -91,6 +112,9 @@
     "derive_matter_facts": {
       "copies": 7
     },
+    "facts_digest": {
+      "copies": 7
+    },
     "fetch_memo_facts": {
       "copies": 7
     },
@@ -98,6 +122,9 @@
       "copies": 7
     },
     "pull_facts_payload": {
+      "copies": 7
+    },
+    "routine_label": {
       "copies": 7
     },
     "write_emitted_wake_heartbeat": {

@@ -23,7 +23,7 @@ Shapes A and C remain the turn's own work, under the templates below.
 ## Shape A - Prepare & route for authenticated approval
 
 ```markdown
-# Verification - <plaintiff> - <response-set> (v<version>) - matter <id> - YYYY-MM-DD
+# Verification - <plaintiff> - <response-set> (v<version>) - matter <matter number> - YYYY-MM-DD
 
 **Signer:** <party | GAL for minor <name> | successor-in-interest <name>>
 **Response type:** <interrogatories | RFP | RFA> - attorney-flagged for verification
@@ -55,7 +55,7 @@ one). The denominator is the authored `escalate_after_attempts`. So the third
 unanswered chase on a ceiling of 3 reads `nudge 3 of 3`.
 
 ```markdown
-# Verification Chase - <plaintiff> - <response-set> - matter <id> - YYYY-MM-DD
+# Verification Chase - <plaintiff> - <response-set> - matter <matter number> - YYYY-MM-DD
 
 **Status:** still open, not yet received (<N> days since last touch); nudge <this attempt> of <escalate_after_attempts>
 **Cadence:** authored `chase_cadence_days` = <days>; last chase <date from ledger>, so this one is due
@@ -85,7 +85,7 @@ State-read note: this turn reads matter metadata only (`list_tasks`, `get_files_
 ## Shape C - Signed, logged & closed (ONLY on a confident match)
 
 ```markdown
-# Verification Signed - <plaintiff> - <response-set> - matter <id> - YYYY-MM-DD
+# Verification Signed - <plaintiff> - <response-set> - matter <matter number> - YYYY-MM-DD
 
 **Decision:** signed verification observed in the matter and matched with confidence
 to <response-set> v<version>; item closed; cadence stopped.
@@ -106,7 +106,7 @@ Nothing to do.
 ## Shape D - Surface to a human (ambiguous / unauthenticated / say-so / unconfirmed)
 
 ```markdown
-# ⚠ Verification - needs a human - <plaintiff> - matter <id> - YYYY-MM-DD
+# ⚠ Verification - needs a human - <plaintiff> - matter <matter number> - YYYY-MM-DD
 
 **Situation:** <signer ambiguous | approval not authenticated | client says-signed but no
 matching document | firm file-naming convention not yet confirmed | RFA near deadline unsigned |
@@ -138,12 +138,32 @@ overlapping morning emails. "Under active escalation" is read from the shared
 `escalation_ledger.py` state (a `fired`/`chased` from another skill on the same
 item within its `escalation.refire_days` window), never from same-day prediction:
 
-> <matter> (<matter id>) - verification for <plaintiff>/<response-set>: under active escalation by <owning skill> (last raised <date>).
+> Matter <matter number>, verification for <plaintiff>, <response-set>: escalated; the Operator is following up.
+
+The line names no person (the ledger does not record who the escalation went to) and
+no routine, and carries no date from the ledger (the identifier gate refuses one).
 
 Deadline-proximity on an unsigned verification is owned by
 `deadline-miss-escalator` (it pulls verification response deadlines with the rest
 of the firm's authored dates). The chase does not re-escalate a nearing deadline;
 it points to the deadline lane. The chase's OWN trigger is the attempt ceiling.
+
+## A matter with nothing to report, and the facts line
+
+When this routine writes a note on a matter where it found nothing (no verification waiting on a signature),
+the note is the header and exactly two lines. No rule sentence, no request to
+confirm when there is nothing to confirm, and no word about an earlier run
+(`_shared-write-posture.md`, section 5):
+
+```
+[Operator] <Routine name> as of <localDate>
+No verification waiting on a signature.
+Nothing to do.
+```
+
+When the wake line gives the matter a `facts_digest`, the note's last line is
+`facts <digest>`, copied exactly from the wake line and alone on its line. With no
+`facts_digest` on the wake line, write no facts line.
 
 ## Rules
 

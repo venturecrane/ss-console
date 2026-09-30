@@ -41,7 +41,7 @@ claims about timing (only the POS governs the date/method).
 
 **Good - surface to the attorney (interrogatories, clean POS):**
 
-> Special interrogatories were served on Reyes v. Doe. Per the proof of service:
+> Special interrogatories were served on Roe v. Doe. Per the proof of service:
 > served 2026-07-01 by electronic service. Confirm the type, service date, and method
 > so the response deadline gets set. Verification will be required unless the
 > responses are objections-only.

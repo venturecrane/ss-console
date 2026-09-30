@@ -42,7 +42,7 @@ method).
 
 **Good - surface to the attorney (clean confirmation, personal service):**
 
-> The service confirmation came back on Reyes v. Doe for the defendant, Jordan Doe. Per
+> The service confirmation came back on Roe v. Doe for the defendant, Jordan Doe. Per
 > the proof of service: served 2026-07-01 by personal service. Confirm the defendant,
 > served date, and method so the responsive-pleading deadline gets set. I have not
 > calendared it.

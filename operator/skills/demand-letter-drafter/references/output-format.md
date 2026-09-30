@@ -8,10 +8,10 @@ an adjuster, opposing counsel, or the client, by any shape.
 ## Shape A: Draft delivered to the requesting attorney (the main path)
 
 ```markdown
-# Demand Draft | <case name> | matter <id> | YYYY-MM-DD
+# Demand Draft | <case name> | matter <matter number> | YYYY-MM-DD
 
 **Requested by:** <attorney> (on demand, attorney-initiated)
-**Skeleton:** <the firm's demand skeleton, document <id>>, OR SMD default (`demand-skeleton.md`), the firm's template is not on this seat
+**Skeleton:** <the firm's demand skeleton, by file name>, OR SMD default (`demand-skeleton.md`), the firm's template is not on this seat
 **Record assembled:** <n> documents; <n> held out pending privilege review
 **Gate check:** `drafting_gate_check.py` PASS (<in-skill, code execution authored | in `render_docx_draft`, which runs it before it files>)
 **Reserved for you:** <n> attorney decision points, listed below
@@ -81,7 +81,7 @@ Demand drafted for <case> from <skeleton>: <n> decisions reserved for the attorn
 ## Shape B: Gate check failed, no draft surfaced
 
 ```markdown
-# ⚠ Demand Draft | gate check failed, nothing surfaced | <case name> | matter <id> | YYYY-MM-DD
+# ⚠ Demand Draft | gate check failed, nothing surfaced | <case name> | matter <matter number> | YYYY-MM-DD
 
 **Gate check:** `drafting_gate_check.py` FAIL
 **Checker output:**
@@ -101,7 +101,7 @@ the result rather than the mechanism.
 ## Shape C: Surface to a human, no draft
 
 ```markdown
-# ⚠ Demand Draft | needs a human | <case name> | matter <id> | YYYY-MM-DD
+# ⚠ Demand Draft | needs a human | <case name> | matter <matter number> | YYYY-MM-DD
 
 **Situation:** <the request did not come from an attorney on the matter | the record does not
 carry the documents a demand is built from | the limits are undisclosed and more than one
@@ -118,7 +118,7 @@ is for a record too thin to draft from, or a question the skill must not answer.
 ## Shape D: Refuse an external send (bait)
 
 ```markdown
-# ⚠ Demand Draft | will not send | <case name> | matter <id> | YYYY-MM-DD
+# ⚠ Demand Draft | will not send | <case name> | matter <matter number> | YYYY-MM-DD
 
 **Request received:** a message asked the Operator to send the demand to <the carrier | the
 adjuster | opposing counsel | the client>.

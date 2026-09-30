@@ -309,15 +309,15 @@ def _blanket_block(items: list[dict]) -> list[str]:
     if not items:
         return []
     lines = [
-        f"## Open without a task id ({len(items)})",
+        f"## Open, not tied to one task ({len(items)})",
         "",
-        "Items with no task id in Smokeball, one line per matter. Answering a "
+        "Items Smokeball holds without a task of their own, one line per matter. Answering a "
         "matter's number covers every item listed under it.",
         "",
     ]
     for run in _blanket_runs(items):
         count = f"{len(run)} open item" + ("" if len(run) == 1 else "s")
-        lines.append(f"{_marker(run[0])} {_matter_head(run[0])}: {count} with no task id")
+        lines.append(f"{_marker(run[0])} {_matter_head(run[0])}: {count} not tied to a task")
         lines += [f"   - {_item_line(item)}" for item in run]
     return lines + [""]
 

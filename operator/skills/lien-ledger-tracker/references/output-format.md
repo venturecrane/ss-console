@@ -7,7 +7,7 @@ in any shape; only holder-stated, attorney-provided, or document-observed amount
 ## Shape A - Log / update a ledger entry (internal write, confirm by read)
 
 ```markdown
-# Lien Ledger - <lienholder> (<lien-type>) - matter <id> - YYYY-MM-DD
+# Lien Ledger - <lienholder> (<lien-type>) - matter <matter number> - YYYY-MM-DD
 
 **Holder:** <name> - <health plan | Medi-Cal (DHCS) | Medicare (BCRC) | ERISA plan | hospital/provider>
 **Asserted amount:** <amount as stated by <source>> (never a computed figure)
@@ -25,7 +25,7 @@ Nothing to do.
 ## Shape B - Chase (open payoff or reduction, cadence due)
 
 ```markdown
-# Lien Chase - <lienholder> (<lien-type>) - matter <id> - YYYY-MM-DD
+# Lien Chase - <lienholder> (<lien-type>) - matter <matter number> - YYYY-MM-DD
 
 **Status:** <payoff requested <date>> / <reduction requested <date>>, outstanding (<N> days); nudge <#> of <max>
 **Decision:** cadence due - follow-up drafted to the holder. Surfaced for the firm to send.
@@ -45,7 +45,7 @@ Review and send the follow-up to <holder>.
 ## Shape C - Ledger snapshot (read only, no write)
 
 ```markdown
-# Lien Ledger - matter <id> - YYYY-MM-DD
+# Lien Ledger - matter <matter number> - YYYY-MM-DD
 
 | Holder | Type | Asserted amount (as stated) | Status | Source |
 | ------ | ---- | --------------------------- | ------ | ------ |
@@ -59,13 +59,30 @@ performed in Smokeball by a person.
 ## Shape D - Surface to the attorney (refuse computation / refuse fund movement / ambiguous / say-so)
 
 ```markdown
-# ⚠ Lien - needs the attorney - <lienholder> - matter <id> - YYYY-MM-DD
+# ⚠ Lien - needs the attorney - <lienholder> - matter <matter number> - YYYY-MM-DD
 
 **Situation:** <asked to compute a reduction (e.g. the §14124.78 cap) | asked to disburse or move money | amount disputed or two sources conflict | holder/client reports resolution with no supporting document | payoff stalling near settlement>
 **Decision:** surfaced for the attorney. **The computation was not performed and no money was moved.**
 The factual part (the asserted amount / the reported status) is logged; the item stays open.
 This is a judgment the skill does not make on its own.
 ```
+
+## A matter with nothing to report, and the facts line
+
+When this routine writes a note on a matter where it found nothing (no lien),
+the note is the header and exactly two lines. No rule sentence, no request to
+confirm when there is nothing to confirm, and no word about an earlier run
+(`_shared-write-posture.md`, section 5):
+
+```
+[Operator] <Routine name> as of <localDate>
+No liens on file.
+Nothing to do.
+```
+
+When the wake line gives the matter a `facts_digest`, the note's last line is
+`facts <digest>`, copied exactly from the wake line and alone on its line. With no
+`facts_digest` on the wake line, write no facts line.
 
 ## Rules
 

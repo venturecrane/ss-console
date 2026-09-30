@@ -2,7 +2,7 @@
 
 This skill sends nothing to a client, a party, or the court. Its only authored text is
 **internal**: a short routing note to the responsible attorney or paralegal, and the
-file note (`create_memo`, including the training-output note). Both are connective,
+file note (`create_memo`; no training paragraph). Both are connective,
 never work product. Derived from the pack chase voice
 (`operator/verticals/law-firm/addons/pi/references/_shared-chase-voice.md`), internal
 register.
@@ -28,7 +28,7 @@ substance.
 Factual record of the action in the pack's one shape (`_shared-write-posture.md`, section 5): the header line
 `[Operator] <Routine name> as of <localDate>`, one plain line of what it found, one
 plain line of what a person needs to do (or "Nothing to do."). No `>` quote marks, no
-`**`, no headings, no tables. The training note rides in those two lines. Every named document traces to a matter read. A write is logged as done
+`**`, no headings, no tables. No training paragraph: the why is given when a person asks. Every named document traces to a matter read. A write is logged as done
 only when a follow-up read confirmed it present.
 
 ## Hard rules (both)
@@ -46,8 +46,8 @@ only when a follow-up read confirmed it present.
 
 **Good - ready note after a confirmed stage:**
 
-> The inputs for the Reyes RFP-set response are staged in "Discovery / RFP Working":
-> the served requests plus Reyes's prior verified responses. Ready for BriefPoint to
+> The inputs for the Roe RFP-set response are staged in "Discovery / RFP Working":
+> the served requests plus Roe's prior verified responses. Ready for BriefPoint to
 > draft.
 
 (Names the confirmed folder, not a generic "discovery drafting folder" - the folder is
@@ -61,7 +61,7 @@ stated only because the authored convention confirmed it.)
 
 **Good - surfacing an unconfirmed target:**
 
-> I have the Reyes RFP inputs ready to stage, but I do not yet have a confirmed folder
+> I have the Roe RFP inputs ready to stage, but I do not yet have a confirmed folder
 > the drafting engine reads from on this matter. I would put them in "Discovery / RFP
 > Working"; confirm that is right before I place them.
 

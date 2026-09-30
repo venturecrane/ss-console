@@ -18,17 +18,18 @@ what it names and call again. The File note is the separate `create_memo`, and i
 names the file.
 
 ```markdown
-# Trial Binder - <matter descriptor> - matter <id> - trial <date, court-set> - YYYY-MM-DD
+# Trial Binder Index (draft)
 
-**Decision:** assembled from matter components; staged for <attorney> to finalize.
-**Source components:** exhibit list read from <file/doc + folder>; witness list read from <file/doc + folder>; deposition summaries read from <file/doc(s) + folder>; exhibit files located in <folder>.
+Matter <matter number>, <matter descriptor>. Trial is set for <date, the firm's way> in <department>, per the trial setting order (<file name>). Prepared <today, the firm's way> for <attorney> to finalize.
+
+**Source components:** exhibit list read from <file name, folder>; witness list read from <file name, folder>; deposition summaries read from <file names, folder>; exhibit files located in <folder>.
 **Bates / PDF assembly:** routed to the firm's PDF tool (confirmed at connect). The skill did not stamp or merge anything; the exhibit ordering below is ready for stamping.
 
 ## Exhibit list (collated from the authored exhibit list; ordered)
 
 | Ex. # | Description (verbatim from the authored list) | File in matter | Bates range                          |
 | ----- | --------------------------------------------- | -------------- | ------------------------------------ |
-| <N>   | <exhibit description, as authored>            | <fileId/name>  | to be stamped in the firm's PDF tool |
+| <N>   | <exhibit description, as authored>            | <file name>    | to be stamped in the firm's PDF tool |
 
 ## Witness list (collated from the authored witness list; order as authored)
 
@@ -38,11 +39,11 @@ names the file.
 
 ## Deposition summaries (collated; indexed to the witness - authored by the firm, not by the skill)
 
-- <witness> - summary document <fileId/name>, <page count if read> - collated as prepared; not authored or edited here.
+- <witness> - summary document <file name>, <page count if read> - collated as prepared; not authored or edited here.
 
 ## Deposition designations & counter-designations (collated; indexed to the deponent - authored by the firm, a distinct component from the summaries)
 
-- <deponent> - designations document <fileId/name>, counter-designations <fileId/name if present> - collated as authored; not composed, edited, or characterized here.
+- <deponent> - designations document <file name>, counter-designations <file name, if present> - collated as authored; not composed, edited, or characterized here.
 
 ## Trial-prep & pre-trial-filing deadlines (captured and surfaced - NOT computed as final)
 
@@ -73,7 +74,7 @@ Trial binder index assembled for matter <matter number> and filed as <file name>
 ## Shape B - Cannot assemble (missing / unreadable components)
 
 ```markdown
-# ⚠ Trial Binder - cannot assemble - matter <id> - YYYY-MM-DD
+# ⚠ Trial Binder - cannot assemble - matter <matter number> - YYYY-MM-DD
 
 **Situation:** <which required components are missing, unreadable, or cannot be read -
 e.g. "no authored exhibit list located in the matter"; "trial-setting order not found,

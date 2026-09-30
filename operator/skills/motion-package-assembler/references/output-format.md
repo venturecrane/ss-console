@@ -18,9 +18,10 @@ what it names and call again. The File note is the separate `create_memo`, and i
 names the file.
 
 ```markdown
-# Motion Package - <motion descriptor, e.g. Motion to Compel Further RFP Responses> - <matter descriptor> - matter <id> - YYYY-MM-DD
+# Motion Package (draft): <motion descriptor, e.g. Motion to Compel Further RFP Responses>
 
-**Decision:** assembled from matter documents; staged for <attorney> to finalize and file.
+Matter <matter number>, <matter descriptor>. Prepared <today, the firm's way> for <attorney> to finalize and file.
+
 **Motion:** <the motion the attorney flagged>; drafting-tool routing per config (not hardcoded).
 **Source components:** each present component listed with the document + folder it was read from.
 
@@ -90,7 +91,7 @@ Motion package for <motion> on matter <matter number> assembled from <N> documen
 ## Shape B - Cannot assemble (missing / unpairable components)
 
 ```markdown
-# ⚠ Motion Package - cannot assemble - matter <id> - YYYY-MM-DD
+# ⚠ Motion Package - cannot assemble - matter <matter number> - YYYY-MM-DD
 
 **Situation:** <which required components are missing, unreadable, or cannot be paired -
 e.g. "the points and authorities and the supporting declaration are not in the matter";

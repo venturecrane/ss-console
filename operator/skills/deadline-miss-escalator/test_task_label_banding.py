@@ -204,7 +204,7 @@ def test_blanket_lines_carry_the_label_too():
         },
         ack_snooze_days=7,
     )
-    assert "1. 2026-PI-101: 1 open item with no task id" in body
+    assert "1. 2026-PI-101: 1 open item not tied to a task" in body
     assert "   - 2026-PI-101: Call client, due Sep 20, 2026 (overdue 2 days)" in body
 
 

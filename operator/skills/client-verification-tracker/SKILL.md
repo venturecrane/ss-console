@@ -60,7 +60,7 @@ skill must respect both:
 
 The skill therefore never inspects a response to decide "does this need
 verification." It acts on an **attorney-initiated** signal ("start the verification
-for the FROG set on Reyes") or routes its prepared request through the attorney
+for the FROG set on Roe") or routes its prepared request through the attorney
 approval gate - and the attorney's approval _is_ the determination. When unsure
 whether an item needs verification, it asks; it never decides.
 
@@ -154,7 +154,7 @@ version)` - by folder/naming convention + response-set identifier + a recency
   candidate to SURFACE for confirmation, never an auto-close.** An ambiguous match,
   or any matter where the signal is not yet confirmed accurate, is surfaced - never
   auto-closed. Where no automatic signal exists, the skill follows up by asking
-  ("has the GAL signed the verification on Reyes?") rather than assuming.
+  ("has the GAL signed the verification on Roe?") rather than assuming.
 
 ## The chase: authored cadence, attempt-count escalation, taint-safe reads, proactive send (READ THIS)
 
@@ -556,10 +556,11 @@ not an immutable invariant.
   `mcp_agentmail_send_message`; an in-thread reply bypasses recipient classification
   and silently degrades to a held draft.
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every action carries, in the matter memo and the attorney email, a short note a
-junior paralegal learns from: _what_ it did, _why it matters_ (an unverified
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
+(`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): _what_ it did, _why it matters_ (an unverified
 response is treated as no response - §2030.250 / §2031.250 / §2033.240; unsigned
 RFAs risk deemed admissions - §2033.280), _what comes next_ (the signer signs; the
 signed doc returns to the matter), and _when to bring the attorney in_ (nearing the

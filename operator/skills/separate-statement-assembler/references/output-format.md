@@ -17,12 +17,13 @@ what it names and call again. The File note is the separate `create_memo`, and i
 names the file.
 
 ```markdown
-# Separate Statement (CRC 3.1345) - <discovery set, e.g. RFP Set One> - <matter descriptor> - matter <id> - YYYY-MM-DD
+# Separate Statement (draft): <discovery set, e.g. RFP Set One>
 
-**Decision:** assembled from matter documents; staged for <attorney> to finalize and file.
+Matter <matter number>, <matter descriptor>. Prepared <today, the firm's way> for <attorney> to finalize and file.
+
 **Motion:** motion to compel further responses (<interrogatories §2030.300 | production §2031.310 | admissions §2033.290>); one statement per set and method.
 **Moving posture:** propounding party moving against the opposing party's responses as served.
-**Source components:** served requests read from <file/doc + folder>; the opposing party's served responses read from <file/doc + folder>.
+**Source components:** served requests read from <file name, folder>; the opposing party's served responses read from <file name, folder>.
 **Scope:** <items the attorney flagged | full served set, each marked keep/drop for the attorney>.
 **Caption fields (attorney to supply, not composed):** court <TBD by attorney>; case no. <TBD by attorney>; dept <TBD by attorney>; title "SEPARATE STATEMENT IN SUPPORT OF MOTION TO COMPEL FURTHER RESPONSES TO <set>".
 
@@ -74,7 +75,7 @@ Separate statement (CRC 3.1345) for <set> on matter <matter number> assembled fr
 ## Shape B - Cannot assemble (missing / unpairable components)
 
 ```markdown
-# ⚠ Separate Statement - cannot assemble - matter <id> - YYYY-MM-DD
+# ⚠ Separate Statement - cannot assemble - matter <matter number> - YYYY-MM-DD
 
 **Situation:** <which required components are missing, unreadable, or cannot be paired -
 e.g. "RFP Set One served (12 demands) but no opposing-party served-responses document

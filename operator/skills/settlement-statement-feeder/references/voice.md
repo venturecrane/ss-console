@@ -2,7 +2,7 @@
 
 This skill produces an **internal** artifact for a person at the firm to verify and
 execute in Smokeball. There is no client-facing outbound send. Two internal voices:
-the staged statement and its gaps, and the training note on the matter memo. Both are
+the staged statement and its gaps, and the file note on the matter. Both are
 crisp, factual, and honest about what is read versus what is missing.
 
 ## The staged statement (to the responsible attorney / paralegal - internal)

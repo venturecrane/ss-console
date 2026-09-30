@@ -121,7 +121,7 @@ def test_conditional_sections_omitted_whole():
         "## Also open",
         "## Under active escalation elsewhere",
         "## Awaiting clearance",
-        "## Open without a task id",
+        "## Open, not tied to one task",
     ):
         assert heading not in body
 
@@ -726,8 +726,8 @@ def test_blanket_items_share_one_number_per_matter(tmp_path, monkeypatch):
     [dispatch] = written["dispatches"]
     body = dispatch["full_body"]
     assert [int(n) for n in _NUMBERED_LINE.findall(body)] == [1, 2, 3]
-    assert "2. 2026-PI-102: 2 open items with no task id" in body
-    assert "3. 2026-PI-103: 1 open item with no task id" in body
+    assert "2. 2026-PI-102: 2 open items not tied to a task" in body
+    assert "3. 2026-PI-103: 1 open item not tied to a task" in body
     assert "   - 2026-PI-102: a calendar date, Thu Aug 27, 2026 (overdue 4 days)" in body
     blanket_rows = [a for a in dispatch["appends"] if a["matter_id"] in ("m-2", "m-3")]
     assert [(a["matter_id"], a["n"]) for a in blanket_rows] == [("m-2", 2), ("m-2", 2), ("m-3", 3)]

@@ -345,7 +345,7 @@ Inbound:
 4. **On confirm**, `create_event` + `create_task` (keyed to the matter and set), and
    the `create_memo` confirmation bookkeeping (confirming attorney's full name via
    `get_staff`, the day confirmed, confirmed date, source branch) in the file-note shape
-   (the training note rides in its two lines). See `references/output-format.md`.
+   (no training paragraph). See `references/output-format.md`.
 
 Outbound:
 
@@ -388,10 +388,11 @@ attorney. The report to the attorney never restates the approval (the reply
 already opens with code's line naming it); it starts with what the status shows and that the memo is on the
 matter.
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every action carries, in the matter memo and the attorney-facing surface, a short note a
-junior paralegal learns from: _what_ it did (captured/read/flagged), _why it matters_ (the
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
+(`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): _what_ it did (captured/read/flagged), _why it matters_ (the
 response window and where it came from - the engine or the grounded statute; the
 final-day roll under §2016.060; for RFAs, the deemed-admitted exposure under §2033.280),
 _what comes next_ (attorney confirms the date; or the attorney decides meet-and-confer

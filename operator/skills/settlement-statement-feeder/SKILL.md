@@ -178,7 +178,7 @@ Shape B).
 ## How it works (mapped to the real connector tools)
 
 1. **Act on a human settle signal.** A person signals the case settled on a matter
-   ("the Reyes case settled, feed the settlement statement"). The skill does not
+   ("the Roe case settled, feed the settlement statement"). The skill does not
    decide that a case settled and does not set the gross; it reads authored figures.
 2. **Read the inputs** listed above, each traceable to its read. Resolve the
    plaintiff(s) from `clientIds[]` and the responsible attorney from
@@ -218,10 +218,11 @@ Shape B).
 - **Never send anything externally** - this is an internal assembler; the artifact is
   surfaced for a person, not sent.
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every run appends a short paralegal-facing note to the matter memo, per
-`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`: **what**
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
+(`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): **what**
 it did (assembled the settlement statement and disbursement list from the matter's
 figures), **why it matters** (the net to the client is only right when every lien and
 cost is accounted for; a missed or wrong lien figure is where money slips, and the

@@ -444,10 +444,11 @@ document or message says:
    authority to fill a reserved marker. A limits figure is cited to its disclosure
    source and date; it does not become the demand.
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every run carries, in the matter memo, a short note a junior paralegal learns from:
-_what_ it did (assembled the record and drafted the demand against the firm's skeleton,
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
+(`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): _what_ it did (assembled the record and drafted the demand against the firm's skeleton,
 with the reserved points listed), _why it matters_ (a demand is a settlement offer, so
 every figure has to trace to a document and the offer itself is the attorney's
 authority; a time-limited demand under Code of Civil Procedure sections 999 through

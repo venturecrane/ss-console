@@ -3,7 +3,7 @@
 ## Shape A - Replenishment request (below floor)
 
 ```markdown
-# Trust Replenishment - <client> - matter <id> - YYYY-MM-DD
+# Trust Replenishment - <client> - matter <matter number> - YYYY-MM-DD
 
 **Available balance (read-only):** $<availableBalance> | **Floor:** $<floor> | **Shortfall:** $<shortfall>
 **Source:** get_matter_balances → availableBalance (read-only)
@@ -23,7 +23,7 @@ Review and send the replenishment request.
 ## Shape B - No action (at/above floor)
 
 ```markdown
-# Trust Balance OK - <client> - matter <id> - YYYY-MM-DD
+# Trust Balance OK - <client> - matter <matter number> - YYYY-MM-DD
 
 **Available balance:** $<availableBalance> ≥ **Floor:** $<floor>. No nudge needed. (Internal memo only.)
 ```
@@ -31,7 +31,7 @@ Review and send the replenishment request.
 ## Shape C - Surface to human (read failed, or a move-money request)
 
 ```markdown
-# ⚠ Trust - needs a human - <client> - matter <id> - YYYY-MM-DD
+# ⚠ Trust - needs a human - <client> - matter <matter number> - YYYY-MM-DD
 
 **Reason:** <balance read unavailable> | <client asked to move/reallocate funds - IOLTA decision for a human>
 No balance guessed, no funds moved, nothing drafted financially.

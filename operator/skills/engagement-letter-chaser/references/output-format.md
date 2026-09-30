@@ -5,7 +5,7 @@ The decision determines the shape.
 ## Shape A - Nudge due
 
 ```markdown
-# Engagement Chase - <client> - matter <id> - YYYY-MM-DD
+# Engagement Chase - <client> - matter <matter number> - YYYY-MM-DD
 
 **Status:** sent <date>, unsigned (<N> days); last nudge <date or "none">; nudge <#> of <max>
 **Decision:** nudge due
@@ -26,7 +26,7 @@ Review and send the reminder.
 ## Shape B - Signed (log + stop)
 
 ```markdown
-# Engagement Signed - <client> - matter <id> - YYYY-MM-DD
+# Engagement Signed - <client> - matter <matter number> - YYYY-MM-DD
 
 **Decision:** signature logged; cadence stopped; matter advances to active.
 
@@ -40,7 +40,7 @@ Nothing to do.
 ## Shape C - Wait
 
 ```markdown
-# Engagement Chase - <client> - matter <id> - YYYY-MM-DD
+# Engagement Chase - <client> - matter <matter number> - YYYY-MM-DD
 
 **Status:** sent <date>, unsigned; last nudge <date> (<N> days ago, interval <interval>)
 **Decision:** within cadence - wait, no nudge.
@@ -49,7 +49,7 @@ Nothing to do.
 ## Shape D - Surface to human (declined / expired / max reached)
 
 ```markdown
-# ⚠ Engagement Chase - needs a human - <client> - matter <id> - YYYY-MM-DD
+# ⚠ Engagement Chase - needs a human - <client> - matter <matter number> - YYYY-MM-DD
 
 **Status:** <declined | expired | max nudges (<max>) reached>
 **Decision:** surfaced for a human - this is a relationship/decision call, not another nudge.

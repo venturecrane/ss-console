@@ -79,6 +79,7 @@ never passes arguments, so this path cannot trigger on a scheduled fire.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import socket
@@ -220,6 +221,16 @@ _FILE_ID_RE = re.compile(r"\bfileId\s+([A-Za-z0-9][A-Za-z0-9._:-]{0,127})")
 #: Neither marker matches a passing mention of the phrase mid-sentence.
 _MOTION_SURFACE_MARKERS = ("motion calendar assembled", "# motion calendar")
 
+#: The file-note header every routine writes since 2026-09-29 ("[Operator] Motion
+#: calendar as of Sep 29, 2026"). A matter with no motions now gets the two lines
+#: "No motions on file." and "Nothing to do.", which carry neither marker above,
+#: so the header's routine name is what marks the note. The routine name is the
+#: firm's own label from the seat's ``routine_names`` (:func:`routine_label`), so a
+#: firm that renames the routine keeps its last_surface; only a seat with no
+#: entry falls back to :data:`_MOTION_LABEL_FALLBACK`.
+_HEADER_ROUTINE_RE = re.compile(r"\A\[Operator\][ \t]*(?P<routine>[^\n]+?) as of ")
+_MOTION_LABEL_FALLBACK = "motion calendar"
+
 #: An extension is usually papered by a PERSON, not by the Operator, so these
 #: are matched across every memo on the matter rather than only stamped ones.
 _EXTENSION_MARKERS = ("extension", "extend", "stipulation", "stipulated")
@@ -240,7 +251,8 @@ _MATTER_ENVELOPE_KEYS = ("items", "value", "results", "matters", "data")
 # tests exercise in-process is the code that runs against the live tenant. The
 # alternative — extraction written twice, once here and once as snippet text —
 # is two implementations of one rule, and the one nothing runs is the one that
-# drifts. argv[1] is this file's path, argv[2] the skill name.
+# drifts. argv[1] is this file's path, argv[2] the skill name, argv[3] the firm's
+# label for the routine ("" when the seat authored none).
 _FACTS_SNIPPET = """\
 import importlib.util
 import json
@@ -252,8 +264,36 @@ spec.loader.exec_module(gate)
 
 from smokeball_connector.client import build_client_from_env
 
-print(json.dumps(gate.pull_facts_payload(build_client_from_env(), sys.argv[2])))
+label = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else None
+print(json.dumps(gate.pull_facts_payload(build_client_from_env(), sys.argv[2], routine_label=label)))
 """
+
+
+def routine_label(skill: str, customer_yaml_path: str | None = None) -> str | None:
+    """The firm's name for ``skill`` from the seat's ``routine_names``, or None.
+
+    Read from the trusted-volume customer.yaml (``SMD_CUSTOMER_YAML_PATH``, the
+    root-owned copy the ADR-0044 applier live-updates), the same file and the
+    same fail-soft reading the escalator's ``load_escalation_config`` uses. Any
+    failure (no path, no PyYAML, unreadable file, no entry) is None, and None
+    means the caller's fallback, never a crash."""
+    path = customer_yaml_path or os.environ.get("SMD_CUSTOMER_YAML_PATH")
+    if not path:
+        return None
+    try:
+        import yaml  # available in the Hermes venv (the overlay's config reader uses it)
+    except ImportError:
+        return None
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+    except (OSError, yaml.YAMLError):
+        return None
+    names = data.get("routine_names") if isinstance(data, dict) else None
+    label = names.get(skill) if isinstance(names, dict) else None
+    if not isinstance(label, str) or not label.strip() or "\n" in label:
+        return None
+    return " ".join(label.split())
 
 
 def _is_iso_day(value: object) -> bool:
@@ -363,16 +403,31 @@ def _captured_file_ids(memos: list) -> list[str]:
     return found
 
 
-def _latest_surface_day(memos: list) -> str | None:
+def _is_motion_header(body: str, routine_label: str | None) -> bool:
+    """True when the note's header names the motion routine: equal to the
+    firm's label when the seat authored one (case and spacing aside), else a
+    routine name containing the fallback phrase."""
+    match = _HEADER_ROUTINE_RE.match(body.lstrip())
+    if match is None:
+        return False
+    routine = " ".join(match.group("routine").split()).casefold()
+    if routine_label:
+        return routine == " ".join(routine_label.split()).casefold()
+    return _MOTION_LABEL_FALLBACK in routine
+
+
+def _latest_surface_day(memos: list, routine_label: str | None = None) -> str | None:
     """The day of the most recent ``[Operator]`` memo carrying the motion
-    tracker's own surface marker, or None. A day, never the surface."""
+    tracker's own surface marker or header, or None. A day, never the surface."""
     latest: str | None = None
     for memo in memos:
         body = _memo_body(memo)
         if not _is_operator_memo(body):
             continue
         lowered = body.lower()
-        if not any(marker in lowered for marker in _MOTION_SURFACE_MARKERS):
+        if not any(marker in lowered for marker in _MOTION_SURFACE_MARKERS) and not _is_motion_header(
+            body, routine_label
+        ):
             continue
         day = _memo_day(memo)
         if day is not None and (latest is None or day > latest):
@@ -405,7 +460,7 @@ def _capped(fact: str, values: list) -> dict:
     return row
 
 
-def derive_matter_facts(skill: str, payload: object) -> dict:
+def derive_matter_facts(skill: str, payload: object, routine_label: str | None = None) -> dict:
     """One matter's derived facts for ``skill``. Atoms only, by construction.
 
     A skill with no entry in :data:`_FACT_SKILLS` gets ``{}`` and therefore a
@@ -430,13 +485,129 @@ def derive_matter_facts(skill: str, payload: object) -> dict:
     elif fact == "extension_candidates":
         row = _capped(fact, _extension_candidates(memos))
     else:
-        row = {"last_surface": _latest_surface_day(memos)}
+        row = {"last_surface": _latest_surface_day(memos, routine_label)}
     if len(listed) >= _MEMO_PAGE_LIMIT:
         row["truncated"] = True
     return row
 
 
-def _matter_row(client, matter: object, skill: str) -> dict | None:
+# ---------------------------------------------------------------------------
+# The facts digest (2026-09-29): same facts, same note, whatever the wording
+# ---------------------------------------------------------------------------
+#
+# Two motion-calendar runs 14 minutes apart on the pilot rewrote every file
+# note in different words for identical facts, so each run took a "changed"
+# update and left a "Previously" line. The connector's ``upsert_memo`` compares
+# note text, and a model never words the same facts the same way twice. So code
+# hashes the facts the routine reports and hands the model ``facts_digest`` per
+# matter; the note's last line is ``facts <digest>``, copied, and the connector
+# treats two notes carrying the same line as unchanged.
+
+#: Skills whose file note reports exactly the matter's calendar entries and open
+#: tasks, which is what :func:`facts_digest` hashes. A skill joins only when this
+#: pull covers every fact its note reports: a digest that misses one would call
+#: a real change "unchanged" and leave the old note standing.
+_DIGEST_SKILLS = ("motion-calendar-tracker",)
+
+#: One page each. A full page is a partial view, and a partial view gets no
+#: digest (the note then falls back to comparing its text).
+_DIGEST_PAGE_LIMIT = 500
+
+_PROBE_SUBJECT_MARK = "[SMD-PROBE"
+
+
+def _field(record: dict, *keys: str) -> object:
+    for key in keys:
+        if key in record:
+            return record[key]
+    return None
+
+
+def _text(value: object) -> str:
+    return " ".join(value.split()) if isinstance(value, str) else ""
+
+
+def _utc_instant(value: object) -> datetime | None:
+    """A Smokeball ``startTime`` (naive UTC, sometimes zoned) as an aware instant."""
+    if not isinstance(value, str) or len(value) < 16:
+        return None
+    try:
+        stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
+
+
+def _event_fact(event: dict, now: datetime) -> list:
+    start = _field(event, "startTime", "StartTime")
+    instant = _utc_instant(start)
+    return [
+        _text(_field(event, "subject", "Subject")),
+        start if isinstance(start, str) else "",
+        _text(_field(event, "location", "Location")),
+        # Once a hearing date passes, the note says something new (no minute
+        # order yet: confirm what happened), so passing is a fact.
+        bool(instant is not None and instant < now),
+    ]
+
+
+def _task_fact(task: dict, today: str) -> list:
+    due_only = _field(task, "dueDateOnly", "DueDateOnly")
+    due = _field(task, "dueDate", "DueDate")
+    day = due_only if isinstance(due_only, str) else due if isinstance(due, str) else ""
+    return [
+        _text(_field(task, "subject", "Subject")),
+        day,
+        bool(_field(task, "isCompleted", "IsCompleted")),
+        bool(day[:10] and day[:10] < today),
+    ]
+
+
+def facts_digest(events: list, tasks: list, now: datetime | None = None) -> str:
+    """sha256 hex[:12] of a canonical JSON of the facts a routine reports.
+
+    Order-free (both lists sorted), whitespace-free inside a subject, and blind
+    to everything the note does not report (ids, stamps, staff). Deterministic:
+    the same events and tasks give the same digest in any order, on any run, on
+    the same side of each date. Probe artifacts are left out, as the
+    connector's ``list_tasks`` leaves them out of what the model reads.
+    """
+    now = now or datetime.now(timezone.utc)
+    today = now.date().isoformat()
+    canonical = {
+        "events": sorted(_event_fact(e, now) for e in events if isinstance(e, dict)),
+        "tasks": sorted(
+            _task_fact(t, today)
+            for t in tasks
+            if isinstance(t, dict) and _PROBE_SUBJECT_MARK not in _text(_field(t, "subject", "Subject"))
+        ),
+    }
+    blob = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:12]
+
+
+def _matter_digest(client, matter_id: str) -> str | None:
+    """The matter's facts digest, or None when either read fails or is partial."""
+    try:
+        events = _listed(
+            client.get("/events", MatterId=matter_id, ExcludeDeletedEvents=True, Limit=_DIGEST_PAGE_LIMIT),
+            _MEMO_ENVELOPE_KEYS,
+        )
+        tasks = _listed(
+            client.get("/tasks", MatterId=matter_id, IsCompleted=False, Limit=_DIGEST_PAGE_LIMIT),
+            _MEMO_ENVELOPE_KEYS,
+        )
+    except Exception as exc:  # noqa: BLE001 - no digest degrades to the text comparison, never the run
+        sys.stderr.write("[pre_run] facts read failed for one matter: " + type(exc).__name__ + "\n")
+        return None
+    if events is None or tasks is None:
+        return None
+    if len(events) >= _DIGEST_PAGE_LIMIT or len(tasks) >= _DIGEST_PAGE_LIMIT:
+        return None
+    return facts_digest(events, tasks)
+
+
+def _matter_row(client, matter: object, skill: str, routine_label: str | None = None) -> dict | None:
     """One matter's row, or None when it cannot be read or is not atoms."""
     if not isinstance(matter, dict):
         return None
@@ -449,15 +620,19 @@ def _matter_row(client, matter: object, skill: str) -> dict | None:
         # The exception TYPE only: a message can quote the payload it failed on.
         sys.stderr.write("[pre_run] memo read failed for one matter: " + type(exc).__name__ + "\n")
         return None
-    row = derive_matter_facts(skill, memos)
+    row = derive_matter_facts(skill, memos, routine_label)
     row["matterId"] = matter_id
     number = matter.get("number") or matter.get("Number")
     if isinstance(number, str) and _ATOM_RE.match(number):
         row["matterNumber"] = number
+    if skill in _DIGEST_SKILLS:
+        digest = _matter_digest(client, matter_id)
+        if digest is not None:
+            row["facts_digest"] = digest
     return row if _atoms_only(row) else None
 
 
-def pull_facts_payload(client, skill: str) -> dict:
+def pull_facts_payload(client, skill: str, routine_label: str | None = None) -> dict:
     """Read every open matter's memos and return DERIVED FACTS only.
 
     Runs in the connector venv (:data:`_FACTS_SNIPPET`), which is what keeps
@@ -476,7 +651,7 @@ def pull_facts_payload(client, skill: str) -> dict:
         "unreadableMatters": 0,
     }
     for matter in matters[:_FACTS_MATTER_CAP]:
-        row = _matter_row(client, matter, skill)
+        row = _matter_row(client, matter, skill, routine_label)
         if row is None:
             payload["unreadableMatters"] += 1
         else:
@@ -496,10 +671,11 @@ def fetch_memo_facts(skill_name: str) -> tuple[int | None, dict | None]:
     if not Path(connector_python).exists():
         sys.stderr.write(f"[pre_run] connector python missing: {connector_python}\n")
         return None, None
+    label = routine_label(skill_name) or ""
     try:
-        result = subprocess.run(  # noqa: S603 - connector-venv interpreter, a module-constant snippet and two scheduler-derived argv values; no shell
-            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args — argv[0] is the module-constant connector-venv interpreter, overridable only via SMD_CONNECTOR_VENV_PYTHON from the Machine's own boot env (same trust domain as this file; the test seam). argv[1] is a module constant, argv[2] this file's own resolved path, argv[3] the cwd basename the scheduler staged. No request/agent-controlled data reaches argv, and there is no shell.
-            [connector_python, "-c", _FACTS_SNIPPET, str(Path(__file__).resolve()), skill_name],
+        result = subprocess.run(  # noqa: S603 - connector-venv interpreter, a module-constant snippet, two scheduler-derived argv values and a trusted-config label; no shell
+            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args — argv[0] is the module-constant connector-venv interpreter, overridable only via SMD_CONNECTOR_VENV_PYTHON from the Machine's own boot env (same trust domain as this file; the test seam). argv[1] is a module constant, argv[2] this file's own resolved path, argv[3] the cwd basename the scheduler staged, argv[4] the routine's label from the root-owned trusted-volume customer.yaml (or empty). No request/agent-controlled data reaches argv, and there is no shell.
+            [connector_python, "-c", _FACTS_SNIPPET, str(Path(__file__).resolve()), skill_name, label],
             capture_output=True,
             text=True,
             timeout=_FACTS_TIMEOUT_SECONDS,
