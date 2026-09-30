@@ -58,6 +58,7 @@ skills:
   - matter-document-review # reads matter docs, surfaces highlights/timelines/gaps for an attorney; content-ceiling: surface-only, never drafts work product
   - deadline-and-sol-tracker # tracks authored dates; never computes a limitation
   - deadline-miss-escalator # escalates an approaching/missed authored date; internal-only, cron
+  - statute-watch # monthly email of open cases with a statute date in the next three months and nothing filed; internal-only, cron
   # proactive
   - client-matter-digest
   - referral-source-acknowledgment

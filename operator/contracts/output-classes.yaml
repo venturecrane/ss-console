@@ -436,6 +436,13 @@ skill_bindings:
     internal:
       - { artifact: file_status, seam: session_output, class: staff }
     outbound: derived # the brief to the matter's responsible attorney, assisting staff copied
+  # Statute watch: one monthly report of open cases with a statute date in the
+  # next three months and nothing filed, rendered by the pre-run and sent out
+  # of turn to the one recipient the firm named in the skill's settings.
+  statute-watch:
+    internal:
+      - { artifact: statute_report, seam: email_send, class: staff }
+    outbound: derived # the report to the authored recipient; a firm address, so the send resolves internal
   mediation-settlement-tracker:
     internal:
       - { artifact: brief_inputs, seam: session_output, class: staff }
