@@ -1451,7 +1451,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // c2cd8941 -> 9d689629 (2026-09-29, overlay#403 merge commit, Option B). The output
     // checklist refuses short entry ids in notes and mail; a facts digest line is a
     // machine marker on a note.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="9d6896298adfaa224df31c9fbb861112af35ac19"')
+    // 9d689629 -> 881563e9 (2026-09-29, overlay#404 merge commit, Option B). Every staged
+    // pre_run script is refreshed from its skill copy at boot; an unscheduled skill
+    // never runs stale code on request.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="881563e9bf2befe7b21ccae09b8287feb567f9dd"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
