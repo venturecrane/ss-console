@@ -247,10 +247,11 @@ columns.
   confirmed match** - an ambiguous pairing (including which party served the responses)
   is surfaced, not assumed.
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every run appends, to the matter memo, a short note a junior paralegal learns from:
-_what_ it did (assembled the CRC 3.1345 separate statement for the flagged set),
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
+(`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): _what_ it did (assembled the CRC 3.1345 separate statement for the flagged set),
 _why it matters_ (a motion to compel a further response must be accompanied by an
 item-by-item separate statement that is complete on its face, with nothing by
 reference - CRC 3.1345; the motion-to-compel-further statutes are §2030.300 /

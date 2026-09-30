@@ -50,8 +50,10 @@ list and that silence.
 
 This is a **read-and-summarize** skill. It **takes no action on any item it lists.**
 It does not chase the signer, close a verification, compute or move a deadline, send
-a reminder, move money, or touch a matter. Every surfaced line **points to the
-skill/step that owns the next action** and stops there:
+a reminder, move money, or touch a matter. Every surfaced line **points to whoever
+owns the next action** and stops there. Which routine tracks an item tells you
+whether the Operator is on it; the note names a person or "the Operator", never the
+routine:
 
 - an unsigned verification points to `client-verification-tracker` (which owns the
   chase),
@@ -181,16 +183,20 @@ Per `references/output-format.md`:
    beyond the window). If nothing survives, this is a **quiet day**: emit the
    one-line quiet digest and the heartbeat, and stop. Do not pad.
 2. **Group and order.** Batch surviving items into sections (Deadlines near, Due soon,
-   Unsigned, Stalled), most time-critical first. Each line: matter, the item, the
-   sourced date/age, and the **owning skill/step** for the next action. An item
+   Unsigned, Stalled), most time-critical first. Each line: matter, the item by its
+   title, the sourced date/age the firm's way ("Oct 2"), and the **person who owns
+   the next action** (the task's assignee or the matter's responsible person, by
+   name), or "the Operator" for an item the Operator is chasing. Never a routine's
+   name: the skill list above is how this digest decides whose item it is, not
+   words for the note. An item
    already under active escalation by another skill (a `fired`/`chased` ledger
    event within `escalation.refire_days`) renders as a one-line pointer, not a
    full band entry, so the digest and the escalator do not double-hand the reader
    the same item (`references/output-format.md`).
-3. **Carry the training note in the lines.** Per `operator/verticals/law-firm/addons/pi/references/_shared-training-output.md` (pack
-   shared): each item line names the routine that owns the next step, and the last
-   line says what needs doing first and when to bring the attorney in. Short;
-   explanatory, not advisory; no separate training block.
+3. **No training paragraph.** Per `operator/verticals/law-firm/addons/pi/references/_shared-training-output.md` (pack
+   shared): each item line names who owns the next step, and the last line says
+   what needs doing first and when to bring the attorney in. The why is given when
+   a person asks.
 4. **Write the digest** to the firm's internal digest home - the matter your
    SOUL's "Digest home" section names (materialized from the seat's authored
    `digest.home_matter_id`, #1742): the digest goes there as one file note
@@ -266,8 +272,8 @@ guess a window and do not manufacture a digest.
   manufactures urgency; no em dashes
 - `tests/selector_test.md` - blind cross-skill selector simulation vs. its near
   neighbors (`matter-status-digest`, the owning chase skills, `deadline-miss-escalator`)
-- `_shared-training-output.md` (pack shared) - the training-note property every line
-  carries
+- `_shared-training-output.md` (pack shared) - the training property: explained when
+  a person asks, never written into the digest
 - `escalation_ledger.py` - the shared ledger module (byte-identical to
   `operator/workspace_broker/escalation_ledger.py`), read-only here: it tells the
   digest which items are already under active escalation so they collapse to a

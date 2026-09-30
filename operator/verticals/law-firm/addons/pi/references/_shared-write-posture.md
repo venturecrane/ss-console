@@ -127,5 +127,34 @@ every skill's `references/output-format.md`:
   own output-format names (for example `fileId <id> recorded`), which stays exactly
   as that skill writes it, alone on its own line, because a later run reads it back
   and the seat passes a machine-marker line only when it stands alone.
-- The training note (`_shared-training-output.md`) rides in the two lines: what and
-  why in the first, what next and when to bring in the attorney in the second.
+- **Name a record the way a person finds it, never by its id.** A calendar entry by
+  its subject and date ("the MSJ hearing on Oct 6 at 9:30 a.m."), a task by its title
+  and due date ("the task Serve notice, due Oct 1"), a document by its file name, a
+  note by its date. Never "(event <id>)", "(task <id>)", "file <id>", "memo <id>",
+  "event id" or "task id" in a note, an email or a document: a paralegal cannot look
+  an id up, and the audit log already holds every id. The machine-marker lines above
+  are the only exception.
+- **Nothing to report is two short lines.** A matter where this routine found
+  nothing (no motions, no open discovery, no lien, nothing served) gets exactly two
+  lines after the header: what is absent, in the skill's own words ("No motions on
+  file."), then "Nothing to do." Never a rule explanation, never "attorney to confirm"
+  when there is nothing to confirm, and never an internal phrase such as "Prior
+  surface: <date>", "last surfaced", "memo_facts" or "wake".
+- **A rule is named only where it bears on an item on this matter**, once, in plain
+  words ("the opposition is due 9 court days before the hearing; confirm the date"),
+  never as a standing paragraph on every note.
+- **A person or the Operator does the work, never a routine.** Write "Pat Lee to
+  confirm" or "the Operator will check again tomorrow", never a skill's name
+  (`trial-binder-assembler`, "the deadline lane") as the owner or actor of anything.
+- **No capitals for emphasis** in a note, an email or a document ("CRITICAL",
+  "URGENT", "DO NOT"). The date and the plain words carry the weight. Headings and
+  the firm's own capitalized names are not emphasis.
+- **No training paragraph.** A file note never carries a "Training note:" line or a
+  paragraph explaining what the step is and why it matters. That explanation is given
+  when a person asks (`_shared-training-output.md`), never written into the note.
+- **The facts line.** When the wake line gives the matter a `facts_digest`, the last
+  line of the note is exactly `facts <digest>`, the twelve characters copied verbatim
+  from the wake line, alone on the line. Never compute it, never change it, never
+  write one the wake line did not give; with no `facts_digest`, write no facts line.
+  Two runs over the same facts carry the same line whatever their wording, so the
+  connector keeps the note as it is and only moves its date.

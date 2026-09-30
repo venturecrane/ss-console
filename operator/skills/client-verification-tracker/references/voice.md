@@ -77,8 +77,8 @@ deadline).
 
 **Good - approve-and-send to the attorney:**
 
-> The verification for Reyes (initial FROG responses) is ready. Signer resolved to
-> the Guardian ad Litem, <name>, since Reyes is a minor. Response deadline <date>.
+> The verification for Roe (initial FROG responses) is ready. Signer resolved to
+> the Guardian ad Litem, <name>, since Roe is a minor. Response deadline <date>.
 > Approve here to send it to the GAL by <firm method>: <token link>.
 
 **Bad - interprets the responses (UPL):**

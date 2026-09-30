@@ -12,7 +12,7 @@ Every capture is keyed to `(matter, defendant, service-confirmation)`.
 ## Shape A - Served date captured & responsive-pleading deadline surfaced for confirm
 
 ```markdown
-# Service Confirmation - <defendant> - <matter descriptor> - matter <id> - YYYY-MM-DD
+# Service Confirmation - <defendant> - <matter descriptor> - matter <matter number> - YYYY-MM-DD
 
 **Matter:** <case name>, <number>
 **Defendant served:** <defendant name/role, resolved from the matter's otherSideIds / roles>
@@ -35,7 +35,7 @@ Every capture is keyed to `(matter, defendant, service-confirmation)`.
 ## File note (create_memo)
 
 [Operator] <Routine name> as of <localDate>
-Service on <defendant> confirmed on matter <matter number>: served <date> by <method>, read off the proof of service. The responsive pleading deadline comes from the rules engine or is confirmed by hand, not computed here.
+Service on <defendant> confirmed on matter <matter number>: served <date> by <method>, read off the proof of service.
 <Attorney> to confirm the service date and method.
 fileId <file id> recorded
 ```
@@ -52,7 +52,7 @@ defendant's served date to another. If a confirmation cannot be tied to a specif
 defendant, that one is Shape C, even if the others captured cleanly.
 
 ```markdown
-# Service Confirmations - <matter descriptor> - matter <id> - YYYY-MM-DD
+# Service Confirmations - <matter descriptor> - matter <matter number> - YYYY-MM-DD
 
 Two defendants served on different dates; each has its own responsive-pleading clock.
 
@@ -71,7 +71,7 @@ deadline. Each is surfaced for the attorney to confirm; neither is calendared he
 ## Shape C - Surface & ask (fail-closed: cannot read / not a confirmation / defendant ambiguous)
 
 ```markdown
-# ⚠ Service Confirmation - needs a human - matter <id> - YYYY-MM-DD
+# ⚠ Service Confirmation - needs a human - matter <matter number> - YYYY-MM-DD
 
 **Situation:** <proof of service missing / illegible / blank / ambiguous served date or method
 | document is not clearly a proof of service of summons | served defendant cannot be resolved to
@@ -81,6 +81,23 @@ after mailing, §415.20; mail with acknowledgment, §415.30; publication, §415.
 **Decision:** surfaced for a person. Nothing captured as fact, nothing calendared. The
 served date / method / defendant is not guessed.
 ```
+
+## A matter with nothing to report, and the facts line
+
+When this routine writes a note on a matter where it found nothing (no service confirmation),
+the note is the header and exactly two lines. No rule sentence, no request to
+confirm when there is nothing to confirm, and no word about an earlier run
+(`_shared-write-posture.md`, section 5):
+
+```
+[Operator] <Routine name> as of <localDate>
+No service confirmation on file.
+Nothing to do.
+```
+
+When the wake line gives the matter a `facts_digest`, the note's last line is
+`facts <digest>`, copied exactly from the wake line and alone on its line. With no
+`facts_digest` on the wake line, write no facts line.
 
 ## Rules
 

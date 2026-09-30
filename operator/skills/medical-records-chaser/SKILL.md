@@ -121,7 +121,7 @@ things constrain the match:
   confirmation**, not an auto-close. An ambiguous match, or any matter where the
   landing signal is not yet confirmed accurate, is surfaced - never auto-marked
   received. Where no reliable automatic signal exists, the skill asks ("did the
-  Provider X records come in on Reyes?") rather than assuming.
+  Provider X records come in on Roe?") rather than assuming.
 
 ## The send seam - the firm's authored posture, fail-closed when unauthored
 
@@ -416,10 +416,11 @@ ceiling, which silently defeats the graduation.
   `__mrc_hold__` sentinel) in the same turn; only an observed resolution writes
   the `resolved` that releases it (the ss #2402 rule).
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every action carries, in the matter memo, a short note a junior paralegal learns
-from (see `_shared-training-output.md`): _what_ it did, _why it matters_ (records are
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
+(`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): _what_ it did, _why it matters_ (records are
 the backbone of the chronology and the demand; they come in on a signed
 authorization - the CA Confidentiality of Medical Information Act, Civil Code §56 et
 seq. - or, where a provider will not respond, a deposition subpoena for business

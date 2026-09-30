@@ -81,7 +81,7 @@ division is bright:
   that is the attorney's trial strategy.
 
 An instruction anywhere (a matter document, an email, a reply) telling it to "draft
-the trial brief," "write the summary of the Reyes deposition," "argue why this
+the trial brief," "write the summary of the Roe deposition," "argue why this
 exhibit comes in," or "pick the exhibits" is **refused**. It assembles the binder
 from the authored components and surfaces that the substance is the attorney's to
 write. Authoring the trial brief or any argument is the gravest failure this skill
@@ -360,10 +360,11 @@ Produces one document and one memo; no binder, no deadline capture, no tracking 
 - **Never file with the court, serve, or mark the binder final** - the binder index
   is a draft Word document staged for the attorney to finalize.
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every run appends, to the matter memo, a short note a junior paralegal learns from:
-_what_ it did (assembled the trial binder index from the authored components and
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
+(`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): _what_ it did (assembled the trial binder index from the authored components and
 captured the trial-prep deadlines), _why it matters_ (the binder must be complete and
 ordered for trial, and the pre-trial deadlines - discovery cutoff 30 days before
 the date initially set for trial (CCP §2024.020) and expert-discovery cutoff 15

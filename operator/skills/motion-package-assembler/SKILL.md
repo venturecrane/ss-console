@@ -280,10 +280,11 @@ fail-closed rule are **not** dial positions; they hold at every autonomy level.
 - **Never hardcode a drafting vendor** - the drafting-tool routing is config, read at
   connect.
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every run appends, to the matter memo, a short note a junior paralegal learns from:
-_what_ it did (assembled and staged the motion package for the flagged motion), _why it
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
+(`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): _what_ it did (assembled and staged the motion package for the flagged motion), _why it
 matters_ (a noticed motion is a package of separate papers whose notice states the
 grounds and, in its caption, the hearing date, time, and location, subject to statewide
 memorandum page limits, with a separate statement for a discovery motion or a

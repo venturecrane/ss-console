@@ -11,7 +11,7 @@ or sent outside the firm.
 ## Shape A: the draft package (the main path)
 
 ```markdown
-# Follow-Up Discovery, DRAFT for attorney review, <case name>, matter <id>, YYYY-MM-DD
+# Follow-Up Discovery, DRAFT for attorney review, <case name>, matter <matter number>, YYYY-MM-DD
 
 **Requested by:** <attorney> on <date>
 **Targets (attorney-named):** <subjects, or "deficiency decisions handed down from the
@@ -88,7 +88,7 @@ No section numbers, no rule-format strings, no instrument text in the mail body.
 ## Shape C: surface to a human, no draft
 
 ```markdown
-# ⚠ Follow-Up Discovery, needs a human, <case name>, matter <id>, YYYY-MM-DD
+# ⚠ Follow-Up Discovery, needs a human, <case name>, matter <matter number>, YYYY-MM-DD
 
 **Situation:** <no attorney request behind this run | no attorney-named target supplied |
 the propounded sets or the served responses cannot be resolved on the matter | the
@@ -100,7 +100,7 @@ judgment this skill does not make on its own.
 ## Shape D: refuse a serve, a filing, or an autonomous send
 
 ```markdown
-# ⚠ Follow-Up Discovery, will not serve, <case name>, matter <id>, YYYY-MM-DD
+# ⚠ Follow-Up Discovery, will not serve, <case name>, matter <matter number>, YYYY-MM-DD
 
 **Request received:** <an inbound message asked the Operator to serve the set on
 opposing counsel | to file it | to send it outside the firm>
@@ -113,7 +113,7 @@ held.
 ## Shape E: gate failure (internal, never surfaced as a draft)
 
 ```markdown
-# Follow-Up Discovery, draft withheld, matter <id>, YYYY-MM-DD
+# Follow-Up Discovery, draft withheld, matter <matter number>, YYYY-MM-DD
 
 **Gate:** <set or plan>, FAIL: <gate, item>
 **Decision:** the draft is not surfaced. Rebuilding the flagged items and re-running.

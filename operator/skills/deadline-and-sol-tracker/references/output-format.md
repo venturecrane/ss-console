@@ -12,29 +12,29 @@ The firm-internal surface: authored critical dates by matter, grouped by proximi
 
 ## Overdue - past, matter still open
 
-### matter <id> - <client>
+### matter <matter number> - <client>
 
 - **<date>** - <source label> (from <calendar-binding entry | Smokeball task due_date>)
 
 ## Imminent - within <K> days
 
-### matter <id> - <client>
+### matter <matter number> - <client>
 
 - **<date>** - <source label> (from <source>)
 
 ## Upcoming - within <N> days
 
-### matter <id> - <client>
+### matter <matter number> - <client>
 
 - **<date>** - <source label> (from <source>)
 
 ## Missing where expected - needs human attention
 
-- matter <id> - <client> (<practice area>): firm policy expects an SOL date; **none authored on file.** Surfaced, not filled.
+- matter <matter number> - <client> (<practice area>): firm policy expects an SOL date; **none authored on file.** Surfaced, not filled.
 
 ## Plain calendar (not deadlines)
 
-- matter <id> - <client>: <date> "<entry title>" - a calendar entry with no deadline semantics; shown as-is, not promoted to a deadline.
+- matter <matter number> - <client>: <date> "<entry title>" - a calendar entry with no deadline semantics; shown as-is, not promoted to a deadline.
 ```
 
 Each date line also carries its **provenance**. A human-authored date is shown settled, as above. An **engine-computed** date is shown with the unconfirmed marker:

@@ -200,7 +200,7 @@ document says:
   yet captured. Do not invent a `document.created` event as a precondition; the
   scheduled scan is the grounded fallback (the same posture as `discovery-served-watch`).
 - **On demand:** an attorney or paralegal points it at a matter ("did the service
-  confirmation come back on Reyes, and start the response clock?").
+  confirmation come back on Roe, and start the response clock?").
 
 ## How it works (mapped to the real connector tools)
 
@@ -300,11 +300,11 @@ fileId)` against the prior capture memos before capturing on a scan.
   firm's conventions are unknown until confirmed on real matters; identify the
   confirmation from the document's contents, not from a filename.
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every capture carries, in the matter memo and the confirm task, a short note a junior
-paralegal learns from (the pack's training-output property,
-`_shared-training-output.md`): **what** it did (spotted the service confirmation that
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
+(`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): **what** it did (spotted the service confirmation that
 synced in from InfoTrack, resolved the defendant, read the served date and method off
 the POS), **why it matters** (the defendant's responsive-pleading clock runs from the
 date they were served - 30 days after service of summons, §412.20(a)(3); the effective

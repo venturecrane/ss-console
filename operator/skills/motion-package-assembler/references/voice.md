@@ -2,7 +2,7 @@
 
 This skill has **no outbound voice**. It sends nothing to a client, to opposing counsel,
 or to the court. It produces one internal artifact (the staged motion package) plus
-internal calendar/task writes, a file note, and a training note. So there is no
+internal calendar/task writes, and a file note. So there is no
 client-facing tone to tune here; there is a discipline to hold about what it writes and,
 above all, what it does not.
 
@@ -19,10 +19,10 @@ above all, what it does not.
 - **The file note (create_memo)** - crisp and factual, in the pack's one shape (`_shared-write-posture.md`, section 5): the header line
   `[Operator] <Routine name> as of <localDate>`, one plain line of what it found, one
   plain line of what a person needs to do (or "Nothing to do."). No `>` quote marks, no
-  `**`, no headings, no tables. The training note rides in those two lines.
+  `**`, no headings, no tables. No training paragraph: the why is given when a person asks.
   It states what was assembled, from which documents, what was surfaced as missing or
   for confirmation, and which file it is in. It records; it does not opine.
-- **The training note** - plain and explanatory, per `_shared-training-output.md`. Teaches
+- **The explanation, given when a person asks** (never written into the note or a document) - plain and explanatory, per `_shared-training-output.md`. Teaches
   the step (what/why/next/attorney-if) and cites the governing rules (rule 3.1112, rule
   3.1110, rule 3.1113, rule 3.1345, rule 3.1350; the deadline lane owns rule 3.1300). It
   never advises on the motion and never characterizes its merits.
@@ -32,7 +32,7 @@ above all, what it does not.
 The words of the notice of motion, the points and authorities, a declaration, or the
 reasons-to-compel in a separate statement never come from this skill. Its own words appear
 only in the structural labels (component names, the checklist, the filing order, the
-confirm prompts) and the file note and training note. It quotes a component's title or
+confirm prompts) and the file note. It quotes a component's title or
 identity to confirm presence; it never rewrites, extends, or composes a component's
 substance.
 
@@ -52,7 +52,7 @@ substance.
 - **Never state or imply the package was finalized, filed, served, or the hearing
   reserved.** It is staged for the attorney. Say only what is an observed fact, and report
   a Smokeball write only after a confirming read.
-- No legalese in the log or training note; no "execute," no "heretofore," no "the movant
+- No legalese in the note or an explanation; no "execute," no "heretofore," no "the movant
   respectfully submits."
 
 ## Good / bad

@@ -9,10 +9,16 @@ Factual, compact, auditable. Every claim is anchored to a record item, and every
 absence is named as an absence.
 
 The surface MAY: state what is filed, what is due, and the hearing dates **as the
-record shows them**, each with its source id; name a gap ("no hearing set for the
-MTC in the record"); name an ambiguity ("event 'MSJ?' - cannot place"); point an
-un-calendared window at the deadline lane with its anchor and the governing rule as
-the reason to confirm.
+record shows them**, each with its source named by subject and date (never an id);
+name a gap ("no hearing set for the MTC in the record"); name an ambiguity ("the
+calendar entry 'MSJ?' on Oct 6 cannot be placed"); point an opposition or reply that
+is not on the calendar at the attorney, with the hearing date and the governing rule
+as the reason to confirm.
+
+The file note says the same thing shorter, and on a matter with nothing on the motion
+calendar it says only "No motions on file." and "Nothing to do." The rule sentence is
+for a matter that has a hearing, once, in plain words; it is never a standing
+paragraph on every note.
 
 The surface MAY NOT: state a hearing date that no event carries; state a motion
 status that no record item anchors; print a computed opposition/reply date as if it
@@ -39,21 +45,46 @@ merits of any motion.
 
 **Good - a sourced Due row with an un-calendared window:**
 
-> Opposition to Motion to Compel: not calendared. Anchor: hearing 2026-08-14 (event
-> ev-3320). A motion to compel is a regular noticed motion, so its opposition/reply
-> windows run off the hearing under CCP §1005(b) (an MSJ would run on §437c instead) -
-> for the deadline lane to confirm the rule and set. Not computed here.
+> Opposition to Motion to Compel: not on the calendar. The hearing is Aug 14 (the
+> calendar entry "MTC hearing"). A motion to compel is a regular noticed motion, so
+> its opposition and reply are counted back from the hearing under CCP §1005(b); the
+> attorney to confirm and calendar them. Not computed here.
 
 **Good - a surfaced gap (anti-fiction):**
 
-> Hearing 2026-08-14 "MSJ" (event ev-3320) has no matching filed-MSJ item in tasks or
-> memos. Cannot show the motion as filed. Confirm whether the MSJ is filed and by whom.
+> The calendar entry "MSJ" on Aug 14 has no matching filed-MSJ task or note. Cannot
+> show the motion as filed. Confirm whether the MSJ is filed and by whom.
 
 **Good - a passed hearing date with no disposition:**
 
-> Motion to Compel: hearing was set for 2026-07-30 (event ev-3301). No minute order or
-> disposition in the record. Whether it was held, continued, or vacated is not shown;
+> Motion to Compel: the hearing was set for Jul 30 (the calendar entry "MTC hearing").
+> No minute order or ruling in the record. Whether it was held, continued, or vacated is not shown;
 > confirm what happened and any ruling.
+
+**Good - file note, a matter with nothing on the motion calendar:**
+
+```
+[Operator] Motion calendar as of Sep 29, 2026
+No motions on file.
+Nothing to do.
+```
+
+**Bad - file note, the same rule paragraph on every matter and an id:**
+
+```
+[Operator] Motion calendar as of Sep 29, 2026
+No motions found. Opposition and reply windows run off the hearing date under the rule for the motion type; confirm the governing rule. Prior surface: Sep 28.
+Attorney to confirm if any motion is pending not yet entered.
+```
+
+(Nothing to confirm, so nothing to ask; a rule paragraph on a matter with no hearing;
+an internal phrase about the routine's own earlier run.)
+
+**Bad - names a record by its id:**
+
+> Hearing Oct 6 at 9:30 a.m., Dept 3 (event cef69a47).
+
+(A paralegal cannot look up an id. Name the calendar entry by its subject and date.)
 
 **Bad - invents a hearing date:**
 

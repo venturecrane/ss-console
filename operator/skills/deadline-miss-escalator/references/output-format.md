@@ -49,7 +49,7 @@ GUID, never a composed or remembered number. Section membership, per-matter grou
 numbers, section counts, and the subject line are all computed by the pre-run
 gate over the full item universe; the turn re-counts nothing and moves nothing
 across bands. Subject semantics: `<N>` counts the items a person must act on
-by name, "Needs you today" plus "Open without a task id", and never the "Also open"
+by name, "Needs you today" plus "Open, not tied to one task", and never the "Also open"
 overflow (ss #2405: the 2026-08-14 subject said "37 need you" when 5 needed a
 person; 2026-09-24: a recipient holding only blanket items read "0 need you").
 When that count is exactly one, the subject names the item instead of counting
@@ -103,7 +103,7 @@ number covers all of its items; each one is listed in Smokeball.
 
 On a seat that authored `case_manager.task_cleanup`, this line takes the
 overdue tasks out of "Also open": they are in the weekly task review
-(`task-list-keeper`), so the digest counts them instead of listing them, and
+(the task review routine), so the digest counts them instead of listing them, and
 raises none of them. `<Day>` is the weekday of the firm's own review schedule;
 with no single day it reads "the next task review". Court dates and tasks not
 yet overdue stay in "Also open". Unconfigured seats never render this line.
@@ -131,12 +131,12 @@ client-facing step.
 
 - <number> <surname>: <what>, <when> (<relative>). The matter is on CONFLICT-HOLD.
 
-## Open without a task id (<count>) [omit section if 0]
+## Open, not tied to one task (<count>) [omit section if 0]
 
-Items with no task id in Smokeball, one line per matter. Answering a matter's
+Items Smokeball holds without a task of their own, one line per matter. Answering a matter's
 number covers every item listed under it.
 
-8. <number> <surname>: <k> open item(s) with no task id
+8. <number> <surname>: <k> open item(s) not tied to a task
    - <number> <surname>: <what>, <when> (<relative>)
    - ...
 
@@ -147,7 +147,7 @@ good. This is an internal note; no client was contacted.
 
 **The numbers** are assigned in code (`digest_items.number_firing`) in the
 order the lines render: one per needs-you item, then one per "Also open"
-matter, then one per "Open without a task id" matter, continuous from 1. The
+matter, then one per "Open, not tied to one task" matter, continuous from 1. The
 number on a line IS the `n` on that item's `fired` rows (a matter's number is
 on every one of its rows), so what the reader types resolves to exactly the
 rows behind the line. The footer carries no example numbers: a reader who
@@ -161,8 +161,8 @@ from it, so a line that breaks them would let a quoted digest be read as an
 answer. A matter number shaped `NNNN-...` ("2026-PI-105") leads its line bare;
 any other number keeps the word in front ("matter 201520 Crawford"), and an
 absent one reads "matter with no number on record" or "matter number
-unavailable" (`digest_items.head_words`). The item lines listed under an "Open
-without a task id" group are `-` bullets, never numbered.
+unavailable" (`digest_items.head_words`). The item lines listed under an "Open,
+not tied to one task" group are `-` bullets, never numbered.
 
 **No number without a row.** Numbering stops at the envelope's append cap
 (`dispatch_envelope._MAX_APPENDS_PER_DISPATCH`): a line whose rows would not
@@ -284,14 +284,14 @@ Four things went wrong and each has a rule above:
    by the matter's one number. Nothing in the record says an overflow
    item is routine, so the band never calls it that.
 3. **Numbers, never codes.** Each needs-you item carries its own number, and
-   answering it quiets only that item. An "Also open" matter or an "Open
-   without a task id" matter carries one number covering all of its items. The
+   answering it quiets only that item. An "Also open" matter or an "Open,
+   not tied to one task" matter carries one number covering all of its items. The
    rows still carry the legacy `ACK-XXXXXX` token so codes already sent keep
    working, but no code is printed.
 4. **One disclaimer, in the footer.** The reply mechanics and the "internal
    note; no client was contacted" line appear once, at the end, not per item.
 5. **Reader-facing section names.** "Needs you today", "Also open", "Under
-   active escalation elsewhere", "Awaiting clearance", "Open without a task id". No internal ladder jargon
+   active escalation elsewhere", "Awaiting clearance", "Open, not tied to one task". No internal ladder jargon
    (no "notify" / "re-route" / "re-surface") in the reader's copy.
 6. **Every rung is internal.** No client or tribunal send on any path. With no
    authored red-flag recipient, the alert has nowhere to fire and does not fire

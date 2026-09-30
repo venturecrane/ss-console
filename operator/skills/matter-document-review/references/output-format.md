@@ -27,7 +27,7 @@ One output: an **internal, cited surface artifact** for the attorney. There is n
 Worked example (timeline ask):
 
 ```markdown
-# Document Review - Reyes | Auto Accident - treatment timeline
+# Document Review - Roe | Auto Accident - treatment timeline
 
 **Scope:** Sutter ED records, Dignity PT notes (12), Dr. Almasi ortho consult
 **Ask:** Pull the treatment chronology and flag any gaps.

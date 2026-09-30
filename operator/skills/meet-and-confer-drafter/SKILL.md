@@ -224,10 +224,11 @@ draft_markdown, folder_id, held_out_file_names, document_class="letter")`, which
 - **Never assert a fact it cannot see** - that a response was verified, on what date,
   or by what method comes from the observed record, not from a say-so.
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every action carries, in the matter memo and the attorney email, a short note a
-junior paralegal learns from: _what_ it did (drafted the meet-and-confer for the
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
+(`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): _what_ it did (drafted the meet-and-confer for the
 flagged set and surfaced the go/no-go), _why it matters_ (a good-faith meet-and-confer
 is required before a motion to compel further, CCP §2016.040, and the motion must be
 noticed within 45 days of the verified response or the right is waived - §2030.300 /

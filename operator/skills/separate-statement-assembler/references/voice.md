@@ -2,7 +2,7 @@
 
 This skill has **no outbound voice**. It sends nothing to a client, to opposing
 counsel, or to the court. It produces one internal artifact (the staged separate
-statement) plus a file note and a training note. So there is no client-facing tone
+statement) plus a file note. So there is no client-facing tone
 to tune here; there is a discipline to hold about the text it does and does not write.
 
 ## The two things it writes are internal, and both are factual, not argumentative
@@ -10,10 +10,10 @@ to tune here; there is a discipline to hold about the text it does and does not 
 - **The file note (create_memo)** - crisp and factual, in the pack's one shape (`_shared-write-posture.md`, section 5): the header line
   `[Operator] <Routine name> as of <localDate>`, one plain line of what it found, one
   plain line of what a person needs to do (or "Nothing to do."). No `>` quote marks, no
-  `**`, no headings, no tables. The training note rides in those two lines.
+  `**`, no headings, no tables. No training paragraph: the why is given when a person asks.
   It states what was assembled, from which documents, the reasons cell left for the
   attorney, and the gaps. It records; it does not opine.
-- **The training note** - plain, explanatory, per `_shared-training-output.md`. Teaches
+- **The explanation, given when a person asks** (never written into the note or a document) - plain, explanatory, per `_shared-training-output.md`. Teaches
   the step (what/why/next/attorney-if) and cites the governing rule (CRC 3.1345; the
   compel-further statutes §2030.300 / §2031.310 / §2033.290). It never advises on the
   motion and never characterizes the responses.
@@ -24,7 +24,7 @@ The request text, the response text, and the definitions it lays into the statem
 are **verbatim quotations** of the matter documents. The skill does not rewrite,
 summarize, soften, sharpen, or "improve" them. Its own words appear only in the
 structural labels (item numbers, the section headings, the `[ATTORNEY TO AUTHOR]`
-placeholder) and the file note and training note.
+placeholder) and the file note.
 
 ## Hard rules
 
@@ -36,7 +36,7 @@ placeholder) and the file note and training note.
   Say "the served responses," not "our responses."
 - **Never characterize a response** as evasive, non-responsive, incomplete, deficient,
   or an objection as boilerplate or meritless. Quote it; do not judge it.
-- No legalese in the log or training note; no "execute," no "heretofore."
+- No legalese in the note or an explanation; no "execute," no "heretofore."
 - Never state or imply the statement was finalized, filed, or served. It is staged for
   the attorney. Say only what is an observed fact.
 

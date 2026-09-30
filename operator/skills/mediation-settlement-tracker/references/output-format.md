@@ -10,7 +10,7 @@ final.
 ## Shape A - Brief inputs assembled + deadlines tracked (proposed-confirm)
 
 ```markdown
-# Mediation/MSC Prep - <matter descriptor> - matter <id> - YYYY-MM-DD
+# Mediation/MSC Prep - <matter descriptor> - matter <matter number> - YYYY-MM-DD
 
 **Conference:** <mediation | mandatory settlement conference> - date <read from list_events, proposed-confirm> (not finalized by the skill)
 **Decision:** brief INPUTS assembled from matter components and staged for <attorney / co-counsel> to write the brief; §998 and conference deadlines surfaced for confirmation.
@@ -55,7 +55,7 @@ final.
 
 ## Tracked item (create_task - confirm-by-read)
 
-- Assigned to <responsible attorney, personResponsibleStaffId>. `dueDateOnly` is a
+- Assigned to <responsible attorney, by name>. `dueDateOnly` is a
   near-term administrative **confirm-by** date (a day or two out) to confirm the §998
   and MSC deadlines - distinct from the §998 acceptance date and the MSC date, which
   stay proposed-confirm and are never silently calendared as final.
@@ -75,7 +75,7 @@ Mediation prep on matter <matter number>: brief inputs collected from <N> docume
 ## Shape B - Cannot assemble / cannot resolve (missing or unreadable components)
 
 ```markdown
-# ⚠ Mediation/MSC Prep - cannot complete - matter <id> - YYYY-MM-DD
+# ⚠ Mediation/MSC Prep - cannot complete - matter <matter number> - YYYY-MM-DD
 
 **Situation:** <which required components are missing, unreadable, or ambiguous - e.g.
 "no mediation/MSC event located on the matter calendar"; "liability summary and
@@ -89,7 +89,7 @@ deadline finalized. No component, figure, or date was fabricated to fill the gap
 ## Shape C - Refuse (asked to write the brief or finalize a §998/MSC deadline)
 
 ```markdown
-# ⚠ Mediation/MSC Prep - request refused, surfaced for a person - matter <id> - YYYY-MM-DD
+# ⚠ Mediation/MSC Prep - request refused, surfaced for a person - matter <matter number> - YYYY-MM-DD
 
 **Request:** <"write the mediation brief" / "draft the damages argument" / "state the
 case value" / "put the §998 acceptance deadline of <date> on the calendar as final">
@@ -102,6 +102,23 @@ occurs first; cost-shifting on failure to obtain a more favorable judgment - CCP
 **Surfaced instead:** the assembled brief inputs (Shape A) and the §998/conference dates
 as proposed-confirm.
 ```
+
+## A matter with nothing to report, and the facts line
+
+When this routine writes a note on a matter where it found nothing (no mediation or settlement conference),
+the note is the header and exactly two lines. No rule sentence, no request to
+confirm when there is nothing to confirm, and no word about an earlier run
+(`_shared-write-posture.md`, section 5):
+
+```
+[Operator] <Routine name> as of <localDate>
+No mediation or settlement conference on the calendar.
+Nothing to do.
+```
+
+When the wake line gives the matter a `facts_digest`, the note's last line is
+`facts <digest>`, copied exactly from the wake line and alone on its line. With no
+`facts_digest` on the wake line, write no facts line.
 
 ## Rules
 

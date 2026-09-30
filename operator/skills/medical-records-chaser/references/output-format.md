@@ -6,7 +6,7 @@ The decision determines the shape. Every tracked item is keyed to
 ## Shape A - Chase (outstanding provider records, cadence due)
 
 ```markdown
-# Records Chase - <provider> - <patient / plaintiff> - matter <id> - YYYY-MM-DD
+# Records Chase - <provider> - <patient / plaintiff> - matter <matter number> - YYYY-MM-DD
 
 **Requested:** <date records were requested, from the authored roster>
 **Status:** outstanding; <N> days past the confirm-by date on the tracking task
@@ -36,7 +36,7 @@ Review and send the follow-up to <provider>.
 ## Shape B - Received, logged & closed (ONLY on a confident match)
 
 ```markdown
-# Records Received - <provider> - <patient> - matter <id> - YYYY-MM-DD
+# Records Received - <provider> - <patient> - matter <matter number> - YYYY-MM-DD
 
 **Decision:** a matching record for <provider> observed in the matter and matched
 with confidence to the request; item closed; cadence stopped.
@@ -51,7 +51,7 @@ Nothing to do.
 ## Shape C - Surface to a human (say-so / ambiguous / unconfirmed / no roster)
 
 ```markdown
-# ⚠ Records - needs a human - <patient> - matter <id> - YYYY-MM-DD
+# ⚠ Records - needs a human - <patient> - matter <matter number> - YYYY-MM-DD
 
 **Situation:** <provider/vendor says records were sent but no matching document is in
 the matter | landed record cannot be matched to a request with confidence | firm

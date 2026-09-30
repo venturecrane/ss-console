@@ -42,7 +42,7 @@ below are surfaced conservatively.">
 Worked example:
 
 ```markdown
-# Opposing-Response Review - Reyes v. Doe - Defendant's responses to Special Interrogatories, Set One (candidates for attorney review)
+# Opposing-Response Review - Roe v. Doe - Defendant's responses to Special Interrogatories, Set One (candidates for attorney review)
 
 **Scope:** Plaintiff's Special Interrogatories Set One (12 nos.) vs. Defendant's Responses to Special Interrogatories Set One
 **Note:** These are candidates surfaced for your review, not findings.
@@ -77,9 +77,9 @@ Worked example:
    text (and, where useful, the request text) with a document + location. A candidate the
    skill cannot point to in the actual text is not surfaced. No fabrication.
 3. **No next-step decision.** The artifact never decides to meet and confer, never decides
-   to move to compel, and never computes or asserts the compel deadline. It may note, in
-   the training output only, the general process step and its governing rule, as education,
-   never as a direction to act.
+   to move to compel, and never computes or asserts the compel deadline. When a person
+   asks, it may explain the general process step and its governing rule, as education,
+   never as a direction to act, and never in the artifact itself.
 4. **No argument.** No section argues why a response is insufficient. Surfacing the pattern
    is allowed; arguing the deficiency is work product and is banned.
 5. **Internal only.** The artifact is for the attorney; it is never addressed to opposing

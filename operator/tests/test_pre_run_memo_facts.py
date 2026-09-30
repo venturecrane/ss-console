@@ -111,7 +111,7 @@ def test_motion_tracker_gets_the_day_of_its_own_latest_surface() -> None:
             memo(id="m1", createdDate="2026-08-01T09:00:00Z", plainText="[Operator] Motion calendar assembled for ..."),
             # The SURFACE form, which SKILL.md step 6 also sanctions. Matching
             # only the log body would read this matter as never surfaced.
-            memo(id="m2", createdDate="2026-09-14T09:00:00Z", plainText="[Operator] # Motion Calendar - Reyes ..."),
+            memo(id="m2", createdDate="2026-09-14T09:00:00Z", plainText="[Operator] # Motion Calendar - Roe ..."),
             # A LATER memo that is not this skill's surface must not win.
             memo(id="m3", createdDate="2026-09-20T09:00:00Z", plainText=f"[Operator] Captured a lien. {PROSE}"),
             # Nor an unstamped one quoting the marker.
@@ -136,6 +136,28 @@ def test_a_note_updated_in_place_surfaces_on_its_last_update_day() -> None:
     assert gate.derive_matter_facts("motion-calendar-tracker", payload) == {"last_surface": "2026-09-28"}
     assert gate._memo_day({"createdDate": "2026-09-20T00:00:00Z", "lastUpdated": "garbage"}) == "2026-09-20"
     assert gate._memo_day({"lastUpdated": "2026-09-21T00:00:00Z"}) == "2026-09-21"
+
+
+def test_a_no_motions_note_is_found_by_its_header() -> None:
+    # Since 2026-09-29 a matter with no motions gets "No motions on file." and
+    # "Nothing to do.", which carry no surface marker; the header marks it.
+    gate = _load_gate()
+    payload = {
+        "value": [
+            memo(
+                id="m1",
+                createdDate="2026-09-29T09:00:00Z",
+                plainText="[Operator] Motion calendar as of Sep 29, 2026\nNo motions on file.\nNothing to do.",
+            ),
+            # Another routine's note on the same day is not this one.
+            memo(
+                id="m2",
+                createdDate="2026-09-30T09:00:00Z",
+                plainText="[Operator] Trial binder as of Sep 30, 2026\nThe motion calendar is clear.",
+            ),
+        ]
+    }
+    assert gate.derive_matter_facts("motion-calendar-tracker", payload) == {"last_surface": "2026-09-29"}
 
 
 def test_motion_tracker_reports_no_prior_surface_as_none() -> None:

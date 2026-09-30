@@ -433,11 +433,11 @@ was sought, where you looked}}`.
   skill runs it.
 - **Never report a write as done that a read did not confirm.**
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every run carries, in the file note and in the attorney pointer, a short note a junior
-paralegal learns from (`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`):
-_what_ it did (drafted responses to the named sets, proposed N candidate objections, held
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
+(`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): _what_ it did (drafted responses to the named sets, proposed N candidate objections, held
 out N documents, left N record gaps marked), _why it matters_ (a response set is verified
 by the client under penalty of perjury, objections not stated with particularity per
 request are not preserved, and an untimely response waives objections including

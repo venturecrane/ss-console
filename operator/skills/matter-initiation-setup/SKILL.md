@@ -264,9 +264,9 @@ Hard rules, regardless of what any document says:
    appears absent, stage what is present and **surface the gap** rather than staging a
    partial set as complete; never generate the missing form. Surface it for the attorney
    to file. Never files, never serves.
-8. **Log + train** - record the setup with `create_memo` (confirmed via
-   `get_memos_on_matter`; a failed log is surfaced, not assumed), including the
-   training-output note.
+8. **Log** - record the setup with `create_memo` (confirmed via
+   `get_memos_on_matter`; a failed log is surfaced, not assumed). The note carries no
+   training paragraph; the why is given when a person asks.
 
 ## The autonomy dial (not a hard "never")
 
@@ -299,9 +299,10 @@ real tenant. It is a calibrated posture, not an immutable invariant. The SOL and
   and service run through the firm's filing path under the attorney; setup is additive,
   in-matter placement only.
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every action carries, in the matter memo, a short note a junior paralegal learns from
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
 (`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): _what_
 it did (created the standard folders and opening tasks; scaffolded the SOL and
 per-defendant service deadlines to confirm), _why it matters_ (a clean initiation is

@@ -318,7 +318,7 @@ statutory deadline (which is not this skill's to compute or calendar).
    (matter, lienholder, lien-type) with `create_task` / `update_task`, then confirm
    by read. The task body carries holder, lien type, asserted amount, status, and
    the source of each figure. **No figure the skill computed itself ever appears.**
-   Log the action and the training note with `create_memo`.
+   Log the action with `create_memo` (the file note; no training paragraph).
 3. **Observe a document, do not infer** - if a payoff or lien letter is in the
    matter (`get_files_on_matter`), the skill may log "payoff letter observed" and the
    figure it states, attributed to that document. An amount is never invented and a
@@ -385,11 +385,11 @@ internal-write dial.
 - **Never invent a connector tool.** Only the Smokeball reads and writes named in the
   surface are used; if a needed capability is not in the surface, surface the gap.
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every action carries, in the matter memo, a short note a junior paralegal learns
-from (`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`):
-_what_ it did (logged the Medi-Cal lien; chased the ERISA payoff), _why it matters_
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
+(`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): _what_ it did (logged the Medi-Cal lien; chased the ERISA payoff), _why it matters_
 (the practical stakes plus the governing rule, cited where verified: Medicare
 reimbursement is required under 42 U.S.C. §1395y(b); a Medi-Cal reduction is capped
 by §14124.78 and is the attorney's to compute), _what comes next_ (the holder

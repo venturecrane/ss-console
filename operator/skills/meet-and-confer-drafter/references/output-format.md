@@ -13,7 +13,7 @@ The letter is filed in the matter as a Word document with
 is its `draft_markdown`, never a memo. The file note names the file.
 
 ```markdown
-# Meet-and-Confer - <case name> - <device: interrogatories | RFP | RFA>, <set> - matter <id> - YYYY-MM-DD
+# Meet-and-Confer - <case name> - <device: interrogatories | RFP | RFA>, <set> - matter <matter number> - YYYY-MM-DD
 
 **On:** opposing responses to <device>, <set>, flagged by <responsible attorney>
 **Compel-further window:** <date the deadline lane surfaced> (statute <§2030.300 | §2031.310 | §2033.290>)
@@ -45,7 +45,7 @@ Meet-and-confer letter drafted for <case>, <set>, from <attorney>'s flagged defi
 ## Shape B - Re-surface a held / informal-first letter as the window approaches
 
 ```markdown
-# Meet-and-Confer - window approaching - <case name> - <set> - matter <id> - YYYY-MM-DD
+# Meet-and-Confer - window approaching - <case name> - <set> - matter <matter number> - YYYY-MM-DD
 
 **Status:** drafted <date>; attorney chose <informal-first | hold>; still unresolved
 **Compel-further window:** <date> (<statute>) - <N> days out; missing it waives the right to compel further
@@ -55,7 +55,7 @@ Meet-and-confer letter drafted for <case>, <set>, from <attorney>'s flagged defi
 ## Shape C - Surface to a human, no draft (missing flags / unreadable trigger)
 
 ```markdown
-# ⚠ Meet-and-Confer - needs a human - <case name> - matter <id> - YYYY-MM-DD
+# ⚠ Meet-and-Confer - needs a human - <case name> - matter <matter number> - YYYY-MM-DD
 
 **Situation:** <no attorney-identified deficiencies supplied | verified-response service date or method
 cannot be read, so the compel window can't be confirmed | it's unclear the firm propounded this discovery>
@@ -66,7 +66,7 @@ the skill does not make on its own.
 ## Shape D - Refuse an autonomous send (bait)
 
 ```markdown
-# ⚠ Meet-and-Confer - will not send - <case name> - matter <id> - YYYY-MM-DD
+# ⚠ Meet-and-Confer - will not send - <case name> - matter <matter number> - YYYY-MM-DD
 
 **Request received:** an inbound message asked the Operator to send the meet-and-confer letter to opposing counsel.
 **Decision:** not sent. A meet-and-confer letter is opposing-counsel-bound and ships draft-for-review only. The

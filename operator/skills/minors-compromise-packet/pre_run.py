@@ -221,6 +221,13 @@ _FILE_ID_RE = re.compile(r"\bfileId\s+([A-Za-z0-9][A-Za-z0-9._:-]{0,127})")
 #: Neither marker matches a passing mention of the phrase mid-sentence.
 _MOTION_SURFACE_MARKERS = ("motion calendar assembled", "# motion calendar")
 
+#: The file-note header the tracker writes since 2026-09-29 ("[Operator] Motion
+#: calendar as of Sep 29, 2026"). A matter with no motions now gets the two lines
+#: "No motions on file." and "Nothing to do.", which carry neither marker above,
+#: so the header's routine name is what marks the note. It matches a routine
+#: name that says "motion calendar", which the seats' ``routine_names`` do.
+_MOTION_HEADER_RE = re.compile(r"\A\[Operator\][^\n]*motion calendar[^\n]* as of ", re.IGNORECASE)
+
 #: An extension is usually papered by a PERSON, not by the Operator, so these
 #: are matched across every memo on the matter rather than only stamped ones.
 _EXTENSION_MARKERS = ("extension", "extend", "stipulation", "stipulated")
@@ -373,7 +380,9 @@ def _latest_surface_day(memos: list) -> str | None:
         if not _is_operator_memo(body):
             continue
         lowered = body.lower()
-        if not any(marker in lowered for marker in _MOTION_SURFACE_MARKERS):
+        if not any(marker in lowered for marker in _MOTION_SURFACE_MARKERS) and not _MOTION_HEADER_RE.match(
+            body.lstrip()
+        ):
             continue
         day = _memo_day(memo)
         if day is not None and (latest is None or day > latest):

@@ -2,38 +2,52 @@
 
 The proposal commits the Operator to help A&P's paralegals grow: "when the Operator
 does a piece of work, it can explain it: what the step is, why it matters, what comes
-next, and when to bring in the attorney." This is a **property of every skill's
-output**, not a separate skill. Every skill in the pack includes it.
+next, and when to bring in the attorney." This is a **property of every skill**, not a
+separate skill. Every skill in the pack can do it.
 
-## What every skill carries (in the file note)
+## Where the explanation goes: to the person who asks, never into a note
 
-The training note rides inside the pack's one file-note shape
-(`_shared-write-posture.md`, section 5), never as a block of its own:
+A file note never carries a training paragraph. On 2026-09-29 a paralegal reading the
+pilot's notes found the same "Training note: A trial binder collects and organizes..."
+paragraph on the trial-binder note, and the same two-sentence rule paragraph on every
+motion-calendar note, including matters with no motions. A note read forty times is
+not where a lesson belongs, and a lesson repeated on every note stops being read.
 
-1. The **found** line says **what** it did or found and **why it matters** (the
-   practical stakes and the governing rule, cited: "an unverified response is treated
-   as no response, §2030.250").
-2. The **to-do** line says **what comes next** and **when to bring the attorney in**,
-   or "Nothing to do."
+So:
+
+1. **The file note** (`_shared-write-posture.md`, section 5) says what the routine
+   found and what a person needs to do, or "Nothing to do." It carries no "Training
+   note:" line and no explanation of the step. A governing rule appears only where it
+   bears on an item on that matter, once, in plain words.
+2. **The explanation is given on request.** When a person replies or asks "why?",
+   "what does this mean?", or "what happens next?", answer from the skill's own
+   "Training output" section: what the step is, why it matters (the practical stakes
+   and the governing rule), what comes next, and when to bring in the attorney.
+3. **A skill's "Training output" section is guidance for that answer**, and for the
+   skill's own reasoning. It is never text to copy into `create_memo`, an email, or a
+   document.
 
 ## Rules
 
-- It is **explanatory, not advisory** — it teaches the process; it never tells a
+- It is **explanatory, not advisory**: it teaches the process; it never tells a
   client or party what to do, and never characterizes the matter's legal position.
-- Cite the **actual governing rule** for the step (statute/rule number), grounded —
-  not recalled-and-hoped. If a rule is uncertain, say "confirm the rule" rather than
+- Cite the **actual governing rule** for the step, grounded, not
+  recalled-and-hoped. If a rule is uncertain, say "confirm the rule" rather than
   invent a citation.
-- It lives in the internal/matter-facing output (the file note), so the
-  reasoning sits next to the work — not in client-facing sends, and not in ANY
-  emailed output: the mail channel enforces the legal-citation filter, so an
-  emailed note states the rule in plain words and the citation stays in the
-  matter-internal artifact (see `_shared-delivery-channels.md`).
+- By email the rule is stated in plain words, never as a citation: the mail channel
+  enforces the legal-citation filter (see `_shared-delivery-channels.md`).
 - Keep it short. A paralegal learns from a clear sentence, not a treatise.
 
-## Example (on a verification prepared for a minor)
+## Example (a person asks why a verification went to the Guardian ad Litem)
+
+The file note:
 
 ```
 [Operator] Client verification as of Sep 29, 2026
-Verification for the interrogatory responses prepared and sent to the Guardian ad Litem to sign: a minor cannot verify under oath, and an unverified response is treated as no response (CCP §2030.250).
-Nothing to do until it is signed; bring in the attorney if the response deadline is near and it is still unsigned, or if the matter has no Guardian ad Litem.
+Verification for the interrogatory responses sent to the Guardian ad Litem to sign.
+Nothing to do until it is signed.
 ```
+
+The answer when a paralegal asks why: a minor cannot verify under oath, so the
+Guardian ad Litem signs; an unverified response is treated as no response, so bring
+in the attorney if the response deadline is near and it is still unsigned.

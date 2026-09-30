@@ -27,9 +27,10 @@ header line and two plain lines, naming the file (see `_shared-write-posture.md`
 ## Shape A: Assembled artifact (a Word document staged for attorney finalization)
 
 ```markdown
-# <Artifact> - <matter descriptor> - matter <matter number> - <date>
+# <Artifact> (draft)
 
-**Decision:** assembled from matter components; staged for <attorney> to finalize/file.
+Matter <matter number>, <matter descriptor>. Prepared <today, the firm's way> for <attorney> to finalize and file.
+
 **Source components:** <list each component + where it was read from: request, response, exhibit, figure>
 
 ## <The mechanical structure the tool/court requires>
@@ -66,3 +67,9 @@ header line and two plain lines, naming the file (see `_shared-write-posture.md`
    the matter, never filed with a court or sent.
 4. The mechanical structure (columns, form fields, index order) is the skill-specific
    part; author it precisely in the skill's own `references/output-format.md`.
+5. **The document reads like a paralegal wrote it.** Its first line is its title.
+   No "Decision:" line and no other internal label of how it was made. No capitals
+   for emphasis ("CRITICAL: Trial is ..."): a date paragraph says "Trial is set for
+   Oct 13, 2026 in Dept 31", and the date carries the weight. A court's own caption
+   title in capitals is the form, not emphasis. Dates the firm's way, never
+   "2026-10-13". A record is named by its file name, never by an id.

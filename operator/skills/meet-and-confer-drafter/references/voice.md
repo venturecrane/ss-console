@@ -53,7 +53,7 @@ a decision; it does not recommend firing off the letter.
 
 **Good - meet-and-confer letter to opposing counsel (drafted):**
 
-> Re: Reyes v. Doe, Case No. <n> - Defendant's Responses to Plaintiff's Form
+> Re: Roe v. Doe, Case No. <n> - Defendant's Responses to Plaintiff's Form
 > Interrogatories (Set One)
 >
 > Counsel,
@@ -68,7 +68,7 @@ a decision; it does not recommend firing off the letter.
 
 **Good - go/no-go to the attorney (internal):**
 
-> The meet-and-confer for Reyes (Form Rogs, Set One) is drafted and ready. The window
+> The meet-and-confer for Roe (Form Rogs, Set One) is drafted and ready. The window
 > to move to compel further is <date> (CCP §2030.300). Your call: send it now, handle
 > it informally first and I'll hold the draft, or hold. It does not go to opposing
 > counsel until you say so.

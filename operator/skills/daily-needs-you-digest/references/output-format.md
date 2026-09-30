@@ -9,9 +9,18 @@ draft, because this skill sends nothing and acts on nothing.
 The digest is one file note on the digest home matter, in the pack's file-note shape
 (`_shared-write-posture.md`, section 5): the header line, one line of counts, one plain
 line per item with the most time-critical first, and a last line saying what a person
-needs to do first. Every item line names the matter by its number, the item, the
-sourced date or age in the firm's local time, and the routine that owns the next
-action. The digest points; it never acts.
+needs to do first. Every item line names the matter by its number, the item by its
+title (never its id), the sourced date or age in the firm's local time, and who owns
+the next action. The digest points; it never acts.
+
+**The owner is a person or the Operator, never a routine.** A paralegal does not know
+what `trial-binder-assembler` is. The owner is the task's assignee or the matter's
+responsible person, by name (from `get_matter` `personResponsibleStaffId` and
+`get_staff`), or "the Operator" for an item the Operator itself is chasing or
+tracking. Never a skill's name, and never "the deadline lane".
+
+**Dates the firm's way**: "Oct 2", or "Oct 2, 2026" when the year is not this year;
+never "2026-10-02", in the note and in any email.
 
 No `#` headings, no bullets, no `>` quotes, no `**`, no table. At most 15 lines: when
 more than 12 items are in band, list the 12 most time-critical and end the item lines
@@ -25,17 +34,16 @@ is empty.)
 ```markdown
 [Operator] <Routine name> as of <localDate>
 <N> items across <M> open matters need a person: <count> deadlines near, <count> due soon, <count> unsigned, <count> stalled.
-Deadline near: matter <matter number>, <deadline item>, <date> (<days> days). Owner: <routine>.
-Due soon: matter <matter number>, <task>, due <date> (<days> days). Owner: <routine>.
-Unsigned: matter <matter number>, <verification or signature item>, sent <date>, unsigned <N> days. Owner: <routine>.
-Stalled: matter <matter number>, <open item>, no movement since <date> (<N> days). Owner: <routine>.
+Deadline near: matter <matter number>, <deadline item>, <date> (<days> days). Owner: <person, or the Operator>.
+Due soon: matter <matter number>, <task title>, due <date> (<days> days). Owner: <person, or the Operator>.
+Unsigned: matter <matter number>, <verification or signature item>, sent <date>, unsigned <N> days. Owner: <person, or the Operator>.
+Stalled: matter <matter number>, <open item>, no movement since <date> (<N> days). Owner: <person, or the Operator>.
 Reads failed this run: matter <matter number>; its items are not listed.
 <What needs doing first, for which matter, and when to bring in the attorney.>
 ```
 
-The training note rides in the item lines and the last line
-(`_shared-training-output.md`): the owning routine is what comes next, and the last
-line says when to bring in the attorney. No separate training block.
+No training paragraph (`_shared-training-output.md`): the owner is what comes next,
+and the last line says when to bring in the attorney.
 
 ### Items already under active escalation (dedup pointer)
 
@@ -51,8 +59,14 @@ event for it, by another skill, whose age is within the firm's
 `escalation.refire_days` window. Render it as:
 
 ```markdown
-Matter <matter number>, <item>: under active escalation by <owning skill>.
+Matter <matter number>, <item>: escalated to <person>; the Operator is following up.
 ```
+
+`<person>` is the matter's responsible person by name (`get_matter`
+`personResponsibleStaffId`, then `get_staff`), the person an escalation goes to under
+the case-alert routing rule. Never the escalating routine's name ("under active
+escalation by deadline-miss-escalator" is the wording a paralegal read on 2026-09-29
+and could not act on).
 
 The pointer carries **no date from the ledger**. The ledger is the Operator's own
 record of what it sent, not the firm's record, and the identifier gate certifies
@@ -80,8 +94,8 @@ nothing_in_needs_you_band`) is written beside the note, never inside it.
 
 ## Rules
 
-1. **Neither shape contains an outbound draft or an action.** Every line is a pointer
-   to the skill/step that owns the next action, never the action itself.
+1. **Neither shape contains an outbound draft or an action.** Every line points to
+   the person (or the Operator) who owns the next action, never the action itself.
 2. **Only in-band items appear in Shape A.** Due soon / deadline near / unsigned /
    stalled, per the firm's authored windows. Legitimately-waiting items (open task with
    a future due date beyond the window) are excluded, not demoted into a section.
