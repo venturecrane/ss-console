@@ -1,25 +1,26 @@
-"""Court times in the firm's local time, computed once, in the connector.
+"""Court times in the firm's local time, read once, in the connector.
 
-Smokeball stores an event's ``startTime`` in UTC with no offset and names the
-event's zone in ``timeZone`` (probed 2026-09-28: a hearing posted as 16:30Z with
-``America/Los_Angeles`` reads back ``2026-10-06T16:30:00``, the 9:30 a.m.
-hearing). A model that prints ``startTime`` writes 4:30 PM for a 9:30 a.m.
-hearing: the 2026-09-29 defect (vfy_01M3PWQQPSVGDFY33XQ52RSYFB). So every event
-and task a read tool returns carries the local day and clock beside the raw
-fields, and the tool docstrings tell the model to write those.
+An event's ``startTime`` and ``endTime`` are the firm's LOCAL wall clock in the
+event's ``timeZone``, never UTC. The vendor's create-event reference says so:
+"Start date and time of the event. Supported date format is ISO
+YYYY-MM-DDThh:mm:ss. Note: date and time will correlate with the time zone
+provided." A client seat bears it out: 231 firm-entered timed events cluster at
+hours 08-10 and 13-15, business hours in ``America/Los_Angeles``; were those
+UTC, morning hearings would read 15-17.
 
-``local_when`` is a port of ``skills/date-prep-brief/file_status.py`` ``_when``
-(the one skill that already converted). Pure: no server import, no I/O beyond
-reading ``HERMES_TIMEZONE`` for task due dates.
+So the clock is taken as written and ``timeZone`` is informational only: no
+zone arithmetic ever runs here. Shifting a stored ``09:00:00`` from UTC is how a
+correctly entered 9:00 a.m. trial once rendered as 2:00 a.m. in a prep note.
+Every event and task a read tool returns carries the local day and clock beside
+the raw fields, and the tool docstrings tell the model to write those.
+
+Pure: no server import, no I/O.
 """
 
 from __future__ import annotations
 
-import os
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from typing import Any
-
-_FIRM_ZONE_ENV = "HERMES_TIMEZONE"
 
 
 def _first(item: dict, keys: tuple[str, ...]) -> str | None:
@@ -36,30 +37,26 @@ def clock(hour: int, minute: int) -> str:
     return str(hour % 12 or 12) + ":" + format(minute, "02d") + " " + suffix
 
 
-def _to_zone(raw: str, zone: str) -> datetime | None:
-    """A stored UTC stamp (naive or ``Z``) as a wall time in ``zone``, or None."""
-    try:
-        from zoneinfo import ZoneInfo
-
-        stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        if stamp.tzinfo is None:
-            stamp = stamp.replace(tzinfo=timezone.utc)
-        return stamp.astimezone(ZoneInfo(zone))
-    except Exception:  # noqa: BLE001 - an unreadable stamp or unknown zone is no time, never a guess
-        return None
-
-
 def local_when(raw_start: str | None, zone: str | None, all_day: bool = False) -> tuple[str | None, str | None]:
-    """The local ``(day, time)`` of a stored start in its own zone.
+    """The local ``(day, time)`` of a stored start, read as written.
 
-    An all-day event, a start with no clock, or a zone this host cannot resolve
-    has no time: ``(None, None)``. A UTC clock is never shown as if it were local."""
-    if raw_start is None or zone is None or all_day or len(raw_start) < 16 or raw_start[10] != "T":
+    ``raw_start`` is already the firm's wall clock in ``zone`` (the vendor
+    sentence above), so the day is ``raw_start[:10]`` and the time is its
+    ``hh:mm``, with no shift. ``zone`` is accepted for the caller's record and
+    never used for arithmetic, so an unfamiliar zone name does not hide a time.
+    An all-day event, a missing or short start, or a start with no clock has no
+    time: ``(None, None)``."""
+    del zone  # informational: the stored clock is already local to it
+    if raw_start is None or all_day or len(raw_start) < 16 or raw_start[10] != "T" or raw_start[13] != ":":
         return None, None
-    local = _to_zone(raw_start, zone)
-    if local is None:
+    hour, minute = raw_start[11:13], raw_start[14:16]
+    if not (hour.isdigit() and minute.isdigit()) or int(hour) > 23 or int(minute) > 59:
         return None, None
-    return local.date().isoformat(), clock(local.hour, local.minute)
+    try:
+        day = date.fromisoformat(raw_start[:10]).isoformat()
+    except ValueError:
+        return None, None
+    return day, clock(int(hour), int(minute))
 
 
 def enrich_event(event: Any) -> Any:
@@ -98,10 +95,9 @@ def enrich_events(resp: Any) -> Any:
 def enrich_task(task: Any) -> Any:
     """Add ``localDueDate`` (and ``localDueDateSource``) to one task.
 
-    ``dueDateOnly`` is the vendor's own local day and wins. Otherwise ``dueDate``
-    (a UTC stamp) converts through the seat's ``HERMES_TIMEZONE`` when it is set,
-    so a 07:00Z due time lands on the firm's day (source ``firm-timezone``); with
-    no zone the UTC day is used and the source says so (``dueDate-utc``)."""
+    ``dueDateOnly`` is the vendor's own local day and wins. Otherwise the day of
+    ``dueDate`` is taken as written (source ``dueDate``): Smokeball dates are the
+    firm's local dates, so no zone shift is applied."""
     if not isinstance(task, dict):
         return task
     only = _first(task, ("dueDateOnly", "DueDateOnly"))
@@ -111,14 +107,8 @@ def enrich_task(task: Any) -> Any:
     due = _first(task, ("dueDate", "DueDate"))
     if due is None or len(due) < 10:
         return task
-    zone = os.environ.get(_FIRM_ZONE_ENV, "").strip()
-    local = _to_zone(due, zone) if zone and len(due) >= 16 and due[10] == "T" else None
-    if local is not None:
-        task["localDueDate"] = local.date().isoformat()
-        task["localDueDateSource"] = "firm-timezone"
-    else:
-        task["localDueDate"] = due[:10]
-        task["localDueDateSource"] = "dueDate-utc"
+    task["localDueDate"] = due[:10]
+    task["localDueDateSource"] = "dueDate"
     return task
 
 

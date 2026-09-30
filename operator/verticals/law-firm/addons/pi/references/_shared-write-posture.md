@@ -121,8 +121,8 @@ every skill's `references/output-format.md`:
   bullet marks, numbers a list 1, 2, 3, and refuses a note holding a table with that
   remedy.
 - **Times and dates are the firm's.** A court time is the event's `localTime` on its
-  `localDate` ("Oct 6 at 9:30 a.m."), a task's day is its `localDueDate`; never a
-  `startTime` or `dueDate`, which are UTC.
+  `localDate` ("Oct 6 at 9:30 a.m."), a task's day is its `localDueDate`. A raw
+  `startTime` is already the firm's local clock; never convert it from UTC.
 - **The matter by its number**, never an internal id, except a dedup key a skill's
   own output-format names (for example `fileId <id> recorded`), which stays exactly
   as that skill writes it, alone on its own line, because a later run reads it back

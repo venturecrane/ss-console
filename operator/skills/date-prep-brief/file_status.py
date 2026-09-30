@@ -119,29 +119,23 @@ def _clock(hour: int, minute: int) -> str:
 
 
 def _when(event: dict) -> tuple[str | None, str | None]:
-    """The event's local ``(day, time)`` in its own time zone.
+    """The event's local ``(day, time)``, read as written.
 
-    Smokeball stores ``startTime`` in UTC with no offset and names the event's
-    zone in ``timeZone`` (probed 2026-09-28: a hearing posted as 16:30Z with
-    ``America/Los_Angeles`` reads back ``2026-10-06T16:30:00``, the 9:30 a.m.
-    hearing). An all-day event, a start with no clock, or a zone this host
-    cannot resolve has no time: ``(None, None)``, and the day stays the stored
-    one. A UTC clock is never shown as if it were local."""
+    Smokeball's ``startTime`` is already the firm's local wall clock in the
+    event's ``timeZone``, never UTC (vendor create-event: "date and time will
+    correlate with the time zone provided"; a client seat's 231 timed events
+    cluster at hours 08-10 and 13-15). So the day is ``startTime[:10]`` and the
+    time its ``hh:mm``, with no zone shift: shifting from UTC once printed a
+    9:00 a.m. trial as 2:00 a.m. An all-day event, a missing or short start, or
+    a start with no clock has no time: ``(None, None)``, and the day stays the
+    stored one."""
     raw = _first(event, ("startTime", "StartTime"))
-    zone = _first(event, ("timeZone", "TimeZone"))
-    if raw is None or zone is None or event.get("allDay") is True or len(raw) < 16 or raw[10] != "T":
+    if raw is None or event.get("allDay") is True or len(raw) < 16 or raw[10] != "T" or raw[13] != ":":
         return None, None
-    try:
-        from datetime import datetime, timezone
-        from zoneinfo import ZoneInfo
-
-        stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        if stamp.tzinfo is None:
-            stamp = stamp.replace(tzinfo=timezone.utc)
-        local = stamp.astimezone(ZoneInfo(zone))
-    except Exception:  # noqa: BLE001 - an unreadable start or unknown zone is no time, never a guess
+    hour, minute = raw[11:13], raw[14:16]
+    if not (hour.isdigit() and minute.isdigit()) or int(hour) > 23 or int(minute) > 59:
         return None, None
-    return local.date().isoformat(), _clock(local.hour, local.minute)
+    return raw[:10], _clock(int(hour), int(minute))
 
 
 def matter_events(client, matter: dict, frm: str, to: str) -> list[dict] | None:

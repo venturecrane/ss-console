@@ -1,9 +1,11 @@
-"""Court times read in the firm's local time (checklist item 1).
+"""Court times read as the firm's local clock (checklist item 1).
 
-Smokeball returns ``startTime`` as a naive UTC clock plus the event's
-``timeZone``; the 2026-09-29 defect printed a 9:30 a.m. hearing as 4:30 PM. The
-connector now adds ``localDate``/``localTime`` to every event a read returns and
-``localDueDate`` to every task, so no skill converts a time on its own."""
+Smokeball's ``startTime`` is the firm's LOCAL wall clock in the event's
+``timeZone`` (vendor create-event: "date and time will correlate with the time
+zone provided"; a client seat's 231 timed events cluster at hours 08-10 and
+13-15). A shift from UTC printed a 9:00 a.m. trial as 2:00 a.m. The connector
+adds ``localDate``/``localTime`` to every event a read returns and
+``localDueDate`` to every task, read as written, so no skill converts a time."""
 
 from __future__ import annotations
 
@@ -25,13 +27,30 @@ class _Recorder:
 LA = "America/Los_Angeles"
 
 
-def test_morning_hearing_reads_local() -> None:
-    assert local_time.local_when("2026-10-06T16:30:00", LA) == ("2026-10-06", "9:30 a.m.")
-    assert local_time.local_when("2026-10-06T16:30:00Z", LA) == ("2026-10-06", "9:30 a.m.")
+def test_morning_hearing_reads_as_written() -> None:
+    assert local_time.local_when("2026-10-06T09:30:00", LA) == ("2026-10-06", "9:30 a.m.")
 
 
-def test_evening_utc_lands_on_the_previous_local_day() -> None:
-    assert local_time.local_when("2026-10-07T03:00:00Z", LA) == ("2026-10-06", "8:00 p.m.")
+def test_trial_at_nine_is_nine_not_two() -> None:
+    assert local_time.local_when("2026-10-13T09:00:00", LA) == ("2026-10-13", "9:00 a.m.")
+
+
+def test_a_stored_afternoon_clock_reads_as_the_firm_sees_it() -> None:
+    # The old seed posted 16:30 meaning 9:30 a.m. UTC-shifted; Smokeball shows
+    # the firm 4:30 PM, and so must we.
+    assert local_time.local_when("2026-10-06T16:30:00", LA) == ("2026-10-06", "4:30 p.m.")
+
+
+def test_no_shift_even_with_a_z_suffix_or_no_zone() -> None:
+    assert local_time.local_when("2026-10-07T03:00:00Z", LA) == ("2026-10-07", "3:00 a.m.")
+    assert local_time.local_when("2026-10-06T09:30:00", None) == ("2026-10-06", "9:30 a.m.")
+
+
+def test_an_unknown_zone_does_not_hide_the_time() -> None:
+    out = local_time.enrich_event({"startTime": "2026-10-06T09:30:00", "timeZone": "Mars/Olympus"})
+    assert out["localDate"] == "2026-10-06"
+    assert out["localTime"] == "9:30 a.m."
+    assert out["timeZone"] == "Mars/Olympus"
 
 
 def test_clock_noon_and_midnight() -> None:
@@ -43,8 +62,6 @@ def test_clock_noon_and_midnight() -> None:
     "event",
     [
         {"startTime": "2026-10-06T00:00:00Z", "timeZone": LA, "allDay": True},
-        {"startTime": "2026-10-06T16:30:00"},
-        {"startTime": "2026-10-06T16:30:00", "timeZone": "Mars/Olympus"},
         {"startTime": "2026-10-06", "timeZone": LA},
         {"timeZone": LA},
     ],
@@ -58,7 +75,7 @@ def test_no_local_keys_when_the_time_cannot_be_known(event: dict) -> None:
 def test_list_events_enriches_items_and_leaves_start_time(monkeypatch) -> None:
     resp = {
         "value": [
-            {"id": "e1", "startTime": "2026-10-06T16:30:00", "timeZone": LA},
+            {"id": "e1", "startTime": "2026-10-06T09:30:00", "timeZone": LA},
             {"id": "e2", "startTime": "2026-10-09T00:00:00Z", "timeZone": LA, "allDay": True},
         ]
     }
@@ -69,7 +86,7 @@ def test_list_events_enriches_items_and_leaves_start_time(monkeypatch) -> None:
     first, second = out["value"]
     assert first["localDate"] == "2026-10-06"
     assert first["localTime"] == "9:30 a.m."
-    assert first["startTime"] == "2026-10-06T16:30:00"
+    assert first["startTime"] == "2026-10-06T09:30:00"
     assert "localDate" not in second and "localTime" not in second
 
 
@@ -80,18 +97,11 @@ def test_task_due_date_only_wins(monkeypatch) -> None:
     assert "localDueDateSource" not in task
 
 
-def test_task_due_date_converts_through_the_firm_zone(monkeypatch) -> None:
+def test_task_due_date_is_taken_as_written(monkeypatch) -> None:
     monkeypatch.setenv("HERMES_TIMEZONE", LA)
     task = local_time.enrich_task({"dueDate": "2026-10-09T03:00:00Z"})
-    assert task["localDueDate"] == "2026-10-08"
-    assert task["localDueDateSource"] == "firm-timezone"
-
-
-def test_task_due_date_without_a_zone_says_it_is_utc(monkeypatch) -> None:
-    monkeypatch.delenv("HERMES_TIMEZONE", raising=False)
-    task = local_time.enrich_task({"dueDate": "2026-10-09T03:00:00Z"})
     assert task["localDueDate"] == "2026-10-09"
-    assert task["localDueDateSource"] == "dueDate-utc"
+    assert task["localDueDateSource"] == "dueDate"
 
 
 def test_list_and_get_task_are_enriched(monkeypatch) -> None:
@@ -106,7 +116,7 @@ def test_list_and_get_task_are_enriched(monkeypatch) -> None:
     monkeypatch.setattr(server, "_attach_matter_refs_to_list", lambda client, r, **kw: None)
     monkeypatch.setattr(server, "_attach_matter_ref", lambda client, t, **kw: None)
     listed = server.list_tasks()
-    assert listed["value"][0]["localDueDate"] == "2026-10-08"
+    assert listed["value"][0]["localDueDate"] == "2026-10-09"
     assert server.get_task("t2")["localDueDate"] == "2026-10-10"
 
 

@@ -752,9 +752,9 @@ def list_tasks(
     cite. See the matter-ref enrichment block.
 
     Each item also carries ``localDueDate`` (YYYY-MM-DD), the firm's day the
-    task is due: ``dueDateOnly`` when set, else ``dueDate`` converted to the
-    firm's zone (``localDueDateSource`` says which). Write ``localDueDate``;
-    never print ``dueDate``, a UTC stamp that can read as the wrong day."""
+    task is due: ``dueDateOnly`` when set, else the day of ``dueDate`` as
+    written (``localDueDateSource`` says which). Write ``localDueDate``; never
+    reformat ``dueDate`` yourself."""
     client = _get_client()
     resp = client.get(
         "/tasks",
@@ -883,11 +883,12 @@ def list_events(
     against a resolved number rather than a recomposed one.
 
     Each timed event also carries ``localDate`` (YYYY-MM-DD) and ``localTime``
-    ("9:30 a.m.") in the event's own ``timeZone``. Write those. Never print
-    ``startTime``: it is a UTC clock and reads as the wrong time (a 9:30 a.m.
-    hearing reads 4:30 PM). An all-day event, or one whose zone cannot be
-    resolved, has neither key: write its date from the calendar entry and no
-    time."""
+    ("9:30 a.m."): ``startTime`` is already the firm's local clock in the
+    event's ``timeZone`` (vendor: "date and time will correlate with the time
+    zone provided"), read as written with no shift. Write those. Never convert
+    ``startTime`` from UTC yourself: a 9:00 a.m. trial would read 2:00 a.m. An
+    all-day event has neither key: write its date from the calendar entry and
+    no time."""
     client = _get_client()
     resp = client.get(
         "/events",
@@ -926,7 +927,10 @@ def create_event(
     - ``attendees`` — REQUIRED, at least one staff id (see ``get_staff``).
     - ``time_zone`` — REQUIRED, an IANA name (e.g. ``America/Los_Angeles``).
       Use the firm's authored zone; never guess a zone for a deadline.
-    - ``start_time`` / ``end_time`` — ISO 8601. For ``all_day=True`` the API
+    - ``start_time`` / ``end_time``: ``YYYY-MM-DDThh:mm:ss`` as the FIRM'S
+      LOCAL clock in ``time_zone``, never UTC (vendor: "date and time will
+      correlate with the time zone provided"): a 9:00 a.m. hearing is
+      ``...T09:00:00``. For ``all_day=True`` the API
       requires exact 24-hour boundaries; this tool normalizes both to the
       date's midnight span, so passing the deadline DATE is enough.
     """

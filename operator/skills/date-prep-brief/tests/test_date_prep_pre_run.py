@@ -160,7 +160,7 @@ def test_a_note_updated_in_place_marks_its_step_on_the_update_day():
 
 def test_an_enriched_event_uses_the_connectors_local_day_and_time():
     # An event the connector already enriched carries its local day and clock;
-    # the brief uses them even where its own recompute cannot (no zone here).
+    # the brief uses them over its own reading of startTime.
     event = {
         "id": "e1",
         "subject": "Hearing",
@@ -206,6 +206,7 @@ def test_dates_come_from_the_per_matter_event_filter():
             "subject": "Final Status Conference",
             "matter_id": M105,
             "matter_number": "2026-PI-105",
+            "time": "3:30 p.m.",
         }
     ]
     assert out["unreadableMatters"] == 1
@@ -221,26 +222,31 @@ def _one_event(event: dict) -> dict:
 
 
 def test_an_event_carries_its_own_local_time_and_place():
-    """Smokeball reads startTime back in UTC with no offset, beside the event's
-    zone (probed 2026-09-28): the 9:30 a.m. hearing reads 16:30. The brief's
-    first Done line says when and where, so the facts carry both as the event
-    states them."""
+    """Smokeball's startTime is the firm's local clock in the event's zone
+    (vendor create-event: "date and time will correlate with the time zone
+    provided"), read as written. The brief's first Done line says when and
+    where, so the facts carry both as the event states them."""
     row = _one_event(
         {
             "id": "e-h",
             "subject": "Hearing",
-            "startTime": "2026-10-06T16:30:00",
+            "startTime": "2026-10-06T09:30:00",
             "timeZone": "America/Los_Angeles",
             "location": "Department 3",
             "allDay": False,
         }
     )
     assert (row["date"], row["time"], row["location"]) == ("2026-10-06", "9:30 a.m.", "Department 3")
-    # A late local hour belongs to the local day, not the UTC one.
-    late = _one_event(
-        {"id": "e-l", "subject": "H", "startTime": "2026-10-07T01:15:00", "timeZone": "America/Los_Angeles"}
+    # A 9:00 a.m. trial is 9:00 a.m., never shifted from UTC to 2:00 a.m.
+    trial = _one_event(
+        {"id": "e-t", "subject": "Jury Trial", "startTime": "2026-10-13T09:00:00", "timeZone": "America/Los_Angeles"}
     )
-    assert (late["date"], late["time"]) == ("2026-10-06", "6:15 p.m.")
+    assert (trial["date"], trial["time"]) == ("2026-10-13", "9:00 a.m.")
+    # A stored 16:30 reads as the firm sees it in Smokeball: 4:30 p.m.
+    late = _one_event(
+        {"id": "e-l", "subject": "H", "startTime": "2026-10-06T16:30:00", "timeZone": "America/Los_Angeles"}
+    )
+    assert (late["date"], late["time"]) == ("2026-10-06", "4:30 p.m.")
 
 
 def test_the_facts_line_passes_the_time_and_place_to_the_turn():
@@ -262,11 +268,13 @@ def test_the_facts_line_passes_the_time_and_place_to_the_turn():
     }
 
 
-def test_no_zone_no_clock_or_all_day_means_no_time_never_a_utc_guess():
-    no_zone = _one_event({"id": "e-a", "subject": "H", "startTime": "2026-10-02T15:30:00Z"})
-    assert no_zone["date"] == "2026-10-02" and "time" not in no_zone and "location" not in no_zone
-    bad_zone = _one_event({"id": "e-b", "subject": "H", "startTime": "2026-10-02T15:30:00", "timeZone": "Mars/Base"})
-    assert "time" not in bad_zone
+def test_the_zone_is_never_arithmetic_and_all_day_or_no_clock_means_no_time():
+    no_zone = _one_event({"id": "e-a", "subject": "H", "startTime": "2026-10-02T15:30:00"})
+    assert (no_zone["date"], no_zone["time"]) == ("2026-10-02", "3:30 p.m.") and "location" not in no_zone
+    bad_zone = _one_event({"id": "e-b", "subject": "H", "startTime": "2026-10-02T09:30:00", "timeZone": "Mars/Base"})
+    assert bad_zone["time"] == "9:30 a.m."
+    no_clock = _one_event({"id": "e-d", "subject": "H", "startTime": "2026-10-02", "timeZone": "America/Los_Angeles"})
+    assert no_clock["date"] == "2026-10-02" and "time" not in no_clock
     all_day = _one_event(
         {
             "id": "e-c",
