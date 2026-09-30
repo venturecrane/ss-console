@@ -284,7 +284,8 @@ never fill it, never compute the deadline, never assert the outcome.
 ## References
 
 - `references/output-format.md` - the surface shape (Filed / Due / Hearings + the
-  Gaps & Confirms section), sourcing rules, and the internal-log memo body.
+  "Gaps to confirm (surfaced, not filled)" section), sourcing rules, and the file
+  note (including the two-line note for a matter with nothing on the motion calendar).
 - `references/voice.md` - the internal, sourced, anti-fiction voice for the surface
   and the memo (no drafts leave this skill).
 - `tests/selector_test.md` - blind cross-skill selector simulation vs. near neighbors.

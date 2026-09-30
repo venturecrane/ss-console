@@ -59,14 +59,15 @@ event for it, by another skill, whose age is within the firm's
 `escalation.refire_days` window. Render it as:
 
 ```markdown
-Matter <matter number>, <item>: escalated to <person>; the Operator is following up.
+Matter <matter number>, <item>: escalated; the Operator is following up.
 ```
 
-`<person>` is the matter's responsible person by name (`get_matter`
-`personResponsibleStaffId`, then `get_staff`), the person an escalation goes to under
-the case-alert routing rule. Never the escalating routine's name ("under active
-escalation by deadline-miss-escalator" is the wording a paralegal read on 2026-09-29
-and could not act on).
+The line names no person. The escalation ledger row records the item, the event and
+the attempt, never who the escalation went to, so naming anyone (even the matter's
+responsible person) could attribute an escalation to someone who never received it.
+Never the escalating routine's name either ("under active escalation by
+deadline-miss-escalator" is the wording a paralegal read on 2026-09-29 and could not
+act on). If the ledger row ever carries the recipient, name that person, from the row.
 
 The pointer carries **no date from the ledger**. The ledger is the Operator's own
 record of what it sent, not the firm's record, and the identifier gate certifies

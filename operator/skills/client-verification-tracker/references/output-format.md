@@ -138,10 +138,10 @@ overlapping morning emails. "Under active escalation" is read from the shared
 `escalation_ledger.py` state (a `fired`/`chased` from another skill on the same
 item within its `escalation.refire_days` window), never from same-day prediction:
 
-> Matter <matter number>, verification for <plaintiff>, <response-set>: escalated to <person>; the Operator is following up.
+> Matter <matter number>, verification for <plaintiff>, <response-set>: escalated; the Operator is following up.
 
-`<person>` is the matter's responsible person by name, never a routine's name, and the
-line carries no date from the ledger (the identifier gate refuses one).
+The line names no person (the ledger does not record who the escalation went to) and
+no routine, and carries no date from the ledger (the identifier gate refuses one).
 
 Deadline-proximity on an unsigned verification is owned by
 `deadline-miss-escalator` (it pulls verification response deadlines with the rest
