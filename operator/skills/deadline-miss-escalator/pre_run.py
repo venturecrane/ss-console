@@ -1086,8 +1086,9 @@ print(json.dumps(out, default=str))
 """
 
 # Key order is preference: the connector's local day (``localDate``,
-# ``dueDateOnly``/``localDueDate``) comes before the UTC stamp, whose date can
-# be the next day for an afternoon court time in the firm's zone.
+# ``dueDateOnly``/``localDueDate``) comes before the raw stamp. Smokeball's
+# stamps are already the firm's local clock, so the two agree; the connector's
+# field wins only so no skill ever reads a time on its own.
 _TASK_DATE_KEYS = ("dueDateOnly", "localDueDate", "dueDate", "DueDate", "due_date")
 _EVENT_DATE_KEYS = ("localDate", "startTime", "StartTime", "startDate", "start", "from")
 _SUBJECT_KEYS = ("subject", "Subject", "name", "Name", "title", "Title")
