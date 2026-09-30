@@ -37,6 +37,9 @@
     "_is_iso_day": {
       "copies": 7
     },
+    "_is_motion_header": {
+      "copies": 7
+    },
     "_is_operator_memo": {
       "copies": 7
     },
@@ -119,6 +122,9 @@
       "copies": 7
     },
     "pull_facts_payload": {
+      "copies": 7
+    },
+    "routine_label": {
       "copies": 7
     },
     "write_emitted_wake_heartbeat": {

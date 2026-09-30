@@ -160,6 +160,63 @@ def test_a_no_motions_note_is_found_by_its_header() -> None:
     assert gate.derive_matter_facts("motion-calendar-tracker", payload) == {"last_surface": "2026-09-29"}
 
 
+RENAMED = {
+    "value": [
+        memo(
+            id="m1",
+            createdDate="2026-09-29T09:00:00Z",
+            plainText="[Operator] Hearings and motions as of Sep 29, 2026\nNo motions on file.\nNothing to do.",
+        ),
+        # The fallback phrase in ANOTHER routine's name must not win when the
+        # seat authored a label for this one.
+        memo(
+            id="m2",
+            createdDate="2026-09-30T09:00:00Z",
+            plainText="[Operator] Motion calendar review as of Sep 30, 2026\nSomething else.",
+        ),
+    ]
+}
+
+
+def test_a_renamed_routine_is_found_by_the_firms_label() -> None:
+    gate = _load_gate()
+    assert gate.derive_matter_facts("motion-calendar-tracker", RENAMED, routine_label="Hearings and  motions") == {
+        "last_surface": "2026-09-29"
+    }
+
+
+def test_with_no_label_the_fallback_phrase_decides() -> None:
+    # The falsifier for the label path: without it, the renamed note is not
+    # found and the other routine's note (which says "motion calendar") is.
+    gate = _load_gate()
+    assert gate.derive_matter_facts("motion-calendar-tracker", RENAMED) == {"last_surface": "2026-09-30"}
+
+
+def test_the_label_is_read_from_the_seats_routine_names(tmp_path, monkeypatch) -> None:
+    gate = _load_gate()
+    config = tmp_path / "customer.yaml"
+    config.write_text("routine_names:\n  motion-calendar-tracker: 'Hearings and motions'\n  other: 'x'\n")
+    assert gate.routine_label("motion-calendar-tracker", str(config)) == "Hearings and motions"
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(config))
+    assert gate.routine_label("motion-calendar-tracker") == "Hearings and motions"
+    # No entry, no block, no file, no path: None, and the caller falls back.
+    assert gate.routine_label("service-confirmation-watcher", str(config)) is None
+    (tmp_path / "bare.yaml").write_text("cron: []\n")
+    assert gate.routine_label("motion-calendar-tracker", str(tmp_path / "bare.yaml")) is None
+    assert gate.routine_label("motion-calendar-tracker", str(tmp_path / "missing.yaml")) is None
+    monkeypatch.delenv("SMD_CUSTOMER_YAML_PATH")
+    assert gate.routine_label("motion-calendar-tracker") is None
+
+
+def test_the_pull_carries_the_label_to_every_matter() -> None:
+    gate = _load_gate()
+    client = FakeClient(matters={"value": [{"id": "mat-1", "number": "2026-0142"}]}, memos_by_matter={"mat-1": RENAMED})
+    labelled = gate.pull_facts_payload(client, "motion-calendar-tracker", routine_label="Hearings and motions")
+    assert labelled["matters"][0]["last_surface"] == "2026-09-29"
+    bare = gate.pull_facts_payload(client, "motion-calendar-tracker")
+    assert bare["matters"][0]["last_surface"] == "2026-09-30"
+
+
 def test_motion_tracker_reports_no_prior_surface_as_none() -> None:
     gate = _load_gate()
     payload = {
@@ -506,6 +563,20 @@ def test_the_snippet_runs_this_very_file_and_brings_back_facts(stub_connector) -
         }
     ]
     assert PROSE not in json.dumps(facts)
+
+
+def test_the_snippet_receives_the_seats_label(stub_connector, tmp_path, monkeypatch) -> None:
+    """End to end through the subprocess: the label read from customer.yaml in
+    this process reaches the connector-venv pull as argv, and a renamed routine's
+    note is found by it."""
+    gate = _load_gate()
+    config = tmp_path / "customer.yaml"
+    config.write_text("routine_names:\n  motion-calendar-tracker: 'Hearings and motions'\n")
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(config))
+    stub_connector({"matters": {"value": [{"id": "mat-1", "number": "2026-0142"}]}, "memos": {"mat-1": RENAMED}})
+    count, facts = gate.fetch_memo_facts("motion-calendar-tracker")
+    assert count == 1
+    assert facts["matters"][0]["last_surface"] == "2026-09-29"
 
 
 def test_a_missing_connector_python_yields_no_count_and_no_facts(monkeypatch) -> None:
