@@ -410,9 +410,10 @@ def test_parse_pull_clean_tasks_and_events() -> None:
 
 
 def test_parse_pull_prefers_the_firms_local_day() -> None:
-    # A 5 p.m. Pacific hearing is 00:00Z the next day: the connector's
-    # localDate is the court day, and it wins over startTime[:10]. A task's
-    # dueDateOnly / localDueDate wins over its UTC dueDate the same way.
+    # The connector's localDate is the court day and wins over startTime[:10]
+    # whenever the two differ (a synthetic disagreement here: the connector now
+    # reads startTime as written, so live they agree). A task's dueDateOnly /
+    # localDueDate wins over its dueDate the same way.
     raw = {
         "tasks": {
             "items": [

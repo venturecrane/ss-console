@@ -204,8 +204,8 @@ for mid in matter_ids[:budget]:
         events = rows_of(client.get("/events", MatterId=mid, From=today, To=to, ExcludeDeletedEvents=True, Limit=500))
         if events is None:
             raise ValueError("unrecognized /events envelope")
-        # The court day is the firm's local day (localDate), never the UTC
-        # startTime's date: a 5 p.m. Pacific hearing is the next day in UTC.
+        # The court day is the connector's localDate: startTime is already the
+        # firm's local clock (never UTC), read as written with no zone shift.
         entry["events"] = [
             {
                 "id": e.get("id"),
