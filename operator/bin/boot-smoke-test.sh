@@ -335,6 +335,67 @@ else
   ssh_exec "retired-skills-absent" "for n in ${RETIRED_SKILL_NAMES}; do if test -e /opt/data/skills/\$n || test -L /opt/data/skills/\$n; then echo retired skill still on volume: \$n >&2; exit 1; fi; done"
 fi
 
+# ---------- Step 6d: staged scripts current ----------
+# Hermes' scheduler runs a cron pre_run only from <profile>/scripts/<skill>/,
+# so the overlay stages a copy of the skill's script there. It stages only for
+# skills with a live cron, so a skill whose cron was removed keeps its old
+# staged copy, and a later cron (or a one-shot run) executes stale code while
+# every skill copy is current. On 2026-09-29 pilot-smokeball ran a 749-line
+# motion-calendar pre_run.py (pre-#3003) beside an 892-line skill copy, and six
+# unscheduled trackers were stale: the wake line carried no facts_digest and no
+# check noticed. Every staged script must be byte-identical (sha256) to its skill
+# copy: <profile>/skills/<skill>/<file>, or /opt/data/skills/<skill>/<file> when
+# the profile has none. A staged script with no skill copy at all fails too.
+#
+# The program runs through base64 (the ssh_exec_script shape) and its output is
+# CAPTURED, not discarded, so a failure names every stale path.
+# SMD_SMOKE_DATA_ROOT is unset on a seat; the tests point it at a fixture tree.
+STAGED_SCRIPTS_CHECK="$(cat <<'STAGED_SCRIPTS_CHECK'
+# staged-scripts-current
+root="${SMD_SMOKE_DATA_ROOT:-/opt/data}"
+if command -v sha256sum >/dev/null 2>&1; then
+  digest() { sha256sum "$1" | cut -d " " -f 1; }
+else
+  digest() { shasum -a 256 "$1" | cut -d " " -f 1; }
+fi
+bad=0
+checked=0
+for staged in "$root"/profiles/*/scripts/*/*.py; do
+  [ -f "$staged" ] || continue
+  checked=$((checked + 1))
+  skill_dir="$(dirname "$staged")"
+  skill="$(basename "$skill_dir")"
+  profile="$(dirname "$(dirname "$skill_dir")")"
+  file="$(basename "$staged")"
+  src="$profile/skills/$skill/$file"
+  [ -f "$src" ] || src="$root/skills/$skill/$file"
+  if [ ! -f "$src" ]; then
+    echo "stale: $staged has no skill copy"
+    bad=1
+  elif [ "$(digest "$staged")" != "$(digest "$src")" ]; then
+    echo "stale: $staged differs from $src"
+    bad=1
+  fi
+done
+echo "checked: $checked staged script(s)"
+exit "$bad"
+STAGED_SCRIPTS_CHECK
+)"
+# Sets STAGED_OUT (global, read below) and returns the remote exit status.
+staged_scripts_current() {
+  local encoded
+  encoded="$(printf '%s' "${STAGED_SCRIPTS_CHECK}" | base64 | tr -d '\n')"
+  STAGED_OUT="$(fly ssh console -a "${APP_NAME}" --command "sh -c 'echo ${encoded} | base64 -d | sh'" 2>&1)"
+}
+STAGED_OUT=""
+if staged_scripts_current; then
+  pass "staged-scripts-current ($(printf '%s\n' "${STAGED_OUT}" | grep '^checked:' | tail -1 || true))"
+elif retry_if_machine_cycling && staged_scripts_current; then
+  pass "staged-scripts-current (passed on retry; the Machine was cycling on the first attempt)"
+else
+  check_fail "staged-scripts-current: $(printf '%s\n' "${STAGED_OUT}" | grep -E '^(stale|checked):' | tr '\n' ';' || true)"
+fi
+
 # ---------- Step 7: overlay plugins installed ----------
 # `hermes plugins list` should include the four hermes-smd-* plugins
 # installed at image-build time via `hermes plugins install venturecrane/hermes-smd-overlay`.
