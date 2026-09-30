@@ -1445,7 +1445,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // 8ecdf371 -> f1ae58aa (2026-09-29, overlay#401 merge commit, ss#2793 follow-on). The
     // heartbeat carries the watched-tool failure map, so a transcriber that keeps
     // refusing a rostered agent pages team@ through fleet-alerts tool_failing:<tool>.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="f1ae58aafc1813d536211170a76c609a729a2213"')
+    // f1ae58aa -> c2cd8941 (2026-09-29, overlay#402 merge commit, ss#2793 follow-on). The
+    // record store is private per owner with readers who see across (the broker
+    // view); the plugin fences reads and rewrites by the verified inbound sender.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="c2cd89412520eeb408ab28e79dc646820074a498"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
