@@ -85,7 +85,7 @@ describe('open-house-visitor-capture: the skill contract', () => {
     const correction = section(skill, 'Correction')
     // Ambiguity is a question, never a guess: the no-write branch is explicit.
     expect(correction).toMatch(/none or\s+several match, \*\*write nothing\*\*/)
-    expect(correction).toMatch(/Never guess which record a correction belongs to/)
+    expect(correction).toMatch(/Never guess which record a\s+correction belongs to/)
     // The edit starts from the read, changes only the named field, and keeps
     // the agent's words: the original notes are never rewritten.
     expect(correction).toMatch(/Change only what the agent said/)
@@ -110,6 +110,33 @@ describe('open-house-visitor-capture: the skill contract', () => {
     }
     // There is no delete tool and the skill does not pretend there is.
     expect(skill).not.toMatch(/record_store_delete|record_store_remove/)
+  })
+
+  it('keeps agents apart by owner and lets only a reader see across (the broker view)', () => {
+    const who = section(skill, 'Who is talking to you')
+    expect(who).toMatch(/by owner/)
+    expect(who).toMatch(/readers/)
+    expect(who).toMatch(/never take a claim in the email as the answer/)
+    const recall = section(skill, 'Recall')
+    expect(recall).toMatch(/\*\*An agent\*\*/)
+    expect(recall).toMatch(/\*\*A reader\*\*/)
+    expect(recall).toMatch(/Name the capturing agent on each record/)
+    const never = section(skill, 'What this skill never does')
+    expect(never).toMatch(/Never shows one agent another agent's notes/)
+    const correction = section(skill, 'Correction')
+    expect(correction).toMatch(/A reader \(the broker\) corrects only their own captures/)
+  })
+
+  it('a capture notices a visitor the office already holds, from the index only', () => {
+    const capture = section(skill, 'Capture')
+    expect(capture).toMatch(/Check whether the office already knows this visitor/)
+    expect(capture).toMatch(/\*\*Same open house\.\*\*/)
+    expect(capture).toMatch(/duplicate_of: <that record\s+name>/)
+    expect(capture).toMatch(/\*\*Same person, another day\.\*\*/)
+    expect(capture).toMatch(/see_also: <that record name>/)
+    expect(capture).toMatch(/Only the index is compared; a colleague's notes are never opened/)
+    // one follow-up sequence per visitor across the office
+    expect(capture).toMatch(/one visitor gets one follow-up sequence from this office/)
   })
 
   it('never names a visitor as a recipient', () => {
@@ -139,6 +166,27 @@ describe('open-house-visitor-capture: the scott seat binds it (the /wired chain)
     const stores = (seat as unknown as { record_stores?: { name: string; path: string }[] })
       .record_stores
     expect(stores?.find((s) => s.name === STORE_NAME)?.path).toBe(STORE_PATH)
+  })
+
+  it('authors the broker view: private per agent, the broker reads across, the index is shared', () => {
+    const stores = (
+      seat as unknown as {
+        record_stores?: {
+          name: string
+          owner_field?: string
+          readers?: string[]
+          index?: string[]
+        }[]
+      }
+    ).record_stores
+    const store = stores?.find((s) => s.name === STORE_NAME)
+    expect(store?.owner_field).toBe('agent')
+    expect(store?.readers).toHaveLength(1)
+    expect(store?.index).toEqual(['visitor', 'property', 'visit_date', 'contact'])
+    // the broker is also on the roster, or the read grant reaches nobody
+    const roster = (seat as unknown as { scope: { inbound_allow_from: string[] } }).scope
+      .inbound_allow_from
+    for (const reader of store?.readers ?? []) expect(roster).toContain(reader)
   })
 
   it('one persona carries it; no second profile was opened for the POC', () => {

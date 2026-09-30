@@ -1093,7 +1093,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # keeps refusing a rostered agent pages team@ (ss#2793 follow-on; console
 # migration 0119 + fleet-alerts tool_failing:<tool>). shared/heartbeat.py and
 # its test only; no tracked twin moves.
-ARG OVERLAY_REF="f1ae58aafc1813d536211170a76c609a729a2213"
+# 2026-09-29g (c2cd8941, the overlay #402 merge commit). The record store can be
+# private per owner: a store authors owner_field / readers / index, the plugin
+# fences reads and rewrites by the verified inbound sender, readers (the broker)
+# see every owner's records read-only, and the listing carries the index
+# fields (ss#2793 follow-on, the broker view). shared/record_store.py, the
+# record-store plugin, bootstrap/validate.py and tests; no tracked twin moves.
+ARG OVERLAY_REF="c2cd89412520eeb408ab28e79dc646820074a498"
 
 ARG CUSTOMER_SLUG=customer-zero
 

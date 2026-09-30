@@ -193,6 +193,15 @@ scope:
 record_stores:
   - name: open-house-visitors
     path: /opt/data/open-house/visitors
+    # The broker view (Captain, 2026-09-29): every agent at the brokerage writes
+    # into this one store; each opens only records stamped with their own
+    # address (owner_field); the broker reads every agent's records and rewrites
+    # none. The index is what the listing shows everyone, so a capture can see
+    # that a colleague already holds a visitor without opening their notes.
+    owner_field: agent
+    readers:
+      - tim@thebrokery.com
+    index: [visitor, property, visit_date, contact]
 
 # ---- ESCALATION ----
 escalation:
