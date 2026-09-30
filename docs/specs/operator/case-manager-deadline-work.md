@@ -263,6 +263,7 @@ router's existing skill path, reading the routine's own procedure.
 - **A client seat.** No client seat authors `case_manager` in this delivery. Turning
   the jobs on for Ashton & Price means new routines in its Schedule A-1, an
   amendment to what the firm signed, so it is the Captain's call and not a config
-  edit. Until then its `cron: []` and its escalator are untouched.
+  edit. Until then its escalator stays unscheduled; its one armed cron row is
+  statute-watch (letter 156), which is not a case-manager job.
 - **The first cleanup.** Whether a firm's first task-list cleanup is part of
   onboarding or a separately quoted engagement.

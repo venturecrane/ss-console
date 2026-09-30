@@ -431,6 +431,18 @@ personas:
           scheduled: true
           webhook: false
         enabled: true
+      # The monthly statute report, asked for in writing: letter 156
+      # (2026-09-30), Christa's written ask. Rendered and sent by the pre-run to
+      # the one recipient below; the woken turn composes nothing.
+      - name: statute-watch
+        version: pending
+        initiation:
+          manual: false
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          recipient: christa@ashtonandprice.com
       # ---- PI litigation lifecycle (law-firm/pi@0.2.0, staged 2026-07-02) ----
       # The 19-skill CA PI pack, adversarially gated 2026-07-01. Initiation per
       # skill: watch/chase/track skills run on the cron block below; assemblers
@@ -673,9 +685,9 @@ personas:
     # authored as Pacific.
     # GO-LIVE POSTURE (Captain directive 2026-08-12): NO scheduled initiation at
     # hand-off. We told the firm that once they connect Smokeball and their mail,
-    # nothing runs on a schedule until they ask for it. So the seat comes up with
+    # nothing runs on a schedule until they ask for it. So the seat came up with
     # an empty cron list, and a routine is scheduled only when Chris or Christa
-    # asks for that routine by name.
+    # asks for that routine by name. The one live row below is such an ask.
     #
     # The authored schedules are PRESERVED AS COMMENTS below, not deleted, so
     # "turn on the records chase" is a one-line uncomment at the cadence already
@@ -684,13 +696,19 @@ personas:
     # for a cron to target it (sections-bundles-cron.ts:250), never a schedule by
     # itself, so leaving those flags set arms nothing.
     #
-    # Empty here is load-bearing at runtime, not only in git: the overlay's cron
+    # This list is load-bearing at runtime, not only in git: the overlay's cron
     # materializer is a reconciler (hermes-smd-overlay bootstrap/cron_materialize.py)
     # — at bootstrap it REMOVES every managed job missing from this list before
-    # creating the authored ones, so emptying the list also clears the 12 jobs
-    # already persisted in this seat's cron store on its Fly volume. Config alone
-    # converges the runtime; no manual purge of the volume is needed.
-    cron: []
+    # creating the authored ones, so a row left commented also clears that job
+    # from this seat's cron store on its Fly volume. Config alone converges the
+    # runtime; no manual purge of the volume is needed.
+    cron:
+      # letter 156 (2026-09-30), Christa's written ask: a monthly report of the
+      # cases with a statute date in the next three months and nothing filed.
+      - skill: statute-watch
+        schedule: '7 7 1 * *' # monthly, the 1st at 0707 seat-local
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
     # - skill: deadline-miss-escalator
     #   schedule: '0 7 * * *' # daily 0700 seat-local (America/Los_Angeles via business_hours; was silently UTC = midnight PT before HERMES_TIMEZONE landed)
     #   pre_run: pre_run.py
