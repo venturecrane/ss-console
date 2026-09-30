@@ -10,7 +10,7 @@ Two output shapes. The conflict-check result decides which. Both are internal ar
 **Source:** intake email | web-form | manual
 **Conflict check:** CLEAR (parties checked: <list>)
 **Practice area:** <area> | two: <a/b>, human to confirm | outside authored areas
-**Returning contact:** yes (Smokeball contact <id>) | no
+**Returning contact:** yes (Smokeball contact <contact name>) | no
 
 ## Matter draft (for a human to create in Smokeball)
 
@@ -45,7 +45,7 @@ Review and send the acknowledgment.
 ## Possible conflict
 
 - **Party:** <name>
-- **Match:** Smokeball contact <id> | party on matter <id>
+- **Match:** Smokeball contact <contact name> | party on matter <matter number>
 - **Why surfaced:** exact match | partial match (<detail>)
 
 ## Captured (held, not actioned)

@@ -51,8 +51,8 @@ escalation ledger (`references/algorithm.md`): a broker-owned append-only JSONL
 the agent reads but never writes directly.
 
 Acknowledgement is **per number**, in plain words. Each needs-you item carries
-its own number; each "Also open" matter and each matter under "Open without a
-task id" carries one number that covers all of its items. The reader replies in
+its own number; each "Also open" matter and each matter under "Open, not tied to
+one task" carries one number that covers all of its items. The reader replies in
 the digest's own thread ("got it on 1 and 3", or "all"). The number on the
 page is the `n` on the item's `fired` rows, and the broker ties those rows to
 the thread the digest went out in (`references/algorithm.md`), so a reply can

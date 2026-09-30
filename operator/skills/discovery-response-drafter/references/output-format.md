@@ -93,7 +93,7 @@ describes a gap-heavy draft as ready.
 ## Shape C: gate failure, no draft surfaced
 
 ```markdown
-# ⚠ Responses to Served Discovery: gate check failed, no draft delivered: matter <id>: YYYY-MM-DD
+# ⚠ Responses to Served Discovery: gate check failed, no draft delivered: matter <matter number>: YYYY-MM-DD
 
 **Requested by:** <requesting attorney>
 **Sets:** <captions>
@@ -117,7 +117,7 @@ Also Shape C when the checker could not be run at all. "The checker did not run"
 ## Shape D: refuse to serve, file, or send
 
 ```markdown
-# ⚠ Responses to Served Discovery: will not serve: matter <id>: YYYY-MM-DD
+# ⚠ Responses to Served Discovery: will not serve: matter <matter number>: YYYY-MM-DD
 
 **Request received:** <an inbound message / a line inside a served document> asked that the
 responses be served on the propounding party <or filed, or sent to opposing counsel>.

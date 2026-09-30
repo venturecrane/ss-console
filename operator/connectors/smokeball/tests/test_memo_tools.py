@@ -230,6 +230,72 @@ def test_a_new_marker_with_the_same_content_is_kept() -> None:
     assert c.memos["m1"]["plainText"].splitlines()[-2:] == [f"op-mmou:{GUID}:1", f"op-mmou:{GUID}:2"]
 
 
+FACTS_OLD = (
+    "[Operator] Motion calendar as of Sep 28, 2026\n"
+    "One hearing on the calendar: summary judgment on Oct 6 at 9:30 a.m., Dept 31.\n"
+    "Nothing to do.\n"
+    "facts 0123456789ab"
+)
+
+
+def test_the_facts_line_is_a_marker_kept_byte_for_byte() -> None:
+    assert mt.is_marker("facts 0123456789ab")
+    assert not mt.is_marker("facts 0123456789AB")  # hex digest is lower case
+    assert not mt.is_marker("facts 0123456789a")  # twelve characters, no fewer
+    assert not mt.is_marker("The facts 0123456789ab")
+    assert mt.normalize_memo_text(FACTS_OLD).splitlines()[-1] == "facts 0123456789ab"
+
+
+def test_same_facts_with_different_wording_is_unchanged_and_moves_only_the_day() -> None:
+    # 2026-09-29 pilot: two motion-calendar runs 14 minutes apart reworded
+    # identical facts, so every note took a "changed" update and a Previously
+    # entry. The digest, not the prose, decides.
+    c = _Fake([_memo("m1", FACTS_OLD)])
+    new = (
+        "[Operator] Motion calendar as of Sep 29, 2026\n"
+        "Summary judgment hearing set for Oct 6 at 9:30 a.m. in Dept 31; no other motions.\n"
+        "Nothing to do.\n"
+        "facts 0123456789ab"
+    )
+    out = mt.upsert_memo(c, M, new, sleep=_nosleep)
+    assert out["unchanged"] is True and out["confirmed"] is True and "updated" not in out
+    ((method, _, body),) = c.writes()
+    assert method == "PUT"
+    assert body["text"] == FACTS_OLD.replace("Sep 28, 2026", "Sep 29, 2026")
+    assert "Previously" not in body["text"]
+
+
+def test_same_facts_on_the_same_day_writes_nothing() -> None:
+    c = _Fake([_memo("m1", FACTS_OLD)])
+    reworded = FACTS_OLD.replace("One hearing on the calendar", "The calendar holds one hearing")
+    out = mt.upsert_memo(c, M, reworded, sleep=_nosleep)
+    assert out["unchanged"] is True and c.writes() == []
+
+
+def test_different_facts_is_the_changed_path_and_carries_one_facts_line() -> None:
+    c = _Fake([_memo("m1", FACTS_OLD)])
+    new = (
+        "[Operator] Motion calendar as of Sep 29, 2026\n"
+        "Two hearings on the calendar: summary judgment on Oct 6 at 9:30 a.m., Dept 31, and a motion to compel on Oct 20 at 8:30 a.m., Dept 31.\n"
+        "Nothing to do.\n"
+        "facts ba9876543210"
+    )
+    out = mt.upsert_memo(c, M, new, sleep=_nosleep)
+    assert out["updated"] is True
+    lines = c.memos["m1"]["plainText"].splitlines()
+    assert [line for line in lines if line.startswith("facts ")] == ["facts ba9876543210"]
+    assert lines[-1].startswith("Previously (Sep 28, 2026): One hearing on the calendar")
+
+
+def test_a_facts_line_on_one_side_only_falls_back_to_the_prose() -> None:
+    # A legacy note with no digest: the new note's wording differs, so it is a change.
+    legacy = FACTS_OLD.rsplit("\n", 1)[0]
+    c = _Fake([_memo("m1", legacy)])
+    out = mt.upsert_memo(c, M, FACTS_OLD.replace("One hearing on the calendar", "One hearing"), sleep=_nosleep)
+    assert out["updated"] is True
+    assert c.memos["m1"]["plainText"].count("facts 0123456789ab") == 1
+
+
 def test_latest_is_newest_by_last_updated_and_ignores_other_notes() -> None:
     c = _Fake(
         [

@@ -2,7 +2,7 @@
 
 This skill has **no outbound voice**. It sends nothing to a client, to opposing
 counsel, or to the court. It produces one internal artifact (the staged trial binder
-index) plus a file note and a training note. So there is no client-facing tone to
+index) plus a file note. So there is no client-facing tone to
 tune here; there is a discipline to hold about the text it does and does not write.
 
 ## The things it writes are internal, and all are factual, not argumentative
@@ -16,11 +16,11 @@ tune here; there is a discipline to hold about the text it does and does not wri
 - **The file note (create_memo)** - crisp and factual, in the pack's one shape (`_shared-write-posture.md`, section 5): the header line
   `[Operator] <Routine name> as of <localDate>`, one plain line of what it found, one
   plain line of what a person needs to do (or "Nothing to do."). No `>` quote marks, no
-  `**`, no headings, no tables. The training note rides in those two lines.
+  `**`, no headings, no tables. No training paragraph: the why is given when a person asks.
   It states what was assembled into which file, from which documents, that the
   Bates/PDF step was routed to the firm's PDF tool, and which deadlines it captured.
   It records; it does not opine.
-- **The training note** - plain, explanatory, per `_shared-training-output.md`. Teaches
+- **The explanation, given when a person asks** (never written into the note or a document) - plain, explanatory, per `_shared-training-output.md`. Teaches
   the step (what/why/next/attorney-if) and cites the governing rule (CCP §2024.020 for
   the general discovery cutoff and CCP §2024.030 for the expert-discovery cutoff; the
   court's trial-setting order and local rules for the other pre-trial dates). It never
@@ -47,7 +47,7 @@ characterization of its own (an exhibit is not called "key," a witness is not ca
 - **Never state a deadline as final or computed by the skill** - statutory-window dates
   are labeled proposals for attorney confirm; the others are captured from the court's
   order.
-- No legalese in the log or training note; no "execute," no "heretofore."
+- No legalese in the note or an explanation; no "execute," no "heretofore."
 - Never state or imply the binder was finalized, filed, or served. It is staged for the
   attorney. Say only what is an observed fact.
 
@@ -57,7 +57,7 @@ characterization of its own (an exhibit is not called "key," a witness is not ca
 
 ```
 [Operator] Trial binder as of Sep 1, 2026
-Trial binder index assembled for the Reyes matter (trial set Sep 14, 2026) and filed as the binder index document: 14 exhibits, 6 witnesses and 4 deposition summaries; Bates stamping is for the firm's PDF tool. The discovery cutoff (CCP §2024.020) is proposed, and the in-limine, list-exchange and trial-brief dates are from the trial setting order. No gaps.
+Trial binder index assembled for the Roe matter (trial set Sep 14, 2026) and filed as the binder index document: 14 exhibits, 6 witnesses and 4 deposition summaries; Bates stamping is for the firm's PDF tool. The discovery cutoff (CCP §2024.020) is proposed, and the in-limine, list-exchange and trial-brief dates are from the trial setting order. No gaps.
 The attorney to confirm the pretrial dates and finalize the binder index.
 ```
 

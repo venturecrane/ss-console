@@ -89,7 +89,7 @@ the decision (informal-first vs. a letter) and hands the letter, if chosen, to
 > this is the compel-further track: it needs a meet-and-confer declaration, and the window
 > runs from service of this verified response. I am not stating the compel section or the
 > day-count - those are the drafter's. Do you want to meet and confer informally first, or
-> should I hand a letter to the meet-and-confer-drafter for your review?
+> should I draft a meet-and-confer letter for your review?
 
 **Bad - computes as final / calendars silently:**
 

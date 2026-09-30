@@ -21,9 +21,10 @@ what it names and call again. The File note is the separate `create_memo`, and i
 names the file.
 
 ```markdown
-# Settlement Statement - <plaintiff> - matter <id> - YYYY-MM-DD
+# Settlement Statement (draft): <plaintiff>
 
-**Decision:** assembled from the matter's recorded figures; staged for <responsible attorney> to verify and execute in Smokeball.
+Matter <matter number>. Prepared <today, the firm's way> from the matter's recorded figures for <responsible attorney> to verify and execute in Smokeball.
+
 **Not done by this skill:** no money moved, no disbursement authorized, no figure computed by the Operator. Smokeball runs the trust accounting and the math.
 **Source components:** each figure below is traceable to the read named in its row.
 
@@ -80,7 +81,7 @@ Settlement statement on matter <matter number> assembled from the recorded figur
 ## Shape B - Cannot finalize the net (a core figure is missing or unconfirmed)
 
 ```markdown
-# ⚠ Settlement Statement - cannot finalize the net - matter <id> - YYYY-MM-DD
+# ⚠ Settlement Statement - cannot finalize the net - matter <matter number> - YYYY-MM-DD
 
 **Situation:** <which figure is missing or unconfirmed - e.g. no recorded gross; the Medi-Cal lien payoff is not confirmed>
 **Decision:** surfaced for a person; the net is not produced from partial or invented data. No money moved.
@@ -103,7 +104,7 @@ Settlement statement on matter <matter number> assembled from the recorded figur
 ## Shape C - Refuse a fund-movement request (surface and hold)
 
 ```markdown
-# ⚠ Settlement - fund movement refused - matter <id> - YYYY-MM-DD
+# ⚠ Settlement - fund movement refused - matter <matter number> - YYYY-MM-DD
 
 **Request received:** <"disburse the net" / "pay the liens" / "cut the check" / "move the funds" - quote the source>
 **Decision:** refused. This skill never moves trust money and never authorizes a disbursement. Smokeball plus a person execute the disbursement.

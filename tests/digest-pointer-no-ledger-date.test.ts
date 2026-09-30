@@ -23,15 +23,24 @@ const FORMAT = readFileSync(
 
 function pointerTemplate(): string {
   const line = FORMAT.split('\n').find((l) =>
-    l.includes('under active escalation by <owning skill>')
+    l.includes(': escalated; the Operator is following up.')
   )
   if (!line) throw new Error('escalation pointer template line not found in output-format.md')
   return line
 }
 
 describe('daily-needs-you-digest escalation pointer', () => {
-  it('names the owning skill', () => {
-    expect(pointerTemplate()).toContain('<owning skill>')
+  it('names no routine (2026-09-29 read-through)', () => {
+    expect(pointerTemplate()).not.toMatch(
+      /skill|by deadline-miss-escalator|by client-verification-tracker/
+    )
+  })
+
+  it('names no person, because the ledger does not record who an escalation went to', () => {
+    // A name here would attribute an escalation to someone who may never have
+    // received it. The ledger row holds ts, skill, item_key, event, attempt,
+    // token and id; no recipient.
+    expect(pointerTemplate()).not.toMatch(/<person>|escalated to|<attorney>|<staff/)
   })
 
   it('carries no date placeholder, because no ledger date can pass the identifier gate', () => {

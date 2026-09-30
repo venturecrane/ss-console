@@ -1,91 +1,122 @@
 # Motion Calendar Tracker - Output Format
 
-One matter, one surface. The surface is **the record, organized** - every row names
-its Smokeball source, and anything the record does not support is a **gap**, not a
-value. There are no outbound drafts here: this skill only surfaces and writes an
-internal log.
+One matter, one surface. The surface is **the record, organized**: every row names
+the Smokeball record it came from the way a person finds it, and anything the record
+does not support is a **gap**, not a value. There are no outbound drafts here: this
+skill only surfaces and writes a file note.
 
-## Shape A - Motion calendar surface (the current, sourced picture)
+**Name a record by what a person sees, never by its id** (`_shared-write-posture.md`,
+section 5): a calendar entry by its subject and date ("the MSJ hearing entry on Oct 6"),
+a task by its title and due date ("the task File opposition, due Sep 22"), a note by
+its date ("the note of Sep 14"). Never "(event <id>)", "task <id>" or "memo <id>". A
+paralegal cannot look an id up; the audit log holds them.
+
+## Shape A - Motion calendar surface (this run's report, never the note)
 
 ```markdown
-# Motion Calendar - <matter description> - matter <id> - YYYY-MM-DD
+# Motion Calendar - matter <matter number> - <today, the firm's way>
 
-**Matter status:** <Open | Pending | ...> · **Responsible:** <staff>
-**Window:** <from>-<to> · **Sources:** <N> events, <M> tasks
+Matter status: <Open | Pending | ...>. Responsible: <staff name>.
+Window: <from> to <to>. Read: <N> calendar entries, <M> tasks.
 
 ## Filed
 
-| Motion                                        | Filed by        | Filed (source)                 | Status (source)                                                         |
-| --------------------------------------------- | --------------- | ------------------------------ | ----------------------------------------------------------------------- |
-| <e.g. Motion to Compel Further RFP Responses> | firm / opposing | <date> (task <id> / memo <id>) | <filed / opposed / submitted / heard - each from a record item, or "-"> |
+| Motion                                        | Filed by        | Filed (source)                                   | Status (source)                                                   |
+| --------------------------------------------- | --------------- | ------------------------------------------------ | ----------------------------------------------------------------- |
+| <e.g. Motion to Compel Further RFP Responses> | firm / opposing | <date> (the task "<title>" / the note of <date>) | <filed / opposed / submitted / heard, each from a record, or "-"> |
 
 ## Due
 
-| Item                     | Date   | Source                 | Note                                                                                                                       |
-| ------------------------ | ------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| <e.g. Opposition to MTC> | <date> | task <id> / event <id> | authored by a human                                                                                                        |
-| <e.g. Reply to MSJ>      | -      | -                      | not calendared - anchor: hearing <date> (event <id>); MSJ runs on §437c (not §1005(b)) - deadline lane to confirm the rule |
+| Item                     | Date   | Source                                              | Note                                                                                   |
+| ------------------------ | ------ | --------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| <e.g. Opposition to MTC> | <date> | the task "<title>" / the calendar entry "<subject>" | set by a person                                                                        |
+| <e.g. Reply to MSJ>      | -      | -                                                   | not on the calendar; hearing <date>; summary judgment has its own timing rule, confirm |
 
 ## Hearings
 
-| Motion   | Hearing date | Dept/time               | Source     |
-| -------- | ------------ | ----------------------- | ---------- |
-| <motion> | <date>       | <dept/time if in event> | event <id> |
+| Motion   | Hearing date | Dept and time                          | Source                         |
+| -------- | ------------ | -------------------------------------- | ------------------------------ |
+| <motion> | <date>       | <Dept, localTime, if the entry has it> | the calendar entry "<subject>" |
 
-## Gaps & Confirms (surfaced - NOT filled)
+## Gaps to confirm (surfaced, not filled)
 
-- <hearing <date> (event <id>) has no matching filed motion in the record - confirm>
-- <MTC filed <date> (task <id>) has no hearing date set - confirm>
-- <opposition/reply windows for <motion> not calendared - hand to the deadline lane>
-- <event "MSJ?" (event <id>) is ambiguous - cannot place; confirm what it is>
+- <the "<subject>" hearing on <date> has no matching filed motion in the record; confirm>
+- <the motion filed <date> (task "<title>") has no hearing set; confirm>
+- <opposition and reply for <motion> are not on the calendar; confirm and calendar>
+- <the calendar entry "MSJ?" on <date> cannot be placed; confirm what it is>
 ```
 
-## Shape B - Gap / ambiguity dominates (nothing clean to surface)
+## Shape B - Gap or ambiguity dominates (nothing clean to surface)
 
 When the record is too thin or too ambiguous to assemble a trustworthy calendar, do
 **not** manufacture one. Lead with the gap.
 
 ```markdown
-# ⚠ Motion Calendar - gaps to resolve - matter <id> - YYYY-MM-DD
+# Motion Calendar - gaps to resolve - matter <matter number> - <today, the firm's way>
 
-**Situation:** <hearing on the calendar with no filed motion | motion filed with no
-hearing | status reported in a note but unconfirmed | event too ambiguous to place>
-**What the record shows:** <the sourced item(s), verbatim-anchored, e.g. "event <id>:
-'MSJ hearing' <date>; no filed-MSJ item in tasks or memos">
-**What it does NOT show:** <the missing piece - stated as missing, never inferred>
-**Decision:** surfaced for a person. Nothing computed, drafted, or asserted. This is a
-judgment the skill does not make on its own.
+Situation: <hearing on the calendar with no filed motion | motion filed with no
+hearing | status reported in a note but unconfirmed | entry too ambiguous to place>.
+What the record shows: <the item(s), named by subject and date, e.g. "the calendar
+entry 'MSJ hearing' on Oct 6; no filed-MSJ task or note">.
+What it does not show: <the missing piece, stated as missing, never inferred>.
+Nothing computed, drafted, or asserted; this is for a person to decide.
 ```
 
 ## File note (create_memo)
 
-One note per matter. The tables above are this run's report, never the note: a
-note carries no table. Every hearing time is the event's `localTime` on its
-`localDate` ("Oct 6 at 9:30 a.m."), never its `startTime`.
+One note per matter. The tables above are this run's report, never the note: a note
+carries no table. Every hearing time is the event's `localTime` on its `localDate`
+("Oct 6 at 9:30 a.m."), never its `startTime`.
 
-```markdown
-[Operator] <Routine name> as of <localDate>
-Motion calendar assembled: <X> motions filed, <Y> due, <V> hearings (next: <motion> on <date> at <time>, Dept <dept>); gaps: <gaps, or none>. Opposition and reply windows run off the hearing under the rule for the motion type (§1005(b) for a noticed motion, §437c for summary judgment).
-<Attorney> to confirm and calendar <the un-calendared windows, or the gap named above>, or: Nothing to do.
+**A matter with nothing on the motion calendar** (no motion, no hearing, no motion
+task) gets exactly two lines after the header, and nothing else: no rule sentence, no
+"attorney to confirm".
+
 ```
+[Operator] <Routine name> as of <localDate>
+No motions on file.
+Nothing to do.
+facts <facts_digest from the wake line, only when it gives one>
+```
+
+**A matter with motions**: the found line names what is on the calendar by subject and
+date. The rule sentence appears **only when a motion with a hearing date exists on this
+matter and its opposition or reply is not on the calendar**, once, in plain words. The
+to-do line names a person only when there is something to confirm; otherwise it is
+"Nothing to do."
+
+```
+[Operator] <Routine name> as of <localDate>
+<X> motions filed, <Y> due, <V> hearings; next: <motion> hearing on <date> at <time>, Dept <dept>. <Only when a window is missing: The opposition and reply for <motion> are not on the calendar; they are counted back from the hearing date, and summary judgment has its own longer timing.> <Gaps: <each gap named by subject and date>, or nothing.>
+<Attorney> to confirm and calendar <the missing opposition and reply, or the gap named above>, or: Nothing to do.
+facts <facts_digest from the wake line, only when it gives one>
+```
+
+The `facts` line is the wake line's `facts_digest` for this matter, copied exactly
+(`_shared-write-posture.md`, section 5). No `facts_digest` on the wake line, no facts
+line. Never "Prior surface: <date>", "last surfaced" or any other word about this
+routine's own earlier runs in a note: that belongs in the report, not the file.
 
 ## Rules
 
-1. **No outbound drafts in any shape.** This skill surfaces and logs internally; it
-   never drafts a motion, opposition, reply, or client/court message.
-2. **Every Filed / Due / Hearing row names its source** (event id / task id / memo id).
-   A row with no source is not a row - it is a Gap.
-3. **A missing due date is never computed.** Authored dates are surfaced with their
-   source; un-authored windows are surfaced as an **anchor + gap** for the deadline
-   lane, never as a stated date.
-4. **A missing hearing date or motion status is a Gap**, surfaced with what the record
-   does and does not show - never a plausible fill.
+1. **No outbound drafts in any shape.** This skill surfaces and writes a file note;
+   it never drafts a motion, opposition, reply, or client/court message.
+2. **Every Filed / Due / Hearing row names its source by subject and date** (the
+   calendar entry "<subject>" on <date>, the task "<title>" due <date>, the note of
+   <date>), never by id. A row with no source is not a row: it is a gap.
+3. **A missing due date is never computed.** Dates a person set are surfaced with
+   their source; windows nobody set are surfaced as the hearing date plus the gap,
+   never as a stated date.
+4. **A missing hearing date or motion status is a gap**, surfaced with what the record
+   does and does not show, never a plausible fill.
 5. **A hearing outcome appears only if the record states it, and occurrence is never
    inferred from a passed date.** The record shows a hearing was _set_ for a date, not
-   that it was held - hearings get continued, vacated, or taken off calendar. A passed
-   hearing date with no minute order or disposition in the record is "hearing was set
-   for <date> (event <id>); no minute order or disposition in the record - confirm
-   whether it was held, continued, or vacated," never "heard <date>" and never
-   "granted"/"denied."
-6. **A reported-but-unstructured status is surfaced as "reported in <source>,
-   unconfirmed,"** never re-asserted in the skill's own voice.
+   that it was held; hearings get continued, vacated, or taken off calendar. A passed
+   hearing date with no minute order or disposition in the record reads "the hearing
+   was set for <date> (calendar entry "<subject>"); no minute order or ruling in the
+   record; confirm whether it was held, continued, or vacated," never "heard <date>"
+   and never "granted" or "denied."
+6. **A reported-but-unstructured status is surfaced as "reported in the note of
+   <date>, unconfirmed,"** never re-asserted in the skill's own voice.
+7. **Nothing to report is two lines.** No rule sentence, no "attorney to confirm", no
+   internal words ("Prior surface", "last surfaced", "memo_facts") in a note.

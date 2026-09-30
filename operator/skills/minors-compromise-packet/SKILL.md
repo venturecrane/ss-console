@@ -237,10 +237,11 @@ posture; an unconfirmed write is surfaced, never reported as done.
 - **Never invent a connector tool, and never report a write as done without a
   confirming read.**
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every run appends, to the matter memo, a short note a junior paralegal learns from:
-_what_ it did (assembled the MC-350 packet from the authored figures), _why it
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
+(`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): _what_ it did (assembled the MC-350 packet from the authored figures), _why it
 matters_ (a minor's settlement is not final until the court approves the compromise
 and orders how the funds are held, Probate Code §3600 and following; CRC 7.950 and
 following), _what comes next_ (the GAL and minor attend the hearing under CRC 7.952

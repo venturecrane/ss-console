@@ -5,7 +5,7 @@ Two shapes. The conflict gate decides whether the skill produces a booking propo
 ## Shape A - Booking proposal (matter clear)
 
 ```markdown
-# Consult Scheduling - <client name> - matter <id> - YYYY-MM-DD
+# Consult Scheduling - <client name> - matter <matter number> - YYYY-MM-DD
 
 **Responsible attorney:** <name>
 **Practice area / consult length:** <area> / <N> min
@@ -40,7 +40,7 @@ Confirm a time so the calendar entry and the confirmation can go out.
 ## Shape B - Blocked on conflict
 
 ```markdown
-# ⛔ Scheduling blocked - matter <id> - YYYY-MM-DD
+# ⛔ Scheduling blocked - matter <matter number> - YYYY-MM-DD
 
 Scheduling is halted: this matter carries an unresolved conflict / CONFLICT-HOLD. No times proposed, no booking, no confirmation drafted. Route to a human for conflict clearance before scheduling.
 ```

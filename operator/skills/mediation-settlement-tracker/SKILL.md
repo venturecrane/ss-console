@@ -158,7 +158,7 @@ done. Two writes only:
   date or the MSC date, which stay surfaced as proposed-confirm and are never silently
   calendared as final. `staffId` is the responsible attorney resolved from the matter
   (`personResponsibleStaffId`).
-- **`create_memo`** writes the internal log and the training note.
+- **`create_memo`** writes the file note (no training paragraph).
 
 After each write the skill confirms it (`list_tasks`/`get_task` after `create_task`;
 the `confirmed` field `create_memo` returns, true only when it read its own memo back)
@@ -217,9 +217,10 @@ proposal to add or move a calendar entry is surfaced for a human, not written.
   it" is surfaced for confirmation, not adopted as final.
 - **Never assert a write completed** without a confirming read.
 
-## Training output (built into every run)
+## Training output (on request, never in the file note)
 
-Every run appends, to the matter memo, a short note a junior paralegal learns from
+When a person asks why, explain it the way a junior paralegal learns from it. This is
+never written into the file note, an email or a document
 (`operator/verticals/law-firm/addons/pi/references/_shared-training-output.md`): _what_ it did (assembled the brief inputs
 for the flagged mediation/MSC and surfaced the §998 and conference deadlines),
 _why it matters_ (a §998 offer shifts costs and is deemed withdrawn if not accepted

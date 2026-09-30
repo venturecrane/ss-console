@@ -3,7 +3,7 @@
 ## Shape A - Status reply (privilege + gate clear)
 
 ```markdown
-# Matter Status - <client> - matter <id> - YYYY-MM-DD
+# Matter Status - <client> - matter <matter number> - YYYY-MM-DD
 
 **Requester:** <name> (client on matter - verified)
 **Sourced from:** get_matter (incl. personResponsibleStaffId), list_tasks, list_calendar_entries (calendar binding), recent notes
@@ -23,7 +23,7 @@
 ## Shape B - Privilege block
 
 ```markdown
-# ⚠ Status request - non-client - matter <id> - YYYY-MM-DD
+# ⚠ Status request - non-client - matter <matter number> - YYYY-MM-DD
 
 Requester <name> is not the client/authorized contact on this matter. **No status disclosed.** Surface to a human to verify the relationship before any response.
 ```
@@ -31,7 +31,7 @@ Requester <name> is not the client/authorized contact on this matter. **No statu
 ## Shape C - Conflict-hold / route to human
 
 ```markdown
-# ⛔ Status request - matter on hold - matter <id> - YYYY-MM-DD
+# ⛔ Status request - matter on hold - matter <matter number> - YYYY-MM-DD
 
 Matter is on CONFLICT-HOLD. Routed to a human; no status drafted.
 ```

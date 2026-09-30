@@ -11,7 +11,7 @@ Every capture is keyed to `(matter, served-document, type)`.
 ## Shape A - Captured & surfaced for attorney confirm (rog / RFP / RFA)
 
 ```markdown
-# Served Discovery - <type> - <matter descriptor> - matter <id> - YYYY-MM-DD
+# Served Discovery - <type> - <matter descriptor> - matter <matter number> - YYYY-MM-DD
 
 **Matter:** matched to a single unique existing matter by case name + number - <case name>, <number> (caption is the untrusted search key, not a matter assertion)
 **Type:** <interrogatories (Form / Special) | requests for production | requests for admission>, <set number as stated on the document>
@@ -39,7 +39,7 @@ artifact, never the email body.
 ## File note (create_memo)
 
 [Operator] <Routine name> as of <localDate>
-Served <type> captured on matter <matter number>: served <date> by <method>, read off the proof of service. The response deadline comes from the rules engine or is confirmed by hand, not computed here.
+Served <type> captured on matter <matter number>: served <date> by <method>, read off the proof of service.
 <Attorney> to confirm the service date and method.
 fileId <file id> recorded
 ```
@@ -54,7 +54,7 @@ Use this **only** when the notice carries **no** document-production demand. If 
 carries a document rider, use Shape C.
 
 ```markdown
-# Served Discovery - Deposition Notice - <matter descriptor> - matter <id> - YYYY-MM-DD
+# Served Discovery - Deposition Notice - <matter descriptor> - matter <matter number> - YYYY-MM-DD
 
 **Type:** deposition notice (no embedded document demand) - **no party response-verification**; drives calendar + prep
 **Read off the notice:** deponent <name/role>, date/time <...>, place/remote <...>
@@ -76,7 +76,7 @@ carry their own objection window. Surface **both** facets. If either facet canno
 read cleanly, fall back to Shape D rather than dropping the production obligation.
 
 ```markdown
-# Served Discovery - Deposition Notice + Document Demand - <matter descriptor> - matter <id> - YYYY-MM-DD
+# Served Discovery - Deposition Notice + Document Demand - <matter descriptor> - matter <matter number> - YYYY-MM-DD
 
 **Type:** deposition notice with an embedded document demand (§2025.220(a)(4))
 **Facet 1 - calendar + prep:** deponent <name/role>, date/time <...>, place/remote <...>
@@ -98,7 +98,7 @@ fileId <file id> recorded
 ## Shape D - Surface & ask (fail-closed: cannot read / classify / match / one method)
 
 ```markdown
-# ⚠ Served Discovery - needs a human - matter <id> - YYYY-MM-DD
+# ⚠ Served Discovery - needs a human - matter <matter number> - YYYY-MM-DD
 
 **Situation:** <proof of service missing / illegible / blank / ambiguous date or method
 | POS states more than one service method | discovery type unclear | deposition notice

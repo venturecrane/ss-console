@@ -19,9 +19,10 @@ what it names and call again. The File note is the separate `create_memo`, and i
 names the file.
 
 ```markdown
-# Minor's Compromise Packet - <minor> - matter <id> - YYYY-MM-DD
+# Minor's Compromise Packet (draft): <minor>
 
-**Decision:** assembled from authored matter figures; staged for <attorney> to finalize and file.
+Matter <matter number>, <matter descriptor>. Prepared <today, the firm's way> for <attorney> to finalize and file.
+
 **Petitioner (from roles):** <GAL name> as Guardian ad Litem for <minor>
 **Source figures:** <each figure + the file/read it came from - gross, fee, costs, medical/liens, net>
 
@@ -71,7 +72,7 @@ Minor's compromise packet assembled on matter <matter number> from <N> recorded 
 ## Shape B - Track / chase (open item, cadence due)
 
 ```markdown
-# Minor's Compromise Track - <minor> - matter <id> - YYYY-MM-DD
+# Minor's Compromise Track - <minor> - matter <matter number> - YYYY-MM-DD
 
 **Status:** <GAL appointment pending | hearing <date> | lien payoff outstanding>
 **Decision:** <the single next step - surface the gating item / draft the lien chase>
@@ -91,7 +92,7 @@ Minor's compromise on matter <matter number>: <what is outstanding>.
 ## Shape C - Cannot assemble (missing required figures or no GAL)
 
 ```markdown
-# ⚠ Minor's Compromise Packet - cannot assemble - matter <id> - YYYY-MM-DD
+# ⚠ Minor's Compromise Packet - cannot assemble - matter <matter number> - YYYY-MM-DD
 
 **Situation:** <no GAL appointed | authored net missing | required figures unauthored>
 **Decision:** surfaced for a person; not assembled from partial or invented data, and

@@ -11,8 +11,9 @@ who owns the next step. It reads like a competent colleague handing you the shor
 and getting out of the way.
 
 The digest MAY: list the in-band items grouped and ordered by time-criticality; name
-the matter, the item, the sourced date/age, and the owning skill/step; carry the short
-per-item training note; say plainly when nothing needs a person.
+the matter, the item by its title, the sourced date/age, and the person (or the
+Operator) who owns the next step; say plainly when nothing needs a person. No training
+paragraph, and never a routine's name as an owner or actor.
 
 The digest MAY NOT: prescribe the legal next step or what a matter "should" do;
 characterize a matter's legal position; act on an item or imply it acted (no "chased,"
@@ -32,8 +33,10 @@ not a gap to fill.
 - No "just circling back," "just following up," "touching base," "quick heads-up."
 - No urgency words the record does not earn (no "urgent," "critical," "ASAP" unless the
   sourced date/age actually places the item there).
-- Points, never prescribes. "Unsigned 17 days, owns: client-verification-tracker," not
-  "you need to call the client and get this signed."
+- Points, never prescribes. "Unsigned 17 days. Owner: the Operator," not "you need to
+  call the client and get this signed."
+- Dates the firm's way ("Oct 2"), never "2026-10-02".
+- No capitals for emphasis.
 - Never states or implies the skill acted on an item.
 - Short. The firm should read the whole digest in under a minute.
 
@@ -41,15 +44,18 @@ not a gap to fill.
 
 **Good - an item line (Shape A):**
 
-> <matter number> (<matter id, first 4 and last 4>) - interrogatory verification, sent
-> <date as the record prints it>, unsigned (<age>) - owns: client-verification-tracker.
+```
+Unsigned: matter <matter number>, interrogatory verification, sent <date the firm's way>, unsigned <N> days. Owner: <person, or the Operator>.
+```
 
 Placeholders, not sample values, and this line is why. It previously read
-"Reyes v. Doe (7a11...5001) - interrogatory verification, sent 2026-06-14,
+"Roe v. Doe (7a11...5001) - interrogatory verification, sent 2026-06-14,
 unsigned (17 days)", which put four separately-refused classes into the one
 example the model is asked to copy: a case caption (`case-name`, tier 2), a
 date (`date:####-##-##`, the largest single refusal shape), a matter-id
-fragment, and a derived interval. Every value in a digest line has to come
+fragment, and a derived interval. A later version also named a routine
+("owns: client-verification-tracker") as the owner, which a paralegal cannot act on
+(2026-09-29): the owner is a person or the Operator. Every value in a digest line has to come
 from a read of the firm's records, and a sample value in the template is the
 easiest thing in the file to reach for when a read comes up short.
 
@@ -60,12 +66,14 @@ citation gate. The old example taught the one form the substrate rejects.
 
 **Good - a quiet day (Shape B):**
 
-> Nothing needs a person today across 3 open matters. Waiting/on-track items are not
-> listed.
+```
+Nothing needs a person today across 3 open matters; waiting and on-track items are not listed.
+Nothing to do.
+```
 
 **Bad - acts on the item (surface skill must never act):**
 
-> Reyes verification unsigned 17 days, so I sent the client another reminder and
+> Roe verification unsigned 17 days, so I sent the client another reminder and
 > closed it out.
 
 (This skill sends nothing and closes nothing; it points to the owning skill.)

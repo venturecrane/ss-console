@@ -8,7 +8,7 @@ from authored config or is surfaced to confirm.
 ## Shape A - Set up (structure created, deadlines scaffolded to confirm, writes confirmed)
 
 ```markdown
-# Matter set up - <matter descriptor> - <matter type> - matter <id> - YYYY-MM-DD
+# Matter set up - <matter descriptor> - <matter type> - matter <matter number> - YYYY-MM-DD
 
 **Decision:** created the standard setup for <matter type> from the authored convention; each write confirmed by a follow-up read. Deadlines scaffolded as items to confirm, not computed.
 **Setup source:** authored matter-setup convention for <matter type> (config mapping)
@@ -19,7 +19,7 @@ from authored config or is surfaced to confirm.
 
 ## Opening tasks created (each confirmed via list_tasks / get_task)
 
-- <task> - staff <staffId>, confirm-by <near-term admin date, distinct from any legal deadline>
+- <task> - <staff name>, confirm-by <near-term admin date, distinct from any legal deadline>
 
 ## Deadlines scaffolded to confirm (NO date computed - attorney + engine own these)
 
@@ -36,7 +36,7 @@ Matter <matter number> (<type>) set up: <N> folders and <M> tasks created and co
 ## Shape B - Filing package staged (on request)
 
 ```markdown
-# Filing package staged - <matter descriptor> - matter <id> - YYYY-MM-DD
+# Filing package staged - <matter descriptor> - matter <matter number> - YYYY-MM-DD
 
 **Decision:** collated the venue filing-package documents the matter holds into <folder>; each placement confirmed via get_files_on_matter. Surfaced for <attorney> to file. Not filed, not served.
 **Package (each read from the matter):** <complaint / summons / civil case cover sheet CM-010 / ...>
@@ -52,7 +52,7 @@ File the package through the firm's filing path.
 ## Shape C - Surface to a human (convention unknown, write unconfirmed, party unresolved, special-timeline flag)
 
 ```markdown
-# ⚠ Matter setup - needs a human - <matter descriptor> - matter <id> - YYYY-MM-DD
+# ⚠ Matter setup - needs a human - <matter descriptor> - matter <matter number> - YYYY-MM-DD
 
 **Situation:** <setup convention for this matter type not established - proposing a structure to confirm | a write did not confirm (create_folder/create_task/add_file/create_memo error or no confirming-read match) | defendant roster or a party status cannot be resolved | government defendant or minor plaintiff present - SOL timeline is not the default>
 **Decision:** surfaced for a person. Nothing asserted as created; no date computed. This is a judgment the skill does not make on its own.

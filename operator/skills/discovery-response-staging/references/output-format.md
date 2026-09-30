@@ -7,7 +7,7 @@ engine authors that, not this skill.
 ## Shape A - Staged (inputs placed in the confirmed target, writes confirmed)
 
 ```markdown
-# Staged - <matter descriptor> - <response-set> - matter <id> - YYYY-MM-DD
+# Staged - <matter descriptor> - <response-set> - matter <matter number> - YYYY-MM-DD
 
 **Decision:** staged the request and supporting docs into <confirmed input folder>; each write confirmed by a follow-up read.
 **Staging target:** <folder> (from the authored convention / config mapping for <engine>)
@@ -30,11 +30,11 @@ Nothing to do until the draft comes back.
 ## Shape B - Returned draft routed to the attorney
 
 ```markdown
-# Draft routed - <matter descriptor> - <response-set> - matter <id> - YYYY-MM-DD
+# Draft routed - <matter descriptor> - <response-set> - matter <matter number> - YYYY-MM-DD
 
 **Decision:** finished draft observed in the matter; left in place and routed to <responsible attorney> to review. Not moved, not edited, not finalized.
 **Draft:** <file> (observed via get_files_on_matter; identified by diffing against the staged input set)
-**Routed via:** create_task assigned to <personResponsibleStaffId>, keyed to <matter>/<response-set>, **confirmed present via list_tasks/get_task**. dueDateOnly = <near-term confirm-by date, distinct from any legal deadline>.
+**Routed via:** create_task assigned to <responsible person's name>, keyed to <matter>/<response-set>, **confirmed present via list_tasks/get_task**. dueDateOnly = <near-term confirm-by date, distinct from any legal deadline>.
 
 ## File note (create_memo)
 
@@ -46,7 +46,7 @@ Nothing to do until the draft comes back.
 ## Shape C - Surface to a human (target/convention unknown, write unconfirmed, ambiguous candidate)
 
 ```markdown
-# ⚠ Staging - needs a human - <matter descriptor> - matter <id> - YYYY-MM-DD
+# ⚠ Staging - needs a human - <matter descriptor> - matter <matter number> - YYYY-MM-DD
 
 **Situation:** <staging target / folder convention not established - proposing <candidate> to confirm | a write did not confirm (add_file/create_folder/create_task/create_memo error or no confirming-read match) | draft present in the matter but the review task could not be confirmed created | returned-draft candidate cannot be matched to the response-set with confidence>
 **Decision:** surfaced for a person. Nothing asserted as staged or routed. This is a judgment the skill does not make on its own.

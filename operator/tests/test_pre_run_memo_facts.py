@@ -25,6 +25,7 @@ import importlib.util
 import json
 import stat
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -110,7 +111,7 @@ def test_motion_tracker_gets_the_day_of_its_own_latest_surface() -> None:
             memo(id="m1", createdDate="2026-08-01T09:00:00Z", plainText="[Operator] Motion calendar assembled for ..."),
             # The SURFACE form, which SKILL.md step 6 also sanctions. Matching
             # only the log body would read this matter as never surfaced.
-            memo(id="m2", createdDate="2026-09-14T09:00:00Z", plainText="[Operator] # Motion Calendar - Reyes ..."),
+            memo(id="m2", createdDate="2026-09-14T09:00:00Z", plainText="[Operator] # Motion Calendar - Roe ..."),
             # A LATER memo that is not this skill's surface must not win.
             memo(id="m3", createdDate="2026-09-20T09:00:00Z", plainText=f"[Operator] Captured a lien. {PROSE}"),
             # Nor an unstamped one quoting the marker.
@@ -135,6 +136,28 @@ def test_a_note_updated_in_place_surfaces_on_its_last_update_day() -> None:
     assert gate.derive_matter_facts("motion-calendar-tracker", payload) == {"last_surface": "2026-09-28"}
     assert gate._memo_day({"createdDate": "2026-09-20T00:00:00Z", "lastUpdated": "garbage"}) == "2026-09-20"
     assert gate._memo_day({"lastUpdated": "2026-09-21T00:00:00Z"}) == "2026-09-21"
+
+
+def test_a_no_motions_note_is_found_by_its_header() -> None:
+    # Since 2026-09-29 a matter with no motions gets "No motions on file." and
+    # "Nothing to do.", which carry no surface marker; the header marks it.
+    gate = _load_gate()
+    payload = {
+        "value": [
+            memo(
+                id="m1",
+                createdDate="2026-09-29T09:00:00Z",
+                plainText="[Operator] Motion calendar as of Sep 29, 2026\nNo motions on file.\nNothing to do.",
+            ),
+            # Another routine's note on the same day is not this one.
+            memo(
+                id="m2",
+                createdDate="2026-09-30T09:00:00Z",
+                plainText="[Operator] Trial binder as of Sep 30, 2026\nThe motion calendar is clear.",
+            ),
+        ]
+    }
+    assert gate.derive_matter_facts("motion-calendar-tracker", payload) == {"last_surface": "2026-09-29"}
 
 
 def test_motion_tracker_reports_no_prior_surface_as_none() -> None:
@@ -291,6 +314,124 @@ def test_an_unknown_matter_envelope_yields_no_count_and_no_facts() -> None:
 def test_the_atom_guard_accepts_atoms_and_refuses_sentences(value, expected) -> None:
     gate = _load_gate()
     assert gate._atoms_only(value) is expected
+
+
+# ---------------------------------------------------------------------------
+# The facts digest: same facts, same note, whatever the wording (2026-09-29)
+# ---------------------------------------------------------------------------
+
+_NOW = datetime(2026, 9, 29, 16, 0, tzinfo=timezone.utc)
+
+EVENTS = [
+    {"id": "e1", "subject": "MSJ hearing", "startTime": "2026-10-06T16:30:00", "location": "Dept 31"},
+    {"id": "e2", "subject": "MTC hearing", "startTime": "2026-10-20T15:30:00", "location": "Dept 31"},
+]
+TASKS = [
+    {"id": "t1", "subject": "File opposition to MSJ", "dueDateOnly": "2026-09-22", "isCompleted": False},
+    {"id": "t2", "subject": "Serve notice", "dueDate": "2026-10-01T07:00:00Z", "isCompleted": False},
+]
+
+
+def test_the_digest_is_twelve_hex_and_the_same_in_any_order() -> None:
+    gate = _load_gate()
+    one = gate.facts_digest(EVENTS, TASKS, now=_NOW)
+    assert len(one) == 12 and all(ch in "0123456789abcdef" for ch in one)
+    assert gate.facts_digest(list(reversed(EVENTS)), list(reversed(TASKS)), now=_NOW) == one
+    # Ids and whitespace inside a subject are not facts the note reports.
+    shuffled = [{**EVENTS[0], "id": "other", "subject": "MSJ   hearing"}, EVENTS[1]]
+    assert gate.facts_digest(shuffled, TASKS, now=_NOW) == one
+    # Twice in a row, in a fresh module: deterministic across runs.
+    assert _load_gate().facts_digest(EVENTS, TASKS, now=_NOW) == one
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda e, t: ([{**e[0], "startTime": "2026-10-07T16:30:00"}, e[1]], t),
+        lambda e, t: ([{**e[0], "location": "Dept 3"}, e[1]], t),
+        lambda e, t: ([{**e[0], "subject": "MSJ hearing (continued)"}, e[1]], t),
+        lambda e, t: (e[:1], t),
+        lambda e, t: (e, [{**t[0], "dueDateOnly": "2026-09-23"}, t[1]]),
+        lambda e, t: (e, t[:1]),
+    ],
+)
+def test_any_reported_fact_changing_moves_the_digest(change) -> None:
+    """The falsifier: a digest that never moved would call every run unchanged."""
+    gate = _load_gate()
+    events, tasks = change(EVENTS, TASKS)
+    assert gate.facts_digest(events, tasks, now=_NOW) != gate.facts_digest(EVENTS, TASKS, now=_NOW)
+
+
+def test_a_hearing_date_passing_moves_the_digest() -> None:
+    gate = _load_gate()
+    later = _NOW.replace(month=10, day=7)
+    assert gate.facts_digest(EVENTS, TASKS, now=later) != gate.facts_digest(EVENTS, TASKS, now=_NOW)
+
+
+def test_a_probe_task_is_not_a_fact() -> None:
+    gate = _load_gate()
+    probe = {"id": "p", "subject": "[SMD-PROBE 1] self test", "dueDateOnly": "2026-10-01"}
+    assert gate.facts_digest(EVENTS, [*TASKS, probe], now=_NOW) == gate.facts_digest(EVENTS, TASKS, now=_NOW)
+
+
+class DigestClient(FakeClient):
+    def __init__(self, *args, events=None, tasks=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._events = events if events is not None else {"value": EVENTS}
+        self._tasks = tasks if tasks is not None else {"value": TASKS}
+        self.params: list[tuple[str, dict]] = []
+
+    def get(self, path, **params):
+        self.params.append((path, params))
+        if path == "/events":
+            self.paths.append(path)
+            return self._events
+        if path == "/tasks":
+            self.paths.append(path)
+            return self._tasks
+        return super().get(path, **params)
+
+
+def _motion_pull(gate, **kwargs):
+    client = DigestClient(
+        matters={"value": [{"id": "mat-1", "number": "2026-0142"}]},
+        memos_by_matter={"mat-1": {"value": []}},
+        **kwargs,
+    )
+    return client, gate.pull_facts_payload(client, "motion-calendar-tracker")
+
+
+def test_the_motion_tracker_row_carries_the_digest_on_the_wake_line() -> None:
+    gate = _load_gate()
+    client, payload = _motion_pull(gate)
+    (row,) = payload["matters"]
+    assert len(row["facts_digest"]) == 12
+    assert row["facts_digest"] == gate.facts_digest(EVENTS, TASKS)
+    assert ("/events", {"MatterId": "mat-1", "ExcludeDeletedEvents": True, "Limit": 500}) in client.params
+    assert ("/tasks", {"MatterId": "mat-1", "IsCompleted": False, "Limit": 500}) in client.params
+    # Atoms only: no subject, place or date reaches the payload.
+    serialized = json.dumps(payload)
+    assert "MSJ" not in serialized and "Dept 31" not in serialized
+
+
+def test_a_partial_or_unreadable_facts_read_gives_no_digest_and_keeps_the_row() -> None:
+    gate = _load_gate()
+    full = {"value": [dict(EVENTS[0], id=f"e{i}") for i in range(gate._DIGEST_PAGE_LIMIT)]}
+    for kwargs in ({"events": full}, {"tasks": {"weird": "envelope"}}):
+        _, payload = _motion_pull(gate, **kwargs)
+        (row,) = payload["matters"]
+        assert "facts_digest" not in row and row["matterId"] == "mat-1"
+
+
+def test_a_skill_outside_the_digest_list_reads_no_events_or_tasks() -> None:
+    gate = _load_gate()
+    client = DigestClient(
+        matters={"value": [{"id": "mat-1", "number": "2026-0142"}]},
+        memos_by_matter={"mat-1": {"value": []}},
+    )
+    payload = gate.pull_facts_payload(client, "service-confirmation-watcher")
+    assert client.paths == ["/matters", "/matters/mat-1/memos"]
+    assert "facts_digest" not in payload["matters"][0]
 
 
 # ---------------------------------------------------------------------------

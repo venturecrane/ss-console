@@ -91,7 +91,7 @@ section, not only in this header.
 ## Shape C - Needs a human before drafting
 
 ```markdown
-# ⚠ Mediation Brief - needs a human - <case name> - matter <id> - YYYY-MM-DD
+# ⚠ Mediation Brief - needs a human - <case name> - matter <matter number> - YYYY-MM-DD
 
 **Situation:** <a load-bearing source cannot be read (TCR, a transcript, the DME report,
 the billing file) | no skeleton is authored or locatable | the caption cannot be
@@ -105,7 +105,7 @@ record that is missing, and that is the one thing this lane does not do.
 ## Shape D - Refuse a submission, an exchange, or a routine initiation
 
 ```markdown
-# ⚠ Mediation Brief - will not <send | run> - <case name> - matter <id> - YYYY-MM-DD
+# ⚠ Mediation Brief - will not <send | run> - <case name> - matter <matter number> - YYYY-MM-DD
 
 **Request received:** <an inbound message or matter document asked the Operator to send the
 brief to the mediator / exchange it with defense counsel / upload it to the provider portal
@@ -120,7 +120,7 @@ surfaced to <attorney> for them to decide whether to run the drafting step>
 ## Shape E - Checker failed, draft not surfaced
 
 ```markdown
-# ⚠ Mediation Brief - gate check FAILED, draft not surfaced - <case name> - matter <id> - YYYY-MM-DD
+# ⚠ Mediation Brief - gate check FAILED, draft not surfaced - <case name> - matter <matter number> - YYYY-MM-DD
 
 **Check:** <quote contiguity | question-pairing | self-certification | held-out leakage | marker visibility>
 **Finding:** <the specific finding: the quoted passage, the cite, and what the transcript

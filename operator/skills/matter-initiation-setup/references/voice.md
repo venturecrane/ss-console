@@ -2,7 +2,7 @@
 
 This skill sends nothing to a client, a party, or the court. Its only authored text is
 **internal**: the task bodies it opens, a short setup note to the responsible attorney or
-paralegal, and the file note (`create_memo`, including the training-output note). All
+paralegal, and the file note (`create_memo`; no training paragraph). All
 of it is connective, never work product, never a legal date. Derived from the pack chase
 voice (`operator/verticals/law-firm/addons/pi/references/_shared-chase-voice.md`),
 internal register.
@@ -30,7 +30,7 @@ staged unless a matter read confirmed it; instruct the attorney on the legal sub
 Factual record of the setup in the pack's one shape (`_shared-write-posture.md`, section 5): the header line
 `[Operator] <Routine name> as of <localDate>`, one plain line of what it found, one
 plain line of what a person needs to do (or "Nothing to do."). No `>` quote marks, no
-`**`, no headings, no tables. The training note rides in those two lines. Every created item traces to a confirming read. A write is logged as done
+`**`, no headings, no tables. No training paragraph: the why is given when a person asks. Every created item traces to a confirming read. A write is logged as done
 only when a follow-up read confirmed it. No date is ever logged as computed.
 
 ## Hard rules (both)
@@ -49,7 +49,7 @@ only when a follow-up read confirmed it. No date is ever logged as computed.
 
 **Good - setup note after a confirmed, authored setup:**
 
-> Reyes (auto) is set up: the standard PI-auto folders and opening tasks are created and
+> Roe (auto) is set up: the standard PI-auto folders and opening tasks are created and
 > confirmed. I scaffolded a SOL-confirm item for you and a serve-and-file item for each
 > of the two named defendants; the dates on those are yours and the engine's to confirm,
 > I did not compute them. The confirm-by dates on the admin tasks are two business days
@@ -60,7 +60,7 @@ without stating a date.)
 
 **Good - surfacing an unconfirmed convention:**
 
-> I have the Reyes matter ready to set up, but I do not yet have your confirmed folder
+> I have the Roe matter ready to set up, but I do not yet have your confirmed folder
 > and opening-task convention for a PI-auto matter. Here is the structure I would create;
 > confirm it is right before I write anything.
 

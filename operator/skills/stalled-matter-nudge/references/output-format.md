@@ -10,7 +10,7 @@
 
 ## Stalled - needs a nudge
 
-### matter <id> - <client> - quiet <D> days
+### matter <matter number> - <client> - quiet <D> days
 
 **Last activity:** <date> (matter `LastUpdated`)
 
@@ -24,11 +24,11 @@
 
 ## Waiting - not flagged (auditable)
 
-- matter <id> - <client>: quiet <D> days BUT open task "<name>" due <future date> → legitimately waiting.
+- matter <matter number> - <client>: quiet <D> days BUT open task "<name>" due <future date> → legitimately waiting.
 
 ## Held - surfaced separately (no client follow-up)
 
-- matter <id> - <client>: on CONFLICT-HOLD; route to human for clearance, no follow-up drafted.
+- matter <matter number> - <client>: on CONFLICT-HOLD; route to human for clearance, no follow-up drafted.
 ```
 
 ## Rules

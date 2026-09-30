@@ -221,8 +221,8 @@ three extra fields so a plain-word reply can be resolved in code:
 
 - **`n`** - the number printed beside the item, assigned by
   `digest_items.number_firing` and copied onto the envelope append by
-  `dispatch_envelope._fired_append`. An "Also open" matter or an "Open without
-  a task id" matter has one number shared by all of its rows. Numbering stops
+  `dispatch_envelope._fired_append`. An "Also open" matter or an "Open, not
+  tied to one task" matter has one number shared by all of its rows. Numbering stops
   at the append cap, so no number is printed without a row behind it.
 - **`snooze_days`** - the escalator's `ack_snooze_days` (1..365), on every
   numbered row, so the overlay's confirmation states the quiet window from the

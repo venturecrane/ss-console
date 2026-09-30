@@ -67,11 +67,11 @@ received <date> appears thin: <what was observed, factual, not a sufficiency rul
   response (§2030.250 / _Appleton_).>
 - <thin but VERIFIED response → compel-further track: a meet-and-confer declaration is
   required and the window runs from service of the verified response. The compel-further
-  section and day-count belong to `meet-and-confer-drafter`.>
+  section and day-count belong to the meet-and-confer letter.>
   <For RFAs no/late response: **higher severity - deemed-admissions exposure, §2033.280.**>
   **Decision (attorney):** informal meet-and-confer first, or a meet-and-confer letter?
-  If a letter, it is drafted by `meet-and-confer-drafter` (that skill owns the letter and
-  the compel-section citation). **This skill does not send anything, does not write the
+  If a letter, the Operator drafts it for your review (the letter carries the
+  compel-section citation). **This skill does not send anything, does not write the
   letter, and does not assert the compel section or the day-count.**
 
 ## File note (create_memo)
@@ -123,6 +123,23 @@ near>
 **Decision:** surfaced for a person. Nothing computed as final, nothing calendared,
 nothing sent. This is a judgment the skill does not make on its own.
 ```
+
+## A matter with nothing to report, and the facts line
+
+When this routine writes a note on a matter where it found nothing (no open discovery),
+the note is the header and exactly two lines. No rule sentence, no request to
+confirm when there is nothing to confirm, and no word about an earlier run
+(`_shared-write-posture.md`, section 5):
+
+```
+[Operator] <Routine name> as of <localDate>
+No open discovery on file.
+Nothing to do.
+```
+
+When the wake line gives the matter a `facts_digest`, the note's last line is
+`facts <digest>`, copied exactly from the wake line and alone on its line. With no
+`facts_digest` on the wake line, write no facts line.
 
 ## Rules
 
