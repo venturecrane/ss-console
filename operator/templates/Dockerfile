@@ -1111,7 +1111,14 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # schedule never runs stale code on request (the pilot ran a pre-#3003 copy of
 # six trackers on 2026-09-29). bootstrap/translate.py and its test only; no
 # tracked twin moves; schemas.py untouched.
-ARG OVERLAY_REF="881563e9bf2befe7b21ccae09b8287feb567f9dd"
+# 2026-09-29j (40c11a21, the overlay #405 merge commit). Capitals for emphasis
+# refuse on every surface, the document included: report-only until the pilot
+# audit showed zero capitals rows on notes and staff sends while the binder
+# index carried "CRITICAL:" and "NOT CAPTURED" (vfy_01M3R9WNX85DGPNW2NWBH90HG1).
+# A heading line, a document's table row, and a quoted record title keep their
+# capitals. shared/output_checklist.py and tests only; no tracked twin moves;
+# schemas.py untouched.
+ARG OVERLAY_REF="40c11a2109c646f74306d8abf878060d56bc5bb7"
 
 ARG CUSTOMER_SLUG=customer-zero
 

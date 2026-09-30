@@ -1454,7 +1454,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // 9d689629 -> 881563e9 (2026-09-29, overlay#404 merge commit, Option B). Every staged
     // pre_run script is refreshed from its skill copy at boot; an unscheduled skill
     // never runs stale code on request.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="881563e9bf2befe7b21ccae09b8287feb567f9dd"')
+    // 881563e9 -> 40c11a21 (2026-09-29, overlay#405 merge commit, Option B). Capitals for
+    // emphasis refuse on every surface, the document included; a heading line, a
+    // document's table row and a quoted record title keep theirs.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="40c11a2109c646f74306d8abf878060d56bc5bb7"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
