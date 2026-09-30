@@ -236,12 +236,43 @@ def test_the_previously_tail_carries_no_internal_id() -> None:
         "Previously (2026-09-28): Index filed as Binder Index (draft).docx on matter.",
         "Previously (2026-09-27): Index refreshed; 4 witnesses.",
     ]
-    assert not mt._ID_RE.search("\n".join(lines[1:]))
+    # The marker the tail held is now a machine line of its own; every line a
+    # person reads is id-free.
+    assert f"fileId {GUID} recorded" in lines
+    assert not mt._ID_RE.search("\n".join(line for line in lines if not mt.is_marker(line)))
 
 
 def test_without_ids_leaves_a_clean_line_alone() -> None:
     line = "Trial is October 13, 2026, 9:00 a.m., Dept. 47; MSJ hearing Oct 6 at 9:30 a.m.; matter 2026-PI-105."
     assert mt._without_ids(line) == line
+
+
+def test_without_ids_is_case_blind() -> None:
+    # The tail line is a sentence: its first word is capitalised.
+    assert mt._without_ids("File 788E0854 attached for review.") == "attached for review."
+    assert mt._without_ids(f"Package {GUID.upper()} confirmed.") == "Package confirmed."
+    assert mt._without_ids("Hash " + "5F3A" * 8 + " confirmed.") == "Hash confirmed."
+
+
+def test_a_marker_found_only_in_the_tail_is_promoted_before_the_tail_loses_it() -> None:
+    # service-confirmation-watcher dedups by scanning the WHOLE note for fileIds.
+    old = (
+        "[Operator] Service confirmation as of 2026-09-28\n"
+        "Nothing to do.\n"
+        f"Previously (2026-09-27): Service on Acme confirmed (fileId {GUID} recorded)."
+    )
+    c = _Fake([_memo("m1", old)])
+    mt.upsert_memo(c, M, "[Operator] Service confirmation as of 2026-09-29\nService on Beta pending.", sleep=_nosleep)
+    lines = c.memos["m1"]["plainText"].splitlines()
+    assert f"fileId {GUID} recorded" in lines
+    assert lines[-1] == "Previously (2026-09-27): Service on Acme confirmed."
+
+
+def test_without_ids_keeps_a_firms_all_digit_reference() -> None:
+    # A firm's own numbers are digits; ours carry a hex letter. Both after "file".
+    line = "Reviewed file 20260928 and matter 84930211; claim 00123456 with State Farm."
+    assert mt._without_ids(line) == line
+    assert mt._without_ids("Filed (file 788e0854, 12 pages) today.") == "Filed today."
 
 
 def test_a_new_marker_with_the_same_content_is_kept() -> None:
