@@ -79,6 +79,7 @@ never passes arguments, so this path cannot trigger on a scheduled fire.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import socket
@@ -436,6 +437,122 @@ def derive_matter_facts(skill: str, payload: object) -> dict:
     return row
 
 
+# ---------------------------------------------------------------------------
+# The facts digest (2026-09-29): same facts, same note, whatever the wording
+# ---------------------------------------------------------------------------
+#
+# Two motion-calendar runs 14 minutes apart on the pilot rewrote every file
+# note in different words for identical facts, so each run took a "changed"
+# update and left a "Previously" line. The connector's ``upsert_memo`` compares
+# note text, and a model never words the same facts the same way twice. So code
+# hashes the facts the routine reports and hands the model ``facts_digest`` per
+# matter; the note's last line is ``facts <digest>``, copied, and the connector
+# treats two notes carrying the same line as unchanged.
+
+#: Skills whose file note reports exactly the matter's calendar entries and open
+#: tasks, which is what :func:`facts_digest` hashes. A skill joins only when this
+#: pull covers every fact its note reports: a digest that misses one would call
+#: a real change "unchanged" and leave the old note standing.
+_DIGEST_SKILLS = ("motion-calendar-tracker",)
+
+#: One page each. A full page is a partial view, and a partial view gets no
+#: digest (the note then falls back to comparing its text).
+_DIGEST_PAGE_LIMIT = 500
+
+_PROBE_SUBJECT_MARK = "[SMD-PROBE"
+
+
+def _field(record: dict, *keys: str) -> object:
+    for key in keys:
+        if key in record:
+            return record[key]
+    return None
+
+
+def _text(value: object) -> str:
+    return " ".join(value.split()) if isinstance(value, str) else ""
+
+
+def _utc_instant(value: object) -> datetime | None:
+    """A Smokeball ``startTime`` (naive UTC, sometimes zoned) as an aware instant."""
+    if not isinstance(value, str) or len(value) < 16:
+        return None
+    try:
+        stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
+
+
+def _event_fact(event: dict, now: datetime) -> list:
+    start = _field(event, "startTime", "StartTime")
+    instant = _utc_instant(start)
+    return [
+        _text(_field(event, "subject", "Subject")),
+        start if isinstance(start, str) else "",
+        _text(_field(event, "location", "Location")),
+        # Once a hearing date passes, the note says something new (no minute
+        # order yet: confirm what happened), so passing is a fact.
+        bool(instant is not None and instant < now),
+    ]
+
+
+def _task_fact(task: dict, today: str) -> list:
+    due_only = _field(task, "dueDateOnly", "DueDateOnly")
+    due = _field(task, "dueDate", "DueDate")
+    day = due_only if isinstance(due_only, str) else due if isinstance(due, str) else ""
+    return [
+        _text(_field(task, "subject", "Subject")),
+        day,
+        bool(_field(task, "isCompleted", "IsCompleted")),
+        bool(day[:10] and day[:10] < today),
+    ]
+
+
+def facts_digest(events: list, tasks: list, now: datetime | None = None) -> str:
+    """sha256 hex[:12] of a canonical JSON of the facts a routine reports.
+
+    Order-free (both lists sorted), whitespace-free inside a subject, and blind
+    to everything the note does not report (ids, stamps, staff). Deterministic:
+    the same events and tasks give the same digest in any order, on any run, on
+    the same side of each date. Probe artifacts are left out, as the
+    connector's ``list_tasks`` leaves them out of what the model reads.
+    """
+    now = now or datetime.now(timezone.utc)
+    today = now.date().isoformat()
+    canonical = {
+        "events": sorted(_event_fact(e, now) for e in events if isinstance(e, dict)),
+        "tasks": sorted(
+            _task_fact(t, today)
+            for t in tasks
+            if isinstance(t, dict) and _PROBE_SUBJECT_MARK not in _text(_field(t, "subject", "Subject"))
+        ),
+    }
+    blob = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:12]
+
+
+def _matter_digest(client, matter_id: str) -> str | None:
+    """The matter's facts digest, or None when either read fails or is partial."""
+    try:
+        events = _listed(
+            client.get("/events", MatterId=matter_id, ExcludeDeletedEvents=True, Limit=_DIGEST_PAGE_LIMIT),
+            _MEMO_ENVELOPE_KEYS,
+        )
+        tasks = _listed(
+            client.get("/tasks", MatterId=matter_id, IsCompleted=False, Limit=_DIGEST_PAGE_LIMIT),
+            _MEMO_ENVELOPE_KEYS,
+        )
+    except Exception as exc:  # noqa: BLE001 - no digest degrades to the text comparison, never the run
+        sys.stderr.write("[pre_run] facts read failed for one matter: " + type(exc).__name__ + "\n")
+        return None
+    if events is None or tasks is None:
+        return None
+    if len(events) >= _DIGEST_PAGE_LIMIT or len(tasks) >= _DIGEST_PAGE_LIMIT:
+        return None
+    return facts_digest(events, tasks)
+
+
 def _matter_row(client, matter: object, skill: str) -> dict | None:
     """One matter's row, or None when it cannot be read or is not atoms."""
     if not isinstance(matter, dict):
@@ -454,6 +571,10 @@ def _matter_row(client, matter: object, skill: str) -> dict | None:
     number = matter.get("number") or matter.get("Number")
     if isinstance(number, str) and _ATOM_RE.match(number):
         row["matterNumber"] = number
+    if skill in _DIGEST_SKILLS:
+        digest = _matter_digest(client, matter_id)
+        if digest is not None:
+            row["facts_digest"] = digest
     return row if _atoms_only(row) else None
 
 

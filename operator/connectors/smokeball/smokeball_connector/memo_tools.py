@@ -52,7 +52,16 @@ MEMO_MACHINE_LINES: tuple[re.Pattern[str], ...] = (
     re.compile(r"^\(?fileId\s+[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\s+recorded\)?\.?$"),
     re.compile(r"^op-mmou:[^\s:]+:\d+$"),
     re.compile(r"^Package job: \S.*; covered document ids: \S.*$"),
+    re.compile(r"^facts [0-9a-f]{12}$"),
 )
+
+#: The facts-digest line (2026-09-29). The pre-run gate hashes the facts a
+#: routine reports for a matter (its calendar entries and open tasks) and hands
+#: the model ``facts_digest`` per matter; the model copies it as the note's last
+#: line. Two runs over identical facts carry the same line whatever their
+#: wording, so the note stays unchanged when only the prose varies. Unlike the
+#: other markers it is REPLACED, never carried forward: a note holds one digest.
+_FACTS_RE = re.compile(r"^facts [0-9a-f]{12}$")
 
 #: A marker the service watcher writes INSIDE a sentence ("... (fileId <id>
 #: recorded)."). When that sentence is superseded, the marker is carried
@@ -216,12 +225,20 @@ def _dedupe(items: list[str]) -> list[str]:
     return list(dict.fromkeys(items))
 
 
-def _carried_markers(old: _Parts, new: _Parts) -> list[str]:
+def _facts_line(parts: _Parts) -> str | None:
+    """The note's ``facts <digest>`` line, or None. The last one wins."""
+    found = [m for m in parts.markers if _FACTS_RE.fullmatch(m)]
+    return found[-1] if found else None
+
+
+def _carried_markers(old: _Parts, new: _Parts, facts: str | None) -> list[str]:
     """Every marker from both notes, once; an old sentence-embedded marker the
-    new content no longer holds becomes a line of its own."""
+    new content no longer holds becomes a line of its own. A facts line is never
+    carried: ``facts`` (or nothing) takes its place, last."""
     new_text = "\n".join(new.content)
     embedded = [m for m in old.embedded() if m not in new_text]
-    return _dedupe([*old.markers, *embedded, *new.markers])
+    kept = [m for m in _dedupe([*old.markers, *embedded, *new.markers]) if not _FACTS_RE.fullmatch(m)]
+    return [*kept, facts] if facts else kept
 
 
 def _compose(header: str, content: list[str], markers: list[str], previously: list[str]) -> str:
@@ -351,9 +368,10 @@ def upsert_memo(client: Any, matter_id: str, text: str, *, sleep: Any = None) ->
 
     * No header: a new memo, exactly as ``create_memo`` always wrote.
     * Header, no earlier note for the routine: a new memo, ``created: true``.
-    * Header, same content as the routine's latest note: that note's header
-      moves to today's day (nothing else changes), ``unchanged: true``; when the
-      day is already today, nothing is written at all.
+    * Header, same content as the routine's latest note, or both notes carry
+      the same ``facts <digest>`` line whatever their prose says: that note's
+      header moves to today's day (nothing else changes), ``unchanged: true``;
+      when the day is already today, nothing is written at all.
     * Header, different content: the note is replaced in place with the new
       content, every marker line, and a ``Previously`` tail, ``updated: true``."""
     body = normalize_memo_text(_stamped(text))
@@ -373,10 +391,15 @@ def _as_dict(resp: Any) -> dict:
 def _replace(client: Any, matter_id: str, latest: dict, body: str, sleep: Any) -> Any:
     old, new = _Parts(latest.get("plainText") or ""), _Parts(body)
     memo_id = str(latest["id"])
-    markers = _carried_markers(old, new)
     old_text = latest.get("plainText") or ""
-    new_markers = [m for m in new.markers if m not in old_text]
-    if old.projection() == new.projection() and not new_markers:
+    old_facts, new_facts = _facts_line(old), _facts_line(new)
+    new_markers = [m for m in new.markers if m not in old_text and not _FACTS_RE.fullmatch(m)]
+    # The same facts on both sides: unchanged, whatever the wording. The model
+    # rewords identical facts from run to run; the digest does not move.
+    same_facts = old_facts is not None and old_facts == new_facts
+    same_prose = old.projection() == new.projection() and new_facts in (None, old_facts)
+    if (same_facts or same_prose) and not new_markers:
+        markers = _carried_markers(old, new, old_facts)
         if old.header == new.header:
             return {
                 "id": memo_id,
@@ -386,6 +409,7 @@ def _replace(client: Any, matter_id: str, latest: dict, body: str, sleep: Any) -
             }
         text = _compose(new.header, old.content, markers, old.previously)
         return {**_as_dict(put_and_confirm(client, matter_id, memo_id, text, sleep=sleep)), "unchanged": True}
+    markers = _carried_markers(old, new, new_facts)
     previously = old.previously
     if old.projection() != new.projection() and old.first_line():
         previously = [f"Previously ({old.day}): {old.first_line()}", *old.previously]
