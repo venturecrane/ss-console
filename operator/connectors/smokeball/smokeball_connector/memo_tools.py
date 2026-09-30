@@ -24,7 +24,8 @@ What this module does, in the connector, so no skill has to remember it:
 
 The PUT is a full replace, so the superseded body would be lost; its first line
 survives as a bounded ``Previously (<day>): ...`` tail (three entries, oldest
-dropped), and every machine-marker line is carried forward (see below).
+dropped) with any internal id removed from it, and every machine-marker line is
+carried forward (see below).
 """
 
 from __future__ import annotations
@@ -88,8 +89,10 @@ _INTERNAL_ID = (
     r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
     r"|\b[0-9a-f]{32,64}\b"
     r"|\b[0-9A-HJKMNP-TV-Z]{26}\b"
-    r"|\b(?:event|task|file|memo|document|doc|job|matter|id|facts)\s+[0-9a-f]{8,12}\b(?!-)"
+    r"|\b(?:event|task|file|memo|document|doc|job|matter|id|facts)\s+(?=[0-9a-f]{0,11}[a-f])[0-9a-f]{8,12}\b(?!-)"
 )
+#: The short handle needs a hex LETTER: "file 84930211" is a firm's own number
+#: and stays; "file 788e0854" is ours and goes.
 _ID_RE = re.compile(_INTERNAL_ID)
 _ID_PAREN_RE = re.compile(rf"\s*\([^()]*(?:{_INTERNAL_ID})[^()]*\)")
 

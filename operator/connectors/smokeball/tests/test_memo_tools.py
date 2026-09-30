@@ -244,6 +244,13 @@ def test_without_ids_leaves_a_clean_line_alone() -> None:
     assert mt._without_ids(line) == line
 
 
+def test_without_ids_keeps_a_firms_all_digit_reference() -> None:
+    # A firm's own numbers are digits; ours carry a hex letter. Both after "file".
+    line = "Reviewed file 20260928 and matter 84930211; claim 00123456 with State Farm."
+    assert mt._without_ids(line) == line
+    assert mt._without_ids("Filed (file 788e0854, 12 pages) today.") == "Filed today."
+
+
 def test_a_new_marker_with_the_same_content_is_kept() -> None:
     old = f"[Operator] Matter updates as of Sep 28, 2026\nMatter updated.\nop-mmou:{GUID}:1"
     c = _Fake([_memo("m1", old)])
