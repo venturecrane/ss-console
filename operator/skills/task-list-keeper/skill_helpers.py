@@ -95,9 +95,10 @@ def local_day(
     """The firm's day for an event or task: the connector's local field first.
 
     The Smokeball connector adds ``localDate`` to every timed event and
-    ``localDueDate`` to every task, computed in the firm's zone; the raw
-    ``startTime``/``dueDate`` are UTC and can land on the next day. Only when no
-    local field is present does this fall back to ``fallback_keys``."""
+    ``localDueDate`` to every task. Smokeball's ``startTime``/``dueDate`` are
+    already the firm's local clock (never UTC), so every field is read as
+    written, ``[:10]``, with no zone arithmetic. Only when no local field is
+    present does this fall back to ``fallback_keys``."""
     found = first_date(item, local_keys)
     if found is not None:
         return found
