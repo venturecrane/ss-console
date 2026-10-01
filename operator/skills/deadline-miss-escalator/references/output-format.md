@@ -218,7 +218,7 @@ with the `confirmation_text` that `reply_verdicts` returns, sent verbatim and
 nothing else. The tool renders it in code from what it actually wrote: which
 numbers went quiet (naming each item), for how long, which numbers are still
 open, and, when the person said a line was done, what closed in Smokeball
-("Closed 1 (2026-PI-105 Okafor: Update exhibit list ...)."), under whose staff
+("Closed 1 (2026-PI-900 Doe: Update exhibit list ...)."), under whose staff
 record when that is not the replier, what could not close and why ("2 (...) is a
 date; it clears when it passes. Quiet for 7 days."), and the one question for a
 line the words left unclear ("Is 1 (...) done, or still open?"). A reply with a
