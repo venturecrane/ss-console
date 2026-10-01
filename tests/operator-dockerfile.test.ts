@@ -1466,7 +1466,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // bff35d08 -> 8215bf04 (2026-10-01, overlay#409 merge commit). "done with 1" on a deadline
     // digest closes the task in Smokeball (the digest's send raises each closable
     // line as a casework complete; the reply approves it under a named person).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="8215bf0467ef91cb81a0001d3a1337eb5a39146c"')
+    // 8215bf04 -> 3883955e (2026-10-01, overlay#411 merge commit). shared/casework_ledger.py restamped byte-identical to the
+    // ss-console canonical (same text, the overlay's 100-column wrap); nothing else moves.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="3883955eb49ae1a6a75668833307c41ad63ff548"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
