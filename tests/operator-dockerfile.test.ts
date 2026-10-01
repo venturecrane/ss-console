@@ -1471,7 +1471,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // overlay#410 (0b03fbac, inside 3883955e). #410 classifies
     // mcp_smokeball_add_medicals_row as an internal write: the Medicals tab row from a
     // medical bill in the firm's scanned post. Unclassified it is refused at runtime.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="3883955eb49ae1a6a75668833307c41ad63ff548"')
+    // 3883955e -> 7bbc385c (2026-10-01, overlay#412 merge commit). a second "done" runs the write an open approval never
+    // got to (the pilot's connector did not reconnect after a restart).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="7bbc385c23b493f29788698f0301cf11aca12eb1"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
