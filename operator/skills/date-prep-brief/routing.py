@@ -278,6 +278,7 @@ for matter_id in matter_ids:
             if not isinstance(staff, dict):
                 continue
             record = {
+                "id": sid,
                 "email": staff.get("email"),
                 "enabled": staff.get("enabled"),
                 "former": staff.get("former"),
@@ -330,3 +331,80 @@ def pull_matter_staff(matter_ids: Sequence[str], budget: int) -> dict[str, dict]
         return raw if isinstance(raw, dict) else {}
     except Exception:  # noqa: BLE001 — a staff pull must never kill the alert
         return {}
+
+
+# ---------------------------------------------------------------------------
+# A person's own staff record, by email. The deadline digest's "done with 1"
+# closes a task in Smokeball under the staff member who answered, so the send
+# resolves the recipient's record up front (the full-replace task PUT needs an
+# owner id, and the task read never echoes one). One paged /staff list, at
+# most two pages, read only when a dispatch has a closable task line. The
+# task-list-keeper resolves its fallback recipients the same way (pull.py).
+# ---------------------------------------------------------------------------
+
+_STAFF_BY_EMAIL_SNIPPET = """\
+import json
+import sys
+
+from smokeball_connector.client import build_client_from_env
+
+wanted = {e.strip().lower() for e in json.load(sys.stdin) if isinstance(e, str) and e.strip()}
+client = build_client_from_env()
+out = {}
+if wanted:
+    for page in range(2):
+        resp = client.get("/staff", Limit=500, Offset=page * 500)
+        batch = resp.get("value") if isinstance(resp, dict) else resp
+        if not isinstance(batch, list):
+            break
+        for rec in batch:
+            if not isinstance(rec, dict):
+                continue
+            email = rec.get("email")
+            if isinstance(email, str) and email.strip().lower() in wanted and isinstance(rec.get("id"), str):
+                out[email.strip().lower()] = {
+                    "id": rec["id"],
+                    "email": email,
+                    "enabled": rec.get("enabled"),
+                    "former": rec.get("former"),
+                }
+        if len(batch) < 500:
+            break
+print(json.dumps(out, default=str))
+"""
+
+
+def pull_staff_by_email(emails: Sequence[str]) -> dict[str, dict]:
+    """``{lowercased email: staff record}`` for the addresses that have one.
+    Any failure returns what resolved (``{}`` at worst): a line with no owner
+    is answered by ack only, never by a close nobody could be written under."""
+    wanted = sorted({e.strip().lower() for e in emails if isinstance(e, str) and e.strip()})
+    if not wanted:
+        return {}
+    connector_python = os.environ.get("SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT)
+    try:
+        result = subprocess.run(  # noqa: S603 - connector-venv interpreter and a module-constant snippet, no shell; the emails ride stdin
+            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args — argv[0] is the module-constant connector-venv interpreter, overridable only via SMD_CONNECTOR_VENV_PYTHON from the Machine's own boot env (same trust domain; the test seam). The snippet is a module constant; the addresses ride STDIN, never argv.
+            [connector_python, "-c", _STAFF_BY_EMAIL_SNIPPET],
+            input=json.dumps(wanted),
+            capture_output=True,
+            text=True,
+            timeout=_STAFF_PULL_TIMEOUT_SECONDS,
+        )
+        if result.returncode != 0:
+            return {}
+        raw = json.loads((result.stdout or "").strip().splitlines()[-1])
+        return raw if isinstance(raw, dict) else {}
+    except Exception:  # noqa: BLE001 — a staff pull must never kill the alert
+        return {}
+
+
+def usable_staff_id(record: object) -> str | None:
+    """A staff record's id when the record may own a task write: present,
+    enabled, not former (the floor ``_usable_staff_email`` applies to delivery)."""
+    if not isinstance(record, dict):
+        return None
+    if record.get("enabled") is False or record.get("former") is True:
+        return None
+    staff_id = record.get("id")
+    return staff_id.strip() if isinstance(staff_id, str) and staff_id.strip() else None

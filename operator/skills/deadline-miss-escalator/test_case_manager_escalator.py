@@ -305,3 +305,32 @@ def test_a_mentioned_item_is_not_told_again(tmp_path, monkeypatch):
     ]
     _wake, envelope = _run(tmp_path, monkeypatch, [_task("t-firm", -5)], QUIET, rows + told)
     assert "Done since" not in envelope["dispatches"][0]["full_body"]
+
+
+def test_a_task_with_an_unanswered_digest_complete_stays_in_the_digest(tmp_path, monkeypatch):
+    """The digest's own "say which are done" raise is a reminder, not the
+    keeper holding the task: left unanswered it must not silence the deadline
+    on the re-fire (the 2026-08-26 class)."""
+    rows = [_raise("task", "t-digest", action="complete")]
+    rows[0]["skill"] = "deadline-miss-escalator"
+    rows[0]["payload"]["class"] = "at_stake"
+    deadlines = [_task("t-digest", -20), _task("t-firm", -5)]
+    _wake, envelope = _run(tmp_path, monkeypatch, deadlines, CM, rows)
+    assert _task_ids(envelope) == {_key("t-digest", days_out=-20), _key("t-firm", days_out=-5)}
+
+
+def test_an_approved_done_that_never_reached_smokeball_resurfaces_and_says_so(tmp_path, monkeypatch):
+    """An approval consumed by no write hides the task for a day, then the
+    digest lists it again and owns the miss in plain words."""
+    raise_row = _raise("task", "t-digest", action="complete")
+    raise_row["skill"] = "deadline-miss-escalator"
+    approved = _row("task", "t-digest", "approved", n=1, thread_ref="t-1", ts="2026-09-22T14:00:00Z")
+    stale = [raise_row, approved]
+    deadlines = [_task("t-digest", -20)]
+    _wake, envelope = _run(tmp_path / "stale", monkeypatch, deadlines, CM, stale)
+    assert _task_ids(envelope) == {_key("t-digest", days_out=-20)}
+    body = envelope["dispatches"][0]["full_body"]
+    assert "I recorded your done on this earlier but could not update Smokeball; it is still open." in body
+    fresh = [raise_row, {**approved, "ts": "2026-09-28T13:00:00Z"}]
+    _wake, envelope = _run(tmp_path / "fresh", monkeypatch, deadlines, CM, fresh)
+    assert envelope is None, "an approval from today still hides the task while its write lands"

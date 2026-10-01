@@ -150,7 +150,7 @@ def _facts(ctx: _Ctx, task):
 def _entry(ctx: _Ctx, task, verdict) -> Entry | None:
     cm, view = ctx.cm, ctx.view
     state = view.task_state(ctx.ledger, ctx.states, task.matter_id, task.task_id)
-    if view.awaiting_write(state) or state is not None and state.named:
+    if view.awaiting_write(state, ctx.today) or state is not None and state.named:
         return None
     if view.is_quiet(ctx.ledger, state, ctx.today, cm.keep_quiet_days):
         return None

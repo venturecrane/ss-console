@@ -56,7 +56,8 @@ wants, in the existing tier language: "Surfaces it", "Prepares it for you",
 
 - **Sort** every overdue task into: really open; already done (the document is on
   file, the event happened, the record shows it); stale (the matter moved on, or a
-  duplicate); money or court at stake (never changed without a person).
+  duplicate); money or court at stake (never changed without a person; the
+  person's own "done" to the deadline digest is that person, see §6).
 - **Propose, then act.** Each attorney gets their own matters, grouped, with a
   suggested call per task. Nothing changes until approved. Approval is a reply in
   words ("yes to all", "leave the Rivera ones").
@@ -184,10 +185,21 @@ What changes is who carries it. The person no longer does. The message does.
   acker named from the firm's authored users (ss#2152 path, overlay
   `__init__.py:51-99, 601-616`). Auto-replies are ignored (RFC 3834
   `Auto-Submitted`).
-- **What an answer does** is unchanged: an acknowledgement quiets, only
-  completion in Smokeball closes (`escalation_ledger.py:444-510`).
-- **Ambiguity is asked, not guessed**: "I read that as yes to 1 and 3. Item 2 is
-  still open. Did you mean it too?"
+- **What an answer does**: an acknowledgement ("got it", a bare number) quiets
+  (`escalation_ledger.py:474-505`). A completion ("done with 1", "1 is done",
+  "close 1") closes the task in Smokeball (2026-10-01): the digest's send
+  raised each closable task line as a casework `proposed` row with action
+  `complete` (owner resolved at send time: the recipient's own staff record,
+  else the matter's responsible staff), the completion approves it under the
+  replier's authored name, and that approval authorizes the one `update_task`
+  write the gate replays. A date clears when it passes; a group number and a
+  line with no owner are quieted and told why; a replier with no authored name
+  closes nothing. The at_stake refusal on `close` stands untouched: it guards
+  the Operator's own evidence-based closes, and `complete` is a person's word.
+- **Ambiguity is asked, not guessed**, and only about the unclear part: "Not done
+  with 1", "I'll close 1 after the FSC" close nothing and come back as "Is 1
+  (...) done, or still open?"; the clear numbers in the same reply are still
+  acted on. A bare "done" closes a one-line digest and asks on a longer one.
 - Existing codes in flight keep working during the change (a reply quoting an
   `ACK-` code still resolves), so no message already sent becomes unanswerable.
 

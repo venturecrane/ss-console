@@ -124,6 +124,46 @@ def test_at_stake_may_still_be_offered_for_reassignment() -> None:
     _check([], _raise(payload=_payload(action="reassign", to_staff_id="st-2", **{"class": "at_stake"})))
 
 
+# --- a person's word: complete ---------------------------------------------
+
+
+def _complete(**over) -> dict:
+    """The digest's raise: a person may say this task is done."""
+    payload = _payload(action="complete", **{"class": "at_stake"}, evidence=[], reason="deadline_digest")
+    payload.update(over)
+    return _raise(skill=cl.COMPLETE_SKILL, payload=payload)
+
+
+def test_a_complete_is_accepted_on_an_at_stake_task_from_the_digest_only() -> None:
+    _check([], _complete())
+    with pytest.raises(ValueError, match="only deadline-miss-escalator"):
+        _check([], {**_complete(), "skill": "task-list-keeper"})
+    with pytest.raises(ValueError, match="names a task"):
+        _check([], {**_complete(), **_base("date", "ev-1"), "skill": cl.COMPLETE_SKILL})
+    with pytest.raises(ValueError, match="staff_id"):
+        _check([], _complete(staff_id=None))
+    with pytest.raises(ValueError, match="closed_by_record means"):
+        _check(
+            [], {**_base(), "skill": cl.COMPLETE_SKILL, "event": "closed_by_record", "payload": _complete()["payload"]}
+        )
+
+
+def test_approving_a_complete_needs_a_named_person_and_licenses_one_write() -> None:
+    rows = _ledger(_complete())
+    named = {"name": "Scott Durgan", "key": "b" * 64}
+    with pytest.raises(ValueError, match="nobody named"):
+        _check(rows, {**_verdict(), "skill": cl.COMPLETE_SKILL})
+    rows = _ledger(_complete(), {**_verdict(decided_by=named), "skill": cl.COMPLETE_SKILL})
+    state = cl.derive_state(rows)[rows[0]["item_key"]]
+    assert state.authorization == "approved"
+    rows = _ledger(
+        _complete(), {**_verdict(decided_by=named), "skill": cl.COMPLETE_SKILL}, {**_done(), "skill": cl.COMPLETE_SKILL}
+    )
+    assert cl.derive_state(rows)[rows[0]["item_key"]].completed
+    # A hold needs no name, exactly as before.
+    _check(_ledger(_complete()), {**_verdict("held"), "skill": cl.COMPLETE_SKILL})
+
+
 def test_a_raise_nobody_received_is_refused() -> None:
     _check([], _raise(), send=YES)
     with pytest.raises(ValueError, match="dispatched no message"):

@@ -1463,10 +1463,15 @@ describe('Operator customer Machine Dockerfile', () => {
     // 6ea7a139 -> bff35d08 (2026-10-01, overlay#408). The four msgraph-mail MCP primitives
     // are classified READ and fenced, so a known-good ashton-price boot stops firing the
     // tool-surface sweep's ERROR (a Sentry event per reprovision since 2026-09-19).
-    // bff35d08 -> 0b03fbac (2026-10-01, overlay#409 + #410). #410 classifies
+    // bff35d08 -> 8215bf04 (2026-10-01, overlay#409 merge commit). "done with 1" on a deadline
+    // digest closes the task in Smokeball (the digest's send raises each closable
+    // line as a casework complete; the reply approves it under a named person).
+    // 8215bf04 -> 3883955e (2026-10-01, overlay#411 merge commit). shared/casework_ledger.py restamped byte-identical to the
+    // ss-console canonical (same text, the overlay's 100-column wrap); nothing else moves.
+    // overlay#410 (0b03fbac, inside 3883955e). #410 classifies
     // mcp_smokeball_add_medicals_row as an internal write: the Medicals tab row from a
     // medical bill in the firm's scanned post. Unclassified it is refused at runtime.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="0b03fbac6bdece19b276f672c02072bf182436c0"')
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="3883955eb49ae1a6a75668833307c41ad63ff548"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

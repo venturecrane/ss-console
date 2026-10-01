@@ -52,6 +52,17 @@ KEEPER_TASKS: dict[str, dict] = {
         "note": "Add the six incident-scene photos produced by Grand Valley; renumber the list after.",
         "due": "2026-09-18",
     },
+    # 2026-10-01 (completion by reply): a fifth overdue task, STILL NEEDED, on
+    # a matter that has a responsible attorney, so the deadline digest raises
+    # it as closable and a live "done with N" reply can be proven to close it
+    # in Smokeball. No court or money word in the subject; nothing on file
+    # shows it done.
+    "overdue-roster-update-alvarez": {
+        "matter": "mva-alvarez",
+        "subject": "Send Valley Imaging Center the updated records request roster - Alvarez",
+        "note": "The roster adds the 2026-08 follow-up visit; the vendor needs the updated list before it can pull.",
+        "due": "2026-09-16",
+    },
 }
 
 

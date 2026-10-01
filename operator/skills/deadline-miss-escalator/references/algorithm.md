@@ -268,7 +268,9 @@ reply that quotes codes:
    what remains un-acked, so an under-ack stays visible (`output-format.md`).
 
 An ack is a snooze: the item goes quiet for `ack_snooze_days`, then re-surfaces
-if still open. Only resolution in Smokeball is terminal.
+if still open. Only resolution in Smokeball is terminal; a person's "done" on a
+task line the send raised as closable (the casework `complete` row) is how a
+reply resolves it there (`SKILL.md`, "Fire once, acknowledge per item").
 
 ## Dedup (do not double-count)
 

@@ -112,6 +112,7 @@ def apply(
     window = _prep_window(doc["case_manager"].get("date_prep"))
     if window is not None:
         kept = [_mark_prep(d, view=view, ledger=ledger, states=states, today=today, window=window) for d in kept]
+    kept = [_mark_stale_write(d, view=view, ledger=ledger, states=states, today=today) for d in kept]
     review = {"day": cm.review_day} if cm.cleanup_level else None
     since = _done_since(helpers, anchor, cm, ledger, states, deadlines)
     return Filtered(kept, review, {"casework_dropped": stats} if stats else {}, since)
@@ -140,6 +141,19 @@ def _mark_prep(d, *, view, ledger, states, today: date, window: int):
     if view.brief_status(view.date_state(ledger, states, d.matter_id, d.task_id)) != "none":
         return d
     return replace(d, prep_note_missing=True)
+
+
+def _mark_stale_write(d, *, view, ledger, states, today: date):
+    """A task a person said was done, whose approved write never landed within
+    a day, gets ``write_pending_stale``: the digest line then says so instead
+    of listing the task as if nobody had answered (the approval no longer
+    hides it, ``casework_view.awaiting_write`` bounded by today)."""
+    if d.label != "task-deadline":
+        return d
+    state = view.task_state(ledger, states, d.matter_id, d.task_id)
+    if not view.stale_authorization(state, today):
+        return d
+    return replace(d, write_pending_stale=True)
 
 
 def _done_since(helpers, anchor: str, cm, ledger, states: dict, deadlines) -> list:

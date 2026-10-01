@@ -573,6 +573,7 @@ def test_the_pilot_overdue_seed_sorts_into_four_classes(monkeypatch):
         "overdue-service-bell": ("done", ("document:proof_of_service:2026-09-28",)),
         "overdue-preservation-chen": ("open", ()),
         "overdue-exhibits-okafor": ("at_stake", ("court_date:2026-10-02",)),
+        "overdue-roster-update-alvarez": ("open", ()),
     }
 
     def surnames(matter_key: str) -> list[str]:
