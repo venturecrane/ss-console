@@ -140,6 +140,14 @@ export interface FleetStatusWriter {
  * doesn't exist yet (e.g. the Machine has never heartbeat'd but the
  * customer is configured). The heartbeat endpoint's later upsert
  * preserves the Sentry columns via COALESCE merging on its side.
+ *
+ * Keyed on customer_slug, the table's PRIMARY KEY since migration 0093
+ * (several seats share one entity, so entity_id is a plain indexed column).
+ * This writer named ON CONFLICT(entity_id) until 2026-10-01; SQLite rejects a
+ * conflict target that is not a PK or UNIQUE constraint, so every nightly
+ * sync failed and the dashboard's Sentry column froze at 2026-07-23
+ * (vfy_01M3W2CDFFHMM293YYZMRV74JJ). entity_id is refreshed from the
+ * request on every upsert, the same way the heartbeat writer does it.
  */
 export async function writeSentrySync(
   db: FleetStatusWriter,
@@ -156,7 +164,8 @@ export async function writeSentrySync(
          sentry_errors_last_24h, sentry_errors_synced_at,
          heartbeat_status, updated_at
        ) VALUES (?, ?, ?, ?, 'unknown', ?)
-       ON CONFLICT(entity_id) DO UPDATE SET
+       ON CONFLICT(customer_slug) DO UPDATE SET
+         entity_id               = excluded.entity_id,
          sentry_errors_last_24h  = excluded.sentry_errors_last_24h,
          sentry_errors_synced_at = excluded.sentry_errors_synced_at,
          updated_at              = excluded.updated_at`
