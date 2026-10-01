@@ -63,6 +63,7 @@ EXPECTED_TOOLS = {
     "stage_vendor_invoice",
     "read_attachment_pages",
     "file_attachment_pages_to_matter",
+    "add_medicals_row",
     "add_workbook",
     "get_webhook_subscriptions",
     "get_event_types",
@@ -176,6 +177,11 @@ def test_write_surface_is_memo_document_and_deadline_engine() -> None:
         # record, nothing sent outside — and the page range is what keeps it
         # from being a filing of the whole bundle onto one client's matter.
         "file_attachment_pages_to_matter": "internal_write",
+        # The Medicals tab write (2026-10-01): one provider row from a medical
+        # bill this run filed on that matter. Opened by the filed-document
+        # ledger, never by a token the model holds; never creates a contact,
+        # never changes a row already on the tab; the firm's own record.
+        "add_medicals_row": "internal_write",
         # A workbook built in code from JSON rows and filed on the matter: the
         # same two-stage upload as add_file, bytes never composed by the model.
         "add_workbook": "internal_write",

@@ -47,6 +47,7 @@ import io
 import re
 import threading
 from dataclasses import dataclass
+from typing import Any
 
 from .extract import SCANNED_CHARS_PER_PAGE, UnsupportedDocumentError
 
@@ -335,8 +336,84 @@ class FiledPages:
 FILED_PAGES = FiledPages()
 
 
+class ScannedPages:
+    """Which pages of which bundle were TRANSCRIBED rather than read from a
+    text layer, keyed on the bundle's sha256. Recorded by the page read and
+    consulted by the filing tool, so a document cut from a scan carries that
+    fact into the ledger below without the model having to report it.
+
+    In-process, like ``FiledPages``: a restart forgets, and a forgotten entry
+    reads as "not known to be a scan", which only changes a note's wording.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._scanned: dict[str, set[int]] = {}
+
+    def record(self, key: str, page_numbers: list[int]) -> None:
+        with self._lock:
+            self._scanned[key] = set(page_numbers)
+
+    def any_in(self, key: str, first_page: int, last_page: int) -> bool:
+        with self._lock:
+            pages = self._scanned.get(key, set())
+        return bool(pages & set(range(first_page, last_page + 1)))
+
+
+SCANNED_PAGES = ScannedPages()
+
+
+class FiledDocs:
+    """Which documents THIS PROCESS filed on which matter, from a page range.
+
+    The Medicals write (``medicals_tools``) is opened by one of these records
+    rather than by a resolution token: the token was spent by the filing, and
+    what a Medicals row must be tied to is the BILL that was filed, on the
+    matter it was filed on, by this run. A ``source_file_id`` the ledger does
+    not hold for that matter refuses the row, so a row cannot be written on a
+    matter from a bill the run never put there.
+
+    In-process and forgotten on restart, like ``FiledPages``: forgetting refuses
+    nothing it should have allowed, because the caller re-files and re-reads.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._docs: dict[tuple[str, str], dict[str, Any]] = {}
+
+    def record(
+        self,
+        matter_id: str,
+        file_id: str,
+        file_name: str,
+        first_page: int,
+        last_page: int,
+        *,
+        from_scan: bool,
+    ) -> None:
+        with self._lock:
+            self._docs[(matter_id, file_id)] = {
+                "file_name": file_name,
+                "first_page": first_page,
+                "last_page": last_page,
+                "from_scan": from_scan,
+            }
+
+    def lookup(self, matter_id: str, file_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            found = self._docs.get((matter_id, file_id))
+            return dict(found) if found is not None else None
+
+
+FILED_DOCS = FiledDocs()
+
+
 __all__ = [
+    "FILED_DOCS",
     "FILED_PAGES",
+    "FiledDocs",
+    "SCANNED_PAGES",
+    "ScannedPages",
     "NO_CONTENT",
     "PAGE_TEXT_FLOOR",
     "FiledPages",
