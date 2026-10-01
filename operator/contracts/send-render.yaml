@@ -227,7 +227,11 @@ skills:
       dispatched out of turn by the overlay's prerendered-dispatch hook to the
       recipient authored in the skill's settings; the model composes nothing,
       and the envelope's in_turn declares the skeleton as the only body the
-      woken turn may send. Stamps: body_sha256 pairs on EMITTED_WAKE.
+      woken turn may send. The dispatch carries the workbook (workbook.py,
+      built in the connector venv) as its one attachment, with a
+      body_without_attachment rung between the full body and the skeleton.
+      Stamps: body_sha256 entries on EMITTED_WAKE (full, skeleton, and
+      without_attachment when the workbook rides).
 
   # ---- scott seat cron rows ----
   status-report-assembler:

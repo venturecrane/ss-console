@@ -231,6 +231,30 @@ def test_a_skeleton_match_grades_degraded_never_diverged():
     assert not verdicts[0].is_finding and not verdicts[0].is_hold
 
 
+def test_a_no_attachment_match_grades_degraded_and_attributes_by_hash():
+    """The overlay's middle rung (body_variant full_no_attachment): the full body
+    sent without its refused attachment. Designed degradation, never a finding --
+    but only because the wake row named that hash; without it, it is a finding."""
+    full = sv.canonical_body_sha256("full body\n\nThe full list is attached as a spreadsheet.")
+    without = sv.canonical_body_sha256("full body\n\nThe workbook could not be attached this month.")
+    stamp = {
+        "body_sha256_full": full,
+        "body_sha256_skeleton": sv.canonical_body_sha256("s"),
+        "body_sha256_without_attachment": without,
+    }
+    for skill in ("deadline-miss-escalator", None):
+        wakes = sv.index_wakes([_wake_row(hashes=[stamp])])
+        dispatches = sv.index_dispatches([_dispatch_row(sha=without, variant="full_no_attachment", skill=skill)])
+        verdicts = sv.verify_hash_join(wakes, dispatches, _declares())
+        assert [v.verdict for v in verdicts] == [sv.VERDICT_DEGRADED]
+        assert not verdicts[0].is_finding and not verdicts[0].is_hold
+        assert "without its attachment" in verdicts[0].detail
+    unnamed = {k: v for k, v in stamp.items() if k != "body_sha256_without_attachment"}
+    wakes = sv.index_wakes([_wake_row(hashes=[unnamed])])
+    dispatches = sv.index_dispatches([_dispatch_row(sha=without, variant="full_no_attachment")])
+    assert [v.verdict for v in sv.verify_hash_join(wakes, dispatches, _declares())] == [sv.VERDICT_DIVERGED]
+
+
 def test_a_templated_dispatch_with_no_wake_hash_holds_not_finds():
     """The designed interim state: render cluster not yet deployed to the seat."""
     sha = sv.canonical_body_sha256("body")

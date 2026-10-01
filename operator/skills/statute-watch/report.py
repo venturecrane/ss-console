@@ -61,6 +61,8 @@ class Case:
     days_left: int
     client_ids: tuple[str, ...]
     staff_id: str | None
+    title: str | None = None
+    status: str | None = None
 
 
 @dataclass(frozen=True)
@@ -81,6 +83,10 @@ class Row:
     attorney: str | None
     attorney_assigned: bool
     court_documents: int | None
+    matter_id: str = ""
+    client_workbook: str | None = None  # "Last, First"; co-clients "; "
+    attorney_full: str | None = None
+    status: str | None = None
 
 
 def iso_day(value: object) -> date | None:
@@ -156,6 +162,8 @@ def select(raw: object, today: date, window_days: int = WINDOW_DAYS) -> Selectio
                 days_left=(day - today).days,
                 client_ids=client_ids,
                 staff_id=_text(matter.get("staffId")),
+                title=_text(matter.get("title")),
+                status=_text(matter.get("status")),
             )
         )
     if len(seen) >= SILENT_ZERO_FLOOR and dated == 0:
@@ -192,8 +200,24 @@ def surname(raw: object) -> str | None:
     return name or None
 
 
-def rows(cases: tuple[Case, ...] | list[Case], details: dict) -> list[Row]:
-    """Join each listed case to what the detail pull read about it."""
+def _staff_names(entry: object) -> tuple[str | None, str | None]:
+    """``(last name, full name)`` for one roster entry. The roster carries
+    ``{"firstName", "lastName"}``; a bare string is a last name."""
+    if isinstance(entry, dict):
+        last = surname(entry.get("lastName"))
+        first = surname(entry.get("firstName"))
+        full = " ".join(p for p in (first, last) if p) or None
+        return last, full
+    last = surname(entry)
+    return last, last
+
+
+def rows(cases: tuple[Case, ...] | list[Case], details: dict, *, names_for=None) -> list[Row]:
+    """Join each listed case to what the detail pull read about it.
+
+    ``names_for(title, contact_last_name) -> (workbook name, body name)`` is
+    ``clients.names_for`` (passed in: this module does no loading). Without
+    it, the contact's last name is used for both."""
     staff_raw = details.get("staff")
     staff: dict = staff_raw if isinstance(staff_raw, dict) else {}
     matters_raw = details.get("matters")
@@ -203,15 +227,24 @@ def rows(cases: tuple[Case, ...] | list[Case], details: dict) -> list[Row]:
         facts = per_matter.get(case.matter_id)
         facts = facts if isinstance(facts, dict) else {}
         docs = facts.get("courtDocuments")
+        if names_for is not None:
+            client_workbook, client = names_for(case.title, facts.get("clientLastName"))
+        else:
+            client = client_workbook = surname(facts.get("clientLastName"))
+        last, full = _staff_names(staff.get(case.staff_id)) if case.staff_id else (None, None)
         out.append(
             Row(
                 matter_number=case.matter_number,
                 statute=case.statute,
                 days_left=case.days_left,
-                client=surname(facts.get("clientLastName")),
-                attorney=surname(staff.get(case.staff_id)) if case.staff_id else None,
+                client=client,
+                attorney=last,
                 attorney_assigned=case.staff_id is not None,
                 court_documents=docs if isinstance(docs, int) and not isinstance(docs, bool) else None,
+                matter_id=case.matter_id,
+                client_workbook=client_workbook,
+                attorney_full=full,
+                status=case.status,
             )
         )
     return out

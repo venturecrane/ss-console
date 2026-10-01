@@ -9,13 +9,14 @@ TWO CHECKS, DIFFERENT STRENGTHS (cross-workstream contract, item 1):
 
 * PRIMARY -- the deterministic hash join. The skill's pre_run stamps
   ``canonical_body_sha256`` of every rendered body onto its EMITTED_WAKE row
-  (``body_sha256: [{body_sha256_full, body_sha256_skeleton}]``); the overlay
+  (``body_sha256: [{body_sha256_full, body_sha256_skeleton}]``, plus
+  ``body_sha256_without_attachment`` when the send carries an attachment); the overlay
   stamps ``rendered_body_sha256`` + ``body_variant`` onto
   CONFIRM_SEND_DISPATCHED at transmit. Both stamps are written seat-side, so
   the comparison needs no body fetch and no normalization judgment. A dispatch
   hash matching neither wake hash is ``BODY_DIVERGED`` -- a finding. A skeleton
-  match grades ``degraded``, never a finding: the fallback ladder fired as
-  designed.
+  or no-attachment match grades ``degraded``, never a finding: the fallback
+  ladder fired as designed.
 
 * SECONDARY -- the transient channel fetch. The message body is pulled from the
   mailbox (AgentMail ``text`` / msgraph ``body``), canon-hashed, and compared
@@ -261,6 +262,9 @@ class WakeStamp:
     skill_name: str
     hashes_full: list[str] = field(default_factory=list)
     hashes_skeleton: list[str] = field(default_factory=list)
+    # The full body without its attachment (the overlay's middle rung,
+    # body_variant full_no_attachment): designed degradation, like the skeleton.
+    hashes_no_attachment: list[str] = field(default_factory=list)
     items: list[dict] = field(default_factory=list)  # [{item_key, ack_code}]
     row_id: Optional[str] = None
     consumed: int = 0  # dispatch pairings consumed against this wake
@@ -307,8 +311,8 @@ def _metadata(row: dict) -> dict:
     return raw if isinstance(raw, dict) else {}
 
 
-def _hash_entries(meta: dict) -> tuple[list[str], list[str]]:
-    """The wake row's ``body_sha256`` list -> (full hashes, skeleton hashes).
+def _hash_entries(meta: dict) -> tuple[list[str], list[str], list[str]]:
+    """The wake row's ``body_sha256`` list -> (full, skeleton, no-attachment hashes).
 
     Tolerant of the entry being a bare hex string (a single-dispatch shorthand
     an emitter might reasonably write) but never of inventing one: anything not
@@ -316,6 +320,7 @@ def _hash_entries(meta: dict) -> tuple[list[str], list[str]]:
     """
     full: list[str] = []
     skeleton: list[str] = []
+    no_attachment: list[str] = []
     entries = meta.get("body_sha256")
     for entry in entries if isinstance(entries, list) else []:
         if isinstance(entry, str) and entry:
@@ -325,7 +330,10 @@ def _hash_entries(meta: dict) -> tuple[list[str], list[str]]:
                 full.append(entry["body_sha256_full"])
             if isinstance(entry.get("body_sha256_skeleton"), str) and entry["body_sha256_skeleton"]:
                 skeleton.append(entry["body_sha256_skeleton"])
-    return full, skeleton
+            value = entry.get("body_sha256_without_attachment")
+            if isinstance(value, str) and value:
+                no_attachment.append(value)
+    return full, skeleton, no_attachment
 
 
 def index_wakes(rows: list[dict]) -> list[WakeStamp]:
@@ -337,7 +345,7 @@ def index_wakes(rows: list[dict]) -> list[WakeStamp]:
         if row.get("action_type") != "EMITTED_WAKE" or not row.get("ts"):
             continue
         meta = _metadata(row)
-        full, skeleton = _hash_entries(meta)
+        full, skeleton, no_attachment = _hash_entries(meta)
         raw_items = meta.get("items")
         items = [
             entry
@@ -350,6 +358,7 @@ def index_wakes(rows: list[dict]) -> list[WakeStamp]:
                 skill_name=str(row.get("skill_name") or ""),
                 hashes_full=full,
                 hashes_skeleton=skeleton,
+                hashes_no_attachment=no_attachment,
                 items=items,
                 row_id=row.get("id"),
             )
@@ -490,6 +499,9 @@ def _grade_pair(wake: WakeStamp, dispatch: DispatchStamp, attribution: str) -> B
         # The authored fallback ladder delivered the identifier-free skeleton.
         # Designed behavior under a render fault -- reported, never a finding.
         return BodyVerdict(verdict=VERDICT_DEGRADED, detail="skeleton fallback delivered", **common)
+    if dispatch.rendered_body_sha256 in wake.hashes_no_attachment:
+        # The middle rung: the full body, its attachment refused or stripped.
+        return BodyVerdict(verdict=VERDICT_DEGRADED, detail="full body delivered without its attachment", **common)
     return BodyVerdict(
         verdict=VERDICT_DIVERGED,
         expected_sha256=wake.hashes_full[0],
@@ -601,6 +613,13 @@ def _grade_channel_body(wake, message, fetch_body, dispatches, window_s, plain_e
             verdict=VERDICT_DEGRADED,
             actual_sha256=digest,
             detail="channel body matches the skeleton fallback",
+            **common,
+        )
+    if digest in wake.hashes_no_attachment:
+        return BodyVerdict(
+            verdict=VERDICT_DEGRADED,
+            actual_sha256=digest,
+            detail="channel body matches the full body without its attachment",
             **common,
         )
     # Raw-markdown wake stamps cannot match a down-rendered channel body, so the

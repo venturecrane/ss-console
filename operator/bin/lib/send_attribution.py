@@ -114,6 +114,11 @@ def _in_window(wake: "WakeStamp", dispatch: "DispatchStamp", window_s: int) -> b
     return wake.ts <= dispatch.ts <= wake.ts + timedelta(seconds=window_s)
 
 
+def _authored_hashes(wake: "WakeStamp") -> set[str]:
+    """Every body the wake authored: full, skeleton, and full-without-attachment."""
+    return {*wake.hashes_full, *wake.hashes_skeleton, *wake.hashes_no_attachment}
+
+
 def _hash_verified(wake: "WakeStamp", declares: dict[str, "RenderDecl"]) -> bool:
     decl = declares.get(wake.skill_name)
     return decl is not None and decl.hash_verified and bool(wake.hashes_full)
@@ -134,7 +139,7 @@ def _wakes_for_hash(
     for wake in wakes:
         if not _hash_verified(wake, declares) or not _in_window(wake, dispatch, window_s):
             continue
-        if dispatch.rendered_body_sha256 in wake.hashes_full or (dispatch.rendered_body_sha256 in wake.hashes_skeleton):
+        if dispatch.rendered_body_sha256 in _authored_hashes(wake):
             yield wake
 
 
@@ -266,9 +271,7 @@ def claim_dispatch_stamp(
             continue
         if not _in_window(wake, stamp, window_s):
             continue
-        by_hash = not stamp.skill_name and (
-            stamp.rendered_body_sha256 in wake.hashes_full or stamp.rendered_body_sha256 in wake.hashes_skeleton
-        )
+        by_hash = not stamp.skill_name and stamp.rendered_body_sha256 in _authored_hashes(wake)
         if stamp.skill_name == wake.skill_name or by_hash:
             stamp.plain_consumed = True
             return stamp

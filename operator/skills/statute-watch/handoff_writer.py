@@ -21,7 +21,7 @@ import os
 import sys
 from pathlib import Path
 
-_RECORD_DATE_KEYS = ("statute_date",)
+_RECORD_DATE_KEYS = ("statute_date", "previous_statute_date")
 
 
 def _values(node, key: str, out: list) -> list:

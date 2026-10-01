@@ -9,6 +9,8 @@ Every fixture name, number and date below is invented.
 from __future__ import annotations
 
 import ast
+import base64
+import hashlib
 import importlib.util
 import io
 import json
@@ -86,10 +88,13 @@ DETAILS = {
 }
 
 
-def _full(raw=THREE, details=DETAILS):
+def _full(raw=THREE, details=DETAILS, changes=None):
     sel = report.select(raw, TODAY)
     listed = sel.cases[: report.RENDER_CAP]
-    body = render.render_full(report.rows(listed, details), total=len(sel.cases), unreadable=sel.unreadable)
+    rows = report.rows(listed, details, names_for=pre_run._CLIENTS.names_for)
+    body = render.render_full(
+        rows, total=len(sel.cases), unreadable=sel.unreadable, week=render.due_this_week(rows), changes=changes
+    )
     return sel, listed, body
 
 
@@ -175,20 +180,23 @@ def test_full_body_passes_both_filters_with_a_handoff_seeded_register(tmp_path, 
     _sel, listed, body = _full()
     pre_run._HANDOFF.write_pre_run_handoff(pre_run.handoff_payload(listed), skill="statute-watch", started_at="x")
     reg = _register_from_handoff(tmp_path, listed)
-    text = render.subject(TODAY) + "\n" + body
+    text = render.subject(TODAY, 3, 1) + "\n" + body
     assert identifier_filter.check(text, reg).unverified == ()
     assert citation_filter.scan(text) == []
     assert not citation_filter.contains_citation(text)
 
 
-def test_a_mispaired_date_would_be_refused(tmp_path, monkeypatch) -> None:
-    """The check above can fail: swap two cases' dates and the pair gate sees it."""
+def test_an_unseeded_date_would_be_refused(tmp_path, monkeypatch) -> None:
+    """The check above can fail: a statute date the handoff never carried is
+    refused. (A case's number and date sit on two lines of its item in v2, so
+    the per-line pair check guards the "since last month" lines and the
+    workbook rows, tested in test_statute_watch_v2.py.)"""
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     _sel, listed, body = _full()
     pre_run._HANDOFF.write_pre_run_handoff(pre_run.handoff_payload(listed), skill="statute-watch", started_at="x")
     reg = _register_from_handoff(tmp_path, listed)
-    swapped = body.replace(render.long_date(listed[0].statute), render.long_date(listed[1].statute), 1)
-    assert identifier_filter.check(swapped, reg).unverified
+    moved = body.replace(render.long_date(listed[0].statute), "December 24, 2026", 1)
+    assert identifier_filter.check(moved, reg).unverified
 
 
 def test_a_full_name_with_a_middle_initial_is_refused_and_the_last_name_is_not() -> None:
@@ -197,9 +205,11 @@ def test_a_full_name_with_a_middle_initial_is_refused_and_the_last_name_is_not()
 
 
 def test_the_subject_month_is_not_a_date_atom() -> None:
-    subject = render.subject(TODAY)
-    assert subject == "Statute report, October 2026"
-    assert identifier_filter.unverified_identifiers(subject, identifier_filter.ProvenanceRegister()) == []
+    assert render.subject(TODAY, 30, 2) == "Statute watch, October 2026: 30 cases, 2 due this week"
+    assert render.subject(TODAY, 1, 0) == "Statute watch, October 2026: 1 case, 0 due this week"
+    assert render.subject(TODAY, 0, 0) == "Statute watch, October 2026: no cases"
+    for subject in (render.subject(TODAY, 30, 2), render.subject(TODAY, 0, 0), render.subject(TODAY, 12, 12)):
+        assert identifier_filter.unverified_identifiers(subject, identifier_filter.ProvenanceRegister()) == []
 
 
 def test_skeleton_is_identifier_free_and_counts_only() -> None:
@@ -218,7 +228,7 @@ def test_no_dates_but_statute_dates_and_no_em_dashes() -> None:
         if h.kind is identifier_filter.IdKind.DATE
     }
     assert found == {c.statute.isoformat() for c in listed}
-    for text in (body, render.render_skeleton(len(sel.cases)), render.subject(TODAY)):
+    for text in (body, render.render_skeleton(len(sel.cases)), render.subject(TODAY, 3, 1)):
         assert "—" not in text and "–" not in text
 
 
@@ -227,17 +237,25 @@ def test_body_lines_and_absences() -> None:
     details = {"staff": {}, "matters": {"m-2": {"clientError": True, "documentsError": True}}}
     _sel, _listed, body = _full(raw, details)
     assert (
-        "1. Matter with no number on file, client name not available: statute date October 1, 2026, due today. "
-        "No responsible attorney on file. Court-named documents: not checked." in body
+        "- **No file number, client name not available**\n"
+        "   Statute date October 1, 2026, due today. No responsible attorney on file. Court-named documents: not checked."
+        in body
     )
-    assert "2. Matter 20456, client name not available: statute date October 2, 2026, 1 day left." in body
+    assert "- **File 20456, client name not available**\n   Statute date October 2, 2026, 1 day left." in body
     assert "Attorney not available." in body
 
 
 def test_empty_set_and_unreadable_line() -> None:
     raw = {"matters": [_matter("a", "301", None), {"id": "b", "layoutError": True}]}
     _sel, _listed, body = _full(raw, {})
-    assert body == render.EMPTY_LINE + "\n\n1 open case could not be checked this month.\n"
+    assert body == (
+        render.EMPTY_LINE
+        + "\n\n1 open case could not be checked this month.\n\n## Since last month\n\n"
+        + render.NO_PREVIOUS_LINE
+        + "\n\n"
+        + render.ATTACHED_LINE
+        + "\n"
+    )
 
 
 def test_cap_at_one_hundred_with_a_remainder_line(tmp_path, monkeypatch) -> None:
@@ -245,7 +263,7 @@ def test_cap_at_one_hundred_with_a_remainder_line(tmp_path, monkeypatch) -> None
     raw = {"matters": [_matter("m-%03d" % i, str(30000 + i), _iso(i % 90)) for i in range(105)]}
     sel, listed, body = _full(raw, {})
     assert len(listed) == 100
-    assert body.count("\n100. ") == 1 and "\n101. " not in body
+    assert body.count("\n- **File ") == 100
     assert "And 5 more cases." in body
     pre_run._HANDOFF.write_pre_run_handoff(pre_run.handoff_payload(listed), skill="statute-watch", started_at="x")
     reg = _register_from_handoff(tmp_path, listed)
@@ -269,14 +287,21 @@ class _Clock:
         return self.t0 if self.calls == 1 else self.t0 + timedelta(minutes=12)
 
 
-def _run(tmp_path, monkeypatch, *, cfg=CFG, raw=THREE, details=DETAILS, dry=False):
+def _run(tmp_path, monkeypatch, *, cfg=CFG, raw=THREE, details=DETAILS, dry=False, build_workbook=None):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     monkeypatch.delenv("HERMES_TIMEZONE", raising=False)
     beats: list = []
     monkeypatch.setattr(pre_run, "_heartbeat", lambda *a: beats.append(a) or True)
     out = io.StringIO()
     with redirect_stdout(out):
-        code = pre_run.run(cfg, pull_matters=lambda: raw, pull_details=lambda cases: details, clock=_Clock(), dry=dry)
+        code = pre_run.run(
+            cfg,
+            pull_matters=lambda: raw,
+            pull_details=lambda cases, departed: details,
+            build_workbook=build_workbook,
+            clock=_Clock(),
+            dry=dry,
+        )
     assert code == 0
     return json.loads(out.getvalue().strip().splitlines()[-1]), out.getvalue(), beats
 
@@ -295,7 +320,9 @@ def test_report_ready_writes_envelope_and_handoff_stamped_after_the_pull(tmp_pat
     assert env["started_at"] == "2026-10-01T14:19:00Z" == handoff["started_at"]
     (dispatch,) = env["dispatches"]
     assert dispatch["recipients"] == [RECIPIENT] and dispatch["appends"] == []
-    assert dispatch["subject"] == "Statute report, October 2026"
+    assert dispatch["subject"] == "Statute watch, October 2026: 3 cases, 1 due this week"
+    assert "attachments" not in dispatch and "body_without_attachment" not in dispatch  # no workbook built
+    assert dispatch["full_body"].rstrip().endswith(render.NOT_ATTACHED_LINE)
     assert env["in_turn_enforce"] is True
     assert env["in_turn"] == [{"name": "statute_report_skeleton", "template": dispatch["skeleton_body"], "slots": {}}]
     assert dispatch["body_sha256_full"] == pre_run._H.canonical_body_sha256(dispatch["full_body"])
@@ -337,6 +364,8 @@ def test_dry_run_writes_nothing_and_prints_counts(tmp_path, monkeypatch) -> None
         "cases": 3,
         "listed": 3,
         "unreadable": 0,
+        "changes": None,
+        "attached": False,
     }
     assert _smd_files(tmp_path) == [] and beats == []
     verdict, _stdout, beats = _run(tmp_path, monkeypatch, dry=True, raw={"listError": "x"})
@@ -366,6 +395,7 @@ def test_recipient_must_be_one_address() -> None:
 def test_snippets_compile_and_carry_the_court_pattern() -> None:
     ast.parse(pull.MATTERS_SNIPPET)
     ast.parse(pull.DETAILS_SNIPPET)
+    ast.parse(pre_run._WORKBOOK.SNIPPET)
     assert repr(pull.COURT_DOC_PATTERN) in pull.DETAILS_SNIPPET
 
     def court_named(file_name: str) -> bool:
@@ -377,13 +407,18 @@ def test_snippets_compile_and_carry_the_court_pattern() -> None:
 
 
 def _fake_connector(tmp_path: Path, matters: dict, details: dict) -> str:
+    """A stand-in connector interpreter: the matter and detail reads answer the
+    fixtures; the workbook snippet RUNS (this interpreter has openpyxl)."""
     script = tmp_path / "fake-python"
     script.write_text(
         "#!" + sys.executable + "\n"
         "import json, sys\n"
         "snippet = sys.argv[2]\n"
+        "if 'from openpyxl' in snippet:\n"
+        "    exec(compile(snippet, 'workbook', 'exec'))\n"
+        "    raise SystemExit(0)\n"
         "sys.stdin.read()\n"
-        "print(json.dumps(" + repr(matters) + " if 'StatuteOfLimitationDate' in snippet else " + repr(details) + "))\n"
+        "print(json.dumps(" + repr(details) + " if 'COURT = re.compile' in snippet else " + repr(matters) + "))\n"
     )
     script.chmod(script.stat().st_mode | stat.S_IXUSR)
     return str(script)
@@ -407,8 +442,18 @@ def test_main_end_to_end_through_the_subprocess_seam(tmp_path, monkeypatch) -> N
     verdict = json.loads(out.getvalue().strip().splitlines()[-1])
     assert verdict["status"] == "report_ready" and verdict["cases"] == 1
     assert "20455" not in out.getvalue()
+    has_openpyxl = importlib.util.find_spec("openpyxl") is not None  # the workbook snippet needs it
+    assert verdict["attached"] is has_openpyxl
     env = json.loads((tmp_path / ".smd" / "pre_run" / "statute-watch.dispatch.json").read_text())
-    assert "1. Matter 20455, client Lindqvist:" in env["dispatches"][0]["full_body"]
+    (dispatch,) = env["dispatches"]
+    assert "- **File 20455, Lindqvist**" in dispatch["full_body"]
+    if has_openpyxl:
+        (attachment,) = dispatch["attachments"]
+        data = base64.b64decode(attachment["content_b64"])
+        assert data[:2] == b"PK" and hashlib.sha256(data).hexdigest() == attachment["sha256"]
+    else:
+        assert "attachments" not in dispatch
+    assert (tmp_path / ".smd" / "statute-watch" / "last-run.json").exists()
 
 
 def test_main_with_no_connector_sends_nothing(tmp_path, monkeypatch) -> None:
@@ -449,7 +494,7 @@ def test_the_same_fleet_with_one_statute_date_sends_normally(tmp_path, monkeypat
     verdict, _stdout, beats = _run(tmp_path, monkeypatch, raw=raw)
     assert verdict["status"] == "report_ready" and verdict["cases"] == 0
     env = json.loads((tmp_path / ".smd" / "pre_run" / "statute-watch.dispatch.json").read_text())
-    assert env["dispatches"][0]["full_body"] == render.EMPTY_LINE + "\n"
+    assert env["dispatches"][0]["full_body"].startswith(render.EMPTY_LINE + "\n\n## Since last month")
     assert [b[1] for b in beats] == ["EMITTED_WAKE"]
 
 
@@ -462,7 +507,7 @@ def test_a_suppress_whose_heartbeat_did_not_land_says_so_on_stderr(tmp_path, mon
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     monkeypatch.delenv("SMD_WORKSPACE_BROKER_SOCKET", raising=False)
     monkeypatch.delenv("SMD_AUDIT_BROKER_SOCKET", raising=False)
-    pre_run.run(CFG, pull_matters=lambda: {"listError": "x"}, pull_details=lambda cases: {}, clock=_Clock())
+    pre_run.run(CFG, pull_matters=lambda: {"listError": "x"}, pull_details=lambda cases, departed: {}, clock=_Clock())
     captured = capsys.readouterr()
     assert "matter_list_failed" in captured.err and "heartbeat not recorded" in captured.err
     assert json.loads(captured.out)["status"] == "matter_list_failed"
@@ -473,11 +518,31 @@ def test_output_format_carries_every_authored_phrase_render_uses() -> None:
     render.py prints appears verbatim (placeholders for values) in the spec."""
     spec = (_DIR / "references" / "output-format.md").read_text()
     phrases = [
-        render.INTRO,
         render.EMPTY_LINE,
+        render.HEADLINE_TEMPLATE.format(count="<N>", cases="cases have", week="<K>"),
+        render.SINCE_TEMPLATE.format(new="<new>", passed="<P>"),
         render.SKELETON_TEMPLATE.format(count="<N>", cases="cases have"),
         render.unreadable_line(2).replace("2", "<N>", 1),
         render.more_line(2).replace("2", "<N>", 1),
-        render.SUBJECT_TEMPLATE.format(month="<Month>", year="<Year>"),
+        render.more_changes_line(2).replace("2", "<N>", 1),
+        render.SUBJECT_TEMPLATE.format(month="<Month>", year="<YYYY>", cases="<N> cases", week="<K>"),
+        render.SUBJECT_EMPTY_TEMPLATE.format(month="<Month>", year="<YYYY>"),
+        render.SECTION_WEEK,
+        render.SECTION_MONTH,
+        render.SECTION_LATER,
+        render.SECTION_SINCE,
+        render.NO_PREVIOUS_LINE,
+        render.NO_CHANGES_LINE,
+        render.ATTACHED_LINE,
+        render.NOT_ATTACHED_LINE,
+        "No responsible attorney on file.",
+        "Attorney not available.",
+        "Court-named documents: not checked.",
+        "No file number",
+        "client name not available",
+        *(s.format(date="<Month D, YYYY>", old="<old>", new="<new>") for s in render.CHANGE_SENTENCES.values()),
+        *render.CHANGE_LABELS.values(),
+        *pre_run._WORKBOOK.CASE_HEADER,
+        *pre_run._WORKBOOK.CHANGE_HEADER,
     ]
     assert [p for p in phrases if p not in spec] == []

@@ -85,8 +85,10 @@ jobs:
         # not, and an unpinned install turned a locally green tree red at one
         # site on 2026-09-10. Bump deliberately: `uvx ruff@<new> check .` and
         # `format --check .` locally first, then move this pin and the note in
-        # ruff.toml together.
-        run: python3 -m pip install --quiet pytest pyyaml cryptography ruff==0.15.17 pyright==1.1.406
+        # ruff.toml together. openpyxl is pinned to the connector venv's version
+        # (3.1.5): statute-watch builds its workbook there, and its tests build
+        # and scan one.
+        run: python3 -m pip install --quiet pytest pyyaml cryptography openpyxl==3.1.5 ruff==0.15.17 pyright==1.1.406
 
       # The safe half of packaging (operator/pyproject.toml header): the tree is
       # installed as packages so imports resolve the way they will once the
