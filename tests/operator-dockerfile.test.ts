@@ -1460,7 +1460,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // 40c11a21 -> 6ea7a139 (2026-10-01, overlay#406 + #407 merge commits). The send-render
     // mirror catches up; a pre-rendered send may carry one gated workbook attachment
     // (scanned like the body, msgraph only), falling back to the body without it.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="6ea7a139dfcbd31edeb306e10787f67eed65deaf"')
+    // 6ea7a139 -> bff35d08 (2026-10-01, overlay#408). The four msgraph-mail MCP primitives
+    // are classified READ and fenced, so a known-good ashton-price boot stops firing the
+    // tool-surface sweep's ERROR (a Sentry event per reprovision since 2026-09-19).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="bff35d0847b2232855be67a63f0e0e178d5d28ff"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
