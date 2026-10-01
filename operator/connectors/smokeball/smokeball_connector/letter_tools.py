@@ -35,6 +35,8 @@ from . import letter_pages, vision
 from .attachment_source import fetch_bytes
 from .extract import METHOD_PYPDF, METHOD_VISION, METHOD_VISION_CACHED
 from .letter_pages import FILED_DOCS, FILED_PAGES, SCANNED_PAGES, PageReadError
+from .library import find_folder_id
+from .post_intake_config import KINDS, load_post_intake_config
 from .resolution_token import ResolutionRefused
 from .resolution_token import consume as consume_resolution
 from .resolution_token import verify as verify_resolution
@@ -324,7 +326,7 @@ def file_attachment_pages_to_matter(
     sha256: str,
     first_page: int,
     last_page: int,
-    folder_id: str | None = None,
+    document_kind: str = "letter",
 ) -> Any:
     """File ONE letter — a page RANGE cut out of an emailed bundle — onto its
     matter. Classified INTERNAL_WRITE: a write into the firm's own record that
@@ -356,6 +358,14 @@ def file_attachment_pages_to_matter(
     Smokeball is async, so a filed document may take a moment to appear; do
     not re-read to confirm it.
 
+    ``document_kind`` is ``"medical"`` for a medical record or a medical bill
+    (an imaging report, a provider's statement), and ``"letter"`` for anything
+    else. A medical one files into the folder the firm authored for medical
+    documents (``combined_post_intake.medical_folder``), resolved here by name;
+    the result's ``folder`` says where it went, and ``folderNote`` says so when
+    the matter has no such folder and it went to the root. There is no
+    argument for a folder id: the firm's rule chooses the folder, not the call.
+
     A filed letter that is a MEDICAL BILL can then put one row on the matter's
     Medicals tab with ``add_medicals_row``, which takes this call's ``fileId``
     as its ``source_file_id`` and refuses any file this run did not file on
@@ -365,6 +375,9 @@ def file_attachment_pages_to_matter(
     matter = (matter_id or "").strip()
     if not matter:
         return _refused("matter_id is required")
+    kind = (document_kind or "letter").strip().lower()
+    if kind not in KINDS:
+        return _refused(f"document_kind must be one of {sorted(KINDS)}")
     try:
         first = int(first_page)
         last = int(last_page)
@@ -404,13 +417,14 @@ def file_attachment_pages_to_matter(
         return _refused(str(exc))
 
     safe_name = letter_pages.safe_file_name(file_name, first, last)
+    folder = _folder_for(matter, kind)
     try:
         consume_resolution(matter_resolution, matter)
     except ResolutionRefused as exc:  # a concurrent turn spent it between the checks
         FILED_PAGES.release(want_sha, first, last)
         return _refused(str(exc))
     try:
-        result = _client().add_file(matter, safe_name, cut, folder_id=folder_id)
+        result = _client().add_file(matter, safe_name, cut, folder_id=folder.get("id"))
     except Exception as exc:  # noqa: BLE001 - the upload raises a wide family
         FILED_PAGES.release(want_sha, first, last)
         return _refused(f"the letter could not be filed: {exc}")
@@ -428,9 +442,26 @@ def file_attachment_pages_to_matter(
         "fileName": safe_name,
         "pages": {"first": first, "last": last},
         "fromScan": from_scan,
+        **({"folder": {"name": folder["name"], "id": folder["id"]}} if folder.get("id") else {}),
+        **({"folderNote": folder["note"]} if folder.get("note") else {}),
         "byteLength": len(cut),
         "file": result,
     }
+
+
+def _folder_for(matter: str, kind: str) -> dict[str, Any]:
+    """``{"name", "id"}`` for the authored folder of this kind on this matter,
+    ``{"note"}`` when it is authored but not there, ``{}`` when unauthored."""
+    cfg = load_post_intake_config()
+    if cfg.error:
+        return {"note": f"the seat's filing folder setting could not be read ({cfg.error}); filed at the matter root"}
+    name = cfg.folders.get(kind)
+    if not name:
+        return {}
+    folder_id = find_folder_id(_client(), matter, name)
+    if folder_id is None:
+        return {"note": f"this matter has no {name} folder, so it was filed at the matter root"}
+    return {"name": name, "id": folder_id}
 
 
 def register(server: Any) -> None:

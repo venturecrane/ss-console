@@ -321,15 +321,48 @@ def _walk_folders(nodes: Any) -> list[dict[str, Any]]:
 
 
 def find_folder_id(client: Any, matter_id: str, folder_name: str) -> str | None:
+    """The id of the matter's folder named ``folder_name``, or None.
+
+    A plain name matches a folder of that name at any depth (the first found),
+    as it always has. A PATH ("Accounting/Invoices") matches only a folder
+    whose own name and whose parents' names end with those parts, and only
+    when exactly one does: a firm keeps an "Invoices" folder under more than
+    one parent, and filing a vendor's bill into the wrong one hides it (A&P,
+    2026-10-01: invoices go in Accounting/Invoices)."""
     try:
         resp = client.get(f"/matters/{matter_id}/documents/folders", Limit=500, Offset=0)
     except Exception:  # noqa: BLE001 - any transport or auth failure listing folders reads as "no such folder"; the caller falls back to the root
         return None
-    want = _norm(folder_name)
-    for f in _walk_folders(_listing(resp)):
-        if _norm(f.get("name")) == want:
-            return str(f.get("id"))
-    return None
+    parts = [_norm(p) for p in str(folder_name or "").split("/") if p.strip()]
+    if not parts:
+        return None
+    if len(parts) == 1:
+        for f in _walk_folders(_listing(resp)):
+            if _norm(f.get("name")) == parts[0]:
+                return str(f.get("id"))
+        return None
+    hits = [f for f, path in _walk_folder_paths(_listing(resp)) if [_norm(n) for n in path[-len(parts) :]] == parts]
+    return str(hits[0].get("id")) if len(hits) == 1 else None
+
+
+def _walk_folder_paths(nodes: Any) -> list[tuple[dict[str, Any], list[str]]]:
+    """Every named folder with the names of the folders above it, root first.
+    The tree's unnamed root contributes no name (see ``_walk_folders``)."""
+    out: list[tuple[dict[str, Any], list[str]]] = []
+    stack: list[tuple[Any, list[str]]] = [(n, []) for n in (nodes if isinstance(nodes, list) else [nodes])]
+    while stack:
+        node, above = stack.pop()
+        if not isinstance(node, dict):
+            continue
+        path = above
+        if node.get("id") and node.get("name"):
+            path = [*above, str(node.get("name"))]
+            out.append((node, path))
+        for key in ("folders", "children", "subFolders"):
+            child = node.get(key)
+            if isinstance(child, list):
+                stack.extend((c, path) for c in child)
+    return out
 
 
 def list_matter_files(client: Any, matter_id: str) -> list[dict[str, Any]]:

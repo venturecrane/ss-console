@@ -1289,3 +1289,29 @@ staff_mailbox_reads:
     - daniela@ashtonandprice.com
     - maricela@ashtonandprice.com
     - bhardiman@ashtonandprice.com
+
+# The firm's filing rules for the daily post, in Christa's words, written
+# inline on our 2026-10-01 "RE: Mail" summary and returned 19:16Z (Gmail
+# message 1a0f8e54e1b04789): "Medical records include medical bills should go
+# in the Medical folder and amount entered in the Plaintiff, Medicals &
+# Settlement Details. Vendor Invoices for police reports, fees to obtain
+# medical records, depo transcripts, etc. go in Expense tab as billable and
+# the a copy in the Accounting/ Invoices subfolder." and "Always click
+# Billable."
+#
+# combined_post_intake.medical_folder: a medical record or bill cut from the
+# post files into the matter's folder of this name, resolved by the Smokeball
+# connector at write time (smokeball_connector/post_intake_config.py). A matter
+# without one gets the letter at its root and the reply says so; no folder is
+# ever created by this setting.
+combined_post_intake:
+  medical_folder: Medical
+
+# vendor_invoice_intake: every staged vendor invoice is billable, and its PDF
+# files into Accounting/Invoices (a nested path: the "Invoices" folder whose
+# parent is "Accounting"). Cost type, activity code and staff stay unauthored
+# and are left to Smokeball's defaults until the firm says otherwise. The
+# expense is still never finalized; the firm's staff finalize it.
+vendor_invoice_intake:
+  is_billable: true
+  folder_name: Accounting/Invoices
