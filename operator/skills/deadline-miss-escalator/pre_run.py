@@ -278,9 +278,8 @@ def load_matter_lookup_budget(customer_yaml_path: str | None = None) -> int:
     if not isinstance(esc, dict):
         return _DEFAULT_MATTER_LOOKUP_BUDGET
     raw = esc.get("matter_lookup_budget")
-    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0:
-        return _DEFAULT_MATTER_LOOKUP_BUDGET
-    return raw
+    junk = isinstance(raw, bool) or not isinstance(raw, int) or raw < 0
+    return _DEFAULT_MATTER_LOOKUP_BUDGET if junk else raw
 
 
 # ---------------------------------------------------------------------------
@@ -444,18 +443,11 @@ def _digest_item(d: MatterDeadline, today: date, ack_code: str | None) -> dict:
         "priority_marker": d.priority_marker,
         "subject_display": d.subject_display,
         "matter_name": d.matter_name,
-        # The two case-manager flags only when set, and the ledger identity day
-        # only when it differs from the printed local day: the dispatch's
-        # ``fired`` row must key on it (see identity_date).
-        **{
-            key: value
-            for key, value in (
-                ("prep_note_missing", d.prep_note_missing or None),
-                ("write_pending_stale", d.write_pending_stale or None),
-                ("identity_date", str(d.identity_date) if d.identity_date not in (None, d.authored_date) else None),
-            )
-            if value is not None
-        },
+        **({"prep_note_missing": True} if d.prep_note_missing else {}),
+        **({"write_pending_stale": True} if d.write_pending_stale else {}),
+        # The ledger identity day, only when it differs from the printed local
+        # day: the dispatch's ``fired`` row must key on it (see identity_date).
+        **({"identity_date": str(d.identity_date)} if d.identity_date not in (None, d.authored_date) else {}),
     }
 
 
@@ -553,9 +545,7 @@ def _rung_for(d: MatterDeadline, today: date, windows: EscalationWindows) -> str
     days_out = (d.authored_date - today).days
     if days_out <= windows.notify_days:  # within notify window or overdue
         return "notify"
-    if days_out <= windows.near_days:
-        return "re-route"
-    return "re-surface"
+    return "re-route" if days_out <= windows.near_days else "re-surface"
 
 
 def decide(
