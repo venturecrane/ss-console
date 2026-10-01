@@ -738,3 +738,25 @@ def test_an_emailed_invoice_still_stages_whole_with_no_page_note() -> None:
     out = _stage(tenant)
     assert out["status"] == "staged" and "pages" not in out
     assert "scanned mail" not in tenant.posted[0]["description"]
+
+
+def test_the_firms_rule_billable_and_filed_in_accounting_invoices() -> None:
+    """The firm's written rule (2026-10-01): billable, and a copy in the
+    Invoices folder under Accounting, not any other folder named Invoices."""
+    tenant = Tenant()
+    tenant.folders = [
+        {
+            "folders": [
+                {"id": "f-old-inv-parent", "name": "Old", "folders": [{"id": "f-old-inv", "name": "Invoices"}]},
+                {"id": "f-acct", "name": "Accounting", "folders": [{"id": "f-acct-inv", "name": "Invoices"}]},
+            ]
+        }
+    ]
+    cfg = vi.parse_expense_config({"is_billable": True, "folder_name": "Accounting/Invoices"})
+    out = _stage(tenant, config=cfg)
+    assert out["status"] == "staged", out
+    (body,) = tenant.posted
+    assert body["isBillable"] is True and body["finalized"] is False
+    (upload,) = tenant.posts("/documents/files")
+    assert json.loads(upload.content)["folderId"] == "f-acct-inv"
+    assert out["defaulted"] == ["costType", "activityCode", "staffId"]

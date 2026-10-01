@@ -278,10 +278,27 @@ top_level:
       path by which any of the four billing fields reaches an expense; the
       stage tool has no argument for them, and `finalized` is never read from
       anywhere. Each unauthored field is left to Smokeball's default and named
-      in the reply; a malformed value refuses the write. Authored on no seat
-      yet (the pilot rehearses the defaults). The overlay's on-box validator
-      does not inspect unknown top-level blocks, but run it at the pinned ref
-      against the edited file before the first authoring anyway.
+      in the reply; a malformed value refuses the write. First authored on
+      ashton-price 2026-10-01 (`is_billable: true`, `folder_name:
+      Accounting/Invoices`, the firm's written rule); the pilot rehearses the
+      defaults. `folder_name` may be a nested path, matched as a folder whose
+      parents' names end with it (smokeball_connector/library.py
+      find_folder_id); a path matching no folder or several files at the root.
+  combined_post_intake:
+    status: implemented
+    materializer: >-
+      no translate step by design, the vendor_invoice_intake shape: the
+      Smokeball connector reads the block directly off the seat's own
+      /var/lib/smd-config/customer.yaml at filing time
+      (smokeball_connector/post_intake_config.py load_post_intake_config).
+    note: >-
+      Where combined post intake files a letter by kind. `medical_folder`: the
+      matter folder a medical record or medical bill files into, resolved by
+      name in file_attachment_pages_to_matter (document_kind "medical"); the
+      model supplies the kind, never a folder id. A matter with no such
+      folder gets the letter at its root and the result says so; nothing
+      creates a folder. Unauthored files at the root and says nothing; a
+      malformed block is reported on the filing and the letter still files.
   staff_mailbox_reads:
     status: implemented
     materializer: >-

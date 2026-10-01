@@ -269,7 +269,8 @@ not a failure. Naming it and asking is the whole point.
 ### 4. File the letters that resolved
 
 For each `unique` letter, call `file_attachment_pages_to_matter(matter_id,
-matter_resolution, download_url, file_name, sha256, first_page, last_page)`:
+matter_resolution, download_url, file_name, sha256, first_page, last_page,
+document_kind)`:
 
 - `matter_id` and `matter_resolution` from that letter's own resolve, unchanged
   and never borrowed from another letter's.
@@ -278,6 +279,12 @@ matter_resolution, download_url, file_name, sha256, first_page, last_page)`:
 - `file_name` is `<YYYY-MM-DD> <sender as the letter prints it> pp<first>-<last>`,
   where the date is **the date the email arrived**, not a date printed on the
   paper. The connector sanitises it; you do not add an extension.
+- `document_kind` is `"medical"` for a medical record or a medical bill (an
+  imaging or treatment report, a provider's statement or itemized bill), and
+  `"letter"` for everything else. The firm's own rule decides where a medical
+  one files (its authored medical folder); you never name a folder. When the
+  result carries `folderNote`, the matter has no such folder and the letter
+  went to its root: add the note's words to that letter's line.
 
 Read the `status`. `filed` means filed. `refused` means **nothing was created**
 and `reason` says why; put the reason on that letter's line in plain words.
