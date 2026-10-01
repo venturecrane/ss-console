@@ -143,6 +143,14 @@ users:
   - email: ss-probe-admin@agentmail.to
     role: staff
     full_name: SS Probe Admin (staging rehearsal)
+  # The staging tenant's one Smokeball staff record (ba848ad4) carries this
+  # address, so matter_staff routing sends the deadline digest here. A reply
+  # closes a task only under an authored name (decided_by, ADR 0088 / the
+  # digest-close path, ss#3022); unauthored, "done with 1" is refused. Same
+  # human as scott@smd.services; role staff, not an admin.
+  - email: smdurgan@smdurgan.com
+    role: staff
+    full_name: Scott Durgan
 
 # ---- PERSONAS ----
 # One coordinator persona. Name/title/voice are a PROPOSED default — the firm
