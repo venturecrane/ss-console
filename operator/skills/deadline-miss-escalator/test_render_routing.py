@@ -99,10 +99,16 @@ def test_render_digest_carries_template_markup_and_values():
 def test_the_footer_is_exactly_the_authored_sentence():
     body = render.render_digest(_digest(), ack_snooze_days=7)
     assert (
-        "Reply to this email with the numbers you have, or say all. Each one you answer goes quiet "
-        "for 7 days; finishing it in Smokeball clears it for good. This is an internal note; no "
-        "client was contacted."
+        "Reply to this email with the numbers you have, or say all; each one goes quiet for 7 days "
+        "and stays open. Say which ones are done and I'll close them in Smokeball. This is an "
+        "internal note; no client was contacted."
     ) in body
+
+
+def test_a_recorded_done_that_never_reached_smokeball_says_so():
+    body = render.render_digest(_digest(needs_you=[{**_item(), "write_pending_stale": True}]), ack_snooze_days=7)
+    assert "   I recorded your done on this earlier but could not update Smokeball; it is still open." in body
+    assert "I recorded your done" not in render.render_digest(_digest(), ack_snooze_days=7)
 
 
 def test_a_body_with_no_numbered_unit_invites_no_reply():
@@ -768,3 +774,113 @@ def test_number_firing_does_not_mutate_its_input():
     assert [i["n"] for i in numbered["needs_you"]] == [1]
     assert [i["n"] for i in numbered["blanket_ack_only"]] == [2]
     assert "n" not in sub["needs_you"][0] and "n" not in sub["blanket_ack_only"][0]
+
+
+def _complete_raises(tmp_path, monkeypatch, *, staff, by_email, deadlines=None, module="escalator_pre_run_for_raises"):
+    """Build an envelope under matter_staff routing and return the dispatches by leg."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    pre_run = _load("pre_run.py", module)
+    yaml_path = tmp_path / "customer.yaml"
+    yaml_path.write_text(
+        "escalation:\n"
+        "  red_flag_recipients:\n    - ops@firm.example\n"
+        "  case_alert_routing:\n"
+        "    mode: matter_staff\n"
+        "    fallback_recipients:\n      - fallback@firm.example\n"
+        "scope:\n  inbound_allow_from:\n    - '@firm.example'\n"
+    )
+    deadlines = deadlines or [
+        _mk_deadline(pre_run, "m-1", "t-1", "2026-PI-101"),
+        _mk_deadline(pre_run, "m-2", "t-2", "2026-PI-102"),
+    ]
+    today = date(2026, 8, 31)
+    digest = pre_run.project_digest(deadlines, pre_run.EscalationWindows(), ledger, today=today)
+    pulled: list = []
+
+    def by_email_pull(emails):
+        pulled.append(list(emails))
+        return by_email
+
+    envelope.build_and_write(
+        digest=digest,
+        deadlines=deadlines,
+        states={},
+        ledger=ledger,
+        today=today,
+        ack_snooze_days=7,
+        customer_yaml_path=str(yaml_path),
+        staff_pull=lambda ids, budget: staff,
+        staff_by_email_pull=by_email_pull,
+    )
+    written = json.loads((tmp_path / ".smd" / "pre_run" / "deadline-miss-escalator.dispatch.json").read_text())
+    return {d["routing_leg"]: d for d in written["dispatches"]}, pulled, pre_run
+
+
+def test_a_numbered_task_line_with_an_owner_raises_a_complete(tmp_path, monkeypatch):
+    """The recipient's own staff record owns the close (Smokeball shows the
+    person who answered as the closer); without one, the matter's responsible
+    staff does; with neither, the line gets no raise and is answered by ack."""
+    amy = {"id": "st-amy", "email": "amy@firm.example", "enabled": True, "name": "Amy Ng"}
+    staff = {"m-1": {"responsible": amy, "assisting": []}}
+    by_leg, pulled, _ = _complete_raises(tmp_path, monkeypatch, staff=staff, by_email={"amy@firm.example": amy})
+    # One read, for the one-recipient dispatches only.
+    assert pulled == [["amy@firm.example", "fallback@firm.example"]]
+    [raise_row] = by_leg["matter_staff_responsible"]["casework_raises"]
+    cw = _load("casework_ledger.py", "escalator_cw_for_raises")
+    assert raise_row == {
+        "item_key": cw.item_key(matter_id="m-1", kind="task", source_id="t-1"),
+        "matter_id": "m-1",
+        "kind": "task",
+        "source_id": "t-1",
+        "n": 1,
+        "payload": {
+            "action": "complete",
+            "class": "open",
+            "staff_id": "st-amy",
+            "reason": "deadline_digest; owner Amy Ng",
+            "evidence": [],
+        },
+    }
+    assert raise_row["n"] == by_leg["matter_staff_responsible"]["appends"][0]["n"]
+    # The fallback recipient has no staff record and m-2 no responsible staff:
+    # no raise, and the key is absent (byte-identical to before).
+    assert "casework_raises" not in by_leg["fallback"]
+
+
+def test_the_responsible_staff_owns_the_close_when_the_recipient_has_no_record(tmp_path, monkeypatch):
+    staff = {"m-1": {"responsible": {"id": "st-amy", "email": "amy@firm.example", "enabled": True}, "assisting": []}}
+    by_leg, _pulled, _ = _complete_raises(
+        tmp_path / "a", monkeypatch, staff=staff, by_email={}, module="escalator_pre_run_raises_a"
+    )
+    [raise_row] = by_leg["matter_staff_responsible"]["casework_raises"]
+    assert raise_row["payload"]["staff_id"] == "st-amy"
+    assert raise_row["payload"]["reason"] == "deadline_digest"
+    # A disabled record owns nothing.
+    staff = {"m-1": {"responsible": {"id": "st-amy", "email": "amy@firm.example", "enabled": False}, "assisting": []}}
+    by_leg, _pulled, _ = _complete_raises(
+        tmp_path / "b", monkeypatch, staff=staff, by_email={}, module="escalator_pre_run_raises_b"
+    )
+    assert all("casework_raises" not in d for d in by_leg.values())
+
+
+def test_a_task_on_a_matter_with_a_court_date_in_the_window_is_raised_at_stake(tmp_path, monkeypatch):
+    pre_run = _load("pre_run.py", "escalator_pre_run_raises_court")
+    deadlines = [
+        _mk_deadline(pre_run, "m-1", "t-1", "2026-PI-101"),
+        pre_run.MatterDeadline(
+            matter_id="m-1",
+            authored_date=date(2026, 9, 4),
+            label="court-date",
+            task_id="ev-1",
+            matter_number="2026-PI-101",
+        ),
+    ]
+    staff = {"m-1": {"responsible": {"id": "st-amy", "email": "amy@firm.example", "enabled": True}, "assisting": []}}
+    by_leg, _pulled, _ = _complete_raises(
+        tmp_path, monkeypatch, staff=staff, by_email={}, deadlines=deadlines, module="escalator_pre_run_raises_court"
+    )
+    raises = by_leg["matter_staff_responsible"]["casework_raises"]
+    # The court date itself earns no raise (a date clears when it passes).
+    assert [r["source_id"] for r in raises] == ["t-1"]
+    assert raises[0]["payload"]["class"] == "at_stake"

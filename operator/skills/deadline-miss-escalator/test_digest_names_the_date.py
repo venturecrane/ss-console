@@ -96,14 +96,14 @@ BEFORE_BODY = (
     "## Needs you today (1)\n\n"
     "1. matter 2026-PI-105, court-date 2026-10-02 (due in 4 days)\n"
     "   a court date the firm authored\n\n"
-    "Reply to this email with the numbers you have, or say all. Each one you answer goes quiet "
-    "for 7 days; finishing it in Smokeball clears it for good. This is an internal note; no "
-    "client was contacted.\n"
+    "Reply to this email with the numbers you have, or say all; each one goes quiet for 7 days "
+    "and stays open. Say which ones are done and I'll close them in Smokeball. This is an "
+    "internal note; no client was contacted.\n"
 )
 FOOTER = (
-    "Reply to this email with the numbers you have, or say all. Each one you answer goes quiet "
-    "for 7 days; finishing it in Smokeball clears it for good. This is an internal note; no "
-    "client was contacted.\n"
+    "Reply to this email with the numbers you have, or say all; each one goes quiet for 7 days "
+    "and stays open. Say which ones are done and I'll close them in Smokeball. This is an "
+    "internal note; no client was contacted.\n"
 )
 
 

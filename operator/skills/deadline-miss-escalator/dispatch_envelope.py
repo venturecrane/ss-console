@@ -71,6 +71,15 @@ _H = _load_skill_helpers()
 #: dispatches the authored failure note instead of a mis-banded digest.
 _DIGEST_ITEMS: Any = _H.load_sibling(SKILL_NAME, __file__, "digest_items.py", "escalator_digest_items")
 
+#: The casework ledger's key arithmetic, for the ``complete`` raise each
+#: closable task line earns (a person may answer "done with 1"). A missing
+#: copy means no raises: the line is then answered by ack only, never closed.
+_CW_LEDGER: Any = _H.load_sibling(SKILL_NAME, __file__, "casework_ledger.py", "escalator_casework_ledger")
+
+#: The reason a complete raise carries: where it came from, and whom the close
+#: is written under, so the reply can say "recorded in Smokeball under <name>".
+_RAISE_REASON = "deadline_digest"
+
 
 # The staff pull + its authored budget live in the vendored ``routing.py``
 # (one pull, one resolution, shared with client-verification-tracker — the
@@ -161,6 +170,80 @@ def _mentions(sub_digest: dict) -> dict:
         return {}
     keys = ("item_key", "matter_id", "kind", "source_id")
     return {"casework_mentions": [{k: r[k] for k in keys} for r in rows]}
+
+
+def _staff_name(record: dict | None) -> str:
+    """The display name a staff record carries, or ''."""
+    if not isinstance(record, dict):
+        return ""
+    name = record.get("name")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    parts = [record.get("firstName"), record.get("lastName")]
+    return " ".join(p.strip() for p in parts if isinstance(p, str) and p.strip())
+
+
+def _casework_raises(sub: dict, emails: tuple, deadlines, matter_staff: dict, staff_by_email: dict, routing) -> dict:
+    """``{"casework_raises": [...]}`` for the needs-you task lines a person may
+    say are done, else ``{}`` (an unconfigured or ownerless send is
+    byte-identical to before).
+
+    One raise per numbered needs-you item that is a task (``digest_items.
+    is_task``) with a resolvable owner. The owner is the staff member the
+    full-replace task PUT is written under and whom Smokeball shows as the
+    closer: the dispatch's one recipient when that address has an enabled
+    staff record (the person who will reply), else the matter's responsible
+    staff. A group number (one ``n`` over several tasks) and a court date get
+    no raise and are answered by ack only.
+
+    ``class`` is the honest one: ``at_stake`` when the item carries a
+    priority marker or its matter has a court date in the escalator's window
+    (the ``deadlines`` universe is that window), else ``open``."""
+    if _CW_LEDGER is None:
+        return {}
+    court = {d.matter_id for d in deadlines if getattr(d, "label", None) == "court-date"}
+    recipient = staff_by_email.get(emails[0].strip().lower()) if len(emails) == 1 else None
+    recipient_id = routing.usable_staff_id(recipient)
+    raises = []
+    for item in sub.get("needs_you") or []:
+        n, task_id, matter_id = item.get("n"), item.get("task_id"), item.get("matter_id")
+        if not (_DIGEST_ITEMS.is_task(item) and isinstance(n, int) and task_id and matter_id):
+            continue
+        if matter_id == routing.UNKNOWN_MATTER:
+            continue
+        owner_record = recipient if recipient_id else (matter_staff.get(matter_id) or {}).get("responsible")
+        owner = recipient_id or routing.usable_staff_id(owner_record)
+        if not owner:
+            continue
+        try:
+            key = _CW_LEDGER.item_key(matter_id=matter_id, kind="task", source_id=task_id)
+        except ValueError:
+            continue
+        klass = "at_stake" if item.get("priority_marker") or matter_id in court else "open"
+        name = _staff_name(owner_record)
+        raises.append(
+            {
+                "item_key": key,
+                "matter_id": matter_id,
+                "kind": "task",
+                "source_id": task_id,
+                "n": n,
+                "payload": {
+                    "action": "complete",
+                    "class": klass,
+                    "staff_id": owner,
+                    "reason": f"{_RAISE_REASON}; owner {name}" if name else _RAISE_REASON,
+                    "evidence": [],
+                },
+            }
+        )
+    return {"casework_raises": raises} if raises else {}
+
+
+def _single_recipient_emails(by_recipients: dict) -> list[str]:
+    """The addresses a one-recipient dispatch goes to: the only ones whose
+    staff record can own a close (a group address has no one person behind it)."""
+    return sorted({emails[0] for (emails, _leg) in by_recipients if len(emails) == 1})
 
 
 def _group_by_recipients(result, since_routes: dict) -> dict[tuple, dict]:
@@ -254,6 +337,10 @@ def _fired_append(item: dict, ledger, states: dict, snooze_days: int) -> dict:
         "event": "fired",
         "attempt": ledger.next_attempt(states.get(key_hex)),
         "token": item.get("ack_code"),
+        # What the line is, for the reply's words: a task a person may say is
+        # done, or a date that clears when it passes. The overlay keeps it
+        # beside the line's label (sent_lines); the ledger row never carries it.
+        "kind": "task" if _DIGEST_ITEMS.is_task(item) else "date",
     }
     if isinstance(item.get("n"), int):
         row["n"] = item["n"]
@@ -375,6 +462,7 @@ def build_and_write(
     ack_snooze_days: int,
     customer_yaml_path: str | None = None,
     staff_pull=None,
+    staff_by_email_pull=None,
 ) -> dict:
     """Render everything, write the envelope, and return the EMITTED_WAKE
     metadata additions.
@@ -401,6 +489,8 @@ def build_and_write(
             )
         if staff_pull is None:
             staff_pull = routing.pull_matter_staff
+        if staff_by_email_pull is None:
+            staff_by_email_pull = routing.pull_staff_by_email
         customer_yaml = _H.load_customer_yaml(customer_yaml_path)
         rekey = legacy_rekey_count(deadlines, states, ledger)
 
@@ -427,6 +517,11 @@ def build_and_write(
         result = routing.resolve_case_alert_routing(customer_yaml, matter_staff, matter_ids)
         since_routes = _since_routes(digest, matter_ids, customer_yaml, routing, mode, staff_pull, matter_staff)
         by_recipients = _group_by_recipients(result, since_routes)
+        # The recipients' own staff records, read once and only when a task
+        # line could be answered "done" (a digest of dates alone reads nothing).
+        staff_by_email: dict = {}
+        if _CW_LEDGER is not None and any(_DIGEST_ITEMS.is_task(i) for i in digest.get("needs_you") or []):
+            staff_by_email = staff_by_email_pull(_single_recipient_emails(by_recipients)) or {}
 
         today_iso = today.isoformat()
         dispatches: list[dict] = []
@@ -464,6 +559,7 @@ def build_and_write(
                     "body_sha256_skeleton": _H.canonical_body_sha256(skeleton_body),
                     "appends": appends,
                     **_mentions(sub),
+                    **_casework_raises(sub, emails, deadlines, matter_staff, staff_by_email, routing),
                 }
             )
             wake_hashes.append(

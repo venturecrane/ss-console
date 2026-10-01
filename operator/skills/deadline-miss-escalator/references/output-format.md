@@ -140,9 +140,9 @@ number covers every item listed under it.
    - <number> <surname>: <what>, <when> (<relative>)
    - ...
 
-Reply to this email with the numbers you have, or say all. Each one you answer
-goes quiet for <ack_snooze_days> days; finishing it in Smokeball clears it for
-good. This is an internal note; no client was contacted.
+Reply to this email with the numbers you have, or say all; each one goes quiet
+for <ack_snooze_days> days and stays open. Say which ones are done and I'll
+close them in Smokeball. This is an internal note; no client was contacted.
 ```
 
 **The numbers** are assigned in code (`digest_items.number_firing`) in the
@@ -213,11 +213,17 @@ number to pair with.
 
 ## The confirmation reply (internal, after an ack)
 
-**A plain-word reply** ("got it on 1 and 3", "all") is confirmed with the
-`confirmation_text` that `reply_verdicts` returns, sent verbatim and
+**A plain-word reply** ("got it on 1 and 3", "all", "done with 1") is confirmed
+with the `confirmation_text` that `reply_verdicts` returns, sent verbatim and
 nothing else. The tool renders it in code from what it actually wrote: which
-numbers went quiet (naming each item), for how long, and which numbers are
-still open. When it wrote nothing (the reply named no number, named a number
+numbers went quiet (naming each item), for how long, which numbers are still
+open, and, when the person said a line was done, what closed in Smokeball
+("Closed 1 (2026-PI-105 Okafor: Update exhibit list ...)."), under whose staff
+record when that is not the replier, what could not close and why ("2 (...) is a
+date; it clears when it passes. Quiet for 7 days."), and the one question for a
+line the words left unclear ("Is 1 (...) done, or still open?"). A reply with a
+`writes_queued` status is the same reply mid-flight: the queued `update_task`
+calls run, then the tool renders the confirmation. When it wrote nothing (the reply named no number, named a number
 the digest does not have, or the thread holds no digest rows), its text is a
 question back to the reader; that is sent verbatim too. An empty
 `confirmation_text` means no reply is sent at all (no verified reply, an

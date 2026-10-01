@@ -69,16 +69,47 @@ def is_quiet(ledger, state, today: date, keep_quiet_days: int) -> bool:
     return False
 
 
+#: How long an approved write may stay unlanded before it stops counting as on
+#: its way. A turn that wrote ``approved`` and died before ``update_task`` leaves
+#: no ``write_failed`` row (the queue records that only when the next write
+#: starts), and an authorization nobody will ever consume must not hide a
+#: deadline from every digest after it.
+AUTHORIZATION_STALE_DAYS = 1
+
+
 def has_pending_proposal(state) -> bool:
-    """A numbered line about this item is out and nobody has answered it."""
+    """A numbered line about this item is out and nobody has answered it.
+
+    A ``complete`` line is the deadline digest's own reminder ("say which are
+    done"), not the keeper holding the task: counting it would make the digest
+    drop the deadline it just raised, the moment nobody answers."""
     if state is None:
         return False
-    return any(d.raise_event == "proposed" and d.verdict is None for d in state.decisions.values())
+    return any(
+        d.raise_event == "proposed" and d.verdict is None and d.payload.get("action") != "complete"
+        for d in state.decisions.values()
+    )
 
 
-def awaiting_write(state) -> bool:
-    """A write is authorized and has not landed or failed yet."""
-    return state is not None and state.authorization is not None
+def _authorization_fresh(state, today: date | None) -> bool:
+    """The open authorization was granted within ``AUTHORIZATION_STALE_DAYS``,
+    or its age cannot be told (no verdict stamp, no ``today``)."""
+    decision = state.authorized_decision
+    if today is None or decision is None or decision.verdict_ts is None:
+        return True
+    return _within(decision.verdict_ts, today, AUTHORIZATION_STALE_DAYS + 1)
+
+
+def awaiting_write(state, today: date | None = None) -> bool:
+    """A write is authorized and has not landed or failed yet. With ``today``,
+    an approval older than ``AUTHORIZATION_STALE_DAYS`` no longer counts."""
+    return state is not None and state.authorization is not None and _authorization_fresh(state, today)
+
+
+def stale_authorization(state, today: date) -> bool:
+    """An approval was written and its write never landed or failed within
+    ``AUTHORIZATION_STALE_DAYS``: the person said done, Smokeball did not change."""
+    return state is not None and state.authorization == "approved" and not _authorization_fresh(state, today)
 
 
 def keeper_owns_task(ledger, state, today: date, keep_quiet_days: int) -> bool:
@@ -89,7 +120,7 @@ def keeper_owns_task(ledger, state, today: date, keep_quiet_days: int) -> bool:
         return False
     return (
         has_pending_proposal(state)
-        or awaiting_write(state)
+        or awaiting_write(state, today)
         or bool(state.named)
         or is_quiet(ledger, state, today, keep_quiet_days)
     )

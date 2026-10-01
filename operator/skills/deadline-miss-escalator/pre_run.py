@@ -149,6 +149,11 @@ class MatterDeadline:
     # the prep window that no date-prep brief has gone out for
     # (``casework_filter.py``). The digest says so in plain words.
     prep_note_missing: bool = False
+    # A person said this task was done (a digest reply the ledger approved) and
+    # the Smokeball write never landed or failed within a day
+    # (``casework_view.stale_authorization``). The digest says so instead of
+    # silently re-listing the task as if nobody had answered.
+    write_pending_stale: bool = False
     # The subject starts with the connector's "[Operator]" provenance stamp:
     # the Operator created this task. Read only by casework_filter.py, and only
     # on a seat that authored ``case_manager.own_tasks``.
@@ -440,6 +445,7 @@ def _digest_item(d: MatterDeadline, today: date, ack_code: str | None) -> dict:
         "subject_display": d.subject_display,
         "matter_name": d.matter_name,
         **({"prep_note_missing": True} if d.prep_note_missing else {}),
+        **({"write_pending_stale": True} if d.write_pending_stale else {}),
         # The ledger identity day, only when it differs from the printed local
         # day: the dispatch's ``fired`` row must key on it (see identity_date).
         **({"identity_date": str(d.identity_date)} if d.identity_date not in (None, d.authored_date) else {}),

@@ -66,7 +66,25 @@ number ("thanks") or an unknown number writes nothing and gets a question back.
 
 An ack is a **snooze, not a tombstone**: the item goes quiet for
 `escalation.ack_snooze_days` (pack default 7), then re-surfaces if it is still
-open in Smokeball. Only resolution in Smokeball closes an item.
+open in Smokeball. A person's **"done"** is different from "got it" (2026-10-01):
+"done with 1", "1 is done", "close 1" closes the task in Smokeball, in the same
+turn. The send made that possible: for every numbered task line whose owner it
+could resolve, the digest's dispatch also wrote a casework `proposed` row with
+payload action `complete` (`dispatch_envelope.casework_raises`), joined to the
+sent message exactly as the `fired` rows are. The completion approves that row
+under the replier's authored name (the broker refuses an anonymous approval of
+a `complete`), which authorizes one `update_task` write the trust gate replays
+from the stored payload; the task is written under the owner the send resolved
+(the recipient's own staff record first, else the matter's responsible staff),
+and the confirmation says "recorded in Smokeball under <name>" when that is not
+the replier. What cannot close is quieted and told why in words: a court date
+("it clears when it passes"), a group number (one number over several tasks), a
+task line with no owner, or a replier the firm authored no name for. "Not done
+with 1", "I'll close 1 after the FSC" close nothing and are asked about; the
+clear numbers in the same reply are still acted on. A bare "done" closes a
+one-line digest and asks on a longer one. Everything above is decided in code
+(`reply_verdicts` → the overlay's `digest_reply`); the turn sends
+`confirmation_text` verbatim.
 
 **Codes already sent keep working.** Digests sent before 2026-09-25 carried
 per-item `ACK-XXXXXX` codes and a blanket `ESCALATION_ACKNOWLEDGED`. The rows
@@ -110,7 +128,7 @@ Reads Smokeball (`list_tasks` `due_date`) for authored task deadlines and the ma
    **Provenance boundary (unchanged).** `last_raised` in the wake payload records what THE OPERATOR raised, and only after a send succeeded: a null value is "no prior raise on this item", never "not raised". `ACK` codes remain the #1935 class: in any legacy reply you write (step 3), print only a code a tool call this run returned or the reader quoted.
 
 3. **On a rostered internal reply (routed here by the inbox skill):**
-   - **A reply in a `[Deadlines]` thread in plain words** (numbers, "all", or no number at all): call `reply_verdicts` with no arguments, then send its `confirmation_text` to the replier verbatim, and nothing else. **An empty `confirmation_text` means send no reply at all** (the tool found no verified reply, an automatic reply, or a sender who is not rostered); never compose one to fill the gap. The tool reads the reply and the thread from the verified inbound message itself; you never pass it a number, an item, or a thread. If it refuses (no digest rows in this thread, an unknown number, nothing named), its `confirmation_text` is the question to send back; send that verbatim too. Never write an `acked` row yourself for a plain-word reply.
+   - **A reply in a `[Deadlines]` thread in plain words** (numbers, "all", "done with 1", or no number at all): call `reply_verdicts` with no arguments. When its `status` is `writes_queued`, make exactly `writes` calls to `mcp_smokeball_update_task` (the gate replaces your arguments with the close the person approved, and refuses a call beyond them), then call `reply_verdicts` again. Then send its `confirmation_text` to the replier verbatim, and nothing else. **An empty `confirmation_text` means send no reply at all** (the tool found no verified reply, an automatic reply, or a sender who is not rostered); never compose one to fill the gap. The tool reads the reply and the thread from the verified inbound message itself; you never pass it a number, an item, or a thread. If it refuses (no digest rows in this thread, an unknown number, nothing named), its `confirmation_text` is the question to send back; send that verbatim too. Never write an `acked` row yourself for a plain-word reply.
    - **A reply quoting legacy `ACK-XXXXXX` codes or `ESCALATION_ACKNOWLEDGED`** (a digest sent before the numbered format): run the per-code procedure - resolve each code against `escalation_state` output, emit an `acked` event per code with `escalation_append` (`ack_token`), and reply enumerating what was acked and counting what remains, per the legacy confirmation template in `references/output-format.md`.
 4. **Never compute, never send to a client.** No date is produced; no client/tribunal-bound message is drafted or sent.
 
@@ -131,7 +149,7 @@ The agent MUST NOT: compute or infer a deadline; send anything to a client or tr
 3. **Fail-closed notify.** With no authored red-flag recipient, no named-human alert fires (re-surface/re-route still run).
 4. **Held matters route to clearance,** never a client-facing escalation.
 5. **Heartbeat integrity.** Every quiet tick writes a `SUPPRESSED_WAKE` row and an audit-write failure forces wake; every firing tick writes an `EMITTED_WAKE` row best-effort, which can never suppress or delay the wake (#2253). A scheduled tick with **neither** row is the dead-man's-switch signal - the watch is advisory, never the firm's system of record (`compliance-floor.md`).
-6. **Ledger writes are validated, never direct.** Every `fired`/`acked` event goes through the `escalation_append` tool to the broker's `escalation_event_append` verb; the agent never writes the ledger file and never reaches the broker socket via `execute_code` (that class is unauthored on customer seats and refused - ss #1915). An `acked` with no prior `fired` is rejected. An ack is a snooze, not a tombstone - only resolution in Smokeball is terminal.
+6. **Ledger writes are validated, never direct.** Every `fired`/`acked` event goes through the `escalation_append` tool to the broker's `escalation_event_append` verb; the agent never writes the ledger file and never reaches the broker socket via `execute_code` (that class is unauthored on customer seats and refused - ss #1915). An `acked` with no prior `fired` is rejected. An ack is a snooze, not a tombstone - only resolution in Smokeball is terminal, and the one reply that resolves a task there is a person's "done" on a line the send raised as closable (the casework `complete` row, approved under that person's authored name; never the agent's own `update_task`).
 7. **No invented urgency.** The triage orders by signals the record carries (task-label markers, consequential category, overdue age) and never manufactures an urgency the data does not state.
 8. **A digest with zero resolved matter numbers is withheld, never sent.** When no matter number resolved and at least one lookup failed, the gate suppresses the wake (`digest_degraded_suppressed`) and the ops pager carries the withholding; authored absence (`no_number_on_record`) and partial failure still ship, with explicit absences. A turn never "fixes" a degraded digest by removing or supplying values.
 

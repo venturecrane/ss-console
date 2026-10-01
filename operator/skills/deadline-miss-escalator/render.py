@@ -82,13 +82,21 @@ _PRIORITY_PHRASES = {
 #: what the item WAS, in our words, and asked nothing of them.
 _PREP_NOTE_PHRASE = "No prep note has gone out for this yet."
 
+#: A person answered "done" to an earlier digest and the Smokeball write never
+#: landed (``write_pending_stale``, set by ``casework_filter.py``). The line
+#: owns the miss instead of listing the task as if nobody had answered.
+_WRITE_PENDING_PHRASE = "I recorded your done on this earlier but could not update Smokeball; it is still open."
+
 
 def consequence_line(item: dict) -> str | None:
     """The one plain line of what an item still needs, or None.
 
-    Authored signal only: a task-priority marker the record carries, else a
-    date in the prep window with no brief out. Anything else renders nothing
-    (rule 7: no invented urgency)."""
+    Authored signal only: a recorded done that never reached Smokeball, a
+    task-priority marker the record carries, else a date in the prep window
+    with no brief out. Anything else renders nothing (rule 7: no invented
+    urgency)."""
+    if item.get("write_pending_stale") is True:
+        return _WRITE_PENDING_PHRASE
     marker = item.get("priority_marker")
     if isinstance(marker, str) and marker in _PRIORITY_PHRASES:
         return _PRIORITY_PHRASES[marker]
@@ -154,9 +162,10 @@ _REKEY_NOTICE = (
 #: The footer of a numbered digest. No literal example numbers: a reader who
 #: copies an example would answer an item they never read.
 REPLY_FOOTER = (
-    "Reply to this email with the numbers you have, or say all. Each one you "
-    "answer goes quiet for {ack_snooze_days} days; finishing it in Smokeball "
-    "clears it for good. This is an internal note; no client was contacted."
+    "Reply to this email with the numbers you have, or say all; each one goes "
+    "quiet for {ack_snooze_days} days and stays open. Say which ones are done "
+    "and I'll close them in Smokeball. This is an internal note; no client was "
+    "contacted."
 )
 
 #: The footer of a body with no answerable number (every unit past the append
