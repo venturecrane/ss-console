@@ -60,6 +60,7 @@ from __future__ import annotations
 
 import re
 import time
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable
 
@@ -363,72 +364,97 @@ def add_medicals_row(
             "source_file_id is not a document this run filed on that matter; "
             "file the bill's pages with file_attachment_pages_to_matter first and pass the fileId it returned"
         )
-    provider = _clean(provider_name)
     amount = parse_charge(charge)
     assert amount is not None  # _problem checked it
-    start, end = service_start.strip(), service_end.strip()
-    account = _clean(account_number)[:_MAX_ACCOUNT]
-
+    bill = _Bill(
+        matter=matter,
+        provider=_clean(provider_name),
+        amount=amount,
+        start=service_start.strip(),
+        end=service_end.strip(),
+        account=_clean(account_number)[:_MAX_ACCOUNT],
+        source=source,
+    )
     client = _client()
+    tab = _select_tab(client, matter, claimant_index)
+    if "status" in tab:
+        return tab
+    return _write_row(client, bill, tab["id"])
+
+
+@dataclass(frozen=True)
+class _Bill:
+    """The facts one call carries, validated, plus the ledger's source record."""
+
+    matter: str
+    provider: str
+    amount: Decimal
+    start: str
+    end: str
+    account: str
+    source: dict[str, Any]
+
+
+def _select_tab(client: Any, matter: str, claimant_index: int | None) -> dict[str, Any]:
+    """The Medicals tab to write, as ``{"id": ...}``, or a refusal dict."""
     try:
         tabs = _pi_items(client, matter)
     except Exception as exc:  # noqa: BLE001 - a failed read is a failed step, never "no tab"
         return _refused(f"the matter's layouts could not be read ({exc.__class__.__name__}: {str(exc)[:200]})")
     if not tabs:
         return _refused("the matter has no Medicals tab (no personal-injury settlement details layout)")
+    listed = [{"claimant_index": t["parentIndex"], "item_id": t["id"]} for t in tabs]
     if len(tabs) > 1 and claimant_index is None:
         return _refused(
             "the matter has several Medicals tabs, one per claimant; pass claimant_index for the claimant "
             "this bill is for, after the sender says which",
-            tabs=[{"claimant_index": t["parentIndex"], "item_id": t["id"]} for t in tabs],
+            tabs=listed,
         )
     if len(tabs) == 1 and claimant_index is None:
-        tab = tabs[0]
-    else:
-        chosen = [t for t in tabs if t["parentIndex"] == claimant_index]
-        if len(chosen) != 1:
-            return _refused(
-                f"no Medicals tab has claimant_index {claimant_index!r}",
-                tabs=[{"claimant_index": t["parentIndex"], "item_id": t["id"]} for t in tabs],
-            )
-        tab = chosen[0]
-    path = f"/matters/{matter}/layouts/{tab['id']}"
+        return {"id": tabs[0]["id"]}
+    chosen = [t for t in tabs if t["parentIndex"] == claimant_index]
+    if len(chosen) != 1:
+        return _refused(f"no Medicals tab has claimant_index {claimant_index!r}", tabs=listed)
+    return {"id": chosen[0]["id"]}
 
+
+def _write_row(client: Any, bill: _Bill, item_id: str) -> dict[str, Any]:
+    """Read the tab, stop if the provider is on it, find its contact, then link
+    and fill the row. Every early return writes nothing."""
+    path = f"/matters/{bill.matter}/layouts/{item_id}"
     try:
         values = layout_values(client.get(path))
     except Exception as exc:  # noqa: BLE001 - the vendor read raises a wide family; a failed read refuses, never "no rows"
         return _refused(f"the Medicals tab could not be read ({exc.__class__.__name__}: {str(exc)[:200]})")
     rows = provider_rows(values)
-    present = indices_named(rows, provider)
+    present = indices_named(rows, bill.provider)
     if present:
-        index = present[0]
-        row = rows[index]
+        row = rows[present[0]]
         return {
             "status": "already_present",
             "created": False,
-            "matter_id": matter,
-            "item_id": tab["id"],
-            "index": index,
+            "matter_id": bill.matter,
+            "item_id": item_id,
+            "index": present[0],
             "existing": {
                 "provider": row.get("Provider/DisplayName"),
                 "charge": row.get("Invoices[0]/InitialInvoiceAmount"),
                 "service_start": row.get("Invoices[0]/ServiceStartDate") or row.get("ServiceStartDate"),
                 "service_end": row.get("Invoices[0]/ServiceEndDate") or row.get("ServiceEndDate"),
             },
-            "bill": {"charge": f"{amount:.2f}", "service_start": start, "service_end": end},
+            "bill": {"charge": f"{bill.amount:.2f}", "service_start": bill.start, "service_end": bill.end},
         }
-
     try:
-        candidates = contacts_by_name(client, provider)
+        candidates = contacts_by_name(client, bill.provider)
     except Exception as exc:  # noqa: BLE001 - SearchFailed and friends: a failed search is reported as one
         return _refused(f"the firm's contacts could not be searched ({exc.__class__.__name__})")
     if len(candidates) != 1:
         return {
             "status": "needs_contact",
             "created": False,
-            "matter_id": matter,
-            "item_id": tab["id"],
-            "provider": provider,
+            "matter_id": bill.matter,
+            "item_id": item_id,
+            "provider": bill.provider,
             "candidates": [_contact_label(c) for c in candidates],
             "reason": (
                 "the firm's contacts hold no record for this provider"
@@ -436,9 +462,14 @@ def add_medicals_row(
                 else "the firm's contacts hold several records that could be this provider"
             ),
         }
-    contact = candidates[0]
-    contact_id = str(contact.get("id"))
+    return _link_and_fill(client, bill, item_id, path, rows, str(candidates[0].get("id")))
 
+
+def _link_and_fill(
+    client: Any, bill: _Bill, item_id: str, path: str, rows: dict[int, dict[str, Any]], contact_id: str
+) -> dict[str, Any]:
+    """The two writes: link the contact (an empty row appears where the tenant
+    puts it), then PATCH that row's values and read them back."""
     before = set(rows)
     planned = (max(rows) + 1) if rows else 0
     try:
@@ -449,69 +480,49 @@ def add_medicals_row(
         )
     except Exception as exc:  # noqa: BLE001 - the link POST raises a wide family; a failed link is reported with nothing written after it
         return _refused(f"the provider could not be linked to the tab ({exc.__class__.__name__}: {str(exc)[:200]})")
-
-    def appeared(current: dict[str, Any]) -> bool:
-        return bool(set(provider_rows(current)) - before)
-
-    values = _poll(client, path, LINK_WAITS, appeared)
+    values = _poll(client, path, LINK_WAITS, lambda current: bool(set(provider_rows(current)) - before))
     fresh = sorted(set(provider_rows(values)) - before)
+    base = {"created": True, "matter_id": bill.matter, "item_id": item_id}
     if not fresh:
-        return {
-            "status": "link_not_visible",
-            "created": True,
-            "matter_id": matter,
-            "item_id": tab["id"],
-            "planned_index": planned,
-            "contact_id": contact_id,
-        }
+        return {"status": "link_not_visible", **base, "planned_index": planned, "contact_id": contact_id}
     index = fresh[0]
     linked_as = provider_rows(values)[index].get("Provider/DisplayName")
     note = compose_note(
-        provider_name=provider,
-        charge=amount,
-        service_start=start,
-        service_end=end,
-        account_number=account,
-        source=source,
+        provider_name=bill.provider,
+        charge=bill.amount,
+        service_start=bill.start,
+        service_end=bill.end,
+        account_number=bill.account,
+        source=bill.source,
         stamp=_stamp(),
     )
-    description = f"{provider}, {source['file_name']}"[:200]
     want = _row_values(
         index,
-        charge=amount,
-        service_start=start,
-        service_end=end,
-        account_number=account,
+        charge=bill.amount,
+        service_start=bill.start,
+        service_end=bill.end,
+        account_number=bill.account,
         note=note,
-        description=description,
+        description=f"{bill.provider}, {bill.source['file_name']}"[:200],
     )
     try:
         client.request("PATCH", path, json={"values": [{"key": k, "value": v} for k, v in want.items()]})
     except Exception as exc:  # noqa: BLE001 - the empty row exists; say so rather than hide it
-        return {
-            "status": "readback_mismatch",
-            "created": True,
-            "matter_id": matter,
-            "item_id": tab["id"],
-            "index": index,
-            "linked_as": linked_as,
-            "mismatch": {"_write": {"want": "the row's values", "got": f"{exc.__class__.__name__}: {str(exc)[:200]}"}},
-        }
+        failed = {"_write": {"want": "the row's values", "got": f"{exc.__class__.__name__}: {str(exc)[:200]}"}}
+        return {"status": "readback_mismatch", **base, "index": index, "linked_as": linked_as, "mismatch": failed}
     values = _poll(client, path, VALUE_WAITS, lambda current: not compare(want, current))
     mismatch = compare(want, values)
     out = {
         "status": "written" if not mismatch else "readback_mismatch",
-        "created": True,
-        "matter_id": matter,
-        "item_id": tab["id"],
+        **base,
         "index": index,
         "linked_as": linked_as,
-        "charge": f"{amount:.2f}",
-        "service_start": start,
-        "service_end": end,
+        "charge": f"{bill.amount:.2f}",
+        "service_start": bill.start,
+        "service_end": bill.end,
         "note": note,
-        "from_scan": bool(source.get("from_scan")),
-        "source_file": source["file_name"],
+        "from_scan": bool(bill.source.get("from_scan")),
+        "source_file": bill.source["file_name"],
         "extra_rows": fresh[1:],
     }
     if mismatch:

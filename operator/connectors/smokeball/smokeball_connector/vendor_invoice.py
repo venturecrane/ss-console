@@ -401,6 +401,88 @@ def _file_invoice(client: Any, matter_id: str, file_name: str, blob: bytes, cfg:
     return {"filed": True, "fileId": result.get("fileId"), "folderId": folder_id, "note": note}
 
 
+def _source_note(sha: str, bounds: tuple[int, int] | None) -> tuple[str | None, bool]:
+    """The description's note for a bill cut from a scanned bundle, and whether
+    any of its pages was transcribed from paper. ``(None, False)`` for an
+    emailed invoice PDF."""
+    if bounds is None:
+        return None, False
+    from_scan = SCANNED_PAGES.any_in(sha, *bounds)
+    read = "read from a scan" if from_scan else "read from the document's text"
+    return f"Pages {bounds[0]}-{bounds[1]} of the scanned mail, {read}; check the figure against the paper.", from_scan
+
+
+def _fetch_for_staging(
+    client: Any, download_url: str, sha: str, bounds: tuple[int, int] | None, file_name: str
+) -> tuple[bytes, str] | dict[str, Any]:
+    """The bytes to file beside the expense and their file name, or a refusal.
+    Re-fetches and re-verifies the attachment; for a page range, claims the
+    pages in the filed-pages ledger and cuts them out. Keyed on the BYTES, like
+    the letter filing, so a bill's pages cannot also be filed as a letter and a
+    letter's pages cannot also be staged as a bill. A refusal after the claim
+    releases it."""
+    try:
+        blob = fetch_bytes(client, download_url)
+    except SmokeballWriteError as exc:
+        return _refused(f"the attachment could not be fetched again: {exc}")
+    if hashlib.sha256(blob).hexdigest() != sha:
+        return _refused("the attachment's bytes changed since it was read; read it again before staging")
+    if is_xlsx(blob):
+        return _refused("a spreadsheet is never staged as an invoice; route it to a person")
+    if bounds is None:
+        return blob, file_name
+    clash = FILED_PAGES.claim(sha, *bounds)
+    if clash is not None:
+        return _refused(f"page {clash} of this bundle was already filed in this session; nothing was created")
+    try:
+        cut = letter_pages.split_range(blob, *bounds)
+    except PageReadError as exc:
+        FILED_PAGES.release(sha, *bounds)
+        return _refused(str(exc))
+    return cut, letter_pages.safe_file_name(file_name, *bounds)
+
+
+def _write_expense(
+    client: Any,
+    matter_id: str,
+    facts: InvoiceFacts,
+    subject: str,
+    description: str,
+    cfg: ExpenseConfig,
+    file_name: str,
+    blob: bytes,
+) -> dict[str, Any]:
+    """The one write: POST the unfinalized entry, read it back, file the PDF.
+    Called only after the resolution is spent; nothing here refuses."""
+    accepted = client.request(
+        "POST", f"/matters/{matter_id}/expenses", json=build_expense_body(facts, subject, description, cfg)
+    )
+    expense_id = str(accepted.get("id") or "") if isinstance(accepted, dict) else ""
+    readback = (
+        _read_back(client, matter_id, expense_id, facts)
+        if expense_id
+        else {"verified": False, "problems": ["Smokeball accepted the entry but returned no id to read back"]}
+    )
+    filed = _file_invoice(client, matter_id, file_name, blob, cfg)
+    status = "staged" if readback["verified"] else "staged_unverified"
+    if status == "staged" and not filed["filed"]:
+        status = "staged_file_failed"
+    out = {
+        "status": status,
+        "created": True,
+        "expense_id": expense_id or None,
+        "matter_id": matter_id,
+        "amount": str(facts.amount),
+        "subject": subject,
+        "file_id": filed.get("fileId"),
+        "file": filed,
+        "readback": readback,
+        "defaulted": cfg.defaulted,
+        "ignored_config_keys": list(cfg.ignored_keys),
+    }
+    return out
+
+
 def _preflight(
     client: Any, matter_id: str, facts: InvoiceFacts, subject: str, description: str, verify_reference: Callable
 ) -> dict[str, Any] | None:
@@ -475,72 +557,23 @@ def stage_vendor_invoice(
     cfg = config if config is not None else load_expense_config()
     if cfg.error:
         return _refused(f"the seat's expense settings are malformed: {cfg.error}")
-    source_note = None
-    from_scan = False
-    if bounds is not None:
-        from_scan = SCANNED_PAGES.any_in(_clean(sha256), *bounds)
-        read = "read from a scan" if from_scan else "read from the document's text"
-        source_note = f"Pages {bounds[0]}-{bounds[1]} of the scanned mail, {read}; check the figure against the paper."
+    source_note, from_scan = _source_note(_clean(sha256), bounds)
     subject, description = compose_entry(facts, file_name, stamp, source_note)
     blocked = _preflight(client, matter_id, facts, subject, description, verify_reference)
     if blocked is not None:
         return blocked
-    try:
-        blob = fetch_bytes(client, download_url)
-    except SmokeballWriteError as exc:
-        return _refused(f"the attachment could not be fetched again: {exc}")
-    if hashlib.sha256(blob).hexdigest() != _clean(sha256):
-        return _refused("the attachment's bytes changed since it was read; read it again before staging")
-    if is_xlsx(blob):
-        return _refused("a spreadsheet is never staged as an invoice; route it to a person")
-    if bounds is not None:
-        # Keyed on the BYTES, like the letter filing: the ledger holds across two
-        # references to one bundle, so a bill's pages cannot also be filed as a
-        # letter, and a letter's pages cannot also be staged as a bill.
-        clash = FILED_PAGES.claim(_clean(sha256), *bounds)
-        if clash is not None:
-            return _refused(f"page {clash} of this bundle was already filed in this session; nothing was created")
-        try:
-            blob = letter_pages.split_range(blob, *bounds)
-        except PageReadError as exc:
-            FILED_PAGES.release(_clean(sha256), *bounds)
-            return _refused(str(exc))
-        file_name = letter_pages.safe_file_name(file_name, *bounds)
+    got = _fetch_for_staging(client, download_url, _clean(sha256), bounds, file_name)
+    if isinstance(got, dict):
+        return got
+    blob, file_name = got
     try:
         consume_resolution(matter_resolution, matter_id)
     except ResolutionRefused as exc:  # a concurrent turn spent it between the two checks
         if bounds is not None:
             FILED_PAGES.release(_clean(sha256), *bounds)
         return _refused(str(exc))
-    accepted = client.request(
-        "POST", f"/matters/{matter_id}/expenses", json=build_expense_body(facts, subject, description, cfg)
-    )
-    expense_id = str(accepted.get("id") or "") if isinstance(accepted, dict) else ""
-    readback = (
-        _read_back(client, matter_id, expense_id, facts)
-        if expense_id
-        else {"verified": False, "problems": ["Smokeball accepted the entry but returned no id to read back"]}
-    )
-    filed = _file_invoice(client, matter_id, file_name, blob, cfg)
-    status = "staged" if readback["verified"] else "staged_unverified"
-    if status == "staged" and not filed["filed"]:
-        status = "staged_file_failed"
-    out = {
-        "status": status,
-        "created": True,
-        "expense_id": expense_id or None,
-        "matter_id": matter_id,
-        "matched_on": list(resolution.matched_on),
-        "amount": str(facts.amount),
-        "subject": subject,
-        "file_id": filed.get("fileId"),
-        "file": filed,
-        "readback": readback,
-        "defaulted": cfg.defaulted,
-        "ignored_config_keys": list(cfg.ignored_keys),
-    }
+    out = _write_expense(client, matter_id, facts, subject, description, cfg, file_name, blob)
+    out["matched_on"] = list(resolution.matched_on)
     if bounds is not None:
-        out["pages"] = {"first": bounds[0], "last": bounds[1]}
-        out["fromScan"] = from_scan
-        out["fileName"] = file_name
+        out.update(pages={"first": bounds[0], "last": bounds[1]}, fromScan=from_scan, fileName=file_name)
     return out
