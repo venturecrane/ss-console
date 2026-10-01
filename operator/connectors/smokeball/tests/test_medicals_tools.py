@@ -32,7 +32,8 @@ PI = {"id": TAB, "layoutDesign": {"id": "PersonalInjurySettlementDetailsItem"}, 
 OTHER = {"id": "ins-1", "layoutDesign": {"id": "6325a09c_4ae31510"}, "parentIndex": 0}
 AMR = {"id": "c-amr", "company": {"name": "American Medical Response"}}
 NORTHSIDE = {"id": "c-nor", "company": {"name": "Northside Imaging Center"}}
-NORTHSIDE_TWO = {"id": "c-nor2", "company": {"name": "Northside Imaging Center Billing"}}
+NORTHSIDE_TWO = {"id": "c-nor2", "company": {"name": "Northside Imaging Center"}}  # a duplicate record
+NORTHSIDE_WIDER = {"id": "c-norw", "company": {"name": "Valley Northside Imaging Center"}}
 
 _KEY_INDEX = re.compile(r"^Providers\[(\d+)\]/")
 
@@ -60,6 +61,8 @@ class _Tenant:
         self.link_adds_row = True
         self.patch_sticks = True
         self.fail_layouts = False
+        # The matter's clients, in order: a tab's parentIndex is a position here.
+        self.clients: list[dict[str, Any]] = []
 
     # -- reads
     def get(self, path: str, **params: Any) -> Any:
@@ -70,6 +73,10 @@ class _Tenant:
             return {"value": self.tabs}
         if path == "/contacts":
             return {"value": list(self.contacts)}
+        if path == f"/matters/{MATTER}":
+            return {"id": MATTER, "clientIds": [c["id"] for c in self.clients]}
+        if path.startswith("/contacts/"):
+            return next(c for c in self.clients if c["id"] == path.rsplit("/", 1)[1])
         if path.startswith(f"/matters/{MATTER}/layouts/"):
             return {"values": [{"key": k, "value": v} for k, v in self.values.items()]}
         raise AssertionError(f"unscripted GET {path}")
@@ -77,6 +84,10 @@ class _Tenant:
     # -- writes
     def request(self, method: str, path: str, *, json: Any = None, params: Any = None) -> Any:
         self.requests.append((method, path, json))
+        if method == "POST" and path == "/contacts":
+            made = {"id": f"c-new-{len(self.contacts)}", "company": dict(json["company"])}
+            self.contacts.append(made)
+            return {"id": made["id"], "href": f"/contacts/{made['id']}"}
         if method == "POST" and path.endswith("/contacts"):
             if self.link_adds_row:
                 planned = int(_KEY_INDEX.match(json["key"]).group(1))
@@ -141,6 +152,7 @@ def test_no_argument_carries_free_text() -> None:
         "service_end",
         "account_number",
         "claimant_index",
+        "patient_name",
     }
     # The overlay's draft gate scans write arguments by these names; the
     # note is composed in the connector, so none may exist.
@@ -219,6 +231,7 @@ def test_a_provider_already_on_the_tab_is_reported_and_left_alone(tenant: _Tenan
     _filed()
     tenant.values["Providers[0]/Provider/DisplayName"] = "AMERICAN MEDICAL RESPONSE."
     tenant.values["Providers[0]/Invoices[0]/InitialInvoiceAmount"] = "4345.16"
+    tenant.values["Providers[0]/Invoices[0]/ServiceStartDate"] = "2026-07-16T00:00:00"
     out = _add()
     assert out["status"] == "already_present"
     assert out["existing"]["charge"] == "4345.16"
@@ -226,14 +239,44 @@ def test_a_provider_already_on_the_tab_is_reported_and_left_alone(tenant: _Tenan
     assert tenant.writes() == []
 
 
-@pytest.mark.parametrize("contacts", [[], [NORTHSIDE, NORTHSIDE_TWO]])
-def test_no_contact_or_two_contacts_creates_nothing(tenant: _Tenant, contacts: list[dict[str, Any]]) -> None:
+def test_two_matching_contacts_create_nothing(tenant: _Tenant) -> None:
     _filed()
-    tenant.contacts = contacts
+    tenant.contacts = [NORTHSIDE, NORTHSIDE_TWO]
     out = _add(provider_name="Northside Imaging Center")
     assert out["status"] == "needs_contact"
-    assert [c["id"] for c in out["candidates"]] == [c["id"] for c in contacts]
-    assert tenant.writes() == [], "no contact is ever created and no row is ever linked"
+    assert [c["id"] for c in out["candidates"]] == [NORTHSIDE["id"], NORTHSIDE_TWO["id"]]
+    assert tenant.writes() == [], "no contact is created and no row is linked when the firm has candidates"
+
+
+def test_a_provider_with_no_contact_is_added_then_linked(tenant: _Tenant) -> None:
+    """Two providers on the 2026-10-01 bills were in no contact record. A
+    search that finds nothing adds the provider as a company, named as the
+    bill prints it, and the row links to that new record."""
+    _filed()
+    tenant.contacts = []
+    out = _add(provider_name="Northside Imaging Center")
+    assert out["status"] == "written", out
+    assert out["contact_created"] is True
+    create, link, _patch = tenant.writes()
+    assert create[1] == "/contacts" and create[2] == {"company": {"name": "Northside Imaging Center"}}
+    assert link[2]["contactId"] == "c-new-0"
+    assert out["linked_as"] == "Northside Imaging Center"
+
+
+def test_a_failed_contact_create_writes_no_row(tenant: _Tenant, monkeypatch: pytest.MonkeyPatch) -> None:
+    _filed()
+    tenant.contacts = []
+    real = tenant.request
+
+    def _refusing(method: str, path: str, **kw: Any) -> Any:
+        if path == "/contacts":
+            raise RuntimeError("403")
+        return real(method, path, **kw)
+
+    monkeypatch.setattr(tenant, "request", _refusing)
+    out = _add(provider_name="Northside Imaging Center")
+    assert out["status"] == "refused" and "could not be added" in out["reason"]
+    assert [r for r in tenant.requests if r[0] in ("POST", "PATCH")] == []
 
 
 def test_several_claimants_refuse_to_choose(tenant: _Tenant) -> None:
@@ -347,3 +390,66 @@ def test_compare_reads_amounts_numerically_and_dates_by_day() -> None:
     }
     assert mt.compare(want, got) == {}
     assert "x/Note" in mt.compare(want, dict(got, **{"x/Note": "other"}))
+
+
+# ---- the 2026-10-01 batch: what the first live run could not do -------------
+
+
+def test_an_exact_contact_wins_over_one_that_only_contains_the_words(tenant: _Tenant) -> None:
+    """A provider name also matched a longer contact holding every one of its
+    words, and the bill was left unkeyed as "several records" (a client tenant,
+    2026-10-01). The record whose name IS the provider's is the one."""
+    _filed()
+    tenant.contacts = [NORTHSIDE_WIDER, NORTHSIDE]
+    out = _add(provider_name="Northside Imaging Center")
+    assert out["status"] == "written", out
+    link = tenant.writes()[0]
+    assert link[2]["contactId"] == NORTHSIDE["id"]
+
+
+def test_the_bills_patient_chooses_the_claimants_tab(tenant: _Tenant) -> None:
+    """Two plaintiffs, a tab each; the bill names one of them. Her position
+    among the matter's clients is her tab's parentIndex."""
+    _filed()
+    tenant.tabs = [PI, dict(PI, id="pi-2", parentIndex=1)]
+    tenant.clients = [
+        {"id": "cl-0", "person": {"firstName": "Ana", "lastName": "Quill"}},
+        {"id": "cl-1", "person": {"firstName": "Rosa", "lastName": "Quill"}},
+    ]
+    out = _add(patient_name="QUILL, ROSA")
+    assert out["status"] == "written", out
+    assert tenant.writes()[0][1] == f"/matters/{MATTER}/layouts/pi-2/contacts"
+
+
+@pytest.mark.parametrize("patient", ["Pat Nobody", "Quill"])
+def test_a_patient_matching_no_client_or_several_still_asks(tenant: _Tenant, patient: str) -> None:
+    _filed()
+    tenant.tabs = [PI, dict(PI, id="pi-2", parentIndex=1)]
+    tenant.clients = [
+        {"id": "cl-0", "person": {"firstName": "Ana", "lastName": "Quill"}},
+        {"id": "cl-1", "person": {"firstName": "Rosa", "lastName": "Quill"}},
+    ]
+    out = _add(patient_name=patient)
+    assert out["status"] == "refused" and "several Medicals tabs" in out["reason"]
+    assert tenant.writes() == []
+
+
+def test_a_further_bill_from_a_provider_on_the_tab_is_its_own_line(tenant: _Tenant) -> None:
+    """An imaging center billed two studies the same day: one row, two lines.
+    The second bill must not be dropped as "already present"."""
+    _filed()
+    tenant.values["Providers[0]/Provider/DisplayName"] = "American Medical Response"
+    tenant.values["Providers[0]/Invoices[0]/InitialInvoiceAmount"] = "2035.00"
+    tenant.values["Providers[0]/Invoices[0]/ServiceStartDate"] = "2026-07-16"
+    out = _add(charge="2000.00")
+    assert out["status"] == "invoice_added", out
+    assert out["line"] == 1 and out["index"] == 0
+    (patch,) = tenant.writes()
+    written = {v["key"]: v["value"] for v in patch[2]["values"]}
+    assert written["Providers[0]/Invoices[1]/InitialInvoiceAmount"] == "2000.00"
+    assert written["Providers[0]/Invoices[1]/ServiceStartDate"] == "2026-07-16"
+    assert "pages 3-4" in written["Providers[0]/Invoices[1]/Description"]
+    assert not any(k.startswith("Providers[0]/Invoices[0]/") for k in written), "the first bill's line is untouched"
+    again = _add(charge="2000.00")
+    assert again["status"] == "already_present" and again["existing"]["line"] == 1
+    assert len(tenant.writes()) == 1, "the same bill is never keyed twice"

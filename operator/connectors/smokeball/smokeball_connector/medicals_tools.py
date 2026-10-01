@@ -58,14 +58,33 @@ Medicals tab on the firm's files on 2026-09-22 and 09-29:
 
 from __future__ import annotations
 
-import re
 import time
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any, Callable
 
 from .letter_pages import FILED_DOCS
 from .matter_resolution import contacts_by_name
+from .medicals_layout import (
+    _MAX_ACCOUNT,
+    _clean,
+    _contact_label,
+    _items,
+    _problem,
+    _row_values,
+    client_positions,
+    compare,
+    compose_note,
+    indices_named,
+    invoice_line_values,
+    invoice_lines,
+    layout_values,
+    normalize_name,
+    parse_charge,
+    prefer_exact,
+    provider_rows,
+    same_bill_on_row,
+)
 
 PI_DESIGN = "PersonalInjurySettlementDetailsItem"
 
@@ -75,13 +94,6 @@ PI_DESIGN = "PersonalInjurySettlementDetailsItem"
 LINK_WAITS: tuple[float, ...] = (2, 3, 5, 8, 12)
 VALUE_WAITS: tuple[float, ...] = (2, 3, 5, 8, 12)
 SLEEP: Callable[[float], None] = time.sleep
-
-_AMOUNT_RE = re.compile(r"^\d{1,9}(?:\.\d{1,2})?$")
-_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_PROV_NAME = re.compile(r"^Providers\[(\d+)\]/Provider/DisplayName$")
-_PROV_KEY = re.compile(r"^Providers\[(\d+)\]/(.+)$")
-_MAX_NAME = 120
-_MAX_ACCOUNT = 60
 
 
 def _client() -> Any:
@@ -100,77 +112,6 @@ def _refused(reason: str, **extra: Any) -> dict[str, Any]:
     out: dict[str, Any] = {"status": "refused", "created": False, "reason": reason}
     out.update(extra)
     return out
-
-
-# ---- Reading the tab ------------------------------------------------------
-
-
-def _items(resp: Any) -> list[Any]:
-    if isinstance(resp, list):
-        return resp
-    if isinstance(resp, dict):
-        for key in ("value", "items", "data", "results"):
-            if isinstance(resp.get(key), list):
-                return resp[key]
-    return []
-
-
-def layout_values(item: Any) -> dict[str, Any]:
-    """A layout item's values as ``{key: value}``. The vendor returns them as a
-    list of ``{key, value}`` pairs, sometimes wrapped in a one-element
-    ``value`` list; a dict is accepted too."""
-    if (
-        isinstance(item, dict)
-        and isinstance(item.get("value"), list)
-        and item["value"]
-        and isinstance(item["value"][0], dict)
-        and "values" in item["value"][0]
-    ):
-        item = item["value"][0]
-    values = item.get("values") if isinstance(item, dict) else None
-    if isinstance(values, dict):
-        return dict(values)
-    out: dict[str, Any] = {}
-    for entry in values or []:
-        if isinstance(entry, dict) and "key" in entry:
-            out[entry["key"]] = entry.get("value")
-    return out
-
-
-def provider_rows(values: dict[str, Any]) -> dict[int, dict[str, Any]]:
-    """``{index: {field: value}}`` for every ``Providers[n]`` row on the tab."""
-    rows: dict[int, dict[str, Any]] = {}
-    for key, value in values.items():
-        match = _PROV_KEY.match(key)
-        if match:
-            rows.setdefault(int(match.group(1)), {})[match.group(2)] = value
-    return rows
-
-
-def normalize_name(name: Any) -> str:
-    """One spelling for a provider name: casefolded, punctuation dropped,
-    spaces collapsed. "Northside Imaging Center" and "NORTHSIDE IMAGING
-    CENTER." are one facility."""
-    if not isinstance(name, str):
-        return ""
-    return " ".join(re.sub(r"[^a-z0-9]+", " ", name.casefold()).split())
-
-
-def _same_provider(a: str, b: str) -> bool:
-    """Equal after normalization, or one contains the other when both are
-    long enough for containment to mean something ("Northside Imaging
-    Center" and "Northside Imaging Center, Valley Health")."""
-    na, nb = normalize_name(a), normalize_name(b)
-    if not na or not nb:
-        return False
-    if na == nb:
-        return True
-    shorter, longer = (na, nb) if len(na) <= len(nb) else (nb, na)
-    return len(shorter) >= 8 and f" {shorter} " in f" {longer} "
-
-
-def indices_named(rows: dict[int, dict[str, Any]], name: str) -> list[int]:
-    return sorted(i for i, row in rows.items() if _same_provider(str(row.get("Provider/DisplayName") or ""), name))
 
 
 def _pi_items(client: Any, matter_id: str) -> list[dict[str, Any]]:
@@ -197,112 +138,6 @@ def _poll(client: Any, path: str, waits: tuple[float, ...], until: Callable[[dic
     return values
 
 
-# ---- The facts ------------------------------------------------------------
-
-
-def _clean(value: Any) -> str:
-    return value.strip() if isinstance(value, str) else ""
-
-
-def parse_charge(raw: Any) -> Decimal | None:
-    """A positive amount with at most two decimals, as a STRING. A float is
-    refused: "1250.0" is not the figure a bill prints."""
-    if not isinstance(raw, str) or not _AMOUNT_RE.match(raw.strip()):
-        return None
-    try:
-        amount = Decimal(raw.strip())
-    except InvalidOperation:
-        return None
-    return amount if amount > 0 else None
-
-
-def _problem(
-    *, matter_id: str, source_file_id: str, provider_name: str, charge: Any, service_start: str, service_end: str
-) -> str | None:
-    if not _clean(matter_id) or not _clean(source_file_id):
-        return "matter_id and source_file_id are required"
-    if not _clean(provider_name) or len(_clean(provider_name)) > _MAX_NAME:
-        return f"provider_name must be the facility named on the bill, up to {_MAX_NAME} characters"
-    if parse_charge(charge) is None:
-        return 'charge must be the bill\'s figure as a string with at most two decimals, e.g. "1250.00"'
-    for label, value in (("service_start", service_start), ("service_end", service_end)):
-        if not isinstance(value, str) or not _DATE_RE.match(value.strip()):
-            return f"{label} must be a date as YYYY-MM-DD"
-    if service_end.strip() < service_start.strip():
-        return "service_end is before service_start"
-    return None
-
-
-def compose_note(
-    *,
-    provider_name: str,
-    charge: Decimal,
-    service_start: str,
-    service_end: str,
-    account_number: str,
-    source: dict[str, Any],
-    stamp: Callable[[str], str | None],
-) -> str:
-    """The row's note, from the facts and the ledger's record of the source.
-    Composed here so there is no free-text argument, and stamped so a person
-    reading the tab can tell the Operator's row from a colleague's."""
-    pages = f"pages {source['first_page']}-{source['last_page']}"
-    read = "read from a scan" if source.get("from_scan") else "read from the document's text"
-    span = service_start if service_start == service_end else f"{service_start} to {service_end}"
-    account = f" Account {account_number}." if account_number else ""
-    text = (
-        f"From {source['file_name']} ({pages} of the scanned mail), {read}: {provider_name} billed "
-        f"{charge} for service {span}.{account} Check the figure against the bill before relying on it."
-    )
-    return stamp(text) or text
-
-
-def _row_values(
-    index: int,
-    *,
-    charge: Decimal,
-    service_start: str,
-    service_end: str,
-    account_number: str,
-    note: str,
-    description: str,
-) -> dict[str, str]:
-    prefix = f"Providers[{index}]/"
-    values = {
-        prefix + "Invoices[0]/InitialInvoiceAmount": f"{charge:.2f}",
-        prefix + "Invoices[0]/ServiceStartDate": service_start,
-        prefix + "Invoices[0]/ServiceEndDate": service_end,
-        prefix + "Invoices[0]/Description": description,
-        prefix + "Note": note,
-    }
-    if account_number:
-        values[prefix + "AccountNumber"] = account_number
-    return values
-
-
-def _num(value: Any) -> Decimal | None:
-    try:
-        return Decimal(str(value).strip())
-    except (InvalidOperation, ValueError, TypeError):
-        return None
-
-
-def compare(want: dict[str, str], got: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """``{key: {want, got}}`` for every written field that did not stick."""
-    bad: dict[str, dict[str, Any]] = {}
-    for key, wanted in want.items():
-        actual = got.get(key)
-        if key.endswith("Amount"):
-            ok = _num(actual) is not None and _num(actual) == _num(wanted)
-        elif key.endswith("Date"):
-            ok = str(actual or "")[:10] == wanted
-        else:
-            ok = str(actual or "").strip() == wanted.strip()
-        if not ok:
-            bad[key] = {"want": wanted, "got": actual}
-    return bad
-
-
 # ---- The write ------------------------------------------------------------
 
 
@@ -315,6 +150,7 @@ def add_medicals_row(
     service_end: str,
     account_number: str = "",
     claimant_index: int | None = None,
+    patient_name: str = "",
 ) -> Any:
     """Put ONE provider row on a matter's Medicals tab from a medical bill
     this run filed on that matter. Classified INTERNAL_WRITE: a write into the
@@ -333,18 +169,28 @@ def add_medicals_row(
     bill prints one. A bill that prints no total, or no dates of service, has
     no row: say so in the reply and put nothing here.
 
-    ``claimant_index`` is needed only when the matter has several Medicals
-    tabs (one per claimant); the refusal lists them so the sender can be
-    asked which claimant the bill is for. Never pick one.
+    ``patient_name`` is the patient as the bill prints them ("QUILL, ROSA").
+    Always pass it: on a matter with several Medicals tabs (one per claimant)
+    it chooses the claimant's own tab, matched against the matter's clients.
+    If no client or several match, the call refuses and lists the tabs, and
+    the sender is asked which claimant it is; then pass ``claimant_index``.
+    Never pick one yourself.
+
+    A provider already on the tab gets this bill as its own invoice line on
+    that row, unless a line there already has the same amount and the same
+    first date of service, which is the same bill keyed before.
 
     Returns ``status``: ``written`` (the row exists and read back as written;
-    ``index``, ``linked_as`` and ``note`` say what); ``readback_mismatch`` (the
+    ``index``, ``linked_as`` and ``note`` say what); ``invoice_added`` (the
+    provider was on the tab, and this bill is its own new invoice line,
+    ``line``, read back); ``readback_mismatch`` (the
     row exists but a field did not read back as written; ``mismatch`` names it,
-    nothing was retried or undone); ``already_present`` (that provider is
-    already on the tab; ``existing`` gives its row and NOTHING was changed);
-    ``needs_contact`` (the firm's contacts hold no record for that provider, or
-    more than one; ``candidates`` lists what was found and NOTHING was
-    created); ``link_not_visible`` (the contact link was accepted but no row
+    nothing was retried or undone); ``already_present`` (this same bill is
+    already on the provider's row; ``existing`` gives it and NOTHING was changed);
+    ``needs_contact`` (the firm's contacts hold several records that could be
+    that provider; ``candidates`` lists them and NOTHING was created). A
+    provider the contacts do not hold at all is added as a company named as
+    the bill prints it, and the result carries ``contact_created: true``; ``link_not_visible`` (the contact link was accepted but no row
     appeared in time; nothing further was written); or ``refused`` (``reason``
     says why and NOTHING was written)."""
     problem = _problem(
@@ -376,7 +222,7 @@ def add_medicals_row(
         source=source,
     )
     client = _client()
-    tab = _select_tab(client, matter, claimant_index)
+    tab = _select_tab(client, matter, claimant_index, _clean(patient_name))
     if "status" in tab:
         return tab
     return _write_row(client, bill, tab["id"])
@@ -395,7 +241,7 @@ class _Bill:
     source: dict[str, Any]
 
 
-def _select_tab(client: Any, matter: str, claimant_index: int | None) -> dict[str, Any]:
+def _select_tab(client: Any, matter: str, claimant_index: int | None, patient_name: str) -> dict[str, Any]:
     """The Medicals tab to write, as ``{"id": ...}``, or a refusal dict."""
     try:
         tabs = _pi_items(client, matter)
@@ -404,10 +250,12 @@ def _select_tab(client: Any, matter: str, claimant_index: int | None) -> dict[st
     if not tabs:
         return _refused("the matter has no Medicals tab (no personal-injury settlement details layout)")
     listed = [{"claimant_index": t["parentIndex"], "item_id": t["id"]} for t in tabs]
+    if len(tabs) > 1 and claimant_index is None and patient_name:
+        claimant_index = _claimant_of(client, matter, patient_name)
     if len(tabs) > 1 and claimant_index is None:
         return _refused(
-            "the matter has several Medicals tabs, one per claimant; pass claimant_index for the claimant "
-            "this bill is for, after the sender says which",
+            "the matter has several Medicals tabs, one per claimant, and the bill's patient did not match "
+            "exactly one client; pass claimant_index for the claimant this bill is for, after the sender says which",
             tabs=listed,
         )
     if len(tabs) == 1 and claimant_index is None:
@@ -416,6 +264,21 @@ def _select_tab(client: Any, matter: str, claimant_index: int | None) -> dict[st
     if len(chosen) != 1:
         return _refused(f"no Medicals tab has claimant_index {claimant_index!r}", tabs=listed)
     return {"id": chosen[0]["id"]}
+
+
+def _claimant_of(client: Any, matter: str, patient_name: str) -> int | None:
+    """The bill's patient's position among the matter's clients, which is the
+    ``parentIndex`` of their Medicals tab (a client tenant 2026-10-01: two
+    plaintiffs, the bill named the second, whose tab is position 1). None unless exactly one matches,
+    or when the record cannot be read: then the sender is asked."""
+    try:
+        record = client.get(f"/matters/{matter}")
+        ids = [cid for cid in (record.get("clientIds") or []) if isinstance(cid, str)]
+        clients = [client.get(f"/contacts/{cid}") for cid in ids]
+    except Exception:  # noqa: BLE001 - an unread record decides nothing; the refusal asks the sender instead
+        return None
+    hits = client_positions([c if isinstance(c, dict) else {} for c in clients], patient_name)
+    return hits[0] if len(hits) == 1 else None
 
 
 def _write_row(client: Any, bill: _Bill, item_id: str) -> dict[str, Any]:
@@ -429,26 +292,12 @@ def _write_row(client: Any, bill: _Bill, item_id: str) -> dict[str, Any]:
     rows = provider_rows(values)
     present = indices_named(rows, bill.provider)
     if present:
-        row = rows[present[0]]
-        return {
-            "status": "already_present",
-            "created": False,
-            "matter_id": bill.matter,
-            "item_id": item_id,
-            "index": present[0],
-            "existing": {
-                "provider": row.get("Provider/DisplayName"),
-                "charge": row.get("Invoices[0]/InitialInvoiceAmount"),
-                "service_start": row.get("Invoices[0]/ServiceStartDate") or row.get("ServiceStartDate"),
-                "service_end": row.get("Invoices[0]/ServiceEndDate") or row.get("ServiceEndDate"),
-            },
-            "bill": {"charge": f"{bill.amount:.2f}", "service_start": bill.start, "service_end": bill.end},
-        }
+        return _on_existing_row(client, bill, item_id, path, present[0], rows[present[0]])
     try:
-        candidates = contacts_by_name(client, bill.provider)
+        candidates = prefer_exact(contacts_by_name(client, bill.provider), bill.provider)
     except Exception as exc:  # noqa: BLE001 - SearchFailed and friends: a failed search is reported as one
         return _refused(f"the firm's contacts could not be searched ({exc.__class__.__name__})")
-    if len(candidates) != 1:
+    if len(candidates) > 1:
         return {
             "status": "needs_contact",
             "created": False,
@@ -456,13 +305,78 @@ def _write_row(client: Any, bill: _Bill, item_id: str) -> dict[str, Any]:
             "item_id": item_id,
             "provider": bill.provider,
             "candidates": [_contact_label(c) for c in candidates],
-            "reason": (
-                "the firm's contacts hold no record for this provider"
-                if not candidates
-                else "the firm's contacts hold several records that could be this provider"
-            ),
+            "reason": "the firm's contacts hold several records that could be this provider",
         }
-    return _link_and_fill(client, bill, item_id, path, rows, str(candidates[0].get("id")))
+    if candidates:
+        return _link_and_fill(client, bill, item_id, path, rows, str(candidates[0].get("id")))
+    contact_id = _create_provider_contact(client, bill.provider)
+    if contact_id is None:
+        return _refused(f"{bill.provider} is not in the firm's contacts and could not be added; nothing was written")
+    return {**_link_and_fill(client, bill, item_id, path, rows, contact_id), "contact_created": True}
+
+
+def _create_provider_contact(client: Any, provider: str) -> str | None:
+    """Add a provider the firm's contacts do not hold, as a company named exactly
+    as the bill prints it, and return its id. Reached ONLY when the broad token
+    search returned nothing at all: one or more candidates never creates (a
+    client tenant, 2026-10-01: two providers on that day's bills were in no
+    contact record, and their Medicals rows waited on a person to add them)."""
+    try:
+        made = client.request("POST", "/contacts", json={"company": {"name": provider}})
+    except Exception:  # noqa: BLE001 - the vendor write raises a wide family; a failed create writes no row
+        return None
+    contact_id = made.get("id") if isinstance(made, dict) else None
+    return contact_id if isinstance(contact_id, str) and contact_id else None
+
+
+def _on_existing_row(
+    client: Any, bill: _Bill, item_id: str, path: str, index: int, row: dict[str, Any]
+) -> dict[str, Any]:
+    """The provider is on the tab. The same bill already keyed there is left
+    alone; a further bill from that provider is its own invoice line, read back.
+    (A client tenant, 2026-10-01: one imaging center billed two studies on one
+    day, another three; one row each, a line per bill.)"""
+    base = {"matter_id": bill.matter, "item_id": item_id, "index": index}
+    same = same_bill_on_row(row, bill.amount, bill.start)
+    if same is not None:
+        line = invoice_lines(row)[same]
+        existing = {
+            "provider": row.get("Provider/DisplayName"),
+            "line": same,
+            "charge": line.get("InitialInvoiceAmount"),
+            "service_start": line.get("ServiceStartDate"),
+            "service_end": line.get("ServiceEndDate"),
+        }
+        bill_facts = {"charge": f"{bill.amount:.2f}", "service_start": bill.start, "service_end": bill.end}
+        return {"status": "already_present", "created": False, **base, "existing": existing, "bill": bill_facts}
+    line = 1 + max(invoice_lines(row) or [-1])
+    read = "read from a scan" if bill.source.get("from_scan") else "read from the document's text"
+    description = f"{bill.source['file_name']}, pages {bill.source['first_page']}-{bill.source['last_page']}, {read}"
+    stamped = _stamp()(description) or description
+    want = invoice_line_values(
+        index, line, charge=bill.amount, service_start=bill.start, service_end=bill.end, description=stamped[:200]
+    )
+    try:
+        client.request("PATCH", path, json={"values": [{"key": k, "value": v} for k, v in want.items()]})
+    except Exception as exc:  # noqa: BLE001 - the vendor write raises a wide family; refused, nothing claimed written
+        return _refused(f"the invoice line could not be written ({exc.__class__.__name__}: {str(exc)[:200]})")
+    values = _poll(client, path, VALUE_WAITS, lambda current: not compare(want, current))
+    mismatch = compare(want, values)
+    out = {
+        "status": "invoice_added" if not mismatch else "readback_mismatch",
+        "created": True,
+        **base,
+        "line": line,
+        "linked_as": row.get("Provider/DisplayName"),
+        "charge": f"{bill.amount:.2f}",
+        "service_start": bill.start,
+        "service_end": bill.end,
+        "from_scan": bool(bill.source.get("from_scan")),
+        "source_file": bill.source["file_name"],
+    }
+    if mismatch:
+        out["mismatch"] = mismatch
+    return out
 
 
 def _link_and_fill(
@@ -530,18 +444,6 @@ def _link_and_fill(
     return out
 
 
-def _contact_label(contact: dict[str, Any]) -> dict[str, Any]:
-    person = contact.get("person") if isinstance(contact.get("person"), dict) else {}
-    company = contact.get("company") if isinstance(contact.get("company"), dict) else {}
-    name = (
-        " ".join(p for p in (person.get("firstName"), person.get("lastName")) if p)
-        or company.get("name")
-        or contact.get("name")
-        or "(unnamed)"
-    )
-    return {"id": contact.get("id"), "name": name}
-
-
 def register(server: Any) -> None:
     """Register the Medicals write onto the connector's server. Called once,
     from ``attachment_tools.register``."""
@@ -559,6 +461,7 @@ __all__ = [
     "layout_values",
     "normalize_name",
     "parse_charge",
+    "prefer_exact",
     "provider_rows",
     "register",
 ]

@@ -189,6 +189,17 @@ def compose(pages: list[str]) -> str:
     return "\n\n".join(blocks)
 
 
+def compose_window(pages: list[str], first_page: int) -> str:
+    """A run of pages as marked text, numbered from ``first_page``: the same
+    grammar as ``compose``, carrying the BUNDLE's page numbers, so a window
+    holding pages 16-30 says ``[p.16]`` where its first page is."""
+    blocks: list[str] = []
+    for index, text in enumerate(pages, start=first_page):
+        body = text.strip()
+        blocks.append(f"[p.{index}]\n{body}" if body else f"[p.{index}: no legible content]")
+    return "\n\n".join(blocks)
+
+
 def parse_marked(text: str, page_count: int) -> list[str]:
     """Marked text back into a page list, or refuse.
 
@@ -423,6 +434,7 @@ __all__ = [
     "LEGIBLE_WORD_SHARE",
     "MIN_TOKENS_FOR_LEGIBILITY",
     "compose",
+    "compose_window",
     "extract_pages",
     "page_needs_vision",
     "word_share",

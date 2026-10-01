@@ -184,6 +184,24 @@ def test_a_date_of_birth_on_the_party_contact_separates_them() -> None:
     assert out["matched_on"] == [mr.FACT_NAME, mr.FACT_BIRTH]
 
 
+def test_the_tenants_own_birth_date_shape_corroborates() -> None:
+    """The live tenant keeps a birth date at person.birthDate with a time on
+    it (A&P, 2026-10-01). A bill printing the client's name and birth date
+    must resolve on the two, which it never did when only top-level fields
+    were read."""
+    tenant = Tenant(
+        contact_matters={CONTACT: [M101], OTHER_CONTACT: [M107]},
+        contacts={
+            CONTACT: {"id": CONTACT, "name": NAME, "person": {"birthDate": "1979-04-02T00:00:00"}},
+            OTHER_CONTACT: {"id": OTHER_CONTACT, "name": f"{NAME} Jr", "person": {"birthDate": "1980-01-01T00:00:00"}},
+        },
+    )
+    out = _resolve(tenant, client_name=NAME, date_of_birth="1979-04-02")
+    assert out["verdict"] == mr.VERDICT_UNIQUE and out["matter_id"] == M101
+    assert out["matched_on"] == [mr.FACT_NAME, mr.FACT_BIRTH]
+    assert mr._birth_date({"person": {"birthDate": "not a date"}}) == ""
+
+
 def test_a_fact_no_candidate_carries_is_inert_not_fatal() -> None:
     """A date of loss the firm never recorded must not wipe a resolution the
     number and the name already agree on."""

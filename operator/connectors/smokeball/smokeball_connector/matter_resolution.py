@@ -371,12 +371,28 @@ def _carries(
         return _text_has_date(_matter_text(matter), values[FACT_LOSS])
     if fact == FACT_BIRTH:
         want = values[FACT_BIRTH]
-        return any(
-            _iso_date(contact.get(field)) == want
-            for contact in parties.get(matter_id, [])
-            for field in CONTACT_BIRTH_FIELDS
-        )
+        return any(_birth_date(contact) == want for contact in parties.get(matter_id, []))
     return False
+
+
+def _birth_date(contact: dict[str, Any]) -> str:
+    """A party's birth date as YYYY-MM-DD, or "".
+
+    The live tenant keeps it at ``person.birthDate`` as ``1979-04-02T00:00:00``
+    (read off a client tenant 2026-10-01), not at the top level the first form
+    of this read looked at. So a birth date never corroborated anything on the
+    firm's real record, and a bill printing the client's name and birth date
+    came back ``none`` with one candidate. The date part is what is compared;
+    a value that does not start with an ISO date is not a birth date."""
+    person = contact.get("person") if isinstance(contact.get("person"), dict) else {}
+    for value in (
+        *(contact.get(field) for field in CONTACT_BIRTH_FIELDS),
+        *(person.get(field) for field in CONTACT_BIRTH_FIELDS),
+    ):
+        date = _iso_date(_clean(value)[:10])
+        if date:
+            return date
+    return ""
 
 
 def _narrow(

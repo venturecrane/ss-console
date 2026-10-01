@@ -645,3 +645,79 @@ def test_a_refused_filing_records_nothing(monkeypatch: pytest.MonkeyPatch, clien
     )
     assert out["status"] == "refused"
     assert lp.FILED_DOCS._docs == {}
+
+
+# ---- reading a long bundle in windows (2026-10-01) -------------------------
+
+
+def test_a_long_bundle_returns_no_text_until_a_window_is_asked_for(
+    monkeypatch: pytest.MonkeyPatch, client: _Client
+) -> None:
+    """The 2026-10-01 defect: 52 pages came back as one 91,000-character block
+    the turn could not partition, and nothing was filed. Over the window size
+    the read hands back the bundle's facts and no text."""
+    blob = _pdf([f"{DIGITAL} page {n}" for n in range(1, 21)])
+    url = _spooled(monkeypatch, blob)
+    out = lt.read_attachment_pages(url, "post.pdf")
+    assert out["readable"] is True and out["pageCount"] == 20
+    assert out["windowRequired"] is True and out["text"] == ""
+    assert out["sha256"] == hashlib.sha256(blob).hexdigest()
+
+
+def test_a_window_carries_only_its_pages_under_the_bundles_numbers(
+    monkeypatch: pytest.MonkeyPatch, client: _Client
+) -> None:
+    blob = _pdf([f"{DIGITAL} page {n}" for n in range(1, 21)])
+    url = _spooled(monkeypatch, blob)
+    out = lt.read_attachment_pages(url, "post.pdf", first_page=16, last_page=20)
+    assert out["window"] == {"first": 16, "last": 20}
+    markers = [line for line in out["text"].split("\n") if line.startswith("[p.")]
+    assert markers == ["[p.16]", "[p.17]", "[p.18]", "[p.19]", "[p.20]"]
+    assert "page 16" in out["text"] and "page 15" not in out["text"]
+    assert out["pageCount"] == 20
+
+
+@pytest.mark.parametrize(
+    ("first", "last", "reason"),
+    [
+        (0, 3, "window_out_of_range"),
+        (5, 30, "window_out_of_range"),
+        (1, 16, "window_too_large"),
+        ("a", 2, "window_invalid"),
+    ],
+)
+def test_a_bad_window_reads_nothing(
+    monkeypatch: pytest.MonkeyPatch, client: _Client, first: Any, last: Any, reason: str
+) -> None:
+    blob = _pdf([f"{DIGITAL} page {n}" for n in range(1, 21)])
+    url = _spooled(monkeypatch, blob)
+    out = lt.read_attachment_pages(url, "post.pdf", first_page=first, last_page=last)
+    assert out["readable"] is False and out["reason"] == reason and out["text"] == ""
+
+
+def test_windows_of_a_scanned_bundle_cost_one_transcription(monkeypatch: pytest.MonkeyPatch, client: _Client) -> None:
+    """Every window after the first read is served from the cache: reading a
+    bundle in windows must not pay for its paper pages again."""
+    calls: list[int] = []
+
+    def _fake(blob: bytes, *, pages: int, **_kw: Any) -> Any:
+        calls.append(pages)
+        return lt.vision.VisionOutcome(
+            text="\n\n".join(f"[p.{n}]\ntranscribed scan {n}" for n in range(1, pages + 1)),
+            pages_read=pages,
+            stop_reason="end_turn",
+        )
+
+    monkeypatch.setattr(lt.vision, "gate", lambda _b, *, pages, **_kw: None)
+    monkeypatch.setattr(lt.vision, "transcribe_pdf", _fake)
+    texts = [f"{DIGITAL} page {n}" for n in range(1, 21)]
+    texts[17] = ""  # page 18 is paper
+    blob = _pdf(texts)
+    url = _spooled(monkeypatch, blob)
+    assert lt.read_attachment_pages(url, "post.pdf")["windowRequired"] is True
+    first = lt.read_attachment_pages(url, "post.pdf", first_page=1, last_page=15)
+    second = lt.read_attachment_pages(url, "post.pdf", first_page=16, last_page=20)
+    assert calls == [1], "the paper page is transcribed once, on the first read"
+    assert "[p.18]\ntranscribed scan 1" in second["text"]
+    assert "[p.18]" not in first["text"]
+    assert second["scannedPageNumbers"] == [18]

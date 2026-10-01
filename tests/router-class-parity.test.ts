@@ -241,7 +241,7 @@ describe('matter-inbox-router: the combined post class', () => {
     // exact signatures, so prose and tool cannot drift apart silently.
     const skill = flat(read(`${SKILLS_DIR}/combined-post-intake/SKILL.md`))
     expect(skill).toContain(
-      '`add_medicals_row(matter_id, source_file_id, provider_name, charge, service_start, service_end, account_number, claimant_index)`'
+      '`add_medicals_row(matter_id, source_file_id, provider_name, charge, service_start, service_end, account_number, claimant_index, patient_name)`'
     )
     expect(skill).toContain(
       '`stage_vendor_invoice(matter_id, matter_resolution, download_url, file_name, sha256, vendor, invoice_number, invoice_date, amount, first_page, last_page)`'
