@@ -182,6 +182,21 @@ describe('vendor-invoice-intake: where it is bound', () => {
     expect(skill?.initiation).toEqual({ manual: true, scheduled: false, webhook: false })
   })
 
+  // The client seats that carry it, each person-initiated only, and why.
+  // ashton-price: letter 62 asked for it, letter 64 reported the rehearsal,
+  // the 2026-09-21 list told the firm the Smokeball permission is live, and
+  // Christa's 2026-10-01 "Mail" letter asked for the bills in the day's post
+  // to reach the Expenses tab. A seat not listed here must not carry it.
+  const CLIENT_SEATS_BOUND = ['ashton-price']
+
+  it('is enabled on ashton-price, person-initiated only', () => {
+    const skill = (personaSkills('ashton-price').get('operator') ?? []).find(
+      (s) => s.name === 'vendor-invoice-intake'
+    )
+    expect(skill?.enabled).toBe(true)
+    expect(skill?.initiation).toEqual({ manual: true, scheduled: false, webhook: false })
+  })
+
   it('is bound on no other seat, and has no routine-grid row anywhere', () => {
     const seats = readdirSync('operator/customers').filter(
       (d) => d !== '_template' && existsSync(`operator/customers/${d}/customer.yaml`)
@@ -191,7 +206,7 @@ describe('vendor-invoice-intake: where it is bound', () => {
       const grid = `operator/customers/${seat}/routine-grid.yaml`
       if (existsSync(grid))
         expect(readFileSync(grid, 'utf8')).not.toContain('vendor-invoice-intake')
-      if (seat === 'pilot-smokeball') continue
+      if (seat === 'pilot-smokeball' || CLIENT_SEATS_BOUND.includes(seat)) continue
       for (const skills of personaSkills(seat).values()) {
         expect(
           skills.map((s) => s.name),

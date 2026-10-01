@@ -90,6 +90,8 @@ def _isolate(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
     monkeypatch.setenv("SMOKEBALL_EXTRACT_CACHE_DIR", str(tmp_path / "cache"))
     resolution_token._reset_for_tests()
     lp.FILED_PAGES._filed.clear()
+    lp.FILED_DOCS._docs.clear()
+    lp.SCANNED_PAGES._scanned.clear()
 
 
 class _Client:
@@ -574,3 +576,72 @@ def test_the_filename_is_sanitised_on_the_way_out(monkeypatch: pytest.MonkeyPatc
     name = client.uploads[0][1]
     assert name.count(".") == 1 and name.endswith(".pdf")
     assert "/" not in name
+
+
+# ---- the ledgers the Medicals write and the bill staging read -------------
+
+
+def test_the_read_numbers_the_pages_it_transcribed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``scannedPageNumbers`` is what lets a reply line say a letter's figures
+    were read from a scan, and the per-bundle record is what lets the filing
+    tool carry that fact into the ledger without the model reporting it."""
+
+    def _fake(blob: bytes, *, pages: int, **_kw: Any) -> Any:
+        return lt.vision.VisionOutcome(
+            text="\n\n".join(f"[p.{n}]\ntranscribed scan {n}" for n in range(1, pages + 1)),
+            pages_read=pages,
+            stop_reason="end_turn",
+        )
+
+    monkeypatch.setattr(lt.vision, "gate", lambda _b, *, pages, **_kw: None)
+    monkeypatch.setattr(lt.vision, "transcribe_pdf", _fake)
+    blob = _pdf([DIGITAL, "", DIGITAL, ""])
+    out = lt._read_pages(blob, "post.pdf")
+    assert out["scannedPageNumbers"] == [2, 4]
+    sha = hashlib.sha256(blob).hexdigest()
+    assert lp.SCANNED_PAGES.any_in(sha, 2, 2) is True
+    assert lp.SCANNED_PAGES.any_in(sha, 1, 1) is False
+    assert lp.SCANNED_PAGES.any_in(sha, 3, 4) is True
+
+
+def test_filing_records_the_document_for_the_medicals_write(monkeypatch: pytest.MonkeyPatch, client: _Client) -> None:
+    """What opens ``add_medicals_row``: the filed-document ledger holds the
+    file on the matter it was filed on, with the pages and whether any of
+    them was transcribed. A matter the file was NOT filed on holds nothing."""
+    blob = _pdf([DIGITAL, DIGITAL, DIGITAL])
+    url = _spooled(monkeypatch, blob)
+    sha = hashlib.sha256(blob).hexdigest()
+    lp.SCANNED_PAGES.record(sha, [3])
+    out = lt.file_attachment_pages_to_matter(
+        matter_id="m-1",
+        matter_resolution=_token("m-1"),
+        download_url=url,
+        file_name="2026-10-01 AMR",
+        sha256=sha,
+        first_page=2,
+        last_page=3,
+    )
+    assert out["status"] == "filed" and out["fileId"] == "file-1"
+    assert out["fromScan"] is True
+    record = lp.FILED_DOCS.lookup("m-1", "file-1")
+    assert record == {"file_name": out["fileName"], "first_page": 2, "last_page": 3, "from_scan": True}
+    assert lp.FILED_DOCS.lookup("m-2", "file-1") is None
+    assert lp.FILED_DOCS.lookup("m-1", "file-9") is None
+
+
+def test_a_refused_filing_records_nothing(monkeypatch: pytest.MonkeyPatch, client: _Client) -> None:
+    blob = _pdf([DIGITAL, DIGITAL])
+    url = _spooled(monkeypatch, blob)
+    sha = hashlib.sha256(blob).hexdigest()
+    client.fail = True
+    out = lt.file_attachment_pages_to_matter(
+        matter_id="m-1",
+        matter_resolution=_token("m-1"),
+        download_url=url,
+        file_name="letter",
+        sha256=sha,
+        first_page=1,
+        last_page=2,
+    )
+    assert out["status"] == "refused"
+    assert lp.FILED_DOCS._docs == {}

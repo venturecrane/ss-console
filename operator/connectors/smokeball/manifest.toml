@@ -172,6 +172,23 @@ stage_vendor_invoice = "internal_write"
 # defaulted), which is the fail-closed direction.
 read_attachment_pages = "read"
 file_attachment_pages_to_matter = "internal_write"
+# add_medicals_row (2026-10-01, the firm's ask that a medical bill in the day's
+# post reach the Medicals tab, not only the matter's documents): links the
+# provider's contact record to the matter's personal-injury settlement layout
+# and writes that one bill's charge, service dates and a composed note. Opened
+# by the filed-document ledger, not a resolution token: it takes the fileId
+# file_attachment_pages_to_matter returned for the bill on that matter in this
+# run, and refuses any other. Never creates a contact, never changes a row
+# already on the tab, never writes a figure it was not handed. internal_write
+# for the same reason as the filing above: the firm's own record, nothing sent
+# outside. COORDINATED CHANGE: hermes-smd-overlay shared/action_classes.py
+# mcp_smokeball_add_medicals_row = ActionClass.INTERNAL_WRITE, shipped by the
+# OVERLAY_REF bump in the same change; until it lands the tool is UNREACHABLE at
+# runtime (an unclassified tool is refused, not defaulted).
+# stage_vendor_invoice gained first_page/last_page the same day: a vendor's bill
+# INSIDE a scanned bundle is cut and staged in one write, instead of filed and
+# flagged for a person to key.
+add_medicals_row = "internal_write"
 # add_workbook (2026-09-25): builds an .xlsx from JSON rows in code (typed
 # columns, totals summed here, every cell read back before upload) and files it
 # through the same two-stage upload as add_file. internal_write for the same

@@ -213,6 +213,9 @@ def test_no_tool_argument_can_reach_finalized_or_the_billing_settings() -> None:
         "invoice_number",
         "invoice_date",
         "amount",
+        # A bill inside a scanned bundle: the page range to cut and file.
+        "first_page",
+        "last_page",
     }
     # The overlay's draft gate scans write arguments by these names; the entry's
     # text is composed in the connector, so none may exist.
@@ -645,3 +648,93 @@ def test_get_expenses_drops_and_counts_deleted_rows(monkeypatch: pytest.MonkeyPa
 
 def test_drop_deleted_keeps_a_bare_list_a_list() -> None:
     assert ledger.drop_deleted([{"id": 1}, {"id": 2, "isDeleted": True}]) == [{"id": 1}]
+
+
+# ---- A vendor's bill inside a scanned bundle (2026-10-01) ------------------
+
+from smokeball_connector import letter_pages as lp  # noqa: E402 - the bundle section imports the page ledgers where its tests begin, after the module's fixtures
+
+
+def _bundle(page_texts: list[str]) -> bytes:
+    """A multi-page PDF with one text page per entry."""
+
+    def esc(s: str) -> str:
+        return s.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
+
+    return _pdf_from_content(
+        [("BT /F1 10 Tf 40 760 Td 12 TL\n" + f"({esc(text)}) Tj T*\n" + "ET").encode() for text in page_texts]
+    )
+
+
+BUNDLE = _bundle(
+    ["Letter from Allstate about a claim", "Acme Records Inc Invoice INV-2026-001 Amount due 1250.00", "Court notice"]
+)
+BUNDLE_SHA = hashlib.sha256(BUNDLE).hexdigest()
+
+
+@pytest.fixture(autouse=True)
+def _empty_page_ledgers() -> None:
+    lp.FILED_PAGES._filed.clear()
+    lp.SCANNED_PAGES._scanned.clear()
+
+
+def _page_count(blob: bytes) -> int:
+    from io import BytesIO
+
+    from pypdf import PdfReader
+
+    return len(PdfReader(BytesIO(blob)).pages)
+
+
+def test_a_bill_cut_from_a_bundle_is_staged_and_filed_as_its_own_pages() -> None:
+    tenant = Tenant(blob=BUNDLE)
+    lp.SCANNED_PAGES.record(BUNDLE_SHA, [2])
+    out = _stage(tenant, sha256=BUNDLE_SHA, file_name="2026-10-01 Acme Records", first_page=2, last_page=2)
+    assert out["status"] == "staged", out
+    assert out["pages"] == {"first": 2, "last": 2} and out["fromScan"] is True
+    assert out["fileName"] == "2026-10-01 Acme Records.pdf"
+    (body,) = tenant.posted
+    assert body["finalized"] is False and body["price"] == 1250.0
+    assert "Pages 2-2 of the scanned mail, read from a scan; check the figure against the paper." in body["description"]
+    uploaded = [r for r in tenant.requests if r.method == "PUT" and "s3.example.com" in str(r.url)]
+    assert len(uploaded) == 1 and _page_count(uploaded[0].content) == 1, "only the bill's page is filed"
+    # Those pages are the bill's now: a letter cannot be filed from them.
+    assert lp.FILED_PAGES.claim(BUNDLE_SHA, 2, 2) == 2
+    assert lp.FILED_PAGES.claim(BUNDLE_SHA, 1, 1) is None
+
+
+def test_a_bill_from_text_pages_says_so() -> None:
+    tenant = Tenant(blob=BUNDLE)
+    out = _stage(tenant, sha256=BUNDLE_SHA, first_page=2, last_page=2)
+    assert out["status"] == "staged" and out["fromScan"] is False
+    assert "read from the document's text" in tenant.posted[0]["description"]
+
+
+def test_pages_already_filed_as_a_letter_refuse_the_bill_and_create_nothing() -> None:
+    tenant = Tenant(blob=BUNDLE)
+    assert lp.FILED_PAGES.claim(BUNDLE_SHA, 2, 3) is None  # a letter took pages 2-3 earlier this turn
+    out = _stage(tenant, sha256=BUNDLE_SHA, first_page=2, last_page=2)
+    assert out["status"] == "refused" and "already filed" in out["reason"]
+    assert tenant.posted == []
+
+
+@pytest.mark.parametrize("pages", [(0, 1), (3, 2), (2, None), ("two", 2)])
+def test_a_bad_page_range_refuses_before_anything_is_read(pages: tuple[Any, Any]) -> None:
+    tenant = Tenant(blob=BUNDLE)
+    out = _stage(tenant, sha256=BUNDLE_SHA, first_page=pages[0], last_page=pages[1])
+    assert out["status"] == "refused"
+    assert tenant.requests == []
+
+
+def test_a_range_outside_the_bundle_refuses_and_releases_its_claim() -> None:
+    tenant = Tenant(blob=BUNDLE)
+    out = _stage(tenant, sha256=BUNDLE_SHA, first_page=5, last_page=6)
+    assert out["status"] == "refused" and tenant.posted == []
+    assert lp.FILED_PAGES.claim(BUNDLE_SHA, 5, 6) is None, "a refused cut leaves the pages claimable"
+
+
+def test_an_emailed_invoice_still_stages_whole_with_no_page_note() -> None:
+    tenant = Tenant()
+    out = _stage(tenant)
+    assert out["status"] == "staged" and "pages" not in out
+    assert "scanned mail" not in tenant.posted[0]["description"]

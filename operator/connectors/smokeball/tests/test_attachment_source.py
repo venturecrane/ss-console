@@ -253,5 +253,10 @@ def test_the_staging_tool_gained_no_attachment_argument() -> None:
         "invoice_number",
         "invoice_date",
         "amount",
+        # The page range of a bill inside a scanned bundle (2026-10-01); two
+        # integers that name pages of the bytes already pinned by sha256, not
+        # an attachment source and not money.
+        "first_page",
+        "last_page",
     }
     assert not params & {"description", "subject", "title", "body", "note", "finalized"}

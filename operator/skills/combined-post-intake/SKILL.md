@@ -5,11 +5,14 @@ description: >-
   the firm emails the Operator one PDF
   holding several letters for different matters, it reads the bundle page by
   page, works out where each letter starts and ends, asks the connector which
-  matter each one belongs to, files the letters it can place, and replies once
-  naming a candidate matter for every letter it could not place so the sender
-  can say yes. A letter is never filed on a matter the connector did not
-  resolve or the sender did not name, the whole bundle is never filed as one
-  document, and nothing is ever sent outside the firm.
+  matter each one belongs to, files the letters it can place, puts a medical
+  bill's figures on that matter's Medicals tab, stages a vendor's bill as an
+  unfinalized expense, and replies once naming a candidate matter for every
+  letter it could not place so the sender can say yes. A letter is never
+  filed on a matter the connector did not resolve or the sender did not name,
+  the whole bundle is never filed as one document, no figure is written that
+  the page does not print, nothing is ever finalized, and nothing is ever
+  sent outside the firm.
 version: 0.1.0
 author: SMD Services
 license: MIT
@@ -23,12 +26,12 @@ metadata:
   smd:
     vertical: law-firm
     addon: pi
-    weight: medium # per bundle: one page read (paper pages transcribed at about ten seconds a page, four at a time), one resolve per letter, one write per placed letter
-    action_class: read + internal_write + one reply to the sender # files letters into the firm's own record; replies only to the rostered sender
-    content_ceiling: surface_only # reports what the letters state and where each was filed; never summarizes a letter's contents or characterizes it
+    weight: medium # per bundle: one page read (paper pages transcribed at about ten seconds a page, four at a time), one resolve per letter, one write per placed letter, one more per bill (a Medicals row or an expense)
+    action_class: read + internal_write + one reply to the sender # files letters, Medicals rows and unfinalized expenses into the firm's own record; replies only to the rostered sender
+    content_ceiling: surface_only # reports what the letters state and where each was filed; a bill's figures are copied as printed, never totalled or characterized
     connectors:
       - email # the Operator's inbox: mail_list_attachments (the event carries none), mail_spool_attachment (bytes to the seat, a token back), and the reply draft
-      - smokeball # read_attachment_pages (the bundle, page-marked), resolve_invoice_matter (the matter, as a verdict rather than a judgement), file_attachment_pages_to_matter (the one write, which refuses without a unique resolution)
+      - smokeball # read_attachment_pages (the bundle, page-marked), resolve_invoice_matter (the matter, as a verdict rather than a judgement), file_attachment_pages_to_matter (the letter write, which refuses without a unique resolution), add_medicals_row (one Medicals row from a bill this run filed), stage_vendor_invoice with a page range (a vendor's bill, filed and staged in one write)
 ---
 
 # Combined Post Intake
@@ -42,6 +45,12 @@ skill does that filing, and only that.
 It files a letter as its own document, on its own matter, or it does not file
 it. It never files the bundle whole, and a letter it cannot place comes back
 named, with a candidate matter, for the sender to confirm.
+
+Two kinds of letter are also keyed, because the firm asked for the keying
+(2026-10-01) and keying is what a person would do next: a medical bill goes
+on the matter's Medicals tab as one row, and a vendor's bill goes on the
+matter's expenses as one unfinalized entry. Both copy what the bill prints,
+both say where the figure came from, and neither finalizes anything.
 
 Filing one client's letter onto another client's matter is a confidentiality
 event, and this turn cannot undo it: deleting a filed document is a separate,
@@ -60,6 +69,14 @@ gated act. Every rule below falls out of that.
 - **Never summarizes a letter.** The reply says who a letter is from and where
   it was filed. It does not say what the letter says, what it means for the
   case, or what anyone should do about it.
+- **Never writes a figure the page does not print.** A charge on the Medicals
+  tab and an expense amount are the bill's own printed total, passed exactly
+  as the bill prints it: never a sum of lines, never a rounding, never a
+  figure from memory or from another letter. A figure read from a scan is
+  written with that said, for a person to check against the paper.
+- **Never finalizes, never pays, never changes a row.** An expense is staged
+  unfinalized; a Medicals row is added only when the provider is not on the
+  tab yet. The firm's own entries are the firm's.
 - **Never deletes or replaces a filed document.** A letter filed on the wrong
   matter is reported; a person fixes it.
 
@@ -83,10 +100,27 @@ sending the scan is the instruction.
   goes at the TOP of the reply, in the "needs a word from you" group, as
   "filed; court paper, needs calendaring". The Operator never sets a deadline
   from it: calendaring is a person's act.
-- **A vendor's bill inside the bundle IS filed, and flagged.** Same resolution
-  rules, same place at the top of the reply, as "filed; looks like a vendor
-  bill, not entered as an expense". It never creates an expense: vendor bills
-  are entered through their own lane, from their own forward.
+- **A vendor's bill inside the bundle IS staged as an expense, and flagged.**
+  Same resolution rules; on a `unique` verdict its pages are NOT filed with
+  the letter tool: `stage_vendor_invoice` with the bill's page range files
+  those pages as their own document and stages ONE unfinalized expense beside
+  them (step 4b). Its line goes at the top of the reply, as "staged as an
+  expense, unfinalized; check the figure". A vendor's bill is a bill TO THE
+  FIRM from someone the firm pays (a records copy service, a court reporter, a
+  process server, a filing service); a provider's statement for the client's
+  own treatment is a medical bill, below.
+- **A medical bill inside the bundle IS filed, and its figures go on the
+  Medicals tab.** A provider's statement, itemized bill or account ledger for
+  the client's own treatment (an ambulance, a hospital, an imaging center, a
+  chiropractor) is filed on its resolved matter like any letter, and then
+  `add_medicals_row` puts ONE row on that matter's Medicals tab from it (step
+  4a): the facility as the bill names it, this bill's total charges, the dates
+  of service, and the account number when printed. The row can only come from
+  a bill this run filed on that matter: the tool takes the `fileId` the filing
+  returned and refuses anything else. A lien notice, a records request, an
+  insurer's letter about bills, a conditional-payment letter, or a settlement
+  ledger is NOT a medical bill: it files as a letter and nothing goes on the
+  tab.
 - **A scan holding one letter is a bundle of one.** The router sends a bare PDF
   here without counting its letters; the partition finds one, and it files the
   same way.
@@ -241,6 +275,67 @@ changed page range or a different matter to get it through.
 Smokeball materializes a filed document asynchronously, so do not re-read the
 matter to confirm: the read would manufacture a failure that did not happen.
 
+### 4a. A medical bill: one row on the Medicals tab
+
+After a medical bill's pages are `filed` (step 4), and only then, call
+`add_medicals_row(matter_id, source_file_id, provider_name, charge, service_start, service_end, account_number, claimant_index)`:
+
+- `matter_id` and `source_file_id` are the filing's own `matter_id` and
+  `fileId`, unchanged. The tool refuses a file this run did not file on that
+  matter; there is no other way to open it.
+- `provider_name` is the facility exactly as the bill names it.
+- `charge` is THIS bill's total charges as the page prints them, as a string
+  with at most two decimals ("4345.16"). If the bill prints no total, there is
+  no row: say so on the letter's line. Never add lines up to make one.
+- `service_start` and `service_end` are the dates of service as printed, as
+  YYYY-MM-DD; one visit is the same date twice. No dates of service printed,
+  no row.
+- `account_number` is the account or patient number when the bill prints one;
+  leave it empty otherwise. `claimant_index` is left out unless the tool
+  refuses because the matter has several Medicals tabs (several claimants):
+  then the letter is held with the tabs it listed, and the sender's reply
+  naming the claimant is what fills it in.
+
+Read the `status`:
+
+| status              | what happened                                                                                | the line says                                                                       |
+| ------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `written`           | one row, read back as written; `charge`, `linked_as`, `from_scan` say what                   | "Medicals tab row added, <charge> for service <dates>", plus the scan note          |
+| `readback_mismatch` | the row exists but a field did not read back; `mismatch` names it; nothing retried or undone | "Medicals tab row added, but <field> did not save as written; check it"             |
+| `already_present`   | that provider is already on the tab; `existing` is the firm's row; nothing changed           | "<provider> is already on the Medicals tab at <existing charge>, nothing changed"   |
+| `needs_contact`     | the firm's contacts hold no record for the provider, or several; nothing created             | "no Medicals row: the firm's contacts hold no record for <provider>" (or "several") |
+| `link_not_visible`  | the provider was linked but no row appeared in time; nothing further written                 | "the Medicals row did not appear; check the tab"                                    |
+| `refused`           | nothing written; `reason` says why                                                           | the reason, in plain words                                                          |
+
+The figure on the line is the tool's returned `charge`, never retyped from the
+page. When `from_scan` is true, the line adds "read from a scan, check the
+figure", because the figure was transcribed from paper.
+
+### 4b. A vendor's bill: stage the expense
+
+A vendor's bill with a `unique` verdict is not filed in step 4. Instead call
+`stage_vendor_invoice(matter_id, matter_resolution, download_url, file_name, sha256, vendor, invoice_number, invoice_date, amount, first_page, last_page)`:
+
+- `matter_id` and `matter_resolution` from that letter's own resolve, as in
+  step 4; `download_url` and `sha256` are the bundle's, as the read returned
+  them; `first_page` and `last_page` are the bill's `[p.N]` bounds.
+- `vendor`, `invoice_number`, `invoice_date` (YYYY-MM-DD) and `amount` (this
+  invoice's charges as a string with at most two decimals) are what the bill
+  prints. A bill missing any of them is held on its line with the missing
+  fact named, and its pages are filed as a letter in step 4 instead.
+- `file_name` as in step 4.
+
+The one write files the bill's pages as their own document and stages one
+UNFINALIZED expense beside them; the entry's description says which pages it
+came from and, when they were transcribed, that it was read from a scan. Read
+the `status` exactly as `vendor-invoice-intake` does: `staged` (the line says
+"staged as an expense of <amount>, unfinalized"), `staged_unverified` or
+`staged_file_failed` (say which), `duplicate` or `possible_duplicate`
+(nothing created; name the existing entry), `refused` (nothing created; the
+reason in plain words). The amount on the line is the tool's returned
+`amount`. Never call the filing tool for a bill that was staged: its pages
+are filed by the stage, and a second filing is refused anyway.
+
 ### 5. Reply once to the sender
 
 Reply by creating a draft (`create_draft`) addressed ONLY to the sender, in the
@@ -262,12 +357,17 @@ Filed: pages 9-11, letter from Mercury Insurance, on matter <matter-number>.
 13 pages, 5 letters, 3 filed, 1 court paper filed and needs calendaring, 1 waiting on you.
 ```
 
-A vendor's bill that filed reads `Needs a word from you: page 14, what looks
-like a vendor bill from <sender>, filed on matter <matter-number>; looks like a
-vendor bill, not entered as an expense.` and counts as `1 vendor bill filed,
-not entered as an expense`. A court paper or a bill that did NOT resolve is
-held like any letter, on its ordinary held line, with the same flag words
-after it.
+A vendor's bill that staged reads `Needs a word from you: page 14, a bill
+from <vendor>, filed on matter <matter-number> and staged as an expense of
+<amount>, unfinalized; read from a scan, check the figure before finalizing.`
+and counts as `1 vendor bill staged as an expense, unfinalized`. A medical
+bill reads `Needs a word from you: pages 3-4, a bill from <provider>, filed on
+matter <matter-number>; Medicals tab row added, <charge> for service <dates>;
+read from a scan, check the figure.` and counts as `1 medical bill filed and
+on the Medicals tab`; when the row was not added, the line says why in the
+words of the status table and the count says `1 medical bill filed, not on
+the Medicals tab`. A court paper or a bill that did NOT resolve is held like
+any letter, on its ordinary held line, with the same flag words after it.
 
 The reply is the firm's only record of what happened to the paper, so a letter
 that was not filed must appear in it. A held letter with no line is a letter
@@ -310,9 +410,15 @@ reply does not name a matter number, do not file; ask again for the number.
   `unique`.
 - Never pass a docket number, claim number or carrier file number as
   `matter_number`.
-- Never create an expense from a vendor's bill in the bundle, and never set a
-  deadline, a calendar entry or a task from a court paper in it. They are filed
-  and flagged; what follows from them is a person's act.
+- Never set a deadline, a calendar entry or a task from a court paper in the
+  bundle. It is filed and flagged; what follows from it is a person's act.
+- Never finalize an expense, never pay anyone, and never put a figure on the
+  Medicals tab or in an expense that the bill's own pages do not print. Never
+  total two bills into one figure, never change a row already on the tab,
+  and never create a contact for a provider the firm does not hold.
+- Never call `add_medicals_row` with a file id other than the one the filing
+  returned for that bill on that matter, and never for a letter that is not a
+  medical bill.
 - Never summarize a letter's contents, state what it means for a case, or say
   what anyone should do about it.
 - Never reply to anyone but the rostered sender, and never to a party named in a

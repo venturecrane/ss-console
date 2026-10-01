@@ -40,15 +40,26 @@ Held: pages 9-11, letter from Mercury Insurance. Two matters match that client, 
 Held: pages 3-4, letter from Radiology Associates. I could not find a matter for the client it names. Reply with the matter number and I will file it.
 ```
 
-**Filed, and flagged** (a court paper or a vendor's bill that resolved). Filed
-on its matter by the same rules as any letter, and placed at the TOP of the
-reply, because each one needs a person: a court paper to be calendared, a bill
-to be entered. The Operator does neither.
+**Filed, and flagged** (a court paper, a vendor's bill or a medical bill that
+resolved). Filed on its matter by the same rules as any letter, and placed at
+the TOP of the reply, because each one needs a person: a court paper to be
+calendared (the Operator never does that), a bill's figure to be checked
+against the paper (the Operator keyed it, from the page, and says so).
 
 ```
 Needs a word from you: pages 12-13, a summons, filed on matter <matter-number>; court paper, needs calendaring.
-Needs a word from you: page 14, what looks like a vendor bill from a copy service, filed on matter <matter-number>; looks like a vendor bill, not entered as an expense.
+Needs a word from you: page 14, a bill from a copy service, filed on matter <matter-number> and staged as an expense of 185.00, unfinalized; read from a scan, check the figure before finalizing.
+Needs a word from you: pages 3-4, a bill from an ambulance company, filed on matter <matter-number>; Medicals tab row added, 4345.16 for service 2026-07-16; read from a scan, check the figure.
+Needs a word from you: pages 5-6, a bill from an imaging center, filed on matter <matter-number>; that provider is already on the Medicals tab at 1200.00, nothing changed.
+Needs a word from you: pages 7-8, a bill from a chiropractor, filed on matter <matter-number>; no Medicals row: the firm's contacts hold no record for that provider.
 ```
+
+The figures on these lines are the tool's returned `amount` or `charge`,
+never retyped from the page. "Read from a scan" appears when the tool says
+`fromScan` or `from_scan`; a bill whose pages carried their own text says
+"read from the document's text" instead. A bill that prints no total or no
+dates of service is filed and its line says what is missing; nothing is
+keyed from it.
 
 A court paper or a bill that did not resolve is held on the ordinary held line
 for its verdict, with the same flag words after it, and stays in page order.
@@ -77,7 +88,8 @@ count. A flagged filing is named on its own, never folded into "filed".
 
 ```
 13 pages, 5 letters, 3 filed, 1 court paper filed and needs calendaring, 1 waiting on you.
-14 pages, 6 letters, 3 filed, 1 court paper filed and needs calendaring, 1 vendor bill filed, not entered as an expense, 1 waiting on you.
+14 pages, 6 letters, 3 filed, 1 court paper filed and needs calendaring, 1 vendor bill staged as an expense, unfinalized, 1 waiting on you.
+16 pages, 7 letters, 3 filed, 1 medical bill filed and on the Medicals tab, 1 medical bill filed, not on the Medicals tab, 1 vendor bill staged as an expense, unfinalized, 1 waiting on you.
 ```
 
 ## Nothing could be separated

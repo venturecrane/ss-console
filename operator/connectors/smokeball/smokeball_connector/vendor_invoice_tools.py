@@ -134,10 +134,24 @@ def stage_vendor_invoice(
     invoice_number: str,
     invoice_date: str,
     amount: str,
+    first_page: int | None = None,
+    last_page: int | None = None,
 ) -> Any:
     """Stage ONE vendor invoice as an UNFINALIZED expense on a matter and file
     the invoice PDF beside it. Classified INTERNAL_WRITE: a write into the
     firm's own record that bills nobody and sends nothing.
+
+    A VENDOR'S BILL INSIDE A SCANNED BUNDLE (the day's post, read with
+    ``read_attachment_pages``) is staged from here too: pass the bundle's
+    ``download_url`` and ``sha256`` as that read returned them, and
+    ``first_page`` and ``last_page`` from its ``[p.N]`` markers for the bill's
+    pages. The range is cut out of the bundle and filed as its own document
+    beside the expense, and those pages can then never be filed as a letter.
+    Do NOT also call ``file_attachment_pages_to_matter`` for a bill: this one
+    write files it. The entry's description says which pages it came from and,
+    when they were transcribed from paper, that the figures were read from a
+    scan, so the person who finalizes it checks them against the paper. Omit
+    both page arguments for an emailed invoice PDF.
 
     ``matter_id`` and ``matter_resolution`` come TOGETHER from a ``unique``
     verdict of ``resolve_invoice_matter``, unchanged. Without a live resolution
@@ -183,6 +197,8 @@ def stage_vendor_invoice(
         amount=amount,
         verify_reference=_verify_reference(),
         stamp=_stamp(),
+        first_page=first_page,
+        last_page=last_page,
     )
 
 
