@@ -68,6 +68,7 @@ from pathlib import Path
 from typing import Any
 
 from .audit_ledger import new_row_token
+from .msgraph_attachments import AttachmentRefused, carries_attachments, graph_attachments
 from .msgraph_auth import load_credential, seat_mailbox
 from .msgraph_redirect import send_redirected
 from .recipient_policy import RecipientPolicy, authored_policy, normalize_address, sender_key
@@ -468,6 +469,18 @@ class MsGraphOps:
         reply_to = _recipients(payload.get("reply_to"))
         if reply_to:
             message["replyTo"] = reply_to
+        # Attachments are validated HERE, in-broker, against one pinned shape
+        # (``msgraph_attachments``). A malformed one refuses the whole send: a
+        # message must never leave with its attachment silently dropped.
+        try:
+            attachments = graph_attachments(payload)
+        except AttachmentRefused as exc:
+            # The "attachment refused:" prefix is a contract: the overlay falls
+            # back to the body-without-workbook rung only on a refusal whose
+            # reason names the attachment.
+            raise MsGraphRefused(f"attachment refused: {exc}") from exc
+        if attachments:
+            message["attachments"] = attachments
         headers = _audit_headers(audit_token)
         if headers:
             message["internetMessageHeaders"] = headers
@@ -675,6 +688,10 @@ class MsGraphOps:
         stored message's from/replyTo with its own Mail.ReadWrite — that is a
         pre-existing property of replying to mutable message objects.
         """
+        if carries_attachments(payload):
+            # The reply wire carries a comment, not a message resource, so an
+            # attachment would be dropped silently. Refuse rather than do that.
+            raise MsGraphRefused("attachment refused: the reply verb does not carry attachments")
         message_id = str(payload.get("message_id") or "").strip()
         if not message_id:
             raise MsGraphRefused("reply requires the source message_id")
