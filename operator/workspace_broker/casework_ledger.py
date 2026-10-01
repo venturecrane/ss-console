@@ -112,7 +112,9 @@ _STEP_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,120}$")
 _SKILL_RE = re.compile(r"^[a-z0-9_-]{1,64}$")
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
-_COMMON = frozenset({"v", "ts", "id", "skill", "matter_id", "kind", "source_id", "item_key", "event", "session_id"})
+_COMMON = frozenset(
+    {"v", "ts", "id", "skill", "matter_id", "kind", "source_id", "item_key", "event", "session_id"}
+)
 _ALLOWED: dict[str, frozenset[str]] = {
     **{k: _COMMON | {"n", "dispatch_ref", "thread_ref", "payload"} for k in RAISING_EVENTS},
     **{k: _COMMON | {"n", "thread_ref", "decided_by"} for k in VERDICT_EVENTS},
@@ -124,7 +126,9 @@ _ALLOWED: dict[str, frozenset[str]] = {
     "kept": _COMMON,
     "step_ran": _COMMON | {"payload", "tool_call_id"},
 }
-_PAYLOAD_KEYS = frozenset({"action", "class", "staff_id", "to_staff_id", "reason", "evidence", "step"})
+_PAYLOAD_KEYS = frozenset(
+    {"action", "class", "staff_id", "to_staff_id", "reason", "evidence", "step"}
+)
 
 
 def ledger_path() -> str:
@@ -263,14 +267,18 @@ def _fold(state: ItemState, event: dict) -> None:
     decision = state.decisions.get(slot)
     if kind in VERDICT_EVENTS and decision is not None:
         decision.verdict, decision.verdict_ts = kind, ts
-        decision.decided_by = event.get("decided_by") if isinstance(event.get("decided_by"), dict) else None
+        decision.decided_by = (
+            event.get("decided_by") if isinstance(event.get("decided_by"), dict) else None
+        )
         if kind == "approved" and decision.payload.get("action") in WRITE_ACTIONS:
             state.authorization, state.authorized_decision = "approved", decision
     elif kind == "step_started" and decision is not None:
         decision.started = True
     elif kind == "closed_by_record":
         state.authorization, state.authorized_decision = "closed_by_record", None
-        state.record_payload = event.get("payload") if isinstance(event.get("payload"), dict) else None
+        state.record_payload = (
+            event.get("payload") if isinstance(event.get("payload"), dict) else None
+        )
     elif kind in OUTCOME_EVENTS:
         if kind == "completed":
             state.completed, state.completed_via = True, state.authorization
@@ -311,7 +319,12 @@ def needs_mention(state: ItemState | None) -> bool:
     the next message, never its own)."""
     if state is not None and state.unmentioned_steps:
         return True
-    return bool(state and state.completed and state.completed_via == "closed_by_record" and not state.mentioned)
+    return bool(
+        state
+        and state.completed
+        and state.completed_via == "closed_by_record"
+        and not state.mentioned
+    )
 
 
 def is_kept_quiet(state: ItemState | None, today: date, keep_quiet_days: int) -> bool:
@@ -358,12 +371,30 @@ def _validate_step(step) -> None:
         )
 
 
+def _check_complete(payload: dict, item: str, skill: str | None) -> None:
+    """A ``complete`` is a person's word to the deadline digest: raised by that
+    one routine, on a task, written under a named owner."""
+    if skill != COMPLETE_SKILL:
+        raise ValueError(
+            f"a complete is a person's answer to the deadline digest; only {COMPLETE_SKILL} "
+            "raises one. Propose a close instead."
+        )
+    if item != "task":
+        raise ValueError("a complete names a task; a court date clears when it passes")
+    if not _short_str(payload.get("staff_id"), _MAX_ID_CHARS):
+        raise ValueError(
+            "a complete carries payload.staff_id, the staff member the close is written under"
+        )
+
+
 def _validate_payload(kind: str, payload, item: str, skill: str | None = None) -> None:
     if not isinstance(payload, dict):
         raise ValueError(f"a {kind} row requires a payload object")
     unknown = sorted(set(payload) - _PAYLOAD_KEYS)
     if unknown:
-        raise ValueError(f"payload carries unknown fields {unknown}; it holds only {sorted(_PAYLOAD_KEYS)}")
+        raise ValueError(
+            f"payload carries unknown fields {unknown}; it holds only {sorted(_PAYLOAD_KEYS)}"
+        )
     action, klass = payload.get("action"), payload.get("class")
     if action not in ACTIONS:
         raise ValueError(f"payload.action must be one of {ACTIONS}")
@@ -377,15 +408,7 @@ def _validate_payload(kind: str, payload, item: str, skill: str | None = None) -
             "or leave it with the escalator. Retrying will fail identically."
         )
     if action == "complete":
-        if skill != COMPLETE_SKILL:
-            raise ValueError(
-                f"a complete is a person's answer to the deadline digest; only {COMPLETE_SKILL} "
-                "raises one. Propose a close instead."
-            )
-        if item != "task":
-            raise ValueError("a complete names a task; a court date clears when it passes")
-        if not _short_str(payload.get("staff_id"), _MAX_ID_CHARS):
-            raise ValueError("a complete carries payload.staff_id, the staff member the close is written under")
+        _check_complete(payload, item, skill)
     for key in ("staff_id", "to_staff_id"):
         if not _short_str(payload.get(key), _MAX_ID_CHARS, allow_none=True):
             raise ValueError(f"payload.{key} must be a staff id read off the record, or null")
@@ -411,13 +434,18 @@ def _check_kind_shape(kind: str, payload: dict, item: str) -> None:
     action, klass = payload.get("action"), payload.get("class")
     evidence = payload.get("evidence", [])
     if kind == "step_ran" and (
-        action != "step" or klass != "open" or item != "date" or payload["step"].get("level") != "handles"
+        action != "step"
+        or klass != "open"
+        or item != "date"
+        or payload["step"].get("level") != "handles"
     ):
         raise ValueError(
             "step_ran records a date-prep step the Operator ran itself: kind date, action step, "
             "class open, and a step at level handles. A step at any other level waits for a person."
         )
-    if kind == "closed_by_record" and (action != "close" or klass != "done" or not evidence or item != "task"):
+    if kind == "closed_by_record" and (
+        action != "close" or klass != "done" or not evidence or item != "task"
+    ):
         raise ValueError(
             "closed_by_record means the record shows a task is done: kind task, action close, "
             "class done, "
@@ -431,7 +459,9 @@ def _validate_decided_by(decided_by) -> None:
     if not isinstance(decided_by, dict) or set(decided_by) != {"name", "key"}:
         raise ValueError("decided_by holds exactly name and key")
     if not _short_str(decided_by.get("name"), _MAX_NAME_CHARS):
-        raise ValueError("decided_by.name is the firm's authored users[].full_name, 1..120 characters")
+        raise ValueError(
+            "decided_by.name is the firm's authored users[].full_name, 1..120 characters"
+        )
     if not (isinstance(decided_by.get("key"), str) and _SHA256_RE.fullmatch(decided_by["key"])):
         raise ValueError("decided_by.key is the sha256 of the verified sender's canonical address")
 
@@ -442,7 +472,9 @@ def _validate_identity(event: dict) -> None:
         raise ValueError(f"unknown casework event {kind!r}; expected one of {EVENTS}")
     unknown = sorted(set(event) - _ALLOWED[kind])
     if unknown:
-        raise ValueError(f"a {kind} row carries unknown fields {unknown}; drop them from this append")
+        raise ValueError(
+            f"a {kind} row carries unknown fields {unknown}; drop them from this append"
+        )
     if not _short_str(event.get("skill"), _MAX_ID_CHARS):
         raise ValueError("casework event requires a skill")
     if event.get("kind") not in ITEM_KINDS:
@@ -450,7 +482,9 @@ def _validate_identity(event: dict) -> None:
     for key in ("matter_id", "source_id"):
         if not _short_str(event.get(key), _MAX_ID_CHARS):
             raise ValueError(f"casework event requires {key}, read off the record")
-    derived = item_key(matter_id=event["matter_id"], kind=event["kind"], source_id=event["source_id"])
+    derived = item_key(
+        matter_id=event["matter_id"], kind=event["kind"], source_id=event["source_id"]
+    )
     if event.get("item_key") != derived:
         raise ValueError("item_key must be derived from this row's matter_id, kind and source_id")
 
@@ -494,7 +528,11 @@ def _check_answer(kind: str, event: dict, state: ItemState | None) -> None:
             raise ValueError("a step starts only on an approved step line")
         return
     _validate_decided_by(event.get("decided_by"))
-    if kind == "approved" and decision.payload.get("action") == "complete" and event.get("decided_by") is None:
+    if (
+        kind == "approved"
+        and decision.payload.get("action") == "complete"
+        and event.get("decided_by") is None
+    ):
         raise ValueError(
             "refusing to approve a complete with nobody named: a person's word closes a task "
             "only under that person's authored name (decided_by). Write nothing; quiet the "
@@ -535,10 +573,15 @@ def _check_outcome(kind, event, state, existing_events, audit_witness) -> None:
 
 
 def _check_followup(kind: str, state: ItemState | None) -> None:
-    if kind == "kept" and (state is None or not any(d.verdict == "held" for d in state.decisions.values())):
+    if kind == "kept" and (
+        state is None or not any(d.verdict == "held" for d in state.decisions.values())
+    ):
         raise ValueError("kept records a person's hold; this item has no held line")
     if kind == "mentioned" and (state is None or not (state.completed or state.unmentioned_steps)):
-        raise ValueError("mentioned records telling someone a task was closed or a step was run; this item has neither")
+        raise ValueError(
+            "mentioned records telling someone a task was closed or a step was run; "
+            "this item has neither"
+        )
 
 
 def validate_append(existing_events, new_event: dict, *, send_witness, audit_witness) -> None:

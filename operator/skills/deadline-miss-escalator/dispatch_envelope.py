@@ -240,6 +240,26 @@ def _casework_raises(sub: dict, emails: tuple, deadlines, matter_staff: dict, st
     return {"casework_raises": raises} if raises else {}
 
 
+def _route(digest: dict, matter_ids: list, customer_yaml: dict, esc: dict, routing, staff_pull, staff_by_email_pull):
+    """Who each matter's alert goes to, and the staff records behind it: the
+    matter staff pull under ``matter_staff`` routing, the resolved recipient
+    sets, and the recipients' own staff records (read once, and only when a
+    task line could be answered "done"; a digest of dates alone reads nothing).
+    Returns ``(result, matter_staff, by_recipients, staff_by_email)``."""
+    routing_block = esc.get("case_alert_routing")
+    mode = routing_block.get("mode") if isinstance(routing_block, dict) else None
+    matter_staff: dict[str, dict] = {}
+    if mode == "matter_staff":
+        matter_staff = staff_pull(matter_ids, routing.staff_lookup_budget(customer_yaml))
+    result = routing.resolve_case_alert_routing(customer_yaml, matter_staff, matter_ids)
+    since_routes = _since_routes(digest, matter_ids, customer_yaml, routing, mode, staff_pull, matter_staff)
+    by_recipients = _group_by_recipients(result, since_routes)
+    staff_by_email: dict = {}
+    if _CW_LEDGER is not None and any(_DIGEST_ITEMS.is_task(i) for i in digest.get("needs_you") or []):
+        staff_by_email = staff_by_email_pull(_single_recipient_emails(by_recipients)) or {}
+    return result, matter_staff, by_recipients, staff_by_email
+
+
 def _single_recipient_emails(by_recipients: dict) -> list[str]:
     """The addresses a one-recipient dispatch goes to: the only ones whose
     staff record can own a close (a group address has no one person behind it)."""
@@ -509,19 +529,9 @@ def build_and_write(
                 matter_ids.append(item["matter_id"])
 
         esc = customer_yaml.get("escalation") if isinstance(customer_yaml.get("escalation"), dict) else {}
-        routing_block = esc.get("case_alert_routing")
-        mode = routing_block.get("mode") if isinstance(routing_block, dict) else None
-        matter_staff: dict[str, dict] = {}
-        if mode == "matter_staff":
-            matter_staff = staff_pull(matter_ids, routing.staff_lookup_budget(customer_yaml))
-        result = routing.resolve_case_alert_routing(customer_yaml, matter_staff, matter_ids)
-        since_routes = _since_routes(digest, matter_ids, customer_yaml, routing, mode, staff_pull, matter_staff)
-        by_recipients = _group_by_recipients(result, since_routes)
-        # The recipients' own staff records, read once and only when a task
-        # line could be answered "done" (a digest of dates alone reads nothing).
-        staff_by_email: dict = {}
-        if _CW_LEDGER is not None and any(_DIGEST_ITEMS.is_task(i) for i in digest.get("needs_you") or []):
-            staff_by_email = staff_by_email_pull(_single_recipient_emails(by_recipients)) or {}
+        result, matter_staff, by_recipients, staff_by_email = _route(
+            digest, matter_ids, customer_yaml, esc, routing, staff_pull, staff_by_email_pull
+        )
 
         today_iso = today.isoformat()
         dispatches: list[dict] = []
