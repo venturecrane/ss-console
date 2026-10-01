@@ -31,8 +31,8 @@ TAB = "pi-1"
 PI = {"id": TAB, "layoutDesign": {"id": "PersonalInjurySettlementDetailsItem"}, "parentIndex": 0}
 OTHER = {"id": "ins-1", "layoutDesign": {"id": "6325a09c_4ae31510"}, "parentIndex": 0}
 AMR = {"id": "c-amr", "company": {"name": "American Medical Response"}}
-SUTTER = {"id": "c-sut", "company": {"name": "Sutter Roseville Medical Center"}}
-SUTTER_TWO = {"id": "c-sut2", "company": {"name": "Sutter Roseville Medical Center Billing"}}
+NORTHSIDE = {"id": "c-nor", "company": {"name": "Northside Imaging Center"}}
+NORTHSIDE_TWO = {"id": "c-nor2", "company": {"name": "Northside Imaging Center Billing"}}
 
 _KEY_INDEX = re.compile(r"^Providers\[(\d+)\]/")
 
@@ -226,11 +226,11 @@ def test_a_provider_already_on_the_tab_is_reported_and_left_alone(tenant: _Tenan
     assert tenant.writes() == []
 
 
-@pytest.mark.parametrize("contacts", [[], [SUTTER, SUTTER_TWO]])
+@pytest.mark.parametrize("contacts", [[], [NORTHSIDE, NORTHSIDE_TWO]])
 def test_no_contact_or_two_contacts_creates_nothing(tenant: _Tenant, contacts: list[dict[str, Any]]) -> None:
     _filed()
     tenant.contacts = contacts
-    out = _add(provider_name="Sutter Roseville Medical Center")
+    out = _add(provider_name="Northside Imaging Center")
     assert out["status"] == "needs_contact"
     assert [c["id"] for c in out["candidates"]] == [c["id"] for c in contacts]
     assert tenant.writes() == [], "no contact is ever created and no row is ever linked"
@@ -313,10 +313,10 @@ def test_service_end_before_start_refuses(tenant: _Tenant) -> None:
 
 
 def test_name_normalization_treats_spelling_as_one_facility() -> None:
-    rows = {0: {"Provider/DisplayName": "SUTTER ROSEVILLE MEDICAL CENTER."}, 1: {"Provider/DisplayName": "Kaiser"}}
-    assert mt.indices_named(rows, "Sutter Roseville Medical Center") == [0]
-    assert mt.indices_named(rows, "Sutter Roseville Medical Center, Dignity Health") == [0]
-    assert mt.indices_named(rows, "Sutter") == [], "a short fragment is not a facility"
+    rows = {0: {"Provider/DisplayName": "NORTHSIDE IMAGING CENTER."}, 1: {"Provider/DisplayName": "Kaiser"}}
+    assert mt.indices_named(rows, "Northside Imaging Center") == [0]
+    assert mt.indices_named(rows, "Northside Imaging Center, Valley Health") == [0]
+    assert mt.indices_named(rows, "Imaging") == [], "a short fragment is not a facility"
     # A row the firm named with one short word is not claimed by a longer
     # name on a bill: the tab's name is the contact record's, so "Kaiser" is
     # a contact called Kaiser, and whether "Kaiser Permanente" is that contact

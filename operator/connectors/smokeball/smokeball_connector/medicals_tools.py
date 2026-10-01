@@ -148,8 +148,8 @@ def provider_rows(values: dict[str, Any]) -> dict[int, dict[str, Any]]:
 
 def normalize_name(name: Any) -> str:
     """One spelling for a provider name: casefolded, punctuation dropped,
-    spaces collapsed. "Sutter Roseville Medical Center" and "SUTTER ROSEVILLE
-    MEDICAL CENTER." are one facility."""
+    spaces collapsed. "Northside Imaging Center" and "NORTHSIDE IMAGING
+    CENTER." are one facility."""
     if not isinstance(name, str):
         return ""
     return " ".join(re.sub(r"[^a-z0-9]+", " ", name.casefold()).split())
@@ -157,8 +157,8 @@ def normalize_name(name: Any) -> str:
 
 def _same_provider(a: str, b: str) -> bool:
     """Equal after normalization, or one contains the other when both are
-    long enough for containment to mean something ("Sutter Roseville Medical
-    Center" and "Sutter Roseville Medical Center, Dignity Health")."""
+    long enough for containment to mean something ("Northside Imaging
+    Center" and "Northside Imaging Center, Valley Health")."""
     na, nb = normalize_name(a), normalize_name(b)
     if not na or not nb:
         return False
