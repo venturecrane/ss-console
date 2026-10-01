@@ -187,9 +187,10 @@ def add_medicals_row(
     row exists but a field did not read back as written; ``mismatch`` names it,
     nothing was retried or undone); ``already_present`` (this same bill is
     already on the provider's row; ``existing`` gives it and NOTHING was changed);
-    ``needs_contact`` (the firm's contacts hold no record for that provider, or
-    more than one; ``candidates`` lists what was found and NOTHING was
-    created); ``link_not_visible`` (the contact link was accepted but no row
+    ``needs_contact`` (the firm's contacts hold several records that could be
+    that provider; ``candidates`` lists them and NOTHING was created). A
+    provider the contacts do not hold at all is added as a company named as
+    the bill prints it, and the result carries ``contact_created: true``; ``link_not_visible`` (the contact link was accepted but no row
     appeared in time; nothing further was written); or ``refused`` (``reason``
     says why and NOTHING was written)."""
     problem = _problem(
@@ -296,7 +297,7 @@ def _write_row(client: Any, bill: _Bill, item_id: str) -> dict[str, Any]:
         candidates = prefer_exact(contacts_by_name(client, bill.provider), bill.provider)
     except Exception as exc:  # noqa: BLE001 - SearchFailed and friends: a failed search is reported as one
         return _refused(f"the firm's contacts could not be searched ({exc.__class__.__name__})")
-    if len(candidates) != 1:
+    if len(candidates) > 1:
         return {
             "status": "needs_contact",
             "created": False,
@@ -304,13 +305,28 @@ def _write_row(client: Any, bill: _Bill, item_id: str) -> dict[str, Any]:
             "item_id": item_id,
             "provider": bill.provider,
             "candidates": [_contact_label(c) for c in candidates],
-            "reason": (
-                "the firm's contacts hold no record for this provider"
-                if not candidates
-                else "the firm's contacts hold several records that could be this provider"
-            ),
+            "reason": "the firm's contacts hold several records that could be this provider",
         }
-    return _link_and_fill(client, bill, item_id, path, rows, str(candidates[0].get("id")))
+    if candidates:
+        return _link_and_fill(client, bill, item_id, path, rows, str(candidates[0].get("id")))
+    contact_id = _create_provider_contact(client, bill.provider)
+    if contact_id is None:
+        return _refused(f"{bill.provider} is not in the firm's contacts and could not be added; nothing was written")
+    return {**_link_and_fill(client, bill, item_id, path, rows, contact_id), "contact_created": True}
+
+
+def _create_provider_contact(client: Any, provider: str) -> str | None:
+    """Add a provider the firm's contacts do not hold, as a company named exactly
+    as the bill prints it, and return its id. Reached ONLY when the broad token
+    search returned nothing at all: one or more candidates never creates (a
+    client tenant, 2026-10-01: two providers on that day's bills were in no
+    contact record, and their Medicals rows waited on a person to add them)."""
+    try:
+        made = client.request("POST", "/contacts", json={"company": {"name": provider}})
+    except Exception:  # noqa: BLE001 - the vendor write raises a wide family; a failed create writes no row
+        return None
+    contact_id = made.get("id") if isinstance(made, dict) else None
+    return contact_id if isinstance(contact_id, str) and contact_id else None
 
 
 def _on_existing_row(

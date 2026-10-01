@@ -323,9 +323,14 @@ Read the `status`:
 | `readback_mismatch` | the row exists but a field did not read back; `mismatch` names it; nothing retried or undone | "Medicals tab row added, but <field> did not save as written; check it"              |
 | `invoice_added`     | the provider was on the tab; this bill is its own new line on that row, read back            | "Medicals tab, <charge> for service <dates> added to <provider>", plus the scan note |
 | `already_present`   | this same bill is already on the provider's row; `existing` is that line; nothing changed    | "<provider> already shows this bill at <existing charge>, nothing changed"           |
-| `needs_contact`     | the firm's contacts hold no record for the provider, or several; nothing created             | "no Medicals row: the firm's contacts hold no record for <provider>" (or "several")  |
-| `link_not_visible`  | the provider was linked but no row appeared in time; nothing further written                 | "the Medicals row did not appear; check the tab"                                     |
-| `refused`           | nothing written; `reason` says why                                                           | the reason, in plain words                                                           |
+| `needs_contact`     | the firm's contacts hold several records that could be the provider; nothing created         | "no Medicals row: your contacts hold several records for <provider>; which is it?"   |
+
+When a `written` result carries `contact_created: true`, the provider was in
+none of the firm's contacts and was added as a company named as the bill
+prints it; the line adds "added <provider> to your contacts". A provider
+already in the contacts is never added again.
+| `link_not_visible` | the provider was linked but no row appeared in time; nothing further written | "the Medicals row did not appear; check the tab" |
+| `refused` | nothing written; `reason` says why | the reason, in plain words |
 
 The figure on the line is the tool's returned `charge`, never retyped from the
 page. When `from_scan` is true, the line adds "read from a scan, check the

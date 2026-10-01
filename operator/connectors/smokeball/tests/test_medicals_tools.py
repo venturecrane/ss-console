@@ -84,6 +84,10 @@ class _Tenant:
     # -- writes
     def request(self, method: str, path: str, *, json: Any = None, params: Any = None) -> Any:
         self.requests.append((method, path, json))
+        if method == "POST" and path == "/contacts":
+            made = {"id": f"c-new-{len(self.contacts)}", "company": dict(json["company"])}
+            self.contacts.append(made)
+            return {"id": made["id"], "href": f"/contacts/{made['id']}"}
         if method == "POST" and path.endswith("/contacts"):
             if self.link_adds_row:
                 planned = int(_KEY_INDEX.match(json["key"]).group(1))
@@ -235,14 +239,44 @@ def test_a_provider_already_on_the_tab_is_reported_and_left_alone(tenant: _Tenan
     assert tenant.writes() == []
 
 
-@pytest.mark.parametrize("contacts", [[], [NORTHSIDE, NORTHSIDE_TWO]])
-def test_no_contact_or_two_contacts_creates_nothing(tenant: _Tenant, contacts: list[dict[str, Any]]) -> None:
+def test_two_matching_contacts_create_nothing(tenant: _Tenant) -> None:
     _filed()
-    tenant.contacts = contacts
+    tenant.contacts = [NORTHSIDE, NORTHSIDE_TWO]
     out = _add(provider_name="Northside Imaging Center")
     assert out["status"] == "needs_contact"
-    assert [c["id"] for c in out["candidates"]] == [c["id"] for c in contacts]
-    assert tenant.writes() == [], "no contact is ever created and no row is ever linked"
+    assert [c["id"] for c in out["candidates"]] == [NORTHSIDE["id"], NORTHSIDE_TWO["id"]]
+    assert tenant.writes() == [], "no contact is created and no row is linked when the firm has candidates"
+
+
+def test_a_provider_with_no_contact_is_added_then_linked(tenant: _Tenant) -> None:
+    """Two providers on the 2026-10-01 bills were in no contact record. A
+    search that finds nothing adds the provider as a company, named as the
+    bill prints it, and the row links to that new record."""
+    _filed()
+    tenant.contacts = []
+    out = _add(provider_name="Northside Imaging Center")
+    assert out["status"] == "written", out
+    assert out["contact_created"] is True
+    create, link, _patch = tenant.writes()
+    assert create[1] == "/contacts" and create[2] == {"company": {"name": "Northside Imaging Center"}}
+    assert link[2]["contactId"] == "c-new-0"
+    assert out["linked_as"] == "Northside Imaging Center"
+
+
+def test_a_failed_contact_create_writes_no_row(tenant: _Tenant, monkeypatch: pytest.MonkeyPatch) -> None:
+    _filed()
+    tenant.contacts = []
+    real = tenant.request
+
+    def _refusing(method: str, path: str, **kw: Any) -> Any:
+        if path == "/contacts":
+            raise RuntimeError("403")
+        return real(method, path, **kw)
+
+    monkeypatch.setattr(tenant, "request", _refusing)
+    out = _add(provider_name="Northside Imaging Center")
+    assert out["status"] == "refused" and "could not be added" in out["reason"]
+    assert [r for r in tenant.requests if r[0] in ("POST", "PATCH")] == []
 
 
 def test_several_claimants_refuse_to_choose(tenant: _Tenant) -> None:
