@@ -396,7 +396,7 @@ def add_medicals_row(
 
     try:
         values = layout_values(client.get(path))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - the vendor read raises a wide family; a failed read refuses, never "no rows"
         return _refused(f"the Medicals tab could not be read ({exc.__class__.__name__}: {str(exc)[:200]})")
     rows = provider_rows(values)
     present = indices_named(rows, provider)
@@ -447,7 +447,7 @@ def add_medicals_row(
             f"{path}/contacts",
             json={"key": f"Providers[{planned}]/Provider/MatterEntityId", "contactId": contact_id},
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - the link POST raises a wide family; a failed link is reported with nothing written after it
         return _refused(f"the provider could not be linked to the tab ({exc.__class__.__name__}: {str(exc)[:200]})")
 
     def appeared(current: dict[str, Any]) -> bool:

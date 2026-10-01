@@ -652,7 +652,7 @@ def test_drop_deleted_keeps_a_bare_list_a_list() -> None:
 
 # ---- A vendor's bill inside a scanned bundle (2026-10-01) ------------------
 
-from smokeball_connector import letter_pages as lp  # noqa: E402
+from smokeball_connector import letter_pages as lp  # noqa: E402 - the bundle section imports the page ledgers where its tests begin, after the module's fixtures
 
 
 def _bundle(page_texts: list[str]) -> bytes:
