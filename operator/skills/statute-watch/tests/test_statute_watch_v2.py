@@ -16,6 +16,7 @@ import base64
 import hashlib
 import importlib.util
 import io
+import re
 import json
 import sys
 import zipfile
@@ -469,7 +470,7 @@ def test_the_workbook_layout(tmp_path, monkeypatch) -> None:
     assert book.sheetnames == ["Statute watch", "Since last month", "About"]
     ws = book["Statute watch"]
     assert [c.value for c in ws[1]] == list(workbook.CASE_HEADER)
-    assert ws.freeze_panes == "A2" and ws.auto_filter.ref == "A1:G4"
+    assert ws.freeze_panes == "A2" and ws.auto_filter.ref is None
     assert all(c.font.bold for c in ws[1])
     assert [c.value for c in ws[2]] == [
         3,
@@ -649,3 +650,21 @@ def test_the_handoff_seeds_previous_dates_and_changes_come_first(tmp_path, monke
     assert by_number["913306"] == ["2026-09-28"]
     assert record["records"][0]["matterNumber"] == "913306"  # the first change, ahead of the case list
     assert "2026-09-03" not in record["dates"]
+
+
+@needs_openpyxl
+def test_the_workbook_defines_no_names_and_carries_no_dollar_sign(tmp_path, monkeypatch) -> None:
+    """The overlay's scanner reads workbook.xml defined names; a filter range there
+    (\'Sheet\'!$A$1:$G$30) reads as "$1" and "$30", unsourced dollar figures, and the
+    send gate refuses the attachment (the 2026-10-01 proof run). Falsifier: put the
+    autofilter back and both assertions fail."""
+    import zipfile
+
+    _run(tmp_path, monkeypatch)
+    data = _attachment_bytes(_envelope(tmp_path)["dispatches"][0])
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        workbook_xml = archive.read("xl/workbook.xml")
+        assert re.search(rb"<definedName[ >]", workbook_xml) is None
+        for name in archive.namelist():
+            if name.startswith("xl/"):
+                assert b"$" not in archive.read(name), name

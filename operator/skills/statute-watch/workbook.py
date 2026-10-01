@@ -11,7 +11,7 @@ Three sheets:
 * "Statute watch": every listed case (the body caps at 100; the workbook
   carries them all). Days left, Statute date (a real date cell, mm/dd/yyyy),
   File number, Client ("Last, First"), Attorney (full name), Status,
-  Court-named documents. Bold frozen header, column widths, an autofilter,
+  Court-named documents. Bold frozen header, column widths (no autofilter: see below),
   and a fill on rows due within 7 days and within 30 days.
 * "Since last month": Change, File number, Client, Statute date, Detail. The
   Detail is the same sentence the email body prints.
@@ -87,7 +87,9 @@ def sheet(wb, title, header, rows, widths, date_col):
         if cell.value is not None:
             cell.number_format = "mm/dd/yyyy"
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = "A1:" + get_column_letter(len(header)) + str(max(ws.max_row, 1))
+    # No auto_filter: openpyxl records a filter as the defined name _xlnm._FilterDatabase
+    # ('Sheet'!$A$1:$G$30), and the send gate scans defined names, reading "$1" and
+    # "$30" as unsourced dollar amounts. The 2026-10-01 proof run lost its workbook to it.
     for index, width in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(index)].width = width
     for row in ws.iter_rows(min_row=2):
