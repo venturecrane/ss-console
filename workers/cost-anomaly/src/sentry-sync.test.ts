@@ -6,7 +6,10 @@
  *   - Happy path: query-string shape, bearer header, count extraction.
  *   - Failure paths: HTTP non-2xx, network throw, malformed JSON, malformed
  *     payload shape — all return count=null without throwing.
- *   - Writer: ON CONFLICT upsert binds in the right order; nulls allowed.
+ *   - Writer: ON CONFLICT upsert binds in the right order; nulls allowed;
+ *     the conflict target is the table's real PRIMARY KEY (customer_slug),
+ *     because a target SQLite cannot resolve fails the whole statement and
+ *     the sync dies silently (it did, 2026-07-23 to 2026-10-01).
  */
 
 import { describe, it, expect, vi } from 'vitest'
@@ -161,7 +164,12 @@ describe('writeSentrySync', () => {
     expect(binds).toHaveLength(1)
     expect(binds[0]).toEqual(['ent-smd', 'smd', 12, '2026-05-26T18:00:00Z', '2026-05-26T18:00:00Z'])
     expect(sqls[0]).toContain('INSERT INTO fleet_status')
-    expect(sqls[0]).toContain('ON CONFLICT(entity_id) DO UPDATE')
+    // fleet_status is keyed on customer_slug (migration 0093); entity_id is a
+    // plain column several seats share. ON CONFLICT(entity_id) is not a valid
+    // conflict target and SQLite rejects the statement outright.
+    expect(sqls[0]).toContain('ON CONFLICT(customer_slug) DO UPDATE')
+    expect(sqls[0]).not.toContain('ON CONFLICT(entity_id)')
+    expect(sqls[0]).toContain('entity_id               = excluded.entity_id')
   })
 
   it('binds NULL count for http_error / parse_error', async () => {
