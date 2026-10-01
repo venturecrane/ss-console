@@ -1457,7 +1457,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // 881563e9 -> 40c11a21 (2026-09-29, overlay#405 merge commit, Option B). Capitals for
     // emphasis refuse on every surface, the document included; a heading line, a
     // document's table row and a quoted record title keep theirs.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="40c11a2109c646f74306d8abf878060d56bc5bb7"')
+    // 40c11a21 -> 6ea7a139 (2026-10-01, overlay#406 + #407 merge commits). The send-render
+    // mirror catches up; a pre-rendered send may carry one gated workbook attachment
+    // (scanned like the body, msgraph only), falling back to the body without it.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="6ea7a139dfcbd31edeb306e10787f67eed65deaf"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

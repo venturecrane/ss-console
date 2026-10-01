@@ -28,6 +28,8 @@ second, read-only app registration in the tenant makes that sentence true.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import sys
 import urllib.error
@@ -51,6 +53,7 @@ from workspace_broker.msgraph_ops import (
     MsGraphRefused,
     MsGraphTransportError,
 )
+from workspace_broker.msgraph_attachments import MAX_ATTACHMENT_BYTES, XLSX_CONTENT_TYPE
 from workspace_broker.recipient_policy import sender_key
 from workspace_broker.server import Broker
 
@@ -479,6 +482,10 @@ def test_unknown_payload_keys_never_reach_the_wire(tmp_path: Path) -> None:
         # ss#2499. On the list because the BROKER puts it there, never a caller
         # — the test below proves a caller cannot.
         "internetMessageHeaders",
+        # Present only when the caller's `attachments` passed the broker's own
+        # validation, and then rebuilt as Graph fileAttachment objects (see the
+        # attachment tests at the end of this file).
+        "attachments",
     }
 
 
@@ -1787,3 +1794,199 @@ def test_a_failed_lookup_records_no_conversation(tmp_path: Path) -> None:
     meta = _meta(broker)
     assert meta["lookup"].startswith("failed")
     assert "conversation_id" not in meta
+
+
+# ---------------------------------------------------------------------------
+# Outbound attachments (statute-watch workbook): one pinned shape, validated
+# in-broker, refused whole on any violation, never on the ledger.
+# ---------------------------------------------------------------------------
+
+# Real xlsx bytes are a zip; the broker does not parse them, so a zip-magic
+# prefix plus filler is an honest stand-in for the bytes it relays.
+_XLSX_BYTES = b"PK\x03\x04" + b"statute-watch-workbook" * 40
+_XLSX_B64 = base64.b64encode(_XLSX_BYTES).decode("ascii")
+_XLSX_SHA = hashlib.sha256(_XLSX_BYTES).hexdigest()
+
+
+def _attachment(**overrides) -> dict:
+    entry = {
+        "name": "Statute watch October 2026.xlsx",
+        "content_type": XLSX_CONTENT_TYPE,
+        "content_b64": _XLSX_B64,
+        "sha256": _XLSX_SHA,
+    }
+    entry.update(overrides)
+    return entry
+
+
+def _attach_payload(attachments) -> dict:
+    return {
+        "to": ["scott@smd.services"],
+        "subject": "Statute watch",
+        "body_text": "x",
+        "attachments": attachments,
+    }
+
+
+def test_a_valid_attachment_reaches_graph_as_a_file_attachment(tmp_path: Path) -> None:
+    """The exact Graph v1.0 sendMail fileAttachment shape (vfy_01M3TKFJRYTVF6P4CMG10JDYZ0),
+    and nothing else: the caller's own key names (content_b64, sha256) do not ride."""
+    http = FakeGraph()
+    ops = _ops(tmp_path, http)
+    ops.send(_attach_payload([_attachment()]))
+    posts = http.graph_posts()
+    assert len(posts) == 1 and posts[0][1].endswith("/sendMail")
+    assert posts[0][2]["message"]["attachments"] == [
+        {
+            "@odata.type": "#microsoft.graph.fileAttachment",
+            "name": "Statute watch October 2026.xlsx",
+            "contentType": XLSX_CONTENT_TYPE,
+            "contentBytes": _XLSX_B64,
+        }
+    ]
+    assert base64.b64decode(posts[0][2]["message"]["attachments"][0]["contentBytes"]) == _XLSX_BYTES
+
+
+def test_no_attachments_key_sends_no_attachments(tmp_path: Path) -> None:
+    for payload in ({"to": ["scott@smd.services"], "body_text": "x"}, _attach_payload(None)):
+        http = FakeGraph()
+        _ops(tmp_path, http).send(payload)
+        assert "attachments" not in http.graph_posts()[0][2]["message"]
+
+
+def test_send_as_staff_carries_the_attachment_too(tmp_path: Path) -> None:
+    http = FakeGraph()
+    ops = _ops(tmp_path, http)
+    ops.send_as_staff(_attach_payload([_attachment()]), "christa@examplefirm.example")
+    message = http.graph_posts()[0][2]["message"]
+    assert message["attachments"][0]["contentBytes"] == _XLSX_B64
+    assert message["from"] == {"emailAddress": {"address": "christa@examplefirm.example"}}
+
+
+_TOO_BIG = b"PK" + b"\0" * MAX_ATTACHMENT_BYTES
+_BAD_ATTACHMENTS = {
+    "empty list": [],
+    "not a list": _attachment(),
+    "two entries": [_attachment(), _attachment(name="Second.xlsx")],
+    "entry not an object": ["Statute watch.xlsx"],
+    "extra key": [{**_attachment(), "disposition": "inline"}],
+    "missing key": [{k: v for k, v in _attachment().items() if k != "sha256"}],
+    "non-string field": [_attachment(name=123)],
+    "not xlsx": [_attachment(name="Statute watch.xlsm")],
+    "path in name": [_attachment(name="../../etc/passwd.xlsx")],
+    "slash in name": [_attachment(name="a/b.xlsx")],
+    "name too long": [_attachment(name="a" * 121 + ".xlsx")],
+    "wrong content type": [_attachment(content_type="application/octet-stream")],
+    "urlsafe base64": [_attachment(content_b64=_XLSX_B64.replace("+", "-").replace("/", "_") + "-_")],
+    "junk base64": [_attachment(content_b64="not base64 at all!!")],
+    "empty content": [_attachment(content_b64="", sha256=hashlib.sha256(b"").hexdigest())],
+    "sha mismatch": [_attachment(sha256="0" * 64)],
+    "sha uppercase": [_attachment(sha256=_XLSX_SHA.upper())],
+    "over 512 KiB": [
+        _attachment(
+            content_b64=base64.b64encode(_TOO_BIG).decode("ascii"),
+            sha256=hashlib.sha256(_TOO_BIG).hexdigest(),
+        )
+    ],
+}
+
+
+@pytest.mark.parametrize("case", sorted(_BAD_ATTACHMENTS))
+def test_an_invalid_attachment_refuses_the_whole_send(tmp_path: Path, case: str) -> None:
+    """Never sent with the attachment dropped: refused, nothing POSTed, and the
+    reason names the attachment (the overlay's body-without-workbook rung keys on
+    the word "attachment" in the refusal reason)."""
+    http = FakeGraph()
+    ops = _ops(tmp_path, http)
+    with pytest.raises(MsGraphRefused) as excinfo:
+        ops.send(_attach_payload(_BAD_ATTACHMENTS[case]))
+    assert http.graph_posts() == []
+    assert str(excinfo.value).startswith("attachment refused: ")
+    assert "attachment" in str(excinfo.value).lower()
+
+
+def test_the_attachment_bound_is_inclusive_at_512_kib(tmp_path: Path) -> None:
+    """Falsifier for the size case: exactly 512 KiB sends, so the refusal above is
+    the bound and not some other rule."""
+    raw = b"P" * MAX_ATTACHMENT_BYTES
+    http = FakeGraph()
+    _ops(tmp_path, http).send(
+        _attach_payload(
+            [
+                _attachment(
+                    content_b64=base64.b64encode(raw).decode("ascii"),
+                    sha256=hashlib.sha256(raw).hexdigest(),
+                )
+            ]
+        )
+    )
+    assert len(http.graph_posts()) == 1
+
+
+def test_reply_refuses_an_attachment_rather_than_dropping_it(tmp_path: Path) -> None:
+    http = FakeGraph()
+    ops = _ops(tmp_path, http)
+    with pytest.raises(MsGraphRefused) as excinfo:
+        ops.reply({"message_id": "AAMk123", "comment": "sure", "attachments": [_attachment()]})
+    assert http.graph_posts() == []
+    assert str(excinfo.value).startswith("attachment refused: ")
+
+
+def test_the_row_never_carries_the_attachment_bytes(tmp_path: Path) -> None:
+    """Sent and refused alike: the ledger holds the digest and the stamped hash,
+    never the base64."""
+    broker = _broker(tmp_path, FakeGraph())
+    broker.handle(
+        {
+            "action": "msgraph_send",
+            "payload": _attach_payload([_attachment()]),
+            "audit_extra": {"attachment_sha256": _XLSX_SHA},
+        },
+        peer_pid=GATEWAY_PID,
+        peer_uid=AGENT_UID,
+    )
+    with pytest.raises(MsGraphRefused):
+        broker.handle(
+            {"action": "msgraph_send", "payload": _attach_payload([_attachment(sha256="0" * 64)])},
+            peer_pid=GATEWAY_PID,
+            peer_uid=AGENT_UID,
+        )
+    rows = json.dumps(broker.ledger.rows)
+    assert [r["action_type"] for r in broker.ledger.rows] == [
+        "CONFIRM_SEND_DISPATCHED",
+        "CONFIRM_SEND_FAILED",
+    ]
+    assert _XLSX_B64 not in rows
+    assert _XLSX_B64[:64] not in rows
+    assert _meta(broker, 1)["reason"].startswith("attachment refused: ")
+
+
+def test_attachment_sha256_rides_audit_extra_onto_the_row(tmp_path: Path) -> None:
+    http = FakeGraph()
+    broker = _broker(tmp_path, http)
+    broker.handle(
+        {
+            "action": "msgraph_send",
+            "payload": _attach_payload([_attachment()]),
+            "audit_extra": {"attachment_sha256": _XLSX_SHA},
+        },
+        peer_pid=GATEWAY_PID,
+        peer_uid=AGENT_UID,
+    )
+    assert _meta(broker)["attachment_sha256"] == _XLSX_SHA
+    assert "attachment_sha256" not in json.dumps(http.graph_posts()[0][2])
+
+
+@pytest.mark.parametrize("bad", ["not-a-hash", "A" * 64, "a" * 63, "<script>"])
+def test_a_malformed_attachment_sha256_is_dropped_from_the_row(tmp_path: Path, bad: str) -> None:
+    broker = _broker(tmp_path, FakeGraph())
+    broker.handle(
+        {
+            "action": "msgraph_send",
+            "payload": {"to": ["scott@smd.services"], "body_text": "x"},
+            "audit_extra": {"attachment_sha256": bad},
+        },
+        peer_pid=GATEWAY_PID,
+        peer_uid=AGENT_UID,
+    )
+    assert "attachment_sha256" not in _meta(broker)

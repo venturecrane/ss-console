@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from .broker_context import BrokerContext
@@ -116,6 +117,12 @@ _AUDIT_ONLY_KEYS = frozenset({"sender_key", "audit_row_token"})
 #:                          ``_TAINT_EXEMPT_VALUES`` are kept, so the row says
 #:                          exactly which exemption, or nothing.
 #:
+#: ``attachment_sha256``    sha256 (64 lowercase hex) of the decoded bytes of
+#:                          the attachment the send carried, stamped by the
+#:                          overlay. The base64 itself never reaches the row:
+#:                          this hash and ``input_digest`` do. A value of any
+#:                          other shape is dropped like any unnamed key.
+#:
 #: CLOSED ALLOWLIST, AND SILENTLY SO. The filter below drops any key not named
 #: here with no error and no log, which is the right posture for an untrusted
 #: caller-supplied dict but means a stamp the overlay adds WITHOUT a matching
@@ -131,8 +138,10 @@ _CALLER_AUDIT_KEYS: tuple[str, ...] = (
     "skill_name",
     "dispatch_ref",
     "taint_exempt",
+    "attachment_sha256",
 )
 _TAINT_EXEMPT_VALUES: tuple[str, ...] = ("code_fixed_recipients",)
+_SHA256_HEX = re.compile(r"[0-9a-f]{64}")
 
 
 def append_send_row(
@@ -217,6 +226,8 @@ def _audit_extra(request: dict[str, Any]) -> dict[str, str]:
         del extra["dispatch_ref"]
     if extra.get("taint_exempt") not in (None, *_TAINT_EXEMPT_VALUES):
         del extra["taint_exempt"]
+    if "attachment_sha256" in extra and not _SHA256_HEX.fullmatch(extra["attachment_sha256"]):
+        del extra["attachment_sha256"]
     return extra
 
 

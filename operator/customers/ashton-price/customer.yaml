@@ -706,7 +706,7 @@ personas:
       # letter 156 (2026-09-30), Christa's written ask: a monthly report of the
       # cases with a statute date in the next three months and nothing filed.
       - skill: statute-watch
-        schedule: '7 7 1 * *' # monthly, the 1st at 0707 seat-local
+        schedule: '7 12 1 * *' # monthly, the 1st at 1207 seat-local (midday so the report ships in its finished form)
         pre_run: pre_run.py
         wake_policy: pre_run_decides
     # - skill: deadline-miss-escalator

@@ -51,6 +51,20 @@ class AgentMailRefused(RuntimeError):
     """The authored policy forbids this send. Never retried, always audited."""
 
 
+def _refuse_attachments(payload: dict[str, Any]) -> None:
+    """AgentMail carries no attachments here: refuse loudly, never drop silently.
+
+    ``attachments`` is deliberately NOT in ``_BODY_FIELDS``, so without this
+    check the closed allowlist would quietly strip it and the recipient would
+    get a message referring to a file that is not there. Outbound attachments
+    ride the msgraph transport only (statute-watch plan, revision 9). The
+    "attachment refused:" prefix is the contract the overlay keys its
+    body-without-attachment fallback on.
+    """
+    if payload.get("attachments") is not None:
+        raise AgentMailRefused("attachment refused: the AgentMail transport does not carry attachments")
+
+
 class AgentMailTransportError(RuntimeError):
     """The send could not be attempted or its outcome is unknown."""
 
@@ -221,6 +235,7 @@ class AgentMailOps:
 
     def send(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Fence every recipient, then transmit from this seat's pinned inbox."""
+        _refuse_attachments(payload)
         policy = authored_policy(self._customer_path)
         recipients = collect_recipients(payload)
         enforce_recipients(policy, recipients)
@@ -241,6 +256,7 @@ class AgentMailOps:
         here rather than taken from the caller. A caller that could name the
         sender could name any sender.
         """
+        _refuse_attachments(payload)
         message_id = str(payload.get("message_id") or "").strip()
         if not message_id:
             raise AgentMailRefused("reply requires the source message_id")
