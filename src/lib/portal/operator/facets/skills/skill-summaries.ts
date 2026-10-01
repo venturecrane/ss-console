@@ -123,7 +123,7 @@ export const SKILL_SUMMARIES: Record<string, string> = {
   'status-report-assembler':
     'Assembles a weekly client status report from your PM tools and analytics.',
   'statute-watch':
-    'Emails the person you name a monthly list of open cases whose statute date is in the next three months with nothing filed. Reflects dates you entered, never computes one.',
+    'Emails the person you name a monthly spreadsheet of open cases with a statute date in the next three months and nothing filed, and what changed since last month. Never computes a date.',
   'task-list-keeper':
     'Keeps your task list honest: each week it sorts overdue tasks and sends each attorney suggested calls to answer in plain words. Nothing changes until someone says yes.',
   'trial-binder-assembler':

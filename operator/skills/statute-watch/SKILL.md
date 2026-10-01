@@ -7,7 +7,7 @@ description: >-
   and sent by the pre-run, not composed; the woken turn sends nothing. Not the on-request
   deadline view (deadline-and-sol-tracker) and not the missed-deadline alarm
   (deadline-miss-escalator). Never computes a date.
-version: 0.1.0
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -51,12 +51,23 @@ class N, ADR 0050):
    number and the Filed date.
 2. Selects the cases whose statute date is today (the seat's own day) through
    the next 91 days with neither a Filed date nor a Case number, soonest first.
-3. For the listed cases only: the client's last name, the responsible
-   attorney's last name, and how many of the case's documents carry a
+3. For the listed cases: the client's name from the matter title (`clients.py`;
+   the contact's last name only when the title does not carry it), the
+   responsible attorney's name, and how many of the case's documents carry a
    court-paper name (complaint, summons, proof of service, and the like).
-4. Renders the email per `references/output-format.md` (`render.py`), writes
-   the provenance handoff and the dispatch envelope, and wakes the turn so the
-   seat sends the envelope out of turn through the full gate.
+4. Compares the list with last month's (`changes.py`, the state file
+   `.smd/statute-watch/last-run.json`): new cases, and for every case that
+   left the list, a fresh read of the matter and its case details, worded
+   only as the record now shows it (filed, closed, statute date passed with
+   nothing filed, statute date changed or removed, could not be checked).
+5. Builds the spreadsheet in the connector venv (`workbook.py`): every listed
+   case, the changes, and what is counted.
+6. Renders the email per `references/output-format.md` (`render.py`), writes
+   the provenance handoff and the dispatch envelope with the spreadsheet
+   attached, writes the state file, and wakes the turn so the seat sends the
+   envelope out of turn through the full gate. If the spreadsheet is refused
+   the seat sends the body saying it could not be attached; if the body is
+   refused, the counts-only skeleton.
 
 A case whose details could not be read is counted, never dropped: the email
 says how many open cases could not be checked. If the matter list itself
