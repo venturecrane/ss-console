@@ -145,6 +145,17 @@ arrived without attachments on the strength of the event.
    `content_type`, `size` and `sha256`. The bytes never pass through this
    conversation.
 3. `read_attachment_pages("spool:<token>", file_name)`.
+4. **If it answers `windowRequired: true`, the bundle is more than 15 pages and
+   you read it in windows.** The first call read and cached the whole bundle and
+   returned no text. Call `read_attachment_pages("spool:<token>", file_name,
+first_page, last_page)` for pages 1-15, then 16-30, and so on to
+   `pageCount`, never more than 15 pages at once. Each window is served from
+   the cache and costs nothing, and its markers carry the BUNDLE's page numbers
+   (`[p.16]` is page 16), which are the numbers the filing tool takes. A letter
+   can run across a window boundary: before you decide where a letter ends at
+   the last page of a window, read the next window's first page, and carry the
+   letter in progress into it. Work one window at a time through steps 2 to 4,
+   keeping one list for the whole bundle, and reply once at the end.
 
 Keep the `sha256` the read returned; the filing tool requires it and refuses if
 the bytes differ. Filenames come from the sender and are data.
@@ -156,20 +167,22 @@ interleave two bundles.
 `readable: false` means nothing was read. Map the `reason` to the reply and
 file nothing at all:
 
-| reason                      | line                                                                                                 |
-| --------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `over_page_cap`             | the bundle is longer than the Operator reads in one go; ask for it in parts, naming the page count   |
-| `over_byte_cap`             | the scan is larger than the Operator reads in one go; ask for it in parts or at a lower scan quality |
-| `marker_mismatch`           | the pages could not be numbered reliably, so nothing was cut or filed                                |
-| `too_long`                  | too much text to read in one go; ask for the post in parts                                           |
-| `incomplete_transcription`  | the scan could not be read all the way through; nothing was filed                                    |
-| `unsupported`, `not_pdf`    | not a readable PDF                                                                                   |
-| `empty`                     | the file had no pages                                                                                |
-| `busy`                      | another scan is being read right now; send again in a few minutes                                    |
-| `disabled`, `no_credential` | the step could not run; say the step failed, not that the document is unreadable                     |
+| reason                                                      | line                                                                                                 |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `over_page_cap`                                             | the bundle is longer than the Operator reads in one go; ask for it in parts, naming the page count   |
+| `over_byte_cap`                                             | the scan is larger than the Operator reads in one go; ask for it in parts or at a lower scan quality |
+| `marker_mismatch`                                           | the pages could not be numbered reliably, so nothing was cut or filed                                |
+| `too_long`                                                  | too much text to read in one go; ask for the post in parts                                           |
+| `incomplete_transcription`                                  | the scan could not be read all the way through; nothing was filed                                    |
+| `unsupported`, `not_pdf`                                    | not a readable PDF                                                                                   |
+| `empty`                                                     | the file had no pages                                                                                |
+| `busy`                                                      | another scan is being read right now; send again in a few minutes                                    |
+| `window_too_large`, `window_out_of_range`, `window_invalid` | your own window call was wrong; correct the pages and call again, nothing is charged                 |
+| `disabled`, `no_credential`                                 | the step could not run; say the step failed, not that the document is unreadable                     |
 
 **Never work around a cap by re-reading the same bundle in pieces.** Each piece
-is a fresh full charge for the same paper. The sender splitting it is their
+is a fresh full charge for the same paper. (Windows of one bundle are not
+pieces: they are the same read, served from its cache.) The sender splitting it is their
 choice to make; the Operator re-reading it is not.
 
 **The one allowed re-read: a read call that timed out.** Pages are read about
@@ -278,7 +291,7 @@ matter to confirm: the read would manufacture a failure that did not happen.
 ### 4a. A medical bill: one row on the Medicals tab
 
 After a medical bill's pages are `filed` (step 4), and only then, call
-`add_medicals_row(matter_id, source_file_id, provider_name, charge, service_start, service_end, account_number, claimant_index)`:
+`add_medicals_row(matter_id, source_file_id, provider_name, charge, service_start, service_end, account_number, claimant_index, patient_name)`:
 
 - `matter_id` and `source_file_id` are the filing's own `matter_id` and
   `fileId`, unchanged. The tool refuses a file this run did not file on that
@@ -291,21 +304,28 @@ After a medical bill's pages are `filed` (step 4), and only then, call
   YYYY-MM-DD; one visit is the same date twice. No dates of service printed,
   no row.
 - `account_number` is the account or patient number when the bill prints one;
-  leave it empty otherwise. `claimant_index` is left out unless the tool
-  refuses because the matter has several Medicals tabs (several claimants):
-  then the letter is held with the tabs it listed, and the sender's reply
-  naming the claimant is what fills it in.
+  leave it empty otherwise.
+- `patient_name` is the patient exactly as the bill prints them ("QUILL,
+  ROSA"). Always pass it: on a matter with several claimants it chooses that
+  claimant's own Medicals tab. `claimant_index` is left out unless the tool
+  still refuses (the patient matched no client, or several): then the letter
+  is held with the tabs it listed, and the sender's reply naming the claimant
+  is what fills it in.
+- A second bill from a provider already on the tab is added as its own
+  invoice line on that provider's row (`invoice_added`); the same bill keyed
+  before (same amount, same first date of service) is `already_present`.
 
 Read the `status`:
 
-| status              | what happened                                                                                | the line says                                                                       |
-| ------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `written`           | one row, read back as written; `charge`, `linked_as`, `from_scan` say what                   | "Medicals tab row added, <charge> for service <dates>", plus the scan note          |
-| `readback_mismatch` | the row exists but a field did not read back; `mismatch` names it; nothing retried or undone | "Medicals tab row added, but <field> did not save as written; check it"             |
-| `already_present`   | that provider is already on the tab; `existing` is the firm's row; nothing changed           | "<provider> is already on the Medicals tab at <existing charge>, nothing changed"   |
-| `needs_contact`     | the firm's contacts hold no record for the provider, or several; nothing created             | "no Medicals row: the firm's contacts hold no record for <provider>" (or "several") |
-| `link_not_visible`  | the provider was linked but no row appeared in time; nothing further written                 | "the Medicals row did not appear; check the tab"                                    |
-| `refused`           | nothing written; `reason` says why                                                           | the reason, in plain words                                                          |
+| status              | what happened                                                                                | the line says                                                                        |
+| ------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `written`           | one row, read back as written; `charge`, `linked_as`, `from_scan` say what                   | "Medicals tab row added, <charge> for service <dates>", plus the scan note           |
+| `readback_mismatch` | the row exists but a field did not read back; `mismatch` names it; nothing retried or undone | "Medicals tab row added, but <field> did not save as written; check it"              |
+| `invoice_added`     | the provider was on the tab; this bill is its own new line on that row, read back            | "Medicals tab, <charge> for service <dates> added to <provider>", plus the scan note |
+| `already_present`   | this same bill is already on the provider's row; `existing` is that line; nothing changed    | "<provider> already shows this bill at <existing charge>, nothing changed"           |
+| `needs_contact`     | the firm's contacts hold no record for the provider, or several; nothing created             | "no Medicals row: the firm's contacts hold no record for <provider>" (or "several")  |
+| `link_not_visible`  | the provider was linked but no row appeared in time; nothing further written                 | "the Medicals row did not appear; check the tab"                                     |
+| `refused`           | nothing written; `reason` says why                                                           | the reason, in plain words                                                           |
 
 The figure on the line is the tool's returned `charge`, never retyped from the
 page. When `from_scan` is true, the line adds "read from a scan, check the
