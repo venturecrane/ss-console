@@ -1463,7 +1463,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // 6ea7a139 -> bff35d08 (2026-10-01, overlay#408). The four msgraph-mail MCP primitives
     // are classified READ and fenced, so a known-good ashton-price boot stops firing the
     // tool-surface sweep's ERROR (a Sentry event per reprovision since 2026-09-19).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="bff35d0847b2232855be67a63f0e0e178d5d28ff"')
+    // bff35d08 -> 8215bf04 (2026-10-01, overlay#409 merge commit). "done with 1" on a deadline
+    // digest closes the task in Smokeball (the digest's send raises each closable
+    // line as a casework complete; the reply approves it under a named person).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="8215bf0467ef91cb81a0001d3a1337eb5a39146c"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

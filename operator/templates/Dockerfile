@@ -1118,7 +1118,7 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # A heading line, a document's table row, and a quoted record title keep their
 # capitals. shared/output_checklist.py and tests only; no tracked twin moves;
 # schemas.py untouched.
-ARG OVERLAY_REF="bff35d0847b2232855be67a63f0e0e178d5d28ff"
+ARG OVERLAY_REF="8215bf0467ef91cb81a0001d3a1337eb5a39146c"
 
 ARG CUSTOMER_SLUG=customer-zero
 
