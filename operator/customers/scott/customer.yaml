@@ -87,11 +87,19 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+      # Manual only since 2026-10-01. It ran as the 7:00 MST "morning digest"
+      # from day one and never delivered one: the skill reads prior reports
+      # from a customer_notes directory no seat has, so each morning the agent
+      # guessed a record store by that name, was refused (Sentry
+      # SMD-OPERATOR-2E, 2026-09-30), and the turn ended with nothing sent
+      # (gateway.log 2026-10-01 14:00:14..27). A routine that runs daily and
+      # produces nothing is the ss#2581 shape; it stays off until it has a
+      # source to read.
       - name: status-report-assembler
         version: pending
         initiation:
           manual: true
-          scheduled: true
+          scheduled: false
           webhook: false
         enabled: true
       # Real estate open-house POC (the Captain plays the agent from the
@@ -105,11 +113,8 @@ personas:
           webhook: true
         enabled: true
     cron:
-      # Named day-one job: the morning digest at 7:00 MST (Phoenix has no
-      # DST, so 7am is 14:00 UTC year-round).
-      - skill: status-report-assembler
-        schedule: '0 14 * * *'
-        wake_policy: always
+      # The day-one "morning digest" (status-report-assembler, 0 14 * * *) was
+      # removed 2026-10-01; see the skill entry above for why.
       # Open-house follow-up drafts at 8:00 MST (15:00 UTC). `always`: the
       # skill reads a small records directory and exits silently when nothing
       # is due; a pre_run gate would add a second process root for a POC.
