@@ -394,6 +394,33 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+      # Vendor invoice intake (letter 62: Christa asked that vendor invoices
+      # emailed to the Operator be matched to the matter, staged as an
+      # unfinalized expense and the PDF filed; letter 64 reported the five
+      # rehearsal behaviours; the 2026-09-21 "Where everything stands" letter
+      # told the firm the Smokeball permission it waited on is live). Bound on
+      # 2026-10-01, the day Christa asked for the bills in the day's post to
+      # reach the Expenses tab (her "Mail" letter). Person-initiated exactly
+      # like the post intake above: she forwards a vendor's invoice, or a
+      # vendor's bill sits inside a scanned bundle, and the matter-inbox-router
+      # spine executes this skill in the same turn. Never scheduled, never
+      # webhook-fired on its own. Its one write is an UNFINALIZED expense plus
+      # the PDF, under the internal_write entitlement above; it cannot
+      # finalize, and the firm's staff finalize in Smokeball as they do today.
+      #
+      # No vendor_invoice_intake settings block yet: cost type, billable,
+      # activity code and staff were asked of the firm in letter 64 and the
+      # 09-21 list and are not yet answered, so each is left to Smokeball's
+      # default and every reply says so. Authoring the block is a one-line
+      # change per answer. No routine-grid row: naming a routine there is a
+      # commitment to the firm, which is the Captain's to author.
+      - name: vendor-invoice-intake
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
       - name: stalled-matter-nudge
         version: pending
         initiation:

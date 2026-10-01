@@ -1463,7 +1463,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // 6ea7a139 -> bff35d08 (2026-10-01, overlay#408). The four msgraph-mail MCP primitives
     // are classified READ and fenced, so a known-good ashton-price boot stops firing the
     // tool-surface sweep's ERROR (a Sentry event per reprovision since 2026-09-19).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="bff35d0847b2232855be67a63f0e0e178d5d28ff"')
+    // bff35d08 -> 0b03fbac (2026-10-01, overlay#409 + #410). #410 classifies
+    // mcp_smokeball_add_medicals_row as an internal write: the Medicals tab row from a
+    // medical bill in the firm's scanned post. Unclassified it is refused at runtime.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="0b03fbac6bdece19b276f672c02072bf182436c0"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

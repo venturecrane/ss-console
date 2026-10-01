@@ -215,14 +215,38 @@ describe('matter-inbox-router: the combined post class', () => {
     expect(rubric).toContain('bare scanned PDF is combined post intake, not this')
   })
 
-  it('files a court paper or a vendor bill in the bundle with a flag, never an expense or a deadline', () => {
+  it('files a court paper in the bundle with a flag and never a deadline; keys the bills, never finalized', () => {
+    // 2026-10-01: the firm asked that a medical bill in the day's post reach
+    // the Medicals tab and a vendor's bill the expenses. Both are keyed by the
+    // skill's own procedure, from the page, never finalized; a court paper is
+    // still filed and flagged, and a deadline is still a person's act.
     const b = bullet()
     expect(b).toContain('filed on its resolved matter by the same rules as any letter')
-    expect(b).toContain('never creates an expense and never sets a deadline')
+    expect(b).toContain('it never sets a deadline')
+    expect(b).toContain('staged as an UNFINALIZED expense from its own pages')
+    expect(b).toContain(
+      "a medical bill's figures go on the matter's Medicals tab after it is filed"
+    )
+    expect(b).toContain(
+      'never finalized, never a figure the page does not print, never a row changed'
+    )
     const post = flat(read(POST))
     expect(post).toContain('filed; court paper, needs calendaring')
-    expect(post).toContain('filed; looks like a vendor bill, not entered as an expense')
+    expect(post).toContain('staged as an expense of')
+    expect(post).toContain('Medicals tab row added')
     expect(post).toContain('1 court paper filed and needs calendaring')
     expect(post).not.toContain('never filed here')
+    expect(post).not.toContain('not entered as an expense')
+    // And the skill body carries the two keying steps with the connector's
+    // exact signatures, so prose and tool cannot drift apart silently.
+    const skill = flat(read(`${SKILLS_DIR}/combined-post-intake/SKILL.md`))
+    expect(skill).toContain(
+      '`add_medicals_row(matter_id, source_file_id, provider_name, charge, service_start, service_end, account_number, claimant_index)`'
+    )
+    expect(skill).toContain(
+      '`stage_vendor_invoice(matter_id, matter_resolution, download_url, file_name, sha256, vendor, invoice_number, invoice_date, amount, first_page, last_page)`'
+    )
+    expect(skill).toContain('**Never writes a figure the page does not print.**')
+    expect(skill).toContain('**Never finalizes, never pays, never changes a row.**')
   })
 })

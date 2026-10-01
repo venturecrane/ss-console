@@ -34,7 +34,7 @@ from typing import Any
 from . import letter_pages, vision
 from .attachment_source import fetch_bytes
 from .extract import METHOD_PYPDF, METHOD_VISION, METHOD_VISION_CACHED
-from .letter_pages import FILED_PAGES, PageReadError
+from .letter_pages import FILED_DOCS, FILED_PAGES, SCANNED_PAGES, PageReadError
 from .resolution_token import ResolutionRefused
 from .resolution_token import consume as consume_resolution
 from .resolution_token import verify as verify_resolution
@@ -99,6 +99,7 @@ def _read_pages(blob: bytes, file_name: str) -> dict[str, Any]:
         "method": None,
         "pageCount": None,
         "scannedPages": None,
+        "scannedPageNumbers": None,
         "text": "",
         "reason": None,
     }
@@ -117,6 +118,12 @@ def _read_pages(blob: bytes, file_name: str) -> dict[str, Any]:
         return out
     scanned = letter_pages.scanned_indexes(pages)
     out["scannedPages"] = len(scanned)
+    # 1-based, the way the ``[p.N]`` markers number them, so a letter's lines
+    # can say it was read from a scan. Recorded under the bundle's bytes too, so
+    # the filing tool can carry "cut from a scan" into the filed-document ledger
+    # without the model reporting it.
+    out["scannedPageNumbers"] = [i + 1 for i in scanned]
+    SCANNED_PAGES.record(out["sha256"], out["scannedPageNumbers"])
 
     if not scanned:
         # Every page carries a text layer: compose from pypdf, spend nothing.
@@ -216,8 +223,10 @@ def read_attachment_pages(download_url: str, file_name: str) -> Any:
     from ``mail_spool_attachment`` (the normal case), or an allowlisted
     ``https://`` vendor URL.
 
-    Returns ``pageCount``, ``scannedPages``, ``sha256``, ``byteLength``,
-    ``method`` and ``text``. THE TEXT IS PAGE-MARKED: every page appears as the
+    Returns ``pageCount``, ``scannedPages``, ``scannedPageNumbers`` (the
+    1-based numbers of the pages that were transcribed from paper, so a
+    letter's reply line can say its figures were read from a scan), ``sha256``,
+    ``byteLength``, ``method`` and ``text``. THE TEXT IS PAGE-MARKED: every page appears as the
     line ``[p.N]`` followed by its text, or the bare line ``[p.N: no legible
     content]``, blocks separated by a blank line, running exactly 1..pageCount.
     A page number is where the page SITS in the document; a page's own printed
@@ -297,9 +306,17 @@ def file_attachment_pages_to_matter(
     3 already went somewhere.
 
     Returns ``status``: ``filed`` (the range was cut and uploaded; ``fileId``,
-    ``fileName`` and ``pages`` say what) or ``refused`` (``reason`` says why and
-    NOTHING was created). Materialization in Smokeball is async, so a filed
-    document may take a moment to appear; do not re-read to confirm it."""
+    ``fileName``, ``pages`` and ``fromScan`` say what) or ``refused``
+    (``reason`` says why and NOTHING was created). Materialization in
+    Smokeball is async, so a filed document may take a moment to appear; do
+    not re-read to confirm it.
+
+    A filed letter that is a MEDICAL BILL can then put one row on the matter's
+    Medicals tab with ``add_medicals_row``, which takes this call's ``fileId``
+    as its ``source_file_id`` and refuses any file this run did not file on
+    that matter. A VENDOR'S BILL is not filed here at all: ``stage_vendor_invoice``
+    with ``first_page`` and ``last_page`` files the range and stages the
+    expense in one write."""
     matter = (matter_id or "").strip()
     if not matter:
         return _refused("matter_id is required")
@@ -352,13 +369,20 @@ def file_attachment_pages_to_matter(
     except Exception as exc:  # noqa: BLE001 - the upload raises a wide family
         FILED_PAGES.release(want_sha, first, last)
         return _refused(f"the letter could not be filed: {exc}")
+    file_id = result.get("fileId") if isinstance(result, dict) else None
+    from_scan = SCANNED_PAGES.any_in(want_sha, first, last)
+    if isinstance(file_id, str) and file_id:
+        # What opens ``add_medicals_row`` for this letter: the bill this run
+        # filed, on the matter it was filed on. See ``letter_pages.FiledDocs``.
+        FILED_DOCS.record(matter, file_id, safe_name, first, last, from_scan=from_scan)
     return {
         "status": "filed",
         "created": True,
         "matter_id": matter,
-        "fileId": result.get("fileId") if isinstance(result, dict) else None,
+        "fileId": file_id,
         "fileName": safe_name,
         "pages": {"first": first, "last": last},
+        "fromScan": from_scan,
         "byteLength": len(cut),
         "file": result,
     }

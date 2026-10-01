@@ -325,6 +325,15 @@ def _contacts_by_name(client: Any, name: str) -> list[dict[str, Any]]:
     return matched[:MAX_NAME_CONTACTS]
 
 
+def contacts_by_name(client: Any, name: str) -> list[dict[str, Any]]:
+    """The contact search above, for callers outside this module. The Medicals
+    write (``medicals_tools``) names a provider by the name a bill prints and
+    needs the firm's contact record for it; this is the one search that
+    recovers the duplicates the vendor's index drops, and the one normalization
+    of names, so a provider is looked up exactly as a client is."""
+    return _contacts_by_name(client, name)
+
+
 def _matters_by_name(
     client: Any, name: str, records: dict[str, dict[str, Any]]
 ) -> tuple[set[str], dict[str, list[dict[str, Any]]]]:
