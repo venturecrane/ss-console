@@ -278,8 +278,8 @@ def load_matter_lookup_budget(customer_yaml_path: str | None = None) -> int:
     if not isinstance(esc, dict):
         return _DEFAULT_MATTER_LOOKUP_BUDGET
     raw = esc.get("matter_lookup_budget")
-    junk = isinstance(raw, bool) or not isinstance(raw, int) or raw < 0
-    return _DEFAULT_MATTER_LOOKUP_BUDGET if junk else raw
+    usable = isinstance(raw, int) and not isinstance(raw, bool) and raw >= 0
+    return raw if usable and isinstance(raw, int) else _DEFAULT_MATTER_LOOKUP_BUDGET
 
 
 # ---------------------------------------------------------------------------
