@@ -816,3 +816,50 @@ def test_dispatch_ref_rides_the_row_only_in_its_one_shape(tmp_path: Path) -> Non
         )
     stamped = [_meta(broker, i).get("dispatch_ref") for i in range(4)]
     assert stamped == [DISPATCH_REF, None, None, None]
+
+
+# ---------------------------------------------------------------------------
+# Attachments: AgentMail carries none, and says so rather than dropping them.
+# ---------------------------------------------------------------------------
+
+_ATTACHMENT = {
+    "name": "Statute watch.xlsx",
+    "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "content_b64": "UEsDBA==",
+    "sha256": "0" * 64,
+}
+
+
+def test_agentmail_send_refuses_an_attachment_rather_than_dropping_it(tmp_path: Path) -> None:
+    """``attachments`` is not in the closed body allowlist, so without an explicit
+    refusal it would be stripped and the message sent as though it never had one."""
+    http = FakeHTTP()
+    ops = _ops(tmp_path, http)
+    with pytest.raises(AgentMailRefused) as excinfo:
+        ops.send(
+            {
+                "to": ["ap-client-standin@agentmail.to"],
+                "text": "hello",
+                "attachments": [_ATTACHMENT],
+            }
+        )
+    assert [c for c in http.calls if c[0] == "POST"] == []
+    assert str(excinfo.value).startswith("attachment refused: ")
+
+
+def test_agentmail_reply_refuses_an_attachment(tmp_path: Path) -> None:
+    http = _reply_http("scott@smd.services")
+    ops = _ops(tmp_path, http)
+    with pytest.raises(AgentMailRefused) as excinfo:
+        ops.reply({"message_id": "m1", "text": "answer", "attachments": [_ATTACHMENT]})
+    assert [c for c in http.calls if c[0] == "POST"] == []
+    assert str(excinfo.value).startswith("attachment refused: ")
+
+
+def test_agentmail_send_without_attachments_is_unchanged(tmp_path: Path) -> None:
+    """Falsifier: the refusal is keyed on the attachment, not on every send."""
+    http = FakeHTTP()
+    ops = _ops(tmp_path, http)
+    ops.send({"to": ["ap-client-standin@agentmail.to"], "text": "hello", "attachments": None})
+    posts = [c for c in http.calls if c[0] == "POST"]
+    assert len(posts) == 1 and "attachments" not in posts[0][2]
