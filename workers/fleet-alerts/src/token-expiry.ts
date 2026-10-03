@@ -131,12 +131,17 @@ export function tokenExpiryConditions(
   row: FleetStatusRow,
   lifetimesDays: Record<string, number>,
   warnDays: number,
-  nowMs: number
+  nowMs: number,
+  seatLifetimesBySlug: Record<string, Record<string, number>> = {}
 ): ConditionState[] {
   const ages = parseTokenAgeMap(row.connector_token_age_json)
   if (ages === null) return []
   const out: ConditionState[] = []
-  for (const [server, configuredDays] of Object.entries(lifetimesDays)) {
+  // A seat override REPLACES the fleet lifetime for that server on that seat;
+  // it is an authored fact about the seat's vendor tenant (see
+  // parseSeatLifetimes), not a second opinion to reconcile.
+  const effective = { ...lifetimesDays, ...seatLifetimesBySlug[row.customer_slug] }
+  for (const [server, configuredDays] of Object.entries(effective)) {
     const age = ages[server]
     if (age === undefined) continue
     const lifetimeDays = effectiveLifetimeDays(server, configuredDays, age, nowMs)
@@ -155,6 +160,34 @@ export function tokenExpiryConditions(
         'rewritten, which for a vendor that does not rotate refresh tokens ' +
         '(Smokeball) means a fresh consent — ordinary traffic will not clear this.',
     })
+  }
+  return out
+}
+
+/**
+ * Per-seat lifetime overrides (2026-10-03). Smokeball's 180-day cutover reached
+ * its PRODUCTION tenant only: the STAGING tenant still issues 30-day refresh
+ * tokens. pilot-smokeball (staging) re-consented 2026-09-02 ~22:03Z, after the
+ * cutover, and its connector died with HTTP 400 token-mint rejections on
+ * 2026-10-02/03, ~30 days later. Judged by the fleet-wide 180 it would have
+ * warned at day 175, so the outage arrived as a SEV1 with no warning at all.
+ *
+ * `seatsCsv` names the seats on the shorter-lived tenant; tests pin it to the
+ * customer.yaml files declaring `environment: staging`, so a new staging seat
+ * cannot silently inherit the production lifetime. Unset, empty, or an invalid
+ * day count yields no overrides (no guessed lifetime, no manufactured page).
+ */
+export function parseSeatLifetimes(
+  server: string,
+  seatsCsv: string | undefined,
+  daysRaw: string | undefined
+): Record<string, Record<string, number>> {
+  const days = Number(daysRaw)
+  if (!Number.isFinite(days) || days <= 0) return {}
+  const out: Record<string, Record<string, number>> = {}
+  for (const slug of (seatsCsv ?? '').split(',')) {
+    const s = slug.trim()
+    if (s.length > 0) out[s] = { [server]: Math.floor(days) }
   }
   return out
 }

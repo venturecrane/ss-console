@@ -18,6 +18,7 @@ import {
   type FleetStatusRow,
   type StaleHold,
 } from './index'
+import { parseSeatLifetimes } from './token-expiry'
 
 const NOW = Date.parse('2026-07-04T12:00:00.000Z')
 const RED = 300
@@ -989,6 +990,47 @@ describe('connector_token_expiring (ss#2148)', () => {
       tokenWarnDays: WARN,
     }).filter((c) => c.condition.startsWith('connector_token_expiring:'))
     expect(out).toHaveLength(0)
+  })
+
+  // 2026-10-03: staging tenant still issues 30-day tokens. pilot-smokeball
+  // died ~30d after a post-cutover consent with no warning under the fleet 180.
+  describe('per-seat lifetime override (staging tenant)', () => {
+    const seatStates = (r: FleetStatusRow, seats: Record<string, Record<string, number>>) =>
+      // Post-cutover clock: at the file's NOW (07-04) every token predates
+      // 2026-08-24 and the pre-cutover 30d rule would mask the override.
+      evaluateConditions([r], Date.parse('2026-10-03T13:00:00Z'), RED, {
+        overdueThresholdSeconds: OVERDUE,
+        tokenLifetimesDays: { smokeball: 180 },
+        tokenSeatLifetimesDays: seats,
+        tokenWarnDays: WARN,
+      }).filter((c) => c.condition.startsWith('connector_token_expiring:'))
+
+    it('a 26-day-old staging token is quiet under 180 and OPENS under its seat override', () => {
+      const r = row({ connector_token_age_json: ageJson(26) })
+      expect(seatStates(r, {})[0].active).toBe(false)
+      const out = seatStates(r, { [r.customer_slug]: { smokeball: 30 } })
+      expect(out).toHaveLength(1)
+      expect(out[0].active).toBe(true)
+      expect(out[0].detail).toContain('recorded lifetime 30d')
+    })
+
+    it('an override for a DIFFERENT seat leaves this seat on the fleet lifetime', () => {
+      const out = seatStates(row({ connector_token_age_json: ageJson(26) }), {
+        'some-other-seat': { smokeball: 30 },
+      })
+      expect(out[0].active).toBe(false)
+      expect(out[0].detail).toContain('recorded lifetime 180d')
+    })
+
+    it('parseSeatLifetimes: invalid days or empty list yields no overrides', () => {
+      expect(parseSeatLifetimes('smokeball', 'pilot-smokeball', undefined)).toEqual({})
+      expect(parseSeatLifetimes('smokeball', 'pilot-smokeball', 'x')).toEqual({})
+      expect(parseSeatLifetimes('smokeball', '', '30')).toEqual({})
+      expect(parseSeatLifetimes('smokeball', ' a , b ', '30')).toEqual({
+        a: { smokeball: 30 },
+        b: { smokeball: 30 },
+      })
+    })
   })
 
   it('labels the condition with the server name', () => {

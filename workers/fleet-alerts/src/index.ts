@@ -75,7 +75,7 @@ import { notifySinkAlerts, type SinkNotification } from './sink-notify'
 import { notifySendRefusals, type SendRefusedNotification } from './send-refused'
 import { getOpenSpecControlKeys, specControlConditions } from './spec-control'
 import { getStaleHolds } from './stale-holds'
-import { tokenExpiryConditions } from './token-expiry'
+import { parseSeatLifetimes, tokenExpiryConditions } from './token-expiry'
 import { toolFailingConditions } from './tool-failing'
 import { getOpenWebhookSurfaceKeys, webhookSurfaceConditions } from './webhook-surface'
 import { gatewayLoopConditions, gatewayLoopRedSeconds } from './gateway-loop'
@@ -128,6 +128,9 @@ export interface Env {
    * disables the condition for smokeball rather than guessing a lifetime.
    */
   SMOKEBALL_REFRESH_TOKEN_LIFETIME_DAYS?: string
+  /** Seats on Smokeball's 30-day STAGING tenant (CSV). See parseSeatLifetimes. */
+  SMOKEBALL_STAGING_SEATS?: string
+  SMOKEBALL_STAGING_REFRESH_TOKEN_LIFETIME_DAYS?: string
   /** Days of warning before the recorded lifetime. Default 5. */
   TOKEN_EXPIRY_WARN_DAYS?: string
   /**
@@ -343,6 +346,8 @@ export interface EvaluateOptions {
   overdueThresholdSeconds?: number
   connectorRunAgeThresholdSeconds?: number
   tokenLifetimesDays?: Record<string, number>
+  /** customer_slug → server → lifetime days, overriding tokenLifetimesDays. */
+  tokenSeatLifetimesDays?: Record<string, Record<string, number>>
   tokenWarnDays?: number
   /**
    * customer_slug → the `<class>.<prop>` keys that currently have an OPEN
@@ -374,6 +379,7 @@ export function evaluateConditions(
     overdueThresholdSeconds = DEFAULT_WORK_OVERDUE_SECONDS,
     connectorRunAgeThresholdSeconds = DEFAULT_CONNECTOR_RUN_AGE_SECONDS,
     tokenLifetimesDays = {},
+    tokenSeatLifetimesDays: seatDays = {},
     tokenWarnDays = DEFAULT_TOKEN_EXPIRY_WARN_DAYS,
     openSpecControlKeys = {},
     openWebhookSurfaceKeys = {},
@@ -429,7 +435,7 @@ export function evaluateConditions(
       })
     }
     out.push(...connectorConditions(row, connectorRunAgeThresholdSeconds))
-    out.push(...tokenExpiryConditions(row, tokenLifetimesDays, tokenWarnDays, nowMs))
+    out.push(...tokenExpiryConditions(row, tokenLifetimesDays, tokenWarnDays, nowMs, seatDays))
     // Indexed straight in, no `?? []`: both helpers default an absent list to
     // empty, and the extra branches pushed this function over its complexity
     // ceiling once the ss#2287 condition joined.
@@ -649,6 +655,11 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
     overdueThresholdSeconds: workOverdueSeconds(env),
     connectorRunAgeThresholdSeconds: connectorRunAgeSeconds(env),
     tokenLifetimesDays: tokenLifetimesDays(env),
+    tokenSeatLifetimesDays: parseSeatLifetimes(
+      'smokeball',
+      env.SMOKEBALL_STAGING_SEATS,
+      env.SMOKEBALL_STAGING_REFRESH_TOKEN_LIFETIME_DAYS
+    ),
     tokenWarnDays: tokenWarnDays(env),
     openSpecControlKeys: await getOpenSpecControlKeys(env.DB),
     openWebhookSurfaceKeys: await getOpenWebhookSurfaceKeys(env.DB),

@@ -1,6 +1,8 @@
 {
   "$comment": "Time-boxed npm-audit exceptions. Each key under `allow` is a GHSA that the CI audit gate tolerates at high or critical severity until `expires`; on and after that date the allowlist is ignored entirely, so a lingering exception re-fails the gate and forces the tracked fix to land. Consumed by scripts/audit-allowlist.mjs, run by .github/workflows/security.yml over the root project and every workers/* package. This is NOT a place to silence real exposure. An entry is legitimate only when the advisory is triaged non-reachable in this app AND its patched release is genuinely unavailable, typically because the fix is newer than the .npmrc min-release-age cooldown. When adding an entry, set `expires` to a date and `tracking` to the issue that will land the fix, and give each GHSA a one-line justification as its value. An empty `allow` map means no exceptions are in force: every high or critical advisory fails the gate.",
-  "expires": null,
-  "tracking": null,
-  "allow": {}
+  "expires": "2026-11-02",
+  "tracking": "https://github.com/venturecrane/ss-console/issues/3032",
+  "allow": {
+    "GHSA-ch52-4w7c-c8xp": "http-cache-semantics <=4.2.0, no patched release; only importer is astro build-time remote-image caching (assets/build/remote.js), not on any request path."
+  }
 }

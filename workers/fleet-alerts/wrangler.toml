@@ -68,6 +68,14 @@ CONNECTOR_DOWN_RUN_AGE_SECONDS = "300"
 # is REWRITTEN — Smokeball does not rotate on refresh, so in practice only a
 # re-consent resolves it, never ordinary traffic.
 SMOKEBALL_REFRESH_TOKEN_LIFETIME_DAYS = "180"
+# 2026-10-03: the 180-day cutover reached Smokeball's PRODUCTION tenant only.
+# The STAGING tenant still issues 30-day refresh tokens: pilot-smokeball
+# re-consented 2026-09-02 ~22:03Z and its token mint was rejected (HTTP 400)
+# ~30 days later, with no warning, because 180 put the warning at day 175.
+# Must equal the customer.yaml seats with `environment: staging` under the
+# smokeball connector (tests/fleet-alerts-staging-seats.test.ts pins it).
+SMOKEBALL_STAGING_SEATS = "pilot-smokeball"
+SMOKEBALL_STAGING_REFRESH_TOKEN_LIFETIME_DAYS = "30"
 TOKEN_EXPIRY_WARN_DAYS = "5"
 ADMIN_BASE_URL = "https://admin.smd.services"
 # Wave 8.2 (review 09-10): the outside-in probe. Every other condition is read
