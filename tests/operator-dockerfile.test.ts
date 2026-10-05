@@ -1475,7 +1475,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // got to (the pilot's connector did not reconnect after a restart).
     // 7bbc385c -> 1c4e123d (2026-10-05, overlay#414 merge commit). classifies the firm
     // form letter and the Medicals provider tools as internal writes.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="1c4e123d785fdb7fb13136d097d5287afc5ef63e"')
+    // 1c4e123d -> b8d64ba7 (2026-10-05, overlay#413 merge commit). audit outcome v3 records a
+    // shortfall (refused, limit, unrecovered, filed short) and the heartbeat reports it.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="b8d64ba7b2cd8857505ec3ab4696556eb9c63e7f"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
