@@ -97,7 +97,7 @@ Hosts: admin routes are served on admin.smd.services, portal routes on portal.sm
 |---|---|---|---|---|
 | `/api/webhooks/healthchecks` | POST | shared bearer, constant-time | Healthchecks.io grace-expiration webhook receiver (ADR 0023 Wave 1). | `src/pages/api/webhooks/healthchecks.ts` |
 | `/api/webhooks/resend` | POST | Svix signature (Resend) | Receives webhook callbacks from Resend (https://resend.com/docs/dashboard/webhooks) for outreach lifecycle events: email.sent, email.delivered, email.opened,... | `src/pages/api/webhooks/resend.ts` |
-| `/api/webhooks/sentry` | POST | HMAC signature | Sentry alert-rule webhook receiver (ADR 0023 Wave 1). | `src/pages/api/webhooks/sentry.ts` |
+| `/api/webhooks/sentry` | POST | HMAC signature | Sentry -> SMD alert sink (ADR 0023 Wave 1). | `src/pages/api/webhooks/sentry.ts` |
 | `/api/webhooks/signwell` | POST | SignWell event hash | Receives webhook callbacks from SignWell when document events occur. | `src/pages/api/webhooks/signwell.ts` |
 | `/api/webhooks/stripe` | POST | Stripe signature | Receives webhook callbacks from Stripe when invoice events occur. | `src/pages/api/webhooks/stripe.ts` |
 

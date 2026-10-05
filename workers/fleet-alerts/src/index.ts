@@ -68,18 +68,25 @@
  * verification, plus GET /health.
  */
 
-import { CONNECTOR_DOWN_PREFIX, EDGE_DOWN_CONDITION } from './conditions'
+import { CONNECTOR_DOWN_PREFIX } from './conditions'
 import { runEdgePolls, type EdgePollResult } from './edge-poll'
-import { escapeHtml } from './html'
 import { notifySinkAlerts, type SinkNotification } from './sink-notify'
 import { notifySendRefusals, type SendRefusedNotification } from './send-refused'
+import {
+  DIGEST_CRON,
+  notifyShortfalls,
+  sendShortfallDigest,
+  type ShortfallNotification,
+} from './shortfalls'
+import { mintAlertMessageId } from './alert-thread'
+import { sendTransitionEmail } from './transition-email'
 import { getOpenSpecControlKeys, specControlConditions } from './spec-control'
 import { getStaleHolds } from './stale-holds'
 import { parseSeatLifetimes, tokenExpiryConditions } from './token-expiry'
 import { toolFailingConditions } from './tool-failing'
 import { getOpenWebhookSurfaceKeys, webhookSurfaceConditions } from './webhook-surface'
 import { gatewayLoopConditions, gatewayLoopRedSeconds } from './gateway-loop'
-import { conditionLabel, hardStopDetail } from './conditions'
+import { hardStopDetail } from './conditions'
 import { listFleetStatus, type FleetStatusRow } from './fleet-status'
 export { listFleetStatus, type FleetStatusRow } from './fleet-status'
 export { conditionLabel, hardStopDetail } from './conditions'
@@ -228,6 +235,8 @@ export interface RunSummary {
   stale_holds: StaleHold[]
   sink_notifications: SinkNotification[]
   send_refusals: SendRefusedNotification[]
+  /** 2026-10-05: what the Operator could not give a client (./shortfalls). */
+  shortfalls: ShortfallNotification[]
   /** One entry per configured edge target: what the probe saw and the counted run. */
   edge_polls: EdgePollResult[]
 }
@@ -514,24 +523,32 @@ async function getAlertState(
   db: D1Database,
   slug: string,
   condition: FleetCondition
-): Promise<'open' | 'resolved' | null> {
+): Promise<{ status: 'open' | 'resolved'; alert_message_id: string | null } | null> {
   const row = await db
-    .prepare('SELECT status FROM fleet_alert_state WHERE customer_slug = ? AND condition = ?')
+    .prepare(
+      'SELECT status, alert_message_id FROM fleet_alert_state WHERE customer_slug = ? AND condition = ?'
+    )
     .bind(slug, condition)
-    .first<{ status: 'open' | 'resolved' }>()
-  return row?.status ?? null
+    .first<{ status: 'open' | 'resolved'; alert_message_id: string | null }>()
+  return row ?? null
 }
 
-async function markOpen(db: D1Database, s: ConditionState, resendId: string | null): Promise<void> {
+async function markOpen(
+  db: D1Database,
+  s: ConditionState,
+  resendId: string | null,
+  messageId: string
+): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO fleet_alert_state (customer_slug, condition, status, opened_at, resolved_at, last_alert_id, updated_at)
-       VALUES (?, ?, 'open', datetime('now'), NULL, ?, datetime('now'))
+      `INSERT INTO fleet_alert_state (customer_slug, condition, status, opened_at, resolved_at, last_alert_id, alert_message_id, updated_at)
+       VALUES (?, ?, 'open', datetime('now'), NULL, ?, ?, datetime('now'))
        ON CONFLICT (customer_slug, condition) DO UPDATE SET
          status = 'open', opened_at = datetime('now'), resolved_at = NULL,
-         last_alert_id = excluded.last_alert_id, updated_at = datetime('now')`
+         last_alert_id = excluded.last_alert_id,
+         alert_message_id = excluded.alert_message_id, updated_at = datetime('now')`
     )
-    .bind(s.customer_slug, s.condition, resendId)
+    .bind(s.customer_slug, s.condition, resendId, messageId)
     .run()
 }
 
@@ -543,55 +560,6 @@ async function markResolved(db: D1Database, s: ConditionState): Promise<void> {
     )
     .bind(s.customer_slug, s.condition)
     .run()
-}
-
-async function sendTransitionEmail(
-  env: Env,
-  s: ConditionState,
-  kind: 'opened' | 'resolved'
-): Promise<{ ok: boolean; resendId?: string }> {
-  if (!env.RESEND_API_KEY) {
-    console.log(`[fleet-alerts] DEV: would email ${kind} ${s.condition} for ${s.customer_slug}`)
-    return { ok: false }
-  }
-  const label = conditionLabel(s.condition)
-  const subject =
-    kind === 'opened'
-      ? `[SMD Ops] ALERT ${s.customer_slug}: ${label}`
-      : `[SMD Ops] RECOVERED ${s.customer_slug}: ${label}`
-  const dashboard = `${env.ADMIN_BASE_URL ?? 'https://admin.smd.services'}/operator`
-  // Escaped: connector_down details embed the seat's `last_error_message`,
-  // which is arbitrary text from a customer Machine.
-  const html =
-    `<p><strong>${kind === 'opened' ? 'ALERT' : 'RECOVERED'}</strong>: ${escapeHtml(label)}</p>` +
-    `<ul><li>${s.condition === EDGE_DOWN_CONDITION ? 'Host' : 'Seat'}: ${escapeHtml(s.customer_slug)}</li>` +
-    `<li>Detail: ${escapeHtml(s.detail)}</li>` +
-    `<li>Severity: SEV1 per ADR 0064 - work begins on detection</li></ul>` +
-    `<p><a href="${dashboard}">Fleet dashboard</a>. No automatic action was taken (ADR 0064/0065).</p>`
-  try {
-    const resp = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: env.ALERT_FROM_EMAIL ?? 'SMD Services Ops <team@smd.services>',
-        to: env.ALERT_TO_EMAIL ?? 'team@smd.services',
-        subject,
-        html,
-      }),
-    })
-    if (!resp.ok) {
-      console.error(`[fleet-alerts] resend ${resp.status}: ${await resp.text()}`)
-      return { ok: false }
-    }
-    const data: { id?: string } = await resp.json()
-    return { ok: true, resendId: data.id }
-  } catch (err) {
-    console.error('[fleet-alerts] resend send failed:', err)
-    return { ok: false }
-  }
 }
 
 /**
@@ -619,10 +587,11 @@ async function pingAlerterHealthcheck(env: Env): Promise<void> {
  */
 async function processTransition(env: Env, s: ConditionState): Promise<Transition | null> {
   const prior = await getAlertState(env.DB, s.customer_slug, s.condition)
-  if (s.active && prior !== 'open') {
-    const sent = await sendTransitionEmail(env, s, 'opened')
+  if (s.active && prior?.status !== 'open') {
+    const messageId = mintAlertMessageId()
+    const sent = await sendTransitionEmail(env, s, 'opened', messageId)
     if (!sent.ok) return null
-    await markOpen(env.DB, s, sent.resendId ?? null)
+    await markOpen(env.DB, s, sent.resendId ?? null, messageId)
     return {
       customer_slug: s.customer_slug,
       condition: s.condition,
@@ -632,8 +601,8 @@ async function processTransition(env: Env, s: ConditionState): Promise<Transitio
       resendId: sent.resendId,
     }
   }
-  if (!s.active && prior === 'open') {
-    const sent = await sendTransitionEmail(env, s, 'resolved')
+  if (!s.active && prior?.status === 'open') {
+    const sent = await sendTransitionEmail(env, s, 'resolved', prior.alert_message_id)
     if (!sent.ok) return null
     await markResolved(env.DB, s)
     return {
@@ -646,6 +615,22 @@ async function processTransition(env: Env, s: ConditionState): Promise<Transitio
     }
   }
   return null
+}
+
+/** One log line per non-empty result list, so a quiet tick logs nothing. */
+function logRun(summary: RunSummary): void {
+  const lists: Array<[string, unknown[]]> = [
+    ['transitions', summary.transitions],
+    ['sink notifications', summary.sink_notifications],
+    ['send refusals', summary.send_refusals],
+    ['shortfalls', summary.shortfalls],
+  ]
+  for (const [name, list] of lists) {
+    if (list.length > 0) console.log(`[fleet-alerts] ${name}: ${JSON.stringify(list)}`)
+  }
+  if (summary.edge_polls.some((p) => !p.ok)) {
+    console.log(`[fleet-alerts] edge polls: ${JSON.stringify(summary.edge_polls)}`)
+  }
 }
 
 /** One evaluation pass: read fleet, compute conditions, fire edge transitions. */
@@ -713,6 +698,10 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
   // -- see ./send-refused for why a refusal has no green state to return to.
   const sendRefusals = await notifySendRefusals(env, rows)
 
+  // 2026-10-05: what the Operator could not give a client. Same placement and
+  // fail-soft shape as the two pagers above.
+  const shortfalls = await notifyShortfalls(env, rows, nowMs)
+
   const summary: RunSummary = {
     at: new Date(nowMs).toISOString(),
     seats: rows.length,
@@ -721,20 +710,10 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
     stale_holds: staleHolds,
     sink_notifications: sinkNotifications,
     send_refusals: sendRefusals,
+    shortfalls,
     edge_polls: edge.polls,
   }
-  if (transitions.length > 0) {
-    console.log(`[fleet-alerts] transitions: ${JSON.stringify(transitions)}`)
-  }
-  if (sinkNotifications.length > 0) {
-    console.log(`[fleet-alerts] sink notifications: ${JSON.stringify(sinkNotifications)}`)
-  }
-  if (sendRefusals.length > 0) {
-    console.log(`[fleet-alerts] send refusals: ${JSON.stringify(sendRefusals)}`)
-  }
-  if (edge.polls.some((p) => !p.ok)) {
-    console.log(`[fleet-alerts] edge polls: ${JSON.stringify(edge.polls)}`)
-  }
+  logRun(summary)
 
   // Watch the watcher: only reached when the run completed without throwing.
   await pingAlerterHealthcheck(env)
@@ -742,7 +721,11 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
 }
 
 export default {
-  async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
+  async scheduled(event: ScheduledEvent, env: Env): Promise<void> {
+    if (event.cron === DIGEST_CRON) {
+      await sendShortfallDigest(env)
+      return
+    }
     await runOnce(env)
   },
 
@@ -755,6 +738,9 @@ export default {
       const auth = request.headers.get('authorization') ?? ''
       if (!env.FLEET_ALERTS_BEARER || auth !== `Bearer ${env.FLEET_ALERTS_BEARER}`) {
         return Response.json({ error: 'unauthorized' }, { status: 401 })
+      }
+      if (url.searchParams.get('digest') === '1') {
+        return Response.json({ digest: await sendShortfallDigest(env) })
       }
       return Response.json(await runOnce(env))
     }

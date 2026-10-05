@@ -244,6 +244,13 @@ declare namespace Cloudflare {
      */
     SENTRY_WEBHOOK_SECRET?: string
     /**
+     * How `/api/webhooks/sentry` treats `issue`-resource deliveries: `page`
+     * (default) writes and emails them as `fleet`-or-tenant alerts; `ignore`
+     * acknowledges and drops them. Set `ignore` once the global alert rule
+     * delivers `event_alert` payloads, or every issue pages twice.
+     */
+    SENTRY_ISSUE_RESOURCE?: string
+    /**
      * Shared bearer token for inbound healthchecks.io webhook deliveries
      * to `/api/webhooks/healthchecks`. Healthchecks.io does NOT sign
      * webhooks, so the integration is configured with an

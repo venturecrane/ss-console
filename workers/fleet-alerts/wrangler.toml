@@ -23,7 +23,10 @@ database_name = "ss-console-db"
 database_id = "65171b23-d615-42a7-84e7-a4fac20d063c"
 
 [triggers]
-crons = ["*/2 * * * *"]
+# The 2-minute pager, and the Monday 08:11 Phoenix (15:11 UTC) digest of what
+# the Operator declined as not entitled. The digest string must equal
+# DIGEST_CRON in src/shortfalls.ts: scheduled() routes on event.cron.
+crons = ["*/2 * * * *", "11 15 * * 1"]
 
 [vars]
 ALERT_FROM_EMAIL = "SMD Services Ops <team@smd.services>"
