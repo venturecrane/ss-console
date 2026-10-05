@@ -1,30 +1,43 @@
 /**
  * POST /api/webhooks/sentry
  *
- * Sentry alert-rule webhook receiver (ADR 0023 Wave 1). Configured as
- * an Internal Integration webhook in the shared `smd-operator` Sentry
- * project; each customer's alert rules POST here when they fire.
+ * Sentry -> SMD alert sink (ADR 0023 Wave 1). The `smd-ops-alert-bridge`
+ * Internal Integration in the shared `smd-operator` project POSTs here; each
+ * accepted delivery writes one `cost_anomaly_alerts` row with
+ * `source='sentry'`, which the fleet-alerts Worker emails to team@smd.services
+ * (`workers/fleet-alerts/src/sink-notify.ts`).
  *
- * Auth: HMAC-SHA256 over the raw body, signature in
- * `Sentry-Hook-Signature` header, key = `SENTRY_WEBHOOK_SECRET`
- * (the Internal Integration's Client Secret). Replay protection via
- * `Sentry-Hook-Timestamp` header — events older than 5 minutes rejected.
+ * WHY THIS ACCEPTS TWO PAYLOAD SHAPES (2026-10-05). The receiver was written
+ * for alert-rule deliveries (`Sentry-Hook-Resource: event_alert`), whose
+ * `data.event.tags` carries the `tenant` tag the overlay sets at SDK init. But
+ * no alert rule ever pointed at the integration; it was subscribed to the
+ * `issue` resource instead, whose payload carries no tags at all. Every
+ * delivery from 2026-09-14 to 2026-10-01 was refused `missing_tenant_tag`
+ * (19 of 19, read from Sentry's own delivery log), so no Operator error ever
+ * reached anyone. Many issues also carry no tenant tag, or span several seats.
+ * An unattributable error is still an error: it is now written against the
+ * `fleet` slug and paged, never refused.
+ *
+ *   - `event_alert`: attributed to the `tenant` tag when it names a known seat,
+ *     otherwise `fleet`.
+ *   - `issue`: paged only when `SENTRY_ISSUE_RESOURCE` is `page` (the default
+ *     until the alert rule exists; set `ignore` once it does, or every issue
+ *     pages twice). Only `created` and `unresolved` page; assignment,
+ *     resolution and archive are acknowledged and dropped.
+ *   - anything else: acknowledged and dropped.
+ *
+ * One row per Sentry issue per day (`driver = sentry:<issue id>`); the old
+ * upsert keyed every error on a seat to one row per day, so a second error on
+ * the same day was never emailed. A repeat delivery for the same issue re-pages
+ * it, but at most once per REPAGE_HOURS and never once someone acknowledged the
+ * row: a noisy issue must not turn into an email every two minutes.
+ *
+ * Auth: HMAC-SHA256 over the raw body, signature in `Sentry-Hook-Signature`,
+ * key = `SENTRY_WEBHOOK_SECRET` (the Internal Integration's Client Secret).
+ * Replay protection via `Sentry-Hook-Timestamp`: older than 5 minutes is
+ * refused.
  *
  * Ref: https://docs.sentry.io/organization/integrations/integration-platform/webhooks/
- *
- * On valid delivery, writes one `cost_anomaly_alerts` row with
- * `source='sentry'` so the admin dashboard banner surfaces it alongside
- * cost-anomaly rows (single alerts surface per ADR 0023 §"Cross-cutting
- * calls" #9). Cost-specific columns (`daily_cents` etc.) carry 0 sentinels
- * for non-cost rows; the dashboard reader switches on `source` for display.
- *
- * Tenant identification: the alert payload's `installation.uuid` or
- * `data.event.tags` carries the `tenant` tag set at SDK init in the
- * overlay (`sentry-sdk.set_tag('tenant', customer_id)`). Wave 1 expects
- * each Sentry alert rule to be configured per-customer with a `tenant`
- * tag filter, so the delivered payload always includes the tag — we
- * read it from the event tags directly. If the tag is missing the row
- * is rejected (400) rather than misattributed.
  */
 
 import { jsonResponse, errorResponse, isRecord, parseJsonRecord } from '../../../lib/api/helpers'
@@ -34,6 +47,23 @@ import { env } from 'cloudflare:workers'
 
 const MAX_WEBHOOK_AGE_SECONDS = 300
 
+/** A Sentry issue already emailed today pages again only after this many hours. */
+export const REPAGE_HOURS = 6
+
+/** The slug an unattributable Sentry error is paged under. */
+export const FLEET_SLUG = 'fleet'
+
+/**
+ * The seat whose entity owns `fleet` rows. The sink table keys every row to an
+ * entity, and SMD's own seats roll up to SMD's own entity, so an error that
+ * cannot be pinned to one client lands on SMD rather than on a client. Looked
+ * up at runtime; a miss is a loud 500, never a silent drop.
+ */
+export const FLEET_ENTITY_SEAT = 'scott'
+
+/** Issue actions that mean "something is broken now". */
+const PAGING_ISSUE_ACTIONS = new Set(['created', 'unresolved'])
+
 /** Step into a parsed JSON value by key; undefined when it is not an object. */
 function field(value: unknown, key: string): unknown {
   return isRecord(value) ? value[key] : undefined
@@ -41,7 +71,46 @@ function field(value: unknown, key: string): unknown {
 
 function stringField(value: unknown, key: string): string | undefined {
   const v = field(value, key)
-  return typeof v === 'string' ? v : undefined
+  if (typeof v === 'string') return v
+  if (typeof v === 'number') return String(v)
+  return undefined
+}
+
+/** What a delivery is about, once its shape is known. */
+export interface SentryDelivery {
+  /** Sentry issue (group) id; the row's identity. */
+  issueId: string
+  /** Seat slug from the `tenant` tag, or null when there is none. */
+  tenant: string | null
+  summary: string
+}
+
+/**
+ * Decide what a verified delivery means. Returns null for a delivery that is
+ * acknowledged but does not page.
+ */
+export function interpretDelivery(
+  resource: string,
+  payload: Record<string, unknown>,
+  issueResourceMode: string
+): SentryDelivery | null {
+  const action = stringField(payload, 'action') ?? ''
+  const data = field(payload, 'data')
+  if (resource === 'event_alert') {
+    const event = field(data, 'event')
+    const issueId = stringField(event, 'issue_id') ?? stringField(event, 'group_id')
+    if (!issueId) return null
+    return { issueId, tenant: extractTenantTag(event), summary: buildSummary(data) }
+  }
+  if (resource === 'issue') {
+    if (issueResourceMode !== 'page') return null
+    if (!PAGING_ISSUE_ACTIONS.has(action)) return null
+    const issue = field(data, 'issue')
+    const issueId = stringField(issue, 'id')
+    if (!issueId) return null
+    return { issueId, tenant: null, summary: buildSummary(data) }
+  }
+  return null
 }
 
 export const POST: APIRoute = async ({ request }) => {
@@ -51,6 +120,87 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   const rawBody = await request.text()
+  if (isRuleSettingsSubmission(request, rawBody)) {
+    return jsonResponse(200, { ok: true, source: 'sentry', settings: 'accepted' })
+  }
+  const refused = await refuseUnverified(request, rawBody, secret)
+  if (refused) return refused
+
+  // Parsed as unknown and read field by field (review 2026-09-25, Code
+  // Quality 2): the signature proves Sentry sent it, not its shape.
+  const payload = parseJsonRecord(rawBody)
+  if (!payload) return errorResponse(400, 'invalid_json')
+
+  // An absent header is read as event_alert: that is the shape this receiver
+  // was built for, and the one a hand-signed test delivery sends.
+  const resource = request.headers.get('sentry-hook-resource') ?? 'event_alert'
+  const delivery = interpretDelivery(resource, payload, env.SENTRY_ISSUE_RESOURCE ?? 'page')
+  if (!delivery) {
+    return jsonResponse(200, { ok: true, source: 'sentry', paged: false, resource })
+  }
+
+  const seat = await resolveSeat(delivery.tenant)
+  if (!seat) {
+    return misconfiguredResponse('webhook/sentry', `customer_configs row for ${FLEET_ENTITY_SEAT}`)
+  }
+
+  const alertDate = new Date().toISOString().slice(0, 10)
+  await env.DB.prepare(
+    `INSERT INTO cost_anomaly_alerts (
+       entity_id, customer_slug, alert_date, driver, source,
+       daily_cents, rolling_avg_cents, ratio_bps, threshold_bps,
+       summary, details_json, detected_at
+     ) VALUES (?, ?, ?, ?, 'sentry', 0, 0, 0, 0, ?, ?, datetime('now'))
+     ON CONFLICT(entity_id, alert_date, driver) DO UPDATE SET
+       summary       = excluded.summary,
+       details_json  = excluded.details_json,
+       detected_at   = excluded.detected_at,
+       notified_at   = CASE
+         WHEN cost_anomaly_alerts.acknowledged_at IS NOT NULL THEN cost_anomaly_alerts.notified_at
+         WHEN cost_anomaly_alerts.notified_at < datetime('now', '-${REPAGE_HOURS} hours') THEN NULL
+         ELSE cost_anomaly_alerts.notified_at
+       END`
+  )
+    .bind(
+      seat.entityId,
+      seat.slug,
+      alertDate,
+      `sentry:${delivery.issueId}`,
+      delivery.summary,
+      rawBody
+    )
+    .run()
+
+  return jsonResponse(200, { ok: true, source: 'sentry', paged: true, tenant: seat.slug })
+}
+
+/**
+ * Sentry's alert-rule settings submission (2026-10-05). When an alert rule that
+ * uses this integration's "Send to SMD ops console" action is SAVED, Sentry
+ * POSTs the action's form (`fields`: the "note") to the integration's settings
+ * URI, which is this route, and shows any 4xx to the person saving the rule.
+ * That request carries no `Sentry-Hook-Signature`, so the webhook checks
+ * refused it ("A signature is required.") and the rule could not be created.
+ * Accepted with a 200 and nothing written: it changes no state, so leaving it
+ * unauthenticated exposes nothing. A signed delivery never takes this path.
+ * Ref: https://docs.sentry.io/organization/integrations/integration-platform/ui-components/alert-rule-action/
+ */
+function isRuleSettingsSubmission(request: Request, rawBody: string): boolean {
+  if (request.headers.get('sentry-hook-signature')) return false
+  if (request.headers.get('sentry-hook-resource')) return false
+  const body = parseJsonRecord(rawBody)
+  return body !== null && Array.isArray(body.fields)
+}
+
+/**
+ * The signature and replay checks. Returns the refusal, or null when the
+ * delivery is Sentry's and fresh.
+ */
+async function refuseUnverified(
+  request: Request,
+  rawBody: string,
+  secret: string
+): Promise<Response | null> {
   const signatureHeader = request.headers.get('sentry-hook-signature') ?? ''
   const timestampHeader = request.headers.get('sentry-hook-timestamp') ?? ''
 
@@ -77,68 +227,56 @@ export const POST: APIRoute = async ({ request }) => {
     console.error(`[webhook/sentry] stale webhook (age ${ageSec}s)`)
     return errorResponse(401, 'stale')
   }
-
-  // Parsed as unknown and read field by field (review 2026-09-25, Code
-  // Quality 2): the signature proves Sentry sent it, not its shape.
-  const payload = parseJsonRecord(rawBody)
-  if (!payload) return errorResponse(400, 'invalid_json')
-
-  const tenant = extractTenantTag(payload)
-  if (!tenant) {
-    console.warn('[webhook/sentry] payload missing tenant tag; rejected')
-    return errorResponse(400, 'missing_tenant_tag')
-  }
-
-  const entityRow = await env.DB.prepare(
-    'SELECT entity_id FROM customer_configs WHERE customer_slug = ?'
-  )
-    .bind(tenant)
-    .first<{ entity_id: string }>()
-  if (!entityRow) {
-    console.warn(`[webhook/sentry] tenant ${tenant} not found in customer_configs`)
-    return errorResponse(404, 'unknown_tenant')
-  }
-
-  const summary = buildSummary(payload)
-  const alertDate = new Date().toISOString().slice(0, 10)
-
-  await env.DB.prepare(
-    `INSERT INTO cost_anomaly_alerts (
-       entity_id, customer_slug, alert_date, driver, source,
-       daily_cents, rolling_avg_cents, ratio_bps, threshold_bps,
-       summary, details_json, detected_at
-     ) VALUES (?, ?, ?, '', 'sentry', 0, 0, 0, 0, ?, ?, datetime('now'))
-     ON CONFLICT(entity_id, alert_date, driver) DO UPDATE SET
-       summary       = excluded.summary,
-       details_json  = excluded.details_json,
-       detected_at   = excluded.detected_at`
-  )
-    .bind(entityRow.entity_id, tenant, alertDate, summary, rawBody)
-    .run()
-
-  return jsonResponse(200, { ok: true, source: 'sentry', tenant })
+  return null
 }
 
-function extractTenantTag(payload: Record<string, unknown>): string | null {
-  const tags = field(field(field(payload, 'data'), 'event'), 'tags')
+async function entityFor(slug: string): Promise<string | null> {
+  const row = await env.DB.prepare('SELECT entity_id FROM customer_configs WHERE customer_slug = ?')
+    .bind(slug)
+    .first<{ entity_id: string }>()
+  return row?.entity_id ?? null
+}
+
+/**
+ * The seat a delivery pages under: the tenant it names when the console knows
+ * that seat, otherwise `fleet` on SMD's own entity. Null only when SMD's own
+ * seat is missing, which is a misconfiguration and must be loud.
+ */
+async function resolveSeat(
+  tenant: string | null
+): Promise<{ slug: string; entityId: string } | null> {
+  if (tenant) {
+    const entityId = await entityFor(tenant)
+    if (entityId) return { slug: tenant, entityId }
+    console.warn(`[webhook/sentry] tenant ${tenant} not in customer_configs; paging as fleet`)
+  }
+  const fleetEntity = await entityFor(FLEET_ENTITY_SEAT)
+  return fleetEntity ? { slug: FLEET_SLUG, entityId: fleetEntity } : null
+}
+
+/** The `tenant` tag from an event's `[key, value]` tag pairs, or null. */
+export function extractTenantTag(event: unknown): string | null {
+  const tags = field(event, 'tags')
   if (!Array.isArray(tags)) return null
   const entries: unknown[] = tags
   for (const entry of entries) {
     if (Array.isArray(entry) && entry[0] === 'tenant' && typeof entry[1] === 'string') {
-      return entry[1]
+      const value = entry[1].trim()
+      return value && value !== 'unknown' ? value : null
     }
   }
   return null
 }
 
-function buildSummary(payload: Record<string, unknown>): string {
-  const data = field(payload, 'data')
+function buildSummary(data: unknown): string {
   const issue = field(data, 'issue')
-  const issueTitle = stringField(issue, 'title') ?? stringField(field(data, 'event'), 'title')
+  const event = field(data, 'event')
+  const title = stringField(issue, 'title') ?? stringField(event, 'title')
   const shortId = stringField(issue, 'shortId')
-  if (issueTitle && shortId) return `Sentry ${shortId}: ${issueTitle}`
-  if (issueTitle) return `Sentry alert: ${issueTitle}`
-  return `Sentry alert (action: ${stringField(payload, 'action') ?? 'unknown'})`
+  const url = stringField(event, 'web_url') ?? stringField(issue, 'web_url')
+  const head =
+    title && shortId ? `Sentry ${shortId}: ${title}` : title ? `Sentry: ${title}` : 'Sentry alert'
+  return url ? `${head} (${url})` : head
 }
 
 async function verifyHmac(rawBody: string, signatureHex: string, secret: string): Promise<boolean> {

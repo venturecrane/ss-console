@@ -218,6 +218,8 @@ interface FakeState {
   sinkQueryThrows?: boolean
   /** edge_poll_state counters by target (wave 8.2). Absent = never probed. */
   edge?: Map<string, { consecutive_failures: number; consecutive_successes: number }>
+  /** Message-ID minted for each open alert (migration 0120), by `slug:condition`. */
+  messageIds?: Map<string, string>
 }
 
 function sinkRow(over: Partial<FakeSinkRow> = {}): FakeSinkRow {
@@ -290,6 +292,9 @@ function makeEnv(state: FakeState, withResend = true, extra: Partial<Env> = {}):
           if (sql.includes('FROM fleet_status')) {
             return Promise.resolve({ results: state.fleet })
           }
+          if (sql.includes('FROM operator_shortfalls')) {
+            return Promise.resolve({ results: [] })
+          }
           if (sql.includes('FROM edge_poll_state')) {
             // Retirement lists every counters row (wave 8.2 follow-up).
             return Promise.resolve({
@@ -313,6 +318,10 @@ function makeEnv(state: FakeState, withResend = true, extra: Partial<Env> = {}):
               // parameters). NOTE: this returns a TypeScript reimplementation,
               // NOT the query. The SQL itself is exercised against real SQLite
               // in stale-holds.test.ts; assertions here cannot see it.
+              if (sql.includes('FROM operator_shortfalls')) {
+                // The shortfall pager has its own executed suite (shortfalls.test.ts).
+                return Promise.resolve({ results: [] })
+              }
               if (sql.includes('LEFT JOIN fleet_status')) {
                 return Promise.resolve({ results: computeStaleHolds(state) })
               }
@@ -344,10 +353,16 @@ function makeEnv(state: FakeState, withResend = true, extra: Partial<Env> = {}):
                 throw new Error(`unexpected first(): ${sql}`)
               }
               const status = state.alertState.get(key)
-              return Promise.resolve(status ? { status } : null)
+              return Promise.resolve(
+                status ? { status, alert_message_id: state.messageIds?.get(key) ?? null } : null
+              )
             },
             run() {
               if (sql.includes('INSERT INTO fleet_alert_state')) {
+                if (typeof args[3] === 'string') {
+                  state.messageIds ??= new Map()
+                  state.messageIds.set(key, args[3])
+                }
                 state.alertState.set(key, 'open')
                 state.writes.push(`open:${key}`)
               } else if (sql.includes("SET status = 'resolved'")) {
@@ -451,6 +466,37 @@ describe('runOnce edge triggering', () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body))
     expect(body.subject).toContain('RECOVERED smd')
     expect(state.alertState.get('smd:heartbeat_red')).toBe('resolved')
+  })
+
+  it('threads the recovery under its alert in one inbox conversation', async () => {
+    const fetchMock = stubResend()
+    const state: FakeState = {
+      fleet: [row({ last_heartbeat_ts: '2026-07-04T11:00:00.000Z' })],
+      alertState: new Map(),
+      writes: [],
+    }
+    await runOnce(makeEnv(state), NOW)
+    state.fleet = [row({})]
+    await runOnce(makeEnv(state), NOW)
+    const [alert, recovery] = fetchMock.mock.calls.map((c) => JSON.parse(String(c[1].body)))
+    const messageId = alert.headers['Message-ID']
+    expect(messageId).toMatch(/^<smd-alert\.[0-9a-f-]+@smd\.services>$/)
+    expect(state.messageIds?.get('smd:heartbeat_red')).toBe(messageId)
+    expect(recovery.subject).toBe(`Re: ${alert.subject}`)
+    expect(recovery.headers).toEqual({ 'In-Reply-To': messageId, References: messageId })
+  })
+
+  it('an alert opened before migration 0120 recovers with the standalone subject', async () => {
+    const fetchMock = stubResend()
+    const state: FakeState = {
+      fleet: [row({})],
+      alertState: new Map([['smd:heartbeat_red', 'open']]),
+      writes: [],
+    }
+    await runOnce(makeEnv(state), NOW)
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body))
+    expect(body.subject).toContain('[SMD Ops] RECOVERED smd')
+    expect(body.headers).toBeUndefined()
   })
 
   it('HARD_STOP opens its own condition independently of the heartbeat', async () => {

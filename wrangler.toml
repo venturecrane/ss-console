@@ -51,6 +51,12 @@ MEETING_URL = "https://zoom.us/j/4284801619"
 # page returning 404.
 ENABLE_PUBLIC_PATTERNS = "0"
 
+# Sentry issue-resource deliveries to /api/webhooks/sentry: "page" or "ignore".
+# "page" until the global Sentry alert rule (event_alert payloads, which carry
+# the tenant tag) exists; then "ignore", or every issue pages twice. See the
+# header of src/pages/api/webhooks/sentry.ts.
+SENTRY_ISSUE_RESOURCE = "page"
+
 # ---------- D1 (structured data) ----------
 [[d1_databases]]
 binding = "DB"

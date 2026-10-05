@@ -53,6 +53,16 @@ export interface FleetStatusRow {
    * Optional on the type for the same reason as the 0109 trio.
    */
   tool_failures_json?: string | null
+  /**
+   * 2026-10-05 (migration 0120). What the Operator could not give a client,
+   * from every session: count, newest marker, and the oldest 20 events. Read
+   * by shortfalls.ts. Optional for the same reason as the 0109 trio.
+   */
+  shortfalls?: number | null
+  shortfalls_last_ts?: string | null
+  shortfalls_json?: string | null
+  /** Lost audit writes; carried into the shortfall email so an undercount shows. */
+  audit_write_failures?: number | null
 }
 
 export async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]> {
@@ -67,7 +77,8 @@ export async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]>
               gateway_loop_ok, gateway_loop_age_seconds,
               gateway_supervisor_state, gateway_restarts_last_hour,
               send_refusals, send_refusals_last_ts, send_refusals_json,
-              tool_failures_json
+              tool_failures_json,
+              shortfalls, shortfalls_last_ts, shortfalls_json, audit_write_failures
          FROM fleet_status`
     )
     .all<FleetStatusRow>()

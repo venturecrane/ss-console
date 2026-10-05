@@ -44,6 +44,9 @@ export interface HeartbeatBody {
   send_refusals_last_ts?: unknown
   send_refusals_json?: unknown
   tool_failures?: unknown
+  shortfalls?: unknown
+  shortfalls_last_ts?: unknown
+  shortfalls_json?: unknown
 }
 
 // The breaker ladder vocabulary (overlay shared/cost_breaker.read_stop_state).
@@ -372,6 +375,55 @@ function parseToolFailuresJson(value: unknown): string | null {
   return JSON.stringify(parsed)
 }
 
+// 2026-10-05: what the Operator could not give a client (overlay
+// shared/heartbeat.count_shortfalls). Each event reaches an ops inbox, so the
+// shape is closed: a class from four words, a tool and routine that look like
+// identifiers, a code from the seat's closed vocabulary (a reason enum, a gate
+// prefix, or "filed N of M") and a stable key. Anything else is dropped per
+// entry; a list that is not a list, or is longer than the seat may send, is
+// NULL. The pager pages from the events, so a NULL list pages nothing that
+// beat: the seat caps the list at 20 and re-sends the same window every beat,
+// so an event lost to one bad beat arrives on the next.
+const SHORTFALL_MAX_ENTRIES = 20
+const SHORTFALL_CLASSES = new Set(['not_allowed', 'limit', 'failed', 'partial'])
+const SHORTFALL_NAME_RE = /^[A-Za-z0-9_.:-]{1,80}$/
+const SHORTFALL_CODE_RE = /^[A-Za-z0-9_:. -]{1,80}$/
+const SHORTFALL_KEY_RE = /^[A-Za-z0-9_:.-]{1,128}$/
+
+/** A string that matches `re`, else null. */
+function matching(value: unknown, re: RegExp): string | null {
+  return typeof value === 'string' && re.test(value) ? value : null
+}
+
+/** An absent routine is a person's request (null); a present one must be well-formed. */
+function parseShortfallRoutine(value: unknown): string | null | false {
+  if (value === null || value === undefined || value === '') return null
+  return matching(value, SHORTFALL_NAME_RE) ?? false
+}
+
+function parseShortfallEntry(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const raw = value as Record<string, unknown>
+  const ts = parseIsoInstant(raw.ts)
+  const cls = typeof raw.class === 'string' && SHORTFALL_CLASSES.has(raw.class) ? raw.class : null
+  const tool = matching(raw.tool, SHORTFALL_NAME_RE)
+  const code = matching(raw.code, SHORTFALL_CODE_RE)
+  const key = matching(raw.key, SHORTFALL_KEY_RE)
+  const routine = parseShortfallRoutine(raw.routine)
+  if (ts === null || !cls || !tool || !code || !key || routine === false) return null
+  return { ts, class: cls, tool, routine, code, key }
+}
+
+export function parseShortfallsJson(value: unknown): string | null {
+  if (!Array.isArray(value) || value.length > SHORTFALL_MAX_ENTRIES) return null
+  const parsed: Array<Record<string, unknown>> = []
+  for (const raw of value) {
+    const entry = parseShortfallEntry(raw)
+    if (entry !== null) parsed.push(entry)
+  }
+  return JSON.stringify(parsed)
+}
+
 /**
  * Every alert-driving field, parsed-not-cast.
  *
@@ -440,6 +492,12 @@ export function parseObservability(body: HeartbeatBody) {
     // (plain overwrite, NULL = hold): a zero entry resolves, an absent key
     // holds, and a seat that cannot read its ledger omits the field.
     toolFailuresJson: parseToolFailuresJson(body.tool_failures),
+    // 2026-10-05: what the Operator could not give a client, from every
+    // session. Event-shaped like send_refusals and stored the same way
+    // (COALESCE): an unreported beat holds. See migration 0120.
+    shortfalls: parseNonNegInt(body.shortfalls),
+    shortfallsLastTs: parseIsoInstant(body.shortfalls_last_ts),
+    shortfallsJson: parseShortfallsJson(body.shortfalls_json),
   }
 }
 

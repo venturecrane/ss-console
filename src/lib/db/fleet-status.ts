@@ -54,6 +54,9 @@ export interface FleetStatusUpsert {
   sendRefusalsLastTs: string | null
   sendRefusalsJson: string | null
   toolFailuresJson: string | null
+  shortfalls: number | null
+  shortfallsLastTs: string | null
+  shortfallsJson: string | null
 }
 
 /**
@@ -81,8 +84,9 @@ const FLEET_STATUS_UPSERT_SQL = `INSERT INTO fleet_status (
        audit_write_failures, audit_head, audit_rows,
        gateway_loop_ok, gateway_loop_age_seconds, gateway_supervisor_state,
        gateway_restarts_last_hour,
-       send_refusals, send_refusals_last_ts, send_refusals_json, tool_failures_json, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+       send_refusals, send_refusals_last_ts, send_refusals_json, tool_failures_json,
+       shortfalls, shortfalls_last_ts, shortfalls_json, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(customer_slug) DO UPDATE SET
        entity_id               = excluded.entity_id,
        last_heartbeat_ts       = excluded.last_heartbeat_ts,
@@ -116,6 +120,9 @@ const FLEET_STATUS_UPSERT_SQL = `INSERT INTO fleet_status (
        send_refusals_last_ts   = COALESCE(excluded.send_refusals_last_ts, fleet_status.send_refusals_last_ts),
        send_refusals_json      = COALESCE(excluded.send_refusals_json, fleet_status.send_refusals_json),
        tool_failures_json      = excluded.tool_failures_json,
+       shortfalls              = COALESCE(excluded.shortfalls, fleet_status.shortfalls),
+       shortfalls_last_ts      = COALESCE(excluded.shortfalls_last_ts, fleet_status.shortfalls_last_ts),
+       shortfalls_json         = COALESCE(excluded.shortfalls_json, fleet_status.shortfalls_json),
        updated_at              = datetime('now')`
 
 export async function upsertFleetStatus(db: D1Database, u: FleetStatusUpsert): Promise<void> {
@@ -154,7 +161,10 @@ export async function upsertFleetStatus(db: D1Database, u: FleetStatusUpsert): P
       u.sendRefusals,
       u.sendRefusalsLastTs,
       u.sendRefusalsJson,
-      u.toolFailuresJson
+      u.toolFailuresJson,
+      u.shortfalls,
+      u.shortfallsLastTs,
+      u.shortfallsJson
     )
     .run()
 }
