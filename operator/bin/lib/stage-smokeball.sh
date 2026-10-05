@@ -141,5 +141,28 @@ print(str(sb.get('region', 'us')).strip().lower())
     stage_secret_from_env WEBHOOK_SMOKEBALL_CLIENT_ID "${_SB_WH_CID}" "Smokeball API ClientId fed into the webhook HMAC (per-customer ${_SB_WH_CID_KEY}, else = SMOKEBALL_CLIENT_ID)"
     unset _SB_WH_KEY _SB_WH_SECRET _SB_WH_CID_KEY _SB_WH_CID
   fi
+  # Records orders (2026-10-05): the connector's three records-order tools
+  # (smokeball_connector/records_*.py) call the firm's records-retrieval vendor
+  # with the FIRM'S OWN API token, minted in that vendor's portal. Three values,
+  # all per customer ONLY, from <NAME>__<CUSTOMER_ID> in /ss:
+  #   RECORDS_VENDOR_API_TOKEN  the token (secret)
+  #   RECORDS_VENDOR_API_URL    the vendor's API base, https
+  #   RECORDS_VENDOR_NAME       the name the administrator's read-back shows
+  # Deliberately NO global fallback for any of them: a token is one firm's
+  # account, and a fallback would place one firm's orders on another firm's
+  # account. Why the vendor's identity is staged rather than written in this
+  # tree: this repo is public and the vendor a firm uses is the firm's
+  # information (tests/medchron-scrub.test.ts). A seat with no token or URL
+  # stages nothing, and the tools say the records vendor is not connected.
+  _RV_SUFFIX="$(printf '%s' "${CUSTOMER_ID}" | tr '[:lower:]-' '[:upper:]_' | tr -cd 'A-Z0-9_')"
+  for _rv_name in RECORDS_VENDOR_API_TOKEN RECORDS_VENDOR_API_URL RECORDS_VENDOR_NAME; do
+    _rv_key="${_rv_name}__${_RV_SUFFIX}"
+    if [ -n "${!_rv_key:-}" ]; then
+      stage_secret_from_env "${_rv_name}" "${!_rv_key}" "records-order tools: per-customer ${_rv_key}; no global fallback"
+    else
+      log "records vendor: ${_rv_key} not in the operator env; the records-order tools stay not connected on this seat"
+    fi
+  done
+  unset _RV_SUFFIX _rv_name _rv_key
   unset SB_PARSE_PY SB_FIELDS SB_ENV SB_AUTH_MODE SB_ACCOUNT_ID _sb_cid _sb_sec _sb_key _sb_src
 fi

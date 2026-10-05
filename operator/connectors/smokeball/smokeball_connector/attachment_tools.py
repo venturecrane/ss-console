@@ -25,6 +25,7 @@ from .medicals_tools import register as _register_medicals_tools
 from .memo_tools import register as _register_memo_tools
 from .vendor_invoice_tools import register as _register_vendor_invoice_tools
 from .workbook_tools import register as _register_workbook_tools
+from .records_order_tools import register as _register_records_order_tools
 
 
 def register(server: Any) -> None:
@@ -48,6 +49,8 @@ def register(server: Any) -> None:
     _register_medicals_tools(server)
     _register_medicals_provider_tools(server)
     _register_form_letter_tools(server)
+    # The records-order tools (records_order_tools.py), after everything else.
+    _register_records_order_tools(server)
 
 
 __all__ = ["register"]

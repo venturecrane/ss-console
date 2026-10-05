@@ -1477,7 +1477,8 @@ describe('Operator customer Machine Dockerfile', () => {
     // form letter and the Medicals provider tools as internal writes.
     // 1c4e123d -> b8d64ba7 (2026-10-05, overlay#413 merge commit). audit outcome v3 records a
     // shortfall (refused, limit, unrecovered, filed short) and the heartbeat reports it.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="b8d64ba7b2cd8857505ec3ab4696556eb9c63e7f"')
+    // b8d64ba7 -> a109c271 (overlay#415), 2026-10-05: the medical-records order is a call-payload commitment act.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="a109c271213d91ce763ec9e2994c14758aa3011e"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

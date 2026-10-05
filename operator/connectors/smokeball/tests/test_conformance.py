@@ -74,6 +74,9 @@ EXPECTED_TOOLS = {
     "update_memo",
     "render_docx_template",
     "render_docx_draft",
+    "prepare_records_order",
+    "place_records_order",
+    "records_orders_for_matter",
 }
 
 _SCRIPT = shutil.which("smokeball-mcp")
@@ -122,6 +125,9 @@ def test_conformance_every_tool_classified() -> None:
     assert runtime_map[runtime_tool_name("smokeball", "list_matters")] == "read"
     assert runtime_map[runtime_tool_name("smokeball", "read_attachment_text")] == "read"
     assert runtime_map[runtime_tool_name("smokeball", "stage_vendor_invoice")] == "internal_write"
+    assert runtime_map[runtime_tool_name("smokeball", "prepare_records_order")] == "read"
+    assert runtime_map[runtime_tool_name("smokeball", "place_records_order")] == "commitment"
+    assert runtime_map[runtime_tool_name("smokeball", "records_orders_for_matter")] == "read"
 
 
 def test_write_surface_is_memo_document_and_deadline_engine() -> None:
@@ -194,6 +200,13 @@ def test_write_surface_is_memo_document_and_deadline_engine() -> None:
         # A workbook built in code from JSON rows and filed on the matter: the
         # same two-stage upload as add_file, bytes never composed by the model.
         "add_workbook": "internal_write",
+        # A medical-records order for one matter (2026-10-05).
+        # COMMITMENT for the same reason as create_matter: it spends the firm's
+        # money with a vendor and starts a custodian request, so it is never
+        # autonomous. It is a call-payload act: withheld at `commitment:
+        # confirm`, the broker renders the whole order into the [act ...] line,
+        # and only a Named Administrator's yes replays the stored order.
+        "place_records_order": "commitment",
     }
 
 

@@ -322,6 +322,30 @@ vars:
   # key would be one more thing to rotate for no narrowing of exposure.
   # What IS declared here is the tuning surface — model, the two cost fences,
   # the kill switch, and the transcription cache.
+  # Records orders (2026-10-05): the smokeball MCP subprocess's three
+  # records-order tools call the firm's records-retrieval vendor. All three
+  # values are staged per customer only, from <NAME>__<CUSTOMER_ID> in /ss, never
+  # from a global value (bin/lib/stage-smokeball.sh). Without the token or the
+  # URL those tools report "not connected"; the rest of the connector is
+  # unaffected. The vendor is not named in this public tree on purpose.
+  RECORDS_VENDOR_API_TOKEN:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: customer
+    note: the firm's own records-vendor API token (Bearer).
+  RECORDS_VENDOR_API_URL:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: customer
+    note: the firm's records vendor's API base URL; https only, else not connected.
+  RECORDS_VENDOR_NAME:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: customer
+    note: the vendor's display name the administrator's read-back shows; default "the records vendor".
   SMOKEBALL_VISION_MODEL:
     stage: mcp-subprocess
     requirement: optional

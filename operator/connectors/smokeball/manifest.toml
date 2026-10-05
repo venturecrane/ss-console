@@ -56,6 +56,26 @@
 # falls through to `if not approved: _refuse(...)` at enforce.py:443. Nothing is
 # created and nothing crashes. The confirm path is the overlay half of this
 # work; this half is the tool and the proposal channel.
+# COORDINATED CHANGE (records orders, 2026-10-05): three tools on this
+# connector order medical records from the firm's records-retrieval vendor for a
+# Smokeball matter
+# (smokeball_connector/records_*.py; why they live here and not in a connector of
+# their own is in records_vendor.py's header). prepare_records_order and
+# records_orders_for_matter are reads; place_records_order is COMMITMENT and a
+# call-payload act: the overlay withholds it at an authored `commitment: confirm`,
+# the broker renders the order as the [act ...] line
+# (operator/workspace_broker/act_records_order.py), and only a Named
+# Administrator's yes replays the stored order. Matching overlay entries:
+# shared/action_classes.py (the three classes) and shared/act_broker.py
+# (CALL_PAYLOAD_ACTS), plus an OVERLAY_REF bump.
+#
+# RECORDS_VENDOR_API_TOKEN / _API_URL / _NAME are deliberately NOT required_secrets:
+# they are the firm's own records-vendor account, staged only on a seat whose firm
+# has one (bin/lib/stage-smokeball.sh, per customer, no global fallback). Absent,
+# the three tools answer "The records vendor is not connected on this seat" and
+# every other tool here is untouched. The overlay registry carries them as
+# OPTIONAL connector env (bootstrap/mcp_registry.py env_secrets_optional). The
+# vendor is not named in this public tree; see records_vendor.py's header.
 [connector]
 name = "smokeball"
 capability = "PracticeManagement"
@@ -234,3 +254,6 @@ create_memo = "internal_write"
 # OVERLAY_REF bump in the same change. An unclassified tool fails the seat's
 # boot classification probe, so this entry never lands ahead of the overlay.
 update_memo = "internal_write"
+prepare_records_order = "read"
+place_records_order = "commitment"
+records_orders_for_matter = "read"

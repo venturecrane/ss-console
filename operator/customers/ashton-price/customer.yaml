@@ -226,14 +226,20 @@ personas:
         # (h) now covers it.
         external_send_client: draft_for_review
         external_send_vendor: draft_for_review
-        # The Operator's own internal matter, and nothing else this class can
-        # reach (mcp_smokeball_create_matter is the only COMMITMENT tool on the
-        # Smokeball surface). Captain-authorized 2026-08-21: an admin-confirmed
-        # act proposal is the only path; never autonomous. The Operator states
-        # the exact matter back to a Named Administrator, the administrator
-        # answers in their own words, and only then does the act happen. There
-        # is deliberately no exposure_ceiling entry for this class, so the
-        # runtime entitlement dial cannot raise it at all.
+        # Two COMMITMENT tools sit on the Smokeball surface, and this key
+        # reaches both, each only as an admin-confirmed act: the Operator's own
+        # internal matter (mcp_smokeball_create_matter, Captain-authorized
+        # 2026-08-21) and a medical-records order for one matter
+        # (mcp_smokeball_place_records_order, 2026-10-05, the firm's ask to
+        # order a client's records through the Operator). Never
+        # autonomous: the Operator states the exact act back to a Named
+        # Administrator (the whole order: matter, client by SSN last four,
+        # every facility with its records and dates, the HIPAA file, the
+        # pre-approved custodian fee), the administrator answers in her own
+        # words, and only then does the act happen. The fee is not authored
+        # here: the order shows the firm's usual $100.00 and the requester sets
+        # it per order. There is deliberately no exposure_ceiling entry for this
+        # class, so the runtime entitlement dial cannot raise it at all.
         commitment: confirm
         # Captain-authorized 2026-08-21: an admin-confirmed act proposal is the only path, never autonomous. Requires overlay >= b782926c (validator accepts confirm on commitment).
       # Letter-commitment bounds for the runtime entitlement dial (ss#2003
