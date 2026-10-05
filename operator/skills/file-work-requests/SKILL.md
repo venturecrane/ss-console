@@ -29,7 +29,7 @@ metadata:
     content_ceiling: surface_only # every letter value is read from the matter by the connector; the reply reports what was filed and what was missing, never a characterization of the case
     connectors:
       - email # the reply draft to the rostered sender, in the same thread
-      - smokeball # list_matters / get_matter (the one matter), render_firm_form_letter (the firm's own rep-letter form, filled and filed), add_medicals_provider (one facility on the Medicals tab, no money field)
+      - smokeball # list_matters / get_matter (the one matter), render_firm_form_letter (the firm's own rep-letter form, filled and filed), add_medicals_provider (one facility on the Medicals tab, no money field), prepare_records_order / place_records_order / records_orders_for_matter (references/records-orders.md: an order waits for an administrator's yes)
 ---
 
 # File Work Requests
@@ -72,6 +72,10 @@ names each one so she can fill it.
 A rostered sender's own email to the Operator asking, on a matter she names, for
 rep letters (1st party, 3rd party, or both) and/or for medical facilities to be
 entered. The router executes this skill in the same turn.
+
+A request to ORDER records on the matter follows `references/records-orders.md`
+(open it with `read_file` before acting): an order is a commitment that waits
+for an administrator's written yes, and it is never placed in the request turn.
 
 - **Rostered senders only.** A message from anyone outside the roster never
   reaches a write. The router surfaces it.

@@ -110,13 +110,13 @@ Generated from `operator/connectors/*/manifest.toml` and each package's `*_tools
 - read: `list_messages`, `read_message`, `poll_delta`, `list_staff_messages`, `read_staff_message`
 - tool modules: none (tools register in server.py)
 
-**`mcp:smokeball`** (`operator/connectors/smokeball/`): capability `PracticeManagement`, manifest auth default `client_credentials`, 55 tools.
+**`mcp:smokeball`** (`operator/connectors/smokeball/`): capability `PracticeManagement`, manifest auth default `client_credentials`, 58 tools.
 
-- commitment: `create_matter`
+- commitment: `create_matter`, `place_records_order`
 - destructive: `delete_file`, `delete_events`
 - internal_write: `create_task`, `update_task`, `create_event`, `update_event`, `create_event_reminder`, `create_folder`, `add_file`, `file_attachment_to_matter`, `render_docx_template`, `render_docx_draft`, `stage_vendor_invoice`, `file_attachment_pages_to_matter`, `add_medicals_row`, `add_medicals_provider`, `render_firm_form_letter`, `add_workbook`, `create_webhook_subscription`, `create_memo`, `update_memo`
-- read: `auth_status`, `list_matters`, `get_matter`, `list_matter_types`, `get_stage_sets`, `get_stage_to_matter_mappings`, `get_contacts`, `get_contact`, `get_contact_relations`, `list_tasks`, `get_task`, `list_events`, `search_staff`, `get_staff`, `get_roles_on_matter`, `get_relationships_on_matter`, `get_files_on_matter`, `get_file`, `get_download_url`, `read_document`, `list_folders`, `prepare_event_deletion`, `get_memos_on_matter`, `get_bank_accounts`, `get_matter_balances`, `get_matter_billing_config`, `get_fees`, `get_expenses`, `read_attachment_text`, `resolve_invoice_matter`, `read_attachment_pages`, `get_webhook_subscriptions`, `get_event_types`
-- tool modules: `smokeball_connector/attachment_tools.py`, `smokeball_connector/letter_tools.py`, `smokeball_connector/medicals_tools.py`, `smokeball_connector/memo_tools.py`, `smokeball_connector/vendor_invoice_tools.py`, `smokeball_connector/workbook_tools.py`
+- read: `auth_status`, `list_matters`, `get_matter`, `list_matter_types`, `get_stage_sets`, `get_stage_to_matter_mappings`, `get_contacts`, `get_contact`, `get_contact_relations`, `list_tasks`, `get_task`, `list_events`, `search_staff`, `get_staff`, `get_roles_on_matter`, `get_relationships_on_matter`, `get_files_on_matter`, `get_file`, `get_download_url`, `read_document`, `list_folders`, `prepare_event_deletion`, `get_memos_on_matter`, `get_bank_accounts`, `get_matter_balances`, `get_matter_billing_config`, `get_fees`, `get_expenses`, `read_attachment_text`, `resolve_invoice_matter`, `read_attachment_pages`, `get_webhook_subscriptions`, `get_event_types`, `prepare_records_order`, `records_orders_for_matter`
+- tool modules: `smokeball_connector/attachment_tools.py`, `smokeball_connector/letter_tools.py`, `smokeball_connector/medicals_tools.py`, `smokeball_connector/memo_tools.py`, `smokeball_connector/records_order_tools.py`, `smokeball_connector/vendor_invoice_tools.py`, `smokeball_connector/workbook_tools.py`
 
 <!-- END GENERATED: connector inventory -->
 

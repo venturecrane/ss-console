@@ -128,6 +128,9 @@ _CUSTOMER_PREFIX: tuple[str, ...] = (
     "MSGRAPH_",
     # Per-seat override form WEBHOOK_SECRET_MSGRAPH__<CID>.
     "WEBHOOK_SECRET_MSGRAPH__",
+    # The firm's own records-vendor token, API URL and display name, per seat
+    # only (bin/lib/stage-smokeball.sh): RECORDS_VENDOR_<NAME>__<CID>.
+    "RECORDS_VENDOR_",
 )
 
 # Infra-owned staged/derived names NOT in env-consumption. These are SMD-owned
@@ -251,6 +254,8 @@ def customer_owned_source_names(customer_id: str) -> list[str]:
     names.add(f"WEBHOOK_SECRET_AGENTMAIL__{suffix}")
     names.add(f"WEBHOOK_SECRET_SMOKEBALL__{suffix}")
     names.add(f"WEBHOOK_SMOKEBALL_CLIENT_ID__{suffix}")
+    for name in ("RECORDS_VENDOR_API_TOKEN", "RECORDS_VENDOR_API_URL", "RECORDS_VENDOR_NAME"):
+        names.add(f"{name}__{suffix}")
     return sorted(names)
 
 

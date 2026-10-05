@@ -51,18 +51,20 @@ Not declared in `addon.yaml` — these are wired on the customer's `customer.yam
 and we do not assert a backend we have not verified. Most signals ride the
 **Smokeball hub**: InfoTrack, YoCierge, and BriefPoint all import into / draw from
 the Smokeball matter, so the Operator observes them through Smokeball events
-without a direct integration to each.
+without a direct integration to each. YoCierge is the one exception on the order
+side: the Smokeball connector places a records order through YoCierge's own API,
+as an admin-confirmed act, on a seat that holds the firm's YoCierge token.
 
-| System           | Role                                                     | Operator path                                         | Backend status                                                   |
-| ---------------- | -------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------- |
-| **Smokeball**    | System of record (matters, docs, tasks, calendar, trust) | The hub it watches + writes                           | `mcp:smokeball` — **shipped** (write-cut, 33 tests green)        |
-| **M365 / Graph** | Mail + calendar; the inbound-email-discovery gap         | Watch the inbox; consolidate calendar                 | `build:msgraph` (Track E) — **not yet runtime-wired**            |
-| **InfoTrack**    | Court filing + service of process                        | Stage + present; a human submits (attorney-gated)     | `mcp:infotrack` — **verified** (OAuth2, filing + serve toolsets) |
-| **BriefPoint**   | Discovery-response drafting                              | Stage inputs to / pick outputs from the matter folder | via Smokeball Documents (no direct API)                          |
-| **CoCounsel**    | Broader drafting                                         | Stage inputs / route outputs via matter folder        | **open** — division of labor settled post-TR meeting             |
-| **YoCierge**     | Medical records vendor                                   | Detect new records via Smokeball doc events; chase    | via Smokeball hub                                                |
-| **Adobe**        | PDF / Bates / exhibits                                   | Assemble where it's a real gap                        | `build:` (PDF Services API) — research                           |
-| **Dropbox**      | Client/defense doc sharing                               | Place / retrieve (outbound sharing human-gated)       | research MCP → else `build:`                                     |
+| System           | Role                                                     | Operator path                                                                           | Backend status                                                                                                        |
+| ---------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Smokeball**    | System of record (matters, docs, tasks, calendar, trust) | The hub it watches + writes                                                             | `mcp:smokeball` — **shipped** (write-cut, 33 tests green)                                                             |
+| **M365 / Graph** | Mail + calendar; the inbound-email-discovery gap         | Watch the inbox; consolidate calendar                                                   | `build:msgraph` (Track E) — **not yet runtime-wired**                                                                 |
+| **InfoTrack**    | Court filing + service of process                        | Stage + present; a human submits (attorney-gated)                                       | `mcp:infotrack` — **verified** (OAuth2, filing + serve toolsets)                                                      |
+| **BriefPoint**   | Discovery-response drafting                              | Stage inputs to / pick outputs from the matter folder                                   | via Smokeball Documents (no direct API)                                                                               |
+| **CoCounsel**    | Broader drafting                                         | Stage inputs / route outputs via matter folder                                          | **open** — division of labor settled post-TR meeting                                                                  |
+| **YoCierge**     | Medical records vendor                                   | Order records (admin-confirmed act); detect new records via Smokeball doc events; chase | `mcp:smokeball` `records-order` tools (order + read-back; needs the firm's API token); records land via Smokeball hub |
+| **Adobe**        | PDF / Bates / exhibits                                   | Assemble where it's a real gap                                                          | `build:` (PDF Services API) — research                                                                                |
+| **Dropbox**      | Client/defense doc sharing                               | Place / retrieve (outbound sharing human-gated)                                         | research MCP → else `build:`                                                                                          |
 
 ## Status (2026-07-01)
 
