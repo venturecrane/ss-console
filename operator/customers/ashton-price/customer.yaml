@@ -421,6 +421,26 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+      # File work requests (2026-10-05, Christa asked to work a client's file
+      # only through the Operator: the 1st and 3rd party rep letters "in that
+      # exact formatting", and the client's prior and current facilities on the
+      # Medicals tab). Person-initiated exactly like the post intake above: a
+      # rostered sender emails the ask on one named matter and the
+      # matter-inbox-router spine executes this skill in the same turn. Never
+      # scheduled, never webhook-fired. Its writes are the firm's OWN forms
+      # (self_initiation.document_library.templates below) filled from the
+      # matter's record and filed on it, and facility rows on the Medicals tab
+      # with no money field, both under the internal_write entitlement above.
+      # Nothing is mailed or faxed and no task is completed. The drafting lane
+      # is untouched. No routine-grid row: naming a routine there is a
+      # commitment to the firm, which is the Captain's to author.
+      - name: file-work-requests
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
       - name: stalled-matter-nudge
         version: pending
         initiation:
@@ -1215,6 +1235,15 @@ self_initiation:
     - document-library-establishment
   document_library:
     folder_name: 'Document Library'
+    # The firm's own rep-letter FORMS (2026-10-05): rebuilt from the firm's
+    # filled letters (Smokeball serves filled letters, not task forms) by
+    # operator/connectors/smokeball/tools/build_rep_letter_forms.py and filed in
+    # this library folder. render_firm_form_letter opens the file named here
+    # and refuses when it is not there; it never makes a letter on anything
+    # else. Renaming a file in Smokeball is a one-line change here.
+    templates:
+      first_party_rep_letter: 'Form - 1st Party Rep Letter.docx'
+      third_party_rep_letter: 'Form - 3rd Party Rep Letter.docx'
     # The Operator's OWN matter (ss-console#2536). Four authored values, and
     # every one of them is a decision the firm made here rather than one the
     # Operator makes at runtime: the model can ask for this matter and cannot
@@ -1306,6 +1335,35 @@ staff_mailbox_reads:
 # ever created by this setting.
 combined_post_intake:
   medical_folder: Medical
+
+# form_letters.signers: how the matter's responsible staff member signs the
+# firm's rep letters, keyed by the staff member's name as Smokeball holds it
+# (or their staff id). Authored ONLY from the firm's own letters (the file
+# review packs, 2026-09-29 to 10-02, plus Christa's 2026-10-05 1st party
+# letter): "Christopher A. Price", "Edward A. Schade", "Craig F. Ashton" and
+# "Scott R. Ashton" sign them, over a reference line ATTORNEY/preparer that
+# pairs the attorney's initials (CAP, EAS, CFA, SRA) with the lowercase
+# initials of the paralegal on the file (EAS/cr, CAP/ic, CFA/nb, SRA/pd). The
+# connector supplies the second half from the matter's assisting staff. Only
+# "Attorney at Law" is authored as a title, and only for the two attorneys
+# whose rep letters show it; a missing title prints the marker. A staff member
+# not listed here prints "[NOT IN THE FILE: how <name> signs: ...]".
+form_letters:
+  signers:
+    Chris Price:
+      name: 'Christopher A. Price'
+      title: 'Attorney at Law'
+      initials: 'CAP'
+    Edward Schade:
+      name: 'Edward A. Schade'
+      title: 'Attorney at Law'
+      initials: 'EAS'
+    Craig Ashton:
+      name: 'Craig F. Ashton'
+      initials: 'CFA'
+    Scott Ashton:
+      name: 'Scott R. Ashton'
+      initials: 'SRA'
 
 # vendor_invoice_intake: every staged vendor invoice is billable, and its PDF
 # files into Accounting/Invoices (a nested path: the "Invoices" folder whose

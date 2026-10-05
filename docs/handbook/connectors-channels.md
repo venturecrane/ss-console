@@ -79,6 +79,10 @@ Firms scan the day's post as **one PDF holding several letters for several matte
 
 Letters and demand letters rendered on the starter base carry the firm's letterhead, printed by tool code from the `firm_identity` block the firm authors in `customer.yaml` (`letterhead.py`). The model never types it, so it never meets the content gate that would refuse its street number and phone digits. The firm's own Word template wins untouched; with no template and no authored identity, the document carries no letterhead and says so, rather than inventing one.
 
+#### The firm's own form letters
+
+Some letters a firm makes from its own forms, word for word, and only the merged values change: the 1st and 3rd party representation letters are the first (A&P, 2026-10-05). `render_firm_form_letter` (`form_letters.py`, `form_docx.py`) opens the firm's form from its Document Library by the name authored in `self_initiation.document_library.templates`, reads every value from the matter (roles, insurer and adjuster contacts, layouts, the responsible staff member as the `form_letters.signers` block writes them), fills the form's `{{field}}` placeholders, and files the letter on the matter. Every package part except the body is copied byte for byte. A fact the record does not hold prints visibly as `[NOT IN THE FILE: what]`; a form that does not resolve refuses and nothing is filed. Smokeball serves filled letters but not its task forms, so the forms are rebuilt from the firm's filled letters by `operator/connectors/smokeball/tools/build_rep_letter_forms.py`; the spec naming each letter's merged values is client data and lives with the letters, outside this repo. `add_medicals_provider` (`medicals_provider.py`) is its companion for the same request: a treating facility linked on the Medicals tab with a description and no money field, asked about rather than guessed when the contacts hold several possible records. The `file-work-requests` skill runs both on a rostered sender's emailed ask.
+
 #### Workbooks
 
 `add_workbook` (`workbook_tools.py`, #2923) lets the Operator hand the firm a spreadsheet, such as a costs-and-advances workbook, filed on a matter. The model supplies rows as structured data; tool code does the encoding, the cell typing and the arithmetic, because a workbook is binary and model-written base64 corrupts silently. It is an internal write, like `add_file`, and its cells pass the identifier scan before anything is filed.
@@ -106,11 +110,11 @@ Generated from `operator/connectors/*/manifest.toml` and each package's `*_tools
 - read: `list_messages`, `read_message`, `poll_delta`, `list_staff_messages`, `read_staff_message`
 - tool modules: none (tools register in server.py)
 
-**`mcp:smokeball`** (`operator/connectors/smokeball/`): capability `PracticeManagement`, manifest auth default `client_credentials`, 53 tools.
+**`mcp:smokeball`** (`operator/connectors/smokeball/`): capability `PracticeManagement`, manifest auth default `client_credentials`, 55 tools.
 
 - commitment: `create_matter`
 - destructive: `delete_file`, `delete_events`
-- internal_write: `create_task`, `update_task`, `create_event`, `update_event`, `create_event_reminder`, `create_folder`, `add_file`, `file_attachment_to_matter`, `render_docx_template`, `render_docx_draft`, `stage_vendor_invoice`, `file_attachment_pages_to_matter`, `add_medicals_row`, `add_workbook`, `create_webhook_subscription`, `create_memo`, `update_memo`
+- internal_write: `create_task`, `update_task`, `create_event`, `update_event`, `create_event_reminder`, `create_folder`, `add_file`, `file_attachment_to_matter`, `render_docx_template`, `render_docx_draft`, `stage_vendor_invoice`, `file_attachment_pages_to_matter`, `add_medicals_row`, `add_medicals_provider`, `render_firm_form_letter`, `add_workbook`, `create_webhook_subscription`, `create_memo`, `update_memo`
 - read: `auth_status`, `list_matters`, `get_matter`, `list_matter_types`, `get_stage_sets`, `get_stage_to_matter_mappings`, `get_contacts`, `get_contact`, `get_contact_relations`, `list_tasks`, `get_task`, `list_events`, `search_staff`, `get_staff`, `get_roles_on_matter`, `get_relationships_on_matter`, `get_files_on_matter`, `get_file`, `get_download_url`, `read_document`, `list_folders`, `prepare_event_deletion`, `get_memos_on_matter`, `get_bank_accounts`, `get_matter_balances`, `get_matter_billing_config`, `get_fees`, `get_expenses`, `read_attachment_text`, `resolve_invoice_matter`, `read_attachment_pages`, `get_webhook_subscriptions`, `get_event_types`
 - tool modules: `smokeball_connector/attachment_tools.py`, `smokeball_connector/letter_tools.py`, `smokeball_connector/medicals_tools.py`, `smokeball_connector/memo_tools.py`, `smokeball_connector/vendor_invoice_tools.py`, `smokeball_connector/workbook_tools.py`
 

@@ -1473,7 +1473,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // medical bill in the firm's scanned post. Unclassified it is refused at runtime.
     // 3883955e -> 7bbc385c (2026-10-01, overlay#412 merge commit). a second "done" runs the write an open approval never
     // got to (the pilot's connector did not reconnect after a restart).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="7bbc385c23b493f29788698f0301cf11aca12eb1"')
+    // 7bbc385c -> 1c4e123d (2026-10-05, overlay#414 merge commit). classifies the firm
+    // form letter and the Medicals provider tools as internal writes.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="1c4e123d785fdb7fb13136d097d5287afc5ef63e"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

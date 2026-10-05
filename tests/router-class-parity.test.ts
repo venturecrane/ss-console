@@ -250,3 +250,40 @@ describe('matter-inbox-router: the combined post class', () => {
     expect(skill).toContain('**Never finalizes, never pays, never changes a row.**')
   })
 })
+
+describe('matter-inbox-router: the file work class', () => {
+  const SLUG = 'file-work-requests'
+  const SKILL = `${SKILLS_DIR}/${SLUG}/SKILL.md`
+  const bullet = () => flat(bulletFor(read(ROUTER), '**File work request**'))
+
+  it('is reachable on the email channel, executed in-turn', () => {
+    expect(bullet()).toContain(`/app/skills/${SLUG}/SKILL.md`)
+    expect(flat(classTable(read(ROUTER)))).toContain('File work request')
+    expect(read(RUBRIC)).toContain(`/app/skills/${SLUG}/SKILL.md`)
+  })
+
+  it('never writes for a sender outside the roster', () => {
+    expect(bullet()).toContain(
+      'a sender outside the roster never reaches this skill and nothing is written'
+    )
+    expect(flat(read(RUBRIC))).toContain('A non-roster sender never reaches it')
+  })
+
+  it('makes letters only from the firm forms, and never fills a gap', () => {
+    // 2026-10-05: the firm asked for its rep letters "in that exact formatting".
+    // If a later edit lets the model compose a letter or fill a missing fact,
+    // a letter the firm did not make is filed over its name.
+    expect(bullet()).toContain('never compose a letter')
+    expect(bullet()).toContain('a refusal is reported, never replaced')
+    const skill = flat(read(SKILL))
+    expect(skill).toContain('`render_firm_form_letter(matter_id, form, date)`')
+    expect(skill).toContain('`add_medicals_provider(matter_id, provider_name, address, note)`')
+    expect(skill).toContain('Never pass a value from the email into a letter')
+  })
+
+  it('asks about a facility that could be two, and never completes a task', () => {
+    expect(bullet()).toContain('is asked about and not written')
+    expect(bullet()).toContain('no Smokeball task is completed')
+    expect(flat(read(SKILL))).toContain('Never complete, update or create a Smokeball task.')
+  })
+})

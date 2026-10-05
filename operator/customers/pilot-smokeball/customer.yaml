@@ -712,6 +712,16 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+      # File work requests, bound for rehearsal (2026-10-05): the firm forms
+      # resolve from this seat's library (templates below) and the signer is
+      # left unauthored here, so a rehearsal letter shows the signer markers.
+      - name: file-work-requests
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
     # Every entry is pre_run-gated (ADR 0021 Stream B, #1748). The escalator's
     # bespoke pre_run decides whether a deadline needs the ladder; the other
     # skills carry the shared empty-seat gate (operator/templates/pre_run_gate.py):
@@ -1202,6 +1212,8 @@ self_initiation:
     matter_number: '2026-OPS-001'
     templates:
       demand_letter: 'Template - Demand Letter (Policy Limits)'
+      first_party_rep_letter: 'Form - 1st Party Rep Letter.docx'
+      third_party_rep_letter: 'Form - 3rd Party Rep Letter.docx'
       discovery_response: 'Template - Discovery Responses (RFP and FROG Combined)'
     # The Operator's OWN matter (ss-console#2536), for the rehearsal of the
     # A&P path. The number is deliberately DIFFERENT from the probe matter that

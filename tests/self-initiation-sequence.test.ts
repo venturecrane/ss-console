@@ -46,6 +46,7 @@ interface SelfInitiation {
     matter_hint?: string
     folder_name?: string
     matter_number?: string
+    operator_matter?: { number?: string }
     templates?: Record<string, string>
   }
 }
@@ -59,6 +60,14 @@ const DOCUMENT_CLASSES = [
   'memo',
   'letter',
 ] as const
+
+/**
+ * The firm's own forms, filled by render_firm_form_letter
+ * (smokeball_connector/form_letters.py FORMS). Resolved from the same library
+ * by the same map, so a key here is as well-shaped as a renderer class.
+ */
+const FORM_CLASSES = ['first_party_rep_letter', 'third_party_rep_letter'] as const
+const TEMPLATE_KEYS: readonly string[] = [...DOCUMENT_CLASSES, ...FORM_CLASSES]
 
 function loadSeat(slug: keyof typeof SEAT_PATHS) {
   const raw = parseYaml(readFileSync(SEAT_PATHS[slug], 'utf-8')) as Record<string, unknown>
@@ -131,17 +140,19 @@ describe('self_initiation <-> seat-binding drift gate', () => {
         if (lib.templates !== undefined) {
           for (const [cls, name] of Object.entries(lib.templates)) {
             expect(
-              (DOCUMENT_CLASSES as readonly string[]).includes(cls),
-              `${slug}: document_library.templates names unknown class '${cls}' (known: ${DOCUMENT_CLASSES.join(', ')})`
+              TEMPLATE_KEYS.includes(cls),
+              `${slug}: document_library.templates names unknown class '${cls}' (known: ${TEMPLATE_KEYS.join(', ')})`
             ).toBe(true)
             expect(
               typeof name === 'string' && name.trim().length > 0,
               `${slug}: document_library.templates.${cls} must be a non-empty file name`
             ).toBe(true)
           }
+          // smokeball_connector/library.py load_library_config resolves the
+          // library matter from matter_number, else operator_matter.number.
           expect(
-            lib.matter_number !== undefined,
-            `${slug}: document_library.templates authored without matter_number — the renderer cannot resolve the library matter`
+            lib.matter_number !== undefined || lib.operator_matter?.number !== undefined,
+            `${slug}: document_library.templates authored without matter_number or operator_matter.number — the renderer cannot resolve the library matter`
           ).toBe(true)
         }
       })

@@ -178,8 +178,9 @@ file_attachment_pages_to_matter = "internal_write"
 # and writes that one bill's charge, service dates and a composed note. Opened
 # by the filed-document ledger, not a resolution token: it takes the fileId
 # file_attachment_pages_to_matter returned for the bill on that matter in this
-# run, and refuses any other. Never creates a contact, never changes a row
-# already on the tab, never writes a figure it was not handed. internal_write
+# run, and refuses any other. Adds a company contact only when the firm's
+# contacts hold no candidate at all (several candidates create nothing), never
+# changes a row already on the tab, never writes a figure it was not handed. internal_write
 # for the same reason as the filing above: the firm's own record, nothing sent
 # outside. COORDINATED CHANGE: hermes-smd-overlay shared/action_classes.py
 # mcp_smokeball_add_medicals_row = ActionClass.INTERNAL_WRITE, shipped by the
@@ -189,6 +190,21 @@ file_attachment_pages_to_matter = "internal_write"
 # INSIDE a scanned bundle is cut and staged in one write, instead of filed and
 # flagged for a person to key.
 add_medicals_row = "internal_write"
+# add_medicals_provider (2026-10-05, a paralegal's emailed list of a client's
+# prior and current treating facilities): one facility linked as a Medicals
+# provider row with a description and NO money field. Finds the contact by its
+# one exact name, adds a company only when the contacts hold no candidate, and
+# writes nothing when several could be it. render_firm_form_letter (the same
+# day, "use that exact formatting"): the firm's own 1st/3rd party rep-letter
+# form from its Document Library, filled with facts read from the matter and
+# filed on it; a form that does not resolve refuses, never a fallback letter.
+# Both internal_write: the firm's own record, nothing sent outside.
+# COORDINATED CHANGE: hermes-smd-overlay shared/action_classes.py
+# mcp_smokeball_add_medicals_provider and mcp_smokeball_render_firm_form_letter
+# = ActionClass.INTERNAL_WRITE, shipped by the OVERLAY_REF bump in the same
+# change; until it lands both tools are UNREACHABLE at runtime.
+add_medicals_provider = "internal_write"
+render_firm_form_letter = "internal_write"
 # add_workbook (2026-09-25): builds an .xlsx from JSON rows in code (typed
 # columns, totals summed here, every cell read back before upload) and files it
 # through the same two-stage upload as add_file. internal_write for the same

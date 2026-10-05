@@ -34,9 +34,11 @@ EVERY WAY TO BE UNSURE WRITES NOTHING.
   tab's own ``DisplayName`` values) is ``already_present``: the existing row
   is reported with its charge and nothing is changed. The firm's row is the
   firm's; a second bill from the same facility is a person's reconciliation.
-* A provider the firm's contacts do not hold, or hold more than once, is
-  ``needs_contact``: the candidates are named and nothing is created. A row
-  is a link to a contact record, and this tool never creates a contact.
+* A provider the firm's contacts hold more than once is ``needs_contact``:
+  the candidates are named and nothing is created. A provider the contacts
+  do not hold at all (the broad token search returns nothing) is added as a
+  company named as the bill prints it, and the result says
+  ``contact_created`` (``_create_provider_contact``, since 2026-10-01).
 * A matter with several Medicals tabs (one per claimant) refuses unless the
   caller names ``claimant_index``, and lists the tabs so the sender can be
   asked which claimant the bill is for. Choosing is the firm's act.

@@ -64,6 +64,8 @@ EXPECTED_TOOLS = {
     "read_attachment_pages",
     "file_attachment_pages_to_matter",
     "add_medicals_row",
+    "add_medicals_provider",
+    "render_firm_form_letter",
     "add_workbook",
     "get_webhook_subscriptions",
     "get_event_types",
@@ -179,9 +181,16 @@ def test_write_surface_is_memo_document_and_deadline_engine() -> None:
         "file_attachment_pages_to_matter": "internal_write",
         # The Medicals tab write (2026-10-01): one provider row from a medical
         # bill this run filed on that matter. Opened by the filed-document
-        # ledger, never by a token the model holds; never creates a contact,
-        # never changes a row already on the tab; the firm's own record.
+        # ledger, never by a token the model holds; adds a contact only when
+        # the firm's contacts hold no candidate, never changes a row already on
+        # the tab; the firm's own record.
         "add_medicals_row": "internal_write",
+        # A facility with no bill (2026-10-05): a provider row and its
+        # description, no money field; the firm's own record.
+        "add_medicals_provider": "internal_write",
+        # The firm's own rep-letter form, filled from the matter's record and
+        # filed on it; nothing sent, faxed or mailed.
+        "render_firm_form_letter": "internal_write",
         # A workbook built in code from JSON rows and filed on the matter: the
         # same two-stage upload as add_file, bytes never composed by the model.
         "add_workbook": "internal_write",
