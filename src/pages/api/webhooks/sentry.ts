@@ -120,6 +120,9 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   const rawBody = await request.text()
+  if (isRuleSettingsSubmission(request, rawBody)) {
+    return jsonResponse(200, { ok: true, source: 'sentry', settings: 'accepted' })
+  }
   const refused = await refuseUnverified(request, rawBody, secret)
   if (refused) return refused
 
@@ -169,6 +172,24 @@ export const POST: APIRoute = async ({ request }) => {
     .run()
 
   return jsonResponse(200, { ok: true, source: 'sentry', paged: true, tenant: seat.slug })
+}
+
+/**
+ * Sentry's alert-rule settings submission (2026-10-05). When an alert rule that
+ * uses this integration's "Send to SMD ops console" action is SAVED, Sentry
+ * POSTs the action's form (`fields`: the "note") to the integration's settings
+ * URI, which is this route, and shows any 4xx to the person saving the rule.
+ * That request carries no `Sentry-Hook-Signature`, so the webhook checks
+ * refused it ("A signature is required.") and the rule could not be created.
+ * Accepted with a 200 and nothing written: it changes no state, so leaving it
+ * unauthenticated exposes nothing. A signed delivery never takes this path.
+ * Ref: https://docs.sentry.io/organization/integrations/integration-platform/ui-components/alert-rule-action/
+ */
+function isRuleSettingsSubmission(request: Request, rawBody: string): boolean {
+  if (request.headers.get('sentry-hook-signature')) return false
+  if (request.headers.get('sentry-hook-resource')) return false
+  const body = parseJsonRecord(rawBody)
+  return body !== null && Array.isArray(body.fields)
 }
 
 /**

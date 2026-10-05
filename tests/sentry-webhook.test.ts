@@ -143,6 +143,29 @@ describe('sentry webhook replay window', () => {
     const res = await POST({ request } as unknown as Parameters<typeof POST>[0])
     expect(res.status).toBe(401)
   })
+
+  it('accepts the unsigned settings submission Sentry sends when a rule is saved, writing nothing', async () => {
+    const request = new Request('https://smd.services/api/webhooks/sentry', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ fields: [{ name: 'note', value: 'Global Operator alert' }] }),
+    })
+    const res = await POST({ request } as unknown as Parameters<typeof POST>[0])
+    expect(res.status).toBe(200)
+    const count = await db
+      .prepare('SELECT COUNT(*) AS n FROM cost_anomaly_alerts')
+      .first<{ n: number }>()
+    expect(count?.n).toBe(0)
+  })
+
+  it('still refuses an unsigned body that is not a settings form', async () => {
+    const request = new Request('https://smd.services/api/webhooks/sentry', {
+      method: 'POST',
+      body: JSON.stringify(eventAlert([['tenant', 'scott']])),
+    })
+    const res = await POST({ request } as unknown as Parameters<typeof POST>[0])
+    expect(res.status).toBe(401)
+  })
 })
 
 describe('sentry webhook pages every Operator error', () => {
