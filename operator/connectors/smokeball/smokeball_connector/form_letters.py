@@ -21,7 +21,7 @@ fax and email come from that insurer's contact, else from the side's ADJUSTER
 contact (the carrier's claims desk), never the adjuster's name as the carrier's.
 The signer is the matter's responsible staff member as the firm's authored
 signer map writes them. Anything the record does not hold prints as
-``[NOT IN THE FILE: <what>]``, visibly, in the letter, and is listed in
+``[Not in the file: <what>]``, visibly, in the letter, and is listed in
 ``unfilled``: nothing is defaulted, and a reader cannot mistake a gap for a
 fact.
 
@@ -82,7 +82,7 @@ FORMS: dict[str, FormSpec] = {
 
 #: One paragraph per line: each delivery channel is its own line in the form.
 PARAGRAPH_FIELDS = frozenset({"delivery_lines"})
-MARKER = "[NOT IN THE FILE: {}]"
+MARKER = "[Not in the file: {}]"
 
 #: Read-back waits after the upload, in seconds; module-level so a test can
 #: shorten them. Smokeball materializes an upload asynchronously.
@@ -205,7 +205,7 @@ def render_firm_form_letter(matter_id: str, form: str, date: str | None = None) 
     loss, the claim number, the carrier and its fax/email/address from the
     matter's insurer and adjuster contacts, and the signer from the matter's
     responsible staff member as the firm's signer list writes them. A fact the
-    record does not hold is printed in the letter as ``[NOT IN THE FILE: what]``
+    record does not hold is printed in the letter as ``[Not in the file: what]``
     and listed in ``unfilled``: tell the person who asked exactly those, so
     they fill them in Smokeball or on the letter. Never supply them yourself.
 

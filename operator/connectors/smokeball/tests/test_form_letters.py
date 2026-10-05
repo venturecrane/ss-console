@@ -7,7 +7,7 @@ What these defend, each written so that removing the line it defends fails it:
   firm's, line for line (synthetic facts; the real-value comparison against a
   letter the firm made is run locally and never committed);
 * a placeholder split across runs (a person edited the form in Word) fills;
-* a fact the record does not hold prints as ``[NOT IN THE FILE: ...]`` and is
+* a fact the record does not hold prints as ``[Not in the file: ...]`` and is
   listed in ``unfilled``; nothing is defaulted;
 * the adjuster supplies the carrier's fax and email, never its name;
 * the signer is the authored signer map's, never the staff record's name;
@@ -162,6 +162,17 @@ def _texts(blob: bytes) -> list[str]:
     return [p for p in document_paragraphs(blob) if p.strip()]
 
 
+def test_the_gap_marker_carries_no_all_capitals_word() -> None:
+    """The reply to the requester quotes every gap marker, and the outbound
+    checklist holds a staff reply carrying an all-capitals word as emphasis
+    (overlay shared/output_checklist.py caps_emphasis). On 2026-10-05 the first
+    live request's reply was held for "[NOT IN THE FILE: ...]" and never sent."""
+    import re
+
+    rendered = fl.MARKER.format("3rd party insurer name")
+    assert not re.search(r"\b[A-Z]{2,}\b", rendered), rendered
+
+
 # ---- the form is the firm's, byte for byte outside the body ----------------
 
 
@@ -216,7 +227,7 @@ def test_first_party_letter_reads_as_the_firms_letter(signers: Path) -> None:
         "Attn: Claims",
         # No 1st-party insurer on the record: the adjuster is the carrier's
         # claims desk for fax and email, never the carrier's NAME.
-        "[NOT IN THE FILE: 1st party insurer name]\n[NOT IN THE FILE: 1st party insurer address]",
+        "[Not in the file: 1st party insurer name]\n[Not in the file: 1st party insurer address]",
         "RE:",
         "Our Client /Your Insured:",
         "Dana Example",
@@ -245,7 +256,7 @@ def test_third_party_letter_fills_its_own_layout(signers: Path) -> None:
     filled = fill_form(THIRD, _values(_Record(), "third_party_rep"), fl.PARAGRAPH_FIELDS)
     texts = _texts(filled.data)
     assert texts[0] == "October 5, 2026"
-    assert texts[1] == "\t\t\t\t\t[NOT IN THE FILE: 3rd party insurer fax or email]"
+    assert texts[1] == "\t\t\t\t\t[Not in the file: 3rd party insurer fax or email]"
     assert "Other Side Mutual" in texts
     assert "RE:\tOur client:\t\tDana Example" in texts
     assert "\t\tClaim#:\t\t44-5556667" in texts
@@ -265,7 +276,7 @@ def test_the_reference_line_pairs_the_attorney_with_the_staff_on_the_file(signer
             return super().get(path, **params)
 
     assert _values(_NoAssist(), "third_party_rep")["signer_initials"] == (
-        "SQS/[NOT IN THE FILE: preparer initials (no assisting staff on the matter)]"
+        "SQS/[Not in the file: preparer initials (no assisting staff on the matter)]"
     )
 
 
@@ -306,8 +317,8 @@ def _patched_roles(record: _Record, roles: dict[str, Any]) -> Any:
 def test_missing_facts_print_markers_and_are_listed(signers: Path) -> None:
     record = _Record(layout={})
     values = _values(record, "first_party_rep")
-    assert values["claim_number"] == "[NOT IN THE FILE: 1st party claim number]"
-    assert values["date_of_loss"] == "[NOT IN THE FILE: date of loss]"
+    assert values["claim_number"] == "[Not in the file: 1st party claim number]"
+    assert values["date_of_loss"] == "[Not in the file: date of loss]"
     assert values["delivery_lines"] == "VIA FAX: (800) 555-0101\nEmail: claims@carrier.example", (
         "the adjuster is still found by its role relationship when the layout holds nothing"
     )
@@ -320,7 +331,7 @@ def test_an_unmapped_signer_prints_markers_not_the_staff_record(
     path.write_text("form_letters:\n  signers: {}\n", encoding="utf-8")
     monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
     values = _values(_Record(), "third_party_rep")
-    assert values["signer_name"] == "[NOT IN THE FILE: how Sam Signer signs: name]"
+    assert values["signer_name"] == "[Not in the file: how Sam Signer signs: name]"
     assert "Sam Signer" not in (values["signer_title"].replace("how Sam Signer signs", ""))
 
 
@@ -413,8 +424,8 @@ def test_files_under_the_firms_name_and_reports_gaps(record: _Record, monkeypatc
     assert out["status"] == "filed"
     assert record.uploads[0][1] == "1st party letter.docx"
     assert out["unfilled"] == [
-        "[NOT IN THE FILE: 1st party insurer name]",
-        "[NOT IN THE FILE: 1st party insurer address]",
+        "[Not in the file: 1st party insurer name]",
+        "[Not in the file: 1st party insurer address]",
     ]
     assert out["same_name_on_matter"] == ["f-old"]
     assert "signer_initials" not in out["facts_used"], "a field the form does not carry is not reported as used"
