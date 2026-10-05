@@ -1,6 +1,9 @@
 -- Rollback for 0120: drop the shortfall ledger and the four added columns.
--- Running this while a worker that reads operator_shortfalls is deployed
--- makes every tick log a failed shortfall query (fail-soft; nothing pages).
+-- NOT fail-soft. The fleet-alerts Worker's one fleet_status SELECT names the
+-- shortfall columns and its alert-state read names alert_message_id, and
+-- SQLite fails a statement on an unknown column: running this while that
+-- Worker (or the web Worker's heartbeat upsert) is deployed stops EVERY pager
+-- and every heartbeat write. Roll the Workers back first, then run this.
 --
 -- Manual-only; coordinate with Captain.
 

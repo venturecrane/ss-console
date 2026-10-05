@@ -28,7 +28,8 @@
  * then retried successfully, so what arrives here is what stayed broken.
  *
  * NULL and undefined hold, as everywhere in this Worker: a seat that cannot
- * answer writes nothing and pages nothing.
+ * answer adds nothing to the ledger. Rows it reported earlier and that have not
+ * been emailed yet (a Resend outage, the throttle) still go out.
  */
 
 import { escapeHtml } from './html'

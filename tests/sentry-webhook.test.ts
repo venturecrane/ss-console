@@ -220,13 +220,34 @@ describe('sentry webhook pages every Operator error', () => {
     expect(await rows(db)).toEqual([])
   })
 
-  it('re-pages a second delivery for an issue already emailed today', async () => {
+  it('re-pages an issue emailed hours ago that fires again', async () => {
     await post(eventAlert([['tenant', 'scott']]), alertHeaders())
-    await db.prepare(`UPDATE cost_anomaly_alerts SET notified_at = datetime('now')`).run()
+    await db
+      .prepare(`UPDATE cost_anomaly_alerts SET notified_at = datetime('now', '-7 hours')`)
+      .run()
     await post(eventAlert([['tenant', 'scott']]), alertHeaders())
     const all = await rows(db)
     expect(all).toHaveLength(1)
     expect(all[0].notified_at).toBeNull()
+  })
+
+  it('does not re-page a noisy issue inside the re-page window', async () => {
+    await post(eventAlert([['tenant', 'scott']]), alertHeaders())
+    await db.prepare(`UPDATE cost_anomaly_alerts SET notified_at = datetime('now')`).run()
+    await post(eventAlert([['tenant', 'scott']]), alertHeaders())
+    expect((await rows(db))[0].notified_at).not.toBeNull()
+  })
+
+  it('never re-pages an issue someone acknowledged', async () => {
+    await post(eventAlert([['tenant', 'scott']]), alertHeaders())
+    await db
+      .prepare(
+        `UPDATE cost_anomaly_alerts SET notified_at = datetime('now', '-7 hours'),
+                acknowledged_at = datetime('now')`
+      )
+      .run()
+    await post(eventAlert([['tenant', 'scott']]), alertHeaders())
+    expect((await rows(db))[0].notified_at).not.toBeNull()
   })
 
   it('keeps two different issues on one seat on one day as two rows', async () => {

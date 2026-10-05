@@ -26,10 +26,11 @@
  *     resolution and archive are acknowledged and dropped.
  *   - anything else: acknowledged and dropped.
  *
- * One row per Sentry issue per day (`driver = sentry:<issue id>`). A repeat
- * delivery for the same issue clears `notified_at`, so a regression or a
- * re-fired alert pages again; the old upsert kept `notified_at`, which meant a
- * second error on the same seat on the same day was never emailed.
+ * One row per Sentry issue per day (`driver = sentry:<issue id>`); the old
+ * upsert keyed every error on a seat to one row per day, so a second error on
+ * the same day was never emailed. A repeat delivery for the same issue re-pages
+ * it, but at most once per REPAGE_HOURS and never once someone acknowledged the
+ * row: a noisy issue must not turn into an email every two minutes.
  *
  * Auth: HMAC-SHA256 over the raw body, signature in `Sentry-Hook-Signature`,
  * key = `SENTRY_WEBHOOK_SECRET` (the Internal Integration's Client Secret).
@@ -45,6 +46,9 @@ import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
 
 const MAX_WEBHOOK_AGE_SECONDS = 300
+
+/** A Sentry issue already emailed today pages again only after this many hours. */
+export const REPAGE_HOURS = 6
 
 /** The slug an unattributable Sentry error is paged under. */
 export const FLEET_SLUG = 'fleet'
@@ -148,7 +152,11 @@ export const POST: APIRoute = async ({ request }) => {
        summary       = excluded.summary,
        details_json  = excluded.details_json,
        detected_at   = excluded.detected_at,
-       notified_at   = NULL`
+       notified_at   = CASE
+         WHEN cost_anomaly_alerts.acknowledged_at IS NOT NULL THEN cost_anomaly_alerts.notified_at
+         WHEN cost_anomaly_alerts.notified_at < datetime('now', '-${REPAGE_HOURS} hours') THEN NULL
+         ELSE cost_anomaly_alerts.notified_at
+       END`
   )
     .bind(
       seat.entityId,

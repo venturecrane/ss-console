@@ -381,7 +381,9 @@ function parseToolFailuresJson(value: unknown): string | null {
 // identifiers, a code from the seat's closed vocabulary (a reason enum, a gate
 // prefix, or "filed N of M") and a stable key. Anything else is dropped per
 // entry; a list that is not a list, or is longer than the seat may send, is
-// NULL (the count and marker still land, so junk detail never hides a page).
+// NULL. The pager pages from the events, so a NULL list pages nothing that
+// beat: the seat caps the list at 20 and re-sends the same window every beat,
+// so an event lost to one bad beat arrives on the next.
 const SHORTFALL_MAX_ENTRIES = 20
 const SHORTFALL_CLASSES = new Set(['not_allowed', 'limit', 'failed', 'partial'])
 const SHORTFALL_NAME_RE = /^[A-Za-z0-9_.:-]{1,80}$/
