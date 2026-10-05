@@ -61,6 +61,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Handles inbound email from allow-listed senders and drafts replies in your voice.',
   'engagement-letter-chaser':
     "Tracks an unsigned engagement letter and drafts nudges until it's signed. Never interprets the terms.",
+  'file-work-requests':
+    "Makes your rep letters on your own forms and enters a client's medical facilities on the matter your staff name. Letter values come from the matter; anything missing is marked, never filled in.",
   'follow-up-discovery-drafter':
     "On your attorney's request, drafts the next round of written discovery aimed at what the record leaves unestablished, plus a short plan. Targeting decisions stay with the attorney; it never serves.",
   'inbox-triage': 'Triages your inbox daily and drafts categorized replies for your review.',

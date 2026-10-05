@@ -18,7 +18,9 @@ from __future__ import annotations
 from typing import Any
 
 from .event_delete import register as _register_event_delete_tools
+from .form_letters import register as _register_form_letter_tools
 from .letter_tools import register as _register_letter_tools
+from .medicals_provider import register as _register_medicals_provider_tools
 from .medicals_tools import register as _register_medicals_tools
 from .memo_tools import register as _register_memo_tools
 from .vendor_invoice_tools import register as _register_vendor_invoice_tools
@@ -33,13 +35,19 @@ def register(server: Any) -> None:
     goes LAST so the earlier tools keep their positions. The calendar-event
     deletion pair is not attachment-rooted either and registers after it for the same reason,
     and ``update_memo`` (the in-place file-note write, memo_tools.py) after that,
-    and ``add_medicals_row`` (the Medicals tab write, medicals_tools.py) last."""
+    and ``add_medicals_row`` (the Medicals tab write, medicals_tools.py) after
+    that. Then ``add_medicals_provider`` (a facility with no bill,
+    medicals_provider.py) and ``render_firm_form_letter`` (the firm's own
+    rep-letter form, filled, form_letters.py), neither attachment-rooted, last
+    for the same reason."""
     _register_vendor_invoice_tools(server)
     _register_letter_tools(server)
     _register_workbook_tools(server)
     _register_event_delete_tools(server)
     _register_memo_tools(server)
     _register_medicals_tools(server)
+    _register_medicals_provider_tools(server)
+    _register_form_letter_tools(server)
 
 
 __all__ = ["register"]

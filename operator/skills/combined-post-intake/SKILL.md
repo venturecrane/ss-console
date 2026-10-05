@@ -447,7 +447,8 @@ reply does not name a matter number, do not file; ask again for the number.
 - Never finalize an expense, never pay anyone, and never put a figure on the
   Medicals tab or in an expense that the bill's own pages do not print. Never
   total two bills into one figure, never change a row already on the tab,
-  and never create a contact for a provider the firm does not hold.
+  and never create a contact when the firm's contacts hold one that could be
+  the provider (`add_medicals_row` adds a company only when they hold none).
 - Never call `add_medicals_row` with a file id other than the one the filing
   returned for that bill on that matter, and never for a letter that is not a
   medical bill.

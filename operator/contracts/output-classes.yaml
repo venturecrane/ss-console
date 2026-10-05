@@ -360,6 +360,15 @@ skill_bindings:
       - { artifact: expense_entry, seam: smokeball_expense, class: record }
       - { artifact: invoice_file, seam: smokeball_file, class: record }
     outbound: derived # one reply to the rostered sender, one line per invoice
+  # File work requests: the firm's own rep-letter FORM, filled in code with
+  # values read from the matter and filed on it. A record, not work product:
+  # no model writes a word of it, the shape is the firm's form byte for byte,
+  # and a missing fact prints as a visible marker. The reply to the rostered
+  # sender is outbound, its class resolved at the send site.
+  file-work-requests:
+    internal:
+      - { artifact: rep_letter_file, seam: smokeball_file, class: record }
+    outbound: derived # one reply to the rostered sender, one line per letter and facility
   # Combined post intake: one scanned bundle in, one filed document per letter
   # out, each cut as its own page range and filed on the matter that letter
   # resolved to. The filed letter is a record: it is the correspondence the firm
