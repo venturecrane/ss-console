@@ -5,7 +5,7 @@ Every value here is READ: the matter, its roles, its layouts, the contacts the
 roles name, the responsible staff member and the firm's authored signer map.
 Nothing is composed, defaulted or guessed. A fact the record does not hold is
 a ``Fact`` with ``value=None`` and a ``missing`` description, and the caller
-prints the marker ``[NOT IN THE FILE: <missing>]`` in its place, visibly.
+prints the marker ``[Not in the file: <missing>]`` in its place, visibly.
 
 OBSERVED SHAPES (a client tenant, 2026-10-05):
 
@@ -305,7 +305,7 @@ def _reference_initials(client: Any, matter: dict[str, Any], attorney: str | Non
     preparer = _staff_initials(staff) if isinstance(staff, dict) else None
     if not preparer:
         return Fact(
-            f"{attorney}/[NOT IN THE FILE: preparer initials (no assisting staff on the matter)]",
+            f"{attorney}/[Not in the file: preparer initials (no assisting staff on the matter)]",
             "form_letters.signers; no assisting staff",
         )
     return Fact(f"{attorney}/{preparer}", f"form_letters.signers for {who}; assisting staff initials")
