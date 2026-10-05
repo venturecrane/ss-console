@@ -52,10 +52,13 @@ MEETING_URL = "https://zoom.us/j/4284801619"
 ENABLE_PUBLIC_PATTERNS = "0"
 
 # Sentry issue-resource deliveries to /api/webhooks/sentry: "page" or "ignore".
-# "page" until the global Sentry alert rule (event_alert payloads, which carry
-# the tenant tag) exists; then "ignore", or every issue pages twice. See the
-# header of src/pages/api/webhooks/sentry.ts.
-SENTRY_ISSUE_RESOURCE = "page"
+# "ignore" since 2026-10-05: the global Sentry alert rule (workflow 6119804,
+# "SMD ops console: new or regressed Operator issue") delivers event_alert
+# payloads, which carry the tenant tag. Paging the tagless issue payload too
+# pages every issue twice and, arriving first, labels it "fleet" instead of
+# its seat (proven on the first live test). Set "page" only if that rule is
+# deleted. See the header of src/pages/api/webhooks/sentry.ts.
+SENTRY_ISSUE_RESOURCE = "ignore"
 
 # ---------- D1 (structured data) ----------
 [[d1_databases]]
