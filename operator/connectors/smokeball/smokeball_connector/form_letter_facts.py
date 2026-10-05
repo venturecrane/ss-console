@@ -271,14 +271,44 @@ def signer_facts(client: Any, matter: dict[str, Any], signers: dict[str, dict[st
     entry = signers.get(_key(staff_id)) or signers.get(_key(full)) or {}
     who = full or "the responsible staff member"
     out: dict[str, Fact] = {}
-    for f in ("name", "title", "initials"):
+    for f in ("name", "title"):
         value = entry.get(f)
         out[f] = (
             Fact(value, f"form_letters.signers for {who} (the matter's responsible staff)")
             if value
             else _absent(f"how {who} signs: {f}", "form_letters.signers")
         )
+    out["initials"] = _reference_initials(client, matter, entry.get("initials"), who)
     return out
+
+
+def _staff_initials(staff: dict[str, Any]) -> str | None:
+    """A staff member's typist initials, lowercase: the record's own initials
+    when it carries them, else first + last initial."""
+    own = staff.get("initials")
+    if isinstance(own, str) and own.strip():
+        return own.strip().lower()
+    parts = [p for p in (staff.get("firstName"), staff.get("lastName")) if isinstance(p, str) and p.strip()]
+    return "".join(p.strip()[0] for p in parts).lower() if len(parts) == 2 else None
+
+
+def _reference_initials(client: Any, matter: dict[str, Any], attorney: str | None, who: str) -> Fact:
+    """The firm's reference line is ATTORNEY/preparer ("EAS/cr", "CAP/ic"):
+    the signing attorney's initials as authored in form_letters.signers, then
+    the lowercase initials of the staff member assisting on the matter, who
+    prepares the letter (the firm's own letters pair cr, pd, nb, dm, ic, cc
+    with the paralegal on the file). Either half missing prints its marker."""
+    if not attorney:
+        return _absent(f"how {who} signs: initials", "form_letters.signers")
+    staff_id = matter.get("personAssistingStaffId")
+    staff = client.get(f"/staff/{staff_id}") if isinstance(staff_id, str) and staff_id else None
+    preparer = _staff_initials(staff) if isinstance(staff, dict) else None
+    if not preparer:
+        return Fact(
+            f"{attorney}/[NOT IN THE FILE: preparer initials (no assisting staff on the matter)]",
+            "form_letters.signers; no assisting staff",
+        )
+    return Fact(f"{attorney}/{preparer}", f"form_letters.signers for {who}; assisting staff initials")
 
 
 __all__ = [

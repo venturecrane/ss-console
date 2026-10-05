@@ -1338,22 +1338,32 @@ combined_post_intake:
 
 # form_letters.signers: how the matter's responsible staff member signs the
 # firm's rep letters, keyed by the staff member's name as Smokeball holds it
-# (or their staff id). Authored ONLY from the firm's own letters: Christa's
-# 2026-10-05 1st party letter signed "Christopher A. Price, Attorney at Law";
-# the firm's 3rd party letters of 2026-09-30 and its 1st party letter of
-# 2026-10-02 sign "Edward A. Schade, Attorney at Law" over "EAS/cr". No
-# initials line appears on any letter Chris Price signed, so none is authored
-# for him: a letter that prints one shows the marker. A staff member not
-# listed here prints "[NOT IN THE FILE: how <name> signs: ...]".
+# (or their staff id). Authored ONLY from the firm's own letters (the file
+# review packs, 2026-09-29 to 10-02, plus Christa's 2026-10-05 1st party
+# letter): "Christopher A. Price", "Edward A. Schade", "Craig F. Ashton" and
+# "Scott R. Ashton" sign them, over a reference line ATTORNEY/preparer that
+# pairs the attorney's initials (CAP, EAS, CFA, SRA) with the lowercase
+# initials of the paralegal on the file (EAS/cr, CAP/ic, CFA/nb, SRA/pd). The
+# connector supplies the second half from the matter's assisting staff. Only
+# "Attorney at Law" is authored as a title, and only for the two attorneys
+# whose rep letters show it; a missing title prints the marker. A staff member
+# not listed here prints "[NOT IN THE FILE: how <name> signs: ...]".
 form_letters:
   signers:
     Chris Price:
       name: 'Christopher A. Price'
       title: 'Attorney at Law'
+      initials: 'CAP'
     Edward Schade:
       name: 'Edward A. Schade'
       title: 'Attorney at Law'
-      initials: 'EAS/cr'
+      initials: 'EAS'
+    Craig Ashton:
+      name: 'Craig F. Ashton'
+      initials: 'CFA'
+    Scott Ashton:
+      name: 'Scott R. Ashton'
+      initials: 'SRA'
 
 # vendor_invoice_intake: every staged vendor invoice is billable, and its PDF
 # files into Accounting/Invoices (a nested path: the "Invoices" folder whose

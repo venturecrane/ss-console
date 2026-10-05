@@ -44,6 +44,7 @@ CLIENT = "c-client"
 ADJUSTER = "c-adj"
 INSURER_3P = "c-ins3"
 STAFF = "s-1"
+ASSIST = "s-2"
 
 
 def _layout(**overrides: Any) -> dict[str, Any]:
@@ -94,7 +95,12 @@ class _Record:
 
     def get(self, path: str, **_params: Any) -> Any:
         if path == f"/matters/{MATTER}":
-            return {"id": MATTER, "clientIds": [CLIENT], "personResponsibleStaffId": STAFF}
+            return {
+                "id": MATTER,
+                "clientIds": [CLIENT],
+                "personResponsibleStaffId": STAFF,
+                "personAssistingStaffId": ASSIST,
+            }
         if path == f"/matters/{MATTER}/roles":
             return {
                 "roles": [
@@ -123,6 +129,8 @@ class _Record:
             return self.contacts[path.rsplit("/", 1)[1]]
         if path == f"/staff/{STAFF}":
             return {"id": STAFF, "firstName": "Sam", "lastName": "Signer", "role": "Attorney"}
+        if path == f"/staff/{ASSIST}":
+            return {"id": ASSIST, "firstName": "Alex", "lastName": "Barnes", "role": None}
         if path == f"/matters/{MATTER}/documents/files":
             return {"value": self.files}
         if path.startswith(f"/matters/{MATTER}/documents/files/"):
@@ -138,7 +146,7 @@ class _Record:
 def signers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "customer.yaml"
     path.write_text(
-        "form_letters:\n  signers:\n    Sam Signer: {name: 'Samuel Q. Signer', title: 'Attorney at Law', initials: 'SQS/ab'}\n",
+        "form_letters:\n  signers:\n    Sam Signer: {name: 'Samuel Q. Signer', title: 'Attorney at Law', initials: 'SQS'}\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
@@ -243,6 +251,22 @@ def test_third_party_letter_fills_its_own_layout(signers: Path) -> None:
     assert "\t\tClaim#:\t\t44-5556667" in texts
     assert "Date of Loss:\t\t03/04/2026" in texts
     assert texts[-2:] == ["\t\t\t\t\t\t\tSamuel Q. Signer", "SQS/ab\t\t\t\t\t\t\tAttorney at Law"]
+
+
+def test_the_reference_line_pairs_the_attorney_with_the_staff_on_the_file(signers: Path) -> None:
+    """EAS/cr, CAP/ic: the attorney's authored initials, then the assisting
+    staff member's. A file with no assisting staff marks the second half."""
+    assert _values(_Record(), "third_party_rep")["signer_initials"] == "SQS/ab"
+
+    class _NoAssist(_Record):
+        def get(self, path: str, **params: Any) -> Any:
+            if path == f"/matters/{MATTER}":
+                return {"id": MATTER, "clientIds": [CLIENT], "personResponsibleStaffId": STAFF}
+            return super().get(path, **params)
+
+    assert _values(_NoAssist(), "third_party_rep")["signer_initials"] == (
+        "SQS/[NOT IN THE FILE: preparer initials (no assisting staff on the matter)]"
+    )
 
 
 # ---- the facts ------------------------------------------------------------
