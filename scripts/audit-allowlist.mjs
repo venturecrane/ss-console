@@ -56,6 +56,14 @@ function highSeverityGhsas(dir) {
     throw new Error(`npm audit produced no output for ${dir}: ${res.stderr || res.error}`)
   }
   const report = JSON.parse(res.stdout)
+  // npm reports a failed audit (registry unreachable, no lockfile) as
+  // {"error": {...}} with exit 1. That carries no `vulnerabilities` key, so
+  // without this check "could not look" counted as zero advisories.
+  if (report.error) {
+    const e = report.error
+    const summary = [e.code, e.summary ?? e.message].filter(Boolean).join(': ')
+    throw new Error(`npm audit failed for ${dir}: ${summary || JSON.stringify(e)}`)
+  }
   const found = new Map() // ghsa -> { title, severity }
   for (const vuln of Object.values(report.vulnerabilities ?? {})) {
     if (vuln.severity !== 'high' && vuln.severity !== 'critical') continue

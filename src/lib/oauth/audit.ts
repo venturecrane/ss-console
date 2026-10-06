@@ -10,15 +10,19 @@
  *   - `oauth-callback.token-rejected` — state invalid, provider unknown,
  *     reviewer mismatch, exchange failed, or store rejected the token.
  *
- * v1 ships a console-only writer. The audit log persistence layer is
- * tracked in issue #891 (D1 audit_log table per
- * docs/specs/operator/d1-schema.md). When #891 lands, swap
- * `emitAuditEvent` to write rows there. The shape of the event payload
- * is stable so the swap is a one-line change inside this file.
+ * Each event is INSERTed into the append-only `oauth_callback_audit` table
+ * (migration 0121). It used to be console-only behind a deferral note naming #891,
+ * which closed on 2026-05-22 with nothing persisted (code review
+ * 2026-10-06, I12). A failed insert never breaks the callback (the grant or
+ * the rejection still completes for the client), but it is logged and
+ * captured to Sentry, never swallowed: a missing audit row must be visible.
  *
  * Token material is NEVER included in audit events. Only the metadata
  * fields below.
  */
+
+import type { D1Database } from '@cloudflare/workers-types'
+import { captureError } from '../observability/sentry'
 
 export type OAuthAuditAction = 'token-issued' | 'token-rejected'
 
@@ -40,7 +44,7 @@ export interface EmitOAuthAuditInput {
   reason?: string
 }
 
-export function emitAuditEvent(input: EmitOAuthAuditInput): Promise<void> {
+export async function emitAuditEvent(db: D1Database, input: EmitOAuthAuditInput): Promise<void> {
   const event: OAuthAuditEvent = {
     skill: 'oauth-callback',
     action: input.action,
@@ -51,7 +55,26 @@ export function emitAuditEvent(input: EmitOAuthAuditInput): Promise<void> {
   }
   if (input.reason) event.reason = input.reason
 
-  // TODO(#891): persist to D1 audit_log table once that issue lands.
   console.log('[oauth/audit]', JSON.stringify(event))
-  return Promise.resolve()
+  try {
+    await db
+      .prepare(
+        'INSERT INTO oauth_callback_audit ' +
+          '(skill, action, customer_id, provider, reviewer_id, reason, ts) ' +
+          'VALUES (?, ?, ?, ?, ?, ?, ?)'
+      )
+      .bind(
+        event.skill,
+        event.action,
+        event.customer_id,
+        event.provider,
+        event.reviewer_id,
+        event.reason ?? null,
+        event.ts
+      )
+      .run()
+  } catch (err) {
+    console.error('[oauth/audit] persist failed', JSON.stringify(event), err)
+    captureError(err, 'oauth-callback-audit')
+  }
 }
