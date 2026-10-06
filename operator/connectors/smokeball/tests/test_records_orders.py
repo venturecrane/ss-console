@@ -405,3 +405,49 @@ def test_the_order_carries_the_seats_vendor_name(monkeypatch: pytest.MonkeyPatch
 
 def test_scrub_blanks_ssn_shapes() -> None:
     assert records_vendor.scrub(f"bad ssn {SSN} and {SSN_DIGITS}") == "bad ssn [redacted] and [redacted]"
+
+
+# ---- option B: the vendor's e-authorization (A&P, 2026-10-06) ----------------
+@pytest.fixture
+def e_auth(_authored_fee: Any) -> Any:
+    _authored_fee.write_text(
+        "records_orders:\n  pre_approved_custodian_fee: 100\n  authorization: e_auth\n", encoding="utf-8"
+    )
+    return _authored_fee
+
+
+def test_e_auth_needs_no_file_and_shows_where_the_signing_request_goes(e_auth: Any) -> None:
+    out = prepare(FakeSmokeball(files=[]), Vendor().client(), _request(), TODAY)
+    assert out["status"] == "ready", out
+    order = out["order"]
+    assert order["authorization"] == "e_auth" and order["esign_to"] == "p***@example.com"
+    assert order["hipaa_file_id"] is None and order["hipaa_file_name"] is None
+    assert "pat@example.com" not in json.dumps(out)  # the full address never leaves the tool
+    assert "its own authorization to sign at p***@example.com" in out["next_step"]
+
+
+def test_e_auth_places_without_an_upload(e_auth: Any) -> None:
+    order = prepare(FakeSmokeball(files=[]), Vendor().client(), _request(), TODAY)["order"]
+    vendor = Vendor()
+    out = place(FakeSmokeball(files=[]), vendor.client(), order)
+    assert out["status"] == "placed" and vendor.steps() == ["new", "patch", "validate", "finish"]
+    body = json.loads(vendor.calls[0][2])
+    assert body["patient"]["hipaa_type"] == "e_auth"
+    assert body["patient"]["esign_notification_contact_info"] == "pat@example.com"
+    assert body["matter"]["use_yipaa_form"] is True
+
+
+def test_e_auth_falls_back_to_the_cell_and_asks_when_there_is_neither(e_auth: Any) -> None:
+    out = prepare(FakeSmokeball(contact=_contact(email=None), files=[]), Vendor().client(), _request(), TODAY)
+    assert out["order"]["esign_to"] == "***-***-1212"
+    out = prepare(
+        FakeSmokeball(contact=_contact(email=None, cell=None), files=[]), Vendor().client(), _request(), TODAY
+    )
+    assert out["status"] == "missing_client_facts"
+    assert "email or cell phone (for the signing request)" in out["client"]["missing"]
+
+
+def test_e_auth_refuses_when_the_clients_address_changed_after_she_saw_it(e_auth: Any) -> None:
+    order = prepare(FakeSmokeball(files=[]), Vendor().client(), _request(), TODAY)["order"]
+    with pytest.raises(OrderRefused):
+        place(FakeSmokeball(contact=_contact(email="other@example.com"), files=[]), Vendor().client(), order)
