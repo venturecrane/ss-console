@@ -320,20 +320,38 @@ FIRM = ("firm.example",)
 @pytest.mark.parametrize(
     "sender,recipients,client,want",
     [
-        ("client@mail.example", ["atty@firm.example"], {"client@mail.example"}, "client or personal mailbox to firm"),
-        ("atty@firm.example", ["client@mail.example"], {"client@mail.example"}, "firm to client or personal mailbox"),
+        (
+            "client@mail.example",
+            ["atty@firm.example"],
+            {"client@mail.example"},
+            "between the firm and the client or a personal mailbox",
+        ),
+        (
+            "atty@firm.example",
+            ["client@mail.example"],
+            {"client@mail.example"},
+            "between the firm and the client or a personal mailbox",
+        ),
         ("atty@firm.example", ["para@firm.example"], {"client@mail.example"}, "firm internal"),
         # a second personal address (a spouse) is walled although the client's address is known
-        ("spouse@mail.example", ["atty@firm.example"], {"client@mail.example"}, "client or personal mailbox to firm"),
-        ("atty@firm.example", ["spouse@mail.example"], {"client@mail.example"}, "firm to client or personal mailbox"),
-        # Exchange X.500 internal mail parses to no address at all: walled, never read
-        ("", ["atty@firm.example"], {"client@mail.example"}, "sender or recipients unreadable"),
-        ("atty@firm.example", [], {"client@mail.example"}, "sender or recipients unreadable"),
+        (
+            "spouse@mail.example",
+            ["atty@firm.example"],
+            {"client@mail.example"},
+            "between the firm and the client or a personal mailbox",
+        ),
+        # Exchange writes an internal sender as a name or X.500 path: the firm's own
+        ("", ["atty@firm.example"], {"client@mail.example"}, "firm internal"),
+        ("", ["client@mail.example"], {"client@mail.example"}, "between the firm and the client or a personal mailbox"),
+        ("", [], {"client@mail.example"}, "sender and recipients unreadable"),
+        # ANY business party on the thread keeps it: carrier, provider, vendor (measured 2026-10-06)
         ("adjuster@carrier.example", ["atty@firm.example"], {"client@mail.example"}, None),
         ("atty@firm.example", ["adjuster@carrier.example", "para@firm.example"], {"client@mail.example"}, None),
+        ("client@mail.example", ["atty@firm.example", "records@provider.example"], {"client@mail.example"}, None),
+        ("", ["atty@firm.example", "claims@administrator.example"], {"client@mail.example"}, None),
     ],
 )
-def test_the_wall_is_decided_by_addresses_and_fails_closed(sender, recipients, client, want):
+def test_the_wall_is_decided_by_addresses(sender, recipients, client, want):
     assert pull.wall_reason(sender, recipients, FIRM, client, ("mail.example",)) == want
 
 
@@ -390,8 +408,8 @@ def test_walled_email_never_reaches_the_corpus_and_kept_mail_brings_its_body(tmp
     monkeypatch.setattr(pull, "_open_msg", lambda path: msgs[path.stem])
     out = pull.split_emails(rows, data, firm, {"client@mail.example"})
     assert sorted(w["reason"] for w in out["walled"]) == [
-        "client or personal mailbox to firm",
-        "sender or recipients unreadable",
+        "between the firm and the client or a personal mailbox",
+        "firm internal",
     ]
     assert [k["name"] for k in out["kept"]] == ["Email: claim CLM-0001 limits", "dec page.pdf"]
     # the privileged words are on disk only as held-out text, never in a kept document's TEXT
@@ -1015,3 +1033,83 @@ def test_g1_skips_a_medical_record_by_its_content_not_only_its_name():
         )
     ]
     assert premise.carrier_documents(bill_by_content, ["claim number"]) == []
+
+
+def test_a_header_block_without_a_sent_line_is_not_a_printed_email(tmp_path):
+    firm = firm_mod.load(make_inputs(tmp_path / "in"))
+    no_sent = "From: Alpha <client@mail.example>\nTo: atty@firm.example\nCc: para@firm.example\nbody"
+    assert pull.printed_email_wall(no_sent, firm, {"client@mail.example"}) is None
+    with_cc = (
+        "From: Alpha <client@mail.example>\nSent: Mon\nTo: atty@firm.example\nCc: para@firm.example\nSubject: x\nb"
+    )
+    assert pull.printed_email_wall(with_cc, firm, {"client@mail.example"})
+
+
+PREM = {
+    "settled_phrases": ["accept the policy limits", "release in full of all"],
+    "_firm_signature": "EXAMPLE & EXAMPLE, LLP",
+    "_firm_domains": ["firm.example"],
+}
+
+
+def test_the_firms_own_prior_demand_is_not_an_acceptance():
+    from medchron.demand import premise
+
+    ours = (
+        {"name": "Demand 3-1-26", "kind": "file"},
+        "We ask that you accept the policy limits demand.\nCordially,\nEXAMPLE & EXAMPLE, LLP\nExample A. Lawyer",
+    )
+    ours_email = (
+        {"name": "Email: demand", "kind": "email_body"},
+        "Email: demand\nFrom: atty@firm.example\nTo: adj@carrier.example\n\nPlease accept the policy limits.",
+    )
+    theirs = (
+        {"name": "Letter 5-5-26", "kind": "file"},
+        "Example & Example, LLP\n1 Main\nRe: Alpha. We hereby accept the policy limits demand.\nSincerely,\nPat Adjuster",
+    )
+    assert premise.firm_authored(ours[0], ours[1], PREM) and premise.firm_authored(ours_email[0], ours_email[1], PREM)
+    assert not premise.firm_authored(theirs[0], theirs[1], PREM)  # addressed to the firm, signed by the carrier
+    texts = [ours, ours_email, theirs]
+    hits = premise._phrase_hits(
+        [(r, t) for r, t in texts if not premise.firm_authored(r, t, PREM)], PREM["settled_phrases"], negatable=True
+    )
+    assert [h["document"] for h in hits] == ["Letter 5-5-26"]
+
+
+def test_a_carrier_letter_about_dates_of_service_and_charges_is_still_a_carrier_letter():
+    from medchron.demand import premise
+
+    letter = [
+        (
+            {"name": "Letter from carrier"},
+            "Example Mutual Insurance Company, claims department. Our insured "
+            "Beta Driver. Claim number CLM-0001. We have reviewed the dates of service and charges you sent.",
+        )
+    ]
+    assert len(premise.carrier_documents(letter, ["claim number"])) == 1
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "We decline to deny coverage at this time.",
+        "We are not able to deny coverage yet.",
+        "We won't deny coverage before the investigation ends.",
+    ],
+)
+def test_the_remaining_negations(text):
+    from medchron.demand import premise
+
+    assert premise._phrase_hits([({"name": "letter"}, text)], ["deny coverage"], negatable=True) == []
+
+
+def test_a_financial_responsibility_form_is_not_an_acceptance(tmp_path):
+    """The engagements config narrows "hereby accept" to accepting a demand."""
+
+    phrases = ["hereby accept your demand", "hereby accepts your demand", "hereby accept your time-limited demand"]
+    from medchron.demand import premise
+
+    form = [({"name": "Lien"}, "I hereby accept financial responsibility for all charges.")]
+    acceptance = [({"name": "Letter"}, "Example Mutual hereby accepts your demand dated May 1.")]
+    assert premise._phrase_hits(form, phrases, negatable=True) == []
+    assert premise._phrase_hits(acceptance, phrases, negatable=True)

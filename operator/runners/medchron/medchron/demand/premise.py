@@ -99,6 +99,27 @@ def medical_by_content(text: str) -> bool:
     return len({m.group(1).lower() for m in _MEDICAL_CONTENT.finditer(text[:4000])}) >= 2
 
 
+_CARRIER_SIGNAL = re.compile(
+    r"(?i)\b(our insured|your client|claims? (adjuster|representative|specialist|professional|department)|"
+    r"insurance (company|group|services|exchange)|mutual (insurance|automobile)|casualty (company|insurance))\b"
+)
+_SIGNOFF = r"(?:cordially|sincerely|very truly yours|respectfully(?: yours| submitted)?)[,\s]{0,60}"
+
+
+def firm_authored(r: dict[str, Any], text: str, prem: dict[str, Any]) -> bool:
+    """A document the firm wrote: an email sent from the firm's domain, or a
+    letter signed off over the firm's own signature line. The firm's prior
+    demand quotes "accept the policy limits" at the carrier; it is not an
+    acceptance (review of #3074). A carrier's letter ADDRESSED to the firm
+    names the firm too, so the test is the sign-off, never the name alone."""
+    domains = tuple(prem.get("_firm_domains") or ())
+    if r.get("kind") == "email_body":
+        m = re.search(r"(?im)^From:\s*(\S+@(\S+))", text)
+        return bool(m and m.group(2).lower().strip(">") in domains)
+    sig = str(prem.get("_firm_signature") or "")
+    return bool(sig) and re.search(_SIGNOFF + re.escape(sig), text, re.I) is not None
+
+
 _CARRIER_WORD = re.compile(r"(?i)\b(insured|adjuster|claims? (representative|specialist|adjuster|department))\b")
 _IDENT = re.compile(r"[\s:#.]*([A-Z0-9][A-Z0-9-]{3,})", re.I)
 
@@ -113,7 +134,11 @@ def carrier_documents(texts: list[tuple[dict[str, Any], str]], phrases: list[str
     pats = [re.compile(re.escape(p), re.I) for p in phrases]
     out = []
     for r, t in texts:
-        if _BILL_OR_RECORD.search(str(r.get("name") or "")) or medical_by_content(t) or not _CARRIER_WORD.search(t):
+        if not _CARRIER_WORD.search(t) or _BILL_OR_RECORD.search(str(r.get("name") or "")):
+            continue
+        # A carrier's letter that discusses "dates of service" and "charges"
+        # is still the carrier's letter: its own signals win over medical words.
+        if medical_by_content(t) and not _CARRIER_SIGNAL.search(t[:4000]):
             continue
         for p in pats:
             m = next(
@@ -181,7 +206,9 @@ def decide(
     # read for the settlement phrases too, negation-aware (review of #3074).
     blocking += [
         f"settled, in the text: {h['document']}: {h['quote']}"
-        for h in _phrase_hits(texts, prem["settled_phrases"], negatable=True)
+        for h in _phrase_hits(
+            [(r, t) for r, t in texts if not firm_authored(r, t, prem)], prem["settled_phrases"], negatable=True
+        )
     ]
     gates.append(
         {"gate": "G4 the right instrument (pre-suit, unresolved)", "passed": not blocking, "evidence": blocking[:10]}

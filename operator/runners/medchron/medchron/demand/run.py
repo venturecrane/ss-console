@@ -490,7 +490,11 @@ class DemandRun:
         self._stage("pull", self._pull)
         self._stage("preflight", lambda: preflight.run(self.data, self.firm, self._json("facts.json"), self.log))
         self._estimate()
-        prem = self.firm.data["premise"]
+        prem = {
+            **self.firm.data["premise"],
+            "_firm_signature": self.firm.data["format"]["firm_signature"],
+            "_firm_domains": list(self.firm.firm_domains),
+        }
         self._stage("premise", lambda: premise.run(self.data, self.job, self._json("facts.json"), prem, self.long_date))
         if not self._json("premise.json")["passed"]:
             return self._coverage((self.data / "coverage-report.md").read_text(encoding="utf-8"), gated=False)

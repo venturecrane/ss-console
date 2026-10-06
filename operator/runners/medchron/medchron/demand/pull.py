@@ -78,17 +78,24 @@ def wall_reason(
     client: set[str],
     consumer_domains: tuple[str, ...] = (),
 ) -> str | None:
-    """Why an email is held out, or None. Decided by addresses alone, and
-    failing CLOSED: a document the wall cannot place is held out, which the
-    attorney can clear, never read by a model (review of #3074, 2026-10-06).
+    """Why an email is held out, or None. Decided by addresses alone.
 
-    * no parseable sender, or no parseable recipient: Exchange's internal X.500
-      addresses (``/O=EXCHANGELABS/OU=...``) parse as neither, and that is
-      exactly what firm-internal mail looks like;
-    * the client's known address to or from the firm;
-    * ANY consumer mailbox (the authored list) to or from the firm, whether or
-      not the client's address is known: a second address, a spouse, a parent;
-    * firm to firm only."""
+    Measured on a live 108-email matter (2026-10-06, read-only): the first,
+    fail-closed version held out 97, including mail with a claims
+    administrator, a medical provider and a transport vendor on it, because a
+    business party copied on a client's or an Exchange-internal message was
+    walled with it. A third party on the thread is not attorney-client
+    communication, and carrier and provider mail is the record a demand is
+    built from. So:
+
+    * ANY business party (not the firm, not a personal mailbox) on the message:
+      KEPT;
+    * otherwise, the firm and a personal mailbox (the client's known address,
+      or any consumer mailbox) on the same message: walled;
+    * otherwise firm-only mail, counting a sender with no parseable address as
+      the firm's own (Exchange writes internal senders as a name or an X.500
+      path, never an SMTP address): walled as firm internal;
+    * nothing parseable at all: walled (it cannot be placed)."""
 
     def is_firm(a: str) -> bool:
         return a.rsplit("@", 1)[-1] in firm_domains
@@ -97,14 +104,15 @@ def wall_reason(
         return a in client or a.rsplit("@", 1)[-1] in consumer_domains
 
     sender = sender.lower()
-    recipients = [r.lower() for r in recipients]
-    if not sender or not recipients:
-        return "sender or recipients unreadable"
-    if is_personal(sender) and any(is_firm(r) for r in recipients):
-        return "client or personal mailbox to firm"
-    if is_firm(sender) and any(is_personal(r) for r in recipients):
-        return "firm to client or personal mailbox"
-    if is_firm(sender) and all(is_firm(r) for r in recipients):
+    parties = [x.lower() for x in [sender, *recipients] if x]
+    if any(not is_firm(x) and not is_personal(x) for x in parties):
+        return None
+    if not parties:
+        return "sender and recipients unreadable"
+    firm_side = not sender or any(is_firm(x) for x in parties)
+    if firm_side and any(is_personal(x) for x in parties):
+        return "between the firm and the client or a personal mailbox"
+    if firm_side:
         return "firm internal"
     return None
 
@@ -119,7 +127,7 @@ def printed_email_wall(text: str, firm: DemandFirm, client: set[str]) -> str | N
     A fax cover sheet (TO:/FROM:/RE:) has neither, and a provider's or
     carrier's cover is a record, not correspondence (review of #3074)."""
     head = text[:3000]
-    if {m.group(1).lower() for m in _HEADER.finditer(head)} < {"from", "sent", "to", "subject"}:
+    if not {"from", "sent", "to", "subject"} <= {m.group(1).lower() for m in _HEADER.finditer(head)}:
         return None
     if "@" not in _line(head, "from") + _line(head, "to"):
         return None
