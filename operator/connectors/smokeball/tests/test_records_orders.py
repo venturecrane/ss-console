@@ -30,6 +30,17 @@ CLIENT = "c0ffee00-0000-4000-8000-000000000001"
 SSN = "123-45-6789"
 SSN_DIGITS = "123456789"
 TODAY = date(2026, 10, 5)
+
+
+@pytest.fixture(autouse=True)
+def _authored_fee(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """The seat authors the firm's standing fee; every test reads it from here."""
+    path = tmp_path / "customer.yaml"
+    path.write_text("records_orders:\n  pre_approved_custodian_fee: 100\n", encoding="utf-8")
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
+    return path
+
+
 OID = "11111111-2222-4333-8444-555555555555"
 PDF = b"%PDF-1.7\n" + b"x" * 64
 EMAIL = "paralegal@firm.example"
@@ -252,6 +263,22 @@ def test_prepare_refuses_a_matter_number_and_a_future_range() -> None:
         prepare(FakeSmokeball(), Vendor().client(), _request(matter_id="900101"), TODAY)
     with pytest.raises(OrderRefused):
         prepare(FakeSmokeball(), Vendor().client(), _request(years=None, service_start="2027-01-01"), TODAY)
+
+
+def test_the_fee_is_the_firms_authored_figure_and_is_returned_as_text(
+    _authored_fee: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The administrator's read-back names the fee in dollars, and the outbound
+    fabrication gate admits that figure only when a read this turn carried it
+    as text. A bare 100.0 seeded nothing and the read-back was held."""
+    out = prepare(FakeSmokeball(), Vendor().client(), _request(), TODAY)
+    assert out["order"]["pre_approved_custodian_fee"] == 100.0
+    assert out["pre_approved_custodian_fee_shown"] == "$100.00"
+    out = prepare(FakeSmokeball(), Vendor().client(), _request(pre_approved_custodian_fee=150), TODAY)
+    assert out["pre_approved_custodian_fee_shown"] == "$150.00", "her own figure wins over the standing one"
+    _authored_fee.write_text("records_orders: {}\n", encoding="utf-8")
+    with pytest.raises(OrderRefused, match="not authored"):
+        prepare(FakeSmokeball(), Vendor().client(), _request(), TODAY)
 
 
 # ---- place ------------------------------------------------------------------

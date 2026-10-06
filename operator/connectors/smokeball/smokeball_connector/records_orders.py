@@ -32,10 +32,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from datetime import date
 from typing import Any
 
+from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
 from .records_vendor import MAX_UPLOAD_BYTES, RecordsVendorApiError, scrub
 from .records_patient import LANGUAGES, OrderRefused, read_matter_and_patient, require_matter_id
 
@@ -44,7 +46,14 @@ RECORD_TYPES = ("Medical", "Billing", "Radiology Image", "Radiology Record", "EH
 #: emails): authorization, certification not requested, Medical and Billing, a
 #: $100.00 pre-approved custodian fee. Shown in the read-back for her to change.
 DEFAULT_RECORD_TYPES = ("Medical", "Billing")
-DEFAULT_CUSTODIAN_FEE = 100.0
+# The fee is the FIRM'S standing term, authored per seat in customer.yaml
+# (records_orders.pre_approved_custodian_fee), never a code default: a figure
+# the administrator approves has to be one the firm set. It is also returned as
+# text ("$100.00") because the outbound fabrication gate admits a dollar figure
+# in the reply only when a read this turn carried it in that form; a bare 100.0
+# seeds nothing and the administrator's read-back is held (2026-10-05).
+FEE_CONFIG_BLOCK = "records_orders"
+FEE_CONFIG_KEY = "pre_approved_custodian_fee"
 MAX_CUSTODIAN_FEE = 10_000.0
 MAX_LOCATIONS = 10
 MAX_YEARS = 20
@@ -134,9 +143,29 @@ def record_types(value: Any) -> list[str]:
     return list(dict.fromkeys(value))
 
 
-def custodian_fee(value: Any) -> float:
+def authored_custodian_fee(path: str | None = None) -> Any:
+    """The seat's authored standing fee, or None when the firm authored none
+    (or the config cannot be read: "cannot tell" never becomes a figure)."""
+    path = path or os.environ.get(CUSTOMER_YAML_ENV) or DEFAULT_CUSTOMER_YAML
+    try:
+        import yaml
+
+        with open(path, encoding="utf-8") as fh:
+            cfg = yaml.safe_load(fh) or {}
+    except Exception:  # noqa: BLE001 - unreadable config means nothing authored
+        return None
+    block = cfg.get(FEE_CONFIG_BLOCK) if isinstance(cfg, dict) else None
+    return block.get(FEE_CONFIG_KEY) if isinstance(block, dict) else None
+
+
+def custodian_fee(value: Any, authored: Any = None) -> float:
     if value is None:
-        return DEFAULT_CUSTODIAN_FEE
+        value = authored
+    if value is None:
+        raise OrderRefused(
+            "No pre-approved custodian fee: the firm has not authored one "
+            f"({FEE_CONFIG_BLOCK}.{FEE_CONFIG_KEY}) and the request named none. Ask the requester for the amount."
+        )
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= MAX_CUSTODIAN_FEE:
         raise OrderRefused(f"pre_approved_custodian_fee must be a dollar amount from 0 to {MAX_CUSTODIAN_FEE:,.0f}.")
     return round(float(value), 2)
@@ -260,7 +289,10 @@ def prepare(client: Any, yc: Any, request: dict[str, Any], today: date) -> dict[
         request.get("facilities"), request.get("order_by_email"), request.get("language")
     )
     default = {k: request.get(k) for k in ("years", "service_start", "service_end")}
-    types, fee = record_types(request.get("record_types")), custodian_fee(request.get("pre_approved_custodian_fee"))
+    types, fee = (
+        record_types(request.get("record_types")),
+        custodian_fee(request.get("pre_approved_custodian_fee"), authored_custodian_fee()),
+    )
     matter, facts = read_matter_and_patient(client, matter_id)
     if facts.missing:
         return {
@@ -314,12 +346,13 @@ def prepare(client: Any, yc: Any, request: dict[str, Any], today: date) -> dict[
         "status": "ready",
         "order": {k: order[k] for k in ORDER_KEYS},
         "client": facts.summary(),
+        "pre_approved_custodian_fee_shown": f"${fee:,.2f}",
         "next_step": "Pass `order` to place_records_order exactly as returned. Nothing has been ordered.",
     }
 
 
 __all__ = [
-    "DEFAULT_CUSTODIAN_FEE",
+    "authored_custodian_fee",
     "DEFAULT_RECORD_TYPES",
     "LOCATION_KEYS",
     "MAX_LOCATIONS",
