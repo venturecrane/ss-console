@@ -165,7 +165,9 @@ def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> V
             raise BindingRefused("there is no demand job with that id")
         if row["state"] not in REPLYABLE_DEMAND_STATES:
             raise BindingRefused(f"demand job {ident} has not ended (it is {row['state']}); its reply waits for that")
-        key = f"demand_job:{ident}:{row['state']}"
+        # One reply per (attempt, outcome): a resumed job (attempt + 1) that
+        # ends again is owed a reply for its new outcome.
+        key = f"demand_job:{ident}:{row.get('attempt') or 1}:{row['state']}"
         if bound_replies.claimed(db_path, key):
             raise BindingRefused(f"demand job {ident} has already had its reply for this outcome")
         job_id, imid, expected_sender = ident, f"<{str(row['request_ref']).strip('<>')}>", row["requester"]
@@ -304,6 +306,11 @@ def reply_verb(
         if method == "POST" and not state["claimed"]:
             if not bound_replies.claim(db_path, v.key, v.graph_message_id, v.internet_message_id, session_id):
                 raise BindingRefused("that reply was already sent")
+            if v.kind == "demand_job" and not _demand_ledger(broker).mark_replied(v.job_id, _outcome(v)):
+                # The ledger's own compare-and-set disagrees (this outcome was
+                # already replied to): honor it, give back the claim, send nothing.
+                bound_replies.release(db_path, v.key)
+                raise BindingRefused("the job's record shows this outcome was already replied to")
             state["claimed"] = True
             state["claimed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         return original(path, method, body, **kw)
@@ -340,9 +347,12 @@ def reply_verb(
             _settle_failed_post(broker, ops, v, raw, exc, str(state["claimed_at"]))
         raise
     bound_replies.settle(db_path, v.key, "sent")
-    if v.kind == "demand_job":
-        _demand_ledger(broker).mark_replied(v.job_id)
     return result
+
+
+def _outcome(v: Verified) -> str:
+    """``<attempt>:<state>`` out of a demand key, the ledger's reply key."""
+    return v.key.split(":", 2)[2]
 
 
 def _settle_failed_post(
@@ -362,6 +372,8 @@ def _settle_failed_post(
             delivered = True
         if not delivered:
             bound_replies.release(db_path, v.key)
+            if v.kind == "demand_job":
+                _demand_ledger(broker).unmark_replied(v.job_id, _outcome(v))
             _audit(
                 broker, "send_released", raw, v=v, reason=f"Graph refused the reply (HTTP {status}); nothing was sent"
             )

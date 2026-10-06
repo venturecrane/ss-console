@@ -52,6 +52,7 @@ from .demand_ledger import (
     STATES,
     DemandLedger,
     EnvelopeError,
+    SubmitRefused,
     validate_envelope,
 )
 from .medchron_ledger import admins_from_customer_yaml, cycle_from_customer_yaml
@@ -65,6 +66,9 @@ AUDIT_TYPES = {
     "delivered": "DEMAND_JOB_DELIVERED",
     "failed": "DEMAND_JOB_FAILED",
 }
+#: A person asked the runner to re-run a failed job. NOT a transition (the
+#: daemon records ``running`` when it actually starts), so not RUNNING.
+RESUME_AUDIT_TYPE = "DEMAND_JOB_RESUME_REQUESTED"
 if AUDIT_TYPES != AUDIT_TYPE:
     raise RuntimeError("demand_verbs.AUDIT_TYPES and demand_ledger.AUDIT_TYPE disagree")
 
@@ -98,6 +102,20 @@ def demand_skill_settings(path: str | Path) -> dict[str, Any] | None:
             settings = skill.get("settings")
             return settings if isinstance(settings, dict) else {}
     return None
+
+
+def operator_library_number(path: str | Path) -> str | None:
+    """The firm's own authored library matter number (``self_initiation.
+    document_library.operator_matter.number``), the one matter a rehearsal may
+    file on instead of the matter it reads. None when unauthored."""
+    try:
+        import yaml
+
+        doc = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+        number = doc["self_initiation"]["document_library"]["operator_matter"]["number"]
+    except Exception:  # noqa: BLE001 - unauthored or unreadable authorizes nothing
+        return None
+    return number.strip() if isinstance(number, str) and number.strip() else None
 
 
 def allowance_of(settings: dict[str, Any] | None) -> int | None:
@@ -182,8 +200,9 @@ class DemandVerbs:
         The spend budget's window (the Captain, 2026-10-06: a monthly demand
         budget per calendar month, Pacific). Deliberately NOT the billing
         cycle the COUNT allowance uses: the count is a contract term, the
-        spend budget is ours. ``created_at`` is UTC, so the Pacific month's
-        two midnights are converted to UTC bounds."""
+        spend budget is ours. Cents are dated when the runner WROTE them
+        (``demand_spend``), not when the job began, and stored in UTC, so the
+        Pacific month's two midnights are converted to UTC bounds."""
         local = (now or datetime.now(timezone.utc)).astimezone(_PACIFIC)
         start = local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         nxt = (start + timedelta(days=32)).replace(day=1)
@@ -193,15 +212,7 @@ class DemandVerbs:
             wall = datetime(dt.year, dt.month, 1, tzinfo=_PACIFIC)
             return wall.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
-        conn = self._db._connect()
-        try:
-            row = conn.execute(
-                "SELECT COALESCE(SUM(cents), 0) AS c FROM demand_jobs WHERE created_at >= ? AND created_at < ? AND id != ?",
-                (utc(start), utc(nxt), exclude),
-            ).fetchone()
-            return start.strftime("%Y-%m"), int(row["c"])
-        finally:
-            conn.close()
+        return start.strftime("%Y-%m"), self._db.spend_between(utc(start), utc(nxt), exclude)
 
     # -- status ---------------------------------------------------------------
     def _status(self, request: dict[str, Any], *, full: bool) -> dict[str, Any]:
@@ -250,18 +261,28 @@ class DemandVerbs:
                 "a demand may only be requested by one of the firm's Named Administrators, and the "
                 "requester on this submission is not one of them; nothing was queued"
             )
-        twin = self._db.active_on_matter(envelope["matter"]["id"])
-        if twin is not None:
-            return refused(
-                f"a demand on this matter is already underway as job {twin}; nothing new was queued",
-                job_id=twin,
-            )
+        file_to = envelope["file_to"]
+        if file_to is not None and file_to["id"] != envelope["matter"]["id"]:
+            library = operator_library_number(self.customer_yaml)
+            if not library or file_to["number"] != library:
+                return refused(
+                    "a demand is filed on the matter it reads, or on the firm's own authored "
+                    "library matter for a rehearsal; that filing target is neither, so nothing was queued"
+                )
         if state["remaining"] <= 0:
             return refused(
                 f"this cycle's demand allowance is spent ({state['used']} of {state['allowance']} in "
                 f"{state['cycle']}); nothing was queued"
             )
-        job_id = self._db.submit(envelope)
+        try:
+            # The duplicate, the matter and the cycle are re-checked INSIDE the
+            # ledger's write transaction: the checks above are for a readable
+            # answer, these are the ones two concurrent submits cannot both pass.
+            job_id = self._db.submit(
+                envelope, allowance=state["allowance"], anchor_day=anchor, effective_from=effective_from
+            )
+        except SubmitRefused as exc:
+            return refused(f"{exc}; nothing new was queued", **({"job_id": exc.job_id} if exc.job_id else {}))
         self._audit(
             AUDIT_TYPES["submitted"],
             {
@@ -291,6 +312,10 @@ class DemandVerbs:
         if not job_id or state not in STATES or not isinstance(fields, dict):
             raise ValueError("demand_job_record requires job_id, a known state, and a fields object")
         row = self._db.record(job_id, state, dict(fields))
+        if row.get("prev_state") == state:
+            # A note on an unchanged state (the runner's lost-wake note): the
+            # row is updated, but the audit log records transitions only.
+            return {"ok": True, "job": DemandLedger.project(row)}
         meta: dict[str, Any] = {
             "job_id": job_id,
             "state": state,
@@ -330,8 +355,8 @@ class DemandVerbs:
         marker = self._db.queue_dir / f".resume-{job_id}.json"
         marker.write_text(json.dumps({"job_id": job_id, "reason": reason[:500]}, sort_keys=True), encoding="utf-8")
         self._audit(
-            AUDIT_TYPES["running"],
-            {"job_id": job_id, "resume_requested": True, "reason": reason[:500]},
+            RESUME_AUDIT_TYPE,
+            {"job_id": job_id, "reason": reason[:500]},
             row["matter_id"],
         )
         return {"ok": True, "job_id": job_id, "queued": True}

@@ -39,6 +39,10 @@ personas:
         enabled: true
         settings:
           demand_allowance_per_cycle: {allowance}
+self_initiation:
+  document_library:
+    operator_matter:
+      number: 'OPS-OPERATOR-LIBRARY'
 """
 NO_SKILL_YAML = """
 scope:
@@ -85,6 +89,10 @@ def call(broker, action, *, pid=GATEWAY_PID, uid=AGENT_UID, **req):
 
 
 def submit(broker, **over):
+    # One request email per matter unless a test says otherwise: request_ref is
+    # the idempotency key, so two jobs need two emails.
+    if "request_ref" not in over and "matter" in over:
+        over["request_ref"] = f"<{over['matter']['number']}@mail.firm.example>"
     return call(broker, "demand_job_submit", envelope=_envelope(**over))
 
 
@@ -138,8 +146,11 @@ def test_a_non_admin_requester_refuses(seat) -> None:
 def test_a_second_job_on_the_same_matter_refuses(seat) -> None:
     broker, *_ = seat
     first = submit(broker)
-    out = submit(broker)
+    out = submit(broker, request_ref="<another@mail.firm.example>")
     assert out["accepted"] is False and out["job_id"] == first["job_id"]
+    assert "already underway" in out["reason"]
+    again = submit(broker)  # the same email twice
+    assert again["accepted"] is False and "request email" in again["reason"]
     assert submit(broker, matter={"id": OTHER_MATTER, "number": "900202"})["accepted"] is True
 
 
@@ -226,6 +237,38 @@ def test_resume_writes_the_marker_for_a_failed_job_only(seat) -> None:
     assert call(broker, "demand_job_resume", uid=0, job_id=job, reason="cap raised")["queued"] is True
     marker = json.loads((queue / f".resume-{job}.json").read_text())
     assert marker == {"job_id": job, "reason": "cap raised"}
+    # A request, not a transition: its own audit type, never RUNNING.
+    assert audit_types(_db)[-1] == "DEMAND_JOB_RESUME_REQUESTED"
+
+
+def test_a_same_state_note_writes_no_audit_row(seat) -> None:
+    broker, db, *_ = seat
+    job = submit(broker)["job_id"]
+    call(broker, "demand_job_record", uid=0, job_id=job, state="running", fields={})
+    before = audit_types(db)
+    out = call(broker, "demand_job_record", uid=0, job_id=job, state="running", fields={"reason": "wake lost"})
+    assert out["job"]["reason"] == "wake lost"
+    assert audit_types(db) == before
+
+
+def test_file_to_is_the_matter_or_the_authored_library(seat) -> None:
+    """FALSIFIER: drop the file_to check and a demand files on any matter."""
+    broker, _db, yaml_path, _q = seat
+    elsewhere = {"id": OTHER_MATTER, "number": "900202"}
+    out = submit(broker, file_to=elsewhere)
+    assert out["accepted"] is False and "filing target" in out["reason"]
+    same = submit(broker, file_to={"id": MATTER, "number": "900201"})
+    assert same["accepted"] is True
+    library = {"id": "1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23", "number": "OPS-OPERATOR-LIBRARY"}
+    rehearsal = submit(broker, matter={"id": OTHER_MATTER, "number": "900202"}, file_to=library)
+    assert rehearsal["accepted"] is True
+    yaml_path.write_text(YAML.format(allowance=25).split("self_initiation:")[0])
+    out = submit(
+        broker,
+        matter={"id": "2dad2f6b-7c5b-4cee-a06d-aab9e1e91a24", "number": "900203"},
+        file_to=library,
+    )
+    assert out["accepted"] is False  # no library authored: no rehearsal target
 
 
 def test_an_unconfigured_broker_refuses(seat) -> None:
@@ -237,7 +280,7 @@ def test_an_unconfigured_broker_refuses(seat) -> None:
 
 def test_cents_used_is_the_pacific_calendar_month(seat) -> None:
     """The spend budget's window is the calendar month in America/Los_Angeles,
-    not the billing cycle. 2026-11-01T05:00Z is still October in Pacific (22:00
+    not the billing cycle, dated when the cents were WRITTEN. 2026-11-01T05:00Z is still October in Pacific (22:00
     Oct 31, PDT); 2026-11-01T08:00Z is November. FALSIFIER: bound the month in
     UTC and the first job moves months."""
     from datetime import datetime, timezone
@@ -249,8 +292,8 @@ def test_cents_used_is_the_pacific_calendar_month(seat) -> None:
     call(broker, "demand_job_record", uid=0, job_id=a, state="running", fields={"cents": 300})
     call(broker, "demand_job_record", uid=0, job_id=b, state="running", fields={"cents": 450})
     conn = sqlite3.connect(db)
-    conn.execute("UPDATE demand_jobs SET created_at=? WHERE id=?", ("2026-11-01T05:00:00.000Z", a))
-    conn.execute("UPDATE demand_jobs SET created_at=? WHERE id=?", ("2026-11-01T08:00:00.000Z", b))
+    conn.execute("UPDATE demand_spend SET at=? WHERE job_id=?", ("2026-11-01T05:00:00.000Z", a))
+    conn.execute("UPDATE demand_spend SET at=? WHERE job_id=?", ("2026-11-01T08:00:00.000Z", b))
     conn.commit()
     conn.close()
     verbs = broker.demand

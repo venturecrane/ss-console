@@ -122,6 +122,7 @@ export const CLIENT_ACTIVITY_CATEGORIES: readonly ClientActivityCategory[] = [
       'DEMAND_JOB_HELD',
       'DEMAND_JOB_DELIVERED',
       'DEMAND_JOB_FAILED',
+      'DEMAND_JOB_RESUME_REQUESTED',
       'CASEWORK_APPROVED',
       'CASEWORK_HELD',
       'CASEWORK_CLOSED_BY_RECORD',
@@ -340,6 +341,7 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   DEMAND_JOB_HELD: () => 'Paused a gap audit and draft demand and surfaced why',
   DEMAND_JOB_DELIVERED: () => 'Filed a gap audit and draft demand on the matter',
   DEMAND_JOB_FAILED: () => 'Could not finish a gap audit and draft demand',
+  DEMAND_JOB_RESUME_REQUESTED: () => 'Was asked to resume a gap audit and draft demand',
   // Case-manager casework. Each line is a fact about the firm's own task list:
   // what a person answered, and what the Operator closed because the record
   // already showed it done.

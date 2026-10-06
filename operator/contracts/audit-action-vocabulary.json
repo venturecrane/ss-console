@@ -109,6 +109,7 @@
     "DEMAND_JOB_HELD": "Broker-written when the runner holds a demand job; the reason travels in metadata as a code-authored sentence, never a document.",
     "DEMAND_JOB_DELIVERED": "Broker-written on delivery: cents, the folder id, and the file names and sizes read back from the matter, plus whether the delivery is a coverage report (a premise failure).",
     "DEMAND_JOB_FAILED": "Broker-written when a demand job fails or stops at a spend cap (resumable); the reason is the runner's sentence.",
+    "DEMAND_JOB_RESUME_REQUESTED": "Broker-written by operator/workspace_broker/demand_verbs.py on the root-only demand_job_resume: a person asked the runner to re-run a failed demand job, with their reason. A request, not a transition; the runner's own record writes DEMAND_JOB_RUNNING when it actually starts.",
     "SEND_AS_PROPOSED": "ADR 0089 staff send-as. Written by the workspace broker (send_as_acts.py), the only process holding the Send As credential; the overlay never writes it.",
     "SEND_AS_REVISED": "ADR 0089 staff send-as. Written by the workspace broker (send_as_acts.py), the only process holding the Send As credential; the overlay never writes it.",
     "SEND_AS_CANCELLED": "ADR 0089 staff send-as. Written by the workspace broker (send_as_acts.py), the only process holding the Send As credential; the overlay never writes it.",

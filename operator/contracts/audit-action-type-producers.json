@@ -442,6 +442,11 @@
       "producerFile": "operator/workspace_broker/demand_verbs.py",
       "reason": "A demand job failed or stopped at a spend cap; resumable by a person."
     },
+    "DEMAND_JOB_RESUME_REQUESTED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/demand_verbs.py",
+      "reason": "A person asked the runner to resume a failed demand job (demand_job_resume, root only), with a reason."
+    },
     "ACT_PROPOSED": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/establishment_constants.py",

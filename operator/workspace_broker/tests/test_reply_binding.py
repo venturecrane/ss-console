@@ -506,6 +506,47 @@ def test_failed_then_resumed_then_delivered_reports_both(tmp_path: Path) -> None
     assert len(box.replies()) == 2
 
 
+def test_a_resumed_job_that_fails_again_gets_its_reply(tmp_path: Path) -> None:
+    """One reply per (attempt, outcome). FALSIFIER: key on the state alone and
+    the second failure is refused as already replied."""
+    job = _job(tmp_path, ["failed"])
+    box = FakeMailbox()
+    _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})
+    ledger = DemandLedger(str(tmp_path / "audit.db"), tmp_path / "q")
+    ledger.record(job, "running", {})
+    ledger.record(job, "failed", {"reason": "again"})
+    _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})
+    assert len(box.replies()) == 2
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})
+    assert len(box.replies()) == 2
+
+
+def test_the_ledgers_reply_mark_is_honored(tmp_path: Path) -> None:
+    """The job record already shows this outcome replied to (a reply sent by an
+    earlier broker, say): nothing is sent and the binding claim is given back.
+    FALSIFIER: ignore mark_replied's return value."""
+    job = _job(tmp_path, ["running", "delivered"])
+    DemandLedger(str(tmp_path / "audit.db"), tmp_path / "q").mark_replied(job, "1:delivered")
+    box = FakeMailbox()
+    broker = _broker(tmp_path, box)
+    with pytest.raises(Exception):
+        _send(broker, {"kind": "demand_job", "job_id": job})
+    assert box.replies() == []
+    assert not bound_replies.claimed(broker.audit_db_path, f"demand_job:{job}:1:delivered")
+
+
+def test_a_released_demand_reply_clears_the_ledger_mark(tmp_path: Path) -> None:
+    job = _job(tmp_path, ["running", "delivered"])
+    box = FakeMailbox()
+    box.post_status = 403
+    with pytest.raises(Exception):
+        _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})
+    assert DemandLedger(str(tmp_path / "audit.db"), tmp_path / "q").read(job)["reply_key"] is None
+    box.post_status = None
+    assert _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})["recipients"] == [ADMIN]
+
+
 @pytest.mark.parametrize("path", [[], ["running"]])
 def test_an_unfinished_demand_job_cannot_reply(tmp_path: Path, path: list[str]) -> None:
     job = _job(tmp_path, path)
