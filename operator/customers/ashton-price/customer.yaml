@@ -1383,6 +1383,12 @@ combined_post_intake:
 # it is unauthored and the request is silent. A request's own figure wins.
 records_orders:
   pre_approved_custodian_fee: 100
+  # authorization: how the client's HIPAA authorization reaches the vendor.
+  # e_auth: the vendor emails the client its own authorization to sign, and
+  # nothing is uploaded. Christa chose this on 2026-10-06 ("option B"): the
+  # authorization pages in the firm's retainer packets are signed but otherwise
+  # blank, so there is no completed form to upload.
+  authorization: e_auth
 
 form_letters:
   signers:
