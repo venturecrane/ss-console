@@ -117,6 +117,10 @@ const EXPECTED_VERBS = [
   'medchron_job_status',
   'medchron_job_submit',
   'msgraph_reply',
+  // The verified reply binding (reply_binding.py): a turn no inbound opened
+  // answers one earlier email once, to the sender the broker verified.
+  'msgraph_reply_bind',
+  'msgraph_reply_bound',
   'msgraph_send',
   'ops_ask_sent',
   'ops_propose',
