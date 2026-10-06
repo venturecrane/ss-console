@@ -56,6 +56,9 @@ class PatientFacts:
     address: dict[str, str] = field(default_factory=dict)
     contact: dict[str, str] = field(default_factory=dict)
     missing: tuple[str, ...] = ()
+    #: Where the vendor's e-signature request goes: the contact's email, else
+    #: its cell or phone; "" when the record holds neither.
+    esign_to: str = ""
 
     @property
     def full_name(self) -> str:
@@ -75,13 +78,26 @@ class PatientFacts:
             "missing": list(self.missing),
         }
 
-    def body(self, language: str) -> dict[str, Any]:
-        """The vendor's ``patient`` object. Goes to the vendor and nowhere else."""
+    @property
+    def esign_label(self) -> str:
+        """``p***@example.com`` / ``***-***-1212``: enough for the administrator
+        to recognize where the signing request goes, without echoing it."""
+        target = self.esign_to
+        if "@" in target:
+            local, _, domain = target.partition("@")
+            return f"{local[:1]}***@{domain}"
+        digits = "".join(ch for ch in target if ch.isdigit())
+        return f"***-***-{digits[-4:]}" if len(digits) >= 4 else ""
+
+    def body(self, language: str, authorization: str = "upload") -> dict[str, Any]:
+        """The vendor's ``patient`` object. Goes to the vendor and nowhere else.
+        ``e_auth``: the vendor sends the client its own authorization to sign
+        at ``esign_to``; nothing is uploaded."""
         name = {"first_name": self.first_name, "last_name": self.last_name}
         if self.middle_name:
             name["middle_name"] = self.middle_name
         out: dict[str, Any] = {
-            "hipaa_type": "upload",
+            "hipaa_type": "e_auth" if authorization == "e_auth" else "upload",
             "name": name,
             "ssn": self.ssn,
             "date_birth": self.date_birth,
@@ -91,6 +107,8 @@ class PatientFacts:
             out["address"] = dict(self.address)
         if self.contact:
             out["contact"] = dict(self.contact)
+        if authorization == "e_auth":
+            out["esign_notification_contact_info"] = self.esign_to
         return out
 
 
@@ -189,6 +207,7 @@ def patient_from_contact(contact: dict[str, Any]) -> PatientFacts:
         # only when the record holds both.
         contact={"email": email, "phone": phone} if (email and "@" in email and phone) else {},
         missing=tuple(missing),
+        esign_to=(email if (email and "@" in email) else phone)[:255],
     )
 
 

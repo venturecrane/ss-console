@@ -48,6 +48,8 @@ ORDER_KEYS = (
     "ssn_last4",
     "order_by_email",
     "language",
+    "authorization",
+    "esign_to",
     "hipaa_file_id",
     "hipaa_file_name",
     "pre_approved_custodian_fee",
@@ -66,6 +68,9 @@ _LAST4 = re.compile(r"^\d{4}$")
 _REF = re.compile(r"^[0-9a-f]{32}$")
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,}$")
+#: The masked signing address the connector shows (``p***@example.com`` or
+#: ``***-***-1212``): never the full address.
+_ESIGN_LABEL = re.compile(r"^(?:[^@\s]\*\*\*@[^@\s]{1,190}|\*\*\*-\*\*\*-\d{4})$")
 
 
 def _refuse(why: str) -> EstablishmentValidationError:
@@ -118,8 +123,17 @@ def require_order(value: Any) -> dict[str, Any]:
     _text(order["client_name"], "client_name", 120)
     _text(order["ssn_last4"], "ssn_last4", 4, pattern=_LAST4)
     _text(order["order_by_email"], "order_by_email", 254, pattern=_EMAIL)
-    _text(order["hipaa_file_id"], "hipaa_file_id", 64, pattern=_FILE_ID)
-    _text(order["hipaa_file_name"], "hipaa_file_name", 255)
+    if order["authorization"] == "upload":
+        _text(order["hipaa_file_id"], "hipaa_file_id", 64, pattern=_FILE_ID)
+        _text(order["hipaa_file_name"], "hipaa_file_name", 255)
+        if order["esign_to"] is not None:
+            raise _refuse("an upload order carries no signing address")
+    elif order["authorization"] == "e_auth":
+        _text(order["esign_to"], "esign_to", 200, pattern=_ESIGN_LABEL)
+        if order["hipaa_file_id"] is not None or order["hipaa_file_name"] is not None:
+            raise _refuse("an e-authorization order uploads no file")
+    else:
+        raise _refuse("authorization must be 'upload' or 'e_auth'")
     if order["language"] not in ("en", "es") or order["order_certificate"] not in ("request", "no_request"):
         raise _refuse("language or order_certificate is not a value the vendor takes")
     fee = order["pre_approved_custodian_fee"]
@@ -150,6 +164,15 @@ def _location_line(n: int, loc: dict[str, Any]) -> str:
     )
 
 
+def _authorization_line(order: dict[str, Any]) -> str:
+    if order["authorization"] == "e_auth":
+        return (
+            f"Authorization by the vendor's e-signature: it sends {_shown(order['client_name'], 120)} its "
+            f"authorization to sign at {_shown(order['esign_to'], 200)}, and the records are requested once signed"
+        )
+    return f"Authorization, with the HIPAA form uploaded from the matter ('{_shown(order['hipaa_file_name'], 120)}')"
+
+
 def order_readback(payload: dict[str, Any]) -> str:
     """The order as one line she answers: who, which matter, every facility with
     its records and dates, the authorization, the fee and the certification."""
@@ -161,8 +184,8 @@ def order_readback(payload: dict[str, Any]) -> str:
         f"Place a medical-records order with {_shown(order['vendor_name'], 60)} on matter "
         f"{_shown(order['matter_number'], 64)} for "
         f"{_shown(order['client_name'], 120)} (SSN ending {order['ssn_last4']}), ordered by "
-        f"{_shown(order['order_by_email'], 254)}, {len(order['locations'])} {noun}: {lines}. Authorization, with the HIPAA "
-        f"form uploaded from the matter ('{_shown(order['hipaa_file_name'], 120)}'); pre-approved custodian fee "
+        f"{_shown(order['order_by_email'], 254)}, {len(order['locations'])} {noun}: {lines}. {_authorization_line(order)}; "
+        f"pre-approved custodian fee "
         f"${float(order['pre_approved_custodian_fee']):,.2f}; {cert}. "
         'Reply "yes, place it" to proceed.'
     )
