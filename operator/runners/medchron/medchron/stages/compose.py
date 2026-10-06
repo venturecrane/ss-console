@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import llm, prompts
+from ..limits import LimitHold
 from .base import StageRun, append_jsonl, read_json
 from .chunking import build_chunks, chunk_size, sha, split_chunk
 
@@ -153,6 +154,8 @@ class _Composer:
                 cache_blocks=("system",),
                 custom_id=c.out_name[:-3],
             )
+        except LimitHold:
+            raise  # a limit stops the stage and reaches the driver as a hold (N10)
         except Exception as exc:  # noqa: BLE001 - classified by handle()
             return self.handle(c, None, str(exc))
         return self.handle(c, r, None)

@@ -8,6 +8,9 @@ import json
 from pathlib import Path
 from types import SimpleNamespace as NS
 
+import pytest
+
+from medchron.limits import CAP_SETTING, LimitHold
 
 from medchron import config as config_mod, job as job_mod
 from medchron.audit import anchors as AN, claims as CL, coverage, diag, page_text, render, repair, verify as VF
@@ -413,3 +416,86 @@ def test_diag_page_remap_and_rekey(job_dir: Path, firm_config_path: Path, data_r
     assert diag.rekey_rows(results, CL.read_rows(results), live, remap, doc_sha="abc") == 1
     rows = CL.read_rows(results)
     assert rows[-1]["key"] == live[0]["key"] and rows[-1]["rekeyed_from"] == old["key"] and rows[-1]["doc_sha"] == "abc"
+
+
+# ---- a limit hold mid-audit (review 2026-10-06, N10) ------------------------------
+def _held_after(n_allowed: int):
+    """A doorway hook that lets `n_allowed` paid calls through and then holds,
+    exactly as the driver's per-call limit check does when the cap is reached."""
+    seen = {"n": 0}
+
+    def before_request(stage: str) -> None:
+        seen["n"] += 1
+        if seen["n"] > n_allowed:
+            raise LimitHold(CAP_SETTING, f"{CAP_SETTING}: reached during {stage}; the run stopped")
+
+    return before_request
+
+
+def test_a_limit_hold_mid_audit_stops_the_loop_and_drops_nothing(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """The hold fires while the second claim is being verified. It used to be
+    caught as that claim's ERROR verdict; the ERROR row made the key "done", so
+    no later round re-audited it, repair's call was held and swallowed too, and
+    at the round cap drop_residual DELETED the claim. The gate then checked only
+    the survivors and passed, and a truncated chronology went to the firm
+    instead of the job ending held. Now the hold leaves the stage (the driver
+    turns it into `held`, and no later stage, upload included, runs) and
+    nothing is dropped."""
+
+    client = Scripted(lambda p, n: tool_msg(UNSUPPORTED if _is_control(p) else SUPPORTED))
+    log: list[str] = []
+    sr = _sr(job_dir, firm_config_path, data_root, client, log=log)
+    sr.before_request = _held_after(1)
+    _exhibit_set(sr, [PROSE, PROSE])
+    entries = (
+        "01/02/2026\nExample Clinic | Medical Diagnoses\n\n"
+        "The patient reports neck pain rated 6 of 10 since the incident. (Exhibit 1 - p. 1)\n\n"
+        "Blood pressure was recorded as 120/80 at this visit. (Exhibit 1 - p. 2)"
+    )
+    _write_doc(sr, entries)
+    doc_path = sr.slug_dir / "runs" / "alpha" / "final-chronology.md"
+    before = doc_path.read_text()
+
+    with pytest.raises(LimitHold):
+        audit_loop.run(sr)
+
+    assert doc_path.read_text() == before, "a held audit must not drop or rewrite a single claim"
+    edits = sr.slug_dir / "out" / "alpha" / "repair-edits.jsonl"
+    assert not edits.is_file() or not [r for r in CL.read_rows(edits) if r.get("action") == "drop-residual"]
+    rows = CL.read_rows(AuditPaths(sr.slug_dir, "alpha").results)
+    assert not [r for r in rows if r.get("verdict") == "ERROR"], "a hold is not a verdict"
+    assert len([r for r in rows if r.get("kind") == "real"]) == 1, "the held claim stays un-audited for the resume"
+    assert len(client.calls) == 1, "nothing reached the model after the hold"
+
+
+def test_a_limit_hold_in_the_worker_pool_and_in_repair_propagates(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """The other places the hold was swallowed: the audit's thread pool (a
+    worker's exception has to leave the pool) and repair's per-claim catch."""
+    client = Scripted(lambda p, n: tool_msg(UNSUPPORTED if _is_control(p) else SUPPORTED))
+    sr = _sr(job_dir, firm_config_path, data_root, client)
+    _exhibit_set(sr, [PROSE, PROSE])
+    entries = "\n\n".join(
+        f"01/0{i}/2026\nExample Clinic | Medical Diagnoses\n\nA supported claim number {i} about the neck. (Exhibit 1 - p. 1)"
+        for i in range(1, 7)
+    )
+    _write_doc(sr, entries)
+    paths = AuditPaths(sr.slug_dir, "alpha")
+    sr.before_request = _held_after(2)
+    with pytest.raises(LimitHold):
+        Round(sr.doorway, "claude-sonnet-5", paths, lambda *_: None, mode="image", workers=3).execute()
+    rows = CL.read_rows(paths.results)
+    assert not [r for r in rows if r.get("verdict") == "ERROR"], "no claim the hold stopped reads as audited"
+    assert len(rows) == 2
+
+    # repair: one failing claim whose repair call is held
+    paths.results.unlink()
+    first = CL.extract_claims(CL.body_of(paths.doc.read_text()), {1})[0]
+    CL.append_row(paths.results, {**UNSUPPORTED, "key": first["key"], "kind": "real", "exhibit": 1, "page_spec": "1"})
+    before = paths.doc.read_text()
+    with pytest.raises(LimitHold):
+        repair.run(sr.doorway, "claude-sonnet-5", paths, lambda *_: None, pause=0)
+    assert paths.doc.read_text() == before
