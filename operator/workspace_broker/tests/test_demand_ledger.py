@@ -69,20 +69,21 @@ def test_submit_writes_the_row_then_the_queue_file(ledger, tmp_path) -> None:
 
 
 def test_in_flight_and_paid_jobs_use_the_allowance(ledger) -> None:
-    """In flight (submitted/running/held) reserves a slot; a job that ended
-    without paying frees it. FALSIFIER: count cents > 0 only and the in-flight
-    job stops reserving, so two submits could take the last slot."""
+    """In flight (submitted/running) reserves a slot; a job that ended
+    without paying frees it, and held is an ending. FALSIFIER: count cents > 0
+    only and the in-flight job stops reserving, so two submits could take the
+    last slot."""
     paid = ledger.submit(_env())
     ledger.record(paid, "running", {})
     ledger.record(paid, "delivered", {"cents": 640})
-    held = ledger.submit(
+    running = ledger.submit(
         _env(matter={"id": LIBRARY, "number": "OPS-OPERATOR-LIBRARY"}, request_ref="<second@x.example>")
     )
-    ledger.record(held, "held", {"reason": "premise: carrier not identified", "cents": 0})
+    ledger.record(running, "running", {})
     state = ledger.allowance(25)
     assert state["used"] == 2 and state["remaining"] == 23 and state["authored"] is True
-    ledger.record(held, "failed", {"reason": "premise"})
-    assert ledger.allowance(25)["used"] == 1  # ended, paid nothing: freed
+    ledger.record(running, "held", {"reason": "premise: carrier not identified"})
+    assert ledger.allowance(25)["used"] == 1  # held, paid nothing: freed
     assert ledger.allowance(None)["remaining"] == 0  # unauthored: nothing may be submitted
 
 
@@ -148,6 +149,29 @@ def test_a_resume_starts_a_new_attempt_with_its_own_reply(ledger) -> None:
     assert row["attempt"] == 2 and row["prev_state"] == "failed"
     ledger.record(job, "failed", {"reason": "cap again"})
     assert ledger.mark_replied(job, "2:failed") is True
+
+
+def test_the_asking_job_never_counts_against_its_own_slot(ledger) -> None:
+    """The runner asks before its first paid stage, excluding itself. The job
+    holding the cycle's LAST slot must see 1 remaining, not 0. FALSIFIER: drop
+    the exclude from the count and the last job fails before paying."""
+    job = ledger.submit(_env())
+    ledger.record(job, "running", {})
+    assert ledger.allowance(1)["remaining"] == 0
+    assert ledger.allowance(1, exclude=job)["remaining"] == 1
+
+
+def test_a_held_job_does_not_lock_its_matter(ledger) -> None:
+    """Held is final in the runner. FALSIFIER: treat held as in flight and the
+    matter refuses every later request forever."""
+    job = ledger.submit(_env())
+    ledger.record(job, "held", {"reason": "premise: carrier not identified"})
+    assert ledger.active_on_matter(MATTER) is None
+    again = ledger.submit(_env(request_ref="<followup@x.example>"), allowance=25)
+    assert again != job
+    # The same email still cannot queue twice (request_ref stays UNIQUE).
+    with pytest.raises(SubmitRefused):
+        ledger.submit(_env())
 
 
 def test_an_unfinished_job_on_the_matter_is_a_duplicate(ledger) -> None:

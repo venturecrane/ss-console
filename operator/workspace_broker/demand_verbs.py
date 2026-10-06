@@ -183,12 +183,15 @@ class DemandVerbs:
             anchor, effective_from = cycle_from_customer_yaml(self.customer_yaml)
         except AnchorInvalid as exc:
             return {"ok": True, "authored": False, "invalid": True, "reason": str(exc)}
+        exclude = str(request.get("exclude_job_id") or "")
+        # The job asking (the runner, before a paid stage) is excluded from the
+        # count as well as from the spend: it must not take its own slot.
         state = self._db.allowance(
             allowance_of(demand_skill_settings(self.customer_yaml)),
             anchor_day=anchor,
             effective_from=effective_from,
+            exclude=exclude,
         )
-        exclude = str(request.get("exclude_job_id") or "")
         month, cents = self._cents_this_month(exclude)
         return {"ok": True, **state, "cents_used": cents, "cents_month": month}
 

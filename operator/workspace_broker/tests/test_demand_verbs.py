@@ -241,6 +241,26 @@ def test_resume_writes_the_marker_for_a_failed_job_only(seat) -> None:
     assert audit_types(_db)[-1] == "DEMAND_JOB_RESUME_REQUESTED"
 
 
+def test_the_runners_check_excludes_its_own_job(seat) -> None:
+    """FALSIFIER: drop exclude from the count and remaining reads 0 for the
+    job holding the cycle's last slot, which then fails before paying."""
+    broker, _db, yaml_path, _q = seat
+    yaml_path.write_text(YAML.format(allowance=1))
+    job = submit(broker)["job_id"]
+    call(broker, "demand_job_record", uid=0, job_id=job, state="running", fields={})
+    assert call(broker, "demand_allowance", uid=0)["remaining"] == 0
+    assert call(broker, "demand_allowance", uid=0, exclude_job_id=job)["remaining"] == 1
+
+
+def test_a_new_request_after_a_held_job_is_accepted(seat) -> None:
+    broker, *_ = seat
+    job = submit(broker)["job_id"]
+    call(broker, "demand_job_record", uid=0, job_id=job, state="held", fields={"reason": "premise"})
+    out = submit(broker, request_ref="<followup@mail.firm.example>")
+    assert out["accepted"] is True and out["job_id"] != job
+    assert submit(broker)["accepted"] is False  # the first email, again
+
+
 def test_a_same_state_note_writes_no_audit_row(seat) -> None:
     broker, db, *_ = seat
     job = submit(broker)["job_id"]

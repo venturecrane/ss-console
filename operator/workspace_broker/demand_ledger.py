@@ -33,9 +33,11 @@ THE WAKE (the runner's completion, for the DELIVER turn): ``job_id``, ``kind:
 
 THE ALLOWANCE is a COUNT of demands per billing cycle (the firm's authored
 ``demand_allowance_per_cycle``), on the chronology cycle's anchor. A job counts
-while it is IN FLIGHT (submitted, running, held: the slot is reserved, so two
+while it is IN FLIGHT (submitted, running: the slot is reserved, so two
 submits cannot both take the last one) and once it recorded cents, whatever it
-ended as. A job that ended before any paid stage (a premise failure, a cap
+ended as. HELD is FINAL in the runner (nothing drives held -> failed), so a
+held job reserves nothing and does not block its matter: only its paid cents
+count, and a new request on the matter is a new job. A job that ended before any paid stage (a premise failure, a cap
 estimate over the limit) and paid nothing does not.
 
 SUBMIT IS ATOMIC (review 2026-10-06). ``submit`` re-checks, inside one
@@ -119,7 +121,7 @@ CREATE_SPEND_SQL = (
     "CREATE TABLE IF NOT EXISTS demand_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
 )
 CREATE_SPEND_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_demand_spend_at ON demand_spend(at)"
-IN_FLIGHT = ("submitted", "running", "held")
+IN_FLIGHT = ("submitted", "running")
 PROJECTION = (
     "id",
     "created_at",
@@ -235,13 +237,15 @@ class DemandLedger:
         now: str | None = None,
         anchor_day: int | None = None,
         effective_from: str | None = None,
+        exclude: str = "",
     ) -> dict[str, Any]:
-        """Demands used and remaining this cycle. Unauthored is ``authored:
-        False`` with nothing remaining: the fail-closed answer."""
+        """Demands used and remaining this cycle, without ``exclude`` (the job
+        asking, so it never counts against its own slot). Unauthored is
+        ``authored: False`` with nothing remaining: the fail-closed answer."""
         window = cycle_window(now or _iso_utc(), anchor_day, effective_from)
         conn = self._connect()
         try:
-            used = self._used(conn, window.start, window.end)
+            used = self._used(conn, window.start, window.end, exclude)
         finally:
             conn.close()
         out = {"unit": "demands", "used": used, "cycle": window.label, "cycle_start": window.start}
@@ -253,7 +257,7 @@ class DemandLedger:
     def _used(conn: sqlite3.Connection, start: str, end: str, exclude: str = "") -> int:
         return conn.execute(
             "SELECT COUNT(*) AS n FROM demand_jobs WHERE created_at >= ? AND created_at < ? AND id != ? "
-            "AND (state IN ('submitted','running','held') OR cents > 0)",
+            "AND (state IN ('submitted','running') OR cents > 0)",
             (start, end, exclude),
         ).fetchone()["n"]
 
@@ -275,7 +279,7 @@ class DemandLedger:
         conn = self._connect()
         try:
             row = conn.execute(
-                "SELECT id FROM demand_jobs WHERE matter_id=? AND state NOT IN ('delivered','failed') "
+                "SELECT id FROM demand_jobs WHERE matter_id=? AND state NOT IN ('delivered','failed','held') "
                 "ORDER BY created_at DESC LIMIT 1",
                 (matter_id,),
             ).fetchone()
@@ -308,7 +312,7 @@ class DemandLedger:
                 conn.rollback()
                 raise SubmitRefused(f"that request email already queued demand job {dup['id']}", dup["id"])
             twin = conn.execute(
-                "SELECT id FROM demand_jobs WHERE matter_id=? AND state NOT IN ('delivered','failed') "
+                "SELECT id FROM demand_jobs WHERE matter_id=? AND state NOT IN ('delivered','failed','held') "
                 "ORDER BY created_at DESC LIMIT 1",
                 (env["matter"]["id"],),
             ).fetchone()
