@@ -309,6 +309,47 @@ def _require_request(facilities: Any, order_by_email: Any, language: Any) -> tup
     return facilities, email, lang
 
 
+def _locations(
+    yc: Any, facilities: list[dict[str, Any]], default: dict[str, Any], types: list[str], today: date
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Each facility resolved to a directory location with its record types and
+    dates, or a question for the requester."""
+    locations: list[dict[str, Any]] = []
+    questions: list[dict[str, Any]] = []
+    for facility in facilities:
+        location, question = resolve_facility(yc, facility)
+        if question is not None or location is None:
+            questions.append(question or {"facility": str(facility.get("name") or "")})
+            continue
+        start, end = service_range(facility, default, today)
+        location.update(
+            {
+                "record_types": record_types(facility.get("record_types")) if "record_types" in facility else types,
+                "service_start": start,
+                "service_end": end,
+            }
+        )
+        locations.append(location)
+    return locations, questions
+
+
+def _ready(facts: Any, order: dict[str, Any], fee: float, auth: str) -> dict[str, Any]:
+    order["order_ref"] = order_ref(order)
+    signing = (
+        f" When it is placed, the vendor sends {facts.full_name} its own authorization to sign at "
+        f"{facts.esign_label}; the records are requested once it is signed."
+        if auth == "e_auth"
+        else ""
+    )
+    return {
+        "status": "ready",
+        "order": {k: order[k] for k in ORDER_KEYS},
+        "client": facts.summary(),
+        "pre_approved_custodian_fee_shown": f"${fee:,.2f}",
+        "next_step": "Pass `order` to place_records_order exactly as returned. Nothing has been ordered." + signing,
+    }
+
+
 def prepare(client: Any, yc: Any, request: dict[str, Any], today: date) -> dict[str, Any]:
     """Build the order, or say exactly what has to be settled first. Orders nothing."""
     matter_id = require_matter_id(request.get("matter_id"))
@@ -335,21 +376,7 @@ def prepare(client: Any, yc: Any, request: dict[str, Any], today: date) -> dict[
     hipaa, hipaa_choices = (
         (None, []) if auth == "e_auth" else find_hipaa(client, matter_id, request.get("hipaa_file_id"))
     )
-    locations, questions = [], []
-    for facility in facilities:
-        location, question = resolve_facility(yc, facility)
-        if question is not None or location is None:
-            questions.append(question or {"facility": str(facility.get("name") or "")})
-            continue
-        start, end = service_range(facility, default, today)
-        location.update(
-            {
-                "record_types": record_types(facility.get("record_types")) if "record_types" in facility else types,
-                "service_start": start,
-                "service_end": end,
-            }
-        )
-        locations.append(location)
+    locations, questions = _locations(yc, facilities, default, types, today)
     if questions or (hipaa is None and auth == "upload"):
         return {
             "status": "needs_choice",
@@ -375,20 +402,7 @@ def prepare(client: Any, yc: Any, request: dict[str, Any], today: date) -> dict[
         "order_certificate": "request" if request.get("certification") is True else "no_request",
         "locations": locations,
     }
-    order["order_ref"] = order_ref(order)
-    return {
-        "status": "ready",
-        "order": {k: order[k] for k in ORDER_KEYS},
-        "client": facts.summary(),
-        "pre_approved_custodian_fee_shown": f"${fee:,.2f}",
-        "next_step": "Pass `order` to place_records_order exactly as returned. Nothing has been ordered."
-        + (
-            f" When it is placed, the vendor sends {facts.full_name} its own authorization to sign at "
-            f"{facts.esign_label}; the records are requested once it is signed."
-            if auth == "e_auth"
-            else ""
-        ),
-    }
+    return _ready(facts, order, fee, auth)
 
 
 __all__ = [
