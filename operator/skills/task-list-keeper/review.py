@@ -329,6 +329,21 @@ def build(ctx: _Ctx) -> Plan:
     return plan
 
 
+def _framing(ctx: _Ctx, n_items: int, listed: list[Entry], overflow: int, fallback: bool) -> tuple:
+    """``(subject, lead, footer)`` for one message."""
+    L = ctx.lines
+    if not n_items:
+        # Closes only: the Operator's own finished tasks, nothing to decide. No
+        # count of tasks to review, no handover lead, no reply-with-numbers footer.
+        return L.closes_only_subject(fallback=fallback), L.LEAD_CLOSES_ONLY, L.FOOTER_CLOSES_ONLY
+    review = f"The next review is on {ctx.cm.review_day}." if ctx.cm.review_day and overflow else None
+    # A handover lead needs at least one handover line: all([]) is True, and an
+    # empty list must never read "I opened these tasks and can't finish them".
+    handover_only = bool(listed) and all(e.handover for e in listed)
+    lead = L.lead_text(overflow, review, handover_only=handover_only, fallback=fallback)
+    return L.subject_line(n_items, fallback=fallback), lead, L.FOOTER
+
+
 def _message(ctx: _Ctx, group_key, es: list[Entry], since: list, plan: Plan) -> dict | None:
     recipients, cc, leg = group_key
     closes = [e for e in es if e.event == "close"]
@@ -372,22 +387,7 @@ def _message(ctx: _Ctx, group_key, es: list[Entry], since: list, plan: Plan) -> 
     plan.matter_ids.extend(sorted({e.task.matter_id for e in es}))
     if not items and not closes:
         return None
-    review = f"The next review is on {ctx.cm.review_day}." if ctx.cm.review_day and overflow else None
-    fallback = leg == ctx.routing.LEG_FALLBACK
-    L = ctx.lines
-    if items:
-        # A handover lead needs at least one handover line: all([]) is True, and
-        # an empty list must never read "I opened these tasks and can't finish them".
-        handover_only = bool(listed) and all(e.handover for e in listed)
-        subject = L.subject_line(len(items), fallback=fallback)
-        lead = L.lead_text(overflow, review, handover_only=handover_only, fallback=fallback)
-        footer = L.FOOTER
-    else:
-        # Closes only: the Operator's own finished tasks, nothing to decide. No
-        # count of tasks to review, no handover lead, no reply-with-numbers footer.
-        subject = L.closes_only_subject(fallback=fallback)
-        lead = L.LEAD_CLOSES_ONLY
-        footer = L.FOOTER_CLOSES_ONLY
+    subject, lead, footer = _framing(ctx, len(items), listed, overflow, leg == ctx.routing.LEG_FALLBACK)
     return {
         "recipients": list(recipients),
         "cc": list(cc),
