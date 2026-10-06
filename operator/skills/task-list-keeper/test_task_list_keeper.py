@@ -639,3 +639,42 @@ def test_the_pilot_overdue_seed_sorts_into_four_classes(monkeypatch):
             duplicates=duplicates,
         )
         assert (verdict.klass, verdict.evidence) == expected[task.task_id], task.task_id
+
+
+def _closes_only_message(*, fallback: bool):
+    """review._message over a group holding only the Operator's own record
+    closes: no numbered line, so nothing to review (code review 2026-10-06 N16)."""
+    from types import SimpleNamespace as NS
+
+    review = _load("review.py", "tlk_review_closes_only_under_test")
+    routing = _load("routing.py", "tlk_routing_closes_only_under_test")
+    task = NS(
+        task_id="1ec31561-1136-4986-9692-1457dae9513a",
+        matter_id=M101,
+        matter_number="2026-PI-101",
+        matter_number_absent=False,
+        due=date(2026, 7, 8),
+    )
+    verdict = NS(
+        klass="done",
+        evidence_day=date(2026, 7, 9),
+        evidence=("document:proof_of_service:2026-07-09",),
+        reason="document_on_file",
+    )
+    close = review.Entry(
+        task, verdict, True, "close", "close", "s-atty", None, text="matter 2026-PI-101: closed", key="k1"
+    )
+    ctx = NS(cm=NS(max_lines=30, review_day="Monday"), lines=lines, routing=routing)
+    leg = routing.LEG_FALLBACK if fallback else "responsible"
+    return review._message(ctx, (("atty@firm.test",), (), leg), [close], [], review.Plan())
+
+
+@pytest.mark.parametrize("fallback", [False, True])
+def test_a_closes_only_message_asks_nothing_and_claims_no_handover(fallback):
+    msg = _closes_only_message(fallback=fallback)
+    assert msg is not None and msg["items"] == [] and len(msg["closes"]) == 1
+    assert msg["lead"] != lines.LEAD_HANDOVER and "can't finish" not in msg["lead"]
+    assert msg["lead"] == lines.LEAD_CLOSES_ONLY
+    assert "to review" not in msg["subject"] and not re.search(r"\d", msg["subject"])
+    assert msg["footer"] == lines.FOOTER_CLOSES_ONLY and "numbers" not in msg["footer"]
+    assert ("on your matters" in msg["subject"]) is (not fallback)

@@ -28,6 +28,9 @@ FOOTER = (
     "Reply here in words: say yes to all, or name the numbers to leave as they are. "
     "Nothing on your task list changes until you answer. This is an internal note; no client was contacted."
 )
+#: A message carrying only the Operator's own record closes (no numbered line)
+#: asks nothing, so its footer must not ask for numbers that do not exist.
+FOOTER_CLOSES_ONLY = "Nothing here needs an answer. This is an internal note; no client was contacted."
 
 SUGGEST = {
     "close": "Suggest: close it.",
@@ -156,6 +159,12 @@ LEAD_FALLBACK = (
 )
 
 
+#: The lead for a closes-only message. It does not say the tasks closed: the
+#: overlay lists under "Closed just now" only the closes that actually landed and
+#: names the ones it could not update, so this lead claims neither outcome.
+LEAD_CLOSES_ONLY = "Task list upkeep on tasks I opened."
+
+
 def lead_text(
     overflow: int, review_note: str | None, *, handover_only: bool = False, fallback: bool = False
 ) -> str | None:
@@ -174,3 +183,8 @@ def subject_line(count: int, *, fallback: bool = False) -> str:
     noun = "task" if count == 1 else "tasks"
     # The fallback contact's matters are not "yours"; the lead says why they came.
     return f"[Tasks] {count} {noun} to review" + ("" if fallback else " on your matters")
+
+
+def closes_only_subject(*, fallback: bool = False) -> str:
+    """Subject for a message with no numbered line: nothing to review, so no count."""
+    return "[Tasks] Task list upkeep" + ("" if fallback else " on your matters")

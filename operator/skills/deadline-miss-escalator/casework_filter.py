@@ -70,9 +70,14 @@ def _modules(helpers, anchor: str):
 def _drop_reason(d, *, cm, view, ledger, states, today: date, notify_days: int) -> str | None:
     if d.label == "task-deadline":
         stamp = "[Operator]" if getattr(d, "operator_stamped", False) else ""
-        if cm.own_level and d.task_id and view.is_operator_task(cm, d.task_id, stamp):
-            return "own_task"
         state = view.task_state(ledger, states, d.matter_id, d.task_id)
+        # Own only while the Operator still holds it. A person who approved the
+        # handover owns it now (the reassign leaves the "[Operator]" subject),
+        # and the keeper never raises it again: dropping it here would take an
+        # overdue task, money or court included, off every alert surface.
+        operator_holds = d.task_id and not view.handed_over(state)
+        if cm.own_level and operator_holds and view.is_operator_task(cm, d.task_id, stamp):
+            return "own_task"
         if view.keeper_owns_task(ledger, state, today, cm.keep_quiet_days):
             return "in_task_review"
         return None
