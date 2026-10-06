@@ -200,6 +200,44 @@ def _send_missing(
     return (sent, skipped_known), "ok"
 
 
+def _write_readback(
+    delivery: dict[str, Any], manifest: list[dict[str, Any]], present: dict[str, int], delivery_path: Path
+) -> set[str]:
+    """Rewrite delivery.json from the read-back; returns the names still
+    pending going in."""
+    up_already = {str(f.get("name")) for f in (delivery.get("files") or []) if f.get("sent") or f.get("confirmed")}
+    pending = {str(f.get("name")) for f in (delivery.get("files") or []) if f.get("pending")}
+
+    def final_row(m: dict[str, Any]) -> dict[str, Any]:
+        confirmed = present.get(m["name"]) == m["bytes"]
+        row: dict[str, Any] = {
+            "name": m["name"],
+            "sha256": m["sha256"],
+            "bytes": m["bytes"],
+            "sent": m["name"] in up_already or (m["name"] in pending and confirmed),
+            "confirmed": confirmed,
+        }
+        # A pending send stays pending until the folder shows it at size: the
+        # next attempt must keep refusing to resend it.
+        if m["name"] in pending and not confirmed:
+            row["pending"] = True
+        return row
+
+    delivery["files"] = [final_row(m) for m in manifest]
+    delivery_path.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
+    return pending
+
+
+def _note_unresolved(sr: StageRun, unresolved: list[str], folder_id: str) -> None:
+    if unresolved:
+        sr.log(
+            f"{len(unresolved)} of them were sends whose outcome was never learned "
+            f"({', '.join(unresolved)}); the runner will not resend them. A person reads folder {folder_id}: "
+            f"if a file is missing or at 0 bytes, remove any partial copy there and clear its `pending` row "
+            f"in delivery.json so the next attempt sends it once."
+        )
+
+
 def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = READBACK_TRIES) -> int:
     out = sr.slug_dir / "out" / sr.unit.unit
     manifest = json.loads((out / "upload_manifest.json").read_text(encoding="utf-8"))
@@ -262,36 +300,10 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
     # set is read back off delivery.json, which `_send_missing` has already
     # written through for every file it sent, so it covers this attempt and
     # every earlier one.
-    up_already = {str(f.get("name")) for f in (delivery.get("files") or []) if f.get("sent") or f.get("confirmed")}
-    pending = {str(f.get("name")) for f in (delivery.get("files") or []) if f.get("pending")}
-
-    def final_row(m: dict[str, Any]) -> dict[str, Any]:
-        confirmed = present.get(m["name"]) == m["bytes"]
-        row: dict[str, Any] = {
-            "name": m["name"],
-            "sha256": m["sha256"],
-            "bytes": m["bytes"],
-            "sent": m["name"] in up_already or (m["name"] in pending and confirmed),
-            "confirmed": confirmed,
-        }
-        # A pending send stays pending until the folder shows it at size: the
-        # next attempt must keep refusing to resend it.
-        if m["name"] in pending and not confirmed:
-            row["pending"] = True
-        return row
-
-    delivery["files"] = [final_row(m) for m in manifest]
-    delivery_path.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
+    pending = _write_readback(delivery, manifest, present, delivery_path)
     if short:
         sr.log(f"read-back short after {tries} tries: {', '.join(short)}")
-        unresolved = [n for n in short if n in pending]
-        if unresolved:
-            sr.log(
-                f"{len(unresolved)} of them were sends whose outcome was never learned "
-                f"({', '.join(unresolved)}); the runner will not resend them. A person reads folder {folder_id}: "
-                f"if a file is missing or at 0 bytes, remove any partial copy there and clear its `pending` row "
-                f"in delivery.json so the next attempt sends it once."
-            )
+        _note_unresolved(sr, [n for n in short if n in pending], folder_id)
         return 2
     sr.log(f"read-back complete: {len(expected)} file(s) at the expected byte counts in folder {folder_id}")
     return 0

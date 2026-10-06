@@ -291,6 +291,23 @@ class Round:
                 },
             )
 
+    def text_verdict(self, c: dict[str, Any], ex: int, block: str) -> dict[str, Any]:
+        try:
+            return VF.verify_text(
+                self.doorway,
+                self.model,
+                c["claim"],
+                block,
+                c["pages"],
+                c["anchors"],
+                f"Exhibit {ex} p.{c['page_spec'] or '1'}",
+                custom_id=c["key"],
+            )
+        except LimitHold:
+            raise  # a limit stops the round; an ERROR row here would read as audited (N10)
+        except Exception as exc:  # noqa: BLE001 - a text verification raising is recorded as an ERROR verdict for that claim; the audit continues
+            return {**ERROR, "note": str(exc)[:200], "supporting_pages": []}
+
     def run_cluster(self, cl: dict[str, Any], pdfs: dict[int, Path], index: PageIndex, doc_sha: str, ts: str) -> None:
         ex = cl["exhibit"]
         try:
@@ -302,22 +319,7 @@ class Round:
             return
         for c in cl["claims"]:
             try:
-                cite_label = f"Exhibit {ex} p.{c['page_spec'] or '1'}"
-                try:
-                    tv = VF.verify_text(
-                        self.doorway,
-                        self.model,
-                        c["claim"],
-                        block,
-                        c["pages"],
-                        c["anchors"],
-                        cite_label,
-                        custom_id=c["key"],
-                    )
-                except LimitHold:
-                    raise  # a limit stops the round; an ERROR row here would read as audited (N10)
-                except Exception as exc:  # noqa: BLE001 - a text verification raising is recorded as an ERROR verdict for that claim; the audit continues
-                    tv = {**ERROR, "note": str(exc)[:200], "supporting_pages": []}
+                tv = self.text_verdict(c, ex, block)
                 rec = {
                     "key": c["key"],
                     "kind": "real",
@@ -519,6 +521,20 @@ class Round:
                 f"text-eligible claims: {sum(len(cl['claims']) for cl in clusters)}/{len(todo)} | image: "
                 f"{len(image_claims)} | " + ", ".join(f"{k}={v}" for k, v in sorted(elig.items()))
             )
+        self.run_tasks(clusters, image_claims, pdfs, index, doc_sha, ts)
+        return self.report()
+
+    def run_tasks(
+        self,
+        clusters: list[dict],
+        image_claims: list[dict],
+        pdfs: dict[int, Path],
+        index: PageIndex | None,
+        doc_sha: str,
+        ts: str,
+    ) -> None:
+        """Every cluster and image claim through the pool; the index closes
+        even when a limit hold leaves the pool."""
         tasks: list[Callable[[], None]] = [
             (lambda cl=cl: self.run_cluster(cl, pdfs, index, doc_sha, ts)) for cl in clusters
         ]
@@ -528,7 +544,6 @@ class Round:
         finally:
             if index is not None:
                 index.close()
-        return self.report()
 
     def report(self) -> int:
         allr = CL.read_rows(self.paths.results)
