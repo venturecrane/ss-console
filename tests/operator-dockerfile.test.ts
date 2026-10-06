@@ -1482,7 +1482,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // rows across a broker gap instead of losing them.
     // c126cb9e -> fd46efce (overlay#417), 2026-10-05: a held reply reaches the agent whatever
     // the hook order, and REPLY_HELD/REPLY_FAILED page SMD as shortfalls with informative codes.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="fd46efceeeb2ef3b03fc86cb870b0965c6240bb1"')
+    // fd46efce -> 4f5c085d (overlay#418), 2026-10-06: a job-ledger write rides out a broker
+    // respawn, a broker outage pages once, and four AgentMail app tools are banned.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="4f5c085da47c79ca01ef3ad86324a4cfd1aaa468"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
