@@ -1611,6 +1611,13 @@ RUN set -eu; \
 # dependency closure with the Hermes venv or the broker venv. The venv is
 # root:root a+rX: the medchron uid executes it and can write nothing in it.
 # The `medchron` console-script assertion fails the BUILD, not a seat.
+# The demand job (docs/specs/operator/demand-drafting-routine.md) ships in the
+# same venv: its house renderer and format check are package modules
+# (medchron/demand/house.py, format_check.py) over python-docx, which the
+# hash-locked requirements already carry; the import line below fails the build
+# if either is missing. The firm's house reference .docx is NOT baked in: it is
+# a firm input, fetched from the vault (vaults/<slug>/demand/) by entrypoint.sh
+# with the voice files, the skeleton and the prompts, each sha-pinned.
 COPY operator/runners/ /app/runners/
 # The pricing table the runner's cents cap and ledger price from, beside the
 # venv (NOT under /opt/smd, which is the establishment compilers' contract
@@ -1623,7 +1630,7 @@ RUN set -eu; \
     uv pip install --python /opt/medchron/.venv/bin/python --no-cache --no-deps \
       /app/connectors/_sdk /app/connectors/smokeball /app/runners/medchron; \
     [ -x /opt/medchron/.venv/bin/medchron ] || { echo "FATAL: the medchron runner produced no console-script"; exit 1; }; \
-    /opt/medchron/.venv/bin/python -c "import medchron.daemon, medchron.stages.upload"; \
+    /opt/medchron/.venv/bin/python -c "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, docx"; \
     chown -R root:root /opt/medchron; \
     chmod -R a+rX /opt/medchron
 
@@ -1638,6 +1645,9 @@ COPY operator/contracts/ /app/contracts/
 # Bootstrap entrypoint
 COPY operator/templates/bootstrap.sh /app/bootstrap.sh
 COPY operator/templates/entrypoint.sh /app/entrypoint.sh
+# Sourced by entrypoint.sh (the demand lane's queue, job dirs and firm inputs);
+# its own file because entrypoint.sh sits at its shell size ratchet.
+COPY operator/templates/entrypoint-demand.sh /app/entrypoint-demand.sh
 # REQUIRED_ENV / OPTIONAL_ENV, generated from operator/contracts/env-consumption.yaml
 # (operator/bin/gen-env-arrays.py); bootstrap.sh sources this instead of hardcoding them.
 COPY operator/templates/_env-arrays.generated.sh /app/_env-arrays.generated.sh

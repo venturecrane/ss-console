@@ -31,7 +31,6 @@ import json
 import logging
 import os
 import signal
-import socket
 import sqlite3
 import subprocess
 import sys
@@ -40,6 +39,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from .broker_client import BrokerClient, BrokerError
 from .covered import delivery_fields
 
 from . import config as config_mod, job as job_mod, resume as resume_mod, retention, verdict as verdict_mod
@@ -78,55 +78,6 @@ CHILD_ENV_PASS = (
     "CUSTOMER_SLUG",
 )
 TERMINAL = frozenset({"delivered", "failed"})
-
-
-class BrokerError(RuntimeError):
-    pass
-
-
-class BrokerClient:
-    """The two verbs the daemon speaks: status (does the row exist) and record."""
-
-    def __init__(self, socket_path: str, timeout: float = 5.0) -> None:
-        self.socket_path, self.timeout = socket_path, timeout
-
-    def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
-        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode() + b"\n"
-        try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as c:
-                c.settimeout(self.timeout)
-                c.connect(self.socket_path)
-                c.sendall(encoded)
-                buf = bytearray()
-                while not buf.endswith(b"\n"):
-                    chunk = c.recv(65_536)
-                    if not chunk:
-                        break
-                    buf.extend(chunk)
-        except OSError as exc:
-            raise BrokerError(f"broker socket: {exc}") from exc
-        try:
-            resp = json.loads(bytes(buf).decode() or "{}")
-        except ValueError as exc:
-            raise BrokerError("broker returned no JSON") from exc
-        if resp.get("ok") is not True:
-            raise BrokerError(f"broker refused: {resp.get('error')}: {resp.get('message')}")
-        return resp
-
-    def status(self, job_id: str) -> dict[str, Any] | None:
-        return self._request({"action": "medchron_job_status", "job_id": job_id}).get("job")
-
-    def record(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any]:
-        return self._request({"action": "medchron_job_record", "job_id": job_id, "state": state, "fields": fields})
-
-    def allowance(self, exclude_job_id: str | None = None) -> dict[str, Any]:
-        """The month's page allowance and spend as the broker counts them now.
-        `exclude_job_id` leaves THIS job's own row out, so a resume does not
-        meter a run against the cents it already recorded."""
-        req: dict[str, Any] = {"action": "medchron_allowance"}
-        if exclude_job_id:
-            req["exclude_job_id"] = exclude_job_id
-        return self._request(req)
 
 
 def sticky_level(db_path: str) -> str | None:
@@ -201,6 +152,10 @@ class Daemon:
     firm_config: str | None = None
     gate_url: str = field(default_factory=lambda: os.environ.get(GATE_URL_ENV) or DEFAULT_GATE_URL)
     wake_secret: str = field(default_factory=lambda: os.environ.get(WAKE_SECRET_ENV, ""))
+    #: What a lane names itself by: the wake's handoff id prefix, the memory
+    #: cgroup, and the heartbeat file. The demand lane overrides them.
+    LANE = "medchron"
+    HEARTBEAT = "heartbeat"
 
     # -- paths -------------------------------------------------------------
     @property
@@ -228,12 +183,12 @@ class Daemon:
             "wakes_pending": len(self._wakes_pending()),
             "wakes_failed": self.wakes_failed,
         }
-        tmp = self.run_dir / ".heartbeat.tmp"
+        tmp = self.run_dir / f".{self.HEARTBEAT}.tmp"
         try:
             tmp.write_text(json.dumps(payload), encoding="utf-8")
             os.chmod(tmp, 0o644)
-            tmp.replace(self.run_dir / "heartbeat.json")
-            (self.run_dir / "tick").touch()
+            tmp.replace(self.run_dir / f"{self.HEARTBEAT}.json")
+            (self.run_dir / ("tick" if self.LANE == "medchron" else f"{self.LANE}-tick")).touch()
         except OSError as exc:  # the daemon IS the thing the heartbeat reports on
             logger.warning("heartbeat write failed: %s", exc)
 
@@ -362,10 +317,10 @@ class Daemon:
         if mode == "none":
             return None
         if mode == "cgroup2":
-            cg = self.cgroup_root / "medchron"
+            cg = self.cgroup_root / self.LANE
             limit_file, limit = cg / "memory.max", str(self.memory_max)
         else:  # cgroup1: the hybrid layout Fly guests run
-            cg = self.cgroup_root / "memory" / "medchron"
+            cg = self.cgroup_root / "memory" / self.LANE
             limit_file, limit = cg / "memory.limit_in_bytes", str(self.memory_max)
         try:
             cg.mkdir(exist_ok=True)
@@ -532,7 +487,7 @@ class Daemon:
             if not self.wake_secret:
                 logger.warning("no %s in the daemon env; wake for %s stays pending", WAKE_SECRET_ENV, job_id)
                 return
-            body = json.dumps({"handoff_id": f"medchron-{job_id}", "task": wake["task"]})
+            body = json.dumps({"handoff_id": f"{self.LANE}-{job_id}", "task": wake["task"]})
             url = urlparse(self.gate_url)
             sent = False
             outcome = "error"
@@ -670,6 +625,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     poll = float(os.environ.get(POLL_ENV) or 5)
     logger.info("medchron daemon up: run_dir=%s poll=%ss", d.run_dir, poll)
+    from .demand_lane import start_lane  # its own slot: a demand never waits on a chronology, nor the reverse
+
+    start_lane(d, stop=lambda: stopped["flag"], poll_seconds=poll)
     d.run_forever(stop=lambda: stopped["flag"], poll_seconds=poll)
     return 0
 

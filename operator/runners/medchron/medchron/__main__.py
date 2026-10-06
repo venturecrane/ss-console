@@ -46,6 +46,28 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return _exit_code(outcomes)
 
 
+def _cmd_demand(args: argparse.Namespace) -> int:
+    """One demand job (``demand/run.py``). Same verdict contract as ``run``:
+    the JSON list goes to verdict.json and stdout, progress to stderr."""
+    import json
+
+    from .demand import firm as demand_firm, job as demand_job
+    from .demand.run import DemandRun
+
+    try:
+        r = DemandRun(
+            Path(args.job_dir), inputs_dir=args.inputs, pricing=args.pricing, log=lambda m: print(m, file=sys.stderr)
+        )
+    except (demand_firm.DemandConfigError, demand_job.DemandJobError) as exc:
+        print(f"medchron: {exc}", file=sys.stderr)
+        return 2
+    v = r.run()
+    payload = json.dumps(v.to_list())
+    verdict_mod.write(Path(args.job_dir), payload)
+    print(payload)
+    return {"delivered": 0, "held": 3, "failed": 1}.get(v.outcome, 1)
+
+
 def _exit_code(outcomes) -> int:
     worst = {"delivered": 0, "dry_run": 0, "rehearsed": 0, "held": 3, "refused": 4, "failed": 1}
     return max(worst.get(o.outcome, 1) for o in outcomes) if outcomes else 1
@@ -151,6 +173,11 @@ def main(argv: list[str] | None = None) -> int:
     rh.add_argument("--pricing", default=None)
     rh.add_argument("--json", action="store_true")
     rh.set_defaults(fn=_cmd_rehearse)
+    dm = sub.add_parser("demand", help="run one demand job (gap audit + draft demand) from pull to read-back")
+    dm.add_argument("job_dir")
+    dm.add_argument("--inputs", default=None, help="the demand firm-inputs dir (default: MEDCHRON_DEMAND_INPUTS)")
+    dm.add_argument("--pricing", default=None)
+    dm.set_defaults(fn=_cmd_demand)
     d = sub.add_parser("dag", help="print the stage order and validate it")
     d.set_defaults(fn=_cmd_dag)
     v = sub.add_parser("validate-config", help="validate a firm config file")

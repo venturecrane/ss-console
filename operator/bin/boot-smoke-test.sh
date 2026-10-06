@@ -736,6 +736,13 @@ ssh_exec "medchron-daemon-idle" "! test -f /run/smd-medchron/child.pid"
 ssh_exec "medchron-memory-cap-present" "grep -q memory_cap.:..cgroup /run/smd-medchron/heartbeat.json"
 ssh_exec "medchron-queue-root-owned" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/queue)\" = root:workspace-broker:770 ]"
 ssh_exec "medchron-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/jobs)\" = root:medchron:710 ]"
+# The demand lane (2026-10-06): its own thread in the same daemon, its own tick,
+# queue and job dirs. A lane thread that died leaves the chronology ticking and
+# this tick aging, which is the only way that death would be seen.
+ssh_exec "demand-lane-ticking" "t=/run/smd-medchron/demand-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
+ssh_exec "demand-lane-idle" "! test -f /run/smd-medchron/demand-child.pid"
+ssh_exec "demand-queue-root-owned" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/demand-queue)\" = root:workspace-broker:770 ]"
+ssh_exec "demand-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/demand-jobs)\" = root:medchron:710 ]"
 
 # The firm config is authored per-seat in the PRIVATE engagements repo, and
 # provision-customer.sh step 2b reads the SAME path and continues without it

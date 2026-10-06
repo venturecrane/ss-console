@@ -148,12 +148,11 @@ if AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" \
   mv -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" "${MEDCHRON_FIRM_CONFIG}"
   log "medchron-firm.yaml refreshed from R2 into ${CONFIG_DIR}"
 elif [ -f "${MEDCHRON_FIRM_CONFIG}" ]; then
-  rm -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null || true
   log "WARN: R2 fetch of medchron-firm.yaml failed; keeping the existing root-owned copy"
 else
-  rm -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null || true
   log "No medchron-firm.yaml in the vault for ${CUSTOMER_SLUG}; the chronology runner will refuse jobs"
 fi
+rm -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null || true
 if [ -f "${MEDCHRON_FIRM_CONFIG}" ]; then
   chown root:medchron "${MEDCHRON_FIRM_CONFIG}"
   chmod 0640 "${MEDCHRON_FIRM_CONFIG}"
@@ -274,6 +273,9 @@ mountpoint -q "${MEDCHRON_RUN_DIR}" \
   || mount --bind "${MEDCHRON_DATA_DIR}" "${MEDCHRON_RUN_DIR}" \
   || { log "FATAL: could not bind-mount ${MEDCHRON_DATA_DIR} -> ${MEDCHRON_RUN_DIR}"; exit 1; }
 export SMD_MEDCHRON_QUEUE_DIR="${MEDCHRON_RUN_DIR}/queue"
+# The demand lane's queue, job dirs and firm inputs (2026-10-06): sourced, same
+# shell, so its exports reach the broker launch and the daemon below.
+. /app/entrypoint-demand.sh
 
 # 2026-09-04: the chronology runner's INSTALL-level artifacts — the scanned-page
 # classifier's authored control pages (`controls.json` + the PDFs it names) and
@@ -303,12 +305,11 @@ if AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" \
   mv "${MEDCHRON_CONTROLS_DIR}.r2.tmp" "${MEDCHRON_CONTROLS_DIR}"
   log "medchron controls refreshed from R2 into ${MEDCHRON_CONTROLS_DIR}"
 elif [ -f "${MEDCHRON_CONTROLS_DIR}/controls.json" ]; then
-  rm -rf "${MEDCHRON_CONTROLS_DIR}.r2.tmp"
   log "WARN: R2 fetch of medchron-controls/ failed; keeping the existing root-owned copy"
 else
-  rm -rf "${MEDCHRON_CONTROLS_DIR}.r2.tmp"
   log "No medchron-controls/ in the vault for ${CUSTOMER_SLUG}; the chronology runner will refuse the classify stage of every job"
 fi
+rm -rf "${MEDCHRON_CONTROLS_DIR}.r2.tmp"
 if [ -d "${MEDCHRON_CONTROLS_DIR}" ]; then
   chown -R root:medchron "${MEDCHRON_CONTROLS_DIR}"
   find "${MEDCHRON_CONTROLS_DIR}" -type d -exec chmod 0750 {} +
@@ -509,6 +510,7 @@ launch_broker() {
     SMD_AUDIT_DB_PATH="${AUDIT_BIND_DB}" \
     SMD_ESTABLISH_SPOOL_DIR="${SMD_ESTABLISH_SPOOL_DIR}" \
     SMD_MEDCHRON_QUEUE_DIR="${SMD_MEDCHRON_QUEUE_DIR}" \
+    SMD_DEMAND_QUEUE_DIR="${SMD_DEMAND_QUEUE_DIR}" \
     SMD_AGENTMAIL_CREDENTIAL_PATH="${SMD_AGENTMAIL_CREDENTIAL_PATH}" \
     SMD_MSGRAPH_CREDENTIAL_PATH="${SMD_MSGRAPH_CREDENTIAL_PATH}" \
     SMD_MSGRAPH_READ_CREDENTIAL_PATH="${SMD_MSGRAPH_READ_CREDENTIAL_PATH}" \

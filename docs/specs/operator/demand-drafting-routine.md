@@ -1,6 +1,6 @@
 # Demand drafting routine (on request)
 
-**Status:** design, not built. The build starts when a firm accepts the terms in writing (agreement §2.7). Every figure below was measured on real matters between 2026-09-01 and 2026-09-24. Nothing is estimated unless it says so.
+**Status:** the runner is built, not yet deployed (2026-10-06): `operator/runners/medchron/medchron/demand/` (stages 1 to 8), the daemon's demand lane (`demand_lane.py`, its own slot beside the chronology), and the firm inputs in engagements `operator/customers/ashton-price/demand/` (voice, skeleton, prompts, house reference, `demand-firm.yaml` pinning each by sha256). The request edge (broker verbs, overlay tool, the skill's REQUEST and DELIVER modes) is built separately. The Captain decided on 2026-10-06 that the firm's own request is the go-ahead. Every figure below was measured on real matters between 2026-09-01 and 2026-09-24. Nothing is estimated unless it says so.
 
 **What it replaces:** today a session drives the laptop drafting pipeline (engagements `tools/drafting`, `tools/medchron`) by hand. On 2026-09-24 that took 5 h 14 min for four matters, because the drafting stages themselves (about 25 minutes per demand) sat inside queue waits, seat-transport failures and rework. Why, and the evidence: `docs/runbooks/operator/incidents/2026-09-24-demand-batch-took-five-hours.md`.
 
