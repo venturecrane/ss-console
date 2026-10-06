@@ -1115,7 +1115,7 @@ def test_a_financial_responsibility_form_is_not_an_acceptance(tmp_path):
     assert premise._phrase_hits(acceptance, phrases, negatable=True)
 
 
-# ---- live practice run 2026-10-06 (203222): a false G2 on our own draft ------------------
+# ---- live practice run 2026-10-06: a false G2 on our own draft ------------------
 def test_g2_never_reads_the_firms_or_the_operators_own_draft_demand(tmp_path, pricing):
     own = make_pdf(
         [

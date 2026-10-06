@@ -107,7 +107,7 @@ _SIGNOFF = r"(?:cordially|sincerely|very truly yours|respectfully(?: yours| subm
 
 
 #: A document the firm or the Operator drafted, by its name: a draft demand
-#: ("203222 Demand DRAFT 2026-09-24", the Operator's own 9/24 output, quoted a
+#: ("<matter> Demand DRAFT <date>", the Operator's own 9/24 output, quoted a
 #: carrier's refusal to disclose limits and stopped a live job at G2), anything
 #: carrying the Operator's provenance, a coverage posture report.
 _OWN_NAME = re.compile(
