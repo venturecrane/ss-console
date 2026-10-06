@@ -100,43 +100,50 @@ check I15 FIXED exact 0 "$(git grep -nE '[a-z0-9._-]+@venturecrane\.com' -- src 
 
 # ============================================================ STILL OPEN
 check F1  OPEN at-most 1 "$(grep -rn 'record_tool_failure\|record_refusal\|record_tool_success' operator/ --include='*.py' | grep -v test | grep -v 'sticky_stop.py:' | grep -v control-probes | n)" "sticky_stop arms have no code callers (a docstring)"
-check I12 OPEN exact 1 "$(c 'TODO(#891)' src/lib/oauth/audit.ts)" "OAuth consent audit is console.log only; #891 closed 2026-05-22"
+# I12 CLOSED 10-06 (#3067): callback events persist to oauth_callback_audit
+# (migration 0121, applied on prod: vfy_01M499BC3Y6N669K5CBSY69BXZ).
+check I12 FIXED exact 0 "$(c 'TODO(#891)' src/lib/oauth/audit.ts)" "OAuth consent audit persists to D1"
 
+# 2026-10-06 fix wave (#3061 #3062 #3063 #3064 #3065 #3067): N1-N14, N16-N18
+# and I12 flipped OPEN -> FIXED with the value measured on main after the
+# merges. The expectations now read as REGRESSED if a defect returns. N15 (SR1
+# other driver) stays OPEN: it is being fixed by the firm-letter session.
 # =============================================== NEW 10-06: src/ scripts/ CI
-check N1  OPEN at-most 3 "$(git grep -n "strField(data, 'error')" -- src/scripts | n)" "assessment chat shows raw error codes to visitors"
-check N2  OPEN exact 1 "$(c 'operatorPriceCents ?? 0) : 0' src/pages/portal/billing/index.astro)" "billing list renders \$0 per month for unpriced subscriptions (Pattern B)"
-check N3  OPEN exact 1 "$(c 'We will let you know the moment it is ready' 'src/pages/portal/billing/invoices/[id].astro')" "invoice page promises a notice nothing sends (Pattern A)"
+check N1  FIXED exact 0 "$(git grep -n "strField(data, 'error')" -- src/scripts | n)" "assessment chat shows the API's message, not its code"
+check N2  FIXED exact 0 "$(c 'operatorPriceCents ?? 0) : 0' src/pages/portal/billing/index.astro)" "billing list renders no amount for an unpriced subscription"
+check N3  FIXED exact 0 "$(grep -rlE "[Ww]e('ll| will) (let you know|notify you|email you)" src --include='*.ts' --include='*.tsx' --include='*.astro' | n)" "no client surface promises a notice nothing sends"
 check PCN4 FIXED at-least 1 "$(c 'tee gitleaks-output.txt' .github/workflows/security.yml)" "instrument live: the gitleaks step is found"
-check N4  OPEN exact 2 "$(c -E 'pipefail|shell: bash' .github/workflows/security.yml)" "gitleaks tests tee's exit status, so it cannot fail"
+check N4  FIXED at-least 3 "$(c -E 'pipefail|shell: bash' .github/workflows/security.yml)" "gitleaks step runs with pipefail, so it can fail"
 check PCN5 FIXED at-least 1 "$(c 'report.vulnerabilities' scripts/audit-allowlist.mjs)" "instrument live: the audit report is parsed"
-check N5  OPEN exact 0 "$(c 'report.error' scripts/audit-allowlist.mjs)" "npm audit error JSON reads as zero advisories"
-check N6  OPEN exact 0 "$(grep -A3 'safeAll(async () => findUnwitnessedCertifications' scripts/ci-reconcile-obligations.ts | grep -c '\.ok')" "failed unwitnessed-certification read reads as none"
-check N7  OPEN exact "true true" "$(node -e "import('./.claude/hooks/lib/register-grounding.mjs').then(m=>console.log(m.dateQuoteAnchorsDate('done by October 15, 2026.','2026-10-01'), m.dateQuoteAnchorsDate('due October 15, 2025','2026-10-15')))" 2>&1)" "register due-date guard accepts dates the quote does not state"
-check N8  OPEN exact 2 "$(c 'process.stderr.write(summarize(result))' .claude/hooks/memory-audit.mjs)" "SessionStart memory-audit findings go to stderr, unseen"
+check N5  FIXED at-least 1 "$(c 'report.error' scripts/audit-allowlist.mjs)" "npm audit error JSON fails the gate"
+# N6 RESTATED: the fix swapped safeAll for mustRead, so the .ok grep cannot see it.
+check N6  FIXED exact 1 "$(c "mustRead('unwitnessed certifications'" scripts/ci-reconcile-obligations.ts)" "a failed unwitnessed-certification read fails the run"
+check N7  FIXED exact "false false" "$(node -e "import('./.claude/hooks/lib/register-grounding.mjs').then(m=>console.log(m.dateQuoteAnchorsDate('done by October 15, 2026.','2026-10-01'), m.dateQuoteAnchorsDate('due October 15, 2025','2026-10-15')))" 2>&1)" "register due-date guard refuses dates the quote does not state"
+check N8  FIXED exact 1 "$(c 'process.stderr.write(summarize(result))' .claude/hooks/memory-audit.mjs)" "SessionStart findings reach context (the manual run keeps stderr)"
 
 # ============================================= NEW 10-06: broker / medchron
 check PCN9 FIXED at-least 1 "$(c PermissionError operator/workspace_broker/request_errors.py)" "instrument live: protocol exceptions are listed"
-check N9  OPEN exact 0 "$(c -E 'Refused|TransportError' operator/workspace_broker/request_errors.py)" "msgraph/AgentMail refusals reach the overlay as internal_error"
+check N9  FIXED at-least 1 "$(c 'BrokerRefusal' operator/workspace_broker/request_errors.py)" "msgraph/AgentMail refusals keep their name and message"
 check PCN10 FIXED at-least 1 "$(c LimitHold $MC/llm.py)" "instrument live: llm.py handles LimitHold"
-check N10 OPEN exact 0 "$(git grep -n 'LimitHold' -- $MC/audit/ $MC/stages/ | n)" "a cost hold mid-audit becomes dropped claims in a delivered chronology"
-check N11 OPEN exact 1 "$(c 'if "|" in ln and "(" in ln and ln.strip() and not who' $MC/stages/scope.py)" "joint matter: client's unlabelled blocks deleted after a co-client block"
+check N10 FIXED at-least 12 "$(grep -r 'except LimitHold' $MC/audit/ $MC/stages/ | n)" "a cost hold mid-audit propagates and the job holds"
+check N11 FIXED exact 0 "$(c 'if "|" in ln and "(" in ln and ln.strip() and not who' $MC/stages/scope.py)" "joint matter keeps the client's unlabelled blocks"
 check PCN12 FIXED at-least 1 "$(c 'r = seat.add_file' $MC/stages/upload.py)" "instrument live: the upload call is found"
-check N12 OPEN exact 0 "$(grep -B4 'r = seat.add_file' $MC/stages/upload.py | grep -cE 'try:|record\(')" "resumed upload can file a duplicate document (no intent row)"
+check N12 FIXED at-least 1 "$(c 'pending=True' $MC/stages/upload.py)" "upload writes an intent row before sending"
 
 # ========================================== NEW 10-06: connectors / bin
 N13_PY='from smokeball_connector.medicals_layout import indices_named as f
 k = "Provider/DisplayName"; v = "Valley Northside Imaging Center"; s = "Northside Imaging Center"
 print(f({0: {k: v}, 1: {k: s}}, s), f({0: {k: v}}, s))'
-check N13 OPEN exact "[0, 1] [0]" "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator/connectors/smokeball python3 -c "$N13_PY" 2>&1)" "Medicals provider match by containment picks the wrong row"
+check N13 FIXED exact "[1] []" "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator/connectors/smokeball python3 -c "$N13_PY" 2>&1)" "Medicals provider match is exact; containment never selects a row"
 check PCN14 FIXED at-least 1 "$(c pyyaml operator/pyproject.toml)" "instrument live: operator deps are read"
-check N14 OPEN exact 0 "$(( $(c cryptography operator/pyproject.toml) + $(c 'with cryptography' operator/bin/decommission-customer.sh) ))" "live decommission dies at step 07 after destroying the Fly app"
+check N14 FIXED at-least 1 "$(( $(c cryptography operator/pyproject.toml) + $(c 'with cryptography' operator/bin/decommission-customer.sh) ))" "live decommission can sign its packet"
 check PCN15 FIXED at-least 1 "$(c person $SB/sr1_form.py)" "instrument live: sr1_form checks person for the client"
 check N15 OPEN exact 0 "$(grep -A4 'def _other_driver' $SB/sr1_form.py | grep -c person)" "SR1 prints a company as the other driver"
 
 # ================================================ NEW 10-06: operator/skills
-check N16 OPEN exact 1 "$(c 'handover_only=all(e.handover for e in listed)' operator/skills/task-list-keeper/review.py)" "closes-only task email says 'I can't finish these'"
-check N17 OPEN exact 1 "$(c 'cm.own_level and d.task_id and view.is_operator_task(cm, d.task_id, stamp)' operator/skills/deadline-miss-escalator/casework_filter.py)" "reassigned Operator task drops from every alert"
-check N18 OPEN exact 1 "$(c 'mattersTruncated` is true and the matter has' operator/skills/service-confirmation-watcher/SKILL.md)" "unreadable memo matter reads as nothing captured"
+check N16 FIXED exact 0 "$(c 'handover_only=all(e.handover for e in listed)' operator/skills/task-list-keeper/review.py)" "closes-only task email has its own lead"
+check N17 FIXED exact 0 "$(c 'cm.own_level and d.task_id and view.is_operator_task(cm, d.task_id, stamp)' operator/skills/deadline-miss-escalator/casework_filter.py)" "a handed-over Operator task reaches the digest"
+check N18 FIXED exact 0 "$(c 'mattersTruncated` is true and the matter has' operator/skills/service-confirmation-watcher/SKILL.md)" "a matter with no memo row is unknown, never re-captured"
 
 # ============================================== NEW 10-06: invariant pass
 check PCN19 FIXED at-least 1 "$(c 'migrations/' docs/handbook/repository-map.md)" "instrument live: the migrations row is found"

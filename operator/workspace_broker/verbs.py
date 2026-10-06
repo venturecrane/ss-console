@@ -47,7 +47,7 @@ from typing import Any, Callable
 
 from .broker_context import BrokerContext
 from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
-from . import medchron_verbs
+from . import demand_verbs, medchron_verbs, reply_binding
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
 
@@ -155,12 +155,26 @@ VERBS: tuple[Verb, ...] = (
     Verb("medchron_job_record", _only(ROOT), _medchron),
     Verb("medchron_backfill_covered", _only(ROOT), _medchron),
     Verb("medchron_job_resume", _only(ROOT), _medchron),
+    # The demand job's request edge (demand_verbs.py); same compound gates as
+    # the chronology. Submit's requester and message ref come from the turn's
+    # verified inbound (the overlay), never the model. Resume has no agent tool.
+    Verb("demand_job_submit", GATEWAY_OR_ROOT, demand_verbs.demand_dispatch),
+    Verb("demand_job_status", GATEWAY_ROOT_OR_AGENT, demand_verbs.demand_dispatch),
+    Verb("demand_allowance", GATEWAY_ROOT_OR_AGENT, demand_verbs.demand_dispatch),
+    Verb("demand_job_record", _only(ROOT), demand_verbs.demand_dispatch),
+    Verb("demand_job_resume", _only(ROOT), demand_verbs.demand_dispatch),
     # Gateway-only from here down.
     Verb("audit_append", _only(GATEWAY), audit_verbs.audit_append),
     Verb("agentmail_send", _only(GATEWAY), transmit_verbs.agentmail),
     Verb("agentmail_reply", _only(GATEWAY), transmit_verbs.agentmail),
     Verb("msgraph_send", _only(GATEWAY), transmit_verbs.msgraph),
     Verb("msgraph_reply", _only(GATEWAY), transmit_verbs.msgraph),
+    # The verified reply binding (reply_binding.py): a turn no inbound opened
+    # answers one earlier email, once, to its verified sender. Gateway-only like
+    # the channel it transmits on; the check verb is gateway-only too, because
+    # it reads the mailbox.
+    Verb("msgraph_reply_bind", _only(GATEWAY), reply_binding.bind_verb),
+    Verb("msgraph_reply_bound", _only(GATEWAY), reply_binding.reply_verb),
     # ADR 0089 staff send-as: propose and decide transmit (the approval email;
     # the send AS a staff member), so they are gateway-only like the channels.
     # The reply notice goes to a fixed recipient about an already-sent draft and
@@ -200,6 +214,8 @@ if set(establish_verbs.VERBS) != {v.name for v in VERBS if v.handler is establis
 # inventory does not know it owns. Either way the failure is silent.
 if set(medchron_verbs.VERBS) != {v.name for v in VERBS if v.handler is _medchron}:
     raise RuntimeError("the medchron rows above and medchron_verbs.VERBS disagree")
+if set(demand_verbs.VERBS) != {v.name for v in VERBS if v.handler is demand_verbs.demand_dispatch}:
+    raise RuntimeError("the demand rows above and demand_verbs.VERBS disagree")
 
 
 def peer_classes(broker: BrokerContext, peer_pid: int, peer_uid: int | None) -> frozenset[str]:

@@ -396,6 +396,23 @@ else
   check_fail "staged-scripts-current: $(printf '%s\n' "${STAGED_OUT}" | grep -E '^(stale|checked):' | tr '\n' ';' || true)"
 fi
 
+# ---------- Step 6e: omitted repo skills absent from the volume ----------
+# bootstrap.sh prunes every repo skill (one under /app/skills) that the live
+# customer.yaml does not enable from /opt/data/skills, so an omitted lane cannot
+# be run by reading its files (2026-10-06). This asserts the convergence held:
+# no omitted repo skill is on the volume. A config that enables NO skill fails
+# here rather than passing on an empty set.
+ssh_exec_script "omitted-skills-absent" "/opt/hermes/.venv/bin/python3 -c '
+import os, sys, yaml
+p = os.environ.get(\"SMD_CUSTOMER_YAML_PATH\") or next((c for c in (\"/var/lib/smd-config/customer.yaml\", \"/opt/data/customer.yaml\") if os.path.exists(c)), \"\")
+doc = yaml.safe_load(open(p)) or {}
+on = {s[\"name\"] for q in doc.get(\"personas\") or [] for s in (q or {}).get(\"skills\") or [] if isinstance(s, dict) and s.get(\"enabled\") is not False and isinstance(s.get(\"name\"), str)}
+if not on:
+    sys.exit(\"no enabled skill read from customer.yaml\")
+left = sorted(n for n in os.listdir(\"/app/skills\") if n not in on and os.path.lexists(os.path.join(\"/opt/data/skills\", n)))
+sys.exit(\"omitted skills on the volume: \" + \" \".join(left) if left else 0)
+'"
+
 # ---------- Step 7: overlay plugins installed ----------
 # `hermes plugins list` should include the four hermes-smd-* plugins
 # installed at image-build time via `hermes plugins install venturecrane/hermes-smd-overlay`.

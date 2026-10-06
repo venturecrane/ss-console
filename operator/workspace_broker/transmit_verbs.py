@@ -22,6 +22,7 @@ from typing import Any
 
 from .broker_context import BrokerContext
 from .agentmail_ops import AgentMailRefused, AgentMailTransportError, collect_recipients
+from . import bound_replies
 from .canon import canonical
 from .digest_ref import valid_dispatch_ref
 from .msgraph_ops import MsGraphRefused, MsGraphTransportError
@@ -139,6 +140,10 @@ _CALLER_AUDIT_KEYS: tuple[str, ...] = (
     "dispatch_ref",
     "taint_exempt",
     "attachment_sha256",
+    # The verified reply binding's key (reply_binding.py), set by the broker
+    # itself on msgraph_reply_bound so the transmit row names which binding
+    # it spent.
+    "reply_binding",
 )
 _TAINT_EXEMPT_VALUES: tuple[str, ...] = ("code_fixed_recipients",)
 _SHA256_HEX = re.compile(r"[0-9a-f]{64}")
@@ -269,6 +274,9 @@ def dispatch_transmit(
     session_id = _clean(request, "session_id")
     matter_ref = _clean(request, "matter_ref")
     audit_extra = _audit_extra(request)
+    if action != "msgraph_reply_bound":
+        # Only the broker's own bound-reply verb names a binding.
+        audit_extra.pop("reply_binding", None)
     # Digest what the caller asked to send, computed here, so the row proves
     # which content went out without the ledger ever holding the content.
     digest = hashlib.sha256(canonical(payload)).hexdigest()
@@ -369,12 +377,23 @@ def msgraph(broker: BrokerContext, action: str, request: dict[str, Any], _pid: i
         raise ValueError(
             "msgraph transmit is not configured on this broker (needs SMD_MSGRAPH_CREDENTIAL_PATH and an audit ledger)"
         )
+    ops = broker.msgraph
+    db_path = broker.audit_db_path
+
+    def reply_unless_bound(payload: dict[str, Any]) -> dict[str, Any]:
+        # An email that has had its verified bound reply (reply_binding.py) is
+        # answered; a held inbound reply released afterwards must not answer it
+        # a second time. Refused (and so audited) before anything is fetched.
+        if db_path and bound_replies.claimed_for_graph_id(str(db_path), str(payload.get("message_id") or "")):
+            raise MsGraphRefused("that email has already had its bound reply; this reply would answer it twice")
+        return ops.reply(payload)
+
     return dispatch_transmit(
         broker,
         action,
         request,
-        send=broker.msgraph.send,
-        reply=broker.msgraph.reply,
+        send=ops.send,
+        reply=reply_unless_bound,
         refused=MsGraphRefused,
         transport=MsGraphTransportError,
         attempted_for_send=collect_msgraph_recipients,

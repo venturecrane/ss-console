@@ -221,7 +221,10 @@ def gather(client: Any, matter_id: str, cited: Any) -> tuple[dict[str, str], dic
         key = f"Matter/{side}/InsurancePolicy/PolicyNumber"
         put(policy_box, str(layout.get(key) or "").strip(), f"layout {key}")
 
-    if other:
+    # The other DRIVER is a person too: a company on the other side (a trucking
+    # firm, an employer) never prints as the driver on a form the client signs
+    # under penalty of perjury (review N15, 2026-10-06; the SR19 already checks).
+    if other and isinstance(other.get("person"), dict):
         put("DRIVERS NAME.1", facts.contact_name(other), "the other side's contact")
         theirs = _address_parts(other)
         for box, part in (

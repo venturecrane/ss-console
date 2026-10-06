@@ -431,6 +431,21 @@ def test_a_company_client_is_never_the_driver(seat: Path, documents: None) -> No
     assert values["DRIVERS NAME.1"] == "Robin Other"  # the other side is still read
 
 
+def test_a_company_on_the_other_side_is_never_the_other_driver(seat: Path, documents: None) -> None:
+    """Review N15, 2026-10-06: a trucking company or employer on the other side
+    printed as DRIVERS NAME on a form the client signs under penalty of perjury."""
+
+    class _CompanyOther(_Record):
+        def get(self, path: str, **params: Any) -> Any:
+            if path == f"/contacts/{OTHER}":
+                return {"id": OTHER, "company": {"name": "Example Freight Lines"}}
+            return super().get(path, **params)
+
+    values, _s, _c = sr1_form.gather(_CompanyOther(), MATTER, None)
+    assert "DRIVERS NAME.1" not in values and "DRIVERS STREET ADDRESS.1" not in values
+    assert values["DRIVERS NAME.0"] == "Dana Example"  # the client's own boxes are untouched
+
+
 def test_the_client_completes_list_survives_the_reply_checks() -> None:
     import re
 

@@ -412,6 +412,41 @@
       "producerFile": "operator/workspace_broker/medchron_ledger.py",
       "reason": "ss#2614. The runner exited without a verdict or a stage failed; the reason is the runner's own sentence."
     },
+    "REPLY_BINDING": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/reply_binding.py",
+      "reason": "The workspace broker appends one row per verified-reply-binding verdict (bound or refused) so a reply a non-inbound turn sent, or was refused, can be traced to the email it answered."
+    },
+    "DEMAND_JOB_SUBMITTED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/demand_verbs.py",
+      "reason": "The demand job (gap audit + draft demand). The workspace broker appends one row when a Named Administrator's request is queued through demand_job_submit: job id, matter number, deliverables, allowance remainder, requester, the request's message id; never the request text."
+    },
+    "DEMAND_JOB_RUNNING": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/demand_verbs.py",
+      "reason": "The runner daemon reported a demand job running (demand_job_record), or a person asked to resume a failed one (demand_job_resume, root only)."
+    },
+    "DEMAND_JOB_HELD": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/demand_verbs.py",
+      "reason": "The runner held a demand job; the reason is a code-authored sentence."
+    },
+    "DEMAND_JOB_DELIVERED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/demand_verbs.py",
+      "reason": "The runner filed the demand job's deliverables (or its coverage report) and read them back; names and sizes only."
+    },
+    "DEMAND_JOB_FAILED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/demand_verbs.py",
+      "reason": "A demand job failed or stopped at a spend cap; resumable by a person."
+    },
+    "DEMAND_JOB_RESUME_REQUESTED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/demand_verbs.py",
+      "reason": "A person asked the runner to resume a failed demand job (demand_job_resume, root only), with a reason."
+    },
     "ACT_PROPOSED": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/establishment_constants.py",

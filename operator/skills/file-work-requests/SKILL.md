@@ -309,13 +309,13 @@ For each facility she listed, call
 
 Read the result by `status`:
 
-| status                                  | the reply line                                                                                                             |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `written`                               | `On the Medicals tab: <linked_as> (<note>).` and, when `created` is true, ` Added to contacts as a new company.`           |
-| `already_present`                       | `Already on the Medicals tab: <linked_as>; left as it was.`                                                                |
-| `needs_contact`                         | `Needs a word from you: <provider>. The firm's contacts have <candidate names>. Which one, or is it a different facility?` |
-| `link_not_visible`, `readback_mismatch` | `Check the Medicals tab: <provider> was linked but did not read back as written.`                                          |
-| `refused`                               | `Not entered: <provider>. <reason in plain words>`                                                                         |
+| status                                  | the reply line                                                                                                                                                                                                             |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `written`                               | `On the Medicals tab: <linked_as> (<note>).` and, when `created` is true, ` Added to contacts as a new company.`                                                                                                           |
+| `already_present`                       | `Already on the Medicals tab: <linked_as>; left as it was.`                                                                                                                                                                |
+| `needs_contact`                         | `Needs a word from you: <provider>. <reason, in plain words>: <candidate names>. Which one, or is it a different facility?` (the candidates are the firm's contacts or rows already on the Medicals tab, as `reason` says) |
+| `link_not_visible`, `readback_mismatch` | `Check the Medicals tab: <provider> was linked but did not read back as written.`                                                                                                                                          |
+| `refused`                               | `Not entered: <provider>. <reason in plain words>`                                                                                                                                                                         |
 
 When she answers a `needs_contact` line with one of the names, call again with
 that exact name. When she says it is a different facility, call again with

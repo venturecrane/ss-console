@@ -1486,7 +1486,11 @@ describe('Operator customer Machine Dockerfile', () => {
     // respawn, a broker outage pages once, and four AgentMail app tools are banned.
     // 4f5c085d -> a2c83f92 (overlay#419), 2026-10-06: the DMV SR1 prefill tool is classified internal_write.
     // a2c83f92 -> 0b66db8a (overlay#420), 2026-10-06: the DMV SR 19C prefill tool is classified internal_write.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="0b66db8a846508bc66a222e7e676493298041911"')
+    // 0b66db8a -> 9221b55b (overlay#421), 2026-10-06: the verified reply binding; a job's completion
+    // wake or a scheduled turn answers one earlier email once, through msgraph_reply_bound.
+    // 9221b55b -> 07f6be76 (overlay#422), 2026-10-06: demand_job_submit/status/allowance (the requester is
+    // the turn's own verified email) and the omitted-skill read fence.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="07f6be76667ac7fa6a3626813adf65b647018d06"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
