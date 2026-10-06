@@ -10,7 +10,10 @@ What these defend, each written so that removing the line it defends fails it:
 * a fact the record does not hold prints as ``[Not in the file: ...]`` and is
   listed in ``unfilled``; nothing is defaulted;
 * the adjuster supplies the carrier's fax and email, never its name;
-* the signer is the authored signer map's, never the staff record's name;
+* the signer is the one each of the firm's task forms prints: on the 1st
+  party letter the authored signer map's name ("Christopher A. Price"), never
+  the staff record's; on the 3rd party letter the staff record's own name
+  ("Chris Price", what that task form merges), title authored, no initials;
 * a form that does not resolve refuses and files nothing;
 * the committed forms carry no source matter's binding.
 """
@@ -188,15 +191,15 @@ def test_the_committed_forms_carry_their_fields() -> None:
         "signer_name",
         "signer_title",
     ]
+    # The 3rd party TASK form carries no date line and no reference line.
     assert placeholders_in(THIRD) == [
-        "date",
         "delivery_lines",
         "carrier_name",
+        "carrier_address",
         "client_name",
         "claim_number",
         "date_of_loss",
         "signer_name",
-        "signer_initials",
         "signer_title",
     ]
 
@@ -252,22 +255,78 @@ def test_first_party_letter_reads_as_the_firms_letter(signers: Path) -> None:
     ]
 
 
-def test_third_party_letter_fills_its_own_layout(signers: Path) -> None:
-    filled = fill_form(THIRD, _values(_Record(), "third_party_rep"), fl.PARAGRAPH_FIELDS)
-    texts = _texts(filled.data)
-    assert texts[0] == "October 5, 2026"
-    assert texts[1] == "\t\t\t\t\t[Not in the file: 3rd party insurer fax or email]"
-    assert "Other Side Mutual" in texts
-    assert "RE:\tOur client:\t\tDana Example" in texts
-    assert "\t\tClaim#:\t\t44-5556667" in texts
-    assert "Date of Loss:\t\t03/04/2026" in texts
-    assert texts[-2:] == ["\t\t\t\t\t\t\tSamuel Q. Signer", "SQS/ab\t\t\t\t\t\t\tAttorney at Law"]
+def _third(record: _Record) -> list[str]:
+    spec = fl.FORMS["third_party_rep"]
+    filled = fill_form(THIRD, _values(record, "third_party_rep"), spec.paragraph_fields)
+    assert filled.unknown == []
+    return _texts(filled.data)
+
+
+THIRD_BODY = [
+    "To Whom It May Concern:",
+    "Please be advised that this office has been retained to present a claim on behalf of the above named client "
+    "for injuries arising out of the above referenced incident.  Therefore, please confirm in writing that you "
+    "have coverage in this matter and your policy limits. ",
+    "Please direct all future correspondence and communications to this office. Please be advised that any and "
+    "all authorizations signed by our client releasing any information are hereby revoked. Also, request is "
+    "hereby made that you forward to us a copy of any statement obtained from our client, any accident report, "
+    "preservation and copy of vehicle event data recorder, and photographs, audio, video and digital recording "
+    "you may have relating to this accident and any information regarding witnesses known to you.",
+    "A claimant’s designation of attorneys, as required by California Fair Claims Settlement Practices "
+    "Regulations, is enclosed. As soon as we have the necessary documentation, we will forward it to you along "
+    "with our thoughts concerning settlement. Thank you for your courtesy and cooperation.  Please don’t "
+    "hesitate to contact us with questions.",
+    "Cordially,",
+    "ASHTON & PRICE",
+]
+
+
+def test_third_party_letter_reads_as_the_firms_task_form_letter(signers: Path) -> None:
+    """The 3rd party TASK form's letter, line for line: no date line, the
+    carrier's address one paragraph per line, the staff record's own name
+    over the authored title, and no reference line."""
+    assert _third(_Record()) == [
+        "\t" * 11 + "[Not in the file: 3rd party insurer fax or email]",
+        "Attn:  Claims",
+        "Other Side Mutual",
+        "PO Box 1",
+        "Townville, OH 44000",
+        "RE:",
+        "Our Client:",
+        "Dana Example",
+        "Claim#:",
+        "44-5556667",
+        "Date of Loss:",
+        "03/04/2026",
+        *THIRD_BODY,
+        "Sam Signer",
+        "\tAttorney at Law",
+    ]
+
+
+def test_third_party_delivery_lines_take_the_task_forms_casing(signers: Path) -> None:
+    insurer = _Record().contacts[INSURER_3P]
+    insurer["company"].update({"fax": {"areaCode": "877", "number": "555-0199"}, "email": "c@other.example"})
+    texts = _third(_Record(contacts={INSURER_3P: insurer}))
+    assert texts[:2] == ["\t" * 11 + "Via Fax: (877) 555-0199", "\t" * 11 + "Via Email: c@other.example"]
+
+
+def test_the_third_party_signer_is_the_staff_record_with_the_authored_title(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "customer.yaml"
+    path.write_text("form_letters:\n  signers: {}\n", encoding="utf-8")
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
+    values = _values(_Record(), "third_party_rep")
+    assert values["signer_name"] == "Sam Signer"
+    assert values["signer_title"] == "[Not in the file: how Sam Signer signs: title]"
+    assert "signer_initials" not in values, "the 3rd party task form has no reference line"
 
 
 def test_the_reference_line_pairs_the_attorney_with_the_staff_on_the_file(signers: Path) -> None:
     """EAS/cr, CAP/ic: the attorney's authored initials, then the assisting
     staff member's. A file with no assisting staff marks the second half."""
-    assert _values(_Record(), "third_party_rep")["signer_initials"] == "SQS/ab"
+    assert _values(_Record(), "first_party_rep")["signer_initials"] == "SQS/ab"
 
     class _NoAssist(_Record):
         def get(self, path: str, **params: Any) -> Any:
@@ -275,7 +334,7 @@ def test_the_reference_line_pairs_the_attorney_with_the_staff_on_the_file(signer
                 return {"id": MATTER, "clientIds": [CLIENT], "personResponsibleStaffId": STAFF}
             return super().get(path, **params)
 
-    assert _values(_NoAssist(), "third_party_rep")["signer_initials"] == (
+    assert _values(_NoAssist(), "first_party_rep")["signer_initials"] == (
         "SQS/[Not in the file: preparer initials (no assisting staff on the matter)]"
     )
 
@@ -330,7 +389,7 @@ def test_an_unmapped_signer_prints_markers_not_the_staff_record(
     path = tmp_path / "customer.yaml"
     path.write_text("form_letters:\n  signers: {}\n", encoding="utf-8")
     monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
-    values = _values(_Record(), "third_party_rep")
+    values = _values(_Record(), "first_party_rep")
     assert values["signer_name"] == "[Not in the file: how Sam Signer signs: name]"
     assert "Sam Signer" not in (values["signer_title"].replace("how Sam Signer signs", ""))
 
@@ -381,7 +440,10 @@ def test_build_form_puts_each_value_in_one_run_and_unwraps_nothing_else() -> Non
     xml = zipfile.ZipFile(io.BytesIO(form)).read(DOCUMENT_PART).decode()
     assert ">{{client_name}}</w:t>" in xml and ">{{claim_number}}</w:t>" in xml
     with zipfile.ZipFile(io.BytesIO(source)) as a, zipfile.ZipFile(io.BytesIO(form)) as b:
-        assert [n for n in a.namelist() if a.read(n) != b.read(n)] == [DOCUMENT_PART]
+        # The body, and the core properties' people: who made the source
+        # letter is not the firm's form.
+        assert [n for n in a.namelist() if a.read(n) != b.read(n)] == ["docProps/core.xml", DOCUMENT_PART]
+        assert b"<dc:creator></dc:creator>" in b.read("docProps/core.xml")
 
 
 def test_build_form_refuses_a_value_it_cannot_find_exactly_once() -> None:
@@ -430,6 +492,19 @@ def test_files_under_the_firms_name_and_reports_gaps(record: _Record, monkeypatc
     assert out["same_name_on_matter"] == ["f-old"]
     assert "signer_initials" not in out["facts_used"], "a field the form does not carry is not reported as used"
     assert out["facts_used"]["claim_number"] == "layout Matter/Plaintiffs/InsurancePolicy/Claims/Number"
+
+
+def test_the_third_party_letter_files_with_its_own_paragraph_layout(
+    record: _Record, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _resolves(monkeypatch, THIRD)
+    out = fl.render_firm_form_letter(MATTER, "third_party_rep")
+    assert out["status"] == "filed"
+    assert record.uploads[0][1] == "3rd Party Letter.docx"
+    texts = _texts(record.uploads[0][2])
+    assert texts[2:5] == ["Other Side Mutual", "PO Box 1", "Townville, OH 44000"]
+    assert out["unfilled"] == ["[Not in the file: 3rd party insurer fax or email]"]
+    assert out["facts_used"]["signer_name"] == "the matter's responsible staff record (first and last name)"
 
 
 def test_an_unknown_form_or_bad_date_refuses(record: _Record) -> None:
