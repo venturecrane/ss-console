@@ -404,7 +404,7 @@ def test_walled_email_never_reaches_the_corpus_and_kept_mail_brings_its_body(tmp
 def test_a_printed_email_pdf_is_walled_by_its_header_addresses(tmp_path, pricing):
     printed = make_pdf(
         [
-            "From: Alpha Example <client@mail.example>\nTo: atty@firm.example\nSubject: my neck\nThe privileged body text."
+            "From: Alpha Example <client@mail.example>\nSent: Monday, March 2, 2026 9:14 AM\nTo: atty@firm.example\nSubject: my neck\nThe privileged body text."
         ]
     )
     seat = seat_with(standard_docs() + [("d8", "scan 3-1-26.pdf", printed, "f-med")])
@@ -899,3 +899,119 @@ def test_no_demand_left_this_cycle_fails_before_anything_is_paid(tmp_path, prici
         vendor_factory=lambda: None,
     ).run()
     assert v.outcome == "failed" and v.stage == "demand_allowance_per_cycle" and client.calls == []
+
+
+@pytest.mark.parametrize("estimate,outcome", [(40.0, "delivered"), (140.0, "failed")])
+def test_the_runaway_guard_holds_only_above_the_cap(tmp_path, pricing, estimate, outcome):
+    """Captain, 2026-10-06: delivery must not stop for a few dollars; the
+    per-job cap is a runaway guard (100), so a 40-dollar estimate runs and a
+    140-dollar one stops before anything is paid."""
+    make_inputs(
+        tmp_path / "inputs",
+        budget={"per_job_cap_usd": 100.0, "monthly_budget_usd": 750.0, "usd_drafting_fixed": estimate},
+    )
+    client = ScriptedClient()
+    _r, v, _ = _run(tmp_path, pricing, seat_with(standard_docs()), client)
+    assert v.outcome == outcome, v.reason
+    assert (client.calls == []) == (outcome == "failed")
+    if outcome == "delivered":
+        assert v.dollars > 0  # the job's actual spend rides the verdict, the ledger row and the wake
+
+
+# ---- re-review 2026-10-06 ---------------------------------------------------------------
+def test_an_audit_reply_with_no_tally_line_is_retried_then_held(tmp_path, pricing):
+    client = ScriptedClient(audit="- claim | SUPPORTED | cite\n(the auditor stopped before its tally)")
+    seat = seat_with(standard_docs())
+    _r, v, _ = _run(tmp_path, pricing, seat, client)
+    assert v.outcome == "held" and "did not complete twice" in v.reason
+    assert seat.sent == []
+
+
+def test_a_truncated_audit_reply_is_never_a_pass(tmp_path, pricing):
+    class Truncating(ScriptedClient):
+        def _msg(self, params):
+            m = super()._msg(params)
+            if "AUDIT-PROMPT" in json.dumps(params.get("system")):
+                m.stop_reason = "max_tokens"
+            return m
+
+    seat = seat_with(standard_docs())
+    _r, v, _ = _run(tmp_path, pricing, seat, Truncating())
+    assert v.outcome == "held" and "did not complete" in v.reason and seat.sent == []
+
+
+def test_finding_rows_count_even_when_the_tally_line_under_counts():
+    from medchron.demand import draft
+
+    body = "- a | INVENTED | none\n- b | INVENTED | none\nSUPPORTED=4 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+    assert draft.tally(body)["INVENTED"] == 2 and draft.tally(body)["SUPPORTED"] == 4
+
+
+def test_a_fax_cover_sheet_is_kept_not_walled(tmp_path):
+    firm = firm_mod.load(make_inputs(tmp_path / "in"))
+    cover = "FAX COVER SHEET\nTO: Exampletown ER Records\nFROM: Example & Example, LLP\nRE: Alpha Example\nPages: 4"
+    assert pull.printed_email_wall(cover, firm, set()) is None
+    no_addr = "From: Alpha Example\nSent: Monday\nTo: Example Lawyer\nSubject: hi\nbody"
+    assert pull.printed_email_wall(no_addr, firm, set()) is None  # Outlook shape but no address: not walled
+    real = "From: Alpha <client@mail.example>\nSent: Monday\nTo: atty@firm.example\nSubject: hi\nbody"
+    assert pull.printed_email_wall(real, firm, {"client@mail.example"})
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "We cannot deny coverage at this time.",
+        "We are unable to deny coverage until the investigation ends.",
+        "The carrier will not deny coverage for this loss.",
+    ],
+)
+def test_a_negated_denial_is_not_a_denial(text):
+    from medchron.demand import premise
+
+    assert premise._phrase_hits([({"name": "letter"}, text)], ["deny coverage"], negatable=True) == []
+    assert premise._phrase_hits([({"name": "letter"}, "We deny coverage.")], ["deny coverage"], negatable=True)
+
+
+def test_the_letter_may_name_any_of_the_matters_clients_and_the_file_is_named_for_that_one():
+    from medchron.demand import crosscheck
+
+    facts = {
+        "client_name": "Alpha Example",
+        "client_names": ["Alpha Example", "Beta Second"],
+        "date_of_loss": "01/15/2026",
+    }
+    second = DRAFT.replace("client: Alpha Example", "client: Beta Second")
+    assert crosscheck.check(second, facts)["mismatches"] == []
+    assert crosscheck.matched_client(second, facts) == "Beta Second"
+    stranger = DRAFT.replace("client: Alpha Example", "client: Gamma Person")
+    assert crosscheck.check(stranger, facts)["mismatches"]
+
+
+def test_every_walled_document_is_listed_by_name_in_the_gap_audit_and_the_notes(tmp_path, pricing):
+    printed = make_pdf(["From: Alpha <client@mail.example>\nSent: Monday\nTo: atty@firm.example\nSubject: x\nbody"])
+    seat = seat_with(standard_docs() + [("d8", "scan 3-1-26.pdf", printed, "f-med")])
+    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient())
+    assert v.outcome == "delivered", v.reason
+    import docx
+
+    out = tmp_path / "job" / "data" / "out" / "demand"
+    gap = docx.Document(str(next(out.glob("Gap Audit*.docx"))))
+    gtext = "\n".join(p.text for p in gap.paragraphs) + " ".join(
+        c.text for t in gap.tables for r in t.rows for c in r.cells
+    )
+    assert "privilege wall: 1 document(s)" in gtext and "scan 3-1-26" in gtext
+    notes = docx.Document(str(out / "Demand.Alpha Example - attorney notes.docx"))
+    assert any("scan 3-1-26" in p.text and "privilege wall" in p.text for p in notes.paragraphs)
+
+
+def test_g1_skips_a_medical_record_by_its_content_not_only_its_name():
+    from medchron.demand import premise
+
+    bill_by_content = [
+        (
+            {"name": "scan 3-1-26"},
+            "Patient account 12345. Date of service 01/15/2026. "
+            "Amount due $1,200. Insured: Alpha Example. Claim number CLM-0009.",
+        )
+    ]
+    assert premise.carrier_documents(bill_by_content, ["claim number"]) == []

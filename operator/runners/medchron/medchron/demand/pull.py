@@ -113,11 +113,15 @@ _HEADER = re.compile(r"(?im)^\s*(from|to|cc|sent|subject)\s*:")
 
 
 def printed_email_wall(text: str, firm: DemandFirm, client: set[str]) -> str | None:
-    """A document that is a printed email (two or more header lines, From/To/
-    Sent/Subject, on its first page) gets the same wall as a ``.msg``; a header
-    block whose addresses do not parse is held out."""
+    """A printed email gets the same wall as a ``.msg``. It is recognized by
+    the Outlook header shape (From, Sent, To and Subject lines, all four, in
+    its first 3,000 characters) AND an email address on its From or To line.
+    A fax cover sheet (TO:/FROM:/RE:) has neither, and a provider's or
+    carrier's cover is a record, not correspondence (review of #3074)."""
     head = text[:3000]
-    if len({m.group(1).lower() for m in _HEADER.finditer(head)}) < 2:
+    if {m.group(1).lower() for m in _HEADER.finditer(head)} < {"from", "sent", "to", "subject"}:
+        return None
+    if "@" not in _line(head, "from") + _line(head, "to"):
         return None
     sender = next(iter(addresses(_line(head, "from"))), "")
     rcpt = addresses(_line(head, "to")) + addresses(_line(head, "cc"))

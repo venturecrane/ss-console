@@ -101,7 +101,7 @@ def test_the_lane_claims_from_the_demand_queue_and_records_through_demand_verbs(
     assert lane.tick() == "delivered"
     assert [s for _j, s, _f in client.records] == ["running", "delivered"]
     fields = client.records[-1][2]
-    assert fields["cents"] == 650 and fields["folder_id"] == "folder-7"
+    assert fields["cents"] == 650 and fields["folder_id"] == "folder-7" and fields["delivery"]["cents"] == 650
     assert fields["delivery"]["files"][0] == {"name": "Demand.Alpha Example.docx", "size": 41000, "role": "demand"}
     assert (lane.jobs / jid / "job.json").is_file()
     assert {"action": "demand_allowance", "exclude_job_id": jid} in client.requests
@@ -115,6 +115,7 @@ def test_the_wake_asks_for_deliver_mode_with_the_contract_fields(tmp_path):
     assert task.startswith(f"Run the demand-letter-drafter skill's DELIVER mode for demand job {jid}.")
     for line in (
         "Kind: demand.",
+        "Spend cents: 650.",
         "Outcome: delivered.",
         "Matter number: 100001.",
         "Folder id: folder-7.",

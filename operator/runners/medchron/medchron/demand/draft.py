@@ -127,6 +127,30 @@ def mechanical_checks(corpus_text: str, draft: str) -> dict[str, Any]:
     return {"quotes": contig, "quotes_not_found": sum(1 for c in contig if not c["found"]), "banned": banned}
 
 
+class AuditIncomplete(DraftError):
+    """A section's audit was truncated or carried no tally line, twice."""
+
+
+_TALLY = re.compile(r"SUPPORTED=\d+\s+DRIFTS=\d+\s+INVENTED=\d+\s+ARITHMETIC=\d+")
+
+
+def audit_complete(stop_reason: str, text: str) -> bool:
+    """A finished audit ended on its own and carries its closing tally line."""
+    return stop_reason != "max_tokens" and bool(_TALLY.search(text))
+
+
+def tally(body: str) -> dict[str, int]:
+    """Per verdict, the HIGHER of the auditor's own tally and the count of its
+    finding rows: a tally line that under-counts (or a finding row the tally
+    forgot) must never read as a pass (review of #3074)."""
+    out = {}
+    for k in ("DRIFTS", "INVENTED", "ARITHMETIC", "SUPPORTED"):
+        stated = sum(int(x) for x in re.findall(rf"{k}=(\d+)", body))
+        rows = sum(1 for ln in body.splitlines() if re.search(rf"\|\s*{k}\s*\|", ln, re.I))
+        out[k] = max(stated, rows)
+    return out
+
+
 class Drafter:
     def __init__(
         self,
@@ -242,26 +266,33 @@ class Drafter:
             cache = self.data / "audit" / f"v{version}-{dsha}-{i:02d}.md"
             if cache.is_file():
                 return i, cache.read_text(encoding="utf-8")
-            r = self.doorway.call(
-                "audit",
-                model=self.firm.model("audit"),
-                system=system,
-                max_tokens=AUDIT_MAX_TOKENS,
-                messages=[{"role": "user", "content": f"## SECTION UNDER AUDIT: {head}\n\n{body}"}],
-                stream=True,
-                custom_id=f"audit-{version}-{dsha}-{i:02d}",
-            )
+            text = ""
+            for attempt in (1, 2):
+                r = self.doorway.call(
+                    "audit",
+                    model=self.firm.model("audit"),
+                    system=system,
+                    max_tokens=AUDIT_MAX_TOKENS,
+                    messages=[{"role": "user", "content": f"## SECTION UNDER AUDIT: {head}\n\n{body}"}],
+                    stream=True,
+                    custom_id=f"audit-{version}-{dsha}-{i:02d}-{attempt}",
+                )
+                text = r.text
+                if audit_complete(r.stop_reason, text):
+                    break
+                self.log(f"  audit of {head[:40]} incomplete (stop {r.stop_reason}); attempt {attempt} of 2")
+            else:
+                # Twice incomplete: an audit that did not finish is not an audit
+                # that passed (review of #3074). Not cached, so a resume retries.
+                raise AuditIncomplete(f"the audit of section {head[:60]!r} did not complete twice")
             cache.parent.mkdir(exist_ok=True)
-            cache.write_text(f"## AUDIT: {head}\n\n{r.text}\n", encoding="utf-8")
+            cache.write_text(f"## AUDIT: {head}\n\n{text}\n", encoding="utf-8")
             return i, cache.read_text(encoding="utf-8")
 
         with ThreadPoolExecutor(max_workers=self.workers) as ex:
             results = dict(ex.map(one, enumerate(secs)))
         body = "\n\n".join(results[i] for i in sorted(results))
-        tallies = {
-            k: sum(int(x) for x in re.findall(rf"{k}=(\d+)", body))
-            for k in ("DRIFTS", "INVENTED", "ARITHMETIC", "SUPPORTED")
-        }
+        tallies = tally(body)
         nf = [c["quote"] for c in mech["quotes"] if not c["found"]]
         nf_block = (
             ("## MECHANICAL: quotations not found verbatim in the corpus\n" + "\n".join(f"- {q}" for q in nf) + "\n\n")

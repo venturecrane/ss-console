@@ -51,7 +51,10 @@ def _quote(text: str, match: re.Match[str]) -> str:
     return f"{snippet} (p. {page[-1]})" if page else snippet
 
 
-_NEGATED = re.compile(r"(?i)\b(not|no|never|without)\s+(a|an|any)?\s*$")
+_NEGATED = re.compile(
+    r"(?i)\b(not|no|never|without|cannot|can ?not|unable to|decline to|not able to|will not|won't)\s+"
+    r"(a|an|any|be|to)?\s*(\w+\s+)?$"
+)
 
 
 def _phrase_hits(
@@ -83,6 +86,19 @@ _BILL_OR_RECORD = re.compile(
     r"(?i)\b(bill|billing|statement|ledger|itemi[sz]|ub-?04|hcfa|cms-?1500|invoice|medical record|chart|"
     r"retainer|intake|authori[sz]ation|hipaa)\b"
 )
+_MEDICAL_CONTENT = re.compile(
+    r"(?i)\b(chief complaint|diagnos[ie]s|date of service|dates? of service|cpt|icd-?10|patient (name|account|id)|"
+    r"amount due|balance due|guarantor|medical record (number|no)|mrn|statement date|charges)\b"
+)
+
+
+def medical_by_content(text: str) -> bool:
+    """A bill or a medical record, by what its first pages SAY: two or more
+    distinct clinical or billing terms. A file named "scan 3-1.pdf" is still
+    a bill when it reads like one (review of #3074)."""
+    return len({m.group(1).lower() for m in _MEDICAL_CONTENT.finditer(text[:4000])}) >= 2
+
+
 _CARRIER_WORD = re.compile(r"(?i)\b(insured|adjuster|claims? (representative|specialist|adjuster|department))\b")
 _IDENT = re.compile(r"[\s:#.]*([A-Z0-9][A-Z0-9-]{3,})", re.I)
 
@@ -97,7 +113,7 @@ def carrier_documents(texts: list[tuple[dict[str, Any], str]], phrases: list[str
     pats = [re.compile(re.escape(p), re.I) for p in phrases]
     out = []
     for r, t in texts:
-        if _BILL_OR_RECORD.search(str(r.get("name") or "")) or not _CARRIER_WORD.search(t):
+        if _BILL_OR_RECORD.search(str(r.get("name") or "")) or medical_by_content(t) or not _CARRIER_WORD.search(t):
             continue
         for p in pats:
             m = next(

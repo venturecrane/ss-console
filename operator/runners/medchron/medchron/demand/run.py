@@ -355,7 +355,25 @@ class DemandRun:
             f"Left for the attorney by the auditor (DRIFTS): {x}" for x in draft.finding_lines(audit_md, ("DRIFTS",))
         ]
         notes += [f"Not checked against the matter record: {x}" for x in cc["unchecked"]]
+        notes += [f"Held out, never read (privilege wall: {w['reason']}): {w['name']}" for w in self._walled()]
         return notes + [f"Drafting gate: {w}" for w in g["warnings"]]
+
+    def _walled(self) -> list[dict[str, Any]]:
+        p = self.data / "walled.json"
+        return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else []
+
+    def _wall_section(self) -> str:
+        """Code-authored, so over-walling is visible: every document the wall
+        held out, by name and reason. The attorney can clear any of them."""
+        rows = self._walled()
+        head = f"\n\n## Held out behind the privilege wall: {len(rows)} document(s)\n\n"
+        if not rows:
+            return head + "None.\n"
+        lines = ["| Document | Why it was held out |", "|---|---|"]
+        lines += [f"| {str(w['name']).replace('|', '/')} | {w['reason']} |" for w in rows]
+        return (
+            head + "Never read by a model; clear any of them and ask again to include it.\n\n" + "\n".join(lines) + "\n"
+        )
 
     def _gate(self, name: str, md: str) -> dict[str, Any]:
         g = self._json(name) if self._is_done(name) else None
@@ -386,14 +404,15 @@ class DemandRun:
         if self.job.wants("gap_audit"):
             gap = (self.data / "gap-audit.md").read_text(encoding="utf-8")
             self._gate("gate-gap-audit.json", gap)
-            if (
-                self.data / "vendor.json"
-            ).is_file():  # code-authored, after the gate: directory facts, not record facts
+            # Code-authored, after the gate: directory facts and the wall's own
+            # list, not record facts.
+            if (self.data / "vendor.json").is_file():
                 gap += vendor.section(self._json("vendor.json"))
+            gap += self._wall_section()
             files.append(("gap_audit", deliver.render_plain(gap, out, nm["gap_audit"], self._author)))
         if self.job.wants("demand"):
             md = (self.data / f"draft-v{version}.md").read_text(encoding="utf-8")
-            client = str(self._json("facts.json")["client_name"])
+            client = crosscheck.matched_client(md, self._json("facts.json"))
             try:
                 path, end_lists, fmt_notes = deliver.render_demand(self.firm, md, out, client)
             except deliver.FormatRefused as exc:
@@ -513,7 +532,7 @@ class DemandRun:
             v = self._walk()
         except limits_mod.LimitHold as hold:
             v = Verdict("failed", stage=hold.setting, reason=hold.reason)
-        except DemandHold as h:
+        except (DemandHold, draft.AuditIncomplete) as h:
             v = Verdict("held", stage=self._current(), reason=str(h))
         except Exception as exc:  # noqa: BLE001 - the verdict carries a sentence; the trace goes to the log
             self.log(traceback.format_exc())

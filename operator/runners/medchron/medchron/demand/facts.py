@@ -68,11 +68,15 @@ def from_client(client: Any, matter_id: str) -> dict[str, Any]:
     matter = _safe(errors, "matter", lambda: client.get(f"/matters/{matter_id}"), {}) or {}
     layout = _safe(errors, "layouts", lambda: flf.matter_layout_values(client, matter_id), {})
     emails: list[str] = []
+    names: list[str] = []
     for cid in [c for c in (matter.get("clientIds") or []) if isinstance(c, str)]:
         contact = _safe(errors, "client contact", lambda cid=cid: flf.fetch_contact(client, cid), {})
         e = flf.contact_email(contact)
         if e:
             emails.append(e.lower())
+        n = flf.contact_name(contact)
+        if n:
+            names.append(n)
     parties = _safe(errors, "roles", lambda: flf.read_parties(client, matter_id), None)
     insurer = None
     if parties is not None:
@@ -90,6 +94,9 @@ def from_client(client: Any, matter_id: str) -> dict[str, Any]:
         "defense_counsel": defense_counsel(parties.roles if parties is not None else []),
         "matter_number": str(matter.get("number") or "") or None,
         "client_name": name.value if name is not None else None,
+        # Every client on the matter: a multi-plaintiff file has one demand per
+        # client, and the letter's client must be one of these.
+        "client_names": names,
         "client_emails": sorted(set(emails)),
         "insurer": insurer,
         "date_of_loss": dol.value,

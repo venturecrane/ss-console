@@ -34,6 +34,19 @@ def _date(raw: str) -> date | None:
     return None
 
 
+def matched_client(draft_md: str, facts: dict[str, Any]) -> str:
+    """The matter record's own spelling of the client the letter names (the
+    file label; on a multi-plaintiff matter, the right one of several). Falls
+    back to the matter's first client when the letter leaves a marker."""
+    names = [str(n) for n in (facts.get("client_names") or []) if n] or [str(facts.get("client_name") or "")]
+    try:
+        client = parse(draft_md)[0].get("client", "")
+    except RenderError:
+        return names[0]
+    hits = [w for w in names if _tokens(w) <= _tokens(client) or _tokens(client) <= _tokens(w)]
+    return hits[0] if len(hits) == 1 else names[0]
+
+
 def check(draft_md: str, facts: dict[str, Any]) -> dict[str, list[str]]:
     """``{"mismatches": [...], "unchecked": [...]}``."""
     try:
@@ -41,13 +54,14 @@ def check(draft_md: str, facts: dict[str, Any]) -> dict[str, list[str]]:
     except RenderError as exc:
         return {"mismatches": [f"the letter's front matter does not parse: {exc}"], "unchecked": []}
     out: dict[str, list[str]] = {"mismatches": [], "unchecked": []}
-    client, want = front.get("client", ""), str(facts.get("client_name") or "")
+    client = front.get("client", "")
+    wants = [str(n) for n in (facts.get("client_names") or [facts.get("client_name")]) if n]
     if _MARKER.search(client):
         out["unchecked"].append("client: left as a marker in the letter")
-    elif not want:
+    elif not wants:
         out["unchecked"].append("client: the matter carries no client name")
-    elif not _tokens(want) <= _tokens(client) and not _tokens(client) <= _tokens(want):
-        out["mismatches"].append(f"client: the letter says {client!r}, the matter's client is {want!r}")
+    elif not any(_tokens(w) <= _tokens(client) or _tokens(client) <= _tokens(w) for w in wants):
+        out["mismatches"].append(f"client: the letter says {client!r}, the matter's clients are {wants!r}")
     dol, want_dol = front.get("dol", ""), str(facts.get("date_of_loss") or "")
     if _MARKER.search(dol):
         out["unchecked"].append("date of loss: left as a marker in the letter")

@@ -179,6 +179,7 @@ class DemandLane(Daemon):
             fields["delivery"] = {
                 "files": list(v.get("files") or []),
                 "coverage_report": bool(v.get("coverage_report")),
+                "cents": fields["cents"],
             }
         try:
             self.broker.record(job_id, state, fields)
@@ -219,6 +220,9 @@ class DemandLane(Daemon):
             f"Run the {SKILL} skill's DELIVER mode for demand job {job_id}.",
             "Kind: demand.",
             f"Outcome: {state}.",
+            # The job's actual model spend, recorded per matter (overage billing
+            # reads it); the same figure is the ledger row's cents.
+            f"Spend cents: {int(fields.get('cents') or 0)}.",
             f"Matter number: {(env.get('matter') or {}).get('number', '')}.",
             f"Folder id: {fields.get('folder_id') or 'none'}.",
             f"Files: {files}.",
