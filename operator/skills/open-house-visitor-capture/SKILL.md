@@ -324,7 +324,11 @@ taints the turn so the send is refused and nothing goes out.
    `Open house follow-up drafts for <today>`, listing each draft under the
    visitor's name, property, and visit date. Use the seat's send tool; the
    recipient is the rostered agent, so the send is internal. The visitor's
-   address or number is never a recipient of anything.
+   address or number is never a recipient of anything. Write every label and
+   heading in ordinary case (`Visitor:`, `Property:`, `Visit date:`), never a
+   word in capitals: the send gate refuses capitalized words as emphasis, and
+   a refused send means the agent gets no drafts that day (2026-10-04, a
+   `VISITOR` label stopped the follow-up email).
 4. After the email is sent, stamp each drafted step with `drafted: <today>` in its
    record: write the whole record back with `record_store_write` and
    `overwrite: true`. If the send did not go out, stamp nothing, so the
