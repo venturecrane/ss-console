@@ -1260,6 +1260,8 @@ self_initiation:
       dec_page_fax: 'Form - Fax Dec Page.docx'
       med_pay_fax: 'Form - Fax Medpay.docx'
       sr19_form: 'Form - DMV SR19.pdf'
+      # The firm's toolbar wage loss letter with its verification page (2026-10-06).
+      wage_loss_letter: 'Form - Wage Loss Letter.docx'
     # The Operator's OWN matter (ss-console#2536). Four authored values, and
     # every one of them is a decision the firm made here rather than one the
     # Operator makes at runtime: the model can ask for this matter and cannot

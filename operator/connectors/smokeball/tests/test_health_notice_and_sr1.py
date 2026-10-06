@@ -608,3 +608,155 @@ def test_the_signer_list_survives_the_reply_checks() -> None:
 
     for line in sr19_form.CLIENT_COMPLETES:
         assert "$" not in line and not re.search(r"\b[A-Z]{2,}\b", line), line
+
+
+# ---- the wage loss letter and the med pay ledger email (2026-10-06) ------------
+
+WAGE = (FORMS_DIR / "Form - Wage Loss Letter.docx").read_bytes()
+EMP = "c-emp"
+
+
+class _Employed(_Faxed):
+    """The client's role names an Employer with a mailing address, and the
+    1st party adjuster contact carries the claims email."""
+
+    def get(self, path: str, **params: Any) -> Any:
+        if path == f"/matters/{MATTER}/roles":
+            out = super().get(path, **params)
+            out["roles"][0]["relationships"].append({"id": "rel-e1", "name": "Employer", "contactId": EMP})
+            return out
+        if path == f"/contacts/{EMP}":
+            address = {"addressLine1": "100 Dock Rd", "city": "Portville", "state": "CA", "zipCode": "95001"}
+            return {"id": EMP, "company": {"name": "Acme Freight Co", "businessAddress": address}}
+        if path == f"/contacts/{ADJ}":
+            return {"id": ADJ, "company": {"name": "Pat Adjuster", "email": "claims@carrier.example"}}
+        return super().get(path, **params)
+
+
+def _wage(record: _Record, monkeypatch: pytest.MonkeyPatch, employer: Any = None) -> tuple[dict[str, Any], str]:
+    monkeypatch.setattr(fl, "_client", lambda: record)
+    monkeypatch.setattr(fl, "SLEEP", lambda _s: None)
+    hit = ResolvedTemplate(bytes=WAGE, name="wage", file_id="t", matter_id="lib", folder_id="fold")
+    monkeypatch.setattr(fl, "_resolve_form", lambda _c, _s: hit)
+    out = fl.render_firm_form_letter(MATTER, "wage_loss", "2026-10-06", employer=employer)
+    return out, "\n".join(document_paragraphs(record.uploads[-1][2])) if record.uploads else ""
+
+
+def test_the_wage_form_carries_its_fields_and_no_preparer_link() -> None:
+    assert set(placeholders_in(WAGE)) == {
+        "date",
+        "employer_address",
+        "client_name",
+        "date_of_loss",
+        "accident_date_long",
+        "client_salutation",
+        "signer_name",
+        "signer_title",
+        "client_dob",
+        "employer_name",
+    }
+    assert b"mailto" not in WAGE
+
+
+def test_the_wage_letter_reads_as_the_firms(firm_seat: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    record = _Employed()
+    out, text = _wage(record, monkeypatch)
+    assert out["status"] == "filed" and record.uploads[0][1] == "Wage Loss Letter.docx"
+    paras = [p for p in text.split("\n") if p.strip()]
+    i = paras.index("Attn: Human Resources")
+    assert paras[i + 1 : i + 4] == ["Acme Freight Co", "100 Dock Rd", "Portville, CA 95001"]
+    for want in (
+        "October 6, 2026",
+        "RE:\tClient/Employee\t:\tDana Example",
+        "Date of Injury\t\t:\t03/04/2026",
+        "in an accident that occurred on March 4, 2026.  As a result of the injuries sustained, Ms. Example suffered",
+        "applies to Ms. Example and sign",
+        "Alex Barnes",
+        "Legal Assistant",
+        "Employee Name: \tDana Example",
+        "D.O.B.:\t02/03/1990",
+        "verify that Dana Example is/was employed by Acme Freight Co. As a result of an accident, "
+        "Ms. Example was unable to perform the necessary duties",
+    ):
+        assert want in text, want
+    assert " her " not in text and out["unfilled"] == []
+    assert out["facts_used"]["employer_name"] == "the client role's Employer relationship"
+
+
+def test_with_no_employer_nothing_is_filed(firm_seat: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    record = _Faxed()
+    out, _text = _wage(record, monkeypatch)
+    assert out["status"] == "needs_employer" and record.uploads == []
+
+
+def test_the_employer_as_the_sender_wrote_it(firm_seat: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    out, text = _wage(_Faxed(), monkeypatch, {"name": "Beta Bakery", "address": "5 Oven Ln, Crumbton, CA 95002"})
+    assert "Beta Bakery\n5 Oven Ln\nCrumbton, CA 95002" in text
+    assert "as the sender wrote it" in out["facts_used"]["employer_name"]
+    out, text = _wage(_Faxed(), monkeypatch, {"name": "Beta Bakery"})
+    assert "Beta Bakery\n[Not in the file: employer's mailing address]" in text
+    assert out["unfilled"] == ["[Not in the file: employer's mailing address]"]
+
+
+def test_the_file_beats_the_email_and_a_nameless_employer_is_refused(
+    firm_seat: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _out, text = _wage(_Employed(), monkeypatch, {"name": "Beta Bakery"})
+    assert "Acme Freight Co" in text and "Beta Bakery" not in text
+    record = _Faxed()
+    out, _t = _wage(record, monkeypatch, {"address": "no name"})
+    assert out["status"] == "refused" and record.uploads == []
+
+
+def _ledger(record: _Record, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    monkeypatch.setattr(fl, "_client", lambda: record)
+    return fl.render_firm_form_letter(MATTER, "med_pay_ledger_email")
+
+
+def test_the_ledger_email_is_drafted_and_nothing_is_filed(monkeypatch: pytest.MonkeyPatch) -> None:
+    record = _Employed()
+    out = _ledger(record, monkeypatch)
+    assert out["status"] == "drafted" and record.uploads == [] and out["fileId"] is None
+    assert out["email"]["to"] == "claims@carrier.example"
+    assert out["email"]["subject"] == "Claim CL-0001 | Medical Payment Ledger"
+    body = out["email"]["body"]
+    assert "regarding our client, Dana Example." in body and "your insured" not in body
+    assert body.endswith("Kind regards,") and "Alex Barnes" not in body  # her own signature applies
+    assert "adjuster contact Pat Adjuster" in out["facts_used"]["carrier_email"]
+
+
+def test_a_ledger_email_missing_its_facts_is_incomplete(monkeypatch: pytest.MonkeyPatch) -> None:
+    out = _ledger(_Record(), monkeypatch)
+    assert out["status"] == "incomplete"
+    assert out["email"]["to"] == "[Not in the file: 1st party insurer email]"
+    assert out["unfilled"] == [
+        "[Not in the file: 1st party insurer email]",
+        "[Not in the file: 1st party claim number]",
+    ]
+
+
+def test_an_unusable_employer_on_file_never_reads_as_none(firm_seat: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Nameless(_Employed):
+        def get(self, path: str, **params: Any) -> Any:
+            if path == f"/contacts/{EMP}":
+                return {"id": EMP, "company": {}}
+            return super().get(path, **params)
+
+    class _Two(_Employed):
+        def get(self, path: str, **params: Any) -> Any:
+            if path == f"/matters/{MATTER}/roles":
+                out = super().get(path, **params)
+                out["roles"][0]["relationships"].append({"id": "rel-e2", "name": "Employer", "contactId": "c-emp2"})
+                return out
+            if path == "/contacts/c-emp2":
+                return {"id": "c-emp2", "company": {"name": "Second Job LLC"}}
+            return super().get(path, **params)
+
+    for record, why in ((_Nameless(), "no name"), (_Two(), "2 Employers (Acme Freight Co, Second Job LLC)")):
+        out, _t = _wage(record, monkeypatch, {"name": "Beta Bakery"})  # the sender's never replaces it
+        assert out["status"] == "employer_unclear" and why in out["reason"] and record.uploads == []
+
+
+def test_the_result_shows_whom_the_letter_is_addressed_to(firm_seat: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    out, _t = _wage(_Employed(), monkeypatch)
+    assert out["employer_used"] == "Acme Freight Co\n100 Dock Rd\nPortville, CA 95001"
