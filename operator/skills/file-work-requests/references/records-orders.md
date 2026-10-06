@@ -53,8 +53,11 @@ it>"}`, plus `zip` only if she gave one. When she gives a facility its own
   Radiology Image, Radiology Record, EHR, Other). The default is Medical and
   Billing, the firm's usual order.
 - `order_by_email`: HER address, the vendor's portal user placing the order.
-- `pre_approved_custodian_fee` only if she named an amount. The default is the
-  firm's usual $100.00 and the line shows it, so she can change it.
+- `pre_approved_custodian_fee` only if she named an amount. Otherwise the tool
+  uses the firm's authored standing fee and returns it as
+  `pre_approved_custodian_fee_shown` (e.g. "$100.00"); write that figure in the
+  line exactly as shown, so she can change it. If the tool refuses because no
+  fee is authored and she named none, ask her for the amount.
 
 Read the result by `status`:
 

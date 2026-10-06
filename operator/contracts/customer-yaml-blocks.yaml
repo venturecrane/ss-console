@@ -315,6 +315,20 @@ top_level:
       the letter. Authored only from the firm's own letters. The forms
       themselves resolve through self_initiation.document_library.templates
       (first_party_rep_letter, third_party_rep_letter).
+  records_orders:
+    status: implemented
+    materializer: >-
+      no translate step by design, the form_letters shape: the Smokeball
+      connector reads the block directly off the seat's own
+      /var/lib/smd-config/customer.yaml when an order is prepared
+      (smokeball_connector/records_orders.py authored_custodian_fee).
+    note: >-
+      `pre_approved_custodian_fee`: the firm's standing per-custodian maximum
+      on a medical-records order, in dollars. Used when a request names no
+      figure, shown to the administrator in the order she approves (and
+      returned as "$N.NN" text so the outbound fabrication gate can trace it),
+      and an order is refused when it is unauthored and the request is silent.
+      Authored only from the firm's own vendor confirmations.
   staff_mailbox_reads:
     status: implemented
     materializer: >-
