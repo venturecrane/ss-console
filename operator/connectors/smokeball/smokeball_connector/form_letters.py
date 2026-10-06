@@ -149,7 +149,49 @@ FORMS: dict[str, FormSpec] = {
         signer_name_from="preparer",
         facts_kind="fax",
     ),
+    # The firm's toolbar wage loss letter to the client's employer, with the
+    # WAGE LOSS VERIFICATION page the employer fills (18 firm letters; the
+    # form is rebuilt from the latest, 2026-07-07). The employer is the client
+    # role's Employer relationship, else as the person wrote it; with neither,
+    # nothing is filed and the person is asked.
+    "wage_loss": FormSpec(
+        label="wage loss letter",
+        document_class="wage_loss_letter",
+        default_template="Form - Wage Loss Letter.docx",
+        file_name="Wage Loss Letter.docx",
+        side="Plaintiffs",
+        client_side=True,
+        fax_label="",
+        email_label="",
+        paragraph_fields=frozenset({"employer_address"}),
+        signer_name_from="preparer",
+        facts_kind="wage",
+    ),
 }
+
+#: Requests the firm makes by EMAIL, not on a form: the person sends them from
+#: their own mailbox, so they carry no signer (their mail signature applies).
+#: The med pay ledger request is the firm's own email (2026-08-10, to the
+#: client's carrier: subject "Claim <#> | Medical Payment Ledger", "I am
+#: writing regarding our client ... please provide a Medical Payments ledger
+#: ... for our records. Thank you for your assistance, and please let us know
+#: if you need anything further."). Two parts are composed here and nowhere in
+#: the firm's email: the greeting, and the ask sentence, which generalizes its
+#: one situational sentence (an ambulance bill) from the email's own phrases.
+#: "your insured" is dropped: a passenger or household claimant is not.
+EMAILS: dict[str, dict[str, str]] = {
+    "med_pay_ledger_email": {
+        "subject": "Claim {claim_number} | Medical Payment Ledger",
+        "body": (
+            "Hello,\n\n"
+            "I am writing regarding our client, {client_name}. Please provide a Medical Payments ledger "
+            "reflecting all payments made under our client's Medical Payments coverage for our records.\n\n"
+            "Thank you for your assistance, and please let us know if you need anything further.\n\n"
+            "Kind regards,"
+        ),
+    },
+}
+_MAX_EMPLOYER = 200
 
 #: The 1st party form's paragraph fields (each delivery channel its own line);
 #: each form's own set is ``FormSpec.paragraph_fields``.
@@ -258,6 +300,144 @@ def _fax_facts(
     }
 
 
+def _address_lines(address: str) -> str:
+    """"100 Main St, Sacramento, CA 95814" as the firm's address block prints
+    it (street, then city line); any other shape is printed as written."""
+    from .medicals_provider import _ADDRESS
+
+    match = _ADDRESS.match(address)
+    if not match:
+        return address
+    return f"{match['line1'].strip()}\n{match['city'].strip()}, {match['state'].upper()} {match['zip']}"
+
+
+def _employer(client: Any, matter_id: str, given: dict[str, Any] | None) -> tuple[Fact, Fact] | None:
+    """The employer's name and address block: the client role's Employer
+    relationship first, else as the person wrote it; None with neither."""
+    parties = facts.read_parties(client, matter_id)
+    contact_id = parties.related(True, "Employer")
+    if contact_id:
+        contact = facts.fetch_contact(client, contact_id)
+        name = facts.contact_name(contact) if contact else None
+        if name:
+            src = "the client role's Employer relationship"
+            address = facts.contact_address(contact)
+            return Fact(name, src), (Fact(address, src) if address else Fact(None, "", "employer's mailing address"))
+    if not given:
+        return None
+    src = "as the sender wrote it (no Employer on the matter)"
+    name = str(given.get("name") or "").strip()
+    address = str(given.get("address") or "").strip()
+    return (
+        Fact(name, src),
+        Fact(_address_lines(address), src) if address else Fact(None, "", "employer's mailing address"),
+    )
+
+
+def _wage_facts(
+    client: Any, matter_id: str, matter: dict[str, Any], letter_date: date, employer: dict[str, Any] | None
+) -> dict[str, Fact] | None:
+    """The wage loss letter: the employer (``_employer``), the client with
+    their own title and birth date, the date of loss both ways the firm's
+    letter prints it, and the preparer who signs. None: no employer at all."""
+    from .sr1_form import _birth_date
+
+    found = _employer(client, matter_id, employer)
+    if found is None:
+        return None
+    name, address = found
+    block = (
+        Fact(f"{name.value}\n{address.value}", name.source)
+        if address.value
+        else Fact(f"{name.value}\n{MARKER.format(address.missing)}", name.source)
+    )
+    layout = facts.matter_layout_values(client, matter_id)
+    loss = facts.date_of_loss(layout)
+    long_loss = (
+        Fact(facts.long_date(date(int(loss.value[6:]), int(loss.value[:2]), int(loss.value[3:5]))), loss.source)
+        if loss.value
+        else loss
+    )
+    ids = [c for c in matter.get("clientIds") or [] if isinstance(c, str)]
+    me = facts.fetch_contact(client, ids[0]) if ids else {}
+    dob = _birth_date(me) if isinstance(me.get("person"), dict) else None
+    preparer = facts.preparer_facts(client, matter, facts.load_preparer_title())
+    out = {
+        "date": Fact(facts.long_date(letter_date), "the letter date"),
+        "employer_name": name,
+        "employer_address": block,
+        "client_name": facts.client_name(client, matter),
+        "client_salutation": facts.client_salutation(client, matter),
+        "client_dob": Fact(dob, "matter client contact") if dob else Fact(None, "", "client's date of birth"),
+        "date_of_loss": loss,
+        "accident_date_long": long_loss,
+        "signer_name": preparer["name"],
+        "signer_title": preparer["title"],
+    }
+    if not address.value:
+        out["employer_mailing_address"] = address  # listed in unfilled; the block prints its marker
+    return out
+
+
+def _carrier_email(client: Any, matter_id: str, spec: FormSpec) -> Fact:
+    """The side's carrier email: the insurer contact's, else the adjuster's,
+    with the contact named so the person can judge where it goes."""
+    layout = facts.matter_layout_values(client, matter_id)
+    parties = facts.read_parties(client, matter_id)
+    for relationship in ("Insurer", "Adjuster"):
+        cid, src = facts.related_contact(
+            parties, layout, side=spec.side, relationship=relationship, client_side=spec.client_side
+        )
+        contact = facts.fetch_contact(client, cid)
+        email = facts.contact_email(contact) if contact else None
+        if email:
+            who = facts.contact_name(contact) or "unnamed"
+            return Fact(email, f"email from the {relationship.lower()} contact {who} ({src})")
+    return Fact(None, "", f"{_side_word(spec)} insurer email")
+
+
+def draft_firm_email(client: Any, matter_id: str, form: str) -> dict[str, Any]:
+    """One of ``EMAILS`` for the person to send from their own mailbox. Nothing
+    is filed or sent. ``drafted`` when every fact was in the file, else
+    ``incomplete`` with the markers in place and listed in ``unfilled``."""
+    words = EMAILS[form]
+    spec = FORMS["med_pay_fax"]  # the client's own carrier, the med pay side
+    matter = client.get(f"/matters/{matter_id}")
+    matter = matter if isinstance(matter, dict) else {}
+    layout = facts.matter_layout_values(client, matter_id)
+    found = {
+        "carrier_email": _carrier_email(client, matter_id, spec),
+        "claim_number": _claim_number(layout, spec),
+        "client_name": facts.client_name(client, matter),
+    }
+    values = {k: f.value if f.value is not None else MARKER.format(f.missing) for k, f in found.items()}
+    unfilled = [MARKER.format(f.missing) for f in found.values() if f.value is None]
+    return {
+        "status": "incomplete" if unfilled else "drafted",
+        "fileId": None,
+        "matterId": matter_id,
+        "email": {
+            "to": values["carrier_email"],
+            "subject": words["subject"].format(**values),
+            "body": words["body"].format(**values),
+        },
+        "unfilled": unfilled,
+        "facts_used": {k: f.source for k, f in found.items() if f.value is not None},
+    }
+
+
+def _employer_problem(employer: Any) -> str | None:
+    if employer is None:
+        return None
+    if not isinstance(employer, dict) or not str(employer.get("name") or "").strip():
+        return 'employer must be {"name": ..., "address": ...} as the person wrote it, with a name'
+    for key in ("name", "address"):
+        value = employer.get(key)
+        if value is not None and (not isinstance(value, str) or len(value.strip()) > _MAX_EMPLOYER):
+            return f"employer {key} must be text up to {_MAX_EMPLOYER} characters"
+    return None
+
+
 def _health_facts(
     client: Any, matter_id: str, matter: dict[str, Any], letter_date: date, cited: Any, wanted: set[str]
 ) -> tuple[dict[str, Fact], cited_facts.Confirmed]:
@@ -328,7 +508,11 @@ def _read_back(client: Any, matter_id: str, file_id: str) -> dict[str, Any] | No
 
 
 def render_firm_form_letter(
-    matter_id: str, form: str, date: str | None = None, cited: dict[str, Any] | None = None
+    matter_id: str,
+    form: str,
+    date: str | None = None,
+    cited: dict[str, Any] | None = None,
+    employer: dict[str, Any] | None = None,
 ) -> Any:
     """Make one of the firm's letters on its OWN form and file it on the
     matter. Never write the letter yourself.
@@ -342,8 +526,19 @@ def render_firm_form_letter(
     the person attaches the bills and fills the page count), or
     ``health_blue_shield`` (the health-insurer notice for a Blue
     Shield of California member; Blue Shield's recovery vendor is the
-    addressee printed in the firm's form). ``date`` is the letter date as
-    YYYY-MM-DD; omit it for today.
+    addressee printed in the firm's form), ``wage_loss`` (the firm's letter
+    to the client's employer with the wage loss verification page the
+    employer fills), or ``med_pay_ledger_email`` (the firm's email asking the
+    client's own carrier for the med pay ledger: NOTHING is filed; the result
+    carries ``email`` {to, subject, body} for the person to send from their
+    own mailbox, ``drafted`` or ``incomplete`` when a fact is missing).
+    ``date`` is the letter date as YYYY-MM-DD; omit it for today.
+
+    ``employer`` (wage loss only): ``{"name": ..., "address": ...}`` exactly
+    as the person wrote it in this thread, used only when the matter holds no
+    Employer on the client's role. With neither, the result is
+    ``needs_employer`` and nothing is filed: ask the person for the employer's
+    name and mailing address. Never supply an employer yourself.
 
     ``cited`` (health notice only): what you read on the client's insurance
     card with ``read_document``, as ``{"member_id": {"value": "<as printed>",
@@ -374,12 +569,21 @@ def render_firm_form_letter(
     ``card_values_to_check`` (each card value it printed, which the reply
     lists so the person checks it against the card) and ``cited_refused``. It
     does not send, fax or mail the letter, and does not complete any task."""
-    spec = FORMS.get(str(form or "").strip())
-    if spec is None:
-        return _refused(f"form must be one of {sorted(FORMS)}")
+    name = str(form or "").strip()
+    spec = FORMS.get(name)
+    if spec is None and name not in EMAILS:
+        return _refused(f"form must be one of {sorted([*FORMS, *EMAILS])}")
     matter = str(matter_id or "").strip()
     if not matter:
         return _refused("matter_id is required")
+    problem = _employer_problem(employer)
+    if problem:
+        return _refused(problem)
+    if spec is None:
+        try:
+            return draft_firm_email(_client(), matter, name)
+        except Exception as exc:  # noqa: BLE001 - a record that could not be READ is never printed as "not in the file"
+            return _refused(f"the matter's record could not be read ({exc.__class__.__name__}: {str(exc)[:200]})")
     when = _letter_date(date)
     if isinstance(when, str):
         return _refused(when)
@@ -390,11 +594,17 @@ def render_firm_form_letter(
             f"the firm's {spec.label} form did not resolve ({resolved.reason}); nothing was filed. "
             "No other letter is made in its place: the firm's form has to be in its Document Library."
         )
-    return _fill_and_file(client, matter, spec, when, resolved, cited)
+    return _fill_and_file(client, matter, spec, when, resolved, cited, employer)
 
 
 def _fill_and_file(
-    client: Any, matter: str, spec: FormSpec, when: date, resolved: ResolvedTemplate, cited: Any = None
+    client: Any,
+    matter: str,
+    spec: FormSpec,
+    when: date,
+    resolved: ResolvedTemplate,
+    cited: Any = None,
+    employer: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     template = {"name": resolved.name, "fileId": resolved.file_id}
     try:
@@ -410,6 +620,17 @@ def _fill_and_file(
         if spec.facts_kind == "fax":
             record = client.get(f"/matters/{matter}")
             found = _fax_facts(client, matter, record if isinstance(record, dict) else {}, spec, when)
+        elif spec.facts_kind == "wage":
+            record = client.get(f"/matters/{matter}")
+            wage = _wage_facts(client, matter, record if isinstance(record, dict) else {}, when, employer)
+            if wage is None:
+                return {
+                    "status": "needs_employer",
+                    "fileId": None,
+                    "matterId": matter,
+                    "reason": "the matter has no Employer on the client's role and none was given; nothing was filed",
+                }
+            found = wage
         elif spec.facts_kind == "health":
             record = client.get(f"/matters/{matter}")
             found, confirmed = _health_facts(
@@ -426,6 +647,8 @@ def _fill_and_file(
     used = set(filled.placeholders)
     unfilled = [MARKER.format(found[k].missing) for k in filled.placeholders if k in found and found[k].value is None]
     unfilled += [MARKER.format(name) for name in filled.unknown]
+    if "employer_mailing_address" in found:
+        unfilled.append(MARKER.format(found["employer_mailing_address"].missing))
     same = [str(e.get("id")) for e in list_matter_files(client, matter) if name_matches(e, spec.file_name)]
     result = client.add_file(matter, spec.file_name, filled.data)
     file_id = result.get("fileId") if isinstance(result, dict) else None
@@ -453,6 +676,7 @@ def register(server: Any) -> None:
 
 
 __all__ = [
+    "EMAILS",
     "FORMS",
     "MARKER",
     "PARAGRAPH_FIELDS",

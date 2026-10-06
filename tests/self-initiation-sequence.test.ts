@@ -74,6 +74,7 @@ const FORM_CLASSES = [
   'dec_page_fax',
   'med_pay_fax',
   'sr19_form',
+  'wage_loss_letter',
 ] as const
 const TEMPLATE_KEYS: readonly string[] = [...DOCUMENT_CLASSES, ...FORM_CLASSES]
 

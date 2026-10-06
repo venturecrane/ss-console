@@ -291,7 +291,14 @@ describe('matter-inbox-router: the file work class', () => {
     )
     expect(bullet()).toContain('the SR1 is never signed for the client')
     // 2026-10-06: the next three on a new file route here by their usual names.
-    for (const name of ['declarations page', 'med pay', 'SR-19', 'SR 19C']) {
+    for (const name of [
+      'declarations page',
+      'med pay',
+      'SR-19',
+      'SR 19C',
+      'med pay ledger',
+      'wage loss',
+    ]) {
       expect(bullet()).toContain(name)
     }
     const skill = flat(read(SKILL))
