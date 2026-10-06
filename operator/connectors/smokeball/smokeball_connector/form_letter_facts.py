@@ -64,7 +64,10 @@ def load_signers(path: str | None = None) -> dict[str, dict[str, str]]:
     """``form_letters.signers``: ``{staff full name or staff id: {name, title,
     initials}}``, keys normalized. How a staff member signs is the firm's to
     author; the staff record's own name ("Chris Price") is not it ("Christopher
-    A. Price"), so an unauthored signer prints markers rather than a guess."""
+    A. Price"), so an unauthored signer prints markers rather than a guess.
+    The exception is a form that itself merges the staff record's name (the
+    3rd party task form, ``staff_signer_facts``): there only ``title`` is read
+    from this map."""
     block = _load_yaml(path).get(CONFIG_BLOCK)
     signers = block.get("signers") if isinstance(block, dict) else None
     if not isinstance(signers, dict):
@@ -282,6 +285,38 @@ def signer_facts(client: Any, matter: dict[str, Any], signers: dict[str, dict[st
     return out
 
 
+def staff_signer_facts(client: Any, matter: dict[str, Any], signers: dict[str, dict[str, str]]) -> dict[str, Fact]:
+    """name and title for a form that merges the responsible staff member's
+    OWN name: the firm's 3rd party task form prints Attorney Responsible/Full
+    Name ("Chris Price"), not the authored signature ("Christopher A. Price").
+    The title is still the firm's to author (``form_letters.signers``); the
+    staff record's role ("Attorney") is not it. No initials: that form has no
+    reference line."""
+    staff_id = matter.get("personResponsibleStaffId")
+    if not isinstance(staff_id, str) or not staff_id:
+        return {f: _absent(f"signer {f} (no responsible staff on the matter)") for f in ("name", "title")}
+    staff = client.get(f"/staff/{staff_id}")
+    staff = staff if isinstance(staff, dict) else {}
+    full = " ".join(
+        p.strip() for p in (staff.get("firstName"), staff.get("lastName")) if isinstance(p, str) and p.strip()
+    )
+    who = full or "the responsible staff member"
+    entry = signers.get(_key(staff_id)) or signers.get(_key(full)) or {}
+    title = entry.get("title")
+    return {
+        "name": (
+            Fact(full, "the matter's responsible staff record (first and last name)")
+            if full
+            else _absent("signer name (the responsible staff record has no name)")
+        ),
+        "title": (
+            Fact(title, f"form_letters.signers for {who} (the matter's responsible staff)")
+            if title
+            else _absent(f"how {who} signs: title", "form_letters.signers")
+        ),
+    }
+
+
 def _staff_initials(staff: dict[str, Any]) -> str | None:
     """A staff member's typist initials, lowercase: the record's own initials
     when it carries them, else first + last initial."""
@@ -330,4 +365,5 @@ __all__ = [
     "related_contact",
     "seat_today",
     "signer_facts",
+    "staff_signer_facts",
 ]

@@ -19,8 +19,10 @@ THE FACTS (``form_letter_facts``). Every value is read from the matter: the
 carrier is the insurer the matter's role relationships name for that side;
 fax and email come from that insurer's contact, else from the side's ADJUSTER
 contact (the carrier's claims desk), never the adjuster's name as the carrier's.
-The signer is the matter's responsible staff member as the firm's authored
-signer map writes them. Anything the record does not hold prints as
+The signer is the matter's responsible staff member: on the 1st party letter
+as the firm's authored signer map writes them, on the 3rd party letter by the
+staff record's own name (what the firm's 3rd party task form merges), with
+the title from the signer map either way. Anything the record does not hold prints as
 ``[Not in the file: <what>]``, visibly, in the letter, and is listed in
 ``unfilled``: nothing is defaulted, and a reader cannot mistake a gap for a
 fact.
@@ -55,6 +57,16 @@ class FormSpec:
     client_side: bool
     fax_label: str
     email_label: str
+    #: Fields whose paragraph repeats once per line of the value. The 3rd
+    #: party task form lays the carrier's address out one paragraph per line;
+    #: the 1st party form breaks it with ``w:br`` inside the carrier block.
+    paragraph_fields: frozenset[str]
+    #: Where the signer's NAME is read. ``authored``: the firm's signer map
+    #: (the 1st party task form prints "Christopher A. Price"). ``staff``: the
+    #: responsible staff record's own name (the 3rd party task form merges
+    #: Attorney Responsible/Full Name, "Chris Price"); the title is authored
+    #: either way, and the 3rd party form has no initials line.
+    signer_name_from: str
 
 
 FORMS: dict[str, FormSpec] = {
@@ -67,6 +79,8 @@ FORMS: dict[str, FormSpec] = {
         client_side=True,
         fax_label="VIA FAX: ",
         email_label="Email: ",
+        paragraph_fields=frozenset({"delivery_lines"}),
+        signer_name_from="authored",
     ),
     "third_party_rep": FormSpec(
         label="3rd party rep letter",
@@ -75,13 +89,16 @@ FORMS: dict[str, FormSpec] = {
         file_name="3rd Party Letter.docx",
         side="Defendants",
         client_side=False,
-        fax_label="VIA FAX: ",
-        email_label="VIA EMAIL: ",
+        fax_label="Via Fax: ",
+        email_label="Via Email: ",
+        paragraph_fields=frozenset({"delivery_lines", "carrier_address"}),
+        signer_name_from="staff",
     ),
 }
 
-#: One paragraph per line: each delivery channel is its own line in the form.
-PARAGRAPH_FIELDS = frozenset({"delivery_lines"})
+#: The 1st party form's paragraph fields (each delivery channel its own line);
+#: each form's own set is ``FormSpec.paragraph_fields``.
+PARAGRAPH_FIELDS = FORMS["first_party_rep"].paragraph_fields
 MARKER = "[Not in the file: {}]"
 
 #: Read-back waits after the upload, in seconds; module-level so a test can
@@ -152,15 +169,16 @@ def gather_facts(client: Any, matter_id: str, spec: FormSpec, letter_date: date)
     matter = matter if isinstance(matter, dict) else {}
     layout = facts.matter_layout_values(client, matter_id)
     parties = facts.read_parties(client, matter_id)
-    signer = facts.signer_facts(client, matter, facts.load_signers())
+    if spec.signer_name_from == "staff":
+        signer = facts.staff_signer_facts(client, matter, facts.load_signers())
+    else:
+        signer = facts.signer_facts(client, matter, facts.load_signers())
     found = {
         "date": Fact(facts.long_date(letter_date), "the letter date"),
         "client_name": facts.client_name(client, matter),
         "date_of_loss": facts.date_of_loss(layout),
         "claim_number": _claim_number(layout, spec),
-        "signer_name": signer["name"],
-        "signer_title": signer["title"],
-        "signer_initials": signer["initials"],
+        **{f"signer_{k}": v for k, v in signer.items()},
     }
     found.update(_carrier_facts(client, spec, layout, parties))
     return found
@@ -204,8 +222,9 @@ def render_firm_form_letter(matter_id: str, form: str, date: str | None = None) 
     Every value is read here from the matter: the client's name, the date of
     loss, the claim number, the carrier and its fax/email/address from the
     matter's insurer and adjuster contacts, and the signer from the matter's
-    responsible staff member as the firm's signer list writes them. A fact the
-    record does not hold is printed in the letter as ``[Not in the file: what]``
+    responsible staff member (1st party: as the firm's signer list writes
+    them; 3rd party: the staff record's own name, the title from the list).
+    A fact the record does not hold is printed in the letter as ``[Not in the file: what]``
     and listed in ``unfilled``: tell the person who asked exactly those, so
     they fill them in Smokeball or on the letter. Never supply them yourself.
 
@@ -253,7 +272,7 @@ def _fill_and_file(client: Any, matter: str, spec: FormSpec, when: date, resolve
             f"the matter's record could not be read ({exc.__class__.__name__}: {str(exc)[:200]}); nothing was filed"
         )
     values = {k: f.value if f.value is not None else MARKER.format(f.missing) for k, f in found.items()}
-    filled = fill_form(resolved.bytes, values, PARAGRAPH_FIELDS)
+    filled = fill_form(resolved.bytes, values, spec.paragraph_fields)
     used = set(filled.placeholders)
     unfilled = [MARKER.format(found[k].missing) for k in filled.placeholders if k in found and found[k].value is None]
     unfilled += [MARKER.format(name) for name in filled.unknown]

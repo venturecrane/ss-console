@@ -1353,7 +1353,12 @@ combined_post_intake:
 # connector supplies the second half from the matter's assisting staff. Only
 # "Attorney at Law" is authored as a title, and only for the two attorneys
 # whose rep letters show it; a missing title prints the marker. A staff member
-# not listed here prints "[Not in the file: how <name> signs: ...]".
+# not listed here prints "[Not in the file: how <name> signs: ...]". The 1st
+# party letter prints the `name` here (Christa's 1st party task-form letter
+# reads "Christopher A. Price"). The 3rd party letter does NOT: the firm's 3rd
+# party task form merges the responsible staff record's own name (her
+# 2026-10-05 letter reads "Chris Price") and has no reference line, so only
+# `title` is read from this map for it.
 # records_orders.pre_approved_custodian_fee: the firm's standing maximum it
 # pre-approves per custodian on a medical-records order. Authored from the
 # firm's own orders: all 67 vendor confirmations read in the file reviews of

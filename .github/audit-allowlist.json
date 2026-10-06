@@ -3,6 +3,7 @@
   "expires": "2026-11-02",
   "tracking": "https://github.com/venturecrane/ss-console/issues/3032",
   "allow": {
-    "GHSA-ch52-4w7c-c8xp": "http-cache-semantics <=4.2.0, no patched release; only importer is astro build-time remote-image caching (assets/build/remote.js), not on any request path."
+    "GHSA-ch52-4w7c-c8xp": "http-cache-semantics <=4.2.0, no patched release; only importer is astro build-time remote-image caching (assets/build/remote.js), not on any request path.",
+    "GHSA-68fv-2mgg-jv7q": "source-map-js <1.2.2; patched 1.2.2 published 2026-09-30, inside the .npmrc min-release-age cooldown until 2026-10-07; importers are build/lint tooling only (tailwind, postcss, css-tree, magicast), never imported by src/ or any Worker, so no request path parses a source map."
   }
 }
