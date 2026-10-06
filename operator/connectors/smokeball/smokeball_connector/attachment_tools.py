@@ -28,6 +28,7 @@ from .workbook_tools import register as _register_workbook_tools
 from .records_order_tools import register as _register_records_order_tools
 from .sr1_form import register as _register_sr1_tools
 from .sr19_form import register as _register_sr19_tools
+from .funding_case_eval import register as _register_funding_case_eval_tools
 
 
 def register(server: Any) -> None:
@@ -57,6 +58,8 @@ def register(server: Any) -> None:
     _register_sr1_tools(server)
     # The DMV SR 19C prefill (sr19_form.py), after the SR1.
     _register_sr19_tools(server)
+    # The funding case evaluation prefill (funding_case_eval.py), after the SR19.
+    _register_funding_case_eval_tools(server)
 
 
 __all__ = ["register"]

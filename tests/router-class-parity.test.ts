@@ -398,6 +398,10 @@ describe('matter-inbox-router: the file work class', () => {
       'med pay ledger',
       'wage loss',
       'police report',
+      // 2026-10-06: a funder's intake form, by the names firms call it.
+      'case evaluation form',
+      'funding application',
+      'cash advance application',
     ]) {
       expect(bullet()).toContain(name)
     }

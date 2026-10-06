@@ -4,7 +4,8 @@ description: >-
   Files rep letters, notices, DMV forms, Medicals rows. It does the file work a paralegal asks for on one
   named matter: makes the firm's 1st and 3rd party representation letters and
   its health-insurer notice on the firm's own forms and files them, prefills the
-  state's SR1 for the client to sign, and puts the client's treating facilities
+  state's SR1 for the client to sign, prefills a funder's case evaluation form
+  for the firm to finish, and puts the client's treating facilities
   on the Medicals tab. When a rostered member of the firm emails the Operator
   asking for any of these on a matter, it resolves the one matter, runs the
   connector's tools, and replies once naming what was filed, every fact the file
@@ -29,7 +30,7 @@ metadata:
     content_ceiling: surface_only # every letter value is read from the matter by the connector; the reply reports what was filed and what was missing, never a characterization of the case
     connectors:
       - email # the reply draft to the rostered sender, in the same thread
-      - smokeball # list_matters / get_matter (the one matter), get_files_on_matter + read_document (the client's insurance card, license and estimate, photos included), render_firm_form_letter (the firm's own rep-letter, health-notice and fax-cover forms, filled and filed), render_sr1 (the state SR1 prefilled for the client's signature), render_sr19 (the state SR 19C prefilled for the firm's signer), render_firm_form_letter also drafts the med pay ledger email for the sender to send and files the wage loss letter, update_task (only when the sender says an item went out), add_medicals_provider (one facility on the Medicals tab, no money field), prepare_records_order / place_records_order / records_orders_for_matter (references/records-orders.md: an order waits for an administrator's yes)
+      - smokeball # list_matters / get_matter (the one matter), get_files_on_matter + read_document (the client's insurance card, license and estimate, photos included), render_firm_form_letter (the firm's own rep-letter, health-notice and fax-cover forms, filled and filed), render_sr1 (the state SR1 prefilled for the client's signature), render_sr19 (the state SR 19C prefilled for the firm's signer), render_funding_case_eval (a funder's case evaluation / cash advance application prefilled for the firm to finish), render_firm_form_letter also drafts the med pay ledger email for the sender to send and files the wage loss letter, update_task (only when the sender says an item went out), add_medicals_provider (one facility on the Medicals tab, no money field), prepare_records_order / place_records_order / records_orders_for_matter (references/records-orders.md: an order waits for an administrator's yes)
 ---
 
 # File Work Requests
@@ -297,6 +298,31 @@ agency_words=...)`.
 6. Never take a report number, crash time or agency address from her email
    into `cited`: the letter keeps a blank for it and the reply says so.
 
+### 2j. The funding case evaluation form
+
+A funder's case evaluation / cash advance application ("the funding
+application", "the cash advance form", "case eval form") is the funder's own
+form; the firm keeps its copy in the Document Library.
+
+1. `render_funding_case_eval(matter_id)`. It reads everything itself: the
+   attorney and paralegal, the firm block, the client's contact block, the date
+   of loss, both carriers with claim numbers and adjusters, up to four
+   providers from the Medicals tab, and "MVA" for a motor vehicle matter.
+2. `filed`: reply `Filed: Funding Case Evaluation - prefilled.pdf on matter
+<matter-number>, prefilled from the file.` then `Filled: <filled, joined>.`
+   then `Not in the file: <not_in_file, joined>.` (omit when empty), then
+   `Left for <attorney first name>: <left_for_firm, joined>.` (the
+   responsible attorney), then `Left for <client first name>: <left_for_client, joined>.`
+   When `providers_beyond_four` is above 0: `The Medicals tab lists <n> more
+providers than the form has lines for.` Then `The providers listed are the
+Medicals tab's; some may be records requests rather than treatment.`
+3. `refused`: say what it said, plainly, and that nothing was filed. A form
+   that "does not match" means the library copy changed: say so; never fill it
+   another way.
+4. Never type a value into the form, never answer a judgment or client
+   question on it, never name a medical total or the client's Social Security
+   number, and never send it to the funder: the firm signs and sends it.
+
 ### 3. The facilities
 
 For each facility she listed, call
@@ -368,7 +394,7 @@ filed, not sent, and their tasks stay open until she says they went out.
 
 ## Boundaries (never)
 
-- Never write, edit or paste letter text; only `render_firm_form_letter` makes a letter, and only `render_sr1` makes the SR1, and only `render_sr19` makes the SR19.
+- Never write, edit or paste letter text; only `render_firm_form_letter` makes a letter, and only `render_sr1` makes the SR1, and only `render_sr19` makes the SR19, and only `render_funding_case_eval` fills a funder's case evaluation form.
 - Never fill the SR19's requester name or certification, and never make an SR19 when the other driver's insurer is on file without her yes.
 - Never cite a card, license or vehicle value you did not read in that document's own transcription, and never sign, date or certify the SR1.
 - Never pass a value from the email into a letter, and never fill a `[Not in the file]` gap; the one exception is the wage loss letter's employer when the matter names none (step 2h).
