@@ -102,6 +102,23 @@ describe('matter-inbox-router: the demand class', () => {
     expect(drafting).toContain('a demand is NEVER this class')
   })
 
+  it('DELIVER binds by job id, sends nothing else on a refusal, and names where files went', () => {
+    // 2026-10-06 practice job: DELIVER bound by the email's id (refused, the
+    // email had its acknowledgment), then emailed the responsible attorney and
+    // said the files were "in the matter's demand folder" when they were filed
+    // to the library matter. Each pin below is one of those three failures.
+    const skill = flat(read(DEMAND_SKILL))
+    const deliver = skill.slice(skill.indexOf('## DELIVER mode'), skill.indexOf('## Boundaries'))
+    expect(deliver).toContain('`reply_bind` and ONLY `job_id`')
+    expect(deliver).toContain('Never pass `internet_message_id` or `graph_message_id` in this mode')
+    expect(deliver).toContain('**If the bind is refused, send NOTHING to anyone.**')
+    expect(deliver).toContain('Not the responsible attorney')
+    expect(deliver).toContain('`smd_send_message`')
+    expect(deliver).toContain('`file_to_matter_id` against `matter_id`')
+    expect(deliver).toContain('NOT the client matter')
+    expect(deliver).not.toContain('the documents are filed in matter <number>')
+  })
+
   it('submits and never drafts in the turn', () => {
     expect(bullet()).toContain(`/app/skills/${DEMAND}/SKILL.md`)
     expect(bullet()).toContain('REQUEST mode')

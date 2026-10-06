@@ -110,18 +110,31 @@ check failed, `Coverage report: yes`. The wake's `Files:` line lists ROLES and s
 (`demand`, `gap_audit`, `attorney_notes`, `coverage_report`), never file names. The wake
 is a pointer; the job's own record is the fact.
 
-1. **Bind the reply** with `reply_bind` and `job_id` = the id in the wake's first line.
-   The broker finds the requester's original email, checks it, and answers with the one
-   person this reply can reach. If it refuses, send nothing, write nothing to anyone
-   else, and end the turn stating the refusal sentence; never look for another way to
-   reach the requester.
-2. **Read the job** with `demand_job_status` (`job_id`): its state, the folder, and its
-   `files`, each a `name` exactly as the runner read it back from the matter beside its
-   `role`. Name each document in the reply by that `name`, never by the role or the
-   wake. Report what the record shows, not what the wake says.
+1. **Bind the reply** with `reply_bind` and ONLY `job_id` = the id in the wake's first
+   line. Never pass `internet_message_id` or `graph_message_id` in this mode, even though
+   the wake carries a `Request ref:` line: the request email already had its
+   acknowledgment, so a binding to the email itself is refused by design. The demand-job
+   binding is the one this reply is owed (one per attempt and outcome). The broker finds
+   the requester's original email, checks it, and answers with the one person this reply
+   can reach.
+   **If the bind is refused, send NOTHING to anyone.** Not the responsible attorney, not
+   the matter's staff, not a new message by `smd_send_message` or any other tool, not a
+   task or a brief about it. The requester is the only audience of this mode, and only
+   through the binding. End the turn stating the refusal sentence in your own output;
+   never look for another way to reach anyone.
+2. **Read the job** with `demand_job_status` (`job_id`): its state, the folder, its
+   `files` (each a `name` exactly as the runner read it back, beside its `role`), and
+   where they were filed: `file_to_matter_id` against `matter_id`. Name each document in
+   the reply by that `name`, never by the role or the wake. Report what the record
+   shows, not what the wake says.
+   **Where the files are is the job row's fact.** When `file_to_matter_id` equals
+   `matter_id`, they are in the client matter. When it differs, they were filed in the
+   firm's library (rehearsal) matter, NOT the client matter: say exactly that, and never
+   say they are "in the matter's folder".
 3. **Reply once** with `create_draft` addressed to the bound sender only (the seat sends
    it in her original thread after the reply checks):
-   - **delivered**: the documents are filed in matter <number>, in their dated folder,
+   - **delivered**: the documents are filed in their dated folder in the matter the job
+     row names (the client matter <number>, or the library matter for a rehearsal),
      each named exactly as filed (the gap audit, and `Demand.<Client>.docx`), in the
      firm's house format and ready for attorney review. Say that the demand figure,
      any statement that damages exceed the limits, and what the firm does on expiry are
@@ -134,7 +147,8 @@ is a pointer; the job's own record is the fact.
      the plain words of the job's reason, and what would let it go forward. Never
      describe a held or failed job as done, and never promise a time.
 4. **Stop.** The reply is the whole of this mode. No second reply, no follow-up email,
-   no task or memo unless a person asks for one.
+   no `smd_send_message`, no task, brief or memo. The seat refuses every send tool in a
+   demand job's wake except the bound reply.
 
 ## Boundaries (never)
 
