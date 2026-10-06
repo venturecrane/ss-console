@@ -71,7 +71,8 @@ class LibraryConfig:
     def template_name(self, document_class: str) -> str:
         custom = self.templates.get(document_class)
         if custom:
-            return custom if custom.lower().endswith(".docx") else f"{custom}.docx"
+            # A firm form may be a fillable PDF (the DMV SR1), not only a .docx.
+            return custom if custom.lower().endswith((".docx", ".pdf")) else f"{custom}.docx"
         return f"Template - {CLASS_TITLES.get(document_class, document_class)}.docx"
 
 

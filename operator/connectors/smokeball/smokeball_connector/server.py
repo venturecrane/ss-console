@@ -1139,8 +1139,9 @@ def read_document(matter_id: str, file_id: str, max_chars: int = 40000, offset: 
     formula the file never computed (a gap, never a zero). ``xlsx_operator`` is a
     workbook the Operator itself built with ``add_workbook``: its figures are
     the Operator's, not the firm's record.
-    ``vision``/``vision_cached`` is a MACHINE TRANSCRIPTION of a scan that no
-    human has read: cite it as a transcription, never as the document verbatim
+    ``vision``/``vision_cached`` is a MACHINE TRANSCRIPTION of a scan, or of a
+    photograph of a document (JPEG/PNG/GIF/WEBP: an insurance card, a driver
+    license, an estimate; a HEIC photo is refused by name), that no human has read: cite it as a transcription, never as the document verbatim
     in anything filed, and check any passage you quote against the scan itself.
     ``[illegible]`` in that text means the transcriber could not read a token —
     it is a gap for a person to fill, never something to infer. ``none_scanned``

@@ -1484,7 +1484,8 @@ describe('Operator customer Machine Dockerfile', () => {
     // the hook order, and REPLY_HELD/REPLY_FAILED page SMD as shortfalls with informative codes.
     // fd46efce -> 4f5c085d (overlay#418), 2026-10-06: a job-ledger write rides out a broker
     // respawn, a broker outage pages once, and four AgentMail app tools are banned.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="4f5c085da47c79ca01ef3ad86324a4cfd1aaa468"')
+    // 4f5c085d -> a2c83f92 (overlay#419), 2026-10-06: the DMV SR1 prefill tool is classified internal_write.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="a2c83f924343434b3f72a6f5624ceddb1fdcb3e7"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

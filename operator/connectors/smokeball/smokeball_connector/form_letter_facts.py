@@ -317,6 +317,57 @@ def staff_signer_facts(client: Any, matter: dict[str, Any], signers: dict[str, d
     }
 
 
+def load_preparer_title(path: str | None = None) -> str | None:
+    """``form_letters.preparer_title``: how the staff member who PREPARES a
+    letter signs it (the firm's health-insurer notices are signed by the
+    legal assistant on the file, "Legal Assistant" on 40 of 40 sampled)."""
+    block = _load_yaml(path).get(CONFIG_BLOCK)
+    title = block.get("preparer_title") if isinstance(block, dict) else None
+    return title.strip() if isinstance(title, str) and title.strip() else None
+
+
+def preparer_facts(client: Any, matter: dict[str, Any], title: str | None) -> dict[str, Fact]:
+    """name, title and email of the staff member ASSISTING on the matter, who
+    prepares and signs the firm's notice letters. The name and email are the
+    staff record's own; the title is authored (``preparer_title``)."""
+    staff_id = matter.get("personAssistingStaffId")
+    if not isinstance(staff_id, str) or not staff_id:
+        return {f: _absent(f"preparer {f} (no assisting staff on the matter)") for f in ("name", "title", "email")}
+    staff = client.get(f"/staff/{staff_id}")
+    staff = staff if isinstance(staff, dict) else {}
+    full = " ".join(
+        p.strip() for p in (staff.get("firstName"), staff.get("lastName")) if isinstance(p, str) and p.strip()
+    )
+    email = staff.get("email")
+    email = email.strip() if isinstance(email, str) and "@" in email else None
+    who = full or "the assisting staff member"
+    return {
+        "name": Fact(full, "the matter's assisting staff record") if full else _absent("preparer name"),
+        "title": (
+            Fact(title, "form_letters.preparer_title")
+            if title
+            else _absent(f"how {who} signs: title", "form_letters.preparer_title")
+        ),
+        "email": Fact(email, "the matter's assisting staff record") if email else _absent(f"{who}'s email"),
+    }
+
+
+def client_salutation(client: Any, matter: dict[str, Any]) -> Fact:
+    """``Ms. Rodriguez``: the client contact's own title and last name, as the
+    firm's notices write the client in their first sentence. A contact with no
+    title prints the marker; a title is never inferred from a first name."""
+    ids = [c for c in matter.get("clientIds") or [] if isinstance(c, str)]
+    contact = fetch_contact(client, ids[0]) if ids else {}
+    person = contact.get("person") if isinstance(contact.get("person"), dict) else {}
+    title = str(person.get("title") or "").strip().rstrip(".")
+    last = str(person.get("lastName") or "").strip()
+    if not last:
+        return _absent("client's last name")
+    if title not in ("Mr", "Ms", "Mrs", "Miss", "Dr", "Mx"):
+        return _absent(f"client's title (Mr./Ms.) for {last}")
+    return Fact(f"{title}. {last}", "matter client contact (title and last name)")
+
+
 def _staff_initials(staff: dict[str, Any]) -> str | None:
     """A staff member's typist initials, lowercase: the record's own initials
     when it carries them, else first + last initial."""
@@ -352,15 +403,18 @@ __all__ = [
     "Fact",
     "Parties",
     "client_name",
+    "client_salutation",
     "contact_address",
     "contact_email",
     "contact_fax",
     "contact_name",
     "date_of_loss",
     "fetch_contact",
+    "load_preparer_title",
     "load_signers",
     "long_date",
     "matter_layout_values",
+    "preparer_facts",
     "read_parties",
     "related_contact",
     "seat_today",

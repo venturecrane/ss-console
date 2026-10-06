@@ -66,7 +66,12 @@ const DOCUMENT_CLASSES = [
  * (smokeball_connector/form_letters.py FORMS). Resolved from the same library
  * by the same map, so a key here is as well-shaped as a renderer class.
  */
-const FORM_CLASSES = ['first_party_rep_letter', 'third_party_rep_letter'] as const
+const FORM_CLASSES = [
+  'first_party_rep_letter',
+  'third_party_rep_letter',
+  'health_notice_blue_shield',
+  'sr1_form',
+] as const
 const TEMPLATE_KEYS: readonly string[] = [...DOCUMENT_CLASSES, ...FORM_CLASSES]
 
 function loadSeat(slug: keyof typeof SEAT_PATHS) {

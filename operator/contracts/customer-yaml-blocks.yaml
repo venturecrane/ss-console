@@ -315,9 +315,14 @@ top_level:
       prints the responsible staff record's own name and has no initials
       line. A staff member not listed, or a field not authored, prints
       "[Not in the file: how <name> signs: <field>]" in the letter. Authored
-      only from the firm's own letters. The forms
-      themselves resolve through self_initiation.document_library.templates
-      (first_party_rep_letter, third_party_rep_letter).
+      only from the firm's own letters. `preparer_title`: how the matter's
+      ASSISTING staff member signs the firm's notice letters (the health-
+      insurer notice), whose name and email are read from their own staff
+      record (form_letter_facts.load_preparer_title / preparer_facts); unset
+      prints the marker. The forms themselves resolve through
+      self_initiation.document_library.templates (first_party_rep_letter,
+      third_party_rep_letter, health_notice_blue_shield, and the
+      state SR1 PDF as sr1_form).
   records_orders:
     status: implemented
     materializer: >-

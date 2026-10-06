@@ -41,6 +41,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any, Callable
 
+from . import cited_facts
 from . import form_letter_facts as facts
 from .form_docx import FormError, fill_form, placeholders_in
 from .form_letter_facts import Fact
@@ -65,8 +66,15 @@ class FormSpec:
     #: (the 1st party task form prints "Christopher A. Price"). ``staff``: the
     #: responsible staff record's own name (the 3rd party task form merges
     #: Attorney Responsible/Full Name, "Chris Price"); the title is authored
-    #: either way, and the 3rd party form has no initials line.
+    #: either way, and the 3rd party form has no initials line. ``preparer``:
+    #: the matter's ASSISTING staff record, who signs the firm's notice letters
+    #: with ``form_letters.preparer_title``.
     signer_name_from: str
+    #: ``rep``: a carrier letter (carrier, claim number, delivery lines).
+    #: ``health``: a health-insurer notice, whose addressee is fixed text in
+    #: the firm's form and whose member ID is read from the client's card
+    #: (``cited_facts``), never from a Smokeball field or the email.
+    facts_kind: str = "rep"
 
 
 FORMS: dict[str, FormSpec] = {
@@ -93,6 +101,22 @@ FORMS: dict[str, FormSpec] = {
         email_label="Via Email: ",
         paragraph_fields=frozenset({"delivery_lines", "carrier_address"}),
         signer_name_from="staff",
+    ),
+    # The firm's health-insurer notice for a Blue Shield of California member:
+    # Blue Shield's recovery vendor is the addressee; its address and fax are
+    # fixed text in the firm's form (6 firm letters, 2026-08-05 to 10-02).
+    "health_blue_shield": FormSpec(
+        label="health insurer notice (Blue Shield)",
+        document_class="health_notice_blue_shield",
+        default_template="Form - Med Ins Blue Shield.docx",
+        file_name="Med Ins Req. Blue Shield.docx",
+        side="Plaintiffs",
+        client_side=True,
+        fax_label="",
+        email_label="",
+        paragraph_fields=frozenset(),
+        signer_name_from="preparer",
+        facts_kind="health",
     ),
 }
 
@@ -163,8 +187,29 @@ def _claim_number(layout: dict[str, Any], spec: FormSpec) -> Fact:
     return Fact(value, f"layout {key}") if value else Fact(None, "", f"{_side_word(spec)} claim number")
 
 
+def _health_facts(
+    client: Any, matter_id: str, matter: dict[str, Any], letter_date: date, cited: Any, wanted: set[str]
+) -> tuple[dict[str, Fact], cited_facts.Confirmed]:
+    """A health-insurer notice: the client, the date of loss, the preparer who
+    signs it, and the card's identifiers confirmed on the card itself."""
+    layout = facts.matter_layout_values(client, matter_id)
+    preparer = facts.preparer_facts(client, matter, facts.load_preparer_title())
+    confirmed = cited_facts.confirm(client, matter_id, cited, wanted & set(cited_facts.LABELS))
+    found = {
+        "date": Fact(facts.long_date(letter_date), "the letter date"),
+        "client_name": facts.client_name(client, matter),
+        "client_salutation": facts.client_salutation(client, matter),
+        "date_of_loss": facts.date_of_loss(layout),
+        "signer_name": preparer["name"],
+        "signer_title": preparer["title"],
+        "preparer_email": preparer["email"],
+        **confirmed.facts,
+    }
+    return found, confirmed
+
+
 def gather_facts(client: Any, matter_id: str, spec: FormSpec, letter_date: date) -> dict[str, Fact]:
-    """Every field the two forms carry, read from the matter."""
+    """Every field the two rep-letter forms carry, read from the matter."""
     matter = client.get(f"/matters/{matter_id}")
     matter = matter if isinstance(matter, dict) else {}
     layout = facts.matter_layout_values(client, matter_id)
@@ -211,13 +256,27 @@ def _read_back(client: Any, matter_id: str, file_id: str) -> dict[str, Any] | No
     return None
 
 
-def render_firm_form_letter(matter_id: str, form: str, date: str | None = None) -> Any:
-    """Make the firm's 1st or 3rd party representation letter on its OWN form
-    and file it on the matter. Never write the letter yourself.
+def render_firm_form_letter(
+    matter_id: str, form: str, date: str | None = None, cited: dict[str, Any] | None = None
+) -> Any:
+    """Make one of the firm's letters on its OWN form and file it on the
+    matter. Never write the letter yourself.
 
-    ``form`` is ``first_party_rep`` (to the client's own carrier) or
-    ``third_party_rep`` (to the other side's carrier). ``date`` is the letter
-    date as YYYY-MM-DD; omit it for today.
+    ``form`` is ``first_party_rep`` (to the client's own carrier),
+    ``third_party_rep`` (to the other side's carrier), or
+    ``health_blue_shield`` (the health-insurer notice for a Blue
+    Shield of California member; Blue Shield's recovery vendor is the
+    addressee printed in the firm's form). ``date`` is the letter date as
+    YYYY-MM-DD; omit it for today.
+
+    ``cited`` (health notice only): what you read on the client's insurance
+    card with ``read_document``, as ``{"member_id": {"value": "<as printed>",
+    "file_id": "<the card's file id>"}}``. The value is accepted only when the
+    card's own transcription shows it beside its "ID#"/"Member" label;
+    otherwise the letter prints a marker. Never cite a value from the email.
+    The health notice is signed by the matter's ASSISTING staff member (the
+    legal assistant on the file), with their email in the letter, and opens
+    "retained by Ms. Rodriguez" from the client contact's own title.
 
     Every value is read here from the matter: the client's name, the date of
     loss, the claim number, the carrier and its fax/email/address from the
@@ -235,8 +294,10 @@ def render_firm_form_letter(matter_id: str, form: str, date: str | None = None) 
     with ``reason`` and nothing filed), ``fileId``, ``fileName``, ``unfilled``,
     ``facts_used`` (each field and where it was read), ``template`` (the form
     used) and ``same_name_on_matter`` (ids of files already carrying this
-    name, which the person should know about). It does not send, fax or mail
-    the letter, and does not complete any task."""
+    name, which the person should know about). A health notice also returns
+    ``card_values_to_check`` (each card value it printed, which the reply
+    lists so the person checks it against the card) and ``cited_refused``. It
+    does not send, fax or mail the letter, and does not complete any task."""
     spec = FORMS.get(str(form or "").strip())
     if spec is None:
         return _refused(f"form must be one of {sorted(FORMS)}")
@@ -253,20 +314,30 @@ def render_firm_form_letter(matter_id: str, form: str, date: str | None = None) 
             f"the firm's {spec.label} form did not resolve ({resolved.reason}); nothing was filed. "
             "No other letter is made in its place: the firm's form has to be in its Document Library."
         )
-    return _fill_and_file(client, matter, spec, when, resolved)
+    return _fill_and_file(client, matter, spec, when, resolved, cited)
 
 
-def _fill_and_file(client: Any, matter: str, spec: FormSpec, when: date, resolved: ResolvedTemplate) -> dict[str, Any]:
+def _fill_and_file(
+    client: Any, matter: str, spec: FormSpec, when: date, resolved: ResolvedTemplate, cited: Any = None
+) -> dict[str, Any]:
     template = {"name": resolved.name, "fileId": resolved.file_id}
     try:
-        if not placeholders_in(resolved.bytes):
+        carried = set(placeholders_in(resolved.bytes))
+        if not carried:
             return _refused(
                 f"{resolved.name!r} carries no {{{{field}}}} placeholders, so it is not a form", template=template
             )
     except FormError as exc:
         return _refused(f"{resolved.name!r} could not be filled: {exc}", template=template)
+    confirmed: cited_facts.Confirmed | None = None
     try:
-        found = gather_facts(client, matter, spec, when)
+        if spec.facts_kind == "health":
+            record = client.get(f"/matters/{matter}")
+            found, confirmed = _health_facts(
+                client, matter, record if isinstance(record, dict) else {}, when, cited, carried
+            )
+        else:
+            found = gather_facts(client, matter, spec, when)
     except Exception as exc:  # noqa: BLE001 - a record that could not be READ is never printed as "not in the file"; nothing files
         return _refused(
             f"the matter's record could not be read ({exc.__class__.__name__}: {str(exc)[:200]}); nothing was filed"
@@ -280,7 +351,7 @@ def _fill_and_file(client: Any, matter: str, spec: FormSpec, when: date, resolve
     result = client.add_file(matter, spec.file_name, filled.data)
     file_id = result.get("fileId") if isinstance(result, dict) else None
     seen = _read_back(client, matter, str(file_id)) if file_id else None
-    return {
+    out = {
         "status": "filed" if seen else "filed_not_visible",
         "fileId": file_id,
         "fileName": spec.file_name,
@@ -291,6 +362,10 @@ def _fill_and_file(client: Any, matter: str, spec: FormSpec, when: date, resolve
         "same_name_on_matter": same,
         "sha256": hashlib.sha256(filled.data).hexdigest(),
     }
+    if confirmed is not None:
+        out["card_values_to_check"] = {cited_facts.WORDS[k]: v for k, v in confirmed.shown.items() if k in used}
+        out["cited_refused"] = {cited_facts.WORDS.get(k, k): why for k, why in confirmed.refused.items()}
+    return out
 
 
 def register(server: Any) -> None:
