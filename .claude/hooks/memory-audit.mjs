@@ -479,7 +479,11 @@ function main() {
     // the verdict: its claim is "the hook fired", which is true even of a run
     // that found problems and especially of one that found nothing to say.
     if (!result.missing) writeReceipt(dir, result)
-    if (!result.ok || result.warnings?.length) process.stderr.write(summarize(result))
+    // STDOUT, not stderr: for a SessionStart hook Claude Code injects stdout
+    // into the session context, while stderr on exit 0 never reaches the model
+    // (review 2026-10-06 N8). session-peers.sh prints to stdout for the same
+    // reason. A finding written to stderr here was a report nobody received.
+    if (!result.ok || result.warnings?.length) process.stdout.write(summarize(result))
     return 0 // never fail a session start on hygiene plumbing
   }
 
