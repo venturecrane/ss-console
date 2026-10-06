@@ -831,7 +831,7 @@ def police_seat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
       kind: chp
       address: ['5109 Tyler St.', 'Sacramento, CA 95841']
       channel: mail
-      match: ['north sacramento', 'north sac']
+      match: ['north sacramento area', 'north sac chp']
     citrus_heights:
       name: 'Citrus Heights Police Department'
       short: 'Citrus Heights PD'
@@ -840,7 +840,7 @@ def police_seat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
       address: ['6315 Fountain Square Dr.', 'Citrus Heights, CA 95621']
       channel: email
       route: 'records@city.example'
-      match: ['citrus heights']
+      match: ['citrus heights police', 'citrus heights pd']
     roseville:
       name: 'Roseville Police Department'
       short: 'Roseville PD'
@@ -848,7 +848,7 @@ def police_seat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
       kind: city
       address: ['1 Junction Blvd.', 'Roseville, CA 95678']
       channel: portal
-      match: ['roseville']
+      match: ['roseville police', 'roseville pd']
 """,
         encoding="utf-8",
     )
@@ -976,10 +976,10 @@ def test_a_city_department_named_by_the_sender_goes_by_its_portal(
 def test_an_email_agency_and_an_ambiguous_one(
     police_seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _r, out, text = _police(monkeypatch, words="Citrus Heights")
+    _r, out, text = _police(monkeypatch, words="Citrus Heights PD")
     assert "Citrus Heights Police Department\n6315 Fountain Square Dr." in text
-    assert "Email it to the Citrus Heights police at records@city.example" in out["reply_block"]
-    record, out, _t = _police(monkeypatch, words="Roseville or Citrus Heights")
+    assert "Email it to the Citrus Heights police at records@city.example." in out["reply_block"]
+    record, out, _t = _police(monkeypatch, words="Roseville PD or Citrus Heights PD")
     assert out["status"] == "agency_unclear" and record.uploads == []
     _reply_lines_pass(out["reply_block"])
 
@@ -991,3 +991,30 @@ def test_no_agency_anywhere_files_nothing_and_asks(
     assert out["status"] == "needs_agency" and record.uploads == []
     assert out["reply_block"].startswith("Needs a word from you: which agency took the report?")
     _reply_lines_pass(out["reply_block"])
+
+
+def test_a_street_name_never_picks_an_agency(
+    police_seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record, out, _t = _police(monkeypatch, words="crash on Roseville Rd near Citrus Heights Blvd")
+    assert out["status"] == "needs_agency" and record.uploads == []
+
+
+def test_numbers_run_together_on_one_line_never_stand_in_for_each_other() -> None:
+    joined = "CRASH TIME: 1645 NCIC NUMBER: 9255 OFFICER\u2019S ID NUMBER: 012345"
+    labels = cited_facts.LABELS
+    assert cited_facts.value_after_label(joined, "9255", labels["ncic_number"])
+    assert not cited_facts.value_after_label(joined, "012345", labels["ncic_number"])
+    assert not cited_facts.value_after_label(joined, "9255", labels["crash_time"])
+    assert not cited_facts.value_after_label(joined, "925", labels["ncic_number"])  # a fragment is not the value
+    assert cited_facts.value_after_label(joined, "012345", labels["officer_id"])
+
+
+def test_a_sender_named_agency_is_safe_in_a_file_name(
+    police_seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record, out, _t = _police(
+        monkeypatch, given={"name": "Elk Grove PD/Records", "address": "1 Main St\nElk Grove, CA 95624"}
+    )
+    assert record.uploads[0][1] == "Police Rept Req. Elk Grove PD Records.docx"
+    assert out["agency"]["source"] == "as the sender wrote it"

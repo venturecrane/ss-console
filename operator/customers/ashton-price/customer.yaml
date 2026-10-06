@@ -1447,8 +1447,10 @@ form_letters:
         - 'Sacramento, CA 95841'
       channel: mail
       match:
-        - 'north sacramento'
-        - 'north sac'
+        - 'north sacramento area'
+        - 'north sacramento chp'
+        - 'north sac chp'
+        - 'north sacramento highway patrol'
     citrus_heights:
       name: 'Citrus Heights Police Department'
       short: 'Citrus Heights PD'
@@ -1460,7 +1462,8 @@ form_letters:
       channel: email
       route: 'pdrecords@citrusheights.net'
       match:
-        - 'citrus heights'
+        - 'citrus heights police'
+        - 'citrus heights pd'
     roseville:
       name: 'Roseville Police Department'
       short: 'Roseville PD'
@@ -1471,7 +1474,8 @@ form_letters:
         - 'Roseville, CA 95678'
       channel: portal
       match:
-        - 'roseville'
+        - 'roseville police'
+        - 'roseville pd'
     folsom:
       name: 'Folsom Police Department'
       short: 'Folsom PD'
@@ -1480,7 +1484,8 @@ form_letters:
       channel: portal
       route: 'cityoffolsomca.nextrequest.com'
       match:
-        - 'folsom'
+        - 'folsom police'
+        - 'folsom pd'
 
 # vendor_invoice_intake: every staged vendor invoice is billable, and its PDF
 # files into Accounting/Invoices (a nested path: the "Invoices" folder whose

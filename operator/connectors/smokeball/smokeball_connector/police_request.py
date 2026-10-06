@@ -112,10 +112,11 @@ def _given(given: dict[str, Any], card: str) -> Agency | str:
         return 'agency_given must be {"name": ..., "address": "line 1\\nline 2"} with a name'
     on_card = bool(card) and all(_words(x) in _words(card) for x in [name, *lines])
     kind = "chp" if re.search(r"(?i)\bchp\b|highway patrol", name) else "city"
+    short = " ".join(re.sub(r"[^A-Za-z0-9 .,&'-]", " ", name).split())[:60] or "agency"
     return Agency(
         key="",
         name=name,
-        short=name,
+        short=short,
         reply_name=name,
         kind=kind,
         address=tuple(lines),
@@ -145,7 +146,7 @@ def where_it_goes(agency: Agency) -> str:
     if agency.channel == "fax" and agency.route:
         return f"Fax it to {agency.reply_name} at {agency.route}."
     if agency.channel == "email" and agency.route:
-        return f"Email it to {agency.reply_name} at {agency.route}, with the authorization attached."
+        return f"Email it to {agency.reply_name} at {agency.route}."
     if agency.channel == "portal":
         where = f": {agency.route}" if agency.route else ""
         return f"Requests to {agency.reply_name} go through the records portal{where}. Attach this letter there."

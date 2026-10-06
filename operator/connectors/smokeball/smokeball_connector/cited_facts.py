@@ -10,8 +10,10 @@ file_id}}``. A value the agent merely asserts is exactly what the no-fabrication
 rule forbids, so this module re-reads the cited file (the extraction cache makes
 that free when the agent just read it) and accepts the value only when it
 appears ON THE SAME LINE as one of the field's own labels (or on the line right
-under it, the way a card prints "Group #" above "W3001999"). The labels are
-fixed here, per field; the agent cannot choose them.
+under it, the way a card prints "Group #" above "W3001999"). The crash card's
+three short numbers (``SAME_LINE``) are stricter: each must be the first thing
+after its own label, before any other label, and match it exactly. The labels
+are fixed here, per field; the agent cannot choose them.
 
 WHAT THIS CANNOT CATCH. A vision misread that the agent copies faithfully (an O
 read as a 0) passes, because the transcription agrees with itself. That is why
@@ -133,16 +135,23 @@ def value_beside_label(text: str, value: str, labels: tuple[str, ...]) -> bool:
 
 
 def value_after_label(text: str, value: str, labels: tuple[str, ...]) -> bool:
-    """True when ``value`` sits on a line AFTER one of ``labels`` on that same
-    line (the ``SAME_LINE`` fields)."""
+    """True when ``value`` is exactly the first token after one of ``labels``
+    on the same line, before any other field's label (the ``SAME_LINE``
+    fields: a card that runs "NCIC NUMBER: 9255 OFFICER'S ID NUMBER: 012345"
+    together never lets one number stand in for the other)."""
     want = _norm(value)
     if len(want) < MIN_LENGTH:
         return False
+    every = [lab for labs in LABELS.values() for lab in labs]
     for line in text.splitlines():
         low = line.lower().replace("\u2019", "'")
         for label in labels:
             for hit in re.finditer(rf"(?<![a-z]){re.escape(label)}(?![a-z])", low):
-                if want in _norm(line[hit.end() :]):
+                rest = low[hit.end() :]
+                stops = [m.start() for lab in every for m in re.finditer(rf"(?<![a-z]){re.escape(lab)}(?![a-z])", rest)]
+                rest = rest[: min(stops)] if stops else rest
+                tokens = [t for t in re.split(r"[\s:#]+", rest) if _norm(t)]
+                if tokens and _norm(tokens[0]) == want:
                     return True
     return False
 
