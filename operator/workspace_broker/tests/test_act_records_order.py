@@ -44,6 +44,8 @@ def _order(**over) -> dict:
         "ssn_last4": "6789",
         "order_by_email": "paralegal@firm.example",
         "language": "en",
+        "authorization": "upload",
+        "esign_to": None,
         "hipaa_file_id": "f-hipaa",
         "hipaa_file_name": "HIPAA Authorization - signed.pdf",
         "pre_approved_custodian_fee": 100.0,
@@ -182,3 +184,32 @@ def test_the_call_payload_table_is_both_acts():
         "mcp_smokeball_delete_events": "destructive",
         TOOL: "commitment",
     }
+
+
+def test_an_e_authorization_order_reads_back_where_the_signing_request_goes() -> None:
+    # A&P, 2026-10-06: the vendor emails the client its own authorization to
+    # sign; nothing is uploaded, and the administrator reads where it goes.
+    order = _order(authorization="e_auth", esign_to="p***@example.com", hipaa_file_id=None, hipaa_file_name=None)
+    order["order_ref"] = act_records_order.order_ref(order)
+    payload = act_records_order.require_order({"order": order})
+    line = act_records_order.order_readback(payload)
+    assert "e-signature" in line and "p***@example.com" in line and "uploaded" not in line
+
+
+def test_an_e_authorization_order_never_carries_a_file_or_a_full_address() -> None:
+    for over in (
+        {"esign_to": "pat@example.com"},  # the full address, not the masked label
+        {"hipaa_file_id": "f-hipaa", "hipaa_file_name": "HIPAA.pdf"},
+        {"authorization": "fax"},
+    ):
+        fields = {
+            "authorization": "e_auth",
+            "esign_to": "p***@example.com",
+            "hipaa_file_id": None,
+            "hipaa_file_name": None,
+        }
+        fields.update(over)
+        order = _order(**fields)
+        order["order_ref"] = act_records_order.order_ref(order)
+        with pytest.raises(EstablishmentValidationError):
+            act_records_order.require_order({"order": order})
