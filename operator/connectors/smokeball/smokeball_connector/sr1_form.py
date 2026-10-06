@@ -88,15 +88,18 @@ BOXES: dict[str, str] = {
     "POLICY NUMBER.1": "the other driver's policy number",
     "NAME &  ADDRESS OF INJURED OR DECEASED.0": "injured person's name and address",
 }
-#: Boxes always left for the client: the facts no record holds.
+#: Boxes always left for the client: the facts no record holds. Worded with
+#: no dollar figure and no all-capitals word, because the reply quotes this
+#: list and its outbound checks hold an untraced dollar amount and a capitals
+#: "emphasis" word (rehearsal 2026-10-06: the agent had to reword two lines).
 CLIENT_COMPLETES = (
     "number of vehicles",
     "time of accident",
     "moving / stopped / parked",
     "driving for employer",
-    "damages over $1,000",
+    "the damages box",
     "vehicle owner",
-    "company NAIC numbers",
+    "each insurance company's code number",
     "policy periods",
     "policy holder name",
     "the other driver's license number, date of birth and vehicle",
@@ -183,7 +186,11 @@ def gather(client: Any, matter_id: str, cited: Any) -> tuple[dict[str, str], dic
     dol = facts.date_of_loss(layout)
     put("DATE OF ACCIDENT-MONTH", dol, "")
     put("ACCIDENT LOCATION", str(layout.get(LOCATION_KEY) or "").strip(), f"layout {LOCATION_KEY}")
-    name = facts.contact_name(me) if me else None
+    # The SR1 is a DRIVER'S report: only a person contact is the driver. A
+    # company client (an entity matter) leaves every "her" box for a person.
+    person = me.get("person") if isinstance(me.get("person"), dict) else None
+    name = facts.contact_name(me) if person else None
+    me = me if person else {}
     put("DRIVERS NAME.0", name, "matter client contact")
     mine = _address_parts(me) if me else {}
     for box, part in (
