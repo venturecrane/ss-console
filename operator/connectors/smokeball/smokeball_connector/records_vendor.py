@@ -63,7 +63,10 @@ UPLOAD_KINDS = (
     "special_form",
 )
 
-_TIMEOUT_SECONDS = 30.0
+#: The vendor's directory search answers in ~23s from a seat (measured
+#: 2026-10-06 on ashton-price) and twice ran past a 30s limit the same day, so
+#: the read limit leaves room. Connecting stays short: a dead host fails fast.
+_TIMEOUT = httpx.Timeout(90.0, connect=10.0)
 _MAX_ERROR_CHARS = 400
 #: Anything shaped like an SSN, with or without separators, is blanked out of
 #: every vendor message before it is kept: a validation error may echo a value.
@@ -135,7 +138,7 @@ class RecordsVendorClient:
             raise RecordsVendorNotConnected()
         self._token = token
         self._base = base_url.rstrip("/")
-        self._http = http or httpx.Client(timeout=_TIMEOUT_SECONDS)
+        self._http = http or httpx.Client(timeout=_TIMEOUT)
 
     def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         headers = {"Authorization": f"Bearer {self._token}", "Accept": "application/json"}
