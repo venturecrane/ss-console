@@ -1262,6 +1262,9 @@ self_initiation:
       sr19_form: 'Form - DMV SR19.pdf'
       # The firm's toolbar wage loss letter with its verification page (2026-10-06).
       wage_loss_letter: 'Form - Wage Loss Letter.docx'
+      # The firm's police report request letters (city police; Highway Patrol).
+      police_request_city: 'Form - Police Req City.docx'
+      police_request_chp: 'Form - Police Req CHP.docx'
     # The Operator's OWN matter (ss-console#2536). Four authored values, and
     # every one of them is a decision the firm made here rather than one the
     # Operator makes at runtime: the model can ask for this matter and cannot
@@ -1409,6 +1412,75 @@ form_letters:
     address:
       - '8243 Greenback Lane'
       - 'Fair Oaks, CA 95628'
+  # police_agencies: the agencies the firm's police report requests go to,
+  # each with ONE current channel. Every value is from the firm's own letters
+  # ("Police Rept Req. Sac PD", "... North Sac CHP. Letter") or the agencies'
+  # own emails in its files (2026-10-06): Sac PD and Folsom answer from their
+  # NextRequest portals, Roseville from its JustFOIA portal (no portal link in
+  # its email), Citrus Heights from its records inbox. An agency is used only
+  # when exactly one entry's match words appear in the sender's words or on
+  # the cited crash card. reply_name is how the Operator's reply names it.
+  police_agencies:
+    sac_pd:
+      name: 'Sacramento City Police Department'
+      short: 'Sac PD'
+      reply_name: 'the Sacramento police'
+      kind: city
+      address:
+        - '5770 Freeport Blvd., Ste 100'
+        - 'Sacramento, CA 95822'
+      channel: portal
+      route: 'pdcityofsacramentoca.nextrequest.com'
+      match:
+        - 'sacramento police'
+        - 'sacramento city police'
+        - 'sac pd'
+        - 'sacpd'
+        - 'sacramento pd'
+    north_sac_chp:
+      name: 'North Sacramento CHP'
+      short: 'North Sac CHP'
+      reply_name: "the Highway Patrol's North Sacramento office"
+      kind: chp
+      address:
+        - '5109 Tyler St.'
+        - 'Sacramento, CA 95841'
+      channel: mail
+      match:
+        - 'north sacramento'
+        - 'north sac'
+    citrus_heights:
+      name: 'Citrus Heights Police Department'
+      short: 'Citrus Heights PD'
+      reply_name: 'the Citrus Heights police'
+      kind: city
+      address:
+        - '6315 Fountain Square Dr.'
+        - 'Citrus Heights, CA 95621'
+      channel: email
+      route: 'pdrecords@citrusheights.net'
+      match:
+        - 'citrus heights'
+    roseville:
+      name: 'Roseville Police Department'
+      short: 'Roseville PD'
+      reply_name: 'the Roseville police'
+      kind: city
+      address:
+        - '1051 Junction Blvd.'
+        - 'Roseville, CA 95678'
+      channel: portal
+      match:
+        - 'roseville'
+    folsom:
+      name: 'Folsom Police Department'
+      short: 'Folsom PD'
+      reply_name: 'the Folsom police'
+      kind: city
+      channel: portal
+      route: 'cityoffolsomca.nextrequest.com'
+      match:
+        - 'folsom'
 
 # vendor_invoice_intake: every staged vendor invoice is billable, and its PDF
 # files into Accounting/Invoices (a nested path: the "Invoices" folder whose

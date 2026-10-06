@@ -462,6 +462,8 @@ def render_firm_form_letter(
     date: str | None = None,
     cited: dict[str, Any] | None = None,
     employer: dict[str, Any] | None = None,
+    agency_words: str | None = None,
+    agency_given: dict[str, Any] | None = None,
 ) -> Any:
     """Make one of the firm's letters on its OWN form and file it on the
     matter. Never write the letter yourself.
@@ -481,6 +483,14 @@ def render_firm_form_letter(
     client's own carrier for the med pay ledger: NOTHING is filed; the result
     carries ``email`` {to, subject, body} for the person to send from their
     own mailbox and ``reply_block``, which goes into the reply exactly as returned, ``drafted`` or ``incomplete`` when a fact is missing).
+    ``police_report`` makes the firm's police report request letter (the
+    Highway Patrol letter or the city police letter, by agency): pass
+    ``agency_words`` (the sender's own words naming the agency) and, from a
+    crash card in the file, ``cited`` crash_time / ncic_number / officer_id /
+    report_number; with no directory match, ``agency_given`` {"name",
+    "address"} exactly as the sender wrote it or the card prints it. Its
+    result carries ``reply_block`` for the reply as is, or ``needs_agency`` /
+    ``agency_unclear`` with nothing filed.
     ``date`` is the letter date as YYYY-MM-DD; omit it for today.
 
     ``employer`` (wage loss only): ``{"name": ..., "address": ...}`` exactly
@@ -522,14 +532,16 @@ def render_firm_form_letter(
     spec = FORMS.get(name)
     from .form_emails import EMAILS, draft_firm_email
 
-    if spec is None and name not in EMAILS:
-        return _refused(f"form must be one of {sorted([*FORMS, *EMAILS])}")
+    if spec is None and name not in EMAILS and name != "police_report":
+        return _refused(f"form must be one of {sorted([*FORMS, *EMAILS, 'police_report'])}")
     matter = str(matter_id or "").strip()
     if not matter:
         return _refused("matter_id is required")
     problem = _employer_problem(employer)
     if problem:
         return _refused(problem)
+    if name == "police_report":
+        return _police(matter, date, cited, agency_words, agency_given)
     if spec is None:
         try:
             return draft_firm_email(_client(), matter, name)
@@ -577,6 +589,7 @@ def _fill_and_file(
     resolved: ResolvedTemplate,
     cited: Any = None,
     employer: dict[str, Any] | None = None,
+    gather: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     template = {"name": resolved.name, "fileId": resolved.file_id}
     try:
@@ -588,7 +601,10 @@ def _fill_and_file(
     except FormError as exc:
         return _refused(f"{resolved.name!r} could not be filled: {exc}", template=template)
     try:
-        found, confirmed = _gather(client, matter, spec, when, carried, cited, employer)
+        if gather is not None:
+            found, confirmed = gather(client, matter, spec, when, carried, cited)
+        else:
+            found, confirmed = _gather(client, matter, spec, when, carried, cited, employer)
     except EmployerUnclear as exc:
         return {"status": "employer_unclear", "fileId": None, "matterId": matter, "reason": f"{exc}; nothing was filed"}
     except Exception as exc:  # noqa: BLE001 - a record that could not be READ is never printed as "not in the file"; nothing files
@@ -607,8 +623,7 @@ def _fill_and_file(
     used = set(filled.placeholders)
     unfilled = [MARKER.format(found[k].missing) for k in filled.placeholders if k in found and found[k].value is None]
     unfilled += [MARKER.format(name) for name in filled.unknown]
-    if "employer_mailing_address" in found:
-        unfilled.append(MARKER.format(found["employer_mailing_address"].missing))
+    unfilled += [MARKER.format(f.missing) for k, f in found.items() if k.endswith("_mailing_address")]
     same = [str(e.get("id")) for e in list_matter_files(client, matter) if name_matches(e, spec.file_name)]
     result = client.add_file(matter, spec.file_name, filled.data)
     file_id = result.get("fileId") if isinstance(result, dict) else None
@@ -630,6 +645,17 @@ def _fill_and_file(
         out["card_values_to_check"] = {cited_facts.WORDS[k]: v for k, v in confirmed.shown.items() if k in used}
         out["cited_refused"] = {cited_facts.WORDS.get(k, k): why for k, why in confirmed.refused.items()}
     return out
+
+
+def _police(matter: str, date: str | None, cited: Any, words: str | None, given: Any) -> dict[str, Any]:
+    from .police_request import render_police
+
+    when = _letter_date(date)
+    if isinstance(when, str):
+        return _refused(when)
+    if given is not None and not isinstance(given, dict):
+        return _refused('agency_given must be {"name": ..., "address": ...}')
+    return render_police(_client(), matter, when, cited, words, given)
 
 
 def register(server: Any) -> None:

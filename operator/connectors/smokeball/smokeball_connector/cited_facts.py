@@ -52,7 +52,18 @@ LABELS: dict[str, tuple[str, ...]] = {
     "vehicle_model": ("model",),
     "vehicle_plate": ("plate", "license plate", "lic plate", "lic", "license"),
     "vehicle_vin": ("vin", "vehicle id", "vehicle identification"),
+    # A Highway Patrol crash card prints "CRASH TIME:", "NCIC NUMBER:" and
+    # "OFFICER'S ID NUMBER:" (a real card read on the A&P seat, 2026-10-06); a
+    # city police card or receipt prints a report or case number.
+    "crash_time": ("crash time",),
+    "ncic_number": ("ncic number", "ncic"),
+    "officer_id": ("officer's id number", "officer id number", "officer's id", "officer id"),
+    "report_number": ("report #", "report#", "report number", "report no", "case #", "case number", "case no"),
 }
+#: Fields whose value must sit on the label's OWN line, after the label: a
+#: crash card lays three short numbers out side by side, and "the line under
+#: a label" would let one stand in for another.
+SAME_LINE = frozenset({"crash_time", "ncic_number", "officer_id"})
 #: What the reply calls each field.
 WORDS: dict[str, str] = {
     "member_id": "member ID",
@@ -63,10 +74,26 @@ WORDS: dict[str, str] = {
     "vehicle_model": "vehicle model",
     "vehicle_plate": "license plate",
     "vehicle_vin": "VIN",
+    "crash_time": "crash time",
+    "ncic_number": "office code",
+    "officer_id": "officer number",
+    "report_number": "report number",
 }
 #: Fields the reply may echo back for the person to check. A driver license
 #: number is not echoed: it is an identifier the reply has no reason to carry.
-SHOWN_IN_REPLY = frozenset({"member_id", "group_number", "vehicle_year", "vehicle_make", "vehicle_model"})
+SHOWN_IN_REPLY = frozenset(
+    {
+        "member_id",
+        "group_number",
+        "vehicle_year",
+        "vehicle_make",
+        "vehicle_model",
+        "crash_time",
+        "ncic_number",
+        "officer_id",
+        "report_number",
+    }
+)
 MIN_LENGTH = 3
 
 
@@ -84,7 +111,7 @@ def _norm(text: str) -> str:
 
 
 def _has_label(line: str, labels: tuple[str, ...]) -> bool:
-    low = line.lower()
+    low = line.lower().replace("\u2019", "'")
     return any(re.search(rf"(?<![a-z]){re.escape(label)}(?![a-z])", low) for label in labels)
 
 
@@ -102,6 +129,21 @@ def value_beside_label(text: str, value: str, labels: tuple[str, ...]) -> bool:
             return True
         if i > 0 and _has_label(lines[i - 1], labels) and want not in _norm(lines[i - 1]):
             return True
+    return False
+
+
+def value_after_label(text: str, value: str, labels: tuple[str, ...]) -> bool:
+    """True when ``value`` sits on a line AFTER one of ``labels`` on that same
+    line (the ``SAME_LINE`` fields)."""
+    want = _norm(value)
+    if len(want) < MIN_LENGTH:
+        return False
+    for line in text.splitlines():
+        low = line.lower().replace("\u2019", "'")
+        for label in labels:
+            for hit in re.finditer(rf"(?<![a-z]){re.escape(label)}(?![a-z])", low):
+                if want in _norm(line[hit.end() :]):
+                    return True
     return False
 
 
@@ -153,7 +195,8 @@ def confirm(client: Any, matter_id: str, cited: Any, wanted: set[str]) -> Confir
             facts[field] = Fact(None, "", f"{words} (the cited document could not be read)")
             refused[field] = "the cited document could not be read"
             continue
-        if not value_beside_label(doc[0], value, LABELS[field]):
+        check = value_after_label if field in SAME_LINE else value_beside_label
+        if not check(doc[0], value, LABELS[field]):
             facts[field] = Fact(None, "", f"{words} (could not be confirmed on the cited document)")
             refused[field] = f"not found beside a {words} label on {doc[1]!r}"
             continue
@@ -163,4 +206,13 @@ def confirm(client: Any, matter_id: str, cited: Any, wanted: set[str]) -> Confir
     return Confirmed(facts=facts, shown=shown, refused=refused)
 
 
-__all__ = ["LABELS", "SHOWN_IN_REPLY", "WORDS", "Confirmed", "confirm", "value_beside_label"]
+__all__ = [
+    "LABELS",
+    "SAME_LINE",
+    "SHOWN_IN_REPLY",
+    "WORDS",
+    "Confirmed",
+    "confirm",
+    "value_after_label",
+    "value_beside_label",
+]

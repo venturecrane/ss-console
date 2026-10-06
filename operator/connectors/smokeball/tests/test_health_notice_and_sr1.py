@@ -776,3 +776,218 @@ def test_the_reply_block_is_line_for_line_and_never_ready_when_incomplete(monkey
     assert waiting.startswith(
         "The med pay ledger email is waiting on the file: [Not in the file: 1st party insurer email]"
     )
+
+
+# ---- the police report request (2026-10-06) -------------------------------------
+
+POL_CITY = (FORMS_DIR / "Form - Police Req City.docx").read_bytes()
+POL_CHP = (FORMS_DIR / "Form - Police Req CHP.docx").read_bytes()
+CARD_NORTH = "f-card-north"
+CARD_SOUTH = "f-card-south"
+#: Laid out as the real card transcribed on the A&P seat (labels and order),
+#: every value invented.
+_CHP_CARD = """[p.1]
+CALIFORNIA
+HIGHWAY PATROL
+Providing safety through service
+California Highway Patrol
+{office} Area
+{street}
+{city}
+916-555-0100
+CRASH REPORT INFORMATION
+CRASH DATE: 3/4/26
+CRASH TIME: 1430
+NCIC NUMBER: 9255
+OFFICER’S ID NUMBER: 012345
+YOUR VEHICLE CAN BE LOCATED AT:
+"""
+CARDS = {
+    CARD_NORTH: _CHP_CARD.format(office="North Sacramento", street="5109 Tyler St.", city="Sacramento, CA 95841"),
+    CARD_SOUTH: _CHP_CARD.format(office="South Sacramento", street="1 Example Rd.", city="Sacramento, CA 95899"),
+}
+
+
+@pytest.fixture
+def police_seat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    path = tmp_path / "customer.yaml"
+    path.write_text(
+        """form_letters:
+  preparer_title: 'Legal Assistant'
+  police_agencies:
+    sac_pd:
+      name: 'Sacramento City Police Department'
+      short: 'Sac PD'
+      reply_name: 'the Sacramento police'
+      kind: city
+      address: ['5770 Freeport Blvd., Ste 100', 'Sacramento, CA 95822']
+      channel: portal
+      route: 'pdcityofsacramentoca.nextrequest.com'
+      match: ['sacramento police', 'sac pd']
+    north_sac_chp:
+      name: 'North Sacramento CHP'
+      short: 'North Sac CHP'
+      reply_name: "the Highway Patrol's North Sacramento office"
+      kind: chp
+      address: ['5109 Tyler St.', 'Sacramento, CA 95841']
+      channel: mail
+      match: ['north sacramento', 'north sac']
+    citrus_heights:
+      name: 'Citrus Heights Police Department'
+      short: 'Citrus Heights PD'
+      reply_name: 'the Citrus Heights police'
+      kind: city
+      address: ['6315 Fountain Square Dr.', 'Citrus Heights, CA 95621']
+      channel: email
+      route: 'records@city.example'
+      match: ['citrus heights']
+    roseville:
+      name: 'Roseville Police Department'
+      short: 'Roseville PD'
+      reply_name: 'the Roseville police'
+      kind: city
+      address: ['1 Junction Blvd.', 'Roseville, CA 95678']
+      channel: portal
+      match: ['roseville']
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
+    return path
+
+
+def _police(
+    monkeypatch: pytest.MonkeyPatch, cited: Any = None, words: str | None = None, given: Any = None
+) -> tuple[_Record, dict[str, Any], str]:
+    record = _Record(texts={**CARDS})
+    monkeypatch.setattr(fl, "_client", lambda: record)
+    monkeypatch.setattr(fl, "SLEEP", lambda _s: None)
+    forms = {"police_request_city": POL_CITY, "police_request_chp": POL_CHP}
+    monkeypatch.setattr(
+        fl,
+        "_resolve_form",
+        lambda _c, spec: ResolvedTemplate(
+            bytes=forms[spec.document_class], name=spec.default_template, file_id="t", matter_id="lib", folder_id="f"
+        ),
+    )
+    from smokeball_connector import police_request
+
+    monkeypatch.setattr(police_request, "_resolve_form", fl._resolve_form)
+    out = fl.render_firm_form_letter(
+        MATTER, "police_report", "2026-10-06", cited=cited, agency_words=words, agency_given=given
+    )
+    text = "\n".join(document_paragraphs(record.uploads[-1][2])) if record.uploads else ""
+    return record, out, text
+
+
+def _card(file_id: str, **values: str) -> dict[str, Any]:
+    return {k: {"value": v, "file_id": file_id} for k, v in values.items()}
+
+
+def _reply_lines_pass(block: str) -> None:
+    import re
+
+    for line in block.split("\n\n"):
+        if line.startswith("Filed: "):
+            continue  # the firm's own file name, as its toolbar names it
+        assert "$" not in line and not re.search(r"\b[A-Z]{2,}\b", line), line
+        assert "\n" not in line
+
+
+def test_the_police_forms_carry_their_fields_and_no_preparer_link() -> None:
+    assert set(placeholders_in(POL_CITY)) == {
+        "date", "delivery_line", "agency_block", "client_name", "date_of_loss", "report_number",
+        "client_salutation", "preparer_email", "signer_name", "signer_title",
+    }  # fmt: skip
+    assert set(placeholders_in(POL_CHP)) == {
+        "date", "agency_block", "client_name", "date_of_loss", "crash_time", "ncic_number", "officer_id",
+        "client_salutation", "signer_name", "signer_title",
+    }  # fmt: skip
+    for blob in (POL_CITY, POL_CHP):
+        assert b"mailto" not in blob
+
+
+def test_the_crash_card_names_the_office_and_fills_the_chp_letter(
+    police_seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cited = _card(CARD_NORTH, crash_time="1430", ncic_number="9255", officer_id="012345")
+    record, out, text = _police(monkeypatch, cited=cited)
+    assert out["status"] == "filed" and record.uploads[0][1] == "Police Rept Req. North Sac CHP.docx"
+    for want in (
+        "North Sacramento CHP\n5109 Tyler St.\nSacramento, CA 95841",
+        "Our Client:\t\t\tDana Example",
+        "Date of Accident:\t\t03/04/2026",
+        "Crash Time:\t\t\t1430",
+        "NCIC Number:\t\t9255",
+        "Number:\t\t012345",
+        "that Ms. Example has retained",
+        "Alex Barnes",
+    ):
+        assert want in text, want
+    block = out["reply_block"]
+    assert "Mail it to the Highway Patrol's North Sacramento office." in block
+    assert "Check against the crash card: crash time 1430, office code 9255, officer number 012345." in block
+    _reply_lines_pass(block)
+
+
+def test_a_card_value_beside_the_wrong_label_is_never_accepted(
+    police_seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cited = _card(CARD_NORTH, crash_time="9255", ncic_number="9255", officer_id="012345")
+    _r, out, text = _police(monkeypatch, cited=cited)
+    assert "Crash Time:\t\t\t[Not in the file: crash time (could not be confirmed on the cited document)]" in text
+    assert "NCIC Number:\t\t9255" in text
+
+
+def test_another_office_never_maps_to_north_sacramento(
+    police_seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cited = _card(CARD_SOUTH, crash_time="1430")
+    record, out, _t = _police(monkeypatch, cited=cited)
+    assert out["status"] == "needs_agency" and record.uploads == []
+    _reply_lines_pass(out["reply_block"])
+    given = {"name": "South Sacramento Area", "address": "1 Example Rd.\nSacramento, CA 95899"}
+    record, out, text = _police(monkeypatch, cited=cited, given=given)
+    assert out["status"] == "filed" and "South Sacramento Area\n1 Example Rd.\nSacramento, CA 95899" in text
+    assert out["agency"]["source"] == "as printed on the crash card"
+    assert "the letter uses the agency as printed on the crash card" in out["reply_block"]
+
+
+def test_a_city_department_named_by_the_sender_goes_by_its_portal(
+    police_seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record, out, text = _police(monkeypatch, words="please request it from Sac PD")
+    assert record.uploads[0][1] == "Police Rept Req. Sac PD.docx"
+    paras = [p.strip() for p in text.split("\n") if p.strip()]
+    i = paras.index("Attn: Accident Reports")
+    assert "VIA FAX" not in text and paras[i + 1] == "Sacramento City Police Department"  # name only for a portal
+    assert paras[i + 2].startswith("RE:")
+    assert "Report#:\t\t\t[Not in the file: report number]" in text
+    assert "please email the records to alex@firm.example ASAP" in text
+    block = out["reply_block"]
+    assert (
+        "Requests to the Sacramento police go through the records portal: pdcityofsacramentoca.nextrequest.com."
+        in block
+    )
+    assert "The letter has a blank for the report number." in block
+    _reply_lines_pass(block)
+
+
+def test_an_email_agency_and_an_ambiguous_one(
+    police_seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _r, out, text = _police(monkeypatch, words="Citrus Heights")
+    assert "Citrus Heights Police Department\n6315 Fountain Square Dr." in text
+    assert "Email it to the Citrus Heights police at records@city.example" in out["reply_block"]
+    record, out, _t = _police(monkeypatch, words="Roseville or Citrus Heights")
+    assert out["status"] == "agency_unclear" and record.uploads == []
+    _reply_lines_pass(out["reply_block"])
+
+
+def test_no_agency_anywhere_files_nothing_and_asks(
+    police_seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record, out, _t = _police(monkeypatch)
+    assert out["status"] == "needs_agency" and record.uploads == []
+    assert out["reply_block"].startswith("Needs a word from you: which agency took the report?")
+    _reply_lines_pass(out["reply_block"])
