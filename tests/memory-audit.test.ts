@@ -513,7 +513,10 @@ describe('memory-audit: the SessionStart mode', () => {
     // An orphan speaks, and still does not fail the session.
     writeStore(dir, { 'orphan.md': 'reachable from nothing\n' })
     const loud = run(['--session-start'], { SS_MEMORY_DIR: dir })
-    expect(loud.stderr).toContain('orphan')
+    // On STDOUT: Claude Code injects a SessionStart hook's stdout into the
+    // session; stderr on exit 0 never reaches the model.
+    expect(loud.stdout).toContain('orphan')
+    expect(loud.stderr).toBe('')
     expect(loud.status).toBe(0)
   })
 })

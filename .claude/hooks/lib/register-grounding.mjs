@@ -131,8 +131,62 @@ export function dateQuoteForms(due) {
   ]
 }
 
-/** Does the date quote anchor the due date in the source's own words? */
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * Does the date quote anchor the due date in the source's own words?
+ *
+ * This is the only guard on an obligation's due_at, and a dated row alerts the
+ * Captain, so it must not be satisfied by a near miss (review 2026-10-06 N7).
+ * An earlier version used plain substring containment, under which "october 1"
+ * anchored inside "october 15" and a year-less form anchored any year.
+ *
+ * The rule, stated precisely:
+ *
+ * 1. Word boundaries. A form matches only where it is not glued to a letter or
+ *    digit on either side. So "october 1" does not match inside "october 15",
+ *    and "10/15/2026" does not match inside "110/15/20260".
+ * 2. Adjacent year must agree. When a matched form carries no year and the
+ *    quote states a year right after it ("october 15, 2025", "15 october 2025"),
+ *    that year must equal the due date's year, or this occurrence does not
+ *    anchor the date.
+ * 3. A year-less match is refused when the quote names a conflicting year
+ *    elsewhere. If the quote names any four-digit year and none of them is the
+ *    due date's year, a year-less match is refused: the quote is about a
+ *    different year, and "october 15" alone cannot be read as this one. A quote
+ *    that names no year at all still anchors on the month and day, because
+ *    letters routinely omit the current year.
+ *
+ * Each occurrence is judged on its own; the quote passes if any occurrence
+ * passes. A non-ISO --due (a recurring anchor like "the 15th") keeps the
+ * word-boundary match and skips the year rules, since it names no year.
+ */
 export function dateQuoteAnchorsDate(dateQuote, due) {
   const quote = normalize(dateQuote)
-  return dateQuoteForms(due).some((form) => quote.includes(form))
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalize(due))
+  const dueYear = iso ? iso[1] : null
+  const yearsNamed = quote.match(/(?<![\p{L}\p{N}])(?:19|20)\d{2}(?![\p{L}\p{N}])/gu) ?? []
+  const conflictingYearElsewhere =
+    dueYear !== null && yearsNamed.length > 0 && !yearsNamed.includes(dueYear)
+
+  return dateQuoteForms(due).some((form) => {
+    const formHasYear = dueYear !== null && form.includes(dueYear)
+    const pattern = new RegExp(
+      `(?<![\\p{L}\\p{N}])${escapeRegExp(form)}(?![\\p{L}\\p{N}])`,
+      'gu',
+    )
+    for (const match of quote.matchAll(pattern)) {
+      if (formHasYear || dueYear === null) return true
+      const after = quote.slice(match.index + match[0].length)
+      const adjacent = /^,? ?(\d{4})(?!\d)/.exec(after)
+      if (adjacent) {
+        if (adjacent[1] === dueYear) return true
+        continue
+      }
+      if (!conflictingYearElsewhere) return true
+    }
+    return false
+  })
 }
