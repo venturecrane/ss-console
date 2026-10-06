@@ -1,7 +1,7 @@
 ---
 name: file-work-requests
 description: >-
-  Files rep letters, notices, DMV forms, wage letters. It does the file work a paralegal asks for on one
+  Files rep letters, notices, DMV forms, Medicals rows. It does the file work a paralegal asks for on one
   named matter: makes the firm's 1st and 3rd party representation letters and
   its health-insurer notice on the firm's own forms and files them, prefills the
   state's SR1 for the client to sign, and puts the client's treating facilities
@@ -247,8 +247,9 @@ the asker's own mailbox. Nothing is filed and the Operator sends nothing.
 3. `incomplete`: do not call it ready. Reply `The med pay ledger email is
 waiting on the file: <unfilled, comma-separated>.` and the block with its
    markers in place.
-4. A med pay ledger already in the file (a document named with "ledger" and
-   "med pay"/"medpay"): name the latest one by name and date in the same reply.
+4. Look in the matter's documents (`get_files_on_matter`) for a med pay
+   ledger already there (a name with "ledger" and "med pay"/"medpay"): name
+   the latest one by name and date in the same reply.
 
 ### 2h. The wage loss letter
 
@@ -260,8 +261,10 @@ waiting on the file: <unfilled, comma-separated>.` and the block with its
 2. `render_firm_form_letter(matter_id, "wage_loss", date, employer=...)`.
 3. `needs_employer`: file nothing; reply `Needs a word from you: who is her
 employer, with their mailing address?` Her answer is a new request.
+   `employer_unclear`: file nothing; reply `Needs a word from you: <reason>.`
 4. `filed`: reply `Filed: Wage Loss Letter.docx on matter <matter-number>,
-with the verification page for the employer to complete.` then its gaps.
+with the verification page for the employer to complete. Addressed to:
+<employer_used, lines joined with commas>.` then its gaps.
    When `facts_used.employer_name` says "as the sender wrote it", add `The
 matter has no Employer on her role; this letter uses the employer from
 your email.`

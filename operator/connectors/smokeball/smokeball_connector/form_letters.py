@@ -311,18 +311,36 @@ def _address_lines(address: str) -> str:
     return f"{match['line1'].strip()}\n{match['city'].strip()}, {match['state'].upper()} {match['zip']}"
 
 
+class EmployerUnclear(Exception):
+    """The matter names an Employer the letter cannot use: several of them,
+    or one whose contact reads back with no name. Never read as "none"."""
+
+
 def _employer(client: Any, matter_id: str, given: dict[str, Any] | None) -> tuple[Fact, Fact] | None:
     """The employer's name and address block: the client role's Employer
-    relationship first, else as the person wrote it; None with neither."""
+    relationship first, else as the person wrote it; None with neither.
+    Raises ``EmployerUnclear`` when the matter's Employer cannot be used, so
+    an unreadable or ambiguous one never falls through to the sender's."""
     parties = facts.read_parties(client, matter_id)
-    contact_id = parties.related(True, "Employer")
-    if contact_id:
-        contact = facts.fetch_contact(client, contact_id)
+    named = {
+        facts._contact_of(rel)
+        for role in parties.roles
+        if role.get("isClient") is True
+        for rel in role.get("relationships") or []
+        if isinstance(rel, dict) and str(rel.get("name") or "").strip().lower() == "employer"
+    }
+    named.discard(None)
+    if len(named) > 1:
+        names = sorted(facts.contact_name(facts.fetch_contact(client, cid)) or "an unnamed contact" for cid in named)
+        raise EmployerUnclear(f"the client's role names {len(named)} Employers ({', '.join(names)}); say which")
+    if named:
+        contact = facts.fetch_contact(client, next(iter(named)))
         name = facts.contact_name(contact) if contact else None
-        if name:
-            src = "the client role's Employer relationship"
-            address = facts.contact_address(contact)
-            return Fact(name, src), (Fact(address, src) if address else Fact(None, "", "employer's mailing address"))
+        if not name:
+            raise EmployerUnclear("the client's role names an Employer whose contact has no name")
+        src = "the client role's Employer relationship"
+        address = facts.contact_address(contact)
+        return Fact(name, src), (Fact(address, src) if address else Fact(None, "", "employer's mailing address"))
     if not given:
         return None
     src = "as the sender wrote it (no Employer on the matter)"
@@ -622,7 +640,15 @@ def _fill_and_file(
             found = _fax_facts(client, matter, record if isinstance(record, dict) else {}, spec, when)
         elif spec.facts_kind == "wage":
             record = client.get(f"/matters/{matter}")
-            wage = _wage_facts(client, matter, record if isinstance(record, dict) else {}, when, employer)
+            try:
+                wage = _wage_facts(client, matter, record if isinstance(record, dict) else {}, when, employer)
+            except EmployerUnclear as exc:
+                return {
+                    "status": "employer_unclear",
+                    "fileId": None,
+                    "matterId": matter,
+                    "reason": f"{exc}; nothing was filed",
+                }
             if wage is None:
                 return {
                     "status": "needs_employer",
@@ -664,6 +690,8 @@ def _fill_and_file(
         "same_name_on_matter": same,
         "sha256": hashlib.sha256(filled.data).hexdigest(),
     }
+    if "employer_name" in found:
+        out["employer_used"] = values["employer_address"]  # the reply shows the sender what the letter is addressed to
     if confirmed is not None:
         out["card_values_to_check"] = {cited_facts.WORDS[k]: v for k, v in confirmed.shown.items() if k in used}
         out["cited_refused"] = {cited_facts.WORDS.get(k, k): why for k, why in confirmed.refused.items()}

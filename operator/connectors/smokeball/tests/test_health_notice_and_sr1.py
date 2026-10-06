@@ -733,3 +733,30 @@ def test_a_ledger_email_missing_its_facts_is_incomplete(monkeypatch: pytest.Monk
         "[Not in the file: 1st party insurer email]",
         "[Not in the file: 1st party claim number]",
     ]
+
+
+def test_an_unusable_employer_on_file_never_reads_as_none(firm_seat: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Nameless(_Employed):
+        def get(self, path: str, **params: Any) -> Any:
+            if path == f"/contacts/{EMP}":
+                return {"id": EMP, "company": {}}
+            return super().get(path, **params)
+
+    class _Two(_Employed):
+        def get(self, path: str, **params: Any) -> Any:
+            if path == f"/matters/{MATTER}/roles":
+                out = super().get(path, **params)
+                out["roles"][0]["relationships"].append({"id": "rel-e2", "name": "Employer", "contactId": "c-emp2"})
+                return out
+            if path == "/contacts/c-emp2":
+                return {"id": "c-emp2", "company": {"name": "Second Job LLC"}}
+            return super().get(path, **params)
+
+    for record, why in ((_Nameless(), "no name"), (_Two(), "2 Employers (Acme Freight Co, Second Job LLC)")):
+        out, _t = _wage(record, monkeypatch, {"name": "Beta Bakery"})  # the sender's never replaces it
+        assert out["status"] == "employer_unclear" and why in out["reason"] and record.uploads == []
+
+
+def test_the_result_shows_whom_the_letter_is_addressed_to(firm_seat: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    out, _t = _wage(_Employed(), monkeypatch)
+    assert out["employer_used"] == "Acme Freight Co\n100 Dock Rd\nPortville, CA 95001"
