@@ -9,7 +9,8 @@ the alternative is trusting a payload's provenance:
    matches every other field (an edited order is refused, nothing sent);
 2. the matter number, client name and SSN last four re-read from Smokeball still
    equal what the act line showed;
-3. the HIPAA file is still on the matter and is a PDF the vendor will take.
+3. the HIPAA file is still on the matter and is a PDF the vendor will take, or,
+   for an ``e_auth`` order, the signing request still goes where the order said.
 
 Then ``_new`` -> PATCH -> upload -> validate -> finish. The client's identifiers
 go from the Smokeball contact straight into the request body and appear in no
@@ -23,6 +24,7 @@ from typing import Any
 
 from .records_vendor import MAX_UPLOAD_BYTES, RecordsVendorApiError, scrub
 from .records_orders import (
+    AUTH_MODES,
     LOCATION_KEYS,
     MAX_CUSTODIAN_FEE,
     MAX_LOCATIONS,
@@ -73,6 +75,12 @@ def require_order(order: Any) -> dict[str, Any]:
         raise _refuse("the order's language or certification setting is not one the vendor takes.")
     if not isinstance(order["vendor_name"], str) or not 0 < len(order["vendor_name"]) <= 60:
         raise _refuse("the order's vendor name is missing or too long.")
+    if order["authorization"] not in AUTH_MODES:
+        raise _refuse("the order's authorization mode is not one the vendor takes.")
+    if order["authorization"] == "upload" and not order["hipaa_file_id"]:
+        raise _refuse("an upload order needs the HIPAA authorization file.")
+    if order["authorization"] == "e_auth" and (order["hipaa_file_id"] or not order["esign_to"]):
+        raise _refuse("an e-authorization order carries the signing address and no file.")
     if order["order_ref"] != order_ref(order):
         raise _refuse("the order was changed after it was prepared; prepare it again.")
     return order
@@ -109,7 +117,7 @@ def _matter_body(order: dict[str, Any]) -> dict[str, Any]:
         "order_type": "authorization",
         "order_certificate": order["order_certificate"],
         "retrieval_type": "default",
-        "use_yipaa_form": False,
+        "use_yipaa_form": order["authorization"] == "e_auth",
         "pre_approved_custodian_fee": float(order["pre_approved_custodian_fee"]),
     }
 
@@ -133,6 +141,8 @@ def _recheck(client: Any, order: dict[str, Any]) -> Any:
     shown = (order["matter_number"], order["client_name"], order["ssn_last4"])
     if (matter["number"], facts.full_name, facts.ssn_last4) != shown:
         raise _refuse("the matter or client in Smokeball no longer matches what the order showed; prepare it again.")
+    if order["authorization"] == "e_auth" and facts.esign_label != order["esign_to"]:
+        raise _refuse("the client's email or phone changed since the order was shown; prepare it again.")
     return facts
 
 
@@ -158,11 +168,12 @@ def place(client: Any, yc: Any, order: Any) -> dict[str, Any]:
     """Place the order. Raises on every failure; returns only when finished."""
     spec = require_order(order)
     facts = _recheck(client, spec)
-    filename, blob = _hipaa_pdf(client, spec)
+    e_auth = spec["authorization"] == "e_auth"
+    filename, blob = ("", b"") if e_auth else _hipaa_pdf(client, spec)
     body = {
         "order_by_email": spec["order_by_email"],
         "matter": _matter_body(spec),
-        "patient": facts.body(spec["language"]),
+        "patient": facts.body(spec["language"], spec["authorization"]),
     }
     try:
         created = yc.create_order(body)
@@ -175,7 +186,8 @@ def place(client: Any, yc: Any, order: Any) -> dict[str, Any]:
         raise OrderNotPlaced("The vendor accepted the order but returned no order id. Nothing was finished.")
     locations = [_location_body(loc) for loc in spec["locations"]]
     patched = _vendor_step("locations", oid, lambda: yc.patch_order(oid, {"locations": locations}))
-    _vendor_step("HIPAA upload", oid, lambda: yc.upload(oid, filename, blob, "completed_hipaa_form"))
+    if not e_auth:
+        _vendor_step("HIPAA upload", oid, lambda: yc.upload(oid, filename, blob, "completed_hipaa_form"))
     validated = _vendor_step("validation", oid, lambda: yc.validate(oid))
     finished = _vendor_step("finish", oid, lambda: yc.finish(oid))
     return {
