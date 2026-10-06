@@ -35,6 +35,12 @@ to come from one of the firm's administrators; nothing was ordered.`
 - **Never pick for her.** A facility that matches several locations in the vendor's
   directory, or none, is asked about. So is a matter with several authorization
   files.
+- **How the authorization travels is the firm's setting.** With
+  `records_orders.authorization: e_auth` (A&P), no file is used: the vendor emails
+  the client its own authorization to sign, and the order's `esign_to` shows
+  where, masked. Say so in the reply: `<client> will get an email from the
+records vendor to sign the authorization; the records are requested once it is
+signed.` Never ask her for an authorization file on an e_auth seat.
 - **Never change the order.** Pass `order` to `place_records_order` exactly as
   `prepare_records_order` returned it. An edited order is refused.
 
