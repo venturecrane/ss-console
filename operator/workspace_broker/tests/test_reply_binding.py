@@ -106,6 +106,8 @@ class FakeMailbox:
         self.present = True
         self.post_status: int | None = None
         self.fail_reply_source_get = False
+        self.post_lands_anyway = False
+        self.inbox_status: int | None = None
 
     def __call__(self, request, timeout=None):
         url = request.full_url
@@ -114,6 +116,8 @@ class FakeMailbox:
             return _Response(json.dumps({"access_token": "tok", "expires_in": 3600}))
         decoded = urllib.parse.unquote(url)
         if request.method == "GET" and "/mailFolders/inbox?" in url:
+            if self.inbox_status is not None:
+                raise urllib.error.HTTPError(url, self.inbox_status, "x", {}, None)  # type: ignore[arg-type]
             return _Response(json.dumps({"id": INBOX}))
         if request.method == "GET" and "/mailFolders/sentitems/messages" in url:
             if "conversationId eq" in decoded:
@@ -131,6 +135,10 @@ class FakeMailbox:
             return _Response(json.dumps(self.message))
         if request.method == "POST":
             if self.post_status is not None:
+                if self.post_lands_anyway:
+                    self.sent.append(
+                        {"id": "S", "conversationId": "CONV-1", "sentDateTime": _iso(datetime.now(timezone.utc))}
+                    )
                 raise urllib.error.HTTPError(url, self.post_status, "x", {}, None)  # type: ignore[arg-type]
             self.sent.append({"id": "S", "conversationId": "CONV-1", "sentDateTime": _iso(NOW)})
             return _Response("")
@@ -437,6 +445,40 @@ def test_a_transport_failure_at_the_post_keeps_the_claim_as_unknown(tmp_path: Pa
         _send(_broker(tmp_path, box), MSG)
 
 
+def test_a_graph_4xx_at_the_post_releases_the_claim(tmp_path: Path) -> None:
+    """Graph refused the request (4xx) and nothing reached Sent Items: the one
+    reply is not silently spent. FALSIFIER: settle every failure 'unknown'."""
+    box = FakeMailbox()
+    box.post_status = 403
+    broker = _broker(tmp_path, box)
+    with pytest.raises(Exception):
+        _send(broker, MSG)
+    assert not bound_replies.claimed(broker.audit_db_path, f"message:{IMID}")
+    assert "send_released" in [r["outcome"] for r in _rows(broker, "REPLY_BINDING")]
+    box.post_status = None
+    assert _send(_broker(tmp_path, box), MSG)["recipients"] == [ADMIN]
+
+
+def test_a_4xx_whose_reply_reached_sent_items_stays_spent(tmp_path: Path) -> None:
+    box = FakeMailbox()
+    box.post_status = 400
+    box.post_lands_anyway = True
+    broker = _broker(tmp_path, box)
+    with pytest.raises(Exception):
+        _send(broker, MSG)
+    assert bound_replies.claimed(broker.audit_db_path, f"message:{IMID}")
+    assert "send_unknown" in [r["outcome"] for r in _rows(broker, "REPLY_BINDING")]
+
+
+def test_a_mailbox_that_cannot_be_read_at_bind_time_is_audited(tmp_path: Path) -> None:
+    box = FakeMailbox()
+    box.inbox_status = 503
+    broker = _broker(tmp_path, box)
+    with pytest.raises(Exception):
+        _call(broker, "msgraph_reply_bind", MSG)
+    assert "bind_error" in [r["outcome"] for r in _rows(broker, "REPLY_BINDING")]
+
+
 # -- demand jobs
 
 
@@ -462,6 +504,67 @@ def test_failed_then_resumed_then_delivered_reports_both(tmp_path: Path) -> None
     ledger.record(job, "delivered", {})
     _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})
     assert len(box.replies()) == 2
+
+
+def test_a_resumed_job_that_fails_again_gets_its_reply(tmp_path: Path) -> None:
+    """One reply per (attempt, outcome). FALSIFIER: key on the state alone and
+    the second failure is refused as already replied."""
+    job = _job(tmp_path, ["failed"])
+    box = FakeMailbox()
+    _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})
+    ledger = DemandLedger(str(tmp_path / "audit.db"), tmp_path / "q")
+    ledger.record(job, "running", {})
+    ledger.record(job, "failed", {"reason": "again"})
+    _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})
+    assert len(box.replies()) == 2
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})
+    assert len(box.replies()) == 2
+
+
+def test_the_ledgers_reply_mark_is_honored(tmp_path: Path) -> None:
+    """The job record already shows this outcome replied to (a reply sent by an
+    earlier broker, say): nothing is sent and the binding claim is given back.
+    FALSIFIER: ignore mark_replied's return value."""
+    job = _job(tmp_path, ["running", "delivered"])
+    DemandLedger(str(tmp_path / "audit.db"), tmp_path / "q").mark_replied(job, "1:delivered")
+    box = FakeMailbox()
+    broker = _broker(tmp_path, box)
+    with pytest.raises(Exception):
+        _send(broker, {"kind": "demand_job", "job_id": job})
+    assert box.replies() == []
+    assert not bound_replies.claimed(broker.audit_db_path, f"demand_job:{job}:1:delivered")
+
+
+def test_a_ledger_write_that_raises_gives_the_claim_back(tmp_path: Path, monkeypatch) -> None:
+    """mark_replied raises (a locked or broken DB): nothing is sent, and the
+    binding claim is released so a retry can still reply. FALSIFIER: drop the
+    try/release and the claim stays spent with nothing sent."""
+    job = _job(tmp_path, ["running", "delivered"])
+    box = FakeMailbox()
+
+    def boom(self, job_id, key="reply"):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(DemandLedger, "mark_replied", boom)
+    broker = _broker(tmp_path, box)
+    with pytest.raises(sqlite3.OperationalError):
+        _send(broker, {"kind": "demand_job", "job_id": job})
+    assert box.replies() == []
+    assert not bound_replies.claimed(broker.audit_db_path, f"demand_job:{job}:1:delivered")
+    monkeypatch.undo()
+    assert _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})["recipients"] == [ADMIN]
+
+
+def test_a_released_demand_reply_clears_the_ledger_mark(tmp_path: Path) -> None:
+    job = _job(tmp_path, ["running", "delivered"])
+    box = FakeMailbox()
+    box.post_status = 403
+    with pytest.raises(Exception):
+        _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})
+    assert DemandLedger(str(tmp_path / "audit.db"), tmp_path / "q").read(job)["reply_key"] is None
+    box.post_status = None
+    assert _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})["recipients"] == [ADMIN]
 
 
 @pytest.mark.parametrize("path", [[], ["running"]])

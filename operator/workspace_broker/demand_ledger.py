@@ -33,11 +33,26 @@ THE WAKE (the runner's completion, for the DELIVER turn): ``job_id``, ``kind:
 
 THE ALLOWANCE is a COUNT of demands per billing cycle (the firm's authored
 ``demand_allowance_per_cycle``), on the chronology cycle's anchor. A job counts
-once it recorded cents, whatever it ended as, and a job that ended before any
-paid stage (a premise failure, a cap estimate over the limit) does not.
+while it is IN FLIGHT (submitted, running: the slot is reserved, so two
+submits cannot both take the last one) and once it recorded cents, whatever it
+ended as. HELD is FINAL in the runner (nothing drives held -> failed), so a
+held job reserves nothing and does not block its matter: only its paid cents
+count, and a new request on the matter is a new job. A job that ended before any paid stage (a premise failure, a cap
+estimate over the limit) and paid nothing does not.
 
-THE REPLY is once per job, durably: ``mark_replied`` is a compare-and-set on
-``reply_sent_at``, so a restart or a second wake can never send a second reply.
+SUBMIT IS ATOMIC (review 2026-10-06). ``submit`` re-checks, inside one
+``BEGIN IMMEDIATE`` transaction, that the request email has no job yet
+(``request_ref`` is UNIQUE), that no demand is unfinished on the matter, and
+that the cycle has a demand left, so two concurrent submits cannot both pass.
+
+SPEND is recorded WHEN IT IS WRITTEN: every ``record`` that raises ``cents``
+appends the increase to ``demand_spend`` with its own timestamp, and a month's
+spend is the sum of the increases inside it (``spend_between``).
+
+THE REPLY is once per (attempt, outcome): ``mark_replied`` is a compare-and-set
+on ``reply_key``, so a restart or a second wake can never send a second reply
+for the same outcome, while a job that fails, is resumed (``attempt`` + 1) and
+ends again gets the one reply its new outcome is owed.
 """
 
 from __future__ import annotations
@@ -89,10 +104,24 @@ CREATE_SQL = (
     "reason TEXT, "
     "folder_id TEXT, "
     "delivery_json TEXT, "
-    "reply_sent_at TEXT"
+    "reply_sent_at TEXT, "
+    "attempt INTEGER NOT NULL DEFAULT 1, "
+    "reply_key TEXT"
     ")"
 )
 CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_demand_jobs_created ON demand_jobs(created_at)"
+#: One job per request email (the idempotency key).
+CREATE_UNIQUE_REF_SQL = "CREATE UNIQUE INDEX IF NOT EXISTS uq_demand_jobs_request_ref ON demand_jobs(request_ref)"
+#: Columns added after the first version of the table; each tolerated when present.
+ALTERS = (
+    "ALTER TABLE demand_jobs ADD COLUMN attempt INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE demand_jobs ADD COLUMN reply_key TEXT",
+)
+CREATE_SPEND_SQL = (
+    "CREATE TABLE IF NOT EXISTS demand_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
+)
+CREATE_SPEND_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_demand_spend_at ON demand_spend(at)"
+IN_FLIGHT = ("submitted", "running")
 PROJECTION = (
     "id",
     "created_at",
@@ -111,6 +140,16 @@ PROJECTION = (
 
 class EnvelopeError(ValueError):
     """A request the ledger will not queue. The message names the field."""
+
+
+class SubmitRefused(ValueError):
+    """A valid request the ledger will not queue NOW (a duplicate, a job
+    already on the matter, the cycle's allowance spent). ``job_id`` names the
+    job it collided with, when there is one."""
+
+    def __init__(self, message: str, job_id: str | None = None) -> None:
+        super().__init__(message)
+        self.job_id = job_id
 
 
 def digest(obj: Any) -> str:
@@ -178,7 +217,15 @@ class DemandLedger:
         conn = self._connect()
         try:
             conn.execute(CREATE_SQL)
+            for alter in ALTERS:
+                try:
+                    conn.execute(alter)
+                except sqlite3.OperationalError:
+                    pass  # the column is already there
             conn.execute(CREATE_INDEX_SQL)
+            conn.execute(CREATE_UNIQUE_REF_SQL)
+            conn.execute(CREATE_SPEND_SQL)
+            conn.execute(CREATE_SPEND_INDEX_SQL)
             conn.commit()
         finally:
             conn.close()
@@ -190,16 +237,15 @@ class DemandLedger:
         now: str | None = None,
         anchor_day: int | None = None,
         effective_from: str | None = None,
+        exclude: str = "",
     ) -> dict[str, Any]:
-        """Demands used and remaining this cycle. Unauthored is ``authored:
-        False`` with nothing remaining: the fail-closed answer."""
+        """Demands used and remaining this cycle, without ``exclude`` (the job
+        asking, so it never counts against its own slot). Unauthored is
+        ``authored: False`` with nothing remaining: the fail-closed answer."""
         window = cycle_window(now or _iso_utc(), anchor_day, effective_from)
         conn = self._connect()
         try:
-            used = conn.execute(
-                "SELECT COUNT(*) AS n FROM demand_jobs WHERE created_at >= ? AND created_at < ? AND cents > 0",
-                (window.start, window.end),
-            ).fetchone()["n"]
+            used = self._used(conn, window.start, window.end, exclude)
         finally:
             conn.close()
         out = {"unit": "demands", "used": used, "cycle": window.label, "cycle_start": window.start}
@@ -207,13 +253,33 @@ class DemandLedger:
             return {**out, "allowance": None, "remaining": 0, "authored": False}
         return {**out, "allowance": allowance, "remaining": max(0, allowance - used), "authored": True}
 
+    @staticmethod
+    def _used(conn: sqlite3.Connection, start: str, end: str, exclude: str = "") -> int:
+        return conn.execute(
+            "SELECT COUNT(*) AS n FROM demand_jobs WHERE created_at >= ? AND created_at < ? AND id != ? "
+            "AND (state IN ('submitted','running') OR cents > 0)",
+            (start, end, exclude),
+        ).fetchone()["n"]
+
+    def spend_between(self, start: str, end: str, exclude: str = "") -> int:
+        """Cents WRITTEN in [start, end), without ``exclude``'s."""
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT COALESCE(SUM(cents), 0) AS c FROM demand_spend WHERE at >= ? AND at < ? AND job_id != ?",
+                (start, end, exclude),
+            ).fetchone()
+            return int(row["c"])
+        finally:
+            conn.close()
+
     # -- intake ------------------------------------------------------------
     def active_on_matter(self, matter_id: str) -> str | None:
         """An unfinished demand job on this matter, which a second submit would duplicate."""
         conn = self._connect()
         try:
             row = conn.execute(
-                "SELECT id FROM demand_jobs WHERE matter_id=? AND state NOT IN ('delivered','failed') "
+                "SELECT id FROM demand_jobs WHERE matter_id=? AND state NOT IN ('delivered','failed','held') "
                 "ORDER BY created_at DESC LIMIT 1",
                 (matter_id,),
             ).fetchone()
@@ -221,13 +287,46 @@ class DemandLedger:
         finally:
             conn.close()
 
-    def submit(self, envelope: dict[str, Any]) -> str:
-        """Row, then queue file, so an envelope on disk always has its row."""
+    def submit(
+        self,
+        envelope: dict[str, Any],
+        *,
+        allowance: int | None = None,
+        anchor_day: int | None = None,
+        effective_from: str | None = None,
+    ) -> str:
+        """Row, then queue file, so an envelope on disk always has its row.
+
+        The duplicate, the matter and (when ``allowance`` is given) the cycle
+        are re-checked inside one ``BEGIN IMMEDIATE``, so concurrent submits
+        serialize on the database lock and only one can take a slot.
+        ``SubmitRefused`` when one of them says no."""
         env = validate_envelope(envelope)
         job_id = _ulid()
         now = _iso_utc()
         conn = self._connect()
         try:
+            conn.execute("BEGIN IMMEDIATE")
+            dup = conn.execute("SELECT id FROM demand_jobs WHERE request_ref=?", (env["request_ref"],)).fetchone()
+            if dup is not None:
+                conn.rollback()
+                raise SubmitRefused(f"that request email already queued demand job {dup['id']}", dup["id"])
+            twin = conn.execute(
+                "SELECT id FROM demand_jobs WHERE matter_id=? AND state NOT IN ('delivered','failed','held') "
+                "ORDER BY created_at DESC LIMIT 1",
+                (env["matter"]["id"],),
+            ).fetchone()
+            if twin is not None:
+                conn.rollback()
+                raise SubmitRefused(f"a demand on this matter is already underway as job {twin['id']}", twin["id"])
+            if allowance is not None:
+                window = cycle_window(now, anchor_day, effective_from)
+                used = self._used(conn, window.start, window.end)
+                if used >= allowance:
+                    conn.rollback()
+                    raise SubmitRefused(
+                        f"this cycle's demand allowance is spent ({used} of {allowance} in {window.label})"
+                    )
             conn.execute(
                 "INSERT INTO demand_jobs (id, created_at, updated_at, state, matter_id, matter_number, "
                 "file_to_matter_id, requester, request_ref, envelope_digest) VALUES (?,?,?,?,?,?,?,?,?,?)",
@@ -280,19 +379,32 @@ class DemandLedger:
             raise ValueError(f"unknown state {state!r}")
         conn = self._connect()
         try:
-            cur = conn.execute("SELECT state FROM demand_jobs WHERE id=?", (job_id,)).fetchone()
+            conn.execute("BEGIN IMMEDIATE")
+            cur = conn.execute("SELECT state, cents FROM demand_jobs WHERE id=?", (job_id,)).fetchone()
             if cur is None:
+                conn.rollback()
                 raise ValueError(f"no such job {job_id}")
             if state != cur["state"] and state not in _ALLOWED_NEXT[cur["state"]]:
+                conn.rollback()
                 raise ValueError(f"illegal transition {cur['state']} -> {state}")
             cents = fields.get("cents")
             if "cents" in fields and (not isinstance(cents, int) or isinstance(cents, bool) or cents < 0):
+                conn.rollback()
                 raise ValueError("cents must be a non-negative int")
+            now = _iso_utc()
+            if isinstance(cents, int) and cents > int(cur["cents"] or 0):
+                # The spend is dated when it is WRITTEN, not when the job began.
+                conn.execute(
+                    "INSERT INTO demand_spend (job_id, at, cents) VALUES (?,?,?)",
+                    (job_id, now, cents - int(cur["cents"] or 0)),
+                )
+            resumed = cur["state"] == "failed" and state == "running"
             delivery = fields.get("delivery")
             # One fixed statement: each optional column is written only when
             # its flag is set, so nothing is composed into the SQL text.
             conn.execute(
                 "UPDATE demand_jobs SET state=?, updated_at=?, "
+                "attempt=attempt + CASE WHEN ? THEN 1 ELSE 0 END, "
                 "cents=CASE WHEN ? THEN ? ELSE cents END, "
                 "reason=CASE WHEN ? THEN ? ELSE reason END, "
                 "folder_id=CASE WHEN ? THEN ? ELSE folder_id END, "
@@ -300,7 +412,8 @@ class DemandLedger:
                 "WHERE id=?",
                 (
                     state,
-                    _iso_utc(),
+                    now,
+                    resumed,
                     "cents" in fields,
                     cents,
                     "reason" in fields,
@@ -313,20 +426,37 @@ class DemandLedger:
                 ),
             )
             conn.commit()
-            return dict(conn.execute("SELECT * FROM demand_jobs WHERE id=?", (job_id,)).fetchone())
+            row = dict(conn.execute("SELECT * FROM demand_jobs WHERE id=?", (job_id,)).fetchone())
+            row["prev_state"] = cur["state"]
+            return row
         finally:
             conn.close()
 
-    def mark_replied(self, job_id: str) -> bool:
-        """True exactly once per job: the compare-and-set the completion reply
-        takes before it sends. False when a reply was already sent (or no job)."""
+    def mark_replied(self, job_id: str, key: str = "reply") -> bool:
+        """True exactly once per (job, key): the compare-and-set the completion
+        reply takes AT its send. ``key`` is the outcome being reported (the
+        reply binding uses ``<attempt>:<state>``). False when that outcome was
+        already replied to (or no job)."""
         conn = self._connect()
         try:
             cur = conn.execute(
-                "UPDATE demand_jobs SET reply_sent_at=? WHERE id=? AND reply_sent_at IS NULL", (_iso_utc(), job_id)
+                "UPDATE demand_jobs SET reply_sent_at=?, reply_key=? WHERE id=? "
+                "AND (reply_key IS NULL OR reply_key != ?) AND NOT (reply_key IS NULL AND reply_sent_at IS NOT NULL)",
+                (_iso_utc(), key, job_id, key),
             )
             conn.commit()
             return cur.rowcount == 1
+        finally:
+            conn.close()
+
+    def unmark_replied(self, job_id: str, key: str) -> None:
+        """Undo a mark whose send Graph refused outright (nothing was sent)."""
+        conn = self._connect()
+        try:
+            conn.execute(
+                "UPDATE demand_jobs SET reply_sent_at=NULL, reply_key=NULL WHERE id=? AND reply_key=?", (job_id, key)
+            )
+            conn.commit()
         finally:
             conn.close()
 
@@ -341,5 +471,6 @@ __all__ = [
     "TERMINAL",
     "DemandLedger",
     "EnvelopeError",
+    "SubmitRefused",
     "validate_envelope",
 ]

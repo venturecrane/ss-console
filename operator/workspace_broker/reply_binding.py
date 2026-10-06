@@ -165,7 +165,9 @@ def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> V
             raise BindingRefused("there is no demand job with that id")
         if row["state"] not in REPLYABLE_DEMAND_STATES:
             raise BindingRefused(f"demand job {ident} has not ended (it is {row['state']}); its reply waits for that")
-        key = f"demand_job:{ident}:{row['state']}"
+        # One reply per (attempt, outcome): a resumed job (attempt + 1) that
+        # ends again is owed a reply for its new outcome.
+        key = f"demand_job:{ident}:{row.get('attempt') or 1}:{row['state']}"
         if bound_replies.claimed(db_path, key):
             raise BindingRefused(f"demand job {ident} has already had its reply for this outcome")
         job_id, imid, expected_sender = ident, f"<{str(row['request_ref']).strip('<>')}>", row["requester"]
@@ -250,6 +252,11 @@ def _verified_or_audited(broker: BrokerContext, raw: Any, outcome_prefix: str) -
         if isinstance(exc, BindingRefused):
             raise
         raise BindingRefused(str(exc)) from exc
+    except MsGraphTransportError as exc:
+        # The mailbox could not be read. Not a refusal (nothing was decided),
+        # but still a verdict someone may need to find: recorded, then raised.
+        _audit(broker, f"{outcome_prefix}_error", raw, reason=str(exc))
+        raise
 
 
 def bind_verb(
@@ -290,7 +297,7 @@ def reply_verb(
     v = _verified_or_audited(broker, raw, "send")
     db_path = str(broker.audit_db_path)
     session_id = str(request.get("session_id") or "").strip()
-    state = {"claimed": False}
+    state: dict[str, Any] = {"claimed": False, "claimed_at": ""}
     original = ops._request
 
     def claiming_request(path: str, method: str, body: Any, **kw: Any) -> dict[str, Any]:
@@ -299,7 +306,20 @@ def reply_verb(
         if method == "POST" and not state["claimed"]:
             if not bound_replies.claim(db_path, v.key, v.graph_message_id, v.internet_message_id, session_id):
                 raise BindingRefused("that reply was already sent")
+            try:
+                marked = v.kind != "demand_job" or _demand_ledger(broker).mark_replied(v.job_id, _outcome(v))
+            except Exception:
+                # The ledger could not be written: nothing has been sent, so
+                # the one reply is given back rather than silently spent.
+                bound_replies.release(db_path, v.key)
+                raise
+            if not marked:
+                # The ledger's own compare-and-set disagrees (this outcome was
+                # already replied to): honor it, give back the claim, send nothing.
+                bound_replies.release(db_path, v.key)
+                raise BindingRefused("the job's record shows this outcome was already replied to")
             state["claimed"] = True
+            state["claimed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         return original(path, method, body, **kw)
 
     # A per-call copy, so the claim hook never touches the shared ops object
@@ -326,17 +346,47 @@ def reply_verb(
             attempted_for_send=lambda _payload: [v.sender],
             identity_key="mailbox",
         )
-    except Exception:
+    except Exception as exc:
         # Nothing to release for a failure before the POST: the claim is taken
         # only AT the POST, so such a failure never took one. A claim that was
         # taken means the POST was attempted, and the reply may have gone.
         if state["claimed"]:
-            bound_replies.settle(db_path, v.key, "unknown")
+            _settle_failed_post(broker, ops, v, raw, exc, str(state["claimed_at"]))
         raise
     bound_replies.settle(db_path, v.key, "sent")
-    if v.kind == "demand_job":
-        _demand_ledger(broker).mark_replied(v.job_id)
     return result
+
+
+def _outcome(v: Verified) -> str:
+    """``<attempt>:<state>`` out of a demand key, the ledger's reply key."""
+    return v.key.split(":", 2)[2]
+
+
+def _settle_failed_post(
+    broker: BrokerContext, ops: MsGraphOps, v: Verified, raw: Any, exc: Exception, claimed_at: str
+) -> None:
+    """A POST that failed. A 4xx is Graph refusing the request, which sends
+    nothing; if Sent Items also shows nothing in the conversation since the
+    claim, the claim is RELEASED so the one reply is not silently spent. Every
+    other failure, and a 4xx whose outcome cannot be confirmed, stays
+    ``unknown`` for a person: a second email to a client is the worse error."""
+    db_path = str(broker.audit_db_path)
+    status = getattr(exc, "status", None)
+    if isinstance(status, int) and 400 <= status < 500 and claimed_at:
+        try:
+            delivered = msgraph_lookup.sent_in_conversation_since(ops, v.conversation_id, claimed_at)
+        except (MsGraphTransportError, MsGraphRefused):
+            delivered = True
+        if not delivered:
+            bound_replies.release(db_path, v.key)
+            if v.kind == "demand_job":
+                _demand_ledger(broker).unmark_replied(v.job_id, _outcome(v))
+            _audit(
+                broker, "send_released", raw, v=v, reason=f"Graph refused the reply (HTTP {status}); nothing was sent"
+            )
+            return
+    bound_replies.settle(db_path, v.key, "unknown")
+    _audit(broker, "send_unknown", raw, v=v, reason=str(exc))
 
 
 VERBS: tuple[str, ...] = ("msgraph_reply_bind", "msgraph_reply_bound")

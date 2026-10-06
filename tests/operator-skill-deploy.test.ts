@@ -343,3 +343,95 @@ describe('bootstrap.sh: retired repo skills are pruned from the volume (retired-
     SUBPROCESS_TIMEOUT_MS
   )
 })
+
+/**
+ * The omitted-skill prune (2026-10-06): a repo skill the live customer.yaml does
+ * not enable is removed from the volume every boot, so an omitted lane cannot be
+ * run by reading its files. The block is cut from bootstrap.sh at its markers;
+ * the python that reads the enabled set is stubbed with a script that prints the
+ * set, so this runs the shipped bash, not a copy.
+ */
+describe('bootstrap omitted-skill prune', () => {
+  function lexists(p: string): boolean {
+    try {
+      lstatSync(p)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  function omitScript(hermesHome: string, appSkills: string, enabled: string): string {
+    const src = readFileSync(BOOTSTRAP_SH, 'utf8')
+    const begin = src.indexOf('# omitted-skill-prune:begin')
+    const end = src.indexOf('# omitted-skill-prune:end')
+    expect(begin, 'omitted-skill-prune markers missing from bootstrap.sh').toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(begin)
+    const block = src.slice(begin, end)
+    expect(block).toContain('_omit_app_skills=/app/skills\n')
+    expect(block).toContain('_omit_py=/opt/hermes/.venv/bin/python3\n')
+    const stub = join(hermesHome, '..', 'fake-python.sh')
+    writeFileSync(stub, `#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' '${enabled}'\n`, {
+      mode: 0o755,
+    })
+    return [
+      'set -euo pipefail',
+      'log() { printf "%s\\n" "$*" >&2; }',
+      `HERMES_HOME='${hermesHome}'`,
+      `CUSTOMER_YAML='${join(hermesHome, 'customer.yaml')}'`,
+      block
+        .replace('_omit_app_skills=/app/skills\n', `_omit_app_skills='${appSkills}'\n`)
+        .replace('_omit_py=/opt/hermes/.venv/bin/python3\n', `_omit_py='${stub}'\n`),
+    ].join('\n')
+  }
+
+  function fixture(): { hermesHome: string; appSkills: string; vol: string } {
+    const dir = makeTmpDir()
+    const hermesHome = join(dir, 'opt', 'data')
+    const appSkills = join(dir, 'app', 'skills')
+    const vol = join(hermesHome, 'skills')
+    for (const name of [
+      'matter-inbox-router',
+      'demand-letter-drafter',
+      'mediation-brief-drafter',
+    ]) {
+      mkdirSync(join(appSkills, name), { recursive: true })
+      mkdirSync(join(vol, name), { recursive: true })
+      writeFileSync(join(vol, name, 'SKILL.md'), `# ${name}\n`)
+    }
+    mkdirSync(join(vol, 'agent-authored-skill'), { recursive: true })
+    rmSync(join(vol, 'mediation-brief-drafter'), { recursive: true })
+    symlinkSync(join(appSkills, 'mediation-brief-drafter'), join(vol, 'mediation-brief-drafter'))
+    return { hermesHome, appSkills, vol }
+  }
+
+  it(
+    'removes omitted repo skills (dirs and aliases), keeps enabled and agent-authored ones',
+    () => {
+      const { hermesHome, appSkills, vol } = fixture()
+      execFileSync('bash', ['-c', omitScript(hermesHome, appSkills, 'matter-inbox-router')], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      expect(lexists(join(vol, 'matter-inbox-router'))).toBe(true)
+      expect(lexists(join(vol, 'demand-letter-drafter'))).toBe(false)
+      expect(lexists(join(vol, 'mediation-brief-drafter'))).toBe(false)
+      // The alias went as a LINK; its image target is intact.
+      expect(lexists(join(appSkills, 'mediation-brief-drafter'))).toBe(true)
+      expect(lexists(join(vol, 'agent-authored-skill'))).toBe(true)
+    },
+    SUBPROCESS_TIMEOUT_MS
+  )
+
+  it(
+    'prunes nothing when no enabled skill could be read',
+    () => {
+      const { hermesHome, appSkills, vol } = fixture()
+      execFileSync('bash', ['-c', omitScript(hermesHome, appSkills, '')], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      expect(lexists(join(vol, 'demand-letter-drafter'))).toBe(true)
+      expect(lexists(join(vol, 'matter-inbox-router'))).toBe(true)
+    },
+    SUBPROCESS_TIMEOUT_MS
+  )
+})

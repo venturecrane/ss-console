@@ -320,6 +320,14 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "MEDCHRON_JOB_FAILED",
         # The verified reply binding's verdicts (operator/workspace_broker/reply_binding.py).
         "REPLY_BINDING",
+        # The demand job (gap audit + draft demand), same shape as the chronology's:
+        # one broker-written row per transition (operator/workspace_broker/demand_verbs.py).
+        "DEMAND_JOB_SUBMITTED",
+        "DEMAND_JOB_RUNNING",
+        "DEMAND_JOB_HELD",
+        "DEMAND_JOB_DELIVERED",
+        "DEMAND_JOB_FAILED",
+        "DEMAND_JOB_RESUME_REQUESTED",
         # Case-manager casework (docs/specs/operator/case-manager-deadline-work.md):
         # a verified person approved or held a numbered line about the firm's
         # task list, or the Operator closed its own task on the record's evidence.

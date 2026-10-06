@@ -78,6 +78,88 @@ function routingTargets(body: string): Set<string> {
   return found
 }
 
+/**
+ * The demand class (2026-10-06). The first real demand request a firm sent
+ * was drafted INLINE by the router: line "Attorney drafting request ...
+ * EXECUTE in this turn" told it to read the drafting skill and carry it out,
+ * so it read a fraction of a 215-document file and drafted from that. A demand
+ * is now a queued job. These pin the route an eval of "Pat: draft the demand
+ * on Dana Example" must take: the demand class, a submit, no inline draft.
+ */
+describe('matter-inbox-router: the demand class', () => {
+  const DEMAND = 'demand-letter-drafter'
+  const DEMAND_SKILL = `${SKILLS_DIR}/${DEMAND}/SKILL.md`
+  const bullet = () => flat(bulletFor(read(ROUTER), '**Demand request**'))
+
+  it('routes an attorney\'s "draft the demand" to the job, not the drafting lane', () => {
+    // The eval: an attorney's own "draft the demand" is THIS class's example,
+    // and the attorney drafting class neither names it nor the demand skill.
+    expect(bullet()).toContain('"Pat: draft the demand on Dana Example"')
+    expect(bullet()).toContain('This class takes EVERY demand ask whoever sends it')
+    const drafting = flat(bulletFor(read(ROUTER), '**Attorney drafting request**'))
+    expect(drafting).not.toContain(DEMAND)
+    expect(drafting).not.toContain('"draft the demand,"')
+    expect(drafting).toContain('a demand is NEVER this class')
+  })
+
+  it('submits and never drafts in the turn', () => {
+    expect(bullet()).toContain(`/app/skills/${DEMAND}/SKILL.md`)
+    expect(bullet()).toContain('REQUEST mode')
+    expect(bullet()).toContain('demand_job_submit')
+    expect(bullet()).toContain('NEVER draft, outline, summarize or value anything in this turn')
+    const skill = flat(read(DEMAND_SKILL))
+    expect(skill).toContain('**This skill never drafts in the turn.**')
+    expect(skill).toContain('`demand_job_submit`')
+    expect(skill).toContain('`reply_bind`')
+    // The acknowledgment states only what is true, and never a time.
+    expect(skill).toContain("I'll reply in this thread when they're filed.")
+    expect(skill).toContain('No timing of any kind')
+  })
+
+  it("stays admin-reserved, and the requester is never the model's to say", () => {
+    expect(bullet()).toContain('INITIATION AUTHORITY')
+    expect(bullet()).toContain('Admin-classed')
+    expect(bullet()).toContain("you never pass who asked or the request's words")
+  })
+
+  it('defines a demand by substance, and outranks send-as and drafting', () => {
+    // The review's phrasings: none says "demand", every one is a demand. Each
+    // must be named in BOTH texts as this class, and the send-as bullet must
+    // hand a carrier letter back here.
+    const evals = [
+      'send State Farm a letter asking for the limits',
+      'write the adjuster that we will settle for the policy by Friday',
+      'put a 30-day offer to Geico in writing',
+      'send it as me: a letter to the adjuster demanding the policy limits within 30 days',
+    ]
+    const b = bullet()
+    const rubric = flat(read(RUBRIC))
+    for (const phrase of evals) {
+      expect(b, phrase).toContain(phrase)
+      expect(rubric, phrase).toContain(phrase)
+    }
+    expect(b).toContain('**A demand is defined by its substance, never by the word.**')
+    // Accepting a settlement is the attorney's decision, never a demand and never sent.
+    expect(b).toContain('**Accepting a settlement is NOT a demand, and is not this class.**')
+    expect(b).toContain('"tell the carrier we accept the limits"')
+    expect(b).toContain("accepting a settlement is the responsible attorney's call")
+    expect(rubric).toContain('**Accepting a settlement is NOT a demand, and is not this class.**')
+    expect(b).not.toContain('tell the carrier we accept the limits if paid this month')
+    expect(b).toContain('OUTRANKS the send-as and attorney drafting classes')
+    const sendAs = flat(bulletFor(read(ROUTER), '**Send-as request**'))
+    expect(sendAs).toContain('NEVER this class, whatever words carry it')
+    expect(flat(classTable(read(ROUTER)))).toContain('substance, not the word')
+  })
+
+  it('is in the class table and the rubric', () => {
+    expect(flat(classTable(read(ROUTER)))).toContain('Demand request')
+    const rubric = flat(read(RUBRIC))
+    expect(rubric).toContain('**demand request**')
+    expect(rubric).toContain(`/app/skills/${DEMAND}/SKILL.md`)
+    expect(rubric).toContain('A demand is NEVER this class')
+  })
+})
+
 describe('matter-inbox-router: the chronology class', () => {
   it('is reachable on the email channel', () => {
     const bullet = flat(bulletFor(read(ROUTER), '**Chronology package request**'))
