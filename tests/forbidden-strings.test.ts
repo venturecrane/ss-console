@@ -389,10 +389,39 @@ describe('billing surfaces render only authored amounts and promise nothing unse
     expect(unguarded.map(({ i }) => i + 1)).toEqual([])
   })
 
-  it('the invoice page does not promise a notice nothing sends', () => {
+  it('the invoice page keeps the factual status', () => {
     const content = stripComments(readFileSync(invoiceDetail, 'utf-8'))
     expect(content).toContain('Payment link pending.')
-    expect(content).not.toMatch(/we will let you know/i)
+  })
+})
+
+// ============================================================================
+// No promised notice anywhere in shipped source (code review 2026-10-06, N3
+// widened). The same "We will let you know the moment it is ready." lived on
+// the invoice page AND in the Operator settings status prose
+// (src/lib/portal/operator/account-read.ts). Neither had a sender: the
+// Operator checkout handler states it sends no client email, and the
+// invoice.paid receipt is a payment confirmation, not a go-live notice. A
+// promise to notify is a commitment only a real send path can carry, so it
+// is barred from every file under src/ (comments excluded). If a real notice
+// is ever built, name the file that sends it here as a scoped exception.
+// ============================================================================
+
+const PROMISED_NOTICE = /\b(?:we will|we['’]ll)\s+(?:let you know|notify you|email you)\b/i
+
+describe('no client surface promises a notice nothing sends', () => {
+  it('the pattern can fail', () => {
+    expect(PROMISED_NOTICE.test('We will let you know the moment it is ready.')).toBe(true)
+    expect(PROMISED_NOTICE.test("We'll notify you when it ships.")).toBe(true)
+    expect(PROMISED_NOTICE.test('Payment link pending.')).toBe(false)
+  })
+
+  it('no file under src/ carries one', () => {
+    expect(sourceFiles.length).toBeGreaterThan(100)
+    const violations = sourceFiles
+      .filter((file) => PROMISED_NOTICE.test(stripComments(readFileSync(file, 'utf-8'))))
+      .map((file) => file.replace(SRC_ROOT, 'src'))
+    expect(violations).toEqual([])
   })
 })
 
