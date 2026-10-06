@@ -318,6 +318,8 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "MEDCHRON_JOB_HELD",
         "MEDCHRON_JOB_DELIVERED",
         "MEDCHRON_JOB_FAILED",
+        # The verified reply binding's verdicts (operator/workspace_broker/reply_binding.py).
+        "REPLY_BINDING",
         # Case-manager casework (docs/specs/operator/case-manager-deadline-work.md):
         # a verified person approved or held a numbered line about the firm's
         # task list, or the Operator closed its own task on the record's evidence.
@@ -582,10 +584,7 @@ class HttpD1Executor:
         api_token: str,
         timeout_seconds: float = 5.0,
     ) -> None:
-        self._url = (
-            f"https://api.cloudflare.com/client/v4/accounts/{account_id}"
-            f"/d1/database/{database_id}/query"
-        )
+        self._url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/d1/database/{database_id}/query"
         self._headers = {
             "Authorization": f"Bearer {api_token}",
             "Content-Type": "application/json",
@@ -597,9 +596,7 @@ class HttpD1Executor:
         try:
             import httpx
         except ImportError as e:
-            raise RuntimeError(
-                "HttpD1Executor requires httpx; install operator[adapter] extras"
-            ) from e
+            raise RuntimeError("HttpD1Executor requires httpx; install operator[adapter] extras") from e
 
         if self._client is None:
             self._client = httpx.AsyncClient(timeout=self._timeout, headers=self._headers)
@@ -608,14 +605,10 @@ class HttpD1Executor:
         resp: Awaitable = self._client.post(self._url, json=body)  # type: ignore[assignment]
         result = await resp
         if result.status_code != 200:
-            raise RuntimeError(
-                f"D1 HTTP API returned {result.status_code}: {result.text[:200]}"
-            )
+            raise RuntimeError(f"D1 HTTP API returned {result.status_code}: {result.text[:200]}")
         payload = result.json()
         if not payload.get("success"):
-            raise RuntimeError(
-                f"D1 query failed: {payload.get('errors') or payload}"
-            )
+            raise RuntimeError(f"D1 query failed: {payload.get('errors') or payload}")
 
     async def aclose(self) -> None:
         if self._client is not None:
@@ -741,9 +734,7 @@ class SuppressedWakeWriter:
         if extra_metadata is not None:
             for key, value in extra_metadata.items():
                 if key in meta:
-                    raise ValueError(
-                        f"extra_metadata key {key!r} reserved by SuppressedWakeWriter"
-                    )
+                    raise ValueError(f"extra_metadata key {key!r} reserved by SuppressedWakeWriter")
                 meta[key] = value
         event = AuditEvent(
             action_type="SUPPRESSED_WAKE",
@@ -785,9 +776,7 @@ class SuppressedWakeWriter:
         if extra_metadata is not None:
             for key, value in extra_metadata.items():
                 if key in meta:
-                    raise ValueError(
-                        f"extra_metadata key {key!r} reserved by SuppressedWakeWriter"
-                    )
+                    raise ValueError(f"extra_metadata key {key!r} reserved by SuppressedWakeWriter")
                 meta[key] = value
         event = AuditEvent(
             action_type="EMITTED_WAKE",
@@ -812,11 +801,7 @@ def writer_from_env() -> AuditLogWriter:
     process env. Raises `RuntimeError` if any is missing — that is a
     bootstrap-time invariant failure and should abort container start.
     """
-    missing = [
-        k
-        for k in ("CF_ACCOUNT_ID", "CF_API_TOKEN", "AIE_D1_DATABASE_ID")
-        if not os.environ.get(k)
-    ]
+    missing = [k for k in ("CF_ACCOUNT_ID", "CF_API_TOKEN", "AIE_D1_DATABASE_ID") if not os.environ.get(k)]
     if missing:
         raise RuntimeError(
             f"audit_log.writer_from_env: missing required env vars {missing}; "

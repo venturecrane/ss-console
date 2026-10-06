@@ -9,76 +9,64 @@ chronology thread was two messages, the request and "queued". The fix cannot be
 "let the agent name a message id and reply to it", because then the agent picks
 the recipient. So the broker, which the agent cannot steer, decides:
 
-* the message must EXIST in the operator mailbox as a received message (not a
-  draft; anything holding ``Mail.ReadWrite`` can write a draft with any From);
-* its sender, as the MAILBOX recorded it, must be one this seat may reply to
-  (``scope.inbound_allow_from``, the rule every reply already obeys), re-read
-  from customer.yaml at bind time AND again at send time;
-* it must not have been answered: for a demand job the ledger's own
-  ``reply_sent_at`` compare-and-set (one completion reply per job, durable); for
-  a bare message, a row in ``bound_replies`` here AND nothing sent by this
-  mailbox in that conversation since the message arrived (Sent Items, so a reply
-  by any path counts);
+* the message is a received message in the operator mailbox's INBOX, not a
+  draft, not sent by this mailbox, and with no ``replyTo`` naming anyone other
+  than its sender (Graph's ``/reply`` goes to ``replyTo``); see msgraph_lookup;
+* its sender may be replied to (``scope.inbound_allow_from``), re-read from
+  customer.yaml at bind time AND again at send time;
+* it has not been answered, and is not answered twice:
+    - a demand job: the job has ended (delivered, held or failed), the email is
+      the job's ``request_ref`` and its sender the job's ``requester``; one reply
+      per (job, ending), so a job that fails, is resumed and delivers can still
+      say it delivered;
+    - a bare message: the inbound turn that received it left an
+      ``INBOUND_RECEIVED`` row and no ``REPLY_SENT`` row, it arrived within
+      ``RECENCY_DAYS``, and nothing in its conversation was sent from this
+      mailbox since it arrived (Sent Items, so a reply by any path counts);
 * the reply goes out through ``MsGraphOps.reply`` on the Graph id the broker
-  resolved, so the recipient is derived by Graph from that message. Nobody
-  names it, and the agent never can.
+  resolved, so Graph derives the recipient from that email. Nobody names it.
 
-TWO KINDS OF BINDING (``kind``):
+THE CLAIM IS TWO-PHASE (bound_replies.py). It is taken immediately before the
+POST and nowhere earlier, so every refusal and lookup failure before it spends
+nothing (there is no claim to release); a POST that
+fails in transport keeps the claim (the reply may have gone) and records
+``unknown`` for a person; a POST that returns records ``sent``. The ordinary
+reply verb refuses an email that has had a bound reply, so a held inbound reply
+released later cannot answer it a second time.
 
-``demand_job``  ``{"kind": "demand_job", "job_id": ...}``. The completion reply
-                to the request that queued the job. The message is the job row's
-                ``request_ref``, its sender must equal the row's ``requester``
-                (which the overlay set from the verified inbound, never from the
-                model), and the job must have ended (delivered, held or failed):
-                the request turn already acknowledged it, so this binding is the
-                one reply that says how it ended.
-``message``     ``{"kind": "message", "internet_message_id": "<...>"}`` or
-                ``{"kind": "message", "graph_message_id": "AAMk..."}`` (the id a
-                gateway turn is handed). One reply to an email that has had none:
-                the one-shot answer to a message whose turn failed to reply. The
-                claim is keyed on the RFC 5322 id the MAILBOX returns for either
-                form, so the two spellings of one email share one claim.
-
-ORDER AT SEND: verify, claim, send. The claim is taken BEFORE the transmit, so a
-transport failure after it leaves the binding spent rather than risking a second
-email to a client. A spent binding whose send failed is on the CONFIRM_SEND_FAILED
-row for a person to see; that is the right failure direction for client mail.
+Every verdict, bound or refused, writes a ``REPLY_BINDING`` audit row.
 """
 
 from __future__ import annotations
 
+import copy
+import json
 import os
 import re
 import sqlite3
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from .audit_ledger import _iso_utc
+from . import bound_replies, msgraph_lookup
 from .broker_context import BrokerContext
-from . import msgraph_lookup
 from .demand_ledger import DemandLedger
 from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError
-from .recipient_policy import authored_policy, normalize_address
+from .recipient_policy import authored_policy, normalize_address, sender_key
 from .transmit_verbs import dispatch_transmit
 
 KINDS = ("demand_job", "message")
-#: A demand job may be answered only once it has ended.
 REPLYABLE_DEMAND_STATES = frozenset({"delivered", "held", "failed"})
+#: How old an email a bare message binding may still answer.
+RECENCY_DAYS = 14
+AUDIT_TYPE = "REPLY_BINDING"
 _JOB_ID = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 _MESSAGE_ID = re.compile(r"^<?[^\s<>]{3,500}@[^\s<>]{1,250}>?$")
-_GRAPH_ID = re.compile(r"^[A-Za-z0-9+/=_-]{16,512}$")
-
-CREATE_SQL = (
-    "CREATE TABLE IF NOT EXISTS bound_replies ("
-    "binding_key TEXT PRIMARY KEY, "
-    "internet_message_id TEXT NOT NULL, "
-    "claimed_at TEXT NOT NULL, "
-    "session_id TEXT"
-    ")"
-)
+#: Graph ids are URL-safe base64; no '/' or '+', which could restructure a path.
+_GRAPH_ID = re.compile(r"^[A-Za-z0-9=_-]{16,512}$")
 
 
-class BindingRefused(ValueError):
+class BindingRefused(MsGraphRefused):
     """The broker will not let a reply bind. The message is the sentence to relay."""
 
 
@@ -102,47 +90,14 @@ def _ops(broker: BrokerContext) -> MsGraphOps:
     return broker.msgraph
 
 
-def _connect(db_path: str) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path, timeout=5.0)
-    conn.execute("PRAGMA journal_mode=DELETE")
-    conn.execute("PRAGMA busy_timeout=5000")
-    conn.execute(CREATE_SQL)
-    return conn
-
-
-def _claimed(db_path: str, key: str) -> bool:
-    conn = _connect(db_path)
-    try:
-        return conn.execute("SELECT 1 FROM bound_replies WHERE binding_key=?", (key,)).fetchone() is not None
-    finally:
-        conn.close()
-
-
-def _claim_message(db_path: str, key: str, imid: str, session_id: str) -> bool:
-    """True exactly once per key: the PRIMARY KEY is the compare-and-set."""
-    conn = _connect(db_path)
-    try:
-        cur = conn.execute(
-            "INSERT OR IGNORE INTO bound_replies (binding_key, internet_message_id, claimed_at, session_id) "
-            "VALUES (?,?,?,?)",
-            (key, imid, _iso_utc(), session_id or None),
-        )
-        conn.commit()
-        return cur.rowcount == 1
-    finally:
-        conn.close()
-
-
 def _demand_ledger(broker: BrokerContext) -> DemandLedger:
-    # The queue dir is never written on this path (read + mark_replied only);
-    # the runner's entrypoint exports it, and an unset one names a path that
-    # this code does not touch.
+    # Read-only here; the queue dir is never written on this path.
     queue = os.environ.get("SMD_DEMAND_QUEUE_DIR") or "/run/smd-medchron/demand-queue"
     return DemandLedger(str(broker.audit_db_path), queue)
 
 
 def _parse(raw: Any) -> tuple[str, str]:
-    """(kind, identifier) from the caller's binding, or BindingRefused."""
+    """(kind, identifier), where kind is demand_job, message or message_graph."""
     if not isinstance(raw, dict):
         raise BindingRefused("a reply binding names a demand job or an email")
     kind = raw.get("kind")
@@ -166,48 +121,85 @@ def _parse(raw: Any) -> tuple[str, str]:
     raise BindingRefused(f"a reply binding's kind is one of {list(KINDS)}")
 
 
-def verify(broker: BrokerContext, raw: Any) -> Verified:
-    """Every check, fresh, from the mailbox, the ledger and the live customer.yaml."""
+def _inbound_turn_did_not_reply(db_path: str, graph_message_id: str, since: str) -> str | None:
+    """None when the ledger shows the email arrived and was never answered;
+    otherwise the refusal sentence. Read from the broker's own audit log."""
+    try:
+        conn = sqlite3.connect(db_path, timeout=5.0)
+        try:
+            rows = conn.execute(
+                "SELECT action_type, metadata FROM audit_log WHERE ts >= ? AND action_type IN "
+                "('INBOUND_RECEIVED','REPLY_SENT')",
+                (since,),
+            ).fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return "the audit log could not be read, so whether that email was answered is unknown"
+    received = answered = False
+    for action_type, metadata in rows:
+        try:
+            meta = json.loads(metadata or "{}")
+        except ValueError:
+            continue
+        if action_type == "INBOUND_RECEIVED" and meta.get("vendor_message_id") == graph_message_id:
+            received = True
+        if action_type == "REPLY_SENT" and graph_message_id in (meta.get("in_reply_to"), meta.get("message_id")):
+            answered = True
+    if answered:
+        return "the audit log shows that email was already answered"
+    if not received:
+        return f"the audit log holds no record of that email arriving in the last {RECENCY_DAYS} days"
+    return None
+
+
+def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> Verified:
+    """Every check, fresh, from the mailbox, the ledgers and the live customer.yaml."""
     ops = _ops(broker)
+    db_path = str(broker.audit_db_path)
     kind, ident = _parse(raw)
-    job_id, expected_sender, imid = "", "", ""
+    job_id, expected_sender, imid, key = "", "", "", ""
     if kind == "demand_job":
         row = _demand_ledger(broker).read(ident)
         if row is None:
             raise BindingRefused("there is no demand job with that id")
         if row["state"] not in REPLYABLE_DEMAND_STATES:
             raise BindingRefused(f"demand job {ident} has not ended (it is {row['state']}); its reply waits for that")
-        if row.get("reply_sent_at"):
-            raise BindingRefused(f"demand job {ident} has already had its reply")
+        key = f"demand_job:{ident}:{row['state']}"
+        if bound_replies.claimed(db_path, key):
+            raise BindingRefused(f"demand job {ident} has already had its reply for this outcome")
         job_id, imid, expected_sender = ident, f"<{str(row['request_ref']).strip('<>')}>", row["requester"]
-        key = f"demand_job:{ident}"
-    try:
-        if kind == "message_graph":
-            found = msgraph_lookup.received_by_graph_id(ops, ident)
-        else:
-            found = msgraph_lookup.find_received(ops, imid or ident)
-    except MsGraphRefused as exc:
-        raise BindingRefused(str(exc)) from exc
+    if kind == "message_graph":
+        found = msgraph_lookup.received_by_graph_id(ops, ident)
+    else:
+        found = msgraph_lookup.find_received(ops, imid or ident)
     if found is None or not found["graph_message_id"]:
-        raise BindingRefused("that email is not in this seat's mailbox as a received message")
-    if kind != "demand_job":
-        # Either spelling of the email keys ONE claim: the mailbox's own id.
-        kind = "message"
-        imid = found["internet_message_id"]
-        key = f"message:{imid}"
-        if _claimed(str(broker.audit_db_path), key):
-            raise BindingRefused("that email has already had its one bound reply")
+        raise BindingRefused("that email is not in this seat's Inbox as a received message")
     sender = found["sender"]
     if not authored_policy(broker.customer_path).allows_reply_to(sender):
         raise BindingRefused(
             "the sender of that email is not someone this seat may reply to (scope.inbound_allow_from)"
         )
-    if kind == "demand_job" and sender != normalize_address(expected_sender):
-        raise BindingRefused("that email's sender is not the person who requested the job")
-    if kind == "message" and msgraph_lookup.sent_in_conversation_since(
-        ops, found["conversation_id"], found["received_at"]
-    ):
-        raise BindingRefused("that email has already been answered from this mailbox")
+    if kind == "demand_job":
+        if sender != normalize_address(expected_sender):
+            raise BindingRefused("that email's sender is not the person who requested the job")
+    else:
+        imid = found["internet_message_id"]
+        key = f"message:{imid}"
+        if bound_replies.claimed(db_path, key):
+            raise BindingRefused("that email has already had its one bound reply")
+        moment = now or datetime.now(timezone.utc)
+        since = (moment - timedelta(days=RECENCY_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        if not found["received_at"] or found["received_at"] < since:
+            raise BindingRefused(
+                f"that email is older than {RECENCY_DAYS} days; a bound reply answers recent mail only"
+            )
+        why = _inbound_turn_did_not_reply(db_path, found["graph_message_id"], since)
+        if why:
+            raise BindingRefused(why)
+        if msgraph_lookup.sent_in_conversation_since(ops, found["conversation_id"], found["received_at"]):
+            raise BindingRefused("that email has already been answered from this mailbox")
+        kind = "message"
     return Verified(
         kind=kind,
         key=key,
@@ -219,21 +211,66 @@ def verify(broker: BrokerContext, raw: Any) -> Verified:
     )
 
 
+def _audit(broker: BrokerContext, outcome: str, raw: Any, *, v: Verified | None = None, reason: str = "") -> None:
+    """One REPLY_BINDING row per verdict. Ids and a hashed sender, never a body."""
+    if broker.ledger is None:
+        return
+    binding = raw if isinstance(raw, dict) else {}
+    meta: dict[str, Any] = {
+        "outcome": outcome,
+        "kind": str(binding.get("kind") or ""),
+        **({"job_id": binding["job_id"]} if isinstance(binding.get("job_id"), str) else {}),
+    }
+    if v is not None:
+        meta.update(
+            {
+                "binding_key": v.key,
+                "graph_message_id": v.graph_message_id,
+                "internet_message_id": v.internet_message_id,
+                "sender_key": sender_key(v.sender),
+            }
+        )
+    if reason:
+        meta["reason"] = reason[:300]
+    broker.ledger.append(
+        {
+            "action_type": AUDIT_TYPE,
+            "actor": "workspace-broker",
+            "actor_role": "broker",
+            "metadata": json.dumps(meta, sort_keys=True, separators=(",", ":")),
+        }
+    )
+
+
+def _verified_or_audited(broker: BrokerContext, raw: Any, outcome_prefix: str) -> Verified:
+    try:
+        return verify(broker, raw)
+    except MsGraphRefused as exc:
+        _audit(broker, f"{outcome_prefix}_refused", raw, reason=str(exc))
+        if isinstance(exc, BindingRefused):
+            raise
+        raise BindingRefused(str(exc)) from exc
+
+
 def bind_verb(
     broker: BrokerContext, _action: str, request: dict[str, Any], _pid: int, _uid: int | None
 ) -> dict[str, Any]:
     """Check a binding without sending. A refusal is a verdict, not an error,
     so the agent can relay the reason; a transport fault still raises."""
+    raw = request.get("binding")
     try:
-        v = verify(broker, request.get("binding"))
+        v = _verified_or_audited(broker, raw, "bind")
     except BindingRefused as exc:
         return {"ok": True, "bound": False, "reason": str(exc)}
+    _audit(broker, "bound", raw, v=v)
     return {
         "ok": True,
         "bound": True,
         "kind": v.kind,
         "job_id": v.job_id,
         "internet_message_id": v.internet_message_id,
+        # The overlay records this as the reply's in_reply_to.
+        "graph_message_id": v.graph_message_id,
         # The person the reply will reach. The overlay locks the draft to it
         # and runs its floors against it; it cannot change it.
         "sender": v.sender,
@@ -244,38 +281,64 @@ def bind_verb(
 def reply_verb(
     broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
 ) -> dict[str, Any]:
-    """Verify again, claim once, then reply through the audited transmit."""
+    """Verify again, claim at the POST, reply through the audited transmit."""
     ops = _ops(broker)
     payload = request.get("payload")
     if not isinstance(payload, dict):
         raise ValueError(f"{action} requires a 'payload' object")
-    v = verify(broker, request.get("binding"))
-    session_id = str(request.get("session_id") or "").strip()
+    raw = request.get("binding")
+    v = _verified_or_audited(broker, raw, "send")
     db_path = str(broker.audit_db_path)
-    if v.kind == "demand_job":
-        claimed = _demand_ledger(broker).mark_replied(v.job_id)
-    else:
-        claimed = _claim_message(db_path, v.key, v.internet_message_id, session_id)
-    if not claimed:
-        raise BindingRefused("that reply was already sent")
+    session_id = str(request.get("session_id") or "").strip()
+    state = {"claimed": False}
+    original = ops._request
+
+    def claiming_request(path: str, method: str, body: Any, **kw: Any) -> dict[str, Any]:
+        # The claim rides the FIRST POST and nothing earlier: every GET and
+        # every refusal before it leaves the one reply unspent.
+        if method == "POST" and not state["claimed"]:
+            if not bound_replies.claim(db_path, v.key, v.graph_message_id, v.internet_message_id, session_id):
+                raise BindingRefused("that reply was already sent")
+            state["claimed"] = True
+        return original(path, method, body, **kw)
+
+    # A per-call copy, so the claim hook never touches the shared ops object
+    # another broker thread is using.
+    bound_ops = copy.copy(ops)
+    bound_ops._request = claiming_request  # type: ignore[method-assign]
     body = {
         "message_id": v.graph_message_id,
         "comment": str(payload.get("comment") or ""),
         **({"html": payload["html"]} if isinstance(payload.get("html"), str) and payload["html"].strip() else {}),
     }
-    return dispatch_transmit(
-        broker,
-        action,
-        {**request, "payload": body},
-        send=ops.reply,
-        reply=ops.reply,
-        refused=MsGraphRefused,
-        transport=MsGraphTransportError,
-        attempted_for_send=lambda _payload: [v.sender],
-        identity_key="mailbox",
-    )
+    extra = request.get("audit_extra")
+    audit_extra = dict(extra) if isinstance(extra, dict) else {}
+    audit_extra["reply_binding"] = v.key
+    try:
+        result = dispatch_transmit(
+            broker,
+            action,
+            {**request, "payload": body, "audit_extra": audit_extra},
+            send=bound_ops.reply,
+            reply=bound_ops.reply,
+            refused=MsGraphRefused,
+            transport=MsGraphTransportError,
+            attempted_for_send=lambda _payload: [v.sender],
+            identity_key="mailbox",
+        )
+    except Exception:
+        # Nothing to release for a failure before the POST: the claim is taken
+        # only AT the POST, so such a failure never took one. A claim that was
+        # taken means the POST was attempted, and the reply may have gone.
+        if state["claimed"]:
+            bound_replies.settle(db_path, v.key, "unknown")
+        raise
+    bound_replies.settle(db_path, v.key, "sent")
+    if v.kind == "demand_job":
+        _demand_ledger(broker).mark_replied(v.job_id)
+    return result
 
 
 VERBS: tuple[str, ...] = ("msgraph_reply_bind", "msgraph_reply_bound")
 
-__all__ = ["KINDS", "VERBS", "BindingRefused", "Verified", "bind_verb", "reply_verb", "verify"]
+__all__ = ["AUDIT_TYPE", "KINDS", "VERBS", "BindingRefused", "Verified", "bind_verb", "reply_verb", "verify"]

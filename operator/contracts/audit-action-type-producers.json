@@ -412,6 +412,11 @@
       "producerFile": "operator/workspace_broker/medchron_ledger.py",
       "reason": "ss#2614. The runner exited without a verdict or a stage failed; the reason is the runner's own sentence."
     },
+    "REPLY_BINDING": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/reply_binding.py",
+      "reason": "The workspace broker appends one row per verified-reply-binding verdict (bound or refused) so a reply a non-inbound turn sent, or was refused, can be traced to the email it answered."
+    },
     "ACT_PROPOSED": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/establishment_constants.py",

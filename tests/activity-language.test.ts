@@ -87,6 +87,7 @@ describe('activity-language exhaustiveness (writer parity)', () => {
         'MEDCHRON_JOB_HELD',
         'MEDCHRON_JOB_DELIVERED',
         'MEDCHRON_JOB_FAILED',
+        'REPLY_BINDING',
         'AGENT_STOPPED',
         'COMPLIANCE_PACKET_EXPORTED',
         // ss#2122: a Named Administrator pulled the per-matter audit record
@@ -193,6 +194,7 @@ describe('failure outcomes are visible to the client (ss#2320)', () => {
     ['MEDCHRON_JOB_HELD', 'Paused a medical chronology package and surfaced why'],
     ['MEDCHRON_JOB_DELIVERED', 'Filed a medical chronology package on the matter'],
     ['MEDCHRON_JOB_FAILED', 'Could not finish a medical chronology package'],
+    ['REPLY_BINDING', 'Checked whether a reply could answer an earlier email'],
   ]
 
   for (const [action, copy] of outcomes) {
