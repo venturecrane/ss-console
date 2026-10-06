@@ -227,7 +227,14 @@ def test_the_lane_reads_cents_used_from_the_real_demand_verbs(tmp_path):
     a = ledger.submit(env)
     ledger.record(a, "running", {})
     ledger.record(a, "failed", {"cents": 700})
-    b = ledger.submit({**env, "matter": {"id": "0f0f0f0f-0000-4000-8000-0000000000aa", "number": "100002"}})
+    # A second job needs its own request email: request_ref is UNIQUE in the ledger.
+    b = ledger.submit(
+        {
+            **env,
+            "matter": {"id": "0f0f0f0f-0000-4000-8000-0000000000aa", "number": "100002"},
+            "request_ref": "<second-request@firm.example>",
+        }
+    )
     ledger.record(b, "running", {})
     ledger.record(b, "delivered", {"cents": 450})
     v = verbs.DemandVerbs(ledger, customer_yaml=str(yaml_path), audit_append=lambda row: None)
