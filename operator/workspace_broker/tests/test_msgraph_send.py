@@ -154,6 +154,7 @@ class FakeGraph:
         self,
         *,
         source_from: str | None = None,
+        source_reply_to: list[str] | None = None,
         conversation_id: str = "",
         sent_items_status: int | None = None,
         sent_items_misses: int = 0,
@@ -165,6 +166,7 @@ class FakeGraph:
         #: tests see WHICH app's token each request actually carried.
         self.auths: list[tuple[str, str]] = []
         self._source_from = source_from
+        self._source_reply_to = source_reply_to or []
         self._conversation_id = conversation_id
         self._sent_items_status = sent_items_status
         self._sent_items_misses = sent_items_misses
@@ -198,6 +200,7 @@ class FakeGraph:
                 json.dumps(
                     {
                         "from": {"emailAddress": {"address": self._source_from or ""}},
+                        "replyTo": [{"emailAddress": {"address": a}} for a in self._source_reply_to],
                         "conversationId": self._conversation_id,
                     }
                 )
@@ -534,6 +537,32 @@ def test_reply_allows_an_authored_sender(tmp_path: Path) -> None:
     result = ops.reply({"message_id": "AAMk123", "comment": "sure"})
     assert result["recipients"] == ["scott@smd.services"]
     assert http.graph_posts()[0][1].endswith("/reply")
+
+
+def test_reply_refuses_a_reply_to_that_is_not_the_vetted_sender(tmp_path: Path) -> None:
+    """Graph's /reply goes to replyTo when it is set. An authored From with a
+    stranger's Reply-To must never carry the answer to the stranger."""
+    http = FakeGraph(source_from="scott@smd.services", source_reply_to=["attacker@evil.example"])
+    ops = _ops(tmp_path, http)
+    with pytest.raises(MsGraphRefused):
+        ops.reply({"message_id": "AAMk123", "comment": "sure"})
+    assert http.graph_posts() == []
+
+
+def test_reply_allows_a_reply_to_that_names_the_sender_itself(tmp_path: Path) -> None:
+    """Law 12 control: clients that set Reply-To to the sender still get answered."""
+    http = FakeGraph(source_from="scott@smd.services", source_reply_to=["Scott <SCOTT@smd.services>"])
+    ops = _ops(tmp_path, http)
+    assert ops.reply({"message_id": "AAMk123", "comment": "sure"})["recipients"] == ["scott@smd.services"]
+
+
+def test_reply_refuses_a_message_the_seat_sent_itself(tmp_path: Path) -> None:
+    http = FakeGraph(source_from="placeholder")
+    ops = _ops(tmp_path, http)
+    http._source_from = ops.mailbox()
+    with pytest.raises(MsGraphRefused):
+        ops.reply({"message_id": "AAMk123", "comment": "sure"})
+    assert http.graph_posts() == []
 
 
 def test_reply_uses_the_fetched_sender_not_a_supplied_one(tmp_path: Path) -> None:
