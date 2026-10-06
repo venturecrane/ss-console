@@ -39,9 +39,9 @@ Build agents consuming these specs should treat each spec as the **implementatio
 
 ## Routines designed, build gated on client acceptance
 
-| Spec                                                     | Status                                                     | Scope                                                                                                                                 |
-| -------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| [demand-drafting-routine.md](demand-drafting-routine.md) | Design; first firm's terms decided 09-24, not yet accepted | On-request time-limited demand as a queued seat job: premise preflight, streamed drafting, filing with read-back; the low-limit watch |
+| Spec                                                     | Status                                                                                | Scope                                                                                                                                 |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| [demand-drafting-routine.md](demand-drafting-routine.md) | Runner built 10-06, not deployed; the firm's request is the go-ahead (Captain, 10-06) | On-request time-limited demand as a queued seat job: premise preflight, streamed drafting, filing with read-back; the low-limit watch |
 
 ## Product redesigns
 

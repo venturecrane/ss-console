@@ -451,6 +451,10 @@ else
 fi
 # <<< medchron-controls-stage
 
+# ---------- Step 2d: the demand job's firm inputs (lib/stage-demand-inputs.sh) ----------
+# shellcheck source=lib/stage-demand-inputs.sh
+source "${BIN_DIR}/lib/stage-demand-inputs.sh"
+
 # ---------- Step 3: render fly.toml ----------
 log "Rendering fly.toml..."
 mkdir -p "${RENDERED_DIR}"
@@ -540,8 +544,7 @@ if [ -n "${CF_API_TOKEN:-}" ] && [ -n "${CF_ACCOUNT_ID:-}" ]; then
     log "WARN: Create the bucket manually via the CF dashboard before the Machine boots."
   fi
 else
-  log "WARN: CF_API_TOKEN or CF_ACCOUNT_ID not set; skipping R2 bucket auto-create."
-  log "WARN: Create '${R2_SKILL_BODIES_BUCKET}' via the CF dashboard before the Machine boots."
+  log "WARN: CF_API_TOKEN or CF_ACCOUNT_ID not set; skipping R2 bucket auto-create. Create '${R2_SKILL_BODIES_BUCKET}' via the CF dashboard before the Machine boots."
 fi
 
 # ---------- Step 6: set secrets (paste flow; never echo values) ----------
