@@ -267,6 +267,36 @@ authorization (searched names with "auth" and "employ"). Other
 authorizations in the file: <names with "auth">.` or, with none at all,
    `No authorization is in the file yet.`
 
+### 2i. The police report request
+
+The firm asks the agency that took the report, on its own letters: the
+Highway Patrol letter (crash time, office code and officer number from the
+officer's crash card) or the city police letter (report number).
+
+1. Look in the matter's documents (`get_files_on_matter`) for the report or a
+   request already made (names with "police", "traffic collision", "TCR",
+   "CHP", "crash" or "report"). Name any in the reply as `Already in the file:
+<names>.` She asked, so the letter is still made.
+2. The agency: her own words naming it go in `agency_words`, verbatim. A crash
+   card or exchange slip in the file: read it with `read_document`, and cite
+   from it only what it prints beside its label (`crash_time`, `ncic_number`,
+   `officer_id`, `report_number`), all from that one document.
+3. `render_firm_form_letter(matter_id, "police_report", date, cited,
+agency_words=...)`.
+4. `needs_agency` or `agency_unclear`: file nothing; the reply carries its
+   `reply_block`. When the card prints an office the firm's list does not
+   have, call again with `agency_given` set to the office name and address
+   lines exactly as the card prints them; when she names one the list does not
+   have, with the name and address exactly as she wrote them.
+5. `filed`: put `reply_block` in the reply EXACTLY as returned (it says where
+   the letter goes, the card values to check and the gaps). Then the
+   authorization line: files named with "auth": `Enclose: <name>.`; when the
+   only one is inside a retainer packet, `The signed authorization is inside
+<name>; enclose only its authorization page, never the retainer.`; none:
+   `No authorization is in the file yet.`
+6. Never take a report number, crash time or agency address from her email
+   into `cited`: the letter keeps a blank for it and the reply says so.
+
 ### 3. The facilities
 
 For each facility she listed, call
@@ -345,7 +375,7 @@ filed, not sent, and their tasks stay open until she says they went out.
 - Never call `add_medicals_provider` with two facilities in one name, and never pick a `needs_contact` candidate yourself.
 - Never write a charge, a date of service or any money figure on the Medicals tab here.
 - Never work a second matter in the same turn.
-- Never mail, fax or email a letter, never send the med pay ledger email yourself (it goes in the reply for her to send), and never reply to anyone but the rostered sender.
+- Never submit a police report request in an agency's portal, fax it or email it; never send the med pay ledger email yourself (it goes in the reply for her to send), and never reply to anyone but the rostered sender.
 - Never complete a Smokeball task except as step 5 says (her own word that the item went out, exactly one matching task), and never update a task any other way or create one.
 
 ## Delivery channels + refusal fallback (law seat rule)
