@@ -75,7 +75,7 @@
     "@cloudflare/vite-plugin": "1.47.0",
     "fast-uri": "3.1.8",
     "svgo": "4.1.0",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "defu": "^6.1.7",
     "undici": "^7.29.0",
     "js-cookie": "^3.0.7",
