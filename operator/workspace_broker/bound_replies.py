@@ -12,7 +12,8 @@ One row per binding key, in the broker-owned audit DB file:
                 been delivered, so the claim stays and a person decides
 
 The claim is taken AT the POST (reply_binding.py), so a refusal or a lookup
-failure before it never spends the one reply.
+failure before it never spends the one reply. A POST Graph refuses with a 4xx,
+with nothing in Sent Items since, is RELEASED (the row deleted).
 """
 
 from __future__ import annotations
@@ -78,6 +79,17 @@ def claim(db_path: str, key: str, graph_message_id: str, internet_message_id: st
         conn.close()
 
 
+def release(db_path: str, key: str) -> None:
+    """Undo a claim whose POST Graph refused outright (a 4xx, nothing sent,
+    and nothing in Sent Items): the one reply stays available."""
+    conn = _connect(db_path)
+    try:
+        conn.execute("DELETE FROM bound_replies WHERE binding_key=?", (key,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def settle(db_path: str, key: str, outcome: str) -> None:
     if outcome not in ("sent", "unknown"):
         raise ValueError(f"unknown bound reply outcome {outcome!r}")
@@ -89,4 +101,4 @@ def settle(db_path: str, key: str, outcome: str) -> None:
         conn.close()
 
 
-__all__ = ["claim", "claimed", "claimed_for_graph_id", "settle"]
+__all__ = ["claim", "claimed", "claimed_for_graph_id", "release", "settle"]

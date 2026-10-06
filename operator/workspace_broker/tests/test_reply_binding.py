@@ -106,6 +106,8 @@ class FakeMailbox:
         self.present = True
         self.post_status: int | None = None
         self.fail_reply_source_get = False
+        self.post_lands_anyway = False
+        self.inbox_status: int | None = None
 
     def __call__(self, request, timeout=None):
         url = request.full_url
@@ -114,6 +116,8 @@ class FakeMailbox:
             return _Response(json.dumps({"access_token": "tok", "expires_in": 3600}))
         decoded = urllib.parse.unquote(url)
         if request.method == "GET" and "/mailFolders/inbox?" in url:
+            if self.inbox_status is not None:
+                raise urllib.error.HTTPError(url, self.inbox_status, "x", {}, None)  # type: ignore[arg-type]
             return _Response(json.dumps({"id": INBOX}))
         if request.method == "GET" and "/mailFolders/sentitems/messages" in url:
             if "conversationId eq" in decoded:
@@ -131,6 +135,10 @@ class FakeMailbox:
             return _Response(json.dumps(self.message))
         if request.method == "POST":
             if self.post_status is not None:
+                if self.post_lands_anyway:
+                    self.sent.append(
+                        {"id": "S", "conversationId": "CONV-1", "sentDateTime": _iso(datetime.now(timezone.utc))}
+                    )
                 raise urllib.error.HTTPError(url, self.post_status, "x", {}, None)  # type: ignore[arg-type]
             self.sent.append({"id": "S", "conversationId": "CONV-1", "sentDateTime": _iso(NOW)})
             return _Response("")
@@ -435,6 +443,40 @@ def test_a_transport_failure_at_the_post_keeps_the_claim_as_unknown(tmp_path: Pa
     box.sent.clear()
     with pytest.raises(BindingRefused):
         _send(_broker(tmp_path, box), MSG)
+
+
+def test_a_graph_4xx_at_the_post_releases_the_claim(tmp_path: Path) -> None:
+    """Graph refused the request (4xx) and nothing reached Sent Items: the one
+    reply is not silently spent. FALSIFIER: settle every failure 'unknown'."""
+    box = FakeMailbox()
+    box.post_status = 403
+    broker = _broker(tmp_path, box)
+    with pytest.raises(Exception):
+        _send(broker, MSG)
+    assert not bound_replies.claimed(broker.audit_db_path, f"message:{IMID}")
+    assert "send_released" in [r["outcome"] for r in _rows(broker, "REPLY_BINDING")]
+    box.post_status = None
+    assert _send(_broker(tmp_path, box), MSG)["recipients"] == [ADMIN]
+
+
+def test_a_4xx_whose_reply_reached_sent_items_stays_spent(tmp_path: Path) -> None:
+    box = FakeMailbox()
+    box.post_status = 400
+    box.post_lands_anyway = True
+    broker = _broker(tmp_path, box)
+    with pytest.raises(Exception):
+        _send(broker, MSG)
+    assert bound_replies.claimed(broker.audit_db_path, f"message:{IMID}")
+    assert "send_unknown" in [r["outcome"] for r in _rows(broker, "REPLY_BINDING")]
+
+
+def test_a_mailbox_that_cannot_be_read_at_bind_time_is_audited(tmp_path: Path) -> None:
+    box = FakeMailbox()
+    box.inbox_status = 503
+    broker = _broker(tmp_path, box)
+    with pytest.raises(Exception):
+        _call(broker, "msgraph_reply_bind", MSG)
+    assert "bind_error" in [r["outcome"] for r in _rows(broker, "REPLY_BINDING")]
 
 
 # -- demand jobs
