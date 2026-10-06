@@ -32,6 +32,7 @@ if [ -f "${DEMAND_INPUTS_DIR}/demand-firm.yaml" ]; then
   log "Syncing the demand firm inputs to R2: s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/demand/"
   AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
     aws s3 sync "${DEMAND_INPUTS_DIR}/" "s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/demand/" --delete \
+      --exclude "eval/*" --exclude "request-brief-*" \
       --endpoint-url "${R2_ENDPOINT_URL}" --only-show-errors \
     || die "R2 sync of the demand firm inputs failed"
   log "R2 upload OK (demand firm inputs)"
