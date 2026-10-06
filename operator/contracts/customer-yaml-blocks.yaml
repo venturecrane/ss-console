@@ -309,10 +309,13 @@ top_level:
     note: >-
       `signers`: how the matter's responsible staff member signs the firm's
       rep letters, keyed by the staff member's name as Smokeball holds it or
-      by their staff id, each `{name, title, initials}`. The only source of a
-      signer on render_firm_form_letter; a staff member not listed, or a field
-      not authored, prints "[Not in the file: how <name> signs: <field>]" in
-      the letter. Authored only from the firm's own letters. The forms
+      by their staff id, each `{name, title, initials}`. The only source of
+      the 1st party letter's signer on render_firm_form_letter; the 3rd party
+      letter reads only `title` here, because the firm's 3rd party task form
+      prints the responsible staff record's own name and has no initials
+      line. A staff member not listed, or a field not authored, prints
+      "[Not in the file: how <name> signs: <field>]" in the letter. Authored
+      only from the firm's own letters. The forms
       themselves resolve through self_initiation.document_library.templates
       (first_party_rep_letter, third_party_rep_letter).
   records_orders:

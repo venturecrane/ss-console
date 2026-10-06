@@ -35,6 +35,7 @@ import io
 import re
 import zipfile
 from dataclasses import dataclass, field
+from typing import Callable
 
 from lxml import etree
 
@@ -326,8 +327,21 @@ def _replace_once(root: etree._Element, old: str, new: str) -> None:
 
 
 def _blank_core_people(xml: bytes) -> bytes:
-    """``lastModifiedBy`` names whoever last saved the source letter."""
+    """``creator`` and ``lastModifiedBy`` name whoever made and last saved the
+    source letter, not the firm's form."""
+    xml = re.sub(rb"<dc:creator>[^<]*</dc:creator>", b"<dc:creator></dc:creator>", xml)
     return re.sub(rb"<cp:lastModifiedBy>[^<]*</cp:lastModifiedBy>", b"<cp:lastModifiedBy></cp:lastModifiedBy>", xml)
+
+
+def rewrite_document(blob: bytes, edit: Callable[[etree._Element], None]) -> bytes:
+    """The package with ``edit`` applied to the parsed body; every other part
+    is copied byte for byte. A form builder that must see the field codes
+    before ``build_form`` unwraps them works through this."""
+    infos, parts = _read_parts(blob)
+    head, root = _parse(parts[DOCUMENT_PART])
+    edit(root)
+    parts[DOCUMENT_PART] = _serialize(head, root)
+    return _write_parts(infos, parts)
 
 
 def build_form(source: bytes, replacements: list[tuple[str, str]], drop_paragraphs: list[str]) -> bytes:
@@ -365,5 +379,6 @@ __all__ = [
     "paragraph_text",
     "placeholders_in",
     "replace_in_paragraph",
+    "rewrite_document",
     "unwrap_fields",
 ]
