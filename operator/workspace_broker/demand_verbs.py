@@ -14,7 +14,9 @@ Peer gating, per verb:
     demand_job_status    gateway PID, agent uid, or uid 0. Root gets the full
                          row (the runner daemon); everyone else the projection,
                          which carries no request text and no message id.
-    demand_allowance     gateway PID, agent uid, or uid 0
+    demand_allowance     gateway PID, agent uid, or uid 0. The COUNT is per
+                         billing cycle; cents_used is the Pacific calendar
+                         month's spend, for the runner's monthly budget.
     demand_job_record    uid 0 only (the runner daemon)
     demand_job_resume    uid 0 only, with NO agent tool: a resume spends money
                          and writes to the firm's matter, and "the defect is
@@ -36,11 +38,13 @@ Audit rows carry ids, counts and states, never the request text.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
 from .broker_context import BrokerContext
-from .cycle_window import AnchorInvalid, cycle_window
+from .cycle_window import AnchorInvalid
 from .demand_ledger import (
     ALLOWANCE_KEY,
     AUDIT_TYPE,
@@ -63,6 +67,9 @@ AUDIT_TYPES = {
 }
 if AUDIT_TYPES != AUDIT_TYPE:
     raise RuntimeError("demand_verbs.AUDIT_TYPES and demand_ledger.AUDIT_TYPE disagree")
+
+#: The spend budget's clock (calendar month, Pacific).
+_PACIFIC = ZoneInfo("America/Los_Angeles")
 
 VERBS = (
     "demand_job_submit",
@@ -164,23 +171,35 @@ class DemandVerbs:
             effective_from=effective_from,
         )
         exclude = str(request.get("exclude_job_id") or "")
-        return {
-            "ok": True,
-            **state,
-            "cents_used": self._cents_used(state["cycle_start"], anchor, effective_from, exclude),
-        }
+        month, cents = self._cents_this_month(exclude)
+        return {"ok": True, **state, "cents_used": cents, "cents_month": month}
 
-    def _cents_used(self, cycle_start: str, anchor: int | None, effective_from: str | None, exclude: str) -> int:
-        """SUM(cents) of this cycle's demand jobs, without ``exclude`` (the job
-        about to run, so a resume does not count its own earlier spend twice)."""
-        window = cycle_window(cycle_start, anchor, effective_from)
+    def _cents_this_month(self, exclude: str, now: datetime | None = None) -> tuple[str, int]:
+        """("YYYY-MM", SUM(cents)) of the demand jobs created in the current
+        CALENDAR month in America/Los_Angeles, without ``exclude`` (the job about
+        to run, so a resume does not count its own earlier spend twice).
+
+        The spend budget's window (the Captain, 2026-10-06: a monthly demand
+        budget per calendar month, Pacific). Deliberately NOT the billing
+        cycle the COUNT allowance uses: the count is a contract term, the
+        spend budget is ours. ``created_at`` is UTC, so the Pacific month's
+        two midnights are converted to UTC bounds."""
+        local = (now or datetime.now(timezone.utc)).astimezone(_PACIFIC)
+        start = local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        nxt = (start + timedelta(days=32)).replace(day=1)
+
+        def utc(dt: datetime) -> str:
+            # Re-anchor the wall-clock midnight in its own month's offset (DST).
+            wall = datetime(dt.year, dt.month, 1, tzinfo=_PACIFIC)
+            return wall.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
         conn = self._db._connect()
         try:
             row = conn.execute(
                 "SELECT COALESCE(SUM(cents), 0) AS c FROM demand_jobs WHERE created_at >= ? AND created_at < ? AND id != ?",
-                (window.start, window.end, exclude),
+                (utc(start), utc(nxt), exclude),
             ).fetchone()
-            return int(row["c"])
+            return start.strftime("%Y-%m"), int(row["c"])
         finally:
             conn.close()
 

@@ -233,3 +233,31 @@ def test_an_unconfigured_broker_refuses(seat) -> None:
     broker.demand = None
     with pytest.raises(ValueError):
         submit(broker)
+
+
+def test_cents_used_is_the_pacific_calendar_month(seat) -> None:
+    """The spend budget's window is the calendar month in America/Los_Angeles,
+    not the billing cycle. 2026-11-01T05:00Z is still October in Pacific (22:00
+    Oct 31, PDT); 2026-11-01T08:00Z is November. FALSIFIER: bound the month in
+    UTC and the first job moves months."""
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+
+    broker, db, *_ = seat
+    a = submit(broker)["job_id"]
+    b = submit(broker, matter={"id": OTHER_MATTER, "number": "900202"})["job_id"]
+    call(broker, "demand_job_record", uid=0, job_id=a, state="running", fields={"cents": 300})
+    call(broker, "demand_job_record", uid=0, job_id=b, state="running", fields={"cents": 450})
+    conn = sqlite3.connect(db)
+    conn.execute("UPDATE demand_jobs SET created_at=? WHERE id=?", ("2026-11-01T05:00:00.000Z", a))
+    conn.execute("UPDATE demand_jobs SET created_at=? WHERE id=?", ("2026-11-01T08:00:00.000Z", b))
+    conn.commit()
+    conn.close()
+    verbs = broker.demand
+    october = datetime(2026, 10, 20, 12, tzinfo=timezone.utc)
+    november = datetime(2026, 11, 15, 12, tzinfo=timezone.utc)
+    assert verbs._cents_this_month("", october) == ("2026-10", 300)
+    assert verbs._cents_this_month("", november) == ("2026-11", 450)
+    assert verbs._cents_this_month(b, november) == ("2026-11", 0)
+    this_month = datetime.now(timezone.utc).astimezone(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
+    assert call(broker, "demand_allowance", uid=0)["cents_month"] == this_month
