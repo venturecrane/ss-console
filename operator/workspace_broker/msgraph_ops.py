@@ -711,7 +711,7 @@ class MsGraphOps:
         # against (ss#2499). Naming them makes the dependency visible to whoever
         # edits this next, instead of leaving it to a default that could narrow.
         source = self._request(
-            self._mail_path("messages", message_id) + "?$select=id,from,sender,conversationId",
+            self._mail_path("messages", message_id) + "?$select=id,from,sender,replyTo,conversationId",
             "GET",
             None,
             credential_path=self._read_credential_path,
@@ -720,6 +720,20 @@ class MsGraphOps:
         sender = normalize_address(source.get("from") or source.get("sender"))
         if not sender:
             raise MsGraphRefused(f"cannot determine who sent message {message_id!r}; refusing to reply")
+        # Graph's /reply goes to the source's ``replyTo`` whenever it is set,
+        # not to ``from`` (Graph "message: reply"). So the sender this fence
+        # vetted is only the recipient when replyTo is empty or names that same
+        # sender; any other replyTo would carry the answer to an address nobody
+        # checked. Refused, never rewritten (2026-10-06 review of overlay#421).
+        reply_to = {normalize_address(r) for r in source.get("replyTo") or []}
+        reply_to.discard("")
+        if reply_to - {sender}:
+            raise MsGraphRefused(
+                "that message asks for replies to go to an address other than its sender; "
+                "this seat answers only the sender it can vet, so it will not reply"
+            )
+        if sender == normalize_address(self.mailbox()):
+            raise MsGraphRefused("that message was sent by this seat's own mailbox; it is not an inbound request")
         policy = authored_policy(self._customer_path)
         if not policy.allows_reply_to(sender):
             raise MsGraphRefused(
