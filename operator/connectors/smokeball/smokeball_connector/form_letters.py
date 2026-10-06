@@ -548,6 +548,27 @@ def render_firm_form_letter(
     return _fill_and_file(client, matter, spec, when, resolved, cited, employer)
 
 
+def _gather(
+    client: Any,
+    matter: str,
+    spec: FormSpec,
+    when: date,
+    carried: set[str],
+    cited: Any,
+    employer: dict[str, Any] | None,
+) -> tuple[dict[str, Fact] | None, cited_facts.Confirmed | None]:
+    """The form's facts by its kind. None (wage loss only): no employer at all."""
+    if spec.facts_kind == "rep":
+        return gather_facts(client, matter, spec, when), None
+    record = client.get(f"/matters/{matter}")
+    record = record if isinstance(record, dict) else {}
+    if spec.facts_kind == "fax":
+        return _fax_facts(client, matter, record, spec, when), None
+    if spec.facts_kind == "wage":
+        return _wage_facts(client, matter, record, when, employer), None
+    return _health_facts(client, matter, record, when, cited, carried)
+
+
 def _fill_and_file(
     client: Any,
     matter: str,
@@ -566,41 +587,21 @@ def _fill_and_file(
             )
     except FormError as exc:
         return _refused(f"{resolved.name!r} could not be filled: {exc}", template=template)
-    confirmed: cited_facts.Confirmed | None = None
     try:
-        if spec.facts_kind == "fax":
-            record = client.get(f"/matters/{matter}")
-            found = _fax_facts(client, matter, record if isinstance(record, dict) else {}, spec, when)
-        elif spec.facts_kind == "wage":
-            record = client.get(f"/matters/{matter}")
-            try:
-                wage = _wage_facts(client, matter, record if isinstance(record, dict) else {}, when, employer)
-            except EmployerUnclear as exc:
-                return {
-                    "status": "employer_unclear",
-                    "fileId": None,
-                    "matterId": matter,
-                    "reason": f"{exc}; nothing was filed",
-                }
-            if wage is None:
-                return {
-                    "status": "needs_employer",
-                    "fileId": None,
-                    "matterId": matter,
-                    "reason": "the matter has no Employer on the client's role and none was given; nothing was filed",
-                }
-            found = wage
-        elif spec.facts_kind == "health":
-            record = client.get(f"/matters/{matter}")
-            found, confirmed = _health_facts(
-                client, matter, record if isinstance(record, dict) else {}, when, cited, carried
-            )
-        else:
-            found = gather_facts(client, matter, spec, when)
+        found, confirmed = _gather(client, matter, spec, when, carried, cited, employer)
+    except EmployerUnclear as exc:
+        return {"status": "employer_unclear", "fileId": None, "matterId": matter, "reason": f"{exc}; nothing was filed"}
     except Exception as exc:  # noqa: BLE001 - a record that could not be READ is never printed as "not in the file"; nothing files
         return _refused(
             f"the matter's record could not be read ({exc.__class__.__name__}: {str(exc)[:200]}); nothing was filed"
         )
+    if found is None:
+        return {
+            "status": "needs_employer",
+            "fileId": None,
+            "matterId": matter,
+            "reason": "the matter has no Employer on the client's role and none was given; nothing was filed",
+        }
     values = {k: f.value if f.value is not None else MARKER.format(f.missing) for k, f in found.items()}
     filled = fill_form(resolved.bytes, values, spec.paragraph_fields)
     used = set(filled.placeholders)
