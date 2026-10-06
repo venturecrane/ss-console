@@ -30,6 +30,8 @@ plugin commits no act row; a validate failure finishes nothing.
 
 from __future__ import annotations
 
+import dataclasses
+
 import hashlib
 import json
 import os
@@ -54,6 +56,13 @@ DEFAULT_RECORD_TYPES = ("Medical", "Billing")
 # seeds nothing and the administrator's read-back is held (2026-10-05).
 FEE_CONFIG_BLOCK = "records_orders"
 FEE_CONFIG_KEY = "pre_approved_custodian_fee"
+#: How the client's HIPAA authorization reaches the vendor, authored per firm:
+#: ``upload`` (a signed authorization PDF on the matter) or ``e_auth`` (the
+#: vendor emails the client its own authorization to sign; nothing uploaded).
+#: A&P chose e_auth on 2026-10-06: its retainer packets' authorization pages
+#: are signed but otherwise blank. Unauthored reads as ``upload``.
+AUTH_CONFIG_KEY = "authorization"
+AUTH_MODES = ("upload", "e_auth")
 MAX_CUSTODIAN_FEE = 10_000.0
 MAX_LOCATIONS = 10
 MAX_YEARS = 20
@@ -68,6 +77,8 @@ ORDER_KEYS = (
     "ssn_last4",
     "order_by_email",
     "language",
+    "authorization",
+    "esign_to",
     "hipaa_file_id",
     "hipaa_file_name",
     "pre_approved_custodian_fee",
@@ -156,6 +167,22 @@ def authored_custodian_fee(path: str | None = None) -> Any:
         return None
     block = cfg.get(FEE_CONFIG_BLOCK) if isinstance(cfg, dict) else None
     return block.get(FEE_CONFIG_KEY) if isinstance(block, dict) else None
+
+
+def authored_authorization(path: str | None = None) -> str:
+    """``records_orders.authorization``: ``e_auth`` or ``upload`` (the default,
+    and what anything unreadable or unrecognized reads as)."""
+    path = path or os.environ.get(CUSTOMER_YAML_ENV) or DEFAULT_CUSTOMER_YAML
+    try:
+        import yaml
+
+        with open(path, encoding="utf-8") as fh:
+            cfg = yaml.safe_load(fh) or {}
+    except Exception:  # noqa: BLE001 - unreadable config: the long-standing upload mode
+        return "upload"
+    block = cfg.get(FEE_CONFIG_BLOCK) if isinstance(cfg, dict) else None
+    mode = block.get(AUTH_CONFIG_KEY) if isinstance(block, dict) else None
+    return mode if mode in AUTH_MODES else "upload"
 
 
 def custodian_fee(value: Any, authored: Any = None) -> float:
@@ -294,6 +321,9 @@ def prepare(client: Any, yc: Any, request: dict[str, Any], today: date) -> dict[
         custodian_fee(request.get("pre_approved_custodian_fee"), authored_custodian_fee()),
     )
     matter, facts = read_matter_and_patient(client, matter_id)
+    auth = authored_authorization()
+    if auth == "e_auth" and not facts.esign_to and "email or cell phone" not in facts.missing:
+        facts = dataclasses.replace(facts, missing=(*facts.missing, "email or cell phone (for the signing request)"))
     if facts.missing:
         return {
             "status": "missing_client_facts",
@@ -302,7 +332,9 @@ def prepare(client: Any, yc: Any, request: dict[str, Any], today: date) -> dict[
             "next_step": "Smokeball's client contact is missing what the vendor requires (listed by name). Ask the "
             "requester to complete it in Smokeball, then prepare again. Nothing was ordered.",
         }
-    hipaa, hipaa_choices = find_hipaa(client, matter_id, request.get("hipaa_file_id"))
+    hipaa, hipaa_choices = (
+        (None, []) if auth == "e_auth" else find_hipaa(client, matter_id, request.get("hipaa_file_id"))
+    )
     locations, questions = [], []
     for facility in facilities:
         location, question = resolve_facility(yc, facility)
@@ -318,12 +350,12 @@ def prepare(client: Any, yc: Any, request: dict[str, Any], today: date) -> dict[
             }
         )
         locations.append(location)
-    if questions or hipaa is None:
+    if questions or (hipaa is None and auth == "upload"):
         return {
             "status": "needs_choice",
             "matter_number": matter["number"],
             "facilities": questions,
-            "hipaa_candidates": hipaa_choices if hipaa is None else [],
+            "hipaa_candidates": hipaa_choices if (hipaa is None and auth == "upload") else [],
             "next_step": "Ask the requester to settle each item (a facility from its candidates, or new_custodian "
             "true with its address; the authorization by file_id), then prepare again. Nothing was ordered.",
         }
@@ -335,8 +367,10 @@ def prepare(client: Any, yc: Any, request: dict[str, Any], today: date) -> dict[
         "ssn_last4": facts.ssn_last4,
         "order_by_email": email,
         "language": lang,
-        "hipaa_file_id": hipaa["id"],
-        "hipaa_file_name": _file_label(hipaa),
+        "authorization": auth,
+        "esign_to": facts.esign_label if auth == "e_auth" else None,
+        "hipaa_file_id": hipaa["id"] if hipaa else None,
+        "hipaa_file_name": _file_label(hipaa) if hipaa else None,
         "pre_approved_custodian_fee": fee,
         "order_certificate": "request" if request.get("certification") is True else "no_request",
         "locations": locations,
@@ -347,11 +381,19 @@ def prepare(client: Any, yc: Any, request: dict[str, Any], today: date) -> dict[
         "order": {k: order[k] for k in ORDER_KEYS},
         "client": facts.summary(),
         "pre_approved_custodian_fee_shown": f"${fee:,.2f}",
-        "next_step": "Pass `order` to place_records_order exactly as returned. Nothing has been ordered.",
+        "next_step": "Pass `order` to place_records_order exactly as returned. Nothing has been ordered."
+        + (
+            f" When it is placed, the vendor sends {facts.full_name} its own authorization to sign at "
+            f"{facts.esign_label}; the records are requested once it is signed."
+            if auth == "e_auth"
+            else ""
+        ),
     }
 
 
 __all__ = [
+    "AUTH_MODES",
+    "authored_authorization",
     "authored_custodian_fee",
     "DEFAULT_RECORD_TYPES",
     "LOCATION_KEYS",
