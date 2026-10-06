@@ -480,7 +480,7 @@ def render_firm_form_letter(
     employer fills), or ``med_pay_ledger_email`` (the firm's email asking the
     client's own carrier for the med pay ledger: NOTHING is filed; the result
     carries ``email`` {to, subject, body} for the person to send from their
-    own mailbox, ``drafted`` or ``incomplete`` when a fact is missing).
+    own mailbox and ``reply_block``, which goes into the reply exactly as returned, ``drafted`` or ``incomplete`` when a fact is missing).
     ``date`` is the letter date as YYYY-MM-DD; omit it for today.
 
     ``employer`` (wage loss only): ``{"name": ..., "address": ...}`` exactly
