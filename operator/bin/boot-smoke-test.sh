@@ -412,6 +412,27 @@ if not on:
 left = sorted(n for n in os.listdir(\"/app/skills\") if n not in on and os.path.lexists(os.path.join(\"/opt/data/skills\", n)))
 sys.exit(\"omitted skills on the volume: \" + \" \".join(left) if left else 0)
 '"
+# The image copy: every omitted /app/skills/<name> is root:root 0700, so the
+# agent user cannot open it (the root entrypoint locks it before the exec into
+# bootstrap). Checked AS the agent user, the way the agent would try.
+ssh_exec_script "omitted-skills-locked" "setpriv --reuid=hermes --regid=hermes --init-groups /opt/hermes/.venv/bin/python3 -c '
+import os, sys, yaml
+p = os.environ.get(\"SMD_CUSTOMER_YAML_PATH\") or next((c for c in (\"/var/lib/smd-config/customer.yaml\", \"/opt/data/customer.yaml\") if os.path.exists(c)), \"\")
+doc = yaml.safe_load(open(p)) or {}
+on = {s[\"name\"] for q in doc.get(\"personas\") or [] for s in (q or {}).get(\"skills\") or [] if isinstance(s, dict) and s.get(\"enabled\") is not False and isinstance(s.get(\"name\"), str)}
+if not on:
+    sys.exit(\"no enabled skill read from customer.yaml\")
+open_ = []
+for n in sorted(os.listdir(\"/app/skills\")):
+    if n in on:
+        continue
+    try:
+        os.listdir(os.path.join(\"/app/skills\", n))
+        open_.append(n)
+    except PermissionError:
+        pass
+sys.exit(\"omitted skills the agent can open: \" + \" \".join(open_) if open_ else 0)
+'"
 
 # ---------- Step 7: overlay plugins installed ----------
 # `hermes plugins list` should include the four hermes-smd-* plugins

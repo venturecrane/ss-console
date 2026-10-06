@@ -39,6 +39,7 @@ personas:
         enabled: true
         settings:
           demand_allowance_per_cycle: {allowance}
+          rehearsal_matter_id: '1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23'
 self_initiation:
   document_library:
     operator_matter:
@@ -282,6 +283,10 @@ def test_file_to_is_the_matter_or_the_authored_library(seat) -> None:
     library = {"id": "1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23", "number": "OPS-OPERATOR-LIBRARY"}
     rehearsal = submit(broker, matter={"id": OTHER_MATTER, "number": "900202"}, file_to=library)
     assert rehearsal["accepted"] is True
+    # The right number with a wrong id: refused. FALSIFIER: compare numbers only.
+    wrong_id = {"id": "9dad2f6b-7c5b-4cee-a06d-aab9e1e91a99", "number": "OPS-OPERATOR-LIBRARY"}
+    out = submit(broker, matter={"id": "3dad2f6b-7c5b-4cee-a06d-aab9e1e91a25", "number": "900204"}, file_to=wrong_id)
+    assert out["accepted"] is False and "filing target" in out["reason"]
     yaml_path.write_text(YAML.format(allowance=25).split("self_initiation:")[0])
     out = submit(
         broker,

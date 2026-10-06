@@ -730,6 +730,12 @@ personas:
         enabled: true
         settings:
           demand_allowance_per_cycle: 25
+          # The one matter a rehearsal may file on instead of the matter it reads:
+          # the firm's own Operator Library (number OPS-OPERATOR-LIBRARY, authored
+          # under self_initiation.document_library.operator_matter). The broker
+          # requires a rehearsal's filing target to match BOTH this id and that
+          # number; any other target is refused.
+          rehearsal_matter_id: '1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23'
     # Every entry is pre_run-gated (ADR 0021 Stream B, #1748). The escalator's
     # bespoke pre_run decides whether a deadline needs the ladder; the other
     # skills carry the shared empty-seat gate (operator/templates/pre_run_gate.py):

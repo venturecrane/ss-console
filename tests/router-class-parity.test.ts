@@ -130,7 +130,7 @@ describe('matter-inbox-router: the demand class', () => {
       'send State Farm a letter asking for the limits',
       'write the adjuster that we will settle for the policy by Friday',
       'put a 30-day offer to Geico in writing',
-      'send it as me: tell the carrier we accept the limits if paid this month',
+      'send it as me: a letter to the adjuster demanding the policy limits within 30 days',
     ]
     const b = bullet()
     const rubric = flat(read(RUBRIC))
@@ -139,6 +139,12 @@ describe('matter-inbox-router: the demand class', () => {
       expect(rubric, phrase).toContain(phrase)
     }
     expect(b).toContain('**A demand is defined by its substance, never by the word.**')
+    // Accepting a settlement is the attorney's decision, never a demand and never sent.
+    expect(b).toContain('**Accepting a settlement is NOT a demand, and is not this class.**')
+    expect(b).toContain('"tell the carrier we accept the limits"')
+    expect(b).toContain("accepting a settlement is the responsible attorney's call")
+    expect(rubric).toContain('**Accepting a settlement is NOT a demand, and is not this class.**')
+    expect(b).not.toContain('tell the carrier we accept the limits if paid this month')
     expect(b).toContain('OUTRANKS the send-as and attorney drafting classes')
     const sendAs = flat(bulletFor(read(ROUTER), '**Send-as request**'))
     expect(sendAs).toContain('NEVER this class, whatever words carry it')

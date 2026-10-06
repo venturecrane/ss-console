@@ -72,6 +72,10 @@ RESUME_AUDIT_TYPE = "DEMAND_JOB_RESUME_REQUESTED"
 if AUDIT_TYPES != AUDIT_TYPE:
     raise RuntimeError("demand_verbs.AUDIT_TYPES and demand_ledger.AUDIT_TYPE disagree")
 
+#: The demand skill setting naming the library matter's id, the one matter a
+#: rehearsal may file on (its number is the firm's authored library number).
+REHEARSAL_MATTER_KEY = "rehearsal_matter_id"
+
 #: The spend budget's clock (calendar month, Pacific).
 _PACIFIC = ZoneInfo("America/Los_Angeles")
 
@@ -266,8 +270,17 @@ class DemandVerbs:
             )
         file_to = envelope["file_to"]
         if file_to is not None and file_to["id"] != envelope["matter"]["id"]:
+            # The rehearsal target is AUTHORED by id and by number: the id in the
+            # demand skill's settings (rehearsal_matter_id), the number as the
+            # firm's own library matter. A right number with a wrong id is refused.
             library = operator_library_number(self.customer_yaml)
-            if not library or file_to["number"] != library:
+            library_id = str(settings.get(REHEARSAL_MATTER_KEY) or "").strip().lower()
+            if (
+                not library
+                or not library_id
+                or file_to["number"] != library
+                or file_to["id"].strip().lower() != library_id
+            ):
                 return refused(
                     "a demand is filed on the matter it reads, or on the firm's own authored "
                     "library matter for a rehearsal; that filing target is neither, so nothing was queued"

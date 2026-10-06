@@ -306,7 +306,14 @@ def reply_verb(
         if method == "POST" and not state["claimed"]:
             if not bound_replies.claim(db_path, v.key, v.graph_message_id, v.internet_message_id, session_id):
                 raise BindingRefused("that reply was already sent")
-            if v.kind == "demand_job" and not _demand_ledger(broker).mark_replied(v.job_id, _outcome(v)):
+            try:
+                marked = v.kind != "demand_job" or _demand_ledger(broker).mark_replied(v.job_id, _outcome(v))
+            except Exception:
+                # The ledger could not be written: nothing has been sent, so
+                # the one reply is given back rather than silently spent.
+                bound_replies.release(db_path, v.key)
+                raise
+            if not marked:
                 # The ledger's own compare-and-set disagrees (this outcome was
                 # already replied to): honor it, give back the claim, send nothing.
                 bound_replies.release(db_path, v.key)

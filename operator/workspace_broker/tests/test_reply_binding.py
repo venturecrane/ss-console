@@ -536,6 +536,26 @@ def test_the_ledgers_reply_mark_is_honored(tmp_path: Path) -> None:
     assert not bound_replies.claimed(broker.audit_db_path, f"demand_job:{job}:1:delivered")
 
 
+def test_a_ledger_write_that_raises_gives_the_claim_back(tmp_path: Path, monkeypatch) -> None:
+    """mark_replied raises (a locked or broken DB): nothing is sent, and the
+    binding claim is released so a retry can still reply. FALSIFIER: drop the
+    try/release and the claim stays spent with nothing sent."""
+    job = _job(tmp_path, ["running", "delivered"])
+    box = FakeMailbox()
+
+    def boom(self, job_id, key="reply"):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(DemandLedger, "mark_replied", boom)
+    broker = _broker(tmp_path, box)
+    with pytest.raises(sqlite3.OperationalError):
+        _send(broker, {"kind": "demand_job", "job_id": job})
+    assert box.replies() == []
+    assert not bound_replies.claimed(broker.audit_db_path, f"demand_job:{job}:1:delivered")
+    monkeypatch.undo()
+    assert _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})["recipients"] == [ADMIN]
+
+
 def test_a_released_demand_reply_clears_the_ledger_mark(tmp_path: Path) -> None:
     job = _job(tmp_path, ["running", "delivered"])
     box = FakeMailbox()
