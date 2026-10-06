@@ -695,38 +695,41 @@ personas:
           scheduled: true
           webhook: false
         enabled: true
-      # ---- work-product drafting lane (law-firm/pi@0.3.0): NOT ACTIVATED ----
-      # FAIL-CLOSED BY OMISSION (ADR 0035, no imposed defaults): the four
-      # drafting skills (discovery-response-drafter, follow-up-discovery-drafter,
-      # demand-letter-drafter, mediation-brief-drafter) exist in the pack and
-      # are rehearsing on pilot-smokeball, but this seat does not carry them
-      # until the firm authors the lane. Unlisted = the seat refuses; there is
-      # nothing to disable.
-      # Activation requires, in order (tracked in the engagement record):
-      #   1. The firm's explicit authorization of the drafting lane (the
-      #      2026-07-29 call and its follow-up letter are the record).
-      #   2. The firm's voice read IN PLACE from exemplar documents they point
-      #      at through the authorized connector (letter 07: "You do not need
-      #      to send us anything" — the firm never assembles or hands over
-      #      samples), distilled into an approved voice profile
-      #      (voice_library below is empty until then).
-      #   3. The firm's own skeletons per artifact class (the shipped defaults
-      #      in operator/templates/drafting/skeletons/ are rehearsal stand-ins).
-      #   4. The drafting-gate delivery hook BUILT, then deployed to this seat.
-      #      code_execution is refused here, so the mechanical gate has to run
-      #      off the agent's own hands. As of 2026-08-13 that hook DOES NOT
-      #      EXIST (ss-console#2258): drafting_gate_check.py is referenced in the
-      #      overlay only as a presence probe, and hermes-smd-drafting disclaims
-      #      the record checks in its own docstring. This row was written as a
-      #      deploy step; it is a BUILD step, and "no draft surfaces ungated" is
-      #      the goal of the row rather than a description of today. It holds on
-      #      this seat right now only because the lane above is unactivated, so
-      #      no draft surfaces here at all.
-      #   5. The pilot-smokeball kill-test battery green on the exact skill
-      #      versions being promoted.
-      # When those are met, the activation is the pilot-smokeball block
-      # (customer.yaml there, "work-product drafting lane") copied onto this
-      # seat: manual initiation only, never scheduled, never webhook.
+      # ---- the demand lane: ACTIVATED 2026-10-06 (demand-letter-drafter only) ----
+      # LANE ACTIVATION RECORD. The firm's administrator asked the Operator for
+      # demand prep (a records gap audit and a draft demand on a named matter)
+      # on 2026-10-06; the Captain decided that request is the firm's
+      # authorization of the demand lane and authorized it the same day. Only
+      # demand-letter-drafter is listed: discovery-response-drafter,
+      # follow-up-discovery-drafter and mediation-brief-drafter stay off this
+      # seat, fail-closed by omission (ADR 0035), and the seat's skill read
+      # fence refuses to load an omitted skill's files.
+      # The skill NEVER drafts in a turn. REQUEST mode submits a demand job
+      # (operator/workspace_broker/demand_verbs.py); the demand job on the
+      # Machine does the work and DELIVER mode replies in the requester's
+      # thread through the verified reply binding. The former activation
+      # prerequisites each became a row of the demand contract:
+      #   1. Authorization: the Captain's decision above.
+      #   2. Voice: read in place from the firm's own exemplars, held in the
+      #      seat's vault, never handed over by the firm.
+      #   3. Skeleton: the firm's own house format (Demand.<Client>.docx),
+      #      enforced by the format check before anything is filed.
+      #   4. Drafting gate: runs in the job before render; a draft that fails
+      #      it is never filed.
+      #   5. Kill-test battery: run on pilot-smokeball before the first live job.
+      # Manual initiation only, never scheduled, never webhook. Reserved to
+      # scope.admins (the broker checks the requester the platform took from
+      # the email). The allowance is a COUNT of demands per billing cycle, on
+      # the chronology cycle's anchor (decided 2026-09-24).
+      - name: demand-letter-drafter # admin-requested demand prep, queued as a job; never drafted in a turn
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+        settings:
+          demand_allowance_per_cycle: 25
     # Every entry is pre_run-gated (ADR 0021 Stream B, #1748). The escalator's
     # bespoke pre_run decides whether a deadline needs the ladder; the other
     # skills carry the shared empty-seat gate (operator/templates/pre_run_gate.py):
