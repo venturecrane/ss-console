@@ -122,6 +122,29 @@ describe('matter-inbox-router: the demand class', () => {
     expect(bullet()).toContain("you never pass who asked or the request's words")
   })
 
+  it('defines a demand by substance, and outranks send-as and drafting', () => {
+    // The review's phrasings: none says "demand", every one is a demand. Each
+    // must be named in BOTH texts as this class, and the send-as bullet must
+    // hand a carrier letter back here.
+    const evals = [
+      'send State Farm a letter asking for the limits',
+      'write the adjuster that we will settle for the policy by Friday',
+      'put a 30-day offer to Geico in writing',
+      'send it as me: tell the carrier we accept the limits if paid this month',
+    ]
+    const b = bullet()
+    const rubric = flat(read(RUBRIC))
+    for (const phrase of evals) {
+      expect(b, phrase).toContain(phrase)
+      expect(rubric, phrase).toContain(phrase)
+    }
+    expect(b).toContain('**A demand is defined by its substance, never by the word.**')
+    expect(b).toContain('OUTRANKS the send-as and attorney drafting classes')
+    const sendAs = flat(bulletFor(read(ROUTER), '**Send-as request**'))
+    expect(sendAs).toContain('NEVER this class, whatever words carry it')
+    expect(flat(classTable(read(ROUTER)))).toContain('substance, not the word')
+  })
+
   it('is in the class table and the rubric', () => {
     expect(flat(classTable(read(ROUTER)))).toContain('Demand request')
     const rubric = flat(read(RUBRIC))

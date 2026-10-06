@@ -451,6 +451,57 @@ else
 fi
 # retired-skill-prune:end
 
+# Prune OMITTED repo skills from the volume (2026-10-06). A seat's lanes are
+# fail-closed by OMISSION from customer.yaml, but the seed above copies every
+# repo skill onto the volume, and on 2026-10-06 the router read an omitted
+# drafting skill's files and ran it inline. A repo skill (one the image ships
+# under /app/skills) that no persona in the live customer.yaml enables is
+# removed from ${HERMES_HOME}/skills here, every boot, so the volume converges
+# on the authored set. Agent-authored skills (only on the volume, ADR 0017) are
+# never iterated. The overlay's skill read fence stays as defense in depth; the
+# image copy under /app/skills is the root entrypoint's to lock. FAIL-SAFE: a
+# config that cannot be read, or that enables no skill at all, prunes NOTHING
+# (an empty allowlist must never read as "remove every skill"); never a `die`.
+# boot-smoke-test.sh step 6e asserts the absence on the seat.
+# omitted-skill-prune:begin (tests/operator-skill-deploy.test.ts runs this block)
+_omit_app_skills=/app/skills
+_omit_py=/opt/hermes/.venv/bin/python3
+_enabled_names="$("${_omit_py}" - "${CUSTOMER_YAML}" <<'OMITTED_SKILLS_PY' 2>/dev/null || true
+import sys
+
+import yaml
+
+doc = yaml.safe_load(open(sys.argv[1], encoding="utf-8")) or {}
+names = set()
+for persona in doc.get("personas") or []:
+    for skill in (persona or {}).get("skills") or []:
+        if isinstance(skill, dict) and skill.get("enabled") is not False and isinstance(skill.get("name"), str):
+            names.add(skill["name"].strip())
+print(" ".join(sorted(names)))
+OMITTED_SKILLS_PY
+)"
+if [ -z "${_enabled_names// /}" ]; then
+  log "WARNING: omitted-skill prune: no enabled skill read from ${CUSTOMER_YAML}; pruning nothing"
+else
+  for _src in "${_omit_app_skills}"/*/; do
+    [ -e "${_src}" ] || continue
+    _name=$(basename "${_src}")
+    case " ${_enabled_names} " in
+      *" ${_name} "*) continue ;;
+    esac
+    _dst="${HERMES_HOME}/skills/${_name}"
+    if [ -L "${_dst}" ]; then
+      rm -f "${_dst}" || { log "WARNING: cannot prune omitted skill alias ${_dst}"; continue; }
+    elif [ -e "${_dst}" ]; then
+      rm -rf "${_dst}" || { log "WARNING: cannot prune omitted skill ${_dst}"; continue; }
+    else
+      continue
+    fi
+    log "Pruned omitted skill ${_name} from ${HERMES_HOME}/skills (not enabled in customer.yaml)"
+  done
+fi
+# omitted-skill-prune:end
+
 # Publish the seat's timezone on the env channel Hermes' clock resolves first
 # (hermes_time._resolve_timezone_name: HERMES_TIMEZONE env > global config.yaml
 # `timezone` > server local). The container clock is UTC, so without this every
