@@ -47,7 +47,7 @@ from typing import Any, Callable
 
 from .broker_context import BrokerContext
 from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
-from . import medchron_verbs
+from . import medchron_verbs, reply_binding
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
 
@@ -161,6 +161,12 @@ VERBS: tuple[Verb, ...] = (
     Verb("agentmail_reply", _only(GATEWAY), transmit_verbs.agentmail),
     Verb("msgraph_send", _only(GATEWAY), transmit_verbs.msgraph),
     Verb("msgraph_reply", _only(GATEWAY), transmit_verbs.msgraph),
+    # The verified reply binding (reply_binding.py): a turn no inbound opened
+    # answers one earlier email, once, to its verified sender. Gateway-only like
+    # the channel it transmits on; the check verb is gateway-only too, because
+    # it reads the mailbox.
+    Verb("msgraph_reply_bind", _only(GATEWAY), reply_binding.bind_verb),
+    Verb("msgraph_reply_bound", _only(GATEWAY), reply_binding.reply_verb),
     # ADR 0089 staff send-as: propose and decide transmit (the approval email;
     # the send AS a staff member), so they are gateway-only like the channels.
     # The reply notice goes to a fixed recipient about an already-sent draft and
