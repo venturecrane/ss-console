@@ -301,7 +301,7 @@ def _fax_facts(
 
 
 def _address_lines(address: str) -> str:
-    """"100 Main St, Sacramento, CA 95814" as the firm's address block prints
+    """ "100 Main St, Sacramento, CA 95814" as the firm's address block prints
     it (street, then city line); any other shape is printed as written."""
     from .medicals_provider import _ADDRESS
 
