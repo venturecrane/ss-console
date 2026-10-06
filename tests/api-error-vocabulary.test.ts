@@ -174,3 +174,30 @@ describe('API error vocabulary', () => {
     })
   })
 })
+
+/**
+ * The browser side of the same vocabulary (code review 2026-10-06, N1). Once
+ * `error` became a machine code, a script that put `error` on the screen showed
+ * the visitor "validation_failed". The book, contact and get-started callers
+ * read `message`; this pins every script under src/scripts to the same rule.
+ */
+describe('browser scripts display the prose, never the code', () => {
+  const SCRIPTS_ROOT = resolve('src/scripts')
+  const SCRIPT_FILES = readdirSync(SCRIPTS_ROOT, { recursive: true })
+    .map((entry) => `${SCRIPTS_ROOT}/${String(entry)}`)
+    .filter((p) => p.endsWith('.ts') && statSync(p).isFile())
+  const READS_ERROR_CODE = /strField\(\s*\w+\s*,\s*'error'\s*\)/
+
+  it('finds the browser scripts (sanity)', () => {
+    expect(SCRIPT_FILES.length).toBeGreaterThan(0)
+  })
+
+  it('no script reads the error code field for display', () => {
+    const offenders = SCRIPT_FILES.filter((f) => READS_ERROR_CODE.test(readFileSync(f, 'utf8')))
+    expect(offenders.map(rel)).toEqual([])
+  })
+
+  it('the scanner can fail', () => {
+    expect(READS_ERROR_CODE.test("strField(data, 'error') ?? 'x'")).toBe(true)
+  })
+})

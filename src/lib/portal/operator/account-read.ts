@@ -131,7 +131,7 @@ export function subscriptionStatusLabel(status: SubscriptionStatus): string {
 export function subscriptionStatusProse(status: SubscriptionStatus): string {
   switch (status) {
     case 'provisioning':
-      return 'Your operator is being set up. We will let you know the moment it is ready.'
+      return 'Your operator is being set up.'
     case 'active':
       return 'Your operator is running.'
     case 'paused':

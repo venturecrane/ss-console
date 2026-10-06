@@ -83,7 +83,10 @@ if (/FROM operator_change_requests/i.test(sql)) {
 }
 if (/AS total/i.test(sql)) return out([{ total: state.obligations.length, universe: state.obligations.filter(o => !['closed','cancelled','void'].includes(o.state)).length }])
 if (/MAX\\(total_rows\\)/i.test(sql)) return out([{ hwm: state.high_water_mark ?? null }])
-if (/LEFT JOIN reconcile_runs/i.test(sql)) return out(state.unwitnessed ?? [])
+if (/LEFT JOIN reconcile_runs/i.test(sql)) {
+  if (process.env.FAKE_D1_UNWITNESSED_UNREADABLE === '1') { process.exit(6) }
+  return out(state.unwitnessed ?? [])
+}
 if (/GROUP BY origin_source/i.test(sql)) return out(state.census ?? [])
 if (/FROM client_obligations/i.test(sql)) return out(state.obligations.filter(o => !['closed','cancelled','void'].includes(o.state)))
 out([])
@@ -318,6 +321,16 @@ describe('findings', () => {
     const result = run()
     expect(result.code).toBe(2)
     expect(result.stdout).toMatch(/no CI workflow stands behind/)
+  })
+
+  it('treats an unreadable certification read as a control failure, not zero findings', () => {
+    // Code review 2026-10-06, N6: the read went through safeAll and its `.ok`
+    // was never checked, so a failed D1 read reported zero unwitnessed
+    // certifications and the run could exit converged.
+    setState({})
+    const result = run({ FAKE_D1_UNWITNESSED_UNREADABLE: '1' })
+    expect(result.code).toBe(1)
+    expect(result.stdout).toMatch(/unwitnessed certifications unreadable/)
   })
 })
 

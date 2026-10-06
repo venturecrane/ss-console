@@ -135,7 +135,7 @@ async function operatorTurn(): Promise<void> {
     const data: unknown = await res.json()
     const message = strField(data, 'message')
     if (!res.ok || !message) {
-      appendBubble('operator', strField(data, 'error') ?? 'Something went wrong. Please try again.')
+      appendBubble('operator', message ?? 'Something went wrong. Please try again.')
       setComposerEnabled(true)
       return
     }
@@ -176,7 +176,7 @@ async function finish(): Promise<void> {
     const data: unknown = await res.json()
     const findings = strField(data, 'findings')
     if (!res.ok || !findings) {
-      reportBody.innerHTML = `<p class="muted">${escapeHtml(strField(data, 'error') ?? 'Could not draft findings.')}</p>`
+      reportBody.innerHTML = `<p class="muted">${escapeHtml(strField(data, 'message') ?? 'Could not draft findings.')}</p>`
       return
     }
     reportBody.innerHTML = renderMarkdown(findings)

@@ -205,7 +205,7 @@ const csTone = startStatus === 'done' ? 'success' : 'error'
                 tone={stamp.tone}
                 toneLabel={stamp.label}
                 title={productDisplayName(sub)}
-                amountCents={sub.product_slug === 'operator' ? (operatorPriceCents ?? 0) : 0}
+                amountCents={sub.product_slug === 'operator' ? operatorPriceCents : null}
                 metaCaption="Per month"
                 metaLabel={date.label}
                 trailingCaption={date.value}

@@ -228,6 +228,10 @@ jobs:
 
       - name: Run Gitleaks
         run: |
+          # Without the next line the `if` below tests tee's status, not
+          # gitleaks', and a real leak takes the success branch (code review
+          # 2026-10-06, N4; pinned by tests/workflow-pipe*.test.ts).
+          set -o pipefail
           echo "## Secret Detection" >> $GITHUB_STEP_SUMMARY
           # Full history, not the working tree. The checkout above pays for
           # `fetch-depth: 0` precisely so a secret committed and later removed

@@ -38,7 +38,9 @@ type StatusProps = {
   tone: Tone
   toneLabel: string
   title: string
-  amountCents: number
+  /** Null when no price was authored: the row draws no amount (and no
+   *  amount caption) rather than a fabricated "$0" (Pattern B). */
+  amountCents: number | null
   metaCaption?: string | null
   trailingCaption?: string | null
   /** Short serial glyph shown in the № cell (ticket chrome only). Card
@@ -111,8 +113,10 @@ const ticketShell = [
             </span>
           </div>
           <div class="flex items-baseline gap-row flex-wrap">
-            <MoneyDisplay amountCents={props.amountCents} size="h2" />
-            {props.metaCaption && (
+            {props.amountCents !== null && (
+              <MoneyDisplay amountCents={props.amountCents} size="h2" />
+            )}
+            {props.amountCents !== null && props.metaCaption && (
               <span class="text-caption text-[color:var(--ss-color-text-muted)]">
                 {props.metaCaption}
               </span>
@@ -197,10 +201,14 @@ const ticketShell = [
 
         {/* Price */}
         <div class="md:border-r-[2px] md:border-[color:var(--ss-color-text-primary)] px-5 py-3 md:py-5 flex flex-col items-start md:items-end justify-center gap-1">
-          <MoneyDisplay amountCents={props.amountCents} size="row" />
-          <span class="font-mono text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
-            {props.metaCaption ?? 'Amount'}
-          </span>
+          {props.amountCents !== null && (
+            <>
+              <MoneyDisplay amountCents={props.amountCents} size="row" />
+              <span class="font-mono text-label font-semibold uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
+                {props.metaCaption ?? 'Amount'}
+              </span>
+            </>
+          )}
         </div>
 
         {/* Date */}
