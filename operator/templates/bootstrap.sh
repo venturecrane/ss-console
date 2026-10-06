@@ -458,8 +458,9 @@ fi
 # under /app/skills) that no persona in the live customer.yaml enables is
 # removed from ${HERMES_HOME}/skills here, every boot, so the volume converges
 # on the authored set. Agent-authored skills (only on the volume, ADR 0017) are
-# never iterated. The overlay's skill read fence stays as defense in depth; the
-# image copy under /app/skills is the root entrypoint's to lock. FAIL-SAFE: a
+# never iterated. The image copy under /app/skills is NOT locked (the seed above
+# copies from it as the hermes user under set -e, and a root-only directory
+# there would stop the boot); the overlay's skill read fence covers it. FAIL-SAFE: a
 # config that cannot be read, or that enables no skill at all, prunes NOTHING
 # (an empty allowlist must never read as "remove every skill"); never a `die`.
 # boot-smoke-test.sh step 6e asserts the absence on the seat.
