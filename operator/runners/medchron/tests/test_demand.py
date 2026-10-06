@@ -169,7 +169,10 @@ def test_a_premise_failure_files_a_coverage_report_and_pays_nothing(tmp_path, pr
     assert client.calls == [] and v.dollars == 0
     assert [f["name"].startswith("Coverage Posture Report") for f in v.files] == [True]
     report = (tmp_path / "job" / "data" / "coverage-report.md").read_text()
-    assert "Demand Acceptance letter (rule: a document name of class acceptance)" in report and "No demand was drafted" in report
+    assert (
+        "Demand Acceptance letter (rule: a document name of class acceptance)" in report
+        and "No demand was drafted" in report
+    )
 
 
 def test_a_written_denial_fails_g2(tmp_path, pricing):
