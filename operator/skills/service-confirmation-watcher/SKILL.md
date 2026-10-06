@@ -154,13 +154,18 @@ before the session started:
 ```
 
 Dedup against that matter's `captured_file_ids`: a candidate whose `fileId` is in the
-list is already captured, so skip it. Three cases are **not** "nothing captured yet"
-and must be treated as unknown, which means surface rather than re-capture:
+list is already captured, so skip it. A matter whose row carries `"unreadable": true`
+or `"truncated": true`, or that has no row at all, is **not** "nothing captured yet" -
+it is "capture state unknown", which means surface rather than re-capture:
 
 - the matter's row carries `"unreadable": true` (its memos could not be read);
 - the row carries `"truncated": true` (more captures exist than were handed over);
-- `memo_facts` is absent altogether, or `mattersTruncated` is true and the matter has
-  no row (the scan is seeing more matters than the facts cover).
+- the matter has **no row at all**, for any reason: its memo read failed (the pre_run
+  drops that matter from `matters` and counts it only in `unreadableMatters`), or
+  `mattersTruncated` is true (the scan is seeing more matters than the facts cover);
+- `memo_facts` is absent altogether.
+
+Never re-capture a proof of service for a matter you have no row for.
 
 **The POS read is unaffected.** This watcher reads the proof of service through
 `get_files_on_matter` + `get_file` / `get_download_url`, and **none of those three is

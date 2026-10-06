@@ -120,7 +120,7 @@ async function drawFindings(): Promise<void> {
     const data: unknown = await res.json()
     const findings = strField(data, 'findings')
     if (!res.ok || !findings) {
-      reportBody.innerHTML = `<p class="muted">${escapeHtml(strField(data, 'error') ?? 'Could not draft findings.')}</p>`
+      reportBody.innerHTML = `<p class="muted">${escapeHtml(strField(data, 'message') ?? 'Could not draft findings.')}</p>`
       return
     }
     reportBody.innerHTML = renderMarkdown(findings)

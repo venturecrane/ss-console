@@ -85,18 +85,76 @@ def test_upload_refuses_a_folder_it_did_not_create(job_dir, firm_config_path, da
 
 
 def test_upload_resumes_after_a_crash_between_create_and_add(job_dir, firm_config_path, data_root):
+    """A send that raises has an UNKNOWN outcome: the POST may have created the
+    file's record before the connection dropped. Review 2026-10-06 (N12): the
+    old shape recorded nothing and a resume re-sent the name, which on a lost
+    response is a same-name duplicate in the client's folder. Now the intent is
+    on disk before the send, a failure holds, a resume never resends it, and a
+    person clearing the `pending` row is what lets it go up exactly once."""
     seat = FakeSeat([], [], {})
     seat.crash_after = 1  # the second add_file dies
     log: list[str] = []
     sr = _upload_sr(job_dir, firm_config_path, data_root, seat, log)
-    with pytest.raises(RuntimeError):
-        upload.run(sr, pause=0, tries=2)
-    d = json.loads((sr.slug_dir / "runs" / "alpha" / "delivery.json").read_text())
+    assert upload.run(sr, pause=0, tries=2) == 2, "a failed send holds; it does not crash or retry"
+    dpath = sr.slug_dir / "runs" / "alpha" / "delivery.json"
+    d = json.loads(dpath.read_text())
     assert d["folder_id"] == "folder-1"  # recorded before the first add_file
+    pend = [f["name"][:9] for f in d["files"] if f.get("pending")]
+    assert pend == ["Exhibit 1"], "the intent row was written before the send"
     seat.crash_after = None
+    assert upload.run(sr, pause=0, tries=3) == 2, "a pending send is never resent by the runner"
+    assert [s["name"][:9] for s in seat.sent] == ["Alpha Exa"]
+    assert any("outcome unknown; not resending" in line for line in log)
+    assert any("will not resend them" in line for line in log)
+    # A person read the folder, found nothing, and cleared the pending row.
+    d = json.loads(dpath.read_text())
+    d["files"] = [f for f in d["files"] if not f.get("pending")]
+    dpath.write_text(json.dumps(d))
     assert upload.run(sr, pause=0, tries=3) == 0
     assert len(seat.created) == 1 and [s["name"][:9] for s in seat.sent] == ["Alpha Exa", "Exhibit 1"]
-    assert any("already present" in line and "1 file(s) sent" in line for line in log)
+
+
+def test_upload_never_reposts_a_send_whose_response_was_lost(job_dir, firm_config_path, data_root):
+    """Review 2026-10-06 (N12). The POST lands, the PUT fails, and the folder
+    holds a 0-byte placeholder under the name. delivery.json used to carry no
+    trace of the attempt, so the resume read the name as unsent and POSTed it
+    again: two same-name records in the client's folder. A 0-byte row is
+    presence, not confirmation, and the runner holds instead of resending.
+
+    Without the fix the first run raises with no trace of the attempt in
+    delivery.json, and a resume POSTs the exhibit a second time."""
+    seat = FakeSeat([], [], {})
+    exhibit = "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf"
+    seat.post_then_fail = {exhibit: 0}
+    log: list[str] = []
+    sr = _upload_sr(job_dir, firm_config_path, data_root, seat, log)
+    assert upload.run(sr, pause=0, tries=2) == 2
+    for _ in range(2):  # resumed twice: neither may POST the name again
+        assert upload.run(sr, pause=0, tries=2) == 2
+    assert [s["name"] for s in seat.sent].count(exhibit) == 1, "a resume must never re-POST a pending send"
+    assert len(seat.sent) == 2 and len(seat.created) == 1
+    assert any("in the listing: yes, 0 bytes" in line for line in log), "the placeholder is read as presence"
+    d = json.loads((sr.slug_dir / "runs" / "alpha" / "delivery.json").read_text())
+    row = next(f for f in d["files"] if f["name"] == exhibit)
+    assert row.get("pending") and not row["confirmed"], "it stays pending until the folder shows it at size"
+
+
+def test_a_lost_response_whose_file_landed_confirms_without_a_resend(job_dir, firm_config_path, data_root):
+    """The other half of an unknown outcome: the whole send landed and only the
+    response was lost, and the vendor's index lags behind it. The resume must
+    find it by name once it materializes, mark it sent and confirmed, and never
+    have POSTed it twice."""
+    seat = FakeSeat([], [], {})
+    exhibit = "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf"
+    seat.post_then_fail = {exhibit: len(b"%PDF-1")}
+    seat.lag = 3
+    log: list[str] = []
+    sr = _upload_sr(job_dir, firm_config_path, data_root, seat, log)
+    assert upload.run(sr, pause=0, tries=1) == 2
+    assert upload.run(sr, pause=0, tries=6) == 0
+    assert [s["name"] for s in seat.sent].count(exhibit) == 1
+    d = json.loads((sr.slug_dir / "runs" / "alpha" / "delivery.json").read_text())
+    assert all(f["sent"] and f["confirmed"] and not f.get("pending") for f in d["files"])
 
 
 def test_upload_holds_when_the_read_back_stays_short(job_dir, firm_config_path, data_root):

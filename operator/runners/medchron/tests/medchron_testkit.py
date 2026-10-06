@@ -133,6 +133,12 @@ class FakeSeat:
         self.sent: list[dict] = []
         self.lag = 0
         self.crash_after: int | None = None
+        # Review 2026-10-06 (N12): add_file is a POST (the folder record) then
+        # a presigned PUT. A name in `post_then_fail` has its POST land -- the
+        # row appears in the listing at the mapped size, 0 for the placeholder
+        # a failed PUT leaves, the full size when only the response was lost --
+        # and then the call raises, so the caller never learns the outcome.
+        self.post_then_fail: dict[str, int] = {}
         self._pending: list[tuple[int, dict]] = []
         self._lists = 0
 
@@ -147,6 +153,7 @@ class FakeSeat:
         if self.crash_after is not None and len(self.sent) >= self.crash_after:
             raise RuntimeError("connection dropped mid-upload")
         self.sent.append({"folderId": folder_id, "name": name, "size": len(data)})
+        landed = self.post_then_fail.pop(name, None)
         # The vendor splits a filename: `name` carries NO extension and `ext`
         # carries it WITH its leading dot (`seat.normalize_file`; measured on
         # all 356 rows of a live matter 2026-09-24). This fake used to echo the
@@ -161,12 +168,14 @@ class FakeSeat:
                 {
                     "id": f"up-{len(self.sent)}",
                     "name": stem if dot else name,
-                    "size": len(data),
+                    "size": len(data) if landed is None else landed,
                     "ext": f".{tail}" if dot else "",
                     "folderId": folder_id,
                 },
             )
         )
+        if landed is not None:
+            raise RuntimeError("the response was lost after the POST")
         return {"fileId": None}
 
     def _materialize(self) -> None:

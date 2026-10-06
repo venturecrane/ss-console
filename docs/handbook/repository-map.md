@@ -21,7 +21,7 @@ The repo is `venturecrane/ss-console`. From the root:
 | `src/` | The Astro SSR application - marketing, admin, portal, API, and all the business logic in `src/lib/`. The bulk of the console plane. |
 | `operator/` | The Operator plane's authored content and tooling: vertical skill bodies, the safety substrate, capability adapters, connectors, per-customer `customer.yaml` files, the workspace broker, provisioning scripts. Python and YAML, not the Worker. |
 | `workers/` | Two sibling Cloudflare Workers run outside the request path: `cost-telemetry` and `cost-anomaly` (Operator cost ingest + anomaly detection). The lead-gen pipelines that used to live here were retired 2026-07-01 (PRs #1610/#1616). |
-| `migrations/` | D1 schema migrations for the console database `ss-console-db`, numbered `0001_*` upward (107 forward migrations plus a `rollbacks/` directory). Applied with `wrangler d1 migrations apply`. See `/admin/playbook/data-model`. |
+| `migrations/` | D1 schema migrations for the console database `ss-console-db`, numbered `0001_*` upward (forward migrations, plus a `rollbacks/` directory; the directory is the count). Applied with `wrangler d1 migrations apply`. See `/admin/playbook/data-model`. |
 | `tests/` | Vitest suites, including the policy-enforcing tests cited in CLAUDE.md (`forbidden-strings.test.ts`, `intake-questionnaire.test.ts`). |
 | `docs/` | All venture documentation: `adr/` (decision records), `handbook/` (this manual), plus `design/`, `runbooks/`, `specs/`, `security/`, and more. The full map is at `/admin/playbook/docs-map`. |
 | `.github/` | CI workflows, including the fabrication and scope merge gates (`scope-deferred-todo.yml`, `unmet-ac-on-close.yml`). See `/admin/playbook/deployment-release`. |

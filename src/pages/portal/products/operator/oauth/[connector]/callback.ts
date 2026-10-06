@@ -87,7 +87,7 @@ async function reject(
     auditReason?: string
   }
 ): Promise<Response> {
-  await emitAuditEvent({
+  await emitAuditEvent(env.DB, {
     action: 'token-rejected',
     customer_id: meta.customer_id,
     provider: meta.provider,
@@ -310,7 +310,7 @@ export const GET: APIRoute = async ({ request, redirect, locals, params }) => {
     })
   }
 
-  await emitAuditEvent({
+  await emitAuditEvent(env.DB, {
     action: 'token-issued',
     customer_id,
     provider: providerSlug,

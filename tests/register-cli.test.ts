@@ -491,6 +491,39 @@ describe('regressions found in review', () => {
     expect(dateQuoteAnchorsDate('we will file before October 15th', '2026-11-30')).toBe(false)
     expect(dateQuoteAnchorsDate('no date at all in this sentence', '2026-10-15')).toBe(false)
   })
+
+  it('refuses a day number that is only a prefix of the stated day (review 2026-10-06 N7)', async () => {
+    // Substring containment let "october 1" anchor inside "october 15", so a
+    // row due the 1st was "grounded" by a letter about the 15th.
+    const { dateQuoteAnchorsDate } = await loadLib()
+    expect(dateQuoteAnchorsDate('done by October 15, 2026.', '2026-10-01')).toBe(false)
+    expect(dateQuoteAnchorsDate('we will file before October 15th', '2026-10-01')).toBe(false)
+    expect(dateQuoteAnchorsDate('by 15 October', '2026-10-01')).toBe(false)
+    expect(dateQuoteAnchorsDate('on 10/15/2026', '2026-10-01')).toBe(false)
+    expect(dateQuoteAnchorsDate('the deadline is 2026-10-150', '2026-10-15')).toBe(false)
+    // The true day still anchors, with or without an ordinal suffix.
+    expect(dateQuoteAnchorsDate('done by October 1, 2026.', '2026-10-01')).toBe(true)
+    expect(dateQuoteAnchorsDate('due October 1st', '2026-10-01')).toBe(true)
+  })
+
+  it('refuses a quote whose stated year is not the due year (review 2026-10-06 N7)', async () => {
+    const { dateQuoteAnchorsDate } = await loadLib()
+    // Adjacent year disagrees.
+    expect(dateQuoteAnchorsDate('due October 15, 2025', '2026-10-15')).toBe(false)
+    expect(dateQuoteAnchorsDate('due October 15th, 2025', '2026-10-15')).toBe(false)
+    expect(dateQuoteAnchorsDate('by 15 October 2025', '2026-10-15')).toBe(false)
+    expect(dateQuoteAnchorsDate('on 10/15/2025', '2026-10-15')).toBe(false)
+    // A conflicting year named elsewhere in the quote, none matching.
+    expect(dateQuoteAnchorsDate('for the 2025 tax year, file by October 15', '2026-10-15')).toBe(
+      false
+    )
+    // Adjacent year agrees, or the quote names the due year somewhere.
+    expect(dateQuoteAnchorsDate('due October 15, 2026', '2026-10-15')).toBe(true)
+    expect(dateQuoteAnchorsDate('by 15 October 2026', '2026-10-15')).toBe(true)
+    expect(dateQuoteAnchorsDate('in 2026, file by October 15', '2026-10-15')).toBe(true)
+    // No year at all still anchors: letters routinely omit the current year.
+    expect(dateQuoteAnchorsDate('please send it by October 15', '2026-10-15')).toBe(true)
+  })
 })
 
 /**

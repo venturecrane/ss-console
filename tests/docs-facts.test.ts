@@ -110,6 +110,25 @@ describe('ADR range in CLAUDE.md is not a stale upper bound', () => {
 })
 
 /**
+ * The 2026-09-04 review found repository-map.md stating 68 migrations with 107
+ * on disk; the 2026-10-06 review found it stating 107 with 115. A count that
+ * moves every week is not restated in prose at all: the directory is the count.
+ */
+describe('repository map states no migration count', () => {
+  const row = read('docs/handbook/repository-map.md')
+    .split('\n')
+    .find((line) => line.startsWith('| `migrations/` |'))
+
+  it('finds the migrations row (sanity: the check can fail)', () => {
+    expect(row).toBeDefined()
+  })
+
+  it('the row names no number of migrations', () => {
+    expect(row).not.toMatch(/\b\d+ (forward )?migrations\b/)
+  })
+})
+
+/**
  * Every major the README's Stack list states is the major package.json
  * declares. TypeScript was the first pinned (2026-09-10 review: "TypeScript 5"
  * against ^6); the 2026-09-25 review then found "Vitest 4" against ^5.0.0,

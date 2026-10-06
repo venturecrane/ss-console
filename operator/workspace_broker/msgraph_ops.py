@@ -72,6 +72,7 @@ from .msgraph_attachments import AttachmentRefused, carries_attachments, graph_a
 from .msgraph_auth import load_credential, seat_mailbox
 from .msgraph_redirect import send_redirected
 from .recipient_policy import RecipientPolicy, authored_policy, normalize_address, sender_key
+from .request_errors import BrokerRefusal
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 TOKEN_HOST = "https://login.microsoftonline.com"
@@ -124,11 +125,11 @@ _SENT_LOOKUP_TOP = 25
 _SENT_LOOKUP_BACKOFF_S = (0.5, 1.5, 3.0)
 
 
-class MsGraphRefused(RuntimeError):
+class MsGraphRefused(BrokerRefusal):
     """The authored policy forbids this send. Never retried, always audited."""
 
 
-class MsGraphTransportError(RuntimeError):
+class MsGraphTransportError(BrokerRefusal):
     """The send could not be attempted or its outcome is unknown.
 
     ``status`` carries the HTTP status when Graph answered with one, and is
@@ -345,7 +346,9 @@ class MsGraphOps:
             # and one of those parameters is the client secret. Status only.
             raise MsGraphTransportError(f"msgraph token mint rejected with HTTP {exc.code}") from exc
         except Exception as exc:
-            raise MsGraphTransportError(f"msgraph token mint failed: {exc}") from exc
+            # The exception's text is not ours to forward (it can name a host or
+            # echo a proxy's body); its class is a bounded vocabulary.
+            raise MsGraphTransportError(f"msgraph token mint failed: {type(exc).__name__}") from exc
         try:
             parsed = json.loads(raw)
         except ValueError as exc:
@@ -395,7 +398,7 @@ class MsGraphOps:
             failure.status = exc.code
             raise failure from exc
         except Exception as exc:
-            raise MsGraphTransportError(f"msgraph {method} {path} failed: {exc}") from exc
+            raise MsGraphTransportError(f"msgraph {method} {path} failed: {type(exc).__name__}") from exc
         # sendMail and reply answer 202 with no body; that is success, not a
         # malformed response, so an empty payload must not raise here.
         if not raw.strip():

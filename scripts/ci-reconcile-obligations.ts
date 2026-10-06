@@ -338,9 +338,14 @@ async function probeOpenRows(
 // ---------------------------------------------- 4. unwitnessed certifications
 
 async function flagUnwitnessed(db: D1Database, today: string, tally: Tally): Promise<void> {
-  const unwitnessed = await safeAll(async () => findUnwitnessedCertifications(db))
-  tally.unwitnessed = unwitnessed.rows.length
-  for (const row of unwitnessed.rows) {
+  // mustRead, not safeAll: a failed read is "could not look", and counting it
+  // as zero unwitnessed certifications let the run report converged
+  // (code review 2026-10-06, N6).
+  const unwitnessed = await mustRead('unwitnessed certifications', async () =>
+    findUnwitnessedCertifications(db)
+  )
+  tally.unwitnessed = unwitnessed.length
+  for (const row of unwitnessed) {
     tally.findings.push(
       `::error::${row.obligation_id} ${row.customer_slug} certified by a run no CI workflow stands behind`
     )

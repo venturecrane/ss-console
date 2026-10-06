@@ -21,6 +21,7 @@ import time
 from typing import Any, Callable
 
 from .. import llm
+from ..limits import LimitHold
 from . import claims as CL
 from .page_text import exhibit_paths
 from .run import AuditPaths
@@ -70,6 +71,37 @@ def replace_in(text: str, anchor: str, replacement: str) -> tuple[str, bool]:
     if replacement == "" and anchor + "\n" in text:
         return text.replace(anchor + "\n", "", 1), True
     return text.replace(anchor, replacement, 1), True
+
+
+def ask_repair(doorway: llm.Doorway, model: str, r: dict[str, Any], c: dict[str, Any]) -> tuple[str | None, str]:
+    """(corrected text, "") or (None, why) for one failing claim. A limit hold
+    is not one claim's failure: it leaves, so the stage holds and nothing the
+    hold stopped is later dropped as residual (review 2026-10-06, N10)."""
+    problems = (r.get("unsupported_assertions") or []) + (r.get("contradictions") or [])
+    if r["verdict"] == "PAGE_OUT_OF_RANGE":
+        problems = problems or [f"cited pages {r.get('bad_pages')} do not exist in that exhibit"]
+    if not problems:
+        problems = [r.get("note") or "assertion not found on cited pages"]
+    payload = (
+        "CLAIM:\n"
+        + c["claim"]
+        + "\n\nASSERTIONS NOT FOUND ON THE CITED PAGES:\n"
+        + "\n".join(f"- {p}" for p in problems)
+    )
+    try:
+        return doorway.call(
+            "repair",
+            model=model,
+            max_tokens=2000,
+            system=SYSTEM,
+            timeout=180.0,
+            messages=[{"role": "user", "content": payload}],
+            custom_id=f"repair-{r['key']}",
+        ).text.strip(), ""
+    except LimitHold:
+        raise
+    except Exception as exc:  # noqa: BLE001 - one claim's failure is one log row
+        return None, str(exc)[:150]
 
 
 def run(
@@ -147,29 +179,9 @@ def run(
             logrow(key=r["key"], action="drop-residual", verdict=r["verdict"], old=c["claim"][:300])
             dropped += 1
             continue
-        problems = (r.get("unsupported_assertions") or []) + (r.get("contradictions") or [])
-        if r["verdict"] == "PAGE_OUT_OF_RANGE":
-            problems = problems or [f"cited pages {r.get('bad_pages')} do not exist in that exhibit"]
-        if not problems:
-            problems = [r.get("note") or "assertion not found on cited pages"]
-        payload = (
-            "CLAIM:\n"
-            + c["claim"]
-            + "\n\nASSERTIONS NOT FOUND ON THE CITED PAGES:\n"
-            + "\n".join(f"- {p}" for p in problems)
-        )
-        try:
-            new = doorway.call(
-                "repair",
-                model=model,
-                max_tokens=2000,
-                system=SYSTEM,
-                timeout=180.0,
-                messages=[{"role": "user", "content": payload}],
-                custom_id=f"repair-{r['key']}",
-            ).text.strip()
-        except Exception as exc:  # noqa: BLE001 - one claim's failure is one log row
-            logrow(key=r["key"], action="repair", result=f"ERROR: {str(exc)[:150]}")
+        new, err = ask_repair(doorway, model, r, c)
+        if new is None:
+            logrow(key=r["key"], action="repair", result=f"ERROR: {err}")
             skipped += 1
             continue
         if new == "DROP":

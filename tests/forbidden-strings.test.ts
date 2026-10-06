@@ -348,6 +348,83 @@ describe('checkout-return copy guard (no "your subscription is active" from the 
   })
 })
 
+// ============================================================================
+// Billing surfaces (code review 2026-10-06, N2 + N3).
+//
+// N2 (Pattern B): the subscriptions ledger passed `operatorPriceCents ?? 0`
+// and a literal 0 for every other product, so a hosted-agent row or an
+// Operator row with no authored price read "$0 per month". No authored price
+// renders no amount; PortalListItem takes a null amount and draws nothing.
+//
+// N3 (Pattern A): the unpaid-invoice page promised "We will let you know the
+// moment it is ready." No code path sends that notice.
+// ============================================================================
+
+describe('billing surfaces render only authored amounts and promise nothing unsent', () => {
+  const billingIndex = resolve('src/pages/portal/billing/index.astro')
+  const invoiceDetail = resolve('src/pages/portal/billing/invoices/[id].astro')
+  const listItem = resolve('src/components/portal/PortalListItem.astro')
+
+  it('the subscriptions ledger never invents a zero amount', () => {
+    const content = stripComments(readFileSync(billingIndex, 'utf-8'))
+    expect(content).not.toMatch(/operatorPriceCents\s*\?\?\s*0/)
+    expect(content).not.toMatch(/amountCents=\{[^}]*:\s*0\s*\}/)
+  })
+
+  it('PortalListItem draws no MoneyDisplay when the amount is null', () => {
+    const content = readFileSync(listItem, 'utf-8')
+    expect(content).toMatch(/amountCents:\s*number\s*\|\s*null/)
+    const lines = content.split('\n')
+    const sites = lines
+      .map((line, i) => ({ line, i }))
+      .filter(({ line }) => line.includes('<MoneyDisplay amountCents={props.amountCents}'))
+    expect(sites.length).toBeGreaterThan(0)
+    const unguarded = sites.filter(
+      ({ i }) =>
+        !lines
+          .slice(Math.max(0, i - 3), i)
+          .join('\n')
+          .includes('props.amountCents !== null')
+    )
+    expect(unguarded.map(({ i }) => i + 1)).toEqual([])
+  })
+
+  it('the invoice page keeps the factual status', () => {
+    const content = stripComments(readFileSync(invoiceDetail, 'utf-8'))
+    expect(content).toContain('Payment link pending.')
+  })
+})
+
+// ============================================================================
+// No promised notice anywhere in shipped source (code review 2026-10-06, N3
+// widened). The same "We will let you know the moment it is ready." lived on
+// the invoice page AND in the Operator settings status prose
+// (src/lib/portal/operator/account-read.ts). Neither had a sender: the
+// Operator checkout handler states it sends no client email, and the
+// invoice.paid receipt is a payment confirmation, not a go-live notice. A
+// promise to notify is a commitment only a real send path can carry, so it
+// is barred from every file under src/ (comments excluded). If a real notice
+// is ever built, name the file that sends it here as a scoped exception.
+// ============================================================================
+
+const PROMISED_NOTICE = /\b(?:we will|we['’]ll)\s+(?:let you know|notify you|email you)\b/i
+
+describe('no client surface promises a notice nothing sends', () => {
+  it('the pattern can fail', () => {
+    expect(PROMISED_NOTICE.test('We will let you know the moment it is ready.')).toBe(true)
+    expect(PROMISED_NOTICE.test("We'll notify you when it ships.")).toBe(true)
+    expect(PROMISED_NOTICE.test('Payment link pending.')).toBe(false)
+  })
+
+  it('no file under src/ carries one', () => {
+    expect(sourceFiles.length).toBeGreaterThan(100)
+    const violations = sourceFiles
+      .filter((file) => PROMISED_NOTICE.test(stripComments(readFileSync(file, 'utf-8'))))
+      .map((file) => file.replace(SRC_ROOT, 'src'))
+    expect(violations).toEqual([])
+  })
+})
+
 describe('forbidden-strings: Pattern A/B violations must not appear in shipped source', () => {
   for (const { label, pattern } of FORBIDDEN_PATTERNS) {
     it(`must not contain: ${label}`, () => {

@@ -36,6 +36,7 @@ from .agentmail_auth import (
     seat_inbox_address,
     sender_key,
 )
+from .request_errors import BrokerRefusal
 
 API_BASE = "https://api.agentmail.to/v0"
 TIMEOUT_S = 15.0
@@ -47,7 +48,7 @@ _BODY_FIELDS = ("to", "cc", "bcc", "subject", "text", "html", "reply_to")
 _RECIPIENT_FIELDS = ("to", "cc", "bcc")
 
 
-class AgentMailRefused(RuntimeError):
+class AgentMailRefused(BrokerRefusal):
     """The authored policy forbids this send. Never retried, always audited."""
 
 
@@ -65,7 +66,7 @@ def _refuse_attachments(payload: dict[str, Any]) -> None:
         raise AgentMailRefused("attachment refused: the AgentMail transport does not carry attachments")
 
 
-class AgentMailTransportError(RuntimeError):
+class AgentMailTransportError(BrokerRefusal):
     """The send could not be attempted or its outcome is unknown."""
 
 
@@ -189,7 +190,8 @@ class AgentMailOps:
         except urllib.error.HTTPError as exc:  # includes a vendor-side 403
             raise AgentMailTransportError(f"agentmail {method} {path} failed: HTTP {exc.code}") from exc
         except Exception as exc:
-            raise AgentMailTransportError(f"agentmail {method} {path} failed: {exc}") from exc
+            # Class name only: the exception's text is vendor/OS text, not ours to forward.
+            raise AgentMailTransportError(f"agentmail {method} {path} failed: {type(exc).__name__}") from exc
         try:
             parsed = json.loads(raw)
         except ValueError as exc:

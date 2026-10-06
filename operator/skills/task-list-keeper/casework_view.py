@@ -112,6 +112,18 @@ def stale_authorization(state, today: date) -> bool:
     return state is not None and state.authorization == "approved" and not _authorization_fresh(state, today)
 
 
+def handed_over(state) -> bool:
+    """A person approved a reassign line for this task: it is theirs now, not the
+    Operator's, even though its subject still carries the ``[Operator]`` stamp
+    (a reassign moves the assignee and leaves the subject). The keeper never
+    raises it again, so the deadline digest is where it stays visible. True from
+    the approval on; while the write is still on its way ``awaiting_write``
+    holds it, and a failed write leaves it a person's task all the same."""
+    if state is None:
+        return False
+    return any(d.verdict == "approved" and d.payload.get("action") == "reassign" for d in state.decisions.values())
+
+
 def keeper_owns_task(ledger, state, today: date, keep_quiet_days: int) -> bool:
     """The task-list-keeper holds this task, so the deadline digest drops it:
     a proposal is out, a person told us to leave it, a write is on its way, or

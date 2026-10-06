@@ -23,6 +23,7 @@ import re
 import time
 
 from .. import llm, prompts
+from ..limits import LimitHold
 from .base import StageRun
 
 ENTRY = re.compile(r"(?m)^(?=\d{2}/\d{2}/\d{4}\s*(?:\(|$))")
@@ -103,6 +104,8 @@ def condense(sr: StageRun, src: str, incident: str, pause: float = PAUSE_SECONDS
                 custom_id=f"condense-{i}",
             )
             new = r.text.strip()
+        except LimitHold:
+            raise  # a limit stops the stage and reaches the driver as a hold (N10)
         except Exception as exc:  # noqa: BLE001 - one entry keeps its long form
             sr.log(f"  [{n}] error: {str(exc)[:90]}")
             failed += 1

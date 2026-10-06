@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 from .. import llm, prompts
+from ..limits import LimitHold
 from . import merge_falsify as mf
 from .base import StageRun, append_jsonl
 
@@ -33,6 +34,8 @@ def _run_batch(
             stream=True,
             custom_id=f"merge{label}",
         )
+    except LimitHold:
+        raise  # a limit stops the stage and reaches the driver as a hold (N10)
     except Exception as exc:  # noqa: BLE001 - a doorway failure on one batch is logged; the stage falls back to splitting the batch below
         sr.log(f"  merge {label} failed: {str(exc)[:110]}")
     if r is not None:
