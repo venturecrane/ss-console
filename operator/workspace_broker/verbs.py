@@ -47,7 +47,7 @@ from typing import Any, Callable
 
 from .broker_context import BrokerContext
 from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
-from . import medchron_verbs, reply_binding
+from . import demand_verbs, medchron_verbs, reply_binding
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
 
@@ -155,6 +155,14 @@ VERBS: tuple[Verb, ...] = (
     Verb("medchron_job_record", _only(ROOT), _medchron),
     Verb("medchron_backfill_covered", _only(ROOT), _medchron),
     Verb("medchron_job_resume", _only(ROOT), _medchron),
+    # The demand job's request edge (demand_verbs.py); same compound gates as
+    # the chronology. Submit's requester and message ref come from the turn's
+    # verified inbound (the overlay), never the model. Resume has no agent tool.
+    Verb("demand_job_submit", GATEWAY_OR_ROOT, demand_verbs.demand_dispatch),
+    Verb("demand_job_status", GATEWAY_ROOT_OR_AGENT, demand_verbs.demand_dispatch),
+    Verb("demand_allowance", GATEWAY_ROOT_OR_AGENT, demand_verbs.demand_dispatch),
+    Verb("demand_job_record", _only(ROOT), demand_verbs.demand_dispatch),
+    Verb("demand_job_resume", _only(ROOT), demand_verbs.demand_dispatch),
     # Gateway-only from here down.
     Verb("audit_append", _only(GATEWAY), audit_verbs.audit_append),
     Verb("agentmail_send", _only(GATEWAY), transmit_verbs.agentmail),
@@ -206,6 +214,8 @@ if set(establish_verbs.VERBS) != {v.name for v in VERBS if v.handler is establis
 # inventory does not know it owns. Either way the failure is silent.
 if set(medchron_verbs.VERBS) != {v.name for v in VERBS if v.handler is _medchron}:
     raise RuntimeError("the medchron rows above and medchron_verbs.VERBS disagree")
+if set(demand_verbs.VERBS) != {v.name for v in VERBS if v.handler is demand_verbs.demand_dispatch}:
+    raise RuntimeError("the demand rows above and demand_verbs.VERBS disagree")
 
 
 def peer_classes(broker: BrokerContext, peer_pid: int, peer_uid: int | None) -> frozenset[str]:

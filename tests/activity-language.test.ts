@@ -88,6 +88,11 @@ describe('activity-language exhaustiveness (writer parity)', () => {
         'MEDCHRON_JOB_DELIVERED',
         'MEDCHRON_JOB_FAILED',
         'REPLY_BINDING',
+        'DEMAND_JOB_SUBMITTED',
+        'DEMAND_JOB_RUNNING',
+        'DEMAND_JOB_HELD',
+        'DEMAND_JOB_DELIVERED',
+        'DEMAND_JOB_FAILED',
         'AGENT_STOPPED',
         'COMPLIANCE_PACKET_EXPORTED',
         // ss#2122: a Named Administrator pulled the per-matter audit record
@@ -195,6 +200,11 @@ describe('failure outcomes are visible to the client (ss#2320)', () => {
     ['MEDCHRON_JOB_DELIVERED', 'Filed a medical chronology package on the matter'],
     ['MEDCHRON_JOB_FAILED', 'Could not finish a medical chronology package'],
     ['REPLY_BINDING', 'Checked whether a reply could answer an earlier email'],
+    ['DEMAND_JOB_SUBMITTED', 'Started a gap audit and draft demand for a matter'],
+    ['DEMAND_JOB_RUNNING', 'Is preparing a gap audit and draft demand'],
+    ['DEMAND_JOB_HELD', 'Paused a gap audit and draft demand and surfaced why'],
+    ['DEMAND_JOB_DELIVERED', 'Filed a gap audit and draft demand on the matter'],
+    ['DEMAND_JOB_FAILED', 'Could not finish a gap audit and draft demand'],
   ]
 
   for (const [action, copy] of outcomes) {

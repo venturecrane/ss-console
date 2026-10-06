@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from .audit_ledger import LedgerWriter
     from .establishment import EstablishmentStore
     from .job_ledger import JobLedgerWriter
+    from .demand_verbs import DemandVerbs
     from .medchron_verbs import MedchronVerbs
     from .msgraph_ops import MsGraphOps
     from .operations import WorkspaceOperations
@@ -74,6 +75,8 @@ class BrokerContext(Protocol):
     def establishment(self) -> EstablishmentStore | None: ...
     @property
     def medchron(self) -> MedchronVerbs | None: ...
+    @property
+    def demand(self) -> DemandVerbs | None: ...
     @property
     def agentmail(self) -> AgentMailOps | None: ...
     @property

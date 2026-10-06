@@ -117,6 +117,11 @@ export const CLIENT_ACTIVITY_CATEGORIES: readonly ClientActivityCategory[] = [
       'MEDCHRON_JOB_DELIVERED',
       'MEDCHRON_JOB_FAILED',
       'REPLY_BINDING',
+      'DEMAND_JOB_SUBMITTED',
+      'DEMAND_JOB_RUNNING',
+      'DEMAND_JOB_HELD',
+      'DEMAND_JOB_DELIVERED',
+      'DEMAND_JOB_FAILED',
       'CASEWORK_APPROVED',
       'CASEWORK_HELD',
       'CASEWORK_CLOSED_BY_RECORD',
@@ -330,6 +335,11 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   MEDCHRON_JOB_DELIVERED: () => 'Filed a medical chronology package on the matter',
   MEDCHRON_JOB_FAILED: () => 'Could not finish a medical chronology package',
   REPLY_BINDING: () => 'Checked whether a reply could answer an earlier email',
+  DEMAND_JOB_SUBMITTED: () => 'Started a gap audit and draft demand for a matter',
+  DEMAND_JOB_RUNNING: () => 'Is preparing a gap audit and draft demand',
+  DEMAND_JOB_HELD: () => 'Paused a gap audit and draft demand and surfaced why',
+  DEMAND_JOB_DELIVERED: () => 'Filed a gap audit and draft demand on the matter',
+  DEMAND_JOB_FAILED: () => 'Could not finish a gap audit and draft demand',
   // Case-manager casework. Each line is a fact about the firm's own task list:
   // what a person answered, and what the Operator closed because the record
   // already showed it done.
