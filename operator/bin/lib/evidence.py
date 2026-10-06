@@ -10,7 +10,7 @@ Usage
 
 ::
 
-    uv run --quiet --with pyyaml python3 -m bin.lib.evidence \\
+    uv run --quiet --with pyyaml --with cryptography python3 -m bin.lib.evidence \\
         --customer <slug> \\
         --matter <id-or-all> \\
         --from <ISO> \\

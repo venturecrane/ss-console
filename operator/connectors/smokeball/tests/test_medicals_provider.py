@@ -153,6 +153,34 @@ def test_a_facility_already_on_the_tab_is_left_alone(monkeypatch: pytest.MonkeyP
     assert tenant.writes() == []
 
 
+NORTHSIDE = {"id": "c-nor", "company": {"name": "Northside Imaging Center"}}
+VALLEY = {"id": "c-val", "company": {"name": "Valley Northside Imaging Center"}}
+
+
+def test_a_row_that_only_resembles_the_facility_is_not_already_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The review probe (2026-10-06): only the Valley row is on the tab. It is
+    not Northside, so "already present" would be false and nothing would be
+    written; a person is asked, and ``create_new`` is their answer."""
+    tenant = _use(monkeypatch, _Tenant([VALLEY, NORTHSIDE], rows={0: "Valley Northside Imaging Center"}))
+    out = mp.add_medicals_provider(MATTER, "Northside Imaging Center")
+    assert out["status"] == "needs_contact", out
+    assert out["candidates"] == [{"row": 0, "name": "Valley Northside Imaging Center"}]
+    assert tenant.writes() == []
+    again = mp.add_medicals_provider(MATTER, "Northside Imaging Center", create_new=True)
+    assert again["status"] == "written", again
+    assert (again["row"], again["contactId"], again["created"]) == (1, "c-nor", False)
+
+
+def test_the_exact_row_wins_over_one_that_contains_its_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    tenant = _use(
+        monkeypatch,
+        _Tenant([VALLEY, NORTHSIDE], rows={0: "Valley Northside Imaging Center", 1: "Northside Imaging Center"}),
+    )
+    out = mp.add_medicals_provider(MATTER, "northside imaging center.")
+    assert out["status"] == "already_present" and out["row"] == 1
+    assert tenant.writes() == []
+
+
 def test_without_a_note_only_the_link_is_written(monkeypatch: pytest.MonkeyPatch) -> None:
     tenant = _use(monkeypatch, _Tenant([RIVERSIDE]))
     out = mp.add_medicals_provider(MATTER, "Riverside Community Health Center")

@@ -330,7 +330,16 @@ Read the `status`:
 | `readback_mismatch` | the row exists but a field did not read back; `mismatch` names it; nothing retried or undone | "Medicals tab row added, but <field> did not save as written; check it"              |
 | `invoice_added`     | the provider was on the tab; this bill is its own new line on that row, read back            | "Medicals tab, <charge> for service <dates> added to <provider>", plus the scan note |
 | `already_present`   | this same bill is already on the provider's row; `existing` is that line; nothing changed    | "<provider> already shows this bill at <existing charge>, nothing changed"           |
-| `needs_contact`     | the firm's contacts hold several records that could be the provider; nothing created         | "no Medicals row: your contacts hold several records for <provider>; which is it?"   |
+| `needs_contact`     | the provider could be several records or rows; `reason` says which; nothing written          | see below                                                                            |
+
+A `needs_contact` line follows the result's `reason`. When `candidates` carry a
+`row` (the reason names the Medicals tab), they are rows already on the tab
+whose names are not exactly the bill's: the line says "no Medicals row: the
+Medicals tab has <candidate names>, none exactly <provider>; is this bill one
+of them, or a different facility?" Only when `candidates` carry an `id` (the
+reason names the firm's contacts) are they contact records: the line says "no
+Medicals row: your contacts hold several records for <provider> (<candidate
+names>); which is it?" Never pick a candidate yourself.
 
 When a `written` result carries `contact_created: true`, the provider was in
 none of the firm's contacts and was added as a company named as the bill

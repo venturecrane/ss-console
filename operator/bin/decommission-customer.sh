@@ -86,9 +86,12 @@ if [ -n "${CONFIRM_SLUG}" ]; then
 fi
 
 # uv + pyyaml is the same toolchain pause/provision/rollback use, so
-# Captain does not need a separate venv.
+# Captain does not need a separate venv. cryptography signs the compliance
+# packet (step 07, adapter/evidence/signing.py): without it every live run
+# halted after step 06 had destroyed the Fly app (review 2026-10-06 N14). The
+# CLI also loads the key before any destructive step and refuses (exit 5).
 set +e
-uv run --quiet --with pyyaml python3 -m bin.lib.decommission_cli \
+uv run --quiet --with pyyaml --with cryptography python3 -m bin.lib.decommission_cli \
   "${SLUG}" \
   "${MODE_FLAG}" \
   "${CONFIRM_ARGS[@]}" \

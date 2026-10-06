@@ -81,7 +81,7 @@ cd "${AIE_ROOT}"
 # uv + pyyaml match the toolchain pause / provision / rollback /
 # decommission use, so Captain does not need a separate venv.
 set +e
-uv run --quiet --with pyyaml python3 -m bin.lib.evidence "$@"
+uv run --quiet --with pyyaml --with cryptography python3 -m bin.lib.evidence "$@"
 EXIT_CODE=$?
 set -e
 

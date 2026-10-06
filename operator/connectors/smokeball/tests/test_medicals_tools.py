@@ -358,8 +358,12 @@ def test_service_end_before_start_refuses(tenant: _Tenant) -> None:
 def test_name_normalization_treats_spelling_as_one_facility() -> None:
     rows = {0: {"Provider/DisplayName": "NORTHSIDE IMAGING CENTER."}, 1: {"Provider/DisplayName": "Kaiser"}}
     assert mt.indices_named(rows, "Northside Imaging Center") == [0]
-    assert mt.indices_named(rows, "Northside Imaging Center, Valley Health") == [0]
+    assert mt.indices_named(rows, " northside  imaging center ") == [0], "case and spacing are one spelling"
+    # Containment is a resemblance, never a match: it is reported, not chosen.
+    assert mt.indices_named(rows, "Northside Imaging Center, Valley Health") == []
+    assert mt.indices_resembling(rows, "Northside Imaging Center, Valley Health") == [0]
     assert mt.indices_named(rows, "Imaging") == [], "a short fragment is not a facility"
+    assert mt.indices_resembling(rows, "Imaging") == [], "a short fragment does not even resemble one"
     # A row the firm named with one short word is not claimed by a longer
     # name on a bill: the tab's name is the contact record's, so "Kaiser" is
     # a contact called Kaiser, and whether "Kaiser Permanente" is that contact
@@ -367,6 +371,16 @@ def test_name_normalization_treats_spelling_as_one_facility() -> None:
     # which answers needs_contact and creates nothing.
     assert mt.indices_named(rows, "Kaiser Permanente") == []
     assert mt.indices_named(rows, "kaiser") == [1]
+
+
+def test_a_longer_name_containing_the_providers_is_not_its_row() -> None:
+    """The review probe (2026-10-06): "Northside Imaging Center" sits inside
+    "Valley Northside Imaging Center", a different facility the tenant holds."""
+    rows = {0: {"Provider/DisplayName": "Valley Northside Imaging Center"}}
+    both = {**rows, 1: {"Provider/DisplayName": "Northside Imaging Center"}}
+    assert mt.indices_named(both, "Northside Imaging Center") == [1]
+    assert mt.indices_named(rows, "Northside Imaging Center") == []
+    assert mt.indices_resembling(rows, "Northside Imaging Center") == [0]
 
 
 def test_layout_values_accepts_both_shapes() -> None:
@@ -405,6 +419,42 @@ def test_an_exact_contact_wins_over_one_that_only_contains_the_words(tenant: _Te
     assert out["status"] == "written", out
     link = tenant.writes()[0]
     assert link[2]["contactId"] == NORTHSIDE["id"]
+
+
+def test_a_bill_goes_to_the_row_that_is_exactly_its_provider(tenant: _Tenant) -> None:
+    """Both facilities are on the tab, the wider name first. A Northside bill
+    is a new line on the Northside row (1), never on the Valley row (0)."""
+    _filed()
+    tenant.values["Providers[0]/Provider/DisplayName"] = "Valley Northside Imaging Center"
+    tenant.values["Providers[1]/Provider/DisplayName"] = "Northside Imaging Center"
+    out = _add(provider_name="Northside Imaging Center")
+    assert out["status"] == "invoice_added", out
+    assert out["index"] == 1
+    (patch,) = tenant.writes()
+    assert all(v["key"].startswith("Providers[1]/") for v in patch[2]["values"])
+
+
+def test_a_row_that_only_resembles_the_provider_asks_and_writes_nothing(tenant: _Tenant) -> None:
+    """Only the Valley row is on the tab. A Northside bill is not its line,
+    and no new row is guessed either: a person says which it is."""
+    _filed()
+    tenant.values["Providers[0]/Provider/DisplayName"] = "Valley Northside Imaging Center"
+    tenant.contacts = [NORTHSIDE_WIDER, NORTHSIDE]
+    out = _add(provider_name="Northside Imaging Center")
+    assert out["status"] == "needs_contact", out
+    assert out["candidates"] == [{"row": 0, "name": "Valley Northside Imaging Center"}]
+    assert "exactly" in out["reason"]
+    assert tenant.writes() == []
+
+
+def test_two_rows_with_exactly_the_providers_name_ask(tenant: _Tenant) -> None:
+    _filed()
+    tenant.values["Providers[0]/Provider/DisplayName"] = "Northside Imaging Center"
+    tenant.values["Providers[2]/Provider/DisplayName"] = "NORTHSIDE IMAGING CENTER."
+    out = _add(provider_name="Northside Imaging Center")
+    assert out["status"] == "needs_contact", out
+    assert [c["row"] for c in out["candidates"]] == [0, 2]
+    assert tenant.writes() == []
 
 
 def test_the_bills_patient_chooses_the_claimants_tab(tenant: _Tenant) -> None:
