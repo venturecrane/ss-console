@@ -32,7 +32,7 @@ operator/bin/decommission-customer.sh <slug> --live [--confirm-slug <slug>]
 Default is `--dry-run`. A live run is confirmed by typing the slug a second time: on a terminal the wrapper prompts for it, and a non-interactive caller passes `--confirm-slug <slug>`. The Python CLI may also be invoked directly:
 
 ```
-cd operator && uv run --quiet --with pyyaml python3 \
+cd operator && uv run --quiet --with pyyaml --with cryptography python3 \
   -m bin.lib.decommission_cli <slug> [--dry-run|--live --confirm-slug <slug>] \
   [--customers-root PATH] [--archive-root PATH] [--audit-db PATH] [--actor NAME] \
   [--allow-unwired]

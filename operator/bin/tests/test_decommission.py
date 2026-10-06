@@ -735,6 +735,104 @@ def test_cli_live_refuses_when_only_the_archiver_is_unwired(tmp_path, monkeypatc
     assert _untouched(customers_root)
 
 
+def test_cli_live_refuses_a_signing_key_that_cannot_sign_before_any_step(tmp_path, monkeypatch, capsys):
+    """Review 2026-10-06 N14: step 07 signs the packet AFTER step 06 destroys
+    the Fly app, and the decommission's uv run held no ``cryptography``. So
+    every live run with the archiver wired halted between the two: the Machine
+    gone, no packet, no tombstone, the seat key never revoked by step 09. A
+    key that cannot load (here, not a PEM; in the field, no cryptography) must
+    refuse at exit 5 with every backend untouched."""
+    import base64
+
+    from bin.lib import decommission_cli
+
+    r2 = _RecordingR2Deleter()
+    destroyed: list[str] = []
+
+    class _CountingFly(_FakeFly):
+        async def destroy_machine(self, customer_slug: str) -> dict:
+            destroyed.append(customer_slug)
+            return await super().destroy_machine(customer_slug)
+
+    everything = {
+        "audit_log_preserver": _RecordingPreserver(),
+        "r2_deleter": r2,
+        "vectorize_deleter": _RecordingVectorizeDeleter(),
+        "agentmail": _FakeAgentMail(),
+        "fly": _CountingFly(),
+        "observability": _RecordingObservabilityCleanup(),
+        "archiver": _FakeArchiver(),
+    }
+    wired = {n: True for n in decommission_cli.BACKEND_REQUIREMENTS}
+    monkeypatch.setattr(decommission_cli, "backends_from_env", lambda slug, root, **_: (everything, wired))
+    monkeypatch.setattr(decommission_cli, "seam_client_from_env", lambda slug: None)
+    monkeypatch.setenv("EVIDENCE_PACKET_SIGNING_KEY_B64", base64.b64encode(b"not a PEM private key").decode())
+    customers_root = _copy_fixture(tmp_path)
+    rc = decommission_cli.main(
+        [
+            "smd",
+            "--live",
+            "--confirm-slug",
+            "smd",
+            "--customers-root",
+            str(customers_root),
+            "--archive-root",
+            str(tmp_path / "archive"),
+            "--audit-db",
+            str(tmp_path / "audit.sqlite"),
+        ]
+    )
+    err = capsys.readouterr().err
+    assert rc == 5
+    assert "could not be signed" in err
+    assert destroyed == [] and r2.calls == []
+    assert _untouched(customers_root)
+
+
+def test_cli_live_with_a_key_that_signs_passes_the_preflight(tmp_path, monkeypatch):
+    """The same wiring with a real Ed25519 key runs the whole sequence."""
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from bin.lib import decommission_cli
+
+    pem = Ed25519PrivateKey.generate().private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    )
+    everything = {
+        "audit_log_preserver": _RecordingPreserver(),
+        "r2_deleter": _RecordingR2Deleter(),
+        "vectorize_deleter": _RecordingVectorizeDeleter(),
+        "agentmail": _FakeAgentMail(),
+        "fly": _FakeFly(),
+        "observability": _RecordingObservabilityCleanup(),
+        "archiver": _FakeArchiver(),
+    }
+    wired = {n: True for n in decommission_cli.BACKEND_REQUIREMENTS}
+    monkeypatch.setattr(decommission_cli, "backends_from_env", lambda slug, root, **_: (everything, wired))
+    monkeypatch.setattr(decommission_cli, "seam_client_from_env", lambda slug: None)
+    monkeypatch.setenv("EVIDENCE_PACKET_SIGNING_KEY_B64", base64.b64encode(pem).decode())
+    customers_root = _copy_fixture(tmp_path)
+    rc = decommission_cli.main(
+        [
+            "smd",
+            "--live",
+            "--confirm-slug",
+            "smd",
+            "--customers-root",
+            str(customers_root),
+            "--archive-root",
+            str(tmp_path / "archive"),
+            "--audit-db",
+            str(tmp_path / "audit.sqlite"),
+        ]
+    )
+    assert rc == 0
+    assert len(list(customers_root.glob("smd.decommissioned.*"))) == 1
+
+
 # ---------------------------------------------------------------------------
 # Tests: audit-log retention carve-out (audit-retention.md, #893)
 #

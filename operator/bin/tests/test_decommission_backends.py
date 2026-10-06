@@ -696,3 +696,39 @@ def test_ledger_period_brackets_fractional_and_offset_timestamps():
         "2026-09-24T00:00:00Z",
         "2026-09-25T12:00:01Z",
     )
+
+
+# ---- the signing preflight (review 2026-10-06 N14) --------------------------
+
+
+def test_signing_preflight_passes_a_key_that_loads_and_an_absent_one():
+    from bin.lib.decommission_backends import signing_preflight
+
+    assert signing_preflight({SIGNING_KEY_ENV: _signing_key_b64()}) is None
+    assert signing_preflight({}) is None, "no key leaves the archiver unwired; the #1123 gate handles that"
+
+
+def test_signing_preflight_names_a_key_that_does_not_parse():
+    import base64
+
+    from bin.lib.decommission_backends import signing_preflight
+
+    assert signing_preflight({SIGNING_KEY_ENV: base64.b64encode(b"this is not a PEM private key").decode()})
+
+
+def test_signing_preflight_names_a_missing_cryptography_install(monkeypatch):
+    """The decommission ran under a uv environment holding only pyyaml: the key
+    was staged, the archiver wired, and the import failed at step 07, after
+    the Fly app was gone. The preflight sees that same failure first."""
+    from bin.lib.decommission_backends import signing_preflight
+
+    key = _signing_key_b64()
+    monkeypatch.setitem(sys.modules, "cryptography.hazmat.primitives", None)
+    problem = signing_preflight({SIGNING_KEY_ENV: key})
+    assert problem and "cryptography" in problem
+
+
+def test_the_decommission_and_packet_scripts_run_with_cryptography():
+    bin_dir = Path(__file__).resolve().parents[1]
+    for script in ("decommission-customer.sh", "generate-evidence-packet.sh"):
+        assert "--with cryptography" in (bin_dir / script).read_text(), script

@@ -37,9 +37,11 @@ from .medicals_layout import (
     _contact_label,
     compare,
     indices_named,
+    indices_resembling,
     layout_values,
     normalize_name,
     provider_rows,
+    resembling_rows,
 )
 from .medicals_tools import LINK_WAITS, VALUE_WAITS, _poll, _refused, _select_tab
 
@@ -138,7 +140,8 @@ def add_medicals_provider(
     Returns ``status``: ``written`` (``row`` index, ``linked_as``, ``contactId``,
     ``created`` true when the contact was added); ``already_present`` (the
     facility is on the tab; ``row`` and ``linked_as``; nothing changed);
-    ``needs_contact`` (``candidates`` from the firm's contacts; nothing written:
+    ``needs_contact`` (``candidates`` from the firm's contacts, or the tab's
+    rows whose names only resemble this one, ``reason`` says which; nothing written:
     ask the sender which one, then call again with that exact name, or with
     ``create_new`` true if it is a different facility); ``link_not_visible`` or
     ``readback_mismatch`` (reported as is, never retried); or ``refused``
@@ -157,13 +160,30 @@ def add_medicals_provider(
     except Exception as exc:  # noqa: BLE001 - a failed read refuses, never "no rows"
         return _refused(f"the Medicals tab could not be read ({exc.__class__.__name__}: {str(exc)[:200]})")
     present = indices_named(rows, name)
-    if present:
+    if len(present) == 1:
         row = rows[present[0]]
         return {
             "status": "already_present",
             "created": False,
             "row": present[0],
             "linked_as": row.get("Provider/DisplayName"),
+        }
+    near = present or ([] if create_new else indices_resembling(rows, name))
+    if near:
+        # A row whose name only resembles this one ("Valley Northside Imaging
+        # Center" for "Northside Imaging Center") is not this facility until a
+        # person says so; ``create_new`` is that person saying it is not.
+        return {
+            "status": "needs_contact",
+            "created": False,
+            "matter_id": matter,
+            "provider": name,
+            "candidates": resembling_rows(rows, near),
+            "reason": (
+                "the Medicals tab has several rows with exactly this name"
+                if present
+                else "no row on the Medicals tab has exactly this name, but these rows could be the same facility"
+            ),
         }
     chosen = _choose_contact(client, name, create_new)
     if "status" in chosen:

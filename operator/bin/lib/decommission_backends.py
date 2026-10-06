@@ -63,7 +63,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
-from adapter.evidence.signing import SIGNING_KEY_ENV
+from adapter.evidence.signing import SIGNING_KEY_ENV, EvidenceSigningError, load_signer
 from bin.lib.console_d1 import ConsoleD1, sql_text
 from bin.lib.decommission_archiver import EvidencePacketArchiver
 
@@ -541,6 +541,28 @@ def _fly_authenticated(env: dict) -> bool:
     return bool(env.get("FLY_API_TOKEN"))
 
 
+def signing_preflight(env: Optional[dict] = None) -> Optional[str]:
+    """Why the staged signing key cannot sign a packet, or ``None`` when it can
+    (or when no key is staged, which leaves the archiver unwired instead).
+
+    Step 07 (the compliance archive) runs AFTER step 06 destroys the Fly app,
+    and the key is loaded only there. A key that does not parse, or a run
+    whose interpreter lacks ``cryptography`` (the decommission ran under a uv
+    environment holding only pyyaml until 2026-10-06), used to halt the run
+    between the two: the Machine gone, no packet, no tombstone, and the seat's
+    machine credential never revoked by step 09. Loading the key here, before
+    any destructive step, turns that into a refusal with nothing touched."""
+    env = dict(os.environ) if env is None else env
+    raw = (env.get(SIGNING_KEY_ENV) or "").strip()
+    if not raw:
+        return None
+    try:
+        load_signer({SIGNING_KEY_ENV: raw})
+    except EvidenceSigningError as exc:
+        return str(exc)
+    return None
+
+
 def backends_from_env(
     customer_slug: str,
     customers_root: Path,
@@ -601,6 +623,7 @@ def backends_from_env(
 
 
 __all__ = [
+    "signing_preflight",
     "ARCHIVE_SEGMENT",
     "AgentMailInboxDeprovisioner",
     "BACKEND_REQUIREMENTS",

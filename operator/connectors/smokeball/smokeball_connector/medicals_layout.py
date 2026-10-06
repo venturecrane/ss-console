@@ -70,21 +70,42 @@ def normalize_name(name: Any) -> str:
     return " ".join(re.sub(r"[^a-z0-9]+", " ", name.casefold()).split())
 
 
-def _same_provider(a: str, b: str) -> bool:
-    """Equal after normalization, or one contains the other when both are
-    long enough for containment to mean something ("Northside Imaging
-    Center" and "Northside Imaging Center, Valley Health")."""
+def _contains_provider(a: str, b: str) -> bool:
+    """One normalized name inside the other, both long enough for containment
+    to mean something ("Northside Imaging Center" inside "Northside Imaging
+    Center, Valley Health"), and NOT equal. A resemblance, never a match:
+    "Northside Imaging Center" is also inside "Valley Northside Imaging
+    Center", a different facility a client tenant really holds (2026-10-01)."""
     na, nb = normalize_name(a), normalize_name(b)
-    if not na or not nb:
+    if not na or not nb or na == nb:
         return False
-    if na == nb:
-        return True
     shorter, longer = (na, nb) if len(na) <= len(nb) else (nb, na)
     return len(shorter) >= 8 and f" {shorter} " in f" {longer} "
 
 
+def _row_name(row: dict[str, Any]) -> str:
+    return str(row.get("Provider/DisplayName") or "")
+
+
 def indices_named(rows: dict[int, dict[str, Any]], name: str) -> list[int]:
-    return sorted(i for i, row in rows.items() if _same_provider(str(row.get("Provider/DisplayName") or ""), name))
+    """The rows whose provider IS ``name`` after the one normalization (case,
+    punctuation, spacing). Only these may be written to as that provider."""
+    want = normalize_name(name)
+    if not want:
+        return []
+    return sorted(i for i, row in rows.items() if normalize_name(_row_name(row)) == want)
+
+
+def indices_resembling(rows: dict[int, dict[str, Any]], name: str) -> list[int]:
+    """The rows whose provider contains ``name`` or is contained in it, without
+    being it. Callers never write to one of these: with no exact row, a
+    resemblance is a question for a person, answered by an exact name."""
+    return sorted(i for i, row in rows.items() if _contains_provider(_row_name(row), name))
+
+
+def resembling_rows(rows: dict[int, dict[str, Any]], indices: list[int]) -> list[dict[str, Any]]:
+    """The near-name rows as ``{"row", "name"}``, for a needs-a-person result."""
+    return [{"row": i, "name": _row_name(rows[i])} for i in indices]
 
 
 def _clean(value: Any) -> str:

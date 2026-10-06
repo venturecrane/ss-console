@@ -78,6 +78,7 @@ from .medicals_layout import (
     compare,
     compose_note,
     indices_named,
+    indices_resembling,
     invoice_line_values,
     invoice_lines,
     layout_values,
@@ -85,6 +86,7 @@ from .medicals_layout import (
     parse_charge,
     prefer_exact,
     provider_rows,
+    resembling_rows,
     same_bill_on_row,
 )
 
@@ -190,7 +192,9 @@ def add_medicals_row(
     nothing was retried or undone); ``already_present`` (this same bill is
     already on the provider's row; ``existing`` gives it and NOTHING was changed);
     ``needs_contact`` (the firm's contacts hold several records that could be
-    that provider; ``candidates`` lists them and NOTHING was created). A
+    that provider, or the tab has rows whose names only resemble the bill's
+    and none that is exactly it; ``candidates`` lists them, ``reason`` says
+    which, and NOTHING was created or written). A
     provider the contacts do not hold at all is added as a company named as
     the bill prints it, and the result carries ``contact_created: true``; ``link_not_visible`` (the contact link was accepted but no row
     appeared in time; nothing further was written); or ``refused`` (``reason``
@@ -293,8 +297,27 @@ def _write_row(client: Any, bill: _Bill, item_id: str) -> dict[str, Any]:
         return _refused(f"the Medicals tab could not be read ({exc.__class__.__name__}: {str(exc)[:200]})")
     rows = provider_rows(values)
     present = indices_named(rows, bill.provider)
-    if present:
+    if len(present) == 1:
         return _on_existing_row(client, bill, item_id, path, present[0], rows[present[0]])
+    near = present or indices_resembling(rows, bill.provider)
+    if near:
+        # Several rows with exactly this name, or none exact and some only
+        # resembling it ("Northside Imaging Center" is inside "Valley
+        # Northside Imaging Center", a different facility): a person says
+        # which row, if any, is this provider. Nothing is written to a guess.
+        return {
+            "status": "needs_contact",
+            "created": False,
+            "matter_id": bill.matter,
+            "item_id": item_id,
+            "provider": bill.provider,
+            "candidates": resembling_rows(rows, near),
+            "reason": (
+                "the Medicals tab has several rows with exactly this provider's name"
+                if present
+                else "no row on the Medicals tab has exactly this provider's name, but these rows could be it"
+            ),
+        }
     try:
         candidates = prefer_exact(contacts_by_name(client, bill.provider), bill.provider)
     except Exception as exc:  # noqa: BLE001 - SearchFailed and friends: a failed search is reported as one
@@ -460,6 +483,7 @@ __all__ = [
     "compare",
     "compose_note",
     "indices_named",
+    "indices_resembling",
     "layout_values",
     "normalize_name",
     "parse_charge",

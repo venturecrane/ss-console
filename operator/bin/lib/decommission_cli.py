@@ -4,7 +4,7 @@ Wraps :class:`bin.lib.decommission.DecommissionPipeline` with argument
 parsing, audit-writer construction, and the customer.yaml lookup. Called
 by the shell wrapper or directly via:
 
-    uv run --quiet --with pyyaml python3 \
+    uv run --quiet --with pyyaml --with cryptography python3 \
         -m bin.lib.decommission_cli <slug> [--dry-run] [--live]
 
 Exit codes
@@ -75,7 +75,7 @@ from bin.lib.decommission import (
     StepResult,
     _load_customer_yaml,
 )
-from bin.lib.decommission_backends import BACKEND_REQUIREMENTS, backends_from_env
+from bin.lib.decommission_backends import BACKEND_REQUIREMENTS, backends_from_env, signing_preflight
 from bin.lib.seam_pull import SeamAuditLogPreserver, seam_client_from_env
 
 log = logging.getLogger("aie.bin.decommission_cli")
@@ -336,6 +336,23 @@ async def _run(args: argparse.Namespace) -> int:
     # Fail closed (#1123): a --live run that cannot actually delete must
     # not report success. Refuse BEFORE writing any audit row or
     # tombstoning the customer directory.
+    if args.live and wired.get("compliance_archiver"):
+        # The packet is signed at step 07, after step 06 destroys the Fly app.
+        # A key that cannot sign must stop the run here, with nothing touched,
+        # not between the two (review 2026-10-06 N14).
+        problem = signing_preflight()
+        if problem:
+            print(
+                f"[live] REFUSING: the compliance packet could not be signed, so step 07 would halt "
+                f"after step 06 destroyed the Fly app. {problem}",
+                file=sys.stderr,
+            )
+            try:
+                audit_conn.close()
+            except Exception:  # noqa: BLE001 - closing the audit connection on the refusal path must not mask the refusal being reported
+                pass
+            _print_footer(args.slug, mode=mode, ok=False)
+            return 5
     if args.live:
         unwired = pipeline.unwired_destructive_backends()
         if unwired and not args.allow_unwired:
