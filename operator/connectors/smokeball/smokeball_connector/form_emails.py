@@ -39,9 +39,10 @@ EMAILS: dict[str, dict[str, str]] = {
 }
 
 
-def _carrier_email(client: Any, matter_id: str, spec: FormSpec) -> Fact:
+def _carrier_email(client: Any, matter_id: str, spec: FormSpec) -> tuple[Fact, str]:
     """The side's carrier email: the insurer contact's, else the adjuster's,
-    with the contact named so the person can judge where it goes."""
+    with the contact named so the person can judge where it goes; and that
+    contact in plain words for the reply ("" when there is no email)."""
     layout = facts.matter_layout_values(client, matter_id)
     parties = facts.read_parties(client, matter_id)
     for relationship in ("Insurer", "Adjuster"):
@@ -52,8 +53,9 @@ def _carrier_email(client: Any, matter_id: str, spec: FormSpec) -> Fact:
         email = facts.contact_email(contact) if contact else None
         if email:
             who = facts.contact_name(contact) or "unnamed"
-            return Fact(email, f"email from the {relationship.lower()} contact {who} ({src})")
-    return Fact(None, "", f"{_side_word(spec)} insurer email")
+            source = f"email from the {relationship.lower()} contact {who} ({src})"
+            return Fact(email, source), f"the {relationship.lower()} contact {who}"
+    return Fact(None, "", f"{_side_word(spec)} insurer email"), ""
 
 
 def draft_firm_email(client: Any, matter_id: str, form: str) -> dict[str, Any]:
@@ -65,25 +67,44 @@ def draft_firm_email(client: Any, matter_id: str, form: str) -> dict[str, Any]:
     matter = client.get(f"/matters/{matter_id}")
     matter = matter if isinstance(matter, dict) else {}
     layout = facts.matter_layout_values(client, matter_id)
+    address, on = _carrier_email(client, matter_id, spec)
     found = {
-        "carrier_email": _carrier_email(client, matter_id, spec),
+        "carrier_email": address,
         "claim_number": _claim_number(layout, spec),
         "client_name": facts.client_name(client, matter),
     }
     values = {k: f.value if f.value is not None else MARKER.format(f.missing) for k, f in found.items()}
     unfilled = [MARKER.format(f.missing) for f in found.values() if f.value is None]
+    subject = words["subject"].format(**values)
+    body = words["body"].format(**values)
     return {
         "status": "incomplete" if unfilled else "drafted",
         "fileId": None,
         "matterId": matter_id,
         "email": {
             "to": values["carrier_email"],
-            "subject": words["subject"].format(**values),
-            "body": words["body"].format(**values),
+            "subject": subject,
+            "body": body,
         },
+        "reply_block": reply_block(values["carrier_email"], subject, body, on, unfilled),
         "unfilled": unfilled,
         "facts_used": {k: f.source for k, f in found.items() if f.value is not None},
     }
 
 
-__all__ = ["EMAILS", "draft_firm_email"]
+def reply_block(to: str, subject: str, body: str, on: str, unfilled: list[str]) -> str:
+    """The email as the reply carries it, built here so the reply cannot call
+    an incomplete draft ready or run its lines together. The mail renderer
+    joins consecutive lines into one paragraph, so every line of the email is
+    its own paragraph, a blank line between. Live 2026-10-06: a block the
+    model laid out arrived as one run-on paragraph, headed "Ready to send"
+    with markers in it."""
+    if unfilled:
+        head = f"The med pay ledger email is waiting on the file: {', '.join(unfilled)}. As it stands:"
+    else:
+        head = f"Ready to send from your email (the address is on {on}):"
+    paragraphs = [p.replace("\n", " ") for p in body.split("\n\n")]
+    return "\n\n".join([head, f"To: {to}", f"Subject: {subject}", *paragraphs])
+
+
+__all__ = ["EMAILS", "draft_firm_email", "reply_block"]

@@ -231,22 +231,14 @@ the asker's own mailbox. Nothing is filed and the Operator sends nothing.
 1. `render_firm_form_letter(matter_id, "med_pay_ledger_email")`. It returns
    `email` (`to`, `subject`, `body`) and `facts_used.carrier_email`, which
    names the contact the address came from.
-2. `drafted`: put it in the reply as one quoted block, never a list:
-
-   ```
-   Ready to send from your email (the address is from <facts_used.carrier_email, in plain words>):
-   > To: <to>
-   > Subject: <subject>
-   >
-   > <body, line for line>
-   ```
-
-   The body ends at "Kind regards,": her own signature applies. Never add a
-   name under it.
-
-3. `incomplete`: do not call it ready. Reply `The med pay ledger email is
-waiting on the file: <unfilled, comma-separated>.` and the block with its
-   markers in place.
+2. Put `reply_block` in the reply EXACTLY as returned, as its own section,
+   keeping every blank line: it carries its own heading ("Ready to send from
+   your email" only when the draft is complete, "waiting on the file" with the
+   gaps when it is not), and each line of the email is its own paragraph so
+   the reply shows it line for line. Never retype it, re-quote it, join its
+   lines or add a name under "Kind regards,": her own signature applies.
+3. Never say the ledger email is ready, or that it went out, anywhere else in
+   the reply.
 4. Look in the matter's documents (`get_files_on_matter`) for a med pay
    ledger already there (a name with "ledger" and "med pay"/"medpay"): name
    the latest one by name and date in the same reply.

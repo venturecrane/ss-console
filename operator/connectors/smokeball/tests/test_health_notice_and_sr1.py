@@ -760,3 +760,19 @@ def test_an_unusable_employer_on_file_never_reads_as_none(firm_seat: Path, monke
 def test_the_result_shows_whom_the_letter_is_addressed_to(firm_seat: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     out, _t = _wage(_Employed(), monkeypatch)
     assert out["employer_used"] == "Acme Freight Co\n100 Dock Rd\nPortville, CA 95001"
+
+
+def test_the_reply_block_is_line_for_line_and_never_ready_when_incomplete(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Live 2026-10-06: a model-laid block arrived as one run-on paragraph headed
+    # "Ready to send" with markers in it. The block is the tool's, and every
+    # line is its own paragraph (the mail renderer joins adjacent lines).
+    ready = _ledger(_Employed(), monkeypatch)["reply_block"]
+    paras = ready.split("\n\n")
+    assert paras[0] == "Ready to send from your email (the address is on the adjuster contact Pat Adjuster):"
+    assert paras[1:4] == ["To: claims@carrier.example", "Subject: Claim CL-0001 | Medical Payment Ledger", "Hello,"]
+    assert paras[-1] == "Kind regards," and all("\n" not in p for p in paras)
+    waiting = _ledger(_Record(), monkeypatch)["reply_block"]
+    assert "Ready to send" not in waiting
+    assert waiting.startswith(
+        "The med pay ledger email is waiting on the file: [Not in the file: 1st party insurer email]"
+    )
