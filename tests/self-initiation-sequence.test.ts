@@ -71,6 +71,9 @@ const FORM_CLASSES = [
   'third_party_rep_letter',
   'health_notice_blue_shield',
   'sr1_form',
+  'dec_page_fax',
+  'med_pay_fax',
+  'sr19_form',
 ] as const
 const TEMPLATE_KEYS: readonly string[] = [...DOCUMENT_CLASSES, ...FORM_CLASSES]
 

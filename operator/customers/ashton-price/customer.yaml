@@ -1255,6 +1255,11 @@ self_initiation:
       # toolbar letters (6 of them, 2026-08-05 to 10-02); and the state's SR1.
       health_notice_blue_shield: 'Form - Med Ins Blue Shield.docx'
       sr1_form: 'Form - DMV SR1.pdf'
+      # The firm's toolbar fax cover sheets (dec page follow-up, med pay) and
+      # the state SR 19C its SR19 task form produces (2026-10-06).
+      dec_page_fax: 'Form - Fax Dec Page.docx'
+      med_pay_fax: 'Form - Fax Medpay.docx'
+      sr19_form: 'Form - DMV SR19.pdf'
     # The Operator's OWN matter (ss-console#2536). Four authored values, and
     # every one of them is a decision the firm made here rather than one the
     # Operator makes at runtime: the model can ask for this matter and cannot
@@ -1395,6 +1400,13 @@ form_letters:
   # file (the matter's assisting staff), titled "Legal Assistant" on 40 of 40
   # firm letters sampled 2026-08-13 to 10-02, across three legal assistants.
   preparer_title: 'Legal Assistant'
+  # firm: the firm's name and mailing lines as its letterhead prints them on
+  # every firm letter and fax cover; the SR 19C's requester block.
+  firm:
+    name: 'Ashton & Price, LLP'
+    address:
+      - '8243 Greenback Lane'
+      - 'Fair Oaks, CA 95628'
 
 # vendor_invoice_intake: every staged vendor invoice is billable, and its PDF
 # files into Accounting/Invoices (a nested path: the "Invoices" folder whose

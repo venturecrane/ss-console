@@ -78,6 +78,7 @@ EXPECTED_TOOLS = {
     "place_records_order",
     "records_orders_for_matter",
     "render_sr1",
+    "render_sr19",
 }
 
 _SCRIPT = shutil.which("smokeball-mcp")
@@ -201,6 +202,8 @@ def test_write_surface_is_memo_document_and_deadline_engine() -> None:
         # The state SR1 prefilled from the matter and filed for the client to
         # sign; nothing mailed, never signed.
         "render_sr1": "internal_write",
+        # The state SR 19C prefilled for the firm's signer; never signed.
+        "render_sr19": "internal_write",
         # A workbook built in code from JSON rows and filed on the matter: the
         # same two-stage upload as add_file, bytes never composed by the model.
         "add_workbook": "internal_write",

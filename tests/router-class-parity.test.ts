@@ -290,6 +290,10 @@ describe('matter-inbox-router: the file work class', () => {
       "a Smokeball task is completed only when the sender's own email says that item went out"
     )
     expect(bullet()).toContain('the SR1 is never signed for the client')
+    // 2026-10-06: the next three on a new file route here by their usual names.
+    for (const name of ['declarations page', 'med pay', 'SR-19', 'SR 19C']) {
+      expect(bullet()).toContain(name)
+    }
     const skill = flat(read(SKILL))
     expect(skill).toContain('Never complete a Smokeball task except as step 5 says')
     expect(skill).toContain('Never complete it in the turn that files the document.')

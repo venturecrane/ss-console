@@ -118,6 +118,37 @@ FORMS: dict[str, FormSpec] = {
         signer_name_from="preparer",
         facts_kind="health",
     ),
+    # The firm's toolbar FAX COVER SHEETS (2026-10-06). The dec page cover
+    # follows up the 1st party rep letter, whose form already asks the carrier
+    # to "include a declarations page with your letter of acknowledgement"
+    # (the firm's own dec page faxes are 1st party; no 3rd party cover is
+    # made). The med pay cover goes with the bills the person attaches.
+    "dec_page_fax": FormSpec(
+        label="dec page request (fax cover)",
+        document_class="dec_page_fax",
+        default_template="Form - Fax Dec Page.docx",
+        file_name="Fax Cover Sheet - Req Dec Page.docx",
+        side="Plaintiffs",
+        client_side=True,
+        fax_label="",
+        email_label="",
+        paragraph_fields=frozenset(),
+        signer_name_from="preparer",
+        facts_kind="fax",
+    ),
+    "med_pay_fax": FormSpec(
+        label="med pay request (fax cover)",
+        document_class="med_pay_fax",
+        default_template="Form - Fax Medpay.docx",
+        file_name="Fax Cover Sheet Medpay.docx",
+        side="Plaintiffs",
+        client_side=True,
+        fax_label="",
+        email_label="",
+        paragraph_fields=frozenset(),
+        signer_name_from="preparer",
+        facts_kind="fax",
+    ),
 }
 
 #: The 1st party form's paragraph fields (each delivery channel its own line);
@@ -185,6 +216,46 @@ def _claim_number(layout: dict[str, Any], spec: FormSpec) -> Fact:
     key = f"Matter/{spec.side}/InsurancePolicy/Claims/Number"
     value = str(layout.get(key) or "").strip()
     return Fact(value, f"layout {key}") if value else Fact(None, "", f"{_side_word(spec)} claim number")
+
+
+def _fax_facts(
+    client: Any, matter_id: str, matter: dict[str, Any], spec: FormSpec, letter_date: date
+) -> dict[str, Fact]:
+    """A fax cover sheet to the side's carrier: its name and FAX number (the
+    insurer contact's, else the adjuster's, the same order as the rep letters),
+    the claim number, the client, the date as the firm's covers print it
+    (MM/DD/YYYY), and the preparer who sends it. The page count is the
+    sender's: she attaches the pages, so it is always left for her."""
+    layout = facts.matter_layout_values(client, matter_id)
+    parties = facts.read_parties(client, matter_id)
+    who = f"{_side_word(spec)} insurer"
+    insurer_id, insurer_src = facts.related_contact(
+        parties, layout, side=spec.side, relationship="Insurer", client_side=spec.client_side
+    )
+    adjuster_id, adjuster_src = facts.related_contact(
+        parties, layout, side=spec.side, relationship="Adjuster", client_side=spec.client_side
+    )
+    insurer = facts.fetch_contact(client, insurer_id)
+    adjuster = facts.fetch_contact(client, adjuster_id)
+    name = facts.contact_name(insurer) if insurer else None
+    fax = None
+    for contact, src, role in ((insurer, insurer_src, "insurer"), (adjuster, adjuster_src, "adjuster")):
+        number = facts.contact_fax(contact) if contact else None
+        if number:
+            fax = Fact(number, f"fax from the {role} contact ({src})")
+            break
+    preparer = facts.preparer_facts(client, matter, facts.load_preparer_title())
+    return {
+        "carrier_name": Fact(name, f"insurer contact ({insurer_src})") if name else Fact(None, "", f"{who} name"),
+        "carrier_fax": fax or Fact(None, "", f"{who} fax number"),
+        "date_numeric": Fact(letter_date.strftime("%m/%d/%Y"), "the letter date"),
+        "claim_number": _claim_number(layout, spec),
+        "client_name": facts.client_name(client, matter),
+        "signer_name": preparer["name"],
+        "signer_title": preparer["title"],
+        "preparer_email": preparer["email"],
+        "page_count": Fact(None, "", "page count (attach the bills, then count the pages)"),
+    }
 
 
 def _health_facts(
@@ -264,6 +335,11 @@ def render_firm_form_letter(
 
     ``form`` is ``first_party_rep`` (to the client's own carrier),
     ``third_party_rep`` (to the other side's carrier), or
+    ``dec_page_fax`` (the firm's fax cover sheet asking the client's own
+    carrier for her declarations page, a follow-up to the 1st party rep
+    letter's request), ``med_pay_fax`` (the firm's med pay fax cover sheet
+    asking that carrier to pay the attached bills directly to the providers;
+    the person attaches the bills and fills the page count), or
     ``health_blue_shield`` (the health-insurer notice for a Blue
     Shield of California member; Blue Shield's recovery vendor is the
     addressee printed in the firm's form). ``date`` is the letter date as
@@ -331,7 +407,10 @@ def _fill_and_file(
         return _refused(f"{resolved.name!r} could not be filled: {exc}", template=template)
     confirmed: cited_facts.Confirmed | None = None
     try:
-        if spec.facts_kind == "health":
+        if spec.facts_kind == "fax":
+            record = client.get(f"/matters/{matter}")
+            found = _fax_facts(client, matter, record if isinstance(record, dict) else {}, spec, when)
+        elif spec.facts_kind == "health":
             record = client.get(f"/matters/{matter}")
             found, confirmed = _health_facts(
                 client, matter, record if isinstance(record, dict) else {}, when, cited, carried

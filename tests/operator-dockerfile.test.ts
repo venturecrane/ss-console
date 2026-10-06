@@ -1485,7 +1485,8 @@ describe('Operator customer Machine Dockerfile', () => {
     // fd46efce -> 4f5c085d (overlay#418), 2026-10-06: a job-ledger write rides out a broker
     // respawn, a broker outage pages once, and four AgentMail app tools are banned.
     // 4f5c085d -> a2c83f92 (overlay#419), 2026-10-06: the DMV SR1 prefill tool is classified internal_write.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="a2c83f924343434b3f72a6f5624ceddb1fdcb3e7"')
+    // a2c83f92 -> 0b66db8a (overlay#420), 2026-10-06: the DMV SR 19C prefill tool is classified internal_write.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="0b66db8a846508bc66a222e7e676493298041911"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
