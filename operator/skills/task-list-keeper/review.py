@@ -374,12 +374,26 @@ def _message(ctx: _Ctx, group_key, es: list[Entry], since: list, plan: Plan) -> 
         return None
     review = f"The next review is on {ctx.cm.review_day}." if ctx.cm.review_day and overflow else None
     fallback = leg == ctx.routing.LEG_FALLBACK
+    L = ctx.lines
+    if items:
+        # A handover lead needs at least one handover line: all([]) is True, and
+        # an empty list must never read "I opened these tasks and can't finish them".
+        handover_only = bool(listed) and all(e.handover for e in listed)
+        subject = L.subject_line(len(items), fallback=fallback)
+        lead = L.lead_text(overflow, review, handover_only=handover_only, fallback=fallback)
+        footer = L.FOOTER
+    else:
+        # Closes only: the Operator's own finished tasks, nothing to decide. No
+        # count of tasks to review, no handover lead, no reply-with-numbers footer.
+        subject = L.closes_only_subject(fallback=fallback)
+        lead = L.LEAD_CLOSES_ONLY
+        footer = L.FOOTER_CLOSES_ONLY
     return {
         "recipients": list(recipients),
         "cc": list(cc),
         "routing_leg": leg,
-        "subject": ctx.lines.subject_line(len(items), fallback=fallback),
-        "lead": ctx.lines.lead_text(overflow, review, handover_only=all(e.handover for e in listed), fallback=fallback),
+        "subject": subject,
+        "lead": lead,
         "closes": [
             {
                 "item_key": e.key,
@@ -394,5 +408,5 @@ def _message(ctx: _Ctx, group_key, es: list[Entry], since: list, plan: Plan) -> 
         ],
         "items": items,
         "done_since": [{k: v for k, v in row.items() if not k.startswith("_")} for row in since],
-        "footer": ctx.lines.FOOTER,
+        "footer": footer,
     }

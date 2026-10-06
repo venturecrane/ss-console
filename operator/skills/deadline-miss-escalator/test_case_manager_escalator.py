@@ -140,6 +140,52 @@ def test_own_tasks_leave_the_digest_only_when_own_tasks_is_authored(tmp_path, mo
     assert len(_task_ids(without)) == 3
 
 
+def _handover(task_id, *, verdict=None, landed=False):
+    """A reassign line raised on a stamped task, optionally answered and written."""
+    rows = [
+        _row(
+            "task",
+            task_id,
+            "proposed",
+            n=1,
+            thread_ref="t-1",
+            dispatch_ref="b" * 32,
+            payload={
+                "action": "reassign",
+                "class": "open",
+                "staff_id": "s-atty",
+                "to_staff_id": "s-para",
+                "evidence": [],
+            },
+            ts="2026-09-21T14:00:00Z",
+        )
+    ]
+    if verdict:
+        rows.append(_row("task", task_id, verdict, n=1, thread_ref="t-1", ts="2026-09-22T14:00:00Z"))
+    if landed:
+        rows.append(_row("task", task_id, "completed", tool_call_id="call-1", ts="2026-09-22T14:01:00Z"))
+    return rows
+
+
+def test_a_handed_over_operator_task_reaches_the_digest(tmp_path, monkeypatch):
+    """Code review 2026-10-06 N17: the approved handover is a reassign that leaves
+    the "[Operator]" subject, and the keeper never raises the task again. Once a
+    person took it, it is theirs, and an overdue one must reach the digest."""
+    handed = _task("t-handed", -10, stamped=True)
+    still_own = _task("t-own", -10, stamped=True)
+    rows = _handover("t-handed", verdict="approved", landed=True)
+    _wake, envelope = _run(tmp_path, monkeypatch, [handed, still_own], CM, casework_rows=rows)
+    assert _task_ids(envelope) == {_key("t-handed")}
+
+
+def test_an_unanswered_or_held_handover_stays_the_operators(tmp_path, monkeypatch):
+    for i, rows in enumerate((_handover("t-x"), _handover("t-x", verdict="held"))):
+        _wake, envelope = _run(
+            tmp_path / str(i), monkeypatch, [_task("t-x", -10, stamped=True)], CM, casework_rows=rows
+        )
+        assert _task_ids(envelope) == set()
+
+
 def test_a_task_in_the_review_leaves_the_digest(tmp_path, monkeypatch):
     rows = [_raise("task", "t-proposed")]
     deadlines = [_task("t-proposed", -20), _task("t-firm", -5)]
