@@ -672,6 +672,35 @@ class MsGraphOps:
             return located
         return {"lookup": f"failed: {reason}"}
 
+    def _vetted_sender(self, source: dict[str, Any], message_id: str) -> tuple[str, Any]:
+        """The one address a reply to ``source`` may go to, and the policy that
+        allowed it. Refuses when no sender can be read, when the message is
+        this seat's own, when it is not an authored sender, or when its
+        ``replyTo`` names anyone else: Graph's /reply goes to replyTo whenever it
+        is set, not to ``from`` (Graph "message: reply"), so any other replyTo
+        would carry the answer to an address nobody vetted. Refused, never
+        rewritten (2026-10-06 review of overlay#421)."""
+        sender = normalize_address(source.get("from") or source.get("sender"))
+        if not sender:
+            raise MsGraphRefused(f"cannot determine who sent message {message_id!r}; refusing to reply")
+        reply_to = {normalize_address(r) for r in source.get("replyTo") or []}
+        reply_to.discard("")
+        if reply_to - {sender}:
+            raise MsGraphRefused(
+                "that message asks for replies to go to an address other than its sender; "
+                "this seat answers only the sender it can vet, so it will not reply"
+            )
+        if sender == normalize_address(self.mailbox()):
+            raise MsGraphRefused("that message was sent by this seat's own mailbox; it is not an inbound request")
+        policy = authored_policy(self._customer_path)
+        if not policy.allows_reply_to(sender):
+            raise MsGraphRefused(
+                "the sender of that message is not on scope.inbound_allow_from, so "
+                "this seat may not answer it. Anyone can email this mailbox; only "
+                "authored senders get replies (ss#2258)"
+            )
+        return sender, policy
+
     def reply(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Answer an inbound message, but only one from an allowed sender.
 
@@ -717,30 +746,7 @@ class MsGraphOps:
             credential_path=self._read_credential_path,
             role="read",
         )
-        sender = normalize_address(source.get("from") or source.get("sender"))
-        if not sender:
-            raise MsGraphRefused(f"cannot determine who sent message {message_id!r}; refusing to reply")
-        # Graph's /reply goes to the source's ``replyTo`` whenever it is set,
-        # not to ``from`` (Graph "message: reply"). So the sender this fence
-        # vetted is only the recipient when replyTo is empty or names that same
-        # sender; any other replyTo would carry the answer to an address nobody
-        # checked. Refused, never rewritten (2026-10-06 review of overlay#421).
-        reply_to = {normalize_address(r) for r in source.get("replyTo") or []}
-        reply_to.discard("")
-        if reply_to - {sender}:
-            raise MsGraphRefused(
-                "that message asks for replies to go to an address other than its sender; "
-                "this seat answers only the sender it can vet, so it will not reply"
-            )
-        if sender == normalize_address(self.mailbox()):
-            raise MsGraphRefused("that message was sent by this seat's own mailbox; it is not an inbound request")
-        policy = authored_policy(self._customer_path)
-        if not policy.allows_reply_to(sender):
-            raise MsGraphRefused(
-                "the sender of that message is not on scope.inbound_allow_from, so "
-                "this seat may not answer it. Anyone can email this mailbox; only "
-                "authored senders get replies (ss#2258)"
-            )
+        sender, policy = self._vetted_sender(source, message_id)
         redirect = self._device_redirect(payload.get("to"), sender, policy)
         conversation_id = str(source.get("conversationId") or "")
         audit_token = new_row_token()
