@@ -260,11 +260,18 @@ def fill_sr1(blob: bytes, values: dict[str, str], *, injured_driver: bool) -> by
     section shares the page-1 names), and, when the client is the injured
     driver, the "Injured" and "Driver" boxes of the first injured row ticked.
     Every other box, and the whole certification, is left as the state ships it."""
+    checks = {"INJURED.0": "/INJURED", "DRIVER1": "/DRIVER"} if injured_driver else {}
+    return fill_acroform(blob, values, checks)
+
+
+def fill_acroform(blob: bytes, values: dict[str, str], checks: dict[str, str]) -> bytes:
+    """A state AcroForm with ``values`` in its text boxes and each box named in
+    ``checks`` (fully qualified name -> the "on" state) ticked; every other
+    box exactly as the state ships it. Shared by the SR1 and the SR 19C."""
     from pypdf import PdfReader, PdfWriter
     from pypdf.generic import NameObject
 
     writer = PdfWriter(clone_from=PdfReader(io.BytesIO(blob)))
-    checks = {"INJURED.0": "/INJURED", "DRIVER1": "/DRIVER"} if injured_driver else {}
     for page in writer.pages:
         writer.update_page_form_field_values(page, values, auto_regenerate=False)
         for annot in page.get("/Annots") or []:
@@ -349,4 +356,4 @@ def register(server: Any) -> None:
     server.tool()(render_sr1)
 
 
-__all__ = ["BOXES", "DEFAULT_TEMPLATE", "FILE_NAME", "fill_sr1", "gather", "register", "render_sr1"]
+__all__ = ["BOXES", "DEFAULT_TEMPLATE", "FILE_NAME", "fill_acroform", "fill_sr1", "gather", "register", "render_sr1"]

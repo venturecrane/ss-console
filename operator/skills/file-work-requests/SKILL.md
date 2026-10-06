@@ -1,7 +1,7 @@
 ---
 name: file-work-requests
 description: >-
-  Files rep letters, health notices, SR1s, Medicals rows. It does the file work a paralegal asks for on one
+  Files rep letters, notices, DMV forms, Medicals rows. It does the file work a paralegal asks for on one
   named matter: makes the firm's 1st and 3rd party representation letters and
   its health-insurer notice on the firm's own forms and files them, prefills the
   state's SR1 for the client to sign, and puts the client's treating facilities
@@ -29,7 +29,7 @@ metadata:
     content_ceiling: surface_only # every letter value is read from the matter by the connector; the reply reports what was filed and what was missing, never a characterization of the case
     connectors:
       - email # the reply draft to the rostered sender, in the same thread
-      - smokeball # list_matters / get_matter (the one matter), get_files_on_matter + read_document (the client's insurance card, license and estimate, photos included), render_firm_form_letter (the firm's own rep-letter and health-notice forms, filled and filed), render_sr1 (the state SR1 prefilled for the client's signature), update_task (only when the sender says an item went out), add_medicals_provider (one facility on the Medicals tab, no money field), prepare_records_order / place_records_order / records_orders_for_matter (references/records-orders.md: an order waits for an administrator's yes)
+      - smokeball # list_matters / get_matter (the one matter), get_files_on_matter + read_document (the client's insurance card, license and estimate, photos included), render_firm_form_letter (the firm's own rep-letter, health-notice and fax-cover forms, filled and filed), render_sr1 (the state SR1 prefilled for the client's signature), render_sr19 (the state SR 19C prefilled for the firm's signer), update_task (only when the sender says an item went out), add_medicals_provider (one facility on the Medicals tab, no money field), prepare_records_order / place_records_order / records_orders_for_matter (references/records-orders.md: an order waits for an administrator's yes)
 ---
 
 # File Work Requests
@@ -176,6 +176,51 @@ name> to complete and sign: <left_for_client, comma-separated>.` Never list
    what was written in a box: the result names boxes, never values, and the
    reply does the same.
 
+### 2d. The dec page request (fax cover)
+
+The 1st party rep letter already asked her carrier to include a declarations
+page with its acknowledgement. This is the firm's follow-up.
+
+1. Look in the matter's documents (`get_files_on_matter`) for a declarations
+   page from her carrier (names like "dec page", "DEC PG", "declarations").
+   One is there: make nothing, and reply `Already in the file: <name>.`
+2. None: `render_firm_form_letter(matter_id, "dec_page_fax", date)`. Reply
+   `Filed: <fileName> on matter <matter-number>, following up the rep
+letter's request. Fax to <carrier> at the number from the <insurer or
+adjuster> contact.` (`facts_used.carrier_fax` says which), then its gaps.
+3. Only her own carrier: a 3rd party dec page is asked for by the 3rd party
+   rep letter ("confirm in writing that you have coverage ... and your policy
+   limits"); no fax cover is made for it. Say so if she asks.
+
+### 2e. The med pay request (fax cover)
+
+1. `render_firm_form_letter(matter_id, "med_pay_fax", date)`.
+2. List the bills she could attach: documents in the matter that are bills
+   or itemized statements, by name and date, one per line under `Bills in
+the file to attach:`. None: `No bills are in the file yet to attach.`
+3. Two judgment calls go in the reply as questions, never decided here:
+   - when no 1st party declarations page is in the file: `Her med pay
+coverage is not confirmed yet; the dec page will show it.`
+   - when a health insurer notice is on the matter: `Med pay paid straight
+to providers interacts with the health plan's claim; your call on
+timing.`
+4. The page count is always left for her (`[Not in the file: page count
+...]`): she attaches the bills, then counts.
+
+### 2f. The SR19
+
+The SR19 asks DMV for the OTHER driver's insurance, for an uninsured case.
+
+1. When the matter already names the other driver's insurer (a Defendants
+   insurer contact or policy number), make nothing, and ask: `Needs a word
+from you: the SR19 is for an uninsured other driver, and <insurer> is on
+file for them. Do you want it anyway?` A "yes" is a new request.
+2. Otherwise, read her license with `read_document` if it is in the file,
+   then `render_sr19(matter_id, cited)` citing only `driver_license_number`.
+3. Reply: `Filed: DMV SR19 - for signature.pdf on matter <matter-number>,
+prefilled from the file. Left for the signer: <left_for_signer,
+comma-separated>.` Never list a value.
+
 ### 3. The facilities
 
 For each facility she listed, call
@@ -247,7 +292,8 @@ filed, not sent, and their tasks stay open until she says they went out.
 
 ## Boundaries (never)
 
-- Never write, edit or paste letter text; only `render_firm_form_letter` makes a letter, and only `render_sr1` makes the SR1.
+- Never write, edit or paste letter text; only `render_firm_form_letter` makes a letter, and only `render_sr1` makes the SR1, and only `render_sr19` makes the SR19.
+- Never fill the SR19's requester name or certification, and never make an SR19 when the other driver's insurer is on file without her yes.
 - Never cite a card, license or vehicle value you did not read in that document's own transcription, and never sign, date or certify the SR1.
 - Never pass a value from the email into a letter, and never fill a `[Not in the file]` gap.
 - Never call `add_medicals_provider` with two facilities in one name, and never pick a `needs_contact` candidate yourself.

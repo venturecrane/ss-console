@@ -319,10 +319,12 @@ top_level:
       ASSISTING staff member signs the firm's notice letters (the health-
       insurer notice), whose name and email are read from their own staff
       record (form_letter_facts.load_preparer_title / preparer_facts); unset
-      prints the marker. The forms themselves resolve through
+      prints the marker. `firm`: the firm's name and address lines as its
+      letterhead prints them, the SR 19C's requester block
+      (sr19_form.load_firm). The forms themselves resolve through
       self_initiation.document_library.templates (first_party_rep_letter,
-      third_party_rep_letter, health_notice_blue_shield, and the
-      state SR1 PDF as sr1_form).
+      third_party_rep_letter, health_notice_blue_shield, dec_page_fax,
+      med_pay_fax, and the state PDFs as sr1_form and sr19_form).
   records_orders:
     status: implemented
     materializer: >-

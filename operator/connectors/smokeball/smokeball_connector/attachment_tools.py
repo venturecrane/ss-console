@@ -27,6 +27,7 @@ from .vendor_invoice_tools import register as _register_vendor_invoice_tools
 from .workbook_tools import register as _register_workbook_tools
 from .records_order_tools import register as _register_records_order_tools
 from .sr1_form import register as _register_sr1_tools
+from .sr19_form import register as _register_sr19_tools
 
 
 def register(server: Any) -> None:
@@ -54,6 +55,8 @@ def register(server: Any) -> None:
     _register_records_order_tools(server)
     # The DMV SR1 prefill (sr1_form.py), after everything else.
     _register_sr1_tools(server)
+    # The DMV SR 19C prefill (sr19_form.py), after the SR1.
+    _register_sr19_tools(server)
 
 
 __all__ = ["register"]

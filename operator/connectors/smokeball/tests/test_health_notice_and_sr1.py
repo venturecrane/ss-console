@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from smokeball_connector import cited_facts, extract, form_letters as fl, sr1_form, vision
+from smokeball_connector import cited_facts, extract, form_letters as fl, sr1_form, sr19_form, vision
 from smokeball_connector.form_docx import document_paragraphs, placeholders_in
 from smokeball_connector.library import NotResolved, ResolvedTemplate
 
@@ -435,4 +435,176 @@ def test_the_client_completes_list_survives_the_reply_checks() -> None:
     import re
 
     for line in sr1_form.CLIENT_COMPLETES:
+        assert "$" not in line and not re.search(r"\b[A-Z]{2,}\b", line), line
+
+
+# ---- the fax cover sheets and the SR 19C (2026-10-06) -------------------------
+
+DEC = (FORMS_DIR / "Form - Fax Dec Page.docx").read_bytes()
+MEDPAY = (FORMS_DIR / "Form - Fax Medpay.docx").read_bytes()
+SR19 = (FORMS_DIR / "Form - DMV SR19.pdf").read_bytes()
+ADJ = "c-adj1"
+
+
+class _Faxed(_Record):
+    """The 1st party insurer carries no fax; its adjuster does (the shape of
+    the live A&P records), and the Plaintiffs layout names both plus a claim."""
+
+    def get(self, path: str, **params: Any) -> Any:
+        if path == f"/matters/{MATTER}/roles":
+            out = super().get(path, **params)
+            out["roles"][0]["relationships"].append({"id": "rel-a1", "name": "Adjuster", "contactId": ADJ})
+            return out
+        if path == f"/matters/{MATTER}/layouts/lay":
+            out = super().get(path, **params)
+            out["values"].append({"key": "Matter/Plaintiffs/InsurancePolicy/Claims/Number", "value": "CL-0001"})
+            return out
+        if path == f"/contacts/{ADJ}":
+            return {"id": ADJ, "company": {"name": "Pat Adjuster", "fax": {"areaCode": "800", "number": "555-0101"}}}
+        return super().get(path, **params)
+
+
+@pytest.fixture
+def firm_seat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    path = tmp_path / "customer.yaml"
+    path.write_text(
+        "form_letters:\n  preparer_title: 'Legal Assistant'\n"
+        "  firm:\n    name: 'Example & Firm, LLP'\n    address: ['1 Firm Way', 'Lawtown, CA 90000']\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
+    return path
+
+
+def _file_fax(record: _Record, form: str, blob: bytes, monkeypatch: pytest.MonkeyPatch) -> tuple[dict[str, Any], str]:
+    monkeypatch.setattr(fl, "_client", lambda: record)
+    monkeypatch.setattr(fl, "SLEEP", lambda _s: None)
+    hit = ResolvedTemplate(bytes=blob, name=form, file_id="t", matter_id="lib", folder_id="fold")
+    monkeypatch.setattr(fl, "_resolve_form", lambda _c, _s: hit)
+    out = fl.render_firm_form_letter(MATTER, form, "2026-10-06")
+    return out, "\n".join(document_paragraphs(record.uploads[-1][2])) if record.uploads else ""
+
+
+def test_the_fax_forms_carry_their_fields_and_no_preparer_link() -> None:
+    assert set(placeholders_in(DEC)) == {
+        "preparer_email",
+        "carrier_name",
+        "signer_name",
+        "carrier_fax",
+        "date_numeric",
+        "claim_number",
+    }
+    assert set(placeholders_in(MEDPAY)) == {
+        "preparer_email",
+        "carrier_name",
+        "signer_name",
+        "carrier_fax",
+        "page_count",
+        "date_numeric",
+        "claim_number",
+        "client_name",
+        "signer_title",
+    }
+    for blob in (DEC, MEDPAY):
+        assert b"mailto" not in blob
+
+
+def test_the_dec_page_cover_reads_as_the_firms(firm_seat: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    record = _Faxed()
+    out, text = _file_fax(record, "dec_page_fax", DEC, monkeypatch)
+    assert out["status"] == "filed" and record.uploads[0][1] == "Fax Cover Sheet - Req Dec Page.docx"
+    for want in (
+        "Own Side Insurance",
+        "(800) 555-0101",
+        "10/06/2026",
+        "Claim # CL-0001",
+        "Alex Barnes",
+        "Please forward a copy of the dec page as soon as possible. My email is alex@firm.example.",
+    ):
+        assert want in text, want
+    assert out["unfilled"] == []
+    assert "adjuster contact" in out["facts_used"]["carrier_fax"]  # the reply names where the fax came from
+
+
+def test_the_med_pay_cover_leaves_the_page_count_for_the_sender(
+    firm_seat: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out, text = _file_fax(_Faxed(), "med_pay_fax", MEDPAY, monkeypatch)
+    assert "applied for Dana Example’s claim" in text and "PAYMENT DIRECTLY TO THE PROVIDERS" in text
+    assert "[Not in the file: page count (attach the bills, then count the pages)] (including cover)" in text
+    assert "Legal Assistant" in text and out["unfilled"] == [
+        "[Not in the file: page count (attach the bills, then count the pages)]"
+    ]
+
+
+def test_no_fax_on_record_prints_the_marker(firm_seat: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _out, text = _file_fax(_Record(), "dec_page_fax", DEC, monkeypatch)
+    assert "[Not in the file: 1st party insurer fax number]" in text
+
+
+# ---- the SR 19C -----------------------------------------------------------------
+
+
+def test_the_sr19_reads_as_the_firms_request(firm_seat: Path, documents: None) -> None:
+    from datetime import date
+
+    values, _c = sr19_form.gather(
+        _Record(), MATTER, {"driver_license_number": {"value": "Z7654321", "file_id": LICENSE}}, date(2026, 10, 6)
+    )
+    got = _fields(sr19_form.fill_acroform(SR19, values, sr19_form.CHECKS))
+    assert got["Name/Address1"] == "\nExample & Firm, LLP\n1 Firm Way\nLawtown, CA 90000"  # name line blank
+    assert got["Date of Request1"] == "10/06/2026" and got["AccidentvDate2"] == "03/04/2026"
+    assert got["Client1"] == got["Driver1"] == "Dana Example"
+    assert got["BDay 1"] == "02/03/1990" and got["DLNo 1"] == "Z7654321"
+    assert got["Address1"] == "1 Test Way, Exampleton, CA 95000"
+    assert got["Subject of Inquiry"] == "Robin Other" and got["Address2"] == "9 Far Rd, Elsewhere, CA 95999"
+    for box in ("Insurance1", "Check Box1.0.0", "Check Box1.3.0", "Check Box5"):
+        assert got[box] == "/Yes", box
+    for untouched in ("Uninsured", "Photocopy1", "Check Box6", "date of certification", "printed name", "DLNo 2"):
+        assert got.get(untouched) in (None, "", "/Off"), untouched
+
+
+def test_an_entity_client_is_never_the_driver(firm_seat: Path, documents: None) -> None:
+    from datetime import date
+
+    class _Company(_Record):
+        def get(self, path: str, **params: Any) -> Any:
+            if path == f"/contacts/{CLIENT}":
+                return {"id": CLIENT, "company": {"name": "Example Holdings LLC"}}
+            return super().get(path, **params)
+
+    values, _c = sr19_form.gather(_Company(), MATTER, None, date(2026, 10, 6))
+    assert not {"Client1", "Driver1", "BDay 1", "Address1", "DLNo 1"} & set(values)
+
+
+def test_render_sr19_files_it_and_carries_no_value(
+    firm_seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = _Record()
+    monkeypatch.setattr(sr19_form, "_client", lambda: record)
+    monkeypatch.setattr(fl, "SLEEP", lambda _s: None)
+    monkeypatch.setattr(
+        sr19_form,
+        "resolve_template",
+        lambda *_a: ResolvedTemplate(bytes=SR19, name="Form - DMV SR19", file_id="t", matter_id="lib", folder_id="f"),
+    )
+    out = sr19_form.render_sr19(MATTER, {"driver_license_number": {"value": "Z7654321", "file_id": LICENSE}})
+    assert out["status"] == "filed" and record.uploads[0][1] == "DMV SR19 - for signature.pdf"
+    dumped = json.dumps(out)
+    for value in ("Z7654321", "02/03/1990", "1 Test Way", "Robin Other"):
+        assert value not in dumped, value
+    assert "the certification: date, printed name and signature" in out["left_for_signer"]
+
+
+def test_an_sr19_that_does_not_resolve_files_nothing(firm_seat: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    record = _Record()
+    monkeypatch.setattr(sr19_form, "_client", lambda: record)
+    monkeypatch.setattr(sr19_form, "resolve_template", lambda *_a: NotResolved("no file"))
+    assert sr19_form.render_sr19(MATTER)["status"] == "refused" and record.uploads == []
+
+
+def test_the_signer_list_survives_the_reply_checks() -> None:
+    import re
+
+    for line in sr19_form.CLIENT_COMPLETES:
         assert "$" not in line and not re.search(r"\b[A-Z]{2,}\b", line), line
