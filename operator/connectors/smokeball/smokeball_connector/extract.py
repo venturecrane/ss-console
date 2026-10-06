@@ -205,6 +205,9 @@ def _extract(
         return ExtractResult(_docx_text(blob), METHOD_DOCX)
     if ext in ("txt", "text", "md", "csv", "log", "eml"):
         return ExtractResult(blob.decode("utf-8", "replace"), METHOD_PLAIN)
+    media_type = _image_media_type(blob, ext)
+    if media_type is not None:
+        return _image_result(blob, media_type, file_name, allow_vision=allow_vision, allow_cache=allow_cache)
     # Last resort: treat as text only when it plausibly IS text (no NUL bytes
     # in the first 4KB); otherwise refuse explicitly.
     if b"\x00" not in blob[:4096]:
@@ -213,6 +216,56 @@ def _extract(
         f"no text-extraction path for {file_name or 'document'!r} "
         f"(extension {file_extension or 'unknown'!r}); needs manual review"
     )
+
+
+def _image_media_type(blob: bytes, ext: str) -> str | None:
+    """The image type a photo of a document is, by its bytes; None when it is
+    not an image. HEIC (an iPhone's default) is named so it can be refused by
+    name rather than read as text."""
+    if blob.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if blob.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if blob.startswith(b"GIF8"):
+        return "image/gif"
+    if blob[:4] == b"RIFF" and blob[8:12] == b"WEBP":
+        return "image/webp"
+    if blob[4:8] == b"ftyp" and blob[8:12] in (b"heic", b"heix", b"mif1", b"msf1", b"hevc"):
+        return "image/heic"
+    if ext in ("heic", "heif"):
+        return "image/heic"
+    return None
+
+
+def _image_result(
+    blob: bytes, media_type: str, file_name: str, *, allow_vision: bool, allow_cache: bool
+) -> ExtractResult:
+    """A PHOTOGRAPH of a document (a card, a license, an estimate): the cache,
+    then one vision call. Same contract as a scanned PDF: a photo nobody could
+    read comes back empty with its reason, never as an exception or a guess."""
+    if media_type == "image/heic":
+        raise UnsupportedDocumentError(
+            f"{file_name or 'document'!r} is a HEIC photo, which cannot be read here; "
+            "it needs to be saved as JPEG or scanned to PDF"
+        )
+    if not allow_cache:
+        return ExtractResult("", METHOD_NONE_SCANNED, reason=REASON_NOT_ATTEMPTED, pages=1)
+
+    from .extract_cache import cache_get, cache_put
+
+    cached = cache_get(blob)
+    if cached is not None:
+        return ExtractResult(cached, METHOD_VISION_CACHED, pages=1)
+    if not allow_vision:
+        return ExtractResult("", METHOD_NONE_SCANNED, reason=REASON_NOT_ATTEMPTED, pages=1)
+
+    from .vision import transcribe_image
+
+    outcome = transcribe_image(blob, media_type=media_type)
+    if outcome.reason is not None:
+        return ExtractResult("", METHOD_NONE_SCANNED, reason=outcome.reason, pages=1)
+    cache_put(blob, outcome.text, pages=1)
+    return ExtractResult(outcome.text, METHOD_VISION, pages=1)
 
 
 def _pdf_result(blob: bytes, *, allow_vision: bool, allow_cache: bool) -> ExtractResult:

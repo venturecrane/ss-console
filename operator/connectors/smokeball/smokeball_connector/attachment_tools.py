@@ -26,6 +26,7 @@ from .memo_tools import register as _register_memo_tools
 from .vendor_invoice_tools import register as _register_vendor_invoice_tools
 from .workbook_tools import register as _register_workbook_tools
 from .records_order_tools import register as _register_records_order_tools
+from .sr1_form import register as _register_sr1_tools
 
 
 def register(server: Any) -> None:
@@ -51,6 +52,8 @@ def register(server: Any) -> None:
     _register_form_letter_tools(server)
     # The records-order tools (records_order_tools.py), after everything else.
     _register_records_order_tools(server)
+    # The DMV SR1 prefill (sr1_form.py), after everything else.
+    _register_sr1_tools(server)
 
 
 __all__ = ["register"]

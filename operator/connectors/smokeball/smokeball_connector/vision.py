@@ -172,6 +172,30 @@ INSTRUCTION = (
     "Output the transcription only."
 )
 
+#: A PHOTOGRAPH of a document (an insurance card, a driver license, a repair
+#: estimate) is one image, sent as an ``image`` block. Same rules as a page,
+#: plus one: a label and its value stay on one line, because the code that
+#: accepts a value cited from this transcription looks for it beside its label
+#: (``cited_facts``), never anywhere on the card.
+IMAGE_INSTRUCTION = INSTRUCTION.replace(
+    "Transcribe this page verbatim. It is a scan of one page of paper from a "
+    "legal matter file and its exact words are the only thing of value here.",
+    "Transcribe this photograph of a document verbatim. It is an insurance "
+    "card, an identification card, a form, or similar paper from a legal "
+    "matter file, and its exact words are the only thing of value here.",
+).replace(
+    "- Do not add page numbers,",
+    "- Keep each printed label on the same line as the value printed beside "
+    'or under it, as "Label: value".\n- Do not add page numbers,',
+)
+#: The Messages API refuses an image over 5 MB, so a bigger photo is refused
+#: here, by name, before any money is spent. Phone photos of a card are a few
+#: hundred KB; a larger one is re-photographed or scanned, never guessed at.
+IMAGE_MAX_BYTES = 5 * 1024 * 1024
+#: Media types an image block accepts. HEIC (an iPhone's default) is not one of
+#: them, and is refused rather than sent.
+IMAGE_MEDIA_TYPES = ("image/jpeg", "image/png", "image/gif", "image/webp")
+
 
 @dataclass(frozen=True)
 class VisionOutcome:
@@ -255,13 +279,23 @@ def gate(blob: bytes, *, pages: int, page_cap: int | None = None) -> str | None:
     return None
 
 
-def build_request(page_b64: str) -> dict:
+def build_request(page_b64: str, media_type: str = "application/pdf") -> dict:
     """The request body for ONE page. Pinned by a snapshot test: no ``tools``
     key, one turn, effort low, and NO ``thinking`` key (adaptive default).
 
     No ``citations``: they anchor to a text layer, and a scanned page has none
     (vfy_01M0ES31GSRBGH3T4KFQ44WE7N). Asking for them bought nothing and cost
-    tokens. Provenance comes from which page we sent."""
+    tokens. Provenance comes from which page we sent.
+
+    A photograph (``media_type`` an image type) goes as an ``image`` block with
+    :data:`IMAGE_INSTRUCTION`; everything else about the request is the same."""
+    if media_type != "application/pdf":
+        body = build_request(page_b64)
+        body["messages"][0]["content"] = [
+            {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": page_b64}},
+            {"type": "text", "text": IMAGE_INSTRUCTION},
+        ]
+        return body
     return {
         "model": model(),
         "max_tokens": PAGE_MAX_TOKENS,
@@ -326,6 +360,32 @@ def transcribe_pdf(blob: bytes, *, pages: int, page_cap: int | None = None) -> V
     return VisionOutcome(text=_compose(transcripts), pages_read=len(transcripts), stop_reason="end_turn")
 
 
+def transcribe_image(blob: bytes, *, media_type: str) -> VisionOutcome:
+    """Transcribe one photograph of a document in ONE API call. Never raises.
+
+    The same gates as a scanned page (kill switch, credential, the shared lock),
+    plus the API's own image limits checked first: a media type it cannot take
+    (HEIC) or a photo over 5 MB is refused by name and costs nothing."""
+    if media_type not in IMAGE_MEDIA_TYPES:
+        return VisionOutcome(reason=REASON_INCOMPLETE)
+    if len(blob) > IMAGE_MAX_BYTES:
+        return VisionOutcome(reason=REASON_OVER_BYTE_CAP)
+    refusal = gate(blob, pages=1)
+    if refusal is not None:
+        return VisionOutcome(reason=refusal)
+    if not _LOCK.acquire(timeout=lock_timeout()):
+        return VisionOutcome(reason=REASON_BUSY)
+    try:
+        text, stop_reason, failed = _transcribe_page(blob, media_type=media_type)
+    finally:
+        _LOCK.release()
+    if failed is not None:
+        return VisionOutcome(reason=failed, stop_reason=stop_reason)
+    if not _is_legible(text):
+        return VisionOutcome(reason=REASON_INCOMPLETE)
+    return VisionOutcome(text=_compose([text]), pages_read=1, stop_reason="end_turn")
+
+
 def _transcribe_pages(page_pdfs: list[bytes]) -> tuple[list[str], tuple[str, str | None] | None]:
     """Every page through a bounded pool, each result in its SENT position.
 
@@ -368,7 +428,9 @@ def _transcribe_pages(page_pdfs: list[bytes]) -> tuple[list[str], tuple[str, str
     return transcripts, None
 
 
-def _transcribe_page(page_pdf: bytes, abort: threading.Event | None = None) -> tuple[str, str | None, str | None]:
+def _transcribe_page(
+    page_pdf: bytes, abort: threading.Event | None = None, *, media_type: str = "application/pdf"
+) -> tuple[str, str | None, str | None]:
     """One page, with retries. Returns ``(text, stop_reason, failure_reason)``;
     on failure the text is empty and the reason is from the closed set.
 
@@ -378,7 +440,7 @@ def _transcribe_page(page_pdf: bytes, abort: threading.Event | None = None) -> t
     attempt. Never retried: any other status, a refusal, a truncation."""
     import base64
 
-    body = json.dumps(build_request(base64.b64encode(page_pdf).decode("ascii"))).encode("utf-8")
+    body = json.dumps(build_request(base64.b64encode(page_pdf).decode("ascii"), media_type)).encode("utf-8")
     headers = {
         "content-type": "application/json",
         "accept": "text/event-stream",

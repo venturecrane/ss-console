@@ -281,9 +281,17 @@ describe('matter-inbox-router: the file work class', () => {
     expect(skill).toContain('Never pass a value from the email into a letter')
   })
 
-  it('asks about a facility that could be two, and never completes a task', () => {
+  it("asks about a facility that could be two, and closes a task only on the sender's word", () => {
+    // 2026-10-06: filing a document is not doing its task ("Mail DMV SR1 form"
+    // is done when the SR1 is mailed), so a task closes only when the sender
+    // says the item went out, and the SR1 is never signed for the client.
     expect(bullet()).toContain('is asked about and not written')
-    expect(bullet()).toContain('no Smokeball task is completed')
-    expect(flat(read(SKILL))).toContain('Never complete, update or create a Smokeball task.')
+    expect(bullet()).toContain(
+      "a Smokeball task is completed only when the sender's own email says that item went out"
+    )
+    expect(bullet()).toContain('the SR1 is never signed for the client')
+    const skill = flat(read(SKILL))
+    expect(skill).toContain('Never complete a Smokeball task except as step 5 says')
+    expect(skill).toContain('Never complete it in the turn that files the document.')
   })
 })

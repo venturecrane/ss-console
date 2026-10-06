@@ -1250,6 +1250,11 @@ self_initiation:
     templates:
       first_party_rep_letter: 'Form - 1st Party Rep Letter.docx'
       third_party_rep_letter: 'Form - 3rd Party Rep Letter.docx'
+      # The firm's health-insurer notice for a Blue Shield member (addressed to
+      # Blue Shield's recovery vendor, Machinify), rebuilt from the firm's own
+      # toolbar letters (6 of them, 2026-08-05 to 10-02); and the state's SR1.
+      health_notice_blue_shield_machinify: 'Form - Med Ins Req. Machinify_Blue Shield.docx'
+      sr1_form: 'Form - DMV SR1.pdf'
     # The Operator's OWN matter (ss-console#2536). Four authored values, and
     # every one of them is a decision the firm made here rather than one the
     # Operator makes at runtime: the model can ask for this matter and cannot
@@ -1385,6 +1390,11 @@ form_letters:
     Scott Ashton:
       name: 'Scott R. Ashton'
       initials: 'SRA'
+  # preparer_title: how the staff member who PREPARES a notice letter signs it.
+  # The firm's health-insurer notices are signed by the legal assistant on the
+  # file (the matter's assisting staff), titled "Legal Assistant" on 40 of 40
+  # firm letters sampled 2026-08-13 to 10-02, across three legal assistants.
+  preparer_title: 'Legal Assistant'
 
 # vendor_invoice_intake: every staged vendor invoice is billable, and its PDF
 # files into Accounting/Invoices (a nested path: the "Invoices" folder whose

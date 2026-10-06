@@ -257,3 +257,13 @@ update_memo = "internal_write"
 prepare_records_order = "read"
 place_records_order = "commitment"
 records_orders_for_matter = "read"
+# render_sr1 (2026-10-06, ahead of A&P's "Mail DMV SR1 form" task): the state's
+# SR1 PDF prefilled from the matter (and from values cited off the client's
+# license and estimate, accepted only beside their labels) and filed on the
+# matter for the client to complete and sign; it never signs or certifies.
+# internal_write: the firm's own record, nothing mailed or sent.
+#
+# COORDINATED CHANGE: hermes-smd-overlay shared/action_classes.py must carry
+# mcp_smokeball_render_sr1 = ActionClass.INTERNAL_WRITE, shipped by the
+# OVERLAY_REF bump in the same change; until it lands the tool is UNREACHABLE.
+render_sr1 = "internal_write"
