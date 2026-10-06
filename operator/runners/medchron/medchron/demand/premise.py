@@ -106,6 +106,16 @@ _CARRIER_SIGNAL = re.compile(
 _SIGNOFF = r"(?:cordially|sincerely|very truly yours|respectfully(?: yours| submitted)?)[,\s]{0,60}"
 
 
+#: A document the firm or the Operator drafted, by its name: a draft demand
+#: ("203222 Demand DRAFT 2026-09-24", the Operator's own 9/24 output, quoted a
+#: carrier's refusal to disclose limits and stopped a live job at G2), anything
+#: carrying the Operator's provenance, a coverage posture report.
+_OWN_NAME = re.compile(
+    r"(?i)(\bdemand\b.*\bdraft\b|\bdraft\b.*\bdemand\b|\boperator\b|coverage posture report|"
+    r"attorney notes|gap audit)"
+)
+
+
 def firm_authored(r: dict[str, Any], text: str, prem: dict[str, Any]) -> bool:
     """A document the firm wrote: an email sent from the firm's domain, or a
     letter signed off over the firm's own signature line. The firm's prior
@@ -113,6 +123,8 @@ def firm_authored(r: dict[str, Any], text: str, prem: dict[str, Any]) -> bool:
     acceptance (review of #3074). A carrier's letter ADDRESSED to the firm
     names the firm too, so the test is the sign-off, never the name alone."""
     domains = tuple(prem.get("_firm_domains") or ())
+    if _OWN_NAME.search(str(r.get("name") or "")):
+        return True
     if r.get("kind") == "email_body":
         m = re.search(r"(?im)^From:\s*(\S+@(\S+))", text)
         return bool(m and m.group(2).lower().strip(">") in domains)
@@ -177,6 +189,21 @@ def variant(
     return {"variant": "pre_suit", "evidence": ["no court document and no defense counsel of record in the file"]}
 
 
+_ROR = "reservation of rights"
+#: A carrier declining to DISCLOSE its limits (privacy, the insured's
+#: permission) is not a coverage position: it is the ordinary answer before a
+#: time-limited demand, and the demand is what moves it.
+_LIMITS_REFUSAL = re.compile(
+    r"(?i)(private financial information|insured'?s (written )?permission|"
+    r"(cannot|can ?not|unable to|not able to|will not|won't|decline to) (disclose|release|provide)[^.]{0,40}limits|"
+    r"limits? (are|is) (confidential|private|protected))"
+)
+
+
+def limits_refusal(quote: str) -> bool:
+    return bool(_LIMITS_REFUSAL.search(quote))
+
+
 def decide(
     extracted: list[dict[str, Any]], preflight: dict[str, Any], facts: dict[str, Any], prem: dict[str, Any]
 ) -> dict[str, Any]:
@@ -192,20 +219,29 @@ def decide(
             + [f"{h['document']}: {h['quote']}" for h in carrier_docs[:5]],
         }
     )
-    denials = _phrase_hits(texts, prem["denial_phrases"], negatable=True)
+    # G2 reads only what OTHERS wrote: the firm's and the Operator's own
+    # drafts quote carriers, and a quote is not the carrier's position.
+    theirs = [(r, t) for r, t in texts if not firm_authored(r, t, prem)]
+    denials = [
+        h for h in _phrase_hits(theirs, prem["denial_phrases"], negatable=True) if not limits_refusal(h["quote"])
+    ]
     gates.append(
         {
             "gate": "G2 coverage not denied",
             "passed": not denials,
-            "evidence": [f"{h['document']}: {h['quote']}" for h in denials[:10]],
+            "evidence": [f"{h['document']} (rule: a denial phrase): {h['quote']}" for h in denials[:10]],
         }
     )
     fail_on = set(prem["fail_on"])
-    blocking = [f"{h['class']}: {h['document']}" for h in preflight.get("premise_hits") or [] if h["class"] in fail_on]
+    blocking = [
+        f"{h['document']} (rule: a document name of class {h['class']})"
+        for h in preflight.get("premise_hits") or []
+        if h["class"] in fail_on and not firm_authored({"name": h["document"]}, "", prem)
+    ]
     # Names alone miss an acceptance filed as "letter 5-5-26.pdf": the TEXT is
     # read for the settlement phrases too, negation-aware (review of #3074).
     blocking += [
-        f"settled, in the text: {h['document']}: {h['quote']}"
+        f"{h['document']} (rule: a settlement phrase in its text): {h['quote']}"
         for h in _phrase_hits(
             [(r, t) for r, t in texts if not firm_authored(r, t, prem)], prem["settled_phrases"], negatable=True
         )
@@ -216,6 +252,8 @@ def decide(
     facts_out = [
         f"{h['class']}: {h['document']}" for h in preflight.get("premise_hits") or [] if h["class"] not in fail_on
     ]
+    for h in _phrase_hits(theirs, [_ROR], negatable=True):
+        facts_out.append(f"reservation of rights (a posture, not a denial): {h['document']}: {h['quote']}")
     for r, t in texts:
         m = _CONDITIONAL.search(t)
         if m:

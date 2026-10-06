@@ -169,7 +169,7 @@ def test_a_premise_failure_files_a_coverage_report_and_pays_nothing(tmp_path, pr
     assert client.calls == [] and v.dollars == 0
     assert [f["name"].startswith("Coverage Posture Report") for f in v.files] == [True]
     report = (tmp_path / "job" / "data" / "coverage-report.md").read_text()
-    assert "acceptance: Demand Acceptance letter" in report and "No demand was drafted" in report
+    assert "Demand Acceptance letter (rule: a document name of class acceptance)" in report and "No demand was drafted" in report
 
 
 def test_a_written_denial_fails_g2(tmp_path, pricing):
@@ -1113,3 +1113,55 @@ def test_a_financial_responsibility_form_is_not_an_acceptance(tmp_path):
     acceptance = [({"name": "Letter"}, "Example Mutual hereby accepts your demand dated May 1.")]
     assert premise._phrase_hits(form, phrases, negatable=True) == []
     assert premise._phrase_hits(acceptance, phrases, negatable=True)
+
+
+# ---- live practice run 2026-10-06 (203222): a false G2 on our own draft ------------------
+def test_g2_never_reads_the_firms_or_the_operators_own_draft_demand(tmp_path, pricing):
+    own = make_pdf(
+        [
+            "Your claim number CLM-0001. We note your letter: coverage is denied pending review. "
+            "Demand is hereby made for the full policy limits."
+        ]
+    )
+    docs = standard_docs() + [("d20", "100001 Demand DRAFT 2026-09-24.pdf", own, "f-corr")]
+    client = ScriptedClient()
+    _r, v, _ = _run(tmp_path, pricing, seat_with(docs), client)
+    assert v.outcome == "delivered" and v.coverage_report is False, v.reason
+    assert client.calls  # the job went on to draft
+
+
+def test_a_carrier_refusing_to_disclose_limits_is_not_a_denial(tmp_path, pricing):
+    letter = make_pdf(
+        [
+            "Example Mutual. Claim number CLM-0001. Policy limits are protected private financial "
+            "information; coverage is denied disclosure until we request our insured's permission."
+        ]
+    )
+    docs = standard_docs() + [("d21", "Carrier letter limits.pdf", letter, "f-corr")]
+    _r, v, _ = _run(tmp_path, pricing, seat_with(docs), ScriptedClient())
+    assert v.coverage_report is False, v.reason
+    real = make_pdf(["Example Mutual. Claim number CLM-0001. Coverage is denied for this loss."])
+    docs2 = standard_docs() + [("d22", "Carrier letter 2.pdf", real, "f-corr")]
+    _r, v2, _ = _run(tmp_path / "b", pricing, seat_with(docs2), ScriptedClient())
+    assert v2.coverage_report is True
+    report = (tmp_path / "b" / "job" / "data" / "coverage-report.md").read_text()
+    assert "Carrier letter 2 (rule: a denial phrase)" in report
+
+
+def test_a_reservation_of_rights_is_a_flag_not_a_fail(tmp_path):
+    from medchron.demand import premise
+
+    prem = {
+        "denial_phrases": ["coverage is denied"],
+        "fail_on": [],
+        "settled_phrases": ["timely acceptance"],
+        "carrier_phrases": ["claim number"],
+        "litigation_phrases": ["complaint for damages"],
+        "_firm_signature": "X",
+        "_firm_domains": [],
+    }
+    t = tmp_path / "a.txt"
+    t.write_text("Example Mutual issues this reservation of rights under claim number CLM-0001.")
+    out = premise.decide([{"name": "ROR letter", "text_path": str(t)}], {"premise_hits": []}, {"insurer": "X"}, prem)
+    assert out["gates"][1]["passed"] is True
+    assert any("reservation of rights" in f for f in out["premise_facts"])
