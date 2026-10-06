@@ -264,6 +264,45 @@ def _preflight(customers_root: Path, slug: str) -> tuple[bool, Optional[str]]:
     return True, None
 
 
+def _live_refusal(args: argparse.Namespace, pipeline: DecommissionPipeline, wired: dict[str, bool]) -> bool:
+    """True when a --live run must be refused (exit 5) before any step runs;
+    the reason is printed. Prints the --allow-unwired warning otherwise."""
+    if wired.get("compliance_archiver"):
+        # The packet is signed at step 07, after step 06 destroys the Fly app.
+        # A key that cannot sign must stop the run here, with nothing touched,
+        # not between the two (review 2026-10-06 N14).
+        problem = signing_preflight()
+        if problem:
+            print(
+                f"[live] REFUSING: the compliance packet could not be signed, so step 07 would halt "
+                f"after step 06 destroyed the Fly app. {problem}",
+                file=sys.stderr,
+            )
+            return True
+    unwired = pipeline.unwired_destructive_backends()
+    if unwired and not args.allow_unwired:
+        needs = "; ".join(f"{name} needs {BACKEND_REQUIREMENTS.get(name, 'its client')}" for name in unwired)
+        print(
+            "[live] REFUSING: backend(s) not wired: "
+            f"{', '.join(unwired)}. A --live run would report a clean decommission while "
+            "customer data, the Fly Machine and its secrets remain, or with no compliance "
+            f"packet. Stage the credentials ({needs}), or pass "
+            "--allow-unwired with a fixture --customers-root for a "
+            "dev/fixture run that explicitly tolerates skipped deletions.",
+            file=sys.stderr,
+        )
+        return True
+    if unwired:
+        print(
+            "[live] WARNING: --allow-unwired set; the following "
+            "destructive backend(s) will be SKIPPED, not deleted: "
+            f"{', '.join(unwired)}. This run does NOT fully decommission "
+            "the customer.",
+            file=sys.stderr,
+        )
+    return False
+
+
 async def _run(args: argparse.Namespace) -> int:
     customers_root, archive_root, audit_db = _resolve_paths(args)
 
@@ -336,50 +375,13 @@ async def _run(args: argparse.Namespace) -> int:
     # Fail closed (#1123): a --live run that cannot actually delete must
     # not report success. Refuse BEFORE writing any audit row or
     # tombstoning the customer directory.
-    if args.live and wired.get("compliance_archiver"):
-        # The packet is signed at step 07, after step 06 destroys the Fly app.
-        # A key that cannot sign must stop the run here, with nothing touched,
-        # not between the two (review 2026-10-06 N14).
-        problem = signing_preflight()
-        if problem:
-            print(
-                f"[live] REFUSING: the compliance packet could not be signed, so step 07 would halt "
-                f"after step 06 destroyed the Fly app. {problem}",
-                file=sys.stderr,
-            )
-            try:
-                audit_conn.close()
-            except Exception:  # noqa: BLE001 - closing the audit connection on the refusal path must not mask the refusal being reported
-                pass
-            _print_footer(args.slug, mode=mode, ok=False)
-            return 5
-    if args.live:
-        unwired = pipeline.unwired_destructive_backends()
-        if unwired and not args.allow_unwired:
-            needs = "; ".join(f"{name} needs {BACKEND_REQUIREMENTS.get(name, 'its client')}" for name in unwired)
-            print(
-                "[live] REFUSING: backend(s) not wired: "
-                f"{', '.join(unwired)}. A --live run would report a clean decommission while "
-                "customer data, the Fly Machine and its secrets remain, or with no compliance "
-                f"packet. Stage the credentials ({needs}), or pass "
-                "--allow-unwired with a fixture --customers-root for a "
-                "dev/fixture run that explicitly tolerates skipped deletions.",
-                file=sys.stderr,
-            )
-            try:
-                audit_conn.close()
-            except Exception:  # noqa: BLE001 - closing the audit connection on the refusal path must not mask the refusal being reported
-                pass
-            _print_footer(args.slug, mode=mode, ok=False)
-            return 5
-        if unwired and args.allow_unwired:
-            print(
-                "[live] WARNING: --allow-unwired set; the following "
-                "destructive backend(s) will be SKIPPED, not deleted: "
-                f"{', '.join(unwired)}. This run does NOT fully decommission "
-                "the customer.",
-                file=sys.stderr,
-            )
+    if args.live and _live_refusal(args, pipeline, wired):
+        try:
+            audit_conn.close()
+        except Exception:  # noqa: BLE001 - closing the audit connection on the refusal path must not mask the refusal being reported
+            pass
+        _print_footer(args.slug, mode=mode, ok=False)
+        return 5
 
     try:
         if args.live:
