@@ -1480,7 +1480,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // b8d64ba7 -> a109c271 (overlay#415), 2026-10-05: the medical-records order is a call-payload commitment act.
     // a109c271 -> c126cb9e (overlay#416), 2026-10-05: the gateway holds observational audit
     // rows across a broker gap instead of losing them.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="c126cb9ed6ad460c39198481d115b2b31225130f"')
+    // c126cb9e -> fd46efce (overlay#417), 2026-10-05: a held reply reaches the agent whatever
+    // the hook order, and REPLY_HELD/REPLY_FAILED page SMD as shortfalls with informative codes.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="fd46efceeeb2ef3b03fc86cb870b0965c6240bb1"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
