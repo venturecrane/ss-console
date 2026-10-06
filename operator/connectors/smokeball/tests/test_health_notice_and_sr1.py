@@ -414,3 +414,25 @@ def test_a_pdf_template_name_keeps_its_extension() -> None:
 
 def test_the_letter_date_default_is_unchanged_for_rep_letters() -> None:
     assert fl.FORMS["first_party_rep"].facts_kind == "rep" and date(2026, 10, 6)
+
+
+def test_a_company_client_is_never_the_driver(seat: Path, documents: None) -> None:
+    """Rehearsal 2026-10-06: on a matter whose client is a company, the SR1
+    printed the company as "her name". A driver is a person."""
+
+    class _Company(_Record):
+        def get(self, path: str, **params: Any) -> Any:
+            if path == f"/contacts/{CLIENT}":
+                return {"id": CLIENT, "company": {"name": "Example Holdings LLC"}}
+            return super().get(path, **params)
+
+    values, _s, _c = sr1_form.gather(_Company(), MATTER, None)
+    assert "DRIVERS NAME.0" not in values and "NAME &  ADDRESS OF INJURED OR DECEASED.0" not in values
+    assert values["DRIVERS NAME.1"] == "Robin Other"  # the other side is still read
+
+
+def test_the_client_completes_list_survives_the_reply_checks() -> None:
+    import re
+
+    for line in sr1_form.CLIENT_COMPLETES:
+        assert "$" not in line and not re.search(r"\b[A-Z]{2,}\b", line), line
