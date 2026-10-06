@@ -552,7 +552,12 @@ def test_the_signature_block_and_initials_come_from_the_attorney_map_not_the_mod
 
 def test_a_filed_action_selects_litigation_and_an_unauthored_litigation_format_holds(tmp_path, pricing):
     docs = standard_docs() + [
-        ("d12", "Pleading.pdf", make_pdf(["SUPERIOR COURT. COMPLAINT FOR DAMAGES. Case No. 24CV0001."]), "f-corr")
+        (
+            "d12",
+            "Pleading.pdf",
+            make_pdf(["SUPERIOR COURT OF CALIFORNIA. COMPLAINT FOR DAMAGES. Case No. 24CV0001."]),
+            "f-corr",
+        )
     ]
     client = ScriptedClient()
     _r, v, _ = _run(tmp_path, pricing, seat_with(docs), client)
@@ -861,3 +866,36 @@ def test_an_upload_refusal_carries_the_upload_stages_own_reason(tmp_path, pricin
     seat2.folders.append({"id": "f-x", "name": seat.created[0]["name"], "parentId": None, "path": "/x"})
     _r, v2, _ = _run(tmp_path / "b", pricing, seat2, ScriptedClient())
     assert v2.outcome == "held" and "already exists on the matter" in v2.reason
+
+
+def test_a_records_vendors_case_number_stamp_is_not_a_lawsuit(tmp_path, pricing):
+    """Free replay on the 9/24 trial matters: the records vendor stamps the
+    firm's matter number as "Case Number:" on every certificate, and a gate
+    that read that as a court case called every pre-suit file litigation."""
+    cert = make_pdf(["Certificate of records. Case Number: 100001 Requested Date Range: 1/1/2021 - present."])
+    docs = standard_docs() + [("d14", "ER Certificate for Medical.pdf", cert, "f-med")]
+    _r, v, _ = _run(tmp_path, pricing, seat_with(docs), ScriptedClient())
+    assert v.outcome == "delivered", v.reason
+    assert json.loads((tmp_path / "job" / "data" / "premise.json").read_text())["variant"]["variant"] == "pre_suit"
+
+
+def test_no_demand_left_this_cycle_fails_before_anything_is_paid(tmp_path, pricing):
+    from demand_testkit import job_doc
+
+    seat = seat_with(standard_docs())
+    jd = tmp_path / "job"
+    jd.mkdir()
+    (jd / "job.json").write_text(json.dumps({**job_doc(), "allowance_remaining": 0}))
+    make_inputs(tmp_path / "inputs")
+    client = ScriptedClient()
+    v = DemandRun(
+        jd,
+        inputs_dir=str(tmp_path / "inputs"),
+        pricing=str(pricing),
+        seat_factory=lambda: seat,
+        client=client,
+        log=lambda m: None,
+        readback_pause=0.0,
+        vendor_factory=lambda: None,
+    ).run()
+    assert v.outcome == "failed" and v.stage == "demand_allowance_per_cycle" and client.calls == []

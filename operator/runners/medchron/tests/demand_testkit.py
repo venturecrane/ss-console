@@ -110,7 +110,7 @@ def firm_data(**over: Any) -> dict[str, Any]:
             "denial_phrases": ["coverage is denied", "deny coverage"],
             "carrier_phrases": ["claim number", "policy number"],
             "settled_phrases": ["accept the policy limits", "timely acceptance"],
-            "litigation_phrases": ["complaint for damages", "case no."],
+            "litigation_phrases": ["complaint for damages", "superior court of california"],
         },
         "format": {"firm_signature": SIGNATURE, "footer_markers": ["Settlement Communication", "1119, 1152"]},
         "variants": {

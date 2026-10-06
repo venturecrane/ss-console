@@ -239,6 +239,12 @@ class DemandRun:
         pull.run(self.seat, self.job.matter_id, self.firm, set(f.get("client_emails") or []), self.data, self.log)
 
     def _estimate(self) -> None:
+        if self.job.allowance_remaining is not None and self.job.allowance_remaining <= 0 and not self.budget.refresh():
+            raise limits_mod.LimitHold(
+                "demand_allowance_per_cycle",
+                "demand_allowance_per_cycle: this cycle's demands are used, counting the ones in progress; "
+                "nothing was spent",
+            )
         est = self._json("preflight.json")["estimate"]
         spent = self.budget.refresh()
         try:

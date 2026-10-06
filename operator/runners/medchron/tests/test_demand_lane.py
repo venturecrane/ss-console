@@ -54,7 +54,12 @@ class FakeClient:
             self.rows[req["job_id"]]["state"] = req["state"]
             return {"ok": True}
         if a == "demand_allowance":
-            return {"ok": True, "used": 0, **({"cents_used": self.cents} if self.cents is not None else {})}
+            return {
+                "ok": True,
+                "used": 0,
+                "remaining": 5,
+                **({"cents_used": self.cents} if self.cents is not None else {}),
+            }
         raise AssertionError(f"the demand lane must speak only demand verbs, not {a}")
 
 
@@ -232,3 +237,5 @@ def test_the_lane_reads_cents_used_from_the_real_demand_verbs(tmp_path):
 
     broker = DemandBroker(Client())  # type: ignore[arg-type]
     assert broker.month_cents(a) == 450 and broker.month_cents(b) == 700 and broker.month_cents("none") == 1150
+    cents, remaining = broker.month_state("none")
+    assert cents == 1150 and isinstance(remaining, int)

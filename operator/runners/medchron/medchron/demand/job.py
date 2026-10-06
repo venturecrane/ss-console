@@ -40,6 +40,9 @@ class DemandJob:
     request_text: str
     deliverables: tuple[str, ...]
     month_cents_used: int
+    #: Demands left this cycle with this job excluded (the broker reserves
+    #: submitted, running and held jobs). None on a laptop run.
+    allowance_remaining: int | None = None
 
     @property
     def data(self) -> Path:
@@ -88,6 +91,9 @@ def parse(data: Any, job_dir: Path) -> DemandJob:
         request_text=text,
         deliverables=tuple(d for d in DELIVERABLES if d in wanted),
         month_cents_used=cents,
+        allowance_remaining=data.get("allowance_remaining")
+        if isinstance(data.get("allowance_remaining"), int)
+        else None,
     )
 
 

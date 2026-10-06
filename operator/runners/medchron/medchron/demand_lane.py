@@ -62,12 +62,20 @@ class DemandBroker:
     def record(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any]:
         return self.client._request({"action": "demand_job_record", "job_id": job_id, "state": state, "fields": fields})
 
-    def month_cents(self, exclude_job_id: str) -> int:
+    def month_state(self, exclude_job_id: str) -> tuple[int, int]:
+        """(the Pacific calendar month's demand spend in cents, the demands
+        left this cycle), both with this job excluded, so a resume is metered
+        against neither its own cents nor its own reservation. A missing or
+        malformed field raises: the lane defers rather than run unmetered."""
         resp = self.client._request({"action": "demand_allowance", "exclude_job_id": exclude_job_id})
-        cents = resp.get("cents_used")
-        if not isinstance(cents, int) or isinstance(cents, bool) or cents < 0:
-            raise BrokerError("demand_allowance carried no cents_used; the month's demand spend is unknown")
-        return cents
+        cents, remaining = resp.get("cents_used"), resp.get("remaining")
+        for name, v in (("cents_used", cents), ("remaining", remaining)):
+            if not isinstance(v, int) or isinstance(v, bool) or v < 0:
+                raise BrokerError(f"demand_allowance carried no {name}; the job cannot be metered")
+        return int(cents), int(remaining)  # type: ignore[arg-type]
+
+    def month_cents(self, exclude_job_id: str) -> int:
+        return self.month_state(exclude_job_id)[0]
 
 
 def demand_runner_cmd() -> list[str]:
@@ -109,7 +117,7 @@ class DemandLane(Daemon):
             "job_id": job_id,
             "kind": "demand",
             "slug": self.customer_slug,
-            "month_cents_used": self.broker.month_cents(job_id),
+            **dict(zip(("month_cents_used", "allowance_remaining"), self.broker.month_state(job_id))),
         }
         (jd / "data").mkdir(exist_ok=True)
         (jd / "job.json").write_text(json.dumps(doc, indent=1), encoding="utf-8")
