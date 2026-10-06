@@ -49,7 +49,14 @@ from .library import ResolvedTemplate, list_matter_files, load_library_config, n
 DOCUMENT_CLASS = "sr1_form"
 DEFAULT_TEMPLATE = "Form - DMV SR1.pdf"
 FILE_NAME = "DMV SR1 - for client signature.pdf"
-CITED_FIELDS = {"driver_license_number", "vehicle_year", "vehicle_make", "vehicle_model", "vehicle_plate", "vehicle_vin"}
+CITED_FIELDS = {
+    "driver_license_number",
+    "vehicle_year",
+    "vehicle_make",
+    "vehicle_model",
+    "vehicle_plate",
+    "vehicle_vin",
+}
 LOCATION_KEY = "Matter/CaseDetails/AccidentDetails/AccidentLocation"
 
 #: Box -> what the client sees it called, for the "left for the client" list.
@@ -113,7 +120,9 @@ def _address_parts(contact: dict[str, Any]) -> dict[str, str]:
         addr = body.get(key)
         if isinstance(addr, dict) and str(addr.get("addressLine1") or "").strip():
             street = " ".join(
-                str(addr.get(k) or "").strip() for k in ("addressLine1", "addressLine2") if str(addr.get(k) or "").strip()
+                str(addr.get(k) or "").strip()
+                for k in ("addressLine1", "addressLine2")
+                if str(addr.get(k) or "").strip()
             )
             return {
                 "street": street,
@@ -177,7 +186,12 @@ def gather(client: Any, matter_id: str, cited: Any) -> tuple[dict[str, str], dic
     name = facts.contact_name(me) if me else None
     put("DRIVERS NAME.0", name, "matter client contact")
     mine = _address_parts(me) if me else {}
-    for box, part in (("DRIVERS STREET ADDRESS.0", "street"), ("CITY.0", "city"), ("STATE2.0", "state"), ("ZIP CODE.0", "zip")):
+    for box, part in (
+        ("DRIVERS STREET ADDRESS.0", "street"),
+        ("CITY.0", "city"),
+        ("STATE2.0", "state"),
+        ("ZIP CODE.0", "zip"),
+    ):
         put(box, mine.get(part), "matter client contact address")
     put("DATE OF BIRTH-MONTH.0", _birth_date(me) if me else None, "matter client contact")
     phone = _phone(me) if me else None
@@ -192,7 +206,9 @@ def gather(client: Any, matter_id: str, cited: Any) -> tuple[dict[str, str], dic
         ("Plaintiffs", True, "INSURANCE CO. NAME.22", "POLICY NUMBER.0"),
         ("Defendants", False, "INSURANCE CO. NAME.221", "POLICY NUMBER.1"),
     ):
-        insurer_id, src = facts.related_contact(parties, layout, side=side, relationship="Insurer", client_side=client_side)
+        insurer_id, src = facts.related_contact(
+            parties, layout, side=side, relationship="Insurer", client_side=client_side
+        )
         insurer = facts.fetch_contact(client, insurer_id)
         put(insurer_box, facts.contact_name(insurer) if insurer else None, f"insurer contact ({src})")
         key = f"Matter/{side}/InsurancePolicy/PolicyNumber"
@@ -201,7 +217,12 @@ def gather(client: Any, matter_id: str, cited: Any) -> tuple[dict[str, str], dic
     if other:
         put("DRIVERS NAME.1", facts.contact_name(other), "the other side's contact")
         theirs = _address_parts(other)
-        for box, part in (("DRIVERS STREET ADDRESS.1", "street"), ("CITY.1", "city"), ("STATE2.1", "state"), ("ZIP CODE.1", "zip")):
+        for box, part in (
+            ("DRIVERS STREET ADDRESS.1", "street"),
+            ("CITY.1", "city"),
+            ("STATE2.1", "state"),
+            ("ZIP CODE.1", "zip"),
+        ):
             put(box, theirs.get(part), "the other side's contact address")
 
     confirmed = cited_facts.confirm(client, matter_id, cited, set(CITED_FIELDS))

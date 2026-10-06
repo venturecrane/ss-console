@@ -34,7 +34,7 @@ from smokeball_connector.form_docx import document_paragraphs, placeholders_in
 from smokeball_connector.library import NotResolved, ResolvedTemplate
 
 FORMS_DIR = Path(__file__).parent / "fixtures" / "forms"
-HEALTH = (FORMS_DIR / "Form - Med Ins Req. Machinify_Blue Shield.docx").read_bytes()
+HEALTH = (FORMS_DIR / "Form - Med Ins Blue Shield.docx").read_bytes()
 SR1 = (FORMS_DIR / "Form - DMV SR1.pdf").read_bytes()
 
 MATTER = "m-9"
@@ -74,14 +74,27 @@ class _Record:
 
     def get(self, path: str, **_params: Any) -> Any:
         if path == f"/matters/{MATTER}":
-            return {"id": MATTER, "clientIds": [CLIENT], "personResponsibleStaffId": STAFF, "personAssistingStaffId": ASSIST}
+            return {
+                "id": MATTER,
+                "clientIds": [CLIENT],
+                "personResponsibleStaffId": STAFF,
+                "personAssistingStaffId": ASSIST,
+            }
         if path == f"/matters/{MATTER}/roles":
             return {
                 "roles": [
-                    {"name": "Plaintiff", "isClient": True, "contactId": CLIENT,
-                     "relationships": [{"id": "rel-i1", "name": "Insurer", "contactId": INS_1P}]},
-                    {"name": "Defendant", "isOtherSide": True, "contactId": OTHER,
-                     "relationships": [{"id": "rel-i3", "name": "Insurer", "contactId": INS_3P}]},
+                    {
+                        "name": "Plaintiff",
+                        "isClient": True,
+                        "contactId": CLIENT,
+                        "relationships": [{"id": "rel-i1", "name": "Insurer", "contactId": INS_1P}],
+                    },
+                    {
+                        "name": "Defendant",
+                        "isOtherSide": True,
+                        "contactId": OTHER,
+                        "relationships": [{"id": "rel-i3", "name": "Insurer", "contactId": INS_3P}],
+                    },
                 ]
             }
         if path == f"/matters/{MATTER}/layouts":
@@ -96,16 +109,34 @@ class _Record:
             return {"values": [{"key": k, "value": v} for k, v in values.items()]}
         if path == f"/contacts/{CLIENT}":
             person = {
-                "firstName": "Dana", "lastName": "Example", "birthDate": "1990-02-03T00:00:00",
+                "firstName": "Dana",
+                "lastName": "Example",
+                "birthDate": "1990-02-03T00:00:00",
                 "cell": {"areaCode": "916", "number": "555-0199"},
-                "residentialAddress": {"addressLine1": "1 Test Way", "city": "Exampleton", "state": "CA", "zipCode": "95000"},
+                "residentialAddress": {
+                    "addressLine1": "1 Test Way",
+                    "city": "Exampleton",
+                    "state": "CA",
+                    "zipCode": "95000",
+                },
             }
             if self.title is not None:
                 person["title"] = self.title
             return {"id": CLIENT, "person": person}
         if path == f"/contacts/{OTHER}":
-            return {"id": OTHER, "person": {"firstName": "Robin", "lastName": "Other",
-                    "residentialAddress": {"addressLine1": "9 Far Rd", "city": "Elsewhere", "state": "CA", "zipCode": "95999"}}}
+            return {
+                "id": OTHER,
+                "person": {
+                    "firstName": "Robin",
+                    "lastName": "Other",
+                    "residentialAddress": {
+                        "addressLine1": "9 Far Rd",
+                        "city": "Elsewhere",
+                        "state": "CA",
+                        "zipCode": "95999",
+                    },
+                },
+            }
         if path == f"/contacts/{INS_1P}":
             return {"id": INS_1P, "company": {"name": "Own Side Insurance"}}
         if path == f"/contacts/{INS_3P}":
@@ -229,7 +260,10 @@ def test_confirm_marks_what_it_could_not_prove(documents: None) -> None:
 
 def test_a_license_number_is_accepted_but_never_shown(documents: None) -> None:
     got = cited_facts.confirm(
-        _Record(), MATTER, {"driver_license_number": {"value": "Z7654321", "file_id": LICENSE}}, {"driver_license_number"}
+        _Record(),
+        MATTER,
+        {"driver_license_number": {"value": "Z7654321", "file_id": LICENSE}},
+        {"driver_license_number"},
     )
     assert got.facts["driver_license_number"].value == "Z7654321" and got.shown == {}
 
@@ -239,29 +273,41 @@ def test_a_license_number_is_accepted_but_never_shown(documents: None) -> None:
 
 def test_the_health_form_carries_its_fields_and_the_firms_fixed_addressee() -> None:
     assert placeholders_in(HEALTH) == [
-        "date", "client_name", "date_of_loss", "member_id", "client_salutation",
-        "preparer_email", "signer_name", "signer_title",
+        "date",
+        "client_name",
+        "date_of_loss",
+        "member_id",
+        "client_salutation",
+        "preparer_email",
+        "signer_name",
+        "signer_title",
     ]
     text = "\n".join(document_paragraphs(HEALTH))
-    assert "Machinify" in text and "La Grange, KY 40031-0589" in text and "Blue Shield of California" in text
+    # The committed fixture names the recovery vendor generically (vendor names
+    # are scrubbed from this public repo); the firm's library copy names it.
+    assert "Recovery Vendor" in text and "La Grange, KY 40031-0589" in text and "Blue Shield of California" in text
     assert "mailto:" not in str(HEALTH)  # the source letter's link to its own preparer is gone
 
 
 def _file_health(record: _Record, monkeypatch: pytest.MonkeyPatch, cited: Any) -> tuple[dict[str, Any], str]:
     monkeypatch.setattr(fl, "_client", lambda: record)
     monkeypatch.setattr(fl, "SLEEP", lambda _s: None)
-    hit = ResolvedTemplate(bytes=HEALTH, name="Form - Med Ins Req. Machinify_Blue Shield", file_id="t", matter_id="lib", folder_id="fold")
+    hit = ResolvedTemplate(
+        bytes=HEALTH, name="Form - Med Ins Blue Shield", file_id="t", matter_id="lib", folder_id="fold"
+    )
     monkeypatch.setattr(fl, "_resolve_form", lambda _c, _s: hit)
-    out = fl.render_firm_form_letter(MATTER, "health_blue_shield_machinify", "2026-10-06", cited)
+    out = fl.render_firm_form_letter(MATTER, "health_blue_shield", "2026-10-06", cited)
     text = "\n".join(document_paragraphs(record.uploads[-1][2])) if record.uploads else ""
     return out, text
 
 
-def test_the_health_notice_reads_as_the_firms_letter(seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_health_notice_reads_as_the_firms_letter(
+    seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
     record = _Record()
     out, text = _file_health(record, monkeypatch, {"member_id": {"value": "XQZ900111222", "file_id": CARD}})
     assert out["status"] == "filed" and out["unfilled"] == []
-    assert record.uploads[0][1] == "Med Ins Req. Machinify_Blue Shield.docx"
+    assert record.uploads[0][1] == "Med Ins Req. Blue Shield.docx"
     for want in (
         "October 6, 2026",
         "Patient/Client\t\t: Dana Example",
@@ -277,14 +323,18 @@ def test_the_health_notice_reads_as_the_firms_letter(seat: Path, documents: None
     assert out["card_values_to_check"] == {"member ID": "XQZ900111222"}
 
 
-def test_a_member_id_not_on_the_card_prints_the_marker(seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_member_id_not_on_the_card_prints_the_marker(
+    seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
     record = _Record()
     out, text = _file_health(record, monkeypatch, {"member_id": {"value": "XQZ999999999", "file_id": CARD}})
     assert "Member ID #\t\t: [Not in the file: member ID (could not be confirmed on the cited document)]" in text
     assert out["card_values_to_check"] == {} and "member ID" in out["cited_refused"]
 
 
-def test_no_title_on_the_contact_is_a_marker_never_a_guess(seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_no_title_on_the_contact_is_a_marker_never_a_guess(
+    seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
     record = _Record(title=None)
     out, text = _file_health(record, monkeypatch, None)
     assert "retained by [Not in the file: client's title (Mr./Ms.) for Example]" in text
@@ -292,7 +342,9 @@ def test_no_title_on_the_contact_is_a_marker_never_a_guess(seat: Path, documents
     assert any("title" in u for u in out["unfilled"])
 
 
-def test_an_unset_preparer_title_prints_the_marker(documents: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_an_unset_preparer_title_prints_the_marker(
+    documents: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     path = tmp_path / "customer.yaml"
     path.write_text("form_letters: {}\n", encoding="utf-8")
     monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))

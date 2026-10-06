@@ -332,9 +332,7 @@ def preparer_facts(client: Any, matter: dict[str, Any], title: str | None) -> di
     staff record's own; the title is authored (``preparer_title``)."""
     staff_id = matter.get("personAssistingStaffId")
     if not isinstance(staff_id, str) or not staff_id:
-        return {
-            f: _absent(f"preparer {f} (no assisting staff on the matter)") for f in ("name", "title", "email")
-        }
+        return {f: _absent(f"preparer {f} (no assisting staff on the matter)") for f in ("name", "title", "email")}
     staff = client.get(f"/staff/{staff_id}")
     staff = staff if isinstance(staff, dict) else {}
     full = " ".join(

@@ -1,8 +1,7 @@
 ---
 name: file-work-requests
 description: >-
-  Files rep letters, the health-insurer notice, the DMV SR1 and Medicals
-  providers on one matter. It does the file work a paralegal asks for on one
+  Files rep letters, health notices, SR1s, Medicals rows. It does the file work a paralegal asks for on one
   named matter: makes the firm's 1st and 3rd party representation letters and
   its health-insurer notice on the firm's own forms and files them, prefills the
   state's SR1 for the client to sign, and puts the client's treating facilities
@@ -141,7 +140,7 @@ named <fileName> on the matter; both are there now.`
    what you cite from.
 2. Name the plan from the card's own words, and pick the firm's form:
    - **Blue Shield of California** (any Blue Shield plan, including Trio HMO):
-     `render_firm_form_letter(matter_id, "health_blue_shield_machinify", date,
+     `render_firm_form_letter(matter_id, "health_blue_shield", date,
 cited)` with `cited = {"member_id": {"value": <the ID exactly as the
 transcription prints it beside "ID#">, "file_id": <the card's file id>}}`.
    - **Any other plan** (Medi-Cal, Medicare, Kaiser, Anthem, a union plan):
@@ -236,7 +235,7 @@ Filed: 3rd Party Letter.docx on matter <matter-number>.
   [Not in the file: 3rd party insurer fax or email]
 On the Medicals tab: Riverside Community Health Center (Current - need 5 years of records).
 On the Medicals tab: Clearview Imaging (Prior). Added to contacts as a new company.
-Filed: Med Ins Req. Machinify_Blue Shield.docx on matter <matter-number>.
+Filed: Med Ins Req. Blue Shield.docx on matter <matter-number>.
 Check against the card: member ID XQZ900111222.
 Filed: DMV SR1 - for client signature.pdf on matter <matter-number>, prefilled from the file.
 Left for Dana to complete and sign: number of vehicles, time of accident, ..., the certification: date, printed name and signature.

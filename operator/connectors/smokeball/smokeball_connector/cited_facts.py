@@ -33,7 +33,18 @@ from .form_letter_facts import Fact
 
 #: field -> the labels it may sit beside, lowercase, matched as words.
 LABELS: dict[str, tuple[str, ...]] = {
-    "member_id": ("id#", "id #", "id no", "id number", "member id", "member #", "member#", "member", "subscriber id", "id"),
+    "member_id": (
+        "id#",
+        "id #",
+        "id no",
+        "id number",
+        "member id",
+        "member #",
+        "member#",
+        "member",
+        "subscriber id",
+        "id",
+    ),
     "group_number": ("group #", "group#", "group number", "group no", "group", "grp"),
     "driver_license_number": ("dl", "dl#", "lic", "lic#", "license", "license no", "license number", "driver license"),
     "vehicle_year": ("year", "yr"),

@@ -321,7 +321,7 @@ top_level:
       record (form_letter_facts.load_preparer_title / preparer_facts); unset
       prints the marker. The forms themselves resolve through
       self_initiation.document_library.templates (first_party_rep_letter,
-      third_party_rep_letter, health_notice_blue_shield_machinify, and the
+      third_party_rep_letter, health_notice_blue_shield, and the
       state SR1 PDF as sr1_form).
   records_orders:
     status: implemented

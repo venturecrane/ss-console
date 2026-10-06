@@ -103,13 +103,13 @@ FORMS: dict[str, FormSpec] = {
         signer_name_from="staff",
     ),
     # The firm's health-insurer notice for a Blue Shield of California member:
-    # Blue Shield's recovery vendor is Machinify, whose address and fax are
+    # Blue Shield's recovery vendor is the addressee; its address and fax are
     # fixed text in the firm's form (6 firm letters, 2026-08-05 to 10-02).
-    "health_blue_shield_machinify": FormSpec(
-        label="health insurer notice (Blue Shield, through Machinify)",
-        document_class="health_notice_blue_shield_machinify",
-        default_template="Form - Med Ins Req. Machinify_Blue Shield.docx",
-        file_name="Med Ins Req. Machinify_Blue Shield.docx",
+    "health_blue_shield": FormSpec(
+        label="health insurer notice (Blue Shield)",
+        document_class="health_notice_blue_shield",
+        default_template="Form - Med Ins Blue Shield.docx",
+        file_name="Med Ins Req. Blue Shield.docx",
         side="Plaintiffs",
         client_side=True,
         fax_label="",
@@ -264,9 +264,9 @@ def render_firm_form_letter(
 
     ``form`` is ``first_party_rep`` (to the client's own carrier),
     ``third_party_rep`` (to the other side's carrier), or
-    ``health_blue_shield_machinify`` (the health-insurer notice for a Blue
-    Shield of California member; Blue Shield's recovery vendor Machinify is
-    the addressee printed in the firm's form). ``date`` is the letter date as
+    ``health_blue_shield`` (the health-insurer notice for a Blue
+    Shield of California member; Blue Shield's recovery vendor is the
+    addressee printed in the firm's form). ``date`` is the letter date as
     YYYY-MM-DD; omit it for today.
 
     ``cited`` (health notice only): what you read on the client's insurance
@@ -363,9 +363,7 @@ def _fill_and_file(
         "sha256": hashlib.sha256(filled.data).hexdigest(),
     }
     if confirmed is not None:
-        out["card_values_to_check"] = {
-            cited_facts.WORDS[k]: v for k, v in confirmed.shown.items() if k in used
-        }
+        out["card_values_to_check"] = {cited_facts.WORDS[k]: v for k, v in confirmed.shown.items() if k in used}
         out["cited_refused"] = {cited_facts.WORDS.get(k, k): why for k, why in confirmed.refused.items()}
     return out
 
