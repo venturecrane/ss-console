@@ -249,11 +249,13 @@ def out_name(client: str) -> str:
     return f"Demand.{safe}.docx"
 
 
-def _header(w: HouseWriter, front: dict[str, str]) -> None:
+def _header(w: HouseWriter, front: dict[str, str], mail_line: str = "") -> None:
     w.para("blank")
     w.para("blank")
     w.para("date", front["date"])
     w.para("blank")
+    if mail_line:  # the pre-suit variant's bold "CERTIFIED MAIL" above the address block
+        w.para("attn", f"**{mail_line}**")
     for line in front["attn"].split("|"):
         w.para("attn", line.strip())
     w.para("blank")
@@ -270,8 +272,11 @@ def _header(w: HouseWriter, front: dict[str, str]) -> None:
 class _Body:
     """The letter body, line by line, into the writer."""
 
-    def __init__(self, w: HouseWriter, front: dict[str, str], signature: str, title: str) -> None:
+    def __init__(
+        self, w: HouseWriter, front: dict[str, str], signature: str, title: str, signer: str = "", initials: str = ""
+    ) -> None:
         self.w, self.front, self.signature, self.title = w, front, signature, title
+        self.signer, self.initials = signer, initials
         self.in_exhibits = self.exh_intro_done = self.signed = False
 
     def sign(self) -> None:
@@ -279,8 +284,13 @@ class _Body:
         w.para("blank")
         w.para("sign", "Cordially,")
         w.para("signfirm", f"**{self.signature}**")
-        w.para("sign", self.front["signer"])
-        w.para("sign", self.front.get("signer_title") or self.title)
+        # The signer, title and typist initials are the firm's authored map for
+        # the responsible attorney, never the model's front matter (review of
+        # #3074: "CAP/dm" on every demand Doug drafts for Chris).
+        w.para("sign", self.signer or self.front["signer"])
+        w.para("sign", self.title if self.signer else (self.front.get("signer_title") or self.title))
+        if self.initials:
+            w.para("sign", self.initials)
         self.signed = True
 
     def heading(self, line: str) -> None:
@@ -346,15 +356,28 @@ class _Body:
 
 
 def render(
-    md: str, reference: Path, out_dir: Path, *, signature: str, signer_title: str, author: str
+    md: str,
+    reference: Path,
+    out_dir: Path,
+    *,
+    signature: str,
+    signer_title: str,
+    author: str,
+    client_label: str | None = None,
+    signer: str = "",
+    initials: str = "",
+    mail_line: str = "",
 ) -> tuple[Path, str]:
-    """``(the demand file, the attorney notes text)``."""
+    """``(the demand file, the attorney notes text)``. ``client_label`` names
+    the file: on the seat it is the matter record's client name, read by code,
+    so no model-written string becomes a file name (review of #3074); the
+    laptop tool's behavior (the letter's own client line) is the fallback."""
     front, body, notes = parse(md)
     w = HouseWriter(reference)
-    _header(w, front)
-    _Body(w, front, signature, signer_title).feed(body.strip("\n").splitlines())
+    _header(w, front, mail_line)
+    _Body(w, front, signature, signer_title, signer, initials).feed(body.strip("\n").splitlines())
     out_dir.mkdir(parents=True, exist_ok=True)
-    name = out_name(front["client"])
+    name = out_name(client_label or front["client"])
     out = out_dir / name
     w.save(out, title=name[:-5], author=author)
     return out, notes

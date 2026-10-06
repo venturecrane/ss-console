@@ -4,6 +4,8 @@ text, deferral on the demand inputs only, and the separate slot."""
 from __future__ import annotations
 
 import json
+
+import pytest
 import os
 from pathlib import Path
 
@@ -18,9 +20,13 @@ job = json.loads(jd.joinpath('job.json').read_text())
 assert job['kind'] == 'demand' and job['month_cents_used'] == 1234, job
 out = [{"unit": "demand", "kind": "demand", "outcome": "delivered", "stage": "file", "reason": None, "dollars": 6.5,
         "folder_id": "folder-7", "coverage_report": False,
-        "files": [{"name": "Demand.Alpha Example.docx", "size": 41000}, {"name": "Gap Audit - 100001 - 10-06-26.docx", "size": 9000}]}]
+        "files": [{"name": "Demand.Alpha Example.docx", "size": 41000, "role": "demand"}, {"name": "Gap Audit - 100001 - 10-06-26.docx", "size": 9000, "role": "gap_audit"}]}]
 (jd / 'verdict.json').write_text(json.dumps(out))
 print(json.dumps(out))
+"""
+HELD_RUNNER = """
+import json
+print(json.dumps([{"unit": "demand", "outcome": "held", "stage": "render", "reason": "format", "dollars": 3.0}]))
 """
 FAIL_RUNNER = """
 import json, sys
@@ -91,7 +97,7 @@ def test_the_lane_claims_from_the_demand_queue_and_records_through_demand_verbs(
     assert [s for _j, s, _f in client.records] == ["running", "delivered"]
     fields = client.records[-1][2]
     assert fields["cents"] == 650 and fields["folder_id"] == "folder-7"
-    assert fields["delivery"]["files"][0] == {"name": "Demand.Alpha Example.docx", "size": 41000}
+    assert fields["delivery"]["files"][0] == {"name": "Demand.Alpha Example.docx", "size": 41000, "role": "demand"}
     assert (lane.jobs / jid / "job.json").is_file()
     assert {"action": "demand_allowance", "exclude_job_id": jid} in client.requests
 
@@ -107,11 +113,12 @@ def test_the_wake_asks_for_deliver_mode_with_the_contract_fields(tmp_path):
         "Outcome: delivered.",
         "Matter number: 100001.",
         "Folder id: folder-7.",
-        "Demand.Alpha Example.docx (41000 bytes)",
+        "Files: demand (41000 bytes); gap_audit (9000 bytes).",
         "Requested by: admin@firm.example.",
         "Request ref: <req-1@firm.example>.",
     ):
         assert line in task
+    assert "Alpha Example" not in task  # no client name rides the wake, not even inside a file name
 
 
 def test_a_failed_job_wakes_with_the_stage_never_the_free_text_reason(tmp_path):
@@ -161,3 +168,67 @@ def test_the_lane_has_its_own_slot_queue_cgroup_and_heartbeat(tmp_path, monkeypa
     assert built is not None and built.queue == lane.queue and built.memory_max == 1024 * 1024 * 1024
     monkeypatch.delenv("SMD_DEMAND_QUEUE_DIR")
     assert build_lane(chron) is None
+
+
+def test_a_head_job_that_keeps_deferring_backs_off_and_the_next_job_runs(tmp_path):
+    lane, client = _lane(tmp_path)
+    t = {"now": 1_000_000.0}
+    lane.clock = lambda: t["now"]
+    first = _submit(lane, client, "01DEMAND0000000000000000AA")
+    (lane.queue / f"{first}.json").write_text("{not json")  # an envelope the lane cannot read
+    second = _submit(lane, client, "01DEMAND0000000000000000BB")
+    assert lane.tick() == "deferred"  # the head job crashed on its envelope, and backed off
+    assert lane._daemon_state(first)["retry_after"] > t["now"]
+    assert lane.tick() == "delivered"  # the job behind it was not starved
+    assert client.rows[second]["state"] == "delivered"
+    t["now"] += 120  # after the backoff the head job is tried again (and backs off longer)
+    assert lane.tick() == "deferred" and lane._daemon_state(first)["deferrals"] == 2
+
+
+def test_a_resume_marker_for_a_held_demand_is_refused(tmp_path):
+    lane, client = _lane(tmp_path, script=HELD_RUNNER)
+    jid = _submit(lane, client)
+    assert lane.tick() == "held"
+    (lane.queue / f".resume-{jid}.json").write_text(json.dumps({"job_id": jid, "reason": "try again"}))
+    lane.tick()
+    assert not (lane.queue / f".resume-{jid}.json").exists()
+    assert [s for _j, s, _f in client.records] == ["running", "held"]  # never running again
+
+
+def test_the_lane_reads_cents_used_from_the_real_demand_verbs(tmp_path):
+    """The contract against request-edge's real broker verb and the real
+    ledger, not a fake field. Skips only while that verb is unmerged."""
+    import sys
+
+    operator_dir = Path(__file__).resolve().parents[3]
+    sys.path.insert(0, str(operator_dir))
+    verbs = pytest.importorskip(
+        "workspace_broker.demand_verbs", reason="request-edge's demand verbs are not merged yet"
+    )
+    from workspace_broker.demand_ledger import DemandLedger
+
+    yaml_path = tmp_path / "customer.yaml"
+    yaml_path.write_text(
+        "personas:\n  - slug: operator\n    skills:\n      - name: demand-letter-drafter\n"
+        "        enabled: true\n        settings:\n          demand_allowance_per_cycle: 25\n"
+    )
+    ledger = DemandLedger(str(tmp_path / "audit.db"), tmp_path / "q")
+    env = {
+        k: v
+        for k, v in job_doc().items()
+        if k in ("matter", "file_to", "requested_by", "request_ref", "request_text", "deliverables")
+    }
+    a = ledger.submit(env)
+    ledger.record(a, "running", {})
+    ledger.record(a, "failed", {"cents": 700})
+    b = ledger.submit({**env, "matter": {"id": "0f0f0f0f-0000-4000-8000-0000000000aa", "number": "100002"}})
+    ledger.record(b, "running", {})
+    ledger.record(b, "delivered", {"cents": 450})
+    v = verbs.DemandVerbs(ledger, customer_yaml=str(yaml_path), audit_append=lambda row: None)
+
+    class Client:
+        def _request(self, req):
+            return v.handle(req["action"], req, 0)
+
+    broker = DemandBroker(Client())  # type: ignore[arg-type]
+    assert broker.month_cents(a) == 450 and broker.month_cents(b) == 700 and broker.month_cents("none") == 1150

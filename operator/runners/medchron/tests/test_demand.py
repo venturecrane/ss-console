@@ -11,6 +11,8 @@ import pytest
 import yaml
 
 from demand_testkit import (
+    LIBRARY as LIBRARY_ID,
+    MATTER as MATTER_ID,
     DRAFT,
     FOOTER,
     SIGNATURE,
@@ -40,7 +42,7 @@ def pricing(tmp_path: Path) -> Path:
     return p
 
 
-def _run(tmp_path: Path, pricing: Path, seat, client, **job_kw):
+def _run(tmp_path: Path, pricing: Path, seat, client, vendor=None, **job_kw):
     inputs = tmp_path / "inputs"
     if not inputs.is_dir():
         make_inputs(inputs)
@@ -54,6 +56,7 @@ def _run(tmp_path: Path, pricing: Path, seat, client, **job_kw):
         client=client,
         log=log.append,
         readback_pause=0.0,
+        vendor_factory=(lambda: vendor) if vendor is not None else (lambda: None),
     )
     return r, r.run(), log
 
@@ -114,7 +117,18 @@ def test_a_demand_runs_pull_to_read_back_and_files_both_deliverables(tmp_path, p
     bills = json.loads((tmp_path / "job" / "data" / "preflight.json").read_text())["bills"]
     assert bills["tab_providers_without_a_bill_in_file"] == []  # matched on the bill's letterhead, not its file name
     state = json.loads((tmp_path / "job" / "data" / "state.json").read_text())
-    assert {"facts", "pull", "preflight", "premise", "transcribe", "summarize", "gate", "format"} <= set(state)
+    assert {
+        "facts",
+        "destination",
+        "pull",
+        "preflight",
+        "premise",
+        "transcribe",
+        "summarize",
+        "gate.json",
+        "gate-gap-audit.json",
+        "render",
+    } <= set(state)
 
 
 def test_a_resume_after_delivery_pays_for_nothing_twice(tmp_path, pricing):
@@ -177,14 +191,118 @@ def test_a_truncated_digest_is_split_and_redone_without_a_hand_step(tmp_path, pr
 
 
 def test_the_drafting_gate_refuses_before_anything_is_filed(tmp_path, pricing):
+    bad = DRAFT.replace("Demand is hereby made", "This demand fully addresses every claim. Demand is hereby made")
+    seat = seat_with(standard_docs())
+    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient(draft=bad))
+    assert v.outcome == "held" and "drafting gate refused the letter" in v.reason
+    assert seat.sent == [] and seat.created == []
+
+
+def test_an_unfound_quotation_is_repaired_twice_then_held_never_filed(tmp_path, pricing):
     bad = DRAFT.replace(
         "Demand is hereby made",
         'The record says "the patient reported severe pain radiating to both arms daily" and demand is made',
     )
     seat = seat_with(standard_docs())
-    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient(draft=bad))
-    assert v.outcome == "held" and "drafting gate refused" in v.reason
+    client = ScriptedClient(draft=bad)
+    _r, v, _ = _run(tmp_path, pricing, seat, client)
+    assert v.outcome == "held" and "1 quotation(s) not found" in v.reason and "after 2 repair(s)" in v.reason
+    assert client.stages().count("REPAIR") == 2
     assert seat.sent == [] and seat.created == []
+
+
+def test_invented_facts_left_after_repair_hold_and_drifts_reach_the_attorney_notes(tmp_path, pricing):
+    seat = seat_with(standard_docs())
+    client = ScriptedClient(
+        audit="- claim | INVENTED | no cite in digest\nSUPPORTED=0 DRIFTS=0 INVENTED=1 ARITHMETIC=0"
+    )
+    _r, v, _ = _run(tmp_path, pricing, seat, client)
+    assert v.outcome == "held" and " invented and " in v.reason and seat.sent == []
+    assert client.stages().count("REPAIR") == 2
+    tmp2 = tmp_path / "drifts"
+    seat2 = seat_with(standard_docs())
+    client2 = ScriptedClient(
+        audit="- the date | DRIFTS | digest says 1/16\nSUPPORTED=3 DRIFTS=1 INVENTED=0 ARITHMETIC=0"
+    )
+    _r, v2, _ = _run(tmp2, pricing, seat2, client2)
+    assert v2.outcome == "delivered", v2.reason
+    import docx
+
+    notes = docx.Document(str(tmp2 / "job" / "data" / "out" / "demand" / "Demand.Alpha Example - attorney notes.docx"))
+    text = "\n".join(p.text for p in notes.paragraphs)
+    assert "DRIFTS" in text and "digest says 1/16" in text
+
+
+def test_the_short_re_block_and_demand_table_are_audited():
+    from medchron.demand import draft
+
+    secs = draft.sections(DRAFT)
+    audited = {h for h, _ in draft.auditable(secs)}
+    assert {"PREAMBLE", "Demand", "Summary of Injuries"} <= audited
+    assert all(len(b) <= 300 for h, b in secs if h == "Demand")  # short: only the figure test brings it in
+
+
+def test_a_repair_that_drops_a_section_leaves_no_repaired_draft_to_resume_from(tmp_path):
+    from medchron.demand import draft as draft_mod
+
+    d = draft_mod.Drafter.__new__(draft_mod.Drafter)
+    d.data = tmp_path
+    (tmp_path / "draft-v1.md").write_text(DRAFT)
+    (tmp_path / "audit-v1.md").write_text("## AUDIT: Liability\n\n- x | INVENTED | none\n")
+    d.firm, d.compose_max = None, 100
+
+    class R:
+        text = "## Damages\n\nnothing for Liability"
+        stop_reason = "end_turn"
+
+    d.compose_system = lambda: "S"
+    d.firm = type("F", (), {"text": lambda self, k: "REPAIR-PROMPT"})()
+    d._call = lambda *a, **k: R()
+    with pytest.raises(draft_mod.DraftError):
+        d.repair("digest", 1)
+    assert not (tmp_path / "draft-v2.md").exists()
+
+
+def test_the_re_block_is_cross_checked_against_the_matter_record(tmp_path, pricing):
+    wrong = DRAFT.replace("dol: January 15, 2026", "dol: January 16, 2026")
+    seat = seat_with(standard_docs())
+    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient(draft=wrong))
+    assert v.outcome == "held" and "date of loss" in v.reason and seat.sent == []
+    from medchron.demand import crosscheck
+
+    other = DRAFT.replace("client: Alpha Example", "client: Gamma Person")
+    assert crosscheck.check(other, {"client_name": "Alpha Example", "date_of_loss": "01/15/2026"})["mismatches"]
+    left = DRAFT.replace("client: Alpha Example", "client: {{FILL: client}}")
+    out = crosscheck.check(left, {"client_name": "Alpha Example", "date_of_loss": "01/15/2026"})
+    assert out["mismatches"] == [] and out["unchecked"]
+
+
+def test_the_request_is_never_an_audit_source(tmp_path):
+    from medchron.demand import draft
+
+    block = draft.brief_block("Carrier claim # 99-1234; limits $15,000.", [])
+    assert "never a source of facts" in block
+    root = make_inputs(tmp_path / "in")
+    d = draft.Drafter(
+        tmp_path,
+        None,
+        firm_mod.load(root).select("pre_suit", {"signer": "S", "title": "T", "initials": "I"}),
+        "Carrier claim # 99-1234",
+        [],
+        print,
+        matter_fields=["client: A"],
+    )
+    (tmp_path / "draft-v1.md").write_text(DRAFT)
+    seen = {}
+
+    class Door:
+        def call(self, stage, **kw):
+            seen["system"] = kw["system"]
+            return type("R", (), {"text": "SUPPORTED=0 DRIFTS=0 INVENTED=0 ARITHMETIC=0", "stop_reason": "end_turn"})()
+
+    d.doorway = Door()
+    d.audit(1, "digest", "corpus")
+    assert "99-1234" not in seen["system"] and "client: A" in seen["system"]
 
 
 def test_an_off_format_demand_is_refused_before_filing(tmp_path, pricing):
@@ -202,23 +320,25 @@ FIRM = ("firm.example",)
 @pytest.mark.parametrize(
     "sender,recipients,client,want",
     [
-        ("client@mail.example", ["atty@firm.example"], {"client@mail.example"}, "client to firm"),
-        ("atty@firm.example", ["client@mail.example"], {"client@mail.example"}, "firm to client"),
+        ("client@mail.example", ["atty@firm.example"], {"client@mail.example"}, "client or personal mailbox to firm"),
+        ("atty@firm.example", ["client@mail.example"], {"client@mail.example"}, "firm to client or personal mailbox"),
         ("atty@firm.example", ["para@firm.example"], {"client@mail.example"}, "firm internal"),
+        # a second personal address (a spouse) is walled although the client's address is known
+        ("spouse@mail.example", ["atty@firm.example"], {"client@mail.example"}, "client or personal mailbox to firm"),
+        ("atty@firm.example", ["spouse@mail.example"], {"client@mail.example"}, "firm to client or personal mailbox"),
+        # Exchange X.500 internal mail parses to no address at all: walled, never read
+        ("", ["atty@firm.example"], {"client@mail.example"}, "sender or recipients unreadable"),
+        ("atty@firm.example", [], {"client@mail.example"}, "sender or recipients unreadable"),
         ("adjuster@carrier.example", ["atty@firm.example"], {"client@mail.example"}, None),
         ("atty@firm.example", ["adjuster@carrier.example", "para@firm.example"], {"client@mail.example"}, None),
     ],
 )
-def test_the_wall_is_decided_by_addresses(sender, recipients, client, want):
-    assert pull.wall_reason(sender, recipients, FIRM, client) == want
+def test_the_wall_is_decided_by_addresses_and_fails_closed(sender, recipients, client, want):
+    assert pull.wall_reason(sender, recipients, FIRM, client, ("mail.example",)) == want
 
 
-def test_with_no_client_address_a_consumer_mailbox_is_walled_as_possibly_the_client():
-    assert (
-        pull.wall_reason("someone@mail.example", ["atty@firm.example"], FIRM, set(), ("mail.example",))
-        == "client to firm"
-    )
-    assert pull.wall_reason("adjuster@carrier.example", ["atty@firm.example"], FIRM, set(), ("mail.example",)) is None
+def test_x500_addresses_parse_to_nothing_so_the_wall_holds_them():
+    assert pull.addresses("/O=EXCHANGELABS/OU=EXCHANGE ADMINISTRATIVE GROUP/CN=RECIPIENTS/CN=ATTY") == []
 
 
 def test_walled_email_never_reaches_the_corpus_and_kept_mail_brings_its_body(tmp_path, monkeypatch):
@@ -235,6 +355,14 @@ def test_walled_email_never_reaches_the_corpus_and_kept_mail_brings_its_body(tmp
             "date": "",
             "body": "Privileged words the client wrote to her lawyer.",
             "attachments": [("x.pdf", b"%PDF" * 9000)],
+        },
+        "m3": {
+            "subject": "fwd",
+            "sender": "",
+            "recipients": ["atty@firm.example"],
+            "date": "",
+            "body": "Internal X500 note about strategy.",
+            "attachments": [],
         },
         "m2": {
             "subject": "claim CLM-0001 limits",
@@ -261,10 +389,50 @@ def test_walled_email_never_reaches_the_corpus_and_kept_mail_brings_its_body(tmp
         )
     monkeypatch.setattr(pull, "_open_msg", lambda path: msgs[path.stem])
     out = pull.split_emails(rows, data, firm, {"client@mail.example"})
-    assert [w["reason"] for w in out["walled"]] == ["client to firm"]
-    kept_names = [k["name"] for k in out["kept"]]
-    assert kept_names == ["Email: claim CLM-0001 limits", "dec page.pdf"]
-    assert "Privileged words" not in json.dumps(out["kept"])
+    assert sorted(w["reason"] for w in out["walled"]) == [
+        "client or personal mailbox to firm",
+        "sender or recipients unreadable",
+    ]
+    assert [k["name"] for k in out["kept"]] == ["Email: claim CLM-0001 limits", "dec page.pdf"]
+    # the privileged words are on disk only as held-out text, never in a kept document's TEXT
+    kept_text = "".join(Path(k["text_path"]).read_text() for k in out["kept"] if k.get("text_path"))
+    assert "carrier's position" in kept_text
+    assert "Privileged words" not in kept_text and "strategy" not in kept_text
+    assert "Privileged words" in Path(out["walled"][0]["text_path"]).read_text()
+
+
+def test_a_printed_email_pdf_is_walled_by_its_header_addresses(tmp_path, pricing):
+    printed = make_pdf(
+        [
+            "From: Alpha Example <client@mail.example>\nTo: atty@firm.example\nSubject: my neck\nThe privileged body text."
+        ]
+    )
+    seat = seat_with(standard_docs() + [("d8", "scan 3-1-26.pdf", printed, "f-med")])
+    client = ScriptedClient()
+    _r, v, _ = _run(tmp_path, pricing, seat, client)
+    assert v.outcome == "delivered", v.reason
+    walled = json.loads((tmp_path / "job" / "data" / "walled.json").read_text())
+    assert [w["name"] for w in walled] == ["scan 3-1-26"]
+    assert all("privileged body" not in json.dumps(c) for c in client.calls)
+
+
+def test_memo_intake_and_notes_are_never_pulled(tmp_path, pricing):
+    docs = standard_docs() + [
+        ("d9", "Attorney memo re value.pdf", make_pdf(["Firm analysis."]), "f-med"),
+        ("d10", "Intake sheet.pdf", make_pdf(["Intake."]), "f-med"),
+    ]
+    seat = seat_with(docs)
+    _run(tmp_path, pricing, seat, ScriptedClient())
+    assert all("d9" not in m and "d10" not in m for m in seat.mints)
+
+
+def test_a_client_contact_read_error_holds_before_anything_is_pulled(tmp_path, pricing):
+    seat = seat_with(standard_docs())
+    seat.facts = {**seat.facts, "errors": ["client contact: HTTPError: 500"]}
+    client = ScriptedClient()
+    _r, v, _ = _run(tmp_path, pricing, seat, client)
+    assert v.outcome == "held" and "client contact" in v.reason
+    assert seat.mints == [] and client.calls == []
 
 
 # ---- preflight ------------------------------------------------------------------------
@@ -358,3 +526,338 @@ def test_an_open_item_in_the_expiry_line_is_counted_not_refused(tmp_path):
             path2, signature=SIGNATURE, signer_title="Attorney at Law", footer_markers=["1119, 1152"]
         ).fails
     )
+
+
+def test_an_unmapped_responsible_attorney_holds_before_anything_is_paid(tmp_path, pricing):
+    seat = seat_with(standard_docs())
+    seat.facts = {**seat.facts, "responsible_attorney": "Other Attorney"}
+    client = ScriptedClient()
+    _r, v, _ = _run(tmp_path, pricing, seat, client)
+    assert v.outcome == "held" and "Other Attorney" in v.reason and "no signature is authored" in v.reason
+    assert client.calls == [] and v.dollars == 0 and seat.sent == []
+
+
+def test_the_signature_block_and_initials_come_from_the_attorney_map_not_the_model(tmp_path, pricing):
+    seat = seat_with(standard_docs())
+    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient())  # DRAFT's front matter says "Example Attorney"
+    assert v.outcome == "delivered", v.reason
+    import docx
+
+    doc = docx.Document(str(tmp_path / "job" / "data" / "out" / "demand" / "Demand.Alpha Example.docx"))
+    texts = [p.text for p in doc.paragraphs if p.text.strip()]
+    i = texts.index("Cordially,")
+    assert texts[i + 2 : i + 5] == ["Example A. Lawyer", "Attorney at Law", "EAL/dm"]
+    assert "CERTIFIED MAIL" in texts[:6]
+
+
+def test_a_filed_action_selects_litigation_and_an_unauthored_litigation_format_holds(tmp_path, pricing):
+    docs = standard_docs() + [
+        ("d12", "Pleading.pdf", make_pdf(["SUPERIOR COURT. COMPLAINT FOR DAMAGES. Case No. 24CV0001."]), "f-corr")
+    ]
+    client = ScriptedClient()
+    _r, v, _ = _run(tmp_path, pricing, seat_with(docs), client)
+    assert v.outcome == "held" and "litigation demand" in v.reason and client.calls == []
+
+
+def test_defense_counsel_of_record_selects_litigation():
+    from medchron.demand import facts
+
+    roles = [
+        {
+            "isOtherSide": True,
+            "name": "Defendant",
+            "relationships": [{"name": "Attorney", "contactId": "c-1"}, {"name": "Insurer", "contactId": "c-2"}],
+        },
+        {"isOtherSide": True, "name": "Defendant", "relationships": [{"name": "Attorney"}]},
+    ]  # an empty slot is not counsel
+    assert facts.defense_counsel(roles) == ["Attorney"]
+
+
+def test_a_lawsuit_named_only_in_a_subject_is_unclear_and_holds(tmp_path, pricing):
+    docs = standard_docs() + [("d13", "Lawsuit threat email.pdf", make_pdf(["We may consider options."]), "f-corr")]
+    client = ScriptedClient()
+    _r, v, _ = _run(tmp_path, pricing, seat_with(docs), client)
+    assert v.outcome == "held" and "pre-suit or a litigation" in v.reason and client.calls == []
+
+
+def test_the_litigation_variant_refuses_a_pre_suit_shaped_file(tmp_path):
+    from demand_testkit import make_reference
+    from medchron.demand import house
+
+    ref = tmp_path / "ref.docx"
+    make_reference(ref)
+    path, _ = house.render(
+        DRAFT,
+        ref,
+        tmp_path / "o",
+        signature=SIGNATURE,
+        signer_title="Attorney at Law",
+        author="E",
+        mail_line="CERTIFIED MAIL",
+    )
+    lit = format_check.Variant(
+        headings=("Summary of Injuries",),
+        re_required=(),
+        re_one_of=(),
+        mail_line="",
+        banner=False,
+        forbidden=("CERTIFIED MAIL",),
+        re_vs=True,
+    )
+    fails = format_check.check(
+        path, signature=SIGNATURE, signer_title="Attorney at Law", footer_markers=[], variant=lit
+    ).fails
+    assert any("vs." in f for f in fails) and any("another demand variant" in f for f in fails)
+
+
+def test_a_gap_audit_only_job_needs_no_attorney_signature(tmp_path, pricing):
+    seat = seat_with(standard_docs())
+    seat.facts = {**seat.facts, "responsible_attorney": "Other Attorney"}
+    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient(), deliverables=["gap_audit"])
+    assert v.outcome == "delivered", v.reason
+    assert [f["role"] for f in v.files] == ["gap_audit"]
+
+
+def test_a_profile_names_its_own_headings_and_the_check_holds_them(tmp_path):
+    from demand_testkit import make_reference
+    from medchron.demand import house
+
+    ref = tmp_path / "ref.docx"
+    make_reference(ref)
+    path, _ = house.render(DRAFT, ref, tmp_path / "o", signature=SIGNATURE, signer_title="Attorney at Law", author="E")
+    kw = dict(signature=SIGNATURE, signer_title="Attorney at Law", footer_markers=["1119, 1152"])
+    assert format_check.check(path, **kw, headings=["Summary of Injuries", "Liability", "Damages", "Demand"]).ok
+    other = format_check.check(path, **kw, headings=["Facts", "Liability"])
+    assert any("'Facts' missing" in f for f in other.fails)
+
+
+def test_a_variant_naming_no_input_refuses_to_load(tmp_path):
+    from demand_testkit import firm_data
+
+    bad = firm_data()["variants"]["pre_suit"] | {"skeleton": "nope"}
+    root = make_inputs(tmp_path / "in", variants={"pre_suit": bad})
+    with pytest.raises(firm_mod.DemandConfigError, match="names no entry in inputs"):
+        firm_mod.load(root)
+
+
+class FakeVendor:
+    def __init__(self, answers):
+        self.answers, self.asked = answers, []
+
+    def get_locations(self, term, zip_code=None):
+        self.asked.append(term)
+        a = self.answers[term]
+        if isinstance(a, Exception):
+            raise a
+        return a
+
+
+def test_each_missing_provider_is_resolved_against_the_vendor_directory_once_after_the_paid_stages(tmp_path, pricing):
+    v = FakeVendor(
+        {
+            "Exampletown ER": [
+                {
+                    "id": "L-1",
+                    "value": "Exampletown Regional",
+                    "street": "1 Main",
+                    "city": "Exampletown",
+                    "state": "CA",
+                    "postalcode": "90000",
+                }
+            ],
+            "Northfield Imaging": [],
+            "Ridgeview PT": [
+                {"id": "L-2", "value": "Ridgeview PT North"},
+                {"id": "L-3", "value": "Ridgeview PT South"},
+            ],
+        }
+    )
+    client = ScriptedClient()
+    _r, verdict, _ = _run(tmp_path, pricing, seat_with(standard_docs()), client, vendor=v)
+    assert verdict.outcome == "delivered", verdict.reason
+    assert v.asked == ["Exampletown ER", "Northfield Imaging", "Ridgeview PT"]  # once each, in order
+    rows = {r["provider"]: r for r in json.loads((tmp_path / "job" / "data" / "vendor.json").read_text())["rows"]}
+    assert rows["Exampletown ER"]["custodian_id"] == "L-1"
+    assert rows["Northfield Imaging"]["status"] == "no vendor match"
+    assert rows["Ridgeview PT"]["status"] == "several matches" and rows["Ridgeview PT"]["count"] == 2
+    import docx
+
+    gap = docx.Document(
+        str(tmp_path / "job" / "data" / "out" / "demand" / f"Gap Audit - 100001 - {_r.date_stamp}.docx")
+    )
+    cells = " ".join(c.text for t in gap.tables for row in t.rows for c in row.cells)
+    assert "L-1" in cells and "no vendor match" in cells and "several matches (2)" in cells
+
+
+def test_vendor_lookups_are_capped_and_a_failed_lookup_is_named(tmp_path):
+    from medchron.demand import vendor
+
+    v = FakeVendor({"Exampletown ER": RuntimeError("timeout"), "Northfield Imaging": [], "Ridgeview PT": []})
+    from demand_testkit import GAP
+
+    out = vendor.run(tmp_path, GAP, lambda: v, 2, lambda m: None)
+    assert [r["status"] for r in out["rows"]] == ["lookup failed", "no vendor match", "not looked up (over the cap)"]
+    assert v.asked == ["Exampletown ER", "Northfield Imaging"]
+    (tmp_path / "x").mkdir()
+    none = vendor.run(tmp_path / "x", GAP, lambda: None, 2, lambda m: None)
+    assert "not connected" in vendor.section(none)
+
+
+# ---- the destination ------------------------------------------------------------------
+def test_filing_anywhere_but_the_matter_or_an_authored_rehearsal_matter_is_refused(tmp_path, pricing):
+    from demand_testkit import job_doc
+
+    seat = seat_with(standard_docs())
+    seat.numbers["0f0f0f0f-0000-4000-8000-0000000000ff"] = "200002"
+    jd = tmp_path / "job"
+    jd.mkdir()
+    doc = job_doc()
+    doc["file_to"] = {"id": "0f0f0f0f-0000-4000-8000-0000000000ff", "number": "200002"}
+    (jd / "job.json").write_text(json.dumps(doc))
+    make_inputs(tmp_path / "inputs")
+    r = DemandRun(
+        jd,
+        inputs_dir=str(tmp_path / "inputs"),
+        pricing=str(pricing),
+        seat_factory=lambda: seat,
+        client=ScriptedClient(),
+        log=lambda m: None,
+        readback_pause=0.0,
+        vendor_factory=lambda: None,
+    )
+    v = r.run()
+    assert v.outcome == "held" and "neither the matter it reads nor an authored rehearsal matter" in v.reason
+    assert seat.mints == [] and seat.sent == []
+
+
+def test_a_matter_id_that_does_not_carry_its_number_is_refused(tmp_path, pricing):
+    seat = seat_with(standard_docs())
+    seat.numbers[MATTER_ID] = "999999"
+    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient())
+    assert v.outcome == "held" and "does not carry matter number 100001" in v.reason and seat.mints == []
+
+
+def test_the_rehearsal_matter_is_allowed_by_number_read_from_its_id(tmp_path, pricing):
+    seat = seat_with(standard_docs())
+    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient(), file_to=True)
+    assert v.outcome == "delivered", v.reason
+    seat2 = seat_with(standard_docs())
+    seat2.numbers.pop(LIBRARY_ID)  # the library id no longer resolves to its number
+    _r, v2, _ = _run(tmp_path / "b", pricing, seat2, ScriptedClient(), file_to=True)
+    assert v2.outcome == "held" and "destination's id" in v2.reason
+
+
+# ---- resume never sends a second copy ---------------------------------------------------
+def test_a_resume_after_a_short_read_back_files_the_same_bytes_under_the_same_date(tmp_path, pricing):
+    seat = seat_with(standard_docs())
+    seat.lag = 99  # the vendor's list never shows the files: the read-back stays short
+    days = iter([(2026, 10, 6), (2026, 10, 9)])
+
+    def today():
+        y, m, d = next(days)
+        import time as _t
+
+        return _t.struct_time((y, m, d, 9, 0, 0, 0, 0, -1))
+
+    make_inputs(tmp_path / "inputs")
+    jd = make_job(tmp_path / "job")
+    kw = dict(
+        inputs_dir=str(tmp_path / "inputs"),
+        pricing=str(pricing),
+        seat_factory=lambda: seat,
+        client=ScriptedClient(),
+        log=lambda m: None,
+        readback_pause=0.0,
+        vendor_factory=lambda: None,
+    )
+    v1 = DemandRun(jd, today=today, **kw).run()
+    assert v1.outcome == "failed" and "read-back is short" in v1.reason
+    sent = list(seat.sent)
+    manifest = (jd / "data" / "out" / "demand" / "upload_manifest.json").read_text()
+    seat.lag = 0
+    seat._pending = [(0, row) for _due, row in seat._pending]  # the index catches up
+    v2 = DemandRun(jd, today=today, **kw).run()
+    assert v2.outcome == "delivered", v2.reason
+    assert seat.sent == sent  # nothing sent twice
+    assert (jd / "data" / "out" / "demand" / "upload_manifest.json").read_text() == manifest
+    assert all("10-06-26" in f["name"] or not f["name"].startswith("Gap") for f in v2.files)
+
+
+# ---- premise: text, not only names; G1 is a carrier's own document ---------------------
+def test_an_acceptance_found_only_in_a_documents_text_fails_g4(tmp_path, pricing):
+    docs = standard_docs() + [
+        (
+            "d11",
+            "letter 5-5-26.pdf",
+            make_pdf(["Example Mutual. This is our timely acceptance of your demand."]),
+            "f-corr",
+        )
+    ]
+    client = ScriptedClient()
+    _r, v, _ = _run(tmp_path, pricing, seat_with(docs), client)
+    assert v.coverage_report is True and client.calls == []
+
+
+def test_g1_does_not_pass_on_a_medical_bill_or_a_blank_claim_field():
+    from medchron.demand import premise
+
+    texts = [
+        ({"name": "ER bill 1-15-26"}, "Patient account. Claim number 55512345. Insured: Alpha Example."),
+        ({"name": "Retainer agreement"}, "CLAIM NUMBER:\nYOUR INSURED:\n"),
+        ({"name": "Notes"}, "your insured was speeding; claim number: n/a"),
+    ]
+    assert premise.carrier_documents(texts, ["claim number"]) == []
+    carrier = [({"name": "Carrier letter"}, "Our insured Beta Driver. Claim number CLM-0001.")]
+    assert len(premise.carrier_documents(carrier, ["claim number"])) == 1
+
+
+# ---- spend ----------------------------------------------------------------------------
+def test_the_estimate_adds_condense_when_the_digest_outgrows_the_budget(tmp_path):
+    firm = firm_mod.load(make_inputs(tmp_path / "in", levers={"digest_budget_chars": 1_000_000}))
+    rows = [{"chars": 2_000_000, "pages": 10, "transcribe": []}]
+    assert preflight.estimate(rows, firm)["usd"] == round(2.0 * 6.0 + 4.0 + 2.0 * 3.3, 2)
+
+
+def test_a_resume_is_checked_against_what_is_left_to_spend(tmp_path, pricing):
+    make_inputs(tmp_path / "inputs", budget={"per_job_cap_usd": 5.0})
+    seat = seat_with(standard_docs())
+    jd = make_job(tmp_path / "job")
+    ledger = jd / "data" / "usage-ledger.jsonl"
+    ledger.parent.mkdir(parents=True)
+    # 1.50 USD already spent by an earlier attempt; the estimate is 4.00, so
+    # 1.50 + (4.00 - 1.50) fits the 5.00 cap, where 1.50 + 4.00 would not.
+    ledger.write_text(json.dumps({"stage": "digest", "model": "claude-sonnet-5", "in": 750_000, "out": 0}) + "\n")
+    r = DemandRun(
+        jd,
+        inputs_dir=str(tmp_path / "inputs"),
+        pricing=str(pricing),
+        seat_factory=lambda: seat,
+        client=ScriptedClient(),
+        log=lambda m: None,
+        readback_pause=0.0,
+        vendor_factory=lambda: None,
+    )
+    r._stage("facts", r._facts)
+    r._stage("pull", r._pull)
+    r._stage("preflight", lambda: preflight.run(r.data, r.firm, r._json("facts.json"), r.log))
+    r._estimate()  # does not raise
+
+
+# ---- the compose sentinel path and the upload's own reason --------------------------------
+def test_a_model_written_coverage_report_is_gated_before_it_is_filed(tmp_path, pricing):
+    from medchron.demand import draft as draft_mod
+
+    report = draft_mod.COVERAGE_SENTINEL + "\n# Coverage\n\nThis report fully addresses every claim.\n"
+    seat = seat_with(standard_docs())
+    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient(draft=report))
+    assert v.outcome == "held" and "coverage report" in v.reason and seat.sent == []
+
+
+def test_an_upload_refusal_carries_the_upload_stages_own_reason(tmp_path, pricing):
+    seat = seat_with(standard_docs())
+    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient())
+    assert v.outcome == "delivered"
+    seat2 = seat_with(standard_docs())
+    seat2.folders.append({"id": "f-x", "name": seat.created[0]["name"], "parentId": None, "path": "/x"})
+    _r, v2, _ = _run(tmp_path / "b", pricing, seat2, ScriptedClient())
+    assert v2.outcome == "held" and "already exists on the matter" in v2.reason

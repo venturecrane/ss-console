@@ -93,17 +93,17 @@ def _banner(tables: list[Any], fails: list[str]) -> None:
         fails.append("no ICD-10 Code table under Summary of Injuries")
 
 
-def _headings(lines: list[tuple[str, str | None, Any]], fails: list[str]) -> None:
+def _headings(lines: list[tuple[str, str | None, Any]], fails: list[str], headings: tuple[str, ...]) -> None:
     heads = [str(t).lower() for k, t, el in lines if k == "p" and t and _centered(el)]
     pos = []
-    for h in HEADINGS:
+    for h in headings:
         idx = [i for i, x in enumerate(heads) if x == h]
         if not idx:
             fails.append(f"section heading {h.title()!r} missing (or not a centered heading)")
         else:
             pos.append(idx[0])
     if pos != sorted(pos):
-        fails.append("section headings are out of the firm's order (Summary of Injuries, Liability, Damages, Demand)")
+        fails.append("section headings are out of the profile's order (" + ", ".join(h.title() for h in headings) + ")")
 
 
 def _machinery(alltext: str, fails: list[str], notes: list[str]) -> None:
@@ -123,13 +123,112 @@ def _machinery(alltext: str, fails: list[str], notes: list[str]) -> None:
         notes.append(f"{len(opens)} open item(s) for the attorney: " + ", ".join(sorted(set(opens))))
 
 
-def check(path: Path, *, signature: str, signer_title: str, footer_markers: list[str]) -> FormatResult:
+@dataclass(frozen=True)
+class Variant:
+    """One demand variant's shape, authored in demand-firm.yaml (``variants``).
+
+    Validated 2026-10-06 against a real pre-suit demand of the firm's, read on
+    the seat and never copied off it: its RE block names Your Insured, Claim
+    Number and Date of Loss (no "Our Client" line), a bold "CERTIFIED MAIL" line
+    and an "Attn:" line open the address block, and "Procedure" heads the body.
+    A litigation demand has no mail line and no carrier block and reads "vs."
+    in its RE line."""
+
+    headings: tuple[str, ...] = HEADINGS
+    re_required: tuple[str, ...] = ("Claim Number:", "Date of Loss:")
+    re_one_of: tuple[str, ...] = ("Your Insured:", "Our Client:")
+    mail_line: str = ""
+    banner: bool = True
+    forbidden: tuple[str, ...] = ()
+    re_vs: bool = False
+
+    @classmethod
+    def from_config(cls, v: dict[str, Any]) -> "Variant":
+        return cls(
+            headings=tuple(v["headings"]),
+            re_required=tuple(v["re_required"]),
+            re_one_of=tuple(v["re_one_of"]),
+            mail_line=str(v["mail_line"]),
+            banner=bool(v["banner"]),
+            forbidden=tuple(v["forbidden"]),
+            re_vs=bool(v["re_vs"]),
+        )
+
+
+def _address_block(texts: list[str], variant: Variant, fails: list[str]) -> None:
+    head = texts[: next((i for i, t in enumerate(texts) if t.startswith("Dear ")), 20)]
+    if variant.mail_line and not any(t.strip().upper() == variant.mail_line.upper() for t in head):
+        fails.append(f"no {variant.mail_line!r} line above the salutation")
+    if variant.mail_line and not any(t.startswith("Attn:") for t in head):
+        fails.append("no 'Attn:' line in the address block")
+    for label in variant.re_required:
+        if not any(label in t for t in head):
+            fails.append(f"RE block lacks {label!r}")
+    if variant.re_one_of and not any(label in t for t in head for label in variant.re_one_of):
+        fails.append(f"RE block names none of {list(variant.re_one_of)}")
+    if variant.re_vs and not any(t.startswith("RE:") and re.search(r"\bvs?\.\s", t) for t in head):
+        fails.append("the RE line does not read '<plaintiff> vs. <defendant>'")
+    for bad in variant.forbidden:
+        if any(bad.upper() in t.upper() for t in head):
+            fails.append(f"{bad!r} belongs to another demand variant")
+
+
+def _signature(
+    texts: list[str], fails: list[str], signature: str, signer: str, signer_title: str, initials: str
+) -> None:
+    if "Cordially," not in texts:
+        fails.append("no 'Cordially,' sign-off")
+        return
+    i = texts.index("Cordially,")
+    blk = [t.strip() for t in texts[i : i + 6]]
+    for want, what in (
+        (signature, "the firm"),
+        (signer, "the signer"),
+        (signer_title, "the title"),
+        (initials, "the initials"),
+    ):
+        if want and want not in blk:
+            fails.append(f"signature block lacks {what} ({want!r})")
+
+
+def _own_render(name: str, doc: Any, path: Path, fails: list[str]) -> None:
+    """Hygiene of a file THIS job rendered: its exact name and no properties
+    carried over from the reference. The firm's own files are not held to it:
+    the firm saves "Demand_<Client> (7).docx" and its titles go stale."""
+    if not re.fullmatch(r"Demand\.[A-Za-z][^/\\]*\.docx", name):
+        fails.append(f"file name {name!r} is not Demand.<Client>.docx")
+    stem = name[:-5] if name.endswith(".docx") else name
+    title = (doc.core_properties.title or "").strip()
+    if title and title != stem:
+        fails.append(f"document title property {title!r} is not this file ({stem!r})")
+    with zipfile.ZipFile(str(path)) as z:
+        if "docProps/custom.xml" in z.namelist():
+            fails.append("custom document properties present (they carry a source file's matter ids)")
+
+
+def check(
+    path: Path,
+    *,
+    signature: str,
+    signer_title: str,
+    footer_markers: list[str],
+    headings: tuple[str, ...] | list[str] | None = None,
+    variant: Variant | None = None,
+    signer: str = "",
+    initials: str = "",
+    own_render: bool = True,
+) -> FormatResult:
+    """The file's shape against one variant; ``own_render`` adds the hygiene
+    checks for a file this job rendered (off when validating a firm demand)."""
     import docx
 
+    v = variant or Variant()
+    if headings is not None:
+        v = Variant(**{**v.__dict__, "headings": tuple(headings)})
     res = FormatResult()
     name = Path(path).name
-    if not re.fullmatch(r"Demand\.[A-Za-z][^/\\]*\.docx", name):
-        res.fails.append(f"file name {name!r} is not Demand.<Client>.docx")
+    if not own_render and not re.match(r"(?i)demand[._ ]", name):
+        res.fails.append(f"file name {name!r} does not start with Demand")
     try:
         doc = docx.Document(str(path))
     except Exception as exc:  # noqa: BLE001 - not a docx at all is a refusal, named
@@ -138,29 +237,20 @@ def check(path: Path, *, signature: str, signer_title: str, footer_markers: list
     lines = _lines(doc)
     texts = [str(t) for k, t, _ in lines if k == "p" and t]
     tables = doc.tables
-    for label in ("Our Client:", "Your Insured:", "Claim Number:", "Date of Loss:"):
-        if not any(label in t for t in texts[:20]):
-            res.fails.append(f"RE block lacks {label!r}")
-    _banner(tables, res.fails)
+    _address_block(texts, v, res.fails)
+    if v.banner:
+        _banner(tables, res.fails)
+    elif not any(t.cell(0, 0).text.strip().lower().startswith("icd") for t in tables):
+        res.fails.append("no ICD-10 Code table under Summary of Injuries")
     if not any(t.startswith("Dear ") for t in texts):
         res.fails.append("no salutation")
-    _headings(lines, res.fails)
+    _headings(lines, res.fails, tuple(h.lower() for h in v.headings))
     foot = " ".join(p.text for s in doc.sections for f in (s.footer, s.first_page_footer) for p in f.paragraphs)
     if not all(m in foot for m in footer_markers):
         res.fails.append("footer lacks the firm's settlement-communication line")
-    if "Cordially," not in texts:
-        res.fails.append("no 'Cordially,' sign-off")
-    else:
-        blk = texts[texts.index("Cordially,") : texts.index("Cordially,") + 5]
-        if signature not in blk or signer_title not in blk:
-            res.fails.append(f"signature block is not the firm's: {blk}")
+    _signature(texts, res.fails, signature, signer, signer_title, initials)
     table_text = " ".join(c.text for t in tables for r in t.rows for c in r.cells)
     _machinery("\n".join(texts) + "\n" + table_text, res.fails, res.notes)
-    stem = name[:-5] if name.endswith(".docx") else name
-    title = (doc.core_properties.title or "").strip()
-    if title and title != stem:
-        res.fails.append(f"document title property {title!r} is not this file ({stem!r})")
-    with zipfile.ZipFile(str(path)) as z:
-        if "docProps/custom.xml" in z.namelist():
-            res.fails.append("custom document properties present (they carry a source file's matter ids)")
+    if own_render:
+        _own_render(name, doc, Path(path), res.fails)
     return res

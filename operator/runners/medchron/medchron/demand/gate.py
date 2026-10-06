@@ -52,7 +52,8 @@ def collect(data: Path, firm: Any) -> tuple[list[tuple[str, str]], list[tuple[st
             continue
         text = Path(p).read_text(encoding="utf-8", errors="replace")
         (vision if str(r.get("name")) in machine else sources).append((str(r.get("name")), text))
-    sources.append(("firm demand skeleton", firm.text("skeleton")))
+    if "_variant" in firm.data:  # a gap-audit-only job selects no demand variant
+        sources.append(("firm demand skeleton", firm.text("skeleton")))
     sources.append(("firm fixed strings", firm.text("voice_fixed_strings")))
     walled = json.loads((data / "walled.json").read_text(encoding="utf-8")) if (data / "walled.json").is_file() else []
     held = [
@@ -63,7 +64,7 @@ def collect(data: Path, firm: Any) -> tuple[list[tuple[str, str]], list[tuple[st
     return sources, vision, held
 
 
-def run(data: Path, firm: Any, draft_md: str) -> dict[str, Any]:
+def run(data: Path, firm: Any, draft_md: str, name: str = "gate.json") -> dict[str, Any]:
     from smokeball_connector.record_check import run_record_check
 
     sources, vision, held = collect(data, firm)
@@ -82,5 +83,5 @@ def run(data: Path, firm: Any, draft_md: str) -> dict[str, Any]:
         "infos": verdict.infos,
         "checked_sources": verdict.checked_sources,
     }
-    (data / "gate.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
+    (data / name).write_text(json.dumps(out, indent=1), encoding="utf-8")
     return out

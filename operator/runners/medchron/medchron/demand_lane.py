@@ -46,6 +46,7 @@ INPUTS_ENV = "MEDCHRON_DEMAND_INPUTS"
 MEMORY_ENV = "SMD_DEMAND_MEMORY_MAX_BYTES"
 DEFAULT_MEMORY = 1024 * 1024 * 1024
 SKILL = "demand-letter-drafter"
+VENDOR_ENV_PASS = ("RECORDS_VENDOR_API_TOKEN", "RECORDS_VENDOR_API_URL", "RECORDS_VENDOR_NAME")
 
 
 class DemandBroker:
@@ -129,7 +130,9 @@ class DemandLane(Daemon):
         except BrokerError as exc:
             logger.warning("broker not ready for %s, deferring: %s", job_id, exc)
             return "deferred"
-        env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS}
+        # The demand child also reads the records vendor's directory (the gap
+        # audit's missing providers): its three per-seat values, nothing more.
+        env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS or k in VENDOR_ENV_PASS}
         env.update(self.child_env, MEDCHRON_DAEMON_JOB_ID=str(job_id))
         if self.inputs_dir:
             env[INPUTS_ENV] = str(self.inputs_dir)
@@ -190,13 +193,20 @@ class DemandLane(Daemon):
         the envelope, the folder id, the files the read-back saw (named by this
         runner: ``Demand.<Client>.docx``, the dated gap audit), and WHERE it
         stopped as a stage name. Never the runner's free-text reason, which can
-        quote a document name; the ledger row keeps that for a person."""
+        quote a document name, and never a file name, which carries the
+        client's: files ride as their role and byte count. The ledger row keeps
+        the names and the reason for a person."""
         env: dict[str, Any] = {}
         try:
             env = json.loads((self.job_dir(job_id) / "envelope.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
             pass
-        files = "; ".join(f"{f.get('name')} ({f.get('size')} bytes)" for f in fields.get("files") or []) or "none"
+        # By ROLE, never by file name: the demand's file name carries the
+        # client's name, and no tenant string rides the unfenced wake prompt.
+        # The DELIVER turn reads the names from the folder (review of #3074).
+        files = (
+            "; ".join(f"{f.get('role') or 'file'} ({f.get('size')} bytes)" for f in fields.get("files") or []) or "none"
+        )
         lines = [
             f"Run the {SKILL} skill's DELIVER mode for demand job {job_id}.",
             "Kind: demand.",
@@ -215,6 +225,56 @@ class DemandLane(Daemon):
 
     def _paused(self, job_id: str) -> bool:
         return sticky_level(self.sticky_db) == "HARD_STOP"
+
+    # -- the loop: no head-of-line starvation, and held is final ---------------------
+    def _refuse_held_resumes(self) -> None:
+        """A held demand is FINAL. The ledger has no held -> running edge, and a
+        hold means a person must read the reason (a refused letter, a wrong
+        destination); resuming it would replay the same refusal or, worse,
+        file what was refused. A marker for one is removed, loudly."""
+        if not self.queue.is_dir():
+            return
+        for marker in self.queue.glob(f"{resume_mod.MARKER_PREFIX}*.json"):
+            job_id = marker.name[len(resume_mod.MARKER_PREFIX) : -len(".json")]
+            if self._daemon_state(job_id).get("state") == "held":
+                logger.error("resume of held demand %s refused: a held demand is final; ask again", job_id)
+                marker.unlink(missing_ok=True)
+
+    def _ready(self) -> list[str]:
+        now = self.clock()
+        return [j for j in self._in_progress() if float(self._daemon_state(j).get("retry_after") or 0) <= now]
+
+    def _defer(self, job_id: str) -> None:
+        """Back the job off (1, 2, 4 ... 60 minutes) so a job that keeps
+        deferring cannot hold the head of the queue: the next tick claims the
+        job behind it (review of #3074)."""
+        n = int(self._daemon_state(job_id).get("deferrals") or 0) + 1
+        self._write_state(job_id, deferrals=n, retry_after=self.clock() + min(60.0 * 2 ** (n - 1), 3600.0))
+
+    def tick(self) -> str | None:
+        self._refuse_held_resumes()
+        resume_mod.take_requests(self)
+        self.wipe_expired()
+        self.dispatch_wakes()
+        ready = self._ready()
+        job_id = ready[0] if ready else self.claim_next()
+        self.heartbeat(running=job_id)
+        if job_id is None:
+            return None
+        if self._paused(job_id):
+            return "paused"
+        try:
+            result = self.run_job(job_id)
+        except (
+            Exception
+        ):  # one job's crash backs that job off; it must not wedge the lane's head (logged with its trace)
+            logger.exception("demand job %s could not be started; backing it off", job_id)
+            result = "deferred"
+        if result == "deferred":
+            self._defer(job_id)
+        else:
+            self._write_state(job_id, deferrals=0, retry_after=None)
+        return result
 
 
 def build_lane(d: Daemon) -> DemandLane | None:

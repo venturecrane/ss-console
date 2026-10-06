@@ -79,12 +79,69 @@ def _phrase_hits(
     return hits
 
 
+_BILL_OR_RECORD = re.compile(
+    r"(?i)\b(bill|billing|statement|ledger|itemi[sz]|ub-?04|hcfa|cms-?1500|invoice|medical record|chart|"
+    r"retainer|intake|authori[sz]ation|hipaa)\b"
+)
+_CARRIER_WORD = re.compile(r"(?i)\b(insured|adjuster|claims? (representative|specialist|adjuster|department))\b")
+_IDENT = re.compile(r"[\s:#.]*([A-Z0-9][A-Z0-9-]{3,})", re.I)
+
+
+def carrier_documents(texts: list[tuple[dict[str, Any], str]], phrases: list[str]) -> list[dict[str, str]]:
+    """G1's evidence: a carrier's OWN document. Each must (1) not be a bill, a
+    medical record, or the firm's intake paperwork, by name; (2) use a carrier's
+    vocabulary ("your insured", "adjuster"); and (3) carry a claim or policy
+    phrase followed by an identifier with a digit in it. A medical bill's
+    "claim number" or a retainer's blank "CLAIM NUMBER:" field is not a carrier
+    (review of #3074; the blank field passed G1 on a 9/24 trial matter)."""
+    pats = [re.compile(re.escape(p), re.I) for p in phrases]
+    out = []
+    for r, t in texts:
+        if _BILL_OR_RECORD.search(str(r.get("name") or "")) or not _CARRIER_WORD.search(t):
+            continue
+        for p in pats:
+            m = next(
+                (m for m in p.finditer(t) if (i := _IDENT.match(t, m.end())) and re.search(r"\d", i.group(1))), None
+            )
+            if m:
+                out.append({"document": str(r.get("name")), "quote": _quote(t, m)})
+                break
+    return out
+
+
+def variant(
+    texts: list[tuple[dict[str, Any], str]], preflight: dict[str, Any], facts: dict[str, Any], prem: dict[str, Any]
+) -> dict[str, Any]:
+    """Pre-suit or litigation, from the file, never guessed (review of #3074):
+
+    * litigation: defense counsel of record on the matter, or a court
+      document's own words in the file (a complaint, a case number);
+    * pre-suit: neither of those, and no document NAME suggesting a lawsuit;
+    * unclear: a name suggests a lawsuit but no court document or counsel
+      confirms it. The job holds and says why."""
+    counsel = list(facts.get("defense_counsel") or [])
+    court = _phrase_hits(texts, prem["litigation_phrases"])
+    named = [h["document"] for h in preflight.get("premise_hits") or [] if h["class"] == "lawsuit"]
+    evidence = [f"defense counsel of record: {c}" for c in counsel] + [
+        f"{h['document']}: {h['quote']}" for h in court[:5]
+    ]
+    if counsel or court:
+        return {"variant": "litigation", "evidence": evidence}
+    if named:
+        return {
+            "variant": "unclear",
+            "evidence": [f"a document name suggests a lawsuit: {n}" for n in named[:5]]
+            + ["no court document's text and no defense counsel of record confirms it"],
+        }
+    return {"variant": "pre_suit", "evidence": ["no court document and no defense counsel of record in the file"]}
+
+
 def decide(
     extracted: list[dict[str, Any]], preflight: dict[str, Any], facts: dict[str, Any], prem: dict[str, Any]
 ) -> dict[str, Any]:
     texts = _texts(extracted)
     gates: list[dict[str, Any]] = []
-    carrier_docs = _phrase_hits(texts, prem["carrier_phrases"])
+    carrier_docs = carrier_documents(texts, prem["carrier_phrases"])
     g1 = bool(facts.get("insurer")) or bool(carrier_docs)
     gates.append(
         {
@@ -103,13 +160,15 @@ def decide(
         }
     )
     fail_on = set(prem["fail_on"])
-    blocking = [h for h in preflight.get("premise_hits") or [] if h["class"] in fail_on]
+    blocking = [f"{h['class']}: {h['document']}" for h in preflight.get("premise_hits") or [] if h["class"] in fail_on]
+    # Names alone miss an acceptance filed as "letter 5-5-26.pdf": the TEXT is
+    # read for the settlement phrases too, negation-aware (review of #3074).
+    blocking += [
+        f"settled, in the text: {h['document']}: {h['quote']}"
+        for h in _phrase_hits(texts, prem["settled_phrases"], negatable=True)
+    ]
     gates.append(
-        {
-            "gate": "G4 the right instrument (pre-suit, unresolved)",
-            "passed": not blocking,
-            "evidence": [f"{h['class']}: {h['document']}" for h in blocking],
-        }
+        {"gate": "G4 the right instrument (pre-suit, unresolved)", "passed": not blocking, "evidence": blocking[:10]}
     )
     facts_out = [
         f"{h['class']}: {h['document']}" for h in preflight.get("premise_hits") or [] if h["class"] not in fail_on
@@ -120,7 +179,12 @@ def decide(
             facts_out.append(
                 f"conditional limits language (G3, a constraint on figures): {r.get('name')}: {_quote(t, m)}"
             )
-    return {"passed": all(g["passed"] for g in gates), "gates": gates, "premise_facts": facts_out}
+    return {
+        "passed": all(g["passed"] for g in gates),
+        "gates": gates,
+        "premise_facts": facts_out,
+        "variant": variant(texts, preflight, facts, prem),
+    }
 
 
 def coverage_report(job: Any, decision: dict[str, Any], today: str) -> str:

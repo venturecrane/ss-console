@@ -41,24 +41,31 @@ def names(firm: Any, job: Any, date_stamp: str) -> dict[str, str]:
     }
 
 
-def render_demand(firm: Any, draft_md: str, out_dir: Path) -> tuple[Path, str, list[str]]:
+def render_demand(firm: Any, draft_md: str, out_dir: Path, client_label: str) -> tuple[Path, str, list[str]]:
     """The house file, its attorney notes, and the format check's notes.
     Raises FormatRefused when the file is off-format: nothing is filed."""
-    fmt = firm.data["format"]
+    fmt, v, who = firm.data["format"], firm.variant, firm.attorney
     author = firm.get("firm", "display_name")
     path, notes = house.render(
         draft_md,
         firm.input_path("house_reference"),
         out_dir,
         signature=fmt["firm_signature"],
-        signer_title=fmt["signer_title"],
+        signer_title=who["title"],
         author=author,
+        client_label=client_label,
+        signer=who["signer"],
+        initials=who["initials"],
+        mail_line=v["mail_line"],
     )
     res = format_check.check(
         path,
         signature=fmt["firm_signature"],
-        signer_title=fmt["signer_title"],
+        signer_title=who["title"],
         footer_markers=list(fmt["footer_markers"]),
+        variant=format_check.Variant.from_config(v),
+        signer=who["signer"],
+        initials=who["initials"],
     )
     if not res.ok:
         raise FormatRefused(res.fails)
@@ -69,13 +76,17 @@ def render_plain(md: str, out_dir: Path, name: str, author: str) -> Path:
     return plain_docx.render(md, out_dir / name, title=name.rsplit(".", 1)[0], author=author)
 
 
-def write_manifest(out_dir: Path, folder: str, files: list[Path]) -> list[dict[str, Any]]:
+def write_manifest(out_dir: Path, folder: str, files: list[tuple[str, Path]]) -> list[dict[str, Any]]:
+    """``files`` are (role, path). The role (demand, gap_audit, attorney_notes,
+    coverage_report) is the code-authored label the wake carries instead of a
+    file name."""
     manifest = []
-    for p in files:
+    for role, p in files:
         data = p.read_bytes()
         manifest.append(
             {
                 "name": p.name,
+                "role": role,
                 "folder": folder,
                 "local_path": str(p),
                 "sha256": hashlib.sha256(data).hexdigest(),
@@ -97,17 +108,26 @@ def file_to_matter(
     """Run the chronology's upload stage over ``data/out/demand``. Returns the
     delivery record; ``exit`` 0 is read back complete, 2 is short after the
     retries (the files may still be materializing), 1 is a refusal."""
+    said: list[str] = []
+
+    def _log(line: str) -> None:
+        said.append(line)
+        log(line)
+
     sr = SimpleNamespace(
         slug_dir=data,
         unit=SimpleNamespace(unit=UNIT),
         job=SimpleNamespace(matter_id=matter_id),
         seat=seat,
-        log=log,
+        log=_log,
     )
     code = upload_stage.run(sr, pause=pause)  # type: ignore[arg-type]
     delivery_path = data / "runs" / UNIT / "delivery.json"
     delivery = json.loads(delivery_path.read_text(encoding="utf-8")) if delivery_path.is_file() else {}
-    return {"exit": code, **delivery}
+    # The upload stage's own last sentence is the reason (a folder it did not
+    # create, local bytes changed, no folder id, an empty manifest): one exit
+    # code covers all four, so the caller must not guess which.
+    return {"exit": code, "said": said[-1] if said else "", **delivery}
 
 
 def out_dir(data: Path) -> Path:

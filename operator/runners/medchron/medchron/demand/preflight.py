@@ -160,10 +160,48 @@ def estimate(extracted: list[dict[str, Any]], firm: DemandFirm) -> dict[str, Any
     )
     b = firm.data["budget"]
     # Transcribed pages enter the summary too: about 2,500 characters a page.
-    usd = (chars + pages * 2500) / 1e6 * b["usd_per_million_chars"] + pages * b["usd_per_scanned_page"]
+    summarized = chars + pages * 2500
+    usd = summarized / 1e6 * b["usd_per_million_chars"] + pages * b["usd_per_scanned_page"]
     usd += b["usd_drafting_fixed"]
+    # Condense runs only when the digests exceed the compose budget; a dense
+    # record digests to near its own length, so the summarized size stands in.
+    if summarized > int(firm.get("levers", "digest_budget_chars")):
+        usd += summarized / 1e6 * b["usd_per_million_condense_chars"]
     total_pages = sum(int(r.get("pages") or 0) for r in extracted)
     return {"pages": total_pages, "characters": chars, "transcription_pages": pages, "usd": round(usd, 2)}
+
+
+def write_extracted(data: Path, rows: list[dict[str, Any]]) -> None:
+    tmp = data / "extracted.jsonl.tmp"
+    tmp.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    tmp.replace(data / "extracted.jsonl")
+
+
+def wall_printed_emails(
+    data: Path, firm: DemandFirm, client: set[str], log: Callable[[str], None]
+) -> list[dict[str, Any]]:
+    """Move every printed email the wall holds out (``pull.printed_email_wall``)
+    from the corpus to ``walled.json``. Run after extraction AND after
+    transcription: a scanned printout has no text until it is transcribed."""
+    from .pull import printed_email_wall
+
+    rows = [json.loads(line) for line in (data / "extracted.jsonl").read_text(encoding="utf-8").splitlines() if line]
+    walled_path = data / "walled.json"
+    walled = json.loads(walled_path.read_text(encoding="utf-8")) if walled_path.is_file() else []
+    keep = []
+    for r in rows:
+        p = r.get("text_path")
+        text = Path(p).read_text(encoding="utf-8", errors="replace") if p and Path(p).is_file() else ""
+        reason = printed_email_wall(text, firm, client) if r.get("kind") != "email_body" else None
+        if reason:
+            walled.append({"id": r["id"], "name": r.get("name"), "reason": f"printed email: {reason}", "text_path": p})
+        else:
+            keep.append(r)
+    if len(keep) != len(rows):
+        log(f"privilege wall: {len(rows) - len(keep)} printed email(s) held out")
+        walled_path.write_text(json.dumps(walled, indent=1), encoding="utf-8")
+        write_extracted(data, keep)
+    return keep
 
 
 def run(data: Path, firm: DemandFirm, facts: dict[str, Any], log: Callable[[str], None]) -> dict[str, Any]:
@@ -171,9 +209,8 @@ def run(data: Path, firm: DemandFirm, facts: dict[str, Any], log: Callable[[str]
     text_dir = data / "text"
     text_dir.mkdir(parents=True, exist_ok=True)
     extracted = [extract_one(r, text_dir) for r in corpus]
-    with (data / "extracted.jsonl").open("w", encoding="utf-8") as fh:
-        for r in extracted:
-            fh.write(json.dumps(r) + "\n")
+    write_extracted(data, extracted)
+    extracted = wall_printed_emails(data, firm, set(facts.get("client_emails") or []), log)
     report = {
         "documents": len(extracted),
         "unextractable": [{"name": r["name"], "why": r["unextractable"]} for r in extracted if r.get("unextractable")],

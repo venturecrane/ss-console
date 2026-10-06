@@ -78,26 +78,55 @@ def wall_reason(
     client: set[str],
     consumer_domains: tuple[str, ...] = (),
 ) -> str | None:
-    """Why an email is privileged, or None. Decided by addresses alone.
+    """Why an email is held out, or None. Decided by addresses alone, and
+    failing CLOSED: a document the wall cannot place is held out, which the
+    attorney can clear, never read by a model (review of #3074, 2026-10-06).
 
-    When the matter carries no client address, a firm email to or from a
-    consumer mailbox (the authored list) is walled as possibly the client:
-    failing toward holding a document out, which the attorney can clear, and
-    never toward a model reading a client's letter to her lawyer."""
+    * no parseable sender, or no parseable recipient: Exchange's internal X.500
+      addresses (``/O=EXCHANGELABS/OU=...``) parse as neither, and that is
+      exactly what firm-internal mail looks like;
+    * the client's known address to or from the firm;
+    * ANY consumer mailbox (the authored list) to or from the firm, whether or
+      not the client's address is known: a second address, a spouse, a parent;
+    * firm to firm only."""
 
     def is_firm(a: str) -> bool:
         return a.rsplit("@", 1)[-1] in firm_domains
 
+    def is_personal(a: str) -> bool:
+        return a in client or a.rsplit("@", 1)[-1] in consumer_domains
+
     sender = sender.lower()
-    if not client:
-        client = {a for a in [sender, *recipients] if a.rsplit("@", 1)[-1] in consumer_domains}
-    if sender in client and any(is_firm(r) for r in recipients):
-        return "client to firm"
-    if is_firm(sender) and any(r in client for r in recipients):
-        return "firm to client"
+    recipients = [r.lower() for r in recipients]
+    if not sender or not recipients:
+        return "sender or recipients unreadable"
+    if is_personal(sender) and any(is_firm(r) for r in recipients):
+        return "client or personal mailbox to firm"
+    if is_firm(sender) and any(is_personal(r) for r in recipients):
+        return "firm to client or personal mailbox"
     if is_firm(sender) and all(is_firm(r) for r in recipients):
         return "firm internal"
     return None
+
+
+_HEADER = re.compile(r"(?im)^\s*(from|to|cc|sent|subject)\s*:")
+
+
+def printed_email_wall(text: str, firm: DemandFirm, client: set[str]) -> str | None:
+    """A document that is a printed email (two or more header lines, From/To/
+    Sent/Subject, on its first page) gets the same wall as a ``.msg``; a header
+    block whose addresses do not parse is held out."""
+    head = text[:3000]
+    if len({m.group(1).lower() for m in _HEADER.finditer(head)}) < 2:
+        return None
+    sender = next(iter(addresses(_line(head, "from"))), "")
+    rcpt = addresses(_line(head, "to")) + addresses(_line(head, "cc"))
+    return wall_reason(sender, rcpt, firm.firm_domains, client, firm.consumer_domains)
+
+
+def _line(text: str, field: str) -> str:
+    m = re.search(rf"(?im)^\s*{field}\s*:(.*)$", text)
+    return m.group(1) if m else ""
 
 
 # ---- the pull ------------------------------------------------------------------

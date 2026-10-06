@@ -27,15 +27,16 @@ ENV_DIR = "MEDCHRON_DEMAND_INPUTS"
 DEFAULT_DIR = "/var/lib/smd-config/demand"
 CONFIG_NAME = "demand-firm.yaml"
 
-#: The files a demand job reads. Every one is required; a firm without a voice
-#: profile does not get a plain-register demand (the 2026-09-24 lesson).
+#: The files every demand job reads. Every one is required; a firm without a
+#: voice profile does not get a plain-register demand (the 2026-09-24 lesson).
+#: The skeleton and the house reference are NOT here: they belong to the
+#: demand VARIANT (``variants``: pre-suit to a carrier, or litigation to
+#: defense counsel), which the job reads off the file, never guesses.
 INPUT_KEYS = (
     "voice_profile",
     "voice_fixed_strings",
     "voice_adjustments",
-    "skeleton",
     "drafting_discipline",
-    "house_reference",
     "prompt_digest",
     "prompt_condense",
     "prompt_gap_audit",
@@ -46,7 +47,7 @@ INPUT_KEYS = (
 MODEL_KEYS = ("transcription", "digest", "gap_audit", "compose", "audit", "repair")
 
 # section -> {key: (type, required)}
-SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
+SCHEMA: dict[str, dict[str, tuple[str, bool]] | None] = {
     "firm": {"slug": ("str", True), "display_name": ("str", True)},
     "models": {k: ("str", True) for k in MODEL_KEYS},
     "budget": {
@@ -59,6 +60,9 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
         "usd_per_million_chars": ("float", True),
         "usd_per_scanned_page": ("float", True),
         "usd_drafting_fixed": ("float", True),
+        # Condense, when the digests outgrow the compose budget (measured
+        # $3.30 per million characters on the 09-24 matters).
+        "usd_per_million_condense_chars": ("float", True),
     },
     "privilege": {
         # The firm's own mail domains. Mail between two of them is internal;
@@ -81,18 +85,38 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
         "fail_on": ("list[str]", True),
         # Text phrases that, inside a carrier's document, state a denial.
         "denial_phrases": ("list[str]", True),
+        # Text phrases that, in any document, say the claim is already settled
+        # (an acceptance of a demand, a signed release): G4 fails on them.
+        "settled_phrases": ("list[str]", True),
+        # A court document's own words (a complaint, a case number): the file
+        # is in litigation, and the demand is the litigation variant.
+        "litigation_phrases": ("list[str]", True),
         # Text phrases that identify a carrier claim (G1).
         "carrier_phrases": ("list[str]", True),
     },
     "format": {
         "firm_signature": ("str", True),
-        "signer_title": ("str", True),
         "footer_markers": ("list[str]", True),
     },
+    # {pre_suit: {...}, litigation: {...}}: each variant's skeleton and house
+    # reference (input keys) and its shape (format_check.Variant). pre_suit is
+    # required; a litigation file with no authored litigation variant holds.
+    "variants": None,  # a map of maps, checked in _variants
+    # {responsible attorney, as the firm's authored signer map writes the
+    # name: {signer, title, initials}}: how the responsible attorney signs a
+    # demand ("Christopher A. Price", "Attorney at Law", "CAP/dm"). Keyed by the
+    # attorney's staff name as Smokeball holds it. An attorney with no row gets
+    # no demand: the job holds and names them, rather than signing for them.
+    "attorneys": None,
     "delivery": {
         "folder_template": ("str", True),
         "gap_audit_name_template": ("str", True),
         "coverage_report_name_template": ("str", True),
+        # The ONLY matter numbers a job may file to when they are not the
+        # matter it read (a rehearsal files a real file's work into the firm's
+        # Operator library matter). Anything else is refused: a demand filed
+        # on the wrong client's matter is the costliest misfiling there is.
+        "rehearsal_matters": ("list[str]", True),
     },
     "levers": {
         "chunk_chars": ("int", True),
@@ -100,9 +124,25 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
         "digest_max_tokens": ("int", True),
         "compose_max_tokens": ("int", True),
         "digest_budget_chars": ("int", True),
+        # Records-vendor directory lookups for the gap audit's missing
+        # providers: about 23 s each, run one at a time, at most this many.
+        "vendor_lookup_cap": ("int", True),
     },
-    "inputs": {k: ("map", True) for k in INPUT_KEYS},
+    "inputs": None,  # {key: {path, sha256}}: INPUT_KEYS plus each variant's files
 }
+VARIANT_KEYS = {
+    "skeleton": "str",
+    "house_reference": "str",
+    "headings": "list[str]",
+    "re_required": "list[str]",
+    "re_one_of": "list[str]",
+    "mail_line": "str?",
+    "banner": "bool",
+    "forbidden": "list[str]",
+    "re_vs": "bool",
+}
+VARIANTS = ("pre_suit", "litigation")
+ATTORNEY_KEYS = ("signer", "title", "initials")
 
 
 class DemandConfigError(ValueError):
@@ -120,6 +160,10 @@ def _type_ok(value: Any, kind: str) -> bool:
         return isinstance(value, list) and all(isinstance(x, str) for x in value)
     if kind == "map":
         return isinstance(value, dict)
+    if kind == "bool":
+        return isinstance(value, bool)
+    if kind == "str?":
+        return isinstance(value, str)
     return False
 
 
@@ -131,6 +175,8 @@ def _shape(data: Any) -> list[str]:
         body = data.get(section)
         if not isinstance(body, dict):
             out.append(f"{section}: required section missing or not a map")
+            continue
+        if keys is None:  # a free-keyed map, checked by its own rules
             continue
         out += [f"{section}.{k}: unknown key (closed key set)" for k in body if k not in keys]
         for key, (kind, required) in keys.items():
@@ -170,12 +216,44 @@ def _semantics(data: dict[str, Any]) -> list[str]:
             re.compile(p)
         except re.error as exc:
             out.append(f"selection: invalid regex {p!r} ({exc})")
-    for key in INPUT_KEYS:
-        entry = data["inputs"][key]
-        if set(entry) != {"path", "sha256"} or not re.fullmatch(r"[0-9a-f]{64}", str(entry.get("sha256"))):
+    out += _variants(data)
+    out += [f"inputs.{k}: required" for k in INPUT_KEYS if k not in data["inputs"]]
+    for key, entry in data["inputs"].items():
+        if (
+            not isinstance(entry, dict)
+            or set(entry) != {"path", "sha256"}
+            or not re.fullmatch(r"[0-9a-f]{64}", str(entry.get("sha256")))
+        ):
             out.append(f"inputs.{key}: expected {{path, sha256}} with a 64-hex sha256")
         elif Path(str(entry["path"])).is_absolute() or ".." in Path(str(entry["path"])).parts:
             out.append(f"inputs.{key}.path: must be relative to the inputs directory")
+    return out
+
+
+def _variants(data: dict[str, Any]) -> list[str]:
+    out = []
+    if "pre_suit" not in data["variants"]:
+        out.append("variants.pre_suit: required")
+    for name, v in data["variants"].items():
+        if name not in VARIANTS:
+            out.append(f"variants.{name}: unknown variant (expected {list(VARIANTS)})")
+            continue
+        if not isinstance(v, dict) or set(v) != set(VARIANT_KEYS):
+            out.append(f"variants.{name}: expected exactly {sorted(VARIANT_KEYS)}")
+            continue
+        out += [f"variants.{name}.{k}: expected {t}" for k, t in VARIANT_KEYS.items() if not _type_ok(v[k], t)]
+        out += [
+            f"variants.{name}.{k}: names no entry in inputs"
+            for k in ("skeleton", "house_reference")
+            if v[k] not in data["inputs"]
+        ]
+    for who, a in data["attorneys"].items():
+        if (
+            not isinstance(a, dict)
+            or set(a) != set(ATTORNEY_KEYS)
+            or not all(_type_ok(a[k], "str") for k in ATTORNEY_KEYS)
+        ):
+            out.append(f"attorneys.{who}: expected {{signer, title, initials}}, each a string")
     return out
 
 
@@ -198,10 +276,34 @@ class DemandFirm:
         return str(self.data["models"][stage])
 
     def input_path(self, key: str) -> Path:
+        if key in ("skeleton", "house_reference"):
+            key = self.variant[key]
         return self.root / str(self.data["inputs"][key]["path"])
 
     def text(self, key: str) -> str:
         return self.input_path(key).read_text(encoding="utf-8")
+
+    @property
+    def variant_name(self) -> str:
+        if "_variant" not in self.data:
+            raise DemandConfigError("no demand variant selected for this job")
+        return str(self.data["_variant"])
+
+    @property
+    def variant(self) -> dict[str, Any]:
+        return self.data["variants"][self.variant_name]
+
+    @property
+    def attorney(self) -> dict[str, str]:
+        return dict(self.data.get("_attorney") or {})
+
+    def attorney_for(self, name: str | None) -> dict[str, str] | None:
+        key = " ".join(str(name or "").split()).casefold()
+        rows = {" ".join(k.split()).casefold(): v for k, v in self.data["attorneys"].items()}
+        return rows.get(key) if key else None
+
+    def select(self, variant: str, attorney: dict[str, str]) -> "DemandFirm":
+        return DemandFirm(root=self.root, data={**self.data, "_variant": variant, "_attorney": attorney})
 
     @property
     def firm_domains(self) -> tuple[str, ...]:
@@ -214,8 +316,7 @@ class DemandFirm:
 
 def check_pins(root: Path, data: dict[str, Any]) -> list[str]:
     out: list[str] = []
-    for key in INPUT_KEYS:
-        entry = data["inputs"][key]
+    for key, entry in data["inputs"].items():
         p = root / str(entry["path"])
         if not p.is_file():
             out.append(f"inputs.{key}: {entry['path']} is not in {root}")
@@ -260,7 +361,9 @@ def main(argv: list[str] | None = None) -> int:
     except DemandConfigError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    print(f"{firm.root / CONFIG_NAME}: OK ({firm.get('firm', 'slug')}, {len(INPUT_KEYS)} inputs pinned)")
+    print(
+        f"{firm.root / CONFIG_NAME}: OK ({firm.get('firm', 'slug')}, {len(firm.data['inputs'])} inputs pinned, {len(firm.data['variants'])} variant(s), {len(firm.data['attorneys'])} attorney(s) mapped)"
+    )
     return 0
 
 

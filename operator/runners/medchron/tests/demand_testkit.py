@@ -72,7 +72,7 @@ TEXT_INPUTS = {
     "voice_profile": "Voice: formal, no contractions.",
     "voice_fixed_strings": "Fixed: Demand is hereby made for the full available policy limits.",
     "voice_adjustments": "Preferences only.",
-    "skeleton": "---\ndate: [INSERT]\n---\n## Summary of Injuries\n## Liability\n## Damages\n## Demand\n## Exhibits\n",
+    "skeleton_house": "---\ndate: [INSERT]\n---\n## Summary of Injuries\n## Liability\n## Damages\n## Demand\n## Exhibits\n",
     "drafting_discipline": "## Part I\nRules one to eight.\n## Part II\nGates.\n",
     **PROMPTS,
 }
@@ -90,12 +90,13 @@ def firm_data(**over: Any) -> dict[str, Any]:
             "usd_per_million_chars": 6.0,
             "usd_per_scanned_page": 0.01,
             "usd_drafting_fixed": 4.0,
+            "usd_per_million_condense_chars": 3.3,
         },
         "privilege": {"firm_domains": ["firm.example"], "consumer_domains": ["mail.example"]},
         "selection": {
             "doc_extensions": [".pdf", ".docx", ".msg", ".jpg", ".png"],
             "exclude_folder_patterns": ["(?i)chronology", r"(?i)\(operator\)"],
-            "exclude_name_patterns": ["(?i)^chronology"],
+            "exclude_name_patterns": ["(?i)^chronology", r"(?i)\bmemo\b", r"(?i)\bintake\b", r"(?i)\bnotes?\b"],
         },
         "premise": {
             "scan": {
@@ -105,19 +106,34 @@ def firm_data(**over: Any) -> dict[str, Any]:
                 "lawsuit": ["(?i)complaint for damages|lawsuit"],
                 "funding": ["(?i)funding"],
             },
-            "fail_on": ["acceptance", "release", "lawsuit"],
+            "fail_on": ["acceptance", "release"],
             "denial_phrases": ["coverage is denied", "deny coverage"],
-            "carrier_phrases": ["claim number", "your insured"],
+            "carrier_phrases": ["claim number", "policy number"],
+            "settled_phrases": ["accept the policy limits", "timely acceptance"],
+            "litigation_phrases": ["complaint for damages", "case no."],
         },
-        "format": {
-            "firm_signature": SIGNATURE,
-            "signer_title": "Attorney at Law",
-            "footer_markers": ["Settlement Communication", "1119, 1152"],
+        "format": {"firm_signature": SIGNATURE, "footer_markers": ["Settlement Communication", "1119, 1152"]},
+        "variants": {
+            "pre_suit": {
+                "skeleton": "skeleton_house",
+                "house_reference": "house_reference_house",
+                "headings": ["Summary of Injuries", "Liability", "Damages", "Demand"],
+                "re_required": ["Claim Number:", "Date of Loss:"],
+                "re_one_of": ["Your Insured:", "Our Client:"],
+                "mail_line": "CERTIFIED MAIL",
+                "banner": True,
+                "forbidden": [],
+                "re_vs": False,
+            }
+        },
+        "attorneys": {
+            "Example Lawyer": {"signer": "Example A. Lawyer", "title": "Attorney at Law", "initials": "EAL/dm"}
         },
         "delivery": {
             "folder_template": "Demand Prep {date} (Operator {job})",
             "gap_audit_name_template": "Gap Audit - {matter_number} - {date}.docx",
             "coverage_report_name_template": "Coverage Posture Report - {matter_number} - {date}.docx",
+            "rehearsal_matters": ["OPS-LIBRARY"],
         },
         "levers": {
             "chunk_chars": 120_000,
@@ -125,6 +141,7 @@ def firm_data(**over: Any) -> dict[str, Any]:
             "digest_max_tokens": 64_000,
             "compose_max_tokens": 64_000,
             "digest_budget_chars": 2_000_000,
+            "vendor_lookup_cap": 3,
         },
     }
     for k, v in over.items():
@@ -141,7 +158,7 @@ def make_inputs(root: Path, **over: Any) -> Path:
         inputs[key] = {"path": p.name, "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
     ref = root / "house-reference.docx"
     make_reference(ref)
-    inputs["house_reference"] = {"path": ref.name, "sha256": hashlib.sha256(ref.read_bytes()).hexdigest()}
+    inputs["house_reference_house"] = {"path": ref.name, "sha256": hashlib.sha256(ref.read_bytes()).hexdigest()}
     data = firm_data(**over)
     data["inputs"] = inputs
     (root / "demand-firm.yaml").write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
@@ -179,7 +196,12 @@ def make_job(job_dir: Path, **kw: Any) -> Path:
 class DemandSeat(FakeSeat):
     def __init__(self, *a: Any, facts: dict[str, Any] | None = None, **kw: Any) -> None:
         super().__init__(*a, **kw)
+        self.numbers = {MATTER: "100001", LIBRARY: "OPS-LIBRARY"}
         self.facts = facts or {
+            "matter_number": "100001",
+            "client_name": "Alpha Example",
+            "responsible_attorney": "Example Lawyer",
+            "defense_counsel": [],
             "client_emails": ["client@mail.example"],
             "insurer": "Example Mutual",
             "date_of_loss": "01/15/2026",
@@ -190,6 +212,9 @@ class DemandSeat(FakeSeat):
 
     def matter_facts(self, matter_id: str) -> dict[str, Any]:
         return self.facts
+
+    def matter_number(self, matter_id: str) -> str | None:
+        return self.numbers.get(matter_id)
 
 
 def seat_with(docs: list[tuple[str, str, bytes, str]], **kw: Any) -> DemandSeat:
@@ -292,8 +317,31 @@ The following exhibits are enclosed in support of this demand:
 
 None.
 """
-GAP = "# Records and Billing Gap Audit\n\n## A. Referral and order trail\n\n| Provider | Item | Status |\n|---|---|---|\n| Exampletown ER | follow-up | Missing |\n\n## F. Demand Readiness\n\n- Blocks: none\n"
+GAP = (
+    "# Records and Billing Gap Audit\n\n## A. Referral and order trail\n\n| Provider | Item | Status |\n|---|---|---|\n"
+    "| Exampletown ER | follow-up | Missing |\n\n## E. Items\n\n"
+    "| Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n"
+    "|---|---|---|---|---|---|\n"
+    "| Exampletown ER | radiology bill | ER record 1-15-26, p. 1 | Referenced in record | billing | Blocks demand |\n"
+    "| Northfield Imaging | MRI report | ER record 1-15-26, p. 2 | Referenced in record | records | Strengthens demand |\n"
+    "| Ridgeview PT | visit notes | ER record 1-15-26, p. 2 | Referenced in record | records | Housekeeping |\n"
+    "| Exampletown ER | ED physician bill | ER bill 1-15-26, p. 1 | Billing mismatch | billing | Blocks demand |\n"
+    "\n## F. Demand Readiness\n\n- Blocks: items 1 and 4\n"
+)
 DIGEST = "## MEDICAL | ER record 1-15-26 | 01/15/2026 | (/Medical)\nCervical strain (FILE: ER record 1-15-26, p. 1)\n\n## FILES-SEEN\n- ER record 1-15-26 digested\n"
+
+
+def _echo_sections(user: str) -> str:
+    """A repair that changes nothing: every section it was given, back."""
+    out = []
+    for part in user.split("\n\n---\n\n"):
+        if "## SECTION TO REPAIR: " in part:
+            part = part[part.index("## SECTION TO REPAIR: ") :]
+            head, _, body = part.split("\n\n### AUDIT FINDINGS", 1)[0].partition("\n\n")
+            # the model writes each section under its own heading line; the
+            # preamble has none, so it echoes the request's line (draft_run.py)
+            out.append(f"{head}\n\n{body}" if head.endswith(": PREAMBLE") else body)
+    return "\n\n".join(out)
 
 
 class _Stream:
@@ -313,9 +361,10 @@ class _Stream:
 class ScriptedClient:
     """Answers by which prompt the system block carries. Records every call."""
 
-    def __init__(self, draft: str = DRAFT, truncate_digest_once: bool = False) -> None:
+    def __init__(self, draft: str = DRAFT, truncate_digest_once: bool = False, audit: str | None = None) -> None:
         self.calls: list[dict[str, Any]] = []
         self.draft, self.truncate_once = draft, truncate_digest_once
+        self.audit = audit or "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
         self.messages = SimpleNamespace(stream=self._stream, create=self._create)
 
     def _answer(self, params: dict[str, Any]) -> str:
@@ -326,9 +375,9 @@ class ScriptedClient:
                 return "## MEDICAL | partial"
             return DIGEST
         if "AUDIT-PROMPT" in system:
-            return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+            return self.audit
         if "REPAIR-PROMPT" in system:
-            return ""
+            return _echo_sections(params["messages"][-1]["content"])
         if "COMPOSE-PROMPT" in system:
             return self.draft
         if "GAP-PROMPT" in system:
@@ -354,6 +403,6 @@ class ScriptedClient:
         for c in self.calls:
             s = json.dumps(c.get("system"))
             out.append(
-                next((k for k in ("DIGEST", "GAP", "COMPOSE", "AUDIT", "REPAIR") if f"{k}-PROMPT" in s), "VISION")
+                next((k for k in ("DIGEST", "GAP", "REPAIR", "COMPOSE", "AUDIT") if f"{k}-PROMPT" in s), "VISION")
             )
         return out
