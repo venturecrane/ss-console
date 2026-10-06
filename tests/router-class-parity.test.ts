@@ -298,6 +298,7 @@ describe('matter-inbox-router: the file work class', () => {
       'SR 19C',
       'med pay ledger',
       'wage loss',
+      'police report',
     ]) {
       expect(bullet()).toContain(name)
     }
