@@ -37,6 +37,18 @@ false on every row of delivery.json. A hold whose own message says the files
 could not, so the deliverable sat on the firm's matter while the job said it
 had not arrived. `_vendor_name` composes the two fields the way every other
 stage already did.
+
+**A send is recorded BEFORE it starts, too (review 2026-10-06, N12).** The
+`sent` flag was written only after `add_file` returned, and `add_file` is two
+requests: a POST that creates the file's record in the folder, then a
+presigned PUT of the bytes. A lost response or a failed PUT left no trace in
+delivery.json, so a resume re-POSTed a same-name duplicate into the client's
+folder. Now an intent row (`pending`) is written through before the POST and
+turned into `sent` when it returns. A pending name is NEVER sent again by the
+runner: the read-back looks for it by name across the index lag, a 0-byte row
+counts as presence (the POST's placeholder) but not as confirmation, and a
+pending name the read-back cannot find at its size holds (exit 2) for a person
+to read the folder. A send failing outright holds the same way.
 """
 
 from __future__ import annotations
@@ -127,9 +139,10 @@ def _send_missing(
     present: dict[str, int],
     delivery: dict[str, Any],
     delivery_path: Path,
-) -> tuple[int, int] | None:
-    """Send whatever is not already up. `(sent, skipped_known)`, or None when a
-    manifest row's local bytes no longer match its sha and the stage must refuse.
+) -> tuple[tuple[int, int] | None, str]:
+    """Send whatever is not already up. `((sent, skipped_known), "ok")`;
+    `(None, "refused")` when a manifest row's local bytes no longer match its
+    sha; `(None, "held")` when a send failed and its outcome is unknown.
 
     A name this run already sent is NOT sent again: the vendor's list lags, so
     absence from `present` is not evidence the file is missing, and the delivery
@@ -137,10 +150,14 @@ def _send_missing(
     so a crash mid-loop cannot lose the fact that a file is already up.
     """
     sent_before = {str(f.get("name")): f for f in (delivery.get("files") or []) if f.get("sent") or f.get("confirmed")}
+    pending_before = {str(f.get("name")) for f in (delivery.get("files") or []) if f.get("pending")}
 
-    def record(name: str, sha: str, nbytes: int) -> None:
+    def record(name: str, sha: str, nbytes: int, *, pending: bool) -> None:
         files = [f for f in (delivery.get("files") or []) if str(f.get("name")) != name]
-        files.append({"name": name, "sha256": sha, "bytes": nbytes, "sent": True, "confirmed": False})
+        row: dict[str, Any] = {"name": name, "sha256": sha, "bytes": nbytes, "sent": not pending, "confirmed": False}
+        if pending:
+            row["pending"] = True
+        files.append(row)
         delivery["files"] = files
         delivery_path.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
 
@@ -150,7 +167,7 @@ def _send_missing(
         sha = hashlib.sha256(data).hexdigest()
         if sha != m["sha256"]:
             sr.log(f"{m['name']}: local bytes changed since the manifest (sha mismatch); refusing")
-            return None
+            return None, "refused"
         if present.get(m["name"]) == len(data):
             sr.log(f"  present  {m['name']}")
             continue
@@ -159,11 +176,28 @@ def _send_missing(
             skipped_known += 1
             sr.log(f"  sent earlier, not resending  {m['name']} (read-back will confirm)")
             continue
-        r = seat.add_file(matter_id, folder_id, m["name"], data)
-        record(m["name"], sha, len(data))
+        if m["name"] in pending_before:
+            # An earlier attempt started this send and never learned how it
+            # ended: the POST may have created the record and the PUT may or
+            # may not have landed. Re-POSTing would file a second copy, so the
+            # read-back decides by name, and a person decides if it cannot.
+            skipped_known += 1
+            seen = f"yes, {present[m['name']]} bytes" if m["name"] in present else "not yet"
+            sr.log(f"  send started earlier, outcome unknown; not resending  {m['name']} (in the listing: {seen})")
+            continue
+        record(m["name"], sha, len(data), pending=True)
+        try:
+            r = seat.add_file(matter_id, folder_id, m["name"], data)
+        except Exception as exc:  # noqa: BLE001 - a failed send holds with its intent row on disk; resending could duplicate
+            sr.log(
+                f"{m['name']}: the send failed ({str(exc)[:160]}); the file's record may already exist in folder "
+                f"{folder_id}, so it is not retried. Holding for a person to read the folder."
+            )
+            return None, "held"
+        record(m["name"], sha, len(data), pending=False)
         sent += 1
         sr.log(f"  sent     {m['name']} ({len(data)} bytes; file id {(r or {}).get('fileId') or 'pending'})")
-    return sent, skipped_known
+    return (sent, skipped_known), "ok"
 
 
 def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = READBACK_TRIES) -> int:
@@ -205,9 +239,9 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
     if _cannot_say_what_was_sent(sr, delivery, folder_id):
         return 2
     present = _files_in(seat, matter_id, folder_id)
-    counts = _send_missing(sr, seat, matter_id, folder_id, manifest, present, delivery, delivery_path)
+    counts, why = _send_missing(sr, seat, matter_id, folder_id, manifest, present, delivery, delivery_path)
     if counts is None:
-        return 1
+        return 2 if why == "held" else 1
     sent, skipped_known = counts
     already = len(manifest) - sent - skipped_known
     sr.log(f"{sent} file(s) sent, {already} already present, {skipped_known} sent by an earlier attempt")
@@ -229,19 +263,35 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
     # written through for every file it sent, so it covers this attempt and
     # every earlier one.
     up_already = {str(f.get("name")) for f in (delivery.get("files") or []) if f.get("sent") or f.get("confirmed")}
-    delivery["files"] = [
-        {
+    pending = {str(f.get("name")) for f in (delivery.get("files") or []) if f.get("pending")}
+
+    def final_row(m: dict[str, Any]) -> dict[str, Any]:
+        confirmed = present.get(m["name"]) == m["bytes"]
+        row: dict[str, Any] = {
             "name": m["name"],
             "sha256": m["sha256"],
             "bytes": m["bytes"],
-            "sent": m["name"] in up_already,
-            "confirmed": present.get(m["name"]) == m["bytes"],
+            "sent": m["name"] in up_already or (m["name"] in pending and confirmed),
+            "confirmed": confirmed,
         }
-        for m in manifest
-    ]
+        # A pending send stays pending until the folder shows it at size: the
+        # next attempt must keep refusing to resend it.
+        if m["name"] in pending and not confirmed:
+            row["pending"] = True
+        return row
+
+    delivery["files"] = [final_row(m) for m in manifest]
     delivery_path.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
     if short:
         sr.log(f"read-back short after {tries} tries: {', '.join(short)}")
+        unresolved = [n for n in short if n in pending]
+        if unresolved:
+            sr.log(
+                f"{len(unresolved)} of them were sends whose outcome was never learned "
+                f"({', '.join(unresolved)}); the runner will not resend them. A person reads folder {folder_id}: "
+                f"if a file is missing or at 0 bytes, remove any partial copy there and clear its `pending` row "
+                f"in delivery.json so the next attempt sends it once."
+            )
         return 2
     sr.log(f"read-back complete: {len(expected)} file(s) at the expected byte counts in folder {folder_id}")
     return 0

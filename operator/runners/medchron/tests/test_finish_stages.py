@@ -314,6 +314,41 @@ def test_scope_removes_entries_attributed_to_the_co_plaintiff(job_dir: Path, fir
     assert [x["patient"] for x in dropped] == ["Beta Example", "Beta Example"]
 
 
+def test_scope_keeps_an_unlabelled_client_block_after_a_co_plaintiff_block(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """The map prompt writes `<provider> | <heading>` and never requires a
+    patient label, so on a joint matter the client's own blocks are often
+    UNLABELLED. Review 2026-10-06 (N11): leaving the co-client's block ended
+    only on a header containing "(", so every unlabelled client block after a
+    labelled co-client block was deleted, and omitted_coclient.json named only
+    the co-client. Any new block header ends the co-client block."""
+    mixed = (
+        "01/09/2026\nRiverside ED (Beta Example) | Patient Complaints & Limitations\n\n"
+        "Beta Example reported wrist pain. (Exhibit 1 - p. 14)\n"
+        "Example Clinic | Medical Diagnoses\n\n"
+        "Lumbar strain diagnosed. (Exhibit 1 - p. 15)\n"
+        "Example Imaging | Diagnostic Imaging\n\n"
+        "Lumbar MRI unremarkable. (Exhibit 1 - p. 16)"
+    )
+    text, removed = scope_stage.strip_coclient(mixed, "Alpha Example", "Example")
+    assert removed == ["Beta Example"]
+    assert "wrist pain" not in text
+    assert "Lumbar strain diagnosed." in text and "Lumbar MRI unremarkable." in text
+    assert "Example Clinic | Medical Diagnoses" in text
+
+    sr = _sr(job_dir, firm, data_root, Scripted(lambda p, n: _msg("")))
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "entries.md").write_text(mixed)
+    assert scope_stage.run(sr) == 0
+    scoped = (d / "entries_scoped.md").read_text()
+    assert "wrist pain" not in scoped
+    assert "Lumbar strain diagnosed." in scoped and "Lumbar MRI unremarkable." in scoped
+    dropped = json.loads((d / "omitted_coclient.json").read_text())
+    assert [x["patient"] for x in dropped] == ["Beta Example"]
+
+
 def test_scope_refuses_when_clusters_have_no_merge(job_dir: Path, firm: Path, data_root: Path) -> None:
     sr = _sr(job_dir, firm, data_root, Scripted(lambda p, n: _msg("")))
     d = sr.slug_dir / "runs" / "alpha"

@@ -19,6 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .. import llm, prompts
+from ..limits import LimitHold
 from .base import StageRun, append_jsonl
 from .chunking import MIN_YIELD, split_chunk
 from .compose import read_usage
@@ -39,6 +40,8 @@ def _run_part(
             cache_blocks=("system",),
             custom_id=f"repair-{label}",
         )
+    except LimitHold:
+        raise  # a limit stops the stage and reaches the driver as a hold (N10)
     except Exception as exc:  # noqa: BLE001 - a doorway failure on one part is recorded as that part's error and the stage continues with the rest
         sr.log(f"  {label}: {str(exc)[:120]}")
         return None, "error"

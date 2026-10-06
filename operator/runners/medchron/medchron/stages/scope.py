@@ -76,7 +76,12 @@ def strip_coclient(entry_text: str, client_name: str, surname: str) -> tuple[str
         if who:
             dropping, _ = True, removed.append(who)
             continue
-        if "|" in ln and "(" in ln and ln.strip() and not who and _looks_like_header(ln):
+        if "|" in ln and _looks_like_header(ln):
+            # Any new block header ends the co-client's block. The map prompt
+            # does not require a patient label, so an UNLABELLED header is the
+            # client's own block and keeping resumes; requiring "(" here once
+            # deleted every unlabelled client block after a co-client's (N10-12
+            # review 2026-10-06, N11).
             dropping = False
         if not dropping:
             out.append(ln)

@@ -21,6 +21,7 @@ import time
 from typing import Any, Callable
 
 from .. import llm
+from ..limits import LimitHold
 from . import claims as CL
 from .page_text import exhibit_paths
 from .run import AuditPaths
@@ -168,6 +169,8 @@ def run(
                 messages=[{"role": "user", "content": payload}],
                 custom_id=f"repair-{r['key']}",
             ).text.strip()
+        except LimitHold:
+            raise  # a limit stops the stage and reaches the driver as a hold (N10)
         except Exception as exc:  # noqa: BLE001 - one claim's failure is one log row
             logrow(key=r["key"], action="repair", result=f"ERROR: {str(exc)[:150]}")
             skipped += 1

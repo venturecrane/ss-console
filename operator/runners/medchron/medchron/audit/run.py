@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import llm
+from ..limits import LimitHold
 from . import anchors as AN, claims as CL, verify as VF
 from .page_text import PageIndex, exhibit_paths
 from .render import img_block, render
@@ -63,6 +64,21 @@ def control_exhibit(claim_exhibit: int, pdfs: dict[int, Path]) -> int | None:
     mine = institution(pdfs[claim_exhibit])
     others = [o for o in sorted(pdfs) if o != claim_exhibit]
     return next((o for o in others if institution(pdfs[o]) != mine), others[0] if others else None)
+
+
+def run_pool(tasks: list[Callable[[], None]], workers: int) -> None:
+    """Run every task; a LimitHold from any worker stops the pool and is
+    raised to the caller. Queued tasks are cancelled rather than drained, so
+    nothing after the hold reaches the doorway, and no row is written for a
+    claim the hold stopped: its key stays undone and the resume audits it."""
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futures = [ex.submit(t) for t in tasks]
+        try:
+            for f in futures:
+                f.result()
+        except LimitHold:
+            ex.shutdown(wait=True, cancel_futures=True)
+            raise
 
 
 WINDOW_CAP = 12
@@ -126,6 +142,8 @@ class Round:
                 f"Exhibit {ex} p.{c['page_spec'] or '1'}",
                 custom_id=c["key"],
             )
+        except LimitHold:
+            raise  # a limit stops the round; an ERROR row here would read as audited (N10)
         except Exception as exc:  # noqa: BLE001 - an error is a verdict row, never a dead worker
             v = {**ERROR, "note": str(exc)[:200]}
         widened = None
@@ -147,6 +165,8 @@ class Round:
                     )
                     if wv["verdict"] == "SUPPORTED":
                         v, widened = {**wv, "verdict": "SUPPORTED_WIDENED"}, wide
+                except LimitHold:
+                    raise  # a limit stops the round; an ERROR row here would read as audited (N10)
                 except Exception:  # noqa: BLE001 - widen is best-effort; the flag stands
                     pass
         return v, widened
@@ -192,6 +212,8 @@ class Round:
                     custom_id=c["key"] + f"-ctl{other}",
                 )
                 kind, extra = f"control(vs Ex{other})", {"mode": "image"}
+        except LimitHold:
+            raise  # a limit stops the round; an ERROR row here would read as audited (N10)
         except Exception as exc:  # noqa: BLE001 - a control verification raising is recorded as an ERROR verdict for that claim; the audit continues
             cv, kind, extra = {**ERROR, "note": str(exc)[:200]}, f"control(vs Ex{other})", {"mode": self.mode}
         cv.pop("supporting_pages", None)
@@ -248,6 +270,8 @@ class Round:
             CL.append_row(self.paths.results, rec)
             self.report_line(c, v)
             self.control_for(c, pdfs, index, doc_sha, ts)
+        except LimitHold:
+            raise  # a limit stops the round; an ERROR row here would read as audited (N10)
         except Exception as exc:  # noqa: BLE001 - a worker must never kill the pool
             self.log(f"  ER Ex{c['exhibit']} p.{c['page_spec']} worker died: {str(exc)[:120]}")
             CL.append_row(
@@ -290,6 +314,8 @@ class Round:
                         cite_label,
                         custom_id=c["key"],
                     )
+                except LimitHold:
+                    raise  # a limit stops the round; an ERROR row here would read as audited (N10)
                 except Exception as exc:  # noqa: BLE001 - a text verification raising is recorded as an ERROR verdict for that claim; the audit continues
                     tv = {**ERROR, "note": str(exc)[:200], "supporting_pages": []}
                 rec = {
@@ -352,6 +378,8 @@ class Round:
                             f"  -- REVERSE Ex{ex} p.{c['page_spec'] or '1'}: {'agree' if agree else '!! DISAGREE'}"
                         )
                 self.control_for(c, pdfs, index, doc_sha, ts)
+            except LimitHold:
+                raise  # a limit stops the round; an ERROR row here would read as audited (N10)
             except Exception as exc:  # noqa: BLE001 - one claim's worker dying is recorded as that claim's ERROR row; the remaining claims still run
                 self.log(f"  ER Ex{ex} p.{c['page_spec']} worker died: {str(exc)[:120]}")
                 CL.append_row(
@@ -495,10 +523,11 @@ class Round:
             (lambda cl=cl: self.run_cluster(cl, pdfs, index, doc_sha, ts)) for cl in clusters
         ]
         tasks += [(lambda c=c: self.run_image(c, pdfs, index, doc_sha, ts)) for c in image_claims]
-        with ThreadPoolExecutor(max_workers=self.workers) as ex:
-            list(ex.map(lambda t: t(), tasks))
-        if index is not None:
-            index.close()
+        try:
+            run_pool(tasks, self.workers)
+        finally:
+            if index is not None:
+                index.close()
         return self.report()
 
     def report(self) -> int:
