@@ -522,7 +522,7 @@ class Round:
                 f"{len(image_claims)} | " + ", ".join(f"{k}={v}" for k, v in sorted(elig.items()))
             )
         self.run_tasks(clusters, image_claims, pdfs, index, doc_sha, ts)
-        return self.report()
+        return self.report({c["key"] for c in claims})
 
     def run_tasks(
         self,
@@ -545,9 +545,13 @@ class Round:
             if index is not None:
                 index.close()
 
-    def report(self) -> int:
+    def report(self, live_keys: set[str]) -> int:
         allr = CL.read_rows(self.paths.results)
-        real = [r for r in allr if r.get("kind") == "real"]
+        # The round's answer is the LIVE claims' latest verdicts. Counting every
+        # real row ever written kept a repaired claim's old flag alive, so after
+        # one repair no round could ever report clean and the loop always ran to
+        # the cap (2026-10-07).
+        real = list(CL.latest_real(allr, live_keys).values())
         ctl = [r for r in allr if str(r.get("kind", "")).startswith("control")]
         rev = [r for r in allr if r.get("kind") == "reverse-control"]
         tally: dict[str, int] = {}

@@ -24,7 +24,11 @@ Peer gating, per verb:
                            runner daemon to re-run a FAILED job from the stages
                            its state file has not finished, instead of paying for
                            a fresh one. Requires a reason and the stages the fix
-                           touched; only a person knows a defect is fixed.
+                           touched; only a person knows a defect is fixed. Also
+                           takes a job HELD at the final audit gate (reason
+                           `audit coverage: ...`), which re-enters at the audit
+                           stage on its cached verdicts; every other hold stays
+                           refused.
 
 Every writing verb pins the audit type its transition maps to (``AUDIT_TYPE``),
 so none can forge another row. Audit rows carry counts, digests and ids —
@@ -77,6 +81,23 @@ VERBS = (
 #: (the raw `covered_json` plus both parsed keys), so twenty rows of them is
 #: hundreds of kilobytes landing in a client-facing turn on a 1 vCPU / 1GB seat.
 #: The arrays are what an update needs, and an update asks by matter or by job.
+# The reason the runner records for a hold at the final audit gate: the audit
+# stage's exit-1 text in the runner's `dag.py`, which the daemon passes through
+# as the row's reason. Pinned there by `test_audit_gate_hold_reason_is_the_one_the_broker_resumes`.
+AUDIT_GATE_HOLD_PREFIX = "audit coverage:"
+
+
+def _audit_gate_hold(row: dict[str, Any]) -> bool:
+    """A job held at the final audit gate, which a resume re-enters (2026-10-07).
+
+    That hold is OURS: the loop left a claim it exists to weaken or drop, which
+    is a pipeline defect, and once the fix ships the audit stage re-runs from its
+    cached verdicts for the price of the handful of claims still open. Every
+    other hold stays out: a refusal (`refused: ...`) needs the firm's decision,
+    a limit hold lifts through the limit, and a seat-pause hold self-resumes."""
+    return row.get("state") == "held" and str(row.get("reason") or "").startswith(AUDIT_GATE_HOLD_PREFIX)
+
+
 _COVERAGE_KEYS = ("covered_json", "covered_document_ids", "uncovered_document_ids")
 
 
@@ -261,7 +282,8 @@ class MedchronVerbs:
         raise ValueError(f"unsupported medchron action: {action}")
 
     def _resume(self, request: dict[str, Any]) -> dict[str, Any]:
-        """Ask the runner daemon to re-run a FAILED job from where it stopped.
+        """Ask the runner daemon to re-run a FAILED job, or one HELD at the final
+        audit gate (`_audit_gate_hold`), from where it stopped.
 
         This writes a MARKER into the queue dir and nothing else. It cannot do
         the re-queue itself: `jobs/` is root:medchron 0710 and this process is
@@ -274,7 +296,8 @@ class MedchronVerbs:
 
         The ledger row is NOT moved here. The daemon records `running` when it
         actually starts, so a marker that never gets resolved (the job dir was
-        wiped) leaves the row saying exactly what is true: still failed.
+        wiped) leaves the row saying exactly what is true: still failed (or
+        still held).
         """
         job_id = str(request.get("job_id") or "")
         reason = str(request.get("reason") or "").strip()
@@ -292,8 +315,10 @@ class MedchronVerbs:
         row = self._db.read(job_id)
         if row is None:
             raise ValueError(f"no such job {job_id}")
-        if row["state"] != "failed":
-            raise ValueError(f"job {job_id} is {row['state']}, not failed; only a failed job resumes")
+        if row["state"] != "failed" and not _audit_gate_hold(row):
+            raise ValueError(
+                f"job {job_id} is {row['state']}, not failed; only a failed job or one held at the audit gate resumes"
+            )
         # The refusal a person cannot reasonably work out alone: a LATER job for
         # the same work may already have delivered it. `active_duplicate` does
         # not cover this -- it exempts terminal rows and is only called on

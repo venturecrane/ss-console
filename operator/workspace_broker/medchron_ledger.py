@@ -30,7 +30,8 @@ States and the audit type each transition pins:
     failed     MEDCHRON_JOB_FAILED
 
 Transitions are monotonic except held -> running (a seat pause lifting, or a
-hold the firm resolved and resubmitted through a fresh run of the same job) and
+hold the firm resolved and resubmitted through a fresh run of the same job, or
+an audit-gate hold a person resumes through `medchron_job_resume`) and
 failed -> running (a resume, ss#2903: the defect was fixed and the stages the
 state file already finished are still good). `delivered` remains a dead end.
 """

@@ -372,12 +372,27 @@ comes back from `medchron_job_status`, never from the wake.
    refuse an agent-drafted dollar figure on sight (step 6), and cost is a
    question for the job's console row. The metered unit is safe to quote plainly
    because the firm authored the allowance in it.
-4. **Held:** no ledger entry, no task. Reply to the requester with the hold reason's
+4. **Held:** no ledger entry, no task. A hold goes to **the requester only, by
+   reply** on the request's own thread, through the seat's ordinary mail posture.
+   Never email the responsible attorney, or anyone else, about a hold, and never
+   open a task for one: the requester asked for the work, and the requester is
+   who hears that it stopped. Reply with the hold reason's
    substance (read from the status row in step 1; the wake carries only the
    stage) - which limit or gate held it and what would resume it. A hold is the
    product working, not an apology. The runner's reason begins with the name of
    the setting that held it; say what it means in the firm's words, and name
    pages where the reason gives a page count:
+   - `audit coverage:` - the final citation check. **This hold is SMD's to clear,
+     never the firm's to decide.** The runner checks every sentence against the
+     page it cites, and a sentence the record does not fully support (a
+     `PARTIAL`, an `UNSUPPORTED`) is the runner's job to weaken to what the page
+     says or remove; it is not a question for the attorney and is never framed as
+     one. Do not list the sentences, quote a verdict, or ask anyone to review,
+     confirm, or determine anything. Tell the requester the package stopped at
+     its final quality check before anything was filed on the matter, that
+     nothing is needed from the firm, and that SMD is finishing it; then surface
+     the job id to SMD through the seat's ordinary operations route. SMD resumes
+     the job from that check; the stages before it are not paid for again.
    - `per_job_cap_usd` - the job's own cost cap. A bigger matter than the cap
      was sized for; SMD raises it or the package is split.
    - `chronology_package_page_allowance_per_month` - the seat's cycle page
@@ -455,13 +470,17 @@ hermes run medical-chronology-maintainer --action deliver
 
 ## Escalation
 
-Surface to the responsible attorney (read from `personResponsibleStaffId`), through
-the review task, when: the delivered chronology names documents it could not read;
+Surface to the responsible attorney (read from `personResponsibleStaffId`) only
+through the review task on a DELIVERED package, never by email, when: the
+delivered chronology names documents it could not read;
 two records conflict on a material date, provider, or diagnosis; a flagged
 treatment gap or a referenced-but-absent record needs attention. Surface to SMD when
 a ledger entry cannot be confirmed written or an update has no covered set to
-measure against. Fail closed: surface and ask; never fabricate, never assert an
-unconfirmed write, never characterize.
+measure against, and when a job holds at the final audit gate. A held or failed
+job reaches the attorney by no route at all: the requester hears it by reply, SMD
+through operations. A citation the audit could not fully support is never an
+attorney determination; the runner weakens or drops it. Fail closed: surface and
+ask; never fabricate, never assert an unconfirmed write, never characterize.
 
 ## References
 
