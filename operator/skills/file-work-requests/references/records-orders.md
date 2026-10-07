@@ -93,9 +93,15 @@ vendor's directory, and prepares the orders. It never orders.
 
 Read the result:
 
-- `orders`: each `ready` one goes to `place_records_order` unchanged, exactly as
-  in the table above; put each `[act ...]` line in the reply character for
-  character. Ten facilities at most to an order, so a long audit can be two lines.
+- `orders`: at most ONE order per matter, so the reply carries one `[act ...]`
+  line and her one yes places it. A `ready` order goes to `place_records_order`
+  unchanged, exactly as in the table above; put its line in the reply character
+  for character.
+- `merged`: say each line as written ("A and B are one location at the vendor
+  (C); ordered once"), so she knows why the order has fewer facilities than
+  the audit has providers.
+- `after_this_order`: an order holds ten facilities; name these as what is
+  ordered next, once this order is placed.
 - `would_order`: what will be ordered, one line per custodian with its record
   types and dates. Always show it, even when nothing is ready, so she sees what
   the audit turns into.

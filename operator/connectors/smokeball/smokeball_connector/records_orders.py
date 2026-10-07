@@ -143,6 +143,10 @@ def service_range(spec: dict[str, Any], default: dict[str, Any], today: date) ->
         )
     if start > end or end > today:
         raise OrderRefused("the date range must start before it ends and end no later than today. Nothing was ordered.")
+    # no record request reaches further back than MAX_YEARS, however it was asked
+    start = max(start, _years_back(today, MAX_YEARS))
+    if start > end:
+        raise OrderRefused(f"the date range ends more than {MAX_YEARS} years ago. Nothing was ordered.")
     return start.isoformat(), end.isoformat()
 
 
@@ -276,7 +280,7 @@ def resolve_facility(yc: Any, facility: dict[str, Any]) -> tuple[dict[str, Any] 
     found = [c for c in (_candidate(r) for r in rows) if c is not None]
     wanted = str(facility.get("custodian_id") or "").strip()
     if wanted:
-        if not _CUSTODIAN_ID.match(wanted):
+        if not _CUSTODIAN_ID.fullmatch(wanted):
             raise OrderRefused(f"custodian_id {wanted!r} is not a vendor custodian id. Nothing was ordered.")
         found = [c for c in found if c["custodian_id"] == wanted]
     if len(found) == 1:

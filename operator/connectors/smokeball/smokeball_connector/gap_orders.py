@@ -42,17 +42,29 @@ AUDIT_PREFIX = "Gap Audit"
 ITEM_HEADER = ("item", "provider", "what's missing")
 
 #: A request that is not an order: someone must ask, confirm or decide first.
+#: Anywhere in the request ("Identify PT provider; records..." is a question first).
 _NOT_AN_ORDER = re.compile(
-    r"^\s*(ask|confirm|identify|clarify|update medicals|update the medicals|follow[- ]?up for|written confirmation|"
-    r"none\b|attorney|verify)|medicals tab",
+    r"\b(ask|confirm|identify|clarify|verify|written confirmation|update (the )?medicals|medicals tab|attorney)\b"
+    r"|^\s*none\b",
     re.I,
 )
-#: Addressed to someone who is not a medical custodian.
+#: Addressed to someone who is not a medical custodian, in the provider OR the
+#: request ("Med pay ledger" is a payer's paper however it is worded). MediCal
+#: is matched case-sensitively or with a separator: "medical" is a provider word.
 _NOT_A_PROVIDER = re.compile(
-    r"medicare|\bmedi[- ]cal\b|dhcs|cms\b|msprc|noridian|health ?plan|healthplan|insurance|insurer|casualty|"
-    r"blue shield|blue cross|molina|med-?pay|subrogation|recovery services|claims administrat|optum|anthem|aetna|cigna|unitedhealth|humana|tricare|"
-    r"\bloya\b|carrier|\blegal\b|\blaw\b|llp\b|attorney|counsel|lien ?holder|funding|kaiser permanente health plan",
+    r"medicare|medicaid|\bmedi[- ]cal\b|(?-i:\bMediCal\b|\bMEDICAL\s*\(DHCS\))|\bdhcs\b|\bcms\b|msprc|noridian|"
+    r"health ?plan|healthplan|health ?net\b|insurance|insurer|casualty|indemnity|underwriter|"
+    r"workers'? ?comp|work ?comp|\bwcab\b|carrier|adjuster|claims? (administrat|adjust)|third[- ]party administrat|"
+    r"blue shield|blue cross|molina|med[- ]?pay|subrogation|recovery services|optum|anthem|aetna|cigna|"
+    r"unitedhealth|humana|tricare|geico|allstate|state farm|progressive|farmers|mercury insurance|\bloya\b|"
+    r"\blegal\b|\blaw\b|\bllp\b|attorney|\bcounsel\b|lien ?holder|funding",
     re.I,
+)
+#: Counseling and psychotherapy are excluded ON PURPOSE: their notes need an
+#: authorization of their own (HIPAA's psychotherapy-notes rule), not the
+#: standard records release this order sends, so the firm requests them itself.
+_COUNSELING = re.compile(
+    r"counsel(ing|ling|or)|psychotherap|psychiatr|behavioral health|mental health|therapist\b", re.I
 )
 #: The audit names no provider.
 _UNNAMED = re.compile(
@@ -139,8 +151,10 @@ def classify(row: dict[str, str]) -> str | None:
         return "a treatment-timeline fact, not a request"
     if _UNNAMED.search(row["provider"]):
         return "the audit does not name the provider"
-    if _NOT_A_PROVIDER.search(row["provider"]):
+    if _NOT_A_PROVIDER.search(row["provider"]) or _NOT_A_PROVIDER.search(row["request"]):
         return "addressed to a payer, carrier, program or law firm, not a medical custodian"
+    if _COUNSELING.search(row["provider"]):
+        return "counseling or psychotherapy records need their own authorization; the firm requests them itself"
     if _NOT_AN_ORDER.search(row["request"]):
         return "the audit asks for a question or a confirmation first"
     if _PAYER_ASK.search(row["request"]) and not re.search(r"record|itemiz|image|film", row["request"], re.I):
@@ -182,9 +196,20 @@ def types_for(text: str) -> list[str]:
     return list(dict.fromkeys(out)) or ["Medical", "Billing"]
 
 
+_BIRTH = re.compile(r"\b(dob|d\.o\.b|birth|born)\b", re.I)
+
+
 def _dates(text: str, today: date) -> list[date]:
-    found = []
-    for m, d, y in _DATE.findall(text):
+    """Service dates the text names: never a date of birth (one written within
+    a few words of DOB/birth/born), never a future date, never older than
+    MAX_YEARS."""
+    found, prev = [], 0
+    for match in _DATE.finditer(text):
+        # the words just before THIS date, never past the previous date
+        lead, prev = text[max(prev, match.start() - 16) : match.start()], match.end()
+        if _BIRTH.search(lead):
+            continue
+        m, d, y = match.groups()
         year = int(y) + (2000 if len(y) == 2 else 0)
         try:
             when = date(year, int(m), int(d))
@@ -202,15 +227,21 @@ def _back(when: date, years: int) -> date:
         return when.replace(year=when.year - years, day=28)
 
 
+_RANK = {"blocks": 0, "strengthens": 1, "housekeeping": 2}
+
+
 def merge_same_custodian(facilities: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Two audit providers that resolve to one directory location are one
-    facility on the order: the union of their record types, the wider range."""
+    facility on the order: the union of their record types, the wider range,
+    and both names kept so the reply can say they were merged."""
     out: dict[str, dict[str, Any]] = {}
     for f in facilities:
         have = out.get(f["custodian_id"])
         if have is None:
-            out[f["custodian_id"]] = dict(f)
+            out[f["custodian_id"]] = {**f, "providers": list(f.get("providers") or [])}
             continue
+        have["providers"] = have["providers"] + list(f.get("providers") or [])
+        have["rank"] = min(have.get("rank", 3), f.get("rank", 3))
         have["record_types"] = list(dict.fromkeys(have["record_types"] + f["record_types"]))
         have["service_start"] = min(have["service_start"], f["service_start"])
         have["service_end"] = max(have["service_end"], f["service_end"])
@@ -218,8 +249,9 @@ def merge_same_custodian(facilities: list[dict[str, Any]]) -> list[dict[str, Any
 
 
 def first_date(rows: list[dict[str, str]], today: date) -> date | None:
-    """The earliest date any non-look-back row of the audit names: the start of
-    the treatment the file documents (a look-back row reaches before it)."""
+    """The earliest date any ORDERABLE, non-look-back row names: the start of
+    the treatment the file documents. Pass only orderable rows: a payer's or a
+    timeline row's dates are not treatment (a look-back row reaches before it)."""
     found = [
         d
         for r in rows
@@ -263,6 +295,9 @@ def group(rows: list[dict[str, str]], today: date, file_start: date | None = Non
             g["basis"] = "its rows name no date; from the first treatment date the audit names"
         else:
             g["service_start"], g["basis"] = None, "its rows name no date"
+        floor = _back(today, MAX_YEARS).isoformat()
+        if g["service_start"] is not None and g["service_start"] < floor:
+            g["service_start"], g["basis"] = floor, g["basis"] + f"; held to {MAX_YEARS} years back"
         g["service_end"] = today.isoformat()
         out.append(g)
     return out
@@ -311,15 +346,24 @@ def medicals_contacts(client: Any, matter_id: str) -> list[dict[str, str]]:
     return out
 
 
+def client_home(client: Any, matter_id: str) -> tuple[str, ...]:
+    """The client's own ZIP and city: on every record about her, so never
+    evidence of where a provider is. Empty when the client cannot be read."""
+    from .records_patient import read_matter_and_patient
+
+    try:
+        _matter, facts = read_matter_and_patient(client, matter_id)
+    except Exception:  # noqa: BLE001 - no client read means nothing to exclude, not a refusal
+        return ()
+    return tuple(v for v in (str(facts.address.get("zip") or "")[:5], str(facts.address.get("city") or "")) if v)
+
+
 def _hint(name: str, contacts: list[dict[str, str]]) -> dict[str, str] | None:
-    want = set(_key(name).split()) - {"inc", "md", "the", "of", "and", "medical", "group", "center"}
-    best, score = None, 0.0
-    for c in contacts:
-        have = set(_key(c["name"]).split())
-        s = len(want & have) / max(1, len(want))
-        if s > score:
-            best, score = c, s
-    return best if score >= 0.6 else None
+    """The Medicals-tab contact that is this provider: every distinctive word
+    of the name in the contact's (generic words like "hospital" never count),
+    and exactly one such contact."""
+    hits = [c for c in contacts if gap_locate.names_match(name, c["name"])]
+    return hits[0] if len(hits) == 1 else None
 
 
 def _search_terms(name: str) -> list[str]:
@@ -344,7 +388,8 @@ def one_question(questions: list[dict[str, Any]]) -> str | None:
         names = ", ".join(unknown[:-1]) + (" and " if len(unknown) > 1 else "") + unknown[-1]
         verb = "is" if len(unknown) == 1 else "are"
         parts.append(
-            f"{names} {verb} not in the vendor's directory (send the address and it is added as a new custodian)"
+            f"{names} {verb} not in the vendor's directory at any address the file gives (send the address and "
+            "it is ordered there)"
         )
     for q in several[:4]:
         opts = " or ".join(f"{c['name']}, {c['address']}" for c in q["candidates"][:3])
@@ -372,8 +417,9 @@ def build(
     for r in rows:
         why = classify(r)
         (skipped.append({"item": int(r["item"]), "provider": r["provider"], "why": why}) if why else kept.append(r))
-    providers = group(kept, today, first_date(rows, today))
+    providers = group(kept, today, first_date(kept, today))
     hints = medicals_contacts(client, matter_id)
+    home = client_home(client, matter_id)
     from .library import list_matter_files
 
     files = list_matter_files(client, matter_id)
@@ -385,7 +431,7 @@ def build(
             p["name"],
             _search_terms(p["name"]),
             _hint(p["name"], hints),
-            lambda p=p: gap_locate.evidence(client, matter_id, files, p["rows"], p["name"]),
+            lambda p=p: gap_locate.evidence(client, matter_id, files, p["rows"], p["name"], exclude=home),
             context,
             log,
         )
@@ -402,7 +448,7 @@ def build(
                     "items": p["items"],
                     "reason": "several locations in the vendor's directory match"
                     if res["outcome"] == "ambiguous"
-                    else "no location in the vendor's directory matches",
+                    else "no location in the vendor's directory matches at an address the file gives",
                     "candidates": res["candidates"],
                 }
             )
@@ -411,6 +457,8 @@ def build(
         p["location"] = loc
         facilities.append(
             {
+                "rank": min(_RANK.get(r["priority"].split()[0].casefold(), 3) for r in p["rows"]),
+                "providers": [p["name"]],
                 # the search that found it, plus the id: prepare re-reads the
                 # directory and keeps exactly this location
                 "name": res["term"],
@@ -422,6 +470,16 @@ def build(
             }
         )
     facilities = merge_same_custodian(facilities)
+    merged = [
+        f"{' and '.join(f['providers'])} are one location at the vendor ({next(p['location']['name'] for p in providers if p.get('location') and p['location']['custodian_id'] == f['custodian_id'])}); ordered once"
+        for f in facilities
+        if len(f["providers"]) > 1
+    ]
+    # ONE order, so ONE [act] line and one yes per matter: the facilities whose
+    # rows block the demand first; any beyond the order's limit wait for the next
+    facilities.sort(key=lambda f: f["rank"])
+    later = [f["providers"][0] for f in facilities[MAX_LOCATIONS:]]
+    facilities = [{k: v for k, v in f.items() if k not in ("rank", "providers")} for f in facilities[:MAX_LOCATIONS]]
     would_order = [
         {
             "custodian": p["location"]["name"],
@@ -435,10 +493,10 @@ def build(
         if p.get("location")
     ]
     orders = []
-    for i in range(0, len(facilities), MAX_LOCATIONS):
+    if facilities:
         request = {
             "matter_id": matter_id,
-            "facilities": facilities[i : i + MAX_LOCATIONS],
+            "facilities": facilities,
             "order_by_email": order_by_email,
             "vendor_name": vendor_name,
         }
@@ -457,10 +515,13 @@ def build(
         ],
         "counts": {o: sum(1 for p in providers if p["outcome"] == o) for o in ("matched", "ambiguous", "no_match")},
         "would_order": would_order,
+        "merged": merged,
+        "after_this_order": later,
         "orders": orders,
         "questions": questions,
         "question": one_question(questions),
-        "next_step": "Pass each ready order to place_records_order unchanged (one [act] line each) and ask "
-        "`question` as written, once. On missing_client_facts, say what the client contact lacks and list "
-        "would_order so she sees what will be ordered once it is fixed. Nothing has been ordered.",
+        "next_step": "Pass the ready order to place_records_order unchanged (its one [act] line goes in the "
+        "reply) and ask `question` as written, once. Say each `merged` line. Name `after_this_order` as what is "
+        "ordered next, once this one is placed. On missing_client_facts, say what the client contact lacks and "
+        "list would_order so she sees what will be ordered once it is fixed. Nothing has been ordered.",
     }

@@ -109,7 +109,12 @@ def _files_for(files: list[dict[str, Any]], cited: list[str], name: str) -> list
 
 
 def evidence(
-    client: Any, matter_id: str, files: list[dict[str, Any]], rows: list[dict[str, str]], name: str
+    client: Any,
+    matter_id: str,
+    files: list[dict[str, Any]],
+    rows: list[dict[str, str]],
+    name: str,
+    exclude: tuple[str, ...] = (),
 ) -> dict[str, list[str]]:
     """ZIPs, cities and phones the file's own documents give for this provider,
     most frequent first. Reads at most MAX_DOCS documents; a document that will
@@ -140,22 +145,48 @@ def evidence(
                 cities[city.strip().split("  ")[-1].strip()] += 1
             for a, b, c in _PHONE.findall(span):
                 phones[f"{a}{b}{c}"] += 1
+    # the client's own ZIP and city (on every record about her) place the
+    # client, never the provider
+    skip = {e.casefold() for e in exclude if e}
     return {
-        "zips": [z for z, _ in zips.most_common(5)],
-        "cities": [c for c, _ in cities.most_common(5)],
+        "zips": [z for z, _ in zips.most_common(5) if z.casefold() not in skip],
+        "cities": [c for c, _ in cities.most_common(5) if c.casefold() not in skip],
         "phones": [p for p, _ in phones.most_common(5)],
     }
 
 
+def distinctive(name: str) -> list[str]:
+    """The words that name THIS custodian: no generic word ("medical",
+    "hospital"), no department or time word ("radiology", "prior")."""
+    return [w for w in _norm(name).split() if w not in GENERIC and w not in QUALIFIERS and len(w) > 1]
+
+
 def names_match(name: str, candidate: str) -> bool:
-    """The candidate's NAME carries the provider's distinctive words (at least
-    half of them, and the first): a directory answer that only shares an
-    address or a generic word ("Healthcare") is not this provider."""
-    want = [w for w in _norm(name).split() if w not in GENERIC and w not in QUALIFIERS and len(w) > 2]
+    """The candidate's NAME carries EVERY distinctive word of the provider's: a
+    directory answer that shares only an address, a generic word
+    ("Healthcare") or one word of a two-word name ("Saint Example" is not
+    "Saint Other") is not this provider."""
+    want = distinctive(name)
     have = set(_norm(candidate).split())
-    if not want:
+    return bool(want) and all(w in have for w in want)
+
+
+#: A facility word after the custodian's words, in an address: "... SAINT
+#: EXAMPLE HOSPITAL", never a street ("Example St").
+_FACILITY_AFTER = r"(hospital|medical center|medical centre|health center|campus)"
+
+
+def department_inside(name: str, candidate: dict[str, Any]) -> bool:
+    """A department entity that bills inside the named facility (a radiology
+    group whose address line is the hospital's): its own name is a department,
+    and its address names the provider followed by a facility word."""
+    if not DEPARTMENT_WORDS.search(candidate["name"]):
         return False
-    return want[0] in have and sum(w in have for w in want) * 2 >= len(want)
+    want = distinctive(name)
+    addr = _norm(candidate["address"])
+    return (
+        bool(want) and re.search(r"\b" + r"\s+".join(map(re.escape, want)) + r"\s+" + _FACILITY_AFTER, addr) is not None
+    )
 
 
 def same_place(found: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -174,12 +205,7 @@ def _search(yc: Any, terms: list[str], zip_: str | None, name: str = "") -> tupl
         found = [c for c in (_candidate(r) for r in yc.get_locations(term, zip_)) if c is not None]
         # a department entity (the radiology group that bills inside the
         # hospital) may carry the hospital's name in its address instead
-        found = [
-            c
-            for c in found
-            if names_match(name or terms[0], c["name"])
-            or (DEPARTMENT_WORDS.search(c["name"]) and names_match(name or terms[0], c["name"] + " " + c["address"]))
-        ]
+        found = [c for c in found if names_match(name or terms[0], c["name"]) or department_inside(name or terms[0], c)]
         if found:
             return term, found
     return terms[0], []
@@ -229,13 +255,13 @@ def resolve(
     term, found = _search(yc, terms, None, name)
     found = same_place(found)
     where: dict[str, tuple[str, str | None]] = {c["custodian_id"]: (term, None) for c in found}
-    if len(found) == 1:
-        log(f"  {name}: 1 by name")
-        return {"outcome": "matched", "location": found[0], "term": term, "zip": None, "evidence": False}
+    # even one directory hit is accepted only where the file places the provider
     ev = evidence_fn()
     zips = list(dict.fromkeys(([hint["zip"]] if hint and hint.get("zip") else []) + ev.get("zips", [])))
     cities = list(dict.fromkeys(([hint["city"]] if hint and hint.get("city") else []) + ev.get("cities", [])))
     pool = _local(found, zips, cities)
+    if not pool and len(found) == 1:
+        pool = list(found)
     for z in zips[:3]:  # the directory searched at the file's own ZIP
         if len(department(pool, context)) == 1:
             break
@@ -253,6 +279,9 @@ def resolve(
             same = [c for c in pool if re.match(rf"\s*{key.group(1)}\s+{re.escape(key.group(2))}", c["address"], re.I)]
             pool = same if len(same) == 1 else pool
     log(f"  {name}: {len(found)} by name, {len(pool)} after the file's address evidence {zips[:3]}")
+    if len(pool) == 1 and not _local(pool, zips, cities):
+        # the only candidate is somewhere the file never places this provider
+        return {"outcome": "ambiguous", "candidates": pool, "reason": "the file does not place it at that address"}
     if len(pool) == 1:
         t, z = where[pool[0]["custodian_id"]]
         return {"outcome": "matched", "location": pool[0], "term": t, "zip": z, "evidence": True}

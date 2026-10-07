@@ -64,7 +64,7 @@ MAX_CUSTODIAN_FEE = 10_000.0
 _UUID = re.compile(r"^[0-9a-fA-F-]{32,40}$")
 _FILE_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 #: The vendor's directory id, an opaque token (digits, neo_/npi_ prefixed, or a UUID).
-_CUSTODIAN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+_CUSTODIAN = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9_-]{0,63}\Z")
 _LAST4 = re.compile(r"^\d{4}$")
 _REF = re.compile(r"^[0-9a-f]{32}$")
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
