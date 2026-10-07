@@ -147,7 +147,10 @@ reply for a failed job in any case.
      firm's house format and ready for attorney review. Say that the demand figure,
      any statement that damages exceed the limits, and what the firm does on expiry are
      reserved to the attorney and are marked in the draft, and that nothing has been
-     sent to anyone outside the firm.
+     sent to anyone outside the firm. End with the next step the gap audit opens, as
+     one sentence: "Reply 'order the missing records' and I'll prepare the records
+     orders from the gap audit for your OK." (that reply routes to the records-orders
+     gap path; nothing is ordered until she answers the order line).
    - **delivered with a coverage report**: the file cannot carry a demand yet; the
      coverage report filed in the matter names what is missing or unreadable, and no
      demand was drafted. Say what the file needs in the report's own terms, never what
