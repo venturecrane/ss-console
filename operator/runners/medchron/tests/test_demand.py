@@ -1267,7 +1267,7 @@ def test_g2_never_reads_a_policy_copy_or_its_boilerplate(tmp_path, pricing):
             "increase in indemnity. Claim number CLM-0001. Our insured."
         ]
     )
-    docs = standard_docs() + [("d30", "24-25 Workers Comp Policy copy.pdf", policy, "f-corr")]
+    docs = standard_docs() + [("d30", "Policy copy.pdf", policy, "f-corr")]
     _r, v, _ = _run(tmp_path, pricing, seat_with(docs), ScriptedClient())
     assert v.coverage_report is False, v.reason
 
