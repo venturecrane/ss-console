@@ -347,6 +347,8 @@ class _Writer:
         para, _ = self._para("SMD Body")
         para.paragraph_format.left_indent = Inches(0.5)
         para.paragraph_format.first_line_indent = Inches(-0.5)
+        if self.rules.enforce_layout and self.rules.body_line_spacing != 1.0:
+            para.paragraph_format.line_spacing = self.rules.body_line_spacing
         self._font(para.add_run(f"{block.label}\t"))
         self._runs(para, block.runs)
 

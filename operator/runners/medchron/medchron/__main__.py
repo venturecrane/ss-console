@@ -68,6 +68,33 @@ def _cmd_demand(args: argparse.Namespace) -> int:
     return {"delivered": 0, "held": 3, "failed": 1}.get(v.outcome, 1)
 
 
+def _cmd_draft(args: argparse.Namespace) -> int:
+    """One drafting job (``drafting/run.py``). Same verdict contract as
+    ``demand``: the JSON list goes to verdict.json and stdout, progress to
+    stderr. ``--redo`` (a resume request's stages) reopens those stages."""
+    import json
+
+    from .drafting import firm as drafting_firm, job as drafting_job
+    from .drafting.run import DraftingRun
+
+    try:
+        r = DraftingRun(
+            Path(args.job_dir), inputs_dir=args.inputs, pricing=args.pricing, log=lambda m: print(m, file=sys.stderr)
+        )
+    except (drafting_firm.DraftingConfigError, drafting_job.DraftingJobError) as exc:
+        print(f"medchron: {exc}", file=sys.stderr)
+        return 2
+    for stage in (x.strip() for x in (args.redo or "").split(",") if x.strip()):
+        st = r._state()
+        if st.pop(stage, None) is not None:
+            r._put(stage, {"status": "reopened"})
+    v = r.run()
+    payload = json.dumps(v.to_list())
+    verdict_mod.write(Path(args.job_dir), payload)
+    print(payload)
+    return {"delivered": 0, "held": 3, "failed": 1}.get(v.outcome, 1)
+
+
 def _exit_code(outcomes) -> int:
     worst = {"delivered": 0, "dry_run": 0, "rehearsed": 0, "held": 3, "refused": 4, "failed": 1}
     return max(worst.get(o.outcome, 1) for o in outcomes) if outcomes else 1
@@ -178,6 +205,12 @@ def main(argv: list[str] | None = None) -> int:
     dm.add_argument("--inputs", default=None, help="the demand firm-inputs dir (default: MEDCHRON_DEMAND_INPUTS)")
     dm.add_argument("--pricing", default=None)
     dm.set_defaults(fn=_cmd_demand)
+    dr = sub.add_parser("draft", help="run one drafting job (one document of one class) from pull to read-back")
+    dr.add_argument("job_dir")
+    dr.add_argument("--inputs", default=None, help="the drafting firm-inputs dir (default: MEDCHRON_DRAFTING_INPUTS)")
+    dr.add_argument("--pricing", default=None)
+    dr.add_argument("--redo", default="", help="comma-separated stages to reopen (a resume request)")
+    dr.set_defaults(fn=_cmd_draft)
     d = sub.add_parser("dag", help="print the stage order and validate it")
     d.set_defaults(fn=_cmd_dag)
     v = sub.add_parser("validate-config", help="validate a firm config file")

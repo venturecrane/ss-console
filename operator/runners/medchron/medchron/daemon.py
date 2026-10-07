@@ -628,6 +628,7 @@ def main(argv: list[str] | None = None) -> int:
     from .demand_lane import start_lane  # its own slot: a demand never waits on a chronology, nor the reverse
 
     start_lane(d, stop=lambda: stopped["flag"], poll_seconds=poll)
+    __import__("medchron.drafting_lane", fromlist=["start_lane"]).start_lane(d, stop=lambda: stopped["flag"], poll_seconds=poll)
     d.run_forever(stop=lambda: stopped["flag"], poll_seconds=poll)
     return 0
 
