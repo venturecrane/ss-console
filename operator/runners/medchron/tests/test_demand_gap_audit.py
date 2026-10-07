@@ -149,7 +149,9 @@ def test_a_large_file_is_audited_in_folder_batches_and_merged(tmp_path, pricing,
     assert len(gaps) == 3  # 70 documents, folders of 10, at most 30 a batch
     assert len({json.dumps(c["system"]) for c in gaps}) == 1  # one cached instruction for every batch
     scopes = [re.findall(r"^- (.+?) \(folder ", c["messages"][-1]["content"], flags=re.M) for c in gaps]
-    assert [len(s) for s in scopes] == [30, 30, 10]
+    # The first batch runs alone; the rest run in a pool, so their CALL order is
+    # completion order. The merged audit follows batch order (ex.map), checked below.
+    assert len(scopes[0]) == 30 and sorted(len(s) for s in scopes[1:]) == [10, 30]
     assert all(" visit " in d and d.split(" visit")[0] in ("Provider0", "Provider1", "Provider2") for d in scopes[0])
     assert ["ALSO owns" in c["messages"][-1]["content"] for c in gaps] == [True, False, False]
     md = (tmp_path / "job" / "data" / "gap-audit.md").read_text()
