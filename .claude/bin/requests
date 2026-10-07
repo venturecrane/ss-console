@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+# requests -- list recent Operator request cards (migration 0122).
+#
+#   .claude/bin/requests [--client <slug>] [--since 7d|48h] [--json]
+#
+# One line per card a seat reported (a first reply, a NO REPLY alarm, a queued
+# job ending), newest first, with a footer that counts requests still
+# unanswered. Who asked and what they asked are in the matching email in
+# team@smd.services; the table holds numbers and keys only (ADR 0052 s5).
+#
+# Runs scripts/request-cards.ts under the repo's pinned tsx, resolved from the
+# checkout this script lives in, never an `npx` download.
+set -u
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+TSX="$ROOT/node_modules/.bin/tsx"
+if [ ! -x "$TSX" ]; then
+  echo "requests: $TSX is missing; run \`npm ci\` in this checkout first." >&2
+  exit 1
+fi
+exec "$TSX" "$ROOT/scripts/request-cards.ts" "$@"

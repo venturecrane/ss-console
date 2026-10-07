@@ -73,6 +73,14 @@ declare namespace Cloudflare {
     ADMIN_BASE_URL?: string
     RESEND_API_KEY?: string
     /**
+     * Where Operator request cards are emailed (POST
+     * /api/internal/operator-request-card, migration 0122). SMD ops only;
+     * never a client. [vars] in wrangler.toml; defaults to team@smd.services.
+     */
+    ALERT_TO_EMAIL?: string
+    /** Sender for Operator request cards. Matches workers/fleet-alerts. */
+    ALERT_FROM_EMAIL?: string
+    /**
      * Meta Conversions API access token (ADR 0066 gate 2, #1723), generated
      * under Events Manager > Conversions API settings for the SMD-owned
      * pixel. Secret (wrangler secret via Infisical /ss). Unset = server

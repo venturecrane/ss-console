@@ -60,6 +60,12 @@ ENABLE_PUBLIC_PATTERNS = "0"
 # deleted. See the header of src/pages/api/webhooks/sentry.ts.
 SENTRY_ISSUE_RESOURCE = "ignore"
 
+# Operator request cards (POST /api/internal/operator-request-card, migration
+# 0122): one email per request a person sends a seat. SMD ops only, never a
+# client. The sender matches workers/fleet-alerts/wrangler.toml.
+ALERT_TO_EMAIL = "team@smd.services"
+ALERT_FROM_EMAIL = "SMD Services Ops <team@smd.services>"
+
 # ---------- D1 (structured data) ----------
 [[d1_databases]]
 binding = "DB"
