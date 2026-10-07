@@ -74,9 +74,11 @@ describe('skills the router and self-initiation read, on the firm seat', () => {
     expect([...new Set(bad)], `omitted skills read with no refusal instruction`).toEqual([])
   })
 
-  it('enables the demand lane and nothing else of the drafting lane', () => {
+  it('enables the demand and queued drafting lanes and none of the in-turn drafting skills', () => {
     const enabled = enabledSkills()
     expect(enabled.has('demand-letter-drafter')).toBe(true)
+    // 2026-10-07: the firm's own written ask activated the queued drafting lane.
+    expect(enabled.has('document-drafter')).toBe(true)
     for (const slug of [
       'discovery-response-drafter',
       'follow-up-discovery-drafter',

@@ -177,3 +177,12 @@ def test_refusal_vocabulary_per_class() -> None:
         verbs.dispatch(broker, {"action": "emitted_wake_append"}, GATEWAY_PID, STRANGER_UID)
     with pytest.raises(PermissionError, match="is not permitted for this caller"):
         verbs.dispatch(broker, {"action": "medchron_job_record"}, GATEWAY_PID, AGENT_UID)
+
+
+def test_the_drafting_lane_has_the_demand_lanes_gates_minus_the_rerun() -> None:
+    """FALSIFIER: open drafting_job_record or _resume to the gateway and the
+    agent could move a job or spend money a person did not decide to."""
+    gates = {v.name: v.auth for v in verbs.VERBS}
+    for suffix in ("job_submit", "job_status", "allowance", "job_record", "job_resume"):
+        assert gates[f"drafting_{suffix}"] == gates[f"demand_{suffix}"], suffix
+    assert "drafting_job_rerun" not in gates

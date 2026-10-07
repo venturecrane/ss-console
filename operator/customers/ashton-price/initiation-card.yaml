@@ -295,8 +295,8 @@ stages:
     category: work
     locked: unlocked by the firm's own-file drafting test (the principal's stated condition)
     commands:
-      - say: 'Draft [a demand letter / discovery responses] on [matter] in our format.'
-        backed_by: demand-letter-drafter # and the response/discovery drafting lane skills, per the activation grant
+      - say: 'Draft [a demand letter] on [matter] in our format.'
+        backed_by: demand-letter-drafter # the queued demand job (activated 2026-10-06)
         admin_only: true
         proves: work product in the firm's own conventions, for review
         expected: >-
@@ -306,4 +306,18 @@ stages:
           the attorney.
         falsifier: >-
           Format drift; reserved content filled in; anything sent.
+        rehearsal: pending
+      - say: 'Draft [a mediation brief / special interrogatories, RFAs or RFPs / our discovery responses / a memo / a deposition outline] on [matter] in our format.'
+        backed_by: document-drafter # the queued drafting job (activated 2026-10-07)
+        admin_only: true
+        proves: work product in the attorney's own house style, for review
+        expected: >-
+          A Word document in the attorney's house style filed in the matter
+          for attorney review, never sent anywhere by the Operator; the
+          reply names the file, the items left marked for the attorney, the
+          record or the client, and any caption discrepancy found.
+        falsifier: >-
+          Style drift; settlement authority, the target figure or the
+          bracket filled in; a marked item filled from outside the record;
+          anything sent.
         rehearsal: pending

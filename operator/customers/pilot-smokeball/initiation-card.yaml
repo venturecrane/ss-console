@@ -298,8 +298,8 @@ stages:
     title: Put it to work
     category: work
     commands:
-      - say: 'Draft [a demand letter / discovery responses] on [matter] in our format.'
-        backed_by: demand-letter-drafter # and the response/discovery drafting lane skills, per the activation grant
+      - say: 'Draft [a demand letter] on [matter] in our format.'
+        backed_by: demand-letter-drafter # the queued demand job; the drafting-lane command stays off this card (document-drafter is not on this seat)
         admin_only: true
         proves: work product in the firm's own conventions, for review
         expected: >-

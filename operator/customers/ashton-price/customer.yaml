@@ -699,11 +699,13 @@ personas:
       # LANE ACTIVATION RECORD. The firm's administrator asked the Operator for
       # demand prep (a records gap audit and a draft demand on a named matter)
       # on 2026-10-06; the Captain decided that request is the firm's
-      # authorization of the demand lane and authorized it the same day. Only
-      # demand-letter-drafter is listed: discovery-response-drafter,
+      # authorization of the demand lane and authorized it the same day. Of the
+      # in-turn drafting skills, none is listed: discovery-response-drafter,
       # follow-up-discovery-drafter and mediation-brief-drafter stay off this
       # seat, fail-closed by omission (ADR 0035), and the seat's skill read
-      # fence refuses to load an omitted skill's files.
+      # fence refuses to load an omitted skill's files. Briefs, discovery,
+      # memos and deposition outlines are the queued drafting lane below
+      # (document-drafter), activated separately on 2026-10-07.
       # The skill NEVER drafts in a turn. REQUEST mode submits a demand job
       # (operator/workspace_broker/demand_verbs.py); the demand job on the
       # Machine does the work and DELIVER mode replies in the requester's
@@ -735,6 +737,39 @@ personas:
           # under self_initiation.document_library.operator_matter). The broker
           # requires a rehearsal's filing target to match BOTH this id and that
           # number; any other target is refused.
+          rehearsal_matter_id: '1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23'
+      # ---- the drafting lane: ACTIVATED 2026-10-07 (document-drafter) ----
+      # LANE ACTIVATION RECORD. The firm's office manager, a Named
+      # Administrator, wrote on 2026-10-07 (subject "Instructions and mediation
+      # briefs"), forwarding the principal attorney's drafting instructions:
+      # "These are Chris's specific instructions in claude. Can you have the
+      # Operator mimic?" The instructions name propounded discovery, discovery
+      # responses, memos, mediation briefs and deposition outlines; those five
+      # are the enabled_classes below and nothing else. The Captain approved
+      # the activation 2026-10-07.
+      # The skill NEVER drafts in a turn. REQUEST mode submits a drafting job
+      # (operator/workspace_broker/drafting_verbs.py); the drafting job on the
+      # Machine drafts in the firm's authored house style and DELIVER mode
+      # replies in the requester's thread through the verified reply binding.
+      # Exemplars are the firm's own briefs, held in its vault. The in-turn
+      # drafting skills (discovery-response-drafter, follow-up-discovery-drafter,
+      # mediation-brief-drafter) stay OFF, by omission. Manual initiation only,
+      # never scheduled, never webhook. Reserved to scope.admins. The allowance
+      # is a COUNT of drafts per billing cycle, on the chronology cycle's anchor.
+      - name: document-drafter # admin-requested litigation documents in house style, queued as a job; never drafted in a turn
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+        settings:
+          drafting_allowance_per_cycle: 25
+          # A comma-separated string: skill settings are scalars (ADR 0075; the
+          # validator rejects a list, the overlay would drop it).
+          enabled_classes: 'mediation_brief, discovery_set, discovery_response, memo, depo_outline'
+          # The firm's Operator Library matter, the same rehearsal target the
+          # demand lane authors; the broker checks this id and that number.
           rehearsal_matter_id: '1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23'
     # Every entry is pre_run-gated (ADR 0021 Stream B, #1748). The escalator's
     # bespoke pre_run decides whether a deadline needs the ladder; the other

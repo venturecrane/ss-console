@@ -35,6 +35,7 @@ from .establishment import EstablishmentStore
 from .google_auth import materialize_credential
 from .job_ledger import JobLedgerWriter
 from .demand_verbs import DemandVerbs
+from .drafting_verbs import DraftingVerbs
 from .medchron_verbs import MedchronVerbs
 from .msgraph_auth import materialize_credential as materialize_msgraph_credential
 from .msgraph_auth import materialize_read_credential as materialize_msgraph_read_credential
@@ -135,6 +136,8 @@ class Broker:
     # The demand job's request edge (demand_verbs.py). Same default-disabled
     # posture: no queue dir or no audit ledger, and every demand verb refuses.
     demand: DemandVerbs | None = None
+    # The drafting job's request edge (drafting_verbs.py), same posture.
+    drafting: DraftingVerbs | None = None
     msgraph: MsGraphOps | None = None
 
     def __init__(self) -> None:
@@ -218,6 +221,12 @@ class Broker:
         # 0770 like the chronology's), its own allowance.
         self.demand = DemandVerbs.build(
             self, audit_db_path=audit_db_path, queue_dir=os.environ.get("SMD_DEMAND_QUEUE_DIR")
+        )
+        # The drafting job (litigation documents in the firm's house style):
+        # its own tables on the same DB file, its own queue dir
+        # (SMD_DRAFTING_QUEUE_DIR, root:workspace-broker 0770), its own allowance.
+        self.drafting = DraftingVerbs.build(
+            self, audit_db_path=audit_db_path, queue_dir=os.environ.get("SMD_DRAFTING_QUEUE_DIR")
         )
         # ss#2258: AgentMail transmit moves behind this uid boundary. The gateway
         # keeps an inbox-scoped key with message_send/draft_send WITHHELD, so the

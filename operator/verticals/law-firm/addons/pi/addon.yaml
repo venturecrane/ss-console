@@ -29,8 +29,15 @@
 # lanes keep assembly-no-argument unchanged; the drafting lane is a distinct,
 # manual-initiation-only entitlement a firm authors deliberately.
 
+# v0.4.0 (2026-10-07): adds document-drafter, the QUEUED drafting lane. An
+# administrator asks for a mediation brief, propounded discovery, discovery
+# responses, a memo document or a deposition outline and the request is a job
+# on the Machine (operator/workspace_broker/drafting_verbs.py), drafted in the
+# firm's authored house style; never drafted in a turn. A seat lists it, with
+# its enabled classes, deliberately; omission is refusal.
+
 name: pi
-version: 0.3.0
+version: 0.4.0
 
 # Additive floors on top of the base law-firm compliance set (upl-boundary,
 # privilege, conflict-routing, trust-funds-read-only,
@@ -51,7 +58,9 @@ compliance:
 
 personas: []
 
-# The nineteen PI-litigation lifecycle skills (bodies in operator/skills/).
+# Twenty-five PI skills (bodies in operator/skills/): the nineteen lifecycle
+# skills of v0.2.0, the five drafting-lane skills (four in-turn of v0.3.0 and
+# the queued document-drafter of v0.4.0), and one firm-operations skill.
 skills:
   # discovery (deepest — the firm's named slip area)
   - discovery-served-watch
@@ -86,6 +95,8 @@ skills:
   - follow-up-discovery-drafter
   - demand-letter-drafter
   - mediation-brief-drafter
+  # the queued drafting lane (v0.4.0, admin-initiated, a job on the Machine)
+  - document-drafter
   # firm operations: vendor bills forwarded by the firm's own staff, staged as
   # UNFINALIZED expenses (never finalized, never trust, never a payment).
   # Rehearsed on pilot-smokeball first; not bound on any client seat yet.

@@ -94,6 +94,12 @@ describe('activity-language exhaustiveness (writer parity)', () => {
         'DEMAND_JOB_DELIVERED',
         'DEMAND_JOB_FAILED',
         'DEMAND_JOB_RESUME_REQUESTED',
+        'DRAFTING_JOB_SUBMITTED',
+        'DRAFTING_JOB_RUNNING',
+        'DRAFTING_JOB_HELD',
+        'DRAFTING_JOB_DELIVERED',
+        'DRAFTING_JOB_FAILED',
+        'DRAFTING_JOB_RESUME_REQUESTED',
         'AGENT_STOPPED',
         'COMPLIANCE_PACKET_EXPORTED',
         // ss#2122: a Named Administrator pulled the per-matter audit record
@@ -207,6 +213,12 @@ describe('failure outcomes are visible to the client (ss#2320)', () => {
     ['DEMAND_JOB_DELIVERED', 'Filed a gap audit and draft demand on the matter'],
     ['DEMAND_JOB_FAILED', 'Could not finish a gap audit and draft demand'],
     ['DEMAND_JOB_RESUME_REQUESTED', 'Was asked to resume a gap audit and draft demand'],
+    ['DRAFTING_JOB_SUBMITTED', 'Started drafting a document for a matter'],
+    ['DRAFTING_JOB_RUNNING', 'Is drafting a document'],
+    ['DRAFTING_JOB_HELD', 'Paused drafting a document and surfaced why'],
+    ['DRAFTING_JOB_DELIVERED', 'Filed a drafted document on the matter'],
+    ['DRAFTING_JOB_FAILED', 'Could not finish drafting a document'],
+    ['DRAFTING_JOB_RESUME_REQUESTED', 'Was asked to resume drafting a document'],
   ]
 
   for (const [action, copy] of outcomes) {

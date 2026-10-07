@@ -45,6 +45,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Escalates an approaching or missed deadline up a ladder so it never slips silently. Internal only.',
   'demand-letter-drafter':
     'Drafts a policy-limits demand letter from the matter record when your attorney asks. The demand figure and every settlement decision stay with the attorney; it never sends to a carrier.',
+  'document-drafter':
+    'Drafts a mediation brief, discovery, a memo or a deposition outline in your house style when an administrator asks, filed in the matter for attorney review. Never sent outside the firm.',
   'discovery-response-drafter':
     'Drafts responses to served discovery from the matter record when your attorney asks, with objections labeled as candidates. Never serves, never signs a verification; the attorney finalizes.',
   'discovery-response-staging':
