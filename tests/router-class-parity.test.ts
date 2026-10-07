@@ -117,6 +117,13 @@ describe('matter-inbox-router: the demand class', () => {
     expect(deliver).toContain('`file_to_matter_id` against `matter_id`')
     expect(deliver).toContain('NOT the client matter')
     expect(deliver).not.toContain('the documents are filed in matter <number>')
+    // A failed job is ours: the client hears nothing, SMD is alerted, and no reply ever
+    // asks the firm to narrow its request or names a limit, cost or job id.
+    expect(deliver).toContain('Send the client NOTHING')
+    expect(deliver).toContain("raises SMD's shortfall alert")
+    expect(deliver).toContain('never ask the firm to narrow, split or change its request')
+    expect(deliver).toContain('a token, a limit, a cap, a cost, a dollar figure or a job id')
+    expect(deliver).not.toContain('**held** or **failed**')
   })
 
   it('submits and never drafts in the turn', () => {

@@ -15,7 +15,8 @@ the recipient. So the broker, which the agent cannot steer, decides:
 * its sender may be replied to (``scope.inbound_allow_from``), re-read from
   customer.yaml at bind time AND again at send time;
 * it has not been answered, and is not answered twice:
-    - a demand job: the job has ended (delivered, held or failed), the email is
+    - a demand job: the job has ended (delivered or held; never failed, which is
+      SMD's to resolve), the email is
       the job's ``request_ref`` and its sender the job's ``requester``; one reply
       per (job, ending), so a job that fails, is resumed and delivers can still
       say it delivered;
@@ -56,7 +57,11 @@ from .recipient_policy import authored_policy, normalize_address, sender_key
 from .transmit_verbs import dispatch_transmit
 
 KINDS = ("demand_job", "message")
-REPLYABLE_DEMAND_STATES = frozenset({"delivered", "held", "failed"})
+#: The outcomes a requester is told about. NOT ``failed``: a failed job is
+#: resumable and SMD's to resolve (a live demand job, 2026-10-06, told the firm
+#: to narrow its request after our own stage failed), so its reply is refused
+#: here and the failure goes to SMD's shortfall alert instead.
+REPLYABLE_DEMAND_STATES = frozenset({"delivered", "held"})
 #: How old an email a bare message binding may still answer.
 RECENCY_DAYS = 14
 AUDIT_TYPE = "REPLY_BINDING"
@@ -163,6 +168,11 @@ def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> V
         row = _demand_ledger(broker).read(ident)
         if row is None:
             raise BindingRefused("there is no demand job with that id")
+        if row["state"] == "failed":
+            raise BindingRefused(
+                f"demand job {ident} failed on SMD's side; the requester is told nothing until it is "
+                "delivered or held, and SMD has been alerted. Send nothing to anyone."
+            )
         if row["state"] not in REPLYABLE_DEMAND_STATES:
             raise BindingRefused(f"demand job {ident} has not ended (it is {row['state']}); its reply waits for that")
         # One reply per (attempt, outcome): a resumed job (attempt + 1) that

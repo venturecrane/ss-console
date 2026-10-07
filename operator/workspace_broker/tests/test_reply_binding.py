@@ -494,32 +494,28 @@ def test_a_finished_demand_job_replies_to_its_requester_once(tmp_path: Path) -> 
     assert len(box.replies()) == 1
 
 
-def test_failed_then_resumed_then_delivered_reports_both(tmp_path: Path) -> None:
+def test_a_failed_job_never_replies_to_the_client(tmp_path: Path) -> None:
+    """A failed job is resumable and SMD's to resolve; the requester is told
+    nothing. FALSIFIER: put failed back in REPLYABLE_DEMAND_STATES."""
     job = _job(tmp_path, ["failed"])
     box = FakeMailbox()
-    broker = _broker(tmp_path, box)
-    _send(broker, {"kind": "demand_job", "job_id": job})
-    ledger = DemandLedger(broker.audit_db_path, tmp_path / "q")
+    out = _call(_broker(tmp_path, box), "msgraph_reply_bind", {"kind": "demand_job", "job_id": job})
+    assert out["bound"] is False and "Send nothing to anyone" in out["reason"]
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})
+    assert box.replies() == []
+
+
+def test_failed_then_resumed_then_delivered_replies_once(tmp_path: Path) -> None:
+    job = _job(tmp_path, ["failed"])
+    box = FakeMailbox()
+    ledger = DemandLedger(str(tmp_path / "audit.db"), tmp_path / "q")
     ledger.record(job, "running", {})
     ledger.record(job, "delivered", {})
     _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})
-    assert len(box.replies()) == 2
-
-
-def test_a_resumed_job_that_fails_again_gets_its_reply(tmp_path: Path) -> None:
-    """One reply per (attempt, outcome). FALSIFIER: key on the state alone and
-    the second failure is refused as already replied."""
-    job = _job(tmp_path, ["failed"])
-    box = FakeMailbox()
-    _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})
-    ledger = DemandLedger(str(tmp_path / "audit.db"), tmp_path / "q")
-    ledger.record(job, "running", {})
-    ledger.record(job, "failed", {"reason": "again"})
-    _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})
-    assert len(box.replies()) == 2
     with pytest.raises(BindingRefused):
         _send(_broker(tmp_path, box), {"kind": "demand_job", "job_id": job})
-    assert len(box.replies()) == 2
+    assert len(box.replies()) == 1
 
 
 def test_the_ledgers_reply_mark_is_honored(tmp_path: Path) -> None:
