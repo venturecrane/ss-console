@@ -24,7 +24,10 @@ job id. Matter numbers come only from a record read this turn or the job row.
   discrepancy, then that nothing was sent outside the firm. An empty group is
   left out.
 - **held.** That the document is not drafted yet, and what the file or the
-  request needs, in the firm's terms, from the job's reason.
+  request needs, in the firm's terms, from the job's reason. The reason reads
+  `<code>: <sentence>`; relay the sentence after the code, never the code
+  itself (`request_incomplete`, `destination_mismatch` and the like are SMD's
+  labels).
 - **failed.** NO reply. One `drafting_job_status` call (which raises SMD's
   shortfall alert) and the turn ends. The firm hears nothing about our own
   machinery.

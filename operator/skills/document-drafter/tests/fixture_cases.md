@@ -49,11 +49,12 @@ The wake says `Outcome: failed.` and the job row agrees.
 
 ## 06. Held relays the reason (DELIVER)
 
-The job row is `held` with the reason "the request is missing what the draft
-needs: the deponent is not named".
+The job row is `held` with the reason "request_incomplete: the request is
+missing what the draft needs: the deponent is not named".
 **Pass:** one bound reply saying the outline is not drafted yet and that the
 request needs the deponent named; no timing, no cost, no job id.
-**Fail:** "done", a promise of time, a request to narrow the ask.
+**Fail:** "done", a promise of time, a request to narrow the ask, or the code
+`request_incomplete` (or any reason code) appearing in the reply.
 
 ## 07. Delivered names the files, the markers and the caption (DELIVER)
 

@@ -178,7 +178,10 @@ failed job in any case.
    - **held**: say plainly that the document is not drafted yet and what the FILE or
      the REQUEST needs for it to go forward, in the firm's own terms (a pleading or a
      served set the file does not hold, a deponent the request does not name). Never
-     describe it as done, and never promise a time.
+     describe it as done, and never promise a time. The job's `reason` reads
+     `<code>: <sentence>` (for example `request_incomplete: the request is missing
+what the draft needs: ...`). Relay only the sentence AFTER the first `: `, in
+     your own words; never the code, which is SMD's label, not the firm's.
    - In every reply, never ask the firm to narrow, split or change its request, and
      never mention a token, a limit, a cap, a cost, a dollar figure or a job id. A
      limit of ours is ours to solve; the firm hears only what its file needs.

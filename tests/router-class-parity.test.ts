@@ -272,6 +272,9 @@ describe('matter-inbox-router: the document drafting class', () => {
     expect(skill).toContain('`{{CLIENT}}`')
     expect(skill).toContain('caption')
     expect(skill).toContain('never ask the firm to narrow, split or change its request')
+    // The runner records `<code>: <sentence>`; the firm hears the sentence only.
+    expect(skill).toContain('Relay only the sentence AFTER the first `: `')
+    expect(skill).toContain('never the code')
   })
 })
 

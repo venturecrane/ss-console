@@ -387,3 +387,37 @@ def test_a_non_admin_never_learns_which_classes_are_off(seat) -> None:
     assert out["accepted"] is False and "Named Administrators" in out["reason"]
     assert "switched on" not in out["reason"]
     assert queued(queue) == []
+
+
+RUNNER_REASON_CODES = (
+    "request_incomplete",
+    "gate_refused",
+    "format_check",
+    "record_unreadable",
+    "audit_unsettled",
+    "destination_mismatch",
+    "destination_unauthored",
+    "no_readable_documents",
+    "filing_refused",
+    "stage_unfinished",
+    "limit",
+    "no_verdict",
+    "unexpected",
+    "config_missing",
+)
+
+
+@pytest.mark.parametrize("code", RUNNER_REASON_CODES)
+def test_every_runner_reason_code_is_recorded_verbatim(seat, code) -> None:
+    """The broker validates no reason code: the runner's `<code>: <sentence>`
+    is stored and audited as written (the skill relays the sentence only)."""
+    broker, db, *_ = seat
+    job = submit(broker)["job_id"]
+    reason = f"{code}: the sentence the reply relays"
+    state = "held" if code in ("request_incomplete", "destination_mismatch") else "failed"
+    out = call(broker, "drafting_job_record", uid=0, job_id=job, state=state, fields={"reason": reason})
+    assert out["job"]["reason"] == reason
+    conn = sqlite3.connect(db)
+    meta = json.loads(conn.execute("SELECT metadata FROM audit_log ORDER BY rowid DESC LIMIT 1").fetchone()[0])
+    conn.close()
+    assert meta["reason"] == reason
