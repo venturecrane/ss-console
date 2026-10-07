@@ -79,7 +79,9 @@ def test_responses_with_the_authored_proof_of_service_pass(tmp_path):
 
 def test_a_brief_in_the_authored_section_order_passes(tmp_path):
     sections = _firm().data["format"]["mediation_brief_sections"]
-    body = "\n\n".join(f"# {s}\n\nText." for s in sections)
+    from drafting_testkit import COURT
+
+    body = COURT + "\n\n".join(f"# {s}\n\nText." for s in sections)
     body = body.replace("CASE VALUE\n\nText.", "CASE VALUE\n\n{{ATTORNEY: settlement authority}}\n\nText.")
     res = _render_check(tmp_path, body, "mediation_brief")
     assert res.ok, res.fails
@@ -88,3 +90,12 @@ def test_a_brief_in_the_authored_section_order_passes(tmp_path):
 @pytest.mark.parametrize("cls", ["memo", "depo_outline"])
 def test_memo_and_outline_pass(tmp_path, cls):
     assert _render_check(tmp_path, "# I. QUESTION\n\nText.\n\n1. A topic.", cls).ok
+
+
+@pytest.mark.parametrize("cls", ["mediation_brief", "memo", "depo_outline"])
+def test_the_authored_skeleton_itself_renders_and_passes_the_authored_format(tmp_path, cls):
+    """The skeleton as a drafter's output would carry it (comments gone,
+    every slot still a marker): structure, headings, caption and footer pass."""
+    md = render.COMMENT.sub("", _firm().skeleton(cls))
+    res = _render_check(tmp_path, md, cls)
+    assert res.ok, res.fails

@@ -180,8 +180,14 @@ def standard_docs() -> list[tuple[str, str, bytes, str]]:
     ]
 
 
+COURT = (
+    "Alpha Example, Esq.\nAttorneys for Plaintiff\n\n**SUPERIOR COURT OF THE STATE OF CALIFORNIA**\n"
+    "**COUNTY OF EXAMPLETOWN**\n\n| GAMMA EXAMPLE, Plaintiff, v. DELTA EXAMPLE, Defendant. | Case No. CV-0001 |\n"
+    "| --- | --- |\n\n"
+)
 BRIEF = (
-    "\n\n".join(f"# {s}\n\nThe record supports this section (ER record 1-15-26, p. 1)." for s in SECTIONS)
+    COURT
+    + "\n\n".join(f"# {s}\n\nThe record supports this section (ER record 1-15-26, p. 1)." for s in SECTIONS)
     + "\n\n=== ATTORNEY NOTES ===\n\n## NOT IN RECORD\n\nNone.\n"
 )
 HOWELL_ROWS = (

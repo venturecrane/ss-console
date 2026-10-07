@@ -330,13 +330,41 @@ class _Writer:
             self._runs(para, block.runs)
             return
         para, styled = self._para("SMD Body")
-        if (not styled or self.rules.enforce_layout) and self.rules.body_line_spacing != 1.0:
-            para.paragraph_format.line_spacing = self.rules.body_line_spacing
         if self.rules.enforce_layout:
-            para.paragraph_format.space_after = Pt(0)
-            if self.rules.body_first_line_indent_in is not None:
-                para.paragraph_format.first_line_indent = Inches(self.rules.body_first_line_indent_in)
+            self._house_body(para, block)
+        elif not styled and self.rules.body_line_spacing != 1.0:
+            para.paragraph_format.line_spacing = self.rules.body_line_spacing
         self._runs(para, block.runs)
+
+    def _house_body(self, para, block: g.Paragraph) -> None:
+        """A body paragraph under the class's enforced layout: front matter
+        (before the caption table and the first heading) left and unindented, its all-bold lines
+        centered; a bold-italic line alone a heading at its indent; anything
+        else the class's body."""
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.shared import Inches, Pt
+
+        r, pf = self.rules, para.paragraph_format
+        pf.space_after = Pt(0)
+        runs = [x for x in block.runs if x.text.strip()]
+        bold = bool(runs) and all(x.within_bold if x.marker else x.bold for x in runs)
+        bold_italic = bold and all(x.within_italic if x.marker else x.italic for x in runs)
+        front = self.tables_seen == 0 and self.report.blocks_styled["headings"] == 0
+        if r.front_matter_plain and r.caption_table_first and front:
+            if bold:
+                pf.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            return
+        if bold_italic and r.bold_italic_heading_indent_in is not None:
+            pf.left_indent, pf.first_line_indent = Inches(r.bold_italic_heading_indent_in), Inches(0)
+            pf.keep_with_next = True
+        elif r.body_first_line_indent_in is not None:
+            pf.first_line_indent = Inches(r.body_first_line_indent_in)
+        if r.body_exact_pt:
+            pf.line_spacing = Pt(r.body_exact_pt)
+        elif r.body_line_spacing != 1.0:
+            pf.line_spacing = r.body_line_spacing
+        if r.body_justify and not bold_italic:
+            pf.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
     def _bullet(self, block: g.Bullet) -> None:
         from docx.shared import Inches
@@ -356,12 +384,14 @@ class _Writer:
         self._runs(para, block.runs)
 
     def _numbered(self, block: g.Numbered) -> None:
-        from docx.shared import Inches
+        from docx.shared import Inches, Pt
 
         para, _ = self._para("SMD Body")
         para.paragraph_format.left_indent = Inches(0.5)
         para.paragraph_format.first_line_indent = Inches(-0.5)
-        if self.rules.enforce_layout and self.rules.body_line_spacing != 1.0:
+        if self.rules.enforce_layout and self.rules.body_exact_pt:
+            para.paragraph_format.line_spacing = Pt(self.rules.body_exact_pt)
+        elif self.rules.enforce_layout and self.rules.body_line_spacing != 1.0:
             para.paragraph_format.line_spacing = self.rules.body_line_spacing
         self._font(para.add_run(f"{block.label}\t"))
         self._runs(para, block.runs)
@@ -424,6 +454,12 @@ class _Writer:
                 return
             para = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
         self._font(add_page_field(para))
+        if self.rules.footer_title:
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+            title = footer.add_paragraph()
+            title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            self._font(title.add_run(self.rules.footer_title))
         self.report.notes.append("page number field added to the footer")
 
 

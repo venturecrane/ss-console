@@ -43,6 +43,7 @@ from dataclasses import dataclass, field
 # Well-formed markers only; the content gate runs before the renderer so every
 # ``{{`` has its ``}}`` by the time text reaches this module.
 MARKER_RE = re.compile(r"\{\{.*?\}\}", re.DOTALL)
+_CODE_MARKER_RE = re.compile(r"`(\{\{.*?\}\})`", re.DOTALL)
 _HEADING_RE = re.compile(r"^(#{1,3})\s+(.*)$")
 _BULLET_RE = re.compile(r"^[-*]\s+(.*)$")
 _NUMBERED_RE = re.compile(r"^(\d+[.)])\s+(.*)$")
@@ -68,6 +69,10 @@ class Run:
     bold: bool = False
     italic: bool = False
     marker: bool = False
+    #: For a marker run only: the emphasis it was WRITTEN inside (``**{{...}}**``).
+    #: Information for layout decisions (a bold court line); never applied.
+    within_bold: bool = False
+    within_italic: bool = False
 
 
 @dataclass(frozen=True)
@@ -125,7 +130,10 @@ class _MarkerStash:
             self.markers.append(m.group(0))
             return _PLACEHOLDER.format(len(self.markers) - 1)
 
-        return MARKER_RE.sub(_sub, text)
+        # A marker wrapped in a code span (the skeletons' `` `{{FILL: ...}}` ``)
+        # is stashed WITH its backticks, so a span inside emphasis
+        # (``**`{{...}}`**``) cannot leave literal backticks in the document.
+        return MARKER_RE.sub(_sub, _CODE_MARKER_RE.sub(lambda m: m.group(1), text))
 
     def runs(self, text: str) -> tuple[Run, ...]:
         """Emphasis-split ``text`` (which may hold placeholders) into runs,
@@ -139,7 +147,11 @@ class _MarkerStash:
             for m in _PLACEHOLDER_RE.finditer(run.text):
                 if m.start() > pos:
                     out.append(Run(run.text[pos : m.start()], run.bold, run.italic))
-                out.append(Run(self.markers[int(m.group(1))], marker=True))
+                # Unstyled when rendered; the emphasis it was written inside is
+                # kept as information (a bold-wrapped court line is still one).
+                out.append(
+                    Run(self.markers[int(m.group(1))], marker=True, within_bold=run.bold, within_italic=run.italic)
+                )
                 pos = m.end()
             if pos < len(run.text):
                 out.append(Run(run.text[pos:], run.bold, run.italic))

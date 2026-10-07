@@ -54,6 +54,18 @@ class ClassRules:
     body_line_spacing: float = 1.0  # multiple
     # A first-line indent for body paragraphs (enforced classes only).
     body_first_line_indent_in: float | None = None
+    # Exact body line spacing in points (24 = double at 12 point, fixed rather
+    # than "double", as the attorney's signed briefs set it) and justification.
+    body_exact_pt: float | None = None
+    body_justify: bool = False
+    # Paragraphs before the caption table are front matter: left, unindented,
+    # single-spaced; an all-bold front line (the court) is centered.
+    front_matter_plain: bool = False
+    # A body line that is bold italic alone is a heading at this indent (a
+    # provider heading in a brief's damages section).
+    bold_italic_heading_indent_in: float | None = None
+    # A centered title line under the footer's page number.
+    footer_title: str | None = None
     item_line_spacing: float = 2.0
     item_space_after_pt: float = 0.0
     first_line_indent_in: float = 0.5
@@ -94,9 +106,10 @@ CLASS_RULES: dict[str, ClassRules] = {
     "demand_letter": ClassRules(page_numbers=True, heading_align=("left", "left", "left")),
     # From the attorney's instructions and his signed briefs: roman-numeral
     # headings centered and bold only (never underlined); lettered subsections
-    # indented 0.5", bold and underlined; numbered sub-subsections indented
-    # 1.0", bold and underlined; body double-spaced with a 0.5" first-line
-    # indent; every page numbered at the bottom. Plain Letter paper.
+    # indented 0.5", bold and underlined; numbered sub-subsections and the
+    # bold-italic provider lines indented 1.0"; body exactly 24 point, justified,
+    # 0.5" first-line indent; the court centered and bold above the caption;
+    # the footer a centered page number over the title. Plain Letter paper.
     "mediation_brief": _house(
         caption_table_first=True,
         heading_align=("center", "left", "left"),
@@ -104,8 +117,13 @@ CLASS_RULES: dict[str, ClassRules] = {
         heading_bold=(True, True, True),
         heading_indent_in=(0.0, 0.5, 1.0),
         body_line_spacing=2.0,
+        body_exact_pt=24.0,
+        body_justify=True,
         body_first_line_indent_in=0.5,
+        front_matter_plain=True,
+        bold_italic_heading_indent_in=1.0,
         page_numbers_always=True,
+        footer_title="Plaintiff's Mediation Brief",
     ),
     "memo": _house(heading_align=("left", "left", "left"), heading_underline=(False, False, False)),
     "depo_outline": _house(

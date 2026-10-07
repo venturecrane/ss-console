@@ -21,7 +21,7 @@ import zipfile
 import pytest
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, Twips
@@ -198,7 +198,9 @@ def test_mediation_body_double_spaced_and_caption_first(base: str) -> None:
     blob, _ = render_document(BRIEF, "mediation_brief", BASES[base])
     doc = _doc(blob)
     body = next(p for p in doc.paragraphs if p.text.startswith("This brief"))
-    assert body.paragraph_format.line_spacing == 2.0
+    assert body.paragraph_format.line_spacing == Pt(24)
+    assert body.paragraph_format.line_spacing_rule == WD_LINE_SPACING.EXACTLY
+    assert body.paragraph_format.alignment == WD_ALIGN_PARAGRAPH.JUSTIFY
     assert body.paragraph_format.space_after == Pt(0)
     first = doc.element.body[0]
     assert first.tag == qn("w:tbl")  # the caption table leads the document
@@ -309,7 +311,7 @@ def test_mediation_level3_is_indented_one_inch_bold_and_underlined(base: str) ->
 def test_mediation_body_is_first_line_indented_and_emphasis_renders(base: str) -> None:
     blob, _ = render_document(SPECIMEN, "mediation_brief", BASES[base])
     p = next(p for p in _doc(blob).paragraphs if p.text.startswith("Northfield Physical Therapy treated"))
-    assert p.paragraph_format.first_line_indent == Inches(0.5) and p.paragraph_format.line_spacing == 2.0
+    assert p.paragraph_format.first_line_indent == Inches(0.5) and p.paragraph_format.line_spacing == Pt(24)
     runs = {r.text: (bool(r.bold), bool(r.italic)) for r in p.runs}
     assert runs["Northfield Physical Therapy"] == (True, True)  # bold italic
     assert runs["Dates of service:"] == (True, False)  # a run-in label
@@ -327,4 +329,44 @@ def test_mediation_tables_are_times_new_roman_12() -> None:
 
 def test_a_mediation_brief_is_numbered_at_the_bottom_even_under_a_firm_footer() -> None:
     blob, _ = render_document(SPECIMEN, "mediation_brief", _hostile_base(footer="123 Example Street"))
+    assert "PAGE" in _footer_xml(blob)
+
+
+FRONT = """`{{FILL: attorney name | caption}}`
+Attorneys for Plaintiff
+
+**SUPERIOR COURT OF THE STATE OF CALIFORNIA**
+**`{{FILL: COUNTY OF X | caption}}`**
+
+| `{{FILL: PLAINTIFF | pleading}}`, | Case No. CV-0001 |
+| --- | --- |
+| v. | **PLAINTIFF'S MEDIATION BRIEF** |
+
+# I. INTRODUCTION
+
+Body.
+
+## A. Past Medical
+
+***`{{FILL: provider | records}}`***
+
+**Dates of service:** 01/02/2026.
+"""
+
+
+@pytest.mark.parametrize("base", list(BASES))
+def test_the_signed_brief_front_matter_provider_lines_and_footer(base: str) -> None:
+    blob, _ = render_document(FRONT, "mediation_brief", BASES[base])
+    doc = _doc(blob)
+    paras = [p for p in doc.paragraphs if p.text.strip()]
+    attorney, court = paras[0], [p for p in paras if "SUPERIOR COURT" in p.text or "COUNTY OF" in p.text]
+    assert attorney.paragraph_format.first_line_indent in (None, 0) and attorney.alignment != WD_ALIGN_PARAGRAPH.CENTER
+    assert len(court) == 2 and all(p.alignment == WD_ALIGN_PARAGRAPH.CENTER for p in court)
+    assert "`" not in "".join(p.text for p in paras)  # a code span inside emphasis leaves no backticks
+    provider = next(p for p in paras if p.text.startswith("{{FILL: provider"))
+    assert provider.paragraph_format.left_indent == Inches(1.0) and provider.paragraph_format.first_line_indent == 0
+    lettered = next(p for p in paras if p.text == "A. Past Medical")
+    assert lettered.paragraph_format.left_indent == Inches(0.5)
+    footer = doc.sections[0].footer
+    assert [p.text for p in footer.paragraphs if p.text.strip()][-1] == "Plaintiff's Mediation Brief"
     assert "PAGE" in _footer_xml(blob)

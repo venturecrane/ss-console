@@ -40,6 +40,9 @@ from typing import Any
 from .render import DECL_LINE, FIGURE, RESERVED, _outside_markers, decl_decision
 
 LETTER = (12240, 15840)
+#: The brief's footer title, as the attorney's signed briefs carry it (house
+#: style Part 4). The renderer's class rule writes it; this reads it back.
+FOOTER_TITLE = "Plaintiff's Mediation Brief"
 _ROMAN = re.compile(r"^\s*[IVXLC]+\.\s*", re.I)
 
 
@@ -127,9 +130,34 @@ def check_paper(doc: Any, res: Result) -> None:
             res.fails.append("paper: line numbering present (pleading paper)")
 
 
+def _front_matter(doc: Any) -> set[int]:
+    """The paragraphs before the caption table and the first heading (the
+    attorney block and the court lines), by element id."""
+    out: set[int] = set()
+    for el in doc.element.body.iterchildren():
+        if el.tag.endswith("}tbl"):
+            break
+        if el.tag.endswith("}p"):
+            style = el.style or ""
+            if "Heading" in style:
+                break
+            out.add(id(el))
+    return out
+
+
+def _prose_runs(p: Any) -> list[Any]:
+    """The runs that are words, not a marker (a marker renders unstyled)."""
+    return [r for r in _text_runs(p) if "{{" not in r.text and "}}" not in r.text]
+
+
+def _all(p: Any, test: Any, prose: bool = False) -> bool:
+    runs = _prose_runs(p) if prose else _text_runs(p)
+    return bool(runs) and all(test(r, p) for r in runs)
+
+
 def check_mediation(doc: Any, fmt: dict[str, Any], res: Result) -> None:
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.shared import Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
+    from docx.shared import Inches, Pt
 
     paras = _paras(doc)
     for p in (p for p in paras if _level(p) == 1):
@@ -149,12 +177,33 @@ def check_mediation(doc: Any, fmt: dict[str, Any], res: Result) -> None:
             res.fails.append(f"heading: level 3 not indented 1.0 inch: {p.text[:40]}")
         if not all(_bold(r, p) and _underlined(r, p) for r in _text_runs(p)):
             res.fails.append(f"heading: level 3 not bold and underlined: {p.text[:40]}")
-    body = [p for p in paras if p.style is not None and p.style.name == "SMD Body"]
-    single = [p for p in body if _eff(p, "line_spacing") != 2.0]
-    if single:
-        res.fails.append(f"spacing: {len(single)} body paragraph(s) not double-spaced")
-    prose = [p for p in body if not re.match(r"^\s*\S{1,6}\t", p.text)]  # a numbered item hangs instead
-    unindented = [p for p in prose if _eff(p, "first_line_indent") != Inches(0.5)]
+    front = _front_matter(doc)
+    body = [p for p in paras if p.style is not None and p.style.name == "SMD Body" and id(p._p) not in front]
+    court = [p for p in paras if id(p._p) in front and re.search(r"(?i)\b(court|county)\b", p.text)]
+    if len(court) < 2 or not all(
+        p.alignment == WD_ALIGN_PARAGRAPH.CENTER and all(_bold(r, p) for r in _prose_runs(p)) for p in court
+    ):
+        res.fails.append("caption: the court is not two centered bold lines above the caption table")
+    # A provider line: bold italic alone at the 1.0 inch indent (a slot still a
+    # marker carries no emphasis of its own, so its words are what is read).
+    providers = [p for p in body if _all(p, lambda r, q: _bold(r, q) and bool(r.italic), prose=True)]
+    providers += [p for p in body if p not in providers and _eff(p, "left_indent") == Inches(1.0)]
+    for p in providers:
+        if _eff(p, "left_indent") != Inches(1.0):
+            res.fails.append(f"heading: a bold-italic provider line not indented 1.0 inch: {p.text[:40]}")
+        if not all(_bold(r, p) and r.italic for r in _prose_runs(p)):
+            res.fails.append(f"heading: a provider line not bold italic: {p.text[:40]}")
+    prose = [p for p in body if p not in providers]
+    loose = [
+        p for p in prose if _eff(p, "line_spacing") != Pt(24) or _eff(p, "line_spacing_rule") != WD_LINE_SPACING.EXACTLY
+    ]
+    if loose:
+        res.fails.append(f"spacing: {len(loose)} body paragraph(s) not exactly 24 point")
+    ragged = [p for p in prose if p.alignment != WD_ALIGN_PARAGRAPH.JUSTIFY and not re.match(r"^\s*\S{1,6}\t", p.text)]
+    if ragged:
+        res.fails.append(f"alignment: {len(ragged)} body paragraph(s) not justified")
+    hanging = [p for p in prose if not re.match(r"^\s*\S{1,6}\t", p.text)]  # a numbered item hangs instead
+    unindented = [p for p in hanging if _eff(p, "first_line_indent") != Inches(0.5)]
     if unindented:
         res.fails.append(f"indent: {len(unindented)} body paragraph(s) without the 0.5 inch first-line indent")
     heads = [_ROMAN.sub("", p.text).strip().casefold() for p in paras if _level(p) == 1]
@@ -224,6 +273,12 @@ def check_discovery(doc: Any, cls: str, fmt: dict[str, Any], res: Result, digest
         res.fails.append("attachments: a response carries no section 2030.050 declaration")
 
 
+def check_footer_title(doc: Any, title: str, res: Result) -> None:
+    lines = [p.text.strip() for p in doc.sections[0].footer.paragraphs if p.text.strip()]
+    if title not in lines:
+        res.fails.append(f"footer: the title {title!r} is not under the page number")
+
+
 def check_page_field(blob: bytes, res: Result) -> None:
     z = zipfile.ZipFile(io.BytesIO(blob))
     footers = "".join(z.read(n).decode("utf-8", "replace") for n in z.namelist() if n.startswith("word/footer"))
@@ -252,6 +307,7 @@ def check(path: Path, cls: str, fmt: dict[str, Any], digest: str = "") -> Result
     check_paper(doc, res)
     if cls == "mediation_brief":
         check_mediation(doc, fmt, res)
+        check_footer_title(doc, FOOTER_TITLE, res)
     if cls in ("discovery_set", "discovery_response"):
         check_discovery(doc, cls, fmt, res, digest)
     if cls == "mediation_brief" or (cls == "depo_outline" and fmt["depo_outline_page_numbers"]):
