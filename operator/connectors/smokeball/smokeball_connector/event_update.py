@@ -10,6 +10,9 @@ matter's calendar (``/events?MatterId=...``) while still reading back with the
 right date. ``merge_event_update`` builds the merged body from the event's
 current state plus the requested changes and ``put_event_update`` sends it;
 ``server.update_event`` is the MCP tool over them.
+
+``with_responsible_attorney`` is the create-side rule: ``server.create_event``
+puts the matter's responsible attorney on every event it creates on a matter.
 """
 
 from __future__ import annotations
@@ -94,3 +97,40 @@ def put_event_update(
     if subject is not None or description is not None:
         verify(client, link or "", subject, description)
     return client.request("PUT", f"/events/{event_id}", json=body)
+
+
+def _responsible_staff_id(matter: Any) -> str | None:
+    """The matter's responsible attorney as a staff id, or None.
+
+    The raw ``GET /matters/{id}`` carries it twice: ``personResponsible`` as a
+    ``{id, href, rel}`` link and the flat ``personResponsibleStaffId``. Read the
+    link first and fall back to the flat field."""
+    if not isinstance(matter, dict):
+        return None
+    person = matter.get("personResponsible")
+    staff_id = person.get("id") if isinstance(person, dict) else None
+    if not staff_id:
+        staff_id = matter.get("personResponsibleStaffId")
+    return staff_id if isinstance(staff_id, str) and staff_id else None
+
+
+def with_responsible_attorney(client: Any, matter_id: str | None, attendees: list[str]) -> list[str]:
+    """Return ``attendees`` with the matter's responsible attorney appended.
+
+    Every event the Operator creates on a matter lands on that matter's
+    responsible attorney's calendar (firm ask, 2026-09-24: two deadline events
+    copied their attendees from an existing paralegal-only event, so the
+    attorney never saw them). Caller order is kept; the attorney is appended
+    when missing and never duplicated. Fail-open: no matter, a failed matter
+    read, or a matter with no responsible person leaves ``attendees`` as given,
+    because a read failure must not block the firm's deadline write."""
+    people = list(attendees)
+    if not matter_id:
+        return people
+    try:
+        staff_id = _responsible_staff_id(client.get(f"/matters/{matter_id}"))
+    except Exception:  # noqa: BLE001 - enrichment must never break the write
+        return people
+    if staff_id and staff_id not in people:
+        people.append(staff_id)
+    return people

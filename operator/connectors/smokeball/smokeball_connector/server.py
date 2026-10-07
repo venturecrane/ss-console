@@ -35,7 +35,7 @@ from typing import Any
 from operator_connector_sdk.server import ConnectorServer
 
 from .client import SmokeballApiError, SmokeballClient, build_client_from_env
-from .event_update import put_event_update
+from .event_update import put_event_update, with_responsible_attorney
 from .expense_ledger import drop_deleted as drop_deleted_expenses
 from .library import LOOKUP_FAILED, lookup_matter
 from .local_time import _next_day  # noqa: F401 - re-exported; tests import it from the server
@@ -935,6 +935,13 @@ def create_event(
       For ``all_day=True`` the API
       requires exact 24-hour boundaries; this tool normalizes both to the
       date's midnight span, so passing the deadline DATE is enough.
+
+    The matter's responsible attorney is ALWAYS an attendee when ``matter_id``
+    is given (firm ask: every date the Operator adds is on the responsible
+    attorney's calendar). The tool reads the matter and appends its
+    ``personResponsible`` to ``attendees`` if missing, keeping your order and
+    never duplicating. Still pass the attendees you intend; if the matter read
+    fails or names no responsible person, your list is sent unchanged.
     """
     if not attendees:
         raise ValueError(
@@ -960,7 +967,7 @@ def create_event(
             description=description,
             location=location,
             allDay=all_day,
-            attendees=attendees,
+            attendees=with_responsible_attorney(client, matter_id, attendees),
             timeZone=time_zone,
             type="Normal",
         ),
