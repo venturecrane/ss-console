@@ -227,15 +227,29 @@ def queue_record(env: dict[str, Any], job_id: str) -> dict[str, Any]:
 REPORT_LISTS = ("markers", "caption_discrepancies")
 
 
-def merged_delivery(fields: dict[str, Any]) -> dict[str, Any] | None:
+def incoming_delivery(fields: dict[str, Any]) -> dict[str, Any] | None:
     """``fields["delivery"]`` with any top-level report list folded in, or None
-    when the record carries neither (a note must not erase a stored report)."""
+    when the record carries neither."""
     raw = fields.get("delivery")
     delivery = dict(raw) if isinstance(raw, dict) else {}
     for key in REPORT_LISTS:
         if isinstance(fields.get(key), list):
             delivery[key] = fields[key]
     return delivery if (isinstance(raw, dict) or delivery) else None
+
+
+def merged_delivery(stored_json: str | None, fields: dict[str, Any]) -> dict[str, Any] | None:
+    """The stored delivery report with this record's report merged over it
+    (incoming keys win), or None when the record carries no report. A note
+    that brings only the markers never erases the files already stored."""
+    incoming = incoming_delivery(fields)
+    if incoming is None:
+        return None
+    try:
+        stored = json.loads(stored_json) if stored_json else {}
+    except ValueError:
+        stored = {}
+    return {**(stored if isinstance(stored, dict) else {}), **incoming}
 
 
 class DraftingLedger:
@@ -433,7 +447,7 @@ class DraftingLedger:
         conn = self._connect()
         try:
             conn.execute("BEGIN IMMEDIATE")
-            cur = conn.execute("SELECT state, cents FROM drafting_jobs WHERE id=?", (job_id,)).fetchone()
+            cur = conn.execute("SELECT state, cents, delivery_json FROM drafting_jobs WHERE id=?", (job_id,)).fetchone()
             if cur is None:
                 conn.rollback()
                 raise ValueError(f"no such job {job_id}")
@@ -451,7 +465,7 @@ class DraftingLedger:
                     (job_id, now, cents - int(cur["cents"] or 0)),
                 )
             resumed = cur["state"] == "failed" and state == "running"
-            delivery = merged_delivery(fields)
+            delivery = merged_delivery(cur["delivery_json"], fields)
             conn.execute(
                 "UPDATE drafting_jobs SET state=?, updated_at=?, "
                 "attempt=attempt + CASE WHEN ? THEN 1 ELSE 0 END, "

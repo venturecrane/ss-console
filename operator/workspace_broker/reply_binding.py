@@ -61,10 +61,11 @@ from .transmit_verbs import dispatch_transmit
 KINDS = ("demand_job", "drafting_job", "message")
 #: The job kinds: each binds on its own ledger with the same rules.
 JOB_KINDS = frozenset({"demand_job", "drafting_job"})
-#: The outcomes a requester is told about. NOT ``failed``: a failed job is
-#: resumable and SMD's to resolve (a live demand job, 2026-10-06, told the firm
-#: to narrow its request after our own stage failed), so its reply is refused
-#: here and the failure goes to SMD's shortfall alert instead.
+#: The outcomes a requester is told about, for EVERY job kind (demand and
+#: drafting alike; the name predates the drafting lane). NOT ``failed``: a
+#: failed job is resumable and SMD's to resolve (a live demand job, 2026-10-06,
+#: told the firm to narrow its request after our own stage failed), so its
+#: reply is refused here and the failure goes to SMD's shortfall alert instead.
 REPLYABLE_DEMAND_STATES = frozenset({"delivered", "held"})
 #: How old an email a bare message binding may still answer.
 RECENCY_DAYS = 14
@@ -116,9 +117,9 @@ def _job_ledger(broker: BrokerContext, kind: str) -> DemandLedger | DraftingLedg
 
 
 def _parse(raw: Any) -> tuple[str, str]:
-    """(kind, identifier), where kind is demand_job, message or message_graph."""
+    """(kind, identifier), where kind is demand_job, drafting_job, message or message_graph."""
     if not isinstance(raw, dict):
-        raise BindingRefused("a reply binding names a demand job or an email")
+        raise BindingRefused("a reply binding names a demand job, a drafting job or an email")
     kind = raw.get("kind")
     if kind in JOB_KINDS:
         job_id = str(raw.get("job_id") or "").strip()

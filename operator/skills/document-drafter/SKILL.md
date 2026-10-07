@@ -76,12 +76,14 @@ The request names one of these, in the firm's own words. Each maps to one class:
 | a mediation brief, a mediation statement                                                                                                           | `mediation_brief`    |
 | propounded discovery: special interrogatories, form interrogatories, requests for admission (RFAs), requests for production (RFPs), a set to serve | `discovery_set`      |
 | our responses to their discovery: objections and answers to interrogatories, RFAs or RFPs served on our client                                     | `discovery_response` |
-| a memo (to the file, to the attorney) on the matter                                                                                                | `memo`               |
+| a drafted memo document (a case or legal memo to the file or the attorney); never a note in the record                                             | `memo`               |
 | a deposition outline, depo outline, questions for a deposition                                                                                     | `depo_outline`       |
 
 One email may ask for two documents (a memo and a depo outline): submit one job per
 class, each on its own call. An ask that fits none of these (a demand is never this
-skill; a motion, a letter to opposing counsel) submits nothing here.
+skill; a motion, a letter to opposing counsel; a note or memo entry in the
+practice-management record, such as "add a note to file") submits nothing here and is
+never a paid job.
 
 **Discovery responses** are drafted as objections plus answers drawn from the record.
 Facts only the client knows are left as `{{CLIENT}}` items, and the verification is left
@@ -241,3 +243,12 @@ was actually submitted; otherwise say plainly that the step still needs doing.
 There is no scheduled invocation and no routine lane. REQUEST mode runs on a Named
 Administrator's own email, routed here by `matter-inbox-router`; DELIVER mode runs on
 the drafting job's completion wake (`/webhooks/handoff`).
+
+## References
+
+- `references/classes-and-markers.md`: the class map (including what is never a
+  class, such as a note to file), the three marker kinds, and the caption report.
+- `references/reply-shapes.md`: every reply each mode may send, and the one it never
+  sends.
+- `tests/selector_test.md` and `tests/fixture_cases.md`: the routing and grading
+  battery for both modes.

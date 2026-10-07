@@ -376,3 +376,14 @@ def test_the_demand_lane_is_untouched_by_a_drafting_submit(seat) -> None:
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     conn.close()
     assert "drafting_jobs" in tables and "demand_jobs" not in tables
+
+
+def test_a_non_admin_never_learns_which_classes_are_off(seat) -> None:
+    """FALSIFIER: check the class before the requester and a non-admin is told
+    the firm's switched-off classes."""
+    broker, _db, yaml_path, queue = seat
+    yaml_path.write_text(_yaml(classes="'memo'"))
+    out = submit(broker, requested_by="staff@firm.example", document_class="depo_outline")
+    assert out["accepted"] is False and "Named Administrators" in out["reason"]
+    assert "switched on" not in out["reason"]
+    assert queued(queue) == []

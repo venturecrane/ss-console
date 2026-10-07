@@ -218,6 +218,30 @@ describe('matter-inbox-router: the document drafting class', () => {
     expect(bullet()).not.toContain('demand_job_submit')
   })
 
+  it('takes a drafted memo DOCUMENT, never a note in the record', () => {
+    // A "memo" in Smokeball is also a note entry. If the class took every
+    // "memo" ask, "put a memo on the matter" would queue a paid drafting job.
+    for (const text of [bullet(), flat(read(RUBRIC))]) {
+      expect(text).toContain('**A memo here is a drafted memo DOCUMENT**')
+      expect(text).toContain('is NOT this class and is never a paid job')
+      expect(text).toContain('"add a note to file"')
+      expect(text).toContain('"put a memo on the matter in Smokeball"')
+    }
+    expect(flat(classTable(read(ROUTER)))).toContain(
+      'a drafted memo document (never a note in the record)'
+    )
+    expect(flat(read(SKILL))).toContain('never a paid job')
+  })
+
+  it('is named as outranking in-turn drafting in the attorney and send-as bullets', () => {
+    expect(flat(bulletFor(read(ROUTER), '**Attorney drafting request**'))).toContain(
+      'outranks this one per rubric rule 11'
+    )
+    expect(flat(bulletFor(read(ROUTER), '**Send-as request**'))).toContain(
+      "wherever the seat's `document-drafter` loads, per rubric rule 11"
+    )
+  })
+
   it('falls to attorney drafting where the seat does not carry it', () => {
     expect(bullet()).toContain(
       'handle the ask as the attorney drafting request class below instead'

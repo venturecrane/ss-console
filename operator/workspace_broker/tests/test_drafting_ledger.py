@@ -176,3 +176,19 @@ def test_the_completion_reply_is_claimed_once_per_outcome(ledger) -> None:
     ledger.unmark_replied(job, "1:delivered")
     assert ledger.mark_replied(job, "1:delivered") is True
     assert ledger.mark_replied("no-such-job") is False
+
+
+def test_a_note_with_only_markers_keeps_the_stored_files(ledger) -> None:
+    """FALSIFIER: write the incoming report over the stored one and a later
+    markers-only note erases delivery.files."""
+    job = ledger.submit(_env())
+    ledger.record(job, "running", {})
+    ledger.record(job, "delivered", {"delivery": {"files": [{"name": "a.docx", "size": 9, "role": "draft"}]}})
+    ledger.record(job, "delivered", {"markers": [{"kind": "ATTORNEY", "text": "target figure"}]})
+    proj = DraftingLedger.project(ledger.read(job))
+    assert proj["files"] == [{"name": "a.docx", "size": 9, "role": "draft"}]
+    assert proj["markers"] == [{"kind": "ATTORNEY", "text": "target figure"}]
+    # Incoming keys win over the stored ones.
+    ledger.record(job, "delivered", {"delivery": {"files": [{"name": "b.docx", "size": 3}]}})
+    proj = DraftingLedger.project(ledger.read(job))
+    assert proj["files"] == [{"name": "b.docx", "size": 3}] and proj["markers"][0]["kind"] == "ATTORNEY"

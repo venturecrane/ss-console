@@ -5,7 +5,9 @@ deposition outline a firm administrator asks the Operator to draft).
 A parallel copy of ``demand_verbs`` minus the re-run, registered the same way:
 ``verbs.py`` declares each verb's peer classes and checks them before handing
 the request here, and asserts at import that its drafting rows and ``VERBS``
-below agree.
+below agree. Like the ledger, it imports nothing from the demand lane: the two
+intake helpers both lanes use are this lane's own copies in
+``drafting_intake.py``, pinned to demand's behavior by a parity test.
 
 Peer gating, per verb (identical to demand):
 
@@ -21,10 +23,11 @@ Peer gating, per verb (identical to demand):
 THE SUBMIT CHECKS, in order, none of which spends anything:
 1. the envelope is exactly ``drafting_ledger.validate_envelope``'s shape;
 2. the skill ``document-drafter`` is LISTED and ENABLED on this seat;
-3. the document class is in the skill's ``enabled_classes`` (a class not
-   listed is refused with a sentence the skill relays to the requester);
-4. a per-cycle allowance is authored (``drafting_allowance_per_cycle``);
-5. the requester is a Named Administrator (``scope.admins``);
+3. a per-cycle allowance is authored (``drafting_allowance_per_cycle``);
+4. the requester is a Named Administrator (``scope.admins``);
+5. the document class is in the skill's ``enabled_classes`` (a class not
+   listed is refused with a sentence the skill relays to the requester;
+   checked after the requester, so a non-admin learns nothing of it);
 6. the filing target is the matter itself or the authored rehearsal matter;
 7. the cycle's allowance has a draft left;
 8. no unfinished draft of the same class on the matter (re-checked in the
@@ -43,7 +46,7 @@ from zoneinfo import ZoneInfo
 
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
-from .demand_verbs import _resolve_request_graph_id, operator_library_number
+from .drafting_intake import operator_library_number, resolve_request_graph_id
 from .drafting_ledger import (
     ALLOWANCE_KEY,
     AUDIT_TYPE,
@@ -56,7 +59,7 @@ from .drafting_ledger import (
     DraftingLedger,
     EnvelopeError,
     SubmitRefused,
-    merged_delivery,
+    incoming_delivery,
     validate_envelope,
 )
 from .medchron_ledger import admins_from_customer_yaml, cycle_from_customer_yaml
@@ -253,9 +256,6 @@ class DraftingVerbs:
                 "the drafting lane is not enabled on this seat (document-drafter is not listed); nothing was queued"
             )
         klass = envelope["document_class"]
-        if klass not in enabled_classes_of(settings):
-            label = CLASS_LABEL[klass]
-            return refused(f"{label[0].upper()}{label[1:]} isn't switched on for your firm; nothing was queued")
         try:
             anchor, effective_from = cycle_from_customer_yaml(self.customer_yaml)
         except AnchorInvalid as exc:
@@ -274,6 +274,11 @@ class DraftingVerbs:
                 "a draft may only be requested by one of the firm's Named Administrators, and the "
                 "requester on this submission is not one of them; nothing was queued"
             )
+        # After the requester check, so someone who may not ask never learns
+        # which classes the firm has switched on.
+        if klass not in enabled_classes_of(settings):
+            label = CLASS_LABEL[klass]
+            return refused(f"{label[0].upper()}{label[1:]} isn't switched on for your firm; nothing was queued")
         if not self._filing_target_ok(envelope, settings):
             return refused(
                 "a draft is filed on the matter it reads, or on the firm's own authored "
@@ -330,7 +335,10 @@ class DraftingVerbs:
             "reason": row["reason"],
             "folder_id": row["folder_id"],
         }
-        delivery = merged_delivery(dict(fields))
+        # The STORED report after this record (merged in the ledger), counted
+        # only when this record carried one.
+        stored = json.loads(row["delivery_json"]) if row.get("delivery_json") else None
+        delivery = stored if incoming_delivery(dict(fields)) is not None else None
         if isinstance(delivery, dict):
             meta["files"] = [
                 {"name": f.get("name"), "size": f.get("size"), "role": f.get("role")}
@@ -378,8 +386,8 @@ def drafting_dispatch(
         raise ValueError("drafting verbs not configured on this broker")
     envelope = request.get("envelope")
     if action == "drafting_job_submit" and isinstance(envelope, dict) and "request_graph_id" in envelope:
-        # Root only, the same resolution the demand lane uses (demand_verbs).
-        resolved = _resolve_request_graph_id(broker, envelope, peer_uid)
+        # Root only; the drafting lane's copy of the demand lane's resolution.
+        resolved = resolve_request_graph_id(broker, envelope, peer_uid)
         if "refused" in resolved:
             return {"ok": True, "accepted": False, "reason": resolved["refused"]}
         request = {**request, "envelope": resolved["envelope"]}
