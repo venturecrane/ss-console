@@ -1493,7 +1493,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // 07f6be76 -> 2de32d87 (overlay#423), 2026-10-06: a demand job's wake may call no send tool and
     // binds only by its job id.
     // 2de32d87 -> 467ff5cb (overlay#424), 2026-10-06: render_funding_case_eval classified internal_write.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="467ff5cb5580836857618ddbdd47bfae6cbcc040"')
+    // 467ff5cb -> e9280e5d (overlay#425 + #426), 2026-10-06: a demand wake's reply_bind by email id is
+    // refused before the broker is asked.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="e9280e5d3c9e4d4f91d90661cfeaffbb215c62b4"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
