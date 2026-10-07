@@ -111,6 +111,30 @@ def ask_repair(doorway: llm.Doorway, model: str, r: dict[str, Any], c: dict[str,
         return None, str(exc)[:150]
 
 
+def _rejection(new: str, anchor: str, claim: str) -> str | None:
+    """Why a repaired sentence may not replace the claim, or None. A repair
+    weakens or removes; it never moves a citation or grows the claim."""
+    cites_in_new = CITE.findall(new)
+    if cites_in_new and sorted(cites_in_new) != sorted(CITE.findall(anchor)):
+        return "citations changed"
+    if len(new.split()) > len(claim.split()) * 1.25 + 10:
+        return "expanded"
+    return None
+
+
+def _residual_drop_row(r: dict[str, Any], c: dict[str, Any]) -> dict[str, Any]:
+    """The edit-log row for a claim dropped at the round cap (the dropped-claims record reads it)."""
+    return {
+        "key": r["key"],
+        "action": "drop-residual",
+        "verdict": r["verdict"],
+        "exhibit": c["exhibit"],
+        "page_spec": c["page_spec"],
+        "note": str(r.get("note") or "")[:300],
+        "old": c["claim"][:300],
+    }
+
+
 def run(
     doorway: llm.Doorway,
     model: str,
@@ -187,15 +211,7 @@ def run(
             continue
         if drop_residual:
             apply(anchor, "")
-            logrow(
-                key=r["key"],
-                action="drop-residual",
-                verdict=r["verdict"],
-                exhibit=c["exhibit"],
-                page_spec=c["page_spec"],
-                note=str(r.get("note") or "")[:300],
-                old=c["claim"][:300],
-            )
+            logrow(**_residual_drop_row(r, c))
             dropped += 1
             continue
         new, err = ask_repair(doorway, model, r, c)
@@ -208,16 +224,12 @@ def run(
             logrow(key=r["key"], action="repair", result="DROP", old=c["claim"][:300])
             dropped += 1
             continue
-        cites_in_new = CITE.findall(new)
-        if cites_in_new and sorted(cites_in_new) != sorted(CITE.findall(anchor)):
-            logrow(key=r["key"], action="repair", result="REJECT: citations changed")
+        why = _rejection(new, anchor, c["claim"])
+        if why:
+            logrow(key=r["key"], action="repair", result=f"REJECT: {why}")
             rejected += 1
             continue
-        if len(new.split()) > len(c["claim"].split()) * 1.25 + 10:
-            logrow(key=r["key"], action="repair", result="REJECT: expanded")
-            rejected += 1
-            continue
-        apply(anchor, new if cites_in_new else new + anchor[len(c["claim"]) :])
+        apply(anchor, new if CITE.findall(new) else new + anchor[len(c["claim"]) :])
         logrow(key=r["key"], action="repair", old=c["claim"][:300], new=new[:300])
         repaired += 1
         log(f"  [{i}/{len(failing)}] repaired Ex{r['exhibit']} p.{r.get('page_spec')}")
