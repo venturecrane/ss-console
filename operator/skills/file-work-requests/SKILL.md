@@ -310,12 +310,17 @@ form; the firm keeps its copy in the Document Library.
    providers from the Medicals tab, and "MVA" for a motor vehicle matter.
 2. `filed`: reply `Filed: Funding Case Evaluation - prefilled.pdf on matter
 <matter-number>, prefilled from the file.` then `Filled: <filled, joined>.`
-   then `Not in the file: <not_in_file, joined>.` (omit when empty), then
+   then `Not in the file (left blank on the form): <not_in_file, joined>.`
+   (omit when empty), then
    `Left for <attorney first name>: <left_for_firm, joined>.` (the
    responsible attorney), then `Left for <client first name>: <left_for_client, joined>.`
    When `providers_beyond_four` is above 0: `The Medicals tab lists <n> more
 providers than the form has lines for.` Then `The providers listed are the
 Medicals tab's; some may be records requests rather than treatment.`
+   Quote every list exactly as returned, one line per heading: never reword,
+   abbreviate or regroup an item. This form prints NO marker: a box the file
+   did not hold is blank, so never say a gap is "marked" or "printed" on it
+   (that is the letters' behavior, not this form's).
 3. `refused`: say what it said, plainly, and that nothing was filed. A form
    that "does not match" means the library copy changed: say so; never fill it
    another way.
