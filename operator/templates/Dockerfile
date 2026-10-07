@@ -1124,7 +1124,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # the reply binding (no send tool, binds only its own drafting job, a failed
 # job's status is a shortfall), and the drafting lane on request cards. Pairs
 # with ss-console #3092 (broker) and #3093 (runner).
-ARG OVERLAY_REF="0415efb1b33ec139daf992a7a037791e5c81368e"
+# 2026-10-07 (099f9fdd, the overlay #430 merge commit). A chronology job's
+# completion wake is fenced like demand and drafting: every send tool refused,
+# the bound reply to the requester its only channel (binding kind medchron_job,
+# ss-console #3096); medchron_job_submit takes the requester and request ref
+# from the verified inbound email.
+ARG OVERLAY_REF="099f9fdd5a7545b3b7a5c251842f853e6d371339"
 
 ARG CUSTOMER_SLUG=customer-zero
 

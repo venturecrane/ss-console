@@ -1502,7 +1502,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // 6731de6a -> 0415efb1 (overlay#429), 2026-10-07: drafting_job_submit/status/allowance, the drafting
     // wake in the reply binding (send tools refused, binds only its own drafting job), and the drafting
     // lane on request cards.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="0415efb1b33ec139daf992a7a037791e5c81368e"')
+    // 0415efb1 -> 099f9fdd (overlay#430), 2026-10-07: a chronology job's completion wake is fenced
+    // (send tools refused, binds only its own medchron_job), and the chronology submit takes its
+    // requester from the verified inbound email.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="099f9fdd5a7545b3b7a5c251842f853e6d371339"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
