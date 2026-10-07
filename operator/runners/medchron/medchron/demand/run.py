@@ -53,6 +53,7 @@ from . import (
     preflight,
     premise,
     pull,
+    quotefix,
     summarize,
     transcribe,
     vendor,
@@ -65,6 +66,11 @@ def _vendor_from_env() -> Any:
     from smokeball_connector.records_vendor import client_from_env
 
     return client_from_env()
+
+
+class GateQuotesLeft(RuntimeError):
+    """Quote findings left after the deterministic repair: recorded failed, so a
+    resume re-runs only repair and gate (the paid stages are on disk)."""
 
 
 class DemandHold(RuntimeError):
@@ -137,6 +143,7 @@ class DemandRun:
         self._seat: Any = None
         self.date_stamp, self.long_date = self._frozen_dates(today())
         self.readback_pause = readback_pause
+        self._repairs: dict[str, list[str]] = {}
         self.vendor_factory = vendor_factory or _vendor_from_env
 
     # ---- plumbing ------------------------------------------------------------------
@@ -349,13 +356,14 @@ class DemandRun:
         cc = crosscheck.check(md, self._json("facts.json"))
         if cc["mismatches"]:
             raise DemandHold("the letter's RE block contradicts the matter record: " + "; ".join(cc["mismatches"]))
-        g = self._gate("gate.json", md)
+        g, md = self._gate("gate.json", md, self.data / f"draft-v{version}.md")
         audit_md = (self.data / f"audit-v{version}.md").read_text(encoding="utf-8")
         notes = [
             f"Left for the attorney by the auditor (DRIFTS): {x}" for x in draft.finding_lines(audit_md, ("DRIFTS",))
         ]
         notes += [f"Not checked against the matter record: {x}" for x in cc["unchecked"]]
         notes += [f"Held out, never read (privilege wall: {w['reason']}): {w['name']}" for w in self._walled()]
+        notes += [f"Drafting gate repair (the letter): {x}" for x in g.get("repairs") or []]
         return notes + [f"Drafting gate: {w}" for w in g["warnings"]]
 
     def _walled(self) -> list[dict[str, Any]]:
@@ -375,17 +383,41 @@ class DemandRun:
             head + "Never read by a model; clear any of them and ask again to include it.\n\n" + "\n".join(lines) + "\n"
         )
 
-    def _gate(self, name: str, md: str) -> dict[str, Any]:
-        g = self._json(name) if self._is_done(name) else None
-        if g is None:
+    def _gate(self, name: str, md: str, path: Path | None = None) -> tuple[dict[str, Any], str]:
+        """Gate ``md``; on a quote finding, repair deterministically and gate
+        again (``quotefix.py``). Returns the passing result and the text that
+        passed (written back to ``path`` when given). Done only once PASSED, so
+        a resume re-runs repair and gate and never a paid stage. A refusal of
+        quotes alone that survives the repair is ``failed`` (resumable); any
+        other refusal holds."""
+        what = {"gate.json": "the letter", "gate-gap-audit.json": "the gap audit"}.get(name, "the coverage report")
+        if self._is_done(name):
+            done = self._json(name)
+            self._repairs[what] = list(done.get("repairs") or [])
+            return done, (path.read_text(encoding="utf-8") if path else md)
+        g = gate.run(self.data, self.firm, md, name=name)
+        log: list[str] = []
+        if not g["passed"] and quotefix.quote_findings(g["refusals"]):
+            md, log = quotefix.repair(md, g["refusals"], quotefix.source_texts(self.data, self.firm))
+            if path is not None:
+                tmp = path.with_name(f".{path.name}.tmp")
+                tmp.write_text(md, encoding="utf-8")
+                tmp.replace(path)
             g = gate.run(self.data, self.firm, md, name=name)
-            self._done(name)
+        self._repairs.setdefault(what, []).extend(log)
         if not g["passed"]:
-            what = {"gate.json": "the letter", "gate-gap-audit.json": "the gap audit"}.get(name, "the coverage report")
+            if g["refusals"] and all(quotefix.quote_findings([r]) for r in g["refusals"]):
+                raise GateQuotesLeft(
+                    f"the drafting gate still finds quotations in {what} that are not in the record "
+                    f"after repair: " + "; ".join(g["refusals"])[:400]
+                )
             raise DemandHold(
                 f"the drafting gate refused {what} ({g['disposition']}): " + "; ".join(g["refusals"])[:400]
             )
-        return g
+        g["repairs"] = self._repairs.get(what, [])
+        (self.data / name).write_text(json.dumps(g, indent=1), encoding="utf-8")
+        self._done(name)
+        return g, md
 
     # ---- render once, then file -----------------------------------------------------------
     def _render(self, build: Callable[[], list[tuple[str, Path]]], coverage: bool) -> None:
@@ -403,7 +435,11 @@ class DemandRun:
         files: list[tuple[str, Path]] = []
         if self.job.wants("gap_audit"):
             gap = (self.data / "gap-audit.md").read_text(encoding="utf-8")
-            self._gate("gate-gap-audit.json", gap)
+            gg, gap = self._gate("gate-gap-audit.json", gap, self.data / "gap-audit.md")
+            if gg.get("repairs"):  # code-authored, so a changed quotation is visible
+                gap += (
+                    "\n\n## Quotations repaired before filing\n\n" + "\n".join(f"- {x}" for x in gg["repairs"]) + "\n"
+                )
             # Code-authored, after the gate: directory facts and the wall's own
             # list, not record facts.
             if (self.data / "vendor.json").is_file():
@@ -417,7 +453,8 @@ class DemandRun:
                 path, end_lists, fmt_notes = deliver.render_demand(self.firm, md, out, client)
             except deliver.FormatRefused as exc:
                 raise DemandHold("the format check refused the demand file: " + "; ".join(exc.fails)[:400]) from None
-            extra = "\n".join(f"- {n}" for n in [*notes, *fmt_notes])
+            gap_fixes = [f"Drafting gate repair (the gap audit): {x}" for x in self._repairs.get("the gap audit") or []]
+            extra = "\n".join(f"- {n}" for n in [*notes, *gap_fixes, *fmt_notes])
             notes_md = f"# Attorney notes: {path.stem}\n\n{end_lists}\n" + (
                 f"\n## For review\n\n{extra}\n" if extra else ""
             )
@@ -448,7 +485,7 @@ class DemandRun:
 
     def _coverage(self, md: str, *, gated: bool) -> Verdict:
         if gated:  # a model wrote it (compose's Section 0 path): it is checked like the letter
-            self._gate("gate-coverage.json", md)
+            _g, md = self._gate("gate-coverage.json", md)
         out = deliver.out_dir(self.data)
         nm = deliver.names(self.firm, self.job, self.date_stamp)
         self._render(lambda: [("coverage_report", deliver.render_plain(md, out, nm["coverage"], self._author))], True)
@@ -536,6 +573,8 @@ class DemandRun:
             v = self._walk()
         except limits_mod.LimitHold as hold:
             v = Verdict("failed", stage=hold.setting, reason=hold.reason)
+        except GateQuotesLeft as exc:
+            v = Verdict("failed", stage="gate", reason=str(exc))
         except (DemandHold, draft.AuditIncomplete) as h:
             v = Verdict("held", stage=self._current(), reason=str(h))
         except Exception as exc:  # noqa: BLE001 - the verdict carries a sentence; the trace goes to the log

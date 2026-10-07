@@ -361,7 +361,10 @@ class _Stream:
 class ScriptedClient:
     """Answers by which prompt the system block carries. Records every call."""
 
-    def __init__(self, draft: str = DRAFT, truncate_digest_once: bool = False, audit: str | None = None) -> None:
+    def __init__(
+        self, draft: str = DRAFT, truncate_digest_once: bool = False, audit: str | None = None, gap: str | None = None
+    ) -> None:
+        self.gap = gap or GAP
         self.calls: list[dict[str, Any]] = []
         self.draft, self.truncate_once = draft, truncate_digest_once
         self.audit = audit or "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
@@ -381,7 +384,7 @@ class ScriptedClient:
         if "COMPOSE-PROMPT" in system:
             return self.draft
         if "GAP-PROMPT" in system:
-            return GAP
+            return self.gap
         return "transcribed page text"
 
     def _msg(self, params: dict[str, Any]) -> Any:

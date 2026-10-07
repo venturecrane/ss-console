@@ -1168,3 +1168,76 @@ def test_a_reservation_of_rights_is_a_flag_not_a_fail(tmp_path):
     out = premise.decide([{"name": "ROR letter", "text_path": str(t)}], {"premise_hits": []}, {"insurer": "X"}, prem)
     assert out["gates"][1]["passed"] is True
     assert any("reservation of rights" in f for f in out["premise_facts"])
+
+
+# ---- practice job 2 (2026-10-06): one near-quote held a whole paid delivery ---------------
+NEAR = (
+    'The record states the patient was "seen 01/15/2026 for neck pain following a collision" (ER record 1-15-26, p. 1).'
+)
+FAR = (
+    'The record states "the patient did not immediately initiate chiropractic care for weeks" '
+    "(ER record 1-15-26, p. 1)."
+)
+
+
+def _gap_with(sentence: str) -> str:
+    from demand_testkit import GAP
+
+    return GAP.replace("## F. Demand Readiness", sentence + "\n\n## F. Demand Readiness")
+
+
+def test_a_near_quote_in_the_gap_audit_is_normalized_to_the_source_and_filed(tmp_path, pricing):
+    seat = seat_with(standard_docs())
+    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient(gap=_gap_with(NEAR)))
+    assert v.outcome == "delivered", v.reason
+    gap = (tmp_path / "job" / "data" / "gap-audit.md").read_text()
+    assert '"seen 01/15/2026 for neck pain after a collision"' in gap  # the record's own words
+    g = json.loads((tmp_path / "job" / "data" / "gate-gap-audit.json").read_text())
+    assert g["passed"] and g["repairs"] and g["repairs"][0].startswith("quote normalized to source")
+    import docx
+
+    notes = docx.Document(
+        str(tmp_path / "job" / "data" / "out" / "demand" / "Demand.Alpha Example - attorney notes.docx")
+    )
+    assert any("quote normalized to source" in p.text for p in notes.paragraphs)
+
+
+def test_a_quote_with_no_close_region_becomes_a_paraphrase_with_its_cite(tmp_path, pricing):
+    seat = seat_with(standard_docs())
+    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient(gap=_gap_with(FAR)))
+    assert v.outcome == "delivered", v.reason
+    gap = (tmp_path / "job" / "data" / "gap-audit.md").read_text()
+    assert '"the patient did not' not in gap
+    assert "the patient did not immediately initiate chiropractic care for weeks (ER record 1-15-26, p. 1)" in gap
+    assert json.loads((tmp_path / "job" / "data" / "gate-gap-audit.json").read_text())["repairs"][0].startswith(
+        "quote converted to paraphrase"
+    )
+
+
+def test_a_near_quote_in_the_letter_is_repaired_too(tmp_path, pricing):
+    letter = DRAFT.replace(
+        "The emergency department diagnosed a cervical strain",
+        'The emergency department record says "seen 01/15/2026 for neck pain following a collision" and diagnosed a cervical strain',
+    )
+    seat = seat_with(standard_docs())
+    # the auditor passes it; only the gate's contiguity check would refuse it
+    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient(draft=letter))
+    assert v.outcome in ("delivered", "held"), v.reason
+    if v.outcome == "held":  # the free mechanical check catches it first: also correct, nothing filed
+        assert "quotation" in v.reason and seat.sent == []
+
+
+def test_gate_quote_failures_left_after_repair_are_failed_and_resume_repays_nothing(tmp_path, pricing, monkeypatch):
+    from medchron.demand import quotefix
+
+    real = quotefix.repair
+    monkeypatch.setattr(quotefix, "repair", lambda md, refusals, sources: (md, []))  # a repair that fixes nothing
+    seat = seat_with(standard_docs())
+    client = ScriptedClient(gap=_gap_with(NEAR))
+    _r, v, _ = _run(tmp_path, pricing, seat, client)
+    assert v.outcome == "failed" and v.stage == "gate" and seat.sent == []
+    paid = len(client.calls)
+    monkeypatch.setattr(quotefix, "repair", real)
+    _r, v2, _ = _run(tmp_path, pricing, seat, client)
+    assert v2.outcome == "delivered", v2.reason
+    assert len(client.calls) == paid  # resume re-ran repair, gate, render and file only
