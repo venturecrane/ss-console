@@ -1258,7 +1258,7 @@ def test_gate_quote_failures_left_after_repair_are_failed_and_resume_repays_noth
     assert len(client.calls) == paid  # resume re-ran repair, gate, render and file only
 
 
-# ---- Martello 2026-10-06: a workers' comp policy's boilerplate stopped G2 -------------------
+# ---- 2026-10-06: a workers' comp policy's boilerplate stopped G2 ----------------------------
 def test_g2_never_reads_a_policy_copy_or_its_boilerplate(tmp_path, pricing):
     policy = make_pdf(
         [

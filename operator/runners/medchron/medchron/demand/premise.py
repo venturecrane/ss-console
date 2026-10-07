@@ -257,7 +257,7 @@ def decide(
     # G2 reads ONLY the carrier's own correspondence on this claim
     # (``carrier_letters``): never a policy copy, a form, a benefit booklet,
     # a provider's document, or anything the firm or the Operator wrote. A
-    # workers' comp policy's boilerplate stopped Martello on 2026-10-06.
+    # workers' comp policy's boilerplate stopped a live job on 2026-10-06.
     theirs = carrier_letters(texts, prem)
     denials = [
         h for h in _phrase_hits(theirs, prem["denial_phrases"], negatable=True) if not limits_refusal(h["quote"])
