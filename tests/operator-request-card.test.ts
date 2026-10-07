@@ -280,6 +280,24 @@ describe('POST /api/internal/operator-request-card', () => {
     expect(row.attempts).toBe(2)
   })
 
+  it('a drafting job card is recorded and sent for every terminal state (0123)', async () => {
+    // FALSIFIER: drop 'drafting' from JOB_LANES and the parse refuses it (400);
+    // drop migration 0123 and the job_lane CHECK rejects the INSERT.
+    for (const state of ['delivered', 'failed', 'held'] as const) {
+      const key = `${state
+        .padEnd(64, '0')
+        .replace(/[^0-9a-f]/g, 'a')
+        .slice(0, 64)}:job_done`
+      const res = await post(
+        body({ card_key: key, kind: 'job_done', job: { lane: 'drafting', state, reason: null } })
+      )
+      expect(res.status, state).toBe(200)
+    }
+    const recorded = (await rows()).filter((r) => r.job_lane === 'drafting')
+    expect(recorded.map((r) => r.job_state).sort()).toEqual(['delivered', 'failed', 'held'])
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
   it('no Resend key is a failure, never a pretend send', async () => {
     delete (testEnv as unknown as Record<string, unknown>).RESEND_API_KEY
     expect((await post(body())).status).toBe(502)
