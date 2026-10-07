@@ -400,28 +400,63 @@ def one_question(questions: list[dict[str, Any]]) -> str | None:
 
 
 # ---- 5. the orders ---------------------------------------------------------------------------------
-def build(
-    client: Any,
-    yc: Any,
-    matter_id: str,
-    order_by_email: str,
-    today: date,
-    vendor_name: str,
-    log: Callable[[str], None] = lambda m: None,
-) -> dict[str, Any]:
-    meta, blob = latest_audit(client, matter_id)
-    if blob is None:
-        return {"status": "refused", "reason": "No filed gap audit is on this matter. Nothing was ordered."}
-    rows = audit_rows(blob)
+NEXT_STEP = (
+    "Pass the ready order to place_records_order unchanged (its one [act] line goes in the "
+    "reply) and ask `question` as written, once. Say each `merged` line. Name `after_this_order` as what is "
+    "ordered next, once this one is placed. On missing_client_facts, say what the client contact lacks and "
+    "list would_order so she sees what will be ordered once it is fixed. Nothing has been ordered."
+)
+
+
+def split_rows(rows: list[dict[str, str]]) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
+    """(orderable rows, the rest with why)."""
     kept, skipped = [], []
     for r in rows:
         why = classify(r)
-        (skipped.append({"item": int(r["item"]), "provider": r["provider"], "why": why}) if why else kept.append(r))
-    providers = group(kept, today, first_date(kept, today))
-    hints = medicals_contacts(client, matter_id)
-    home = client_home(client, matter_id)
+        if why:
+            skipped.append({"item": int(r["item"]), "provider": r["provider"], "why": why})
+        else:
+            kept.append(r)
+    return kept, skipped
+
+
+def _question(p: dict[str, Any], res: dict[str, Any]) -> dict[str, Any]:
+    if p["service_start"] is None:
+        return {"facility": p["name"], "items": p["items"], "reason": "the audit's rows name no date to order from"}
+    return {
+        "facility": p["name"],
+        "items": p["items"],
+        "reason": "several locations in the vendor's directory match"
+        if res["outcome"] == "ambiguous"
+        else "no location in the vendor's directory matches at an address the file gives",
+        "candidates": res["candidates"],
+    }
+
+
+def _facility(p: dict[str, Any], res: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "rank": min(_RANK.get(r["priority"].split()[0].casefold(), 3) for r in p["rows"]),
+        "providers": [p["name"]],
+        # the search that found it, plus the id: prepare re-reads the
+        # directory and keeps exactly this location
+        "name": res["term"],
+        **({"zip": res["zip"]} if res["zip"] else {}),
+        "custodian_id": res["location"]["custodian_id"],
+        "record_types": p["types"],
+        "service_start": p["service_start"],
+        "service_end": p["service_end"],
+    }
+
+
+def resolve_providers(
+    client: Any, yc: Any, matter_id: str, providers: list[dict[str, Any]], log: Callable[[str], None]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Each provider located (records first) into a facility, or a question.
+    Sets each provider's outcome, evidence flag and, when matched, location."""
     from .library import list_matter_files
 
+    hints = medicals_contacts(client, matter_id)
+    home = client_home(client, matter_id)
     files = list_matter_files(client, matter_id)
     facilities, questions = [], []
     for p in providers:
@@ -436,51 +471,35 @@ def build(
             log,
         )
         p["outcome"], p["evidence"] = res["outcome"], res.get("evidence", False)
-        if p["service_start"] is None:
-            questions.append(
-                {"facility": p["name"], "items": p["items"], "reason": "the audit's rows name no date to order from"}
-            )
+        if p["service_start"] is None or res["outcome"] != "matched":
+            questions.append(_question(p, res))
             continue
-        if res["outcome"] != "matched":
-            questions.append(
-                {
-                    "facility": p["name"],
-                    "items": p["items"],
-                    "reason": "several locations in the vendor's directory match"
-                    if res["outcome"] == "ambiguous"
-                    else "no location in the vendor's directory matches at an address the file gives",
-                    "candidates": res["candidates"],
-                }
-            )
-            continue
-        loc = res["location"]
-        p["location"] = loc
-        facilities.append(
-            {
-                "rank": min(_RANK.get(r["priority"].split()[0].casefold(), 3) for r in p["rows"]),
-                "providers": [p["name"]],
-                # the search that found it, plus the id: prepare re-reads the
-                # directory and keeps exactly this location
-                "name": res["term"],
-                **({"zip": res["zip"]} if res["zip"] else {}),
-                "custodian_id": loc["custodian_id"],
-                "record_types": p["types"],
-                "service_start": p["service_start"],
-                "service_end": p["service_end"],
-            }
-        )
+        p["location"] = res["location"]
+        facilities.append(_facility(p, res))
+    return facilities, questions
+
+
+def one_order(
+    facilities: list[dict[str, Any]], providers: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+    """(the order's facilities, the merged lines, the providers left for the
+    next order). ONE order, so ONE [act] line and one yes per matter: the
+    facilities whose rows block the demand first; any beyond the limit wait."""
     facilities = merge_same_custodian(facilities)
+    name_of = {p["location"]["custodian_id"]: p["location"]["name"] for p in providers if p.get("location")}
     merged = [
-        f"{' and '.join(f['providers'])} are one location at the vendor ({next(p['location']['name'] for p in providers if p.get('location') and p['location']['custodian_id'] == f['custodian_id'])}); ordered once"
+        f"{' and '.join(f['providers'])} are one location at the vendor ({name_of[f['custodian_id']]}); ordered once"
         for f in facilities
         if len(f["providers"]) > 1
     ]
-    # ONE order, so ONE [act] line and one yes per matter: the facilities whose
-    # rows block the demand first; any beyond the order's limit wait for the next
     facilities.sort(key=lambda f: f["rank"])
     later = [f["providers"][0] for f in facilities[MAX_LOCATIONS:]]
-    facilities = [{k: v for k, v in f.items() if k not in ("rank", "providers")} for f in facilities[:MAX_LOCATIONS]]
-    would_order = [
+    kept = [{k: v for k, v in f.items() if k not in ("rank", "providers")} for f in facilities[:MAX_LOCATIONS]]
+    return kept, merged, later
+
+
+def _would_order(providers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
         {
             "custodian": p["location"]["name"],
             "address": p["location"]["address"],
@@ -492,6 +511,24 @@ def build(
         for p in providers
         if p.get("location")
     ]
+
+
+def build(
+    client: Any,
+    yc: Any,
+    matter_id: str,
+    order_by_email: str,
+    today: date,
+    vendor_name: str,
+    log: Callable[[str], None] = lambda m: None,
+) -> dict[str, Any]:
+    meta, blob = latest_audit(client, matter_id)
+    if blob is None:
+        return {"status": "refused", "reason": "No filed gap audit is on this matter. Nothing was ordered."}
+    kept, skipped = split_rows(audit_rows(blob))
+    providers = group(kept, today, first_date(kept, today))
+    facilities, questions = resolve_providers(client, yc, matter_id, providers, log)
+    facilities, merged, later = one_order(facilities, providers)
     orders = []
     if facilities:
         request = {
@@ -501,27 +538,19 @@ def build(
             "vendor_name": vendor_name,
         }
         orders.append(prepare(client, yc, request, today))
+    shown = ("name", "items", "types", "service_start", "service_end", "basis", "outcome", "evidence")
     return {
         "status": "ready" if orders and all(o.get("status") == "ready" for o in orders) else "needs_choice",
         "gap_audit": (meta or {}).get("name"),
         "orderable_rows": len(kept),
         "rows_not_orderable": skipped,
-        "providers": [
-            {
-                k: p.get(k)
-                for k in ("name", "items", "types", "service_start", "service_end", "basis", "outcome", "evidence")
-            }
-            for p in providers
-        ],
+        "providers": [{k: p.get(k) for k in shown} for p in providers],
         "counts": {o: sum(1 for p in providers if p["outcome"] == o) for o in ("matched", "ambiguous", "no_match")},
-        "would_order": would_order,
+        "would_order": _would_order(providers),
         "merged": merged,
         "after_this_order": later,
         "orders": orders,
         "questions": questions,
         "question": one_question(questions),
-        "next_step": "Pass the ready order to place_records_order unchanged (its one [act] line goes in the "
-        "reply) and ask `question` as written, once. Say each `merged` line. Name `after_this_order` as what is "
-        "ordered next, once this one is placed. On missing_client_facts, say what the client contact lacks and "
-        "list would_order so she sees what will be ordered once it is fixed. Nothing has been ordered.",
+        "next_step": NEXT_STEP,
     }
