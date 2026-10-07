@@ -73,8 +73,8 @@ describe('medical-chronology-maintainer: the allowance unit', () => {
     // submission and on an allowance hold, but NOT on a successful delivery --
     // the one moment the allowance actually moved. A firm that has to ask what
     // is left has been handed a bill with no balance.
-    const start = body.indexOf('3. **Delivered:**')
-    const end = body.indexOf('4. **Held:**')
+    const start = body.indexOf('- **delivered**:')
+    const end = body.indexOf('- **held**:')
     expect(start, 'the Delivered step must exist').toBeGreaterThan(-1)
     expect(end).toBeGreaterThan(start)
     const delivered = body.slice(start, end)
@@ -89,8 +89,8 @@ describe('medical-chronology-maintainer: the allowance unit', () => {
     // The string gate above catches a MODELLED figure ("$1,200"). This catches
     // the absence of the instruction itself, which is what a future edit would
     // drop first.
-    const start = body.indexOf('3. **Delivered:**')
-    const end = body.indexOf('4. **Held:**')
+    const start = body.indexOf('- **delivered**:')
+    const end = body.indexOf('- **held**:')
     const delivered = body.slice(start, end).toLowerCase()
     expect(delivered, 'the delivery step must say in words that money is never stated').toContain(
       'dollar'
