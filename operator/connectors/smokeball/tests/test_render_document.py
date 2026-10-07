@@ -349,8 +349,17 @@ def test_a_delegated_heading_still_carries_the_classs_required_layout() -> None:
     para = next(p for p in doc.paragraphs if "Introduction" in p.text)
     assert para.style.name == "Heading 1"
     assert para.alignment == WD_ALIGN_PARAGRAPH.CENTER
-    # ...and emphasis is left to the firm's style rather than forced over it.
-    assert not any(r.bold for r in para.runs)
+    # ...and a house-style class enforces the attorney's emphasis over it:
+    # bold, explicitly NOT underlined.
+    assert all(r.bold for r in para.runs) and all(r.underline is False for r in para.runs)
+
+
+def test_a_class_without_house_style_leaves_delegated_emphasis_to_the_firm() -> None:
+    base = make_firm_template(drop_styles=("List Bullet", "Table Grid"))
+    blob, _ = render_document("# Introduction\n\nText.\n", "demand_letter", base)
+    para = next(p for p in Document(io.BytesIO(blob)).paragraphs if "Introduction" in p.text)
+    assert para.style.name == "Heading 1"
+    assert not any(r.bold for r in para.runs) and all(r.underline is None for r in para.runs)
 
 
 def test_a_base_defining_neither_still_goes_inline_and_says_what_to_add() -> None:

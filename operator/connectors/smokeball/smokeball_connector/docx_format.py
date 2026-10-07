@@ -37,11 +37,19 @@ letterhead on a client letter is worse than an honest "not yet").
 from __future__ import annotations
 
 import io
-import re
-from dataclasses import dataclass
-
 from . import docgrammar as g
-from .docx_base import has_style, open_as_base, usable_paragraph_style
+from .docx_base import (
+    add_page_field,
+    footer_has_any_field,
+    footer_has_page_field,
+    has_style,
+    open_as_base,
+    plain_letter_paper,
+    set_run_font,
+    set_table_borders,
+    usable_paragraph_style,
+)
+from .docx_classes import _LABEL_MAX_CHARS, CLASS_RULES, DOCUMENT_CLASSES, ClassRules
 from .docx_format_types import (
     DEFAULT_FONT,
     DEFAULT_SIZE_PT,
@@ -58,82 +66,6 @@ from .letterhead import (
     is_starter_derived,
     load_firm_identity,
 )
-
-# ---- Document classes and their styling rules --------------------------------
-
-DOCUMENT_CLASSES = (
-    "discovery_set",
-    "discovery_response",
-    "demand_letter",
-    "mediation_brief",
-    "memo",
-    "letter",
-)
-
-# Label shapes the renderer STYLES (it never writes them). Anchored at line
-# start, whole-line by construction of the skeletons ("**SPECIAL INTERROGATORY
-# NO. 7:**"). A mid-paragraph mention is prose and stays body text.
-_DISCOVERY_LABEL = re.compile(
-    r"^(?:RESPONSE TO |SUPPLEMENTAL RESPONSE TO )?"
-    r"(?:SPECIAL INTERROGATOR(?:Y|IES)|FORM INTERROGATOR(?:Y|IES)|"
-    r"REQUESTS? FOR (?:PRODUCTION|ADMISSION|INSPECTION)|INSPECTION DEMANDS?|"
-    r"DEMANDS? FOR (?:PRODUCTION|INSPECTION))"
-    r"\s+NO\.?\s*\S",
-    re.IGNORECASE,
-)
-_DEFINITION_LABEL = re.compile(r"^DEFINITIONS?\b", re.IGNORECASE)
-_LABEL_MAX_CHARS = 90
-
-
-@dataclass(frozen=True)
-class ClassRules:
-    """Per-class styling decisions. Typography values here are the PRODUCT
-    DEFAULTS used only when the base template lacks the named style; they are
-    deliberately the authored standards of the first engagements (plain Word,
-    not pleading paper) and are labeled as starters the firm edits in Word."""
-
-    label_patterns: tuple[re.Pattern[str], ...] = ()
-    # Paragraphs following a label (until the next label/heading/table) are item
-    # text: first-line indented, with the "between items" spacing as spacing
-    # after the paragraph (the authored standard: double-spaced BETWEEN requests,
-    # not more).
-    item_text: bool = False
-    caption_table_first: bool = False  # first table is the caption (court docs)
-    heading_align: tuple[str, str, str] = ("center", "left", "left")
-    heading_underline: tuple[bool, bool, bool] = (False, True, False)
-    heading_indent_in: tuple[float, float, float] = (0.0, 0.5, 1.0)
-    page_numbers: bool = True
-    body_line_spacing: float = 1.0  # multiple
-    item_line_spacing: float = 2.0
-    item_space_after_pt: float = 0.0
-    first_line_indent_in: float = 0.5
-
-
-CLASS_RULES: dict[str, ClassRules] = {
-    "discovery_set": ClassRules(
-        label_patterns=(_DISCOVERY_LABEL, _DEFINITION_LABEL),
-        item_text=True,
-        caption_table_first=True,
-        item_line_spacing=2.0,
-        item_space_after_pt=12.0,
-    ),
-    "discovery_response": ClassRules(
-        label_patterns=(_DISCOVERY_LABEL, _DEFINITION_LABEL),
-        item_text=True,
-        caption_table_first=True,
-        item_line_spacing=2.0,
-        item_space_after_pt=12.0,
-    ),
-    "demand_letter": ClassRules(page_numbers=True, heading_align=("left", "left", "left")),
-    "mediation_brief": ClassRules(
-        caption_table_first=True,
-        heading_align=("center", "left", "left"),
-        heading_underline=(False, True, False),
-        body_line_spacing=2.0,
-    ),
-    "memo": ClassRules(heading_align=("left", "left", "left"), page_numbers=True),
-    "letter": ClassRules(heading_align=("left", "left", "left"), page_numbers=False),
-}
 
 # ---- Rendering -----------------------------------------------------------------
 
@@ -158,12 +90,14 @@ def render_document(
     rules = CLASS_RULES[document_class]
     report = report or FormatReport(document_class=document_class)
     doc = open_as_base(base_bytes, report)
+    if rules.letter_paper:
+        plain_letter_paper(doc, report)
     _letterhead(doc, document_class, base_bytes is not None, firm_identity, report)
     writer = _Writer(doc, rules, report)
     for block in g.parse_document(markdown):
         writer.write(block)
     if rules.page_numbers:
-        writer.ensure_page_number()
+        writer.ensure_page_number(always=rules.page_numbers_always)
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue(), report
@@ -256,19 +190,38 @@ class _Writer:
             self.report.styles_delegated.pop(style_name, None)
             return self.doc.add_paragraph(), False
 
+    def _font(self, run) -> None:
+        if self.rules.font:
+            set_run_font(run, self.rules.font, self.rules.font_size_pt)
+
     def _runs(
-        self, para, runs: tuple[g.Run, ...], *, caps: bool = False, bold: bool = False, underline: bool = False
+        self,
+        para,
+        runs: tuple[g.Run, ...],
+        *,
+        caps: bool = False,
+        bold: bool = False,
+        underline: bool = False,
+        explicit: bool = False,
     ) -> None:
+        """``explicit`` writes the emphasis as stated, False included, so a
+        base style's underline cannot reach a heading the class says is bold
+        only."""
         for r in runs:
             run = para.add_run(r.text)
+            self._font(run)
             if r.marker:
                 continue  # literal, unstyled, render-visible
             if r.bold or bold:
                 run.bold = True
+            elif explicit:
+                run.bold = False
             if r.italic:
                 run.italic = True
             if underline:
                 run.underline = True
+            elif explicit:
+                run.underline = False
             if caps:
                 run.font.all_caps = True
 
@@ -297,7 +250,8 @@ class _Writer:
         level = block.level
         role = f"SMD Heading {level}"
         para, styled = self._para(role)
-        if styled:
+        enforce = self.rules.enforce_layout
+        if styled and not enforce:
             self._runs(para, block.runs)
             return
         delegated = role in self.report.styles_delegated
@@ -310,13 +264,21 @@ class _Writer:
         para.alignment = {"center": WD_ALIGN_PARAGRAPH.CENTER, "left": WD_ALIGN_PARAGRAPH.LEFT}[align]
         para.paragraph_format.left_indent = Inches(self.rules.heading_indent_in[level - 1])
         para.paragraph_format.keep_with_next = True
-        if delegated:
+        if delegated and not enforce:
             # Emphasis is the firm style's business; forcing bold/underline over
-            # it would defeat the edit we just made possible.
+            # it would defeat the edit we just made possible. A house-style
+            # class enforces it instead (enforce_layout).
             self._runs(para, block.runs)
             return
-        para.paragraph_format.space_before = Pt(12 if level == 1 else 6)
-        self._runs(para, block.runs, bold=True, underline=self.rules.heading_underline[level - 1])
+        if not styled:
+            para.paragraph_format.space_before = Pt(12 if level == 1 else 6)
+        self._runs(
+            para,
+            block.runs,
+            bold=self.rules.heading_bold[level - 1],
+            underline=self.rules.heading_underline[level - 1],
+            explicit=enforce,
+        )
 
     def _is_label(self, text: str) -> bool:
         # A label is a SHORT line that starts with a label phrase ("SPECIAL
@@ -332,24 +294,34 @@ class _Writer:
             self.report.blocks_styled["labels"] += 1
             self.in_item = True
             para, styled = self._para("SMD Item Label")
-            if styled:
+            enforce = self.rules.enforce_layout
+            if styled and not enforce:
                 self._runs(para, block.runs)
+            elif enforce:
+                pf = para.paragraph_format
+                pf.space_before, pf.space_after = Pt(0), Pt(0)
+                pf.line_spacing = self.rules.item_line_spacing
+                self._runs(para, block.runs, caps=True, bold=True, underline=True, explicit=True)
             else:
                 para.paragraph_format.space_before = Pt(12)
                 self._runs(para, block.runs, caps=True, bold=True, underline=True)
             return
         if self.in_item and self.rules.item_text:
             para, styled = self._para("SMD Item Text")
-            if not styled:
+            if not styled or self.rules.enforce_layout:
                 pf = para.paragraph_format
                 pf.first_line_indent = Inches(self.rules.first_line_indent_in)
                 pf.line_spacing = self.rules.item_line_spacing
                 pf.space_after = Pt(self.rules.item_space_after_pt)
+                if self.rules.enforce_layout:
+                    pf.space_before = Pt(0)
             self._runs(para, block.runs)
             return
         para, styled = self._para("SMD Body")
-        if not styled and self.rules.body_line_spacing != 1.0:
+        if (not styled or self.rules.enforce_layout) and self.rules.body_line_spacing != 1.0:
             para.paragraph_format.line_spacing = self.rules.body_line_spacing
+        if self.rules.enforce_layout:
+            para.paragraph_format.space_after = Pt(0)
         self._runs(para, block.runs)
 
     def _bullet(self, block: g.Bullet) -> None:
@@ -366,7 +338,7 @@ class _Writer:
         para = self.doc.add_paragraph()
         para.paragraph_format.left_indent = Inches(0.5)
         para.paragraph_format.first_line_indent = Inches(-0.25)
-        para.add_run("•\t")
+        self._font(para.add_run("•\t"))
         self._runs(para, block.runs)
 
     def _numbered(self, block: g.Numbered) -> None:
@@ -375,7 +347,7 @@ class _Writer:
         para, _ = self._para("SMD Body")
         para.paragraph_format.left_indent = Inches(0.5)
         para.paragraph_format.first_line_indent = Inches(-0.5)
-        para.add_run(f"{block.label}\t")
+        self._font(para.add_run(f"{block.label}\t"))
         self._runs(para, block.runs)
 
     def _table(self, block: g.Table) -> None:
@@ -385,7 +357,7 @@ class _Writer:
         ncols = max(len(row) for row in block.rows)
         table = self.doc.add_table(rows=len(block.rows), cols=ncols)
         caption = self.rules.caption_table_first and self.tables_seen == 1
-        _set_table_borders(table, inside_vertical_only=caption)
+        set_table_borders(table, inside_vertical_only=caption)
         for r_idx, row in enumerate(block.rows):
             for c_idx in range(ncols):
                 cell = table.cell(r_idx, c_idx)
@@ -419,64 +391,24 @@ class _Writer:
 
     # -- footer --------------------------------------------------------------------
 
-    def ensure_page_number(self) -> None:
+    def ensure_page_number(self, *, always: bool = False) -> None:
         """Add a centered PAGE field to the footer when the base has no footer
         text at all. A base with its own footer (a letterhead's address line, a
-        firm's own page numbering) is left exactly as the firm built it."""
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-        from docx.oxml import OxmlElement
-        from docx.oxml.ns import qn
-
-        section = self.doc.sections[0]
-        footer = section.footer
+        firm's own page numbering) is left exactly as the firm built it, unless
+        the class numbers its pages ``always``: then a centered PAGE paragraph
+        is added below the firm's footer text when it carries no PAGE field."""
+        footer = self.doc.sections[0].footer
         existing = "".join(p.text for p in footer.paragraphs).strip()
-        if existing or _footer_has_field(footer):
-            return
-        para = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
-        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = para.add_run()
-        for kind, text in (("begin", None), (None, "PAGE"), ("end", None)):
-            if kind:
-                el = OxmlElement("w:fldChar")
-                el.set(qn("w:fldCharType"), kind)
-            else:
-                el = OxmlElement("w:instrText")
-                el.set(qn("xml:space"), "preserve")
-                el.text = f" {text} "
-            run._r.append(el)
+        if always:
+            if footer_has_page_field(footer):
+                return
+            para = footer.add_paragraph() if existing or not footer.paragraphs else footer.paragraphs[0]
+        else:
+            if existing or footer_has_any_field(footer):
+                return
+            para = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
+        self._font(add_page_field(para))
         self.report.notes.append("page number field added to the footer")
-
-
-def _footer_has_field(footer) -> bool:
-    from docx.oxml.ns import qn
-
-    return (
-        footer._element.find(f".//{qn('w:fldChar')}") is not None
-        or footer._element.find(f".//{qn('w:fldSimple')}") is not None
-    )
-
-
-def _set_table_borders(table, *, inside_vertical_only: bool) -> None:
-    """Explicit ``w:tblBorders`` via lxml: a firm template rarely defines
-    ``Table Grid``, so never rely on a table style existing. A caption table
-    gets the classic look (a vertical rule between the columns, nothing else);
-    every other table gets a thin grid."""
-    from docx.oxml import OxmlElement
-    from docx.oxml.ns import qn
-
-    tbl_pr = table._tbl.tblPr
-    borders = OxmlElement("w:tblBorders")
-    edges = ("insideV",) if inside_vertical_only else ("top", "left", "bottom", "right", "insideH", "insideV")
-    for edge in edges:
-        el = OxmlElement(f"w:{edge}")
-        el.set(qn("w:val"), "single")
-        el.set(qn("w:sz"), "4")
-        el.set(qn("w:space"), "0")
-        el.set(qn("w:color"), "auto")
-        borders.append(el)
-    for old in tbl_pr.findall(qn("w:tblBorders")):
-        tbl_pr.remove(old)
-    tbl_pr.append(borders)
 
 
 __all__ = [

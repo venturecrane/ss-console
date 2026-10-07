@@ -283,3 +283,108 @@ def _apply_default_style_spec(style, name: str) -> None:
         pf.left_indent = Inches(3.5)
         pf.space_before = Pt(24)
     # SMD Body: Normal + the default font; nothing else.
+
+
+# ---- Class-enforced page setup, fonts, footer and borders -------------------------
+
+LETTER_WIDTH_TWIPS, LETTER_HEIGHT_TWIPS = 12240, 15840  # 8.5 x 11 inches
+
+
+def plain_letter_paper(doc, report: FormatReport) -> None:
+    """Plain US Letter, portrait, no line numbering: never pleading paper. A
+    base on another size or carrying line numbers is corrected and the change
+    is noted, since it moves the firm's own page setup."""
+    from docx.enum.section import WD_ORIENT
+    from docx.oxml.ns import qn
+    from docx.shared import Twips
+
+    for section in doc.sections:
+        if (section.page_width, section.page_height) != (Twips(LETTER_WIDTH_TWIPS), Twips(LETTER_HEIGHT_TWIPS)):
+            report.notes.append("page size set to US Letter (the base was another size)")
+            section.orientation = WD_ORIENT.PORTRAIT
+            section.page_width, section.page_height = Twips(LETTER_WIDTH_TWIPS), Twips(LETTER_HEIGHT_TWIPS)
+        sect_pr = section._sectPr
+        for ln in sect_pr.findall(qn("w:lnNumType")):
+            sect_pr.remove(ln)
+            report.notes.append("line numbering removed: plain paper, never pleading paper")
+
+
+def set_run_font(run, name: str, size_pt: float | None) -> None:
+    """The font on the RUN, all four rFonts slots and the size, so neither a
+    base style nor a theme font can reach the text."""
+    from docx.oxml.ns import qn
+    from docx.shared import Pt
+
+    run.font.name = name
+    rpr = run._r.get_or_add_rPr()
+    fonts = rpr.find(qn("w:rFonts"))
+    if fonts is not None:
+        for attr in ("w:ascii", "w:hAnsi", "w:eastAsia", "w:cs"):
+            fonts.set(qn(attr), name)
+    if size_pt is not None:
+        run.font.size = Pt(size_pt)
+
+
+def footer_has_any_field(footer) -> bool:
+    from docx.oxml.ns import qn
+
+    return (
+        footer._element.find(f".//{qn('w:fldChar')}") is not None
+        or footer._element.find(f".//{qn('w:fldSimple')}") is not None
+    )
+
+
+def footer_has_page_field(footer) -> bool:
+    """A PAGE field specifically (complex or simple), not any field."""
+    from docx.oxml.ns import qn
+
+    for el in footer._element.iter(qn("w:instrText")):
+        if (el.text or "").split()[:1] == ["PAGE"]:
+            return True
+    for el in footer._element.iter(qn("w:fldSimple")):
+        if (el.get(qn("w:instr")) or "").split()[:1] == ["PAGE"]:
+            return True
+    return False
+
+
+def add_page_field(para):
+    """A centered PAGE field in ``para``; returns the run carrying it."""
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = para.add_run()
+    for kind, text in (("begin", None), (None, "PAGE"), ("end", None)):
+        if kind:
+            el = OxmlElement("w:fldChar")
+            el.set(qn("w:fldCharType"), kind)
+        else:
+            el = OxmlElement("w:instrText")
+            el.set(qn("xml:space"), "preserve")
+            el.text = f" {text} "
+        run._r.append(el)
+    return run
+
+
+def set_table_borders(table, *, inside_vertical_only: bool) -> None:
+    """Explicit ``w:tblBorders`` via lxml: a firm template rarely defines
+    ``Table Grid``, so never rely on a table style existing. A caption table
+    gets the classic look (a vertical rule between the columns, nothing else);
+    every other table gets a thin grid."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    tbl_pr = table._tbl.tblPr
+    borders = OxmlElement("w:tblBorders")
+    edges = ("insideV",) if inside_vertical_only else ("top", "left", "bottom", "right", "insideH", "insideV")
+    for edge in edges:
+        el = OxmlElement(f"w:{edge}")
+        el.set(qn("w:val"), "single")
+        el.set(qn("w:sz"), "4")
+        el.set(qn("w:space"), "0")
+        el.set(qn("w:color"), "auto")
+        borders.append(el)
+    for old in tbl_pr.findall(qn("w:tblBorders")):
+        tbl_pr.remove(old)
+    tbl_pr.append(borders)
