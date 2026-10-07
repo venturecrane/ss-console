@@ -447,6 +447,36 @@
       "producerFile": "operator/workspace_broker/demand_verbs.py",
       "reason": "A person asked the runner to resume a failed demand job (demand_job_resume, root only), with a reason."
     },
+    "DRAFTING_JOB_SUBMITTED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/drafting_verbs.py",
+      "reason": "The drafting job. The workspace broker appends one row when a Named Administrator's request is queued through drafting_job_submit: job id, matter number, document class, allowance remainder, requester, the request's message id; never the request text."
+    },
+    "DRAFTING_JOB_RUNNING": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/drafting_verbs.py",
+      "reason": "The runner daemon reported a drafting job running (drafting_job_record)."
+    },
+    "DRAFTING_JOB_HELD": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/drafting_verbs.py",
+      "reason": "The runner held a drafting job for a cause in the file or the request; the reason is a code-authored sentence."
+    },
+    "DRAFTING_JOB_DELIVERED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/drafting_verbs.py",
+      "reason": "The runner filed the drafting job's document and read it back; names, sizes, roles and counts only."
+    },
+    "DRAFTING_JOB_FAILED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/drafting_verbs.py",
+      "reason": "A drafting job failed on SMD's own machinery or stopped at a spend cap; resumable by a person, never reported to the client."
+    },
+    "DRAFTING_JOB_RESUME_REQUESTED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/drafting_verbs.py",
+      "reason": "A person asked the runner to resume a failed drafting job (drafting_job_resume, root only), with a reason."
+    },
     "ACT_PROPOSED": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/establishment_constants.py",

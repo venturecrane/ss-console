@@ -88,6 +88,13 @@ const EXPECTED_VERBS = [
   'demand_job_resume',
   'demand_job_status',
   'demand_job_submit',
+  // The drafting job's request edge (drafting_verbs.py): the demand gates
+  // exactly, minus the re-run.
+  'drafting_allowance',
+  'drafting_job_record',
+  'drafting_job_resume',
+  'drafting_job_status',
+  'drafting_job_submit',
   'emitted_wake_append',
   'escalation_event_append',
   'establish_decline',

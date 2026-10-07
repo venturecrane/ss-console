@@ -270,6 +270,12 @@ skill_bindings:
       - { artifact: letter, seam: smokeball_memo, class: work_product }
       - { artifact: review_task, seam: smokeball_task, class: record }
     outbound: derived # citation-free pointer to the requesting attorney
+  document-drafter:
+    internal:
+      # The queued drafting job files the Word document (and its attorney notes)
+      # in the matter; the turn itself writes nothing to the matter.
+      - { artifact: draft, seam: smokeball_file, class: work_product }
+    outbound: derived # one bound reply in the requester's thread naming the filed file
   discovery-response-drafter:
     internal:
       - { artifact: draft, seam: smokeball_memo, class: work_product }

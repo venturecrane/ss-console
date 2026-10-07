@@ -583,3 +583,72 @@ def test_an_unknown_job_is_refused(tmp_path: Path) -> None:
         {"kind": "demand_job", "job_id": "01J0000000000000000000000Z"},
     )
     assert out["bound"] is False
+
+
+# -- drafting jobs (the demand job's rules exactly, on the drafting ledger)
+
+
+def _drafting_job(tmp_path: Path, path: list[str], requester: str = ADMIN) -> str:
+    from workspace_broker.drafting_ledger import DraftingLedger
+
+    ledger = DraftingLedger(str(tmp_path / "audit.db"), tmp_path / "dq")
+    job = ledger.submit(
+        {
+            "matter": {"id": MATTER, "number": "900201"},
+            "file_to": None,
+            "requested_by": requester,
+            "request_ref": IMID,
+            "request_text": "Draft the mediation brief.",
+            "document_class": "mediation_brief",
+        }
+    )
+    for step in path:
+        ledger.record(job, step, {})
+    return job
+
+
+@pytest.mark.parametrize("ending", ["delivered", "held"])
+def test_a_finished_drafting_job_replies_to_its_requester_once(tmp_path: Path, ending: str) -> None:
+    from workspace_broker.drafting_ledger import DraftingLedger
+
+    job = _drafting_job(tmp_path, ["running", ending])
+    box = FakeMailbox()
+    _ack_in_thread(box)
+    broker = _broker(tmp_path, box)
+    assert _send(broker, {"kind": "drafting_job", "job_id": job})["recipients"] == [ADMIN]
+    assert DraftingLedger(broker.audit_db_path, tmp_path / "dq").read(job)["reply_key"] == f"1:{ending}"
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box), {"kind": "drafting_job", "job_id": job})
+    assert len(box.replies()) == 1
+
+
+def test_a_failed_drafting_job_never_replies_to_the_client(tmp_path: Path) -> None:
+    """FALSIFIER: let failed bind for drafting_job and the firm hears about our own fault."""
+    job = _drafting_job(tmp_path, ["failed"])
+    box = FakeMailbox()
+    out = _call(_broker(tmp_path, box), "msgraph_reply_bind", {"kind": "drafting_job", "job_id": job})
+    assert out["bound"] is False and "Send nothing to anyone" in out["reason"]
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box), {"kind": "drafting_job", "job_id": job})
+    assert box.replies() == []
+
+
+@pytest.mark.parametrize("path", [[], ["running"]])
+def test_an_unfinished_drafting_job_cannot_reply(tmp_path: Path, path: list[str]) -> None:
+    job = _drafting_job(tmp_path, path)
+    out = _call(_broker(tmp_path, FakeMailbox()), "msgraph_reply_bind", {"kind": "drafting_job", "job_id": job})
+    assert out["bound"] is False and "has not ended" in out["reason"]
+
+
+def test_a_drafting_reply_only_reaches_the_requester(tmp_path: Path) -> None:
+    job = _drafting_job(tmp_path, ["running", "delivered"], requester="other@firm.example")
+    out = _call(_broker(tmp_path, FakeMailbox()), "msgraph_reply_bind", {"kind": "drafting_job", "job_id": job})
+    assert out["bound"] is False and "requested the job" in out["reason"]
+
+
+def test_a_drafting_job_id_is_not_read_from_the_demand_ledger(tmp_path: Path) -> None:
+    """The two lanes' ids never cross. FALSIFIER: read drafting_job from the
+    demand ledger and a delivered demand job could answer as a drafting job."""
+    demand = _job(tmp_path, ["running", "delivered"])
+    out = _call(_broker(tmp_path, FakeMailbox()), "msgraph_reply_bind", {"kind": "drafting_job", "job_id": demand})
+    assert out["bound"] is False and "no drafting job" in out["reason"]

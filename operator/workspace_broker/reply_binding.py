@@ -20,6 +20,7 @@ the recipient. So the broker, which the agent cannot steer, decides:
       the job's ``request_ref`` and its sender the job's ``requester``; one reply
       per (job, ending), so a job that fails, is resumed and delivers can still
       say it delivered;
+    - a drafting job: exactly the demand job's rules, on the drafting ledger;
     - a bare message: the inbound turn that received it left an
       ``INBOUND_RECEIVED`` row and no ``REPLY_SENT`` row, it arrived within
       ``RECENCY_DAYS``, and nothing in its conversation was sent from this
@@ -52,11 +53,14 @@ from typing import Any
 from . import bound_replies, msgraph_lookup
 from .broker_context import BrokerContext
 from .demand_ledger import DemandLedger
+from .drafting_ledger import DraftingLedger
 from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError
 from .recipient_policy import authored_policy, normalize_address, sender_key
 from .transmit_verbs import dispatch_transmit
 
-KINDS = ("demand_job", "message")
+KINDS = ("demand_job", "drafting_job", "message")
+#: The job kinds: each binds on its own ledger with the same rules.
+JOB_KINDS = frozenset({"demand_job", "drafting_job"})
 #: The outcomes a requester is told about. NOT ``failed``: a failed job is
 #: resumable and SMD's to resolve (a live demand job, 2026-10-06, told the firm
 #: to narrow its request after our own stage failed), so its reply is refused
@@ -101,15 +105,25 @@ def _demand_ledger(broker: BrokerContext) -> DemandLedger:
     return DemandLedger(str(broker.audit_db_path), queue)
 
 
+def _drafting_ledger(broker: BrokerContext) -> DraftingLedger:
+    # Read-only here; the queue dir is never written on this path.
+    queue = os.environ.get("SMD_DRAFTING_QUEUE_DIR") or "/run/smd-medchron/drafting-queue"
+    return DraftingLedger(str(broker.audit_db_path), queue)
+
+
+def _job_ledger(broker: BrokerContext, kind: str) -> DemandLedger | DraftingLedger:
+    return _drafting_ledger(broker) if kind == "drafting_job" else _demand_ledger(broker)
+
+
 def _parse(raw: Any) -> tuple[str, str]:
     """(kind, identifier), where kind is demand_job, message or message_graph."""
     if not isinstance(raw, dict):
         raise BindingRefused("a reply binding names a demand job or an email")
     kind = raw.get("kind")
-    if kind == "demand_job":
+    if kind in JOB_KINDS:
         job_id = str(raw.get("job_id") or "").strip()
         if set(raw) != {"kind", "job_id"} or not _JOB_ID.match(job_id):
-            raise BindingRefused("a demand_job binding carries exactly the job id")
+            raise BindingRefused(f"a {kind} binding carries exactly the job id")
         return kind, job_id
     if kind == "message":
         if set(raw) == {"kind", "graph_message_id"}:
@@ -164,22 +178,23 @@ def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> V
     db_path = str(broker.audit_db_path)
     kind, ident = _parse(raw)
     job_id, expected_sender, imid, key = "", "", "", ""
-    if kind == "demand_job":
-        row = _demand_ledger(broker).read(ident)
+    if kind in JOB_KINDS:
+        noun = "drafting" if kind == "drafting_job" else "demand"
+        row = _job_ledger(broker, kind).read(ident)
         if row is None:
-            raise BindingRefused("there is no demand job with that id")
+            raise BindingRefused(f"there is no {noun} job with that id")
         if row["state"] == "failed":
             raise BindingRefused(
-                f"demand job {ident} failed on SMD's side; the requester is told nothing until it is "
+                f"{noun} job {ident} failed on SMD's side; the requester is told nothing until it is "
                 "delivered or held, and SMD has been alerted. Send nothing to anyone."
             )
         if row["state"] not in REPLYABLE_DEMAND_STATES:
-            raise BindingRefused(f"demand job {ident} has not ended (it is {row['state']}); its reply waits for that")
+            raise BindingRefused(f"{noun} job {ident} has not ended (it is {row['state']}); its reply waits for that")
         # One reply per (attempt, outcome): a resumed job (attempt + 1) that
         # ends again is owed a reply for its new outcome.
-        key = f"demand_job:{ident}:{row.get('attempt') or 1}:{row['state']}"
+        key = f"{kind}:{ident}:{row.get('attempt') or 1}:{row['state']}"
         if bound_replies.claimed(db_path, key):
-            raise BindingRefused(f"demand job {ident} has already had its reply for this outcome")
+            raise BindingRefused(f"{noun} job {ident} has already had its reply for this outcome")
         job_id, imid, expected_sender = ident, f"<{str(row['request_ref']).strip('<>')}>", row["requester"]
     if kind == "message_graph":
         found = msgraph_lookup.received_by_graph_id(ops, ident)
@@ -192,7 +207,7 @@ def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> V
         raise BindingRefused(
             "the sender of that email is not someone this seat may reply to (scope.inbound_allow_from)"
         )
-    if kind == "demand_job":
+    if kind in JOB_KINDS:
         if sender != normalize_address(expected_sender):
             raise BindingRefused("that email's sender is not the person who requested the job")
     else:
@@ -317,7 +332,7 @@ def reply_verb(
             if not bound_replies.claim(db_path, v.key, v.graph_message_id, v.internet_message_id, session_id):
                 raise BindingRefused("that reply was already sent")
             try:
-                marked = v.kind != "demand_job" or _demand_ledger(broker).mark_replied(v.job_id, _outcome(v))
+                marked = v.kind not in JOB_KINDS or _job_ledger(broker, v.kind).mark_replied(v.job_id, _outcome(v))
             except Exception:
                 # The ledger could not be written: nothing has been sent, so
                 # the one reply is given back rather than silently spent.
@@ -368,7 +383,7 @@ def reply_verb(
 
 
 def _outcome(v: Verified) -> str:
-    """``<attempt>:<state>`` out of a demand key, the ledger's reply key."""
+    """``<attempt>:<state>`` out of a job key, the ledger's reply key."""
     return v.key.split(":", 2)[2]
 
 
@@ -389,8 +404,8 @@ def _settle_failed_post(
             delivered = True
         if not delivered:
             bound_replies.release(db_path, v.key)
-            if v.kind == "demand_job":
-                _demand_ledger(broker).unmark_replied(v.job_id, _outcome(v))
+            if v.kind in JOB_KINDS:
+                _job_ledger(broker, v.kind).unmark_replied(v.job_id, _outcome(v))
             _audit(
                 broker, "send_released", raw, v=v, reason=f"Graph refused the reply (HTTP {status}); nothing was sent"
             )

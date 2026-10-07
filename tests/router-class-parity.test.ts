@@ -188,6 +188,69 @@ describe('matter-inbox-router: the demand class', () => {
   })
 })
 
+/**
+ * The queued drafting class (2026-10-07). The firm asked the Operator to draft
+ * its litigation documents in its attorney's house style. Like the demand,
+ * each is a queued job, never drafted in a turn. On a seat without the lane the
+ * same ask falls to the in-turn attorney drafting class, so the fallback is
+ * pinned too: dropping it would leave such a seat refusing an attorney.
+ */
+describe('matter-inbox-router: the document drafting class', () => {
+  const SLUG = 'document-drafter'
+  const SKILL = `${SKILLS_DIR}/${SLUG}/SKILL.md`
+  const bullet = () => flat(bulletFor(read(ROUTER), '**Document drafting request**'))
+
+  it('is reachable on the email channel, queued and never drafted', () => {
+    expect(bullet()).toContain(`/app/skills/${SLUG}/SKILL.md`)
+    expect(bullet()).toContain('`drafting_job_submit`')
+    expect(bullet()).toContain('NEVER draft, outline, summarize or value anything in this turn')
+    expect(flat(classTable(read(ROUTER)))).toContain('Document drafting request')
+    const rubric = flat(read(RUBRIC))
+    expect(rubric).toContain('**document drafting request**')
+    expect(rubric).toContain(`/app/skills/${SLUG}/SKILL.md`)
+  })
+
+  it('stays admin-reserved, takes no requester from the model, and is never a demand', () => {
+    expect(bullet()).toContain('INITIATION AUTHORITY')
+    expect(bullet()).toContain('Admin-classed')
+    expect(bullet()).toContain("you never pass who asked or the request's words")
+    expect(bullet()).toContain('A demand is NEVER this class')
+    expect(bullet()).not.toContain('demand_job_submit')
+  })
+
+  it('falls to attorney drafting where the seat does not carry it', () => {
+    expect(bullet()).toContain(
+      'handle the ask as the attorney drafting request class below instead'
+    )
+    expect(flat(read(RUBRIC))).toContain(
+      'the ask is the **attorney drafting request** class instead'
+    )
+  })
+
+  it('names all five classes the broker accepts, and its DELIVER mode keeps failures from the client', () => {
+    const skill = flat(read(SKILL))
+    for (const klass of [
+      'mediation_brief',
+      'discovery_set',
+      'discovery_response',
+      'memo',
+      'depo_outline',
+    ]) {
+      expect(skill, klass).toContain(`\`${klass}\``)
+    }
+    expect(skill).toContain('**This skill never drafts in the turn.**')
+    expect(skill).toContain("Run the document-drafter skill's DELIVER mode for drafting job <id>.")
+    expect(skill).toContain('Send the client NOTHING')
+    expect(skill).toContain('`reply_bind` and ONLY `job_id`')
+    expect(skill).toContain('**If the bind is refused, send NOTHING to anyone.**')
+    expect(skill).toContain('`{{ATTORNEY}}`')
+    expect(skill).toContain('`{{NOT IN RECORD}}`')
+    expect(skill).toContain('`{{CLIENT}}`')
+    expect(skill).toContain('caption')
+    expect(skill).toContain('never ask the firm to narrow, split or change its request')
+  })
+})
+
 describe('matter-inbox-router: the chronology class', () => {
   it('is reachable on the email channel', () => {
     const bullet = flat(bulletFor(read(ROUTER), '**Chronology package request**'))

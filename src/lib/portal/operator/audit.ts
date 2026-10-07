@@ -189,6 +189,12 @@ export const AUDIT_ACTION_TYPES = [
   'DEMAND_JOB_DELIVERED',
   'DEMAND_JOB_FAILED',
   'DEMAND_JOB_RESUME_REQUESTED',
+  'DRAFTING_JOB_SUBMITTED',
+  'DRAFTING_JOB_RUNNING',
+  'DRAFTING_JOB_HELD',
+  'DRAFTING_JOB_DELIVERED',
+  'DRAFTING_JOB_FAILED',
+  'DRAFTING_JOB_RESUME_REQUESTED',
   'REPLY_BINDING',
   // Case-manager casework: a person's answer to a numbered line about the
   // task list, and a task the Operator closed on the record's evidence.
