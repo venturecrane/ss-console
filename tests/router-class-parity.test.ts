@@ -124,6 +124,10 @@ describe('matter-inbox-router: the demand class', () => {
     expect(deliver).toContain('never ask the firm to narrow, split or change its request')
     expect(deliver).toContain('a token, a limit, a cap, a cost, a dollar figure or a job id')
     expect(deliver).not.toContain('**held** or **failed**')
+    // A delivered package names the next step its gap audit opens, so the firm learns
+    // it from the Operator itself; nothing is ordered until she answers the order line.
+    expect(deliver).toContain("Reply 'order the missing records'")
+    expect(deliver).toContain('nothing is ordered until she answers the order line')
   })
 
   it('submits and never drafts in the turn', () => {
