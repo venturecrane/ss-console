@@ -241,6 +241,20 @@ class DemandVerbs:
         return {"ok": True, "jobs": [DemandLedger.project(r) for r in rows]}
 
     # -- submit ---------------------------------------------------------------
+    def _filing_target_ok(self, envelope: dict[str, Any], settings: dict[str, Any]) -> bool:
+        """The job files on the matter it reads, or on the authored rehearsal
+        matter: the id in the demand skill's settings (rehearsal_matter_id) AND
+        the number of the firm's own library matter. A right number with a wrong
+        id is refused."""
+        file_to = envelope["file_to"]
+        if file_to is None or file_to["id"] == envelope["matter"]["id"]:
+            return True
+        library = operator_library_number(self.customer_yaml)
+        library_id = str(settings.get(REHEARSAL_MATTER_KEY) or "").strip().lower()
+        return bool(
+            library and library_id and file_to["number"] == library and file_to["id"].strip().lower() == library_id
+        )
+
     def _submit(self, request: dict[str, Any], supersedes: str | None = None) -> dict[str, Any]:
         def refused(reason: str, **extra: Any) -> dict[str, Any]:
             return {"ok": True, "accepted": False, "reason": reason, **extra}
@@ -272,23 +286,11 @@ class DemandVerbs:
                 "a demand may only be requested by one of the firm's Named Administrators, and the "
                 "requester on this submission is not one of them; nothing was queued"
             )
-        file_to = envelope["file_to"]
-        if file_to is not None and file_to["id"] != envelope["matter"]["id"]:
-            # The rehearsal target is AUTHORED by id and by number: the id in the
-            # demand skill's settings (rehearsal_matter_id), the number as the
-            # firm's own library matter. A right number with a wrong id is refused.
-            library = operator_library_number(self.customer_yaml)
-            library_id = str(settings.get(REHEARSAL_MATTER_KEY) or "").strip().lower()
-            if (
-                not library
-                or not library_id
-                or file_to["number"] != library
-                or file_to["id"].strip().lower() != library_id
-            ):
-                return refused(
-                    "a demand is filed on the matter it reads, or on the firm's own authored "
-                    "library matter for a rehearsal; that filing target is neither, so nothing was queued"
-                )
+        if not self._filing_target_ok(envelope, settings):
+            return refused(
+                "a demand is filed on the matter it reads, or on the firm's own authored "
+                "library matter for a rehearsal; that filing target is neither, so nothing was queued"
+            )
         if state["remaining"] <= 0:
             return refused(
                 f"this cycle's demand allowance is spent ({state['used']} of {state['allowance']} in "
