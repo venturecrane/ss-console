@@ -11,7 +11,14 @@ never fuzzily applied; a repair whose citation set changed or that grew past
 1.25x+10 words is REJECTED; after all edits the claim count must reconcile.
 `drop_residual` is the round-cap policy, fixed before the run: a claim still
 failing is DROPPED (removal is always safe under the extractive invariant)
-and logged for review.
+and logged for review. `final` is the last drop pass, after which nothing is
+re-audited: a SUPPORTED_WIDENED claim is dropped there too, because a citation
+rewritten on that pass would ship unverified.
+
+A claim is located by its EXACT span in the body (`claims.claim_spans`), not
+by re-gluing `claim + " " + cite`: a citation on the next line made the glued
+form unfindable, and the claim was skipped by repair and drop alike until it
+held the package at the gate (live 2026-10-07).
 """
 
 from __future__ import annotations
@@ -104,6 +111,30 @@ def ask_repair(doorway: llm.Doorway, model: str, r: dict[str, Any], c: dict[str,
         return None, str(exc)[:150]
 
 
+def _rejection(new: str, anchor: str, claim: str) -> str | None:
+    """Why a repaired sentence may not replace the claim, or None. A repair
+    weakens or removes; it never moves a citation or grows the claim."""
+    cites_in_new = CITE.findall(new)
+    if cites_in_new and sorted(cites_in_new) != sorted(CITE.findall(anchor)):
+        return "citations changed"
+    if len(new.split()) > len(claim.split()) * 1.25 + 10:
+        return "expanded"
+    return None
+
+
+def _residual_drop_row(r: dict[str, Any], c: dict[str, Any]) -> dict[str, Any]:
+    """The edit-log row for a claim dropped at the round cap (the dropped-claims record reads it)."""
+    return {
+        "key": r["key"],
+        "action": "drop-residual",
+        "verdict": r["verdict"],
+        "exhibit": c["exhibit"],
+        "page_spec": c["page_spec"],
+        "note": str(r.get("note") or "")[:300],
+        "old": c["claim"][:300],
+    }
+
+
 def run(
     doorway: llm.Doorway,
     model: str,
@@ -111,6 +142,7 @@ def run(
     log: Callable[[str], None],
     *,
     drop_residual: bool = False,
+    final: bool = False,
     pause: float = 0.2,
 ) -> bool:
     """False when the claim count fails to reconcile after the edits."""
@@ -122,12 +154,15 @@ def run(
     entries = entries_path.read_text(encoding="utf-8") if entries_path.is_file() else None
     pdfs = set(exhibit_paths(paths.out))
     live = {c["key"]: c for c in CL.extract_claims(body, pdfs)}
+    spans = CL.claim_spans(body, pdfs)
     n_orig = len(live)
     latest = CL.latest_real(CL.read_rows(paths.results), set(live))
-    cite_fix = [r for r in latest.values() if r["verdict"] == "SUPPORTED_WIDENED"]
+    widened_ok = not (drop_residual and final)
+    cite_fix = [r for r in latest.values() if r["verdict"] == "SUPPORTED_WIDENED" and widened_ok]
     # Anything not finally SUPPORTED is failing; enumerating failure verdicts
     # once left an unlisted one neither repaired nor dropped.
-    failing = [r for r in latest.values() if r["verdict"] not in ("SUPPORTED", "SUPPORTED_WIDENED")]
+    ok_verdicts = ("SUPPORTED", "SUPPORTED_WIDENED") if widened_ok else ("SUPPORTED",)
+    failing = [r for r in latest.values() if r["verdict"] not in ok_verdicts]
     log(
         f"{paths.unit}: {len(latest)}/{n_orig} live claims with verdicts; cite-fix {len(cite_fix)}, "
         f"{'DROP' if drop_residual else 'repair'} {len(failing)}"
@@ -145,8 +180,8 @@ def run(
             entries, _ = replace_in(entries, anchor, replacement)
 
     def locate(c: dict[str, Any]) -> str | None:
-        for cand in (c["claim"] + " " + c["cite"], c["claim"] + c["cite"]):
-            if cand in body:
+        for cand in (spans.get(c["key"]), c["claim"] + " " + c["cite"], c["claim"] + c["cite"]):
+            if cand and cand in body:
                 return cand
         return None
 
@@ -176,7 +211,7 @@ def run(
             continue
         if drop_residual:
             apply(anchor, "")
-            logrow(key=r["key"], action="drop-residual", verdict=r["verdict"], old=c["claim"][:300])
+            logrow(**_residual_drop_row(r, c))
             dropped += 1
             continue
         new, err = ask_repair(doorway, model, r, c)
@@ -189,16 +224,12 @@ def run(
             logrow(key=r["key"], action="repair", result="DROP", old=c["claim"][:300])
             dropped += 1
             continue
-        cites_in_new = CITE.findall(new)
-        if cites_in_new and sorted(cites_in_new) != sorted(CITE.findall(anchor)):
-            logrow(key=r["key"], action="repair", result="REJECT: citations changed")
+        why = _rejection(new, anchor, c["claim"])
+        if why:
+            logrow(key=r["key"], action="repair", result=f"REJECT: {why}")
             rejected += 1
             continue
-        if len(new.split()) > len(c["claim"].split()) * 1.25 + 10:
-            logrow(key=r["key"], action="repair", result="REJECT: expanded")
-            rejected += 1
-            continue
-        apply(anchor, new if cites_in_new else new + " " + c["cite"])
+        apply(anchor, new if CITE.findall(new) else new + anchor[len(c["claim"]) :])
         logrow(key=r["key"], action="repair", old=c["claim"][:300], new=new[:300])
         repaired += 1
         log(f"  [{i}/{len(failing)}] repaired Ex{r['exhibit']} p.{r.get('page_spec')}")

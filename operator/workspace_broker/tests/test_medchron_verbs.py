@@ -521,6 +521,61 @@ def test_resume_refuses_when_a_twin_already_delivered_the_same_work(verbs):
     assert not (queue / f".resume-{stale}.json").exists()
 
 
+def _held_job(v, reason: str) -> str:
+    j = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state="running", fields={})
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state="held", fields={"reason": reason, "pages": 10})
+    return j
+
+
+def test_a_job_held_at_the_audit_gate_resumes_through_the_same_verb(verbs):
+    """2026-10-07: a chronology held at the final audit gate on two PARTIAL
+    claims the loop exists to drop. That hold is our defect, not the firm's
+    decision; once the loop is fixed the audit stage re-runs from its cached
+    verdicts. Same marker, same reason and redo rules, and the ledger's
+    existing held -> running edge carries the restart."""
+    v, _ledger, queue = verbs
+    j = _held_job(v, "audit coverage: a live claim is not finally SUPPORTED; last output: GATE FAIL")
+    out = call(v, "medchron_job_resume", peer_uid=ROOT, job_id=j, reason="audit loop now drops a residual", redo=[])
+    assert out["queued"] is True and (queue / f".resume-{j}.json").is_file()
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state="running", fields={})
+    with pytest.raises(PermissionError):
+        call(v, "medchron_job_resume", peer_uid=AGENT_UID, job_id=j, reason="x", redo=[])
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "refused: the incident date is not authored on the matter",
+        "the per-job spending cap was reached (cap_usd)",
+        "seat paused (sticky stop HARD_STOP)",
+        "",
+    ],
+)
+def test_every_other_hold_still_refuses_a_resume(verbs, reason):
+    """A refusal needs the firm's decision, a limit hold lifts through the
+    limit, a seat pause self-resumes. None of those is ours to re-run."""
+    v, _ledger, queue = verbs
+    j = _held_job(v, reason)
+    with pytest.raises(ValueError, match="not failed"):
+        call(v, "medchron_job_resume", peer_uid=ROOT, job_id=j, reason="x", redo=[])
+    assert not (queue / f".resume-{j}.json").exists()
+
+
+def test_audit_gate_hold_reason_is_the_one_the_broker_resumes():
+    """The broker recognises the audit-gate hold by the reason the runner
+    records for it (the audit stage's exit-1 text in dag.py, passed through
+    by the daemon). The two live in different packages, so this reads the
+    runner's source rather than trusting the two strings to stay in step."""
+    from workspace_broker.medchron_verbs import AUDIT_GATE_HOLD_PREFIX
+
+    dag = Path(__file__).resolve().parents[2] / "runners" / "medchron" / "medchron" / "dag.py"
+    src = dag.read_text(encoding="utf-8")
+    audit = src[src.index('        "audit",\n') :]
+    audit = audit[: audit.index("    Stage(")]
+    assert f'1: (HELD, "{AUDIT_GATE_HOLD_PREFIX}' in audit
+
+
 def test_transitions_are_monotonic_and_each_pins_its_audit_type(verbs):
     v, ledger, _ = verbs
     j = call(v, "medchron_job_submit", envelope=envelope())["job_id"]

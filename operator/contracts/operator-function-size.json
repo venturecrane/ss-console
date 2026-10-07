@@ -63,7 +63,7 @@
     "connectors/smokeball/smokeball_connector/vision.py::_stream": 16,
     "rehearsal/drivers.py::drive_leg": 18,
     "rehearsal/run.py::run_suite": 16,
-    "runners/medchron/medchron/audit/repair.py::run": 18,
+    "runners/medchron/medchron/audit/repair.py::run": 17,
     "runners/medchron/medchron/llm.py::_round": 17,
     "runners/medchron/medchron/stages/assemble.py::run": 16,
     "runners/medchron/medchron/stages/billing_chart.py::run": 25,

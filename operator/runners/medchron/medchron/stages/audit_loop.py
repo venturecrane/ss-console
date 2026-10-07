@@ -10,6 +10,18 @@ under the extractive invariant) and logged for review. Before the first
 round, verdicts are carried across a strip's page remap where the claim
 text is unchanged (the double-sweep the frozen tree re-billed).
 
+THE DROP CONVERGES (2026-10-07). The residual drop once ran straight after
+the last round's REPAIR, so every claim that round rewrote carried a new key
+and no verdict, escaped a drop that only removes failing verdicts, and was
+graded PARTIAL by the post-drop audit: the gate held a package on exactly the
+claims the policy exists to remove (a client matter, SUPPORTED=300 PARTIAL=2).
+Past the cap the loop now alternates drop and audit until the audit is clean,
+at most DROP_PASSES times; the last pass drops a widened citation too, since
+nothing re-audits after it. Every dropped claim is listed in
+`out/<unit>/audit-dropped-claims.json`. The gate can then fail only on what
+the loop cannot resolve: a claim it could not find in the document, a
+wrongly SUPPORTED control, or a claim with no verdict at all.
+
 Exit 0 only when the final audit reports zero problems AND the coverage gate
 passes; 1 when the gate fails (the driver holds); 2 on an INVALID audit
 (control failure, no exhibit bytes) or a reconciliation mismatch; 3 at the
@@ -17,6 +29,9 @@ double-sweep guard.
 """
 
 from __future__ import annotations
+
+import json
+from typing import Callable
 
 from .. import llm
 from ..audit import claims as CL, coverage, diag, repair
@@ -34,6 +49,11 @@ from .base import StageRun
 # after round 4 it would have been ~1, so the cap was set just inside the knee
 # of the curve rather than past it.
 ROUNDS = 5
+# Past the cap: drop what is not SUPPORTED, re-audit, repeat. A drop removes a
+# failing claim outright, so a later pass only meets a citation the previous
+# pass widened (a new span, a new key); the last pass drops those too.
+DROP_PASSES = 3
+DROPPED_RECORD = "audit-dropped-claims.json"
 
 
 def _rekey(sr: StageRun, paths: AuditPaths) -> None:
@@ -125,14 +145,57 @@ def run(sr: StageRun) -> int:
             sr.log("repair reconciliation MISMATCH")
             return 2
     else:
-        sr.log("===== round cap reached: dropping residual =====")
-        if not repair.run(sr.doorway, repair_model, paths, sr.log, drop_residual=True):
-            sr.log("residual drop reconciliation MISMATCH")
-            return 2
-        sr.log("===== post-drop audit =====")
-        if audit_round() in (2, 3):
-            sr.log("post-drop audit INVALID or REFUSED at the guard")
-            return 2
+        rc = _converge(sr, paths, repair_model, audit_round)
+        if rc is not None:
+            return rc
+    _record_drops(sr, paths)
     sr.log("===== final gate =====")
     ok, _summary = coverage.check(paths, sr.log)
     return 0 if ok else 1
+
+
+def _converge(sr: StageRun, paths: AuditPaths, repair_model: str, audit_round: Callable[[], int]) -> int | None:
+    """The round cap's exhaustion policy: drop the residual, re-audit, until
+    the audit is clean. None to go on to the gate; 2 on an invalid audit or a
+    drop that does not reconcile."""
+    for n in range(1, DROP_PASSES + 1):
+        final = n == DROP_PASSES
+        sr.log(f"===== round cap reached: drop pass {n}/{DROP_PASSES}{' (final)' if final else ''} =====")
+        if not repair.run(sr.doorway, repair_model, paths, sr.log, drop_residual=True, final=final):
+            sr.log("residual drop reconciliation MISMATCH")
+            return 2
+        sr.log(f"===== post-drop audit {n}/{DROP_PASSES} =====")
+        rc = audit_round()
+        if rc in (2, 3):
+            sr.log("post-drop audit INVALID or REFUSED at the guard")
+            return 2
+        if rc == 0:
+            sr.log(f"post-drop audit {n}: clean")
+            return None
+    return None
+
+
+def _record_drops(sr: StageRun, paths: AuditPaths) -> None:
+    """Every claim the loop removed, from the repair edit log, as one record
+    kept with the staged package (internal: never uploaded to the matter).
+    Rewritten whole each run; the edit log is append-only across resumes, so
+    this is always the complete list."""
+    rows = CL.read_rows(paths.out / "repair-edits.jsonl")
+    drops = [
+        {
+            "key": r.get("key"),
+            "how": "dropped at the round cap" if r.get("action") == "drop-residual" else "removed by repair",
+            "verdict": r.get("verdict"),
+            "exhibit": r.get("exhibit"),
+            "page_spec": r.get("page_spec"),
+            "note": r.get("note"),
+            "claim": r.get("old"),
+        }
+        for r in rows
+        if r.get("action") == "drop-residual" or r.get("result") == "DROP"
+    ]
+    paths.out.mkdir(parents=True, exist_ok=True)
+    (paths.out / DROPPED_RECORD).write_text(
+        json.dumps({"unit": sr.unit.unit, "count": len(drops), "claims": drops}, indent=1), encoding="utf-8"
+    )
+    sr.log(f"dropped claims recorded: {len(drops)} -> {DROPPED_RECORD}")

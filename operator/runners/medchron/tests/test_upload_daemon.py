@@ -619,6 +619,34 @@ def test_a_resume_marker_re_queues_the_job_and_the_daemon_runs_it(tmp_path):
     assert d._daemon_state("01A")["resumes"] == 1
 
 
+def test_a_job_held_at_the_audit_gate_stays_parked_until_a_resume_then_runs(tmp_path):
+    """2026-10-07: the broker now accepts a resume for a job held at the final
+    audit gate. The daemon half: the hold parks (no re-run every tick), and the
+    marker re-queues it exactly as it does a failed job, so the driver re-enters
+    at the audit stage, which state.json records as `held`, not `done`."""
+    d, broker = _daemon(tmp_path)
+    _submit(d, broker, "01A")
+    d.tick()
+    held = [
+        {
+            "unit": "alpha",
+            "outcome": "held",
+            "stage": "audit",
+            "dollars": 3.0,
+            "pages": 10,
+            "documents": 1,
+            "reason": "audit coverage: a live claim is not finally SUPPORTED; last output: GATE FAIL",
+        }
+    ]
+    assert d._report("01A", 3, json.dumps(held)) == "held"
+    before = list(broker.records)
+    assert d.tick() is None and broker.records == before, "an audit-gate hold must park, not re-run every tick"
+    (d.queue / ".resume-01A.json").write_text(json.dumps({"job_id": "01A", "reason": "loop fixed", "redo": []}))
+    assert d.tick() == "delivered"
+    assert [s for _, s, _ in broker.records][-3:] == ["held", "running", "delivered"]
+    assert d._daemon_state("01A")["resumes"] == 1
+
+
 def test_a_resume_marker_is_never_mistaken_for_an_envelope(tmp_path):
     """`_queued` skips dotfiles, so a marker must not be claimed as a job."""
     d, _broker = _daemon(tmp_path)

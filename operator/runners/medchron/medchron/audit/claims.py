@@ -53,26 +53,45 @@ def parse_pages(spec: str | None) -> list[int]:
     return list(dict.fromkeys(got))
 
 
-def extract_claims(body: str, keep: set[int]) -> list[dict[str, Any]]:
-    claims: list[dict[str, Any]] = []
+def _walk(body: str, keep: set[int]) -> list[tuple[dict[str, Any], str]]:
+    """Each claim with its EXACT span in the body (text through citation).
+
+    The span is what a repair edits. Rebuilding it as `claim + " " + cite`
+    failed whenever the citation sat on the next line or behind two spaces:
+    the claim was logged `SKIP: claim not located` every round, never repaired
+    and never dropped, and held the package at the gate (live 2026-10-07).
+    """
+    out: list[tuple[dict[str, Any], str]] = []
     cursor = 0
     for m in CITE.finditer(body):
-        seg = body[cursor : m.start()].split("\n\n")[-1].strip()
+        part = body[cursor : m.start()]
+        cut = part.rfind("\n\n")
+        last = part[cut + 2 :] if cut >= 0 else part
+        start = cursor + (cut + 2 if cut >= 0 else 0) + (len(last) - len(last.lstrip()))
+        seg = last.strip()
         cursor = m.end()
         n = int(m.group(1))
         if n not in keep or len(seg) < 30 or seg.lstrip().startswith("[NTD:"):
             continue
         spec = m.group(2)
-        claims.append(
-            {
-                "exhibit": n,
-                "page_spec": (spec or "").strip(),
-                "cite": m.group(0),
-                "claim": seg,
-                "key": claim_key(n, spec, seg),
-            }
-        )
-    return claims
+        claim = {
+            "exhibit": n,
+            "page_spec": (spec or "").strip(),
+            "cite": m.group(0),
+            "claim": seg,
+            "key": claim_key(n, spec, seg),
+        }
+        out.append((claim, body[start : m.end()]))
+    return out
+
+
+def extract_claims(body: str, keep: set[int]) -> list[dict[str, Any]]:
+    return [c for c, _ in _walk(body, keep)]
+
+
+def claim_spans(body: str, keep: set[int]) -> dict[str, str]:
+    """key -> the claim's exact text-through-citation span in `body`."""
+    return {c["key"]: span for c, span in _walk(body, keep)}
 
 
 def read_rows(path: Path) -> list[dict[str, Any]]:
