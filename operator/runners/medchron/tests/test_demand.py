@@ -206,11 +206,11 @@ def test_the_drafting_gate_refuses_before_anything_is_filed(tmp_path, pricing):
     bad = DRAFT.replace("Demand is hereby made", "This demand fully addresses every claim. Demand is hereby made")
     seat = seat_with(standard_docs())
     _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient(draft=bad))
-    assert v.outcome == "held" and "drafting gate refused the letter" in v.reason
+    assert v.outcome == "failed" and "drafting gate refused the letter" in v.reason  # our letter: resumable
     assert seat.sent == [] and seat.created == []
 
 
-def test_an_unfound_quotation_is_repaired_twice_then_held_never_filed(tmp_path, pricing):
+def test_an_unfound_quotation_the_repairs_leave_is_never_filed_as_a_quotation(tmp_path, pricing):
     bad = DRAFT.replace(
         "Demand is hereby made",
         'The record says "the patient reported severe pain radiating to both arms daily" and demand is made',
@@ -218,18 +218,21 @@ def test_an_unfound_quotation_is_repaired_twice_then_held_never_filed(tmp_path, 
     seat = seat_with(standard_docs())
     client = ScriptedClient(draft=bad)
     _r, v, _ = _run(tmp_path, pricing, seat, client)
-    assert v.outcome == "held" and "1 quotation(s) not found" in v.reason and "after 2 repair(s)" in v.reason
+    # the repairs could not remove it; the gate's quote repair settles it, so the quotation is never filed
+    assert v.outcome == "delivered", v.reason
     assert client.stages().count("REPAIR") == 2
-    assert seat.sent == [] and seat.created == []
+    final = (tmp_path / "job" / "data" / "draft-final.md").read_text()
+    assert '"the patient reported severe pain radiating to both arms daily"' not in final
 
 
-def test_invented_facts_left_after_repair_hold_and_drifts_reach_the_attorney_notes(tmp_path, pricing):
+def test_an_unlocatable_final_finding_fails_and_drifts_reach_the_attorney_notes(tmp_path, pricing):
     seat = seat_with(standard_docs())
     client = ScriptedClient(
         audit="- claim | INVENTED | no cite in digest\nSUPPORTED=0 DRIFTS=0 INVENTED=1 ARITHMETIC=0"
     )
     _r, v, _ = _run(tmp_path, pricing, seat, client)
-    assert v.outcome == "held" and " invented and " in v.reason and seat.sent == []
+    # a finding naming nothing in its section cannot be settled: ours, resumable, never filed
+    assert v.outcome == "failed" and "could not settle" in v.reason and seat.sent == []
     assert client.stages().count("REPAIR") == 2
     tmp2 = tmp_path / "drifts"
     seat2 = seat_with(standard_docs())
@@ -321,7 +324,7 @@ def test_an_off_format_demand_is_refused_before_filing(tmp_path, pricing):
     bad = DRAFT.replace("## Liability", "## Fault")
     seat = seat_with(standard_docs())
     _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient(draft=bad))
-    assert v.outcome == "held" and "format check refused" in v.reason and "Liability" in v.reason
+    assert v.outcome == "failed" and "format check refused" in v.reason and "Liability" in v.reason
     assert seat.sent == []
 
 
@@ -456,13 +459,15 @@ def test_memo_intake_and_notes_are_never_pulled(tmp_path, pricing):
     assert all("d9" not in m and "d10" not in m for m in seat.mints)
 
 
-def test_a_client_contact_read_error_holds_before_anything_is_pulled(tmp_path, pricing):
+def test_a_client_contact_read_error_fails_resumably_before_anything_is_pulled(tmp_path, pricing):
     seat = seat_with(standard_docs())
     seat.facts = {**seat.facts, "errors": ["client contact: HTTPError: 500"]}
     client = ScriptedClient()
     _r, v, _ = _run(tmp_path, pricing, seat, client)
-    assert v.outcome == "held" and "client contact" in v.reason
+    assert v.outcome == "failed" and "client contact" in v.reason  # a read that did not finish is ours
     assert seat.mints == [] and client.calls == []
+    state = json.loads((tmp_path / "job" / "data" / "state.json").read_text())
+    assert "facts" not in state  # so a resume reads the matter again
 
 
 # ---- preflight ------------------------------------------------------------------------
@@ -885,7 +890,7 @@ def test_a_model_written_coverage_report_is_gated_before_it_is_filed(tmp_path, p
     report = draft_mod.COVERAGE_SENTINEL + "\n# Coverage\n\nThis report fully addresses every claim.\n"
     seat = seat_with(standard_docs())
     _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient(draft=report))
-    assert v.outcome == "held" and "coverage report" in v.reason and seat.sent == []
+    assert v.outcome == "failed" and "coverage report" in v.reason and seat.sent == []
 
 
 def test_an_upload_refusal_carries_the_upload_stages_own_reason(tmp_path, pricing):
@@ -949,11 +954,11 @@ def test_the_runaway_guard_holds_only_above_the_cap(tmp_path, pricing, estimate,
 
 
 # ---- re-review 2026-10-06 ---------------------------------------------------------------
-def test_an_audit_reply_with_no_tally_line_is_retried_then_held(tmp_path, pricing):
+def test_an_audit_reply_with_no_tally_line_is_retried_then_failed_resumably(tmp_path, pricing):
     client = ScriptedClient(audit="- claim | SUPPORTED | cite\n(the auditor stopped before its tally)")
     seat = seat_with(standard_docs())
     _r, v, _ = _run(tmp_path, pricing, seat, client)
-    assert v.outcome == "held" and "did not complete twice" in v.reason
+    assert v.outcome == "failed" and "did not complete" in v.reason  # our machinery: resumable, never held
     assert seat.sent == []
 
 
@@ -967,7 +972,7 @@ def test_a_truncated_audit_reply_is_never_a_pass(tmp_path, pricing):
 
     seat = seat_with(standard_docs())
     _r, v, _ = _run(tmp_path, pricing, seat, Truncating())
-    assert v.outcome == "held" and "did not complete" in v.reason and seat.sent == []
+    assert v.outcome == "failed" and "did not complete" in v.reason and seat.sent == []
 
 
 def test_finding_rows_count_even_when_the_tally_line_under_counts():
@@ -1238,8 +1243,8 @@ def test_a_near_quote_in_the_letter_is_repaired_too(tmp_path, pricing):
     seat = seat_with(standard_docs())
     # the auditor passes it; only the gate's contiguity check would refuse it
     _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient(draft=letter))
-    assert v.outcome in ("delivered", "held"), v.reason
-    if v.outcome == "held":  # the free mechanical check catches it first: also correct, nothing filed
+    assert v.outcome in ("delivered", "failed"), v.reason
+    if v.outcome == "failed":  # the free mechanical check catches it first: also correct, nothing filed
         assert "quotation" in v.reason and seat.sent == []
 
 

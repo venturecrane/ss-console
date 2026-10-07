@@ -47,6 +47,7 @@ from . import (
     deliver,
     draft,
     facts as facts_mod,
+    finalpass,
     firm as firm_mod,
     gate,
     job as job_mod,
@@ -60,6 +61,7 @@ from . import (
 )
 
 MAX_REPAIRS = 2
+FINAL = "draft-final.md"  # the letter after the final audit pass; what is gated and rendered
 
 
 def _vendor_from_env() -> Any:
@@ -74,7 +76,23 @@ class GateQuotesLeft(RuntimeError):
 
 
 class DemandHold(RuntimeError):
-    """A person must act; nothing is filed."""
+    """Something about the FILE or the REQUEST that a person at the firm must
+    decide (premise, variant, an unmapped attorney, a letter that contradicts
+    the matter record, privileged text the wall caught): ``held``, final, and
+    the firm is told. Nothing is filed."""
+
+
+class DemandFailed(RuntimeError):
+    """Something about OUR machinery (a read that did not complete, a draft
+    the audit loop could not clean, a gate or format refusal of our own
+    output): ``failed``, resumable, no client message, SMD
+    alerted (ss#3085). A held job cannot resume, so a machinery fault must
+    never hold."""
+
+
+#: The drafting gate's privilege-and-wall gate. A refusal there means text from
+#: behind the wall reached the letter: the attorney must see it, so it holds.
+WALL_GATE = "[1]"
 
 
 @dataclass
@@ -214,11 +232,12 @@ class DemandRun:
     def _facts(self) -> None:
         f = facts_mod.read(self.seat, self.job.matter_id)
         (self.data / "facts.json").write_text(json.dumps(f, indent=1), encoding="utf-8")
+        self._check_facts()  # before the stage is marked done, so a resume reads the matter again
 
     def _check_facts(self) -> None:
         errs = facts_mod.blocking_errors(self._json("facts.json"))
         if errs:
-            raise DemandHold(
+            raise DemandFailed(
                 "the matter record could not be read in full, so the privilege wall and the "
                 "letter's names cannot be checked: " + "; ".join(errs)[:400]
             )
@@ -342,29 +361,44 @@ class DemandRun:
         return version, result
 
     def _demand_checks(self, version: int, result: dict[str, Any]) -> list[str]:
-        """Every check between the final audit and the render. Holds on
-        anything a person must see before the letter exists as the firm's file;
-        returns what the attorney notes must carry."""
-        if draft.blocking_findings(result):
-            t = result["tallies"]
-            raise DemandHold(
-                f"after {version - 1} repair(s) the letter still carries {t.get('INVENTED', 0)} invented and "
-                f"{t.get('ARITHMETIC', 0)} miscalculated statement(s) and {result.get('quotes_not_found', 0)} "
-                f"quotation(s) not found in the record (audit-v{version}.md)"
-            )
-        md = (self.data / f"draft-v{version}.md").read_text(encoding="utf-8")
+        """Every check between the final audit and the render. Findings the
+        repairs left are settled in code (finalpass.py: an invented statement
+        removed, a miscalculated figure flagged), never filed and never a stop;
+        holds only on what a person at the firm must decide. Returns what the
+        attorney notes must carry."""
+        md, settled = self._final_pass(version)
         cc = crosscheck.check(md, self._json("facts.json"))
         if cc["mismatches"]:
             raise DemandHold("the letter's RE block contradicts the matter record: " + "; ".join(cc["mismatches"]))
-        g, md = self._gate("gate.json", md, self.data / f"draft-v{version}.md")
+        g, md = self._gate("gate.json", md, self.data / FINAL)
         audit_md = (self.data / f"audit-v{version}.md").read_text(encoding="utf-8")
         notes = [
             f"Left for the attorney by the auditor (DRIFTS): {x}" for x in draft.finding_lines(audit_md, ("DRIFTS",))
         ]
+        notes += [f"Removed or flagged by the final audit: {x}" for x in settled]
         notes += [f"Not checked against the matter record: {x}" for x in cc["unchecked"]]
         notes += [f"Held out, never read (privilege wall: {w['reason']}): {w['name']}" for w in self._walled()]
         notes += [f"Drafting gate repair (the letter): {x}" for x in g.get("repairs") or []]
         return notes + [f"Drafting gate: {w}" for w in g["warnings"]]
+
+    def _final_pass(self, version: int) -> tuple[str, list[str]]:
+        """``draft-final.md`` from the last draft and its audit, once: a resume
+        (or the gate's quote repair, which rewrites it) keeps the same file."""
+        out, rec = self.data / FINAL, self.data / "final-pass.json"
+        if out.is_file() and rec.is_file():
+            return out.read_text(encoding="utf-8"), list(self._json("final-pass.json")["notes"])
+        md = (self.data / f"draft-v{version}.md").read_text(encoding="utf-8")
+        audit_md = (self.data / f"audit-v{version}.md").read_text(encoding="utf-8")
+        try:
+            md, notes = finalpass.settle(md, audit_md)
+        except finalpass.Unlocated as exc:
+            raise DemandFailed(f"the final audit pass could not settle a finding: {exc}") from None
+        tmp = self.data / f".{FINAL}.tmp"
+        tmp.write_text(md, encoding="utf-8")
+        tmp.replace(out)
+        rec.write_text(json.dumps({"version": version, "notes": notes, **finalpass.summary(notes)}, indent=1))
+        self.log(f"  final audit pass: {finalpass.summary(notes)}")
+        return md, notes
 
     def _walled(self) -> list[dict[str, Any]]:
         p = self.data / "walled.json"
@@ -411,9 +445,8 @@ class DemandRun:
                     f"the drafting gate still finds quotations in {what} that are not in the record "
                     f"after repair: " + "; ".join(g["refusals"])[:400]
                 )
-            raise DemandHold(
-                f"the drafting gate refused {what} ({g['disposition']}): " + "; ".join(g["refusals"])[:400]
-            )
+            exc = DemandHold if any(str(r).startswith(WALL_GATE) for r in g["refusals"]) else DemandFailed
+            raise exc(f"the drafting gate refused {what} ({g['disposition']}): " + "; ".join(g["refusals"])[:400])
         g["repairs"] = self._repairs.get(what, [])
         (self.data / name).write_text(json.dumps(g, indent=1), encoding="utf-8")
         self._done(name)
@@ -447,12 +480,12 @@ class DemandRun:
             gap += self._wall_section()
             files.append(("gap_audit", deliver.render_plain(gap, out, nm["gap_audit"], self._author)))
         if self.job.wants("demand"):
-            md = (self.data / f"draft-v{version}.md").read_text(encoding="utf-8")
+            md = (self.data / FINAL).read_text(encoding="utf-8")
             client = crosscheck.matched_client(md, self._json("facts.json"))
             try:
                 path, end_lists, fmt_notes = deliver.render_demand(self.firm, md, out, client)
             except deliver.FormatRefused as exc:
-                raise DemandHold("the format check refused the demand file: " + "; ".join(exc.fails)[:400]) from None
+                raise DemandFailed("the format check refused the demand file: " + "; ".join(exc.fails)[:400]) from None
             gap_fixes = [f"Drafting gate repair (the gap audit): {x}" for x in self._repairs.get("the gap audit") or []]
             extra = "\n".join(f"- {n}" for n in [*notes, *gap_fixes, *fmt_notes])
             notes_md = f"# Attorney notes: {path.stem}\n\n{end_lists}\n" + (
@@ -472,6 +505,8 @@ class DemandRun:
         kw = {} if self.readback_pause is None else {"pause": self.readback_pause}
         rec = deliver.file_to_matter(self.data, self.seat, self.job.file_to_id, self.log, **kw)
         if rec["exit"] == 1:
+            # The matter's own state refused it (a same-named folder already
+            # there): a person at the firm decides, so it holds.
             raise DemandHold(f"filing refused: {rec.get('said') or 'the upload stage refused'}")
         if rec["exit"] != 0:
             raise RuntimeError("the read-back is short after its retries; the files may still be materializing")
@@ -575,7 +610,9 @@ class DemandRun:
             v = Verdict("failed", stage=hold.setting, reason=hold.reason)
         except GateQuotesLeft as exc:
             v = Verdict("failed", stage="gate", reason=str(exc))
-        except (DemandHold, draft.AuditIncomplete) as h:
+        except DemandFailed as exc:
+            v = Verdict("failed", stage=self._current(), reason=str(exc))
+        except DemandHold as h:
             v = Verdict("held", stage=self._current(), reason=str(h))
         except Exception as exc:  # noqa: BLE001 - the verdict carries a sentence; the trace goes to the log
             self.log(traceback.format_exc())

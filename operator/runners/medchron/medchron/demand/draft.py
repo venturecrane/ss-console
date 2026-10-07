@@ -135,8 +135,20 @@ def mechanical_checks(corpus_text: str, draft: str) -> dict[str, Any]:
     return {"quotes": contig, "quotes_not_found": sum(1 for c in contig if not c["found"]), "banned": banned}
 
 
+def split_paragraphs(body: str) -> list[str]:
+    """Two halves at the blank line (else the line break) nearest the middle;
+    one piece when the body cannot be split."""
+    for sep in ("\n\n", "\n"):
+        cuts = [i for i in range(len(body)) if body.startswith(sep, i) and body[:i].strip() and body[i:].strip()]
+        if cuts:
+            cut = min(cuts, key=lambda c: abs(c - len(body) // 2))
+            return [body[:cut].strip("\n"), body[cut:].strip("\n")]
+    return [body]
+
+
 class AuditIncomplete(DraftError):
-    """A section's audit was truncated or carried no tally line, twice."""
+    """A section's audit could not finish: our failure, so the job ends failed
+    (resumable; finished sections are cached), never held."""
 
 
 _TALLY = re.compile(r"SUPPORTED=\d+\s+DRIFTS=\d+\s+INVENTED=\d+\s+ARITHMETIC=\d+")
@@ -310,25 +322,7 @@ class Drafter:
             cache = self.data / "audit" / f"v{version}-{dsha}-{i:02d}.md"
             if cache.is_file():
                 return i, cache.read_text(encoding="utf-8")
-            text = ""
-            for attempt in (1, 2):
-                r = self.doorway.call(
-                    "audit",
-                    model=self.firm.model("audit"),
-                    system=system,
-                    max_tokens=AUDIT_MAX_TOKENS,
-                    messages=[{"role": "user", "content": f"## SECTION UNDER AUDIT: {head}\n\n{body}"}],
-                    stream=True,
-                    custom_id=f"audit-{version}-{dsha}-{i:02d}-{attempt}",
-                )
-                text = r.text
-                if audit_complete(r.stop_reason, text):
-                    break
-                self.log(f"  audit of {head[:40]} incomplete (stop {r.stop_reason}); attempt {attempt} of 2")
-            else:
-                # Twice incomplete: an audit that did not finish is not an audit
-                # that passed (review of #3074). Not cached, so a resume retries.
-                raise AuditIncomplete(f"the audit of section {head[:60]!r} did not complete twice")
+            text = self._audit_part(system, f"{version}-{dsha}-{i:02d}", head, body)
             cache.parent.mkdir(exist_ok=True)
             cache.write_text(f"## AUDIT: {head}\n\n{text}\n", encoding="utf-8")
             return i, cache.read_text(encoding="utf-8")
@@ -352,6 +346,38 @@ class Drafter:
         }
         self._write(f"audit-v{version}.json", json.dumps(out, indent=1))
         return out
+
+    def _audit_part(self, system: str, key: str, head: str, body: str) -> str:
+        """One section's audit, complete. The ceiling is the audit model's own
+        maximum; a part that still reaches it is split at the paragraph nearest
+        its middle and each half audited (a live demand job, 2026-10-07: a dense
+        31-line provider section ran out of a 12,000-token budget twice, most of
+        it thinking). Only a single paragraph that cannot finish, or an answer
+        with no tally twice, raises."""
+        mx = gapaudit.output_max(self.firm.model("audit"), AUDIT_MAX_TOKENS)
+        r = None
+        for attempt in (1, 2):
+            r = self.doorway.call(
+                "audit",
+                model=self.firm.model("audit"),
+                system=system,
+                max_tokens=mx,
+                messages=[{"role": "user", "content": f"## SECTION UNDER AUDIT: {head}\n\n{body}"}],
+                stream=True,
+                custom_id=f"audit-{key}-{attempt}",
+            )
+            if audit_complete(r.stop_reason, r.text):
+                return r.text
+            self.log(f"  audit of {head[:40]} incomplete (stop {r.stop_reason}); attempt {attempt} of 2")
+            if r.stop_reason == "max_tokens":
+                break
+        parts = split_paragraphs(body)
+        if r is not None and r.stop_reason == "max_tokens" and len(parts) == 2:
+            self.log(f"  audit of {head[:40]} reached its ceiling; audited in two halves")
+            return "\n\n".join(self._audit_part(system, f"{key}{k}", head, p) for k, p in zip("ab", parts))
+        # An audit that did not finish is not an audit that passed (review of
+        # #3074). Not cached, so a resume retries; the job ends failed.
+        raise AuditIncomplete(f"the audit of section {head[:60]!r} did not complete")
 
     # ---- repair --------------------------------------------------------------------
     def _commit(self, name: str, text: str) -> None:

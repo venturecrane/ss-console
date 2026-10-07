@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import subprocess
 import threading
 from dataclasses import dataclass, field
@@ -120,9 +121,26 @@ class DemandLane(Daemon):
             **dict(zip(("month_cents_used", "allowance_remaining"), self.broker.month_state(job_id))),
         }
         (jd / "data").mkdir(exist_ok=True)
+        self._seed_from_superseded(jd, str(env.get("supersedes") or ""))
         (jd / "job.json").write_text(json.dumps(doc, indent=1), encoding="utf-8")
         self._chown_child(jd)
         return jd
+
+    def _seed_from_superseded(self, jd: Path, old_id: str) -> None:
+        """A re-run (demand_job_rerun) starts where the superseded job stopped:
+        its paid, input-keyed stages are copied in (demand/seed.py). The old id
+        comes from the broker's queued envelope; anything but a job id is
+        ignored, and a superseded dir already wiped means a fresh start."""
+        from .demand import seed
+
+        if not re.fullmatch(r"[0-9A-HJKMNP-TV-Z]{26}", old_id):
+            return
+        old = self.job_dir(old_id)
+        if not (old / "data").is_dir():
+            logger.info("demand re-run %s: superseded job %s has no data left; starting fresh", jd.name, old_id)
+            return
+        carried = seed.seed(jd, old)
+        logger.info("demand re-run %s seeded from %s: %s", jd.name, old_id, ", ".join(carried) or "nothing")
 
     def run_job(self, job_id: str) -> str:
         from .demand import firm as demand_firm
