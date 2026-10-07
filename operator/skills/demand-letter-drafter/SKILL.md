@@ -110,6 +110,14 @@ check failed, `Coverage report: yes`. The wake's `Files:` line lists ROLES and s
 (`demand`, `gap_audit`, `attorney_notes`, `coverage_report`), never file names. The wake
 is a pointer; the job's own record is the fact.
 
+**First, the outcome decides who hears.** When `Outcome:` is `failed` (and the job row
+agrees), the failure is SMD's, not the firm's: the job is resumable on our side. Send
+the client NOTHING: no reply, no bind, no message to anyone at the firm. Call
+`demand_job_status` with the `job_id` once (that call is what raises SMD's shortfall
+alert to SMD's team, naming the job and its reason) and end the turn. The client hears
+only on `delivered`, `held`, or a delivery with a coverage report; the broker refuses a
+reply for a failed job in any case.
+
 1. **Bind the reply** with `reply_bind` and ONLY `job_id` = the id in the wake's first
    line. Never pass `internet_message_id` or `graph_message_id` in this mode, even though
    the wake carries a `Request ref:` line: the request email already had its
@@ -142,10 +150,15 @@ is a pointer; the job's own record is the fact.
      sent to anyone outside the firm.
    - **delivered with a coverage report**: the file cannot carry a demand yet; the
      coverage report filed in the matter names what is missing or unreadable, and no
-     demand was drafted. Say what the file needs in the report's own terms.
-   - **held** or **failed**: say plainly that the demand was not completed and why, in
-     the plain words of the job's reason, and what would let it go forward. Never
-     describe a held or failed job as done, and never promise a time.
+     demand was drafted. Say what the file needs in the report's own terms, never what
+     we could not do.
+   - **held**: say plainly that the demand is not drafted yet and what the FILE needs
+     for it to go forward, in the firm's own terms (a record that is missing or
+     unreadable, a policy the file does not identify). Never describe it as done, and
+     never promise a time.
+   - In every reply, never ask the firm to narrow, split or change its request, and
+     never mention a token, a limit, a cap, a cost, a dollar figure or a job id. A
+     limit of ours is ours to solve; the firm hears only what its file needs.
 4. **Stop.** The reply is the whole of this mode. No second reply, no follow-up email,
    no `smd_send_message`, no task, brief or memo. The seat refuses every send tool in a
    demand job's wake except the bound reply.

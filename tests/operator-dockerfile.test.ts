@@ -1495,7 +1495,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // 2de32d87 -> 467ff5cb (overlay#424), 2026-10-06: render_funding_case_eval classified internal_write.
     // 467ff5cb -> e9280e5d (overlay#425 + #426), 2026-10-06: a demand wake's reply_bind by email id is
     // refused before the broker is asked.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="e9280e5d3c9e4d4f91d90661cfeaffbb215c62b4"')
+    // e9280e5d -> fb31b666 (overlay#427), 2026-10-06: a failed demand job's status read is a shortfall,
+    // so SMD is alerted and the client is told nothing.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="fb31b6665ebfabf7c72f979668dcf0dbaf110b89"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
