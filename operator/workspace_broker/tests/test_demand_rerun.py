@@ -1,4 +1,4 @@
-"""A re-run of a finished demand job (demand_job_rerun, root only; Martello, 2026-10-06).
+"""A re-run of a finished demand job (demand_job_rerun, root only; 2026-10-06).
 
 A NEW job with the same envelope (digest-checked against the old job), naming
 the job it supersedes, so its completion reply binds afresh in the requester's
