@@ -743,6 +743,13 @@ ssh_exec "demand-lane-ticking" "t=/run/smd-medchron/demand-tick; [ -f \$t ] && [
 ssh_exec "demand-lane-idle" "! test -f /run/smd-medchron/demand-child.pid"
 ssh_exec "demand-queue-root-owned" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/demand-queue)\" = root:workspace-broker:770 ]"
 ssh_exec "demand-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/demand-jobs)\" = root:medchron:710 ]"
+# The drafting lane (2026-10-07): the daemon's third thread, the same four checks.
+# Every seat runs it (entrypoint-drafting.sh always makes the queue); a seat with
+# no drafting inputs ticks and defers, so a silent tick is still a dead thread.
+ssh_exec "drafting-lane-ticking" "t=/run/smd-medchron/drafting-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
+ssh_exec "drafting-lane-idle" "! test -f /run/smd-medchron/drafting-child.pid"
+ssh_exec "drafting-queue-root-owned" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/drafting-queue)\" = root:workspace-broker:770 ]"
+ssh_exec "drafting-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/drafting-jobs)\" = root:medchron:710 ]"
 
 # The firm config is authored per-seat in the PRIVATE engagements repo, and
 # provision-customer.sh step 2b reads the SAME path and continues without it
