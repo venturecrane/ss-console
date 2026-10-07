@@ -99,22 +99,29 @@ FORM = _form([*fce.BOXES, *DECOYS], [*fce.CHECKS, *DECOY_CHECKS])
 
 
 class _Record:
-    def __init__(self, *, matter_type: str = "Motor Vehicle Accident - Plaintiff", home: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        matter_type: str = "Motor Vehicle Accident - Plaintiff",
+        home: bool = False,
+        clients: tuple[str, ...] = (CLIENT,),
+        pi_tabs: int = 1,
+    ) -> None:
         self.matter_type = matter_type
         self.home = home
+        self.clients = list(clients)
+        self.pi_tabs = pi_tabs
         self.uploads: list[tuple[str, str, bytes]] = []
 
     def get(self, path: str, **_params: Any) -> Any:
         if path == f"/matters/{MATTER}":
             return {
                 "id": MATTER,
-                "clientIds": [CLIENT],
-                "matterTypeId": "mt-1",
+                "clientIds": self.clients,
+                "matterType": {"id": "mt-1", "name": self.matter_type},
                 "personResponsibleStaffId": STAFF,
                 "personAssistingStaffId": ASSIST,
             }
-        if path == "/mattertypes/mt-1":
-            return {"id": "mt-1", "name": self.matter_type}
         if path == f"/matters/{MATTER}/roles":
             return {
                 "roles": [
@@ -139,7 +146,10 @@ class _Record:
             return {
                 "value": [
                     {"id": "lay"},
-                    {"id": "pi", "layoutDesign": {"id": "PersonalInjurySettlementDetailsItem-1"}, "parentIndex": 0},
+                    *(
+                        {"id": "pi", "layoutDesign": {"id": "PersonalInjurySettlementDetailsItem-1"}, "parentIndex": 0}
+                        for _ in range(self.pi_tabs)
+                    ),
                 ]
             }
         if path == f"/matters/{MATTER}/layouts/lay":
@@ -280,14 +290,14 @@ def test_mva_only_for_a_motor_vehicle_matter(seat: Path, monkeypatch: pytest.Mon
     rec = _Record(matter_type="Premises Liability - Plaintiff")
     out = _render(monkeypatch, rec)
     assert _values(rec.uploads[0][2])["MVA"] in ("", "/Off")
-    assert "case type: MVA" not in out["filled"]
+    assert "case type: motor vehicle" not in out["filled"]
 
 
 def test_filled_is_read_back_and_carries_no_value(seat: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     rec = _Record()
     out = _render(monkeypatch, rec)
     assert "client home phone" not in out["filled"] and "client home phone" in out["not_in_file"]
-    assert "client cell phone" in out["filled"] and "case type: MVA" in out["filled"]
+    assert "client cell phone" in out["filled"] and "case type: motor vehicle" in out["filled"]
     blob = json.dumps(out)
     for secret in ("Dana", "555-0199", "1990", "CLM-3", "Other Side Mutual", "sam@firm.example"):
         assert secret not in blob, secret
@@ -314,3 +324,28 @@ def test_seat_today_is_the_request_date(seat: Path, monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(fce.facts, "seat_today", lambda *_a: date(2026, 10, 6))
     _render(monkeypatch, rec)
     assert _values(rec.uploads[0][2])["Date of Request"] == "10/06/2026"
+
+
+def test_a_matter_with_two_clients_is_refused(seat: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A shared matter: the funding form is one client's, so never the first one's by default.
+    rec = _Record(clients=(CLIENT, "c-9"))
+    out = _render(monkeypatch, rec)
+    assert out["status"] == "refused" and "2 clients" in out["reason"]
+    assert rec.uploads == []
+
+
+def test_two_candidate_medicals_tabs_fill_no_providers(seat: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    rec = _Record(pi_tabs=2)
+    out = _render(monkeypatch, rec)
+    v = _values(rec.uploads[0][2])
+    assert v["Provider/Facility 1"] == "" and "provider 1" in out["not_in_file"]
+
+
+def test_nothing_the_reply_quotes_has_an_all_capitals_word(seat: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The reply quotes these lists, and its outbound check holds a capitals
+    # "emphasis" word (the SR1's first live reply was held that way, #3038/#3050).
+    import re
+
+    out = _render(monkeypatch, _Record())
+    quoted = [*out["filled"], *out["not_in_file"], *out["left_for_firm"], *out["left_for_client"]]
+    assert not [q for q in quoted if re.search(r"\b[A-Z]{2,}\b", q)]

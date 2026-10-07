@@ -89,14 +89,14 @@ BOXES: dict[str, str] = {
     "Provider/Facility 4": "provider 4",
 }
 #: Checkbox -> what the reply calls it, ticked "/Yes".
-CHECKS: dict[str, str] = {"MVA": "case type: MVA"}
+CHECKS: dict[str, str] = {"MVA": "case type: motor vehicle"}
 PROVIDER_BOXES = ("Provider/Facility 1", "Provider/Facility 2", "Provider/Facility 3", "Provider/Facility 4")
 
 LEFT_FOR_FIRM = (
     "the request type and amount",
     "liability, comparative negligence and causation",
     "citations, the police report and what the carriers have accepted or paid",
-    "policy limits, second layer, UM, UIM and med pay",
+    "policy limits, a second layer, uninsured and underinsured motorist coverage and med pay",
     "emergency care, specialties, last date of care and estimated medical expenses",
     "injuries and complaints",
     "how long the firm has represented her, litigation and demand status",
@@ -123,8 +123,9 @@ def _refused(reason: str) -> dict[str, Any]:
 
 
 def _phone_at(contact: dict[str, Any], key: str) -> str | None:
-    """The number stored under exactly ``key`` (``phone`` is home, ``cell`` is
-    cell), as "(AAA) NNN-NNNN". Never falls back to another key."""
+    """The number stored under exactly ``key`` (``phone`` or ``homePhone`` is
+    home, ``cell`` is cell), as "(AAA) NNN-NNNN". Never falls back to another
+    kind of number: a cell never prints as a home phone."""
     raw = facts._body(contact).get(key)
     if isinstance(raw, dict) and str(raw.get("number") or "").strip():
         area = str(raw.get("areaCode") or "").strip()
@@ -151,21 +152,22 @@ def _staff_email(client: Any, staff_id: Any) -> str | None:
     return email.strip() if isinstance(email, str) and "@" in email else None
 
 
-def _is_mva(client: Any, matter: dict[str, Any]) -> bool:
-    type_id = matter.get("matterTypeId")
-    if not isinstance(type_id, str) or not type_id:
-        return False
-    record = client.get(f"/mattertypes/{type_id}")
-    name = str(record.get("name") or "").casefold() if isinstance(record, dict) else ""
+def _is_mva(matter: dict[str, Any]) -> bool:
+    """The matter type's own name, as get_matter carries it inline
+    (``matterType.name``, e.g. "Motor Vehicle Accident - Plaintiff")."""
+    kind = matter.get("matterType")
+    name = str(kind.get("name") or "").casefold() if isinstance(kind, dict) else ""
     return any(word in name for word in MVA_WORDS)
 
 
 def _providers(client: Any, matter_id: str) -> list[str]:
-    """Provider names on the client's own Medicals tab (the first claimant's,
-    or the only tab), in row order. Never another claimant's tab."""
+    """Provider names on the client's own Medicals tab, in row order. Exactly
+    one tab must be hers (the only tab, or the one at the first claimant's
+    position); two candidates return nothing rather than pick one, so another
+    claimant's providers can never reach her form."""
     tabs = _pi_items(client, matter_id)
     mine = [t for t in tabs if t.get("parentIndex") in (0, "0", None)] or (tabs if len(tabs) == 1 else [])
-    if not mine:
+    if len(mine) != 1:
         return []
     values = layout_values(client.get(f"/matters/{matter_id}/layouts/{mine[0]['id']}"))
     names = []
@@ -174,6 +176,17 @@ def _providers(client: Any, matter_id: str) -> list[str]:
         if name and name not in names:
             names.append(name)
     return names
+
+
+def _company_address_parts(contact: dict[str, Any]) -> dict[str, str]:
+    """A carrier's address, business first, then mailing, then residential: the
+    order the firm's own carrier letters read (``form_letter_facts.contact_address``)."""
+    body = facts._body(contact)
+    for key in ("businessAddress", "mailingAddress", "residentialAddress"):
+        found = _address_parts({"person": {key: body.get(key)}})
+        if found:
+            return found
+    return {}
 
 
 def _carrier(
@@ -185,7 +198,7 @@ def _carrier(
     adjuster_id, _ = facts.related_contact(parties, layout, side=side, relationship="Adjuster", client_side=client_side)
     insurer = facts.fetch_contact(client, insurer_id)
     adjuster = facts.fetch_contact(client, adjuster_id)
-    parts = _address_parts(insurer) if insurer else {}
+    parts = _company_address_parts(insurer) if insurer else {}
     out = {
         "carrier": facts.contact_name(insurer) if insurer else None,
         "claim": str(layout.get(CLAIM_KEY.format(side=side)) or "").strip() or None,
@@ -231,7 +244,7 @@ def gather(client: Any, matter_id: str, today: Any) -> tuple[dict[str, str], dic
         put("Client Name", facts.contact_name(me))
         put("Client Street Address", parts.get("street"))
         put("Client City, State, Zip", _city_line(parts))
-        put("Client Phone (home)", _phone_at(me, "phone"))
+        put("Client Phone (home)", _phone_at(me, "phone") or _phone_at(me, "homePhone"))
         put("Client Cell/Pager", _phone_at(me, "cell"))
         put("Client's Date of Birth", _birth_date(me))
     put("Date of Loss", facts.date_of_loss(layout))
@@ -248,7 +261,7 @@ def gather(client: Any, matter_id: str, today: Any) -> tuple[dict[str, str], dic
         put(f"{prefix} City, State, Zip", found.get("city"))
     for box, name in zip(PROVIDER_BOXES, _providers(client, matter_id)):
         put(box, name)
-    checks = {"MVA": "/Yes"} if _is_mva(client, matter) else {}
+    checks = {"MVA": "/Yes"} if _is_mva(matter) else {}
     return values, checks
 
 
@@ -309,6 +322,13 @@ def render_funding_case_eval(matter_id: str) -> Any:
         return _refused(
             f"{resolved.name!r} does not match the funding form this tool fills ({len(missing)} boxes not found); "
             "nothing was filed"
+        )
+    record = client.get(f"/matters/{matter}")
+    clients = [c for c in (record.get("clientIds") or []) if isinstance(c, str)] if isinstance(record, dict) else []
+    if len(clients) > 1:
+        return _refused(
+            f"the matter has {len(clients)} clients and the funding form is one client's; "
+            "nothing was filed (ask which client, and say the form is filled by hand for a shared matter)"
         )
     try:
         values, checks = gather(client, matter, facts.seat_today())
