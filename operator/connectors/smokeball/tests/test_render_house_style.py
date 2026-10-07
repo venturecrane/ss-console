@@ -277,3 +277,54 @@ def test_memo_is_times_new_roman_12() -> None:
     blob, _ = render_document("# To the file\n\nA memo body.", "memo", BASES["hostile firm base"])
     p = next(p for p in _doc(blob).paragraphs if p.text == "A memo body.")
     assert all(r.font.name == "Times New Roman" and r.font.size == Pt(12) for r in p.runs)
+
+
+# ---- the attorney's signed briefs: level 3, body indent, emphasis, tables, page numbers -----
+
+SPECIMEN = """# VI. DAMAGES
+
+## A. Past Medical Expenses
+
+### 1. Northfield Physical Therapy
+
+***Northfield Physical Therapy*** treated plaintiff. **Dates of service:** 02/01/2026 to 03/01/2026. *Prognosis* guarded.
+
+| Provider | Billed | Paid (Howell) |
+| --- | --- | --- |
+| Northfield Physical Therapy | $900.00 | $410.25 |
+
+1. A numbered point.
+"""
+
+
+@pytest.mark.parametrize("base", list(BASES))
+def test_mediation_level3_is_indented_one_inch_bold_and_underlined(base: str) -> None:
+    blob, _ = render_document(SPECIMEN, "mediation_brief", BASES[base])
+    p = next(p for p in _doc(blob).paragraphs if p.text == "1. Northfield Physical Therapy")
+    assert p.paragraph_format.left_indent == Inches(1.0)
+    assert all(r.bold and r.underline for r in p.runs)
+
+
+@pytest.mark.parametrize("base", list(BASES))
+def test_mediation_body_is_first_line_indented_and_emphasis_renders(base: str) -> None:
+    blob, _ = render_document(SPECIMEN, "mediation_brief", BASES[base])
+    p = next(p for p in _doc(blob).paragraphs if p.text.startswith("Northfield Physical Therapy treated"))
+    assert p.paragraph_format.first_line_indent == Inches(0.5) and p.paragraph_format.line_spacing == 2.0
+    runs = {r.text: (bool(r.bold), bool(r.italic)) for r in p.runs}
+    assert runs["Northfield Physical Therapy"] == (True, True)  # bold italic
+    assert runs["Dates of service:"] == (True, False)  # a run-in label
+    assert runs["Prognosis"] == (False, True)
+    assert not any("*" in r.text for r in p.runs)
+    numbered = next(p for p in _doc(blob).paragraphs if "A numbered point." in p.text)
+    assert numbered.paragraph_format.first_line_indent == Inches(-0.5)  # a numbered item still hangs
+
+
+def test_mediation_tables_are_times_new_roman_12() -> None:
+    blob, _ = render_document(SPECIMEN, "mediation_brief", None)
+    cells = [r for c in _doc(blob).tables[0]._cells for p in c.paragraphs for r in p.runs if r.text.strip()]
+    assert cells and all(r.font.name == "Times New Roman" and r.font.size == Pt(12) for r in cells)
+
+
+def test_a_mediation_brief_is_numbered_at_the_bottom_even_under_a_firm_footer() -> None:
+    blob, _ = render_document(SPECIMEN, "mediation_brief", _hostile_base(footer="123 Example Street"))
+    assert "PAGE" in _footer_xml(blob)

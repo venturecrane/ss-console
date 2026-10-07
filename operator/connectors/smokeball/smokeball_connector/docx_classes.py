@@ -52,6 +52,8 @@ class ClassRules:
     # (a deposition outline is numbered at the bottom, always).
     page_numbers_always: bool = False
     body_line_spacing: float = 1.0  # multiple
+    # A first-line indent for body paragraphs (enforced classes only).
+    body_first_line_indent_in: float | None = None
     item_line_spacing: float = 2.0
     item_space_after_pt: float = 0.0
     first_line_indent_in: float = 0.5
@@ -90,15 +92,20 @@ CLASS_RULES: dict[str, ClassRules] = {
     "discovery_set": _house(**_DISCOVERY),
     "discovery_response": _house(**_DISCOVERY),
     "demand_letter": ClassRules(page_numbers=True, heading_align=("left", "left", "left")),
-    # Roman-numeral headings centered and bold only (never underlined);
-    # lettered subsections indented, bold AND underlined; body double-spaced.
+    # From the attorney's instructions and his signed briefs: roman-numeral
+    # headings centered and bold only (never underlined); lettered subsections
+    # indented 0.5", bold and underlined; numbered sub-subsections indented
+    # 1.0", bold and underlined; body double-spaced with a 0.5" first-line
+    # indent; every page numbered at the bottom. Plain Letter paper.
     "mediation_brief": _house(
         caption_table_first=True,
         heading_align=("center", "left", "left"),
-        heading_underline=(False, True, False),
+        heading_underline=(False, True, True),
         heading_bold=(True, True, True),
         heading_indent_in=(0.0, 0.5, 1.0),
         body_line_spacing=2.0,
+        body_first_line_indent_in=0.5,
+        page_numbers_always=True,
     ),
     "memo": _house(heading_align=("left", "left", "left"), heading_underline=(False, False, False)),
     "depo_outline": _house(

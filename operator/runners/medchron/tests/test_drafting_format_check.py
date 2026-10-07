@@ -69,6 +69,27 @@ def test_an_underlined_level_1_heading_fails(tmp_path, monkeypatch):
     assert any("level 1 underlined" in f for f in res.fails)
 
 
+LEVEL3 = "\n\n### 1. Northfield Physical Therapy\n\n***Northfield Physical Therapy*** treated plaintiff."
+
+
+@pytest.mark.parametrize(
+    "change, expect",
+    [
+        ({"heading_underline": (False, True, False)}, "level 3 not bold and underlined"),
+        ({"heading_indent_in": (0.0, 0.5, 0.5)}, "level 3 not indented 1.0 inch"),
+        ({"body_first_line_indent_in": None}, "first-line indent"),
+        ({"page_numbers": False}, "no PAGE field"),
+    ],
+)
+def test_the_signed_brief_rules_each_fail_when_broken(tmp_path, monkeypatch, change, expect):
+    from smokeball_connector.docx_format import CLASS_RULES
+
+    assert _check(tmp_path, _brief(extra=LEVEL3), "mediation_brief").ok
+    monkeypatch.setitem(CLASS_RULES, "mediation_brief", dataclasses.replace(CLASS_RULES["mediation_brief"], **change))
+    res = _check(tmp_path, _brief(extra=LEVEL3), "mediation_brief")
+    assert any(expect in f for f in res.fails), res.fails
+
+
 def test_a_single_spaced_brief_body_fails(tmp_path, monkeypatch):
     from smokeball_connector.docx_format import CLASS_RULES
 

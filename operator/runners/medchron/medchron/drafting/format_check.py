@@ -20,7 +20,9 @@ the raw XML for the footer field and the section properties):
   party is over 35 or a prior count is not readable (``render.decl_decision``,
   the same rule the attach applied); discovery response: a proof of service and
   no declaration;
-* deposition outline: a PAGE field in the footer.
+* deposition outline and mediation brief: a PAGE field in the footer;
+  mediation level-3 headings indented 1.0", bold and underlined, body
+  paragraphs first-line indented 0.5".
 
 A failure here is OUR render's fault (the renderer and the settlements before
 it are code), so the job ends ``failed`` (resumable, SMD alerted), never held.
@@ -127,6 +129,7 @@ def check_paper(doc: Any, res: Result) -> None:
 
 def check_mediation(doc: Any, fmt: dict[str, Any], res: Result) -> None:
     from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Inches
 
     paras = _paras(doc)
     for p in (p for p in paras if _level(p) == 1):
@@ -141,10 +144,19 @@ def check_mediation(doc: Any, fmt: dict[str, Any], res: Result) -> None:
             res.fails.append(f"heading: level 2 not indented: {p.text[:40]}")
         if not all(_bold(r, p) and _underlined(r, p) for r in _text_runs(p)):
             res.fails.append(f"heading: level 2 not bold and underlined: {p.text[:40]}")
+    for p in (p for p in paras if _level(p) == 3):
+        if _eff(p, "left_indent") != Inches(1.0):
+            res.fails.append(f"heading: level 3 not indented 1.0 inch: {p.text[:40]}")
+        if not all(_bold(r, p) and _underlined(r, p) for r in _text_runs(p)):
+            res.fails.append(f"heading: level 3 not bold and underlined: {p.text[:40]}")
     body = [p for p in paras if p.style is not None and p.style.name == "SMD Body"]
     single = [p for p in body if _eff(p, "line_spacing") != 2.0]
     if single:
         res.fails.append(f"spacing: {len(single)} body paragraph(s) not double-spaced")
+    prose = [p for p in body if not re.match(r"^\s*\S{1,6}\t", p.text)]  # a numbered item hangs instead
+    unindented = [p for p in prose if _eff(p, "first_line_indent") != Inches(0.5)]
+    if unindented:
+        res.fails.append(f"indent: {len(unindented)} body paragraph(s) without the 0.5 inch first-line indent")
     heads = [_ROMAN.sub("", p.text).strip().casefold() for p in paras if _level(p) == 1]
     pos = -1
     for title in fmt["mediation_brief_sections"]:
@@ -242,6 +254,6 @@ def check(path: Path, cls: str, fmt: dict[str, Any], digest: str = "") -> Result
         check_mediation(doc, fmt, res)
     if cls in ("discovery_set", "discovery_response"):
         check_discovery(doc, cls, fmt, res, digest)
-    if cls == "depo_outline" and fmt["depo_outline_page_numbers"]:
+    if cls == "mediation_brief" or (cls == "depo_outline" and fmt["depo_outline_page_numbers"]):
         check_page_field(blob, res)
     return res

@@ -334,6 +334,8 @@ class _Writer:
             para.paragraph_format.line_spacing = self.rules.body_line_spacing
         if self.rules.enforce_layout:
             para.paragraph_format.space_after = Pt(0)
+            if self.rules.body_first_line_indent_in is not None:
+                para.paragraph_format.first_line_indent = Inches(self.rules.body_first_line_indent_in)
         self._runs(para, block.runs)
 
     def _bullet(self, block: g.Bullet) -> None:

@@ -11,7 +11,8 @@ drafting-discipline.md`` Part IV):
 * ``#`` / ``##`` / ``###`` headings (the heading TEXT is content: a model writes
   ``## I. Introduction`` and the numeral stays, because the body cross-references
   it; the renderer styles the level and never renumbers),
-* paragraphs (blank-line separated) with ``**bold**`` / ``*italic*`` runs,
+* paragraphs (blank-line separated) with ``**bold**`` / ``*italic*`` /
+  ``***bold italic***`` runs,
 * ``-`` / ``*`` bullets,
 * literal ``1.`` numbered items (the number is content; discovery item numbers
   come from the propounded set, never from a counter). The one exception is
@@ -51,7 +52,7 @@ _TABLE_SEP_RE = re.compile(r"^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?$")
 # skeletons wrap markers in them (`` `{{FILL: ...}}` ``) for human readers, and a
 # Word document must not carry literal backticks. A code span renders as its
 # plain text; nothing inside it is styled.
-_EMPHASIS_RE = re.compile(r"(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)")
+_EMPHASIS_RE = re.compile(r"(\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)")
 
 # Private-use placeholders stand in for markers while cells/emphasis are split.
 _PLACEHOLDER = "{}"
@@ -150,7 +151,9 @@ def _emphasis_runs(text: str) -> list[Run]:
     for part in _EMPHASIS_RE.split(text):
         if not part:
             continue
-        if part.startswith("**") and part.endswith("**") and len(part) > 4:
+        if part.startswith("***") and part.endswith("***") and len(part) > 6:
+            runs.append(Run(part[3:-3], bold=True, italic=True))
+        elif part.startswith("**") and part.endswith("**") and len(part) > 4:
             runs.append(Run(part[2:-2], bold=True))
         elif part.startswith("*") and part.endswith("*") and len(part) > 2:
             runs.append(Run(part[1:-1], italic=True))
