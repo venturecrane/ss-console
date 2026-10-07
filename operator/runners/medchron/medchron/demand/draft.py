@@ -20,11 +20,19 @@ import json
 import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
+from . import gapaudit
 from .summarize import sha
 
 AUDIT_MAX_TOKENS = 12_000
+CONTINUATIONS = 2
+CONTINUE = (
+    "\n\n---\n\nYOUR ANSWER SO FAR stopped at the output limit. It is below, between the markers. Continue it "
+    "from exactly where it stops: write only the rest, beginning with the next character, repeating nothing and "
+    "adding no preamble.\n\n=== ANSWER SO FAR ===\n{text}\n=== END OF ANSWER SO FAR ==="
+)
 COVERAGE_SENTINEL = "=== COVERAGE POSTURE REPORT ==="
 FINDING = re.compile(r"\|\s*(DRIFTS|INVENTED|ARITHMETIC)\s*\|", re.I)
 END_LIST_HEADS = re.compile(r"(TO BE SUPPLIED|NOT IN RECORD|ATTORNEY DECISIONS|HELD OUT|FLAGGED)", re.I)
@@ -174,11 +182,16 @@ class Drafter:
     def _write(self, name: str, text: str) -> None:
         (self.data / name).write_text(text, encoding="utf-8")
 
-    def _call(self, stage: str, system: str, user: str, max_tokens: int, cid: str) -> Any:
+    def _max(self, stage: str) -> int:
+        """The stage model's documented output maximum (gapaudit.OUTPUT_MAX);
+        the firm's lever only for a model that table does not know."""
+        return gapaudit.output_max(self.firm.model(stage), self.compose_max)
+
+    def _raw(self, stage: str, system: str, user: str, max_tokens: int, cid: str) -> Any:
         # The Opus stages ask for high effort explicitly: the API default is
         # medium on claude-opus-5-5 (llm.py's EFFORT_DEFAULTS note).
         effort = "high" if stage in ("compose", "gap_audit") else None
-        r = self.doorway.call(
+        return self.doorway.call(
             stage,
             model=self.firm.model(stage),
             system=system,
@@ -188,13 +201,31 @@ class Drafter:
             custom_id=cid,
             effort=effort,
         )
+
+    def _call(self, stage: str, system: str, user: str, max_tokens: int, cid: str) -> Any:
+        """One whole answer. An answer that reaches the ceiling is CONTINUED
+        (the text so far rides in the next request, which writes only the
+        rest), up to CONTINUATIONS times, so a long letter is never cut off;
+        only an answer still unfinished after that stops the job, resumably."""
+        r = self._raw(stage, system, user, max_tokens, cid)
+        text = r.text
+        for n in range(1, CONTINUATIONS + 1):
+            if r.stop_reason != "max_tokens":
+                break
+            self.log(f"  {stage} reached its {max_tokens:,}-token ceiling; continuation {n} of {CONTINUATIONS}")
+            r = self._raw(stage, system, user + CONTINUE.format(text=text), max_tokens, f"{cid}-c{n}")
+            text += r.text
         if r.stop_reason == "max_tokens":
-            self._write(f"{stage}.truncated.md", r.text)
-            raise DraftError(f"{stage} output truncated at {max_tokens} tokens; nothing downstream ran on it")
-        return r
+            self._write(f"{stage}.truncated.md", text)
+            raise DraftError(
+                f"{stage} output still unfinished after {CONTINUATIONS} continuations; nothing downstream ran on it"
+            )
+        return SimpleNamespace(text=text, stop_reason=r.stop_reason)
 
     # ---- deliverable 1 -------------------------------------------------------------
     def gap_audit(self, digest: str, preflight: dict[str, Any], walled: int, transcribed: list[str]) -> str:
+        """Table rows from the model, in provider batches when the file is
+        large; numbering, sections and readiness in code (gapaudit.py)."""
         if (self.data / "gap-audit.md").is_file():
             return self._read("gap-audit.md")
         free = {
@@ -203,16 +234,29 @@ class Drafter:
             "documents_read_by_machine_transcription": transcribed,
             "emails_held_out_behind_the_privilege_wall": walled,
         }
-        system = self.firm.text("prompt_gap_audit") + "\n\n---\n\n" + self.brief
-        user = (
-            "THE FREE PREFLIGHT (mechanical; cite it as 'preflight' only for the bill reconciliation):\n"
-            + json.dumps(free, indent=1)
-            + "\n\n---\n\nTHE RECORD DIGEST:\n\n"
-            + digest
+        # Everything every batch shares sits in the system block, so the
+        # batches after the first read it from the cache.
+        system = "\n\n---\n\n".join(
+            [
+                self.firm.text("prompt_gap_audit"),
+                self.brief,
+                "THE FREE PREFLIGHT (mechanical; cite it as 'preflight' only for the bill reconciliation):\n"
+                + json.dumps(free, indent=1),
+                "THE RECORD DIGEST:\n\n" + digest,
+                gapaudit.CONTRACT,
+            ]
         )
-        r = self._call("gap_audit", system, user, self.compose_max, f"gap-{sha(user)[:8]}")
-        self._commit("gap-audit.md", r.text)
-        return r.text
+        auditor = gapaudit.GapAuditor(
+            self.data,
+            lambda sy, us, mx, cid: self._raw("gap_audit", sy, us, mx, cid),
+            self.firm.model("gap_audit"),
+            self.compose_max,
+            self.workers,
+            self.log,
+        )
+        text = auditor.run(system, free, digest)
+        self._commit("gap-audit.md", text)
+        return text
 
     # ---- deliverable 2 -------------------------------------------------------------
     def compose_system(self) -> str:
@@ -240,7 +284,7 @@ class Drafter:
             + "THE RECORD DIGEST (every fact you use must trace to a citation here):\n\n"
             + digest
         )
-        r = self._call("compose", self.compose_system(), user, self.compose_max, f"compose-{sha(user)[:8]}")
+        r = self._call("compose", self.compose_system(), user, self._max("compose"), f"compose-{sha(user)[:8]}")
         self._commit("draft-v1.md", r.text)
         return r.text
 
@@ -340,7 +384,7 @@ class Drafter:
             + f"\n\n---\n\n## THE RECORD DIGEST (the documents the findings cite)\n\n{digest_part}"
         )
         system = self.compose_system() + "\n\n---\n\n" + self.firm.text("prompt_repair")
-        r = self._call("repair", system, user, self.compose_max, f"repair-{version}-{sha(user)[:8]}")
+        r = self._call("repair", system, user, self._max("repair"), f"repair-{version}-{sha(user)[:8]}")
         self._write(f"repair-v{version}-response.md", r.text)
         merged, missing = merge_repair(draft, r.text, [h for h, _, _ in flagged])
         if missing:
