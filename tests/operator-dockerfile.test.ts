@@ -1492,7 +1492,8 @@ describe('Operator customer Machine Dockerfile', () => {
     // the turn's own verified email) and the omitted-skill read fence.
     // 07f6be76 -> 2de32d87 (overlay#423), 2026-10-06: a demand job's wake may call no send tool and
     // binds only by its job id.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="2de32d8738e479433d4600835c004265a0cd815e"')
+    // 2de32d87 -> 467ff5cb (overlay#424), 2026-10-06: render_funding_case_eval classified internal_write.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="467ff5cb5580836857618ddbdd47bfae6cbcc040"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
