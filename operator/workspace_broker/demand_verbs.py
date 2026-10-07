@@ -384,7 +384,51 @@ def demand_dispatch(
     verbs = broker.demand
     if verbs is None:
         raise ValueError("demand verbs not configured on this broker")
+    envelope = request.get("envelope")
+    if action == "demand_job_submit" and isinstance(envelope, dict) and "request_graph_id" in envelope:
+        resolved = _resolve_request_graph_id(broker, envelope, peer_uid)
+        if "refused" in resolved:
+            return {"ok": True, "accepted": False, "reason": resolved["refused"]}
+        request = {**request, "envelope": resolved["envelope"]}
     return verbs.handle(action, request, peer_uid)
+
+
+def _resolve_request_graph_id(broker: BrokerContext, envelope: dict[str, Any], peer_uid: int | None) -> dict[str, Any]:
+    """ROOT ONLY: queue a request whose email the seat knows only by its Graph id
+    (a request answered before the demand lane deployed). The broker resolves
+    the id itself, with the reply binding's lookup (Inbox only, never a draft,
+    never this mailbox's own mail, no replyTo elsewhere), requires the sender to
+    be one the seat may reply to AND to equal ``requested_by``, and sets
+    ``request_ref`` to the email's resolved internetMessageId, so the job's
+    completion reply threads to that email. The gateway and agent paths never
+    reach this: theirs is the origin-injected envelope."""
+    if peer_uid != 0:
+        raise PermissionError("request_graph_id is accepted from root only")
+    from . import msgraph_lookup
+    from .msgraph_ops import MsGraphRefused
+    from .recipient_policy import authored_policy, normalize_address
+
+    if broker.msgraph is None:
+        raise ValueError("request_graph_id needs the msgraph read credential on this broker")
+    if "request_ref" in envelope:
+        return {"refused": "pass request_graph_id or request_ref, not both"}
+    gid = str(envelope.get("request_graph_id") or "").strip()
+    if not gid or not all(c.isalnum() or c in "=_-" for c in gid):
+        return {"refused": "request_graph_id must be the email's Graph id"}
+    try:
+        found = msgraph_lookup.received_by_graph_id(broker.msgraph, gid)
+    except MsGraphRefused as exc:
+        return {"refused": str(exc)}
+    if found is None:
+        return {"refused": "that email is not in this seat's Inbox as a received message"}
+    sender = found["sender"]
+    if not authored_policy(broker.customer_path).allows_reply_to(sender):
+        return {"refused": "the sender of that email is not someone this seat may reply to"}
+    if normalize_address(str(envelope.get("requested_by") or "")) != sender:
+        return {"refused": "requested_by must be the sender of that email"}
+    out = {k: v for k, v in envelope.items() if k != "request_graph_id"}
+    out["request_ref"] = found["internet_message_id"]
+    return {"envelope": out}
 
 
 __all__ = ["VERBS", "DemandVerbs", "allowance_of", "demand_dispatch", "demand_skill_settings"]
