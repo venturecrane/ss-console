@@ -277,3 +277,14 @@ render_sr1 = "internal_write"
 # mcp_smokeball_render_sr19 = ActionClass.INTERNAL_WRITE, shipped by the
 # OVERLAY_REF bump in the same change; until it lands the tool is UNREACHABLE.
 render_sr19 = "internal_write"
+# render_funding_case_eval (2026-10-06, A&P asked for a funder's case
+# evaluation / cash advance application filled "with the data in the file so
+# far"): the firm's copy of the form, prefilled from the matter's record and
+# filed on the matter for the firm to finish; never signed, never sent, and
+# never the client's SSN or the attorney's judgment calls.
+# internal_write: the firm's own record; nothing submitted to anyone.
+#
+# COORDINATED CHANGE: hermes-smd-overlay shared/action_classes.py must carry
+# mcp_smokeball_render_funding_case_eval = ActionClass.INTERNAL_WRITE, shipped by the
+# OVERLAY_REF bump in the same change; until it lands the tool is UNREACHABLE.
+render_funding_case_eval = "internal_write"

@@ -1274,6 +1274,9 @@ self_initiation:
       # The firm's police report request letters (city police; Highway Patrol).
       police_request_city: 'Form - Police Req City.docx'
       police_request_chp: 'Form - Police Req CHP.docx'
+      # A funder's case evaluation / cash advance application, the copy the
+      # firm sent 2026-10-06 (render_funding_case_eval prefills it).
+      funding_case_eval: 'Form - Funding Case Eval.pdf'
     # The Operator's OWN matter (ss-console#2536). Four authored values, and
     # every one of them is a decision the firm made here rather than one the
     # Operator makes at runtime: the model can ask for this matter and cannot
