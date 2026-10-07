@@ -84,6 +84,7 @@ const EXPECTED_VERBS = [
   // reads open to the agent, record and resume root only.
   'demand_allowance',
   'demand_job_record',
+  'demand_job_rerun',
   'demand_job_resume',
   'demand_job_status',
   'demand_job_submit',

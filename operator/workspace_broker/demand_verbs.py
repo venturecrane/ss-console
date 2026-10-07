@@ -53,6 +53,7 @@ from .demand_ledger import (
     DemandLedger,
     EnvelopeError,
     SubmitRefused,
+    digest,
     validate_envelope,
 )
 from .medchron_ledger import admins_from_customer_yaml, cycle_from_customer_yaml
@@ -80,6 +81,7 @@ REHEARSAL_MATTER_KEY = "rehearsal_matter_id"
 _PACIFIC = ZoneInfo("America/Los_Angeles")
 
 VERBS = (
+    "demand_job_rerun",
     "demand_job_submit",
     "demand_job_status",
     "demand_allowance",
@@ -179,6 +181,8 @@ class DemandVerbs:
             return self._record(request)
         if action == "demand_job_resume":
             return self._resume(request)
+        if action == "demand_job_rerun":
+            return self._rerun(request)
         raise ValueError(f"unsupported demand action: {action}")
 
     # -- allowance ------------------------------------------------------------
@@ -237,7 +241,7 @@ class DemandVerbs:
         return {"ok": True, "jobs": [DemandLedger.project(r) for r in rows]}
 
     # -- submit ---------------------------------------------------------------
-    def _submit(self, request: dict[str, Any]) -> dict[str, Any]:
+    def _submit(self, request: dict[str, Any], supersedes: str | None = None) -> dict[str, Any]:
         def refused(reason: str, **extra: Any) -> dict[str, Any]:
             return {"ok": True, "accepted": False, "reason": reason, **extra}
 
@@ -295,7 +299,11 @@ class DemandVerbs:
             # ledger's write transaction: the checks above are for a readable
             # answer, these are the ones two concurrent submits cannot both pass.
             job_id = self._db.submit(
-                envelope, allowance=state["allowance"], anchor_day=anchor, effective_from=effective_from
+                envelope,
+                allowance=state["allowance"],
+                anchor_day=anchor,
+                effective_from=effective_from,
+                supersedes=supersedes,
             )
         except SubmitRefused as exc:
             return refused(f"{exc}; nothing new was queued", **({"job_id": exc.job_id} if exc.job_id else {}))
@@ -309,6 +317,7 @@ class DemandVerbs:
                 "allowance_remaining": state["remaining"],
                 "requested_by": envelope["requested_by"],
                 "request_ref": envelope["request_ref"],
+                **({"supersedes": supersedes} if supersedes else {}),
             },
             envelope["matter"]["id"],
         )
@@ -349,6 +358,36 @@ class DemandVerbs:
             meta["coverage_report"] = delivery.get("coverage_report") is True
         self._audit(AUDIT_TYPES[state], meta, row["matter_id"])
         return {"ok": True, "job": DemandLedger.project(row)}
+
+    def _rerun(self, request: dict[str, Any]) -> dict[str, Any]:
+        """ROOT ONLY: a NEW job, with the same envelope, for a finished one.
+
+        The broker never holds the request text (the runner moved the queued
+        envelope into its root-only job dir), so root passes the envelope back
+        and the broker proves it is the SAME envelope: its digest must equal
+        the finished job's ``envelope_digest``. The new job names the job it
+        supersedes, gets its own id (so its completion reply binds afresh in
+        the requester's thread), and passes every submit check: the lane, the
+        allowance, the requester, nothing unfinished on the matter."""
+
+        def refused(reason: str, **extra: Any) -> dict[str, Any]:
+            return {"ok": True, "accepted": False, "reason": reason, **extra}
+
+        job_id = str(request.get("job_id") or "")
+        row = self._db.read(job_id)
+        if row is None:
+            raise ValueError(f"no such job {job_id}")
+        if row["state"] not in ("delivered", "failed", "held"):
+            return refused(f"job {job_id} is {row['state']}; only a finished job is re-run")
+        raw = request.get("envelope")
+        keys = ("matter", "file_to", "requested_by", "request_ref", "request_text", "deliverables")
+        try:
+            env = validate_envelope({k: raw.get(k) for k in keys} if isinstance(raw, dict) else {})
+        except EnvelopeError as exc:
+            return refused(str(exc))
+        if digest(env) != row["envelope_digest"]:
+            return refused(f"that envelope is not job {job_id}'s; a re-run carries the original envelope unchanged")
+        return self._submit({"envelope": env}, supersedes=job_id)
 
     def _resume(self, request: dict[str, Any]) -> dict[str, Any]:
         """Write the resume marker the runner daemon reads; the row moves when

@@ -111,11 +111,19 @@ CREATE_SQL = (
 )
 CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_demand_jobs_created ON demand_jobs(created_at)"
 #: One job per request email (the idempotency key).
-CREATE_UNIQUE_REF_SQL = "CREATE UNIQUE INDEX IF NOT EXISTS uq_demand_jobs_request_ref ON demand_jobs(request_ref)"
+#: One job per request email, except a person's re-run of a finished job,
+#: which carries the same email and names the job it supersedes. The first
+#: version of this index keyed on request_ref alone and is dropped on upgrade.
+DROP_OLD_UNIQUE_REF_SQL = "DROP INDEX IF EXISTS uq_demand_jobs_request_ref"
+CREATE_UNIQUE_REF_SQL = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_demand_jobs_request_ref_rerun "
+    "ON demand_jobs(request_ref, ifnull(supersedes, ''))"
+)
 #: Columns added after the first version of the table; each tolerated when present.
 ALTERS = (
     "ALTER TABLE demand_jobs ADD COLUMN attempt INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE demand_jobs ADD COLUMN reply_key TEXT",
+    "ALTER TABLE demand_jobs ADD COLUMN supersedes TEXT",
 )
 CREATE_SPEND_SQL = (
     "CREATE TABLE IF NOT EXISTS demand_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
@@ -223,6 +231,7 @@ class DemandLedger:
                 except sqlite3.OperationalError:
                     pass  # the column is already there
             conn.execute(CREATE_INDEX_SQL)
+            conn.execute(DROP_OLD_UNIQUE_REF_SQL)
             conn.execute(CREATE_UNIQUE_REF_SQL)
             conn.execute(CREATE_SPEND_SQL)
             conn.execute(CREATE_SPEND_INDEX_SQL)
@@ -294,8 +303,12 @@ class DemandLedger:
         allowance: int | None = None,
         anchor_day: int | None = None,
         effective_from: str | None = None,
+        supersedes: str | None = None,
     ) -> str:
         """Row, then queue file, so an envelope on disk always has its row.
+
+        ``supersedes`` makes this a RE-RUN of that finished job: the same email
+        may queue again, once per superseded job, with every other check intact.
 
         The duplicate, the matter and (when ``allowance`` is given) the cycle
         are re-checked inside one ``BEGIN IMMEDIATE``, so concurrent submits
@@ -307,7 +320,10 @@ class DemandLedger:
         conn = self._connect()
         try:
             conn.execute("BEGIN IMMEDIATE")
-            dup = conn.execute("SELECT id FROM demand_jobs WHERE request_ref=?", (env["request_ref"],)).fetchone()
+            if supersedes is None:
+                dup = conn.execute("SELECT id FROM demand_jobs WHERE request_ref=?", (env["request_ref"],)).fetchone()
+            else:
+                dup = conn.execute("SELECT id FROM demand_jobs WHERE supersedes=?", (supersedes,)).fetchone()
             if dup is not None:
                 conn.rollback()
                 raise SubmitRefused(f"that request email already queued demand job {dup['id']}", dup["id"])
@@ -329,7 +345,8 @@ class DemandLedger:
                     )
             conn.execute(
                 "INSERT INTO demand_jobs (id, created_at, updated_at, state, matter_id, matter_number, "
-                "file_to_matter_id, requester, request_ref, envelope_digest) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "file_to_matter_id, requester, request_ref, envelope_digest, supersedes) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     job_id,
                     now,
@@ -341,6 +358,7 @@ class DemandLedger:
                     env["requested_by"],
                     env["request_ref"],
                     digest(env),
+                    supersedes,
                 ),
             )
             conn.commit()
@@ -348,6 +366,8 @@ class DemandLedger:
             conn.close()
         self.queue_dir.mkdir(parents=True, exist_ok=True)
         queued = {**env, "job_id": job_id, "kind": "demand", "submitted_at": now}
+        if supersedes:
+            queued["supersedes"] = supersedes
         tmp = self.queue_dir / f".{job_id}.json.tmp"
         tmp.write_text(json.dumps(queued, indent=1, sort_keys=True), encoding="utf-8")
         tmp.chmod(0o640)
