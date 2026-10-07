@@ -204,6 +204,41 @@ def limits_refusal(quote: str) -> bool:
     return bool(_LIMITS_REFUSAL.search(quote))
 
 
+#: Not correspondence about a claim, by name: the policy itself and its
+#: paperwork, other coverages' material, forms.
+_NOT_A_LETTER = re.compile(
+    r"(?i)\b(polic(y|ies)|declarations?|dec ?page|endorsements?|forms?|applications?|booklets?|"
+    r"benefits?|summary plan|eob|explanation of benefits|workers'? ?comp(ensation)?|w\.?c\.?|"
+    r"health plan|medi-?cal|medicare|certificate|lien|hipaa|authori[sz]ation|bill|statement|records?)\b"
+)
+#: Policy wording, by content: a document that reads like the policy, not a letter.
+_POLICY_TEXT = re.compile(
+    r"(?i)(this policy|policy period|named insured|insuring agreement|conditions of this|"
+    r"we will pay|part [a-f] |section [ivx]+ |definitions)"
+)
+_LETTER_SHAPE = re.compile(r"(?im)^\s*(dear\b|re:|regarding:|subject:)")
+
+
+def carrier_letters(texts: list[tuple[dict[str, Any], str]], prem: dict[str, Any]) -> list[tuple[dict[str, Any], str]]:
+    """The carrier's own correspondence on this claim: an email, or a document
+    shaped like a letter (a salutation or a RE line), that carries a carrier's
+    signal and a claim identifier (``carrier_documents``), and is not policy
+    paperwork by name or by content, not a bill or record, and not written by
+    the firm or the Operator."""
+    out = []
+    for r, t in texts:
+        name = str(r.get("name") or "")
+        if firm_authored(r, t, prem) or _NOT_A_LETTER.search(name):
+            continue
+        if r.get("kind") != "email_body" and not _LETTER_SHAPE.search(t[:3000]):
+            continue
+        if len(_POLICY_TEXT.findall(t[:6000])) >= 2:
+            continue
+        if carrier_documents([(r, t)], prem["carrier_phrases"]):
+            out.append((r, t))
+    return out
+
+
 def decide(
     extracted: list[dict[str, Any]], preflight: dict[str, Any], facts: dict[str, Any], prem: dict[str, Any]
 ) -> dict[str, Any]:
@@ -219,9 +254,11 @@ def decide(
             + [f"{h['document']}: {h['quote']}" for h in carrier_docs[:5]],
         }
     )
-    # G2 reads only what OTHERS wrote: the firm's and the Operator's own
-    # drafts quote carriers, and a quote is not the carrier's position.
-    theirs = [(r, t) for r, t in texts if not firm_authored(r, t, prem)]
+    # G2 reads ONLY the carrier's own correspondence on this claim
+    # (``carrier_letters``): never a policy copy, a form, a benefit booklet,
+    # a provider's document, or anything the firm or the Operator wrote. A
+    # workers' comp policy's boilerplate stopped a live job on 2026-10-06.
+    theirs = carrier_letters(texts, prem)
     denials = [
         h for h in _phrase_hits(theirs, prem["denial_phrases"], negatable=True) if not limits_refusal(h["quote"])
     ]

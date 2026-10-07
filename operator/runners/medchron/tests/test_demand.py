@@ -177,7 +177,16 @@ def test_a_premise_failure_files_a_coverage_report_and_pays_nothing(tmp_path, pr
 
 def test_a_written_denial_fails_g2(tmp_path, pricing):
     docs = standard_docs() + [
-        ("d6", "Carrier letter 2.pdf", make_pdf(["Your claim number CLM-0001. Coverage is denied."]), "f-corr")
+        (
+            "d6",
+            "Carrier letter 2.pdf",
+            make_pdf(
+                [
+                    "Example Mutual Insurance Company\nRe: Alpha Example, claim number CLM-0001\nDear Counsel:\nOur insured Beta Driver. Coverage is denied."
+                ]
+            ),
+            "f-corr",
+        )
     ]
     _r, v, _ = _run(tmp_path, pricing, seat_with(docs), ScriptedClient())
     assert v.coverage_report is True
@@ -1143,7 +1152,11 @@ def test_a_carrier_refusing_to_disclose_limits_is_not_a_denial(tmp_path, pricing
     docs = standard_docs() + [("d21", "Carrier letter limits.pdf", letter, "f-corr")]
     _r, v, _ = _run(tmp_path, pricing, seat_with(docs), ScriptedClient())
     assert v.coverage_report is False, v.reason
-    real = make_pdf(["Example Mutual. Claim number CLM-0001. Coverage is denied for this loss."])
+    real = make_pdf(
+        [
+            "Example Mutual Insurance Company\nRe: Alpha Example, claim number CLM-0001\nDear Counsel:\nOur insured Beta Driver. Coverage is denied for this loss."
+        ]
+    )
     docs2 = standard_docs() + [("d22", "Carrier letter 2.pdf", real, "f-corr")]
     _r, v2, _ = _run(tmp_path / "b", pricing, seat_with(docs2), ScriptedClient())
     assert v2.coverage_report is True
@@ -1164,7 +1177,9 @@ def test_a_reservation_of_rights_is_a_flag_not_a_fail(tmp_path):
         "_firm_domains": [],
     }
     t = tmp_path / "a.txt"
-    t.write_text("Example Mutual issues this reservation of rights under claim number CLM-0001.")
+    t.write_text(
+        "Example Mutual Insurance Company\nRe: Alpha Example, claim number CLM-0001\nDear Counsel:\nOur insured Beta Driver. We issue this reservation of rights."
+    )
     out = premise.decide([{"name": "ROR letter", "text_path": str(t)}], {"premise_hits": []}, {"insurer": "X"}, prem)
     assert out["gates"][1]["passed"] is True
     assert any("reservation of rights" in f for f in out["premise_facts"])
@@ -1241,3 +1256,50 @@ def test_gate_quote_failures_left_after_repair_are_failed_and_resume_repays_noth
     _r, v2, _ = _run(tmp_path, pricing, seat, client)
     assert v2.outcome == "delivered", v2.reason
     assert len(client.calls) == paid  # resume re-ran repair, gate, render and file only
+
+
+# ---- 2026-10-06: a workers' comp policy's boilerplate stopped G2 ----------------------------
+def test_g2_never_reads_a_policy_copy_or_its_boilerplate(tmp_path, pricing):
+    policy = make_pdf(
+        [
+            "WORKERS COMPENSATION AND EMPLOYERS LIABILITY POLICY\nPolicy period 2024-2025. Named insured: "
+            "Example Employer. You will not deny coverage under this policy and will reimburse us for any "
+            "increase in indemnity. Claim number CLM-0001. Our insured."
+        ]
+    )
+    docs = standard_docs() + [("d30", "Policy copy.pdf", policy, "f-corr")]
+    _r, v, _ = _run(tmp_path, pricing, seat_with(docs), ScriptedClient())
+    assert v.coverage_report is False, v.reason
+
+
+def test_g2_reads_only_letters_shaped_carrier_correspondence():
+    from medchron.demand import premise
+
+    prem = {"carrier_phrases": ["claim number"], "_firm_signature": "X", "_firm_domains": ["firm.example"]}
+    letter = (
+        {"name": "Letter from Example Mutual"},
+        "Example Mutual Insurance Company\nRe: Alpha Example, claim number CLM-0001\nDear Counsel:\nOur insured Beta Driver. Coverage is denied.",
+    )
+    booklet = (
+        {"name": "Benefit booklet"},
+        "Example Mutual Insurance Company\nRe: Alpha Example, claim number CLM-0001\nDear Counsel:\nOur insured Beta Driver. Coverage is denied.",
+    )
+    unshaped = ({"name": "scan 4"}, "Example Mutual. Our insured. Claim number CLM-0001. Coverage is denied.")
+    provider = (
+        {"name": "ER record"},
+        "Example Mutual Insurance Company\nRe: Alpha Example, claim number CLM-0001\nDear Counsel:\nOur insured Beta Driver. Coverage is denied.",
+    )
+    policy_text = (
+        {"name": "doc 7"},
+        "Example Mutual Insurance Company\nRe: Alpha Example, claim number CLM-0001\nDear Counsel:\nOur insured Beta Driver. This policy. Named insured. Policy period. We will pay. Coverage is denied.",
+    )
+    got = [r["name"] for r, _ in premise.carrier_letters([letter, booklet, unshaped, provider, policy_text], prem)]
+    assert got == ["Letter from Example Mutual"]
+
+
+def test_the_wake_carries_no_email_id():
+    import inspect
+
+    from medchron import demand_lane
+
+    assert "Request ref" not in inspect.getsource(demand_lane.DemandLane._compose_wake)

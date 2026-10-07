@@ -121,7 +121,6 @@ def test_the_wake_asks_for_deliver_mode_with_the_contract_fields(tmp_path):
         "Folder id: folder-7.",
         "Files: demand (41000 bytes); gap_audit (9000 bytes).",
         "Requested by: admin@firm.example.",
-        "Request ref: <req-1@firm.example>.",
     ):
         assert line in task
     assert "Alpha Example" not in task  # no client name rides the wake, not even inside a file name
