@@ -652,3 +652,73 @@ def test_a_drafting_job_id_is_not_read_from_the_demand_ledger(tmp_path: Path) ->
     demand = _job(tmp_path, ["running", "delivered"])
     out = _call(_broker(tmp_path, FakeMailbox()), "msgraph_reply_bind", {"kind": "drafting_job", "job_id": demand})
     assert out["bound"] is False and "no drafting job" in out["reason"]
+
+
+# -- chronology jobs (2026-10-07: a held chronology's wake had no binding, and the
+# Operator wrote a new email to the requester AND the matter's attorney)
+
+
+def _chronology_job(tmp_path: Path, path: list[str], requester: str = ADMIN) -> str:
+    from workspace_broker.medchron_ledger import MedchronLedger
+
+    ledger = MedchronLedger(str(tmp_path / "audit.db"), tmp_path / "mq")
+    job = ledger.submit(
+        {
+            "matter": {"id": MATTER, "number": "900201", "title": "Doe v. Roe"},
+            "units": [{"client_name": "Jane Doe", "surname": "Doe", "dob": "01/01/1980"}],
+            "incident": {"date": "2025-01-01", "source": "matter_layout"},
+            "requested_by": requester,
+            "request_ref": IMID,
+        },
+        remaining=1000,
+    )
+    for step in path:
+        ledger.record(job, step, {})
+    return job
+
+
+@pytest.mark.parametrize("ending", ["delivered", "held"])
+def test_a_finished_chronology_job_replies_to_its_requester_once(tmp_path: Path, ending: str) -> None:
+    job = _chronology_job(tmp_path, ["running", ending])
+    box = FakeMailbox()
+    _ack_in_thread(box)
+    assert _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})["recipients"] == [ADMIN]
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
+    assert len(box.replies()) == 1
+
+
+def test_a_held_then_resumed_then_delivered_chronology_replies_for_each_outcome(tmp_path: Path) -> None:
+    from workspace_broker.medchron_ledger import MedchronLedger
+
+    job = _chronology_job(tmp_path, ["running", "held"])
+    box = FakeMailbox()
+    _ack_in_thread(box)
+    _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
+    ledger = MedchronLedger(str(tmp_path / "audit.db"), tmp_path / "mq")
+    ledger.record(job, "running", {})
+    ledger.record(job, "delivered", {})
+    _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
+    assert len(box.replies()) == 2
+
+
+def test_a_failed_chronology_job_never_replies_to_the_client(tmp_path: Path) -> None:
+    job = _chronology_job(tmp_path, ["failed"])
+    box = FakeMailbox()
+    out = _call(_broker(tmp_path, box), "msgraph_reply_bind", {"kind": "medchron_job", "job_id": job})
+    assert out["bound"] is False and "Send nothing to anyone" in out["reason"]
+    assert box.replies() == []
+
+
+def test_a_chronology_reply_only_reaches_the_requester(tmp_path: Path) -> None:
+    """FALSIFIER: drop the requester check and the bind answers whoever sent the
+    request email, even when the job names someone else."""
+    job = _chronology_job(tmp_path, ["running", "held"], requester="attorney@firm.example")
+    out = _call(_broker(tmp_path, FakeMailbox()), "msgraph_reply_bind", {"kind": "medchron_job", "job_id": job})
+    assert out["bound"] is False and "requested the job" in out["reason"]
+
+
+def test_a_chronology_job_id_is_not_read_from_another_ledger(tmp_path: Path) -> None:
+    demand = _job(tmp_path, ["running", "delivered"])
+    out = _call(_broker(tmp_path, FakeMailbox()), "msgraph_reply_bind", {"kind": "medchron_job", "job_id": demand})
+    assert out["bound"] is False and "no chronology job" in out["reason"]
