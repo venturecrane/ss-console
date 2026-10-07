@@ -408,5 +408,8 @@ describe('matter-inbox-router: the file work class', () => {
     const skill = flat(read(SKILL))
     expect(skill).toContain('Never complete a Smokeball task except as step 5 says')
     expect(skill).toContain('Never complete it in the turn that files the document.')
+    // 2026-10-06 rehearsal 7: the reply called the funding form's blanks "markers"; it prints none.
+    expect(skill).toContain('This form prints NO marker')
+    expect(skill).toContain('Quote every list exactly as returned')
   })
 })
