@@ -26,23 +26,25 @@ _ROW = re.compile(r"^\s*\|(.+)\|\s*$")
 
 
 def missing_providers(gap_md: str) -> list[str]:
-    """The provider column of the gap audit's item table (section E: the
-    table whose header reads ``Provider | What's missing | ...``), in order,
-    once each."""
+    """The provider column of the gap audit's item tables (each table whose
+    header names Provider, What's missing and Priority; gapaudit.render leads
+    them with an Item column), in order, once each. The possible list carries
+    no Priority, so a provider only inferable is never looked up."""
     out: list[str] = []
-    in_items = False
+    col: int | None = None
     for line in gap_md.splitlines():
         m = _ROW.match(line)
         if not m:
-            in_items = False
+            col = None
             continue
         cells = [c.strip() for c in m.group(1).split("|")]
-        if cells and cells[0].lower() == "provider" and any("missing" in c.lower() for c in cells[1:]):
-            in_items = True
+        low = [c.lower() for c in cells]
+        if "provider" in low and any("missing" in c for c in low) and "priority" in low:
+            col = low.index("provider")
             continue
-        if not in_items or all(re.fullmatch(r":?-{2,}:?", c) for c in cells if c):
+        if col is None or col >= len(cells) or all(re.fullmatch(r":?-{2,}:?", c) for c in cells if c):
             continue
-        name = re.sub(r"[*_`]", "", cells[0]).strip()
+        name = re.sub(r"[*_`]", "", cells[col]).strip()
         if name and name.lower() not in {p.lower() for p in out}:
             out.append(name)
     return out

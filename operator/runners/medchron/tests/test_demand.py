@@ -268,7 +268,7 @@ def test_a_repair_that_drops_a_section_leaves_no_repaired_draft_to_resume_from(t
         stop_reason = "end_turn"
 
     d.compose_system = lambda: "S"
-    d.firm = type("F", (), {"text": lambda self, k: "REPAIR-PROMPT"})()
+    d.firm = type("F", (), {"text": lambda self, k: "REPAIR-PROMPT", "model": lambda self, k: "claude-opus-5-5"})()
     d._call = lambda *a, **k: R()
     with pytest.raises(draft_mod.DraftError):
         d.repair("digest", 1)
@@ -710,7 +710,7 @@ def test_each_missing_provider_is_resolved_against_the_vendor_directory_once_aft
     client = ScriptedClient()
     _r, verdict, _ = _run(tmp_path, pricing, seat_with(standard_docs()), client, vendor=v)
     assert verdict.outcome == "delivered", verdict.reason
-    assert v.asked == ["Exampletown ER", "Northfield Imaging", "Ridgeview PT"]  # once each, in order
+    assert v.asked == ["Northfield Imaging", "Ridgeview PT", "Exampletown ER"]  # once each, in item order
     rows = {r["provider"]: r for r in json.loads((tmp_path / "job" / "data" / "vendor.json").read_text())["rows"]}
     assert rows["Exampletown ER"]["custodian_id"] == "L-1"
     assert rows["Northfield Imaging"]["status"] == "no vendor match"
@@ -1198,7 +1198,8 @@ FAR = (
 def _gap_with(sentence: str) -> str:
     from demand_testkit import GAP
 
-    return GAP.replace("## F. Demand Readiness", sentence + "\n\n## F. Demand Readiness")
+    row = f"| B. Provider-by-provider completeness | Exampletown ER | {sentence} | ER record 1-15-26, p. 1 | "
+    return GAP.replace("END OF ITEM TABLE", row + "Referenced in record | records | Housekeeping |\nEND OF ITEM TABLE")
 
 
 def test_a_near_quote_in_the_gap_audit_is_normalized_to_the_source_and_filed(tmp_path, pricing):

@@ -318,15 +318,17 @@ The following exhibits are enclosed in support of this demand:
 None.
 """
 GAP = (
-    "# Records and Billing Gap Audit\n\n## A. Referral and order trail\n\n| Provider | Item | Status |\n|---|---|---|\n"
-    "| Exampletown ER | follow-up | Missing |\n\n## E. Items\n\n"
-    "| Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n"
-    "|---|---|---|---|---|---|\n"
-    "| Exampletown ER | radiology bill | ER record 1-15-26, p. 1 | Referenced in record | billing | Blocks demand |\n"
-    "| Northfield Imaging | MRI report | ER record 1-15-26, p. 2 | Referenced in record | records | Strengthens demand |\n"
-    "| Ridgeview PT | visit notes | ER record 1-15-26, p. 2 | Referenced in record | records | Housekeeping |\n"
-    "| Exampletown ER | ED physician bill | ER bill 1-15-26, p. 1 | Billing mismatch | billing | Blocks demand |\n"
-    "\n## F. Demand Readiness\n\n- Blocks: items 1 and 4\n"
+    "| Section | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n"
+    "|---|---|---|---|---|---|---|\n"
+    "| B. Provider-by-provider completeness | Exampletown ER | radiology bill | ER record 1-15-26, p. 1 | "
+    "Referenced in record | billing | Blocks demand |\n"
+    "| A. Referral and order trail | Northfield Imaging | MRI report | ER record 1-15-26, p. 2 | Referenced in record | "
+    "records | Strengthens demand |\n"
+    "| A. Referral and order trail | Ridgeview PT | visit notes | ER record 1-15-26, p. 2 | Referenced in record | "
+    "records | Housekeeping |\n"
+    "| C. Billing-to-record reconciliation | Exampletown ER | ED physician bill | ER bill 1-15-26, p. 1 | "
+    "Billing mismatch | billing | Blocks demand |\n"
+    "END OF ITEM TABLE\n"
 )
 DIGEST = "## MEDICAL | ER record 1-15-26 | 01/15/2026 | (/Medical)\nCervical strain (FILE: ER record 1-15-26, p. 1)\n\n## FILES-SEEN\n- ER record 1-15-26 digested\n"
 
@@ -362,9 +364,19 @@ class ScriptedClient:
     """Answers by which prompt the system block carries. Records every call."""
 
     def __init__(
-        self, draft: str = DRAFT, truncate_digest_once: bool = False, audit: str | None = None, gap: str | None = None
+        self,
+        draft: str = DRAFT,
+        truncate_digest_once: bool = False,
+        audit: str | None = None,
+        gap: str | None = None,
+        gap_fn: Any = None,
+        compose_stops: list[str] | None = None,
     ) -> None:
+        """``gap_fn(params) -> (text, stop_reason)`` scripts the gap audit per
+        call; ``compose_stops`` are the stop reasons of successive compose
+        calls (each returning the next third of ``draft``), then end_turn."""
         self.gap = gap or GAP
+        self.gap_fn, self.compose_stops = gap_fn, list(compose_stops or [])
         self.calls: list[dict[str, Any]] = []
         self.draft, self.truncate_once = draft, truncate_digest_once
         self.audit = audit or "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
@@ -389,11 +401,18 @@ class ScriptedClient:
 
     def _msg(self, params: dict[str, Any]) -> Any:
         self.calls.append(params)
-        text = self._answer(params)
+        text, stop = self._answer(params), "end_turn"
+        system = json.dumps(params.get("system"))
+        if "GAP-PROMPT" in system and self.gap_fn is not None:
+            text, stop = self.gap_fn(params)
+        elif "COMPOSE-PROMPT" in system and "REPAIR-PROMPT" not in system and self.compose_stops:
+            third = len(self.draft) // 3 + 1
+            k = sum(1 for c in self.calls if "COMPOSE-PROMPT" in json.dumps(c.get("system"))) - 1
+            text, stop = self.draft[k * third : (k + 1) * third], self.compose_stops.pop(0)
         usage = SimpleNamespace(
             input_tokens=1000, output_tokens=200, cache_read_input_tokens=0, cache_creation_input_tokens=0
         )
-        return SimpleNamespace(content=[SimpleNamespace(type="text", text=text)], stop_reason="end_turn", usage=usage)
+        return SimpleNamespace(content=[SimpleNamespace(type="text", text=text)], stop_reason=stop, usage=usage)
 
     def _stream(self, **params: Any) -> _Stream:
         return _Stream(self._msg(params))
