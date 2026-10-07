@@ -24,6 +24,7 @@ from typing import Any
 
 from .records_vendor import MAX_UPLOAD_BYTES, RecordsVendorApiError, scrub
 from .records_orders import (
+    _CUSTODIAN_ID,
     AUTH_MODES,
     LOCATION_KEYS,
     MAX_CUSTODIAN_FEE,
@@ -46,8 +47,8 @@ def _require_location(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict) or set(raw) != set(LOCATION_KEYS):
         raise _refuse(f"every location must carry exactly {list(LOCATION_KEYS)}, as prepare returned it.")
     cid = raw["custodian_id"]
-    if cid is not None and not (isinstance(cid, str) and cid.isdigit()):
-        raise _refuse("a custodian_id is the vendor's numeric id, or null for a new custodian.")
+    if cid is not None and not (isinstance(cid, str) and _CUSTODIAN_ID.match(cid)):
+        raise _refuse("a custodian_id is the vendor's directory id, or null for a new custodian.")
     if not isinstance(raw["custodian_name"], str) or not raw["custodian_name"].strip():
         raise _refuse("every location needs its custodian name.")
     types = raw["record_types"]

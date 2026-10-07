@@ -63,7 +63,8 @@ MAX_CUSTODIAN_FEE = 10_000.0
 
 _UUID = re.compile(r"^[0-9a-fA-F-]{32,40}$")
 _FILE_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
-_DIGITS = re.compile(r"^\d{1,20}$")
+#: The vendor's directory id, an opaque token (digits, neo_/npi_ prefixed, or a UUID).
+_CUSTODIAN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 _LAST4 = re.compile(r"^\d{4}$")
 _REF = re.compile(r"^[0-9a-f]{32}$")
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -95,7 +96,7 @@ def _require_location(raw: Any, where: str) -> dict[str, Any]:
     if not isinstance(raw, dict) or set(raw) != set(LOCATION_KEYS):
         raise _refuse(f"{where} must carry exactly {list(LOCATION_KEYS)}")
     if raw["custodian_id"] is not None:
-        _text(raw["custodian_id"], f"{where}.custodian_id", 20, pattern=_DIGITS)
+        _text(raw["custodian_id"], f"{where}.custodian_id", 64, pattern=_CUSTODIAN)
     _text(raw["custodian_name"], f"{where}.custodian_name", 255)
     if raw["custodian_address"] is not None:
         _text(raw["custodian_address"], f"{where}.custodian_address", 255)

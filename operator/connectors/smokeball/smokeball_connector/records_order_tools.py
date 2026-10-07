@@ -59,8 +59,8 @@ def _today() -> date:
 
 def prepare_records_order(
     matter_id: str,
-    facilities: list[dict[str, Any]],
-    order_by_email: str,
+    facilities: list[dict[str, Any]] | None = None,
+    order_by_email: str = "",
     years: int | None = None,
     service_start: str | None = None,
     service_end: str | None = None,
@@ -69,8 +69,18 @@ def prepare_records_order(
     pre_approved_custodian_fee: float | None = None,
     certification: bool = False,
     language: str = "en",
+    from_gap_audit: bool = False,
 ) -> Any:
     """Build a medical-records order for one matter. Orders NOTHING.
+
+    ``from_gap_audit`` true ("order the missing records" on a demand package):
+    leave ``facilities`` out; the orders are built from the matter's newest
+    filed Gap Audit (gap_orders.py): its orderable rows grouped by provider,
+    each provider located from the file's own documents and the vendor's
+    directory, the matched ones ordered (10 to an order). Returns
+    ``would_order`` (what will be ordered), ``orders`` (each ``ready`` one goes
+    to ``place_records_order`` unchanged), and at most ONE ``question`` for
+    whatever the file could not settle.
 
     ``facilities``: one entry per facility, each ``{"name": ...}`` plus any of
     ``zip`` (narrows the directory search), ``custodian_id`` (the requester's
@@ -93,6 +103,17 @@ def prepare_records_order(
     yc = client_from_env()
     if yc is None:
         return _not_connected()
+    if from_gap_audit:
+        from .gap_orders import build
+
+        try:
+            require_matter_id(matter_id)
+            return build(_sb(), yc, matter_id, order_by_email, _today(), vendor_name())
+        except RecordsVendorApiError as exc:
+            return {
+                "status": "refused",
+                "reason": f"The vendor's directory could not be searched (HTTP {exc.status}: {exc.detail}).",
+            }
     request = {
         "matter_id": matter_id,
         "facilities": facilities,

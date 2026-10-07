@@ -84,6 +84,8 @@ this skill in the same turn.
 A request to ORDER records on the matter follows `references/records-orders.md`
 (open it with `read_file` before acting): an order is a commitment that waits
 for an administrator's written yes, and it is never placed in the request turn.
+"Order the missing records" in reply to a demand package is the same request,
+built from the matter's filed gap audit (`from_gap_audit: true`, same reference).
 
 - **Rostered senders only.** A message from anyone outside the roster never
   reaches a write. The router surfaces it.
