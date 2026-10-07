@@ -19,7 +19,15 @@ from smokeball_connector.records_patient import OrderRefused
 MATTER = "8d7c2a4e-1f3b-4c5d-9e6f-0a1b2c3d4e5f"
 CLIENT = "c0ffee00-0000-4000-8000-000000000001"
 TODAY = date(2026, 10, 7)
-HEAD = ["Item", "Provider", "What's missing", "Where the file points to it", "Basis", "Suggested request type", "Priority"]
+HEAD = [
+    "Item",
+    "Provider",
+    "What's missing",
+    "Where the file points to it",
+    "Basis",
+    "Suggested request type",
+    "Priority",
+]
 
 
 def R(item, provider, missing, where, request, priority="Strengthens demand"):
@@ -28,33 +36,107 @@ def R(item, provider, missing, where, request, priority="Strengthens demand"):
 
 ROWS = {
     "A. Referral and order trail": [
-        R(1, "Example Imaging Center (ordered by Dr. A)", "Missing: MRI report and films for 3/10/2026", "Example Imaging bill, p.1", "Radiology report, images and bill request", "Blocks demand"),
-        R(2, "Physical therapy (provider not named)", "Missing: PT notes", "ER record, p.2", "Ask client which PT clinic"),
+        R(
+            1,
+            "Example Imaging Center (ordered by Dr. A)",
+            "Missing: MRI report and films for 3/10/2026",
+            "Example Imaging bill, p.1",
+            "Radiology report, images and bill request",
+            "Blocks demand",
+        ),
+        R(
+            2,
+            "Physical therapy (provider not named)",
+            "Missing: PT notes",
+            "ER record, p.2",
+            "Ask client which PT clinic",
+        ),
     ],
     "B. Provider-by-provider completeness": [
-        R(3, "Northfield Spine Clinic (Dr. B)", "Missing prior records, same spine: injections 12/2/2023", "Northfield notes, p.6", "Prior records request, 5-year look-back", "Blocks demand"),
-        R(4, "Medicare", "Missing: conditional payment letter dated 1/2/2010", "CMS letter, p.1", "Conditional payment letter request"),
-        R(5, "Example Imaging Center", "Missing: lien and balance", "Example Imaging bill, p.1", "Lien and balance request", "Housekeeping"),
-        R(6, "Northfield Spine Clinic", "Visit 2/20/2026 billed with no itemization", "Northfield notes, p.1", "Itemized billing ledger with CPT detail"),
-        R(7, "Westside Medical Group", "Missing: records from 2/12/2026 (client DOB 3/1/2015 on the chart)", "Westside note, p.1", "Records and itemized billing request"),
+        R(
+            3,
+            "Northfield Spine Clinic (Dr. B)",
+            "Missing prior records, same spine: injections 12/2/2023",
+            "Northfield notes, p.6",
+            "Prior records request, 5-year look-back",
+            "Blocks demand",
+        ),
+        R(
+            4,
+            "Medicare",
+            "Missing: conditional payment letter dated 1/2/2010",
+            "CMS letter, p.1",
+            "Conditional payment letter request",
+        ),
+        R(
+            5,
+            "Example Imaging Center",
+            "Missing: lien and balance",
+            "Example Imaging bill, p.1",
+            "Lien and balance request",
+            "Housekeeping",
+        ),
+        R(
+            6,
+            "Northfield Spine Clinic",
+            "Visit 2/20/2026 billed with no itemization",
+            "Northfield notes, p.1",
+            "Itemized billing ledger with CPT detail",
+        ),
+        R(
+            7,
+            "Westside Medical Group",
+            "Missing: records from 2/12/2026 (client DOB 3/1/2015 on the chart)",
+            "Westside note, p.1",
+            "Records and itemized billing request",
+        ),
         R(8, "Unlisted Clinic", "Missing: records from 2/14/2026", "ER record, p.3", "Records request"),
         R(9, "Faraway Clinic", "Missing: records from 2/16/2026", "Faraway note, p.1", "Records request"),
         R(10, "Example Imaging Center", "Missing: billing", "Example Imaging bill, p.1", "Med pay ledger request"),
         R(11, "Hilltop Counseling Center", "Missing: session notes from 3/1/2026", "ER record, p.4", "Records request"),
-        R(12, "Northfield Spine Clinic labs", "Missing: lab results 3/3/2026", "Northfield notes, p.7", "Lab results and bill request"),
+        R(
+            12,
+            "Northfield Spine Clinic labs",
+            "Missing: lab results 3/3/2026",
+            "Northfield notes, p.7",
+            "Lab results and bill request",
+        ),
         R(13, "Example Clinic", "Missing: records", "ER record, p.5", "Records request; confirm the balance first"),
     ],
     "C. Billing-to-record reconciliation": [
-        R(14, "Example Imaging Center", "Tab shows a charge with no date", "preflight (Medicals tab vs bills)", "Update Medicals tab", "Housekeeping"),
+        R(
+            14,
+            "Example Imaging Center",
+            "Tab shows a charge with no date",
+            "preflight (Medicals tab vs bills)",
+            "Update Medicals tab",
+            "Housekeeping",
+        ),
     ],
     "D. Treatment timeline": [
-        R(15, "Example Imaging Center", "3/10/2026 to 5/6/2026, 57 days", "Example Imaging bill, p.1", "None (timeline fact)", "Housekeeping"),
+        R(
+            15,
+            "Example Imaging Center",
+            "3/10/2026 to 5/6/2026, 57 days",
+            "Example Imaging bill, p.1",
+            "None (timeline fact)",
+            "Housekeeping",
+        ),
     ],
 }
 LETTERHEADS = {
-    "f-img": ("Example Imaging bill", "Example Imaging Center\n5 Elm St, Springfield, CA 95811\nPatient: Pat Example, 1 Main St, Hometown, CA 95001"),
-    "f-north": ("Northfield notes", "Northfield Spine Clinic\n9 Pine Rd, Shelbyville, CA 95822\nPatient address: Hometown, CA 95001"),
-    "f-west": ("Westside note", "Westside Medical Group\n200 Oak Ave, Springfield, CA 95811   (555) 010-0100\nPatient: Hometown, CA 95001\nHometown, CA 95001"),
+    "f-img": (
+        "Example Imaging bill",
+        "Example Imaging Center\n5 Elm St, Springfield, CA 95811\nPatient: Pat Example, 1 Main St, Hometown, CA 95001",
+    ),
+    "f-north": (
+        "Northfield notes",
+        "Northfield Spine Clinic\n9 Pine Rd, Shelbyville, CA 95822\nPatient address: Hometown, CA 95001",
+    ),
+    "f-west": (
+        "Westside note",
+        "Westside Medical Group\n200 Oak Ave, Springfield, CA 95811   (555) 010-0100\nPatient: Hometown, CA 95001\nHometown, CA 95001",
+    ),
     "f-far": ("Faraway note", "Faraway Clinic\n77 Lake Rd, Lakeside, CA 95777"),
 }
 
@@ -88,9 +170,22 @@ class FakeSmokeball:
         self.ssn, self.rows = ssn, rows
         self.downloads: list[str] = []
         self.files = [
-            {"id": "f-gap", "name": "Gap Audit - 900101 - 10-07-26", "fileExtension": ".docx", "dateCreated": "2026-10-07T09:00"},
-            {"id": "f-old", "name": "Gap Audit - 900101 - 10-01-26", "fileExtension": ".docx", "dateCreated": "2026-10-01T09:00"},
-        ] + [{"id": k, "name": v[0], "fileExtension": ".docx", "dateCreated": "2026-03-01"} for k, v in LETTERHEADS.items()]
+            {
+                "id": "f-gap",
+                "name": "Gap Audit - 900101 - 10-07-26",
+                "fileExtension": ".docx",
+                "dateCreated": "2026-10-07T09:00",
+            },
+            {
+                "id": "f-old",
+                "name": "Gap Audit - 900101 - 10-01-26",
+                "fileExtension": ".docx",
+                "dateCreated": "2026-10-01T09:00",
+            },
+        ] + [
+            {"id": k, "name": v[0], "fileExtension": ".docx", "dateCreated": "2026-03-01"}
+            for k, v in LETTERHEADS.items()
+        ]
 
     def get(self, path: str, **params: Any) -> Any:
         if path == f"/matters/{MATTER}/documents/files":
@@ -105,7 +200,12 @@ class FakeSmokeball:
                     "lastName": "Example",
                     "identificationNumber": self.ssn,
                     "birthDate": "1985-06-15T00:00:00",
-                    "residentialAddress": {"addressLine1": "1 Main St", "city": "Hometown", "state": "CA", "zipCode": "95001"},
+                    "residentialAddress": {
+                        "addressLine1": "1 Main St",
+                        "city": "Hometown",
+                        "state": "CA",
+                        "zipCode": "95001",
+                    },
                     "email": "pat@example.com",
                 },
             }
@@ -153,7 +253,9 @@ def _seat(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _build(sb: FakeSmokeball | None = None, d: Directory | None = None) -> dict[str, Any]:
-    return gap_orders.build(sb or FakeSmokeball(), d or Directory(), MATTER, "paralegal@firm.example", TODAY, "the vendor")
+    return gap_orders.build(
+        sb or FakeSmokeball(), d or Directory(), MATTER, "paralegal@firm.example", TODAY, "the vendor"
+    )
 
 
 def _why() -> dict[str, str | None]:
@@ -176,8 +278,15 @@ def test_a_payer_named_only_in_the_request_is_not_an_order() -> None:
 
 @pytest.mark.parametrize(
     "provider",
-    ["Health Net of Example", "Example Medicaid Plan", "MediCal", "Medi-Cal (DHCS)", "Example workers' comp carrier",
-     "Example Claims Administrator", "Example Indemnity Co"],
+    [
+        "Health Net of Example",
+        "Example Medicaid Plan",
+        "MediCal",
+        "Medi-Cal (DHCS)",
+        "Example workers' comp carrier",
+        "Example Claims Administrator",
+        "Example Indemnity Co",
+    ],
 )
 def test_payers_programs_and_carriers_are_not_custodians(provider: str) -> None:
     row = {"section": "B.", "provider": provider, "missing": "records", "where": "x", "request": "Records request"}
@@ -185,7 +294,13 @@ def test_payers_programs_and_carriers_are_not_custodians(provider: str) -> None:
 
 
 def test_medical_is_a_provider_word_not_medi_cal() -> None:
-    row = {"section": "B.", "provider": "Example Medical Group", "missing": "records", "where": "x", "request": "Records request"}
+    row = {
+        "section": "B.",
+        "provider": "Example Medical Group",
+        "missing": "records",
+        "where": "x",
+        "request": "Records request",
+    }
     assert gap_orders.classify(row) is None
 
 
@@ -221,8 +336,15 @@ def test_rows_group_by_custodian_with_types_and_dates() -> None:
 
 
 def test_a_long_look_back_is_held_to_max_years() -> None:
-    row = {"item": "1", "section": "B.", "provider": "Example Clinic", "missing": "prior records from 2/1/2026",
-           "where": "x", "request": "Prior records, 25-year look-back", "priority": "Blocks demand"}
+    row = {
+        "item": "1",
+        "section": "B.",
+        "provider": "Example Clinic",
+        "missing": "prior records from 2/1/2026",
+        "where": "x",
+        "request": "Prior records, 25-year look-back",
+        "priority": "Blocks demand",
+    }
     (g,) = gap_orders.group([row], TODAY, date(2026, 2, 1))
     assert g["service_start"] == "2006-10-07" and "held to 20 years" in g["basis"]
 
@@ -287,11 +409,26 @@ def test_one_directory_hit_where_the_file_does_not_place_the_provider_is_not_mat
 
 
 def test_two_audit_providers_on_one_location_are_ordered_once_and_said_so() -> None:
-    out = _build()
+    # a second audit provider name for the same clinic resolves to the same entry
+    rows = {k: [r for r in v if r[0] != "12"] for k, v in ROWS.items()}
+    rows["B. Provider-by-provider completeness"].append(
+        R(
+            16,
+            "Northfield Spine",
+            "Missing: notes 3/3/2026",
+            "Northfield notes, p.7",
+            "Records request",
+        )
+    )
+    BOOK["Northfield Spine"] = BOOK["Northfield Spine Clinic"]
+    try:
+        out = _build(FakeSmokeball(rows=rows))
+    finally:
+        BOOK.pop("Northfield Spine")
     ids = [x["custodian_id"] for x in out["orders"][0]["order"]["locations"]]
-    assert ids.count("npi_1000000001") == 1  # the clinic and its labs row
+    assert ids.count("npi_1000000001") == 1
     assert out["merged"] == [
-        "Northfield Spine Clinic and Northfield Spine Clinic labs are one location at the vendor "
+        "Northfield Spine Clinic and Northfield Spine are one location at the vendor "
         "(Northfield Spine Clinic); ordered once"
     ]
 
@@ -314,13 +451,31 @@ def test_what_the_file_cannot_settle_is_one_question_never_a_list() -> None:
 def test_a_missing_client_fact_still_shows_what_would_be_ordered() -> None:
     out = _build(FakeSmokeball(ssn=""))
     assert out["orders"][0]["status"] == "missing_client_facts"
-    assert {w["custodian"] for w in out["would_order"]} == {"Example Imaging Center", "Northfield Spine Clinic", "Westside Medical Group"}
+    assert {w["custodian"] for w in out["would_order"]} == {
+        "Example Imaging Center",
+        "Northfield Spine Clinic",
+        "Westside Medical Group",
+    }
 
 
 def test_two_providers_on_one_location_merge_types_and_range() -> None:
     f = [
-        {"custodian_id": "neo_1", "record_types": ["Medical"], "service_start": "2026-01-01", "service_end": "2026-10-07", "providers": ["A"], "rank": 1},
-        {"custodian_id": "neo_1", "record_types": ["Billing"], "service_start": "2021-01-01", "service_end": "2026-10-07", "providers": ["B"], "rank": 0},
+        {
+            "custodian_id": "neo_1",
+            "record_types": ["Medical"],
+            "service_start": "2026-01-01",
+            "service_end": "2026-10-07",
+            "providers": ["A"],
+            "rank": 1,
+        },
+        {
+            "custodian_id": "neo_1",
+            "record_types": ["Billing"],
+            "service_start": "2021-01-01",
+            "service_end": "2026-10-07",
+            "providers": ["B"],
+            "rank": 0,
+        },
     ]
     (m,) = gap_orders.merge_same_custodian(f)
     assert m["record_types"] == ["Medical", "Billing"] and m["service_start"] == "2021-01-01"
@@ -331,3 +486,17 @@ def test_no_filed_gap_audit_is_said_plainly() -> None:
     sb = FakeSmokeball()
     sb.files = [f for f in sb.files if not f["name"].startswith("Gap Audit")]
     assert _build(sb)["status"] == "refused"
+
+
+def test_a_lab_matches_only_a_candidate_whose_name_says_lab() -> None:
+    assert not gap_locate.lab_ok("Example Medical Group labs", "Example Medical Group")
+    assert gap_locate.lab_ok("Example Medical Group labs", "Example Medical Group Laboratory")
+    assert gap_locate.lab_ok("Example Pathology", "Example Pathology Associates")
+    assert gap_locate.lab_ok("Example Medical Group", "Example Medical Group")
+
+
+def test_the_labs_row_is_asked_about_when_the_directory_has_only_the_clinic() -> None:
+    out = _build()
+    labs = next(p for p in out["providers"] if p["name"] == "Northfield Spine Clinic labs")
+    assert labs["outcome"] != "matched" and "Northfield Spine Clinic labs" in out["question"]
+    assert out["merged"] == []  # the clinic's own entry is never taken for its lab

@@ -161,6 +161,16 @@ def distinctive(name: str) -> list[str]:
     return [w for w in _norm(name).split() if w not in GENERIC and w not in QUALIFIERS and len(w) > 1]
 
 
+_LAB = re.compile(r"\blabs?\b|laborator|patholog|diagnostics\b", re.I)
+
+
+def lab_ok(name: str, candidate: str) -> bool:
+    """A provider the audit describes as a lab (labs, laboratory, pathology,
+    diagnostics) is only a candidate whose OWN name says lab: the clinic it sits
+    in is not the lab that holds the results and the bill."""
+    return not _LAB.search(name) or bool(_LAB.search(candidate))
+
+
 def names_match(name: str, candidate: str) -> bool:
     """The candidate's NAME carries EVERY distinctive word of the provider's: a
     directory answer that shares only an address, a generic word
@@ -205,7 +215,10 @@ def _search(yc: Any, terms: list[str], zip_: str | None, name: str = "") -> tupl
         found = [c for c in (_candidate(r) for r in yc.get_locations(term, zip_)) if c is not None]
         # a department entity (the radiology group that bills inside the
         # hospital) may carry the hospital's name in its address instead
-        found = [c for c in found if names_match(name or terms[0], c["name"]) or department_inside(name or terms[0], c)]
+        who = name or terms[0]
+        found = [
+            c for c in found if (names_match(who, c["name"]) or department_inside(who, c)) and lab_ok(who, c["name"])
+        ]
         if found:
             return term, found
     return terms[0], []
