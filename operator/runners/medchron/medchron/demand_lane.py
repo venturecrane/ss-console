@@ -227,7 +227,6 @@ class DemandLane(Daemon):
             f"Folder id: {fields.get('folder_id') or 'none'}.",
             f"Files: {files}.",
             f"Requested by: {env.get('requested_by') or ''}.",
-            f"Request ref: {env.get('request_ref') or ''}.",
         ]
         if fields.get("coverage_report"):
             lines.append("Coverage report: yes (the premise gate failed; no demand was drafted).")
