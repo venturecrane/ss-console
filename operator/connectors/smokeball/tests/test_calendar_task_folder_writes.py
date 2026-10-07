@@ -115,7 +115,11 @@ def test_update_task_without_staff_id_refuses_before_the_wire(rec: _Recorder) ->
 # ---- events ---------------------------------------------------------------
 def test_create_event_forces_normal_type(rec: _Recorder) -> None:
     # attendees + time_zone became required with the live-API contract fix
-    # (L2 round 2, 2026-07-06) — see test_create_event_contract.py.
+    # (L2 round 2, 2026-07-06) — see test_create_event_contract.py. The matter
+    # read that adds the responsible attorney comes first; this matter names
+    # s-1 as responsible, so the attendee list is unchanged
+    # (test_create_event_responsible_attorney.py covers the union).
+    rec.responses["/matters/m-9"] = {"id": "m-9", "personResponsible": {"id": "s-1"}}
     server.create_event(
         subject="Discovery responses due",
         start_time="2026-07-15T09:00:00",
@@ -124,7 +128,8 @@ def test_create_event_forces_normal_type(rec: _Recorder) -> None:
         time_zone="America/Los_Angeles",
         matter_id="m-9",
     )
-    assert rec.calls[0] == {
+    assert rec.calls[0] == {"method": "GET", "path": "/matters/m-9", "params": {}}
+    assert rec.calls[1] == {
         "method": "POST",
         "path": "/events",
         "json": {
