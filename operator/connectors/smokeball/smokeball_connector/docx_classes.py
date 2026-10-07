@@ -1,15 +1,28 @@
-"""Document classes and their per-class styling rules (no python-docx import).
+"""Document classes, their product-default styling rules, and the optional
+firm house-style override (no python-docx import).
 
 Split out of ``docx_format`` for size only; ``docx_format`` re-exports every
 name here. See that module's docstring for the doctrine.
+
+Two layers, deliberately:
+
+* ``CLASS_RULES`` are the PRODUCT DEFAULTS, the same for every seat and every
+  in-turn skill: used only where the firm's own Word template lacks a named
+  style, and never overriding one the template defines.
+* ``HouseStyle`` is a FIRM-AUTHORED override, passed to ``render_document`` by
+  a caller that holds an authored house style (the drafting job builds it from
+  the firm's ``drafting-firm.yaml`` ``format`` block). With it, the stated
+  typography and layout are enforced in-class, over the base's styles, because
+  the firm's own written instructions say what a served document looks like.
+  Without it, rendering is exactly the product default. No firm's values live
+  in this file.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from dataclasses import dataclass
-
-from .docx_format_types import DEFAULT_FONT, DEFAULT_SIZE_PT
 
 # ---- Document classes and their styling rules --------------------------------
 
@@ -34,13 +47,15 @@ class ClassRules:
     """Per-class styling decisions. Typography values here are the PRODUCT
     DEFAULTS used only when the base template lacks the named style; they are
     deliberately the authored standards of the first engagements (plain Word,
-    not pleading paper) and are labeled as starters the firm edits in Word."""
+    not pleading paper) and are labeled as starters the firm edits in Word.
+
+    The fields after ``first_line_indent_in`` are neutral by default and are
+    set only by a firm's ``HouseStyle`` (``apply_house``)."""
 
     label_patterns: tuple[re.Pattern[str], ...] = ()
     # Paragraphs following a label (until the next label/heading/table) are item
     # text: first-line indented, with the "between items" spacing as spacing
-    # after the paragraph (the authored standard: double-spaced BETWEEN requests,
-    # not more).
+    # after the paragraph.
     item_text: bool = False
     caption_table_first: bool = False  # first table is the caption (court docs)
     heading_align: tuple[str, str, str] = ("center", "left", "left")
@@ -48,89 +63,98 @@ class ClassRules:
     heading_indent_in: tuple[float, float, float] = (0.0, 0.5, 1.0)
     heading_bold: tuple[bool, bool, bool] = (True, True, True)
     page_numbers: bool = True
-    # A PAGE field is added even when the base footer carries text of its own
-    # (a deposition outline is numbered at the bottom, always).
-    page_numbers_always: bool = False
     body_line_spacing: float = 1.0  # multiple
-    # A first-line indent for body paragraphs (enforced classes only).
-    body_first_line_indent_in: float | None = None
-    # Exact body line spacing in points (24 = double at 12 point, fixed rather
-    # than "double", as the attorney's signed briefs set it) and justification.
-    body_exact_pt: float | None = None
-    body_justify: bool = False
-    # Paragraphs before the caption table are front matter: left, unindented,
-    # single-spaced; an all-bold front line (the court) is centered.
-    front_matter_plain: bool = False
-    # A body line that is bold italic alone is a heading at this indent (a
-    # provider heading in a brief's damages section).
-    bold_italic_heading_indent_in: float | None = None
-    # A centered title line under the footer's page number.
-    footer_title: str | None = None
     item_line_spacing: float = 2.0
     item_space_after_pt: float = 0.0
     first_line_indent_in: float = 0.5
-    # The engaged firm's attorney's house style, enforced IN-CLASS: every run
-    # carries this font and size, and the class's paragraph layout and heading
-    # emphasis are applied even when a named or delegated style carries the
-    # paragraph, so a base style cannot move a served document off the
-    # attorney's standard. None leaves typography to the base (the letters).
+    # ---- set only by a firm HouseStyle --------------------------------------------
+    # Every run carries this font and size, and the class's layout and heading
+    # emphasis are applied over a named or delegated style (enforce_layout).
     font: str | None = None
     font_size_pt: float | None = None
     enforce_layout: bool = False
-    # Plain US Letter paper; line numbering (pleading paper) removed.
-    letter_paper: bool = False
-
-
-def _house(**kw) -> ClassRules:
-    """A drafting class held to the house standard: Times New Roman 12 on every
-    run, plain Letter paper, layout enforced in-class."""
-    return ClassRules(font=DEFAULT_FONT, font_size_pt=DEFAULT_SIZE_PT, enforce_layout=True, letter_paper=True, **kw)
-
-
-_DISCOVERY = dict(
-    label_patterns=(_DISCOVERY_LABEL, _DEFINITION_LABEL),
-    item_text=True,
-    caption_table_first=True,
-    # Double-spaced, and double-spaced BETWEEN items only: the label and the
-    # request are double-spaced lines with no space before or after, so the
-    # gap between two requests is one double-spaced line and never more.
-    item_line_spacing=2.0,
-    item_space_after_pt=0.0,
-    body_line_spacing=2.0,
-)
+    letter_paper: bool = False  # plain US Letter; line numbering removed
+    page_numbers_always: bool = False  # a PAGE field even under a firm footer's text
+    footer_title: str | None = None  # a centered line under the page number
+    body_first_line_indent_in: float | None = None
+    body_exact_pt: float | None = None  # exact line spacing in points
+    body_justify: bool = False
+    front_matter_plain: bool = False  # before the caption: left; all-bold lines centered
+    bold_italic_heading_indent_in: float | None = None  # a bold-italic line alone is a heading
 
 
 CLASS_RULES: dict[str, ClassRules] = {
-    "discovery_set": _house(**_DISCOVERY),
-    "discovery_response": _house(**_DISCOVERY),
+    "discovery_set": ClassRules(
+        label_patterns=(_DISCOVERY_LABEL, _DEFINITION_LABEL),
+        item_text=True,
+        caption_table_first=True,
+        item_line_spacing=2.0,
+        item_space_after_pt=12.0,
+    ),
+    "discovery_response": ClassRules(
+        label_patterns=(_DISCOVERY_LABEL, _DEFINITION_LABEL),
+        item_text=True,
+        caption_table_first=True,
+        item_line_spacing=2.0,
+        item_space_after_pt=12.0,
+    ),
     "demand_letter": ClassRules(page_numbers=True, heading_align=("left", "left", "left")),
-    # From the attorney's instructions and his signed briefs: roman-numeral
-    # headings centered and bold only (never underlined); lettered subsections
-    # indented 0.5", bold and underlined; numbered sub-subsections and the
-    # bold-italic provider lines indented 1.0"; body exactly 24 point, justified,
-    # 0.5" first-line indent; the court centered and bold above the caption;
-    # the footer a centered page number over the title. Plain Letter paper.
-    "mediation_brief": _house(
+    "mediation_brief": ClassRules(
         caption_table_first=True,
         heading_align=("center", "left", "left"),
-        heading_underline=(False, True, True),
-        heading_bold=(True, True, True),
-        heading_indent_in=(0.0, 0.5, 1.0),
+        heading_underline=(False, True, False),
         body_line_spacing=2.0,
-        body_exact_pt=24.0,
-        body_justify=True,
-        body_first_line_indent_in=0.5,
-        front_matter_plain=True,
-        bold_italic_heading_indent_in=1.0,
-        page_numbers_always=True,
-        footer_title="Plaintiff's Mediation Brief",
     ),
-    "memo": _house(heading_align=("left", "left", "left"), heading_underline=(False, False, False)),
-    "depo_outline": _house(
-        heading_align=("left", "left", "left"),
-        heading_underline=(False, False, False),
-        heading_indent_in=(0.0, 0.0, 0.5),
-        page_numbers_always=True,
-    ),
+    "memo": ClassRules(heading_align=("left", "left", "left"), page_numbers=True),
+    "depo_outline": ClassRules(heading_align=("left", "left", "left"), page_numbers=True),
     "letter": ClassRules(heading_align=("left", "left", "left"), page_numbers=False),
 }
+
+
+@dataclass(frozen=True)
+class HouseStyle:
+    """A firm's authored house style for one document class. Every field is
+    optional: an unset field keeps the class's product default. Setting any
+    field enforces the class's layout in-class (``enforce_layout``)."""
+
+    font: str | None = None
+    size_pt: float | None = None
+    plain_letter_paper: bool = False
+    heading_indent_in: tuple[float, float, float] | None = None
+    heading_underline: tuple[bool, bool, bool] | None = None
+    body_line_spacing: float | None = None  # a multiple (2.0 = double)
+    body_line_spacing_pt: float | None = None  # exact points (wins over the multiple)
+    body_justify: bool = False
+    body_first_line_indent_in: float | None = None
+    item_line_spacing: float | None = None
+    item_space_after_pt: float | None = None
+    centered_court_lines: bool = False
+    bold_italic_heading_indent_in: float | None = None
+    page_numbers_always: bool = False
+    footer_title: str | None = None
+
+
+def apply_house(rules: ClassRules, house: HouseStyle | None) -> ClassRules:
+    """The class's rules with the firm's house style laid over them."""
+    if house is None:
+        return rules
+    over: dict[str, object] = {"enforce_layout": True, "font": house.font, "font_size_pt": house.size_pt}
+    pairs = (
+        ("letter_paper", house.plain_letter_paper or None),
+        ("heading_indent_in", house.heading_indent_in),
+        ("heading_underline", house.heading_underline),
+        ("body_line_spacing", house.body_line_spacing),
+        ("body_exact_pt", house.body_line_spacing_pt),
+        ("body_justify", house.body_justify or None),
+        ("body_first_line_indent_in", house.body_first_line_indent_in),
+        ("item_line_spacing", house.item_line_spacing),
+        ("item_space_after_pt", house.item_space_after_pt),
+        ("front_matter_plain", house.centered_court_lines or None),
+        ("bold_italic_heading_indent_in", house.bold_italic_heading_indent_in),
+        ("page_numbers_always", house.page_numbers_always or None),
+        ("footer_title", house.footer_title),
+    )
+    over.update({k: v for k, v in pairs if v is not None})
+    if house.page_numbers_always or house.footer_title:
+        over["page_numbers"] = True
+    return dataclasses.replace(rules, **over)  # type: ignore[arg-type]

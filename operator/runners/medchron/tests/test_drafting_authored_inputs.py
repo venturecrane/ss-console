@@ -46,7 +46,7 @@ def _set(n: int) -> str:
 def _render_check(tmp_path: Path, md: str, cls: str, digest: str = "") -> format_check.Result:
     firm = _firm()
     doc, _ = render.attach(md, cls, firm, digest)
-    path, _ = render.render(doc, cls, tmp_path / f"{cls}.docx")
+    path, _ = render.render(doc, cls, tmp_path / f"{cls}.docx", firm.data["format"])
     return format_check.check(path, cls, firm.data["format"], digest)
 
 

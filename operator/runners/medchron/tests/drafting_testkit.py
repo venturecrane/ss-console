@@ -44,6 +44,26 @@ DECL = """<!-- authoring comment that must never reach the document -->
 POS = "<!-- authoring comment -->\n\n# PROOF OF SERVICE\n\nOn `{{FILL: date of service | at service}}`, I served the foregoing document.\n"
 
 
+#: A fictional firm's authored layout, the drafting-firm.yaml format.layout block.
+LAYOUT: dict[str, Any] = {
+    "mediation_brief": {
+        "line_spacing_pt": 24,
+        "justify": True,
+        "first_line_indent_in": 0.5,
+        "heading_indent_in": [0, 0.5, 1.0],
+        "heading_underline": [False, True, True],
+        "centered_court_lines": True,
+        "bold_italic_heading_indent_in": 1.0,
+        "page_numbers_always": True,
+        "footer_title": "Plaintiff's Mediation Brief",
+    },
+    "discovery_set": {"line_spacing": 2.0, "item_line_spacing": 2.0, "item_space_after_pt": 0},
+    "discovery_response": {"line_spacing": 2.0, "item_line_spacing": 2.0, "item_space_after_pt": 0},
+    "memo": {},
+    "depo_outline": {"page_numbers_always": True},
+}
+
+
 def firm_data(**over: Any) -> dict[str, Any]:
     data: dict[str, Any] = {
         "firm": {"slug": "example", "display_name": "Example & Example, LLP"},
@@ -68,6 +88,8 @@ def firm_data(**over: Any) -> dict[str, Any]:
             "mediation_brief_sections": list(SECTIONS),
             "discovery_label_style": "all caps, bold, underlined",
             "depo_outline_page_numbers": True,
+            "plain_letter_paper": True,
+            "layout": LAYOUT,
         },
         "classes": {
             c: {
@@ -149,7 +171,7 @@ class DraftingSeat(DemandSeat):
             "court": "SUPERIOR COURT OF CALIFORNIA, COUNTY OF EXAMPLETOWN",
             "plaintiffs": ["Gamma Exampel"],
             "defendants": ["Delta Example"],
-            "attorney_email": None,
+            "attorney_email": "",  # read, and empty
         }
 
     def caption_record(self, matter_id: str) -> dict[str, Any]:
@@ -191,8 +213,8 @@ BRIEF = (
     + "\n\n=== ATTORNEY NOTES ===\n\n## NOT IN RECORD\n\nNone.\n"
 )
 HOWELL_ROWS = (
-    '[{"provider": "Exampletown ER", "kind": "bill", "date_of_service": "01/15/2026", "billed": "$1,200.00", '
-    '"paid": null, "outstanding": null}]'
+    '[{"provider": "Exampletown ER", "kind": "bill", "row_type": "stated_total", "payer": null, '
+    '"date_of_service": "01/15/2026", "billed": "$1,200.00", "paid": null, "outstanding": null}]'
 )
 
 

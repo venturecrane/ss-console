@@ -1,8 +1,9 @@
 """The drafting lane: the root daemon's third slot, for drafting jobs.
 
-The chronology daemon with the demand lane's four swaps made again
-(``demand_lane.py`` is the model; it is owned by the demand lane and is not
-imported, so a change there cannot move this lane):
+The chronology daemon with the demand lane's swaps made again. It imports no
+demand LANE code (``demand_lane.py`` is the model, owned by the demand lane);
+the drafting CHILD imports demand's kind-agnostic stages, pinned by
+``tests/test_drafting_demand_contract.py``.
 
 * its own queue (``SMD_DRAFTING_QUEUE_DIR``, written by the broker's
   ``drafting_job_submit`` as ``<queue>/<job_id>.json``) and its own job dirs
@@ -10,16 +11,26 @@ imported, so a change there cannot move this lane):
 * the broker's DRAFTING verbs (``drafting_job_status`` / ``drafting_job_record``
   / ``drafting_allowance``, root only, the same shapes as demand's);
 * its child: ``medchron draft <job_dir>``, with the drafting firm inputs on the
-  allow-listed env, and ``job.json`` stamped fresh before every run with the
-  seat's slug, the month's drafting spend and the jobs left this cycle;
+  allow-listed env and ``job.json`` stamped fresh before every run with the
+  seat's slug, the month's drafting spend and the jobs left this cycle. Not the
+  records vendor's env: no drafting stage uses it;
 * its wake: the ``document-drafter`` skill's DELIVER mode, carrying the job id,
   class, outcome, folder id, the read-back files by ROLE and size, and the
   count of caption discrepancies. Never a file name or a reason: those carry
   client text, and the DELIVER turn reads them from the ledger row.
 
-A schema miss in ``drafting-firm.yaml`` DEFERS drafting jobs only. A failed
-job (our machinery) wakes DELIVER too: the skill's status read raises SMD's
-shortfall alert, and the broker refuses any reply to the client.
+Memory: the drafting child runs in the DEMAND lane's memory cgroup, under its
+cap, and waits while a demand child runs, so the Machine's caps still sum to
+the chronology's and the demand's (2.5 GB + 1 GB on a 4 GB Machine) rather
+than adding a third.
+
+Unusable drafting inputs (no ``drafting-firm.yaml`` on the seat, or a schema
+miss) defer a job once; on the next attempt it is recorded ``failed``
+(``config_missing``: our cause, resumable, SMD alerted) instead of looping
+silently. A failed job (our machinery) wakes DELIVER too: the skill's status
+read raises SMD's shortfall alert, and the broker refuses any reply to the
+client. There is no re-run verb for drafting, so nothing is seeded from a
+superseded job.
 """
 
 from __future__ import annotations
@@ -36,7 +47,7 @@ from typing import Any, Callable
 
 from . import resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
-from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon, sticky_level
+from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon, memory_cap_mode, sticky_level
 
 logger = logging.getLogger("medchron.drafting")
 
@@ -45,7 +56,11 @@ INPUTS_ENV = "MEDCHRON_DRAFTING_INPUTS"
 MEMORY_ENV = "SMD_DRAFTING_MEMORY_MAX_BYTES"
 DEFAULT_MEMORY = 1024 * 1024 * 1024
 SKILL = "document-drafter"
-_ULID = re.compile(r"[0-9A-HJKMNP-TV-Z]{26}")
+#: The demand lane's memory cgroup and child pid file: drafting shares the
+#: first and waits on the second (see the module docstring).
+CGROUP = "demand"
+DEMAND_CHILD_PID = "demand-child.pid"
+DEMAND_BUSY_RETRY_SECONDS = 30.0
 
 
 class DraftingBroker:
@@ -109,21 +124,9 @@ class DraftingLane(Daemon):
             "allowance_remaining": remaining,
         }
         (jd / "data").mkdir(exist_ok=True)
-        self._seed_from_superseded(jd, str(env.get("supersedes") or ""))
         (jd / "job.json").write_text(json.dumps(doc, indent=1), encoding="utf-8")
         self._chown_child(jd)
         return jd
-
-    def _seed_from_superseded(self, jd: Path, old_id: str) -> None:
-        """A re-run starts where the job it supersedes stopped (demand's
-        ``seed``, which is kind-agnostic: it copies ``data/`` minus the dates,
-        the gate, the render and the spend ledger)."""
-        from .demand import seed
-
-        if not _ULID.fullmatch(old_id) or not (self.job_dir(old_id) / "data").is_dir():
-            return
-        carried = seed.seed(jd, self.job_dir(old_id))
-        logger.info("drafting re-run %s seeded from %s: %s", jd.name, old_id, ", ".join(carried) or "nothing")
 
     def run_job(self, job_id: str) -> str:
         from .drafting import firm as drafting_firm
@@ -131,8 +134,15 @@ class DraftingLane(Daemon):
         try:
             drafting_firm.load(self.inputs_dir)
         except drafting_firm.DraftingConfigError as exc:
-            logger.warning("drafting inputs not usable yet, deferring %s: %s", job_id, exc)
-            return "deferred"
+            st = self._daemon_state(job_id)
+            if not st.get("config_deferred"):
+                logger.warning("drafting inputs not usable yet, deferring %s once: %s", job_id, exc)
+                self._write_state(job_id, config_deferred=True)
+                return "deferred"
+            return self._fail_unconfigured(job_id, exc)
+        if (self.run_dir / DEMAND_CHILD_PID).is_file():
+            self._write_state(job_id, retry_after=self.clock() + DEMAND_BUSY_RETRY_SECONDS)
+            return "waiting"
         try:
             jd = self._write_job(job_id)
             self.broker.record(job_id, "running", {})
@@ -162,6 +172,50 @@ class DraftingLane(Daemon):
         (self.run_dir / "drafting-child.pid").unlink(missing_ok=True)
         self.jobs_run += 1
         return self._report(job_id, proc.returncode, out or "")
+
+    def _fail_unconfigured(self, job_id: str, exc: Exception) -> str:
+        """Our cause, said once: the seat has no usable drafting inputs. Failed
+        (resumable once the inputs are staged) so SMD's alert fires, instead of
+        a job that defers every hour and tells no one."""
+        first = str(exc).split(";")[0][:300]
+        reason = f"config_missing: the drafting firm inputs are not usable on this seat: {first}"
+        try:
+            self.broker.record(job_id, "running", {})
+            self.broker.record(
+                job_id, "failed", {"cents": 0, "reason": reason, "caption_discrepancies": [], "markers": []}
+            )
+        except BrokerError as err:
+            logger.error("could not record config_missing for %s: %s", job_id, err)
+            return "deferred"
+        self._write_state(job_id, state="failed", finished_at=self.clock(), reason=reason)
+        task = self._compose_wake(job_id, "failed", {"cents": 0, "files": []}, stage="config")
+        self._write_state(job_id, wake={"pending": True, "attempts": 0, "task": task})
+        return "failed"
+
+    def _cgroup_preexec(self) -> Callable[[], None] | None:
+        """The DEMAND lane's memory cgroup, so the caps do not add a third
+        gigabyte (the demand lane sets its limit; this joins it, creating it at
+        the same limit only when the demand lane has not yet)."""
+        mode = memory_cap_mode(self.cgroup_root)
+        if mode == "none":
+            return None
+        if mode == "cgroup2":
+            cg, limit_file = self.cgroup_root / CGROUP, self.cgroup_root / CGROUP / "memory.max"
+        else:
+            cg = self.cgroup_root / "memory" / CGROUP
+            limit_file = cg / "memory.limit_in_bytes"
+        try:
+            if not cg.is_dir():
+                cg.mkdir(exist_ok=True)
+                limit_file.write_text(str(self.memory_max))
+        except OSError as exc:
+            logger.error("cgroup setup failed (%s); running uncapped", exc)
+            return None
+
+        def preexec() -> None:
+            (cg / "cgroup.procs").write_text(str(os.getpid()))
+
+        return preexec
 
     def _report(self, job_id: str, code: int, out: str) -> str:
         outcomes = verdict_mod.read(self.job_dir(job_id), out)
@@ -258,6 +312,8 @@ class DraftingLane(Daemon):
             result = "deferred"
         if result == "deferred":
             self._defer(job_id)
+        elif result == "waiting":
+            pass  # a demand child is running; retry_after is already set
         else:
             self._write_state(job_id, deferrals=0, retry_after=None)
         return result

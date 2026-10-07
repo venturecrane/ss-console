@@ -142,7 +142,47 @@ def test_no_queue_env_no_lane(monkeypatch, tmp_path):
     assert build_lane(D()) is None  # type: ignore[arg-type]
 
 
-def test_the_daemon_starts_the_drafting_lane_beside_the_demand_lane():
+def test_the_daemon_starts_the_drafting_lane_beside_the_demand_lane_and_survives_its_failure():
     src = (Path(__file__).resolve().parents[1] / "medchron" / "daemon.py").read_text()
     demand = src.index("start_lane(d, stop=")
-    assert "medchron.drafting_lane" in src[demand : demand + 400]
+    block = src[demand : demand + 600]
+    assert "from .drafting_lane import start_lane as start_drafting_lane" in block
+    assert (
+        block.index("try:")
+        < block.index("start_drafting_lane(d")
+        < block.index('logger.exception("drafting lane not started")')
+    )
+
+
+def test_unusable_inputs_defer_once_then_fail_with_config_missing(tmp_path):
+    lane, client = _lane(tmp_path, inputs=False)
+    jid = _submit(lane, client)
+    assert lane.tick() == "deferred"
+    assert client.records == []
+    lane._write_state(jid, retry_after=0)
+    assert lane.tick() == "failed"
+    state, fields = client.records[-1][1], client.records[-1][2]
+    assert state == "failed" and fields["reason"].startswith("config_missing: ")
+    task = lane._daemon_state(jid)["wake"]["task"]
+    assert "Outcome: failed." in task and "Reason: stopped at config." in task
+
+
+def test_a_running_demand_child_makes_drafting_wait_without_backoff(tmp_path):
+    lane, client = _lane(tmp_path)
+    jid = _submit(lane, client)
+    (lane.run_dir / "demand-child.pid").write_text("123")
+    assert lane.tick() == "waiting"
+    st = lane._daemon_state(jid)
+    assert st["retry_after"] == 1_000_000.0 + 30.0 and not st.get("deferrals")
+    assert client.records == []
+
+
+def test_the_drafting_child_joins_the_demand_lanes_memory_cgroup(tmp_path, monkeypatch):
+    import medchron.drafting_lane as dl
+
+    lane, _client = _lane(tmp_path)
+    monkeypatch.setattr(dl, "memory_cap_mode", lambda _root: "cgroup2")
+    lane.cgroup_root.mkdir(parents=True, exist_ok=True)
+    pre = lane._cgroup_preexec()
+    assert pre is not None
+    assert (lane.cgroup_root / "demand").is_dir() and not (lane.cgroup_root / "drafting").exists()

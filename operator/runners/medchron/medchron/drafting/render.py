@@ -23,8 +23,9 @@ attorney:
   argument is drafted from the record; the numbers that are the attorney's
   call are never the Operator's.
 
-The typography is ``smokeball_connector.docx_format.render_document`` (the
-class's house rules, enforced in-class), always on the starter base.
+The typography is ``smokeball_connector.docx_format.render_document`` on the
+starter base, with the firm's authored house style (``house.py``, from the
+``format`` block) passed as its override and enforced in-class.
 """
 
 from __future__ import annotations
@@ -266,10 +267,16 @@ def reserve_judgment(md: str, cls: str) -> tuple[str, list[str]]:
     return md, notes
 
 
-def render(md: str, cls: str, out: Path) -> tuple[Path, dict[str, Any]]:
+def render(md: str, cls: str, out: Path, fmt: dict[str, Any]) -> tuple[Path, dict[str, Any]]:
+    """The class's Word file on the starter base, with the firm's authored
+    house style (``fmt``, the ``format`` block) as the renderer's override."""
     from smokeball_connector.docx_format import render_document
 
-    blob, report = render_document(md, cls, None)
+    from .house import house_for
+
+    blob, report = render_document(md, cls, None, house=house_for(fmt, cls))
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_bytes(blob)
+    part = out.with_name(f".{out.name}.tmp")
+    part.write_bytes(blob)
+    part.replace(out)
     return out, report.to_dict()

@@ -11,7 +11,10 @@ compose prompt RECEIVES it; the model never adds a column. Two halves:
   the document does not carry is dropped and noted, never kept.
 * ``build``: deterministic. Per provider, billed from the bills (else the EOBs,
   else the matter's Medicals tab), paid from the EOBs, ledgers and lien
-  letters, outstanding from a stated balance. A paid figure the record does
+  letters, outstanding from a stated balance. Per source document a stated
+  total is used when printed, else its line items, never both; across
+  documents the same figures count once, different dates add, and a
+  disagreement is the attorney's (``_combine``). A paid figure the record does
   not carry is ``{{NOT IN RECORD}}``: it is never derived from billed, and an
   outstanding balance is never billed minus paid (a write-off is not a
   payment).
@@ -42,15 +45,23 @@ _DATE_FORMATS = ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%m-%d-%Y", "%m-%d-%y")
 
 PROMPT = """You read ONE billing document from a personal-injury file: a bill, an \
 explanation of benefits (EOB), a lien letter, or a payment ledger. Output ONLY a JSON \
-array, one object per line item or per stated total, each:
+array, one object per line item and one per stated total, each:
 {"provider": "<provider name as printed>", "kind": "bill|eob|lien|ledger", \
+"row_type": "line_item|stated_total", "payer": "<who paid, as printed, or null>", \
 "date_of_service": "<as printed, or null>", "billed": "<amount as printed, or null>", \
 "paid": "<amount actually paid as printed, or null>", "outstanding": "<balance stated as \
 still owed, as printed, or null>"}
 Rules: copy every amount and date EXACTLY as printed; never compute, never infer; a \
-figure the document does not print is null. "paid" is money actually paid (not an \
-allowed amount, not an adjustment, not a write-off). Output [] when the document \
-carries no billing figures."""
+figure the document does not print is null. A line item is one charge or one payment; \
+a stated total is a total or balance the document prints for several of them, and is \
+its own row with row_type "stated_total", never folded into a line item. "paid" is \
+money actually paid (not an allowed amount, not an adjustment, not a write-off). \
+Output [] when the document carries no billing figures."""
+
+
+class ExtractionError(RuntimeError):
+    """A billing document's extraction did not finish or could not be read:
+    our machinery (failed, resumable), never an empty table."""
 
 
 def is_billing(row: dict[str, Any], head: str) -> bool:
@@ -105,6 +116,8 @@ def verify(rows: list[Any], text: str, doc: dict[str, str]) -> tuple[list[dict[s
         row: dict[str, Any] = {
             "provider": str(r["provider"]).strip(),
             "kind": r.get("kind") if r.get("kind") in KINDS else "bill",
+            "row_type": "stated_total" if r.get("row_type") == "stated_total" else "line_item",
+            "payer": str(r.get("payer") or "").strip() or None,
             "doc": doc,
         }
         dos = r.get("date_of_service")
@@ -122,22 +135,29 @@ def verify(rows: list[Any], text: str, doc: dict[str, str]) -> tuple[list[dict[s
     return kept, notes
 
 
-def _parse_json_array(text: str) -> list[Any]:
+def _parse_json_array(text: str) -> list[Any] | None:
+    """The answer's JSON array; None when the answer is not one."""
     m = re.search(r"\[.*\]", text, flags=re.S)
     if not m:
-        return []
+        return None
     try:
         out = json.loads(m.group(0))
     except ValueError:
-        return []
-    return out if isinstance(out, list) else []
+        return None
+    return out if isinstance(out, list) else None
 
 
 def extract(
     data: Path, doorway: Any, model: str, workers: int, log: Callable[[str], None]
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    """Every billing document in the corpus into verified rows. Resumes from
-    ``howell/<id>.json``. Returns (rows, notes)."""
+    """Every billing document in the corpus into verified rows, one call per
+    document piece at the model's output maximum. Resumes from
+    ``howell/<id>.json``; a piece that stops at the ceiling or answers with
+    something that is not a JSON array raises ``ExtractionError`` and nothing
+    is cached for that document, so a resume reads it again rather than
+    trusting an empty answer."""
+    from ..demand.gapaudit import output_max
+
     rows = [json.loads(ln) for ln in (data / "extracted.jsonl").read_text(encoding="utf-8").splitlines() if ln]
     out_dir = data / "howell"
     out_dir.mkdir(exist_ok=True)
@@ -149,6 +169,7 @@ def extract(
         text = Path(p).read_text(encoding="utf-8", errors="replace")
         if is_billing(r, text):
             todo.append((r, text))
+    max_tokens = output_max(model, 64_000)
 
     def one(item: tuple[dict[str, Any], str]) -> tuple[list[dict[str, Any]], list[str]]:
         r, text = item
@@ -164,13 +185,20 @@ def extract(
                 model=model,
                 system=PROMPT,
                 messages=[{"role": "user", "content": f"DOCUMENT: {doc['name']}\n\n{text[i : i + DOC_CHARS]}"}],
-                max_tokens=16_000,
+                max_tokens=max_tokens,
                 stream=True,
                 custom_id=f"howell-{doc['id'][:24]}-{i // DOC_CHARS}",
             )
-            raw += _parse_json_array(res.text)
+            if res.stop_reason == "max_tokens":
+                raise ExtractionError(f"the billing read of {doc['name']} stopped at its output ceiling")
+            got = _parse_json_array(res.text)
+            if got is None:
+                raise ExtractionError(f"the billing read of {doc['name']} did not answer with a JSON array")
+            raw += got
         kept, notes = verify(raw, text, doc)
-        cache.write_text(json.dumps({"rows": kept, "notes": notes}, indent=1), encoding="utf-8")
+        tmp = out_dir / f".{doc['id']}.json.tmp"
+        tmp.write_text(json.dumps({"rows": kept, "notes": notes}, indent=1), encoding="utf-8")
+        tmp.replace(cache)
         return kept, notes
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
@@ -200,43 +228,82 @@ def _uniq(docs: list[dict[str, str]]) -> list[dict[str, str]]:
     return out
 
 
-def _sum_cell(raw: list[tuple[Any, Decimal | None, dict[str, str]]]) -> Cell | None:
-    """Sum figures, the same (date, amount) counted once across documents; a
-    figure that did not parse is skipped."""
-    items = [(dos, amt, doc) for dos, amt, doc in raw if amt is not None]
-    seen: set[tuple[Any, Decimal]] = set()
-    total, docs = Decimal("0"), []
-    for dos, amt, doc in items:
-        if (dos, amt) in seen:
-            docs.append(doc)
+Record = tuple[Any, Decimal]  # (date of service or None, amount)
+
+
+def _combine(per_doc: dict[str, tuple[dict[str, str], list[Record]]], what: str) -> Cell | None:
+    """One figure from several documents' records, never double counted.
+
+    Within a document every record counts (two real same-day charges are two
+    charges). Across documents: one document is its own sum; documents whose
+    records are the same set are one account of the same figures and count
+    once; documents whose records are all dated and on different dates are
+    different services and add. Anything else (an undated figure beside
+    another document's, records that overlap without matching) is a
+    disagreement the attorney settles: the marker names each document's
+    figure."""
+    docs = [(doc, recs) for doc, recs in per_doc.values() if recs]
+    if not docs:
+        return None
+    sums = [(doc, sum((a for _d, a in recs), Decimal("0")), recs) for doc, recs in docs]
+    srcs = _uniq([doc for doc, _ in docs])
+    if len(sums) == 1:
+        return Cell(fmt(sums[0][1]), srcs)
+    sets = [sorted((str(d), a) for d, a in recs) for _doc, _s, recs in sums]
+    if all(s == sets[0] for s in sets):
+        return Cell(fmt(sums[0][1]), srcs)
+    dated = all(d is not None for _doc, _s, recs in sums for d, _a in recs)
+    date_sets = [{d for d, _a in recs} for _doc, _s, recs in sums]
+    disjoint = dated and all(
+        not (date_sets[i] & date_sets[j]) for i in range(len(date_sets)) for j in range(i + 1, len(date_sets))
+    )
+    if disjoint:
+        return Cell(fmt(sum((s for _doc, s, _r in sums), Decimal("0"))), srcs)
+    each = " vs ".join(f"{fmt(s)} ({doc['name']})" for doc, s, _r in sums)
+    return Cell(f"{{{{ATTORNEY: confirm {what} amount, sources disagree: {each}}}}}", srcs)
+
+
+def _per_doc(
+    rows: list[dict[str, Any]], field_: str, kinds: tuple[str, ...]
+) -> dict[str, tuple[dict[str, str], list[Record]]]:
+    """Per source document, its records of ``field_``: the document's stated
+    total when it prints one, else its line items, never both."""
+    out: dict[str, tuple[dict[str, str], list[Record]]] = {}
+    for r in rows:
+        if r["kind"] not in kinds or not r.get(field_):
             continue
-        seen.add((dos, amt))
-        total += amt
-        docs.append(doc)
-    return Cell(fmt(total), _uniq(docs)) if items else None
+        amt = money(r[field_])
+        if amt is None:
+            continue
+        doc = r["doc"]
+        entry = out.setdefault(doc["id"], (doc, []))
+        entry[1].append((r.get("date_of_service"), amt, r["row_type"]))  # type: ignore[arg-type]
+    final: dict[str, tuple[dict[str, str], list[Record]]] = {}
+    for key, (doc, recs) in out.items():
+        totals = [(d, a) for d, a, t in recs if t == "stated_total"]  # type: ignore[misc]
+        items = [(d, a) for d, a, t in recs if t != "stated_total"]  # type: ignore[misc]
+        if totals:
+            distinct = {a for _d, a in totals}
+            final[key] = (doc, [(None, max(distinct))] if len(distinct) > 1 else [(None, totals[0][1])])
+        else:
+            final[key] = (doc, items)
+    return final
 
 
 def _billed(rows: list[dict[str, Any]], tab: list[dict[str, Any]]) -> Cell:
     for kinds in (("bill", "ledger"), ("eob",)):
-        items = [
-            (r.get("date_of_service"), money(r["billed"]), r["doc"])
-            for r in rows
-            if r["kind"] in kinds and r.get("billed")
-        ]
-        cell = _sum_cell([i for i in items if i[1] is not None])
+        cell = _combine(_per_doc(rows, "billed", kinds), "billed")
         if cell:
             return cell
-    items = [(c.get("start"), money(c.get("amount")), MEDICALS_TAB) for m in tab for c in m.get("charges") or []]
-    return _sum_cell([i for i in items if i[1] is not None]) or Cell(NOT_IN_RECORD, [])
+    recs = [(c.get("start"), money(c.get("amount"))) for m in tab for c in m.get("charges") or []]
+    recs = [(d, a) for d, a in recs if a is not None]
+    if recs:
+        return Cell(fmt(sum((a for _d, a in recs), Decimal("0"))), [MEDICALS_TAB])  # type: ignore[misc]
+    return Cell(NOT_IN_RECORD, [])
 
 
 def _paid(rows: list[dict[str, Any]]) -> Cell:
-    items = [
-        (r.get("date_of_service"), money(r["paid"]), r["doc"])
-        for r in rows
-        if r["kind"] in ("eob", "ledger", "lien") and r.get("paid")
-    ]
-    return _sum_cell([i for i in items if i[1] is not None]) or Cell(NOT_IN_RECORD, [])
+    return _combine(_per_doc(rows, "paid", ("eob", "ledger", "lien", "bill")), "paid") or Cell(NOT_IN_RECORD, [])
 
 
 def _outstanding(rows: list[dict[str, Any]]) -> Cell:

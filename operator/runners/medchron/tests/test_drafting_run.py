@@ -245,3 +245,134 @@ def test_every_outcome_reason_matches_the_code_shape(tmp_path, pricing, monkeypa
     assert CODE.match(v.reason or ""), v.reason
     assert run_mod.REASON.match(v.reason or ""), v.reason
     assert not (v.reason or "").startswith("Secret")
+
+
+# ---- the second-review rules ---------------------------------------------------------------
+
+
+def test_a_content_finding_gets_one_repair_pass_then_files(tmp_path, pricing, monkeypatch):
+    from medchron.drafting import compose, format_check
+
+    real = format_check.check
+    calls = {"check": 0, "repair": 0}
+
+    def check(*a, **k):
+        calls["check"] += 1
+        if calls["check"] == 1:
+            r = format_check.Result()
+            r.model("sections: 'VII. CAUSATION' missing or out of the authored order")
+            return r
+        return real(*a, **k)
+
+    def repair_format(self, doc, findings):
+        calls["repair"] += 1
+        assert findings == ["sections: 'VII. CAUSATION' missing or out of the authored order"]
+        return doc
+
+    monkeypatch.setattr(format_check, "check", check)
+    monkeypatch.setattr(compose.Drafter, "repair_format", repair_format)
+    r, v, _ = _run(tmp_path, pricing, seat_with(standard_docs()), ScriptedClient())
+    assert v.outcome == "delivered", v.reason
+    assert calls == {"check": 2, "repair": 1} and r._is_done("format_repair")
+
+
+def test_a_content_finding_that_survives_its_repair_fails_with_format_check(tmp_path, pricing, monkeypatch):
+    from medchron.drafting import compose, format_check
+
+    def check(*a, **k):
+        r = format_check.Result()
+        r.model("definitions: no Definitions section")
+        return r
+
+    calls = []
+    monkeypatch.setattr(format_check, "check", check)
+    monkeypatch.setattr(compose.Drafter, "repair_format", lambda self, doc, f: calls.append(f) or doc)
+    seat = seat_with(standard_docs())
+    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient())
+    assert v.outcome == "failed" and v.reason.startswith("format_check: ") and len(calls) == 1
+    assert seat.sent == []
+
+
+def test_our_render_defect_fails_at_once_without_a_repair(tmp_path, pricing, monkeypatch):
+    from medchron.drafting import compose, format_check
+
+    monkeypatch.setattr(format_check, "check", lambda *a, **k: format_check.Result(fails=["font: 3 run(s)"]))
+    monkeypatch.setattr(compose.Drafter, "repair_format", lambda *a: pytest.fail("no repair for our own render"))
+    _r, v, _ = _run(tmp_path, pricing, seat_with(standard_docs()), ScriptedClient())
+    assert v.outcome == "failed" and v.reason.startswith("format_check: ")
+
+
+def test_a_billing_read_that_does_not_finish_fails_resumably(tmp_path, pricing, monkeypatch):
+    from medchron.drafting import howell
+
+    def boom(*a, **k):
+        raise howell.ExtractionError("the billing read of a bill stopped at its output ceiling")
+
+    monkeypatch.setattr(howell, "extract", boom)
+    _r, v, _ = _run(tmp_path, pricing, seat_with(standard_docs()), ScriptedClient())
+    assert v.outcome == "failed" and v.reason.startswith("stage_unfinished: howell")
+
+
+def test_a_privilege_wall_refusal_holds_with_a_fixed_sentence_only(tmp_path, pricing, monkeypatch):
+    from medchron.drafting import gate
+
+    monkeypatch.setattr(
+        gate,
+        "run",
+        lambda *a, **k: {
+            "passed": False,
+            "disposition": "refused",
+            "refusals": ["[1] leaked from held-out Client to firm re settlement.msg"],
+            "warnings": [],
+        },
+    )
+    _r, v, _ = _run(tmp_path, pricing, seat_with(standard_docs()), ScriptedClient())
+    assert v.outcome == "held" and v.reason == f"gate_refused: {run_mod.WALL_SENTENCE}"
+    assert "msg" not in v.reason
+
+
+def test_a_limit_reason_carries_the_estimate_made_before_anything_was_paid(tmp_path, pricing):
+    _r, v, _ = _run(tmp_path, pricing, seat_with(standard_docs()), ScriptedClient(), cents=74_999_00)
+    assert v.outcome == "failed" and v.reason.startswith("limit: ")
+    assert "estimate before anything was paid:" in v.reason and "USD" in v.reason
+
+
+def test_compose_refuses_an_input_over_the_context_ceiling_before_any_call(tmp_path, pricing, monkeypatch):
+    from medchron.drafting import compose
+
+    monkeypatch.setattr(compose, "COMPOSE_INPUT_MAX_CHARS", 1_000)
+    client = ScriptedClient()
+    _r, v, _ = _run(tmp_path, pricing, seat_with(standard_docs()), client)
+    assert v.outcome == "failed" and "over 1,000" in v.reason and v.stage == "compose"
+    assert "COMPOSE" not in client.stages()
+
+
+def test_the_caption_notes_never_say_agrees_when_nothing_was_compared(tmp_path, pricing):
+    seat = seat_with(
+        standard_docs(),
+        record={"case_number": None, "court": None, "plaintiffs": [], "defendants": [], "attorney_email": None},
+    )
+    r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient())
+    assert v.outcome == "delivered"
+    notes = r._notes_md([], [])
+    assert "Fields compared: none" in notes and "agrees" not in notes
+
+
+def test_an_unreadable_caption_record_fails_with_record_unreadable(tmp_path, pricing):
+    seat = seat_with(standard_docs())
+    seat.caption_record = lambda _m: None  # type: ignore[method-assign]
+    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient())
+    assert v.outcome == "failed" and v.reason.startswith("record_unreadable: ")
+
+
+def test_every_artifact_a_resume_trusts_is_written_atomically():
+    import re
+
+    src = Path(run_mod.__file__).read_text(encoding="utf-8")
+    direct = [m.group(0) for m in re.finditer(r"[a-zA-Z_./()\"]+\.write_text\(", src)]
+    assert direct == ["tmp.write_text(", "tmp.write_text("], direct  # state.json and _atomic, each via .tmp
+    from medchron.drafting import howell, render
+
+    for mod in (howell, render):
+        body = Path(mod.__file__).read_text(encoding="utf-8")
+        assert ".replace(" in body and "tmp" in body

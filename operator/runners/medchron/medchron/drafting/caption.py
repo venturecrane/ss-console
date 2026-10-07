@@ -14,7 +14,9 @@ the document it rests on:
 
 * a field the document carries one unambiguous value for, and the record
   carries a different value that is CLOSE to it (a typo, a transposed digit,
-  a misspelled name), or carries none at all (a missing email);
+  a misspelled name), or was read and is empty (a missing email);
+* a record that could not be read is never compared and never reported as
+  agreeing: the run ends failed (``RecordUnreadable``);
 * anything ambiguous (two case numbers in the document, a party line the
   pattern cannot isolate, two very different names that are probably two
   different people) is not reported. A wrong discrepancy sent to the firm
@@ -31,7 +33,9 @@ from typing import Any
 
 PLEADING_NAME = re.compile(r"(?i)\b(first |second |third |fourth )?(amended )?complaint\b")
 NOTICE_NAME = re.compile(r"(?i)\b(notice|minute order|order|summons)\b")
-CASE_NO = re.compile(r"(?i)\bcase\s+(?:no|number)\.?\s*:?\s*([A-Z0-9][A-Z0-9-]{4,30})")
+#: The label is case-blind; the value is not: upper-case letters, digits and
+#: hyphens, with at least one digit ("Case No. pending" is no case number).
+CASE_NO = re.compile(r"(?i:\bcase\s+(?:no|number)\.?\s*:?\s*)([A-Z0-9][A-Z0-9-]{4,30})\b")
 COURT = re.compile(
     r"(?i)(superior court of (?:the state of )?california)[,\s]*\n?\s*(?:for the )?(county of [a-z ]{3,40})"
 )
@@ -97,7 +101,7 @@ def extract(doc: dict[str, Any], firm_domains: tuple[str, ...]) -> dict[str, dic
             v = " ".join(next(iter(distinct.values())).split()).strip(" ,")
             out[field] = {"value": v, "quote": _line(text, quote_of or v)}
 
-    one("case_number", [m.group(1) for m in CASE_NO.finditer(text)])
+    one("case_number", [m.group(1) for m in CASE_NO.finditer(text) if re.search(r"\d", m.group(1))])
     first_court = COURT.search(text)
     one(
         "court",
@@ -122,11 +126,22 @@ def _close(a: str, b: str) -> bool:
     return difflib.SequenceMatcher(None, _norm(a), _norm(b)).ratio() >= CLOSE
 
 
-def compare(caption: dict[str, dict[str, str]], record: dict[str, Any], doc_name: str) -> list[dict[str, str]]:
-    """The discrepancies worth reporting. ``record`` carries ``case_number``,
-    ``court`` (strings or None), ``plaintiffs`` / ``defendants`` (lists of
-    names) and ``attorney_email`` (or None)."""
-    out = []
+class RecordUnreadable(RuntimeError):
+    """The matter record could not be read: never compared, never "agrees"."""
+
+
+def compare(
+    caption: dict[str, dict[str, str]], record: dict[str, Any], doc_name: str
+) -> tuple[list[dict[str, str]], list[str]]:
+    """(the discrepancies worth reporting, the fields actually compared).
+
+    ``record`` carries ``case_number``, ``court`` and ``attorney_email``
+    (a string, "" when the record was read and the field is empty, None when
+    there is no such field to read) and ``plaintiffs`` / ``defendants`` (lists
+    of names). None is never compared or reported; "" is a read, empty field:
+    an email the court's paper carries and the record lacks is reported."""
+    out: list[dict[str, str]] = []
+    compared: list[str] = []
 
     def report(field: str, record_value: str | None, why: str) -> None:
         c = caption[field]
@@ -142,10 +157,11 @@ def compare(caption: dict[str, dict[str, str]], record: dict[str, Any], doc_name
         )
 
     for field in ("case_number", "court", "attorney_email"):
-        if field not in caption:
-            continue
         rec = record.get(field)
-        if not rec:
+        if field not in caption or rec is None:
+            continue
+        compared.append(field)
+        if rec == "":
             if field == "attorney_email":
                 report(field, None, "the matter record carries no email for the responsible attorney")
             continue
@@ -154,24 +170,27 @@ def compare(caption: dict[str, dict[str, str]], record: dict[str, Any], doc_name
             if field == "court"
             else _norm(rec) == _norm(caption[field]["value"])
         )
-        if not same and (field == "case_number" or _close(rec, caption[field]["value"])):
+        if not same and _close(rec, caption[field]["value"]):
             report(field, rec, "differs from the court's paper")
     for field, key in (("plaintiff", "plaintiffs"), ("defendant", "defendants")):
         names = [n for n in record.get(key) or [] if n]
         if field not in caption or not names:
             continue
+        compared.append(field)
         v = caption[field]["value"]
         if any(_norm(n) == _norm(v) for n in names):
             continue
         near = [n for n in names if _close(n, v)]
         if len(near) == 1:  # one record name a near-miss of the caption: a typo, not another party
             report(field, near[0], "spelled differently from the court's paper")
-    return out
+    return out, compared
 
 
 def record_from_client(client: Any, matter_id: str, facts: dict[str, Any]) -> dict[str, Any]:
     """The matter record's side, read through the connector's own readers. A
-    read that fails leaves the field None, and None is never compared."""
+    read that FAILS raises ``RecordUnreadable``: "could not look" must never
+    read as "agrees" (the job ends failed, resumable). A field the matter's
+    layout does not carry at all is None, never compared."""
     from smokeball_connector import form_letter_facts as flf
 
     rec: dict[str, Any] = {
@@ -183,28 +202,24 @@ def record_from_client(client: Any, matter_id: str, facts: dict[str, Any]) -> di
     }
     try:
         layout = flf.matter_layout_values(client, matter_id)
-    except Exception:  # noqa: BLE001 - unreadable: the field is not compared
-        layout = {}
-    for field, pat in (("case_number", r"(?i)case.?(no|number)$"), ("court", r"(?i)court(.?name)?$")):
-        vals = {str(v).strip() for k, v in layout.items() if re.search(pat, str(k)) and str(v or "").strip()}
-        rec[field] = next(iter(vals)) if len(vals) == 1 else None
-    try:
+        for field, pat in (("case_number", r"(?i)case.?(no|number)$"), ("court", r"(?i)court(.?name)?$")):
+            keys = [k for k in layout if re.search(pat, str(k))]
+            vals = {str(layout[k] or "").strip() for k in keys}
+            rec[field] = (next(iter(vals)) if len(vals) == 1 else None) if keys else None
         parties = flf.read_parties(client, matter_id)
         for role in parties.roles:
             if role.get("isOtherSide") is True and role.get("contactId"):
                 n = flf.contact_name(flf.fetch_contact(client, role["contactId"]))
                 if n:
                     rec["defendants"].append(n)
-    except Exception:  # noqa: BLE001 - an unreadable record field is left None and never compared
-        pass
-    try:
         matter = client.get(f"/matters/{matter_id}") or {}
         staff_id = matter.get("personResponsibleStaffId")
-        staff = client.get(f"/staff/{staff_id}") if staff_id else {}
-        email = staff.get("email") if isinstance(staff, dict) else None
-        rec["attorney_email"] = email if isinstance(email, str) and "@" in email else None
-    except Exception:  # noqa: BLE001 - an unreadable record field is left None and never compared
-        pass
+        if staff_id:
+            staff = client.get(f"/staff/{staff_id}")
+            email = staff.get("email") if isinstance(staff, dict) else None
+            rec["attorney_email"] = email.strip() if isinstance(email, str) and "@" in email else ""
+    except Exception as exc:  # noqa: BLE001 - re-raised as the one error the run turns into record_unreadable
+        raise RecordUnreadable(f"{type(exc).__name__}: {str(exc)[:200]}") from None
     return rec
 
 
@@ -212,11 +227,12 @@ def read_record(seat: Any, matter_id: str, facts: dict[str, Any]) -> dict[str, A
     own = getattr(seat, "caption_record", None)
     if callable(own):
         got = own(matter_id)
-        if isinstance(got, dict):
-            return {str(k): v for k, v in got.items()}
+        if not isinstance(got, dict):
+            raise RecordUnreadable("the seat returned no caption record")
+        return {str(k): v for k, v in got.items()}
     client = getattr(seat, "client", None)
-    if client is None or callable(own):
-        return {"case_number": None, "court": None, "plaintiffs": [], "defendants": [], "attorney_email": None}
+    if client is None:
+        raise RecordUnreadable("the seat backend has no connector client; the matter record was not read")
     return record_from_client(client, matter_id, facts)
 
 

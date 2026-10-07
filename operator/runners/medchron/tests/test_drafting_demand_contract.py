@@ -27,7 +27,6 @@ from medchron.demand import (
     preflight,
     pull,
     quotefix,
-    seed,
     summarize,
     transcribe,
 )
@@ -63,9 +62,8 @@ CALLS = [
     (deliver.render_plain, (X, X, X, X), {}),
     (deliver.file_to_matter, (X, X, X, X), {"pause": 0.0}),
     (deliver.file_to_matter, (X, X, X, X), {}),
-    # gate.py, the lane
+    # gate.py
     (gate.strip_names, (X, X), {}),
-    (seed.seed, (X, X), {}),
     # compose.py
     (draft.mechanical_checks, (X, X), {}),
     (draft.auditable, (X,), {}),
@@ -107,6 +105,8 @@ def test_the_demand_firm_view_is_built_and_read_the_way_drafting_builds_it(tmp_p
 def test_the_shapes_drafting_reads_back():
     assert isinstance(draft.CONTINUATIONS, int) and "{text}" in draft.CONTINUE
     assert house.NOTES_MARK == render.NOTES_MARK
+    # the firm loader refuses a model the table does not know (drafting/firm.py _models)
+    assert isinstance(gapaudit.OUTPUT_MAX, dict) and all(isinstance(v, int) for v in gapaudit.OUTPUT_MAX.values())
     t = draft.tally("- c | INVENTED | x\nSUPPORTED=1 DRIFTS=0 INVENTED=1 ARITHMETIC=0")
     assert set(t) >= {"SUPPORTED", "DRIFTS", "INVENTED", "ARITHMETIC"} and t["INVENTED"] == 1
     # the class audits' longer tally line still reads as a complete audit

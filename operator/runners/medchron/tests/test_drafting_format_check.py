@@ -1,11 +1,14 @@
-"""format_check against the authored ``format`` block: each assertion passes on
-the renderer's own output and FAILS on a document built to break it."""
+"""format_check against the firm's authored ``format`` block: each assertion
+passes on the renderer's own output under the firm's house style and FAILS on
+a document rendered under a house style that breaks it (the falsifier is a
+different authored value, checked against the right one)."""
 
 from __future__ import annotations
 
-import dataclasses
+import copy
 import io
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -13,6 +16,13 @@ from drafting_testkit import COURT, SECTIONS, firm_data
 from medchron.drafting import format_check, render
 
 FMT = firm_data()["format"]
+
+
+def _fmt(cls: str | None = None, **layout: Any) -> dict[str, Any]:
+    f = copy.deepcopy(FMT)
+    if cls:
+        f["layout"][cls] = {**f["layout"][cls], **layout}
+    return f
 
 
 def _brief(sections=SECTIONS, extra: str = "") -> str:
@@ -35,9 +45,9 @@ def _set(n: int = 3, pos: bool = True, definitions: bool = True) -> str:
     )
 
 
-def _check(tmp_path: Path, md: str, cls: str, digest: str = "", fmt=FMT):
-    path, _ = render.render(md, cls, tmp_path / f"{cls}.docx")
-    return format_check.check(path, cls, fmt, digest)
+def _check(tmp_path: Path, md: str, cls: str, digest: str = "", render_fmt=None, check_fmt=None):
+    path, _ = render.render(md, cls, tmp_path / f"{cls}.docx", render_fmt or FMT)
+    return format_check.check(path, cls, check_fmt or FMT, digest)
 
 
 @pytest.mark.parametrize(
@@ -56,17 +66,8 @@ def test_the_renderers_own_output_passes(tmp_path, cls, md):
 
 
 def test_a_wrong_font_fails(tmp_path):
-    res = _check(tmp_path, "Body.", "memo", fmt={**FMT, "font": "Arial"})
+    res = _check(tmp_path, "Body.", "memo", check_fmt={**FMT, "font": "Arial"})
     assert any(f.startswith("font:") for f in res.fails)
-
-
-def test_an_underlined_level_1_heading_fails(tmp_path, monkeypatch):
-    from smokeball_connector.docx_format import CLASS_RULES
-
-    bad = dataclasses.replace(CLASS_RULES["mediation_brief"], heading_underline=(True, True, False))
-    monkeypatch.setitem(CLASS_RULES, "mediation_brief", bad)
-    res = _check(tmp_path, _brief(), "mediation_brief")
-    assert any("level 1 underlined" in f for f in res.fails)
 
 
 LEVEL3 = (
@@ -76,44 +77,38 @@ LEVEL3 = (
 
 
 @pytest.mark.parametrize(
-    "change, expect",
+    "layout, expect",
     [
-        ({"heading_underline": (False, True, False)}, "level 3 not bold and underlined"),
-        ({"heading_indent_in": (0.0, 0.5, 0.5)}, "level 3 not indented 1.0 inch"),
-        ({"body_first_line_indent_in": None}, "first-line indent"),
-        ({"page_numbers": False}, "no PAGE field"),
-        ({"body_exact_pt": None}, "not exactly 24 point"),
-        ({"body_justify": False}, "not justified"),
-        ({"front_matter_plain": False}, "court is not two centered bold lines"),
-        ({"bold_italic_heading_indent_in": None}, "provider line not indented 1.0 inch"),
-        ({"footer_title": None}, "footer: the title"),
+        ({"heading_underline": [True, True, True]}, "level 1 should be not underlined"),
+        ({"heading_underline": [False, True, False]}, "level 3 should be underlined"),
+        ({"heading_indent_in": [0, 0.5, 0.5]}, "level 3 not indented 1.0 inch"),
+        ({"first_line_indent_in": 0.25}, "first-line indent"),
+        ({"line_spacing_pt": 12}, "not exactly 24 point"),
+        ({"justify": False}, "not justified"),
+        ({"centered_court_lines": False}, "court lines are not centered"),
+        ({"bold_italic_heading_indent_in": 0.5}, "provider line not bold italic at 1.0 inch"),
+        ({"footer_title": "Brief"}, "footer: the title"),
     ],
 )
-def test_the_signed_brief_rules_each_fail_when_broken(tmp_path, monkeypatch, change, expect):
-    from smokeball_connector.docx_format import CLASS_RULES
-
-    assert _check(tmp_path, _brief(extra=LEVEL3), "mediation_brief").ok
-    monkeypatch.setitem(CLASS_RULES, "mediation_brief", dataclasses.replace(CLASS_RULES["mediation_brief"], **change))
-    res = _check(tmp_path, _brief(extra=LEVEL3), "mediation_brief")
+def test_each_authored_brief_rule_fails_when_the_render_breaks_it(tmp_path, layout, expect):
+    md = _brief(extra=LEVEL3)
+    assert _check(tmp_path, md, "mediation_brief").ok
+    res = _check(tmp_path, md, "mediation_brief", render_fmt=_fmt("mediation_brief", **layout))
     assert any(expect in f for f in res.fails), res.fails
+    assert res.ours  # a render defect, never a content repair
 
 
-def test_a_single_spaced_brief_body_fails(tmp_path, monkeypatch):
-    from smokeball_connector.docx_format import CLASS_RULES
-
-    bad = dataclasses.replace(CLASS_RULES["mediation_brief"], body_exact_pt=None, body_line_spacing=1.0)
-    monkeypatch.setitem(CLASS_RULES, "mediation_brief", bad)
-    res = _check(tmp_path, _brief(), "mediation_brief")
-    assert any("not exactly 24 point" in f for f in res.fails)
-
-
-def test_sections_out_of_order_or_missing_fail(tmp_path):
+def test_sections_missing_or_out_of_order_are_content_findings(tmp_path):
     swapped = [SECTIONS[1], SECTIONS[0], *SECTIONS[2:]]
-    assert any("out of the authored order" in f for f in _check(tmp_path, _brief(swapped), "mediation_brief").fails)
-    assert any(
-        "CAUSATION" in f
-        for f in _check(tmp_path, _brief([s for s in SECTIONS if "CAUSATION" not in s]), "mediation_brief").fails
-    )
+    res = _check(tmp_path, _brief(swapped), "mediation_brief")
+    assert any("out of the authored order" in f for f in res.content) and not res.ours
+    res = _check(tmp_path, _brief([s for s in SECTIONS if "CAUSATION" not in s]), "mediation_brief")
+    assert any("CAUSATION" in f for f in res.content)
+
+
+def test_missing_court_lines_are_a_content_finding(tmp_path):
+    res = _check(tmp_path, _brief().replace(COURT, ""), "mediation_brief")
+    assert any("court is not two lines" in f for f in res.content)
 
 
 def test_a_settlement_figure_outside_a_marker_fails(tmp_path):
@@ -121,18 +116,18 @@ def test_a_settlement_figure_outside_a_marker_fails(tmp_path):
     assert any(f.startswith("reserved:") for f in res.fails)
 
 
-def test_discovery_spacing_beyond_one_double_line_fails(tmp_path, monkeypatch):
-    from smokeball_connector.docx_format import CLASS_RULES
-
-    bad = dataclasses.replace(CLASS_RULES["discovery_set"], item_space_after_pt=12.0)
-    monkeypatch.setitem(CLASS_RULES, "discovery_set", bad)
-    res = _check(tmp_path, _set(), "discovery_set")
-    assert any("double-spaced between items only" in f for f in res.fails)
+def test_discovery_spacing_beyond_the_authored_spacing_fails(tmp_path):
+    res = _check(tmp_path, _set(), "discovery_set", render_fmt=_fmt("discovery_set", item_space_after_pt=12))
+    assert any("space after" in f for f in res.fails)
 
 
-def test_a_missing_proof_of_service_or_definitions_fails(tmp_path):
-    assert any("proof of service" in f for f in _check(tmp_path, _set(pos=False), "discovery_set").fails)
-    assert any("Definitions" in f for f in _check(tmp_path, _set(definitions=False), "discovery_set").fails)
+def test_missing_labels_or_definitions_are_content_and_a_missing_proof_of_service_is_ours(tmp_path):
+    res = _check(tmp_path, _set(pos=False), "discovery_set")
+    assert any("proof of service" in f for f in res.ours)
+    res = _check(tmp_path, _set(definitions=False), "discovery_set")
+    assert any("Definitions" in f for f in res.content)
+    res = _check(tmp_path, "| | |\n| --- | --- |\n\nNo labels here.\n\n**PROOF OF SERVICE**\n", "discovery_set")
+    assert any("no item labels" in f for f in res.content)
 
 
 def test_the_declaration_check_uses_the_cumulative_rule(tmp_path):
@@ -141,10 +136,7 @@ def test_the_declaration_check_uses_the_cumulative_rule(tmp_path):
         "special interrogatories | 20 | 03/01/2026 | cite\n"
     )
     md = _set(20)
-    # 20 in this set + 20 before: the declaration is required, and absent here
     assert any("declaration required" in f for f in _check(tmp_path, md, "discovery_set", prior).fails)
-
-    # attached by the job: passes
     from drafting_testkit import DECL, POS
 
     class F:
@@ -153,7 +145,6 @@ def test_the_declaration_check_uses_the_cumulative_rule(tmp_path):
 
     attached, _ = render.attach(md, "discovery_set", F(), prior)
     assert _check(tmp_path, attached, "discovery_set", prior).ok
-    # the same document with no prior sets: the declaration is not allowed
     assert any("declaration not allowed" in f for f in _check(tmp_path, attached, "discovery_set", "").fails)
 
 
@@ -162,23 +153,42 @@ def test_a_declaration_after_the_proof_of_service_fails(tmp_path):
     assert any("must precede the proof of service" in f for f in _check(tmp_path, md, "discovery_set").fails)
 
 
-def test_a_depo_outline_without_a_page_field_fails(tmp_path, monkeypatch):
-    from smokeball_connector.docx_format import CLASS_RULES
+def _strip_footer_fields(path: Path) -> None:
+    import docx
 
-    bad = dataclasses.replace(CLASS_RULES["depo_outline"], page_numbers=False)
-    monkeypatch.setitem(CLASS_RULES, "depo_outline", bad)
-    res = _check(tmp_path, "# Background\n\n1. Name.", "depo_outline")
-    assert any(f.startswith("footer:") for f in res.fails)
+    d = docx.Document(str(path))
+    for p in d.sections[0].footer.paragraphs:
+        for r in list(p.runs):
+            r._r.getparent().remove(r._r)
+    buf = io.BytesIO()
+    d.save(buf)
+    path.write_bytes(buf.getvalue())
+
+
+@pytest.mark.parametrize("cls, md", [("depo_outline", "# Background\n\n1. Name."), ("mediation_brief", _brief())])
+def test_a_document_without_its_page_field_fails(tmp_path, cls, md):
+    path, _ = render.render(md, cls, tmp_path / "x.docx", FMT)
+    assert format_check.check(path, cls, FMT).ok
+    _strip_footer_fields(path)
+    assert any(f.startswith("footer: no PAGE") for f in format_check.check(path, cls, FMT).fails)
 
 
 def test_pleading_paper_fails(tmp_path):
     import docx
     from docx.oxml import OxmlElement
 
-    path, _ = render.render("Body.", "memo", tmp_path / "m.docx")
+    path, _ = render.render("Body.", "memo", tmp_path / "m.docx", FMT)
     d = docx.Document(str(path))
     d.sections[0]._sectPr.append(OxmlElement("w:lnNumType"))
     buf = io.BytesIO()
     d.save(buf)
     path.write_bytes(buf.getvalue())
     assert any("pleading paper" in f for f in format_check.check(path, "memo", FMT).fails)
+
+
+def test_without_an_authored_layout_only_the_font_and_class_defaults_are_checked(tmp_path):
+    bare = copy.deepcopy(FMT)
+    bare.pop("layout")
+    bare.pop("plain_letter_paper")
+    res = _check(tmp_path, "# Question\n\nA memo body.", "memo", render_fmt=bare, check_fmt=bare)
+    assert res.ok, res.fails

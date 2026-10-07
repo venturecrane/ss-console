@@ -92,8 +92,14 @@ def repair_scope(draft: str, audit: str, digest: str) -> tuple[list[tuple[str, s
 
 
 COMPOSE_FALLBACK_MAX = 64_000
-EXEMPLAR_CHARS = 80_000
-EXEMPLARS_TOTAL = 200_000
+#: One exemplar, trimmed: it shows the FORMAT and VOICE, and a second adds
+#: little but context.
+EXEMPLARS_USED = 1
+EXEMPLAR_CHARS = 120_000
+#: The largest compose request, system plus user, in characters (about 600K
+#: tokens): with the 128K-token output ceiling it stays inside a 1M-token
+#: context window. Asserted before the call, never discovered by a 400.
+COMPOSE_INPUT_MAX_CHARS = 2_400_000
 
 
 class DraftingError(RuntimeError):
@@ -180,12 +186,9 @@ class Drafter:
         return SimpleNamespace(text=text, stop_reason=r.stop_reason)
 
     def exemplars(self) -> str:
-        parts, total = [], 0
-        for p in self.firm.exemplar_paths(self.cls):
+        parts = []
+        for p in self.firm.exemplar_paths(self.cls)[:EXEMPLARS_USED]:
             t = exemplar_text(p)[:EXEMPLAR_CHARS]
-            if total + len(t) > EXEMPLARS_TOTAL:
-                break
-            total += len(t)
             parts.append(
                 f"=== EXEMPLAR: {p.name} (the firm's own document; its FORMAT and VOICE, never its facts) ===\n{t}"
             )
@@ -211,7 +214,13 @@ class Drafter:
             + "\n\n---\n\nTHE RECORD DIGEST (every fact you use must trace to a citation here):\n\n"
             + digest
         )
-        r = self._call("compose", self.compose_system(), user, f"compose-{sha(user)[:8]}")
+        system = self.compose_system()
+        if len(system) + len(user) > COMPOSE_INPUT_MAX_CHARS:
+            raise DraftingError(
+                f"compose input is {len(system) + len(user):,} characters, over {COMPOSE_INPUT_MAX_CHARS:,}; "
+                "the digest must be condensed further before compose"
+            )
+        r = self._call("compose", system, user, f"compose-{sha(user)[:8]}")
         self._commit("draft-v1.md", r.text)
         return r.text
 
@@ -277,6 +286,21 @@ class Drafter:
         if r is not None and r.stop_reason == "max_tokens" and len(parts) == 2:
             return "\n\n".join(self._audit_part(system, f"{key}{k}", head, p) for k, p in zip("ab", parts))
         raise DraftingError(f"the audit of section {head[:60]!r} did not complete")
+
+    # ---- format repair ---------------------------------------------------------------
+    def repair_format(self, doc: str, findings: list[str]) -> str:
+        """One whole-document repair for what the format check found missing
+        from the model's document (a section, the court lines, the item labels,
+        the Definitions). Bounded by the caller: once."""
+        user = (
+            "FORMAT REPAIR. The document below was refused by the format check for exactly these reasons:\n"
+            + "\n".join(f"- {f}" for f in findings)
+            + "\n\nOutput the complete document, corrected for these findings and changing nothing else: no new "
+            "fact, no removed citation, every marker kept. Do not write the attorney notes.\n\n=== DOCUMENT ===\n" + doc
+        )
+        system = self.compose_system() + "\n\n---\n\n" + self.firm.prompt(self.cls, "repair")
+        r = self._call("repair", system, user, f"fmtrepair-{sha(user)[:8]}")
+        return r.text.split("=== ATTORNEY NOTES ===", 1)[0]
 
     # ---- repair ----------------------------------------------------------------------
     def repair(self, digest: str, version: int) -> str:

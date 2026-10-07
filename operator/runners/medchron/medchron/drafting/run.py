@@ -37,10 +37,8 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import time
 import traceback
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
@@ -50,13 +48,20 @@ from ..demand.firm import DemandFirm
 from ..ledger import Ledger
 from ..llm import Doorway
 from . import caption as caption_mod, compose, firm as firm_mod, format_check, gate, howell, job as job_mod, render
+from . import notes as notes_mod
+from .outcome import REASON, WALL_SENTENCE, DraftingFailed, DraftingHold, Verdict, markers
+
 
 MAX_REPAIRS = 2
 FINAL = "draft-final.md"
 CHUNK_CHARS = 120_000
 CONCURRENCY = 4
 DIGEST_MAX_TOKENS = 64_000
-DIGEST_BUDGET_CHARS = 600_000
+#: The digest compose reads, condensed under this many characters (about 400K
+#: tokens, under demand's 2M-character lever): with the house style, the
+#: skeleton, one exemplar and the context, the compose request stays under
+#: compose.COMPOSE_INPUT_MAX_CHARS, which compose asserts before any call.
+DIGEST_BUDGET_CHARS = 1_600_000
 COURT_CLASSES = ("mediation_brief", "discovery_set", "discovery_response")
 CHARGES_CLASSES = ("mediation_brief", "memo")
 TITLES = {
@@ -67,41 +72,10 @@ TITLES = {
     "depo_outline": "Deposition Outline",
 }
 WALL_GATE = "[1]"
-MARKERS = re.compile(r"\{\{\s*(ATTORNEY|NOT IN RECORD|CLIENT)\s*(?::\s*([^{}]*))?\}\}")
 CONDENSE_PROMPT = (
     "Condense these record digests to about the target length. Keep every citation exactly as written, every "
     "date, figure and name; drop repetition only. Never add a fact. Time window: {{WINDOW}}."
 )
-
-
-#: Every reason the runner records starts with a short code and ": " (SMD's
-#: request card shows the leading code; DELIVER relays the sentence after it
-#: for a held job). Never an exception's own text first: it can start with a
-#: document name.
-REASON_CODES = (
-    "request_incomplete",
-    "gate_refused",
-    "format_check",
-    "record_unreadable",
-    "audit_unsettled",
-    "destination_mismatch",
-    "destination_unauthored",
-    "no_readable_documents",
-    "filing_refused",
-    "stage_unfinished",
-    "limit",
-    "no_verdict",
-    "unexpected",
-)
-REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
-
-
-class DraftingHold(RuntimeError):
-    """The file or the request needs a person: held, final, the firm is told."""
-
-
-class DraftingFailed(RuntimeError):
-    """Our machinery: failed, resumable, no client message, SMD alerted."""
 
 
 def demand_view(firm: firm_mod.DraftingFirm) -> DemandFirm:
@@ -127,34 +101,6 @@ def demand_view(firm: firm_mod.DraftingFirm) -> DemandFirm:
             },
         },
     )
-
-
-def markers(md: str) -> list[dict[str, str]]:
-    seen, out = set(), []
-    for m in MARKERS.finditer(md):
-        item = (m.group(1), " ".join((m.group(2) or "").split()))
-        if item not in seen:
-            seen.add(item)
-            out.append({"kind": item[0], "text": item[1]})
-    return out
-
-
-@dataclass
-class Verdict:
-    outcome: str
-    stage: str | None = None
-    reason: str | None = None
-    dollars: float = 0.0
-    documents: int = 0
-    pages: int = 0
-    document_class: str | None = None
-    folder_id: str | None = None
-    files: list[dict[str, Any]] = field(default_factory=list)
-    caption_discrepancies: list[dict[str, str]] = field(default_factory=list)
-    markers: list[dict[str, str]] = field(default_factory=list)
-
-    def to_list(self) -> list[dict[str, Any]]:
-        return [{**self.__dict__, "unit": "drafting", "kind": "drafting"}]
 
 
 class DraftingRun:
@@ -241,11 +187,20 @@ class DraftingRun:
             self._put("date", stamp)
         return str(stamp)
 
+    def _json_text(self, name: str) -> str:
+        return (self.data / name).read_text(encoding="utf-8")
+
     def _json(self, name: str) -> Any:
         return json.loads((self.data / name).read_text(encoding="utf-8"))
 
+    def _atomic(self, name: str, text: str) -> None:
+        """Every artifact a resume trusts is written whole or not at all."""
+        tmp = self.data / f".{name}.tmp"
+        tmp.write_text(text, encoding="utf-8")
+        tmp.replace(self.data / name)
+
     def _write(self, name: str, obj: Any) -> None:
-        (self.data / name).write_text(json.dumps(obj, indent=1), encoding="utf-8")
+        self._atomic(name, json.dumps(obj, indent=1))
 
     def _stage(self, name: str, fn: Callable[[], Any]) -> None:
         if self._is_done(name):
@@ -312,9 +267,17 @@ class DraftingRun:
             )
         est = self._json("preflight.json")["estimate"]
         spent = self.budget.refresh()
-        self.limits.check_before_paid(
-            projected_usd=max(0.0, float(est["usd"]) - spent), spent_usd=spent, stage="the first paid stage"
-        )
+        try:
+            self.limits.check_before_paid(
+                projected_usd=max(0.0, float(est["usd"]) - spent), spent_usd=spent, stage="the first paid stage"
+            )
+        except limits_mod.LimitHold as hold:
+            raise limits_mod.LimitHold(
+                hold.setting,
+                f"{hold.reason} (estimate before anything was paid: {est['pages']:,} pages, "
+                f"{est['characters']:,} characters, {est['transcription_pages']:,} pages to transcribe, "
+                f"{est['usd']:.2f} USD)",
+            ) from None
 
     # ---- paid stages -----------------------------------------------------------------
     def _digest(self) -> str:
@@ -340,21 +303,39 @@ class DraftingRun:
             CONCURRENCY,
             self.log,
         )
-        p.write_text(out, encoding="utf-8")
+        self._atomic("digest.md", out)
         return out
 
     def _howell(self) -> None:
-        rows, notes = howell.extract(self.data, self.doorway, self.firm.model("digest"), CONCURRENCY, self.log)
+        try:
+            rows, notes = howell.extract(self.data, self.doorway, self.firm.model("digest"), CONCURRENCY, self.log)
+        except howell.ExtractionError as exc:
+            raise compose.DraftingError(f"howell: {exc}") from None
         table = howell.build(rows, self._json("facts.json").get("medicals") or [])
         self._write("howell.json", {"table": table, "notes": notes})
 
     def _caption(self) -> None:
         doc = caption_mod.source_document(self.data)
         fields = caption_mod.extract(doc, self.firm.firm_domains) if doc else {}
-        record = caption_mod.read_record(self.seat, self.job.matter_id, self._json("facts.json"))
+        try:
+            record = caption_mod.read_record(self.seat, self.job.matter_id, self._json("facts.json"))
+        except caption_mod.RecordUnreadable as exc:
+            raise DraftingFailed(f"record_unreadable: the matter record's caption fields: {exc}") from None
         name = str(doc.get("name")) if doc else None
-        diffs = caption_mod.compare(fields, record, name or "") if doc else []
-        self._write("caption.json", {"source": name, "fields": fields, "discrepancies": diffs})
+        diffs, compared = caption_mod.compare(fields, record, name or "") if doc else ([], [])
+        why = (
+            ""
+            if compared
+            else (
+                "no court document in the file carries a caption"
+                if not doc
+                else "neither the court's paper nor the matter record carries a comparable field"
+            )
+        )
+        self._write(
+            "caption.json",
+            {"source": name, "fields": fields, "discrepancies": diffs, "compared": compared, "none_because": why},
+        )
 
     def _context(self) -> list[str]:
         f = self._json("facts.json")
@@ -406,12 +387,14 @@ class DraftingRun:
         refused = render.needs_attorney(d.compose(digest))
         if refused:
             raise DraftingHold(f"request_incomplete: the request is missing what the draft needs: {refused}")
+        self._done("compose")
         corpus, version = self._corpus_text(), 1
         result = d.audit(version, digest, corpus)
         while compose.blocking_findings(result) and version <= MAX_REPAIRS:
             d.repair(digest, version)
             version += 1
             result = d.audit(version, digest, corpus)
+        self._done("audit")
         md = (self.data / f"draft-v{version}.md").read_text(encoding="utf-8")
         audit_md = (self.data / f"audit-v{version}.md").read_text(encoding="utf-8")
         try:
@@ -420,9 +403,8 @@ class DraftingRun:
             raise DraftingFailed(f"audit_unsettled: the final audit pass could not settle a finding: {exc}") from None
         drifts = compose.finding_lines(audit_md, ("DRIFTS", *compose.EXTRA_VERDICTS))
         self._write("final-pass.json", {"version": version, "settled": settled, "drifts": drifts})
-        tmp = self.data / f".{FINAL}.tmp"
-        tmp.write_text(md, encoding="utf-8")
-        tmp.replace(out)
+        self._atomic(FINAL, md)
+        self._done("finalpass")
         return md
 
     def _gate(self, md: str) -> str:
@@ -434,11 +416,15 @@ class DraftingRun:
         if not g["passed"] and quotefix.quote_findings(g["refusals"]):
             doc, log = quotefix.repair(doc, g["refusals"], gate.source_texts(self.data, self.firm, self.cls))
             md = doc + ("\n" + render.NOTES_MARK + "\n\n" + notes + "\n" if notes else "")
-            (self.data / FINAL).write_text(md, encoding="utf-8")
+            self._atomic(FINAL, md)
             g = gate.run(self.data, self.firm, self.cls, doc)
         if not g["passed"]:
-            exc = DraftingHold if any(str(r).startswith(WALL_GATE) for r in g["refusals"]) else DraftingFailed
-            raise exc(
+            if any(str(r).startswith(WALL_GATE) for r in g["refusals"]):
+                # Held, so the reply relays this reason to the firm: a fixed
+                # sentence only. The refusals (which can name a held-out email)
+                # stay in gate.json for SMD.
+                raise DraftingHold(f"gate_refused: {WALL_SENTENCE}")
+            raise DraftingFailed(
                 f"gate_refused: the drafting gate refused the document ({g['disposition']}): "
                 + "; ".join(g["refusals"])[:400]
             )
@@ -454,8 +440,21 @@ class DraftingRun:
         doc, attached = render.attach(doc, self.cls, self.firm, digest)
         doc, reserved = render.reserve_judgment(doc, self.cls)
         out, nm = deliver.out_dir(self.data), self._names()
-        path, report = render.render(doc, self.cls, out / nm["draft"])
+        path, report = render.render(doc, self.cls, out / nm["draft"], self.firm.data["format"])
         res = format_check.check(path, self.cls, self.firm.data["format"], digest)
+        if res.content and not res.ours and not self._is_done("format_repair"):
+            # The model's document lacks something the format requires (a
+            # section, the court lines, the item labels): one bounded repair,
+            # then the gate and this check again. Our render's own defects
+            # fail at once below.
+            self.log(f"  format check: {len(res.content)} content finding(s); one repair pass")
+            model_doc, end = render.split_notes(md)
+            fixed = self._drafter().repair_format(model_doc, res.content)
+            self._atomic(FINAL, fixed.rstrip() + ("\n\n" + render.NOTES_MARK + "\n\n" + end + "\n" if end else "\n"))
+            self._done("format_repair")
+            self._put("gate", {"status": "reopened"})
+            self._render(self._gate(self._json_text(FINAL)), digest)
+            return
         if not res.ok:
             raise DraftingFailed(
                 "format_check: the format check refused the rendered document: " + "; ".join(res.fails)[:400]
@@ -467,28 +466,7 @@ class DraftingRun:
         self._done("render", markers=found)
 
     def _notes_md(self, found: list[dict[str, str]], render_notes: list[str], end_tables: str = "") -> str:
-        lines = [f"# Attorney notes: {self._title}", "", "## Items for the attorney", ""]
-        lines += [f"- {{{{{m['kind']}}}}} {m['text']}".rstrip() for m in found] or ["- None."]
-        cap = self._json("caption.json") if (self.data / "caption.json").is_file() else None
-        if cap is not None:
-            lines += ["", f"## Caption: source {cap['source'] or 'none (no court document in the file)'}", ""]
-            lines += [
-                f'- {x["field"].replace("_", " ")}: the court\'s paper reads "{x["document_value"]}"; the matter record '
-                f'reads "{x["record_value"] or "nothing"}" ({x["why"]}). Line: "{x["quote"]}" ({x["source"]})'
-                for x in cap["discrepancies"]
-            ] or ["- The matter record agrees with the court's paper on every field checked."]
-        fp = self._json("final-pass.json")
-        review = [f"Removed or flagged by the final audit: {x}" for x in fp["settled"]]
-        review += [f"Left for the attorney by the auditor: {x}" for x in fp["drifts"]]
-        if (self.data / "howell.json").is_file():
-            review += [f"Howell table: {n}" for n in self._json("howell.json")["notes"]]
-        review += [f"Drafting gate repair: {x}" for x in self._json("gate.json").get("repairs") or []]
-        review += [f"Drafting gate: {w}" for w in self._json("gate.json").get("warnings") or []]
-        review += [f"Format: {n}" for n in render_notes]
-        walled = self._json("walled.json") if (self.data / "walled.json").is_file() else []
-        review += [f"Held out, never read (privilege wall: {w['reason']}): {w['name']}" for w in walled]
-        tail = ["", "## The drafter's end tables", "", end_tables] if end_tables else []
-        return "\n".join(lines + ["", "## For review", ""] + [f"- {x}" for x in review] + tail) + "\n"
+        return notes_mod.attorney_notes(self.data, self._title, found, render_notes, end_tables)
 
     def _file(self) -> Verdict:
         manifest = json.loads((deliver.out_dir(self.data) / "upload_manifest.json").read_text(encoding="utf-8"))
@@ -578,6 +556,9 @@ class DraftingRun:
             "summarize",
             "howell",
             "caption",
+            "compose",
+            "audit",
+            "finalpass",
             "gate",
             "render",
         )

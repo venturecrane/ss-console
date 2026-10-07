@@ -38,6 +38,10 @@ def test_the_inputs_load_and_every_file_is_pinned(tmp_path):
         (lambda d: d["classes"]["memo"]["prompts"].pop("audit"), "prompts: expected exactly"),
         (lambda d: d["inputs"].pop("pos.md"), "attachments.pos: pos.md is not pinned"),
         (lambda d: d["selection"].pop("exclude_name_patterns"), "exclude_name_patterns: required"),
+        (lambda d: d["models"].update(compose="claude-unknown-9"), "no known output maximum"),
+        (lambda d: d["format"]["layout"]["memo"].update(spacing=2), "layout.memo.spacing: unknown key"),
+        (lambda d: d["format"]["layout"]["mediation_brief"].update(heading_underline=[True]), "expected bool3"),
+        (lambda d: d["format"]["layout"].update(letter={}), "layout.letter: unknown class"),
     ],
 )
 def test_a_schema_miss_refuses_rather_than_defaulting(tmp_path, mutate, match):
@@ -89,7 +93,9 @@ def test_a_bad_envelope_is_refused(tmp_path, over, match):
 # ---- the Howell table --------------------------------------------------------------------
 
 BILL = {"id": "b1", "name": "Northfield PT bill.pdf"}
+BILL2 = {"id": "b2", "name": "Northfield PT second bill.pdf"}
 EOB = {"id": "e1", "name": "Northfield PT EOB.pdf"}
+LEDGER = {"id": "g1", "name": "Northfield PT payment ledger.pdf"}
 LIEN = {"id": "l1", "name": "Northfield PT lien letter.pdf"}
 
 
@@ -99,6 +105,7 @@ def test_a_figure_the_document_does_not_print_is_dropped():
             {
                 "provider": "Northfield PT",
                 "kind": "bill",
+                "row_type": "line_item",
                 "date_of_service": "02/01/2026",
                 "billed": "$900.00",
                 "paid": "$450.00",
@@ -107,14 +114,16 @@ def test_a_figure_the_document_does_not_print_is_dropped():
         "Northfield PT statement. 02/01/2026 therapy $900.00",
         BILL,
     )
-    assert rows[0]["billed"] == "$900.00" and rows[0]["paid"] is None
+    assert rows[0]["billed"] == "$900.00" and rows[0]["paid"] is None and rows[0]["row_type"] == "line_item"
     assert notes and "450.00" in notes[0]
 
 
-def _row(doc, kind, dos, **f):
+def _row(doc, kind, dos, row_type="line_item", payer=None, **f):
     return {
         "provider": "Northfield PT",
         "kind": kind,
+        "row_type": row_type,
+        "payer": payer,
         "doc": doc,
         "date_of_service": dos,
         "billed": None,
@@ -124,18 +133,49 @@ def _row(doc, kind, dos, **f):
     }
 
 
-def test_paid_comes_only_from_payment_documents_and_each_cell_cites_its_source():
+def test_line_items_and_the_bills_own_total_count_once():
     rows = [
         _row(BILL, "bill", "02/01/2026", billed="$900.00"),
         _row(BILL, "bill", "02/08/2026", billed="$300.00"),
-        _row(EOB, "eob", "02/01/2026", billed="$900.00", paid="$410.25"),
-        _row(LIEN, "lien", None, outstanding="$789.75"),
+        _row(BILL, "bill", None, row_type="stated_total", billed="$1,200.00"),
     ]
     [t] = howell.build(rows, [])
-    assert t["billed"] == {"value": "$1,200.00", "sources": [BILL]}  # bills win; the EOB's billed is not added
-    assert t["paid"] == {"value": "$410.25", "sources": [EOB]}
-    assert t["outstanding"] == {"value": "$789.75", "sources": [LIEN]}
-    assert t["dates_of_service"]["value"] == "02/01/2026 to 02/08/2026"
+    assert t["billed"] == {"value": "$1,200.00", "sources": [BILL]}
+
+
+def test_two_real_same_day_charges_on_one_bill_both_count():
+    rows = [_row(BILL, "bill", "02/01/2026", billed="$150.00"), _row(BILL, "bill", "02/01/2026", billed="$150.00")]
+    [t] = howell.build(rows, [])
+    assert t["billed"]["value"] == "$300.00"
+
+
+def test_the_same_payment_on_an_eob_and_a_ledger_counts_once():
+    rows = [
+        _row(BILL, "bill", "02/01/2026", billed="$900.00"),
+        _row(EOB, "eob", "02/01/2026", payer="Example Health", paid="$410.25"),
+        _row(LEDGER, "ledger", "02/01/2026", payer="Example Health", paid="$410.25"),
+        _row(LIEN, "lien", None, outstanding="$489.75"),
+    ]
+    [t] = howell.build(rows, [])
+    assert t["paid"]["value"] == "$410.25" and {s["id"] for s in t["paid"]["sources"]} == {"e1", "g1"}
+    assert t["outstanding"] == {"value": "$489.75", "sources": [LIEN]}
+
+
+def test_documents_that_disagree_on_paid_go_to_the_attorney_never_added():
+    rows = [
+        _row(EOB, "eob", "02/01/2026", paid="$410.25"),
+        _row(LEDGER, "ledger", None, paid="$400.00"),  # undated beside a dated figure
+    ]
+    [t] = howell.build(rows, [])
+    v = t["paid"]["value"]
+    assert v.startswith("{{ATTORNEY: confirm paid amount, sources disagree:") and "$810.25" not in v
+    assert "$410.25 (Northfield PT EOB.pdf)" in v and "$400.00 (Northfield PT payment ledger.pdf)" in v
+
+
+def test_bills_for_different_dates_add_across_documents():
+    rows = [_row(BILL, "bill", "02/01/2026", billed="$900.00"), _row(BILL2, "bill", "03/01/2026", billed="$300.00")]
+    [t] = howell.build(rows, [])
+    assert t["billed"]["value"] == "$1,200.00"
 
 
 def test_a_missing_paid_figure_is_the_marker_never_billed():
@@ -153,18 +193,57 @@ def test_a_missing_paid_figure_is_the_marker_never_billed():
 
 def test_the_medicals_tab_supplies_billed_only_when_no_document_does():
     tab = [{"provider": "Southfield Imaging, Inc.", "charges": [{"amount": "1500.00", "start": "2026-03-02"}]}]
-    rows = [_row(BILL, "bill", "02/01/2026", billed="$900.00")]
-    table = howell.build(rows, tab)
+    table = howell.build([_row(BILL, "bill", "02/01/2026", billed="$900.00")], tab)
     imaging = next(t for t in table if t["provider"].startswith("Southfield"))
     assert imaging["billed"] == {"value": "$1,500.00", "sources": [howell.MEDICALS_TAB]}
     assert imaging["paid"]["value"] == howell.NOT_IN_RECORD
-    assert [t["provider"] for t in table][0] == "Northfield PT"  # ordered by first date of service
+    assert [t["provider"] for t in table][0] == "Northfield PT"
 
 
 def test_conflicting_stated_balances_go_to_the_attorney():
-    rows = [_row(LIEN, "lien", None, outstanding="$789.75"), _row(EOB, "ledger", None, outstanding="$700.00")]
+    rows = [_row(LIEN, "lien", None, outstanding="$789.75"), _row(LEDGER, "ledger", None, outstanding="$700.00")]
     [t] = howell.build(rows, [])
     assert t["outstanding"]["value"].startswith("{{ATTORNEY: the record states different balances")
+
+
+class _Doorway:
+    def __init__(self, text: str, stop: str = "end_turn") -> None:
+        self.text, self.stop, self.calls = text, stop, []
+
+    def call(self, stage, **kw):
+        from types import SimpleNamespace
+
+        self.calls.append(kw)
+        return SimpleNamespace(text=self.text, stop_reason=self.stop)
+
+
+def _billing_corpus(tmp_path):
+    import json as _json
+
+    data = tmp_path / "data"
+    (data / "text").mkdir(parents=True)
+    tp = data / "text" / "b1.txt"
+    tp.write_text("Northfield PT itemized statement 02/01/2026 $900.00", encoding="utf-8")
+    row = {"id": "b1", "name": "Northfield PT bill", "text_path": str(tp)}
+    (data / "extracted.jsonl").write_text(_json.dumps(row) + "\n", encoding="utf-8")
+    return data
+
+
+@pytest.mark.parametrize("text, stop", [('[{"provider": "x"', "max_tokens"), ("I could not read it.", "end_turn")])
+def test_an_unfinished_or_unreadable_billing_read_fails_and_caches_nothing(tmp_path, text, stop):
+    data = _billing_corpus(tmp_path)
+    with pytest.raises(howell.ExtractionError):
+        howell.extract(data, _Doorway(text, stop), "claude-sonnet-5", 1, lambda _m: None)
+    assert not (data / "howell" / "b1.json").exists()
+
+
+def test_a_billing_read_asks_for_the_models_output_maximum(tmp_path):
+    from medchron.demand.gapaudit import OUTPUT_MAX
+
+    data, door = _billing_corpus(tmp_path), _Doorway("[]")
+    rows, _ = howell.extract(data, door, "claude-sonnet-5", 1, lambda _m: None)
+    assert rows == [] and door.calls[0]["max_tokens"] == OUTPUT_MAX["claude-sonnet-5"]
+    assert (data / "howell" / "b1.json").is_file()  # an honest empty answer is cached
 
 
 # ---- the caption ----------------------------------------------------------------------------
@@ -182,25 +261,45 @@ def test_caption_fields_are_read_verbatim_from_the_court_paper():
     assert got["attorney_email"]["value"] == "alpha@firm.example"
 
 
+def test_a_case_number_must_carry_a_digit():
+    got = caption.extract(_doc(COMPLAINT.replace("Case No. CV-0001", "Case No. pending")), ("firm.example",))
+    assert "case_number" not in got
+    got = caption.extract(_doc(COMPLAINT.replace("Case No. CV-0001", "Case No. PENDING")), ("firm.example",))
+    assert "case_number" not in got
+
+
 def test_discrepancies_quote_the_document_and_low_confidence_is_not_reported():
     fields = caption.extract(_doc(), ("firm.example",))
     record = {
         "case_number": "CV-0010",
         "court": "SUPERIOR COURT OF THE STATE OF CALIFORNIA, COUNTY OF EXAMPLETOWN",
         "plaintiffs": ["Gamma Exampel"],
-        "defendants": ["Epsilon Unrelated Holdings"],  # a different name, not a typo: not reported
-        "attorney_email": None,
+        "defendants": ["Epsilon Unrelated Holdings"],
+        "attorney_email": "",  # read, and empty
     }
-    out = {d["field"]: d for d in caption.compare(fields, record, "Complaint 2-1-26.pdf")}
+    diffs, compared = caption.compare(fields, record, "Complaint 2-1-26.pdf")
+    out = {d["field"]: d for d in diffs}
     assert set(out) == {"case_number", "plaintiff", "attorney_email"}
     assert out["case_number"]["quote"] == "Case No. CV-0001" and out["case_number"]["source"] == "Complaint 2-1-26.pdf"
-    assert out["plaintiff"]["record_value"] == "Gamma Exampel"
     assert "no email" in out["attorney_email"]["why"]
+    assert set(compared) == {"case_number", "court", "attorney_email", "plaintiff", "defendant"}
+
+
+def test_a_case_number_far_from_the_record_is_another_matter_not_a_typo():
+    fields = caption.extract(_doc(), ("firm.example",))
+    diffs, _ = caption.compare(fields, {"case_number": "ZZ-998877-QQ"}, "c")
+    assert diffs == []
+
+
+def test_a_field_the_record_does_not_carry_is_never_compared_or_reported():
+    fields = caption.extract(_doc(), ("firm.example",))
+    diffs, compared = caption.compare(fields, {"case_number": None, "court": None, "attorney_email": None}, "c")
+    assert diffs == [] and compared == []
 
 
 def test_a_matching_record_reports_nothing_and_an_ambiguous_field_is_not_read():
     fields = caption.extract(_doc(COMPLAINT + "\nCase No. CV-0002"), ("firm.example",))
-    assert "case_number" not in fields  # two case numbers in one paper: not read, so never compared
+    assert "case_number" not in fields
     record = {
         "case_number": "CV-0002",
         "court": "Superior Court of the State of California, County of Exampletown",
@@ -208,7 +307,26 @@ def test_a_matching_record_reports_nothing_and_an_ambiguous_field_is_not_read():
         "defendants": ["Delta Example"],
         "attorney_email": "alpha@firm.example",
     }
-    assert caption.compare(fields, record, "x") == []
+    diffs, compared = caption.compare(fields, record, "x")
+    assert diffs == [] and "court" in compared
+
+
+def test_an_unreadable_record_raises_never_reads_as_agreement():
+    class NoClient:
+        pass
+
+    with pytest.raises(caption.RecordUnreadable):
+        caption.read_record(NoClient(), "m", {})
+
+    class Broken:
+        def get(self, path):
+            raise TimeoutError("timed out")
+
+    class Seat:
+        client = Broken()
+
+    with pytest.raises(caption.RecordUnreadable):
+        caption.read_record(Seat(), "m", {})
 
 
 # ---- section 2030.050: cumulative ----------------------------------------------------------
@@ -318,7 +436,7 @@ def test_a_digest_without_discovery_sets_reads_no_prior():
 def test_a_court_name_typo_is_reported_but_its_wording_variants_are_not():
     fields = caption.extract(_doc(), ("firm.example",))
     base = {"case_number": None, "plaintiffs": [], "defendants": [], "attorney_email": "alpha@firm.example"}
-    same = caption.compare(fields, {**base, "court": "Superior Court of California, County of Exampletown"}, "c")
+    same, _ = caption.compare(fields, {**base, "court": "Superior Court of California, County of Exampletown"}, "c")
     assert same == []
-    typo = caption.compare(fields, {**base, "court": "Superior Court of California, County of Exampletowm"}, "c")
+    typo, _ = caption.compare(fields, {**base, "court": "Superior Court of California, County of Exampletowm"}, "c")
     assert [d["field"] for d in typo] == ["court"]

@@ -29,6 +29,14 @@ Named style contract (a firm's template may define any subset):
   SMD Body, SMD Item Label, SMD Item Text, SMD Heading 1/2/3, SMD Caption,
   SMD Signature
 
+One exception, and it is the firm's own: a caller holding a firm-AUTHORED
+house style (``docx_classes.HouseStyle``, built by the drafting job from the
+firm's ``drafting-firm.yaml``) passes it as ``house``, and its stated font,
+paper, spacing, indents and heading emphasis are enforced in-class, over the
+base's styles: the firm's written instructions for a served document outrank
+the styles of whichever base it lands on. Without ``house`` nothing here
+changes for any seat or skill.
+
 Refusals (the only ones): a multi-section base document (the body clear would
 silently keep the LAST section's page setup and drop the rest; a wrong
 letterhead on a client letter is worse than an honest "not yet").
@@ -49,7 +57,7 @@ from .docx_base import (
     set_table_borders,
     usable_paragraph_style,
 )
-from .docx_classes import _LABEL_MAX_CHARS, CLASS_RULES, ClassRules
+from .docx_classes import _LABEL_MAX_CHARS, CLASS_RULES, ClassRules, HouseStyle, apply_house
 from .docx_format_types import (
     DEFAULT_FONT,
     DEFAULT_SIZE_PT,
@@ -88,6 +96,7 @@ def render_document(
     base_bytes: bytes | None,
     report: FormatReport | None = None,
     firm_identity: FirmIdentity | None = None,
+    house: HouseStyle | None = None,
 ) -> tuple[bytes, FormatReport]:
     """Render ``markdown`` for ``document_class`` into ``base_bytes`` (the firm's
     template) or the stock starter base. Pure: no network, no client.
@@ -96,10 +105,15 @@ def render_document(
     ``firm_identity``). It is printed only for the letter classes, on the
     starter or on a starter-derived base whose headers are empty; a firm's own
     base keeps whatever header the firm built.
-    See ``letterhead``."""
+    See ``letterhead``.
+
+    ``house`` is a FIRM-AUTHORED house style (``docx_classes.HouseStyle``),
+    passed only by a caller holding one (the drafting job, from the firm's
+    ``drafting-firm.yaml``). It is enforced in-class, over the base's styles.
+    Without it the render is the product default, unchanged."""
     if document_class not in CLASS_RULES:
         raise ValueError(f"unknown document_class {document_class!r}; known: {', '.join(DOCUMENT_CLASSES)}")
-    rules = CLASS_RULES[document_class]
+    rules = apply_house(CLASS_RULES[document_class], house)
     report = report or FormatReport(document_class=document_class)
     doc = open_as_base(base_bytes, report)
     if rules.letter_paper:
@@ -472,6 +486,8 @@ __all__ = [
     "ROLE_FALLBACK",
     "ClassRules",
     "FormatRefused",
+    "HouseStyle",
+    "apply_house",
     "FormatReport",
     "has_style",
     "load_firm_identity",

@@ -20,7 +20,14 @@ The schema (the engagements author writes to exactly this)::
     selection:   {doc_extensions, exclude_folder_patterns, exclude_name_patterns}
     style:       <path of the house-style markdown>
     format:      {font, size_pt, mediation_brief_sections: [11 titles],
-                  discovery_label_style, depo_outline_page_numbers}
+                  discovery_label_style, depo_outline_page_numbers,
+                  plain_letter_paper?: bool,
+                  layout?: {<class>: {line_spacing, line_spacing_pt, justify,
+                            first_line_indent_in, heading_indent_in: [3],
+                            heading_underline: [3], item_line_spacing,
+                            item_space_after_pt, centered_court_lines,
+                            bold_italic_heading_indent_in, page_numbers_always,
+                            footer_title}}   every layout key optional
     classes:     {<class>: {skeleton, prompts: {digest, compose, audit, repair},
                   exemplars: [paths]}}   one entry for each of the five classes
     attachments: {decl_2030_050, pos}
@@ -52,6 +59,21 @@ MODEL_KEYS = ("transcription", "digest", "compose", "audit", "repair")
 PROMPT_KEYS = ("digest", "compose", "audit", "repair")
 LABEL_STYLES = ("caps_bold_underline", "all caps, bold, underlined")
 MEDIATION_SECTIONS = 11
+#: format.layout.<class> keys and their types (closed).
+LAYOUT_KEYS = {
+    "line_spacing": "num",  # a multiple: 2.0 is double
+    "line_spacing_pt": "num",  # exact points: wins over line_spacing
+    "justify": "bool",
+    "first_line_indent_in": "num",
+    "heading_indent_in": "num3",
+    "heading_underline": "bool3",
+    "item_line_spacing": "num",
+    "item_space_after_pt": "num",
+    "centered_court_lines": "bool",
+    "bold_italic_heading_indent_in": "num",
+    "page_numbers_always": "bool",
+    "footer_title": "str",
+}
 
 # section -> {key: (type, required)}; None: a free-keyed map checked by its own rules
 SCHEMA: dict[str, dict[str, tuple[str, bool]] | None | str] = {
@@ -77,6 +99,11 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]] | None | str] = {
         "mediation_brief_sections": ("list[str]", True),
         "discovery_label_style": ("str", True),
         "depo_outline_page_numbers": ("bool", True),
+        # Optional: plain US Letter, line numbering removed, for every class.
+        "plain_letter_paper": ("bool", False),
+        # Optional: {<class>: {LAYOUT_KEYS}}, the attorney's per-class layout
+        # (house.py turns it into the renderer's HouseStyle override).
+        "layout": ("map", False),
     },
     "classes": None,
     "attachments": {"decl_2030_050": ("str", True), "pos": ("str", True)},
@@ -96,6 +123,8 @@ def _type_ok(value: Any, kind: str) -> bool:
         return isinstance(value, (int, float)) and not isinstance(value, bool)
     if kind == "bool":
         return isinstance(value, bool)
+    if kind == "map":
+        return isinstance(value, dict)
     if kind == "list[str]":
         return isinstance(value, list) and all(isinstance(x, str) and x.strip() for x in value)
     return False
@@ -148,6 +177,56 @@ def _class_entry(cls: str, entry: Any) -> list[str]:
     return out
 
 
+def _num(v: object) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0
+
+
+def _layout_value_ok(value: object, kind: str) -> bool:
+    num = _num
+    if kind == "num":
+        return num(value)
+    if kind == "bool":
+        return isinstance(value, bool)
+    if kind == "str":
+        return isinstance(value, str) and bool(value.strip())
+    if kind == "num3":
+        return isinstance(value, list) and len(value) == 3 and all(num(v) for v in value)
+    if kind == "bool3":
+        return isinstance(value, list) and len(value) == 3 and all(isinstance(v, bool) for v in value)
+    return False
+
+
+def _layout(layout: dict) -> list[str]:
+    out = []
+    for cls, body in layout.items():
+        where = f"format.layout.{cls}"
+        if cls not in CLASSES:
+            out.append(f"{where}: unknown class (expected {list(CLASSES)})")
+            continue
+        if not isinstance(body, dict):
+            out.append(f"{where}: expected a map")
+            continue
+        out += [f"{where}.{k}: unknown key (closed key set)" for k in body if k not in LAYOUT_KEYS]
+        out += [
+            f"{where}.{k}: expected {LAYOUT_KEYS[k]}"
+            for k, v in body.items()
+            if k in LAYOUT_KEYS and not _layout_value_ok(v, LAYOUT_KEYS[k])
+        ]
+    return out
+
+
+def _models(models: dict) -> list[str]:
+    """Every configured model must have a known output maximum: a model the
+    table does not know would silently get a small ceiling and truncate."""
+    from ..demand.gapaudit import OUTPUT_MAX
+
+    return [
+        f"models.{stage}: {m!r} has no known output maximum (medchron.demand.gapaudit.OUTPUT_MAX)"
+        for stage, m in models.items()
+        if m not in OUTPUT_MAX
+    ]
+
+
 def referenced_paths(data: dict[str, Any]) -> list[tuple[str, str]]:
     """(where, path) for every file the config names outside ``inputs``."""
     refs = [("style", data["style"])]
@@ -173,6 +252,8 @@ def _semantics(data: dict[str, Any]) -> list[str]:
         out.append(f"format.discovery_label_style: expected one of {list(LABEL_STYLES)}")
     if not 8 <= float(fmt["size_pt"]) <= 16:
         out.append("format.size_pt: expected 8..16")
+    out += _layout(fmt.get("layout") or {})
+    out += _models(data["models"])
     for p in data["selection"]["exclude_folder_patterns"] + data["selection"]["exclude_name_patterns"]:
         try:
             re.compile(p)

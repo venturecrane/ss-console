@@ -1,16 +1,16 @@
-"""The drafting classes held to an attorney's house style, enforced in-class.
+"""A firm's AUTHORED house style, passed to the renderer as ``house``, held
+in-class.
 
-The standard (an engaged firm's written drafting instructions, 2026-07-29 and
-2026-10-07): Times New Roman 12 on plain Letter paper, never pleading paper; a
-mediation brief's roman-numeral headings centered and bold ONLY, its lettered
-subsections indented, bold and underlined, its body double-spaced; a discovery
-item led by an all-caps bold underlined label, the request a double-spaced
-first-line-indented paragraph, double-spaced between items and never more; a
-deposition outline numbered at the bottom of every page.
-
-"In-class" is the point: a firm template's own style (an underlined Heading 1,
-an Arial body, a space-after) must not move a served document off the standard,
-so each test runs on the starter AND on a firm base that tries to.
+The renderer carries no firm's values: these tests pass a fictional firm's
+``HouseStyle`` (the shape the drafting job builds from a firm's
+drafting-firm.yaml) and assert it is honored: the font and size on every run,
+plain Letter paper with line numbering removed, a brief's heading levels,
+exact-point justified body and court lines, a discovery set's spacing, and a
+deposition outline's page numbers. "In-class" is the point: a firm template's
+own style (an underlined Heading 1, an Arial body, a space-after) must not move
+a document off the AUTHORED standard, so each test runs on the starter AND on a
+base that tries to. Without ``house`` the render is the product default
+(test_render_product_defaults_unchanged.py).
 """
 
 from __future__ import annotations
@@ -26,10 +26,40 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, Twips
 
-from smokeball_connector import docx_classes
-from smokeball_connector.docx_format import CLASS_RULES, render_document
+import dataclasses
 
-HOUSE = ("discovery_set", "discovery_response", "mediation_brief", "memo", "depo_outline")
+from smokeball_connector.docx_classes import HouseStyle
+from smokeball_connector.docx_format import render_document
+
+# A FICTIONAL firm's authored house style, the shape the drafting job builds
+# from a firm's drafting-firm.yaml. The renderer holds no firm's values; every
+# assertion below is about honoring an authored override.
+_COMMON = dict(font="Times New Roman", size_pt=12, plain_letter_paper=True)
+HOUSE = {
+    "discovery_set": HouseStyle(**_COMMON, body_line_spacing=2.0, item_line_spacing=2.0, item_space_after_pt=0.0),
+    "mediation_brief": HouseStyle(
+        **_COMMON,
+        heading_indent_in=(0.0, 0.5, 1.0),
+        heading_underline=(False, True, True),
+        body_line_spacing_pt=24.0,
+        body_justify=True,
+        body_first_line_indent_in=0.5,
+        centered_court_lines=True,
+        bold_italic_heading_indent_in=1.0,
+        page_numbers_always=True,
+        footer_title="Plaintiff's Mediation Brief",
+    ),
+    "memo": HouseStyle(**_COMMON),
+    "depo_outline": HouseStyle(**_COMMON, page_numbers_always=True),
+}
+HOUSE["discovery_response"] = HOUSE["discovery_set"]
+
+
+def _render(md, cls, base, house=None, **kw):
+    return render_document(md, cls, base, house=house or HOUSE.get(cls), **kw)
+
+
+HOUSE_CLASSES = ("discovery_set", "discovery_response", "mediation_brief", "memo", "depo_outline")
 
 BRIEF = """| PLAINTIFF ALPHA EXAMPLE, | Case No. {{FILL: case number}} |
 | v. |  |
@@ -127,10 +157,10 @@ def level1_headings_underlined(blob: bytes) -> bool:
 # ---- font, paper -----------------------------------------------------------------
 
 
-@pytest.mark.parametrize("cls", HOUSE)
+@pytest.mark.parametrize("cls", HOUSE_CLASSES)
 @pytest.mark.parametrize("base", list(BASES))
 def test_every_run_is_times_new_roman_12_in_class(cls: str, base: str) -> None:
-    blob, _ = render_document(BRIEF + DISCOVERY + "- a bullet\n1. a numbered item\n", cls, BASES[base])
+    blob, _ = _render(BRIEF + DISCOVERY + "- a bullet\n1. a numbered item\n", cls, BASES[base])
     doc = _doc(blob)
     runs = [r for p in doc.paragraphs for r in p.runs if r.text.strip()]
     runs += [r for t in doc.tables for c in t._cells for p in c.paragraphs for r in p.runs if r.text.strip()]
@@ -143,9 +173,9 @@ def test_every_run_is_times_new_roman_12_in_class(cls: str, base: str) -> None:
         assert r.font.size == Pt(12), r.text
 
 
-@pytest.mark.parametrize("cls", HOUSE)
+@pytest.mark.parametrize("cls", HOUSE_CLASSES)
 def test_plain_letter_paper_never_pleading_paper(cls: str) -> None:
-    blob, report = render_document(BRIEF, cls, BASES["hostile firm base"])
+    blob, report = _render(BRIEF, cls, BASES["hostile firm base"])
     sec = _doc(blob).sections[0]
     assert (sec.page_width, sec.page_height) == (Inches(8.5), Inches(11))
     assert sec._sectPr.find(qn("w:lnNumType")) is None
@@ -153,8 +183,8 @@ def test_plain_letter_paper_never_pleading_paper(cls: str) -> None:
     assert any("US Letter" in n for n in notes) and any("never pleading paper" in n for n in notes)
 
 
-def test_letter_classes_keep_the_firms_own_typography_and_paper() -> None:
-    blob, _ = render_document("Body.", "letter", BASES["hostile firm base"])
+def test_without_an_override_the_firms_own_typography_and_paper_stand() -> None:
+    blob, _ = render_document("Body.", "memo", BASES["hostile firm base"])
     sec = _doc(blob).sections[0]
     assert sec.page_width == Twips(11906)
 
@@ -164,7 +194,7 @@ def test_letter_classes_keep_the_firms_own_typography_and_paper() -> None:
 
 @pytest.mark.parametrize("base", list(BASES))
 def test_mediation_level1_headings_are_centered_bold_and_never_underlined(base: str) -> None:
-    blob, _ = render_document(BRIEF, "mediation_brief", BASES[base])
+    blob, _ = _render(BRIEF, "mediation_brief", BASES[base])
     doc = _doc(blob)
     h1 = [p for p in doc.paragraphs if p.text in ("I. INTRODUCTION", "II. LIABILITY")]
     assert len(h1) == 2
@@ -174,20 +204,16 @@ def test_mediation_level1_headings_are_centered_bold_and_never_underlined(base: 
     assert not level1_headings_underlined(blob)
 
 
-def test_the_underline_check_can_fail(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Falsifier: a mediation rule that underlines level 1 is caught."""
-    import dataclasses
-
-    bad = dataclasses.replace(CLASS_RULES["mediation_brief"], heading_underline=(True, True, False))
-    monkeypatch.setitem(CLASS_RULES, "mediation_brief", bad)
-    blob, _ = render_document(BRIEF, "mediation_brief", None)
+def test_the_underline_check_can_fail() -> None:
+    """Falsifier: an override that underlines level 1 is caught."""
+    bad = dataclasses.replace(HOUSE["mediation_brief"], heading_underline=(True, True, False))
+    blob, _ = _render(BRIEF, "mediation_brief", None, house=bad)
     assert level1_headings_underlined(blob)
-    assert docx_classes.CLASS_RULES is CLASS_RULES  # one table, re-exported
 
 
 @pytest.mark.parametrize("base", list(BASES))
 def test_mediation_level2_is_indented_bold_and_underlined(base: str) -> None:
-    blob, _ = render_document(BRIEF, "mediation_brief", BASES[base])
+    blob, _ = _render(BRIEF, "mediation_brief", BASES[base])
     p = next(p for p in _doc(blob).paragraphs if p.text == "A. Past Medical Expenses")
     assert p.paragraph_format.left_indent == Inches(0.5)
     assert all(r.bold and r.underline for r in p.runs)
@@ -195,7 +221,7 @@ def test_mediation_level2_is_indented_bold_and_underlined(base: str) -> None:
 
 @pytest.mark.parametrize("base", list(BASES))
 def test_mediation_body_double_spaced_and_caption_first(base: str) -> None:
-    blob, _ = render_document(BRIEF, "mediation_brief", BASES[base])
+    blob, _ = _render(BRIEF, "mediation_brief", BASES[base])
     doc = _doc(blob)
     body = next(p for p in doc.paragraphs if p.text.startswith("This brief"))
     assert body.paragraph_format.line_spacing == Pt(24)
@@ -212,7 +238,7 @@ def test_mediation_body_double_spaced_and_caption_first(base: str) -> None:
 @pytest.mark.parametrize("cls", ("discovery_set", "discovery_response"))
 @pytest.mark.parametrize("base", list(BASES))
 def test_discovery_items_double_spaced_between_items_only(cls: str, base: str) -> None:
-    blob, _ = render_document(DISCOVERY, cls, BASES[base])
+    blob, _ = _render(DISCOVERY, cls, BASES[base])
     doc = _doc(blob)
     labels = [p for p in doc.paragraphs if p.text.startswith("SPECIAL INTERROGATORY NO.")]
     items = [p for p in doc.paragraphs if p.text.startswith(("Identify", "State all"))]
@@ -227,18 +253,15 @@ def test_discovery_items_double_spaced_between_items_only(cls: str, base: str) -
         assert (pf.line_spacing, pf.space_before, pf.space_after) == (2.0, Pt(0), Pt(0))
 
 
-def test_discovery_spacing_check_can_fail(monkeypatch: pytest.MonkeyPatch) -> None:
-    import dataclasses
-
-    bad = dataclasses.replace(CLASS_RULES["discovery_set"], item_space_after_pt=12.0)
-    monkeypatch.setitem(CLASS_RULES, "discovery_set", bad)
-    blob, _ = render_document(DISCOVERY, "discovery_set", None)
+def test_discovery_spacing_check_can_fail() -> None:
+    bad = dataclasses.replace(HOUSE["discovery_set"], item_space_after_pt=12.0)
+    blob, _ = _render(DISCOVERY, "discovery_set", None, house=bad)
     item = next(p for p in _doc(blob).paragraphs if p.text.startswith("Identify"))
     assert item.paragraph_format.space_after == Pt(12)
 
 
 def test_discovery_definitions_section_is_supported() -> None:
-    blob, report = render_document(DISCOVERY, "discovery_set", None)
+    blob, report = _render(DISCOVERY, "discovery_set", None)
     doc = _doc(blob)
     assert any(p.text == "DEFINITIONS" for p in doc.paragraphs)
     d = next(p for p in doc.paragraphs if p.text.startswith('"INCIDENT"'))
@@ -259,7 +282,7 @@ def _footer_xml(blob: bytes) -> str:
     ids=["starter", "firm base", "firm base with footer text"],
 )
 def test_depo_outline_footer_always_carries_a_centered_page_field(base: bytes | None) -> None:
-    blob, _ = render_document("# Witness background\n\n1. Name and address.\n", "depo_outline", base)
+    blob, _ = _render("# Witness background\n\n1. Name and address.\n", "depo_outline", base)
     xml = _footer_xml(blob)
     assert "PAGE" in xml and 'w:fldCharType="begin"' in xml
     footer = _doc(blob).sections[0].footer
@@ -270,13 +293,13 @@ def test_depo_outline_footer_always_carries_a_centered_page_field(base: bytes | 
 
 
 def test_depo_outline_does_not_add_a_second_page_field() -> None:
-    blob, report = render_document("Body.", "depo_outline", _hostile_base(page_field=True))
+    blob, report = _render("Body.", "depo_outline", _hostile_base(page_field=True))
     assert _footer_xml(blob).count("PAGE") == 1
     assert "page number field added to the footer" not in report.to_dict()["notes"]
 
 
 def test_memo_is_times_new_roman_12() -> None:
-    blob, _ = render_document("# To the file\n\nA memo body.", "memo", BASES["hostile firm base"])
+    blob, _ = _render("# To the file\n\nA memo body.", "memo", BASES["hostile firm base"])
     p = next(p for p in _doc(blob).paragraphs if p.text == "A memo body.")
     assert all(r.font.name == "Times New Roman" and r.font.size == Pt(12) for r in p.runs)
 
@@ -301,7 +324,7 @@ SPECIMEN = """# VI. DAMAGES
 
 @pytest.mark.parametrize("base", list(BASES))
 def test_mediation_level3_is_indented_one_inch_bold_and_underlined(base: str) -> None:
-    blob, _ = render_document(SPECIMEN, "mediation_brief", BASES[base])
+    blob, _ = _render(SPECIMEN, "mediation_brief", BASES[base])
     p = next(p for p in _doc(blob).paragraphs if p.text == "1. Northfield Physical Therapy")
     assert p.paragraph_format.left_indent == Inches(1.0)
     assert all(r.bold and r.underline for r in p.runs)
@@ -309,7 +332,7 @@ def test_mediation_level3_is_indented_one_inch_bold_and_underlined(base: str) ->
 
 @pytest.mark.parametrize("base", list(BASES))
 def test_mediation_body_is_first_line_indented_and_emphasis_renders(base: str) -> None:
-    blob, _ = render_document(SPECIMEN, "mediation_brief", BASES[base])
+    blob, _ = _render(SPECIMEN, "mediation_brief", BASES[base])
     p = next(p for p in _doc(blob).paragraphs if p.text.startswith("Northfield Physical Therapy treated"))
     assert p.paragraph_format.first_line_indent == Inches(0.5) and p.paragraph_format.line_spacing == Pt(24)
     runs = {r.text: (bool(r.bold), bool(r.italic)) for r in p.runs}
@@ -322,13 +345,13 @@ def test_mediation_body_is_first_line_indented_and_emphasis_renders(base: str) -
 
 
 def test_mediation_tables_are_times_new_roman_12() -> None:
-    blob, _ = render_document(SPECIMEN, "mediation_brief", None)
+    blob, _ = _render(SPECIMEN, "mediation_brief", None)
     cells = [r for c in _doc(blob).tables[0]._cells for p in c.paragraphs for r in p.runs if r.text.strip()]
     assert cells and all(r.font.name == "Times New Roman" and r.font.size == Pt(12) for r in cells)
 
 
 def test_a_mediation_brief_is_numbered_at_the_bottom_even_under_a_firm_footer() -> None:
-    blob, _ = render_document(SPECIMEN, "mediation_brief", _hostile_base(footer="123 Example Street"))
+    blob, _ = _render(SPECIMEN, "mediation_brief", _hostile_base(footer="123 Example Street"))
     assert "PAGE" in _footer_xml(blob)
 
 
@@ -356,7 +379,7 @@ Body.
 
 @pytest.mark.parametrize("base", list(BASES))
 def test_the_signed_brief_front_matter_provider_lines_and_footer(base: str) -> None:
-    blob, _ = render_document(FRONT, "mediation_brief", BASES[base])
+    blob, _ = _render(FRONT, "mediation_brief", BASES[base])
     doc = _doc(blob)
     paras = [p for p in doc.paragraphs if p.text.strip()]
     attorney, court = paras[0], [p for p in paras if "SUPERIOR COURT" in p.text or "COUNTY OF" in p.text]
