@@ -208,7 +208,9 @@ def render(merged: list[list[str]], free: dict[str, Any]) -> str:
     out += ["", "## Demand Readiness", ""]
     out.append("Items that block sending the demand: " + (", ".join(blocks) if blocks else "none") + ".")
     out.append("Items that can follow the demand: " + (", ".join(follows) if follows else "none") + ".")
-    unread = [u.get("name") if isinstance(u, dict) else str(u) for u in free.get("unreadable_documents") or []]
+    unread = [
+        str(u.get("name") or "") if isinstance(u, dict) else str(u) for u in free.get("unreadable_documents") or []
+    ]
     machine = [str(m) for m in free.get("documents_read_by_machine_transcription") or []]
     out += ["", "Documents that could not be read: " + ("; ".join(unread) if unread else "none") + "."]
     out.append(
