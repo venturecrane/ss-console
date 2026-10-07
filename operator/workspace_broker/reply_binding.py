@@ -130,6 +130,11 @@ def _medchron_ledger(broker: BrokerContext) -> MedchronLedger:
 def _job_ledger(broker: BrokerContext, kind: str) -> DemandLedger | DraftingLedger | MedchronLedger:
     if kind == "medchron_job":
         return _medchron_ledger(broker)
+    return _marking_ledger(broker, kind)
+
+
+def _marking_ledger(broker: BrokerContext, kind: str) -> DemandLedger | DraftingLedger:
+    """The ledger of a kind in ``_LEDGER_MARKED_KINDS`` (it carries mark_replied)."""
     return _drafting_ledger(broker) if kind == "drafting_job" else _demand_ledger(broker)
 
 
@@ -350,7 +355,7 @@ def reply_verb(
             if not bound_replies.claim(db_path, v.key, v.graph_message_id, v.internet_message_id, session_id):
                 raise BindingRefused("that reply was already sent")
             try:
-                marked = v.kind not in _LEDGER_MARKED_KINDS or _job_ledger(broker, v.kind).mark_replied(
+                marked = v.kind not in _LEDGER_MARKED_KINDS or _marking_ledger(broker, v.kind).mark_replied(
                     v.job_id, _outcome(v)
                 )
             except Exception:
@@ -425,7 +430,7 @@ def _settle_failed_post(
         if not delivered:
             bound_replies.release(db_path, v.key)
             if v.kind in _LEDGER_MARKED_KINDS:
-                _job_ledger(broker, v.kind).unmark_replied(v.job_id, _outcome(v))
+                _marking_ledger(broker, v.kind).unmark_replied(v.job_id, _outcome(v))
             _audit(
                 broker, "send_released", raw, v=v, reason=f"Graph refused the reply (HTTP {status}); nothing was sent"
             )
