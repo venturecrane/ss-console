@@ -1497,7 +1497,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // refused before the broker is asked.
     // e9280e5d -> fb31b666 (overlay#427), 2026-10-06: a failed demand job's status read is a shortfall,
     // so SMD is alerted and the client is told nothing.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="fb31b6665ebfabf7c72f979668dcf0dbaf110b89"')
+    // fb31b666 -> 6731de6a (overlay#428), 2026-10-07: request cards. The seat records each person's
+    // request and posts replied / no_reply / job_done cards to /api/internal/operator-request-card.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="6731de6a086aa45b3bf5c3f9aa2e8de697f6bdbd"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
