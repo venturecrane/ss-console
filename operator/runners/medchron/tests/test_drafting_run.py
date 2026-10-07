@@ -141,3 +141,107 @@ def test_the_cli_draft_command_writes_the_verdict(tmp_path, pricing, monkeypatch
     )
     assert code == 1
     assert json.loads((jd / "verdict.json").read_text())[0]["outcome"] == "failed"
+
+
+DISCOVERY_DRAFT = """| | |
+| --- | --- |
+| PROPOUNDING PARTY: | GAMMA EXAMPLE |
+| RESPONDING PARTY: | DELTA EXAMPLE |
+| SET NO.: | ONE |
+
+# DEFINITIONS
+
+1. "INCIDENT" means the collision on January 15, 2026 (ER record 1-15-26, p. 1).
+
+# SPECIAL INTERROGATORIES
+
+SPECIAL INTERROGATORY NO. 1
+
+IDENTIFY each PERSON who witnessed the INCIDENT.
+
+SPECIAL INTERROGATORY NO. 2
+
+State all facts supporting YOUR contention that the INCIDENT was not YOUR fault.
+
+Dated: {{ATTORNEY: date}}
+
+=== ATTORNEY NOTES ===
+
+## REQUEST BASIS
+
+None.
+"""
+
+
+def test_a_discovery_set_ends_at_the_signature_and_the_job_appends_the_proof_of_service(tmp_path, pricing):
+    import docx
+
+    from medchron.demand import deliver
+
+    seat = seat_with(standard_docs())
+    r, v, _log = _run(tmp_path, pricing, seat, ScriptedClient(draft=DISCOVERY_DRAFT), cls="discovery_set")
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    path = deliver.out_dir(r.data) / v.files[0]["name"]
+    text = [p.text for p in docx.Document(str(path)).paragraphs if p.text.strip()]
+    assert text[-2] == "PROOF OF SERVICE" and "at service" in text[-1]
+    assert not any("DECLARATION" in t for t in text)  # 2 special interrogatories, no prior sets
+    assert not any("ATTORNEY NOTES" in t for t in text)
+
+
+# ---- every recorded reason leads with its code ------------------------------------------
+
+CODE = __import__("re").compile(r"^[a-z_]+: ")
+
+
+def test_every_reason_literal_in_the_runner_leads_with_a_known_code():
+    """Static: each raise of a hold or failure, and each Verdict reason the
+    runner builds, starts with one of REASON_CODES."""
+    import re
+
+    src = Path(run_mod.__file__).read_text(encoding="utf-8")
+    starts = re.findall(r"raise (?:DraftingHold|DraftingFailed|exc)\(\s*f?\"([^\"]*)", src)
+    starts += re.findall(r"reason=f?\"([^\"]*)", src)
+    assert len(starts) >= 12
+    for s in starts:
+        m = run_mod.REASON.match(s)
+        assert m, f"reason does not lead with a code: {s[:60]!r}"
+    lane = (Path(run_mod.__file__).parents[1] / "drafting_lane.py").read_text(encoding="utf-8")
+    assert '"reason": f"no_verdict: ' in lane
+
+
+def _failing(monkeypatch, attr, exc):
+    def boom(self, *a, **k):
+        raise exc
+
+    monkeypatch.setattr(run_mod.DraftingRun, attr, boom)
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["destination", "facts", "format", "needs", "unexpected", "limit", "stage"],
+)
+def test_every_outcome_reason_matches_the_code_shape(tmp_path, pricing, monkeypatch, case):
+    from medchron import limits as limits_mod
+    from medchron.drafting import compose, format_check
+
+    seat, client, kw = seat_with(standard_docs()), ScriptedClient(), {}
+    if case == "destination":
+        seat.numbers[next(k for k, v in seat.numbers.items() if v == "OPS-LIBRARY")] = "200002"
+        kw["file_to"] = True
+    elif case == "facts":
+        seat.facts = {**seat.facts, "errors": ["matter: RuntimeError: timed out"]}
+    elif case == "format":
+        monkeypatch.setattr(format_check, "check", lambda *a, **k: format_check.Result(fails=["font: x"]))
+    elif case == "needs":
+        client = ScriptedClient(draft="=== NEEDS THE ATTORNEY ===\nName the deponent.")
+    elif case == "unexpected":
+        _failing(monkeypatch, "_preflight", ValueError("Secret Client file.pdf could not be parsed"))
+    elif case == "limit":
+        _failing(monkeypatch, "_estimate", limits_mod.LimitHold("per_job_cap_usd", "per_job_cap_usd: over"))
+    elif case == "stage":
+        _failing(monkeypatch, "_digest", compose.DraftingError("compose output still unfinished"))
+    _r, v, _ = _run(tmp_path, pricing, seat, client, **kw)
+    assert v.outcome in ("held", "failed")
+    assert CODE.match(v.reason or ""), v.reason
+    assert run_mod.REASON.match(v.reason or ""), v.reason
+    assert not (v.reason or "").startswith("Secret")

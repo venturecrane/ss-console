@@ -6,16 +6,17 @@ attorney:
 * the split: the model writes the document, then a line exactly
   ``=== ATTORNEY NOTES ===``, then its end tables; only the document is
   rendered, the tables go to the attorney notes file;
-* the CCP section 2030.050 declaration (a propounded special interrogatory
-  set): any declaration the model wrote is removed, and the firm's authored
-  declaration is attached before the proof of service when the count is
+* the served attachments (a discovery set or response), appended by the job
+  in serving order: the document, then the CCP section 2030.050 declaration,
+  then the firm's proof of service. Any declaration or proof of service the
+  model wrote is removed first. The declaration is attached when the count is
   CUMULATIVE over 35 (the statute: "propounding or has propounded more than 35
   specially prepared interrogatories to any other party"): this set's labeled
   special interrogatories plus every prior special interrogatory set to the
   same responding party in the digest's DISCOVERY-SETS index. A prior count the
   record cannot read never counts as zero: the declaration is attached and its
-  paragraph-4 counts are left to the attorney. The proof of service is the
-  model's (from the firm's ``pos`` attachment), never appended here;
+  paragraph-4 counts are left to the attorney. The proof of service's
+  ``{{FILL: ... | at service}}`` slots stay verbatim for the person serving;
 * reserved judgment: in a mediation brief, the case-value section opens with an
   ``{{ATTORNEY}}`` marker, and a paragraph about settlement authority, the
   target figure or the bracket carries no dollar figure. The valuation
@@ -33,6 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+DISCOVERY = ("discovery_set", "discovery_response")
 NOTES_MARK = "=== ATTORNEY NOTES ==="
 NEEDS_ATTORNEY = "=== NEEDS THE ATTORNEY ==="
 SPECIAL_LIMIT = 35
@@ -160,8 +162,15 @@ def decl_decision(md: str, digest: str) -> DeclDecision:
     return d
 
 
-def _fill_decl(text: str, d: DeclDecision) -> str:
+def _fill_decl(text: str, d: DeclDecision, doc: str = "") -> str:
+    """The declaration's code-filled slots: the counts, and the two parties as
+    the set's own identification block names them (the set took them from the
+    operative pleading). A party the block does not name stays a FILL."""
     text = COMMENT.sub("", text).strip()
+    for role, slot in (("PROPOUNDING PARTY", "propounding"), ("RESPONDING PARTY", "responding")):
+        who = party(doc, role)
+        if who:
+            text = re.sub(rf"`?\{{\{{FILL: {slot} party, as captioned[^}}]*\}}\}}`?", lambda _m, w=who: w, text)
     text = re.sub(r"`?\{\{FILL: number of special interrogatories in this set[^}]*\}\}`?", str(d.this_set), text)
     if d.unreadable:
         why = "a prior set's count is not readable in the record: " + "; ".join(d.unreadable)
@@ -178,42 +187,49 @@ def _fill_decl(text: str, d: DeclDecision) -> str:
     return text
 
 
-def strip_decl(doc: str) -> tuple[str, bool]:
-    """Remove a model-written declaration: from its title line to the proof of
-    service or the next heading."""
-    lines, out, skip, removed = doc.splitlines(), [], False, False
-    for ln in lines:
-        if skip and (_heading(ln) or POS_LINE.search(ln)):
-            skip = False
-        if not skip and DECL_LINE.search(ln) and (_heading(ln) or ln.strip().startswith("**")):
-            skip, removed = True, True
-            continue
-        if not skip:
-            out.append(ln)
-    return "\n".join(out), removed
+def strip_attachments(doc: str) -> tuple[str, bool]:
+    """Remove a model-written declaration or proof of service: from the first
+    title line of either (a heading or a bold-only line) to the end of the
+    document, where the job's own attachments go. The drafter's output ends at
+    the signature block (a set) or the verification (responses)."""
+    lines = doc.splitlines()
+    for i, ln in enumerate(lines):
+        titled = _heading(ln) or ln.strip().startswith("**")
+        if titled and (DECL_LINE.search(ln) or POS_LINE.search(ln)):
+            return "\n".join(lines[:i]).rstrip() + "\n", True
+    return doc, False
 
 
-def attach_decl(doc: str, cls: str, firm: Any, digest: str) -> tuple[str, list[str]]:
-    if cls != "discovery_set":
+def attach(doc: str, cls: str, firm: Any, digest: str) -> tuple[str, list[str]]:
+    """The served attachments, appended by the job in the order the firm serves
+    them: the document, then the section 2030.050 declaration (a special
+    interrogatory set over the cumulative limit), then the proof of service
+    (every discovery set and response). Authoring comments are stripped; every
+    ``{{FILL: ... | at service}}`` slot stays verbatim for the person serving.
+    Appended after the audit and the gate: the firm's fixed text is never
+    audited."""
+    if cls not in DISCOVERY:
         return doc, []
-    doc, removed = strip_decl(doc)
-    notes = ["removed a model-written section 2030.050 declaration; the job attaches the firm's"] if removed else []
-    d = decl_decision(doc, digest)
-    if not d.attach:
-        if d.this_set:
+    doc, removed = strip_attachments(doc)
+    notes = ["removed a model-written declaration or proof of service; the job attaches the firm's"] if removed else []
+    parts = [doc.rstrip()]
+    if cls == "discovery_set":
+        d = decl_decision(doc, digest)
+        if d.attach:
+            parts.append(_fill_decl(firm.attachment("decl_2030_050"), d, doc))
+            why = (
+                f"{d.total} special interrogatories to this party ({d.this_set} in this set, {d.prior_special} before)"
+            )
+            if d.unreadable:
+                why += "; a prior count is not readable, so paragraph 4 is left to the attorney"
+            notes.append(f"section 2030.050 declaration attached: {why}")
+        elif d.this_set:
             notes.append(
                 f"section 2030.050: {d.total} special interrogatories to this party ({d.this_set} in this set); no declaration"
             )
-        return doc, notes
-    decl = _fill_decl(firm.attachment("decl_2030_050"), d)
-    lines = doc.splitlines()
-    at = next((i for i, ln in enumerate(lines) if POS_LINE.search(ln)), len(lines))
-    doc = "\n".join([*lines[:at], "", decl, "", *lines[at:]])
-    why = f"{d.total} special interrogatories to this party ({d.this_set} in this set, {d.prior_special} before)"
-    if d.unreadable:
-        why += "; a prior count is not readable, so paragraph 4 is left to the attorney"
-    notes.append(f"section 2030.050 declaration attached: {why}")
-    return doc, notes
+    parts.append(COMMENT.sub("", firm.attachment("pos")).strip())
+    notes.append("the firm's proof of service is attached; its at-service slots are for the person serving")
+    return "\n\n".join(parts) + "\n", notes
 
 
 # ---- reserved judgment ------------------------------------------------------------------

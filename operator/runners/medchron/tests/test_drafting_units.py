@@ -249,13 +249,13 @@ def test_the_declaration_rule_is_cumulative_per_responding_party(n, lines, attac
 
 class _Firm:
     def attachment(self, key: str) -> str:
-        from drafting_testkit import DECL
+        from drafting_testkit import DECL, POS
 
-        return DECL
+        return {"decl_2030_050": DECL, "pos": POS}[key]
 
 
 def test_the_declaration_is_attached_before_the_proof_of_service_with_its_counts_filled():
-    doc, notes = render.attach_decl(_set(20), "discovery_set", _Firm(), _digest(PRIOR20))
+    doc, notes = render.attach(_set(20), "discovery_set", _Firm(), _digest(PRIOR20))
     assert doc.index("DECLARATION FOR ADDITIONAL DISCOVERY") < doc.index("PROOF OF SERVICE")
     assert "authoring comment" not in doc
     assert "a total of 20 interrogatories" in doc and "contains 20 specially" in doc
@@ -263,18 +263,34 @@ def test_the_declaration_is_attached_before_the_proof_of_service_with_its_counts
 
 
 def test_an_unreadable_prior_count_leaves_paragraph_4_to_the_attorney():
-    doc, notes = render.attach_decl(_set(20), "discovery_set", _Firm(), _digest(UNREADABLE))
+    doc, notes = render.attach(_set(20), "discovery_set", _Firm(), _digest(UNREADABLE))
     assert "{{ATTORNEY: a prior set's count is not readable" in doc and "{{FILL: number of interrogatories" not in doc
     assert any("paragraph 4 is left to the attorney" in n for n in notes)
 
 
-def test_a_model_written_declaration_is_removed_and_none_attached_under_the_limit():
+def test_a_model_written_declaration_and_proof_of_service_are_replaced_by_the_firms():
     model = _set(5).replace(
         "**PROOF OF SERVICE**", "**DECLARATION FOR ADDITIONAL DISCOVERY**\n\nI declare.\n\n**PROOF OF SERVICE**"
     )
-    doc, notes = render.attach_decl(model, "discovery_set", _Firm(), _digest())
-    assert "DECLARATION" not in doc and "PROOF OF SERVICE" in doc
+    doc, notes = render.attach(model, "discovery_set", _Firm(), _digest())
+    assert "DECLARATION" not in doc and "I declare." not in doc and "Served." not in doc
+    assert doc.count("PROOF OF SERVICE") == 1 and "# PROOF OF SERVICE" in doc
     assert notes[0].startswith("removed a model-written")
+
+
+@pytest.mark.parametrize("cls", ["discovery_set", "discovery_response"])
+def test_the_job_appends_the_proof_of_service_last_with_at_service_slots_verbatim(cls):
+    body = "| | |\n| --- | --- |\n| RESPONDING PARTY: | DELTA EXAMPLE |\n\nSignature block.\n"
+    doc, notes = render.attach(body, cls, _Firm(), _digest())
+    assert doc.rstrip().endswith("I served the foregoing document.")
+    assert doc.index("Signature block.") < doc.index("# PROOF OF SERVICE")
+    assert "`{{FILL: date of service | at service}}`" in doc and "authoring comment" not in doc
+    assert render.attach(body, "memo", _Firm(), "") == (body, [])
+
+
+def test_order_is_document_then_declaration_then_proof_of_service():
+    doc, _ = render.attach(_set(36).split("**PROOF OF SERVICE**")[0], "discovery_set", _Firm(), _digest())
+    assert doc.index("SPECIAL INTERROGATORY NO. 36") < doc.index("# DECLARATION") < doc.index("# PROOF OF SERVICE")
 
 
 def test_the_drafters_refusal_and_the_notes_split():

@@ -35,13 +35,13 @@ SECTIONS = [
 ]
 DECL = """<!-- authoring comment that must never reach the document -->
 
-**DECLARATION FOR ADDITIONAL DISCOVERY**
+# DECLARATION FOR ADDITIONAL DISCOVERY (CODE CIV. PROC. § 2030.050)
 
 4. I have previously propounded a total of `{{FILL: number of interrogatories previously propounded to this party, form and special | prior sets}}` interrogatories to this party, of which `{{FILL: number of those that were not official form interrogatories | prior sets}}` were not official form interrogatories.
 
 5. This set contains `{{FILL: number of special interrogatories in this set | the count of labeled requests}}` specially prepared interrogatories.
 """
-POS = "**PROOF OF SERVICE**\n\nOn {{FILL: date of service | at service}}, I served the foregoing document.\n"
+POS = "<!-- authoring comment -->\n\n# PROOF OF SERVICE\n\nOn `{{FILL: date of service | at service}}`, I served the foregoing document.\n"
 
 
 def firm_data(**over: Any) -> dict[str, Any]:

@@ -194,6 +194,10 @@ def check_discovery(doc: Any, cls: str, fmt: dict[str, Any], res: Result, digest
     if not any("PROOF OF SERVICE" in t.upper() for t in texts):
         res.fails.append("attachments: proof of service missing")
     has_decl = any(DECL_LINE.search(t) for t in texts)
+    pos_at = next((i for i, t in enumerate(texts) if "PROOF OF SERVICE" in t.upper()), None)
+    decl_at = next((i for i, t in enumerate(texts) if DECL_LINE.search(t)), None)
+    if pos_at is not None and decl_at is not None and decl_at > pos_at:
+        res.fails.append("attachments: the declaration must precede the proof of service")
     if cls == "discovery_set":
         if not any(t.strip().strip(":").upper() == "DEFINITIONS" for t in texts):
             res.fails.append("definitions: no Definitions section")

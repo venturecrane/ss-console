@@ -194,7 +194,7 @@ class Drafter:
     # ---- compose ---------------------------------------------------------------------
     def compose_system(self) -> str:
         blocks = [
-            "## THE ATTORNEY'S HOUSE STYLE (binding)\n\n" + self.firm.style,
+            "## THE HOUSE STYLE (the attorney's own drafting instructions; binding)\n\n" + self.firm.style,
             "## THE SKELETON (structure is fixed; fill it)\n\n" + self.firm.skeleton(self.cls),
             self.firm.prompt(self.cls, "compose"),
         ]

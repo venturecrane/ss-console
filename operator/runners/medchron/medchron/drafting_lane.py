@@ -167,7 +167,7 @@ class DraftingLane(Daemon):
         outcomes = verdict_mod.read(self.job_dir(job_id), out)
         v = outcomes[0] if outcomes and isinstance(outcomes[0], dict) else None
         if v is None:
-            state, v = "failed", {"reason": f"the runner exited {code} without a verdict", "stage": None}
+            state, v = "failed", {"reason": f"no_verdict: the runner exited {code} without a verdict", "stage": None}
         else:
             state = {"delivered": "delivered", "held": "held"}.get(str(v.get("outcome")), "failed")
         cents = int(round(float(v.get("dollars") or 0) * 100))

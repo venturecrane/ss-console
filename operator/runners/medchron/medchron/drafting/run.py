@@ -74,6 +74,28 @@ CONDENSE_PROMPT = (
 )
 
 
+#: Every reason the runner records starts with a short code and ": " (SMD's
+#: request card shows the leading code; DELIVER relays the sentence after it
+#: for a held job). Never an exception's own text first: it can start with a
+#: document name.
+REASON_CODES = (
+    "request_incomplete",
+    "gate_refused",
+    "format_check",
+    "record_unreadable",
+    "audit_unsettled",
+    "destination_mismatch",
+    "destination_unauthored",
+    "no_readable_documents",
+    "filing_refused",
+    "stage_unfinished",
+    "limit",
+    "no_verdict",
+    "unexpected",
+)
+REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
+
+
 class DraftingHold(RuntimeError):
     """The file or the request needs a person: held, final, the firm is told."""
 
@@ -253,26 +275,34 @@ class DraftingRun:
     def _check_facts(self) -> None:
         errs = facts_mod.blocking_errors(self._json("facts.json"))
         if errs:
-            raise DraftingFailed("the matter record could not be read in full: " + "; ".join(errs)[:400])
+            raise DraftingFailed(
+                "record_unreadable: the matter record could not be read in full: " + "; ".join(errs)[:400]
+            )
 
     def _destination(self) -> None:
         job = self.job
         if facts_mod.matter_number(self.seat, job.matter_id) != job.matter_number:
-            raise DraftingHold(f"the matter id does not carry matter number {job.matter_number}; nothing was read")
+            raise DraftingHold(
+                f"destination_mismatch: the matter id does not carry matter number {job.matter_number}; nothing was read"
+            )
         if job.file_to_id == job.matter_id:
             return
         if job.file_to_number not in self.firm.rehearsal_matters:
             raise DraftingHold(
-                f"the job files to matter {job.file_to_number}, which is neither the matter it reads nor an "
+                f"destination_unauthored: the job files to matter {job.file_to_number}, which is neither the matter it reads nor an "
                 "authored rehearsal matter; refused"
             )
         if facts_mod.matter_number(self.seat, job.file_to_id) != job.file_to_number:
-            raise DraftingHold(f"the filing destination's id does not carry matter number {job.file_to_number}")
+            raise DraftingHold(
+                f"destination_mismatch: the filing destination's id does not carry matter number {job.file_to_number}"
+            )
 
     def _preflight(self) -> None:
         report = preflight.run(self.data, self.dview, self._json("facts.json"), self.log)
         if not report["documents"]:
-            raise DraftingHold("the matter file has no readable documents to draft from; nothing was spent")
+            raise DraftingHold(
+                "no_readable_documents: the matter file has no readable documents to draft from; nothing was spent"
+            )
 
     def _estimate(self) -> None:
         if self.job.allowance_remaining is not None and self.job.allowance_remaining <= 0 and not self.budget.refresh():
@@ -375,7 +405,7 @@ class DraftingRun:
         d = self._drafter()
         refused = render.needs_attorney(d.compose(digest))
         if refused:
-            raise DraftingHold(f"the request is missing what the draft needs: {refused}")
+            raise DraftingHold(f"request_incomplete: the request is missing what the draft needs: {refused}")
         corpus, version = self._corpus_text(), 1
         result = d.audit(version, digest, corpus)
         while compose.blocking_findings(result) and version <= MAX_REPAIRS:
@@ -387,7 +417,7 @@ class DraftingRun:
         try:
             md, settled = finalpass.settle(md, audit_md)
         except finalpass.Unlocated as exc:
-            raise DraftingFailed(f"the final audit pass could not settle a finding: {exc}") from None
+            raise DraftingFailed(f"audit_unsettled: the final audit pass could not settle a finding: {exc}") from None
         drifts = compose.finding_lines(audit_md, ("DRIFTS", *compose.EXTRA_VERDICTS))
         self._write("final-pass.json", {"version": version, "settled": settled, "drifts": drifts})
         tmp = self.data / f".{FINAL}.tmp"
@@ -408,7 +438,10 @@ class DraftingRun:
             g = gate.run(self.data, self.firm, self.cls, doc)
         if not g["passed"]:
             exc = DraftingHold if any(str(r).startswith(WALL_GATE) for r in g["refusals"]) else DraftingFailed
-            raise exc(f"the drafting gate refused the document ({g['disposition']}): " + "; ".join(g["refusals"])[:400])
+            raise exc(
+                f"gate_refused: the drafting gate refused the document ({g['disposition']}): "
+                + "; ".join(g["refusals"])[:400]
+            )
         self._write("gate.json", {**g, "repairs": log})
         self._done("gate")
         return md
@@ -418,13 +451,15 @@ class DraftingRun:
         if self._is_done("render"):
             return
         doc, end_tables = render.split_notes(md)
-        doc, attached = render.attach_decl(doc, self.cls, self.firm, digest)
+        doc, attached = render.attach(doc, self.cls, self.firm, digest)
         doc, reserved = render.reserve_judgment(doc, self.cls)
         out, nm = deliver.out_dir(self.data), self._names()
         path, report = render.render(doc, self.cls, out / nm["draft"])
         res = format_check.check(path, self.cls, self.firm.data["format"], digest)
         if not res.ok:
-            raise DraftingFailed("the format check refused the rendered document: " + "; ".join(res.fails)[:400])
+            raise DraftingFailed(
+                "format_check: the format check refused the rendered document: " + "; ".join(res.fails)[:400]
+            )
         found = markers(doc)
         notes_md = self._notes_md(found, [*attached, *reserved, *report.get("notes", [])], end_tables)
         notes = deliver.render_plain(notes_md, out, nm["notes"], str(self.firm.get("firm", "display_name")))
@@ -460,9 +495,11 @@ class DraftingRun:
         kw = {} if self.readback_pause is None else {"pause": self.readback_pause}
         rec = deliver.file_to_matter(self.data, self.seat, self.job.file_to_id, self.log, **kw)
         if rec["exit"] == 1:
-            raise DraftingHold(f"filing refused: {rec.get('said') or 'the upload stage refused'}")
+            raise DraftingHold(f"filing_refused: {rec.get('said') or 'the upload stage refused'}")
         if rec["exit"] != 0:
-            raise RuntimeError("the read-back is short after its retries; the files may still be materializing")
+            raise DraftingFailed(
+                "stage_unfinished: file: the read-back is short after its retries; the files may still be materializing"
+            )
         return Verdict(
             "delivered",
             stage="file",
@@ -505,14 +542,22 @@ class DraftingRun:
         try:
             v = self._walk()
         except limits_mod.LimitHold as hold:
-            v = Verdict("failed", stage=hold.setting, reason=hold.reason)
+            v = Verdict("failed", stage=hold.setting, reason=f"limit: {hold.reason}")
         except DraftingHold as h:
             v = Verdict("held", stage=self._current(), reason=str(h))
-        except (DraftingFailed, compose.DraftingError) as exc:
+        except DraftingFailed as exc:
             v = Verdict("failed", stage=self._current(), reason=str(exc))
+        except compose.DraftingError as exc:
+            v = Verdict("failed", stage=self._current(), reason=f"stage_unfinished: {self._current()}: {exc}")
         except Exception as exc:  # noqa: BLE001 - the verdict carries a sentence; the trace goes to the log
             self.log(traceback.format_exc())
-            v = Verdict("failed", stage=self._current(), reason=f"{type(exc).__name__}: {str(exc)[:300]}")
+            v = Verdict(
+                "failed",
+                stage=self._current(),
+                reason=f"unexpected: {type(exc).__name__} at {self._current()}: {str(exc)[:300]}",
+            )
+        if v.reason and not REASON.match(v.reason):  # a missed code is still never client text first
+            v.reason = f"unexpected: {v.reason}"
         v.document_class = self.cls
         v.dollars = round(self.budget.refresh(), 4)
         if (self.data / "caption.json").is_file():

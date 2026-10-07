@@ -116,14 +116,21 @@ def test_the_declaration_check_uses_the_cumulative_rule(tmp_path):
     assert any("declaration required" in f for f in _check(tmp_path, md, "discovery_set", prior).fails)
 
     # attached by the job: passes
+    from drafting_testkit import DECL, POS
+
     class F:
         def attachment(self, k):
-            return "**DECLARATION FOR ADDITIONAL DISCOVERY**\n\nI declare."
+            return {"decl_2030_050": DECL, "pos": POS}[k]
 
-    attached, _ = render.attach_decl(md, "discovery_set", F(), prior)
+    attached, _ = render.attach(md, "discovery_set", F(), prior)
     assert _check(tmp_path, attached, "discovery_set", prior).ok
     # the same document with no prior sets: the declaration is not allowed
     assert any("declaration not allowed" in f for f in _check(tmp_path, attached, "discovery_set", "").fails)
+
+
+def test_a_declaration_after_the_proof_of_service_fails(tmp_path):
+    md = _set(36) + "\n\n# DECLARATION FOR ADDITIONAL DISCOVERY\n\nI declare.\n"
+    assert any("must precede the proof of service" in f for f in _check(tmp_path, md, "discovery_set").fails)
 
 
 def test_a_depo_outline_without_a_page_field_fails(tmp_path, monkeypatch):
