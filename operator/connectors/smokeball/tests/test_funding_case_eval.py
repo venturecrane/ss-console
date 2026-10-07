@@ -62,7 +62,9 @@ def _form(text_names: list[str], check_names: list[str]) -> bytes:
             {
                 NameObject("/Type"): NameObject("/Annot"),
                 NameObject("/Subtype"): NameObject("/Widget"),
-                NameObject("/Rect"): ArrayObject([NumberObject(0), NumberObject(0), NumberObject(10), NumberObject(10)]),
+                NameObject("/Rect"): ArrayObject(
+                    [NumberObject(0), NumberObject(0), NumberObject(10), NumberObject(10)]
+                ),
                 NameObject("/F"): NumberObject(4),
             }
         )
@@ -161,7 +163,12 @@ class _Record:
                 "birthDate": "1990-02-03T00:00:00",
                 "identificationNumber": "000-00-0000",
                 "cell": {"areaCode": "916", "number": "555-0199"},
-                "residentialAddress": {"addressLine1": "1 Test Way", "city": "Exampleton", "state": "CA", "zipCode": "95000"},
+                "residentialAddress": {
+                    "addressLine1": "1 Test Way",
+                    "city": "Exampleton",
+                    "state": "CA",
+                    "zipCode": "95000",
+                },
             }
             if self.home:
                 person["phone"] = {"areaCode": "916", "number": "555-0100"}
@@ -176,7 +183,12 @@ class _Record:
                 "company": {
                     "name": "Other Side Mutual",
                     "phone": {"areaCode": "800", "number": "555-0300"},
-                    "mailingAddress": {"addressLine1": "PO Box 9", "city": "Claimsville", "state": "TX", "zipCode": "75000"},
+                    "mailingAddress": {
+                        "addressLine1": "PO Box 9",
+                        "city": "Claimsville",
+                        "state": "TX",
+                        "zipCode": "75000",
+                    },
                 },
             }
         if path == f"/contacts/{ADJ_3P}":

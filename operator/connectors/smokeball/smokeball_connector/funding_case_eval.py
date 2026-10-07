@@ -176,7 +176,9 @@ def _providers(client: Any, matter_id: str) -> list[str]:
     return names
 
 
-def _carrier(client: Any, layout: dict[str, Any], parties: facts.Parties, *, side: str, client_side: bool) -> dict[str, str]:
+def _carrier(
+    client: Any, layout: dict[str, Any], parties: facts.Parties, *, side: str, client_side: bool
+) -> dict[str, str]:
     """carrier, claim, adjuster, phone (the adjuster's, else the carrier's),
     address and city line for one side. Absent values are absent keys."""
     insurer_id, _ = facts.related_contact(parties, layout, side=side, relationship="Insurer", client_side=client_side)
@@ -188,7 +190,8 @@ def _carrier(client: Any, layout: dict[str, Any], parties: facts.Parties, *, sid
         "carrier": facts.contact_name(insurer) if insurer else None,
         "claim": str(layout.get(CLAIM_KEY.format(side=side)) or "").strip() or None,
         "adjuster": facts.contact_name(adjuster) if adjuster else None,
-        "phone": (_phone_at(adjuster, "phone") if adjuster else None) or (_phone_at(insurer, "phone") if insurer else None),
+        "phone": (_phone_at(adjuster, "phone") if adjuster else None)
+        or (_phone_at(insurer, "phone") if insurer else None),
         "address": parts.get("street") or None,
         "city": _city_line(parts),
     }
@@ -232,7 +235,10 @@ def gather(client: Any, matter_id: str, today: Any) -> tuple[dict[str, str], dic
         put("Client Cell/Pager", _phone_at(me, "cell"))
         put("Client's Date of Birth", _birth_date(me))
     put("Date of Loss", facts.date_of_loss(layout))
-    for prefix, side, client_side in (("Liability", "Defendants", False), ("First Party Insurance", "Plaintiffs", True)):
+    for prefix, side, client_side in (
+        ("Liability", "Defendants", False),
+        ("First Party Insurance", "Plaintiffs", True),
+    ):
         found = _carrier(client, layout, parties, side=side, client_side=client_side)
         put(f"{prefix} Carrier", found.get("carrier"))
         put(f"{prefix} Claim #", found.get("claim"))
@@ -339,4 +345,13 @@ def register(server: Any) -> None:
     server.tool()(render_funding_case_eval)
 
 
-__all__ = ["BOXES", "CHECKS", "DEFAULT_TEMPLATE", "FILE_NAME", "gather", "landed", "register", "render_funding_case_eval"]
+__all__ = [
+    "BOXES",
+    "CHECKS",
+    "DEFAULT_TEMPLATE",
+    "FILE_NAME",
+    "gather",
+    "landed",
+    "register",
+    "render_funding_case_eval",
+]
