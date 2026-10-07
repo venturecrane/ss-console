@@ -163,6 +163,8 @@ VERBS: tuple[Verb, ...] = (
     Verb("demand_allowance", GATEWAY_ROOT_OR_AGENT, demand_verbs.demand_dispatch),
     Verb("demand_job_record", _only(ROOT), demand_verbs.demand_dispatch),
     Verb("demand_job_resume", _only(ROOT), demand_verbs.demand_dispatch),
+    # A NEW job for a finished one, same envelope (digest-checked). Root only.
+    Verb("demand_job_rerun", _only(ROOT), demand_verbs.demand_dispatch),
     # Gateway-only from here down.
     Verb("audit_append", _only(GATEWAY), audit_verbs.audit_append),
     Verb("agentmail_send", _only(GATEWAY), transmit_verbs.agentmail),

@@ -53,6 +53,7 @@ from .demand_ledger import (
     DemandLedger,
     EnvelopeError,
     SubmitRefused,
+    digest,
     validate_envelope,
 )
 from .medchron_ledger import admins_from_customer_yaml, cycle_from_customer_yaml
@@ -80,6 +81,7 @@ REHEARSAL_MATTER_KEY = "rehearsal_matter_id"
 _PACIFIC = ZoneInfo("America/Los_Angeles")
 
 VERBS = (
+    "demand_job_rerun",
     "demand_job_submit",
     "demand_job_status",
     "demand_allowance",
@@ -179,6 +181,8 @@ class DemandVerbs:
             return self._record(request)
         if action == "demand_job_resume":
             return self._resume(request)
+        if action == "demand_job_rerun":
+            return self._rerun(request)
         raise ValueError(f"unsupported demand action: {action}")
 
     # -- allowance ------------------------------------------------------------
@@ -237,7 +241,21 @@ class DemandVerbs:
         return {"ok": True, "jobs": [DemandLedger.project(r) for r in rows]}
 
     # -- submit ---------------------------------------------------------------
-    def _submit(self, request: dict[str, Any]) -> dict[str, Any]:
+    def _filing_target_ok(self, envelope: dict[str, Any], settings: dict[str, Any]) -> bool:
+        """The job files on the matter it reads, or on the authored rehearsal
+        matter: the id in the demand skill's settings (rehearsal_matter_id) AND
+        the number of the firm's own library matter. A right number with a wrong
+        id is refused."""
+        file_to = envelope["file_to"]
+        if file_to is None or file_to["id"] == envelope["matter"]["id"]:
+            return True
+        library = operator_library_number(self.customer_yaml)
+        library_id = str(settings.get(REHEARSAL_MATTER_KEY) or "").strip().lower()
+        return bool(
+            library and library_id and file_to["number"] == library and file_to["id"].strip().lower() == library_id
+        )
+
+    def _submit(self, request: dict[str, Any], supersedes: str | None = None) -> dict[str, Any]:
         def refused(reason: str, **extra: Any) -> dict[str, Any]:
             return {"ok": True, "accepted": False, "reason": reason, **extra}
 
@@ -268,23 +286,11 @@ class DemandVerbs:
                 "a demand may only be requested by one of the firm's Named Administrators, and the "
                 "requester on this submission is not one of them; nothing was queued"
             )
-        file_to = envelope["file_to"]
-        if file_to is not None and file_to["id"] != envelope["matter"]["id"]:
-            # The rehearsal target is AUTHORED by id and by number: the id in the
-            # demand skill's settings (rehearsal_matter_id), the number as the
-            # firm's own library matter. A right number with a wrong id is refused.
-            library = operator_library_number(self.customer_yaml)
-            library_id = str(settings.get(REHEARSAL_MATTER_KEY) or "").strip().lower()
-            if (
-                not library
-                or not library_id
-                or file_to["number"] != library
-                or file_to["id"].strip().lower() != library_id
-            ):
-                return refused(
-                    "a demand is filed on the matter it reads, or on the firm's own authored "
-                    "library matter for a rehearsal; that filing target is neither, so nothing was queued"
-                )
+        if not self._filing_target_ok(envelope, settings):
+            return refused(
+                "a demand is filed on the matter it reads, or on the firm's own authored "
+                "library matter for a rehearsal; that filing target is neither, so nothing was queued"
+            )
         if state["remaining"] <= 0:
             return refused(
                 f"this cycle's demand allowance is spent ({state['used']} of {state['allowance']} in "
@@ -295,7 +301,11 @@ class DemandVerbs:
             # ledger's write transaction: the checks above are for a readable
             # answer, these are the ones two concurrent submits cannot both pass.
             job_id = self._db.submit(
-                envelope, allowance=state["allowance"], anchor_day=anchor, effective_from=effective_from
+                envelope,
+                allowance=state["allowance"],
+                anchor_day=anchor,
+                effective_from=effective_from,
+                supersedes=supersedes,
             )
         except SubmitRefused as exc:
             return refused(f"{exc}; nothing new was queued", **({"job_id": exc.job_id} if exc.job_id else {}))
@@ -309,6 +319,7 @@ class DemandVerbs:
                 "allowance_remaining": state["remaining"],
                 "requested_by": envelope["requested_by"],
                 "request_ref": envelope["request_ref"],
+                **({"supersedes": supersedes} if supersedes else {}),
             },
             envelope["matter"]["id"],
         )
@@ -349,6 +360,36 @@ class DemandVerbs:
             meta["coverage_report"] = delivery.get("coverage_report") is True
         self._audit(AUDIT_TYPES[state], meta, row["matter_id"])
         return {"ok": True, "job": DemandLedger.project(row)}
+
+    def _rerun(self, request: dict[str, Any]) -> dict[str, Any]:
+        """ROOT ONLY: a NEW job, with the same envelope, for a finished one.
+
+        The broker never holds the request text (the runner moved the queued
+        envelope into its root-only job dir), so root passes the envelope back
+        and the broker proves it is the SAME envelope: its digest must equal
+        the finished job's ``envelope_digest``. The new job names the job it
+        supersedes, gets its own id (so its completion reply binds afresh in
+        the requester's thread), and passes every submit check: the lane, the
+        allowance, the requester, nothing unfinished on the matter."""
+
+        def refused(reason: str, **extra: Any) -> dict[str, Any]:
+            return {"ok": True, "accepted": False, "reason": reason, **extra}
+
+        job_id = str(request.get("job_id") or "")
+        row = self._db.read(job_id)
+        if row is None:
+            raise ValueError(f"no such job {job_id}")
+        if row["state"] not in ("delivered", "failed", "held"):
+            return refused(f"job {job_id} is {row['state']}; only a finished job is re-run")
+        raw = request.get("envelope")
+        keys = ("matter", "file_to", "requested_by", "request_ref", "request_text", "deliverables")
+        try:
+            env = validate_envelope({k: raw.get(k) for k in keys} if isinstance(raw, dict) else {})
+        except EnvelopeError as exc:
+            return refused(str(exc))
+        if digest(env) != row["envelope_digest"]:
+            return refused(f"that envelope is not job {job_id}'s; a re-run carries the original envelope unchanged")
+        return self._submit({"envelope": env}, supersedes=job_id)
 
     def _resume(self, request: dict[str, Any]) -> dict[str, Any]:
         """Write the resume marker the runner daemon reads; the row moves when
