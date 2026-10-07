@@ -16,7 +16,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from test_demand_verbs import call, seat, submit  # noqa: F401 - the shared fixture
+from test_demand_verbs import call, seat, submit  # noqa: F401 - pytest finds the shared seat fixture by this import
 
 REF = "<CA1x2y3z@mail.firm.example>"
 
