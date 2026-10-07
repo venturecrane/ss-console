@@ -1499,7 +1499,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // so SMD is alerted and the client is told nothing.
     // fb31b666 -> 6731de6a (overlay#428), 2026-10-07: request cards. The seat records each person's
     // request and posts replied / no_reply / job_done cards to /api/internal/operator-request-card.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="6731de6a086aa45b3bf5c3f9aa2e8de697f6bdbd"')
+    // 6731de6a -> 0415efb1 (overlay#429), 2026-10-07: drafting_job_submit/status/allowance, the drafting
+    // wake in the reply binding (send tools refused, binds only its own drafting job), and the drafting
+    // lane on request cards.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="0415efb1b33ec139daf992a7a037791e5c81368e"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

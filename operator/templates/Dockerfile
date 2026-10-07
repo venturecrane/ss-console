@@ -1118,7 +1118,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # A heading line, a document's table row, and a quoted record title keep their
 # capitals. shared/output_checklist.py and tests only; no tracked twin moves;
 # schemas.py untouched.
-ARG OVERLAY_REF="6731de6a086aa45b3bf5c3f9aa2e8de697f6bdbd"
+# 2026-10-07 (0415efb1, the overlay #429 merge commit). The drafting lane's
+# seat half: drafting_job_submit / drafting_job_status / drafting_allowance
+# (requester and request taken from the verified inbound), the drafting wake in
+# the reply binding (no send tool, binds only its own drafting job, a failed
+# job's status is a shortfall), and the drafting lane on request cards. Pairs
+# with ss-console #3092 (broker) and #3093 (runner).
+ARG OVERLAY_REF="0415efb1b33ec139daf992a7a037791e5c81368e"
 
 ARG CUSTOMER_SLUG=customer-zero
 
