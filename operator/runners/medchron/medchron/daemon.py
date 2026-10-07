@@ -153,7 +153,8 @@ class Daemon:
     gate_url: str = field(default_factory=lambda: os.environ.get(GATE_URL_ENV) or DEFAULT_GATE_URL)
     wake_secret: str = field(default_factory=lambda: os.environ.get(WAKE_SECRET_ENV, ""))
     #: What a lane names itself by: the wake's handoff id prefix, the memory
-    #: cgroup, and the heartbeat file. The demand lane overrides them.
+    #: cgroup, and the heartbeat file. The demand and drafting lanes override
+    #: them (the drafting lane also joins the demand lane's memory cgroup).
     LANE = "medchron"
     HEARTBEAT = "heartbeat"
 
@@ -628,6 +629,12 @@ def main(argv: list[str] | None = None) -> int:
     from .demand_lane import start_lane  # its own slot: a demand never waits on a chronology, nor the reverse
 
     start_lane(d, stop=lambda: stopped["flag"], poll_seconds=poll)
+    try:  # the third lane: a failure to start it must never stop the daemon or the demand lane
+        from .drafting_lane import start_lane as start_drafting_lane
+
+        start_drafting_lane(d, stop=lambda: stopped["flag"], poll_seconds=poll)
+    except Exception:  # logged with its trace; the chronology and demand lanes keep running
+        logger.exception("drafting lane not started")
     d.run_forever(stop=lambda: stopped["flag"], poll_seconds=poll)
     return 0
 

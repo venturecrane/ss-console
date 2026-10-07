@@ -11,7 +11,8 @@ drafting-discipline.md`` Part IV):
 * ``#`` / ``##`` / ``###`` headings (the heading TEXT is content: a model writes
   ``## I. Introduction`` and the numeral stays, because the body cross-references
   it; the renderer styles the level and never renumbers),
-* paragraphs (blank-line separated) with ``**bold**`` / ``*italic*`` runs,
+* paragraphs (blank-line separated) with ``**bold**`` / ``*italic*`` /
+  ``***bold italic***`` runs,
 * ``-`` / ``*`` bullets,
 * literal ``1.`` numbered items (the number is content; discovery item numbers
   come from the propounded set, never from a counter). The one exception is
@@ -42,6 +43,7 @@ from dataclasses import dataclass, field
 # Well-formed markers only; the content gate runs before the renderer so every
 # ``{{`` has its ``}}`` by the time text reaches this module.
 MARKER_RE = re.compile(r"\{\{.*?\}\}", re.DOTALL)
+_CODE_MARKER_RE = re.compile(r"`(\{\{.*?\}\})`", re.DOTALL)
 _HEADING_RE = re.compile(r"^(#{1,3})\s+(.*)$")
 _BULLET_RE = re.compile(r"^[-*]\s+(.*)$")
 _NUMBERED_RE = re.compile(r"^(\d+[.)])\s+(.*)$")
@@ -51,7 +53,7 @@ _TABLE_SEP_RE = re.compile(r"^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?$")
 # skeletons wrap markers in them (`` `{{FILL: ...}}` ``) for human readers, and a
 # Word document must not carry literal backticks. A code span renders as its
 # plain text; nothing inside it is styled.
-_EMPHASIS_RE = re.compile(r"(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)")
+_EMPHASIS_RE = re.compile(r"(\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)")
 
 # Private-use placeholders stand in for markers while cells/emphasis are split.
 _PLACEHOLDER = "{}"
@@ -67,6 +69,10 @@ class Run:
     bold: bool = False
     italic: bool = False
     marker: bool = False
+    #: For a marker run only: the emphasis it was WRITTEN inside (``**{{...}}**``).
+    #: Information for layout decisions (a bold court line); never applied.
+    within_bold: bool = False
+    within_italic: bool = False
 
 
 @dataclass(frozen=True)
@@ -124,7 +130,10 @@ class _MarkerStash:
             self.markers.append(m.group(0))
             return _PLACEHOLDER.format(len(self.markers) - 1)
 
-        return MARKER_RE.sub(_sub, text)
+        # A marker wrapped in a code span (the skeletons' `` `{{FILL: ...}}` ``)
+        # is stashed WITH its backticks, so a span inside emphasis
+        # (``**`{{...}}`**``) cannot leave literal backticks in the document.
+        return MARKER_RE.sub(_sub, _CODE_MARKER_RE.sub(lambda m: m.group(1), text))
 
     def runs(self, text: str) -> tuple[Run, ...]:
         """Emphasis-split ``text`` (which may hold placeholders) into runs,
@@ -138,7 +147,11 @@ class _MarkerStash:
             for m in _PLACEHOLDER_RE.finditer(run.text):
                 if m.start() > pos:
                     out.append(Run(run.text[pos : m.start()], run.bold, run.italic))
-                out.append(Run(self.markers[int(m.group(1))], marker=True))
+                # Unstyled when rendered; the emphasis it was written inside is
+                # kept as information (a bold-wrapped court line is still one).
+                out.append(
+                    Run(self.markers[int(m.group(1))], marker=True, within_bold=run.bold, within_italic=run.italic)
+                )
                 pos = m.end()
             if pos < len(run.text):
                 out.append(Run(run.text[pos:], run.bold, run.italic))
@@ -150,7 +163,9 @@ def _emphasis_runs(text: str) -> list[Run]:
     for part in _EMPHASIS_RE.split(text):
         if not part:
             continue
-        if part.startswith("**") and part.endswith("**") and len(part) > 4:
+        if part.startswith("***") and part.endswith("***") and len(part) > 6:
+            runs.append(Run(part[3:-3], bold=True, italic=True))
+        elif part.startswith("**") and part.endswith("**") and len(part) > 4:
             runs.append(Run(part[2:-2], bold=True))
         elif part.startswith("*") and part.endswith("*") and len(part) > 2:
             runs.append(Run(part[1:-1], italic=True))

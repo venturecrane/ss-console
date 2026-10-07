@@ -1548,7 +1548,7 @@ def render_docx_template(
 
     **Firm format (``document_class``).** Pass ``document_class`` (one of
     ``discovery_set``, ``discovery_response``, ``demand_letter``,
-    ``mediation_brief``, ``memo``, ``letter``) and the .docx is rendered INTO the
+    ``mediation_brief``, ``memo``, ``depo_outline``, ``letter``) and the .docx is rendered INTO the
     firm's own Word template for that class when one is authored in the firm's
     Document Library (resolved here, deterministically, from the seat's
     customer.yaml: you never pick a template), else onto the SMD starter base
@@ -1775,7 +1775,7 @@ def render_docx_draft(
 
     **Firm format (``document_class``).** Pass ``document_class`` (one of
     ``discovery_set``, ``discovery_response``, ``demand_letter``,
-    ``mediation_brief``, ``memo``, ``letter``) and the .docx is rendered INTO the
+    ``mediation_brief``, ``memo``, ``depo_outline``, ``letter``) and the .docx is rendered INTO the
     firm's own Word template for that class when one is authored in the firm's
     Document Library (resolved here, deterministically, from the seat's
     customer.yaml: you never pick a template), else onto the SMD starter base
