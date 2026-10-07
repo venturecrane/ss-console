@@ -213,3 +213,23 @@ def test_an_e_authorization_order_never_carries_a_file_or_a_full_address() -> No
         order["order_ref"] = act_records_order.order_ref(order)
         with pytest.raises(EstablishmentValidationError):
             act_records_order.require_order({"order": order})
+
+
+@pytest.mark.parametrize("cid", ["neo_77456", "npi_1000000001", "00000000-0000-4000-8000-000000000001", "552211"])
+def test_the_vendors_directory_id_shapes_render(cid) -> None:
+    # 2026-10-07: get_locations answers neo_/npi_ prefixed ids and UUIDs; a
+    # digits-only check refused every order built from a directory pick
+    order = _order(authorization="e_auth", esign_to="p***@example.com", hipaa_file_id=None, hipaa_file_name=None)
+    order["locations"] = [{**order["locations"][0], "custodian_id": cid}]
+    order["order_ref"] = act_records_order.order_ref(order)
+    line = act_records_order.order_readback(act_records_order.require_order({"order": order}))
+    assert f"directory id {cid}" in line
+
+
+@pytest.mark.parametrize("cid", ["../x", "neo 1", "[act x]", "a" * 80, "neo_1\n"])
+def test_a_custodian_id_that_is_not_a_directory_token_is_refused(cid) -> None:
+    order = _order(authorization="e_auth", esign_to="p***@example.com", hipaa_file_id=None, hipaa_file_name=None)
+    order["locations"] = [{**order["locations"][0], "custodian_id": cid}]
+    order["order_ref"] = act_records_order.order_ref(order)
+    with pytest.raises(EstablishmentValidationError):
+        act_records_order.require_order({"order": order})

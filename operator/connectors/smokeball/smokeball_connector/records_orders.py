@@ -90,7 +90,9 @@ LOCATION_KEYS = ("custodian_id", "custodian_name", "custodian_address", "record_
 _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,}$")
 _HIPAA_NAME = re.compile(r"hipaa|authori[sz]ation", re.IGNORECASE)
 _FILE_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
-_CUSTODIAN_ID = re.compile(r"^\d{1,20}$")
+#: The vendor's directory id: an opaque token: digits, ``neo_<digits>``, ``npi_<digits>``
+#: or a UUID (each answered by get_locations, observed live 2026-10-07).
+_CUSTODIAN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 _PAGE = 500
 _MAX_PAGES = 20
 
@@ -141,6 +143,10 @@ def service_range(spec: dict[str, Any], default: dict[str, Any], today: date) ->
         )
     if start > end or end > today:
         raise OrderRefused("the date range must start before it ends and end no later than today. Nothing was ordered.")
+    # no record request reaches further back than MAX_YEARS, however it was asked
+    start = max(start, _years_back(today, MAX_YEARS))
+    if start > end:
+        raise OrderRefused(f"the date range ends more than {MAX_YEARS} years ago. Nothing was ordered.")
     return start.isoformat(), end.isoformat()
 
 
@@ -274,8 +280,8 @@ def resolve_facility(yc: Any, facility: dict[str, Any]) -> tuple[dict[str, Any] 
     found = [c for c in (_candidate(r) for r in rows) if c is not None]
     wanted = str(facility.get("custodian_id") or "").strip()
     if wanted:
-        if not _CUSTODIAN_ID.match(wanted):
-            raise OrderRefused(f"custodian_id {wanted!r} is not a the vendor custodian id. Nothing was ordered.")
+        if not _CUSTODIAN_ID.fullmatch(wanted):
+            raise OrderRefused(f"custodian_id {wanted!r} is not a vendor custodian id. Nothing was ordered.")
         found = [c for c in found if c["custodian_id"] == wanted]
     if len(found) == 1:
         c = found[0]

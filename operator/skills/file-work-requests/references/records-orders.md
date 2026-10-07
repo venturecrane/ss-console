@@ -79,6 +79,45 @@ When she answers a `needs_choice` question, prepare again with what she chose:
 the facility's `custodian_id` from the candidates she picked, or
 `new_custodian: true` with the `address` she gave, or `hipaa_file_id`.
 
+## Turn 1, from the gap audit: "order the missing records"
+
+When she answers a demand package (the gap audit the Operator filed) with
+"order the missing records", "order the records the gap audit lists" or the
+like, she has not named facilities: the audit has. Call
+`prepare_records_order` once with `matter_id`, `order_by_email` (her address)
+and `from_gap_audit: true`, and no `facilities`. The connector reads the
+matter's newest filed Gap Audit, keeps only the rows a records vendor can fill
+(records, itemized bills, imaging, prior look-backs addressed to a medical
+provider), locates each provider from the file's own bills and records and the
+vendor's directory, and prepares the orders. It never orders.
+
+Read the result:
+
+- `orders`: at most ONE order per matter, so the reply carries one `[act ...]`
+  line and her one yes places it. A `ready` order goes to `place_records_order`
+  unchanged, exactly as in the table above; put its line in the reply character
+  for character.
+- `merged`: say each line as written ("A and B are one location at the vendor
+  (C); ordered once"), so she knows why the order has fewer facilities than
+  the audit has providers.
+- `after_this_order`: an order holds ten facilities; name these as what is
+  ordered next, once this order is placed.
+- `would_order`: what will be ordered, one line per custodian with its record
+  types and dates. Always show it, even when nothing is ready, so she sees what
+  the audit turns into.
+- `question`: at most ONE question, already written. Ask it as written, once, at
+  the end. Never turn it into a list and never add questions of your own.
+- an order with `missing_client_facts`: say the file need plainly, then the
+  list. For example: `<client>'s Smokeball contact has no Social Security
+number, which <vendor_name> requires; once it is on the contact, reply "order
+the missing records" again.`
+- `rows_not_orderable`: do not recite them. The gap audit already lists them for
+  the firm (a question to the client, a payer's paper, a lien, a confirmation).
+
+To act on her answer, do not prepare from the gap audit again: call
+`prepare_records_order` with `facilities` for the ones she settled (the `custodian_id` she picked, or `new_custodian: true` with the
+address she sent), exactly as in "When she answers a `needs_choice` question".
+
 ## Turn 2: her yes
 
 The seat tells you when her reply confirms the order line and which call to
