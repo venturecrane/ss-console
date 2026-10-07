@@ -29,7 +29,7 @@ def _set(n: int = 3, pos: bool = True, definitions: bool = True) -> str:
     items = "\n\n".join(f"**SPECIAL INTERROGATORY NO. {i}**\n\nState each fact." for i in range(1, n + 1))
     return (
         "| | |\n| --- | --- |\n| PROPOUNDING PARTY: | GAMMA EXAMPLE |\n| RESPONDING PARTY: | DELTA EXAMPLE |\n\n"
-        + ("# DEFINITIONS\n\n\"INCIDENT\" means the collision.\n\n" if definitions else "")
+        + ('# DEFINITIONS\n\n"INCIDENT" means the collision.\n\n' if definitions else "")
         + items
         + ("\n\n**PROOF OF SERVICE**\n\nServed.\n" if pos else "\n")
     )
@@ -81,7 +81,10 @@ def test_a_single_spaced_brief_body_fails(tmp_path, monkeypatch):
 def test_sections_out_of_order_or_missing_fail(tmp_path):
     swapped = [SECTIONS[1], SECTIONS[0], *SECTIONS[2:]]
     assert any("out of the authored order" in f for f in _check(tmp_path, _brief(swapped), "mediation_brief").fails)
-    assert any("CAUSATION" in f for f in _check(tmp_path, _brief([s for s in SECTIONS if "CAUSATION" not in s]), "mediation_brief").fails)
+    assert any(
+        "CAUSATION" in f
+        for f in _check(tmp_path, _brief([s for s in SECTIONS if "CAUSATION" not in s]), "mediation_brief").fails
+    )
 
 
 def test_a_settlement_figure_outside_a_marker_fails(tmp_path):
@@ -111,6 +114,7 @@ def test_the_declaration_check_uses_the_cumulative_rule(tmp_path):
     md = _set(20)
     # 20 in this set + 20 before: the declaration is required, and absent here
     assert any("declaration required" in f for f in _check(tmp_path, md, "discovery_set", prior).fails)
+
     # attached by the job: passes
     class F:
         def attachment(self, k):

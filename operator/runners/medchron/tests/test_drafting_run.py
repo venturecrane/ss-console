@@ -56,7 +56,11 @@ def test_a_mediation_brief_runs_pull_to_read_back(tmp_path, pricing):
     assert seat.created[0]["name"].endswith(f"(Operator {r.job.job_id[-6:]})")
     assert v.document_class == "mediation_brief" and v.dollars > 0
     # the charges table reached compose, computed by code, with its source
-    compose = next(c for c in client.calls if "COMPOSE-PROMPT" in json.dumps(c["system"]) and "REPAIR" not in json.dumps(c["system"]))
+    compose = next(
+        c
+        for c in client.calls
+        if "COMPOSE-PROMPT" in json.dumps(c["system"]) and "REPAIR" not in json.dumps(c["system"])
+    )
     user = compose["messages"][0]["content"]
     assert "THE CHARGES TABLE" in user and "$1,200.00 (source: ER bill 1-15-26)" in user
     assert "THE ATTORNEY'S REQUEST" in user and "THE CAPTION (verbatim from Complaint 2-1-26" in user
@@ -101,7 +105,14 @@ def test_a_destination_that_is_not_the_matter_or_a_rehearsal_matter_holds(tmp_pa
 
 def test_a_rehearsal_files_to_the_authored_library_matter(tmp_path, pricing):
     seat = seat_with(standard_docs())
-    _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient(draft="# Question\n\nA memo (ER record 1-15-26, p. 1)."), cls="memo", file_to=True)
+    _r, v, _ = _run(
+        tmp_path,
+        pricing,
+        seat,
+        ScriptedClient(draft="# Question\n\nA memo (ER record 1-15-26, p. 1)."),
+        cls="memo",
+        file_to=True,
+    )
     assert v.outcome == "delivered", v.reason
 
 
@@ -125,6 +136,8 @@ def test_the_cli_draft_command_writes_the_verdict(tmp_path, pricing, monkeypatch
     monkeypatch.setattr(run_mod.DraftingRun, "run", lambda self: run_mod.Verdict("failed", stage="pull", reason="x"))
     make_inputs(tmp_path / "inputs")
     jd = make_job(tmp_path / "job")
-    code = cli.main(["draft", str(jd), "--inputs", str(tmp_path / "inputs"), "--pricing", str(pricing), "--redo", "pull"])
+    code = cli.main(
+        ["draft", str(jd), "--inputs", str(tmp_path / "inputs"), "--pricing", str(pricing), "--redo", "pull"]
+    )
     assert code == 1
     assert json.loads((jd / "verdict.json").read_text())[0]["outcome"] == "failed"

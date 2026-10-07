@@ -13,15 +13,6 @@ from .docx_format_types import DEFAULT_FONT, DEFAULT_SIZE_PT
 
 # ---- Document classes and their styling rules --------------------------------
 
-DOCUMENT_CLASSES = (
-    "discovery_set",
-    "discovery_response",
-    "demand_letter",
-    "mediation_brief",
-    "memo",
-    "depo_outline",
-    "letter",
-)
 
 # Label shapes the renderer STYLES (it never writes them). Anchored at line
 # start, whole-line by construction of the skeletons ("**SPECIAL INTERROGATORY

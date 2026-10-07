@@ -32,9 +32,13 @@ from typing import Any
 PLEADING_NAME = re.compile(r"(?i)\b(first |second |third |fourth )?(amended )?complaint\b")
 NOTICE_NAME = re.compile(r"(?i)\b(notice|minute order|order|summons)\b")
 CASE_NO = re.compile(r"(?i)\bcase\s+(?:no|number)\.?\s*:?\s*([A-Z0-9][A-Z0-9-]{4,30})")
-COURT = re.compile(r"(?i)(superior court of (?:the state of )?california)[,\s]*\n?\s*(?:for the )?(county of [a-z ]{3,40})")
+COURT = re.compile(
+    r"(?i)(superior court of (?:the state of )?california)[,\s]*\n?\s*(?:for the )?(county of [a-z ]{3,40})"
+)
 PLAINTIFF = re.compile(r"(?m)^[^\S\n]*([A-Z][A-Za-z .,'&-]{2,80}?),?\s*(?:an individual,?\s*)?\n?\s*Plaintiffs?\b")
-DEFENDANT = re.compile(r"(?m)^[^\S\n]*v[s]?\.\s*\n?\s*([A-Z][A-Za-z .,'&-]{2,80}?),?\s*(?:an individual,?\s*)?\n?\s*Defendants?\b")
+DEFENDANT = re.compile(
+    r"(?m)^[^\S\n]*v[s]?\.\s*\n?\s*([A-Z][A-Za-z .,'&-]{2,80}?),?\s*(?:an individual,?\s*)?\n?\s*Defendants?\b"
+)
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 CLOSE = 0.8
 HEAD_CHARS = 6000
@@ -94,10 +98,11 @@ def extract(doc: dict[str, Any], firm_domains: tuple[str, ...]) -> dict[str, dic
             out[field] = {"value": v, "quote": _line(text, quote_of or v)}
 
     one("case_number", [m.group(1) for m in CASE_NO.finditer(text)])
+    first_court = COURT.search(text)
     one(
         "court",
         [f"{m.group(1)}, {m.group(2)}".upper() for m in COURT.finditer(text)],
-        quote_of=(COURT.search(text).group(1) if COURT.search(text) else None),
+        quote_of=first_court.group(1) if first_court else None,
     )
     # "Attorneys for Plaintiff" is counsel's line, not a party.
     one("plaintiff", [m.group(1) for m in PLAINTIFF.finditer(text) if "attorney" not in m.group(1).lower()])
@@ -144,7 +149,11 @@ def compare(caption: dict[str, dict[str, str]], record: dict[str, Any], doc_name
             if field == "attorney_email":
                 report(field, None, "the matter record carries no email for the responsible attorney")
             continue
-        same = _court(rec) == _court(caption[field]["value"]) if field == "court" else _norm(rec) == _norm(caption[field]["value"])
+        same = (
+            _court(rec) == _court(caption[field]["value"])
+            if field == "court"
+            else _norm(rec) == _norm(caption[field]["value"])
+        )
         if not same and (field == "case_number" or _close(rec, caption[field]["value"])):
             report(field, rec, "differs from the court's paper")
     for field, key in (("plaintiff", "plaintiffs"), ("defendant", "defendants")):
@@ -186,7 +195,7 @@ def record_from_client(client: Any, matter_id: str, facts: dict[str, Any]) -> di
                 n = flf.contact_name(flf.fetch_contact(client, role["contactId"]))
                 if n:
                     rec["defendants"].append(n)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - an unreadable record field is left None and never compared
         pass
     try:
         matter = client.get(f"/matters/{matter_id}") or {}
@@ -194,7 +203,7 @@ def record_from_client(client: Any, matter_id: str, facts: dict[str, Any]) -> di
         staff = client.get(f"/staff/{staff_id}") if staff_id else {}
         email = staff.get("email") if isinstance(staff, dict) else None
         rec["attorney_email"] = email if isinstance(email, str) and "@" in email else None
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - an unreadable record field is left None and never compared
         pass
     return rec
 
@@ -202,9 +211,11 @@ def record_from_client(client: Any, matter_id: str, facts: dict[str, Any]) -> di
 def read_record(seat: Any, matter_id: str, facts: dict[str, Any]) -> dict[str, Any]:
     own = getattr(seat, "caption_record", None)
     if callable(own):
-        return dict(own(matter_id))
+        got = own(matter_id)
+        if isinstance(got, dict):
+            return {str(k): v for k, v in got.items()}
     client = getattr(seat, "client", None)
-    if client is None:
+    if client is None or callable(own):
         return {"case_number": None, "court": None, "plaintiffs": [], "defendants": [], "attorney_email": None}
     return record_from_client(client, matter_id, facts)
 

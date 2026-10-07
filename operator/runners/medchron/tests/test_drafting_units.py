@@ -95,7 +95,15 @@ LIEN = {"id": "l1", "name": "Northfield PT lien letter.pdf"}
 
 def test_a_figure_the_document_does_not_print_is_dropped():
     rows, notes = howell.verify(
-        [{"provider": "Northfield PT", "kind": "bill", "date_of_service": "02/01/2026", "billed": "$900.00", "paid": "$450.00"}],
+        [
+            {
+                "provider": "Northfield PT",
+                "kind": "bill",
+                "date_of_service": "02/01/2026",
+                "billed": "$900.00",
+                "paid": "$450.00",
+            }
+        ],
         "Northfield PT statement. 02/01/2026 therapy $900.00",
         BILL,
     )
@@ -104,7 +112,16 @@ def test_a_figure_the_document_does_not_print_is_dropped():
 
 
 def _row(doc, kind, dos, **f):
-    return {"provider": "Northfield PT", "kind": kind, "doc": doc, "date_of_service": dos, "billed": None, "paid": None, "outstanding": None, **f}
+    return {
+        "provider": "Northfield PT",
+        "kind": kind,
+        "doc": doc,
+        "date_of_service": dos,
+        "billed": None,
+        "paid": None,
+        "outstanding": None,
+        **f,
+    }
 
 
 def test_paid_comes_only_from_payment_documents_and_each_cell_cites_its_source():
@@ -125,7 +142,11 @@ def test_a_missing_paid_figure_is_the_marker_never_billed():
     [t] = howell.build([_row(BILL, "bill", "02/01/2026", billed="$900.00")], [])
     assert t["paid"] == {"value": howell.NOT_IN_RECORD, "sources": []}
     assert t["outstanding"]["value"] == howell.NOT_IN_RECORD  # never billed minus paid
-    assert howell.totals([t]) == {"billed": "$900.00", "paid": howell.NOT_IN_RECORD, "outstanding": howell.NOT_IN_RECORD}
+    assert howell.totals([t]) == {
+        "billed": "$900.00",
+        "paid": howell.NOT_IN_RECORD,
+        "outstanding": howell.NOT_IN_RECORD,
+    }
     md = howell.markdown([t])
     assert "$900.00 (source: Northfield PT bill.pdf)" in md and "| Total | | $900.00 | {{NOT IN RECORD}} |" in md
 
@@ -248,7 +269,9 @@ def test_an_unreadable_prior_count_leaves_paragraph_4_to_the_attorney():
 
 
 def test_a_model_written_declaration_is_removed_and_none_attached_under_the_limit():
-    model = _set(5).replace("**PROOF OF SERVICE**", "**DECLARATION FOR ADDITIONAL DISCOVERY**\n\nI declare.\n\n**PROOF OF SERVICE**")
+    model = _set(5).replace(
+        "**PROOF OF SERVICE**", "**DECLARATION FOR ADDITIONAL DISCOVERY**\n\nI declare.\n\n**PROOF OF SERVICE**"
+    )
     doc, notes = render.attach_decl(model, "discovery_set", _Firm(), _digest())
     assert "DECLARATION" not in doc and "PROOF OF SERVICE" in doc
     assert notes[0].startswith("removed a model-written")

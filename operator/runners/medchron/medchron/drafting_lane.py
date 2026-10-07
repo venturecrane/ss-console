@@ -59,7 +59,9 @@ class DraftingBroker:
         return self.client._request({"action": "drafting_job_status", "job_id": job_id}).get("job")
 
     def record(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any]:
-        return self.client._request({"action": "drafting_job_record", "job_id": job_id, "state": state, "fields": fields})
+        return self.client._request(
+            {"action": "drafting_job_record", "job_id": job_id, "state": state, "fields": fields}
+        )
 
     def month_state(self, exclude_job_id: str) -> tuple[int, int]:
         """(this Pacific month's drafting spend in cents, drafting jobs left this

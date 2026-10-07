@@ -22,7 +22,9 @@ from typing import Any
 from ..demand.gate import strip_names
 
 
-def collect(data: Path, firm: Any, cls: str) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]:
+def collect(
+    data: Path, firm: Any, cls: str
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]:
     rows = [json.loads(ln) for ln in (data / "extracted.jsonl").read_text(encoding="utf-8").splitlines() if ln]
     tp = data / "transcribed.json"
     machine = set(json.loads(tp.read_text(encoding="utf-8"))) if tp.is_file() else set()
@@ -43,7 +45,10 @@ def collect(data: Path, firm: Any, cls: str) -> tuple[list[tuple[str, str]], lis
     walled = json.loads(wp.read_text(encoding="utf-8")) if wp.is_file() else []
     names = [str(r.get("name") or "") for r in rows] + [str(w.get("name") or "") for w in walled]
     held = [
-        (f"held-out {w['name']}", strip_names(Path(w["text_path"]).read_text(encoding="utf-8", errors="replace"), names))
+        (
+            f"held-out {w['name']}",
+            strip_names(Path(w["text_path"]).read_text(encoding="utf-8", errors="replace"), names),
+        )
         for w in walled
         if w.get("text_path") and Path(w["text_path"]).is_file()
     ]
@@ -54,7 +59,9 @@ def run(data: Path, firm: Any, cls: str, md: str, name: str = "gate.json") -> di
     from smokeball_connector.record_check import run_record_check
 
     sources, vision, held = collect(data, firm, cls)
-    v = run_record_check(md, sources + held, held_out_names={n for n, _ in held}, unextractable=[], vision_sources=vision)
+    v = run_record_check(
+        md, sources + held, held_out_names={n for n, _ in held}, unextractable=[], vision_sources=vision
+    )
     out = {
         "passed": v.passed,
         "disposition": v.disposition,

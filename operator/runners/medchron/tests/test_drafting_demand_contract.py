@@ -113,7 +113,9 @@ def test_the_shapes_drafting_reads_back():
     assert draft.audit_complete("end_turn", "SUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0 COMPOUND=0 UNDEFINED=0")
     assert draft.blocking_findings({"tallies": {"INVENTED": 1}, "quotes_not_found": 0}) == 1
     assert compose.blocking_findings({"tallies": {"COMPOUND": 2}, "quotes_not_found": 0}) == 2
-    md, notes = finalpass.settle("# A\n\nAll good.\n", "# Audit v1\n\n## AUDIT: A\n\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0\n")
+    md, notes = finalpass.settle(
+        "# A\n\nAll good.\n", "# Audit v1\n\n## AUDIT: A\n\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0\n"
+    )
     assert isinstance(md, str) and isinstance(notes, list)
     assert issubclass(finalpass.Unlocated, Exception)
     assert quotefix.quote_findings(["[9] something else"]) == []

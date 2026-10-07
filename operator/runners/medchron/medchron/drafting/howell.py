@@ -200,8 +200,10 @@ def _uniq(docs: list[dict[str, str]]) -> list[dict[str, str]]:
     return out
 
 
-def _sum_cell(items: list[tuple[Any, Decimal, dict[str, str]]]) -> Cell | None:
-    """Sum figures, the same (date, amount) counted once across documents."""
+def _sum_cell(raw: list[tuple[Any, Decimal | None, dict[str, str]]]) -> Cell | None:
+    """Sum figures, the same (date, amount) counted once across documents; a
+    figure that did not parse is skipped."""
+    items = [(dos, amt, doc) for dos, amt, doc in raw if amt is not None]
     seen: set[tuple[Any, Decimal]] = set()
     total, docs = Decimal("0"), []
     for dos, amt, doc in items:

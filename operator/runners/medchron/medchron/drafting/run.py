@@ -160,7 +160,10 @@ class DraftingRun:
         )
         b = self.firm.data["budget"]
         self.budget = budget_mod.Budget(
-            self.pricing, float(b["per_job_cap_usd"]), [self.data / "usage-ledger.jsonl"], float(b["usd_per_million_chars"])
+            self.pricing,
+            float(b["per_job_cap_usd"]),
+            [self.data / "usage-ledger.jsonl"],
+            float(b["usd_per_million_chars"]),
         )
         self.limits = limits_mod.Limits(
             cap_usd=float(b["per_job_cap_usd"]),
@@ -299,7 +302,13 @@ class DraftingRun:
             self.log,
         )
         out = summarize.condense(
-            s.run(chunks), DIGEST_BUDGET_CHARS, self.doorway, self.firm.model("digest"), CONDENSE_PROMPT, CONCURRENCY, self.log
+            s.run(chunks),
+            DIGEST_BUDGET_CHARS,
+            self.doorway,
+            self.firm.model("digest"),
+            CONDENSE_PROMPT,
+            CONCURRENCY,
+            self.log,
         )
         p.write_text(out, encoding="utf-8")
         return out
@@ -329,7 +338,10 @@ class DraftingRun:
             )
             if f.get(key)
         ]
-        out = ["THE MATTER RECORD (structured fields read by code; cite as 'matter record'):\n" + "\n".join(f"- {r}" for r in rec)]
+        out = [
+            "THE MATTER RECORD (structured fields read by code; cite as 'matter record'):\n"
+            + "\n".join(f"- {r}" for r in rec)
+        ]
         if (self.data / "caption.json").is_file():
             c = self._json("caption.json")
             out.append(caption_mod.block(c["fields"], c["source"]))
@@ -350,7 +362,8 @@ class DraftingRun:
 
     def _corpus_text(self) -> str:
         return "\n".join(
-            Path(r["text_path"]).read_text(encoding="utf-8", errors="replace") for r in summarize.corpus_files(self.data)
+            Path(r["text_path"]).read_text(encoding="utf-8", errors="replace")
+            for r in summarize.corpus_files(self.data)
         )
 
     def _draft(self, digest: str) -> str:
@@ -425,8 +438,8 @@ class DraftingRun:
         if cap is not None:
             lines += ["", f"## Caption: source {cap['source'] or 'none (no court document in the file)'}", ""]
             lines += [
-                f"- {x['field'].replace('_', ' ')}: the court's paper reads \"{x['document_value']}\"; the matter record "
-                f"reads \"{x['record_value'] or 'nothing'}\" ({x['why']}). Line: \"{x['quote']}\" ({x['source']})"
+                f'- {x["field"].replace("_", " ")}: the court\'s paper reads "{x["document_value"]}"; the matter record '
+                f'reads "{x["record_value"] or "nothing"}" ({x["why"]}). Line: "{x["quote"]}" ({x["source"]})'
                 for x in cap["discrepancies"]
             ] or ["- The matter record agrees with the court's paper on every field checked."]
         fp = self._json("final-pass.json")
@@ -466,7 +479,9 @@ class DraftingRun:
         f = self._json("facts.json")
         self._stage(
             "pull",
-            lambda: pull.run(self.seat, self.job.matter_id, self.dview, set(f.get("client_emails") or []), self.data, self.log),
+            lambda: pull.run(
+                self.seat, self.job.matter_id, self.dview, set(f.get("client_emails") or []), self.data, self.log
+            ),
         )
         self._stage("preflight", self._preflight)
         self._estimate()
@@ -509,7 +524,18 @@ class DraftingRun:
         return v
 
     def _current(self) -> str:
-        order = ("facts", "destination", "pull", "preflight", "transcribe", "summarize", "howell", "caption", "gate", "render")
+        order = (
+            "facts",
+            "destination",
+            "pull",
+            "preflight",
+            "transcribe",
+            "summarize",
+            "howell",
+            "caption",
+            "gate",
+            "render",
+        )
         st = self._state()
         skip = {"howell"} if self.cls not in CHARGES_CLASSES else set()
         skip |= {"caption"} if self.cls not in COURT_CLASSES else set()

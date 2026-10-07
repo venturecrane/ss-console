@@ -49,7 +49,7 @@ from .docx_base import (
     set_table_borders,
     usable_paragraph_style,
 )
-from .docx_classes import _LABEL_MAX_CHARS, CLASS_RULES, DOCUMENT_CLASSES, ClassRules
+from .docx_classes import _LABEL_MAX_CHARS, CLASS_RULES, ClassRules
 from .docx_format_types import (
     DEFAULT_FONT,
     DEFAULT_SIZE_PT,
@@ -65,6 +65,18 @@ from .letterhead import (
     headers_empty,
     is_starter_derived,
     load_firm_identity,
+)
+
+# The classes the renderer knows (their rules: docx_classes.CLASS_RULES). Read
+# out of THIS file by tests/skill-reply-rules.test.ts, so it stays here.
+DOCUMENT_CLASSES = (
+    "discovery_set",
+    "discovery_response",
+    "demand_letter",
+    "mediation_brief",
+    "memo",
+    "depo_outline",
+    "letter",
 )
 
 # ---- Rendering -----------------------------------------------------------------

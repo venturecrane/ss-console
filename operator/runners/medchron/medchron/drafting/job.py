@@ -88,7 +88,9 @@ def parse(data: Any, job_dir: Path) -> DraftingJob:
         fid, fnum = mid, number
     cents = data.get("month_cents_used")
     if not isinstance(cents, int) or isinstance(cents, bool) or cents < 0:
-        raise DraftingJobError("month_cents_used must be stamped (a non-negative int) before a run; unmetered is refused")
+        raise DraftingJobError(
+            "month_cents_used must be stamped (a non-negative int) before a run; unmetered is refused"
+        )
     remaining = data.get("allowance_remaining")
     return DraftingJob(
         job_dir=job_dir,

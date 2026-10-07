@@ -62,7 +62,9 @@ def needs_attorney(md: str) -> str | None:
     i = md.find(NEEDS_ATTORNEY)
     if i < 0:
         return None
-    return " ".join(MARKER.sub("", md[i + len(NEEDS_ATTORNEY) :]).split())[:400] or "the request is missing what it needs"
+    return (
+        " ".join(MARKER.sub("", md[i + len(NEEDS_ATTORNEY) :]).split())[:400] or "the request is missing what it needs"
+    )
 
 
 def _heading(line: str) -> int:
@@ -163,9 +165,15 @@ def _fill_decl(text: str, d: DeclDecision) -> str:
     text = re.sub(r"`?\{\{FILL: number of special interrogatories in this set[^}]*\}\}`?", str(d.this_set), text)
     if d.unreadable:
         why = "a prior set's count is not readable in the record: " + "; ".join(d.unreadable)
-        text = re.sub(r"`?\{\{FILL: number of (?:interrogatories previously|those that were not)[^}]*\}\}`?", f"{{{{ATTORNEY: {why}}}}}", text)
+        text = re.sub(
+            r"`?\{\{FILL: number of (?:interrogatories previously|those that were not)[^}]*\}\}`?",
+            f"{{{{ATTORNEY: {why}}}}}",
+            text,
+        )
     else:
-        text = re.sub(r"`?\{\{FILL: number of interrogatories previously[^}]*\}\}`?", str(d.prior_special + d.prior_form), text)
+        text = re.sub(
+            r"`?\{\{FILL: number of interrogatories previously[^}]*\}\}`?", str(d.prior_special + d.prior_form), text
+        )
         text = re.sub(r"`?\{\{FILL: number of those that were not[^}]*\}\}`?", str(d.prior_special), text)
     return text
 
@@ -193,7 +201,9 @@ def attach_decl(doc: str, cls: str, firm: Any, digest: str) -> tuple[str, list[s
     d = decl_decision(doc, digest)
     if not d.attach:
         if d.this_set:
-            notes.append(f"section 2030.050: {d.total} special interrogatories to this party ({d.this_set} in this set); no declaration")
+            notes.append(
+                f"section 2030.050: {d.total} special interrogatories to this party ({d.this_set} in this set); no declaration"
+            )
         return doc, notes
     decl = _fill_decl(firm.attachment("decl_2030_050"), d)
     lines = doc.splitlines()

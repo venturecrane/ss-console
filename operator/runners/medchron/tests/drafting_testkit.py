@@ -170,14 +170,20 @@ def seat_with(docs: list[tuple[str, str, bytes, str]], **kw: Any) -> DraftingSea
 def standard_docs() -> list[tuple[str, str, bytes, str]]:
     return [
         ("d1", "ER record 1-15-26.pdf", make_pdf(["Exampletown ER. Patient seen 01/15/2026 for neck pain."]), "f-med"),
-        ("d2", "ER bill 1-15-26.pdf", make_pdf(["Exampletown ER itemized statement 01/15/2026 total charges $1,200.00"]), "f-med"),
+        (
+            "d2",
+            "ER bill 1-15-26.pdf",
+            make_pdf(["Exampletown ER itemized statement 01/15/2026 total charges $1,200.00"]),
+            "f-med",
+        ),
         ("d3", "Complaint 2-1-26.pdf", make_pdf([COMPLAINT]), "f-plead"),
     ]
 
 
-BRIEF = "\n\n".join(
-    f"# {s}\n\nThe record supports this section (ER record 1-15-26, p. 1)." for s in SECTIONS
-) + "\n\n=== ATTORNEY NOTES ===\n\n## NOT IN RECORD\n\nNone.\n"
+BRIEF = (
+    "\n\n".join(f"# {s}\n\nThe record supports this section (ER record 1-15-26, p. 1)." for s in SECTIONS)
+    + "\n\n=== ATTORNEY NOTES ===\n\n## NOT IN RECORD\n\nNone.\n"
+)
 HOWELL_ROWS = (
     '[{"provider": "Exampletown ER", "kind": "bill", "date_of_service": "01/15/2026", "billed": "$1,200.00", '
     '"paid": null, "outstanding": null}]'

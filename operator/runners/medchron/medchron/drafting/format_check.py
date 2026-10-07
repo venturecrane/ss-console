@@ -160,7 +160,9 @@ def check_mediation(doc: Any, fmt: dict[str, Any], res: Result) -> None:
         if FIGURE.search(t):
             res.fails.append(f"reserved: a settlement figure outside an {{{{ATTORNEY}}}} marker: {p.text[:60]}")
         elif "{{ATTORNEY" not in p.text:
-            res.fails.append(f"reserved: settlement authority/target/bracket without an {{{{ATTORNEY}}}} marker: {p.text[:60]}")
+            res.fails.append(
+                f"reserved: settlement authority/target/bracket without an {{{{ATTORNEY}}}} marker: {p.text[:60]}"
+            )
 
 
 def check_discovery(doc: Any, cls: str, fmt: dict[str, Any], res: Result, digest: str = "") -> None:
@@ -173,13 +175,18 @@ def check_discovery(doc: Any, cls: str, fmt: dict[str, Any], res: Result, digest
         res.fails.append("discovery: no item labels")
     if fmt["discovery_label_style"] in ("caps_bold_underline", "all caps, bold, underlined"):
         for p in labels:
-            if not all(_bold(r, p) and _underlined(r, p) and (r.font.all_caps or r.text == r.text.upper()) for r in _text_runs(p)):
+            if not all(
+                _bold(r, p) and _underlined(r, p) and (r.font.all_caps or r.text == r.text.upper())
+                for r in _text_runs(p)
+            ):
                 res.fails.append(f"label: not all-caps bold underlined: {p.text[:40]}")
     for p in labels + items:
         spacing = _eff(p, "line_spacing")
         extra = [a for a in ("space_before", "space_after") if (_eff(p, a) or Pt(0)) != Pt(0)]
         if spacing != 2.0 or extra:
-            res.fails.append(f"spacing: not double-spaced between items only ({', '.join(extra) or 'line spacing'}): {p.text[:40]}")
+            res.fails.append(
+                f"spacing: not double-spaced between items only ({', '.join(extra) or 'line spacing'}): {p.text[:40]}"
+            )
     for p in items:
         if p.paragraph_format.first_line_indent != Inches(0.5):
             res.fails.append(f"request: not first-line indented: {p.text[:40]}")

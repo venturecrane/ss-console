@@ -89,6 +89,8 @@ def repair_scope(draft: str, audit: str, digest: str) -> tuple[list[tuple[str, s
         if len(stem) >= 6 and stem in finding_text:
             keep.append(block)
     return flagged, ("".join(keep) if keep else digest)
+
+
 COMPOSE_FALLBACK_MAX = 64_000
 EXEMPLAR_CHARS = 80_000
 EXEMPLARS_TOTAL = 200_000
@@ -184,7 +186,9 @@ class Drafter:
             if total + len(t) > EXEMPLARS_TOTAL:
                 break
             total += len(t)
-            parts.append(f"=== EXEMPLAR: {p.name} (the firm's own document; its FORMAT and VOICE, never its facts) ===\n{t}")
+            parts.append(
+                f"=== EXEMPLAR: {p.name} (the firm's own document; its FORMAT and VOICE, never its facts) ===\n{t}"
+            )
         return "\n\n".join(parts)
 
     # ---- compose ---------------------------------------------------------------------
@@ -220,10 +224,7 @@ class Drafter:
             + "\n\n---\n\n## THE SKELETON (its standing boilerplate is not a claim)\n\n"
             + self.firm.skeleton(self.cls)
             + "\n\n---\n\n## THE MATTER RECORD, THE CAPTION AND THE HOWELL TABLE (valid sources; the request itself "
-            "is NOT one)\n\n"
-            + self.context
-            + "\n\n---\n\n## THE RECORD DIGEST\n\n"
-            + digest
+            "is NOT one)\n\n" + self.context + "\n\n---\n\n## THE RECORD DIGEST\n\n" + digest
         )
         secs = d.auditable(d.sections(draft))
         dsha = sha(draft)[:8]
@@ -248,7 +249,9 @@ class Drafter:
             if nf
             else ""
         )
-        self._commit(f"audit-v{version}.md", f"# Audit v{version}\n\nTallies: {json.dumps(tallies)}\n\n{nf_block}{body}")
+        self._commit(
+            f"audit-v{version}.md", f"# Audit v{version}\n\nTallies: {json.dumps(tallies)}\n\n{nf_block}{body}"
+        )
         out = {"tallies": tallies, "quotes": len(mech["quotes"]), "quotes_not_found": mech["quotes_not_found"]}
         self._commit(f"audit-v{version}.json", json.dumps(out, indent=1))
         return out

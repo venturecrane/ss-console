@@ -66,7 +66,7 @@ look like. The firm's work is the specification.
 
 **The goal is one template per document class the drafting renderer knows.** Those classes are
 the values the render tool's `document_class` parameter accepts, and the tool's own description
-lists them. Today they are six:
+lists them. Today they are seven:
 
 | Class                | What it is                                                                       |
 | -------------------- | -------------------------------------------------------------------------------- |
@@ -75,6 +75,7 @@ lists them. Today they are six:
 | `demand_letter`      | the firm's settlement demand to a carrier or opposing party                      |
 | `mediation_brief`    | the firm's brief or statement for a mediation or settlement conference           |
 | `memo`               | the firm's internal memo: a case evaluation, an analysis, a note to file         |
+| `depo_outline`       | the firm's outline for taking or defending a deposition                          |
 | `letter`             | the firm's correspondence: to its client, a carrier, a provider, other counsel   |
 
 If the render tool's description lists a different set, **the tool's list governs** and this
@@ -89,7 +90,7 @@ A demand letter's template comes from the firm's demand letters. A retainer agre
 letter, however it is addressed, and filed as the `letter` template it would pour every client
 letter into a fee-contract layout.
 
-**Additional templates.** The firm writes documents that are none of the six: a retainer or
+**Additional templates.** The firm writes documents that are none of the seven: a retainer or
 intake agreement, a fee disclosure, a trial binder index. Such a document may be proposed as an
 **additional template under its own name**, never as a class template. Say plainly what that
 means: an additional template is a **reference skeleton** the firm can copy from; no drafter
@@ -224,6 +225,7 @@ does not find, the answer is to **ask the admin to point at one**, by name and m
    - `demand_letter`: DEMAND, SETTLEMENT DEMAND, POLICY LIMITS, TIME-LIMITED
    - `mediation_brief`: MEDIATION, BRIEF, MSC, SETTLEMENT CONFERENCE, MEDIATOR
    - `memo`: MEMO, CASE EVAL, EVALUATION, ANALYSIS, NOTE TO FILE, STRATEGY
+   - `depo_outline`: DEPO, DEPOSITION, OUTLINE, EXAM, QUESTIONS FOR
    - `letter`: CORRESPONDENCE, LETTERS, LTR, OUTGOING, TO CLIENT, STATUS
 
    A DISCOVERY folder holds both directions and received paper besides: the firm's own sets,
@@ -269,8 +271,8 @@ does not find, the answer is to **ask the admin to point at one**, by name and m
 
 ### 2. Sort the firm's documents into the classes
 
-Put every firm-authored document you read into one of the six classes, or into **additional**
-(firm-authored, and none of the six), from what the document IS: who it is addressed to, what
+Put every firm-authored document you read into one of the seven classes, or into **additional**
+(firm-authored, and none of the seven), from what the document IS: who it is addressed to, what
 it asks for, how it is structured. Not from its folder, and not from a word in its name.
 
 - A letter to a carrier that demands a sum to settle is a `demand_letter`, not a `letter`.
@@ -293,7 +295,7 @@ half-templates.
 
 The proposal has three parts and all of them are the admin's to change.
 
-**The class coverage, every class, one line each.** For each of the six classes, exactly one of:
+**The class coverage, every class, one line each.** For each of the seven classes, exactly one of:
 
 - **Exemplar found.** What the template is, in the firm's own words for that kind of document;
   the **exemplar document or documents** it would be derived from, each named by the
@@ -314,7 +316,7 @@ The proposal has three parts and all of them are the admin's to change.
 - **Not applicable.** Only when the admin has said this firm does not write that class. Never
   your inference from an empty search: an empty search is "not found".
 
-**Additional templates, if any.** Each firm-authored document you read that is none of the six,
+**Additional templates, if any.** Each firm-authored document you read that is none of the seven,
 proposed under its own name ("Template - Retainer Agreement"), with its exemplar named and its
 matter, and one sentence saying it is a reference skeleton that no drafter uses as a format
 base. It is never offered as a class template and never takes a class's template name.
@@ -680,7 +682,7 @@ Then the things that did not work, plainly and not at the bottom:
 - what the hunt **could not read** or did not reach,
 - any question about a class you still cannot answer.
 
-And one sentence on what the firm now has: how many class templates of the six, how many
+And one sentence on what the firm now has: how many class templates of the seven, how many
 additional templates, in what location, derived from whose documents. **Claim nothing that
 read-back and the self-check did not confirm.**
 
