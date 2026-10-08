@@ -15,7 +15,6 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
-import time
 import traceback
 from pathlib import Path
 from typing import Any, Callable
@@ -34,6 +33,8 @@ from . import (
     job as job_mod,
 )
 from . import manifest, parity, read, vocab
+from .progress import Progress
+from .runbase import RunBase
 from .outcome import REASON, LitigationFailed, LitigationHold, Verdict
 from .tools import MatterContext, ReadIncomplete, dump
 
@@ -53,7 +54,7 @@ STAGES = (
 )
 
 
-class LitigationRun:
+class LitigationRun(RunBase):
     def __init__(
         self,
         job_dir: Path,
@@ -90,7 +91,7 @@ class LitigationRun:
             ledger=Ledger(self.data / "usage-ledger.jsonl"),
             client=client,
             log=log,
-            before_request=lambda stage: self.limits.check_each_call(self.budget.refresh(), stage),
+            before_request=self._before_call,
         )
         self._seat_factory, self._seat = seat_factory, None
         self.today = self._frozen_today(today)
@@ -108,33 +109,6 @@ class LitigationRun:
                 self._seat = self._seat_factory()
         return self._seat
 
-    def _state(self) -> dict[str, Any]:
-        p = self.data / "state.json"
-        return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
-
-    def _put(self, key: str, value: Any) -> None:
-        st = self._state()
-        st[key] = value
-        dump(self.data / "state.json", st)
-
-    def _is_done(self, stage: str) -> bool:
-        return self._state().get(stage, {}).get("status") == "done"
-
-    def reopen(self, stages: list[str]) -> None:
-        for s in stages:
-            if s in self._state():
-                self._put(s, {"status": "reopened"})
-
-    def _stage(self, name: str, fn: Callable[[], Any]) -> None:
-        if self._is_done(name):
-            return
-        t0 = time.time()
-        self.log(f"[{name}] start")
-        fn()
-        self._put(
-            name, {"status": "done", "at": time.strftime("%Y-%m-%dT%H:%M:%S"), "seconds": round(time.time() - t0, 1)}
-        )
-
     def _frozen_today(self, today: Callable[[], dt.date] | None) -> dt.date:
         stamp = self._state().get("today")
         if not stamp:
@@ -147,16 +121,6 @@ class LitigationRun:
             stamp = d.isoformat()
             self._put("today", stamp)
         return dt.date.fromisoformat(stamp)
-
-    def _json(self, name: str) -> Any:
-        return json.loads((self.data / name).read_text(encoding="utf-8"))
-
-    def _mfile(self, mid: str, name: str) -> Path:
-        return fetch_mod.matter_dir(self.data, mid) / name
-
-    def _mjson(self, mid: str, name: str) -> Any:
-        p = self._mfile(mid, name)
-        return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else None
 
     # ---- stages -----------------------------------------------------------------------
     def _inventory(self) -> None:
@@ -206,32 +170,19 @@ class LitigationRun:
         if retry:
             raise LitigationFailed(f"fetch_unfinished: {len(retry)} files are not fetched for a reason a retry can fix")
 
-    def _ocr(self, png: bytes) -> str:
-        import base64
-
-        img = {
-            "type": "image",
-            "source": {"type": "base64", "media_type": "image/png", "data": base64.standard_b64encode(png).decode()},
-        }
-        r = self.doorway.call(
-            "litigation_ocr",
-            model=self.firm.model("read"),
-            messages=[{"role": "user", "content": [img, {"type": "text", "text": extract_mod.OCR_PROMPT}]}],
-            max_tokens=8000,
-            cache_blocks=(),
-        )
-        return r.text
-
     def _extract(self) -> None:
         summary = {}
-        for mid in self._active():
-            rows = list(fetch_mod.pulled(self.data, mid).values())
-            recs = extract_mod.extract_matter(fetch_mod.matter_dir(self.data, mid), rows, self._ocr)
+        rows_by = {mid: list(fetch_mod.pulled(self.data, mid).values()) for mid in self._active()}
+        total = sum(1 for rows in rows_by.values() for r in rows if r.get("ok") and r.get("path"))
+        self._progress = Progress(self.log, "extract", total, "docs", every=20)
+        for mid, rows in rows_by.items():
+            recs = extract_mod.extract_matter(fetch_mod.matter_dir(self.data, mid), rows, self._ocr, self._progress)
             summary[mid] = {
                 "ok": sum(1 for r in recs if r.get("ok")),
                 "failed": [r["file_id"] for r in recs if not r.get("ok")],
             }
         extract_mod.write_summary(self.data, summary)
+        self._progress.finish()
 
     def _ctx(self, mid: str) -> MatterContext:
         integ = {r["file_id"]: r["problem"] for r in (self._fetch_report().get(mid) or {}).get("integrity") or []}
@@ -258,9 +209,13 @@ class LitigationRun:
         return read.file_list(ctx, p["candidates"], p["newest"])
 
     def _read1(self) -> None:
+        prog = self._reading("read1")
         for m in self._matters():
             mid, p = m["id"], self._plan()[m["id"]]
-            if not p["read_groups"] or self._mfile(mid, "read1.json").is_file():
+            if not p["read_groups"]:
+                continue
+            prog.step()
+            if self._mfile(mid, "read1.json").is_file():
                 continue
             ctx = self._ctx(mid)
             res = read.pass1(
@@ -269,9 +224,13 @@ class LitigationRun:
             dump(self._mfile(mid, "read1.json"), {"groups": p["read_groups"], "result": res})
 
     def _read2(self) -> None:
+        prog = self._reading("read2")
         for m in self._matters():
             mid, p = m["id"], self._plan()[m["id"]]
-            if not p["read_groups"] or self._mfile(mid, "read2.json").is_file():
+            if not p["read_groups"]:
+                continue
+            prog.step()
+            if self._mfile(mid, "read2.json").is_file():
                 continue
             r1 = self._mjson(mid, "read1.json")
             merged = read.merge(manifest.load_prior(self.state, mid), r1["result"], r1["groups"])
@@ -311,8 +270,11 @@ class LitigationRun:
         return extra, hits
 
     def _read3(self) -> None:
+        prog = self._reading("read3", audit=True)
         for m in self._matters():
             mid, p = m["id"], self._plan()[m["id"]]
+            if p["read_groups"] or p["audit"] == "all":
+                prog.step()
             if self._mfile(mid, "read3.json").is_file():
                 continue
             result, log = self._after_read2(mid)

@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .firm import LitigationFirm
+from .progress import Progress
 
 PAGE = 500
 MAX_ROWS = 50_000
@@ -125,13 +126,17 @@ def build(
     files_dir.mkdir(parents=True, exist_ok=True)
     kept: list[dict[str, Any]] = []
     floor = int(firm.get("min_court_hits"))
+    prog = Progress(log, "inventory", len(listed), "matters listed", every=25)
     for m in listed:
         files = seat.list_files(m["id"])
+        prog.counts["files"] = prog.counts.get("files", 0) + len(files)
+        prog.step()
         hits = court_hits(files, firm)
         if hits < floor and m["id"] not in tracked:
             continue
         (files_dir / f"{m['id']}.json").write_text(json.dumps(files, indent=1), encoding="utf-8")
         kept.append({**m, "court_hits": hits, "files": len(files), "responsible": roster.get(m["staff_id"], "")})
+        prog.counts["kept"] = len(kept)
     log(f"{len(kept)} litigation matters kept")
     return {"matters": kept, "staff": roster, "listed": len(listed)}
 

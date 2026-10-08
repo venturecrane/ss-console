@@ -270,8 +270,11 @@ def extract_file(path: Path, ext: str, out: Path, ocr: Ocr | None) -> dict[str, 
     return {"ok": True, "chars": len(text), "scanned_pages": scanned, "text_path": str(out)}
 
 
-def extract_matter(mdir: Path, rows: list[dict[str, Any]], ocr: Ocr | None) -> list[dict[str, Any]]:
-    """Every ok pulled row of one matter; resumable through extracted.jsonl."""
+def extract_matter(
+    mdir: Path, rows: list[dict[str, Any]], ocr: Ocr | None, progress: Any = None
+) -> list[dict[str, Any]]:
+    """Every ok pulled row of one matter; resumable through extracted.jsonl.
+    ``progress`` (a ``progress.Progress``) is stepped once per document."""
     log = mdir / "extracted.jsonl"
     done = {r["file_id"]: r for r in read_jsonl(log)}
     out = []
@@ -279,6 +282,8 @@ def extract_matter(mdir: Path, rows: list[dict[str, Any]], ocr: Ocr | None) -> l
         fid = str(r["id"])
         if fid in done:
             out.append(done[fid])
+            if progress is not None:
+                progress.step()
             continue
         if not r.get("ok") or not r.get("path"):
             continue
@@ -290,6 +295,10 @@ def extract_matter(mdir: Path, rows: list[dict[str, Any]], ocr: Ocr | None) -> l
         append_jsonl(log, rec)
         done[fid] = rec
         out.append(rec)
+        if progress is not None:
+            if not rec.get("ok"):
+                progress.add("failures")
+            progress.step()
     return out
 
 
