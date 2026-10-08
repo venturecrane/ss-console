@@ -95,6 +95,40 @@ def _cmd_draft(args: argparse.Namespace) -> int:
     return {"delivered": 0, "held": 3, "failed": 1}.get(v.outcome, 1)
 
 
+def _cmd_litigate(args: argparse.Namespace) -> int:
+    """One litigation status job (``litigation/run.py``). The verdict is ONE
+    JSON object: the only line on stdout, and the same text in verdict.json.
+    Everything else the run (or a library it imports) writes to stdout is
+    sent to stderr. Exit 0 delivered, 1 held, 2 failed."""
+    import contextlib
+
+    from .litigation import firm as lit_firm, job as lit_job
+    from .litigation.outcome import Verdict
+    from .litigation.run import LitigationRun
+
+    with contextlib.redirect_stdout(sys.stderr):
+        try:
+            r = LitigationRun(
+                Path(args.job_dir),
+                inputs_dir=args.inputs,
+                pricing=args.pricing,
+                log=lambda m: print(m, file=sys.stderr),
+            )
+        except lit_job.LitigationJobError as exc:
+            v = Verdict("failed", stage="envelope", reason=f"envelope_invalid: {exc}")
+        except lit_firm.LitigationConfigError as exc:
+            v = Verdict("failed", stage="config", reason=f"config_missing: {str(exc)[:300]}")
+        except Exception as exc:  # noqa: BLE001 - a verdict, never a trace on stdout
+            v = Verdict("failed", stage="setup", reason=f"unexpected: {type(exc).__name__}: {str(exc)[:300]}")
+        else:
+            r.reopen([x.strip() for x in (args.redo or "").split(",") if x.strip()])
+            v = r.run()
+    payload = v.to_json()
+    verdict_mod.write(Path(args.job_dir), payload)
+    print(payload)
+    return v.exit_code
+
+
 def _exit_code(outcomes) -> int:
     worst = {"delivered": 0, "dry_run": 0, "rehearsed": 0, "held": 3, "refused": 4, "failed": 1}
     return max(worst.get(o.outcome, 1) for o in outcomes) if outcomes else 1
@@ -211,6 +245,12 @@ def main(argv: list[str] | None = None) -> int:
     dr.add_argument("--pricing", default=None)
     dr.add_argument("--redo", default="", help="comma-separated stages to reopen (a resume request)")
     dr.set_defaults(fn=_cmd_draft)
+    lt = sub.add_parser("litigate", help="run one litigation status job, inventory to read-back")
+    lt.add_argument("job_dir")
+    lt.add_argument("--inputs", default=None, help="the litigation inputs dir (default: MEDCHRON_LITIGATION_INPUTS)")
+    lt.add_argument("--pricing", default=None)
+    lt.add_argument("--redo", default="", help="comma-separated stages to reopen (a resume request)")
+    lt.set_defaults(fn=_cmd_litigate)
     d = sub.add_parser("dag", help="print the stage order and validate it")
     d.set_defaults(fn=_cmd_dag)
     v = sub.add_parser("validate-config", help="validate a firm config file")

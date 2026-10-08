@@ -635,6 +635,12 @@ def main(argv: list[str] | None = None) -> int:
         start_drafting_lane(d, stop=lambda: stopped["flag"], poll_seconds=poll)
     except Exception:  # logged with its trace; the chronology and demand lanes keep running
         logger.exception("drafting lane not started")
+    try:  # the fourth lane, the same rule: its failure to start stops nothing else
+        from .litigation_lane import start_lane as start_litigation_lane
+
+        start_litigation_lane(d, stop=lambda: stopped["flag"], poll_seconds=poll)
+    except Exception:  # logged with its trace; the other lanes keep running
+        logger.exception("litigation lane not started")
     d.run_forever(stop=lambda: stopped["flag"], poll_seconds=poll)
     return 0
 
