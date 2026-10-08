@@ -113,100 +113,74 @@ def _overlaps(span: tuple[int, int], done: list[tuple[int, int]]) -> bool:
     return any(span[0] < b and a < span[1] for a, b in done)
 
 
-def settle(draft_md: str, audit_md: str) -> tuple[str, list[str]]:
-    """The draft with every INVENTED statement removed or marked and every
-    ARITHMETIC figure flagged, and the attorney-notes lines saying what was
-    done. Raises ``Unlocated`` only past the unplaced-findings ceiling."""
-    secs = sections(draft_md)
-    heads = [h for h, _ in secs]
-    bodies = [b for _, b in secs]
-    notes: list[str] = []
-    supported = supported_rows(audit_md)
-    unplaced: dict[str, list[str]] = {}  # by heading; reasons only, never the claim
-    removed: dict[str, set[str]] = {}  # per section, the quoted passages of claims already settled
-    written: dict[int, list[tuple[str, str]]] = {}  # per section index: (marker, verdict) THIS pass wrote
-    for head, verdict, claim, detail in findings(audit_md):
-        if set(_quotes(claim)) & removed.get(head, set()):
-            notes.append(f"{head}: already settled by an earlier finding; {_clean(claim, 160)}")
-            continue
-        idxs = [i for i, h in enumerate(heads) if h == head]
-        if not idxs:
-            notes.append(f"{head}: the final audit names a section the draft does not have; {_clean(claim, 160)}")
-            unplaced.setdefault(head, []).append(detail or f"{verdict.lower()}, no reason given")
-            continue
-        if verdict == "ARITHMETIC" and self_cleared(detail):
-            notes.append(f"{head}: the final audit checked {_clean(claim, 120)} and states it correct; left as written")
-            continue
-        # The first same-named section that locates the claim.
-        idx, span = idxs[0], None
-        for i in idxs:
-            quoted = locate_by_spans(bodies[i], claim) if _quotes(claim) else None
-            span = quoted or locate(bodies[i], claim) or locate_by_spans(bodies[i], claim)
-            if span is not None:
-                idx = i
-                break
-        body = bodies[idx]
-        done: list[tuple[int, int]] = [
-            (m.start(), m.end())
-            for w, kind in written.get(idx, [])
-            if kind == "INVENTED" or verdict == kind
-            for m in re.finditer(re.escape(w), body)
-        ]
-        if span is not None and _overlaps(span, done):
-            # A marker ends without a period, so it reads as the start of the
-            # next sentence: settle what follows the marker, not the marker.
-            a, b = span
-            for ma, mb in done:
-                if ma <= a < mb or a <= ma < b:
-                    a = max(a, mb)
-            while a < b and body[a].isspace():
-                a += 1
-            if a >= b or not body[a:b].strip():
-                notes.append(f"{head}: already settled by an earlier finding; {_clean(claim, 160)}")
-                continue
-            span = (a, b)
-        if span is None and verdict == "ARITHMETIC":
-            figs = [f for f in _spans(claim) if _FIG.fullmatch(f.lstrip("$")) and _has(body, f)]
-            if figs:
-                a = body.find(figs[-1])
-                span = (a, a + len(figs[-1]))
-        if span is None:
-            unplaced.setdefault(head, []).append(detail or f"{verdict.lower()}, no reason given")
-            notes.append(
-                f"{head}: the final audit flagged {_clean(claim, 160)} ({_clean(detail, 160)}); not located, marked at the section top"
-            )
-            continue
-        a, b = span
-        unit = body[a:b]
-        other = _contradicted(claim, head, supported) if verdict == "INVENTED" else None
-        if verdict == "INVENTED" and other:
-            mark = (
-                "{{ATTORNEY: the final audit disagrees with itself about the next statement "
-                f"(not supported in {_clean(head, 60)}, supported in {_clean(other, 60)}); confirm it against the file}} "
-            )
-            body = body[:a] + mark + unit + body[b:]
-            notes.append(f"{head}: kept and marked, the audit contradicts itself: {_clean(claim, 160)}")
-        elif verdict == "INVENTED":
-            mark = (
-                "{{NOT IN RECORD: a statement here was removed by the final audit ("
-                + _clean(detail, 160)
-                + "); not found in the file}}"
-            )
-            body = body[:a] + mark + body[b:]
-            notes.append(f"{head}: removed {_clean(claim, 160)} ({_clean(detail, 160)})")
-        else:
-            mark = "{{ATTORNEY: verify arithmetic: " + _clean(detail or claim) + "}}"
-            figs = [f for f in _FIG.findall(claim) if f in unit and re.search(r"\d", f)]
-            if figs:
-                i = unit.rfind(figs[-1])
-                unit = unit[:i] + mark + unit[i + len(figs[-1]) :]
-            else:
-                unit = mark
-            body = body[:a] + unit + body[b:]
-            notes.append(f"{head}: figure flagged for the attorney, {_clean(claim, 160)} ({_clean(detail, 160)})")
-        bodies[idx] = body
-        written.setdefault(idx, []).append((mark, verdict))
-        removed.setdefault(head, set()).update(_quotes(claim))
+def _place(heads: list[str], bodies: list[str], head: str, claim: str) -> tuple[int, tuple[int, int] | None]:
+    """The first same-named section that locates the claim, and the span:
+    exact quoted text first (the fuzzy locator can pick a neighbouring true
+    sentence), then the demand locator, then figures."""
+    idxs = [i for i, h in enumerate(heads) if h == head]
+    for i in idxs:
+        quoted = locate_by_spans(bodies[i], claim) if _quotes(claim) else None
+        span = quoted or locate(bodies[i], claim) or locate_by_spans(bodies[i], claim)
+        if span is not None:
+            return i, span
+    return idxs[0], None
+
+
+def _past_markers(body: str, span: tuple[int, int], done: list[tuple[int, int]]) -> tuple[int, int] | None:
+    """A marker ends without a period, so it reads as the start of the next
+    sentence: the part of the span after the markers, or None when nothing is
+    left (the finding was already settled)."""
+    if not _overlaps(span, done):
+        return span
+    a, b = span
+    for ma, mb in done:
+        if ma <= a < mb or a <= ma < b:
+            a = max(a, mb)
+    while a < b and body[a].isspace():
+        a += 1
+    return (a, b) if a < b and body[a:b].strip() else None
+
+
+def _apply(
+    body: str, span: tuple[int, int], verdict: str, claim: str, detail: str, head: str, other: str | None
+) -> tuple[str, str, str]:
+    """The body with one finding settled, the marker written, and its note."""
+    a, b = span
+    unit = body[a:b]
+    if verdict == "INVENTED" and other:
+        mark = (
+            "{{ATTORNEY: the final audit disagrees with itself about the next statement "
+            f"(not supported in {_clean(head, 60)}, supported in {_clean(other, 60)}); confirm it against the file}} "
+        )
+        return (
+            body[:a] + mark + unit + body[b:],
+            mark,
+            f"{head}: kept and marked, the audit contradicts itself: {_clean(claim, 160)}",
+        )
+    if verdict == "INVENTED":
+        mark = (
+            "{{NOT IN RECORD: a statement here was removed by the final audit ("
+            + _clean(detail, 160)
+            + "); not found in the file}}"
+        )
+        return body[:a] + mark + body[b:], mark, f"{head}: removed {_clean(claim, 160)} ({_clean(detail, 160)})"
+    mark = "{{ATTORNEY: verify arithmetic: " + _clean(detail or claim) + "}}"
+    figs = [f for f in _FIG.findall(claim) if f in unit and re.search(r"\d", f)]
+    if figs:
+        i = unit.rfind(figs[-1])
+        unit = unit[:i] + mark + unit[i + len(figs[-1]) :]
+    else:
+        unit = mark
+    return (
+        body[:a] + unit + body[b:],
+        mark,
+        f"{head}: figure flagged for the attorney, {_clean(claim, 160)} ({_clean(detail, 160)})",
+    )
+
+
+def _mark_unplaced(heads: list[str], bodies: list[str], unplaced: dict[str, list[str]]) -> None:
+    """Section-top markers for the findings no tier could place; past the
+    ceiling the job fails (``Unlocated``)."""
     total = sum(len(v) for v in unplaced.values())
     worst = max((len(v) for v in unplaced.values()), default=0)
     if worst > MAX_UNPLACED_PER_SECTION or total > MAX_UNPLACED:
@@ -225,5 +199,61 @@ def settle(draft_md: str, audit_md: str) -> tuple[str, list[str]]:
         if head not in heads:
             mark = mark.replace("in this section", f"in a section the draft lacks ({_clean(head, 60)})")
         bodies[target] = f"{first}\n\n{mark}\n{rest}" if first.lstrip().startswith("#") else f"{mark}\n\n{body}"
+
+
+def settle(draft_md: str, audit_md: str) -> tuple[str, list[str]]:
+    """The draft with every INVENTED statement removed or marked and every
+    ARITHMETIC figure flagged, and the attorney-notes lines saying what was
+    done. Raises ``Unlocated`` only past the unplaced-findings ceiling."""
+    secs = sections(draft_md)
+    heads = [h for h, _ in secs]
+    bodies = [b for _, b in secs]
+    notes: list[str] = []
+    supported = supported_rows(audit_md)
+    unplaced: dict[str, list[str]] = {}  # by heading; reasons only, never the claim
+    removed: dict[str, set[str]] = {}  # per section, the quoted passages of claims already settled
+    written: dict[int, list[tuple[str, str]]] = {}  # per section index: (marker, verdict) THIS pass wrote
+    for head, verdict, claim, detail in findings(audit_md):
+        reason = detail or f"{verdict.lower()}, no reason given"
+        if set(_quotes(claim)) & removed.get(head, set()):
+            notes.append(f"{head}: already settled by an earlier finding; {_clean(claim, 160)}")
+            continue
+        if head not in heads:
+            notes.append(f"{head}: the final audit names a section the draft does not have; {_clean(claim, 160)}")
+            unplaced.setdefault(head, []).append(reason)
+            continue
+        if verdict == "ARITHMETIC" and self_cleared(detail):
+            notes.append(f"{head}: the final audit checked {_clean(claim, 120)} and states it correct; left as written")
+            continue
+        idx, span = _place(heads, bodies, head, claim)
+        body = bodies[idx]
+        done = [
+            (m.start(), m.end())
+            for w, kind in written.get(idx, [])
+            if kind == "INVENTED" or verdict == kind
+            for m in re.finditer(re.escape(w), body)
+        ]
+        if span is not None:
+            span = _past_markers(body, span, done)
+            if span is None:
+                notes.append(f"{head}: already settled by an earlier finding; {_clean(claim, 160)}")
+                continue
+        elif verdict == "ARITHMETIC":
+            figs = [f for f in _spans(claim) if _FIG.fullmatch(f.lstrip("$")) and _has(body, f)]
+            if figs:
+                a = body.find(figs[-1])
+                span = (a, a + len(figs[-1]))
+        if span is None:
+            unplaced.setdefault(head, []).append(reason)
+            notes.append(
+                f"{head}: the final audit flagged {_clean(claim, 160)} ({_clean(detail, 160)}); not located, marked at the section top"
+            )
+            continue
+        other = _contradicted(claim, head, supported) if verdict == "INVENTED" else None
+        bodies[idx], mark, note = _apply(body, span, verdict, claim, detail, head, other)
+        notes.append(note)
+        written.setdefault(idx, []).append((mark, verdict))
+        removed.setdefault(head, set()).update(_quotes(claim))
+    _mark_unplaced(heads, bodies, unplaced)
     out = "\n".join(bodies)
     return out + ("\n" if draft_md.endswith("\n") else ""), notes
