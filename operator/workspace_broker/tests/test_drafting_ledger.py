@@ -152,6 +152,22 @@ def test_spend_is_dated_when_written(ledger) -> None:
     assert ledger.spend_between("2000-01-01T00:00:00.000Z", "2999-01-01T00:00:00.000Z", exclude=job) == 0
 
 
+def test_a_resumed_job_delivered_carries_no_reason_from_its_failure(ledger) -> None:
+    # 2026-10-08: a drafting job failed at the gate, was resumed and delivered,
+    # and the DELIVER turn read the failure's reason off the delivered row and
+    # told the firm about refusals the filed document never had.
+    job = ledger.submit(_env())
+    ledger.record(job, "running", {})
+    ledger.record(job, "failed", {"reason": "gate_refused: two quotations"})
+    assert ledger.record(job, "running", {})["reason"] is None
+    assert ledger.record(job, "delivered", {"folder_id": "f"})["reason"] is None
+    # A same-state note keeps the reason; a held or failed move brings its own.
+    other = ledger.submit(_env(document_class="memo"))
+    ledger.record(other, "running", {})
+    ledger.record(other, "failed", {"reason": "render fault"})
+    assert ledger.record(other, "failed", {"cents": 5})["reason"] == "render fault"
+
+
 def test_transitions_are_monotonic_with_the_resume_edge(ledger) -> None:
     job = ledger.submit(_env())
     ledger.record(job, "running", {})
