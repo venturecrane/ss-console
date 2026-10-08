@@ -79,6 +79,8 @@ describe('skills the router and self-initiation read, on the firm seat', () => {
     expect(enabled.has('demand-letter-drafter')).toBe(true)
     // 2026-10-07: the firm's own written ask activated the queued drafting lane.
     expect(enabled.has('document-drafter')).toBe(true)
+    // 2026-10-07: letter 93's litigation status list, accepted, is the queued litigation lane.
+    expect(enabled.has('litigation-status')).toBe(true)
     for (const slug of [
       'discovery-response-drafter',
       'follow-up-discovery-drafter',

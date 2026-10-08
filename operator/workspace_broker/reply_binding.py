@@ -21,6 +21,14 @@ the recipient. So the broker, which the agent cannot steer, decides:
       per (job, ending), so a job that fails, is resumed and delivers can still
       say it delivered;
     - a drafting job: exactly the demand job's rules, on the drafting ledger;
+    - a litigation status job (2026-10-07): a REQUESTED job takes the drafting
+      rules on the litigation ledger (a reply in the requester's thread, never
+      a new message). A SCHEDULED job has no request email, so it is the one
+      job binding that sends ONE NEW email: to the job's requester, who must
+      still be a Named Administrator and the first authored
+      ``scheduled_recipients`` entry (re-read at bind time and at send time),
+      under the fixed subject ``scheduled_subject`` composes. Nobody names the
+      recipient or the subject, the model least of all;
     - a chronology job (2026-10-07): the same rules on the medchron ledger, one
       reply per (job, outcome). That ledger has no attempt counter, so a job
       held, resumed and held AGAIN gets no second hold reply: the requester
@@ -58,18 +66,31 @@ from . import bound_replies, msgraph_lookup
 from .broker_context import BrokerContext
 from .demand_ledger import DemandLedger
 from .drafting_ledger import DraftingLedger
+from .litigation_ledger import LitigationLedger
 from .medchron_ledger import MedchronLedger
 from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError
 from .recipient_policy import authored_policy, normalize_address, sender_key
 from .transmit_verbs import dispatch_transmit
 
-KINDS = ("demand_job", "drafting_job", "medchron_job", "message")
+KINDS = ("demand_job", "drafting_job", "litigation_job", "medchron_job", "message")
 #: The job kinds: each binds on its own ledger with the same rules.
-JOB_KINDS = frozenset({"demand_job", "drafting_job", "medchron_job"})
+JOB_KINDS = frozenset({"demand_job", "drafting_job", "litigation_job", "medchron_job"})
 #: The kinds whose ledger carries its own reply mark (``mark_replied``). The
 #: medchron ledger predates it; its once-only rests on the bound_replies claim.
-_LEDGER_MARKED_KINDS = frozenset({"demand_job", "drafting_job"})
-_NOUN = {"demand_job": "demand", "drafting_job": "drafting", "medchron_job": "chronology"}
+_LEDGER_MARKED_KINDS = frozenset({"demand_job", "drafting_job", "litigation_job"})
+_NOUN = {
+    "demand_job": "demand",
+    "drafting_job": "drafting",
+    "litigation_job": "litigation status",
+    "medchron_job": "chronology",
+}
+#: How a binding reaches its person: a reply in their thread, or (a scheduled
+#: litigation job only) one new email to them. The overlay's scheduled wake
+#: sends that one email with smd_send_message under the same fixed subject
+#: (hermes-smd-reply binding.py SCHEDULED_SUBJECT_PREFIX); this mode is the
+#: broker-held equivalent, for a caller that binds instead.
+MODE_REPLY = "reply"
+MODE_NEW_MESSAGE = "new_message"
 #: The outcomes a requester is told about, for EVERY job kind (demand and
 #: drafting alike; the name predates the drafting lane). NOT ``failed``: a
 #: failed job is resumable and SMD's to resolve (a live demand job, 2026-10-06,
@@ -98,6 +119,8 @@ class Verified:
     graph_message_id: str
     sender: str
     conversation_id: str
+    mode: str = MODE_REPLY
+    subject: str = ""
 
 
 def _ops(broker: BrokerContext) -> MsGraphOps:
@@ -121,27 +144,59 @@ def _drafting_ledger(broker: BrokerContext) -> DraftingLedger:
     return DraftingLedger(str(broker.audit_db_path), queue)
 
 
+def _litigation_ledger(broker: BrokerContext) -> LitigationLedger:
+    # Read-only here; the queue dir is never written on this path.
+    queue = os.environ.get("SMD_LITIGATION_QUEUE_DIR") or "/run/smd-medchron/litigation-queue"
+    return LitigationLedger(str(broker.audit_db_path), queue)
+
+
+def scheduled_subject(request_ref: str) -> str:
+    """The fixed subject of a scheduled litigation run's one email, from its
+    ``scheduled:<YYYY-MM-DD>`` ref."""
+    try:
+        day = datetime.strptime(request_ref.split(":", 1)[1], "%Y-%m-%d")
+    except (IndexError, ValueError) as exc:
+        raise BindingRefused("that scheduled job's date cannot be read; nothing was sent") from exc
+    return f"Litigation status list, {day.date().isoformat()}"
+
+
+def _scheduled_recipient_ok(broker: BrokerContext, requester: str) -> bool:
+    """The scheduled job's requester is still a Named Administrator AND the
+    first authored ``scheduled_recipients`` entry, read from the live yaml."""
+    from .litigation_intake import scheduled_recipients, settings_of, skill_entry
+    from .medchron_ledger import admins_from_customer_yaml
+
+    who = normalize_address(requester)
+    recipients = scheduled_recipients(settings_of(skill_entry(broker.customer_path)))
+    admins = admins_from_customer_yaml(str(broker.customer_path)) or ()
+    return bool(recipients) and recipients[0] == who and who in admins
+
+
 def _medchron_ledger(broker: BrokerContext) -> MedchronLedger:
     # Read-only here; the queue dir is never written on this path.
     queue = os.environ.get("SMD_MEDCHRON_QUEUE_DIR") or "/run/smd-medchron/queue"
     return MedchronLedger(str(broker.audit_db_path), queue)
 
 
-def _job_ledger(broker: BrokerContext, kind: str) -> DemandLedger | DraftingLedger | MedchronLedger:
+def _job_ledger(broker: BrokerContext, kind: str) -> DemandLedger | DraftingLedger | LitigationLedger | MedchronLedger:
     if kind == "medchron_job":
         return _medchron_ledger(broker)
     return _marking_ledger(broker, kind)
 
 
-def _marking_ledger(broker: BrokerContext, kind: str) -> DemandLedger | DraftingLedger:
+def _marking_ledger(broker: BrokerContext, kind: str) -> DemandLedger | DraftingLedger | LitigationLedger:
     """The ledger of a kind in ``_LEDGER_MARKED_KINDS`` (it carries mark_replied)."""
+    if kind == "litigation_job":
+        return _litigation_ledger(broker)
     return _drafting_ledger(broker) if kind == "drafting_job" else _demand_ledger(broker)
 
 
 def _parse(raw: Any) -> tuple[str, str]:
     """(kind, identifier), where kind is a job kind, message or message_graph."""
     if not isinstance(raw, dict):
-        raise BindingRefused("a reply binding names a demand, drafting or chronology job, or an email")
+        raise BindingRefused(
+            "a reply binding names a demand, drafting, litigation status or chronology job, or an email"
+        )
     kind = raw.get("kind")
     if kind in JOB_KINDS:
         job_id = str(raw.get("job_id") or "").strip()
@@ -218,6 +273,24 @@ def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> V
         key = f"{kind}:{ident}:{row.get('attempt') or 1}:{row['state']}"
         if bound_replies.claimed(db_path, key):
             raise BindingRefused(f"{noun} job {ident} has already had its reply for this outcome")
+        if kind == "litigation_job" and row.get("trigger") == "scheduled":
+            # No request email exists: ONE new email to the requester, or nothing.
+            if not _scheduled_recipient_ok(broker, str(row["requester"])):
+                raise BindingRefused(
+                    f"{noun} job {ident}'s recipient is no longer the authored scheduled recipient "
+                    "and a Named Administrator; nothing was sent"
+                )
+            return Verified(
+                kind=kind,
+                key=key,
+                job_id=ident,
+                internet_message_id="",
+                graph_message_id="",
+                sender=normalize_address(str(row["requester"])),
+                conversation_id="",
+                mode=MODE_NEW_MESSAGE,
+                subject=scheduled_subject(str(row["request_ref"])),
+            )
         job_id, imid, expected_sender = ident, f"<{str(row['request_ref']).strip('<>')}>", row["requester"]
     if kind == "message_graph":
         found = msgraph_lookup.received_by_graph_id(ops, ident)
@@ -330,6 +403,10 @@ def bind_verb(
         # and runs its floors against it; it cannot change it.
         "sender": v.sender,
         "conversation_id": v.conversation_id,
+        # "new_message" only for a scheduled litigation job: the broker sets
+        # the recipient (``sender``) and this subject; the caller sends a body.
+        "mode": v.mode,
+        **({"subject": v.subject} if v.subject else {}),
     }
 
 
@@ -376,11 +453,22 @@ def reply_verb(
     # another broker thread is using.
     bound_ops = copy.copy(ops)
     bound_ops._request = claiming_request  # type: ignore[method-assign]
-    body = {
-        "message_id": v.graph_message_id,
-        "comment": str(payload.get("comment") or ""),
-        **({"html": payload["html"]} if isinstance(payload.get("html"), str) and payload["html"].strip() else {}),
-    }
+    html = {"html": payload["html"]} if isinstance(payload.get("html"), str) and payload["html"].strip() else {}
+    if v.mode == MODE_NEW_MESSAGE:
+        # The recipient and subject are the broker's, never the caller's; a
+        # caller's to/cc/bcc/subject/attachments are not read at all.
+        body: dict[str, Any] = {
+            "to": [v.sender],
+            "subject": v.subject,
+            "body_text": str(payload.get("comment") or ""),
+            **html,
+        }
+        if not (body["body_text"].strip() or html):
+            raise BindingRefused("refusing to send an empty message")
+        transmit = bound_ops.send
+    else:
+        body = {"message_id": v.graph_message_id, "comment": str(payload.get("comment") or ""), **html}
+        transmit = bound_ops.reply
     extra = request.get("audit_extra")
     audit_extra = dict(extra) if isinstance(extra, dict) else {}
     audit_extra["reply_binding"] = v.key
@@ -389,8 +477,8 @@ def reply_verb(
             broker,
             action,
             {**request, "payload": body, "audit_extra": audit_extra},
-            send=bound_ops.reply,
-            reply=bound_ops.reply,
+            send=transmit,
+            reply=transmit,
             refused=MsGraphRefused,
             transport=MsGraphTransportError,
             attempted_for_send=lambda _payload: [v.sender],
@@ -441,4 +529,16 @@ def _settle_failed_post(
 
 VERBS: tuple[str, ...] = ("msgraph_reply_bind", "msgraph_reply_bound")
 
-__all__ = ["AUDIT_TYPE", "KINDS", "VERBS", "BindingRefused", "Verified", "bind_verb", "reply_verb", "verify"]
+__all__ = [
+    "AUDIT_TYPE",
+    "KINDS",
+    "MODE_NEW_MESSAGE",
+    "MODE_REPLY",
+    "VERBS",
+    "BindingRefused",
+    "Verified",
+    "bind_verb",
+    "reply_verb",
+    "scheduled_subject",
+    "verify",
+]

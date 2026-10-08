@@ -36,8 +36,16 @@
 # firm's authored house style; never drafted in a turn. A seat lists it, with
 # its enabled classes, deliberately; omission is refusal.
 
+# v0.5.0 (2026-10-07): adds litigation-status, the QUEUED litigation status
+# lane. An administrator asks for the firm's litigation status list (or the
+# seat's weekday cron row, shipped commented out, asks for it) and the request
+# is a job on the Machine (operator/workspace_broker/litigation_verbs.py) that
+# reads the court papers of every open litigation matter and files one status
+# workbook, each value citing its document, in the firm's own library matter;
+# never read in a turn. A seat lists it, with its filing target, deliberately.
+
 name: pi
-version: 0.4.0
+version: 0.5.0
 
 # Additive floors on top of the base law-firm compliance set (upl-boundary,
 # privilege, conflict-routing, trust-funds-read-only,
@@ -58,9 +66,10 @@ compliance:
 
 personas: []
 
-# Twenty-five PI skills (bodies in operator/skills/): the nineteen lifecycle
+# Twenty-six PI skills (bodies in operator/skills/): the nineteen lifecycle
 # skills of v0.2.0, the five drafting-lane skills (four in-turn of v0.3.0 and
-# the queued document-drafter of v0.4.0), and one firm-operations skill.
+# the queued document-drafter of v0.4.0), the queued litigation-status of
+# v0.5.0, and one firm-operations skill.
 skills:
   # discovery (deepest — the firm's named slip area)
   - discovery-served-watch
@@ -97,6 +106,9 @@ skills:
   - mediation-brief-drafter
   # the queued drafting lane (v0.4.0, admin-initiated, a job on the Machine)
   - document-drafter
+  # the queued litigation status lane (v0.5.0, admin-initiated or the weekday
+  # cron, a job on the Machine; the workbook files in the firm library)
+  - litigation-status
   # firm operations: vendor bills forwarded by the firm's own staff, staged as
   # UNFINALIZED expenses (never finalized, never trust, never a payment).
   # Rehearsed on pilot-smokeball first; not bound on any client seat yet.

@@ -36,6 +36,7 @@ from .google_auth import materialize_credential
 from .job_ledger import JobLedgerWriter
 from .demand_verbs import DemandVerbs
 from .drafting_verbs import DraftingVerbs
+from .litigation_verbs import LitigationVerbs
 from .medchron_verbs import MedchronVerbs
 from .msgraph_auth import materialize_credential as materialize_msgraph_credential
 from .msgraph_auth import materialize_read_credential as materialize_msgraph_read_credential
@@ -138,6 +139,8 @@ class Broker:
     demand: DemandVerbs | None = None
     # The drafting job's request edge (drafting_verbs.py), same posture.
     drafting: DraftingVerbs | None = None
+    # The litigation status job's request edge (litigation_verbs.py), same posture.
+    litigation: LitigationVerbs | None = None
     msgraph: MsGraphOps | None = None
 
     def __init__(self) -> None:
@@ -227,6 +230,13 @@ class Broker:
         # (SMD_DRAFTING_QUEUE_DIR, root:workspace-broker 0770), its own allowance.
         self.drafting = DraftingVerbs.build(
             self, audit_db_path=audit_db_path, queue_dir=os.environ.get("SMD_DRAFTING_QUEUE_DIR")
+        )
+        # The litigation status job (the firm's open-matter status workbook):
+        # its own tables on the same DB file, its own queue dir
+        # (SMD_LITIGATION_QUEUE_DIR, root:workspace-broker 0770), the firm's
+        # monthly budget read from SMD_LITIGATION_FIRM_CONFIG.
+        self.litigation = LitigationVerbs.build(
+            self, audit_db_path=audit_db_path, queue_dir=os.environ.get("SMD_LITIGATION_QUEUE_DIR")
         )
         # ss#2258: AgentMail transmit moves behind this uid boundary. The gateway
         # keeps an inbox-scoped key with message_send/draft_send WITHHELD, so the

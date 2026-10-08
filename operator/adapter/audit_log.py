@@ -336,6 +336,14 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "DRAFTING_JOB_DELIVERED",
         "DRAFTING_JOB_FAILED",
         "DRAFTING_JOB_RESUME_REQUESTED",
+        # The litigation status job (the firm's open-matter status workbook),
+        # the drafting job's shape (operator/workspace_broker/litigation_verbs.py).
+        "LITIGATION_JOB_SUBMITTED",
+        "LITIGATION_JOB_RUNNING",
+        "LITIGATION_JOB_HELD",
+        "LITIGATION_JOB_DELIVERED",
+        "LITIGATION_JOB_FAILED",
+        "LITIGATION_JOB_RESUME_REQUESTED",
         # Case-manager casework (docs/specs/operator/case-manager-deadline-work.md):
         # a verified person approved or held a numbered line about the firm's
         # task list, or the Operator closed its own task on the record's evidence.

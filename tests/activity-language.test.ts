@@ -100,6 +100,12 @@ describe('activity-language exhaustiveness (writer parity)', () => {
         'DRAFTING_JOB_DELIVERED',
         'DRAFTING_JOB_FAILED',
         'DRAFTING_JOB_RESUME_REQUESTED',
+        'LITIGATION_JOB_SUBMITTED',
+        'LITIGATION_JOB_RUNNING',
+        'LITIGATION_JOB_HELD',
+        'LITIGATION_JOB_DELIVERED',
+        'LITIGATION_JOB_FAILED',
+        'LITIGATION_JOB_RESUME_REQUESTED',
         'AGENT_STOPPED',
         'COMPLIANCE_PACKET_EXPORTED',
         // ss#2122: a Named Administrator pulled the per-matter audit record
@@ -219,6 +225,12 @@ describe('failure outcomes are visible to the client (ss#2320)', () => {
     ['DRAFTING_JOB_DELIVERED', 'Filed a drafted document on the matter'],
     ['DRAFTING_JOB_FAILED', 'Could not finish drafting a document'],
     ['DRAFTING_JOB_RESUME_REQUESTED', 'Was asked to resume drafting a document'],
+    ['LITIGATION_JOB_SUBMITTED', 'Started a litigation status list'],
+    ['LITIGATION_JOB_RUNNING', 'Is preparing a litigation status list'],
+    ['LITIGATION_JOB_HELD', 'Paused a litigation status list and surfaced why'],
+    ['LITIGATION_JOB_DELIVERED', 'Filed a litigation status list in the firm library'],
+    ['LITIGATION_JOB_FAILED', 'Could not finish a litigation status list'],
+    ['LITIGATION_JOB_RESUME_REQUESTED', 'Was asked to resume a litigation status list'],
   ]
 
   for (const [action, copy] of outcomes) {

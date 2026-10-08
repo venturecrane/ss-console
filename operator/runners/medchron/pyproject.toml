@@ -20,6 +20,10 @@ dependencies = [
     "pymupdf>=1.24",
     # PR 9: the timeline visuals.
     "matplotlib>=3.8",
+    # The litigation status job (medchron/litigation/): court papers saved as
+    # .rtf are read with striprtf (pure Python, no deps); .doc goes through the
+    # apt antiword binary the image installs, never a Python package.
+    "striprtf>=0.0.26",
     # Seat access rides the Smokeball connector's plain client (stdlib + httpx),
     # never the MCP tool layer. The sdk is an unpublished transitive dep of the
     # connector; both are named under [tool.uv.sources] so `uv pip install
