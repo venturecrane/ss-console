@@ -182,6 +182,11 @@ def good_result(n: dict[str, int]) -> dict[str, Any]:
     }
 
 
+def first_text(params: dict[str, Any]) -> str:
+    c = params["messages"][0]["content"]
+    return c if isinstance(c, str) else "".join(b.get("text", "") for b in c if isinstance(b, dict))
+
+
 class ScriptedLit:
     """Answers each read: pass 1 opens a document once (a tool turn), then
     records ``result_fn(doc numbers)``; verify and audit record ``verdicts``."""
@@ -204,7 +209,7 @@ class ScriptedLit:
     def _numbers(params: dict[str, Any]) -> dict[str, int]:
         import re
 
-        first = params["messages"][0]["content"]
+        first = first_text(params)
         out = {}
         for num, name in re.findall(r"\[doc (\d+)\] ([^|]+?) \|", first):
             out[
@@ -244,9 +249,7 @@ class ScriptedLit:
             if self.resolve_hits:
                 import re
 
-                hits = re.search(
-                    r"SETTLEMENT-SCAN HITS to resolve in settlement_reviewed: (.*)", params["messages"][0]["content"]
-                )
+                hits = re.search(r"SETTLEMENT-SCAN HITS to resolve in settlement_reviewed: (.*)", first_text(params))
                 reviewed = (
                     [
                         {"doc": int(n), "finding": "an unrelated case"}

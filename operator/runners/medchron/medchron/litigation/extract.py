@@ -34,6 +34,8 @@ from ..stages.base import append_jsonl, read_jsonl
 
 PAGE_MARK = "===== page {n} ====="
 SCAN_FLOOR = 25  # characters: a page with less carries no text layer
+HEAD, TAIL = 3, 2
+DEFERRED = "[scanned page {n}: not transcribed; call view_page with this doc and page {n} to see it]"
 MIN_TEXT = 1
 OCR_PROMPT = (
     "Transcribe every word on this page exactly as printed, top to bottom, including stamps, handwriting you can "
@@ -76,15 +78,26 @@ def pdf_text(data: bytes, ocr: Ocr | None) -> tuple[str, int]:
         texts = [pg.get_text() or "" for pg in doc]
     finally:
         doc.close()
-    scanned = 0
-    for i, t in enumerate(texts):
-        if len(t.strip()) >= SCAN_FLOOR:
-            continue
+    scanned, picks = 0, ocr_pages(texts)
+    for i in picks:
         if ocr is None:
             raise ExtractFailure("scan_without_vision: a page has no text layer and no vision reader was given")
         texts[i] = ocr(render_png(data, i + 1))
         scanned += 1
+    for i, t in enumerate(texts):
+        if len(t.strip()) < SCAN_FLOOR and i not in picks:
+            texts[i] = DEFERRED.format(n=i + 1)
     return _pages(texts), scanned
+
+
+def ocr_pages(texts: list[str]) -> list[int]:
+    """The scanned pages transcribed at extract: every one on a short
+    document; on a long one only those among its first ``HEAD`` and last
+    ``TAIL`` pages (the caption, the filing stamp, the signature and the
+    proof of service). The rest are read on demand: ``view_page``."""
+    n = len(texts)
+    keep = set(range(n)) if n <= HEAD + TAIL else set(range(HEAD)) | set(range(n - TAIL, n))
+    return [i for i in sorted(keep) if len(texts[i].strip()) < SCAN_FLOOR and not texts[i].startswith("[scanned page")]
 
 
 def docx_text(data: bytes) -> str:
@@ -271,35 +284,35 @@ def extract_file(path: Path, ext: str, out: Path, ocr: Ocr | None) -> dict[str, 
 
 
 def extract_matter(
-    mdir: Path, rows: list[dict[str, Any]], ocr: Ocr | None, progress: Any = None
+    mdir: Path, rows: list[dict[str, Any]], ocr: Ocr | None, progress: Any = None, concurrency: int = 1
 ) -> list[dict[str, Any]]:
     """Every ok pulled row of one matter; resumable through extracted.jsonl.
-    ``progress`` (a ``progress.Progress``) is stepped once per document."""
+    Documents are read ``concurrency`` at a time (each one's vision calls in
+    turn), records written by this thread only. ``progress`` (a
+    ``progress.Progress``) is stepped once per document."""
+    from concurrent.futures import ThreadPoolExecutor
+
     log = mdir / "extracted.jsonl"
     done = {r["file_id"]: r for r in read_jsonl(log)}
-    out = []
+    todo = [r for r in rows if str(r["id"]) not in done and r.get("ok") and r.get("path")]
     for r in rows:
-        fid = str(r["id"])
-        if fid in done:
-            out.append(done[fid])
-            if progress is not None:
-                progress.step()
-            continue
-        if not r.get("ok") or not r.get("path"):
-            continue
-        rec = {
-            "file_id": fid,
-            "name": r.get("name"),
-            **extract_file(Path(r["path"]), r.get("ext") or "", mdir / "txt" / f"{fid}.txt", ocr),
-        }
-        append_jsonl(log, rec)
-        done[fid] = rec
-        out.append(rec)
-        if progress is not None:
-            if not rec.get("ok"):
-                progress.add("failures")
+        if str(r["id"]) in done and progress is not None:
             progress.step()
-    return out
+
+    def one(r: dict[str, Any]) -> dict[str, Any]:
+        fid = str(r["id"])
+        rec = extract_file(Path(r["path"]), r.get("ext") or "", mdir / "txt" / f"{fid}.txt", ocr)
+        return {"file_id": fid, "name": r.get("name"), **rec}
+
+    with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
+        for rec in pool.map(one, todo):
+            append_jsonl(log, rec)
+            done[rec["file_id"]] = rec
+            if progress is not None:
+                if not rec.get("ok"):
+                    progress.add("failures")
+                progress.step()
+    return [done[str(r["id"])] for r in rows if str(r["id"]) in done]
 
 
 def failures(mdir: Path) -> list[dict[str, Any]]:

@@ -32,7 +32,7 @@ from . import (
     inventory,
     job as job_mod,
 )
-from . import manifest, parity, read, vocab
+from . import manifest, parity, passes, read
 from .progress import Progress
 from .runbase import RunBase
 from .outcome import REASON, LitigationFailed, LitigationHold, Verdict
@@ -176,7 +176,13 @@ class LitigationRun(RunBase):
         total = sum(1 for rows in rows_by.values() for r in rows if r.get("ok") and r.get("path"))
         self._progress = Progress(self.log, "extract", total, "docs", every=20)
         for mid, rows in rows_by.items():
-            recs = extract_mod.extract_matter(fetch_mod.matter_dir(self.data, mid), rows, self._ocr, self._progress)
+            recs = extract_mod.extract_matter(
+                fetch_mod.matter_dir(self.data, mid),
+                rows,
+                self._ocr,
+                self._progress,
+                concurrency=int(self.firm.get("concurrency")),
+            )
             summary[mid] = {
                 "ok": sum(1 for r in recs if r.get("ok")),
                 "failed": [r["file_id"] for r in recs if not r.get("ok")],
@@ -206,103 +212,22 @@ class LitigationRun(RunBase):
 
     def _listing(self, ctx: MatterContext, mid: str) -> str:
         p = self._plan()[mid]
-        return read.file_list(ctx, p["candidates"], p["newest"])
+        return read.file_list(
+            ctx,
+            p["candidates"],
+            p["newest"],
+            int(self.firm.get("context_chars")),
+            int(self.firm.get("doc_context_chars")),
+        )
 
     def _read1(self) -> None:
-        prog = self._reading("read1")
-        for m in self._matters():
-            mid, p = m["id"], self._plan()[m["id"]]
-            if not p["read_groups"]:
-                continue
-            prog.step()
-            if self._mfile(mid, "read1.json").is_file():
-                continue
-            ctx = self._ctx(mid)
-            res = read.pass1(
-                self.doorway, self.firm, ctx, self._header(m), p["read_groups"], self._listing(ctx, mid), self.today
-            )
-            dump(self._mfile(mid, "read1.json"), {"groups": p["read_groups"], "result": res})
+        passes.read1(self)
 
     def _read2(self) -> None:
-        prog = self._reading("read2")
-        for m in self._matters():
-            mid, p = m["id"], self._plan()[m["id"]]
-            if not p["read_groups"]:
-                continue
-            prog.step()
-            if self._mfile(mid, "read2.json").is_file():
-                continue
-            r1 = self._mjson(mid, "read1.json")
-            merged = read.merge(manifest.load_prior(self.state, mid), r1["result"], r1["groups"])
-            ctx = self._ctx(mid)
-            got = read.check_pass(
-                self.doorway, self.firm, ctx, "verify", self._header(m), merged, self._listing(ctx, mid), self.today, ""
-            )
-            log = read.apply_verdicts(ctx, merged, got["verdicts"], "verify")
-            dump(self._mfile(mid, "read2.json"), {"result": merged, "overturns": log, "verdicts": got["verdicts"]})
-
-    def _after_read2(self, mid: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
-        r2 = self._mjson(mid, "read2.json")
-        if r2 is not None:
-            return r2["result"], r2["overturns"]
-        return manifest.load_prior(self.state, mid), []
-
-    def _texts(self, mid: str) -> dict[str, str]:
-        d = fetch_mod.matter_dir(self.data, mid) / "txt"
-        return {p.stem: p.read_text(encoding="utf-8", errors="replace") for p in d.glob("*.txt")} if d.is_dir() else {}
-
-    def _audit_extra(self, ctx: MatterContext, mid: str, result: dict[str, Any], audit: str) -> tuple[str, list[str]]:
-        prior = manifest.load_prior(self.state, mid)
-        if audit == "all" or prior is None:
-            scope = "AUDIT: every value in the result."
-        else:
-            changed = [
-                c["path"] for c in parity.compare(prior, result, moved_files=set(), overturns=[], today=self.today)
-            ]
-            scope = "AUDIT these values (changed since the last list): " + ("; ".join(changed) or "none")
-        hits = (
-            gates.settlement_hits(self._texts(mid), self.firm)
-            if (result.get("case_status") or {}).get("value") in vocab.OPEN_STATUSES
-            else []
-        )
-        refs = [f"[doc {ctx.by_id[h]}]" for h in hits if h in ctx.by_id]
-        extra = scope + ("\nSETTLEMENT-SCAN HITS to resolve in settlement_reviewed: " + ", ".join(refs) if refs else "")
-        return extra, hits
+        passes.read2(self)
 
     def _read3(self) -> None:
-        prog = self._reading("read3", audit=True)
-        for m in self._matters():
-            mid, p = m["id"], self._plan()[m["id"]]
-            if p["read_groups"] or p["audit"] == "all":
-                prog.step()
-            if self._mfile(mid, "read3.json").is_file():
-                continue
-            result, log = self._after_read2(mid)
-            if result is None or (not p["read_groups"] and p["audit"] != "all"):
-                continue
-            ctx = self._ctx(mid)
-            extra, hits = self._audit_extra(ctx, mid, result, p["audit"])
-            if extra.endswith("none") and not hits:
-                dump(self._mfile(mid, "read3.json"), {"result": result, "overturns": log, "settlement_reviewed": []})
-                continue
-            got = read.check_pass(
-                self.doorway,
-                self.firm,
-                ctx,
-                "audit",
-                self._header(m),
-                result,
-                self._listing(ctx, mid),
-                self.today,
-                extra,
-            )
-            log = log + read.apply_verdicts(ctx, result, got["verdicts"], "audit")
-            reviewed = [
-                {"file_id": (ctx.source(r.get("doc")) or {}).get("file_id"), "finding": r.get("finding")}
-                for r in got["settlement_reviewed"]
-                if isinstance(r, dict)
-            ]
-            dump(self._mfile(mid, "read3.json"), {"result": result, "overturns": log, "settlement_reviewed": reviewed})
+        passes.read3(self)
 
     # ---- assemble, gate, parity -------------------------------------------------------------
     def _integrity(self, mid: str) -> list[dict[str, Any]]:
@@ -329,7 +254,7 @@ class LitigationRun(RunBase):
     def final(self, m: dict[str, Any]) -> dict[str, Any] | None:
         mid = m["id"]
         r3 = self._mjson(mid, "read3.json")
-        result, log = (r3["result"], r3["overturns"]) if r3 else self._after_read2(mid)
+        result, log = (r3["result"], r3["overturns"]) if r3 else passes.after_read2(self, mid)
         if result is None:
             return None
         out = {
@@ -363,8 +288,12 @@ class LitigationRun(RunBase):
             fs = inventory.files_of(self.data, m["id"])
             files[m["id"]] = {str(f["id"]) for f in fs}
             saved[m["id"]] = {str(f["id"]): {str(f.get(k) or "")[:10] for k in ("created", "modified")} for f in fs}
-            hits[m["id"]] = gates.settlement_hits(self._texts(m["id"]), self.firm)
+            hits[m["id"]] = list((self._mjson(m["id"], "read3.json") or {}).get("hits_asked") or [])
         g = gates.run(ms, today=self.today, files=files, saved=saved, text_of=self._text_of, hits=hits)
+        unread = passes.unread_matters(self)
+        if unread:  # every other matter was read; the list holds until these are
+            g["issues"]["matter could not be read"] = [(u["number"], u["stage"], u["reason"][:120]) for u in unread]
+            g["passed"] = False
         dump(self.data / "gates.json", g)
         if not g["passed"]:
             raise LitigationHold(

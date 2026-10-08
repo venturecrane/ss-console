@@ -21,6 +21,7 @@ CASE_STATUSES = (ACTIVE, SETTLED_OWED, DISMISSED, JUDGMENT, STAYED, NOT_FILED, U
 OPEN_STATUSES = (ACTIVE, STAYED, NOT_FILED, UNCLEAR)
 
 NOT_SERVED = "Not served"
+SERVICE_REJECTED = "Service rejected (not served)"
 OUT_FOR_SERVICE = "Out for service"
 SERVED_NO_ANSWER = "Served, no answer in file"
 APPEARED_NO_ANSWER = "Appeared, no answer in file"
@@ -35,6 +36,7 @@ FIRM_CLIENT = "Firm's client (firm is defense counsel)"
 D_UNCLEAR = "Unclear"
 DEFENDANT_STATUSES = (
     NOT_SERVED,
+    SERVICE_REJECTED,
     OUT_FOR_SERVICE,
     SERVED_NO_ANSWER,
     APPEARED_NO_ANSWER,
@@ -51,7 +53,7 @@ DEFENDANT_STATUSES = (
 #: A defendant in one of these needs nothing from the firm right now.
 DEFENDANT_DONE = (ANSWERED, D_DISMISSED, D_SETTLED, DROPPED, UIM, DEFAULT)
 #: Statuses that assert there is NO answer: an answer date contradicts them.
-NO_ANSWER = (NOT_SERVED, OUT_FOR_SERVICE, SERVED_NO_ANSWER, APPEARED_NO_ANSWER)
+NO_ANSWER = (NOT_SERVED, SERVICE_REJECTED, OUT_FOR_SERVICE, SERVED_NO_ANSWER, APPEARED_NO_ANSWER)
 
 FIRM_ROLES = ("plaintiff", "defense")
 

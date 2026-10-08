@@ -46,7 +46,7 @@ DEF_PREFIX = [
     ("answered original", vocab.ANSWERED_ORIGINAL),
     ("answered", vocab.ANSWERED),
     ("not served", vocab.NOT_SERVED),
-    ("service rejected", vocab.NOT_SERVED),
+    ("service rejected", vocab.SERVICE_REJECTED),
     ("out for service", vocab.OUT_FOR_SERVICE),
     ("served, appeared", vocab.APPEARED_NO_ANSWER),
     ("appeared", vocab.APPEARED_NO_ANSWER),

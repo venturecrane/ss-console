@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..seat import SeatError
-from . import fetch as fetch_mod, inventory, manifest
+from . import fetch as fetch_mod, inventory, manifest, passes
 from .outcome import LitigationFailed, LitigationHold, Verdict
 from .run import STAGES, LitigationRun
 from .tools import dump
@@ -55,11 +55,28 @@ REPORT_KEYS = (
     "parity",
     "book",
     "projection",
+    "matters",
 )
 
 
 class RehearsalError(RuntimeError):
     pass
+
+
+class OfflineSeat:
+    """No seat at all (a laptop replay of a copied job dir): every listing,
+    mint and write raises, so a replay reads only what the job dir holds."""
+
+    writes_refused = 0
+
+    def __getattr__(self, name: str) -> Any:
+        def refuse(*_a: Any, **_k: Any) -> Any:
+            raise SeatError("offline: no seat in this run")
+
+        return refuse
+
+    def mint(self, matter_id: str, file_ids: list[str]) -> list[dict[str, Any]]:
+        return [{"id": f, "error": "offline: no seat in this run"} for f in file_ids]
 
 
 class ReadOnlySeat:
@@ -135,9 +152,14 @@ class RehearsalRun(LitigationRun):
         read_limit: int | None = None,
         read_matters: list[str] | None = None,
         seat_factory: Callable[[], Any] | None = None,
+        offline: bool = False,
         **kw: Any,
     ) -> None:
+        self.offline = offline
+
         def read_only() -> Any:
+            if offline:
+                return OfflineSeat()
             if seat_factory is not None:
                 return ReadOnlySeat(seat_factory())
             from ..seat import open_seat
@@ -157,7 +179,7 @@ class RehearsalRun(LitigationRun):
         try:
             super()._stage(name, fn)
         except (LitigationHold, LitigationFailed) as exc:
-            if name not in ("gates", "parity", "book"):
+            if name not in ("gates", "parity", "book") and not (self.offline and name == "fetch"):
                 raise
             self._put(f"{name}_refusal", str(exc))
             self._put(name, {"status": "done", "refused": True})
@@ -178,23 +200,34 @@ class RehearsalRun(LitigationRun):
             p["read_groups"], p["audit"] = [], "none"
         dump(self.data / "plan.json", plan)
 
+    def run(self) -> Verdict:
+        """The report is written on EVERY exit path, a failed run included:
+        a rehearsal that dies without one has measured nothing."""
+        v = super().run()
+        try:
+            write_report(self, verdict=v)
+        except Exception as exc:  # noqa: BLE001 - the verdict still goes out; the report says why it is thin
+            self.report_path.write_text(
+                json.dumps({"rehearsal": {"verdict": json.loads(v.to_json()), "report_error": repr(exc)[:300]}}),
+                encoding="utf-8",
+            )
+        return v
+
     def _walk(self) -> Verdict:
         for name in REHEARSAL_STAGES:
             self._stage(name, getattr(self, f"_{name}"))
             if name == "inventory" and not self._matters():
                 raise LitigationHold("scope_empty: no open litigation matters are in this job's scope")
         report = build_report(self)
-        tmp = self.report_path.with_name(f".{self.report_path.name}.tmp")
-        tmp.write_text(json.dumps(report, indent=1), encoding="utf-8")
-        tmp.replace(self.report_path)
-        c = report["counts"]
+        c, g, par = report["counts"], report["gates"], report["parity"]
         return Verdict(
             "held",
             stage="book",
             reason=(
-                f"rehearsal: {c['matters_inventoried']} matters inventoried, {c['matters_read']} read, "
-                f"{sum(report['gates']['by_rule'].values())} gate findings, "
-                f"{report['parity']['unexplained']} unexplained changes; nothing filed"
+                f"rehearsal: {c.get('matters_inventoried')} matters inventoried, {c.get('matters_read')} read, "
+                f"{len(c.get('matters_unread') or [])} unread, "
+                f"{sum((g.get('by_rule') or {}).values())} gate findings, "
+                f"{par.get('unexplained')} unexplained changes; nothing filed"
             ),
             flags_new=0,
         )
@@ -257,6 +290,7 @@ def _counts(r: RehearsalRun) -> dict[str, Any]:
         "would_read_without_limit": sum(1 for p in plan.values() if _reads(p.get("limited_out") or p)),
         "matters_read": len(read),
         "matters_read_ids": read,
+        "matters_unread": [u["number"] for u in passes.unread_matters(r)],
         "extraction_failures_by_type": dict(fails),
         "state_seeded_from_inputs": r.seeded,
         "seat_writes_refused": getattr(r._seat, "writes_refused", 0),
@@ -344,6 +378,24 @@ def projection(r: RehearsalRun) -> dict[str, Any]:
     }
 
 
+def _safe(fn: Callable[[RehearsalRun], Any], r: RehearsalRun) -> Any:
+    try:
+        return fn(r)
+    except Exception as exc:  # noqa: BLE001 - a section that cannot be measured says so; the report is still written
+        return {"unavailable": f"{type(exc).__name__}: {str(exc)[:200]}"}
+
+
+def write_report(r: RehearsalRun, verdict: Verdict | None = None) -> dict[str, Any]:
+    report = build_report(r)
+    if verdict is not None:
+        report["rehearsal"]["verdict"] = json.loads(verdict.to_json())
+    r.report_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = r.report_path.with_name(f".{r.report_path.name}.tmp")
+    tmp.write_text(json.dumps(report, indent=1, default=str), encoding="utf-8")
+    tmp.replace(r.report_path)
+    return report
+
+
 def build_report(r: RehearsalRun) -> dict[str, Any]:
     st = r._state()
     book_p = r.data / "book.json"
@@ -357,15 +409,50 @@ def build_report(r: RehearsalRun) -> dict[str, Any]:
             "filed": False,
         },
         "stages": {s: (st.get(s) or {}).get("seconds") for s in REHEARSAL_STAGES},
-        "peak_rss": _rss(),
-        "cents": _cents_by(r),
-        "counts": _counts(r),
-        "gates": _gates(r),
-        "parity": _parity(r),
+        "peak_rss": _safe(lambda _r: _rss(), r),
+        "cents": _safe(_cents_by, r),
+        "counts": _safe(_counts, r),
+        "gates": _safe(_gates, r),
+        "parity": _safe(_parity, r),
         "book": {
             **(json.loads(book_p.read_text(encoding="utf-8")) if book_p.is_file() else {}),
             "path": str(r._out()) if r._out().is_file() else None,
             "refusal": st.get("book_refusal"),
         },
-        "projection": projection(r),
+        "projection": _safe(projection, r),
+        "matters": _safe(per_matter, r),
     }
+
+
+def per_matter(r: RehearsalRun) -> dict[str, Any]:
+    """For each matter this run read: what was fetched and why, what the
+    reads cost, and what they found (statuses only, never a name)."""
+    from ..ledger import read_rows
+
+    plan = r._plan()
+    rows = read_rows(r.data / "usage-ledger.jsonl")
+    out: dict[str, Any] = {}
+    finals = {m["matter_id"]: m for m in (r._json("final.json") if (r.data / "final.json").is_file() else [])}
+    for m in r._matters():
+        mid, p = m["id"], plan[m["id"]]
+        if not _reads(p):
+            continue
+        mine = [x for x in rows if str(x.get("custom_id") or "").endswith(mid) or mid in str(x.get("custom_id") or "")]
+        calls: dict[str, int] = {}
+        for x in mine:
+            calls[str(x.get("stage"))] = calls.get(str(x.get("stage")), 0) + 1
+        f = finals.get(mid) or {}
+        out[str(m["number"])] = {
+            "files_listed": m.get("files"),
+            "selected": len(p["candidates"]),
+            "selected_by_class": p.get("candidate_classes"),
+            "fetched_ok": sum(1 for x in fetch_mod.pulled(r.data, mid).values() if x.get("ok")),
+            "read_calls": calls,
+            "read_cents": round(sum(r.pricing.price_row(x) * 100 for x in mine), 2),
+            "unread": (r._mjson(mid, "unread.json") or {}).get("reason"),
+            "case_status": (f.get("case_status") or {}).get("value"),
+            "defendant_statuses": dict(Counter(str(d.get("status")) for d in f.get("defendants") or [])),
+        }
+    ocr = [x for x in rows if x.get("stage") == "litigation_ocr"]
+    out["_ocr"] = {"pages": len(ocr), "models": dict(Counter(str(x.get("model")) for x in ocr))}
+    return out
