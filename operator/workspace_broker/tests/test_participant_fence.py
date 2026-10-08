@@ -338,8 +338,10 @@ def test_a_reply_to_its_own_anchor_reads_nothing(tmp_path: Path) -> None:
     box = FakeMailbox()
     broker = _broker(tmp_path, box)
     assert _reply(broker, "REQ", anchor=_anchor("REQ"))["ok"] is True
-    # The reply verb reads its source (sender vetting); the fence adds no read.
-    assert all("toRecipients" not in u for u in box.message_reads())
+    # The reply verb reads its source once (sender vetting, and since 2026-10-08
+    # the To/Cc lines it copies the request's authored participants from); the
+    # fence adds no read of its own.
+    assert len(box.message_reads()) == 1
 
 
 def test_a_reply_in_the_anchor_conversation_to_a_participant_is_allowed(tmp_path: Path) -> None:

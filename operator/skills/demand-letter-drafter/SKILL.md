@@ -140,7 +140,8 @@ reply for a failed job in any case.
    firm's library (rehearsal) matter, NOT the client matter: say exactly that, and never
    say they are "in the matter's folder".
 3. **Reply once** with `create_draft` addressed to the bound sender only (the seat sends
-   it in her original thread after the reply checks):
+   it in her original thread after the reply checks, copying the firm's people who were on the request;
+   never add anyone yourself):
    - **delivered**: the documents are filed in their dated folder in the matter the job
      row names (the client matter <number>, or the library matter for a rehearsal),
      each named exactly as filed (the gap audit, and `Demand.<Client>.docx`), in the

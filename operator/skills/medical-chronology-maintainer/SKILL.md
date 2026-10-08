@@ -385,7 +385,8 @@ nothing, stop.
    `list_tasks`. The task is the attorney's only notice of a delivery; the attorney
    is never emailed. A held job gets no ledger entry and no task.
 4. **Reply once** with `create_draft` addressed to the bound sender only (the seat
-   sends it in the requester's original thread after the reply checks):
+   sends it in the requester's original thread after the reply checks, copying the firm's people who were on the request;
+   never add anyone yourself):
    - **delivered**: the counts (documents read, pages, exclusions as the runner
      reported them) and where the folder is, and nothing from the job's `reason`:
      never say an entry is flagged, partial, or needs review unless the delivery

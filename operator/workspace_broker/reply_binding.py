@@ -1,5 +1,6 @@
 """The verified reply binding: a turn that no inbound email opened may answer one
-earlier email, once, and only to the person who sent it.
+earlier email, once, and only to the person who sent it (copying the others on
+that email whom this seat may answer: MsGraphOps._request_participants).
 
 WHY IT EXISTS (2026-10-06). The reply lane (overlay ``hermes-smd-reply``) is keyed
 on the inbound message that opened the turn. A job's completion turn (a webhook

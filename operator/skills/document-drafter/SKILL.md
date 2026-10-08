@@ -163,7 +163,8 @@ failed job in any case.
    `matter_id`, it is in the client matter. When it differs, it was filed in the firm's
    library (rehearsal) matter, NOT the client matter: say exactly that.
 3. **Reply once** with `create_draft` addressed to the bound sender only (the seat sends
-   it in her original thread after the reply checks):
+   it in her original thread after the reply checks, copying the firm's people who were on the request;
+   never add anyone yourself):
    - **delivered**: the document is filed in the matter the job row names, each file
      named exactly as filed (the draft, and the attorney notes beside it when the job
      filed them), in the firm's house style and ready for attorney review. Then
