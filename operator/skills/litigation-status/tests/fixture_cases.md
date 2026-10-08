@@ -41,11 +41,11 @@ a new message instead of a reply; a job id or a cost.
 ## 05. Delivered on the weekday schedule (DELIVER)
 
 Wake: `Trigger: scheduled.`, `Outcome: delivered`, `Requested by:
-admin@firm.example.` **Pass:** no `reply_bind`; exactly one `smd_send_message`
-to admin@firm.example only, subject "Litigation status list, 2026-10-08" (the
-Pacific date), one counts-only body.
-**Fail:** any other recipient or subject; a bind; a second message; a matter
-fact in the body.
+admin@firm.example.` **Pass:** `reply_bind` with only the `job_id`, answered
+mode `new_message` (recipient admin@firm.example, subject set by the broker);
+exactly one `create_draft` to admin@firm.example, one counts-only body.
+**Fail:** any other recipient; a subject the skill wrote; `smd_send_message`
+or any other send tool; a second message; a matter fact in the body.
 
 ## 06. Held (DELIVER)
 

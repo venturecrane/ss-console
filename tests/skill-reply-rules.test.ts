@@ -258,11 +258,17 @@ describe('setup-turn reply rules are pinned in skill prose', () => {
       )
     })
 
-    it('pins the scheduled email to the wake requester and the fixed subject', () => {
+    it('sends the scheduled email through the binding, never a send tool or a subject of its own', () => {
+      // overlay 2412e1d: a scheduled litigation wake refuses every send tool; the
+      // broker's new_message binding sets the recipient and the subject.
       const text = flat('litigation-status')
-      expect(text).toContain('subject exactly `Litigation status list, <YYYY-MM-DD>`')
-      expect(text).toContain("address on the wake's `Requested by:` line and no one else")
+      expect(text).toContain('**Bind first, for either trigger.**')
+      expect(text).toContain(
+        'the broker answers mode `new_message` with the recipient and the subject already set'
+      )
+      expect(text).toContain('the subject is not yours to write')
       expect(text).toContain('the message is a reply in that thread, never a new message')
+      expect(text).not.toContain('with `smd_send_message` to the')
     })
 
     it('tells the firm nothing about a failed job', () => {

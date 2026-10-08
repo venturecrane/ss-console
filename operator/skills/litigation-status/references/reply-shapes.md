@@ -25,10 +25,10 @@ The counts and the workbook's file name are the whole of the facts.
   Status, as <file name>. It covers 64 matters; 7 were re-read because their
   files changed since the last list, and it carries 3 new flags for review.
   Nothing has been sent to anyone outside the firm."
-- **delivered, scheduled.** One new email by `smd_send_message` to the wake's
-  `Requested by:` address only, subject exactly "Litigation status list,
-  <YYYY-MM-DD>" (the Pacific date), with the same counts-only body. No bind:
-  a scheduled run has no thread.
+- **delivered, scheduled.** `reply_bind` with the job id answers mode
+  `new_message` with the recipient and the subject set by the broker; one
+  `create_draft` to that person with the same counts-only body. The subject
+  is the broker's, never written by the skill.
 - **held.** That the list is not filed yet, and what the files or the request
   need, in the firm's terms, from the job's reason. The reason reads
   `<code>: <sentence>`; relay the sentence after the code, never the code
@@ -43,5 +43,5 @@ The counts and the workbook's file name are the whole of the facts.
 
 - A list of cases, a matter number, a name or a date in the body.
 - A second message, a follow-up, a task or a memo.
-- A message to anyone but the person the broker binds, or on a scheduled run
-  the wake's requester.
+- A message to anyone but the person the broker binds.
+- Any send tool other than `create_draft` after a bind.

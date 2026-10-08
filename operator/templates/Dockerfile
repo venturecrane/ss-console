@@ -1129,7 +1129,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # the bound reply to the requester its only channel (binding kind medchron_job,
 # ss-console #3096); medchron_job_submit takes the requester and request ref
 # from the verified inbound email.
-ARG OVERLAY_REF="099f9fdd5a7545b3b7a5c251842f853e6d371339"
+# 2026-10-08 (00220a0d, the overlay #431 merge commit). The litigation status
+# lane's seat half: litigation_job_submit / litigation_job_status (requester and
+# request taken from the verified inbound), the litigation wake in the reply
+# binding (every send tool refused; a scheduled run takes only the broker's
+# new_message binding in its own wake), and the litigation lane on request cards.
+ARG OVERLAY_REF="00220a0d3634b58637c027a1c0499c4514a6950a"
 
 ARG CUSTOMER_SLUG=customer-zero
 

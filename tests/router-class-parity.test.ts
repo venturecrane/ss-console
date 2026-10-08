@@ -324,7 +324,7 @@ describe('matter-inbox-router: the litigation status class', () => {
       "Run the litigation-status skill's DELIVER mode for litigation job <id>."
     )
     expect(skill).toContain('Send the client NOTHING')
-    expect(skill).toContain('`reply_bind` and ONLY `job_id`')
+    expect(skill).toContain('Call `reply_bind` with ONLY `job_id`')
   })
 })
 
