@@ -95,6 +95,26 @@ def _cmd_draft(args: argparse.Namespace) -> int:
     return {"delivered": 0, "held": 3, "failed": 1}.get(v.outcome, 1)
 
 
+def _litigation_run(args: argparse.Namespace, run_cls, lit_rehearse, lit_firm):
+    """The run ``medchron litigate`` asked for: the real job, or a rehearsal
+    (read-only seat, its own state dir, an optional read limit, a report)."""
+    jd = Path(args.job_dir)
+    kw = {"inputs_dir": args.inputs, "pricing": args.pricing, "log": lambda m: print(m, file=sys.stderr)}
+    if not args.rehearse:
+        if args.read_limit is not None or args.read_matters:
+            raise lit_rehearse.RehearsalError("rehearsal: --read-limit and --read-matters need --rehearse")
+        return run_cls(jd, state_dir=args.state_dir, **kw)
+    lit_rehearse.ensure_job(jd, lit_firm.load(args.inputs).data["firm"]["slug"], [])
+    return lit_rehearse.RehearsalRun(
+        jd,
+        report_path=Path(args.rehearse),
+        state_dir=args.state_dir or str(jd / "rehearsal-state"),
+        read_limit=args.read_limit,
+        read_matters=[x.strip() for x in (args.read_matters or "").split(",") if x.strip()],
+        **kw,
+    )
+
+
 def _cmd_litigate(args: argparse.Namespace) -> int:
     """One litigation status job (``litigation/run.py``). The verdict is ONE
     JSON object: the only line on stdout, and the same text in verdict.json.
@@ -102,18 +122,15 @@ def _cmd_litigate(args: argparse.Namespace) -> int:
     sent to stderr. Exit 0 delivered, 1 held, 2 failed."""
     import contextlib
 
-    from .litigation import firm as lit_firm, job as lit_job
+    from .litigation import firm as lit_firm, job as lit_job, rehearse as lit_rehearse
     from .litigation.outcome import Verdict
     from .litigation.run import LitigationRun
 
     with contextlib.redirect_stdout(sys.stderr):
         try:
-            r = LitigationRun(
-                Path(args.job_dir),
-                inputs_dir=args.inputs,
-                pricing=args.pricing,
-                log=lambda m: print(m, file=sys.stderr),
-            )
+            r = _litigation_run(args, LitigationRun, lit_rehearse, lit_firm)
+        except lit_rehearse.RehearsalError as exc:
+            v = Verdict("failed", stage="setup", reason=str(exc))
         except lit_job.LitigationJobError as exc:
             v = Verdict("failed", stage="envelope", reason=f"envelope_invalid: {exc}")
         except lit_firm.LitigationConfigError as exc:
@@ -250,6 +267,15 @@ def main(argv: list[str] | None = None) -> int:
     lt.add_argument("--inputs", default=None, help="the litigation inputs dir (default: MEDCHRON_LITIGATION_INPUTS)")
     lt.add_argument("--pricing", default=None)
     lt.add_argument("--redo", default="", help="comma-separated stages to reopen (a resume request)")
+    lt.add_argument("--state-dir", default=None, help="the persistent state dir (default: the lane's, on the volume)")
+    lt.add_argument(
+        "--rehearse",
+        default=None,
+        metavar="REPORT_JSON",
+        help="run through book, gates and parity on a read-only seat; file nothing; write the report here",
+    )
+    lt.add_argument("--read-limit", type=int, default=None, help="rehearsal: read only this many matters")
+    lt.add_argument("--read-matters", default="", help="rehearsal: matter ids read first, comma-separated")
     lt.set_defaults(fn=_cmd_litigate)
     d = sub.add_parser("dag", help="print the stage order and validate it")
     d.set_defaults(fn=_cmd_dag)

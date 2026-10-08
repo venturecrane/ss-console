@@ -34,6 +34,7 @@ REASON_CODES = (
     "limit",
     "no_verdict",
     "unexpected",
+    "rehearsal",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 EXIT = {"delivered": 0, "held": 1, "failed": 2}
