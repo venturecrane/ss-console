@@ -73,7 +73,10 @@ def test_an_inner_quotation_in_single_marks_matches_a_record_written_with_double
     g = _gate()
     record = 'pain often contributes to difficulty \n"even climbing the back stairs." \nNEXT SECTION'
     draft = "difficulty 'even climbing the back stairs.'"
-    flat = lambda s: g.normalize(g.strip_markdown(s))  # noqa: E731
+
+    def flat(s: str) -> str:
+        return g.normalize(g.strip_markdown(s))
+
     assert flat(draft) in flat(record.replace("\n", " "))
     # a changed word still does not match
     assert flat("difficulty 'even getting up the back stairs.'") not in flat(record.replace("\n", " "))

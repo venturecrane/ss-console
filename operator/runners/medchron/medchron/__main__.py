@@ -96,6 +96,7 @@ def _reexec_without_redo() -> None:
     head = ["-m", "medchron"] if argv[0].endswith("__main__.py") else [argv[0]]
     sys.stdout.flush()
     sys.stderr.flush()
+    # nosemgrep: python.lang.security.audit.dangerous-os-exec-tainted-env-args.dangerous-os-exec-tainted-env-args - re-runs this process with its own argv (the daemon's fixed `medchron draft <job_dir>` line) minus --redo; no input reaches it
     os.execv(sys.executable, [sys.executable, *head, *argv[1:]])
 
 
