@@ -55,6 +55,13 @@ CALLS = [
     (summarize.Summarizer.run, (X, X), {}),
     (summarize.condense, (X, X, X, X, X, X, X), {}),
     (finalpass.settle, (X, X), {}),
+    # settle.py (the drafting final pass reuses these read-only)
+    (finalpass.findings, (X,), {}),
+    (finalpass.locate, (X, X), {}),
+    (finalpass.self_cleared, (X,), {}),
+    (finalpass._clean, (X, X), {}),
+    (finalpass._units, (X,), {}),
+    (draft.audit_sections, (X,), {}),
     (quotefix.quote_findings, (X,), {}),
     (quotefix.repair, (X, X, X), {}),
     (deliver.out_dir, (X,), {}),
@@ -118,6 +125,10 @@ def test_the_shapes_drafting_reads_back():
     )
     assert isinstance(md, str) and isinstance(notes, list)
     assert issubclass(finalpass.Unlocated, Exception)
+    assert hasattr(finalpass._FIG, "findall")
+    # settle.py reads finding rows as (section, verdict, claim, detail)
+    rows = finalpass.findings("# Audit v1\n\n## AUDIT: A\n\n- a claim | INVENTED | why\n")
+    assert rows and len(rows[0]) == 4 and rows[0][1] == "INVENTED"
     assert quotefix.quote_findings(["[9] something else"]) == []
     merged, missing = draft.merge_repair("# A\n\nx\n", "# A\n\ny\n", ["A"])
     assert "y" in merged and missing == []

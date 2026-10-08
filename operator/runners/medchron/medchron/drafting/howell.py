@@ -38,6 +38,22 @@ BILLING_NAME = re.compile(
     r"invoices?|ub-?04|hcfa|cms-?1500|balance)\b"
 )
 BILLING_TEXT = re.compile(r"(?i)(explanation of benefits|amount paid|total charges|balance due|lien)")
+#: Signals that a document is itself a bill or ledger, not a letter or record
+#: that mentions one (a 2026-10-07 large-matter dry run read 438 documents on the
+#: phrase test alone: demand letters, depositions and records that say "lien").
+_AMOUNT = re.compile(r"\$\s?\d[\d,]*\.\d{2}\b")
+_TABLE = re.compile(
+    r"(?i)\b(cpt|hcpcs|date of service|dates of service|\bdos\b|charges?\s+(payments?|adj)|"
+    r"adjustments?|amount billed|billed amount|patient responsibility|allowed amount)\b"
+)
+_LIEN = re.compile(r"(?i)\b(lien|balance due|amount owed|outstanding balance)\b")
+SHORT_DOC_CHARS = 15_000
+#: Documents that state money but are not a provider's charges: the case's own
+#: settlement papers, releases, retainers, funding agreements, court forms.
+_NOT_A_BILL = re.compile(
+    r"(?i)\b(releases?|settlement|set\.? ?smt|smt|retainer|loan|bill of sale|dismissal|summons|"
+    r"agreement|stipulation|demand|deposition|complaint)\b"
+)
 KINDS = ("bill", "eob", "lien", "ledger")
 DOC_CHARS = 60_000
 _STOP = {"medical", "center", "centers", "group", "inc", "llc", "the", "and", "of", "health", "care", "clinic", "md"}
@@ -65,7 +81,23 @@ class ExtractionError(RuntimeError):
 
 
 def is_billing(row: dict[str, Any], head: str) -> bool:
-    return bool(BILLING_NAME.search(str(row.get("name") or ""))) or bool(BILLING_TEXT.search(head[:4000]))
+    """A billing document: named as one, or reading as one. A text-only
+    candidate needs a ledger's shape (five or more cents-precise amounts and a
+    column or code signal) or a lien/balance statement carrying an amount; a
+    letter that only mentions a lien is not read for figures."""
+    name = str(row.get("name") or "")
+    if _NOT_A_BILL.search(name):
+        return False
+    if BILLING_NAME.search(name) or BILLING_NAME.search(str(row.get("folder") or "")):
+        return True
+    h = head[:4000]
+    amounts = len(_AMOUNT.findall(h))
+    if amounts >= 5 and _TABLE.search(h):
+        return True
+    # A lien or balance letter is short; a demand or deposition that mentions
+    # a lien is not (SHORT_DOC_CHARS of extracted text).
+    short = int(row.get("chars") or len(head)) <= SHORT_DOC_CHARS
+    return amounts >= 1 and short and bool(_LIEN.search(h))
 
 
 def money(raw: Any) -> Decimal | None:
@@ -135,16 +167,22 @@ def verify(rows: list[Any], text: str, doc: dict[str, str]) -> tuple[list[dict[s
     return kept, notes
 
 
+RETRY = "Your answer was not a JSON array. Answer again with ONLY the JSON array described, and nothing else; [] when this part of the document carries no billing figures."
+
+
 def _parse_json_array(text: str) -> list[Any] | None:
-    """The answer's JSON array; None when the answer is not one."""
-    m = re.search(r"\[.*\]", text, flags=re.S)
-    if not m:
-        return None
-    try:
-        out = json.loads(m.group(0))
-    except ValueError:
-        return None
-    return out if isinstance(out, list) else None
+    """The first well-formed JSON array in the answer; None when there is none.
+    Decodes from each '[' in turn, so prose or bracketed words around the
+    array cannot corrupt it (a greedy first-'[' to last-']' match did)."""
+    dec = json.JSONDecoder()
+    for m in re.finditer(r"\[", text):
+        try:
+            out, _ = dec.raw_decode(text, m.start())
+        except ValueError:
+            continue
+        if isinstance(out, list) and all(isinstance(x, dict) for x in out):
+            return out
+    return None
 
 
 def extract(
@@ -180,18 +218,33 @@ def extract(
             return got["rows"], got["notes"]
         raw: list[Any] = []
         for i in range(0, max(len(text), 1), DOC_CHARS):
-            res = doorway.call(
-                "howell",
-                model=model,
-                system=PROMPT,
-                messages=[{"role": "user", "content": f"DOCUMENT: {doc['name']}\n\n{text[i : i + DOC_CHARS]}"}],
-                max_tokens=max_tokens,
-                stream=True,
-                custom_id=f"howell-{doc['id'][:24]}-{i // DOC_CHARS}",
-            )
-            if res.stop_reason == "max_tokens":
-                raise ExtractionError(f"the billing read of {doc['name']} stopped at its output ceiling")
-            got = _parse_json_array(res.text)
+            piece = i // DOC_CHARS
+            messages: list[dict[str, Any]] = [
+                {"role": "user", "content": f"DOCUMENT: {doc['name']}\n\n{text[i : i + DOC_CHARS]}"}
+            ]
+            got = None
+            for attempt in range(2):  # one corrective retry, then the read fails
+                res = doorway.call(
+                    "howell",
+                    model=model,
+                    system=PROMPT,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    stream=True,
+                    custom_id=f"howell-{doc['id'][:24]}-{piece}-{attempt}",
+                )
+                if res.stop_reason == "max_tokens":
+                    raise ExtractionError(f"the billing read of {doc['name']} stopped at its output ceiling")
+                got = _parse_json_array(res.text)
+                if got is not None:
+                    break
+                # Keep the unparseable answer: a failure nobody can read cannot be diagnosed.
+                (out_dir / f".{doc['id']}.{piece}.{attempt}.unparsed.txt").write_text(res.text or "", encoding="utf-8")
+                messages = [
+                    *messages,
+                    {"role": "assistant", "content": res.text or "(no answer)"},
+                    {"role": "user", "content": RETRY},
+                ]
             if got is None:
                 raise ExtractionError(f"the billing read of {doc['name']} did not answer with a JSON array")
             raw += got
@@ -329,23 +382,123 @@ def _dates(rows: list[dict[str, Any]], tab: list[dict[str, Any]]) -> Cell:
     return Cell(span, _uniq([doc for _, doc in pts]))
 
 
-def build(rows: list[dict[str, Any]], medicals: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """One row per provider, ordered by first date of service then name."""
+#: Words that name a kind of provider, not which one ("Northgate Orthopedic
+#: Consultants" and "Westfield Orthopedic Consultants" are different providers).
+_GENERIC = {
+    "orthopedic",
+    "orthopaedic",
+    "orthopedics",
+    "consultants",
+    "therapy",
+    "physical",
+    "rehab",
+    "surgery",
+    "surgical",
+    "center",
+    "massage",
+    "therapist",
+    "office",
+    "imaging",
+    "radiology",
+    "medical",
+    "associates",
+    "services",
+    "foundation",
+    "hospital",
+    "health",
+    "northern",
+    "southern",
+    "california",
+    "sacramento",
+    "doctor",
+    "spine",
+    "treatment",
+    "interventional",
+    "chiropractic",
+    "clinic",
+    "group",
+    "open",
+    "reduced",
+}
+
+
+#: A billing row naming a treating provider, and one naming a vendor or payer.
+_MEDICAL = re.compile(
+    r"(?i)\b(m\.?d\.?|d\.?o\.?|d\.?c\.?|p\.?t\.?|dpt|clinic|medical|hospital|imaging|radiology|mri|surgery|"
+    r"surgical|orthop\w*|chiropractic|therapy|pain|anesthesia|physicians?)\b"
+)
+_VENDOR = re.compile(
+    r"(?i)\b(llc legal|legal|litigation|law office|attorney|advisory|funding|lien funding|nurses?, llc|"
+    r"court|records? retrieval|copy|one legal|infotrack|info track|mediation|associates, llc)\b"
+)
+OFF_TAB = "{{ATTORNEY: this provider is not on the matter's Medicals tab; confirm it is the client's treatment}}"
+
+
+def _distinct(name: str) -> list[str]:
+    """The name's identifying words: five letters or more, not a kind of
+    provider, with any parenthetical or "/staff" suffix removed."""
+    base = re.sub(r"\(.*?\)|/.*$", " ", name)
+    return [t for t in re.findall(r"[a-z]+", base.lower()) if len(t) >= 5 and t not in _GENERIC and t not in _STOP]
+
+
+def match_provider(name: str, spine: list[str]) -> str | None:
+    """The Medicals-tab provider a billing row's provider is, or None. A word
+    matches at 0.85 similarity, so "Halverson"/"Halvorsen" and "Jaek"/"Jack"
+    are one provider; a tie between two tab providers matches neither."""
+    from difflib import SequenceMatcher
+
+    mine = _distinct(name)
+    best, score, tie = None, 0, False
+    for cand in spine:
+        s = sum(1 for a in mine if any(SequenceMatcher(None, a, b).ratio() >= 0.85 for b in _distinct(cand)))
+        if s > score:
+            best, score, tie = cand, s, False
+        elif s == score and s > 0:
+            tie = True
+    return None if tie or score == 0 else best
+
+
+def build(
+    rows: list[dict[str, Any]], medicals: list[dict[str, Any]], unmatched: list[str] | None = None
+) -> list[dict[str, Any]]:
+    """One row per provider, ordered by first date of service then name.
+
+    When the matter's Medicals tab lists providers, the tab is the spine: a
+    billing row joins the tab provider it names, and a row naming none of them
+    (a litigation vendor, the firm's own invoice, a funding company) is left
+    out of the table and appended to ``unmatched`` for the attorney notes."""
     groups: dict[str, dict[str, Any]] = {}
-    for r in rows:
-        g = groups.setdefault(provider_key(r["provider"]), {"provider": r["provider"], "rows": [], "tab": []})
-        g["rows"].append(r)
+    spine = [str(m.get("provider") or "").strip() for m in medicals if str(m.get("provider") or "").strip()]
     for m in medicals:
         name = str(m.get("provider") or "").strip()
         if name:
             g = groups.setdefault(provider_key(name), {"provider": name, "rows": [], "tab": []})
             g["tab"].append(m)
+    off_tab: set[str] = set()
+    for r in rows:
+        if spine:
+            hit = match_provider(r["provider"], spine)
+            if hit is None and _MEDICAL.search(r["provider"]) and not _VENDOR.search(r["provider"]):
+                # A treating provider the tab does not list: its own row, marked,
+                # never silently dropped (the tab is not always complete).
+                key = provider_key(re.sub(r"\(.*?\)|/.*$", "", r["provider"]))
+                off_tab.add(key)
+            elif hit is None:
+                if unmatched is not None:
+                    unmatched.append(f"{r['provider']} ({r['doc']['name']})")
+                continue
+            else:
+                key = provider_key(hit)
+        else:
+            key = provider_key(r["provider"])
+        g = groups.setdefault(key, {"provider": r["provider"], "rows": [], "tab": []})
+        g["rows"].append(r)
     table = []
     for key in groups:
         g = groups[key]
         table.append(
             {
-                "provider": g["provider"],
+                "provider": g["provider"] + (f" {OFF_TAB}" if key in off_tab else ""),
                 "dates_of_service": _dates(g["rows"], g["tab"]).as_dict(),
                 "billed": _billed(g["rows"], g["tab"]).as_dict(),
                 "paid": _paid(g["rows"]).as_dict(),
