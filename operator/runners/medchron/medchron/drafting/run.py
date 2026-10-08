@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import budget as budget_mod, limits as limits_mod
+from . import settle as settle_mod
 from ..demand import deliver, facts as facts_mod, finalpass, preflight, pull, quotefix, summarize, transcribe
 from ..demand.firm import DemandFirm
 from ..ledger import Ledger
@@ -311,7 +312,9 @@ class DraftingRun:
             rows, notes = howell.extract(self.data, self.doorway, self.firm.model("digest"), CONCURRENCY, self.log)
         except howell.ExtractionError as exc:
             raise compose.DraftingError(f"howell: {exc}") from None
-        table = howell.build(rows, self._json("facts.json").get("medicals") or [])
+        unmatched: list[str] = []
+        table = howell.build(rows, self._json("facts.json").get("medicals") or [], unmatched)
+        notes += [f"not on the Medicals tab, left out of the charges table: {u}" for u in unmatched]
         self._write("howell.json", {"table": table, "notes": notes})
 
     def _caption(self) -> None:
@@ -398,7 +401,7 @@ class DraftingRun:
         md = (self.data / f"draft-v{version}.md").read_text(encoding="utf-8")
         audit_md = (self.data / f"audit-v{version}.md").read_text(encoding="utf-8")
         try:
-            md, settled = finalpass.settle(md, audit_md)
+            md, settled = settle_mod.settle(md, audit_md)
         except finalpass.Unlocated as exc:
             raise DraftingFailed(f"audit_unsettled: the final audit pass could not settle a finding: {exc}") from None
         drifts = compose.finding_lines(audit_md, ("DRIFTS", *compose.EXTRA_VERDICTS))
