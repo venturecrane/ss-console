@@ -250,6 +250,65 @@ def _inbound_turn_did_not_reply(db_path: str, graph_message_id: str, since: str)
     return None
 
 
+def _verify_job(broker: BrokerContext, kind: str, ident: str, db_path: str) -> tuple[dict[str, Any], str]:
+    """A job binding's ledger checks: (the row, its reply key), or refused."""
+    noun = _NOUN[kind]
+    row = _job_ledger(broker, kind).read(ident)
+    if row is None:
+        raise BindingRefused(f"there is no {noun} job with that id")
+    if row["state"] == "failed":
+        raise BindingRefused(
+            f"{noun} job {ident} failed on SMD's side; the requester is told nothing until it is "
+            "delivered or held, and SMD has been alerted. Send nothing to anyone."
+        )
+    if row["state"] not in REPLYABLE_DEMAND_STATES:
+        raise BindingRefused(f"{noun} job {ident} has not ended (it is {row['state']}); its reply waits for that")
+    # One reply per (attempt, outcome): a resumed job (attempt + 1) that
+    # ends again is owed a reply for its new outcome.
+    key = f"{kind}:{ident}:{row.get('attempt') or 1}:{row['state']}"
+    if bound_replies.claimed(db_path, key):
+        raise BindingRefused(f"{noun} job {ident} has already had its reply for this outcome")
+    return row, key
+
+
+def _verify_scheduled(broker: BrokerContext, kind: str, ident: str, key: str, row: dict[str, Any]) -> Verified:
+    """A scheduled litigation job has no request email: ONE new email to its
+    requester, who must still be the authored scheduled recipient, or nothing."""
+    if not _scheduled_recipient_ok(broker, str(row["requester"])):
+        raise BindingRefused(
+            f"{_NOUN[kind]} job {ident}'s recipient is no longer the authored scheduled recipient "
+            "and a Named Administrator; nothing was sent"
+        )
+    return Verified(
+        kind=kind,
+        key=key,
+        job_id=ident,
+        internet_message_id="",
+        graph_message_id="",
+        sender=normalize_address(str(row["requester"])),
+        conversation_id="",
+        mode=MODE_NEW_MESSAGE,
+        subject=scheduled_subject(str(row["request_ref"])),
+    )
+
+
+def _verify_bare_message(ops: MsGraphOps, db_path: str, found: dict[str, Any], now: datetime | None) -> str:
+    """A bare message binding's once-only and recency checks; its reply key."""
+    key = f"message:{found['internet_message_id']}"
+    if bound_replies.claimed(db_path, key):
+        raise BindingRefused("that email has already had its one bound reply")
+    moment = now or datetime.now(timezone.utc)
+    since = (moment - timedelta(days=RECENCY_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if not found["received_at"] or found["received_at"] < since:
+        raise BindingRefused(f"that email is older than {RECENCY_DAYS} days; a bound reply answers recent mail only")
+    why = _inbound_turn_did_not_reply(db_path, found["graph_message_id"], since)
+    if why:
+        raise BindingRefused(why)
+    if msgraph_lookup.sent_in_conversation_since(ops, found["conversation_id"], found["received_at"]):
+        raise BindingRefused("that email has already been answered from this mailbox")
+    return key
+
+
 def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> Verified:
     """Every check, fresh, from the mailbox, the ledgers and the live customer.yaml."""
     ops = _ops(broker)
@@ -257,40 +316,9 @@ def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> V
     kind, ident = _parse(raw)
     job_id, expected_sender, imid, key = "", "", "", ""
     if kind in JOB_KINDS:
-        noun = _NOUN[kind]
-        row = _job_ledger(broker, kind).read(ident)
-        if row is None:
-            raise BindingRefused(f"there is no {noun} job with that id")
-        if row["state"] == "failed":
-            raise BindingRefused(
-                f"{noun} job {ident} failed on SMD's side; the requester is told nothing until it is "
-                "delivered or held, and SMD has been alerted. Send nothing to anyone."
-            )
-        if row["state"] not in REPLYABLE_DEMAND_STATES:
-            raise BindingRefused(f"{noun} job {ident} has not ended (it is {row['state']}); its reply waits for that")
-        # One reply per (attempt, outcome): a resumed job (attempt + 1) that
-        # ends again is owed a reply for its new outcome.
-        key = f"{kind}:{ident}:{row.get('attempt') or 1}:{row['state']}"
-        if bound_replies.claimed(db_path, key):
-            raise BindingRefused(f"{noun} job {ident} has already had its reply for this outcome")
+        row, key = _verify_job(broker, kind, ident, db_path)
         if kind == "litigation_job" and row.get("trigger") == "scheduled":
-            # No request email exists: ONE new email to the requester, or nothing.
-            if not _scheduled_recipient_ok(broker, str(row["requester"])):
-                raise BindingRefused(
-                    f"{noun} job {ident}'s recipient is no longer the authored scheduled recipient "
-                    "and a Named Administrator; nothing was sent"
-                )
-            return Verified(
-                kind=kind,
-                key=key,
-                job_id=ident,
-                internet_message_id="",
-                graph_message_id="",
-                sender=normalize_address(str(row["requester"])),
-                conversation_id="",
-                mode=MODE_NEW_MESSAGE,
-                subject=scheduled_subject(str(row["request_ref"])),
-            )
+            return _verify_scheduled(broker, kind, ident, key, row)
         job_id, imid, expected_sender = ident, f"<{str(row['request_ref']).strip('<>')}>", row["requester"]
     if kind == "message_graph":
         found = msgraph_lookup.received_by_graph_id(ops, ident)
@@ -307,22 +335,8 @@ def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> V
         if sender != normalize_address(expected_sender):
             raise BindingRefused("that email's sender is not the person who requested the job")
     else:
-        imid = found["internet_message_id"]
-        key = f"message:{imid}"
-        if bound_replies.claimed(db_path, key):
-            raise BindingRefused("that email has already had its one bound reply")
-        moment = now or datetime.now(timezone.utc)
-        since = (moment - timedelta(days=RECENCY_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        if not found["received_at"] or found["received_at"] < since:
-            raise BindingRefused(
-                f"that email is older than {RECENCY_DAYS} days; a bound reply answers recent mail only"
-            )
-        why = _inbound_turn_did_not_reply(db_path, found["graph_message_id"], since)
-        if why:
-            raise BindingRefused(why)
-        if msgraph_lookup.sent_in_conversation_since(ops, found["conversation_id"], found["received_at"]):
-            raise BindingRefused("that email has already been answered from this mailbox")
-        kind = "message"
+        key = _verify_bare_message(ops, db_path, found, now)
+        imid, kind = found["internet_message_id"], "message"
     return Verified(
         kind=kind,
         key=key,

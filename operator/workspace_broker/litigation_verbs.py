@@ -103,6 +103,15 @@ _UUID = re.compile(r"^[0-9a-fA-F-]{32,40}$")
 #: What a scheduled run's request_text says (it has no email).
 SCHEDULED_TEXT = "scheduled weekday litigation status run"
 
+
+class _Refused(ValueError):
+    """A submit check that failed; the message is the sentence to relay."""
+
+
+def _refusal(reason: str, **extra: Any) -> dict[str, Any]:
+    return {"ok": True, "accepted": False, "reason": reason, **extra}
+
+
 VERBS = (
     "litigation_job_submit",
     "litigation_job_status",
@@ -248,105 +257,129 @@ class LitigationVerbs:
         return dict(raw)
 
     def _submit(self, request: dict[str, Any], *, peer_uid: int | None, from_gateway: bool) -> dict[str, Any]:
-        def refused(reason: str, **extra: Any) -> dict[str, Any]:
-            return {"ok": True, "accepted": False, "reason": reason, **extra}
-
+        """The checks in the module docstring's order. Each helper raises
+        ``_Refused`` with the sentence the skill relays; none spends anything."""
         try:
             given = self._input(request.get("envelope"), peer_uid=peer_uid, from_gateway=from_gateway)
+            settings, admins = self._seat_gates(given["trigger"], peer_uid)
+            requester, message_ref, request_text, scope_in = self._who(given, settings, admins)
+            library, file_to, folder = self._filing_target(settings)
+            firm, cents = self._budget()
+            envelope = {
+                "trigger": given["trigger"],
+                "requester": requester,
+                "message_ref": message_ref,
+                "request_text": request_text,
+                "scope": self._resolve_scope(scope_in, firm),
+                "file_to_matter_id": file_to,
+                "file_to_matter_number": library,
+                "folder_name": folder,
+            }
+            valid = validate_envelope(envelope)
+            job_id = self._db.submit(valid)
         except EnvelopeError as exc:
-            return refused(str(exc))
-        trigger = given["trigger"]
+            return _refusal(str(exc))
+        except _Refused as exc:
+            return _refusal(str(exc))
+        except SubmitRefused as exc:
+            return _refusal(f"{exc}; nothing new was queued", **({"job_id": exc.job_id} if exc.job_id else {}))
+        self._audit_submitted(job_id, valid, cents)
+        return {"ok": True, "accepted": True, "job_id": job_id, "state": "queued", "trigger": valid["trigger"]}
+
+    def _seat_gates(self, trigger: str, peer_uid: int | None) -> tuple[dict[str, Any], tuple[str, ...]]:
+        """Checks 2 to 4's seat half: the skill listed and enabled for this
+        trigger, a scheduled run's cron row live, the admin list readable."""
         entry = skill_entry(self.customer_yaml)
         if entry is None:
-            return refused(
+            raise _Refused(
                 "the litigation status lane is not enabled on this seat (litigation-status is not listed); "
                 "nothing was queued"
             )
         if not initiation_allows(entry, trigger):
             word = "on request" if trigger == "request" else "on a schedule"
-            return refused(f"the litigation status list is not switched on {word} for this seat; nothing was queued")
-        settings = settings_of(entry)
+            raise _Refused(f"the litigation status list is not switched on {word} for this seat; nothing was queued")
         if trigger == "scheduled" and peer_uid != 0 and not cron_row_live(self.customer_yaml):
-            return refused("the weekday litigation status run is not enabled on this seat; nothing was queued")
+            raise _Refused("the weekday litigation status run is not enabled on this seat; nothing was queued")
         admins = admins_from_customer_yaml(self.customer_yaml)
         if not admins:
-            return refused(
+            raise _Refused(
                 "the seat's administrator list (scope.admins) is empty or could not be read, so who may "
                 "request a status list cannot be established; nothing was queued"
             )
-        if trigger == "scheduled":
+        return settings_of(entry), admins
+
+    def _who(
+        self, given: dict[str, Any], settings: dict[str, Any], admins: tuple[str, ...]
+    ) -> tuple[str, str, str, Any]:
+        """(requester, message_ref, request_text, scope) for either trigger,
+        the requester a Named Administrator in both."""
+        if given["trigger"] == "scheduled":
             recipients = scheduled_recipients(settings)
             if not recipients or recipients[0] not in admins:
-                return refused(
+                raise _Refused(
                     "a scheduled run goes to the first authored scheduled_recipients entry, which must be "
                     "one of the firm's Named Administrators; none is, so nothing was queued"
                 )
-            requester = recipients[0]
-            message_ref = f"scheduled:{pacific_today(self._now()).isoformat()}"
-            request_text = SCHEDULED_TEXT
-            scope_in: Any = {"all": True}
-        else:
-            requester = str(given["requester"] or "").strip().lower()
-            if requester not in admins:
-                return refused(
-                    "a status list may only be requested by one of the firm's Named Administrators, and the "
-                    "requester on this submission is not one of them; nothing was queued"
-                )
-            message_ref, request_text, scope_in = given["message_ref"], given["request_text"], given["scope"]
+            ref = f"scheduled:{pacific_today(self._now()).isoformat()}"
+            return recipients[0], ref, SCHEDULED_TEXT, {"all": True}
+        requester = str(given["requester"] or "").strip().lower()
+        if requester not in admins:
+            raise _Refused(
+                "a status list may only be requested by one of the firm's Named Administrators, and the "
+                "requester on this submission is not one of them; nothing was queued"
+            )
+        return requester, given["message_ref"], given["request_text"], given["scope"]
+
+    def _filing_target(self, settings: dict[str, Any]) -> tuple[str, str, str]:
         library = operator_library_number(self.customer_yaml)
         file_to = str(settings.get(FILE_TO_KEY) or "").strip()
         folder = str(settings.get(FOLDER_KEY) or "").strip()
         if not (library and _UUID.match(file_to) and folder):
-            return refused(
+            raise _Refused(
                 "where the status list is filed is not authored on this seat (the library matter and its "
                 "folder); nothing was queued"
             )
+        return library, file_to, folder
+
+    def _budget(self) -> tuple[dict[str, Any] | None, int]:
+        """(the firm config, cents spent this Pacific month), or refused."""
         firm = firm_config(self.firm_config_path)
         budget = monthly_budget_cents(firm)
         if budget is None:
-            return refused("the firm's litigation status budget is not authored on this seat; nothing was queued")
+            raise _Refused("the firm's litigation status budget is not authored on this seat; nothing was queued")
         month, cents = self.month_cents()
         if cents >= budget:
-            return refused(f"this month's litigation status budget is spent ({month}); nothing was queued")
-        if isinstance(scope_in, dict) and set(scope_in) == {"attorneys"}:
-            names = scope_in["attorneys"]
-            if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
-                return refused("scope.attorneys must be a list of names; nothing was queued")
-            ids, why = resolve_attorneys(names, attorney_roster(firm))
-            if why:
-                return refused(why)
-            scope_in = {"attorney_staff_ids": ids}
-        envelope = {
-            "trigger": trigger,
-            "requester": requester,
-            "message_ref": message_ref,
-            "request_text": request_text,
-            "scope": scope_in,
-            "file_to_matter_id": file_to,
-            "file_to_matter_number": library,
-            "folder_name": folder,
-        }
-        try:
-            valid = validate_envelope(envelope)
-            job_id = self._db.submit(valid)
-        except EnvelopeError as exc:
-            return refused(str(exc))
-        except SubmitRefused as exc:
-            return refused(f"{exc}; nothing new was queued", **({"job_id": exc.job_id} if exc.job_id else {}))
+            raise _Refused(f"this month's litigation status budget is spent ({month}); nothing was queued")
+        return firm, cents
+
+    @staticmethod
+    def _resolve_scope(scope_in: Any, firm: dict[str, Any] | None) -> Any:
+        """Named attorneys become staff ids from the firm's roster; any other
+        scope passes through for the envelope check."""
+        if not (isinstance(scope_in, dict) and set(scope_in) == {"attorneys"}):
+            return scope_in
+        names = scope_in["attorneys"]
+        if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+            raise _Refused("scope.attorneys must be a list of names; nothing was queued")
+        ids, why = resolve_attorneys(names, attorney_roster(firm))
+        if why:
+            raise _Refused(why)
+        return {"attorney_staff_ids": ids}
+
+    def _audit_submitted(self, job_id: str, valid: dict[str, Any], cents: int) -> None:
         scope = valid["scope"]
         self._audit(
             AUDIT_TYPES["queued"],
             {
                 "job_id": job_id,
-                "trigger": trigger,
+                "trigger": valid["trigger"],
                 "scope": "all" if scope.get("all") else "attorneys",
                 "attorney_count": len(scope.get("attorney_staff_ids") or []),
-                "requested_by": requester,
-                "request_ref": message_ref,
+                "requested_by": valid["requester"],
+                "request_ref": valid["message_ref"],
                 "month_cents_used": cents,
             },
         )
-        return {"ok": True, "accepted": True, "job_id": job_id, "state": "queued", "trigger": trigger}
 
     # -- the runner's report and a person's resume ---------------------------------
     def _record(self, request: dict[str, Any]) -> dict[str, Any]:
