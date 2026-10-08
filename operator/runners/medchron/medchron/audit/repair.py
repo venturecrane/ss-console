@@ -122,8 +122,11 @@ def _rejection(new: str, anchor: str, claim: str) -> str | None:
     return None
 
 
-def _residual_drop_row(r: dict[str, Any], c: dict[str, Any]) -> dict[str, Any]:
-    """The edit-log row for a claim dropped at the round cap (the dropped-claims record reads it)."""
+def _residual_drop_row(r: dict[str, Any], c: dict[str, Any], contested: bool) -> dict[str, Any]:
+    """The edit-log row for a claim dropped at the round cap (the dropped-claims
+    record reads it). `contested` marks a claim the repair tier, shown the same
+    findings, judged to need no change: the audit and the repair disagreed and
+    the drop settled it, which a reviewer must be able to see."""
     return {
         "key": r["key"],
         "action": "drop-residual",
@@ -131,8 +134,26 @@ def _residual_drop_row(r: dict[str, Any], c: dict[str, Any]) -> dict[str, Any]:
         "exhibit": c["exhibit"],
         "page_spec": c["page_spec"],
         "note": str(r.get("note") or "")[:300],
-        "old": c["claim"][:300],
+        "assertions": [str(a)[:200] for a in (r.get("unsupported_assertions") or []) + (r.get("contradictions") or [])][
+            :5
+        ],
+        "contested": contested,
+        "old": c["claim"],
     }
+
+
+def _unchanged(new: str, anchor: str, claim: str) -> bool:
+    """The repair returned the claim as written (with or without its citation)."""
+    flat = " ".join(new.split())
+    return flat in (" ".join(claim.split()), " ".join(anchor.split()))
+
+
+def _ts() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def _noop_keys(rows: list[dict[str, Any]]) -> set[str]:
+    return {r["key"] for r in rows if str(r.get("result", "")).startswith("NOOP") and "key" in r}
 
 
 def run(
@@ -156,7 +177,12 @@ def run(
     live = {c["key"]: c for c in CL.extract_claims(body, pdfs)}
     spans = CL.claim_spans(body, pdfs)
     n_orig = len(live)
-    latest = CL.latest_real(CL.read_rows(paths.results), set(live))
+    rows = CL.read_rows(paths.results)
+    latest = CL.latest_real(rows, set(live))
+    # A stale verdict is not a reason to delete a claim: one the last repair
+    # left unchanged is graded again first (the post-drop audit does it), and
+    # only the final pass, after which nothing is re-audited, drops it anyway.
+    stale = set() if final else CL.pending_reaudit(rows)
     widened_ok = not (drop_residual and final)
     cite_fix = [r for r in latest.values() if r["verdict"] == "SUPPORTED_WIDENED" and widened_ok]
     # Anything not finally SUPPORTED is failing; enumerating failure verdicts
@@ -168,7 +194,8 @@ def run(
         f"{'DROP' if drop_residual else 'repair'} {len(failing)}"
     )
     edits_log = paths.out / "repair-edits.jsonl"
-    fixed = repaired = dropped = rejected = skipped = 0
+    contested = _noop_keys(CL.read_rows(edits_log))
+    fixed = repaired = dropped = rejected = skipped = noop = 0
 
     def logrow(**kw: Any) -> None:
         CL.append_row(edits_log, kw)
@@ -210,8 +237,12 @@ def run(
             skipped += 1
             continue
         if drop_residual:
+            if r["key"] in stale:
+                logrow(key=r["key"], action="drop-residual", result="DEFER: re-audit pending")
+                skipped += 1
+                continue
             apply(anchor, "")
-            logrow(**_residual_drop_row(r, c))
+            logrow(**_residual_drop_row(r, c, r["key"] in contested))
             dropped += 1
             continue
         new, err = ask_repair(doorway, model, r, c)
@@ -223,6 +254,18 @@ def run(
             apply(anchor, "")
             logrow(key=r["key"], action="repair", result="DROP", old=c["claim"][:300])
             dropped += 1
+            continue
+        if _unchanged(new, anchor, c["claim"]):
+            # The repair tier found nothing to remove. That is a second reading
+            # disagreeing with the verdict, not a repair: the key does not move,
+            # so without the marker the next round resumes the same verdict and
+            # the cap deletes a claim nobody re-read (2026-10-07).
+            logrow(key=r["key"], action="repair", result="NOOP: unchanged; re-audit")
+            CL.append_row(
+                paths.results,
+                {"key": r["key"], "kind": CL.REAUDIT, "why": "repair returned the claim unchanged", "ts": _ts()},
+            )
+            noop += 1
             continue
         why = _rejection(new, anchor, c["claim"])
         if why:
@@ -242,7 +285,10 @@ def run(
         entries_path.write_text(re.sub(r"\n{3,}", "\n\n", entries), encoding="utf-8")
     n_new = len(CL.extract_claims(body, pdfs))
     ok = n_new == n_orig - dropped
-    log(f"APPLIED: cite-fix {fixed}, repaired {repaired}, dropped {dropped}, rejected {rejected}, skipped {skipped}")
+    log(
+        f"APPLIED: cite-fix {fixed}, repaired {repaired}, unchanged->re-audit {noop}, dropped {dropped}, "
+        f"rejected {rejected}, skipped {skipped}"
+    )
     log(
         f"claims before {n_orig}, after {n_new} (expected {n_orig - dropped}) -> {'RECONCILES' if ok else '!! MISMATCH'}"
     )

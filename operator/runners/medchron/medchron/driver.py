@@ -320,6 +320,7 @@ class Driver:
         results = out / "audit-results.jsonl"
         rows = claims_mod.read_rows(results) if results.is_file() else []
         verified = {r["key"] for r in rows if r.get("kind") == "real" and r.get("doc_sha") == sha}
+        verified -= claims_mod.pending_reaudit(rows)  # a stale verdict the next round pays for again
         return sum(1 for c in claims if c["key"] not in verified)
 
     def _check_limits(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> None:

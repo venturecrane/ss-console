@@ -58,6 +58,10 @@ __all__ = ["validate_covered"]
 
 STATES = ("submitted", "running", "held", "delivered", "failed")
 TERMINAL = frozenset({"delivered", "failed"})
+# A transition INTO one of these states, with no reason of its own, clears the
+# reason an earlier state (a hold, a failure) left on the row. `held` and
+# `failed` always arrive with their own reason; these two never inherit one.
+REASON_CLEARING = frozenset({"running", "delivered"})
 AUDIT_TYPE = {
     "submitted": "MEDCHRON_JOB_SUBMITTED",
     "running": "MEDCHRON_JOB_RUNNING",
@@ -836,6 +840,16 @@ class MedchronLedger:
             if "reason" in fields:
                 sets.append("reason=?")
                 vals.append(str(fields["reason"] or "")[:500] or None)
+            elif state != cur["state"] and state in REASON_CLEARING:
+                # 2026-10-07: a job held at the audit gate was resumed and
+                # delivered, and its row still carried the hold's reason. The
+                # DELIVER turn read it and told the requester two entries
+                # needed attorney review; the delivered document had none.
+                # A reason describes the state that wrote it, so moving on
+                # without a new one leaves the row with none. The history
+                # stays where it belongs: on the earlier state's audit row.
+                sets.append("reason=?")
+                vals.append(None)
             if "folder_id" in fields:
                 sets.append("folder_id=?")
                 vals.append(str(fields["folder_id"] or "") or None)
