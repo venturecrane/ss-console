@@ -68,3 +68,25 @@ describe('medical-chronology-maintainer: a PARTIAL is never the attorney', () =>
     expect(all).not.toContain('attorney-confirm note')
   })
 })
+
+describe('medical-chronology-maintainer: a delivered package never relays the job reason', () => {
+  // 2026-10-07: a job held at the audit gate was resumed and delivered; its row
+  // still carried the hold reason, and the DELIVER reply told the requester two
+  // entries needed attorney review that the delivered document did not have.
+  // The ledger now clears a stale reason on delivery; the skill must not lean
+  // on that alone, because a row written before the fix still carries one.
+  it('reads the reason only on a hold, never on a delivery', () => {
+    expect(flat).toContain(
+      '**On `delivered`, the `reason` field is not part of the delivery and is never relayed**'
+    )
+    expect(flat).toContain('The `reason` is read and acted on only when the state is `held`.')
+  })
+
+  it('the delivered reply carries nothing from the reason', () => {
+    const delivered = flat.slice(flat.indexOf('- **delivered**:'), flat.indexOf('- **held**:'))
+    expect(delivered).toContain("nothing from the job's `reason`")
+    expect(delivered).toMatch(
+      /never say an entry is flagged, partial, or needs review unless the delivery itself reports it/
+    )
+  })
+})

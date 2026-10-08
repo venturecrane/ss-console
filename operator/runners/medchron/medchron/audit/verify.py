@@ -53,7 +53,22 @@ VERDICT_TOOL_TEXT = {
 }
 TOOL_CHOICE = {"type": "tool", "name": "record_verdict"}
 
-PROMPT = """You are auditing a medical chronology prepared for a law firm.
+NOT_DEFECTS = """What is NOT an unsupported assertion. Never list these, and never let them
+alone make the verdict anything but SUPPORTED:
+- Something the page says that the claim leaves out. The claim summarizes; it
+  does not have to repeat everything on the page.
+- The page number. The citation counts pages by their position in the exhibit
+  file; the page itself may print a different number (a chart page, a Bates
+  number, a fax page count). Never report that difference.
+- Wording. A claim that says what the page says in other words, at the same
+  strength, is supported. It is not supported when the rewording strengthens,
+  generalises, or changes a value.
+- An assertion you checked and found. If it is on the page, it is supported:
+  do not list it, not even with a remark that it is supported.
+If every point you would list is one of these, the verdict is SUPPORTED."""
+
+PROMPT = (
+    """You are auditing a medical chronology prepared for a law firm.
 
 Below is a CLAIM taken from the chronology, and the page image(s) it cites as its
 source. Determine whether the pages actually support the claim.
@@ -66,14 +81,20 @@ more serious than a missing one - report those under contradictions.
 
 Do not be generous. If you cannot find an assertion on these pages, list it.
 
+"""
+    + NOT_DEFECTS
+    + """
+
 CLAIM (cited to {cite}):
 \"\"\"
 {claim}
 \"\"\"
 
 Call record_verdict with your findings."""
+)
 
-SYSTEM_TEXT = """You are auditing a medical chronology prepared for a law firm.
+SYSTEM_TEXT = (
+    """You are auditing a medical chronology prepared for a law firm.
 
 The user message carries the TEXT of a window of consecutive pages from one
 exhibit (each page under a "===== Exhibit N p.K =====" header), then a CLAIM
@@ -98,7 +119,14 @@ supporting text. Before you call an assertion unsupported, re-read the CITED
 PAGES list and check every page on it.
 
 Do not be generous. If you cannot find an assertion anywhere in the cited set,
-list it. Call record_verdict with your findings."""
+list it.
+
+"""
+    + NOT_DEFECTS
+    + """
+
+Call record_verdict with your findings."""
+)
 
 CLAIM_TAIL = """CITED PAGES (judge against these as one set): {cited}
 

@@ -363,6 +363,14 @@ nothing, stop.
 2. **Read the job** with `medchron_job_status` (`job_id`): its state, its counts,
    its reason. On `delivered`, `get_files_on_matter` for the delivered folder's
    contents. Report what the record shows, not what the wake says.
+   **On `delivered`, the `reason` field is not part of the delivery and is never
+   relayed**, in the reply, the ledger entry, or the task. A reason describes a
+   hold or a failure; a job that was held and then resumed and delivered may
+   still show the old one, and on 2026-10-07 a delivered package's reply relayed
+   a stale audit-gate reason as "entries flagged for attorney review" that the
+   delivered document did not have. The delivered package speaks only through
+   what the delivery reports: the counts, the exclusions, the folder and its
+   files. The `reason` is read and acted on only when the state is `held`.
    **Idempotency pre-check** (delivered): read the ledger and `list_tasks`; when the
    ledger already records this job id AND a review task for it exists, the records
    are done: write nothing twice.
@@ -379,7 +387,9 @@ nothing, stop.
 4. **Reply once** with `create_draft` addressed to the bound sender only (the seat
    sends it in the requester's original thread after the reply checks):
    - **delivered**: the counts (documents read, pages, exclusions as the runner
-     reported them) and where the folder is. **Say what the delivery consumed and
+     reported them) and where the folder is, and nothing from the job's `reason`:
+     never say an entry is flagged, partial, or needs review unless the delivery
+     itself reports it. **Say what the delivery consumed and
      what is left.** Call `medchron_allowance` on this turn and close the reply
      with two figures: what this job consumed, and what remains for the period.
      Quote the response's `unit` field as the unit and its `month` field verbatim

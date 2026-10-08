@@ -18,7 +18,15 @@ claims the policy exists to remove (a client matter, SUPPORTED=300 PARTIAL=2).
 Past the cap the loop now alternates drop and audit until the audit is clean,
 at most DROP_PASSES times; the last pass drops a widened citation too, since
 nothing re-audits after it. Every dropped claim is listed in
-`out/<unit>/audit-dropped-claims.json`. The gate can then fail only on what
+`out/<unit>/audit-dropped-claims.json`, `contested` when the repair tier had
+judged it needed no change.
+
+A STALE VERDICT DELETES NOTHING (2026-10-07, later the same day). Three
+record-true facts left a delivered package because the repair returned each
+unchanged, its key did not move, and every round resumed the same PARTIAL until
+the cap dropped it. An unchanged repair now marks the claim for a fresh grading
+(`claims.pending_reaudit`), and a non-final drop pass defers it until that
+grading lands. The gate can then fail only on what
 the loop cannot resolve: a claim it could not find in the document, a
 wrongly SUPPORTED control, or a claim with no verdict at all.
 
@@ -189,13 +197,19 @@ def _record_drops(sr: StageRun, paths: AuditPaths) -> None:
             "exhibit": r.get("exhibit"),
             "page_spec": r.get("page_spec"),
             "note": r.get("note"),
+            "assertions": r.get("assertions"),
+            "contested": bool(r.get("contested")),
             "claim": r.get("old"),
         }
         for r in rows
-        if r.get("action") == "drop-residual" or r.get("result") == "DROP"
+        if (r.get("action") == "drop-residual" and "old" in r) or r.get("result") == "DROP"
     ]
     paths.out.mkdir(parents=True, exist_ok=True)
     (paths.out / DROPPED_RECORD).write_text(
         json.dumps({"unit": sr.unit.unit, "count": len(drops), "claims": drops}, indent=1), encoding="utf-8"
     )
-    sr.log(f"dropped claims recorded: {len(drops)} -> {DROPPED_RECORD}")
+    contested = sum(1 for d in drops if d["contested"])
+    sr.log(
+        f"dropped claims recorded: {len(drops)} -> {DROPPED_RECORD}"
+        + (f"; {contested} CONTESTED (repair found nothing to remove; review before filing)" if contested else "")
+    )

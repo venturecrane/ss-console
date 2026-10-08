@@ -543,6 +543,52 @@ def test_a_job_held_at_the_audit_gate_resumes_through_the_same_verb(verbs):
         call(v, "medchron_job_resume", peer_uid=AGENT_UID, job_id=j, reason="x", redo=[])
 
 
+AUDIT_HOLD = "audit coverage: a live claim is not finally SUPPORTED; last output: GATE FAIL"
+
+
+def test_a_resumed_hold_delivers_with_no_leftover_reason(verbs):
+    """2026-10-07, live: a job held at the audit gate was resumed and delivered,
+    and its row still carried the hold's reason. The DELIVER turn read it and
+    told the requester two entries were flagged for attorney review; the
+    delivered document had them correctly worded. A reason describes the state
+    that wrote it: the resume clears it, and so does the delivery."""
+    v, _ledger, _queue = verbs
+    j = _held_job(v, AUDIT_HOLD)
+    rec = lambda state, **f: call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state=state, fields=f)  # noqa: E731 - test-local shorthand
+    assert rec("running")["job"]["reason"] is None
+    # The falsifier: re-seat the stale reason as the ledger held it on the
+    # live seat (written by a note on the running row), then deliver.
+    rec("running", reason=AUDIT_HOLD)
+    assert rec("running")["job"]["reason"] == AUDIT_HOLD, "a same-state note must not clear the reason"
+    row = rec("delivered", documents=3, pages=40, folder_id="f-1")["job"]
+    assert row["reason"] is None
+    assert call(v, "medchron_job_status", job_id=j)["job"]["reason"] is None
+
+
+def test_a_transition_that_carries_its_own_reason_keeps_it(verbs):
+    v, _ledger, _queue = verbs
+    j = _held_job(v, AUDIT_HOLD)
+    rec = lambda state, **f: call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state=state, fields=f)  # noqa: E731 - test-local shorthand
+    assert rec("running", reason="resumed: audit loop fixed")["job"]["reason"] == "resumed: audit loop fixed"
+    assert rec("delivered", reason="delivered with 1 exclusion")["job"]["reason"] == "delivered with 1 exclusion"
+
+
+def test_a_failure_reason_does_not_survive_its_resume(verbs):
+    v, _ledger, _queue = verbs
+    j = _failed_job(v)
+    assert call(v, "medchron_job_status", job_id=j)["job"]["reason"]
+    row = call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state="running", fields={})["job"]
+    assert row["reason"] is None
+
+
+def test_hold_and_failure_still_record_their_reason(verbs):
+    """Only the moves AWAY from a hold or a failure clear; the hold itself
+    must keep saying why it held."""
+    v, _ledger, _queue = verbs
+    j = _held_job(v, AUDIT_HOLD)
+    assert call(v, "medchron_job_status", job_id=j)["job"]["reason"] == AUDIT_HOLD
+
+
 @pytest.mark.parametrize(
     "reason",
     [

@@ -113,8 +113,29 @@ def append_row(path: Path, rec: dict[str, Any]) -> None:
             fh.write(json.dumps(rec) + "\n")
 
 
+REAUDIT = "reaudit"
+
+
+def pending_reaudit(rows: list[dict[str, Any]]) -> set[str]:
+    """Keys whose LAST verdict-bearing row is a re-audit marker: the verdict on
+    file is stale and the next round grades the claim again.
+
+    Repair writes the marker when the judgment tier, shown the auditor's
+    findings, returns the claim unchanged. Before, that no-op counted as a
+    repair, the key (which hashes the text) did not move, the next round
+    resumed the cached PARTIAL, and at the cap the claim was dropped: three
+    record-true facts left a delivered package that way (2026-10-07), each
+    graded PARTIAL on a printed page label, an omission, or a point the
+    auditor itself marked supported."""
+    last: dict[str, str] = {}
+    for r in rows:
+        if r.get("kind") in ("real", REAUDIT) and "key" in r:
+            last[r["key"]] = r["kind"]
+    return {k for k, kind in last.items() if kind == REAUDIT}
+
+
 def done_keys(rows: list[dict[str, Any]]) -> set[str]:
-    return {r["key"] for r in rows if "key" in r}
+    return {r["key"] for r in rows if "key" in r} - pending_reaudit(rows)
 
 
 def lineage_orphans(rows: list[dict[str, Any]], current_keys: set[str], sha: str) -> list[str]:
