@@ -12,6 +12,7 @@ matter name, or document text. ``line`` builds it from integers alone.
 
 from __future__ import annotations
 
+import threading
 import time
 from typing import Callable
 
@@ -34,6 +35,7 @@ class Progress:
         self.every, self.seconds, self.clock = max(1, int(every)), float(seconds), clock
         self.done = 0
         self.counts: dict[str, int] = {}
+        self._lock = threading.Lock()
         self._last = clock()
 
     def line(self) -> str:
@@ -47,12 +49,17 @@ class Progress:
     def add(self, key: str, n: int = 1) -> None:
         """Count something inside the current item (a vision page, a
         failure) and speak if the stage has been quiet too long."""
-        self.counts[key] = self.counts.get(key, 0) + n
+        with self._lock:
+            self.counts[key] = self.counts.get(key, 0) + n
         self.beat()
 
     def beat(self) -> None:
-        if self.clock() - self._last >= self.seconds:
-            self._emit()
+        with self._lock:
+            due = self.clock() - self._last >= self.seconds
+            if due:
+                self._last = self.clock()
+        if due:
+            self.log(self.line())
 
     def step(self, n: int = 1) -> None:
         """One more item finished."""

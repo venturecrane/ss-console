@@ -25,6 +25,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,8 @@ STATE_ENV = "MEDCHRON_LITIGATION_STATE_DIR"
 DATA_ENV = "MEDCHRON_DATA_DIR"
 DEFAULT_DATA_DIR = "/opt/data/medchron"
 EMAIL_EXTS = (".msg", ".eml")
+#: Per-matter fetch caps (``fetch_caps`` in the firm config overrides any).
+FETCH_CAPS = {"court": 120, "server": 15, "discovery": 30, "email": 25, "total": 180}
 
 
 def state_dir(explicit: str | Path | None = None) -> Path:
@@ -112,37 +115,136 @@ def newest_emails(files: list[dict[str, Any]], n: int) -> list[str]:
     return [str(f["id"]) for f in mail[:n]]
 
 
-def is_candidate(f: dict[str, Any], firm: LitigationFirm, today: dt.date) -> bool:
-    """Would a read open this file by its name? Court and discovery papers and
-    process-server records always; an email only when it is recent and its
-    name points at the case (service, answer, settlement, a hearing)."""
-    if f.get("deleted"):
-        return False
-    name = full_name(f)
-    if any(s in name.lower() for s in firm.process_servers):
-        return True
-    named = any(p.search(name) for p in [*firm.court_rx, *firm.discovery_rx])
-    if not is_email(f):
-        return named
-    if not (named or any(p.search(name) for p in firm.settlement_rx)):
-        return False
+def _recent(f: dict[str, Any], firm: LitigationFirm, today: dt.date) -> bool:
     try:
         when = dt.date.fromisoformat(file_date(f))
     except ValueError:
-        return True  # an undated email is read rather than assumed old
+        return True  # an undated file is read rather than assumed old
     return (today - when).days <= 31 * int(firm.get("email_months"))
 
 
+def classify(f: dict[str, Any], firm: LitigationFirm, today: dt.date) -> str | None:
+    """Why a read would open this file by its name, or None.
+
+    * ``court``: a court paper by name (any age; the case's own record);
+    * ``server``: a process server's record (a file of any age; an email
+      only when recent: the hand method read service emails of the last year);
+    * ``discovery``: a discovery paper by name (a file of any age);
+    * ``email``: a recent email whose name points at the case (court,
+      discovery, service or settlement words).
+    The newest emails regardless of name are added by ``select``."""
+    if f.get("deleted"):
+        return None
+    name = full_name(f)
+    court = any(p.search(name) for p in firm.court_rx)
+    server = any(s in name.lower() for s in firm.process_servers)
+    disc = any(p.search(name) for p in firm.discovery_rx)
+    if is_email(f):
+        named = court or server or disc or any(p.search(name) for p in firm.settlement_rx)
+        return "email" if named and _recent(f, firm, today) else None
+    if court:
+        return "court"
+    if server:
+        return "server"
+    return "discovery" if disc else None
+
+
+def is_candidate(f: dict[str, Any], firm: LitigationFirm, today: dt.date) -> bool:
+    return classify(f, firm, today) is not None
+
+
+def _newest_first(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(rows, key=lambda f: (file_date(f), str(f.get("modified") or "")), reverse=True)
+
+
+def _both_ends(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Newest, oldest, second newest, second oldest...: a kind's first papers
+    (the original proofs of service) and its latest ones both survive a cap.
+    Measured on a 5,996-file matter: newest-first alone cut a 2024 proof of
+    service that was the only record of one defendant."""
+    out, lo, hi = [], 0, len(rows) - 1
+    while lo <= hi:
+        out.append(rows[lo])
+        if hi != lo:
+            out.append(rows[hi])
+        lo, hi = lo + 1, hi - 1
+    return out
+
+
+def _by_kind(court: list[dict[str, Any]], firm: LitigationFirm) -> list[dict[str, Any]]:
+    """Court papers interleaved by kind (the firm pattern each first matches),
+    newest first within a kind: a matter with forty proofs of service still
+    hands the read its answers, dismissals and case management statements, and
+    an old proof of service is not crowded out by newer ones of another kind
+    (2026-10-08 replay: a defendant served in 2024 was cut by a newest-first cap)."""
+    groups: dict[int, list[dict[str, Any]]] = {}
+    for f in court:
+        k = next((i for i, p in enumerate(firm.court_rx) if p.search(full_name(f))), len(firm.court_rx))
+        groups.setdefault(k, []).append(f)
+    out: list[dict[str, Any]] = []
+    queues = [_both_ends(groups[k]) for k in sorted(groups)]
+    while any(queues):
+        for q in queues:
+            if q:
+                out.append(q.pop(0))
+    return out
+
+
+def select(files: list[dict[str, Any]], firm: LitigationFirm, today: dt.date) -> list[tuple[str, str]]:
+    """The files a read is handed, in the order they are handed, with the
+    class each came in by: court papers (newest first, plus the earliest
+    complaint-named paper so the filing is never capped away), the N newest
+    emails, process-server records, discovery papers, then named recent
+    emails. Each class has its own cap and the matter a total
+    (``fetch_caps``); what is capped out stays on the list ``list_files``
+    shows, so a read can still open it."""
+    caps = {**FETCH_CAPS, **(firm.get("fetch_caps") or {})}
+    by: dict[str, list[dict[str, Any]]] = {}
+    for f in files:
+        c = classify(f, firm, today)
+        if c:
+            by.setdefault(c, []).append(f)
+    court = _by_kind(_newest_first(by.get("court", [])), firm)
+    complaint = [f for f in reversed(_newest_first(by.get("court", []))) if re.search(r"(?i)complaint", full_name(f))][
+        :1
+    ]
+    out: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    def take(rows: list[dict[str, Any]], cls: str, cap: int) -> None:
+        n = 0
+        for f in rows:
+            fid = str(f["id"])
+            if n >= cap or len(out) >= caps["total"]:
+                return
+            if fid not in seen:
+                seen.add(fid)
+                out.append((fid, cls))
+                n += 1
+
+    take(complaint, "court", 1)
+    take(court, "court", caps["court"] - len(complaint))
+    by_id = {str(f["id"]): f for f in files}
+    take([by_id[i] for i in newest_emails(files, int(firm.get("email_recent_n")))], "newest_email", caps["total"])
+    take(_newest_first(by.get("server", [])), "server", caps["server"])
+    take(_newest_first(by.get("discovery", [])), "discovery", caps["discovery"])
+    take(_newest_first(by.get("email", [])), "email", caps["email"])
+    return out
+
+
 def candidates(files: list[dict[str, Any]], firm: LitigationFirm, today: dt.date) -> list[str]:
-    """Every file a read is handed up front: the name-filtered set plus the N
-    newest emails regardless of name."""
-    named = [str(f["id"]) for f in files if is_candidate(f, firm, today)]
-    return list(dict.fromkeys([*named, *newest_emails(files, int(firm.get("email_recent_n")))]))
+    """The ids ``select`` hands a read, in order."""
+    return [fid for fid, _c in select(files, firm, today)]
 
 
 def _missing_groups(prior: dict[str, Any]) -> list[str]:
-    have = set(prior.get("fields_read") or [])
-    if not have:  # a seed without the marker: infer from the fields it carries
+    # A present marker is authoritative, EMPTY included: a seed whose groups
+    # were all struck for a re-read must read them all. Inferring from the
+    # fields here (the old test was "falsy") read an emptied marker as "no
+    # marker" and treated a struck defendants group as read (2026-10-08).
+    marked = prior.get("fields_read")
+    have = set(marked) if isinstance(marked, list) else set()
+    if not isinstance(marked, list):  # a seed without the marker: infer from the fields it carries
         have = {g for g, keys in vocab.GROUP_FIELDS.items() if all(k in prior for k in keys)}
     return [g for g in vocab.GROUPS if g not in have]
 
@@ -154,7 +256,22 @@ def plan_matter(
     firm: LitigationFirm,
     today: dt.date,
 ) -> dict[str, Any]:
-    cands = candidates(files, firm, today)
+    sel = select(files, firm, today)
+    cands = [fid for fid, _c in sel]
+    classes: dict[str, int] = {}
+    for _fid, c in sel:
+        classes[c] = classes.get(c, 0) + 1
+    out = _plan(files, prior, prior_manifest, cands, today)
+    return {**out, "candidate_classes": classes}
+
+
+def _plan(
+    files: list[dict[str, Any]],
+    prior: dict[str, Any] | None,
+    prior_manifest: dict[str, str],
+    cands: list[str],
+    today: dt.date,
+) -> dict[str, Any]:
     if prior is None:
         return {
             "reason": "new",

@@ -73,7 +73,7 @@ def test_the_loop_stops_at_its_cap(tmp_path):
             final_tool=read.RECORD_RESULT,
             max_iterations=3,
         )
-    assert len(client.calls) == 3
+    assert len(client.calls) == 2 + 2  # two exploring calls under a cap of 3, then two answer-now turns
     assert all(not c.get("tools") or c["tools"][-1]["name"] == "record_result" for c in client.calls)
 
 

@@ -159,10 +159,13 @@ record any negative (not served, no answer, not dismissed, not filed, active), s
 it: answers (including inside emails), dismissals, proofs of service and process-server emails, stipulations and
 extensions, defaults, case management statements newer than your finding, settlement emails ("settled",
 "release", "W-9", "settlement check", "notice of settlement"). Settlement language in an email changes the case
-status. Take defendants from the complaint caption and any amendments; a defendant dropped by an amended
+status. Take defendants from the complaint caption and any amendments, and add any party a proof of service, a
+Doe amendment or a case management statement names as a defendant. Record each defendant's served and answered
+dates whatever its status now (a dismissed or settled defendant was usually served first); a defendant dropped by an amended
 complaint is "{dropped}". Never list the firm's own client as a defendant unless the firm is defense counsel, in
 which case firm_role is "defense" and the client is "{firm_client}". An uninsured/underinsured motorist arbitration
-respondent is "{uim}", not a court defendant. Use only the listed statuses. Write plain sentences for flags and
+respondent is "{uim}", not a court defendant. A defendant whose service was rejected (a registered agent's
+notice that it is not the agent, a returned service) and who was not then served is "{rejected}". Use only the listed statuses. Write plain sentences for flags and
 notes: facts only, no legal advice, no doc numbers, no file ids.
 
 Today is {today}. A next court date must be the next one AFTER today; if none is set in the file, leave its date
@@ -179,7 +182,12 @@ def _hints(firm: Any) -> str:
 
 def system_for(role: str, firm: Any, today: dt.date) -> str:
     base = COMMON.format(
-        today=today.isoformat(), hints=_hints(firm), dropped=vocab.DROPPED, firm_client=vocab.FIRM_CLIENT, uim=vocab.UIM
+        today=today.isoformat(),
+        hints=_hints(firm),
+        dropped=vocab.DROPPED,
+        firm_client=vocab.FIRM_CLIENT,
+        uim=vocab.UIM,
+        rejected=vocab.SERVICE_REJECTED,
     )
     tail = {
         "read": "\n\nYOUR PASS: determine the field groups you are asked for, then call record_result.",
@@ -201,19 +209,48 @@ def system_for(role: str, firm: Any, today: dt.date) -> str:
     return base + tail
 
 
-def file_list(ctx: MatterContext, candidates: list[str], newest: list[str]) -> str:
-    shown = [ctx.by_id[c] for c in candidates if c in ctx.by_id]
-    lines = [
-        ctx.line(n) + ("  (one of the newest emails)" if str(ctx.refs[n]["id"]) in newest else "")
-        for n in sorted(shown)
-    ]
-    rest = len(ctx.refs) - len(shown)
-    return "\n".join(lines) + f"\n\n{rest} other files are on the matter; list_files shows them by name."
+def file_list(
+    ctx: MatterContext, candidates: list[str], newest: list[str], context_chars: int = 0, doc_chars: int = 0
+) -> str:
+    """The files a read is handed, in priority order (court papers newest
+    first, the newest emails, service records, discovery, named emails), and
+    the TEXT of as many as fit ``context_chars`` (at most ``doc_chars`` of
+    each), so a read starts from the papers instead of spending calls on
+    them. The tools fetch the rest."""
+    order = [ctx.by_id[c] for c in candidates if c in ctx.by_id]
+    lines = [ctx.line(n) + ("  (one of the newest emails)" if str(ctx.refs[n]["id"]) in newest else "") for n in order]
+    rest = len(ctx.refs) - len(order)
+    out = "\n".join(lines) + f"\n\n{rest} other files are on the matter; list_files shows them by name."
+    used, shown, texts = 0, 0, []
+    for n in order:
+        if used >= context_chars:
+            break
+        body = ctx.text(n)
+        take = min(doc_chars, context_chars - used, len(body))
+        more = f"\n(more: fetch_doc {n} offset {take})" if take < len(body) else ""
+        texts.append(f"===== {ctx.line(n)}\n{body[:take]}{more}")
+        used += take
+        shown += 1
+    if texts:
+        out += (
+            f"\n\nDOCUMENT TEXTS ({shown} of {len(order)} files above, in that order, each cut at {doc_chars} "
+            "characters; fetch_doc reads the rest and the others):\n\n" + "\n\n".join(texts)
+        )
+    return out
 
 
 def ask(header: str, groups: list[str], listing: str, extra: str = "") -> str:
     want = ", ".join(groups)
-    return f"MATTER: {header}\nFIELD GROUPS TO DETERMINE: {want}\n\nFILES (court papers, service records, recent emails):\n{listing}\n{extra}"
+    must = (
+        "\nEvery defendant named in the complaint caption or any amendment goes in defendants, each with a status."
+        if vocab.GROUP_DEFENDANTS in groups
+        else ""
+    )
+    return (
+        f"MATTER: {header}\nFIELD GROUPS TO DETERMINE: {want}{must}\n\n"
+        "Read the document texts below first; use the tools only for what they do not settle.\n\n"
+        f"FILES (court papers, recent emails, service records, discovery):\n{listing}\n{extra}"
+    )
 
 
 # ---- model answer -> state ---------------------------------------------------------

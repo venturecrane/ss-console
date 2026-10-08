@@ -29,7 +29,7 @@ def test_the_same_papers_with_a_different_answer_hold():
     new["defendants"][0]["status"] = vocab.SERVED_NO_ANSWER
     new["defendants"][0]["answered"] = {"date": None, "source": None}
     bad = parity.unexplained(parity.compare(prior, new, moved_files=set(), overturns=[], today=TODAY))
-    assert {c["path"] for c in bad} >= {"defendants[Delta Example].answered"}
+    assert {c["path"] for c in bad} >= {"defendants[deltaexample].answered"}
 
 
 def test_a_new_document_explains_its_value_and_a_passed_court_date_moves_on():

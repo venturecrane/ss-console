@@ -78,11 +78,21 @@ class MatterContext:
     def _text_path(self, fid: str) -> Path:
         return self.mdir / "txt" / f"{fid}.txt"
 
+    def cached_text(self, fid: str) -> str | None:
+        return fetch_mod.cached_text(self.data, self.matter_id, fid)
+
     def text(self, n: int) -> str:
         f = self.refs[n]
         fid = str(f["id"])
         if fid in self.integrity:
             return "This file entry exists in Smokeball but its content is missing (it cannot be opened)."
+        cached = self.cached_text(fid)
+        if cached is not None:
+            return cached
+        failed = next((r for r in extract_mod.failures(self.mdir) if r.get("file_id") == fid), None)
+        if failed is not None:
+            why = str(failed.get("problem")).split(":")[0]
+            return f"This file could not be read ({why}); do not treat it as absent."
         path = fetch_mod.local_path(self.data, self.matter_id, fid)
         if path is None and self.seat is not None:
             row = fetch_mod.fetch_one(self.seat, self.matter_id, f, self.data, self.log)
@@ -107,10 +117,9 @@ class MatterContext:
     def opened(self) -> dict[int, str]:
         out = {}
         for n, f in self.refs.items():
-            fid = str(f["id"])
-            path = fetch_mod.local_path(self.data, self.matter_id, fid)
-            if path is not None and self._text_path(path.stem).is_file():
-                out[n] = self._text_path(path.stem).read_text(encoding="utf-8", errors="replace")
+            t = self.cached_text(str(f["id"]))
+            if t is not None:
+                out[n] = t
         return out
 
     # ---- the tools -----------------------------------------------------------------
@@ -164,10 +173,12 @@ class MatterContext:
         except (TypeError, ValueError, KeyError):
             return "unknown doc or page"
         path = fetch_mod.local_path(self.data, self.matter_id, str(f["id"]))
-        if path is None:
-            self.text(n)
+        if path is None and self.seat is not None:
+            fetch_mod.fetch_one(self.seat, self.matter_id, f, self.data, self.log)
             path = fetch_mod.local_path(self.data, self.matter_id, str(f["id"]))
-        if path is None or path.suffix.lower() != ".pdf":
+        if path is None:
+            return "the page image is not available in this run; rely on the document's text and say so if it matters"
+        if path.suffix.lower() != ".pdf":
             return "only a PDF page can be viewed as an image"
         try:
             png = extract_mod.render_png(path.read_bytes(), page)
@@ -224,6 +235,44 @@ def _uses(message: Any) -> list[dict[str, Any]]:
     return [d for d in (_block_dict(b) for b in getattr(message, "content", None) or []) if d.get("type") == "tool_use"]
 
 
+_CACHE = {"type": "ephemeral"}
+#: An overloaded API (529) is transient: a read retries for minutes, not
+#: seconds, before its matter is marked unread (2026-10-08 replay: one matter
+#: lost to three overloaded answers 20 and 40 seconds apart).
+CALL_ATTEMPTS, CALL_BACKOFF = 5, 30.0
+#: Answer-now turns after the exploration cap.
+FINAL_TURNS = 2
+FINAL_NUDGE = (
+    "Stop exploring and answer now with {tool}. Record what the documents establish; for anything you could not "
+    "establish, mark it unclear (status Unclear, or a flag saying what is missing). Do not guess."
+)
+
+
+def _roll_cache(messages: list[dict[str, Any]]) -> None:
+    """Breakpoints: the system prompt (the doorway), the first user message
+    (the matter's documents), and the newest block. Older rolling marks are
+    removed so a long loop never carries more than the API allows."""
+    for m in messages[1:]:
+        if isinstance(m.get("content"), list):
+            for b in m["content"]:
+                if isinstance(b, dict):
+                    b.pop("cache_control", None)
+    last = messages[-1]
+    if len(messages) > 1 and isinstance(last.get("content"), list) and last["content"]:
+        tail = last["content"][-1]
+        if isinstance(tail, dict) and tail.get("type") in ("text", "tool_result"):
+            tail["cache_control"] = dict(_CACHE)
+
+
+def _tool_results(uses: list[dict[str, Any]], handlers: dict[str, Callable[[dict[str, Any]], Any]]) -> list[dict]:
+    out = []
+    for u in uses:
+        fn = handlers.get(str(u.get("name")))
+        got = fn(u.get("input") or {}) if fn else f"unknown tool {u.get('name')}"
+        out.append({"type": "tool_result", "tool_use_id": u.get("id"), "content": got})
+    return out
+
+
 def run_loop(
     doorway: Any,
     stage: str,
@@ -236,15 +285,21 @@ def run_loop(
     max_iterations: int,
     max_tokens: int = 16000,
 ) -> dict[str, Any]:
-    """Drive one read to its ``final_tool`` call; its input is the result."""
+    """Drive one read to its ``final_tool`` call; its input is the result.
+    After ``max_iterations - 1`` exploring calls, the answer-now turns
+    (``_forced_final``) ask for the result with what was found, unclear where
+    nothing was established."""
     handlers: dict[str, Callable[[dict[str, Any]], Any]] = {
         "list_files": ctx.list_files,
         "fetch_doc": ctx.fetch_doc,
         "search_text": ctx.search_text,
         "view_page": ctx.view_page,
     }
-    messages: list[dict[str, Any]] = [{"role": "user", "content": user}]
-    for _ in range(max_iterations):
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": [{"type": "text", "text": user, "cache_control": dict(_CACHE)}]}
+    ]
+    for _ in range(max(1, max_iterations - 1)):
+        _roll_cache(messages)
         r = doorway.call(
             stage,
             model=model,
@@ -255,6 +310,8 @@ def run_loop(
             thinking={"type": "adaptive"},
             stream=True,
             custom_id=f"{stage}-{ctx.matter_id}",
+            attempts=CALL_ATTEMPTS,
+            backoff=CALL_BACKOFF,
         )
         uses = _uses(r.message)
         final = next((u for u in uses if u.get("name") == final_tool["name"]), None)
@@ -263,15 +320,74 @@ def run_loop(
             return got if isinstance(got, dict) else {}
         messages.append({"role": "assistant", "content": [_block_dict(b) for b in r.message.content or []]})
         if not uses:
-            messages.append({"role": "user", "content": f"Call {final_tool['name']} now with what you found."})
+            nudge = f"Call {final_tool['name']} now with what you found."
+            messages.append({"role": "user", "content": [{"type": "text", "text": nudge}]})
             continue
-        results = []
-        for u in uses:
-            fn = handlers.get(str(u.get("name")))
-            out = fn(u.get("input") or {}) if fn else f"unknown tool {u.get('name')}"
-            results.append({"type": "tool_result", "tool_use_id": u.get("id"), "content": out})
-        messages.append({"role": "user", "content": results})
-    raise ReadIncomplete(f"{stage}: no result inside {max_iterations} calls")
+        messages.append({"role": "user", "content": _tool_results(uses, handlers)})
+    return _forced_final(doorway, stage, model, system, messages, final_tool, max_tokens, ctx, handlers)
+
+
+def _forced_final(
+    doorway: Any,
+    stage: str,
+    model: str,
+    system: str,
+    messages: list[dict[str, Any]],
+    final_tool: dict[str, Any],
+    max_tokens: int,
+    ctx: MatterContext,
+    handlers: dict[str, Callable[[dict[str, Any]], Any]] | None = None,
+) -> dict[str, Any]:
+    """The answer-now turn. The tool list and thinking stay exactly as in the
+    loop: the read model refuses a forced ``tool_choice`` (live 2026-10-08:
+    "tool_choice ... not supported for this model"), and a changed tool list
+    would miss the cached prefix. So the turn says to answer now; a reply
+    that still explores gets its results and one last instruction; a reply
+    that writes the answer as JSON text instead of the tool is parsed."""
+    for attempt in range(FINAL_TURNS):
+        nudge = {"type": "text", "text": FINAL_NUDGE.format(tool=final_tool["name"])}
+        last = messages[-1]
+        if last.get("role") == "user" and isinstance(last.get("content"), list):
+            last["content"] = [*last["content"], nudge]
+        else:
+            messages.append({"role": "user", "content": [nudge]})
+        _roll_cache(messages)
+        r = doorway.call(
+            stage,
+            model=model,
+            system=system,
+            messages=messages,
+            max_tokens=max_tokens,
+            tools=[*TOOLS, final_tool],
+            thinking={"type": "adaptive"},
+            stream=True,
+            custom_id=f"{stage}-{ctx.matter_id}-final",
+            attempts=CALL_ATTEMPTS,
+            backoff=CALL_BACKOFF,
+        )
+        uses = _uses(r.message)
+        final = next((u for u in uses if u.get("name") == final_tool["name"]), None)
+        if final is not None and isinstance(final.get("input"), dict):
+            return final["input"]
+        parsed = _json_answer(r.message)
+        if parsed is not None:
+            return parsed
+        messages.append({"role": "assistant", "content": [_block_dict(b) for b in r.message.content or []]})
+        if uses and handlers is not None and attempt + 1 < FINAL_TURNS:
+            messages.append({"role": "user", "content": _tool_results(uses, handlers)})
+    raise ReadIncomplete(f"{stage}: no result, the answer-now turns included")
+
+
+def _json_answer(message: Any) -> dict[str, Any] | None:
+    text = "".join(str(_block_dict(b).get("text") or "") for b in getattr(message, "content", None) or [])
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        got = json.loads(text[start : end + 1])
+    except ValueError:
+        return None
+    return got if isinstance(got, dict) else None
 
 
 def dump(path: Path, obj: Any) -> None:

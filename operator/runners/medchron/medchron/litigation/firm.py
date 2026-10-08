@@ -13,7 +13,7 @@ and the models. Closed key set: a misspelled key is an error, never a default.
 The schema::
 
     firm:                  {slug, display_name}
-    models:                {read, verify, audit}
+    models:                {read, verify, audit, transcription?}
     per_job_cap_usd:       number > 0
     monthly_budget_usd:    number > 0      (the broker reads this one too)
     court_paper_patterns:  [regex]         file names that read as court papers
@@ -30,6 +30,10 @@ The schema::
     min_court_hits:        int >= 1        court-named files a matter needs (1)
     matter_statuses:       [str]           Smokeball statuses listed (["Open"])
     tool_iterations:       int >= 4        one read's tool-loop cap (30)
+    fetch_caps:            {court, server, discovery, email, total: int}   per matter
+    concurrency:           int >= 1        parallel model calls in extract (5)
+    context_chars:         int >= 5000     document text a read is handed up front (120000)
+    doc_context_chars:     int >= 1        of which one document at most (8000)
     chunk_chars:           int >= 5000     one fetch_doc page (60000)
     timezone:              IANA name       "today" for the date gates
 """
@@ -73,8 +77,15 @@ OPTIONAL: dict[str, tuple[str, Any]] = {
     "tool_iterations": ("int4", 30),
     "chunk_chars": ("int5000", 60000),
     "timezone": ("str", "America/Los_Angeles"),
+    "fetch_caps": ("caps", {}),
+    "concurrency": ("int1", 5),
+    "context_chars": ("int5000", 120000),
+    "doc_context_chars": ("int1", 8000),
 }
 MODEL_KEYS = ("read", "verify", "audit")
+#: transcription: the vision OCR model (defaults to models.read).
+OPTIONAL_MODELS = ("transcription",)
+FETCH_CAP_KEYS = ("court", "server", "discovery", "email", "total")
 
 
 class LitigationConfigError(ValueError):
@@ -97,11 +108,14 @@ def _check_struct(key: str, v: Any, kind: str) -> list[str]:
     if kind == "models":
         if (
             not isinstance(v, dict)
-            or set(v) != set(MODEL_KEYS)
+            or not set(MODEL_KEYS) <= set(v) <= set(MODEL_KEYS) | set(OPTIONAL_MODELS)
             or not all(isinstance(x, str) and x for x in v.values())
         ):
-            return [f"{key}: expected exactly {list(MODEL_KEYS)} as model ids"]
+            return [f"{key}: expected {list(MODEL_KEYS)} (and optionally {list(OPTIONAL_MODELS)}) as model ids"]
         return []
+    if kind == "caps":
+        ok = isinstance(v, dict) and all(k in FETCH_CAP_KEYS and _is_int(x) and x >= 1 for k, x in v.items())
+        return [] if ok else [f"{key}: expected a map of {list(FETCH_CAP_KEYS)} to integers >= 1"]
     return []
 
 
@@ -146,7 +160,7 @@ def _check_collection(key: str, v: Any, kind: str) -> list[str]:
 
 
 def _check(key: str, v: Any, kind: str) -> list[str]:
-    if kind in ("firm", "models"):
+    if kind in ("firm", "models", "caps"):
         return _check_struct(key, v, kind)
     if kind in ("pos", "int1", "int4", "int5000", "str"):
         return _check_scalar(key, v, kind)
@@ -200,7 +214,10 @@ class LitigationFirm:
         raise KeyError(key)
 
     def model(self, role: str) -> str:
-        return str(self.data["models"][role])
+        models = self.data["models"]
+        if role == "transcription" and role not in models:
+            return str(models["read"])
+        return str(models[role])
 
     @property
     def court_rx(self) -> list[re.Pattern[str]]:

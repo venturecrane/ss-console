@@ -8,7 +8,17 @@ from pathlib import Path
 
 import pytest
 
-from litigation_testkit import LIBRARY, M1, LitSeat, ScriptedLit, good_result, make_inputs, make_job, matter_docs
+from litigation_testkit import (
+    LIBRARY,
+    M1,
+    LitSeat,
+    ScriptedLit,
+    first_text,
+    good_result,
+    make_inputs,
+    make_job,
+    matter_docs,
+)
 from medchron.litigation import manifest, vocab
 from medchron.litigation.run import LitigationRun
 from medchron_testkit import make_pdf
@@ -108,10 +118,41 @@ def test_a_gate_refusal_holds_and_files_nothing(tmp_path):
     assert not seat.sent and manifest.load_prior(tmp_path / "state", M1) is None
 
 
-def test_a_read_that_never_records_fails_resumably(tmp_path):
-    r, _ = _run(tmp_path, ScriptedLit(never_finish=True))
+def test_a_read_that_never_records_marks_the_matter_unread_and_holds(tmp_path):
+    client = ScriptedLit(never_finish=True)
+    r, seat = _run(tmp_path, client)
     v = r.run()
-    assert v.verdict == "failed" and v.reason.startswith("read_incomplete: ") and v.stage == "read1"
+    assert v.verdict == "held" and "matter could not be read" in v.reason and v.stage == "gates"
+    assert seat.sent == []
+    u = json.loads((r.data / "m" / M1 / "unread.json").read_text())
+    assert u["stage"] == "read1" and u["reason"].startswith("read_incomplete: ")
+    # after the cap, answer-now turns: the same tools (a forced tool_choice is
+    # refused by the read model), the instruction to answer, never a forced choice
+    last = client.calls[-1]
+    assert "tool_choice" not in last and last["tools"][-1]["name"] == "record_result"
+    assert "answer now" in json.dumps(last["messages"][-1]).lower()
+
+
+def test_one_matters_failure_does_not_stop_the_others(tmp_path, monkeypatch):
+    from litigation_testkit import M2
+
+    monkeypatch.setattr("medchron.llm.time.sleep", lambda s: None)
+
+    calls = {"n": 0}
+
+    class FlakyFirst(ScriptedLit):
+        def _msg(self, params):
+            if "MATTER: 100001 " in first_text(params):
+                calls["n"] += 1
+                raise ValueError("a transport failure on this matter only")
+            return super()._msg(params)
+
+    docs2 = [("m2" + fid[1:], n, b, d) for fid, n, b, d in matter_docs()]
+    seat = LitSeat({M1: matter_docs(), M2: docs2})
+    r, _ = _run(tmp_path, FlakyFirst(), seat=seat)
+    v = r.run()
+    assert v.verdict == "held" and "matter could not be read (1)" in v.reason
+    assert (r.data / "m" / M2 / "read3.json").is_file() and (r.data / "m" / M1 / "unread.json").is_file()
 
 
 def test_the_cap_stops_the_run_inside_a_read(tmp_path):

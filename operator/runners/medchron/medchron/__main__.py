@@ -101,8 +101,8 @@ def _litigation_run(args: argparse.Namespace, run_cls, lit_rehearse, lit_firm):
     jd = Path(args.job_dir)
     kw = {"inputs_dir": args.inputs, "pricing": args.pricing, "log": lambda m: print(m, file=sys.stderr)}
     if not args.rehearse:
-        if args.read_limit is not None or args.read_matters:
-            raise lit_rehearse.RehearsalError("rehearsal: --read-limit and --read-matters need --rehearse")
+        if args.read_limit is not None or args.read_matters or args.offline:
+            raise lit_rehearse.RehearsalError("rehearsal: --read-limit, --read-matters and --offline need --rehearse")
         return run_cls(jd, state_dir=args.state_dir, **kw)
     lit_rehearse.ensure_job(jd, lit_firm.load(args.inputs).data["firm"]["slug"], [])
     return lit_rehearse.RehearsalRun(
@@ -111,6 +111,7 @@ def _litigation_run(args: argparse.Namespace, run_cls, lit_rehearse, lit_firm):
         state_dir=args.state_dir or str(jd / "rehearsal-state"),
         read_limit=args.read_limit,
         read_matters=[x.strip() for x in (args.read_matters or "").split(",") if x.strip()],
+        offline=bool(args.offline),
         **kw,
     )
 
@@ -121,6 +122,7 @@ def _cmd_litigate(args: argparse.Namespace) -> int:
     Everything else the run (or a library it imports) writes to stdout is
     sent to stderr. Exit 0 delivered, 1 held, 2 failed."""
     import contextlib
+    import json
 
     from .litigation import firm as lit_firm, job as lit_job, rehearse as lit_rehearse
     from .litigation.outcome import Verdict
@@ -141,6 +143,9 @@ def _cmd_litigate(args: argparse.Namespace) -> int:
             r.reopen([x.strip() for x in (args.redo or "").split(",") if x.strip()])
             v = r.run()
     payload = v.to_json()
+    if args.rehearse and not Path(args.rehearse).is_file():
+        # a rehearsal writes its report on every exit path, a setup failure included
+        Path(args.rehearse).write_text(json.dumps({"rehearsal": {"verdict": json.loads(payload)}}), encoding="utf-8")
     verdict_mod.write(Path(args.job_dir), payload)
     print(payload)
     return v.exit_code
@@ -276,6 +281,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     lt.add_argument("--read-limit", type=int, default=None, help="rehearsal: read only this many matters")
     lt.add_argument("--read-matters", default="", help="rehearsal: matter ids read first, comma-separated")
+    lt.add_argument(
+        "--offline", action="store_true", help="rehearsal: no seat; replay a copied job dir from its cached text"
+    )
     lt.set_defaults(fn=_cmd_litigate)
     d = sub.add_parser("dag", help="print the stage order and validate it")
     d.set_defaults(fn=_cmd_dag)

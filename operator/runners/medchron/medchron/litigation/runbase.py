@@ -45,9 +45,26 @@ class RunBase:
         return self._state().get(stage, {}).get("status") == "done"
 
     def reopen(self, stages: list[str]) -> None:
-        for s in stages:
+        """Reopen the named stages AND every stage after the earliest of them
+        (a re-read must be re-gated and rebuilt). A read stage's per-matter
+        artifacts go too, unread markers included, or the stage would skip
+        every matter it already did."""
+        from .run import STAGES
+
+        known = [s for s in stages if s in STAGES]
+        if not known:
+            return
+        first = min(STAGES.index(s) for s in known)
+        for s in STAGES[first:]:
             if s in self._state():
                 self._put(s, {"status": "reopened"})
+        reads = [s for s in STAGES[first:] if s in ("read1", "read2", "read3")]
+        root = self.data / "m"
+        for mdir in root.iterdir() if root.is_dir() else []:
+            for s in reads:
+                (mdir / f"{s}.json").unlink(missing_ok=True)
+            if reads:
+                (mdir / "unread.json").unlink(missing_ok=True)
 
     def _stage(self, name: str, fn: Callable[[], Any]) -> None:
         if self._is_done(name):
@@ -80,7 +97,7 @@ class RunBase:
         }
         r = self.doorway.call(
             "litigation_ocr",
-            model=self.firm.model("read"),
+            model=self.firm.model("transcription"),
             messages=[{"role": "user", "content": [img, {"type": "text", "text": extract_mod.OCR_PROMPT}]}],
             max_tokens=8000,
             cache_blocks=(),
