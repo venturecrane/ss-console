@@ -68,6 +68,38 @@ def _cmd_demand(args: argparse.Namespace) -> int:
     return {"delivered": 0, "held": 3, "failed": 1}.get(v.outcome, 1)
 
 
+def _argv_without_redo(argv: list[str]) -> list[str]:
+    """``argv`` with ``--redo`` and its value removed: the stages it reopened
+    are already reopened in the job's state, and reopening them again in the
+    fresh process would redo finished (paid) work."""
+    out: list[str] = []
+    skip = False
+    for a in argv:
+        if skip:
+            skip = False
+        elif a == "--redo":
+            skip = True
+        elif not a.startswith("--redo="):
+            out.append(a)
+    return out
+
+
+def _reexec_without_redo() -> None:
+    """Replace this process with a fresh run of the same command (same pid, so
+    the daemon's child bookkeeping and stdout verdict are unchanged)."""
+    import os
+
+    argv = _argv_without_redo(sys.argv)
+    # `python -m medchron` puts this file's path in argv[0]; run it as a module
+    # again, or its relative imports break. The installed `medchron` script runs
+    # as itself.
+    head = ["-m", "medchron"] if argv[0].endswith("__main__.py") else [argv[0]]
+    sys.stdout.flush()
+    sys.stderr.flush()
+    # nosemgrep: python.lang.security.audit.dangerous-os-exec-tainted-env-args.dangerous-os-exec-tainted-env-args - re-runs this process with its own argv (the daemon's fixed `medchron draft <job_dir>` line) minus --redo; no input reaches it
+    os.execv(sys.executable, [sys.executable, *head, *argv[1:]])
+
+
 def _cmd_draft(args: argparse.Namespace) -> int:
     """One drafting job (``drafting/run.py``). Same verdict contract as
     ``demand``: the JSON list goes to verdict.json and stdout, progress to
@@ -79,7 +111,11 @@ def _cmd_draft(args: argparse.Namespace) -> int:
 
     try:
         r = DraftingRun(
-            Path(args.job_dir), inputs_dir=args.inputs, pricing=args.pricing, log=lambda m: print(m, file=sys.stderr)
+            Path(args.job_dir),
+            inputs_dir=args.inputs,
+            pricing=args.pricing,
+            log=lambda m: print(m, file=sys.stderr),
+            reexec=_reexec_without_redo,
         )
     except (drafting_firm.DraftingConfigError, drafting_job.DraftingJobError) as exc:
         print(f"medchron: {exc}", file=sys.stderr)
