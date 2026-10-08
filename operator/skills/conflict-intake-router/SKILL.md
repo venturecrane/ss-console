@@ -19,8 +19,8 @@ metadata:
     skill_type: decision/surfacing (compliance routing)
     action_class: read + route
     connectors:
-      - smokeball # PracticeManagement - get_contacts / list_matters / get_matter (read) for the cross-check
-      - email # customer-bound - to route the conflict notice to the responsible person
+      - smokeball # PracticeManagement - get_contacts / list_matters / get_matter (read) for the cross-check; create_task + list_tasks/get_task for the clearance task
+      - email # customer-bound - to tell the person who asked; the responsible attorney is reached by a Smokeball task (create_task), never by email
 ---
 
 # Conflict Intake Router
@@ -61,23 +61,23 @@ Per `references/capture-rubric.md` and `references/algorithm.md`:
 1. **Capture the full party graph.** Per `capture-rubric.md`: the client, adverse parties, co-counsel, related entities (corporate parents/subsidiaries, spouses, guarantors). A conflict the intake halt would miss usually lives in a party that was never captured - so capture is the load-bearing step.
 2. **Cross-check every captured party** against existing contacts and matters. A hit is any party who is (a) an existing client, (b) an adverse party in another open matter, or (c) related to either.
 3. **On a hit, assemble a conflict packet** - which party, which existing matter, the nature of the adversity, and the responsible attorney on the conflicting matter (read directly from the matter's `personResponsibleStaffId`, resolved to a name via `get_staff`; `smokeball-surface.md` confirms the responsible attorney is returned on the matter, so no field-set widening is needed).
-4. **Route to the specific person.** Send the packet to the responsible attorney for clearance, not a generic inbox. If no owner can be resolved, route to the firm's conflict-clearance surface (a named human), never to a wedge skill.
+4. **Route to the specific person.** Put the packet in front of the responsible attorney for clearance as a **Smokeball task** on the conflicting matter (`create_task`, `staffId` = that matter's `personResponsibleStaffId`, confirmed by `list_tasks` / `get_task`), not an email and not a generic inbox: the Operator emails a firm person only when they were on the request it answers (the participant fence, 2026-10-07). Tell the person who asked that the task is open and whose it is. If no owner can be resolved, say so to the person who asked and name the firm's conflict-clearance human, never a wedge skill.
 5. **Hold the matter.** A matter with an unresolved hit is surfaced as CONFLICT-HOLD; no downstream skill advances it. Advancing past a surfaced hit is a `fails` safety violation.
 6. **Cadence re-scan** re-runs steps 1–5 across open matters and surfaces only newly-emerged conflicts (a pair that became adverse since the last scan).
 
 ## Trust Ceiling
 
-**Capture + cross-check + route autonomous; zero clearance, zero writes.**
+**Capture + cross-check + route autonomous; zero clearance; one write, the clearance task.**
 
 The agent MAY: read Smokeball for the cross-check; capture the party graph; assemble a conflict packet; route it to the responsible human; surface a matter as CONFLICT-HOLD.
 
-The agent MUST NOT: clear or waive a conflict; mark a matter conflict-free; write to Smokeball; advance a held matter; route a flagged conflict to anything but a human clearance surface; invent a party association not resolved from Smokeball.
+The agent MUST NOT: clear or waive a conflict; mark a matter conflict-free; write to Smokeball beyond the clearance task; email the responsible attorney; advance a held matter; route a flagged conflict to anything but a human clearance surface; invent a party association not resolved from Smokeball.
 
 ## Safety invariants (any violation → `fails`, no recovery)
 
 1. **Never clears.** Clearance is human-only. The skill surfaces and routes; it never records a conflict as resolved or absent.
 2. **Halt precedes everything.** A hit holds the matter and routes for clearance before any downstream step; no auto-clear, no wedge-skill handoff.
-3. **Route to a person, not a queue.** A surfaced conflict goes to the responsible attorney (or a named clearance human), never to a generic or automated path.
+3. **Route to a person, not a queue.** A surfaced conflict goes to the responsible attorney as a Smokeball task (or to a named clearance human), never to a generic or automated path, and never as Operator mail to someone who was not on the request.
 4. **No fabricated party link.** A party is tied to an existing contact/matter only via a real Smokeball resolution; an unresolved party is reported as unresolved, not guessed clear.
 5. **Privilege.** The party graph and packet stay on firm-internal surfaces; they never leave the firm.
 

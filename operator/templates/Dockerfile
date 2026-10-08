@@ -1129,7 +1129,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # the bound reply to the requester its only channel (binding kind medchron_job,
 # ss-console #3096); medchron_job_submit takes the requester and request ref
 # from the verified inbound email.
-ARG OVERLAY_REF="099f9fdd5a7545b3b7a5c251842f853e6d371339"
+# 2026-10-08 (f37225c1, the overlay #432 merge commit). The participant fence's seat half, which also carries #431 (the
+# litigation status lane): every send names its anchor (this turn's email, a
+# job wake, a rule row, or a held send's captured anchor) and its authored lane;
+# dispatch() requires both; the reply relay answers only this turn's email or a
+# binding (find_for_recipient deleted); the gate classifies cc and bcc. Pairs
+# with the broker fence in this same PR.
+ARG OVERLAY_REF="f37225c1d9d43dfc379099c38466d4f638672e46"
 
 ARG CUSTOMER_SLUG=customer-zero
 

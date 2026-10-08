@@ -324,6 +324,11 @@ PENDING_RULES_COLUMN_ALTERS: tuple[str, ...] = (
     # existed before the claim did.
     "ALTER TABLE pending_rules ADD COLUMN notify_claimed_at REAL",
     "ALTER TABLE pending_rules ADD COLUMN notify_claimed_by TEXT",
+    # The participant fence (participant_fence.py): the request email the row
+    # was proposed from, recorded at creation so an outcome letter anchors on
+    # the broker's own record. Absent on an older row, whose letter is then
+    # refused as unverifiable rather than sent to an unanchored person.
+    "ALTER TABLE pending_rules ADD COLUMN origin_json TEXT",
 )
 CREATE_PENDING_RULES_INDEX_SQL = (
     "CREATE INDEX IF NOT EXISTS idx_pending_rules_open "

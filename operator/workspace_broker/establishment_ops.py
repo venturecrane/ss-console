@@ -90,6 +90,7 @@ class OpsRequests(ProposalLifecycle):
             # ``done`` reach the requester through the path that already exists.
             for_admin=True,
             kind=OPS_REQUEST_KIND,
+            origin=request.get("origin"),
         )
         self.ledger.append(
             {

@@ -235,6 +235,30 @@ class AgentMailOps:
 
     # -- verbs -------------------------------------------------------------
 
+    def participants_of(self, message_id: str) -> dict[str, Any]:
+        """Who sent this inbox's message, and whom it reached (To and Cc).
+
+        The participant fence's read (participant_fence.py). Received, not sent,
+        is vetted by its From not being this seat's own inbox; AgentMail's
+        labels are not relied on. RAISES on any failure to look.
+        """
+        wanted = str(message_id or "").strip()
+        if not wanted:
+            raise AgentMailRefused("no message id to read participants from")
+        found = self._request(self._path("messages", wanted), "GET", None)
+        sender = normalize_address(found.get("from") or found.get("from_"))
+        if not sender:
+            raise AgentMailRefused("that message names no sender")
+        if sender == normalize_address(self.inbox_id()):
+            raise AgentMailRefused("that message was sent by this inbox itself, not to it")
+        return {
+            "message_id": wanted,
+            "sender": sender,
+            "to": _as_addresses(found.get("to")),
+            "cc": _as_addresses(found.get("cc")),
+            "conversation_id": _thread_id(found),
+        }
+
     def send(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Fence every recipient, then transmit from this seat's pinned inbox."""
         _refuse_attachments(payload)

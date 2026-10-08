@@ -261,8 +261,7 @@ class ActProposals(ProposalLifecycle):
             )
         # The hook may pass the block it read as well. It has to agree with the
         # copy THIS uid read, or the two are looking at different files.
-        supplied_authored = request.get("authored")
-        if supplied_authored is not None:
+        if (supplied_authored := request.get("authored")) is not None:
             if not isinstance(supplied_authored, dict) or {k: v for k, v in supplied_authored.items()} != authored:
                 raise EstablishmentValidationError(
                     "the authored block supplied with this proposal disagrees with the "
@@ -285,6 +284,7 @@ class ActProposals(ProposalLifecycle):
             for_admin=True,
             kind="tool_call",
             payload=authored,
+            origin=request.get("origin"),
         )
         self.ledger.append(
             {
@@ -343,6 +343,7 @@ class ActProposals(ProposalLifecycle):
             for_admin=True,
             kind="tool_call",
             payload=payload,
+            origin=request.get("origin"),
         )
         self.ledger.append(
             {

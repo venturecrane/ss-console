@@ -25,6 +25,10 @@ from .msgraph_ops import SENT_ITEMS_FOLDER, MsGraphOps, MsGraphRefused, MsGraphT
 from .recipient_policy import normalize_address
 
 _SELECT = "id,from,sender,replyTo,conversationId,receivedDateTime,isDraft,internetMessageId,parentFolderId"
+#: The participant fence's own projection (participant_fence.py). Kept apart
+#: from ``_SELECT`` on purpose: widening the binding's projection would hand
+#: every caller of it two address lists it never asked for.
+_PARTICIPANT_SELECT = "id,from,sender,toRecipients,ccRecipients,conversationId,isDraft,internetMessageId"
 _MAX_SENT_PAGES = 5
 
 
@@ -127,6 +131,41 @@ def received_by_graph_id(ops: MsGraphOps, graph_message_id: str) -> dict[str, st
     return _vetted(ops, m, inbox)
 
 
+def _address_list(value: object) -> list[str]:
+    items = value if isinstance(value, list) else []
+    return [a for a in (normalize_address(v) for v in items) if a]
+
+
+def participants_of(ops: MsGraphOps, graph_message_id: str) -> dict[str, object]:
+    """Who sent the email with this Graph id, and whom it reached (To and Cc).
+
+    The participant fence's read (participant_fence.py). RAISES on any failure
+    to look, a 404 included, and refuses a draft, an email this mailbox sent,
+    or an answer for a different message: the fence reads every one of those as
+    "the request could not be verified" and sends nothing.
+    """
+    wanted = str(graph_message_id or "").strip()
+    if not wanted:
+        raise MsGraphRefused("no message id to read participants from")
+    m = _read(ops, ops._mail_path("messages", wanted) + f"?$select={_PARTICIPANT_SELECT}")
+    if not isinstance(m, dict) or str(m.get("id") or "") != wanted:
+        raise MsGraphRefused("the mailbox answered for a different message than the one named; refusing")
+    if m.get("isDraft") is True:
+        raise MsGraphRefused("that message is a draft, not a request anyone sent")
+    sender = normalize_address(m.get("from") or m.get("sender"))
+    if not sender:
+        raise MsGraphRefused("that message names no sender")
+    if sender == normalize_address(ops.mailbox()):
+        raise MsGraphRefused("that message was sent by this mailbox itself, not to it")
+    return {
+        "graph_message_id": wanted,
+        "sender": sender,
+        "to": _address_list(m.get("toRecipients")),
+        "cc": _address_list(m.get("ccRecipients")),
+        "conversation_id": str(m.get("conversationId") or ""),
+    }
+
+
 def sent_in_conversation_since(ops: MsGraphOps, conversation_id: str, since: str) -> bool:
     """Whether this mailbox SENT anything in this conversation at or after ``since``.
 
@@ -165,4 +204,4 @@ def sent_in_conversation_since(ops: MsGraphOps, conversation_id: str, since: str
     return True
 
 
-__all__ = ["find_received", "inbox_id", "received_by_graph_id", "sent_in_conversation_since"]
+__all__ = ["find_received", "inbox_id", "participants_of", "received_by_graph_id", "sent_in_conversation_since"]

@@ -1505,7 +1505,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // 0415efb1 -> 099f9fdd (overlay#430), 2026-10-07: a chronology job's completion wake is fenced
     // (send tools refused, binds only its own medchron_job), and the chronology submit takes its
     // requester from the verified inbound email.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="099f9fdd5a7545b3b7a5c251842f853e6d371339"')
+    // 099f9fdd -> f37225c1 (overlay#432 merge commit), 2026-10-08: the participant
+    // fence's seat half (anchor + lane on every send, find_for_recipient deleted, cc/bcc classified),
+    // carrying overlay#431 (the litigation status lane).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="f37225c1d9d43dfc379099c38466d4f638672e46"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
