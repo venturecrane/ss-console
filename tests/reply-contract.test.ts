@@ -164,6 +164,38 @@ describe('reply-contract: what must pass', () => {
   })
 })
 
+describe('reply-contract: a cost is never weighed against the monthly fee', () => {
+  // The Captain, 2026-09-23 and 2026-10-08 ("for the 50th time"): the fee already
+  // carries chronology cost of goods, labor and hosting, and the margin is slim.
+  // The first two offenders are sentences actually written; each must bounce at any length.
+  const OFFENDERS = [
+    'Neither threatens the engagement; the $5,150 monthly fee covers it many times over.',
+    'That is small against the $5,000 monthly fee.',
+    'Even $500 is a fraction of the retainer.',
+    'The discovery backfill is well within the fee.',
+  ]
+  for (const s of OFFENDERS) {
+    it(`BLOCKS: ${s}`, () => {
+      const r = runHook(payload(`Short answer.\n\n${s}`))
+      expect(r.status).toBe(0)
+      expect(decision(r)).toBe('block')
+      expect((JSON.parse(r.stdout) as { reason: string }).reason).toMatch(/ADDED cost of goods/)
+    })
+  }
+
+  const ALLOWED = [
+    'The weekday refresh reads about 180,000 tokens a day, about $16 a month of added cost of goods.',
+    'The firm paid $2,500 for the first run; the hand run cost $513 in agents.',
+    'Spend caps stay at $500 a job and $750 a month as runaway guards.',
+    'The retainer started on 9/15 and bills on the 15th.',
+  ]
+  for (const s of ALLOWED) {
+    it(`passes: ${s}`, () => {
+      expect(decision(runHook(payload(s)))).toBeNull()
+    })
+  }
+})
+
 describe('reply-contract: containment', () => {
   it('exits 0 on malformed stdin', () => {
     expect(runHook('not json {{{').status).toBe(0)

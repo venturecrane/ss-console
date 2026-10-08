@@ -69,6 +69,23 @@ const SKILL_EXEMPT = [
 
 const FAILURE_WORDS = /\b(error|failed|failure|regression|broken)\b/i
 
+// Cost-minimized-against-the-fee (BLOCKING, any reply length). The Captain,
+// 2026-09-23 and again 2026-10-08 ("for the 50th time"): never say a cost is
+// small, a fraction, or covered against the monthly fee. The fee already
+// carries chronology cost of goods (~$800-1,000 a month), labor and hosting,
+// and the margin is slim; a memory saying so did not stop it, so this does.
+// A cost is reported as the number and its basis, framed as ADDED cost of
+// goods, never weighed against the fee. Sentence-level: a fee reference and a
+// minimizing word in the same sentence.
+const FEE_REF = /(\bmonthly fee\b|\bthe fee\b|\bretainer\b|\$\s?5,?[01][05]0\b|\$\s?5k\b|\bfee covers\b|\bagainst the fee\b)/i
+const MINIMIZER =
+  /\b(fraction|small|tiny|cheap|negligible|trivial|rounding|covers?|covered|many times|well within|nothing (?:against|next to)|dwarf|pales|threaten|easily absorb|absorbs?|comfortabl)/i
+
+export function feeComparison(msg) {
+  const sentences = msg.replace(/\n+/g, ' ').split(/(?<=[.!?;])\s+/)
+  return sentences.filter((s) => FEE_REF.test(s) && MINIMIZER.test(s)).map((s) => s.trim().slice(0, 200))
+}
+
 function boardDir() {
   return process.env.SS_BOARD_DIR || join(homedir(), '.claude', 'ss-board')
 }
@@ -125,6 +142,8 @@ export function headerOk(msg) {
 }
 
 export function evaluate(msg) {
+  const fee = feeComparison(msg)
+  if (fee.length) return { verdict: 'block', rule: 'fee-comparison', sentences: fee }
   if (SKILL_EXEMPT.some((re) => re.test(msg))) return { verdict: 'exempt' }
   const { total, aboveFold, foldSeen } = proseLines(msg)
   const advisories = []
@@ -194,6 +213,19 @@ function main() {
     return // if the guard cannot be recorded, do not risk a loop: let it pass
   }
 
+  if (result.rule === 'fee-comparison') {
+    process.stdout.write(
+      JSON.stringify({
+        decision: 'block',
+        reason:
+          `[reply-contract] This reply weighs a cost against the monthly fee: "${result.sentences[0]}". ` +
+          `The Captain has ruled this out repeatedly: the fee already carries chronology cost of goods, labor and hosting, and the margin is slim. ` +
+          `Restate the reply without comparing any cost to the fee or calling it small, covered or a fraction. ` +
+          `Report the dollar figure with its basis as ADDED cost of goods, and stop there. Do not apologize or mention this check.`,
+      }),
+    )
+    return
+  }
   process.stdout.write(
     JSON.stringify({
       decision: 'block',
