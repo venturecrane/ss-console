@@ -426,6 +426,20 @@ def bind_verb(
     }
 
 
+def _bound_body(v: Verified, payload: dict[str, Any], bound_ops: MsGraphOps) -> tuple[dict[str, Any], Any]:
+    """The wire body and the ops call for a verified binding: a reply on the
+    verified email, or (a scheduled litigation job) one new message whose
+    recipient and subject are the broker's; a caller's to/cc/bcc/subject and
+    attachments are never read."""
+    html = {"html": payload["html"]} if isinstance(payload.get("html"), str) and payload["html"].strip() else {}
+    comment = str(payload.get("comment") or "")
+    if v.mode != MODE_NEW_MESSAGE:
+        return {"message_id": v.graph_message_id, "comment": comment, **html}, bound_ops.reply
+    if not (comment.strip() or html):
+        raise BindingRefused("refusing to send an empty message")
+    return {"to": [v.sender], "subject": v.subject, "body_text": comment, **html}, bound_ops.send
+
+
 def reply_verb(
     broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
 ) -> dict[str, Any]:
@@ -469,22 +483,7 @@ def reply_verb(
     # another broker thread is using.
     bound_ops = copy.copy(ops)
     bound_ops._request = claiming_request  # type: ignore[method-assign]
-    html = {"html": payload["html"]} if isinstance(payload.get("html"), str) and payload["html"].strip() else {}
-    if v.mode == MODE_NEW_MESSAGE:
-        # The recipient and subject are the broker's, never the caller's; a
-        # caller's to/cc/bcc/subject/attachments are not read at all.
-        body: dict[str, Any] = {
-            "to": [v.sender],
-            "subject": v.subject,
-            "body_text": str(payload.get("comment") or ""),
-            **html,
-        }
-        if not (body["body_text"].strip() or html):
-            raise BindingRefused("refusing to send an empty message")
-        transmit = bound_ops.send
-    else:
-        body = {"message_id": v.graph_message_id, "comment": str(payload.get("comment") or ""), **html}
-        transmit = bound_ops.reply
+    body, transmit = _bound_body(v, payload, bound_ops)
     extra = request.get("audit_extra")
     audit_extra = dict(extra) if isinstance(extra, dict) else {}
     audit_extra["reply_binding"] = v.key
