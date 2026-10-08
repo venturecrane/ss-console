@@ -176,6 +176,9 @@ failed job in any case.
      caption discrepancies, list each one as reported: the field, what the court paper
      says, what the practice-management record says. Say that nothing has been sent to
      anyone outside the firm. An empty list is left out, never announced as "none".
+     On `delivered`, never relay the job's `reason`: it can describe an earlier
+     failed attempt, and the filed document is what the firm reads. Report only the
+     files, markers and caption discrepancies the job reports.
    - **held**: say plainly that the document is not drafted yet and what the FILE or
      the REQUEST needs for it to go forward, in the firm's own terms (a pleading or a
      served set the file does not hold, a deponent the request does not name). Never
