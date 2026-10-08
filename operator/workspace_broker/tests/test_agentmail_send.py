@@ -40,6 +40,8 @@ GATEWAY_PID = 42
 AGENT_UID = 1000
 SEAT = "pilot-smokeball"
 SEAT_INBOX = "pilot-smokeball@agentmail.to"
+#: The participant fence: a reply names the email it answers (participant_fence.py).
+ANCHOR_IN = {"kind": "agentmail_message", "message_id": "msg_in"}
 # The incident recipient, kept as a variable so the string appears once and the
 # intent is legible: a real person at a real firm, on no roster of this seat.
 UNAUTHORED = "someone@a-firm-this-seat-never-named.example"
@@ -481,6 +483,7 @@ def _broker(tmp_path: Path, http: FakeHTTP, yaml_text: str = PILOT_YAML) -> Brok
     broker.agent_uid = AGENT_UID
     broker.ledger = RecordingLedger()
     broker.agentmail = _ops(tmp_path, http, yaml_text)
+    broker.customer_path = broker.agentmail._customer_path
     return broker
 
 
@@ -505,13 +508,13 @@ def test_reply_verb_answers_an_authored_sender_and_keeps_the_sender_key_in_the_r
     broker = _broker(tmp_path, http)
     with pytest.raises(PermissionError):
         broker.handle(
-            {"action": "agentmail_reply", "payload": {"message_id": "msg_in", "text": "sure"}},
+            {"action": "agentmail_reply", "payload": {"message_id": "msg_in", "text": "sure"}, "anchor": ANCHOR_IN},
             peer_pid=GATEWAY_PID + 1,
             peer_uid=AGENT_UID,
         )
     assert broker.ledger.rows == []
     response = broker.handle(
-        {"action": "agentmail_reply", "payload": {"message_id": "msg_in", "text": "sure"}},
+        {"action": "agentmail_reply", "payload": {"message_id": "msg_in", "text": "sure"}, "anchor": ANCHOR_IN},
         peer_pid=GATEWAY_PID,
         peer_uid=AGENT_UID,
     )

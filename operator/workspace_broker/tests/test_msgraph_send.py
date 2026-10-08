@@ -885,6 +885,7 @@ def _broker(tmp_path: Path, http: FakeGraph, yaml_text: str = STAGING_YAML) -> B
     broker.agent_uid = AGENT_UID
     broker.ledger = RecordingLedger()
     broker.msgraph = _ops(tmp_path, http, yaml_text)
+    broker.customer_path = broker.msgraph._customer_path
     return broker
 
 
@@ -958,6 +959,7 @@ def test_a_transport_failure_is_not_recorded_as_a_refusal(tmp_path: Path) -> Non
     broker.agent_uid = AGENT_UID
     broker.ledger = RecordingLedger()
     broker.msgraph = MsGraphOps(credential, customer, opener=_boom)
+    broker.customer_path = customer
     with pytest.raises(MsGraphTransportError):
         broker.handle(
             {
@@ -1002,7 +1004,11 @@ def test_an_unconfigured_broker_refuses_the_verb(tmp_path: Path) -> None:
 def test_the_reply_verb_writes_its_own_row(tmp_path: Path) -> None:
     broker = _broker(tmp_path, FakeGraph(source_from="scott@smd.services"))
     broker.handle(
-        {"action": "msgraph_reply", "payload": {"message_id": "m1", "comment": "ok"}},
+        {
+            "action": "msgraph_reply",
+            "payload": {"message_id": "m1", "comment": "ok"},
+            "anchor": {"kind": "graph_message", "graph_message_id": "m1"},
+        },
         peer_pid=GATEWAY_PID,
         peer_uid=AGENT_UID,
     )
@@ -1181,6 +1187,7 @@ def test_a_reply_row_names_the_person_it_answered_without_an_address(tmp_path: P
         {
             "action": "msgraph_reply",
             "payload": {"message_id": "AAMk123", "comment": "sure"},
+            "anchor": {"kind": "graph_message", "graph_message_id": "AAMk123"},
             "session_id": "sess-4",
         },
         peer_pid=GATEWAY_PID,
@@ -1539,6 +1546,7 @@ def test_an_agentmail_shaped_result_writes_exactly_the_row_it_writes_today(
         transport=MsGraphTransportError,
         attempted_for_send=lambda p: list(p.get("to") or []),
         identity_key="inbox_id",
+        channel="agentmail",
     )
     meta = _meta(broker)
     assert meta["message_id"] == "<am-1>"
@@ -1772,6 +1780,7 @@ def test_the_device_reply_row_names_the_person_and_the_device(tmp_path: Path) ->
         {
             "action": "msgraph_reply",
             "payload": {"message_id": "AAMk123", "comment": "Filed.", "to": PERSON},
+            "anchor": {"kind": "graph_message", "graph_message_id": "AAMk123"},
         },
         peer_pid=GATEWAY_PID,
         peer_uid=AGENT_UID,

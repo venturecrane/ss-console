@@ -127,7 +127,7 @@ def _medchron_ledger(broker: BrokerContext) -> MedchronLedger:
     return MedchronLedger(str(broker.audit_db_path), queue)
 
 
-def _job_ledger(broker: BrokerContext, kind: str) -> DemandLedger | DraftingLedger | MedchronLedger:
+def job_ledger(broker: BrokerContext, kind: str) -> DemandLedger | DraftingLedger | MedchronLedger:
     if kind == "medchron_job":
         return _medchron_ledger(broker)
     return _marking_ledger(broker, kind)
@@ -203,7 +203,7 @@ def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> V
     job_id, expected_sender, imid, key = "", "", "", ""
     if kind in JOB_KINDS:
         noun = _NOUN[kind]
-        row = _job_ledger(broker, kind).read(ident)
+        row = job_ledger(broker, kind).read(ident)
         if row is None:
             raise BindingRefused(f"there is no {noun} job with that id")
         if row["state"] == "failed":
@@ -388,13 +388,22 @@ def reply_verb(
         result = dispatch_transmit(
             broker,
             action,
-            {**request, "payload": body, "audit_extra": audit_extra},
+            # The participant fence's anchor is the email the broker just
+            # verified, never one the caller named: a bound reply answers it.
+            {
+                **request,
+                "payload": body,
+                "audit_extra": audit_extra,
+                "anchor": {"kind": "graph_message", "graph_message_id": v.graph_message_id},
+                "lane": None,
+            },
             send=bound_ops.reply,
             reply=bound_ops.reply,
             refused=MsGraphRefused,
             transport=MsGraphTransportError,
             attempted_for_send=lambda _payload: [v.sender],
             identity_key="mailbox",
+            channel="msgraph",
         )
     except Exception as exc:
         # Nothing to release for a failure before the POST: the claim is taken
@@ -441,4 +450,14 @@ def _settle_failed_post(
 
 VERBS: tuple[str, ...] = ("msgraph_reply_bind", "msgraph_reply_bound")
 
-__all__ = ["AUDIT_TYPE", "KINDS", "VERBS", "BindingRefused", "Verified", "bind_verb", "reply_verb", "verify"]
+__all__ = [
+    "AUDIT_TYPE",
+    "KINDS",
+    "VERBS",
+    "BindingRefused",
+    "Verified",
+    "bind_verb",
+    "job_ledger",
+    "reply_verb",
+    "verify",
+]
