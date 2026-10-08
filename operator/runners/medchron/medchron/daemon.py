@@ -148,6 +148,9 @@ class Daemon:
     started_at: float = field(default_factory=time.time)
     jobs_run: int = 0
     wakes_failed: int = 0
+    #: The loop's stop flag, bound by ``run_forever``; a lane reads it when its
+    #: child exits to tell a Machine stop from a failure.
+    stopping: Callable[[], bool] = lambda: False
     #: Explicit firm-config path; None resolves the env/default the seat uses.
     firm_config: str | None = None
     gate_url: str = field(default_factory=lambda: os.environ.get(GATE_URL_ENV) or DEFAULT_GATE_URL)
@@ -387,6 +390,8 @@ class Daemon:
             log.close()
             pidfile.unlink(missing_ok=True)
         self.jobs_run += 1
+        if resume_mod.cut_short_by_stop(self, job_id, code, out or ""):
+            return "interrupted"
         return self._report(job_id, code, out or "")
 
     def _report(self, job_id: str, code: int, out: str) -> str:
@@ -571,6 +576,7 @@ class Daemon:
         return self.run_job(job_id)
 
     def run_forever(self, stop: Callable[[], bool], poll_seconds: float) -> None:
+        self.stopping = stop
         while not stop():
             try:
                 self.tick()

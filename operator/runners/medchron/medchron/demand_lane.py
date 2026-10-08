@@ -180,6 +180,8 @@ class DemandLane(Daemon):
             out, _ = proc.communicate()
         (self.run_dir / "demand-child.pid").unlink(missing_ok=True)
         self.jobs_run += 1
+        if resume_mod.cut_short_by_stop(self, job_id, proc.returncode, out or ""):
+            return "interrupted"
         return self._report(job_id, proc.returncode, out or "")
 
     def _report(self, job_id: str, code: int, out: str) -> str:
