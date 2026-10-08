@@ -16,6 +16,7 @@ from typing import Any
 
 from .broker_context import BrokerContext
 from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError, collect_recipients
+from .participant_fence import LANE_SEND_AS
 from .transmit_verbs import append_send_row, dispatch_transmit
 
 NOT_CONFIGURED = "send-as is not configured on this broker (needs msgraph, an audit ledger, and an audit db)"
@@ -53,6 +54,8 @@ def audited_send(broker: BrokerContext, payload: dict[str, Any], session_id: str
         transport=MsGraphTransportError,
         attempted_for_send=collect_recipients,
         identity_key="mailbox",
+        channel="msgraph",
+        internal_lane=LANE_SEND_AS,
     )
 
 

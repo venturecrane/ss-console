@@ -44,7 +44,26 @@ from .establishment_validation import (  # noqa: F401 — `import *` skips _name
     _require_text,
 )
 
+from .participant_fence import MESSAGE_KINDS, FenceRefused, parse_anchor
+
 logger = logging.getLogger(__name__)
+
+
+def _origin_json(raw: Any) -> str | None:
+    """A message anchor, canonical JSON, or None. Malformed is refused."""
+    try:
+        anchor = parse_anchor(raw, kinds=MESSAGE_KINDS)
+    except FenceRefused as exc:
+        raise EstablishmentValidationError(f"origin: {exc}") from exc
+    return None if anchor is None else json.dumps(anchor.as_dict(), sort_keys=True, separators=(",", ":"))
+
+
+def _decoded_origin(raw: Any) -> dict[str, Any] | None:
+    try:
+        decoded = json.loads(raw) if isinstance(raw, str) and raw else None
+    except ValueError:
+        return None
+    return decoded if isinstance(decoded, dict) else None
 
 
 class PendingRuleStore:
@@ -154,6 +173,7 @@ class PendingRuleStore:
         for_admin: bool,
         kind: str = "rule",
         payload: dict[str, Any] | None = None,
+        origin: Any = None,
     ) -> dict[str, Any]:
         """Store one proposal and return it. The id and both times are minted
         here; the digest is computed here over the stored text.
@@ -161,7 +181,12 @@ class PendingRuleStore:
         ``kind`` and ``payload`` carry an ACT (ss-console#2536): the payload is
         the exact field set the confirmed tool call will be made with, stored so
         the commit replays the row rather than the wire.
+
+        ``origin`` is the request email the row was proposed from, as a message
+        anchor (participant_fence.py); validated here and stored as given, so
+        the person's outcome letter anchors on the broker's own record of it.
         """
+        origin_json = _origin_json(origin)
         now = time.time()
         ttl = ttl_for_kind(kind)
         digest = _hash_text(text)
@@ -175,8 +200,8 @@ class PendingRuleStore:
                         "INSERT INTO pending_rules ("
                         "proposal_id, scope, subject_json, text, text_sha256, "
                         "instructed_by, for_admin, created_at, expires_at, "
-                        "kind, payload_json"
-                        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "kind, payload_json, origin_json"
+                        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (
                             proposal_id,
                             scope,
@@ -189,6 +214,7 @@ class PendingRuleStore:
                             now + ttl,
                             kind,
                             payload_json,
+                            origin_json,
                         ),
                     )
                     conn.commit()
@@ -214,6 +240,7 @@ class PendingRuleStore:
             "expires_at": now + ttl,
             "kind": kind,
             "payload": payload,
+            "origin": None if origin_json is None else json.loads(origin_json),
         }
 
     def get(self, proposal_id: str) -> dict[str, Any] | None:
@@ -681,4 +708,6 @@ class PendingRuleStore:
             # ss-console#2546 (the duplicate-letter fix); same tolerance again.
             "notify_claimed_at": _column(row, "notify_claimed_at"),
             "notify_claimed_by": _column(row, "notify_claimed_by"),
+            # The participant fence; NULL on a row written before it existed.
+            "origin": _decoded_origin(_column(row, "origin_json")),
         }

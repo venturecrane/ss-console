@@ -57,10 +57,9 @@ class RuleProposals(ProposalLifecycle):
         instructed_by = require_address(request.get("instructed_by"), "instructed_by")
         source_ref = _require_text(request.get("source_ref"), "source_ref", _MAX_SHORT_TEXT)
 
-        for_admin_raw = request.get("for_admin", False)
-        if not isinstance(for_admin_raw, bool):
+        for_admin = request.get("for_admin", False)
+        if not isinstance(for_admin, bool):
             raise EstablishmentValidationError("for_admin must be a boolean")
-        for_admin = for_admin_raw
 
         subject_raw = request.get("subject")
         if not isinstance(subject_raw, dict):
@@ -114,6 +113,7 @@ class RuleProposals(ProposalLifecycle):
             text=text,
             instructed_by=instructed_by,
             for_admin=for_admin,
+            origin=request.get("origin"),
         )
 
         metadata = {

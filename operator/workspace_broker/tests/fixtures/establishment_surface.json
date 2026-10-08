@@ -133,7 +133,8 @@
       "ALTER TABLE pending_rules ADD COLUMN outcome_reason TEXT",
       "ALTER TABLE pending_rules ADD COLUMN ask_sent_at REAL",
       "ALTER TABLE pending_rules ADD COLUMN notify_claimed_at REAL",
-      "ALTER TABLE pending_rules ADD COLUMN notify_claimed_by TEXT"
+      "ALTER TABLE pending_rules ADD COLUMN notify_claimed_by TEXT",
+      "ALTER TABLE pending_rules ADD COLUMN origin_json TEXT"
     ]
   },
   "PROPOSAL_ID_HEX_BYTES": {

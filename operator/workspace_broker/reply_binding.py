@@ -91,6 +91,8 @@ _NOUN = {
 #: broker-held equivalent, for a caller that binds instead.
 MODE_REPLY = "reply"
 MODE_NEW_MESSAGE = "new_message"
+#: The authored lane a scheduled litigation job's new message is fenced on.
+SCHEDULED_LANE = "skill:litigation-status"
 #: The outcomes a requester is told about, for EVERY job kind (demand and
 #: drafting alike; the name predates the drafting lane). NOT ``failed``: a
 #: failed job is resumable and SMD's to resolve (a live demand job, 2026-10-06,
@@ -178,7 +180,7 @@ def _medchron_ledger(broker: BrokerContext) -> MedchronLedger:
     return MedchronLedger(str(broker.audit_db_path), queue)
 
 
-def _job_ledger(broker: BrokerContext, kind: str) -> DemandLedger | DraftingLedger | LitigationLedger | MedchronLedger:
+def job_ledger(broker: BrokerContext, kind: str) -> DemandLedger | DraftingLedger | LitigationLedger | MedchronLedger:
     if kind == "medchron_job":
         return _medchron_ledger(broker)
     return _marking_ledger(broker, kind)
@@ -253,7 +255,7 @@ def _inbound_turn_did_not_reply(db_path: str, graph_message_id: str, since: str)
 def _verify_job(broker: BrokerContext, kind: str, ident: str, db_path: str) -> tuple[dict[str, Any], str]:
     """A job binding's ledger checks: (the row, its reply key), or refused."""
     noun = _NOUN[kind]
-    row = _job_ledger(broker, kind).read(ident)
+    row = job_ledger(broker, kind).read(ident)
     if row is None:
         raise BindingRefused(f"there is no {noun} job with that id")
     if row["state"] == "failed":
@@ -490,13 +492,28 @@ def reply_verb(
         result = dispatch_transmit(
             broker,
             action,
-            {**request, "payload": body, "audit_extra": audit_extra},
+            # The participant fence's anchor is the email the broker just
+            # verified, never one the caller named: a bound reply answers it.
+            # A scheduled litigation job has no such email: its one new
+            # message is fenced as a send on the skill's authored lane
+            # (settings.scheduled_recipients), and names no anchor.
+            {
+                **request,
+                "payload": body,
+                "audit_extra": audit_extra,
+                "anchor": None
+                if v.mode == MODE_NEW_MESSAGE
+                else {"kind": "graph_message", "graph_message_id": v.graph_message_id},
+                "lane": None,
+            },
             send=transmit,
             reply=transmit,
+            internal_lane=SCHEDULED_LANE if v.mode == MODE_NEW_MESSAGE else None,
             refused=MsGraphRefused,
             transport=MsGraphTransportError,
             attempted_for_send=lambda _payload: [v.sender],
             identity_key="mailbox",
+            channel="msgraph",
         )
     except Exception as exc:
         # Nothing to release for a failure before the POST: the claim is taken
@@ -552,6 +569,7 @@ __all__ = [
     "BindingRefused",
     "Verified",
     "bind_verb",
+    "job_ledger",
     "reply_verb",
     "scheduled_subject",
     "verify",

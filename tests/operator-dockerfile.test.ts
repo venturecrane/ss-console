@@ -1508,7 +1508,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // 099f9fdd -> 00220a0d (overlay#431), 2026-10-08: the litigation status lane's tools, its wake in
     // the reply binding (send tools refused; a scheduled run binds one broker-addressed new message),
     // and the litigation lane on request cards.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="00220a0d3634b58637c027a1c0499c4514a6950a"')
+    // 099f9fdd -> f37225c1 (overlay#432 merge commit), 2026-10-08: the participant
+    // fence's seat half (anchor + lane on every send, find_for_recipient deleted, cc/bcc classified),
+    // carrying overlay#431 (the litigation status lane).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="f37225c1d9d43dfc379099c38466d4f638672e46"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

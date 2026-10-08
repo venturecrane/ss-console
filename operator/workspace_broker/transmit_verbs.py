@@ -22,11 +22,12 @@ from typing import Any
 
 from .broker_context import BrokerContext
 from .agentmail_ops import AgentMailRefused, AgentMailTransportError, collect_recipients
-from . import bound_replies
+from . import bound_replies, participant_lookup
 from .canon import canonical
 from .digest_ref import valid_dispatch_ref
 from .msgraph_ops import MsGraphRefused, MsGraphTransportError
 from .msgraph_ops import collect_recipients as collect_msgraph_recipients
+from .participant_fence import FenceRefused
 
 VERBS: tuple[str, ...] = ("agentmail_send", "agentmail_reply", "msgraph_send", "msgraph_reply")
 
@@ -241,6 +242,47 @@ def _clean(request: dict[str, Any], key: str) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
+def _fenced(
+    broker: BrokerContext,
+    action: str,
+    request: dict[str, Any],
+    payload: dict[str, Any],
+    failed_row: dict[str, Any],
+    *,
+    channel: str,
+    internal_lane: str | None,
+    refused: type[Exception],
+) -> dict[str, str]:
+    """The participant fence (participant_fence.py), before anything is sent.
+
+    A refusal is written as CONFIRM_SEND_FAILED ``outcome: refused`` with the
+    ``fence`` that refused it and the refused people as sender keys, then raised
+    as the channel's own refusal: never ``transport_error``, because nothing was
+    attempted. The overlay's heartbeat already pages SMD on that row
+    (``send_refused``); there is no second alert path.
+    """
+    try:
+        return participant_lookup.enforce(
+            broker,
+            action,
+            request,
+            payload,
+            channel=channel,
+            recipients=list(failed_row["recipients"]),
+            internal_lane=internal_lane,
+        )
+    except FenceRefused as exc:
+        append_send_row(
+            broker,
+            "CONFIRM_SEND_FAILED",
+            action,
+            {"outcome": "refused", "fence": exc.fence, "refused": exc.refused, "reason": str(exc), **failed_row},
+            session_id=_clean(request, "session_id"),
+            matter_ref=_clean(request, "matter_ref"),
+        )
+        raise refused(str(exc)) from exc
+
+
 def dispatch_transmit(
     broker: BrokerContext,
     action: str,
@@ -252,6 +294,8 @@ def dispatch_transmit(
     transport: type[Exception],
     attempted_for_send: Any,
     identity_key: str,
+    channel: str,
+    internal_lane: str | None = None,
 ) -> dict[str, Any]:
     """Execute a fenced transmit and record its outcome either way.
 
@@ -285,6 +329,10 @@ def dispatch_transmit(
     # dispatched row, resolved by the broker.
     attempted = [] if action.endswith("_reply") else attempted_for_send(payload)
     failed_row = {"recipients": attempted, "input_digest": digest, **audit_extra}
+    fence_meta = _fenced(
+        broker, action, request, payload, failed_row, channel=channel, internal_lane=internal_lane, refused=refused
+    )
+    failed_row.update(fence_meta)
     try:
         result = send(payload) if action.endswith("_send") else reply(payload)
     except refused as exc:
@@ -322,6 +370,7 @@ def dispatch_transmit(
             identity_key: result.get(identity_key) or "",
             "input_digest": digest,
             **audit_extra,
+            **fence_meta,
             # The ops verb's own contributions to the row, written through by
             # NAME rather than by wholesale copy, so a transmit result can
             # never quietly widen what the ledger records.
@@ -369,6 +418,7 @@ def agentmail(
         transport=AgentMailTransportError,
         attempted_for_send=collect_recipients,
         identity_key="inbox_id",
+        channel="agentmail",
     )
 
 
@@ -398,4 +448,5 @@ def msgraph(broker: BrokerContext, action: str, request: dict[str, Any], _pid: i
         transport=MsGraphTransportError,
         attempted_for_send=collect_msgraph_recipients,
         identity_key="mailbox",
+        channel="msgraph",
     )

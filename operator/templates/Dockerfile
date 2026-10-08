@@ -1134,7 +1134,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # request taken from the verified inbound), the litigation wake in the reply
 # binding (every send tool refused; a scheduled run takes only the broker's
 # new_message binding in its own wake), and the litigation lane on request cards.
-ARG OVERLAY_REF="00220a0d3634b58637c027a1c0499c4514a6950a"
+# 2026-10-08 (f37225c1, the overlay #432 merge commit). The participant fence's seat half, which also carries #431 (the
+# litigation status lane): every send names its anchor (this turn's email, a
+# job wake, a rule row, or a held send's captured anchor) and its authored lane;
+# dispatch() requires both; the reply relay answers only this turn's email or a
+# binding (find_for_recipient deleted); the gate classifies cc and bcc. Pairs
+# with the broker fence in this same PR.
+ARG OVERLAY_REF="f37225c1d9d43dfc379099c38466d4f638672e46"
 
 ARG CUSTOMER_SLUG=customer-zero
 

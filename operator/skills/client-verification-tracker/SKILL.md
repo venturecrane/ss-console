@@ -25,7 +25,7 @@ metadata:
     content_ceiling: connective # drafts a verification REQUEST (a connective artifact); never legal work product; never the legal determination of what needs verifying
     connectors:
       - smokeball # PracticeManagement - matter, contacts, roles/relationships (GAL/minor), tasks, files (signature detection), memo
-      - agentmail # Email - the Operator's own inbox; emails the attorney the approve-and-send, chases the signer on approval
+      - agentmail # Email - the Operator's own inbox; receives the attorney's approval (the approve-and-send itself is a Smokeball task), chases the signer on approval
 ---
 
 # Client Verification Tracker
@@ -285,7 +285,7 @@ Two ledger raise events matter for the chase:
   handle. A handle derived for a `chased` cannot be spent on a `handed_off` -
   the write is terminal, so it must name an item this turn deliberately looked
   up. `handed_off` is **terminal** for autonomous wakes:
-  the pre_run will not re-raise the item, so the hand-off alert to the attorney
+  the pre_run will not re-raise the item, so the hand-off alert
   fires **once**, not on every wake. A `resolved` event (written on a confident
   signed-document close) is likewise terminal.
 
@@ -365,10 +365,15 @@ surface), never a silent default.
    verification, draft the plain-language verification request in the firm's voice
    from the pack template (`verification-request.md`). Connective artifact, not work
    product; it does not characterize the responses' accuracy or completeness.
-3. **Route for authenticated approval** - email the responsible attorney (via the
-   Operator's AgentMail inbox; the attorney is a rostered internal recipient) an
-   approve-and-send bound to the specific verification. **No send to the signer
-   before authenticated approval.**
+3. **Route for authenticated approval** - create a **Smokeball task** assigned to the
+   responsible attorney (`create_task`, `staffId` = `personResponsibleStaffId`,
+   confirmed by `list_tasks` / `get_task`) carrying the approve-and-send bound to
+   the specific verification, never an email: the Operator emails a firm person
+   only when they were on the request it answers or the firm authored them for
+   this routine (the participant fence, 2026-10-07). The attorney approves by
+   emailing the Operator; that email is authenticated as before and is the
+   request every later reply answers. **No send to the signer before
+   authenticated approval.**
 4. **Send on approval** - on authenticated approval, surface for firm-method send
    (today's only path) or use a connect-verified e-sign path if authored. Log with
    `create_memo`; open a tracked item with `create_task` (assigned to the

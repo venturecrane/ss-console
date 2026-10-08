@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import budget as budget_mod, limits as limits_mod
+from . import citefix
 from . import settle as settle_mod
 from ..demand import deliver, facts as facts_mod, finalpass, preflight, pull, quotefix, summarize, transcribe
 from ..demand.firm import DemandFirm
@@ -421,6 +422,13 @@ class DraftingRun:
             md = doc + ("\n" + render.NOTES_MARK + "\n\n" + notes + "\n" if notes else "")
             self._atomic(FINAL, md)
             g = gate.run(self.data, self.firm, self.cls, doc)
+        if not g["passed"] and citefix.findings(g["refusals"]):
+            doc, fixed = citefix.repair(doc, g["refusals"])
+            if fixed:
+                log += fixed
+                md = doc + ("\n" + render.NOTES_MARK + "\n\n" + notes + "\n" if notes else "")
+                self._atomic(FINAL, md)
+                g = gate.run(self.data, self.firm, self.cls, doc)
         if not g["passed"]:
             if any(str(r).startswith(WALL_GATE) for r in g["refusals"]):
                 # Held, so the reply relays this reason to the firm: a fixed
