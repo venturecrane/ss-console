@@ -150,7 +150,7 @@ def _apply(
     if verdict == "INVENTED" and other:
         mark = (
             "{{ATTORNEY: the final audit disagrees with itself about the next statement "
-            f"(not supported in {_clean(head, 60)}, supported in {_clean(other, 60)}); confirm it against the file}} "
+            f"(not supported in {_clean(head, 60)}, supported in {_clean(other, 60)}); confirm it against the file}}}} "
         )
         return (
             body[:a] + mark + unit + body[b:],
