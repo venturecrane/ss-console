@@ -29,12 +29,12 @@ The schema::
     email_months:          int >= 1        older emails are not candidates (12)
     min_court_hits:        int >= 1        court-named files a matter needs (1)
     matter_statuses:       [str]           Smokeball statuses listed (["Open"])
-    tool_iterations:       int >= 4        one read's tool-loop cap (30)
+    tool_iterations:       int >= 4        the extract read's call cap (10); verify and audit get half
     fetch_caps:            {court, server, discovery, email, total: int}   per matter
     concurrency:           int >= 1        parallel model calls in extract (5)
-    context_chars:         int >= 5000     document text a read is handed up front (120000)
-    doc_context_chars:     int >= 1        of which one document at most (8000)
-    chunk_chars:           int >= 5000     one fetch_doc page (60000)
+    context_chars:         int >= 5000     document text a read is handed up front (60000)
+    doc_context_chars:     int >= 1        of which one document at most (6000)
+    chunk_chars:           int >= 5000     one fetch_doc page (20000)
     timezone:              IANA name       "today" for the date gates
 """
 
@@ -74,13 +74,13 @@ OPTIONAL: dict[str, tuple[str, Any]] = {
     "email_months": ("int1", 12),
     "min_court_hits": ("int1", 1),
     "matter_statuses": ("strs", ["Open"]),
-    "tool_iterations": ("int4", 30),
-    "chunk_chars": ("int5000", 60000),
+    "tool_iterations": ("int4", 10),
+    "chunk_chars": ("int5000", 20000),
     "timezone": ("str", "America/Los_Angeles"),
     "fetch_caps": ("caps", {}),
     "concurrency": ("int1", 5),
-    "context_chars": ("int5000", 120000),
-    "doc_context_chars": ("int1", 8000),
+    "context_chars": ("int5000", 60000),
+    "doc_context_chars": ("int1", 6000),
 }
 MODEL_KEYS = ("read", "verify", "audit")
 #: transcription: the vision OCR model (defaults to models.read).

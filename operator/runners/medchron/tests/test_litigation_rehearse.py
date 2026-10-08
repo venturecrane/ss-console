@@ -82,7 +82,10 @@ def test_a_rehearsal_files_nothing_writes_nothing_and_reports(tmp_path):
     assert rep["peak_rss"]["self"] > 0 and set(rep["stages"]) == set(rehearse.REHEARSAL_STAGES)
     p = rep["projection"]
     assert "dateModified" in p["method"] and len(p["weekdays"]) == 5 and p["projected_monthly_cents"] is not None
-    assert p["weekdays"]["2026-10-06"] == 1 and p["weekdays"]["2026-10-05"] == 1
+    # a new complaint re-reads case + defendants; a new proof of service, the same two
+    assert p["weekdays"]["2026-10-06"] == {"matters": 1, "groups": 2}
+    assert p["weekdays"]["2026-10-05"] == {"matters": 1, "groups": 2}
+    assert "Incremental refresh" in p["method"] and p["measured_cents_per_group"] > 0
 
 
 def test_the_lanes_state_is_never_touched(tmp_path):

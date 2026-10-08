@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..seat import SeatError
-from . import fetch as fetch_mod, inventory, manifest, passes
+from . import fetch as fetch_mod, inventory, manifest, passes, vocab
 from .outcome import LitigationFailed, LitigationHold, Verdict
 from .run import STAGES, LitigationRun
 from .tools import dump
@@ -343,37 +343,47 @@ def _weekdays_before(today: dt.date, n: int) -> list[dt.date]:
     return out
 
 
+def _day_groups(r: RehearsalRun, day: dt.date) -> tuple[int, int]:
+    """(matters a refresh on ``day`` re-reads, field groups it re-reads)."""
+    matters = groups = 0
+    for mid in r._plan():
+        files = inventory.files_of(r.data, mid)
+        classes = dict(manifest.select(files, r.firm, day))
+        trig = [str(f["id"]) for f in files if manifest.file_date(f) == day.isoformat() and str(f["id"]) in classes]
+        if trig:
+            matters += 1
+            groups += len(manifest.groups_for(trig, classes))
+    return matters, groups
+
+
 def projection(r: RehearsalRun) -> dict[str, Any]:
     plan = r._plan()
     days = _weekdays_before(r.today, PROJECTION_DAYS)
-    per_day = {}
-    for d in days:
-        n = 0
-        for mid in plan:
-            files = inventory.files_of(r.data, mid)
-            cands = set(manifest.candidates(files, r.firm, d))
-            if any(manifest.file_date(f) == d.isoformat() and str(f["id"]) in cands for f in files):
-                n += 1
-        per_day[d.isoformat()] = n
+    per_day = {d.isoformat(): _day_groups(r, d) for d in days}
     st = r._state()
     read_cents = sum((st.get(s) or {}).get("cents", 0.0) for s in ("fetch", "extract", "read1", "read2", "read3"))
-    read_n = sum(1 for p in plan.values() if _reads(p))
-    per_matter = read_cents / read_n if read_n else None
-    mean = sum(per_day.values()) / len(days)
-    monthly = None if per_matter is None else round(mean * per_matter * WEEKDAYS_PER_MONTH)
+    read = [p for p in plan.values() if _reads(p)]
+    read_groups = sum(len(p["read_groups"]) or len(vocab.GROUPS) for p in read)
+    per_group = read_cents / read_groups if read_groups else None
+    mean_groups = sum(g for _m, g in per_day.values()) / len(days)
+    monthly = None if per_group is None else round(mean_groups * per_group * WEEKDAYS_PER_MONTH)
     return {
         "method": (
-            f"For each of the last {PROJECTION_DAYS} weekdays before {r.today.isoformat()}, count the matters "
-            "with at least one file whose Smokeball dateModified falls on that day AND which passes the "
-            "candidate filter (court/discovery/process-server name, a recent case-pointing email, or one of the "
-            "newest emails). Mean those counts, multiply by this run's measured cents per read matter (the cents "
-            "of fetch+extract+read1+read2+read3 divided by the matters read), and by "
-            f"{WEEKDAYS_PER_MONTH} weekdays a month. An approximation: newest-email membership is judged on "
-            "today's listing, a dateModified moves on any edit, and matters a person reads by hand are not removed."
+            f"Incremental refresh. For each of the last {PROJECTION_DAYS} weekdays before {r.today.isoformat()}, "
+            "find every matter with a file whose Smokeball dateModified falls on that day and which the selection "
+            "would hand a read; map each such file to the field groups its class can change (court paper: case "
+            "and defendants; service record: defendants; discovery paper: discovery; named email: all three; an "
+            "unnamed newest email: case status only) and count the groups a refresh would re-read. Mean the "
+            "daily group count, multiply by this run's measured cents per field group read (the cents of "
+            "fetch+extract+read1+read2+read3 divided by the field groups read, a full matter counting as all "
+            f"three), and by {WEEKDAYS_PER_MONTH} weekdays a month. Approximations: a re-read of one group "
+            "still opens the matter's papers, so a one-group read costs more than a third of a full read; "
+            "newest-email membership is judged on that day's listing as it reads today."
         ),
-        "weekdays": per_day,
-        "mean_rereads_per_weekday": round(mean, 2),
-        "measured_cents_per_read_matter": None if per_matter is None else round(per_matter, 2),
+        "weekdays": {d: {"matters": m, "groups": g} for d, (m, g) in per_day.items()},
+        "mean_groups_per_weekday": round(mean_groups, 2),
+        "measured_cents_per_group": None if per_group is None else round(per_group, 2),
+        "measured_cents_per_full_matter": None if per_group is None else round(per_group * 3, 2),
         "projected_monthly_cents": monthly,
     }
 

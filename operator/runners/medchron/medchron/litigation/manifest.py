@@ -237,6 +237,24 @@ def candidates(files: list[dict[str, Any]], firm: LitigationFirm, today: dt.date
     return [fid for fid, _c in select(files, firm, today)]
 
 
+#: Which field groups a new or changed paper of each class can change: a
+#: refresh re-reads only those (a new discovery set does not re-read service,
+#: a new proof of service does not re-read discovery). An unnamed newest
+#: email can carry a settlement, so it re-reads the case status group.
+CLASS_GROUPS = {
+    "court": (vocab.GROUP_CASE, vocab.GROUP_DEFENDANTS),
+    "server": (vocab.GROUP_DEFENDANTS,),
+    "discovery": (vocab.GROUP_DISCOVERY,),
+    "email": (vocab.GROUP_CASE, vocab.GROUP_DEFENDANTS, vocab.GROUP_DISCOVERY),
+    "newest_email": (vocab.GROUP_CASE,),
+}
+
+
+def groups_for(trigger: list[str], classes: dict[str, str]) -> list[str]:
+    want = {g for fid in trigger for g in CLASS_GROUPS.get(classes.get(fid, "email"), vocab.GROUPS)}
+    return [g for g in vocab.GROUPS if g in want]
+
+
 def _missing_groups(prior: dict[str, Any]) -> list[str]:
     # A present marker is authoritative, EMPTY included: a seed whose groups
     # were all struck for a re-read must read them all. Inferring from the
@@ -261,7 +279,7 @@ def plan_matter(
     classes: dict[str, int] = {}
     for _fid, c in sel:
         classes[c] = classes.get(c, 0) + 1
-    out = _plan(files, prior, prior_manifest, cands, today)
+    out = _plan(files, prior, prior_manifest, cands, today, dict(sel))
     return {**out, "candidate_classes": classes}
 
 
@@ -271,7 +289,9 @@ def _plan(
     prior_manifest: dict[str, str],
     cands: list[str],
     today: dt.date,
+    classes: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    classes = classes or {}
     if prior is None:
         return {
             "reason": "new",
@@ -287,7 +307,7 @@ def _plan(
     if trigger:
         return {
             "reason": "changed",
-            "read_groups": list(vocab.GROUPS),
+            "read_groups": groups_for(trigger, classes) if not two_pass else list(vocab.GROUPS),
             "audit": "all" if two_pass else "changed",
             "trigger_files": trigger,
             "candidates": cands,

@@ -192,3 +192,18 @@ def test_an_answer_written_as_json_text_is_taken():
     msg = SimpleNamespace(content=[{"type": "text", "text": 'Here it is: {"verdicts": []} done'}])
     assert _json_answer(msg) == {"verdicts": []}
     assert _json_answer(SimpleNamespace(content=[{"type": "text", "text": "no json"}])) is None
+
+
+def test_a_refresh_rereads_only_the_groups_a_new_paper_can_change(tmp_path):
+    firm = load(make_inputs(tmp_path / "in"))
+    base = [_f("c", "Complaint", ".pdf", "2026-03-01")]
+    prior = {"fields_read": list(vocab.GROUPS)}
+    man = manifest.current_manifest(base)
+    disc = manifest.plan_matter(
+        base + [_f("d", "Interrogatories set two", ".pdf", "2026-09-01")], prior, man, firm, TODAY
+    )
+    assert disc["reason"] == "changed" and disc["read_groups"] == ["discovery"]
+    pos = manifest.plan_matter(base + [_f("p", "POS Delta", ".pdf", "2026-09-01")], prior, man, firm, TODAY)
+    assert pos["read_groups"] == ["case", "defendants"]
+    mail = manifest.plan_matter(base + [_f("e", "Re: lunch", ".msg", "2026-09-01")], prior, man, firm, TODAY)
+    assert mail["read_groups"] == ["case"]  # an unnamed newest email: the case status (a settlement) only

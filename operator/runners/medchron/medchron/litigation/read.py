@@ -199,10 +199,12 @@ def system_for(role: str, firm: Any, today: dt.date) -> str:
             + ". Then call record_verdicts with one verdict per value checked."
         ),
         "audit": (
-            "\n\nYOUR PASS: the last check before the list goes to the firm. For every value you are asked to audit, open the "
-            "cited source yourself; the date must be the court or event date in the document. Checkbox facts: view_page, and "
-            "if you cannot see it the verdict is unclear. Every quote in a flag or note must appear verbatim in its source, "
-            "with the right sender. Resolve every settlement-scan hit you are given in settlement_reviewed (doc + one line). "
+            "\n\nYOUR PASS: the last check before the list goes to the firm, after an independent verify pass already "
+            "confirmed the positive dates against their sources. Audit ONLY: every negative (not served, no answer, not "
+            "filed, not dismissed, active), every fact that rests on a checkbox (view_page; if you cannot see it the verdict "
+            "is unclear), any contradiction between documents, and every quote in a flag or note (verbatim, right sender). "
+            "Do not re-open a positive date's source unless a document contradicts it. Resolve every settlement-scan hit you "
+            "are given in settlement_reviewed (doc + one line). "
             "Paths you may correct: " + PATHS + ". Then call record_verdicts."
         ),
     }[role]
@@ -484,11 +486,16 @@ def check_pass(
     listing: str,
     today: dt.date,
     extra: str,
+    groups: list[str] | None = None,
 ) -> dict[str, Any]:
     stage, model = (
         ("litigation_verify", firm.model("verify")) if role == "verify" else ("litigation_audit", firm.model("audit"))
     )
-    user = ask(header, list(vocab.GROUPS), listing, f"\nTHE RESULT TO CHECK:\n{_for_model(result, ctx)}\n{extra}")
+    want = list(groups or vocab.GROUPS)
+    scope = (
+        f"\nCHECK ONLY the values in these field groups: {', '.join(want)}." if set(want) != set(vocab.GROUPS) else ""
+    )
+    user = ask(header, want, listing, f"\nTHE RESULT TO CHECK:\n{_for_model(result, ctx)}\n{scope}{extra}")
     got = run_loop(
         doorway,
         stage,
@@ -497,6 +504,6 @@ def check_pass(
         user=user,
         ctx=ctx,
         final_tool=RECORD_VERDICTS,
-        max_iterations=int(firm.get("tool_iterations")),
+        max_iterations=max(4, int(firm.get("tool_iterations")) // 2),
     )
     return {"verdicts": got.get("verdicts") or [], "settlement_reviewed": got.get("settlement_reviewed") or []}

@@ -66,7 +66,18 @@ def read2(r: Any) -> None:
         r1 = r._mjson(mid, "read1.json")
         merged = read.merge(manifest.load_prior(r.state, mid), r1["result"], r1["groups"])
         ctx = r._ctx(mid)
-        got = read.check_pass(r.doorway, r.firm, ctx, "verify", r._header(m), merged, r._listing(ctx, mid), r.today, "")
+        got = read.check_pass(
+            r.doorway,
+            r.firm,
+            ctx,
+            "verify",
+            r._header(m),
+            merged,
+            r._listing(ctx, mid),
+            r.today,
+            "",
+            groups=p["read_groups"] or None,
+        )
         log = read.apply_verdicts(ctx, merged, got["verdicts"], "verify")
         dump(r._mfile(mid, "read2.json"), {"result": merged, "overturns": log, "verdicts": got["verdicts"]})
 
@@ -119,7 +130,16 @@ def read3(r: Any) -> None:
             dump(r._mfile(mid, "read3.json"), rec)
             return
         got = read.check_pass(
-            r.doorway, r.firm, ctx, "audit", r._header(m), result, r._listing(ctx, mid), r.today, extra
+            r.doorway,
+            r.firm,
+            ctx,
+            "audit",
+            r._header(m),
+            result,
+            r._listing(ctx, mid),
+            r.today,
+            extra,
+            groups=p["read_groups"] or None,
         )
         log = log + read.apply_verdicts(ctx, result, got["verdicts"], "audit")
         reviewed = [
