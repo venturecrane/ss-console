@@ -79,20 +79,7 @@ class MatterContext:
         return self.mdir / "txt" / f"{fid}.txt"
 
     def cached_text(self, fid: str) -> str | None:
-        """The extracted text for a file id, or None. Served from the job's
-        ``txt/`` first (a content duplicate resolves to its original), so an
-        offline replay needs no raw bytes."""
-        rows = fetch_mod.pulled(self.data, self.matter_id)
-        cur = fid
-        for _ in range(3):
-            tp = self._text_path(cur)
-            if tp.is_file():
-                return tp.read_text(encoding="utf-8", errors="replace")
-            nxt = (rows.get(cur) or {}).get("duplicate_of")
-            if not nxt:
-                return None
-            cur = str(nxt)
-        return None
+        return fetch_mod.cached_text(self.data, self.matter_id, fid)
 
     def text(self, n: int) -> str:
         f = self.refs[n]
@@ -253,6 +240,8 @@ _CACHE = {"type": "ephemeral"}
 #: seconds, before its matter is marked unread (2026-10-08 replay: one matter
 #: lost to three overloaded answers 20 and 40 seconds apart).
 CALL_ATTEMPTS, CALL_BACKOFF = 5, 30.0
+#: Answer-now turns after the exploration cap.
+FINAL_TURNS = 2
 FINAL_NUDGE = (
     "Stop exploring and answer now with {tool}. Record what the documents establish; for anything you could not "
     "establish, mark it unclear (status Unclear, or a flag saying what is missing). Do not guess."
@@ -273,16 +262,6 @@ def _roll_cache(messages: list[dict[str, Any]]) -> None:
         tail = last["content"][-1]
         if isinstance(tail, dict) and tail.get("type") in ("text", "tool_result"):
             tail["cache_control"] = dict(_CACHE)
-
-
-def _without_thinking(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    out = []
-    for m in messages:
-        c = m.get("content")
-        if m.get("role") == "assistant" and isinstance(c, list):
-            c = [b for b in c if not (isinstance(b, dict) and b.get("type") in ("thinking", "redacted_thinking"))]
-        out.append({**m, "content": c})
-    return out
 
 
 def _tool_results(uses: list[dict[str, Any]], handlers: dict[str, Callable[[dict[str, Any]], Any]]) -> list[dict]:
@@ -307,9 +286,9 @@ def run_loop(
     max_tokens: int = 16000,
 ) -> dict[str, Any]:
     """Drive one read to its ``final_tool`` call; its input is the result.
-    The last of ``max_iterations`` calls is forced: it offers only the final
-    tool (no thinking, so the choice can be forced) and answers with what was
-    found, unclear where nothing was established."""
+    After ``max_iterations - 1`` exploring calls, the answer-now turns
+    (``_forced_final``) ask for the result with what was found, unclear where
+    nothing was established."""
     handlers: dict[str, Callable[[dict[str, Any]], Any]] = {
         "list_files": ctx.list_files,
         "fetch_doc": ctx.fetch_doc,
@@ -345,7 +324,7 @@ def run_loop(
             messages.append({"role": "user", "content": [{"type": "text", "text": nudge}]})
             continue
         messages.append({"role": "user", "content": _tool_results(uses, handlers)})
-    return _forced_final(doorway, stage, model, system, messages, final_tool, max_tokens, ctx)
+    return _forced_final(doorway, stage, model, system, messages, final_tool, max_tokens, ctx, handlers)
 
 
 def _forced_final(
@@ -357,31 +336,58 @@ def _forced_final(
     final_tool: dict[str, Any],
     max_tokens: int,
     ctx: MatterContext,
+    handlers: dict[str, Callable[[dict[str, Any]], Any]] | None = None,
 ) -> dict[str, Any]:
-    nudge = {"type": "text", "text": FINAL_NUDGE.format(tool=final_tool["name"])}
-    last = messages[-1]
-    if last.get("role") == "user" and isinstance(last.get("content"), list):
-        last["content"] = [*last["content"], nudge]
-    else:
-        messages.append({"role": "user", "content": [nudge]})
-    _roll_cache(messages)
-    r = doorway.call(
-        stage,
-        model=model,
-        system=system,
-        messages=_without_thinking(messages),
-        max_tokens=max_tokens,
-        tools=[final_tool],
-        tool_choice={"type": "tool", "name": final_tool["name"]},
-        stream=True,
-        custom_id=f"{stage}-{ctx.matter_id}-final",
-        attempts=CALL_ATTEMPTS,
-        backoff=CALL_BACKOFF,
-    )
-    final = next((u for u in _uses(r.message) if u.get("name") == final_tool["name"]), None)
-    if final is None or not isinstance(final.get("input"), dict):
-        raise ReadIncomplete(f"{stage}: no result, the forced final answer included")
-    return final["input"]
+    """The answer-now turn. The tool list and thinking stay exactly as in the
+    loop: the read model refuses a forced ``tool_choice`` (live 2026-10-08:
+    "tool_choice ... not supported for this model"), and a changed tool list
+    would miss the cached prefix. So the turn says to answer now; a reply
+    that still explores gets its results and one last instruction; a reply
+    that writes the answer as JSON text instead of the tool is parsed."""
+    for attempt in range(FINAL_TURNS):
+        nudge = {"type": "text", "text": FINAL_NUDGE.format(tool=final_tool["name"])}
+        last = messages[-1]
+        if last.get("role") == "user" and isinstance(last.get("content"), list):
+            last["content"] = [*last["content"], nudge]
+        else:
+            messages.append({"role": "user", "content": [nudge]})
+        _roll_cache(messages)
+        r = doorway.call(
+            stage,
+            model=model,
+            system=system,
+            messages=messages,
+            max_tokens=max_tokens,
+            tools=[*TOOLS, final_tool],
+            thinking={"type": "adaptive"},
+            stream=True,
+            custom_id=f"{stage}-{ctx.matter_id}-final",
+            attempts=CALL_ATTEMPTS,
+            backoff=CALL_BACKOFF,
+        )
+        uses = _uses(r.message)
+        final = next((u for u in uses if u.get("name") == final_tool["name"]), None)
+        if final is not None and isinstance(final.get("input"), dict):
+            return final["input"]
+        parsed = _json_answer(r.message)
+        if parsed is not None:
+            return parsed
+        messages.append({"role": "assistant", "content": [_block_dict(b) for b in r.message.content or []]})
+        if uses and handlers is not None and attempt + 1 < FINAL_TURNS:
+            messages.append({"role": "user", "content": _tool_results(uses, handlers)})
+    raise ReadIncomplete(f"{stage}: no result, the answer-now turns included")
+
+
+def _json_answer(message: Any) -> dict[str, Any] | None:
+    text = "".join(str(_block_dict(b).get("text") or "") for b in getattr(message, "content", None) or [])
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        got = json.loads(text[start : end + 1])
+    except ValueError:
+        return None
+    return got if isinstance(got, dict) else None
 
 
 def dump(path: Path, obj: Any) -> None:

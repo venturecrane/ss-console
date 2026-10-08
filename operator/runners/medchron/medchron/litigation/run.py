@@ -276,9 +276,7 @@ class LitigationRun(RunBase):
         return [f for f in (self.final(m) for m in self._matters()) if f is not None]
 
     def _text_of(self, mid: str, fid: str) -> str | None:
-        path = fetch_mod.local_path(self.data, mid, fid)
-        tp = fetch_mod.matter_dir(self.data, mid) / "txt" / f"{(path.stem if path else fid)}.txt"
-        return tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else None
+        return fetch_mod.cached_text(self.data, mid, fid)
 
     def _gates(self) -> None:
         ms = self._finals()

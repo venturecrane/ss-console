@@ -160,7 +160,8 @@ it: answers (including inside emails), dismissals, proofs of service and process
 extensions, defaults, case management statements newer than your finding, settlement emails ("settled",
 "release", "W-9", "settlement check", "notice of settlement"). Settlement language in an email changes the case
 status. Take defendants from the complaint caption and any amendments, and add any party a proof of service, a
-Doe amendment or a case management statement names as a defendant; a defendant dropped by an amended
+Doe amendment or a case management statement names as a defendant. Record each defendant's served and answered
+dates whatever its status now (a dismissed or settled defendant was usually served first); a defendant dropped by an amended
 complaint is "{dropped}". Never list the firm's own client as a defendant unless the firm is defense counsel, in
 which case firm_role is "defense" and the client is "{firm_client}". An uninsured/underinsured motorist arbitration
 respondent is "{uim}", not a court defendant. A defendant whose service was rejected (a registered agent's

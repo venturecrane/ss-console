@@ -149,3 +149,46 @@ def test_view_page_offline_says_the_image_is_not_available(tmp_path):
 
     ctx = MatterContext(M1, LitSeat({M1: matter_docs()}).list_files(M1), tmp_path, 500, seat=None, log=lambda m: None)
     assert "not available in this run" in ctx.view_page({"doc": 1, "page": 1})
+
+
+def test_court_papers_are_interleaved_by_kind_so_an_old_proof_survives_the_cap(tmp_path):
+    firm = load(make_inputs(tmp_path / "in", fetch_caps={"court": 4, "total": 20}))
+    files = [_f(f"a{i}", f"Answer {i}", ".pdf", f"2026-0{1 + i}-01") for i in range(6)]
+    files.append(_f("old-pos", "POS Delta", ".pdf", "2024-10-17"))
+    ids = [f for f, c in manifest.select(files, firm, TODAY) if c == "court"]
+    assert "old-pos" in ids and len(ids) == 4
+
+
+def test_parity_matches_a_defendant_across_spellings():
+    from medchron.litigation.parity import party_key
+
+    assert party_key("Andrea DeFelice (Deflice), NP") == party_key("Andrea DeFelice, N.P.")
+    assert party_key("Syed Haider (Raider/Hrider), MD") == party_key("Syed Haider, M.D.")
+    assert party_key("MarketOne Builders") != party_key("Auberge Resorts LLC")
+
+
+def test_an_uncited_prior_value_may_be_replaced_by_a_cited_one():
+    from medchron.litigation import parity
+
+    prior = {"case_status": {"value": vocab.ACTIVE, "source": None}}
+    new = {"case_status": {"value": vocab.SETTLED_OWED, "source": {"file_id": "f1"}}}
+    assert not parity.unexplained(parity.compare(prior, new, moved_files=set(), overturns=[], today=TODAY))
+    cited = {"case_status": {"value": vocab.ACTIVE, "source": {"file_id": "f0"}}}
+    assert parity.unexplained(parity.compare(cited, new, moved_files=set(), overturns=[], today=TODAY))
+
+
+def test_a_kind_keeps_its_oldest_paper_under_a_cap(tmp_path):
+    firm = load(make_inputs(tmp_path / "in", fetch_caps={"court": 3, "total": 20}))
+    files = [_f(f"p{i}", f"POS {i}", ".pdf", f"2025-{1 + i:02d}-01") for i in range(10)]
+    ids = [f for f, _c in manifest.select(files, firm, TODAY)]
+    assert ids[:3] == ["p9", "p0", "p8"]  # newest, oldest, next newest
+
+
+def test_an_answer_written_as_json_text_is_taken():
+    from types import SimpleNamespace
+
+    from medchron.litigation.tools import _json_answer
+
+    msg = SimpleNamespace(content=[{"type": "text", "text": 'Here it is: {"verdicts": []} done'}])
+    assert _json_answer(msg) == {"verdicts": []}
+    assert _json_answer(SimpleNamespace(content=[{"type": "text", "text": "no json"}])) is None

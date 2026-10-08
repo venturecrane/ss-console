@@ -107,3 +107,19 @@ def local_path(data: Path, matter_id: str, file_id: str) -> Path | None:
 
 def write_report(data: Path, report: dict[str, Any]) -> None:
     (data / "fetch.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
+
+
+def cached_text(data: Path, matter_id: str, file_id: str) -> str | None:
+    """A file's extracted text from the job's ``txt/``; a content duplicate
+    resolves to its original. Needs no raw bytes (an offline replay)."""
+    rows = pulled(data, matter_id)
+    cur = file_id
+    for _ in range(3):
+        tp = matter_dir(data, matter_id) / "txt" / f"{cur}.txt"
+        if tp.is_file():
+            return tp.read_text(encoding="utf-8", errors="replace")
+        nxt = (rows.get(cur) or {}).get("duplicate_of")
+        if not nxt:
+            return None
+        cur = str(nxt)
+    return None

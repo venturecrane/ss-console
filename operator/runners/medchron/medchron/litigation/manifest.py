@@ -37,7 +37,7 @@ DATA_ENV = "MEDCHRON_DATA_DIR"
 DEFAULT_DATA_DIR = "/opt/data/medchron"
 EMAIL_EXTS = (".msg", ".eml")
 #: Per-matter fetch caps (``fetch_caps`` in the firm config overrides any).
-FETCH_CAPS = {"court": 60, "server": 15, "discovery": 30, "email": 25, "total": 120}
+FETCH_CAPS = {"court": 120, "server": 15, "discovery": 30, "email": 25, "total": 180}
 
 
 def state_dir(explicit: str | Path | None = None) -> Path:
@@ -157,6 +157,39 @@ def _newest_first(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda f: (file_date(f), str(f.get("modified") or "")), reverse=True)
 
 
+def _both_ends(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Newest, oldest, second newest, second oldest...: a kind's first papers
+    (the original proofs of service) and its latest ones both survive a cap.
+    Measured on a 5,996-file matter: newest-first alone cut a 2024 proof of
+    service that was the only record of one defendant."""
+    out, lo, hi = [], 0, len(rows) - 1
+    while lo <= hi:
+        out.append(rows[lo])
+        if hi != lo:
+            out.append(rows[hi])
+        lo, hi = lo + 1, hi - 1
+    return out
+
+
+def _by_kind(court: list[dict[str, Any]], firm: LitigationFirm) -> list[dict[str, Any]]:
+    """Court papers interleaved by kind (the firm pattern each first matches),
+    newest first within a kind: a matter with forty proofs of service still
+    hands the read its answers, dismissals and case management statements, and
+    an old proof of service is not crowded out by newer ones of another kind
+    (2026-10-08 replay: a defendant served in 2024 was cut by a newest-first cap)."""
+    groups: dict[int, list[dict[str, Any]]] = {}
+    for f in court:
+        k = next((i for i, p in enumerate(firm.court_rx) if p.search(full_name(f))), len(firm.court_rx))
+        groups.setdefault(k, []).append(f)
+    out: list[dict[str, Any]] = []
+    queues = [_both_ends(groups[k]) for k in sorted(groups)]
+    while any(queues):
+        for q in queues:
+            if q:
+                out.append(q.pop(0))
+    return out
+
+
 def select(files: list[dict[str, Any]], firm: LitigationFirm, today: dt.date) -> list[tuple[str, str]]:
     """The files a read is handed, in the order they are handed, with the
     class each came in by: court papers (newest first, plus the earliest
@@ -171,8 +204,10 @@ def select(files: list[dict[str, Any]], firm: LitigationFirm, today: dt.date) ->
         c = classify(f, firm, today)
         if c:
             by.setdefault(c, []).append(f)
-    court = _newest_first(by.get("court", []))
-    complaint = [f for f in reversed(court) if re.search(r"(?i)complaint", full_name(f))][:1]
+    court = _by_kind(_newest_first(by.get("court", [])), firm)
+    complaint = [f for f in reversed(_newest_first(by.get("court", []))) if re.search(r"(?i)complaint", full_name(f))][
+        :1
+    ]
     out: list[tuple[str, str]] = []
     seen: set[str] = set()
 

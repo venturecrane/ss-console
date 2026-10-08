@@ -126,10 +126,11 @@ def test_a_read_that_never_records_marks_the_matter_unread_and_holds(tmp_path):
     assert seat.sent == []
     u = json.loads((r.data / "m" / M1 / "unread.json").read_text())
     assert u["stage"] == "read1" and u["reason"].startswith("read_incomplete: ")
-    # the cap's last call is forced: only the final tool, chosen, no thinking
+    # after the cap, answer-now turns: the same tools (a forced tool_choice is
+    # refused by the read model), the instruction to answer, never a forced choice
     last = client.calls[-1]
-    assert last["tool_choice"] == {"type": "tool", "name": "record_result"} and "thinking" not in last
-    assert [t["name"] for t in last["tools"]] == ["record_result"]
+    assert "tool_choice" not in last and last["tools"][-1]["name"] == "record_result"
+    assert "answer now" in json.dumps(last["messages"][-1]).lower()
 
 
 def test_one_matters_failure_does_not_stop_the_others(tmp_path, monkeypatch):

@@ -290,7 +290,7 @@ def _changed_rows(ms: list[dict[str, Any]], changes: dict[str, list[dict[str, An
                     m.get("responsible") or "",
                     m.get("number"),
                     m.get("case_name") or m.get("title") or "",
-                    humanize(c["path"]) if c["path"] != "matter" else "Matter",
+                    humanize(c.get("label") or c["path"]) if c["path"] != "matter" else "Matter",
                     _show(c["old"]),
                     _show(c["new"]) if not isinstance(c["new"], dict) else "added",
                 ]
