@@ -144,6 +144,10 @@ export function headerOk(msg) {
 export function evaluate(msg) {
   const fee = feeComparison(msg)
   if (fee.length) return { verdict: 'block', rule: 'fee-comparison', sentences: fee }
+  return evaluateShape(msg)
+}
+
+function evaluateShape(msg) {
   if (SKILL_EXEMPT.some((re) => re.test(msg))) return { verdict: 'exempt' }
   const { total, aboveFold, foldSeen } = proseLines(msg)
   const advisories = []
