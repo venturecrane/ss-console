@@ -1580,7 +1580,10 @@ def test_failure_note_envelope_passes_the_pinned_dispatchers_validator(tmp_path,
     # seat with ``quiet`` authored writes it; every other envelope omits it.
     # Named here rather than filtered by shape so a NEW optional key still
     # fails this test until someone reads the pinned code and says so.
-    required -= {"casework_mentions"}
+    # casework_raises: the task lines a person may answer "done" to, validated
+    # by ``casework_raises.valid(entry.get(...))``, whose first line is also
+    # ``if value is None: return True``; this skill's envelope never writes it.
+    required -= {"casework_mentions", "casework_raises"}
     # A regex that silently matched nothing would make every assertion below
     # vacuous -- the exact hole this repo keeps finding in its own gates.
     assert {"recipients", "subject", "full_body"} <= required, required
