@@ -454,51 +454,39 @@ def mask_markers(text: str) -> str:
     return "".join(chars)
 
 
-def _straight_pairs(text: str) -> list[tuple[int, int]]:
-    """(start, end) of each straight-quoted span's inner text, pairing the marks
-    in order within each paragraph.
-
-    A regex over the whole document cannot pair an empty "" (a nested quote's
-    closing marks written as two doubles): it skips the first mark and pairs
-    the second with the next quotation's opener, so every quotation after it
-    reads its gap as its text. Pairing per paragraph confines any malformed mark
-    to its own paragraph; an odd mark left at a paragraph's end pairs nothing.
-    """
-    pairs: list[tuple[int, int]] = []
-    offset = 0
-    for para in re.split(r"(\n[ \t]*\n)", text):
-        marks = [m.start() + offset for m in re.finditer('"', para)]
-        pairs += [(a + 1, b) for a, b in zip(marks[0::2], marks[1::2])]
-        offset += len(para)
-    return pairs
-
-
 def extract_quotes(body_text: str) -> list[Quote]:
     """Every double-quoted string of at least ``_MIN_QUOTE_WORDS`` words.
 
     Straight and curly pairs both. Quoted text inside a ``{{...}}`` marker is
-    excluded. A candidate spanning a blank line or a markdown heading is
-    dropped: that is an unbalanced quote character, not a quotation.
+    excluded. A candidate longer than 700 characters or spanning a markdown
+    heading is dropped: that is an unbalanced quote character, not a quotation.
     """
     body_text = mask_markers(body_text)
     quotes: list[Quote] = []
     seen: set[tuple[str, int]] = set()
-    spans = _straight_pairs(body_text) + [(m.start(1), m.end(1)) for m in re.finditer("“([^”]{1,700})”", body_text)]
-    for start, end in spans:
-        inner = body_text[start:end]
-        if not inner or len(inner) > 700:
-            continue
-        if "\n\n" in inner or re.search(r"^\s*#{1,6}\s", inner, re.MULTILINE):
-            continue
-        normalized = normalize(strip_markdown(inner))
-        if len(normalized.split()) < _MIN_QUOTE_WORDS:
-            continue
-        line = body_text.count("\n", 0, start) + 1
-        key = (normalized, line)
-        if key in seen:
-            continue
-        seen.add(key)
-        quotes.append(Quote(inner, normalized, line, start))
+    # A pair's inner text may not cross a blank line, so a mark left unpaired at
+    # a paragraph's end pairs nothing instead of shifting every later quotation,
+    # and it may be empty: a nested quotation closed with two doubles ("") is a
+    # pair. A pattern that required one character skipped the first of those
+    # marks and read each later gap between two quotations as a quotation.
+    patterns = (
+        re.compile(r'"((?:[^"\n]|\n(?![ \t]*\n))*)"'),
+        re.compile("“((?:[^”\n]|\n(?![ \t]*\n))*)”"),
+    )
+    for pattern in patterns:
+        for match in pattern.finditer(body_text):
+            inner = match.group(1)
+            if not inner or len(inner) > 700 or re.search(r"^\s*#{1,6}\s", inner, re.MULTILINE):
+                continue
+            normalized = normalize(strip_markdown(inner))
+            if len(normalized.split()) < _MIN_QUOTE_WORDS:
+                continue
+            line = body_text.count("\n", 0, match.start(1)) + 1
+            key = (normalized, line)
+            if key in seen:
+                continue
+            seen.add(key)
+            quotes.append(Quote(inner, normalized, line, match.start(1)))
     quotes.sort(key=lambda q: q.start)
     return quotes
 
