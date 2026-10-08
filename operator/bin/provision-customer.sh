@@ -451,11 +451,12 @@ else
 fi
 # <<< medchron-controls-stage
 
-# ---------- Steps 2d/2e: the demand and drafting jobs' firm inputs ----------
-# lib/stage-demand-inputs.sh, then lib/stage-drafting-inputs.sh (skipped quietly
-# for a seat with no drafting inputs). One loop line: the ratchet holds this file.
-# shellcheck disable=SC1090 # the two stage files are named in the comment above
-for _stage in demand drafting; do source "${BIN_DIR}/lib/stage-${_stage}-inputs.sh"; done
+# ---------- Steps 2d/2e/2f: the demand, drafting and litigation jobs' firm inputs ----------
+# lib/stage-demand-inputs.sh, lib/stage-drafting-inputs.sh, then
+# lib/stage-litigation-inputs.sh (the last two skipped quietly for a seat with no
+# such inputs). One loop line: the ratchet holds this file.
+# shellcheck disable=SC1090 # the three stage files are named in the comment above
+for _stage in demand drafting litigation; do source "${BIN_DIR}/lib/stage-${_stage}-inputs.sh"; done
 
 # ---------- Step 3: render fly.toml ----------
 log "Rendering fly.toml..."

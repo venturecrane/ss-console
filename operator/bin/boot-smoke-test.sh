@@ -750,6 +750,43 @@ ssh_exec "drafting-lane-ticking" "t=/run/smd-medchron/drafting-tick; [ -f \$t ] 
 ssh_exec "drafting-lane-idle" "! test -f /run/smd-medchron/drafting-child.pid"
 ssh_exec "drafting-queue-root-owned" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/drafting-queue)\" = root:workspace-broker:770 ]"
 ssh_exec "drafting-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/drafting-jobs)\" = root:medchron:710 ]"
+# The litigation status lane (2026-10-07): the daemon's fourth thread, the same
+# four checks plus its state dir (client facts: the child's alone, 0700) and the
+# broker's copy of the firm config (present exactly when the runner's is, and
+# group workspace-broker read-only, never writable by it).
+ssh_exec "litigation-lane-ticking" "t=/run/smd-medchron/litigation-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
+ssh_exec "litigation-lane-idle" "! test -f /run/smd-medchron/litigation-child.pid"
+ssh_exec "litigation-queue-root-owned" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/litigation-queue)\" = root:workspace-broker:770 ]"
+ssh_exec "litigation-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/litigation-jobs)\" = root:medchron:710 ]"
+ssh_exec "litigation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/litigation/state)\" = medchron:medchron:700 ]"
+ssh_exec "litigation-broker-config-matches-runner" "r=/var/lib/smd-config/litigation/litigation-firm.yaml; b=/var/lib/smd-config/litigation-broker-firm.yaml; if [ -f \$r ]; then [ \"\$(stat -c %U:%G:%a \$b)\" = root:workspace-broker:640 ] && cmp -s \$r \$b; else ! test -e \$b; fi"
+# MEMORY BUDGET (2026-10-07). Every lane child runs under a memory cgroup cap,
+# and the gateway runs under none, so the caps must leave the gateway room: the
+# sum of every lane cgroup's limit must not exceed the authored machine memory
+# minus a 512 MiB gateway reserve (the #2465 shape: a 1 GB guest went
+# health-critical when a job and the gateway shared it). A cgroup a lane has
+# not made yet (no job since boot) counts at its code default, read from the
+# runner itself, so a bigger default fails here before the first job. The
+# litigation and drafting lanes share the demand cgroup, so it counts once.
+# FALSIFIER: raise a lane default or shrink machine.memory_mb and this fails.
+ssh_exec_script "lane-memory-caps-leave-gateway-reserve" "/opt/medchron/.venv/bin/python -c '
+import os, sys, yaml
+from pathlib import Path
+import medchron.daemon as d, medchron.demand_lane as dl
+doc = yaml.safe_load(open(\"/var/lib/smd-config/customer.yaml\")) or {}
+mb = int((doc.get(\"machine\") or {}).get(\"memory_mb\") or 0)
+if mb <= 0:
+    sys.exit(\"machine.memory_mb is not authored\")
+defaults = {\"medchron\": d.DEFAULT_MEMORY_MAX, \"demand\": dl.DEFAULT_MEMORY}
+caps = {}
+for name, default in defaults.items():
+    live = [Path(\"/sys/fs/cgroup\", name, \"memory.max\"), Path(\"/sys/fs/cgroup/memory\", name, \"memory.limit_in_bytes\")]
+    vals = [f.read_text().strip() for f in live if f.is_file()]
+    caps[name] = int(vals[0]) if vals and vals[0].isdigit() else int(default)
+budget = (mb - 512) * 1024 * 1024
+total = sum(caps.values())
+sys.exit(0 if total <= budget else f\"lane memory caps {caps} sum {total} > machine {mb} MiB minus 512 MiB gateway reserve\")
+'"
 
 # The firm config is authored per-seat in the PRIVATE engagements repo, and
 # provision-customer.sh step 2b reads the SAME path and continues without it

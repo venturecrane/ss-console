@@ -47,7 +47,7 @@ from typing import Any, Callable
 
 from .broker_context import BrokerContext
 from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
-from . import demand_verbs, drafting_verbs, medchron_verbs, reply_binding
+from . import demand_verbs, drafting_verbs, litigation_verbs, medchron_verbs, reply_binding
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
 
@@ -172,6 +172,16 @@ VERBS: tuple[Verb, ...] = (
     Verb("drafting_allowance", GATEWAY_ROOT_OR_AGENT, drafting_verbs.drafting_dispatch),
     Verb("drafting_job_record", _only(ROOT), drafting_verbs.drafting_dispatch),
     Verb("drafting_job_resume", _only(ROOT), drafting_verbs.drafting_dispatch),
+    # The litigation status job's request edge (litigation_verbs.py). Submit's
+    # table gate admits all three classes because it has two forms; the handler
+    # pins each form to its peers (a request from the gateway or root, a
+    # scheduled run from the cron pre_run's agent uid or root, never the
+    # gateway). No allowance verb: the lane is metered by the firm's monthly
+    # budget, read on root's status. Resume has no agent tool.
+    Verb("litigation_job_submit", GATEWAY_ROOT_OR_AGENT, litigation_verbs.litigation_dispatch),
+    Verb("litigation_job_status", GATEWAY_ROOT_OR_AGENT, litigation_verbs.litigation_dispatch),
+    Verb("litigation_job_record", _only(ROOT), litigation_verbs.litigation_dispatch),
+    Verb("litigation_job_resume", _only(ROOT), litigation_verbs.litigation_dispatch),
     # Gateway-only from here down.
     Verb("audit_append", _only(GATEWAY), audit_verbs.audit_append),
     Verb("agentmail_send", _only(GATEWAY), transmit_verbs.agentmail),
@@ -227,6 +237,8 @@ if set(demand_verbs.VERBS) != {v.name for v in VERBS if v.handler is demand_verb
     raise RuntimeError("the demand rows above and demand_verbs.VERBS disagree")
 if set(drafting_verbs.VERBS) != {v.name for v in VERBS if v.handler is drafting_verbs.drafting_dispatch}:
     raise RuntimeError("the drafting rows above and drafting_verbs.VERBS disagree")
+if set(litigation_verbs.VERBS) != {v.name for v in VERBS if v.handler is litigation_verbs.litigation_dispatch}:
+    raise RuntimeError("the litigation rows above and litigation_verbs.VERBS disagree")
 
 
 def peer_classes(broker: BrokerContext, peer_pid: int, peer_uid: int | None) -> frozenset[str]:

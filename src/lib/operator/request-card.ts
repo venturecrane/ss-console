@@ -20,7 +20,7 @@
 
 export const CARD_KINDS = ['replied', 'no_reply', 'job_done'] as const
 export type CardKind = (typeof CARD_KINDS)[number]
-export const JOB_LANES = ['demand', 'drafting', 'medchron'] as const
+export const JOB_LANES = ['demand', 'drafting', 'litigation', 'medchron'] as const
 export const JOB_STATES = ['delivered', 'failed', 'held'] as const
 
 const CARD_KEY_RE = /^[0-9a-f]{64}:(replied|no_reply|job_done)$/
