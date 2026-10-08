@@ -197,7 +197,8 @@ def test_the_medicals_tab_supplies_billed_only_when_no_document_does():
     imaging = next(t for t in table if t["provider"].startswith("Southfield"))
     assert imaging["billed"] == {"value": "$1,500.00", "sources": [howell.MEDICALS_TAB]}
     assert imaging["paid"]["value"] == howell.NOT_IN_RECORD
-    assert [t["provider"] for t in table][0] == "Northfield PT"
+    first = [t["provider"] for t in table][0]
+    assert first.startswith("Northfield PT") and howell.OFF_TAB in first  # not on the tab: marked
 
 
 def test_conflicting_stated_balances_go_to_the_attorney():
@@ -235,6 +236,54 @@ def test_an_unfinished_or_unreadable_billing_read_fails_and_caches_nothing(tmp_p
     with pytest.raises(howell.ExtractionError):
         howell.extract(data, _Doorway(text, stop), "claude-sonnet-5", 1, lambda _m: None)
     assert not (data / "howell" / "b1.json").exists()
+
+
+class _SeqDoorway:
+    """Answers in order, one per call."""
+
+    def __init__(self, *texts: str) -> None:
+        self.texts, self.calls = list(texts), []
+
+    def call(self, stage, **kw):
+        from types import SimpleNamespace
+
+        self.calls.append(kw)
+        return SimpleNamespace(text=self.texts[len(self.calls) - 1], stop_reason="end_turn")
+
+
+ROW = '{"provider": "Northfield PT", "kind": "bill", "row_type": "line_item", "billed": "$900.00"}'
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        f"Here is the array:\n[{ROW}]\nNote: [see attached] for detail.",  # brackets after the array broke the greedy match
+        f"```json\n[{ROW}]\n```",
+        f"The visit [02/01/2026] is billed below.\n[{ROW}]",  # a bracketed word before the array
+    ],
+)
+def test_the_array_is_read_from_an_answer_with_words_around_it(tmp_path, answer):
+    data = _billing_corpus(tmp_path)
+    rows, _ = howell.extract(data, _SeqDoorway(answer), "claude-sonnet-5", 1, lambda _m: None)
+    assert [r["billed"] for r in rows] == ["$900.00"]
+
+
+def test_an_unreadable_answer_is_retried_once_and_kept_for_diagnosis(tmp_path):
+    data = _billing_corpus(tmp_path)
+    door = _SeqDoorway("This part of the demand restates the bills.", f"[{ROW}]")
+    rows, _ = howell.extract(data, door, "claude-sonnet-5", 1, lambda _m: None)
+    assert [r["billed"] for r in rows] == ["$900.00"] and len(door.calls) == 2
+    assert door.calls[1]["messages"][-1]["content"] == howell.RETRY
+    kept = data / "howell" / ".b1.0.0.unparsed.txt"
+    assert kept.read_text(encoding="utf-8") == "This part of the demand restates the bills."
+
+
+def test_two_unreadable_answers_fail_the_read_and_keep_both(tmp_path):
+    data = _billing_corpus(tmp_path)
+    with pytest.raises(howell.ExtractionError):
+        howell.extract(data, _SeqDoorway("no.", "still no."), "claude-sonnet-5", 1, lambda _m: None)
+    assert not (data / "howell" / "b1.json").exists()
+    assert (data / "howell" / ".b1.0.1.unparsed.txt").read_text(encoding="utf-8") == "still no."
 
 
 def test_a_billing_read_asks_for_the_models_output_maximum(tmp_path):

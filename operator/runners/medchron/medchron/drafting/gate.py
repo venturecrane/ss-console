@@ -16,10 +16,42 @@ strings, the demand variant's skeleton).
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 from ..demand.gate import strip_names
+
+#: The leakage gate's window: a run this long that a held-out email shares
+#: with the draft is a refusal (record_check's consecutive-word test).
+SHINGLE = 10
+_WORD = re.compile(r"[a-z0-9]+")
+
+
+def _shingles(text: str) -> set[int]:
+    w = _WORD.findall(text.lower())
+    return {hash(tuple(w[i : i + SHINGLE])) for i in range(len(w) - SHINGLE + 1)}
+
+
+def public_only(held: str, public: set[int]) -> str:
+    """The held-out email with every SHINGLE-word run that also appears in a
+    document outside the wall blanked. The firm's own letterhead and address
+    sit in its pleadings too; a brief's attorney block reproducing them proves
+    nothing crossed the wall (a 2026-10-07 large-matter dry run was held on
+    exactly that). Text only the walled emails carry is checked as before."""
+    words = [(m.start(), m.end(), m.group(0)) for m in _WORD.finditer(held.lower())]
+    cover = [False] * len(words)
+    for i in range(len(words) - SHINGLE + 1):
+        if hash(tuple(t for _a, _b, t in words[i : i + SHINGLE])) in public:
+            for j in range(i, i + SHINGLE):
+                cover[j] = True
+    out, last = [], 0
+    for (a, b, _t), hidden in zip(words, cover):
+        if hidden:
+            out.append(held[last:a])
+            last = b
+    out.append(held[last:])
+    return "".join(out)
 
 
 def collect(
@@ -44,10 +76,13 @@ def collect(
     wp = data / "walled.json"
     walled = json.loads(wp.read_text(encoding="utf-8")) if wp.is_file() else []
     names = [str(r.get("name") or "") for r in rows] + [str(w.get("name") or "") for w in walled]
+    public: set[int] = set()
+    for _n, text in sources + vision:
+        public |= _shingles(text)
     held = [
         (
             f"held-out {w['name']}",
-            strip_names(Path(w["text_path"]).read_text(encoding="utf-8", errors="replace"), names),
+            public_only(strip_names(Path(w["text_path"]).read_text(encoding="utf-8", errors="replace"), names), public),
         )
         for w in walled
         if w.get("text_path") and Path(w["text_path"]).is_file()
