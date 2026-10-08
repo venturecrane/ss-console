@@ -13,6 +13,11 @@ Containment, not equality: summarising legitimately merges adjacent ranges
 from one exhibit, which names no page the source did not. A citation
 reaching a page the source never cited, or an exhibit it never used, is a
 summary reaching beyond the record: exit 1.
+
+Under `chronology.pre_incident_history: itemize_all` the block is written and
+checked exactly the same way, and the body after it carries EVERY entry,
+pre- and post-incident, in date order: the firm asked that no pre-incident
+visit be left out.
 """
 
 from __future__ import annotations
@@ -55,6 +60,11 @@ def beyond_source(source: str, summary: str) -> list[str]:
     return bad
 
 
+def _iso(entry: str) -> str:
+    m = DATE.match(entry)
+    return f"{m.group(3)}-{m.group(1)}-{m.group(2)}" if m else ""
+
+
 def run(sr: StageRun) -> int:
     d = sr.slug_dir / "runs" / sr.unit.unit
     incident = sr.job.incident_date
@@ -67,7 +77,14 @@ def run(sr: StageRun) -> int:
         m = DATE.match(e)
         iso = f"{m.group(3)}-{m.group(1)}-{m.group(2)}" if m else ""
         (pre if iso < incident else post).append(e)
-    sr.log(f"{sr.unit.unit}: {len(pre)} pre-incident entries -> summary, {len(post)} post-incident kept in full")
+    itemize_all = sr.cfg.itemize_all_pre_incident
+    if itemize_all:
+        sr.log(
+            f"{sr.unit.unit}: {len(pre)} pre-incident entries -> summary AND itemized (itemize_all), "
+            f"{len(post)} post-incident kept in full"
+        )
+    else:
+        sr.log(f"{sr.unit.unit}: {len(pre)} pre-incident entries -> summary, {len(post)} post-incident kept in full")
     if not pre:
         (d / "entries_scoped_final.md").write_text("\n\n".join(post), encoding="utf-8")
         return 0
@@ -92,7 +109,10 @@ def run(sr: StageRun) -> int:
             sr.log(f"    - {b}")
         return 1
     sr.log(f"summary {len(block.split())} words; every cited page is one the source entries cited")
-    out = block + "\n\n" + "\n\n".join(post)
+    # itemize_all: the block leads, then EVERY entry in date order, because the
+    # firm asked that no pre-incident visit be left out of the itemized body.
+    body = sorted(entries, key=_iso) if itemize_all else post
+    out = block + "\n\n" + "\n\n".join(body)
     (d / "entries_scoped_final.md").write_text(out, encoding="utf-8")
     before, after = sum(len(e.split()) for e in entries), len(out.split())
     sr.log(f"body words {before} -> {after} ({after / before * 100:.0f}%)")

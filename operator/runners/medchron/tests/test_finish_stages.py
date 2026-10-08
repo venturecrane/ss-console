@@ -358,6 +358,69 @@ def test_scope_refuses_when_clusters_have_no_merge(job_dir: Path, firm: Path, da
     assert scope_stage.run(sr) == 1
 
 
+def _with_policy(firm: Path, policy: str) -> Path:
+    """The same firm config with `chronology.pre_incident_history` set."""
+    data = yaml.safe_load(firm.read_text())
+    data["chronology"]["pre_incident_history"] = policy
+    firm.write_text(yaml.safe_dump(data))
+    return firm
+
+
+def _no_call(p, n):
+    raise AssertionError("itemize_all must make no model call")
+
+
+def _seed_scope_with_stale_note(d: Path) -> None:
+    """Two pre-incident entries, one post-incident, plus the note and triage
+    reply an earlier `include` run would have left behind."""
+    d.mkdir(parents=True)
+    (d / "entries.md").write_text("\n\n".join([E_POST, E_PRE_MATERIAL, E_PRE_ROUTINE]))
+    (d / "preincident_note.txt").write_text("[NTD: 1 additional pre-incident encounters dated x were reviewed]")
+    (d / "preincident_triage.txt").write_text("1 | OMIT | unrelated allergy visit\n")
+
+
+def test_scope_itemize_all_keeps_every_pre_incident_entry_with_no_call_and_clears_a_stale_note(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """A firm that asked for ALL previous records: nothing is triaged out, no
+    judgment call is paid for, and a note from an earlier run cannot survive
+    into a document that now itemizes everything (build_doc renders the note
+    whenever the file exists)."""
+    client = Scripted(_no_call)
+    sr = _sr(job_dir, _with_policy(firm, "itemize_all"), data_root, client)
+    d = sr.slug_dir / "runs" / "alpha"
+    _seed_scope_with_stale_note(d)
+    assert scope_stage.run(sr) == 0
+    assert client.calls == []
+    assert not (d / "usage-ledger.jsonl").exists(), "no call means no ledger row"
+    scoped = (d / "entries_scoped.md").read_text()
+    assert scoped == "\n\n".join(e.strip() for e in [E_PRE_ROUTINE, E_PRE_MATERIAL, E_POST]), "every entry, date order"
+    assert json.loads((d / "omitted_preincident.json").read_text()) == []
+    assert not (d / "preincident_note.txt").exists(), "a stale disclosure note must be removed"
+    assert not (d / "preincident_triage.txt").exists(), "a stale triage reply must be removed"
+
+
+def test_scope_include_still_triages_and_writes_the_note_on_the_same_fixture(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """The falsifier for the test above: the identical fixture under `include`
+    pays one call, drops the routine entry, and writes the note. If the runner
+    ignored the policy, the itemize_all test would see this behaviour and fail."""
+    client = Scripted(lambda p, n: _msg("1 | OMIT | unrelated allergy visit\n2 | MATERIAL | neck\n"))
+    sr = _sr(job_dir, _with_policy(firm, "include"), data_root, client)
+    d = sr.slug_dir / "runs" / "alpha"
+    _seed_scope_with_stale_note(d)
+    assert scope_stage.run(sr) == 0
+    assert len(client.calls) == 1
+    scoped = (d / "entries_scoped.md").read_text()
+    assert "Seasonal allergies" not in scoped and "Chronic neck pain" in scoped and "Subject Incident" in scoped
+    assert [x["date"] for x in json.loads((d / "omitted_preincident.json").read_text())] == ["2025-06-01"]
+    assert (
+        "1 additional pre-incident encounters dated 2025-06-01 to 2025-06-01"
+        in (d / "preincident_note.txt").read_text()
+    )
+
+
 # ---- exhibits ----------------------------------------------------------------------
 def test_exhibits_merges_a_providers_files_and_remaps_citations(job_dir: Path, firm: Path, data_root: Path) -> None:
     sr = _sr(job_dir, firm, data_root)
@@ -559,6 +622,54 @@ def test_summarize_collapses_pre_incident_and_rejects_a_reach_beyond_source(
 def test_summarize_with_no_pre_incident_is_free(job_dir: Path, firm: Path, data_root: Path) -> None:
     client = Scripted(lambda p, n: (_ for _ in ()).throw(AssertionError("no call expected")))
     sr = _sr(job_dir, firm, data_root, client)
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "entries_final.md").write_text(E_POST)
+    assert summarize_stage.run(sr) == 0 and (d / "entries_scoped_final.md").read_text() == E_POST.strip()
+
+
+def test_summarize_itemize_all_writes_the_block_then_every_entry_in_date_order(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """itemize_all: the cited Prior Medical History block is produced and
+    checked exactly as under `include`, and the body after it itemizes every
+    entry, pre-incident included."""
+    block = (
+        "Prior Medical History\n\nThe patient carried a diagnosis of chronic neck pain before the incident. "
+        "(Exhibit 1 - p. 2)"
+    )
+    client = Scripted(lambda p, n: _msg(block))
+    sr = _sr(job_dir, _with_policy(firm, "itemize_all"), data_root, client)
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "entries_condensed.md").write_text("\n\n".join([E_PRE_ROUTINE, E_PRE_MATERIAL, E_POST]))
+    assert summarize_stage.run(sr) == 0
+    out = (d / "entries_scoped_final.md").read_text()
+    assert out == block + "\n\n" + "\n\n".join(e.strip() for e in [E_PRE_ROUTINE, E_PRE_MATERIAL, E_POST])
+    assert len(client.calls) == 1
+    assert client.calls[0]["messages"][0]["content"] == "\n\n".join([E_PRE_ROUTINE.strip(), E_PRE_MATERIAL.strip()])
+    # The containment check still binds under itemize_all.
+    client2 = Scripted(lambda p, n: _msg(block.replace("p. 2", "p. 7")))
+    assert summarize_stage.run(_sr(job_dir, firm, data_root, client2)) == 1
+
+
+def test_summarize_include_on_the_same_fixture_drops_pre_incident_from_the_body(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """The falsifier for the itemize_all summarize test: under `include` the
+    same input yields block + post-incident only."""
+    block = "Prior Medical History\n\nChronic neck pain predates the incident. (Exhibit 1 - p. 2)"
+    client = Scripted(lambda p, n: _msg(block))
+    sr = _sr(job_dir, _with_policy(firm, "include"), data_root, client)
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "entries_condensed.md").write_text("\n\n".join([E_PRE_ROUTINE, E_PRE_MATERIAL, E_POST]))
+    assert summarize_stage.run(sr) == 0
+    assert (d / "entries_scoped_final.md").read_text() == block + "\n\n" + E_POST.strip()
+
+
+def test_summarize_itemize_all_with_no_pre_incident_is_free(job_dir: Path, firm: Path, data_root: Path) -> None:
+    sr = _sr(job_dir, _with_policy(firm, "itemize_all"), data_root, Scripted(_no_call))
     d = sr.slug_dir / "runs" / "alpha"
     d.mkdir(parents=True)
     (d / "entries_final.md").write_text(E_POST)

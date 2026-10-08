@@ -102,7 +102,14 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
     },
     "chronology": {
         "treatment_gap_days": ("int", True),
-        "pre_incident_history": ("str", True),  # include | summarize_only
+        # include | summarize_only | itemize_all.
+        # `itemize_all`: the firm wants every pre-incident encounter in the
+        # chronology. `filter` (stages/scope.py) makes no triage call and keeps
+        # every pre-incident entry; `summarize` still writes the cited Prior
+        # Medical History block and then itemizes every entry, pre- and
+        # post-incident, in date order. `include` and `summarize_only` both run
+        # the triage + summary path (neither is read by any stage today).
+        "pre_incident_history": ("str", True),
     },
     "budget": {
         "per_job_cap_usd": ("float", True),
@@ -136,7 +143,8 @@ DOS_CHECK_MODES = {"report", "hold"}
 # Models that return HTTP 400 on tool_choice {"type": "any"|"tool"} (Anthropic
 # migration notes for Claude Fable 5.1 and Claude Opus 5.5). Prefix-matched.
 NO_FORCED_TOOL_MODELS = ("claude-opus-5-5", "claude-fable-5-1", "claude-mythos-5-1")
-PRE_INCIDENT_POLICIES = {"include", "summarize_only"}
+PRE_INCIDENT_ITEMIZE_ALL = "itemize_all"
+PRE_INCIDENT_POLICIES = {"include", "summarize_only", PRE_INCIDENT_ITEMIZE_ALL}
 
 
 @dataclass(frozen=True)
@@ -174,6 +182,12 @@ class FirmConfig:
     @property
     def usd_per_audit_claim(self) -> float:
         return float(self.get("budget", "usd_per_audit_claim"))
+
+    @property
+    def itemize_all_pre_incident(self) -> bool:
+        """True when the firm wants every pre-incident encounter itemized, never
+        triaged out (`chronology.pre_incident_history: itemize_all`)."""
+        return self.get("chronology", "pre_incident_history") == PRE_INCIDENT_ITEMIZE_ALL
 
     def compiled(self, section: str, key: str) -> list[tuple[re.Pattern[str], str]]:
         """Compile a [{match, label|reason}] list once; the second field is
