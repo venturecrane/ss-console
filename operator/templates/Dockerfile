@@ -1135,7 +1135,7 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # dispatch() requires both; the reply relay answers only this turn's email or a
 # binding (find_for_recipient deleted); the gate classifies cc and bcc. Pairs
 # with the broker fence in this same PR.
-ARG OVERLAY_REF="f37225c1d9d43dfc379099c38466d4f638672e46"
+ARG OVERLAY_REF="bd8858836f43a3be4a38197e7525bf5813be0f4d"
 
 ARG CUSTOMER_SLUG=customer-zero
 
