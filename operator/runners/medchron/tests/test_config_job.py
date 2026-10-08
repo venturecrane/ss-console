@@ -67,6 +67,25 @@ def test_missing_file_is_a_refusal_not_a_default(tmp_path: Path, monkeypatch: py
         config_mod.load(str(tmp_path / "absent.yaml"))
 
 
+@pytest.mark.parametrize("policy", ["include", "summarize_only", "itemize_all"])
+def test_every_pre_incident_policy_loads(tmp_path: Path, policy: str) -> None:
+    data = copy.deepcopy(FIRM_CONFIG)
+    data["chronology"]["pre_incident_history"] = policy
+    p = tmp_path / "f.yaml"
+    p.write_text(yaml.safe_dump(data), encoding="utf-8")
+    cfg = config_mod.load(str(p))
+    assert cfg.itemize_all_pre_incident is (policy == "itemize_all")
+
+
+def test_an_unknown_pre_incident_policy_is_refused(tmp_path: Path) -> None:
+    data = copy.deepcopy(FIRM_CONFIG)
+    data["chronology"]["pre_incident_history"] = "itemise_everything"
+    p = tmp_path / "f.yaml"
+    p.write_text(yaml.safe_dump(data), encoding="utf-8")
+    with pytest.raises(config_mod.ConfigError, match="chronology.pre_incident_history: expected one of"):
+        config_mod.load(str(p))
+
+
 def test_bad_regex_is_named(tmp_path: Path) -> None:
     data = copy.deepcopy(FIRM_CONFIG)
     data["coverage"]["exclusions"].append({"match": "(", "reason": "x"})
