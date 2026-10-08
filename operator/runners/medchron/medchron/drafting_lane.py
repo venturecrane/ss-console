@@ -171,6 +171,8 @@ class DraftingLane(Daemon):
             out, _ = proc.communicate()
         (self.run_dir / "drafting-child.pid").unlink(missing_ok=True)
         self.jobs_run += 1
+        if self.cut_short_by_stop(job_id, proc.returncode, out or ""):
+            return "interrupted"
         return self._report(job_id, proc.returncode, out or "")
 
     def _fail_unconfigured(self, job_id: str, exc: Exception) -> str:
