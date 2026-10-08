@@ -43,7 +43,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import budget as budget_mod, limits as limits_mod
-from . import citefix
+from . import citefix, nestquote
 from . import settle as settle_mod
 from ..demand import deliver, facts as facts_mod, finalpass, preflight, pull, quotefix, summarize, transcribe
 from ..demand.firm import DemandFirm
@@ -117,7 +117,11 @@ class DraftingRun:
         log: Callable[[str], None] = print,
         today: Callable[[], time.struct_time] = time.localtime,
         readback_pause: float | None = None,
+        reexec: Callable[[], None] | None = None,
     ) -> None:
+        #: Replaces this process with a fresh one on the same job (the CLI's
+        #: os.execv); None in tests and dry runs. See ``_walk``.
+        self.reexec = reexec
         self.job = job_mod.load(job_dir)
         self.firm = firm_mod.load(inputs_dir)
         self.dview = demand_view(self.firm)
@@ -415,8 +419,12 @@ class DraftingRun:
         if self._is_done("gate"):
             return (self.data / FINAL).read_text(encoding="utf-8")
         doc, notes = render.split_notes(md)
+        doc, log = nestquote.repair(doc)
+        if log:
+            md = doc + ("\n" + render.NOTES_MARK + "\n\n" + notes + "\n" if notes else "")
+            self._atomic(FINAL, md)
+            self.log("  " + log[0])
         g = gate.run(self.data, self.firm, self.cls, doc)
-        log: list[str] = []
         if not g["passed"] and quotefix.quote_findings(g["refusals"]):
             doc, log = quotefix.repair(doc, g["refusals"], gate.source_texts(self.data, self.firm, self.cls))
             md = doc + ("\n" + render.NOTES_MARK + "\n\n" + notes + "\n" if notes else "")
@@ -511,10 +519,19 @@ class DraftingRun:
         )
         self._stage("preflight", self._preflight)
         self._estimate()
+        transcribing = not self._is_done("transcribe")
         self._stage(
             "transcribe",
             lambda: transcribe.run(self.data, self.doorway, self.firm.model("transcription"), self.log, CONCURRENCY),
         )
+        if transcribing and self.reexec is not None:
+            # Reading page images grows the heap far past what the rest of the
+            # job needs, and the process does not give it back: a 1,083-page
+            # file was killed at its 1 GiB cap while rendering, long after the
+            # images were done with. Every stage so far is on disk, so a fresh process picks up
+            # at the next one with none of that heap.
+            self.log("  transcription done; continuing in a fresh process")
+            self.reexec()
         client = set(f.get("client_emails") or [])
         self._stage("wall-transcribed", lambda: preflight.wall_printed_emails(self.data, self.dview, client, self.log))
         digest = self._digest()

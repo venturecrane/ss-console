@@ -244,10 +244,15 @@ def strip_markdown(text: str) -> str:
     typography, not testimony, so they are removed from both sides before any
     contiguity comparison. Applied symmetrically, this can only remove false
     failures: a splice does not become contiguous when asterisks come off.
+
+    Quotation-mark style is typography too. A record that quotes someone with
+    double marks is quoted in a brief with that inner quotation in single marks
+    ("difficulty 'even climbing the back stairs.'" for a record reading difficulty
+    "even climbing the back stairs."), so double marks compare as single on both sides.
     """
     text = _MD_BLOCKQUOTE_RE.sub(" ", text)
     text = _MD_INLINE_RE.sub("", text)
-    return text
+    return text.replace('"', "'")
 
 
 def word_tokens(text: str) -> list[str]:
@@ -453,20 +458,25 @@ def extract_quotes(body_text: str) -> list[Quote]:
     """Every double-quoted string of at least ``_MIN_QUOTE_WORDS`` words.
 
     Straight and curly pairs both. Quoted text inside a ``{{...}}`` marker is
-    excluded. A candidate spanning a blank line or a markdown heading is
-    dropped: that is an unbalanced quote character, not a quotation.
+    excluded. A candidate longer than 700 characters or spanning a markdown
+    heading is dropped: that is an unbalanced quote character, not a quotation.
     """
     body_text = mask_markers(body_text)
     quotes: list[Quote] = []
     seen: set[tuple[str, int]] = set()
+    # A pair's inner text may not cross a blank line, so a mark left unpaired at
+    # a paragraph's end pairs nothing instead of shifting every later quotation,
+    # and it may be empty: a nested quotation closed with two doubles ("") is a
+    # pair. A pattern that required one character skipped the first of those
+    # marks and read each later gap between two quotations as a quotation.
     patterns = (
-        re.compile(r'"([^"]{1,700})"'),
-        re.compile("“([^”]{1,700})”"),
+        re.compile(r'"((?:[^"\n]|\n(?![ \t]*\n))*)"'),
+        re.compile("“((?:[^”\n]|\n(?![ \t]*\n))*)”"),
     )
     for pattern in patterns:
         for match in pattern.finditer(body_text):
             inner = match.group(1)
-            if "\n\n" in inner or re.search(r"^\s*#{1,6}\s", inner, re.MULTILINE):
+            if not inner or len(inner) > 700 or re.search(r"^\s*#{1,6}\s", inner, re.MULTILINE):
                 continue
             normalized = normalize(strip_markdown(inner))
             if len(normalized.split()) < _MIN_QUOTE_WORDS:
