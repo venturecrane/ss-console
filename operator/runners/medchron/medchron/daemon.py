@@ -78,16 +78,6 @@ CHILD_ENV_PASS = (
     "CUSTOMER_SLUG",
 )
 TERMINAL = frozenset({"delivered", "failed"})
-#: The signals a Machine stop delivers. A child that died of one of these while
-#: the daemon was stopping was cut short by the stop, not by its own defect.
-STOP_SIGNALS = frozenset({-signal.SIGTERM, -signal.SIGINT})
-#: How long a lane waits for the daemon's own stop flag after its child died of
-#: a stop signal: the same signal reaches the daemon's main thread, which sets
-#: the flag between bytecodes, so this is a race window and not a timeout.
-STOP_FLAG_GRACE_SECONDS = 5.0
-#: The outcomes that are a job's real ending. Recorded even during a stop:
-#: the work happened, and a re-run would only repeat it.
-FINISHED_OUTCOMES = frozenset({"delivered", "dry_run", "held", "refused"})
 
 
 def sticky_level(db_path: str) -> str | None:
@@ -400,7 +390,7 @@ class Daemon:
             log.close()
             pidfile.unlink(missing_ok=True)
         self.jobs_run += 1
-        if self.cut_short_by_stop(job_id, code, out or ""):
+        if resume_mod.cut_short_by_stop(self, job_id, code, out or ""):
             return "interrupted"
         return self._report(job_id, code, out or "")
 
@@ -584,42 +574,6 @@ class Daemon:
         if self._daemon_state(job_id).get("held_paused"):
             self._write_state(job_id, held_paused=False)
         return self.run_job(job_id)
-
-    def cut_short_by_stop(self, job_id: str, code: int, out: str) -> bool:
-        """True when the Machine's stop ended this attempt, so the job must be
-        left claimed for the next boot to resume rather than recorded failed.
-
-        A deploy stops the Machine: the stop signal reaches the child and the
-        daemon together, the child dies without a verdict, and recording that
-        as ``failed`` turns a restart into a dead request that only a root
-        resume can revive, while the requester holds a reply saying the work
-        is underway (a demand queued seconds before a release restarted the
-        seat, 2026-10-08). Left claimed and
-        non-terminal, the job is picked up by ``_in_progress`` on the next boot
-        and the driver's state file skips the stages that finished, which is
-        the module's stated contract for a crash mid-job.
-
-        Only a stop counts. A child the cgroup OOM-killed dies of SIGKILL with
-        the daemon running; that is a real failure, recorded, and a re-run
-        would die the same way. A real ending (delivered, held, refused) is
-        recorded even mid-stop: the work happened."""
-        if code in STOP_SIGNALS:
-            waited = 0.0
-            while not self.stopping() and waited < STOP_FLAG_GRACE_SECONDS:
-                time.sleep(0.1)
-                waited += 0.1
-        if not self.stopping():
-            return False
-        outcomes = verdict_mod.read(self.job_dir(job_id), out)
-        if any(isinstance(o, dict) and str(o.get("outcome")) in FINISHED_OUTCOMES for o in outcomes):
-            return False
-        logger.warning(
-            "%s job %s cut short by the Machine's stop (exit %s); left claimed for the next boot",
-            self.LANE,
-            job_id,
-            code,
-        )
-        return True
 
     def run_forever(self, stop: Callable[[], bool], poll_seconds: float) -> None:
         self.stopping = stop

@@ -18,11 +18,25 @@ from __future__ import annotations
 
 import json
 import logging
+import signal
+import time
 from typing import Any
+
+from . import verdict as verdict_mod
 
 logger = logging.getLogger("medchron.daemon")
 
 MARKER_PREFIX = ".resume-"
+#: The signals a Machine stop delivers. A child that died of one of these while
+#: the daemon was stopping was cut short by the stop, not by its own defect.
+STOP_SIGNALS = frozenset({-signal.SIGTERM, -signal.SIGINT})
+#: How long a lane waits for the daemon's own stop flag after its child died of
+#: a stop signal: the same signal reaches the daemon's main thread, which sets
+#: the flag between bytecodes, so this is a race window and not a timeout.
+STOP_FLAG_GRACE_SECONDS = 5.0
+#: The outcomes that are a job's real ending. Recorded even during a stop:
+#: the work happened, and a re-run would only repeat it.
+FINISHED_OUTCOMES = frozenset({"delivered", "dry_run", "held", "refused"})
 
 
 def take_requests(d: Any) -> list[str]:
@@ -101,3 +115,40 @@ def start_run(d: Any, job_id: str, base: list[str]) -> list[str]:
         return base
     logger.info("resuming %s with --redo %s", job_id, ",".join(redo))
     return [*base, "--redo", ",".join(redo)]
+
+
+def cut_short_by_stop(d: Any, job_id: str, code: int, out: str) -> bool:
+    """True when the Machine's stop ended this attempt, so the job must be
+    left claimed for the next boot to resume rather than recorded failed.
+
+    A deploy stops the Machine: the stop signal reaches the child and the
+    daemon together, the child dies without a verdict, and recording that
+    as ``failed`` turns a restart into a dead request that only a root
+    resume can revive, while the requester holds a reply saying the work
+    is underway (a demand queued seconds before a release restarted the
+    seat, 2026-10-08). Left claimed and
+    non-terminal, the job is picked up by ``_in_progress`` on the next boot
+    and the driver's state file skips the stages that finished, which is
+    the daemon's stated contract for a crash mid-job (daemon.py header).
+
+    Only a stop counts. A child the cgroup OOM-killed dies of SIGKILL with
+    the daemon running; that is a real failure, recorded, and a re-run
+    would die the same way. A real ending (delivered, held, refused) is
+    recorded even mid-stop: the work happened."""
+    if code in STOP_SIGNALS:
+        waited = 0.0
+        while not d.stopping() and waited < STOP_FLAG_GRACE_SECONDS:
+            time.sleep(0.1)
+            waited += 0.1
+    if not d.stopping():
+        return False
+    outcomes = verdict_mod.read(d.job_dir(job_id), out)
+    if any(isinstance(o, dict) and str(o.get("outcome")) in FINISHED_OUTCOMES for o in outcomes):
+        return False
+    logger.warning(
+        "%s job %s cut short by the Machine's stop (exit %s); left claimed for the next boot",
+        d.LANE,
+        job_id,
+        code,
+    )
+    return True

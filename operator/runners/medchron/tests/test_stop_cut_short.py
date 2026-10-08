@@ -21,7 +21,7 @@ import pytest
 import test_demand_lane as demand_t
 import test_drafting_lane as drafting_t
 import test_upload_daemon as chron_t
-from medchron import daemon as daemon_mod
+from medchron import daemon as daemon_mod, resume as resume_mod
 
 # The child under test: what it does is read from a file beside it, so one
 # script serves every lane and every scenario.
@@ -156,7 +156,7 @@ def test_an_oom_kill_with_the_daemon_running_is_a_failure_recorded_at_once(tmp_p
 
 @LANES
 def test_a_stop_signal_with_no_stop_after_the_grace_is_a_failure(tmp_path, make, monkeypatch):
-    monkeypatch.setattr(daemon_mod, "STOP_FLAG_GRACE_SECONDS", 0.3)
+    monkeypatch.setattr(resume_mod, "STOP_FLAG_GRACE_SECONDS", 0.3)
     lane, client, submit, _skill = make(tmp_path)
     submit()
     _with_child(lane, tmp_path, "term")
