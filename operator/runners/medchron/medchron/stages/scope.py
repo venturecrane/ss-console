@@ -8,6 +8,10 @@ can audit it. Omitted entries are NOT deleted silently: the document gains a
 note stating how many pre-incident encounters were reviewed and not itemized,
 with their date span, and the full unfiltered assembly stays on disk.
 
+Under `chronology.pre_incident_history: itemize_all` the firm wants every
+pre-incident encounter itemized: no call is made, every entry is kept, the
+omitted list is empty, and any note from an earlier run is removed.
+
 Refuses (exit 1) to scope a document whose merged clusters are missing: a
 merge once failed, merged.md never appeared, and this step happily produced
 a 155-entry document with all 34 clusters absent and nothing saying so.
@@ -165,6 +169,25 @@ def brief(i: int, e: dict[str, str]) -> str:
     return f"{i}. {e['iso']} | {head[:90]}\n   {' '.join(dx)[:600]}"
 
 
+def _itemize_all(sr: StageRun, d: Path, pre: list[dict[str, str]], post: list[dict[str, str]]) -> int:
+    """`chronology.pre_incident_history: itemize_all`: the firm wants every
+    pre-incident encounter in the chronology, so nothing is triaged and no
+    model call is made. Every entry is kept, the omitted list is empty, and a
+    disclosure note or triage reply left by an earlier run is DELETED: build_doc
+    renders the note whenever the file exists, so a stale "[NTD: ... not
+    itemized]" would otherwise contradict a document that itemizes everything."""
+    for stale in ("preincident_note.txt", "preincident_triage.txt"):
+        if (d / stale).is_file():
+            (d / stale).unlink()
+            sr.log(f"  stale {stale} from an earlier run removed")
+    kept = sorted(pre + post, key=lambda x: x["iso"])
+    (d / "entries_scoped.md").write_text("\n\n".join(e["text"] for e in kept), encoding="utf-8")
+    (d / "omitted_preincident.json").write_text(json.dumps([], indent=1), encoding="utf-8")
+    sr.log(f"  pre-incident: itemize_all, {len(pre)} kept, none triaged (no model call)")
+    sr.log(f"  scoped document: {len(kept)} entries")
+    return 0
+
+
 def run(sr: StageRun) -> int:
     d = sr.slug_dir / "runs" / sr.unit.unit
     incident = sr.job.incident_date
@@ -184,6 +207,8 @@ def run(sr: StageRun) -> int:
     pre = [e for e in entries if e["iso"] < incident]
     post = [e for e in entries if e["iso"] >= incident]
     sr.log(f"{sr.unit.unit}: {len(pre)} pre-incident, {len(post)} post-incident")
+    if sr.cfg.itemize_all_pre_incident:
+        return _itemize_all(sr, d, pre, post)
     verdict: dict[int, tuple[str, str]] = {}
     if pre:
         payload = f"CLAIM INJURIES: {sr.job.injuries}\n\nPRE-INCIDENT ENCOUNTERS:\n\n" + "\n\n".join(
