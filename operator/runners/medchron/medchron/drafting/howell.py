@@ -41,13 +41,14 @@ BILLING_TEXT = re.compile(r"(?i)(explanation of benefits|amount paid|total charg
 #: Signals that a document is itself a bill or ledger, not a letter or record
 #: that mentions one (a 2026-10-07 large-matter dry run read 438 documents on the
 #: phrase test alone: demand letters, depositions and records that say "lien").
-_AMOUNT = re.compile(r"\$\s?\d[\d,]*\.\d{2}\b")
+_AMOUNT = re.compile(r"(?<![\d.])\$?\s?\d{1,3}(?:,\d{3})*\.\d{2}\b")
 _TABLE = re.compile(
     r"(?i)\b(cpt|hcpcs|date of service|dates of service|\bdos\b|charges?\s+(payments?|adj)|"
     r"adjustments?|amount billed|billed amount|patient responsibility|allowed amount)\b"
 )
 _LIEN = re.compile(r"(?i)\b(lien|balance due|amount owed|outstanding balance)\b")
 SHORT_DOC_CHARS = 15_000
+_STRONG = re.compile(r"(?i)explanation of benefits|itemi[sz]ed statement|amount paid|total charges|patient balance")
 #: Documents that state money but are not a provider's charges: the case's own
 #: settlement papers, releases, retainers, funding agreements, court forms.
 _NOT_A_BILL = re.compile(
@@ -86,14 +87,18 @@ def is_billing(row: dict[str, Any], head: str) -> bool:
     column or code signal) or a lien/balance statement carrying an amount; a
     letter that only mentions a lien is not read for figures."""
     name = str(row.get("name") or "")
+    if BILLING_NAME.search(name):
+        return True  # "Medical Lien Agreement" is a lien before it is an agreement
     if _NOT_A_BILL.search(name):
         return False
-    if BILLING_NAME.search(name) or BILLING_NAME.search(str(row.get("folder") or "")):
+    if BILLING_NAME.search(str(row.get("folder") or "")):
         return True
     h = head[:4000]
     amounts = len(_AMOUNT.findall(h))
     if amounts >= 5 and _TABLE.search(h):
         return True
+    if amounts >= 2 and _STRONG.search(h):
+        return True  # an EOB or itemized statement with few lines
     # A lien or balance letter is short; a demand or deposition that mentions
     # a lien is not (SHORT_DOC_CHARS of extracted text).
     short = int(row.get("chars") or len(head)) <= SHORT_DOC_CHARS
@@ -179,6 +184,8 @@ def _parse_json_array(text: str) -> list[Any] | None:
         try:
             out, _ = dec.raw_decode(text, m.start())
         except ValueError:
+            if re.match(r"\[\s*\{", text[m.start() :]):
+                return None  # an array of objects that does not close: truncated, never its inner part
             continue
         if isinstance(out, list) and all(isinstance(x, dict) for x in out):
             return out
@@ -200,6 +207,7 @@ def extract(
     out_dir = data / "howell"
     out_dir.mkdir(exist_ok=True)
     todo = []
+    skipped: list[str] = []
     for r in rows:
         p = r.get("text_path")
         if not p or not Path(p).is_file():
@@ -207,6 +215,8 @@ def extract(
         text = Path(p).read_text(encoding="utf-8", errors="replace")
         if is_billing(r, text):
             todo.append((r, text))
+        elif _NOT_A_BILL.search(str(r.get("name") or "")) and _AMOUNT.search(text[:4000]):
+            skipped.append(str(r.get("name")))
     max_tokens = output_max(model, 64_000)
 
     def one(item: tuple[dict[str, Any], str]) -> tuple[list[dict[str, Any]], list[str]]:
@@ -257,7 +267,9 @@ def extract(
     with ThreadPoolExecutor(max_workers=workers) as ex:
         results = list(ex.map(one, todo))
     log(f"  howell: {len(todo)} billing document(s) read")
-    return [r for rs, _ in results for r in rs], [n for _, ns in results for n in ns]
+    notes = [n for _, ns in results for n in ns]
+    notes += [f"not read for billing (settlement, release, agreement or similar by name): {s}" for s in skipped]
+    return [r for rs, _ in results for r in rs], notes
 
 
 # ---- the deterministic table ---------------------------------------------------------
@@ -406,10 +418,6 @@ _GENERIC = {
     "foundation",
     "hospital",
     "health",
-    "northern",
-    "southern",
-    "california",
-    "sacramento",
     "doctor",
     "spine",
     "treatment",
@@ -427,9 +435,10 @@ _MEDICAL = re.compile(
     r"(?i)\b(m\.?d\.?|d\.?o\.?|d\.?c\.?|p\.?t\.?|dpt|clinic|medical|hospital|imaging|radiology|mri|surgery|"
     r"surgical|orthop\w*|chiropractic|therapy|pain|anesthesia|physicians?)\b"
 )
+#: Applied only to a row that ALSO reads as medical: the strong signs of a
+#: litigation vendor or payer ("Valley Pain Associates, LLC" is a treater).
 _VENDOR = re.compile(
-    r"(?i)\b(llc legal|legal|litigation|law office|attorney|advisory|funding|lien funding|nurses?, llc|"
-    r"court|records? retrieval|copy|one legal|infotrack|info track|mediation|associates, llc)\b"
+    r"(?i)\b(legal|litigation|law office|attorney|funding|records? retrieval|mediation|nurse consult\w*)\b"
 )
 OFF_TAB = "{{ATTORNEY: this provider is not on the matter's Medicals tab; confirm it is the client's treatment}}"
 
@@ -447,10 +456,15 @@ def match_provider(name: str, spine: list[str]) -> str | None:
     are one provider; a tie between two tab providers matches neither."""
     from difflib import SequenceMatcher
 
+    spine = list(dict.fromkeys(spine))  # a provider listed twice on the tab is one provider
     mine = _distinct(name)
+    if not mine:  # a short or generic name: the whole-name key must match
+        hits = [c for c in spine if provider_key(c) == provider_key(name)]
+        return hits[0] if len(hits) == 1 else None
     best, score, tie = None, 0, False
     for cand in spine:
-        s = sum(1 for a in mine if any(SequenceMatcher(None, a, b).ratio() >= 0.85 for b in _distinct(cand)))
+        theirs = _distinct(cand) or [t for t in provider_key(cand).split() if len(t) >= 3]
+        s = sum(1 for a in mine if any(SequenceMatcher(None, a, b).ratio() >= 0.85 for b in theirs))
         if s > score:
             best, score, tie = cand, s, False
         elif s == score and s > 0:
@@ -481,7 +495,7 @@ def build(
             if hit is None and _MEDICAL.search(r["provider"]) and not _VENDOR.search(r["provider"]):
                 # A treating provider the tab does not list: its own row, marked,
                 # never silently dropped (the tab is not always complete).
-                key = provider_key(re.sub(r"\(.*?\)|/.*$", "", r["provider"]))
+                key = "offtab:" + provider_key(re.sub(r"\(.*?\)|/.*$", "", r["provider"]))
                 off_tab.add(key)
             elif hit is None:
                 if unmatched is not None:

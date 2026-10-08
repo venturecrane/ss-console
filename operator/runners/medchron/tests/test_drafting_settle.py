@@ -63,7 +63,7 @@ def test_an_unplaceable_claim_is_marked_at_the_section_top_not_fatal():
     au = _audit({XI: ["- looks forward to the mediator's assistance | INVENTED | no cite"]})
     md, notes = settle.settle(DRAFT, au)
     head, rest = md.split("# XI. CONCLUSION", 1)
-    assert rest.lstrip().startswith("{{ATTORNEY: the final audit flags a statement in this section")
+    assert rest.lstrip().startswith("{{ATTORNEY: the final audit flags a statement or figure in this section")
     assert any("not located" in n for n in notes)
 
 
@@ -175,3 +175,70 @@ def test_vendors_stay_out_and_off_tab_treaters_are_marked():
 def test_without_a_medicals_tab_every_provider_is_its_own_row():
     table = howell.build([_brow("Summit Litigation Solutions", "$563.75")], [], [])
     assert [t["provider"] for t in table] == ["Summit Litigation Solutions"]
+
+
+# ---- review falsifiers (PR #3098) ------------------------------------------------
+
+TWO = """# VI. DAMAGES
+
+Northgate billed $1,200.00 for the first visit. The plan paid $1,200.00 toward a later balance. Treatment ended in 2025.
+"""
+
+
+def test_two_different_claims_sharing_a_figure_are_both_settled():
+    au = _audit(
+        {
+            "VI. DAMAGES": [
+                "- Northgate billed $1,200.00 for the first visit | INVENTED | no bill",
+                "- The plan paid $1,200.00 toward a later balance | INVENTED | no EOB",
+            ]
+        }
+    )
+    md, _ = settle.settle(TWO, au)
+    assert md.count("{{NOT IN RECORD") == 2
+    assert "first visit" not in md and "later balance" not in md
+
+
+def test_a_figure_matches_only_as_a_whole_number():
+    assert settle._has("billed $13,550.00", "3,550") is False
+    assert settle._has("billed $3,550.00 in all", "$3,550.00") is True
+
+
+def test_two_sections_with_one_heading_both_survive():
+    md = "# A. Treatment\n\nFirst provider text.\n\n# A. Treatment\n\nSecond provider text.\n"
+    out, _ = settle.settle(md, "# Audit v1\n\n## AUDIT: A. Treatment\n\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0\n")
+    assert "First provider text." in out and "Second provider text." in out
+
+
+def test_a_finding_for_a_missing_section_still_reaches_the_draft():
+    au = _audit({"XII. NO SUCH SECTION": ["- something | INVENTED | no cite"]})
+    md, _ = settle.settle(DRAFT, au)
+    assert "in a section the draft lacks (XII. NO SUCH SECTION)" in md
+
+
+def test_an_arithmetic_flag_never_lands_inside_a_date():
+    au = _audit({"VI. DAMAGES": ["- total of 2 visits | ARITHMETIC | should be 3"]})
+    md, _ = settle.settle(TWO, au)
+    assert "2025" in md
+
+
+def test_a_truncated_answer_is_not_read_as_its_inner_array():
+    assert howell._parse_json_array('[{"provider": "x", "lines": [{"a": 1}]') is None
+
+
+def test_a_lien_agreement_is_a_billing_document():
+    assert howell.is_billing({"name": "Medical Lien Agreement", "folder": "/MISC", "chars": 9000}, "") is True
+
+
+def test_a_treater_named_associates_llc_is_not_a_vendor():
+    rows = [_brow("Valley Pain Associates, LLC", "$900.00", "p1")]
+    table = howell.build(rows, TAB, [])
+    assert any(t["provider"].startswith("Valley Pain") for t in table)
+
+
+def test_a_provider_listed_twice_on_the_tab_still_matches():
+    tab = [*TAB, {"provider": "Dr. Okonkwo", "charges": [{"amount": "1.0"}]}]
+    rows = [_brow("Dana K. Okonkwo, M.D.", "$87,950.00", "a")]
+    out: list[str] = []
+    howell.build(rows, tab, out)
+    assert out == []
