@@ -162,15 +162,39 @@ COMPLAINT = (
 )
 
 
+#: What the caption reader copies off COMPLAINT's page 1.
+CAPTION = {
+    "document_title": "COMPLAINT FOR DAMAGES",
+    "case_number": "CV-0001",
+    "court_name": "SUPERIOR COURT OF THE STATE OF CALIFORNIA",
+    "county": "EXAMPLETOWN",
+    "courthouse_or_branch": None,
+    "plaintiffs": ["GAMMA EXAMPLE"],
+    "defendants": ["DELTA EXAMPLE"],
+    "attorney": {
+        "name": "ALPHA EXAMPLE",
+        "state_bar_number": "000001",
+        "firm": None,
+        "street": None,
+        "city_state_zip": None,
+        "phone": None,
+        "fax": None,
+        "email": "alpha@firm.example",
+        "attorney_for": "Plaintiff",
+    },
+}
+CAPTION_JSON = json.dumps(CAPTION)
+
+
 class DraftingSeat(DemandSeat):
     def __init__(self, *a: Any, record: dict[str, Any] | None = None, **kw: Any) -> None:
         super().__init__(*a, **kw)
         self.facts = {**self.facts, "client_name": "Gamma Example", "client_names": ["Gamma Example"]}
         self.record = record or {
             "case_number": "CV-0010",
-            "court": "SUPERIOR COURT OF CALIFORNIA, COUNTY OF EXAMPLETOWN",
-            "plaintiffs": ["Gamma Exampel"],
-            "defendants": ["Delta Example"],
+            "court": "Superior Court",
+            "county": "Exampletown",
+            "parties": [{"side": "client", "name": "Gamma Exampel"}, {"side": "other", "name": "Delta Example"}],
             "attorney_email": "",  # read, and empty
         }
 
@@ -222,13 +246,107 @@ class ScriptedClient(_DemandClient):
     """Answers by the prompt the system block carries; the billing reader is
     recognized by its own in-code prompt."""
 
-    def __init__(self, draft: str = BRIEF, **kw: Any) -> None:
+    def __init__(self, draft: str = BRIEF, caption: list[str] | None = None, **kw: Any) -> None:
+        """``caption``: the successive answers to the caption read (the last
+        one repeats); by default the complaint's caption as JSON."""
         super().__init__(draft=draft, **kw)
+        self.caption = list(caption or [CAPTION_JSON])
 
     def _answer(self, params: dict[str, Any]) -> str:
-        if "You read ONE billing document" in json.dumps(params.get("system")):
+        system = json.dumps(params.get("system"))
+        if "You read ONE billing document" in system:
             return HOWELL_ROWS
+        if "COPY THE CAPTION" in system:
+            return self.caption.pop(0) if len(self.caption) > 1 else self.caption[0]
         return super()._answer(params)
+
+
+CASE_KEY = "Matter/CaseDetails/StandardCaseDetails/CaseNumber"
+SOL_KEY = "Matter/CaseDetails/StandardCaseDetails/StatuteOfLimitationDate"
+
+
+class FakeSmokeball:
+    """The few Smokeball endpoints a caption correction touches, with the
+    vendor's two observed behaviours: a contact PUT answers 202 and lands only
+    on a later read, and a layout PATCH CLEARS every set date it does not
+    re-send (the 2026-10-08 incident). ``mangle(kind, body)`` lets a test move
+    an unintended field on a write; ``mangle_restores`` keeps it moving on the
+    restore too."""
+
+    def __init__(
+        self,
+        contacts: dict[str, dict[str, Any]] | None = None,
+        layout: dict[str, Any] | None = None,
+        clears_unsent_dates: bool = True,
+        mangle: Any = None,
+        mangle_restores: bool = False,
+    ) -> None:
+        import copy
+
+        self._copy = copy.deepcopy
+        self.contacts = contacts or {}
+        self.items = {"item-case": dict(layout or {}), "item-other": {"Matter/Other/Field": "x"}}
+        self.clears_unsent_dates = clears_unsent_dates
+        self.mangle, self.mangle_restores = mangle, mangle_restores
+        self.pending: dict[str, dict[str, Any]] = {}
+        self.writes: list[tuple[str, str, Any]] = []
+
+    def get(self, path: str, **_params: Any) -> Any:
+        if path.startswith("/contacts/"):
+            cid = path.rsplit("/", 1)[1]
+            if cid in self.pending:  # the 202's write lands on the next read
+                self.contacts[cid] = self.pending.pop(cid)
+            return self._copy(self.contacts[cid])
+        if path.endswith("/layouts"):
+            return {"value": [{"id": "item-other"}, {"id": "item-case"}]}
+        item = path.rsplit("/", 1)[1]
+        return {"values": [{"key": k, "value": v} for k, v in self.items[item].items()]}
+
+    def request(self, method: str, path: str, *, params: Any = None, json: Any = None) -> Any:
+        self.writes.append((method, path, self._copy(json)))
+        first = sum(1 for m, p, _ in self.writes if p == path) == 1
+        if method == "PUT" and path.startswith("/contacts/"):
+            cid = path.rsplit("/", 1)[1]
+            new = self._copy(self.contacts[cid])
+            for key, body in json.items():
+                new[key] = self._copy(body)
+            new["versionId"] = f"v{len(self.writes)}"
+            if self.mangle and (first or self.mangle_restores):
+                self.mangle("contact", new)
+            self.pending[cid] = new
+            return None
+        if method == "PATCH":
+            values = self.items[path.rsplit("/", 1)[1]]
+            sent = {v["key"]: v["value"] for v in json["values"]}
+            if self.clears_unsent_dates:
+                for k in list(values):
+                    if "Date" in k and k not in sent:
+                        values[k] = ""
+            values.update(sent)
+            if self.mangle and (first or self.mangle_restores):
+                self.mangle("layout", values)
+            return None
+        raise AssertionError(f"unexpected write {method} {path}")
+
+
+def contact(cid: str, first: str, last: str, middle: str | None = None) -> dict[str, Any]:
+    """A person contact as Smokeball returns it, with fields a name write must keep."""
+    return {
+        "id": cid,
+        "href": f"/contacts/{cid}",
+        "versionId": "v0",
+        "lastUpdated": "2026-01-01T00:00:00Z",
+        "person": {
+            "title": "Ms",
+            "firstName": first,
+            "middleName": middle,
+            "lastName": last,
+            "email": "someone@mail.example",
+            "phone": {"areaCode": "555", "number": "0100"},
+            "residentialAddress": {"addressLine1": "1 Example Way", "city": "Exampletown"},
+            "birthDate": "1980-01-01",
+        },
+    }
 
 
 __all__ = ["SimpleNamespace", "_Stream", "LIBRARY", "MATTER"]

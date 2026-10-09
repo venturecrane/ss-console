@@ -299,11 +299,14 @@ def test_record_moves_the_row_and_the_projection_carries_the_report(seat) -> Non
             },
             # The runner sends this one top-level; it lands in the same report.
             "caption_discrepancies": [{"field": "case_number"}],
+            # The record fields the job corrected from the court's paper.
+            "caption_corrections": [{"field": "plaintiff", "from": "A", "to": "B", "source_document": "C"}],
         },
     )
     proj = out["job"]
     assert proj["state"] == "delivered" and proj["files"][0]["name"] == "Mediation Brief.docx"
     assert proj["markers"][0]["kind"] == "ATTORNEY" and proj["caption_discrepancies"] == [{"field": "case_number"}]
+    assert proj["caption_corrections"][0]["field"] == "plaintiff"
     assert audit_types(db)[-2:] == ["DRAFTING_JOB_RUNNING", "DRAFTING_JOB_DELIVERED"]
     conn = sqlite3.connect(db)
     meta = json.loads(conn.execute("SELECT metadata FROM audit_log ORDER BY rowid DESC LIMIT 1").fetchone()[0])
@@ -311,6 +314,7 @@ def test_record_moves_the_row_and_the_projection_carries_the_report(seat) -> Non
     # Counts only in the audit row.
     assert meta["markers_count"] == 1 and "markers" not in meta
     assert meta["caption_discrepancies_count"] == 1
+    assert meta["caption_corrections_count"] == 1 and "caption_corrections" not in meta
     # A later same-state note never erases the stored report.
     note = call(broker, "drafting_job_record", uid=0, job_id=job, state="delivered", fields={"reason": "n"})
     assert note["job"]["caption_discrepancies"] == [{"field": "case_number"}]

@@ -22,6 +22,20 @@ def attorney_notes(
     if cap is not None:
         lines += ["", f"## Caption: source {cap['source'] or 'none (no court document in the file)'}", ""]
         lines += [
+            f"- Corrected in Smokeball from the court's {c['source_document']}: {c['field'].replace('_', ' ')} "
+            f'"{c["from"] or "nothing"}" -> "{c["to"]}"'
+            for c in cap.get("corrections") or []
+        ]
+        if cap.get("scanned"):
+            lines.append(
+                "- Page 1 of the court's paper is a scan with no text layer: its caption was read from the image, "
+                "so nothing was corrected in Smokeball from it."
+            )
+        if cap.get("kind") == "answer":
+            lines.append(
+                "- The caption is read from an answer; its attorney block is opposing counsel's and was not used."
+            )
+        lines += [
             f'- {x["field"].replace("_", " ")}: the court\'s paper reads "{x["document_value"]}"; the matter record '
             f'reads "{x["record_value"] or "nothing"}" ({x["why"]}). Line: "{x["quote"]}" ({x["source"]})'
             for x in cap["discrepancies"]

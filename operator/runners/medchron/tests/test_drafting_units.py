@@ -7,12 +7,13 @@ case that passes, so a check that cannot fail is caught here.
 
 from __future__ import annotations
 
+import json
 
 import pytest
 import yaml
 
-from drafting_testkit import COMPLAINT, envelope, make_inputs
-from medchron.drafting import caption, firm as firm_mod, howell, job as job_mod, render
+from drafting_testkit import CAPTION, COMPLAINT, envelope, make_inputs
+from medchron.drafting import caption, caption_read, firm as firm_mod, howell, job as job_mod, render
 
 # ---- firm inputs ---------------------------------------------------------------------
 
@@ -298,66 +299,92 @@ def test_a_billing_read_asks_for_the_models_output_maximum(tmp_path):
 # ---- the caption ----------------------------------------------------------------------------
 
 
-def _doc(text: str = COMPLAINT, name: str = "Complaint 2-1-26.pdf") -> dict:
-    return {"name": name, "head": text}
+def _fields(text: str = COMPLAINT, **cap) -> dict:
+    """The complaint's caption as the reader returns it, verified against ``text``."""
+    got = {"caption": caption_read.parse(json.dumps({**CAPTION, **cap})), "text_chars": len(text), "text": text}
+    return caption_read.fields(got, ("firm.example",), True)
 
 
-def test_caption_fields_are_read_verbatim_from_the_court_paper():
-    got = caption.extract(_doc(), ("firm.example",))
-    assert got["case_number"]["value"] == "CV-0001"
-    assert got["court"]["value"] == "SUPERIOR COURT OF THE STATE OF CALIFORNIA, COUNTY OF EXAMPLETOWN"
-    assert got["plaintiff"]["value"] == "GAMMA EXAMPLE" and got["defendant"]["value"] == "DELTA EXAMPLE"
+def test_caption_fields_are_the_court_papers_and_verified_against_its_text():
+    got = _fields()
+    assert got["case_number"] == {"value": "CV-0001", "verified": True, "quote": "Case No. CV-0001"}
+    assert got["court_name"]["value"] == "SUPERIOR COURT OF THE STATE OF CALIFORNIA" and got["county"]["verified"]
+    assert [p["value"] for p in got["plaintiffs"]] == ["GAMMA EXAMPLE"] and got["defendants"][0]["verified"]
     assert got["attorney_email"]["value"] == "alpha@firm.example"
+    misread = _fields(case_number="CV-0007")  # a value the page does not print is never verified
+    assert misread["case_number"]["verified"] is False
 
 
-def test_a_case_number_must_carry_a_digit():
-    got = caption.extract(_doc(COMPLAINT.replace("Case No. CV-0001", "Case No. pending")), ("firm.example",))
-    assert "case_number" not in got
-    got = caption.extract(_doc(COMPLAINT.replace("Case No. CV-0001", "Case No. PENDING")), ("firm.example",))
-    assert "case_number" not in got
+def test_a_null_field_is_not_read_and_another_firms_email_is_not_ours():
+    got = _fields(case_number=None, attorney={**CAPTION["attorney"], "email": "beta@other.example"})
+    assert "case_number" not in got and "attorney_email" not in got
 
 
 def test_discrepancies_quote_the_document_and_low_confidence_is_not_reported():
-    fields = caption.extract(_doc(), ("firm.example",))
     record = {
         "case_number": "CV-0010",
-        "court": "SUPERIOR COURT OF THE STATE OF CALIFORNIA, COUNTY OF EXAMPLETOWN",
-        "plaintiffs": ["Gamma Exampel"],
-        "defendants": ["Epsilon Unrelated Holdings"],
+        "court": "Superior Court",
+        "county": "Exampletown",
+        "parties": [
+            {"side": "client", "name": "Gamma Exampel"},
+            {"side": "other", "name": "Epsilon Unrelated Holdings"},
+        ],
         "attorney_email": "",  # read, and empty
     }
-    diffs, compared = caption.compare(fields, record, "Complaint 2-1-26.pdf")
+    diffs, compared = caption.compare(_fields(), record, "Complaint 2-1-26.pdf")
     out = {d["field"]: d for d in diffs}
     assert set(out) == {"case_number", "plaintiff", "attorney_email"}
     assert out["case_number"]["quote"] == "Case No. CV-0001" and out["case_number"]["source"] == "Complaint 2-1-26.pdf"
     assert "no email" in out["attorney_email"]["why"]
-    assert set(compared) == {"case_number", "court", "attorney_email", "plaintiff", "defendant"}
+    assert all("fix" not in d for d in diffs)  # no contact to write to, and CV-0010 is another number
+    assert set(compared) == {"case_number", "court", "county", "attorney_email", "plaintiff", "defendant"}
 
 
 def test_a_case_number_far_from_the_record_is_another_matter_not_a_typo():
-    fields = caption.extract(_doc(), ("firm.example",))
-    diffs, _ = caption.compare(fields, {"case_number": "ZZ-998877-QQ"}, "c")
+    diffs, _ = caption.compare(_fields(), {"case_number": "ZZ-998877-QQ"}, "c")
     assert diffs == []
 
 
 def test_a_field_the_record_does_not_carry_is_never_compared_or_reported():
-    fields = caption.extract(_doc(), ("firm.example",))
-    diffs, compared = caption.compare(fields, {"case_number": None, "court": None, "attorney_email": None}, "c")
+    diffs, compared = caption.compare(
+        _fields(), {"case_number": None, "court": None, "county": None, "attorney_email": None}, "c"
+    )
     assert diffs == [] and compared == []
 
 
-def test_a_matching_record_reports_nothing_and_an_ambiguous_field_is_not_read():
-    fields = caption.extract(_doc(COMPLAINT + "\nCase No. CV-0002"), ("firm.example",))
-    assert "case_number" not in fields
+def test_a_matching_record_reports_nothing():
     record = {
-        "case_number": "CV-0002",
-        "court": "Superior Court of the State of California, County of Exampletown",
+        "case_number": "cv-0001",
+        "court": "Superior Court of the State of California",
+        "county": "County of Exampletown",
         "plaintiffs": ["Gamma Example"],
-        "defendants": ["Delta Example"],
+        "defendants": ["Delta Example."],
         "attorney_email": "alpha@firm.example",
     }
-    diffs, compared = caption.compare(fields, record, "x")
-    assert diffs == [] and "court" in compared
+    diffs, compared = caption.compare(_fields(), record, "x")
+    assert diffs == [] and {"court", "county", "plaintiff", "defendant"} <= set(compared)
+
+
+def test_the_source_is_the_latest_complaint_then_an_answer_then_a_notice(tmp_path):
+    rows = []
+    for i, name in enumerate(
+        ("Notice of Hearing 3-1-26", "Answer to Complaint 4-1-26", "Complaint 2-1-26", "First Amended Complaint 5-1-26")
+    ):
+        src, txt = tmp_path / f"{i}.pdf", tmp_path / f"{i}.txt"
+        src.write_bytes(b"%PDF")
+        txt.write_text(COMPLAINT, encoding="utf-8")
+        rows.append({"id": str(i), "name": name, "text_path": str(txt), "source_path": str(src)})
+
+    def pick(subset: list[dict]) -> str:
+        (tmp_path / "extracted.jsonl").write_text("\n".join(json.dumps(r) for r in subset), encoding="utf-8")
+        got = caption.source_document(tmp_path)
+        return f"{got['name']} ({got['kind']})" if got else "none"
+
+    assert pick(rows) == "First Amended Complaint 5-1-26 (pleading)"
+    assert pick(rows[:2]) == "Answer to Complaint 4-1-26 (answer)"
+    assert pick(rows[:1]) == "Notice of Hearing 3-1-26 (notice)"
+    docx = {**rows[3], "source_path": str(tmp_path / "x.docx")}
+    assert pick([docx]) == "none"  # page 1 of a .docx cannot be rendered
 
 
 def test_an_unreadable_record_raises_never_reads_as_agreement():
@@ -483,9 +510,8 @@ def test_a_digest_without_discovery_sets_reads_no_prior():
 
 
 def test_a_court_name_typo_is_reported_but_its_wording_variants_are_not():
-    fields = caption.extract(_doc(), ("firm.example",))
-    base = {"case_number": None, "plaintiffs": [], "defendants": [], "attorney_email": "alpha@firm.example"}
-    same, _ = caption.compare(fields, {**base, "court": "Superior Court of California, County of Exampletown"}, "c")
+    base = {"case_number": None, "attorney_email": "alpha@firm.example"}
+    same, _ = caption.compare(_fields(), {**base, "court": "Superior Court of California"}, "c")
     assert same == []
-    typo, _ = caption.compare(fields, {**base, "court": "Superior Court of California, County of Exampletowm"}, "c")
+    typo, _ = caption.compare(_fields(), {**base, "court": "Superor Court"}, "c")
     assert [d["field"] for d in typo] == ["court"]
