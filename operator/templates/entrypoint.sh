@@ -273,11 +273,12 @@ mountpoint -q "${MEDCHRON_RUN_DIR}" \
   || mount --bind "${MEDCHRON_DATA_DIR}" "${MEDCHRON_RUN_DIR}" \
   || { log "FATAL: could not bind-mount ${MEDCHRON_DATA_DIR} -> ${MEDCHRON_RUN_DIR}"; exit 1; }
 export SMD_MEDCHRON_QUEUE_DIR="${MEDCHRON_RUN_DIR}/queue"
-# The demand lane's (2026-10-06) and the drafting lane's (2026-10-07) queues, job
-# dirs and firm inputs: sourced, same shell, so their exports reach the broker
+# The demand lane's (2026-10-06), the drafting lane's (2026-10-07) and the
+# negotiation watch's (2026-10-09) queues, job dirs and inputs: sourced, same
+# shell, so their exports reach the broker
 # launch and the daemon below. One loop line: the ratchet holds this file.
-# shellcheck disable=SC1090 # /app/entrypoint-demand.sh and /app/entrypoint-drafting.sh
-for _lane in demand drafting; do . "/app/entrypoint-${_lane}.sh"; done
+# shellcheck disable=SC1090 # /app/entrypoint-{demand,drafting,negotiation}.sh
+for _lane in demand drafting negotiation; do . "/app/entrypoint-${_lane}.sh"; done
 
 # 2026-09-04: the chronology runner's INSTALL-level artifacts — the scanned-page
 # classifier's authored control pages (`controls.json` + the PDFs it names) and
@@ -512,7 +513,7 @@ launch_broker() {
     SMD_AUDIT_DB_PATH="${AUDIT_BIND_DB}" \
     SMD_ESTABLISH_SPOOL_DIR="${SMD_ESTABLISH_SPOOL_DIR}" \
     SMD_MEDCHRON_QUEUE_DIR="${SMD_MEDCHRON_QUEUE_DIR}" \
-    SMD_DEMAND_QUEUE_DIR="${SMD_DEMAND_QUEUE_DIR}" SMD_DRAFTING_QUEUE_DIR="${SMD_DRAFTING_QUEUE_DIR}" \
+    SMD_DEMAND_QUEUE_DIR="${SMD_DEMAND_QUEUE_DIR}" SMD_DRAFTING_QUEUE_DIR="${SMD_DRAFTING_QUEUE_DIR}" SMD_NEGOTIATION_QUEUE_DIR="${SMD_NEGOTIATION_QUEUE_DIR}" \
     SMD_AGENTMAIL_CREDENTIAL_PATH="${SMD_AGENTMAIL_CREDENTIAL_PATH}" \
     SMD_MSGRAPH_CREDENTIAL_PATH="${SMD_MSGRAPH_CREDENTIAL_PATH}" \
     SMD_MSGRAPH_READ_CREDENTIAL_PATH="${SMD_MSGRAPH_READ_CREDENTIAL_PATH}" \

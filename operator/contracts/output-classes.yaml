@@ -146,7 +146,15 @@ classes:
     gates: extractive_only
     delivery:
       internal_only: true
-      seams: [smokeball_memo, smokeball_task, smokeball_file, smokeball_expense, local_file]
+      seams:
+        [
+          smokeball_memo,
+          smokeball_task,
+          smokeball_file,
+          smokeball_expense,
+          smokeball_layout,
+          local_file,
+        ]
       external_send: forbidden
 
   staff:
@@ -458,6 +466,14 @@ skill_bindings:
     internal:
       - { artifact: statute_report, seam: email_send, class: staff }
     outbound: derived # the report to the authored recipient; a firm address, so the send resolves internal
+  # The negotiation watch: the queued job enters each new offer on the matter's
+  # Negotiation Details tab (a record: figures and dates as the document states
+  # them, add-only, read back); each notice's wake sends one email, composed in
+  # code, to the firm's authored scheduled recipient.
+  negotiation-watch:
+    internal:
+      - { artifact: negotiation_rows, seam: smokeball_layout, class: record }
+    outbound: derived # one new email per new offer to a firm administrator
   mediation-settlement-tracker:
     internal:
       - { artifact: brief_inputs, seam: session_output, class: staff }

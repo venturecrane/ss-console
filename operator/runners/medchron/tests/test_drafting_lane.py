@@ -147,16 +147,23 @@ def test_no_queue_env_no_lane(monkeypatch, tmp_path):
     assert build_lane(D()) is None  # type: ignore[arg-type]
 
 
-def test_the_daemon_starts_the_drafting_lane_beside_the_demand_lane_and_survives_its_failure():
+def test_the_daemon_starts_the_drafting_lane_beside_the_demand_lane_and_survives_its_failure(monkeypatch):
     src = (Path(__file__).resolve().parents[1] / "medchron" / "daemon.py").read_text()
     demand = src.index("start_lane(d, stop=")
-    block = src[demand : demand + 600]
-    assert "from .drafting_lane import start_lane as start_drafting_lane" in block
-    assert (
-        block.index("try:")
-        < block.index("start_drafting_lane(d")
-        < block.index('logger.exception("drafting lane not started")')
-    )
+    assert "start_other_lanes(d, stop=" in src[demand : demand + 400]
+    from medchron import drafting_lane, lanes, negotiation_lane
+
+    assert lanes.LANES == ("drafting_lane", "negotiation_lane")
+    assert lanes._module("drafting_lane") is drafting_lane and lanes._module("negotiation_lane") is negotiation_lane
+    started: list[str] = []
+
+    def boom(*_a, **_k):
+        raise RuntimeError("drafting lane cannot start")
+
+    monkeypatch.setattr(drafting_lane, "start_lane", boom)
+    monkeypatch.setattr(negotiation_lane, "start_lane", lambda *_a, **_k: started.append("negotiation"))
+    lanes.start_other_lanes(object(), stop=lambda: True, poll_seconds=1.0)
+    assert started == ["negotiation"]
 
 
 def test_unusable_inputs_defer_once_then_fail_with_config_missing(tmp_path):

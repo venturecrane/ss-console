@@ -1224,8 +1224,10 @@ RUN apt-get update \
       ripgrep ffmpeg gcc python3-dev libffi-dev procps git openssh-client \
       docker-cli tini ca-certificates util-linux \
       postgresql-17 postgresql-client-17 redis-server awscli \
-      poppler-utils fonts-dejavu-core \
+      poppler-utils fonts-dejavu-core antiword \
  && rm -rf /var/lib/apt/lists/*
+# antiword (2026-10-09): the negotiation watch reads offer letters saved as
+# legacy Word .doc with it (the build asserts it).
 # poppler-utils + fonts-dejavu-core (ss#2614): the chronology runner's exhibit
 # rendering fallback and matplotlib's timeline visuals need a real font.
 
@@ -1659,7 +1661,8 @@ RUN set -eu; \
     uv pip install --python /opt/medchron/.venv/bin/python --no-cache --no-deps \
       /app/connectors/_sdk /app/connectors/smokeball /app/runners/medchron; \
     [ -x /opt/medchron/.venv/bin/medchron ] || { echo "FATAL: the medchron runner produced no console-script"; exit 1; }; \
-    /opt/medchron/.venv/bin/python -c "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, medchron.drafting_lane, medchron.drafting.run, smokeball_connector.docx_format, docx"; \
+    /opt/medchron/.venv/bin/python -c "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, medchron.drafting_lane, medchron.drafting.run, medchron.negotiation_lane, medchron.negotiation.run, smokeball_connector.docx_format, docx"; \
+    command -v antiword >/dev/null || { echo "FATAL: antiword is missing (the negotiation watch reads .doc with it)"; exit 1; }; \
     chown -R root:root /opt/medchron; \
     chmod -R a+rX /opt/medchron
 
@@ -1679,6 +1682,8 @@ COPY operator/templates/entrypoint.sh /app/entrypoint.sh
 COPY operator/templates/entrypoint-demand.sh /app/entrypoint-demand.sh
 # The drafting lane's twin of it (queue, job dirs, firm inputs from vaults/<slug>/drafting/).
 COPY operator/templates/entrypoint-drafting.sh /app/entrypoint-drafting.sh
+# The negotiation watch's twin (queue, job dirs, state dir; no firm inputs).
+COPY operator/templates/entrypoint-negotiation.sh /app/entrypoint-negotiation.sh
 # REQUIRED_ENV / OPTIONAL_ENV, generated from operator/contracts/env-consumption.yaml
 # (operator/bin/gen-env-arrays.py); bootstrap.sh sources this instead of hardcoding them.
 COPY operator/templates/_env-arrays.generated.sh /app/_env-arrays.generated.sh

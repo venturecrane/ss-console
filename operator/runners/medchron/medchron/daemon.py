@@ -635,12 +635,9 @@ def main(argv: list[str] | None = None) -> int:
     from .demand_lane import start_lane  # its own slot: a demand never waits on a chronology, nor the reverse
 
     start_lane(d, stop=lambda: stopped["flag"], poll_seconds=poll)
-    try:  # the third lane: a failure to start it must never stop the daemon or the demand lane
-        from .drafting_lane import start_lane as start_drafting_lane
+    from .lanes import start_other_lanes  # drafting and negotiation, each in its own module
 
-        start_drafting_lane(d, stop=lambda: stopped["flag"], poll_seconds=poll)
-    except Exception:  # logged with its trace; the chronology and demand lanes keep running
-        logger.exception("drafting lane not started")
+    start_other_lanes(d, stop=lambda: stopped["flag"], poll_seconds=poll)
     d.run_forever(stop=lambda: stopped["flag"], poll_seconds=poll)
     return 0
 

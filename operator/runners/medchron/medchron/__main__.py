@@ -131,6 +131,32 @@ def _cmd_draft(args: argparse.Namespace) -> int:
     return {"delivered": 0, "held": 3, "failed": 1}.get(v.outcome, 1)
 
 
+def _cmd_negotiate(args: argparse.Namespace) -> int:
+    """One negotiation-watch job (``negotiation/run.py``). The verdict is ONE
+    JSON object: stdout's only line, and the same text in verdict.json.
+    Exit 0 delivered, 2 failed."""
+    import contextlib
+    import json
+
+    from .negotiation.run import EXIT, NegotiationRun
+
+    with contextlib.redirect_stdout(sys.stderr):
+        try:
+            run = NegotiationRun(
+                Path(args.job_dir),
+                state_dir=args.state_dir,
+                pricing=args.pricing,
+                log=lambda m: print(m, file=sys.stderr),
+            )
+            v = run.run()
+        except Exception as exc:  # noqa: BLE001 - a verdict, never a trace on stdout
+            v = {"verdict": "failed", "stage": "setup", "reason": f"unexpected: {type(exc).__name__}: {str(exc)[:300]}"}
+    payload = json.dumps(v)
+    verdict_mod.write(Path(args.job_dir), payload)
+    print(payload)
+    return EXIT.get(str(v.get("verdict")), 2)
+
+
 def _exit_code(outcomes) -> int:
     worst = {"delivered": 0, "dry_run": 0, "rehearsed": 0, "held": 3, "refused": 4, "failed": 1}
     return max(worst.get(o.outcome, 1) for o in outcomes) if outcomes else 1
@@ -247,6 +273,11 @@ def main(argv: list[str] | None = None) -> int:
     dr.add_argument("--pricing", default=None)
     dr.add_argument("--redo", default="", help="comma-separated stages to reopen (a resume request)")
     dr.set_defaults(fn=_cmd_draft)
+    ng = sub.add_parser("negotiate", help="run one negotiation-watch job: new offer documents to Negotiation Details")
+    ng.add_argument("job_dir")
+    ng.add_argument("--pricing", default=None)
+    ng.add_argument("--state-dir", default=None, help="the lane's persistent state dir (default: on the volume)")
+    ng.set_defaults(fn=_cmd_negotiate)
     d = sub.add_parser("dag", help="print the stage order and validate it")
     d.set_defaults(fn=_cmd_dag)
     v = sub.add_parser("validate-config", help="validate a firm config file")

@@ -36,8 +36,15 @@
 # firm's authored house style; never drafted in a turn. A seat lists it, with
 # its enabled classes, deliberately; omission is refusal.
 
+# v0.5.0 (2026-10-09): adds negotiation-watch, the SCHEDULED negotiation
+# watch. The seat's weekday cron rows submit a job on the Machine
+# (operator/workspace_broker/negotiation_verbs.py) that enters the offers newly
+# saved to open matters on each matter's Negotiation Details tab (add-only,
+# read back) and emails the firm's authored scheduled recipient once per new
+# offer; never read in a turn. A seat lists it, with its recipient, deliberately.
+
 name: pi
-version: 0.4.0
+version: 0.5.0
 
 # Additive floors on top of the base law-firm compliance set (upl-boundary,
 # privilege, conflict-routing, trust-funds-read-only,
@@ -58,9 +65,10 @@ compliance:
 
 personas: []
 
-# Twenty-five PI skills (bodies in operator/skills/): the nineteen lifecycle
+# Twenty-six PI skills (bodies in operator/skills/): the nineteen lifecycle
 # skills of v0.2.0, the five drafting-lane skills (four in-turn of v0.3.0 and
-# the queued document-drafter of v0.4.0), and one firm-operations skill.
+# the queued document-drafter of v0.4.0), the scheduled negotiation-watch of
+# v0.5.0, and one firm-operations skill.
 skills:
   # discovery (deepest — the firm's named slip area)
   - discovery-served-watch
@@ -97,6 +105,9 @@ skills:
   - mediation-brief-drafter
   # the queued drafting lane (v0.4.0, admin-initiated, a job on the Machine)
   - document-drafter
+  # the scheduled negotiation watch (v0.5.0, the firm's weekday cron, a job on
+  # the Machine; new offers to Negotiation Details, one email per offer)
+  - negotiation-watch
   # firm operations: vendor bills forwarded by the firm's own staff, staged as
   # UNFINALIZED expenses (never finalized, never trust, never a payment).
   # Rehearsed on pilot-smokeball first; not bound on any client seat yet.

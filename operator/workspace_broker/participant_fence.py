@@ -20,7 +20,9 @@ THE RULE, per recipient (to, cc AND bcc; bcc delivers):
       the broker reads out of the mailbox itself (never off the wire);
   (b) the firm authored them for the sending job's LANE: ``rule_dispatch`` is
       ``scope.rule_requests_to``, ``escalation`` is ``escalation.*_recipients``,
-      ``skill:<name>`` is that enabled skill's own ``settings.recipient``;
+      ``skill:<name>`` is that enabled skill's own ``settings.recipient``
+      (and, for a skill that authors one, ``settings.scheduled_recipients``,
+      a comma-separated string: the negotiation watch's offer emails);
   (c) the anchor came from SMD and they are on ``scope.admins``.
 
   When the anchor's From is an authored device (``scope.device_senders``), its
@@ -73,7 +75,7 @@ LANE_SEND_AS = "send_as"
 _SKILL_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,79}$")
 
 MESSAGE_KINDS = ("graph_message", "agentmail_message")
-JOB_KINDS = ("medchron_job", "demand_job", "drafting_job")
+JOB_KINDS = ("medchron_job", "demand_job", "drafting_job", "negotiation_job")
 RULE_KIND = "rule"
 ANCHOR_KINDS = (*MESSAGE_KINDS, *JOB_KINDS, RULE_KIND)
 _ANCHOR_FIELD = {
@@ -82,6 +84,7 @@ _ANCHOR_FIELD = {
     "medchron_job": "job_id",
     "demand_job": "job_id",
     "drafting_job": "job_id",
+    "negotiation_job": "job_id",
     RULE_KIND: "proposal_id",
 }
 _ANCHOR_ID = re.compile(r"^[A-Za-z0-9=_.@<>+:-]{1,512}$")
@@ -175,6 +178,17 @@ def _roster_entry(raw: str) -> str:
     return value if value.startswith("@") else normalize_address(value)
 
 
+#: A skill setting naming the recipients of its scheduled run, authored as a
+#: comma-separated string (skill settings are scalars, ADR 0075).
+SCHEDULED_RECIPIENTS_KEY = "scheduled_recipients"
+
+
+def _comma_addresses(value: Any) -> list[str]:
+    if isinstance(value, str):
+        value = value.split(",")
+    return _addresses(value) if isinstance(value, list) else []
+
+
 def _skill_lanes(personas: Any) -> dict[str, frozenset[str]]:
     lanes: dict[str, frozenset[str]] = {}
     for persona in personas if isinstance(personas, list) else []:
@@ -185,7 +199,7 @@ def _skill_lanes(personas: Any) -> dict[str, frozenset[str]]:
             name, settings = skill.get("name"), skill.get("settings")
             if not isinstance(name, str) or not isinstance(settings, dict):
                 continue
-            found = _addresses(settings.get("recipient"))
+            found = _addresses(settings.get("recipient")) + _comma_addresses(settings.get(SCHEDULED_RECIPIENTS_KEY))
             if found:
                 key = LANE_SKILL_PREFIX + name
                 lanes[key] = lanes.get(key, frozenset()) | frozenset(found)

@@ -47,7 +47,7 @@ from typing import Any, Callable
 
 from .broker_context import BrokerContext
 from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
-from . import demand_verbs, drafting_verbs, medchron_verbs, reply_binding
+from . import demand_verbs, drafting_verbs, medchron_verbs, negotiation_verbs, reply_binding
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
 
@@ -172,6 +172,13 @@ VERBS: tuple[Verb, ...] = (
     Verb("drafting_allowance", GATEWAY_ROOT_OR_AGENT, drafting_verbs.drafting_dispatch),
     Verb("drafting_job_record", _only(ROOT), drafting_verbs.drafting_dispatch),
     Verb("drafting_job_resume", _only(ROOT), drafting_verbs.drafting_dispatch),
+    # The negotiation watch's request edge (negotiation_verbs.py): scheduled
+    # only, so submit is the cron pre_run's agent uid or root, never a turn.
+    # Status serves the completion turn a notice's message. Resume has no tool.
+    Verb("negotiation_job_submit", ROOT_OR_AGENT, negotiation_verbs.negotiation_dispatch),
+    Verb("negotiation_job_status", GATEWAY_ROOT_OR_AGENT, negotiation_verbs.negotiation_dispatch),
+    Verb("negotiation_job_record", _only(ROOT), negotiation_verbs.negotiation_dispatch),
+    Verb("negotiation_job_resume", _only(ROOT), negotiation_verbs.negotiation_dispatch),
     # Gateway-only from here down.
     Verb("audit_append", _only(GATEWAY), audit_verbs.audit_append),
     Verb("agentmail_send", _only(GATEWAY), transmit_verbs.agentmail),
@@ -227,6 +234,8 @@ if set(demand_verbs.VERBS) != {v.name for v in VERBS if v.handler is demand_verb
     raise RuntimeError("the demand rows above and demand_verbs.VERBS disagree")
 if set(drafting_verbs.VERBS) != {v.name for v in VERBS if v.handler is drafting_verbs.drafting_dispatch}:
     raise RuntimeError("the drafting rows above and drafting_verbs.VERBS disagree")
+if set(negotiation_verbs.VERBS) != {v.name for v in VERBS if v.handler is negotiation_verbs.negotiation_dispatch}:
+    raise RuntimeError("the negotiation rows above and negotiation_verbs.VERBS disagree")
 
 
 def peer_classes(broker: BrokerContext, peer_pid: int, peer_uid: int | None) -> frozenset[str]:

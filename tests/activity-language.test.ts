@@ -100,6 +100,11 @@ describe('activity-language exhaustiveness (writer parity)', () => {
         'DRAFTING_JOB_DELIVERED',
         'DRAFTING_JOB_FAILED',
         'DRAFTING_JOB_RESUME_REQUESTED',
+        'NEGOTIATION_JOB_SUBMITTED',
+        'NEGOTIATION_JOB_RUNNING',
+        'NEGOTIATION_JOB_DELIVERED',
+        'NEGOTIATION_JOB_FAILED',
+        'NEGOTIATION_JOB_RESUME_REQUESTED',
         'AGENT_STOPPED',
         'COMPLIANCE_PACKET_EXPORTED',
         // ss#2122: a Named Administrator pulled the per-matter audit record
@@ -219,6 +224,11 @@ describe('failure outcomes are visible to the client (ss#2320)', () => {
     ['DRAFTING_JOB_DELIVERED', 'Filed a drafted document on the matter'],
     ['DRAFTING_JOB_FAILED', 'Could not finish drafting a document'],
     ['DRAFTING_JOB_RESUME_REQUESTED', 'Was asked to resume drafting a document'],
+    ['NEGOTIATION_JOB_SUBMITTED', 'Started a check for new offers'],
+    ['NEGOTIATION_JOB_RUNNING', 'Is checking for new offers'],
+    ['NEGOTIATION_JOB_DELIVERED', 'Checked for new offers and kept Negotiation Details current'],
+    ['NEGOTIATION_JOB_FAILED', 'Could not finish a check for new offers'],
+    ['NEGOTIATION_JOB_RESUME_REQUESTED', 'Was asked to resume a check for new offers'],
   ]
 
   for (const [action, copy] of outcomes) {

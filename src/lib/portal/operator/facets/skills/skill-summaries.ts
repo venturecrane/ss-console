@@ -100,6 +100,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     "Keeps each matter's motion calendar current from Smokeball. Reads and organizes, never computes a deadline or files a motion.",
   'motion-package-assembler':
     'Assembles and stages a law-and-motion filing package from components already drafted in the matter. Never drafts the motion, never reserves a hearing date.',
+  'negotiation-watch':
+    "Keeps each open matter's Negotiation Details current from new offer letters and emails, and emails the person your firm named once per new offer.",
   'new-matter-intake':
     'Turns a new-client inquiry into a structured matter draft and a non-committal acknowledgment, after a read-only conflict check.',
   'open-house-visitor-capture':

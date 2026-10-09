@@ -771,6 +771,37 @@ personas:
           # The firm's Operator Library matter, the same rehearsal target the
           # demand lane authors; the broker checks this id and that number.
           rehearsal_matter_id: '1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23'
+      # ---- the negotiation watch: ENABLED 2026-10-09 (negotiation-watch) ----
+      # LANE ACTIVATION RECORD. On 2026-10-09 the Operator filled the
+      # Negotiation Details tab on the firm's open matters from every offer
+      # letter and email in the files (letter 348). The firm's enable act, in
+      # writing: Christa Barrera, 2026-10-09, offers made thread: "YES, keep up
+      # to date going forward. Send emails automatically to me when new offer
+      # is received." The weekday cron row below is that ask.
+      # The skill NEVER reads a matter in a turn. The cron's pre_run submits a
+      # negotiation job (operator/workspace_broker/negotiation_verbs.py); the
+      # job on the Machine reads the offer documents newly saved to open
+      # matters, enters them on Negotiation Details (add-only, read back, never
+      # a tab the firm keeps itself), and records one notice per new offer;
+      # each notice's wake sends ONE email to the first scheduled_recipients
+      # entry. monthly_budget_usd is a RUNAWAY GUARD, not a delivery limit.
+      - name: negotiation-watch # weekday: new offers to Negotiation Details, one email per offer; never read in a turn
+        version: pending
+        initiation:
+          manual: false
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          # Comma-separated (settings are scalars, ADR 0075); the first entry
+          # gets every offer email and must be in scope.admins.
+          scheduled_recipients: 'christa@ashtonandprice.com'
+          monthly_budget_usd: 25
+          per_job_cap_usd: 10
+          matter_statuses: 'Open'
+          # Words that mark a counter-offer as the firm's own (the reader's
+          # "by" field names the firm), beside the plaintiffs' names.
+          firm_words: 'ashton,price'
     # Every entry is pre_run-gated (ADR 0021 Stream B, #1748). The escalator's
     # bespoke pre_run decides whether a deadline needs the ladder; the other
     # skills carry the shared empty-seat gate (operator/templates/pre_run_gate.py):
@@ -804,6 +835,15 @@ personas:
       # cases with a statute date in the next three months and nothing filed.
       - skill: statute-watch
         schedule: '7 12 1 * *' # monthly, the 1st at 1207 seat-local (midday so the report ships in its finished form)
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      # Christa Barrera, 2026-10-09, offers made thread: "YES, keep up to date
+      # going forward. Send emails automatically to me when new offer is
+      # received." Three weekday runs; the pre_run submits one negotiation job
+      # per slot (Pacific date and hour) and wakes no turn; each new offer's
+      # email goes out when the job enters it.
+      - skill: negotiation-watch
+        schedule: '7 8,12,16 * * 1-5' # weekdays 0807, 1207 and 1607 seat-local
         pre_run: pre_run.py
         wake_policy: pre_run_decides
     # - skill: deadline-miss-escalator
