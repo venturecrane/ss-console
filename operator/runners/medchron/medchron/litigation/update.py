@@ -108,7 +108,15 @@ def screen_plan(p: dict[str, Any], texts: dict[str, str], firm: Any) -> dict[str
         return p
     kept, groups = [], set(p["read_groups"])
     for fid in p.get("unscreened") or []:
-        hits = email_hits(texts.get(fid, ""), firm)
+        text = texts.get(fid)
+        if not (text or "").strip():
+            # Could not read it is not "nothing in it": an email whose text
+            # was not extracted is read, never screened out (2026-10-09
+            # replay: a "hearing set for 10/21" email was dropped unread).
+            kept.append(fid)
+            groups |= set(vocab.GROUPS)
+            continue
+        hits = email_hits(text, firm)
         if hits:
             kept.append(fid)
             groups |= {g for h in hits for g in _EMAIL_GROUPS[h]}
@@ -207,8 +215,34 @@ def _guard_defendants(
     out["defendants"] = kept
 
 
+_SET_KINDS = (
+    ("form_interrogatories", re.compile(r"(?i)form interrogator|\bfrogs?\b")),
+    ("special_interrogatories", re.compile(r"(?i)special interrogator|\bsprogs?\b|\bsrogs?\b")),
+    ("production", re.compile(r"(?i)production|inspection|\brfps?\b|\brpds?\b")),
+    ("admission", re.compile(r"(?i)admission|\brfas?\b")),
+    ("deposition", re.compile(r"(?i)deposition|\bdepo\b")),
+    ("subpoena", re.compile(r"(?i)subpoena")),
+)
+_NUMBERS = {"one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6"}
+
+
+def set_identity(name: str) -> str:
+    """One discovery set however a read words it: its kind and set number.
+    "Form Interrogatories - General, Set One" and "Form Interrogatories, Set 1"
+    are one set; a re-worded name must never become a second row beside the
+    first (2026-10-09 replay)."""
+    kind = next((k for k, rx in _SET_KINDS if rx.search(name or "")), re.sub(r"\W+", " ", (name or "").lower()).strip())
+    m = re.search(r"(?i)\bset\s+(\w+)", name or "")
+    num = _NUMBERS.get(m.group(1).lower(), m.group(1)) if m else ""
+    return f"{kind}#{num}"
+
+
+_ROLE_WORDS = re.compile(r"(?i)\b(defendants?|plaintiffs?|cross-?(?:defendants?|complainants?)|respondents?)\b")
+
+
 def _row_key(kind: str, r: dict[str, Any]) -> str:
-    return f"{kind}[{r.get('set')}|{r.get('served_on') or r.get('served_by')}]"
+    party = parity.party_key(_ROLE_WORDS.sub(" ", str(r.get("served_on") or r.get("served_by") or "")))
+    return f"{kind}[{set_identity(str(r.get('set') or ''))}|{party}]"
 
 
 def _guard_discovery(
@@ -230,6 +264,10 @@ def _guard_discovery(
                 continue
             seen.add(key)
             r = copy.deepcopy(r)
+            # The row keeps the wording already on the list; a read's re-wording is not a change.
+            for f in ("set", "served_on", "served_by"):
+                if f in old:
+                    r[f] = old[f]
             if not _same(old, r, "date"):
                 if _carried(r, trigger, texts):
                     log["changed"].append(key + ".date")

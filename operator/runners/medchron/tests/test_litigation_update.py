@@ -146,6 +146,40 @@ def test_a_court_form_date_printed_in_spaced_characters_is_carried():
     assert not gates.text_carries(text, "2027-01-26")  # every digit still has to match
 
 
+def test_an_email_whose_text_could_not_be_read_is_read_not_screened_out():
+    s = update.screen_plan(update.plan_changed([], ["e1"], {}), {}, FIRM)
+    assert s["trigger_files"] == ["e1"] and s["read_groups"] == list(vocab.GROUPS)
+
+
+def test_a_reworded_discovery_set_is_the_same_row_not_a_second_one():
+    fresh = copy.deepcopy(PRIOR)
+    fresh["discovery_propounded"] = [
+        {
+            "set": "Form Interrogatories - General, Set 1",
+            "served_on": "Defendant Zeta Corp",
+            "date": "2026-05-01",
+            "source": _src("old-frog"),
+        }
+    ]
+    out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS)
+    assert out["discovery_propounded"] == PRIOR["discovery_propounded"]  # one row, the list's own wording
+    assert log == {"changed": [], "reverted": []}
+
+
+def test_a_settlement_paper_starts_a_case_status_update(tmp_path):
+    from medchron.litigation.firm import load
+    from litigation_testkit import make_inputs
+
+    firm = load(make_inputs(tmp_path / "in"))
+    base = [{"id": "c", "name": "Complaint", "ext": ".pdf", "modified": "2026-03-01", "created": "2026-03-01"}]
+    prior = {**copy.deepcopy(PRIOR), "fields_read": ALL}
+    stip = base + [
+        {"id": "s", "name": "Notice of settlement", "ext": ".pdf", "modified": "2026-10-01", "created": "2026-10-01"}
+    ]
+    p = manifest.plan_matter(stip, prior, manifest.current_manifest(base), firm, dt.date(2026, 10, 2))
+    assert p["trigger_files"] == ["s"] and vocab.GROUP_CASE in p["read_groups"]
+
+
 def test_screen_with_nothing_kept_reads_nothing():
     s = update.screen_plan(update.plan_changed([], ["e1"], {}), {"e1": "lunch"}, FIRM)
     assert s["read_groups"] == [] and s["audit"] == "none" and s["candidates"] == []

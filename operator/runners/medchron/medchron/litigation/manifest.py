@@ -36,7 +36,7 @@ DATA_ENV = "MEDCHRON_DATA_DIR"
 DEFAULT_DATA_DIR = "/opt/data/medchron"
 EMAIL_EXTS = (".msg", ".eml")
 #: Per-matter fetch caps (``fetch_caps`` in the firm config overrides any).
-FETCH_CAPS = {"court": 120, "server": 15, "discovery": 30, "email": 25, "total": 180}
+FETCH_CAPS = {"court": 120, "server": 15, "discovery": 30, "email": 25, "settlement": 10, "total": 180}
 
 
 def state_dir(explicit: str | Path | None = None) -> Path:
@@ -145,7 +145,12 @@ def classify(f: dict[str, Any], firm: LitigationFirm, today: dt.date) -> str | N
         return "court"
     if server:
         return "server"
-    return "discovery" if disc else None
+    if disc:
+        return "discovery"
+    # A settlement paper (a stipulation, a release, a disbursement statement)
+    # moves the case status; 2026-10-09 replay: three such PDFs started
+    # nothing because only email names were matched against settlement words.
+    return "settlement" if any(p.search(name) for p in firm.settlement_rx) else None
 
 
 def _recent_iso(f: dict[str, Any], today: dt.date, days: int = 45) -> bool:
@@ -238,6 +243,7 @@ def select(files: list[dict[str, Any]], firm: LitigationFirm, today: dt.date) ->
     take(_newest_first(by.get("server", [])), "server", caps["server"])
     take(_newest_first(by.get("discovery", [])), "discovery", caps["discovery"])
     take(_newest_first(by.get("email", [])), "email", caps["email"])
+    take(_newest_first(by.get("settlement", [])), "settlement", caps.get("settlement", 10))
     return out
 
 
@@ -256,6 +262,7 @@ CLASS_GROUPS = {
     "discovery": (vocab.GROUP_DISCOVERY,),
     "email": (vocab.GROUP_CASE, vocab.GROUP_DEFENDANTS, vocab.GROUP_DISCOVERY),
     "newest_email": (vocab.GROUP_CASE,),
+    "settlement": (vocab.GROUP_CASE,),
 }
 
 
