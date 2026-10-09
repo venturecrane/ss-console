@@ -229,7 +229,7 @@ def queue_record(env: dict[str, Any], job_id: str) -> dict[str, Any]:
 #: The delivery report's lists the DELIVER turn names. The runner may send each
 #: inside ``delivery`` or as a top-level field of the record; either lands in
 #: the stored delivery, so the projection has one place to read them from.
-REPORT_LISTS = ("markers", "caption_discrepancies")
+REPORT_LISTS = ("markers", "caption_discrepancies", "caption_corrections")
 
 
 def incoming_delivery(fields: dict[str, Any]) -> dict[str, Any] | None:

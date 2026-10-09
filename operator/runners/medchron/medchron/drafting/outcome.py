@@ -34,6 +34,7 @@ REASON_CODES = (
     "no_verdict",
     "unexpected",
     "config_missing",
+    "caption_restore_incomplete",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 
@@ -68,6 +69,10 @@ class Verdict:
     folder_id: str | None = None
     files: list[dict[str, Any]] = field(default_factory=list)
     caption_discrepancies: list[dict[str, str]] = field(default_factory=list)
+    #: Matter-record fields the job corrected from the court's own paper.
+    caption_corrections: list[dict[str, str]] = field(default_factory=list)
+    #: A correction that could not be fully put back: SMD's alarm.
+    caption_restore_incomplete: list[str] = field(default_factory=list)
     markers: list[dict[str, str]] = field(default_factory=list)
 
     def to_list(self) -> list[dict[str, Any]]:

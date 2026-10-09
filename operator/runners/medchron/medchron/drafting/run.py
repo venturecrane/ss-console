@@ -4,7 +4,7 @@ The graph, per class::
 
     facts -> destination -> pull (privilege wall) -> preflight -> estimate
       -> transcribe -> digest (cited)
-      -> [mediation brief: howell table] -> [court classes: caption + record diff]
+      -> [mediation brief: howell table] -> [court classes: caption read, record diff + corrections]
       -> compose -> audit -> repair -> reaudit -> final pass -> gate
       -> attach / reserve -> render -> format check -> file -> manifest
 
@@ -49,7 +49,17 @@ from ..demand import deliver, facts as facts_mod, finalpass, preflight, pull, qu
 from ..demand.firm import DemandFirm
 from ..ledger import Ledger
 from ..llm import Doorway
-from . import caption as caption_mod, compose, firm as firm_mod, format_check, gate, howell, job as job_mod, render
+from . import (
+    caption as caption_mod,
+    caption_stage,
+    compose,
+    firm as firm_mod,
+    format_check,
+    gate,
+    howell,
+    job as job_mod,
+    render,
+)
 from . import notes as notes_mod
 from .outcome import REASON, WALL_SENTENCE, DraftingFailed, DraftingHold, Verdict, markers
 
@@ -323,27 +333,20 @@ class DraftingRun:
         self._write("howell.json", {"table": table, "notes": notes})
 
     def _caption(self) -> None:
-        doc = caption_mod.source_document(self.data)
-        fields = caption_mod.extract(doc, self.firm.firm_domains) if doc else {}
         try:
-            record = caption_mod.read_record(self.seat, self.job.matter_id, self._json("facts.json"))
+            out = caption_stage.run(
+                self.data,
+                self.doorway,
+                self.firm,
+                self.seat,
+                self.job.matter_id,
+                self._json("facts.json"),
+                self.job.requester,
+                self.log,
+            )
         except caption_mod.RecordUnreadable as exc:
             raise DraftingFailed(f"record_unreadable: the matter record's caption fields: {exc}") from None
-        name = str(doc.get("name")) if doc else None
-        diffs, compared = caption_mod.compare(fields, record, name or "") if doc else ([], [])
-        why = (
-            ""
-            if compared
-            else (
-                "no court document in the file carries a caption"
-                if not doc
-                else "neither the court's paper nor the matter record carries a comparable field"
-            )
-        )
-        self._write(
-            "caption.json",
-            {"source": name, "fields": fields, "discrepancies": diffs, "compared": compared, "none_because": why},
-        )
+        self._write("caption.json", out)
 
     def _context(self) -> list[str]:
         f = self._json("facts.json")
@@ -362,8 +365,7 @@ class DraftingRun:
             + "\n".join(f"- {r}" for r in rec)
         ]
         if (self.data / "caption.json").is_file():
-            c = self._json("caption.json")
-            out.append(caption_mod.block(c["fields"], c["source"]))
+            out += caption_stage.context(self._json("caption.json"))
         table = self._json("howell.json")["table"] if (self.data / "howell.json").is_file() else []
         if table:
             out.append(
@@ -567,7 +569,15 @@ class DraftingRun:
         v.document_class = self.cls
         v.dollars = round(self.budget.refresh(), 4)
         if (self.data / "caption.json").is_file():
-            v.caption_discrepancies = self._json("caption.json")["discrepancies"]
+            cap = self._json("caption.json")
+            v.caption_discrepancies = cap["discrepancies"]
+            v.caption_corrections = list(cap.get("corrections") or [])
+            v.caption_restore_incomplete = list(cap.get("restore_incomplete") or [])
+            if v.caption_restore_incomplete and v.outcome != "held":
+                # SMD's alarm: a delivered reply never relays the reason; a held
+                # one does, so a held job carries it in its own field only.
+                lost = "caption_restore_incomplete: " + "; ".join(v.caption_restore_incomplete)
+                v.reason = f"{lost} | {v.reason}" if v.reason else lost
         v.markers = list(self._state().get("render", {}).get("markers") or [])
         if (self.data / "preflight.json").is_file():
             e = self._json("preflight.json")

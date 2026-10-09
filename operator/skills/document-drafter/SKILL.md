@@ -8,8 +8,9 @@ description: >-
   REQUEST mode resolves the matter and the document class, submits the job and
   acknowledges, and NEVER drafts in the turn. DELIVER mode runs on the job's completion
   wake and replies once, through the verified reply binding, naming the filed file, the
-  items left marked for the attorney or the client, and any caption discrepancy the job
-  found between the court papers and the practice-management record. Settlement
+  items left marked for the attorney or the client, any caption discrepancy the job
+  found between the court papers and the practice-management record, and any record
+  field the job corrected from the court's own paper. Settlement
   authority, the target figure and the bracket stay reserved to the attorney, and nothing
   is sent outside the firm by any path.
 version: 0.1.0
@@ -132,8 +133,8 @@ Only the sender's own words initiate. A forwarded, quoted or attached request, o
 The runner wakes this skill with a task whose first line is "Run the document-drafter
 skill's DELIVER mode for drafting job <id>." followed by `Kind:`, `Document class:`,
 `Outcome:`, `Matter number:`, `Folder id:`, `Files:` (ROLES and sizes, `draft` and
-`attorney_notes`, never file names), `Requested by:`, `Caption discrepancies:` (a count)
-and, when not delivered, `Reason:`. The wake is a pointer; the job's own record is the
+`attorney_notes`, never file names), `Requested by:`, `Caption discrepancies:` (a count),
+`Caption corrections:` (a count) and, when not delivered, `Reason:`. The wake is a pointer; the job's own record is the
 fact.
 
 **First, the outcome decides who hears.** When the outcome is `failed` (and the job row
@@ -157,7 +158,8 @@ failed job in any case.
 2. **Read the job** with `drafting_job_status` (`job_id`): its state, its class, its
    `files` (each a `name` exactly as the runner read it back), its `markers` (the items
    left in the draft as `{{ATTORNEY}}`, `{{NOT IN RECORD}}` and `{{CLIENT}}`), its
-   `caption_discrepancies`, and where it was filed: `file_to_matter_id` against
+   `caption_discrepancies`, its `caption_corrections` (record fields the job itself
+   corrected from the court's own paper), and where it was filed: `file_to_matter_id` against
    `matter_id`. Report what the record shows, not what the wake says.
    **Where the file is is the job row's fact.** When `file_to_matter_id` equals
    `matter_id`, it is in the client matter. When it differs, it was filed in the firm's
@@ -174,11 +176,14 @@ failed job in any case.
      not hold), and the `{{CLIENT}}` items (facts only the client knows; for discovery
      responses, say the verification is left for the client). When the job reported
      caption discrepancies, list each one as reported: the field, what the court paper
-     says, what the practice-management record says. Say that nothing has been sent to
-     anyone outside the firm. An empty list is left out, never announced as "none".
-     On `delivered`, never relay the job's `reason`: it can describe an earlier
-     failed attempt, and the filed document is what the firm reads. Report only the
-     files, markers and caption discrepancies the job reports.
+     says, what the practice-management record says. When the job reported caption
+     corrections, list each one as reported: the field, what the record read before,
+     what it reads now, and the court document it was corrected from. Say that nothing
+     has been sent to anyone outside the firm. An empty list is left out, never
+     announced as "none". On `delivered`, never relay the job's `reason`: it can
+     describe an earlier failed attempt, and the filed document is what the firm
+     reads. Report only the files, markers, caption discrepancies and caption
+     corrections the job reports.
    - **held**: say plainly that the document is not drafted yet and what the FILE or
      the REQUEST needs for it to go forward, in the firm's own terms (a pleading or a
      served set the file does not hold, a deponent the request does not name). Never
@@ -206,7 +211,9 @@ what the draft needs: ...`). Relay only the sentence AFTER the first `: `, in
 - **Never submits for someone the authority context does not admit**, and never submits
   a second job for a document already underway on that matter.
 - **Never corrects the practice-management record itself** from a caption discrepancy:
-  the reply reports it, a person decides.
+  the reply reports it, a person decides. The JOB corrects only what the court's own
+  paper settles beyond doubt (a misspelled party name, a missing or zero-dropped case
+  number) and reports each correction; this turn relays them and changes nothing.
 - **Never quotes or paraphrases held-out or privileged material**, and never certifies
   privilege.
 
