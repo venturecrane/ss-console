@@ -138,7 +138,7 @@ def screen_plan(p: dict[str, Any], texts: dict[str, str], firm: Any) -> dict[str
             kept.append(fid)
             groups |= set(vocab.GROUPS)
             continue
-        hits = email_hits(text, firm)
+        hits = email_hits(text or "", firm)
         if hits:
             kept.append(fid)
             groups |= {g for h in hits for g in _EMAIL_GROUPS[h]}
