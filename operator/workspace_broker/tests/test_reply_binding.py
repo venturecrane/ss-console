@@ -835,3 +835,90 @@ def test_a_failed_litigation_job_is_never_told(tmp_path: Path, trigger: str) -> 
     with pytest.raises(BindingRefused):
         _send(_broker(tmp_path, box, LIT_YAML), {"kind": "litigation_job", "job_id": job})
     assert box.replies() == [] and _sendmails(box) == []
+
+
+# -- negotiation notices (2026-10-09). The negotiation watch emails the firm once
+# per new offer: each notice binds as ONE new email to the authored scheduled
+# recipient under the broker's subject; the job itself never binds.
+
+NEG_YAML = YAML + (
+    "personas:\n"
+    "  - slug: operator\n"
+    "    skills:\n"
+    "      - name: negotiation-watch\n"
+    "        enabled: true\n"
+    "        initiation: {manual: false, scheduled: true, webhook: false}\n"
+    "        settings:\n"
+    f"          scheduled_recipients: '{ADMIN}'\n"
+    "          monthly_budget_usd: 25\n"
+)
+
+
+def _negotiation_notice(tmp_path: Path, state: str = "delivered") -> tuple[str, str]:
+    from workspace_broker.negotiation_ledger import NegotiationLedger
+
+    ledger = NegotiationLedger(str(tmp_path / "audit.db"), tmp_path / "nq")
+    job = ledger.submit(
+        {
+            "trigger": "scheduled",
+            "requester": ADMIN,
+            "message_ref": "scheduled:2026-10-12T08",
+            "request_text": "scheduled weekday negotiation watch run",
+            "matter_statuses": ["Open"],
+            "negotiation_design": "",
+            "firm_words": [],
+            "seed_saved_before": "",
+            "per_job_cap_usd": 10,
+            "monthly_budget_usd": 25,
+        }
+    )
+    ledger.record(job, "running", {})
+    notice = {"matter_id": "m-1", "matter_number": "200123", "status": "entered", "text": "New offer on matter 200123."}
+    row = ledger.record(job, state, {"notices": [notice]} if state == "delivered" else {})
+    return job, (row["notice_ids"] or [""])[0]
+
+
+def test_a_negotiation_notice_sends_one_new_email_under_the_brokers_subject(tmp_path: Path) -> None:
+    from workspace_broker.negotiation_ledger import NegotiationLedger
+
+    _job_id, notice = _negotiation_notice(tmp_path)
+    box = FakeMailbox()
+    broker = _broker(tmp_path, box, NEG_YAML)
+    bound = _call(broker, "msgraph_reply_bind", {"kind": "negotiation_job", "job_id": notice})
+    assert bound["bound"] is True and bound["mode"] == "new_message"
+    assert bound["sender"] == ADMIN and bound["subject"] == "New offer, matter 200123"
+    _call(
+        broker,
+        "msgraph_reply_bound",
+        {"kind": "negotiation_job", "job_id": notice},
+        payload={"comment": "New offer on matter 200123.", "to": [STRANGER], "subject": "x"},
+        session_id="sess-1",
+    )
+    assert len(_sendmails(box)) == 1 and box.replies() == []
+    assert NegotiationLedger(broker.audit_db_path, tmp_path / "nq").read(notice)["reply_key"] == "1:delivered"
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box, NEG_YAML), {"kind": "negotiation_job", "job_id": notice})
+    assert len(_sendmails(box)) == 1
+
+
+def test_a_negotiation_job_itself_never_binds(tmp_path: Path) -> None:
+    job, _notice = _negotiation_notice(tmp_path)
+    broker = _broker(tmp_path, FakeMailbox(), NEG_YAML)
+    out = _call(broker, "msgraph_reply_bind", {"kind": "negotiation_job", "job_id": job})
+    assert out["bound"] is False and "announced by its notices" in out["reason"]
+
+
+def test_a_failed_negotiation_job_is_never_told(tmp_path: Path) -> None:
+    job, _ = _negotiation_notice(tmp_path, state="failed")
+    broker = _broker(tmp_path, FakeMailbox(), NEG_YAML)
+    out = _call(broker, "msgraph_reply_bind", {"kind": "negotiation_job", "job_id": job})
+    assert out["bound"] is False and "failed on SMD's side" in out["reason"]
+
+
+def test_a_notice_whose_recipient_is_no_longer_authored_sends_nothing(tmp_path: Path) -> None:
+    _job_id, notice = _negotiation_notice(tmp_path)
+    box = FakeMailbox()
+    other = NEG_YAML.replace(f"scheduled_recipients: '{ADMIN}'", "scheduled_recipients: 'other@firm.example'")
+    out = _call(_broker(tmp_path, box, other), "msgraph_reply_bind", {"kind": "negotiation_job", "job_id": notice})
+    assert out["bound"] is False and "nothing was sent" in out["reason"]
+    assert _sendmails(box) == []

@@ -507,6 +507,31 @@
       "producerFile": "operator/workspace_broker/litigation_verbs.py",
       "reason": "A person asked the runner to resume a failed litigation job (litigation_job_resume, root only), with a reason."
     },
+    "NEGOTIATION_JOB_SUBMITTED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/negotiation_verbs.py",
+      "reason": "The negotiation watch. The workspace broker appends one row when the weekday cron's pre_run queues a scheduled run through negotiation_job_submit: job id, trigger, recipient, the slot ref; never a matter fact."
+    },
+    "NEGOTIATION_JOB_RUNNING": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/negotiation_verbs.py",
+      "reason": "The runner daemon reported a negotiation job running (negotiation_job_record)."
+    },
+    "NEGOTIATION_JOB_DELIVERED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/negotiation_verbs.py",
+      "reason": "The runner daemon reported a negotiation run finished (negotiation_job_record): cents and counts, never a matter fact."
+    },
+    "NEGOTIATION_JOB_FAILED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/negotiation_verbs.py",
+      "reason": "The runner daemon reported a negotiation run failed on SMD's machinery (negotiation_job_record)."
+    },
+    "NEGOTIATION_JOB_RESUME_REQUESTED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/negotiation_verbs.py",
+      "reason": "A person asked the runner to resume a failed negotiation job (negotiation_job_resume, root only), with a reason."
+    },
     "ACT_PROPOSED": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/establishment_constants.py",

@@ -707,3 +707,20 @@ def test_a_requested_litigation_reply_anchors_on_its_job_id(tmp_path: Path) -> N
     assert _reply(broker, "REQ", anchor=anchor)["ok"] is True
     box.posts.clear()
     _refused(broker, box, lambda: _send(broker, [BRUNO], anchor=anchor))
+
+
+def test_a_skills_scheduled_recipients_are_its_lane(tmp_path: Path) -> None:
+    """The negotiation watch's offer emails go to the skill's authored
+    scheduled_recipients (a comma-separated scalar). FALSIFIER: read only
+    settings.recipient and the notice's new message is refused at the fence."""
+    p = tmp_path / "customer.yaml"
+    p.write_text(
+        "personas:\n"
+        "  - skills:\n"
+        "      - name: negotiation-watch\n"
+        "        enabled: true\n"
+        "        settings:\n"
+        "          scheduled_recipients: 'Office@Firm.example, second@firm.example'\n"
+    )
+    lanes = pf.seat_facts(p).lanes
+    assert lanes["skill:negotiation-watch"] == frozenset({"office@firm.example", "second@firm.example"})

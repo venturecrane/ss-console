@@ -36,13 +36,17 @@
 # firm's authored house style; never drafted in a turn. A seat lists it, with
 # its enabled classes, deliberately; omission is refusal.
 
-# v0.5.0 (2026-10-07): adds litigation-status, the QUEUED litigation status
-# lane. An administrator asks for the firm's litigation status list (or the
-# seat's weekday cron row, shipped commented out, asks for it) and the request
-# is a job on the Machine (operator/workspace_broker/litigation_verbs.py) that
-# reads the court papers of every open litigation matter and files one status
-# workbook, each value citing its document, in the firm's own library matter;
-# never read in a turn. A seat lists it, with its filing target, deliberately.
+# v0.5.0 (2026-10-07 and 2026-10-09): adds two queued lanes, each a job on the
+# Machine and never read in a turn. litigation-status: an administrator asks
+# for the firm's litigation status list (or the seat's weekday cron row, shipped
+# commented out, asks for it); the job (operator/workspace_broker/litigation_verbs.py)
+# reads the court papers of the open litigation matters and files one status
+# workbook, each value citing its document, in the firm's own library matter.
+# negotiation-watch: the seat's weekday cron rows submit a job
+# (operator/workspace_broker/negotiation_verbs.py) that enters the offers newly
+# saved to open matters on each matter's Negotiation Details tab (add-only, read
+# back) and emails the firm's authored scheduled recipient once per new offer.
+# A seat lists each deliberately, with its filing target or recipient.
 
 name: pi
 version: 0.5.0
@@ -68,7 +72,7 @@ personas: []
 
 # Twenty-six PI skills (bodies in operator/skills/): the nineteen lifecycle
 # skills of v0.2.0, the five drafting-lane skills (four in-turn of v0.3.0 and
-# the queued document-drafter of v0.4.0), the queued litigation-status of
+# the queued document-drafter of v0.4.0), the queued litigation-status and the scheduled negotiation-watch of
 # v0.5.0, and one firm-operations skill.
 skills:
   # discovery (deepest — the firm's named slip area)
@@ -109,6 +113,9 @@ skills:
   # the queued litigation status lane (v0.5.0, admin-initiated or the weekday
   # cron, a job on the Machine; the workbook files in the firm library)
   - litigation-status
+  # the scheduled negotiation watch (v0.5.0, the firm's weekday cron, a job on
+  # the Machine; new offers to Negotiation Details, one email per offer)
+  - negotiation-watch
   # firm operations: vendor bills forwarded by the firm's own staff, staged as
   # UNFINALIZED expenses (never finalized, never trust, never a payment).
   # Rehearsed on pilot-smokeball first; not bound on any client seat yet.

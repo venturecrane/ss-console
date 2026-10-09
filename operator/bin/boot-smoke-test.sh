@@ -787,6 +787,12 @@ budget = (mb - 512) * 1024 * 1024
 total = sum(caps.values())
 sys.exit(0 if total <= budget else f\"lane memory caps {caps} sum {total} > machine {mb} MiB minus 512 MiB gateway reserve\")
 '"
+# The negotiation watch (2026-10-09): its own daemon thread, the same checks,
+# and its state dir (file cursors: the child's alone, 0700).
+ssh_exec "negotiation-lane-ticking" "t=/run/smd-medchron/negotiation-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
+ssh_exec "negotiation-queue-root-owned" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/negotiation-queue)\" = root:workspace-broker:770 ]"
+ssh_exec "negotiation-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/negotiation-jobs)\" = root:medchron:710 ]"
+ssh_exec "negotiation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/negotiation/state)\" = medchron:medchron:700 ]"
 
 # The firm config is authored per-seat in the PRIVATE engagements repo, and
 # provision-customer.sh step 2b reads the SAME path and continues without it

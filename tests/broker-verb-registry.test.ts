@@ -145,6 +145,13 @@ const EXPECTED_VERBS = [
   'msgraph_reply_bind',
   'msgraph_reply_bound',
   'msgraph_send',
+  // The negotiation watch's request edge (negotiation_verbs.py): submit is the
+  // cron pre_run's agent uid or root (scheduled only, never a turn); status
+  // serves a notice's message; record and resume root only.
+  'negotiation_job_record',
+  'negotiation_job_resume',
+  'negotiation_job_status',
+  'negotiation_job_submit',
   'ops_ask_sent',
   'ops_propose',
   'ops_resolve',

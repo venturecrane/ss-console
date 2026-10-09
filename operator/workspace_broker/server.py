@@ -37,6 +37,7 @@ from .job_ledger import JobLedgerWriter
 from .demand_verbs import DemandVerbs
 from .drafting_verbs import DraftingVerbs
 from .litigation_verbs import LitigationVerbs
+from .negotiation_verbs import NegotiationVerbs
 from .medchron_verbs import MedchronVerbs
 from .msgraph_auth import materialize_credential as materialize_msgraph_credential
 from .msgraph_auth import materialize_read_credential as materialize_msgraph_read_credential
@@ -141,6 +142,8 @@ class Broker:
     drafting: DraftingVerbs | None = None
     # The litigation status job's request edge (litigation_verbs.py), same posture.
     litigation: LitigationVerbs | None = None
+    # The negotiation watch's request edge (negotiation_verbs.py), same posture.
+    negotiation: NegotiationVerbs | None = None
     msgraph: MsGraphOps | None = None
 
     def __init__(self) -> None:
@@ -237,6 +240,11 @@ class Broker:
         # monthly budget read from SMD_LITIGATION_FIRM_CONFIG.
         self.litigation = LitigationVerbs.build(
             self, audit_db_path=audit_db_path, queue_dir=os.environ.get("SMD_LITIGATION_QUEUE_DIR")
+        )
+        # The negotiation watch (new offers to Negotiation Details, one email
+        # each): its own tables on the same DB file, its own queue dir.
+        self.negotiation = NegotiationVerbs.build(
+            self, audit_db_path=audit_db_path, queue_dir=os.environ.get("SMD_NEGOTIATION_QUEUE_DIR")
         )
         # ss#2258: AgentMail transmit moves behind this uid boundary. The gateway
         # keeps an inbox-scoped key with message_send/draft_send WITHHELD, so the

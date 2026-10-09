@@ -242,6 +242,17 @@ skills:
       body_without_attachment rung between the full body and the skeleton.
       Stamps: body_sha256 entries on EMITTED_WAKE (full, skeleton, and
       without_attachment when the workbook rides).
+  negotiation-watch:
+    render: compositional
+    note: >-
+      The cron's pre_run submits a negotiation job and wakes no turn; the job
+      enters new offers on Negotiation Details and composes, IN CODE
+      (runners/medchron/medchron/negotiation/notice.py), one message per new
+      offer, held on the broker's notice row. Each notice's completion wake
+      binds one new email (recipient and subject the broker's) and the turn
+      sends the notice's message word for word. Declared compositional because
+      the send is the woken turn's, not a pre_run dispatch, so the body-hash
+      stamps do not apply; the cross-run invariants (one recipient) do.
 
   # ---- scott seat cron rows ----
   status-report-assembler:
