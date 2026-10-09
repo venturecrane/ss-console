@@ -19,73 +19,15 @@ and every file on each. $0, read-only.
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
 from typing import Any, Callable
 
 from .firm import LitigationFirm
 from .progress import Progress
 
-PAGE = 500
-MAX_ROWS = 50_000
-LIST_PAUSE_SECONDS = 0.3
-
-
-class InventoryError(RuntimeError):
-    pass
-
-
-def _listing(payload: Any) -> list[Any] | None:
-    if isinstance(payload, list):
-        return payload
-    if isinstance(payload, dict):
-        for key in ("value", "items", "results", "data"):
-            if isinstance(payload.get(key), list):
-                return payload[key]
-    return None
-
-
-def paged(get: Callable[..., Any], path: str, pause: float = LIST_PAUSE_SECONDS, **params: Any) -> list[Any]:
-    rows: list[Any] = []
-    offset = 0
-    while True:
-        page = _listing(get(path, Limit=PAGE, Offset=offset, **params))
-        if page is None:
-            raise InventoryError(f"{path}: the listing did not parse; no partial list is used")
-        rows.extend(page)
-        if len(page) < PAGE:
-            return rows
-        offset += PAGE
-        if offset > MAX_ROWS:
-            raise InventoryError(f"{path}: the listing did not end")
-        if pause:
-            time.sleep(pause)
-
-
-def _getter(seat: Any) -> Callable[..., Any]:
-    client = getattr(seat, "client", None)
-    if client is None or not hasattr(client, "get"):
-        raise InventoryError("this seat backend cannot list matters; the litigation job runs on the Machine")
-    return client.get
-
-
-def open_matters(seat: Any, statuses: list[str]) -> list[dict[str, Any]]:
-    get = _getter(seat)
-    out: dict[str, dict[str, Any]] = {}
-    for status in statuses:
-        for row in paged(get, "/matters", Status=status, IsLead=False):
-            if not isinstance(row, dict) or not row.get("id") or row.get("isLead") is True:
-                continue
-            mid = str(row["id"])
-            out[mid] = {
-                "id": mid,
-                "number": str(row.get("number") or ""),
-                "title": str(row.get("title") or ""),
-                "staff_id": str(row.get("personResponsibleStaffId") or "").lower(),
-                "status": status,
-            }
-    return list(out.values())
-
+from ..arrivals import ArrivalsError as InventoryError
+from ..arrivals import getter as _getter
+from ..arrivals import open_matters, paged
 
 def staff_roster(seat: Any) -> dict[str, str]:
     """``{staff id: "First Last"}``. A roster that cannot be read raises: the
