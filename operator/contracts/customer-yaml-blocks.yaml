@@ -299,6 +299,21 @@ top_level:
       folder gets the letter at its root and the result says so; nothing
       creates a folder. Unauthored files at the root and says nothing; a
       malformed block is reported on the filing and the letter still files.
+  smokeball_layouts:
+    status: implemented
+    materializer: >-
+      no translate step by design, the vendor_invoice_intake shape: the
+      Smokeball connector reads the block directly off the seat's own
+      /var/lib/smd-config/customer.yaml at call time
+      (smokeball_connector/layout_config.py load_layout_config).
+    note: >-
+      `settlement_negotiations_design`: the base guid of the firm's
+      Negotiation Details layout design (the part before the matter-type
+      suffix). Smokeball's layout list carries no names and omits empty
+      fields, so a matter with no negotiation rows yet shows an item nothing
+      identifies; this guid is how get_matter_layouts labels it and
+      add_negotiation_rows finds it. Unauthored, both fall back to the keys a
+      filled tab carries; a malformed value is reported in the result.
   form_letters:
     status: implemented
     materializer: >-
