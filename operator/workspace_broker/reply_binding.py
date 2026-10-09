@@ -22,6 +22,14 @@ the recipient. So the broker, which the agent cannot steer, decides:
       per (job, ending), so a job that fails, is resumed and delivers can still
       say it delivered;
     - a drafting job: exactly the demand job's rules, on the drafting ledger;
+    - a negotiation notice (2026-10-09): the negotiation watch's one email per
+      new offer. A scheduled run has no request email, so this is the one
+      binding that sends ONE NEW email: to the notice's requester, who must
+      still be a Named Administrator and the first authored
+      ``scheduled_recipients`` of ``negotiation-watch`` (re-read at bind time
+      and at send time), under the subject ``negotiation_ledger.subject``
+      composes. Nobody names the recipient or the subject, the model least of
+      all. A negotiation JOB never binds: only its notices are announced;
     - a chronology job (2026-10-07): the same rules on the medchron ledger, one
       reply per (job, outcome). That ledger has no attempt counter, so a job
       held, resumed and held AGAIN gets no second hold reply: the requester
@@ -60,17 +68,32 @@ from .broker_context import BrokerContext
 from .demand_ledger import DemandLedger
 from .drafting_ledger import DraftingLedger
 from .medchron_ledger import MedchronLedger
+from .negotiation_ledger import NegotiationLedger
+from .negotiation_ledger import subject as negotiation_subject
 from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError
 from .recipient_policy import authored_policy, normalize_address, sender_key
 from .transmit_verbs import dispatch_transmit
 
-KINDS = ("demand_job", "drafting_job", "medchron_job", "message")
+KINDS = ("demand_job", "drafting_job", "medchron_job", "negotiation_job", "message")
 #: The job kinds: each binds on its own ledger with the same rules.
-JOB_KINDS = frozenset({"demand_job", "drafting_job", "medchron_job"})
+JOB_KINDS = frozenset({"demand_job", "drafting_job", "medchron_job", "negotiation_job"})
 #: The kinds whose ledger carries its own reply mark (``mark_replied``). The
 #: medchron ledger predates it; its once-only rests on the bound_replies claim.
-_LEDGER_MARKED_KINDS = frozenset({"demand_job", "drafting_job"})
-_NOUN = {"demand_job": "demand", "drafting_job": "drafting", "medchron_job": "chronology"}
+_LEDGER_MARKED_KINDS = frozenset({"demand_job", "drafting_job", "negotiation_job"})
+_NOUN = {
+    "demand_job": "demand",
+    "drafting_job": "drafting",
+    "medchron_job": "chronology",
+    "negotiation_job": "negotiation",
+}
+#: How a binding reaches its person: a reply in their thread, or (a scheduled
+#: run's notice only) one new email to them, whose recipient and subject are
+#: the broker's (the overlay's scheduled wake takes only this mode).
+MODE_REPLY = "reply"
+MODE_NEW_MESSAGE = "new_message"
+#: Each scheduled kind's authored lane (the skill whose scheduled_recipients it
+#: may reach).
+SCHEDULED_LANES = {"negotiation_job": "skill:negotiation-watch"}
 #: The outcomes a requester is told about, for EVERY job kind (demand and
 #: drafting alike; the name predates the drafting lane). NOT ``failed``: a
 #: failed job is resumable and SMD's to resolve (a live demand job, 2026-10-06,
@@ -99,6 +122,8 @@ class Verified:
     graph_message_id: str
     sender: str
     conversation_id: str
+    mode: str = MODE_REPLY
+    subject: str = ""
 
 
 def _ops(broker: BrokerContext) -> MsGraphOps:
@@ -122,27 +147,45 @@ def _drafting_ledger(broker: BrokerContext) -> DraftingLedger:
     return DraftingLedger(str(broker.audit_db_path), queue)
 
 
+def _negotiation_ledger(broker: BrokerContext) -> NegotiationLedger:
+    # Read here; the binding marks a notice replied, never writes the queue.
+    queue = os.environ.get("SMD_NEGOTIATION_QUEUE_DIR") or "/run/smd-medchron/negotiation-queue"
+    return NegotiationLedger(str(broker.audit_db_path), queue)
+
+
+def _negotiation_recipient_ok(broker: BrokerContext, requester: str) -> bool:
+    from .medchron_ledger import admins_from_customer_yaml
+    from .negotiation_intake import scheduled_recipients, settings_of, skill_entry
+
+    who = normalize_address(requester)
+    recipients = scheduled_recipients(settings_of(skill_entry(broker.customer_path)))
+    admins = admins_from_customer_yaml(str(broker.customer_path)) or ()
+    return bool(recipients) and recipients[0] == who and who in admins
+
+
 def _medchron_ledger(broker: BrokerContext) -> MedchronLedger:
     # Read-only here; the queue dir is never written on this path.
     queue = os.environ.get("SMD_MEDCHRON_QUEUE_DIR") or "/run/smd-medchron/queue"
     return MedchronLedger(str(broker.audit_db_path), queue)
 
 
-def job_ledger(broker: BrokerContext, kind: str) -> DemandLedger | DraftingLedger | MedchronLedger:
+def job_ledger(broker: BrokerContext, kind: str) -> Any:
     if kind == "medchron_job":
         return _medchron_ledger(broker)
     return _marking_ledger(broker, kind)
 
 
-def _marking_ledger(broker: BrokerContext, kind: str) -> DemandLedger | DraftingLedger:
+def _marking_ledger(broker: BrokerContext, kind: str) -> Any:
     """The ledger of a kind in ``_LEDGER_MARKED_KINDS`` (it carries mark_replied)."""
+    if kind == "negotiation_job":
+        return _negotiation_ledger(broker)
     return _drafting_ledger(broker) if kind == "drafting_job" else _demand_ledger(broker)
 
 
 def _parse(raw: Any) -> tuple[str, str]:
     """(kind, identifier), where kind is a job kind, message or message_graph."""
     if not isinstance(raw, dict):
-        raise BindingRefused("a reply binding names a demand, drafting or chronology job, or an email")
+        raise BindingRefused("a reply binding names a demand, drafting, negotiation or chronology job, or an email")
     kind = raw.get("kind")
     if kind in JOB_KINDS:
         job_id = str(raw.get("job_id") or "").strip()
@@ -196,6 +239,68 @@ def _inbound_turn_did_not_reply(db_path: str, graph_message_id: str, since: str)
     return None
 
 
+def _verify_job(broker: BrokerContext, kind: str, ident: str, db_path: str) -> tuple[dict[str, Any], str]:
+    """A job binding's ledger checks: (the row, its reply key), or refused."""
+    noun = _NOUN[kind]
+    row = job_ledger(broker, kind).read(ident)
+    if row is None:
+        raise BindingRefused(f"there is no {noun} job with that id")
+    if row["state"] == "failed":
+        raise BindingRefused(
+            f"{noun} job {ident} failed on SMD's side; the requester is told nothing until it is "
+            "delivered or held, and SMD has been alerted. Send nothing to anyone."
+        )
+    if row["state"] not in REPLYABLE_DEMAND_STATES:
+        raise BindingRefused(f"{noun} job {ident} has not ended (it is {row['state']}); its reply waits for that")
+    # One reply per (attempt, outcome): a resumed job (attempt + 1) that
+    # ends again is owed a reply for its new outcome.
+    key = f"{kind}:{ident}:{row.get('attempt') or 1}:{row['state']}"
+    if bound_replies.claimed(db_path, key):
+        raise BindingRefused(f"{noun} job {ident} has already had its reply for this outcome")
+    return row, key
+
+
+def _verify_scheduled(broker: BrokerContext, kind: str, ident: str, key: str, row: dict[str, Any]) -> Verified:
+    """A negotiation notice has no request email: ONE new email to its
+    requester, who must still be the authored scheduled recipient, or nothing."""
+    if not row.get("notice"):
+        raise BindingRefused(f"{_NOUN[kind]} job {ident} is announced by its notices, never itself; nothing was sent")
+    subject = negotiation_subject(row)
+    if not _negotiation_recipient_ok(broker, str(row["requester"])):
+        raise BindingRefused(
+            f"{_NOUN[kind]} job {ident}'s recipient is no longer the authored scheduled recipient "
+            "and a Named Administrator; nothing was sent"
+        )
+    return Verified(
+        kind=kind,
+        key=key,
+        job_id=ident,
+        internet_message_id="",
+        graph_message_id="",
+        sender=normalize_address(str(row["requester"])),
+        conversation_id="",
+        mode=MODE_NEW_MESSAGE,
+        subject=subject,
+    )
+
+
+def _verify_bare_message(ops: MsGraphOps, db_path: str, found: dict[str, Any], now: datetime | None) -> str:
+    """A bare message binding's once-only and recency checks; its reply key."""
+    key = f"message:{found['internet_message_id']}"
+    if bound_replies.claimed(db_path, key):
+        raise BindingRefused("that email has already had its one bound reply")
+    moment = now or datetime.now(timezone.utc)
+    since = (moment - timedelta(days=RECENCY_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if not found["received_at"] or found["received_at"] < since:
+        raise BindingRefused(f"that email is older than {RECENCY_DAYS} days; a bound reply answers recent mail only")
+    why = _inbound_turn_did_not_reply(db_path, found["graph_message_id"], since)
+    if why:
+        raise BindingRefused(why)
+    if msgraph_lookup.sent_in_conversation_since(ops, found["conversation_id"], found["received_at"]):
+        raise BindingRefused("that email has already been answered from this mailbox")
+    return key
+
+
 def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> Verified:
     """Every check, fresh, from the mailbox, the ledgers and the live customer.yaml."""
     ops = _ops(broker)
@@ -203,22 +308,9 @@ def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> V
     kind, ident = _parse(raw)
     job_id, expected_sender, imid, key = "", "", "", ""
     if kind in JOB_KINDS:
-        noun = _NOUN[kind]
-        row = job_ledger(broker, kind).read(ident)
-        if row is None:
-            raise BindingRefused(f"there is no {noun} job with that id")
-        if row["state"] == "failed":
-            raise BindingRefused(
-                f"{noun} job {ident} failed on SMD's side; the requester is told nothing until it is "
-                "delivered or held, and SMD has been alerted. Send nothing to anyone."
-            )
-        if row["state"] not in REPLYABLE_DEMAND_STATES:
-            raise BindingRefused(f"{noun} job {ident} has not ended (it is {row['state']}); its reply waits for that")
-        # One reply per (attempt, outcome): a resumed job (attempt + 1) that
-        # ends again is owed a reply for its new outcome.
-        key = f"{kind}:{ident}:{row.get('attempt') or 1}:{row['state']}"
-        if bound_replies.claimed(db_path, key):
-            raise BindingRefused(f"{noun} job {ident} has already had its reply for this outcome")
+        row, key = _verify_job(broker, kind, ident, db_path)
+        if kind in SCHEDULED_LANES and row.get("trigger") == "scheduled":
+            return _verify_scheduled(broker, kind, ident, key, row)
         job_id, imid, expected_sender = ident, f"<{str(row['request_ref']).strip('<>')}>", row["requester"]
     if kind == "message_graph":
         found = msgraph_lookup.received_by_graph_id(ops, ident)
@@ -235,22 +327,8 @@ def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> V
         if sender != normalize_address(expected_sender):
             raise BindingRefused("that email's sender is not the person who requested the job")
     else:
-        imid = found["internet_message_id"]
-        key = f"message:{imid}"
-        if bound_replies.claimed(db_path, key):
-            raise BindingRefused("that email has already had its one bound reply")
-        moment = now or datetime.now(timezone.utc)
-        since = (moment - timedelta(days=RECENCY_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        if not found["received_at"] or found["received_at"] < since:
-            raise BindingRefused(
-                f"that email is older than {RECENCY_DAYS} days; a bound reply answers recent mail only"
-            )
-        why = _inbound_turn_did_not_reply(db_path, found["graph_message_id"], since)
-        if why:
-            raise BindingRefused(why)
-        if msgraph_lookup.sent_in_conversation_since(ops, found["conversation_id"], found["received_at"]):
-            raise BindingRefused("that email has already been answered from this mailbox")
-        kind = "message"
+        key = _verify_bare_message(ops, db_path, found, now)
+        imid, kind = found["internet_message_id"], "message"
     return Verified(
         kind=kind,
         key=key,
@@ -331,7 +409,25 @@ def bind_verb(
         # and runs its floors against it; it cannot change it.
         "sender": v.sender,
         "conversation_id": v.conversation_id,
+        # "new_message" only for a negotiation notice: the broker sets
+        # the recipient (``sender``) and this subject; the caller sends a body.
+        "mode": v.mode,
+        **({"subject": v.subject} if v.subject else {}),
     }
+
+
+def _bound_body(v: Verified, payload: dict[str, Any], bound_ops: MsGraphOps) -> tuple[dict[str, Any], Any]:
+    """The wire body and the ops call for a verified binding: a reply on the
+    verified email, or (a negotiation notice) one new message whose
+    recipient and subject are the broker's; a caller's to/cc/bcc/subject and
+    attachments are never read."""
+    html = {"html": payload["html"]} if isinstance(payload.get("html"), str) and payload["html"].strip() else {}
+    comment = str(payload.get("comment") or "")
+    if v.mode != MODE_NEW_MESSAGE:
+        return {"message_id": v.graph_message_id, "comment": comment, **html}, bound_ops.reply
+    if not (comment.strip() or html):
+        raise BindingRefused("refusing to send an empty message")
+    return {"to": [v.sender], "subject": v.subject, "body_text": comment, **html}, bound_ops.send
 
 
 def reply_verb(
@@ -377,11 +473,7 @@ def reply_verb(
     # another broker thread is using.
     bound_ops = copy.copy(ops)
     bound_ops._request = claiming_request  # type: ignore[method-assign]
-    body = {
-        "message_id": v.graph_message_id,
-        "comment": str(payload.get("comment") or ""),
-        **({"html": payload["html"]} if isinstance(payload.get("html"), str) and payload["html"].strip() else {}),
-    }
+    body, transmit = _bound_body(v, payload, bound_ops)
     extra = request.get("audit_extra")
     audit_extra = dict(extra) if isinstance(extra, dict) else {}
     audit_extra["reply_binding"] = v.key
@@ -391,15 +483,21 @@ def reply_verb(
             action,
             # The participant fence's anchor is the email the broker just
             # verified, never one the caller named: a bound reply answers it.
+            # A negotiation notice has no such email: its one new
+            # message is fenced as a send on the skill's authored lane
+            # (settings.scheduled_recipients), and names no anchor.
             {
                 **request,
                 "payload": body,
                 "audit_extra": audit_extra,
-                "anchor": {"kind": "graph_message", "graph_message_id": v.graph_message_id},
+                "anchor": None
+                if v.mode == MODE_NEW_MESSAGE
+                else {"kind": "graph_message", "graph_message_id": v.graph_message_id},
                 "lane": None,
             },
-            send=bound_ops.reply,
-            reply=bound_ops.reply,
+            send=transmit,
+            reply=transmit,
+            internal_lane=SCHEDULED_LANES.get(v.kind) if v.mode == MODE_NEW_MESSAGE else None,
             refused=MsGraphRefused,
             transport=MsGraphTransportError,
             attempted_for_send=lambda _payload: [v.sender],
@@ -454,6 +552,8 @@ VERBS: tuple[str, ...] = ("msgraph_reply_bind", "msgraph_reply_bound")
 __all__ = [
     "AUDIT_TYPE",
     "KINDS",
+    "MODE_NEW_MESSAGE",
+    "MODE_REPLY",
     "VERBS",
     "BindingRefused",
     "Verified",

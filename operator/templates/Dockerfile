@@ -1145,7 +1145,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # provenance source) and add_negotiation_rows (INTERNAL_WRITE), which ship in
 # the same ss-console change (#3116). Until this ref is on a seat both tools are
 # refused there, the fail-closed direction.
-ARG OVERLAY_REF="7008c00849281bbc2b9bb0d8fd7b810f3a6c22e7"
+# 2026-10-09 (e86b659c, the overlay #436 merge commit). The negotiation watch's
+# seat half: "negotiation job <id>" is a scheduled job wake whose one channel is
+# the broker's new_message binding (every send tool refused), and
+# negotiation_job_status (READ) hands the wake a notice's code-composed message.
+# Ships with ss-console #3118 (the lane, its broker verbs and the binding mode).
+ARG OVERLAY_REF="e86b659caa555d350c78d856460fabb6b2971407"
 
 ARG CUSTOMER_SLUG=customer-zero
 
@@ -1224,8 +1229,10 @@ RUN apt-get update \
       ripgrep ffmpeg gcc python3-dev libffi-dev procps git openssh-client \
       docker-cli tini ca-certificates util-linux \
       postgresql-17 postgresql-client-17 redis-server awscli \
-      poppler-utils fonts-dejavu-core \
+      poppler-utils fonts-dejavu-core antiword \
  && rm -rf /var/lib/apt/lists/*
+# antiword (2026-10-09): the negotiation watch reads offer letters saved as
+# legacy Word .doc with it (the build asserts it).
 # poppler-utils + fonts-dejavu-core (ss#2614): the chronology runner's exhibit
 # rendering fallback and matplotlib's timeline visuals need a real font.
 
@@ -1659,7 +1666,8 @@ RUN set -eu; \
     uv pip install --python /opt/medchron/.venv/bin/python --no-cache --no-deps \
       /app/connectors/_sdk /app/connectors/smokeball /app/runners/medchron; \
     [ -x /opt/medchron/.venv/bin/medchron ] || { echo "FATAL: the medchron runner produced no console-script"; exit 1; }; \
-    /opt/medchron/.venv/bin/python -c "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, medchron.drafting_lane, medchron.drafting.run, smokeball_connector.docx_format, docx"; \
+    /opt/medchron/.venv/bin/python -c "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, medchron.drafting_lane, medchron.drafting.run, medchron.negotiation_lane, medchron.negotiation.run, smokeball_connector.docx_format, docx"; \
+    command -v antiword >/dev/null || { echo "FATAL: antiword is missing (the negotiation watch reads .doc with it)"; exit 1; }; \
     chown -R root:root /opt/medchron; \
     chmod -R a+rX /opt/medchron
 
@@ -1679,6 +1687,8 @@ COPY operator/templates/entrypoint.sh /app/entrypoint.sh
 COPY operator/templates/entrypoint-demand.sh /app/entrypoint-demand.sh
 # The drafting lane's twin of it (queue, job dirs, firm inputs from vaults/<slug>/drafting/).
 COPY operator/templates/entrypoint-drafting.sh /app/entrypoint-drafting.sh
+# The negotiation watch's twin (queue, job dirs, state dir; no firm inputs).
+COPY operator/templates/entrypoint-negotiation.sh /app/entrypoint-negotiation.sh
 # REQUIRED_ENV / OPTIONAL_ENV, generated from operator/contracts/env-consumption.yaml
 # (operator/bin/gen-env-arrays.py); bootstrap.sh sources this instead of hardcoding them.
 COPY operator/templates/_env-arrays.generated.sh /app/_env-arrays.generated.sh

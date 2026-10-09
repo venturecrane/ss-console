@@ -175,7 +175,8 @@ def enforce(
 ) -> dict[str, str]:
     """Refuse (``FenceRefused``) or pass; on a pass, return the audit fields.
 
-    ``internal_lane`` is the broker's own (staff send-as); a request's ``lane``
+    ``internal_lane`` is the broker's own (staff send-as, or a negotiation
+    notice's ``skill:negotiation-watch``); a request's ``lane``
     is never consulted when it is set."""
     try:
         facts = seat_facts(broker.customer_path)
@@ -184,7 +185,9 @@ def enforce(
     anchor = parse_anchor(request.get("anchor"))
     lane = internal_lane or parse_lane(request.get("lane"))
     resolve = resolver(broker, channel)
-    if action.endswith("_reply") or action == "msgraph_reply_bound":
+    # A bound send is a reply, except a scheduled job's one new message (a
+    # negotiation notice), which the broker marks with its own authored lane.
+    if action.endswith("_reply") or (action == "msgraph_reply_bound" and not internal_lane):
         target = str(payload.get("message_id") or "").strip()
         if not target:
             raise FenceRefused(FENCE_PARTICIPANTS, "a reply must name the email it answers.")

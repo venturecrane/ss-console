@@ -336,6 +336,11 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "DRAFTING_JOB_DELIVERED",
         "DRAFTING_JOB_FAILED",
         "DRAFTING_JOB_RESUME_REQUESTED",
+        "NEGOTIATION_JOB_SUBMITTED",
+        "NEGOTIATION_JOB_RUNNING",
+        "NEGOTIATION_JOB_DELIVERED",
+        "NEGOTIATION_JOB_FAILED",
+        "NEGOTIATION_JOB_RESUME_REQUESTED",
         # Case-manager casework (docs/specs/operator/case-manager-deadline-work.md):
         # a verified person approved or held a numbered line about the firm's
         # task list, or the Operator closed its own task on the record's evidence.

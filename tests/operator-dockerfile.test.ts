@@ -1514,7 +1514,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // job reports how it ended (pairs with ss-console #3111).
     // 60ad6a1e -> 7008c008 (overlay#435), 2026-10-09: get_matter_layouts (read, a firm-record read and
     // provenance source) and add_negotiation_rows (internal_write) classified.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="7008c00849281bbc2b9bb0d8fd7b810f3a6c22e7"')
+    // 7008c008 -> e86b659c (overlay#436), 2026-10-09: the negotiation watch's wake (a scheduled job
+    // wake bound to one new email) and negotiation_job_status (pairs with ss-console #3118).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="e86b659caa555d350c78d856460fabb6b2971407"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

@@ -621,3 +621,20 @@ def test_the_classifier_reads_the_typed_roster_first(tmp_path: Path) -> None:
     assert facts.classify("someone@elsewhere.example") == "outside"
     assert facts.lanes["escalation"] == frozenset({PAULA, SCOTT})
     assert "skill:retired-watch" not in facts.lanes
+
+
+def test_a_skills_scheduled_recipients_are_its_lane(tmp_path: Path) -> None:
+    """The negotiation watch's offer emails go to the skill's authored
+    scheduled_recipients (a comma-separated scalar). FALSIFIER: read only
+    settings.recipient and the notice's new message is refused at the fence."""
+    p = tmp_path / "customer.yaml"
+    p.write_text(
+        "personas:\n"
+        "  - skills:\n"
+        "      - name: negotiation-watch\n"
+        "        enabled: true\n"
+        "        settings:\n"
+        "          scheduled_recipients: 'Office@Firm.example, second@firm.example'\n"
+    )
+    lanes = pf.seat_facts(p).lanes
+    assert lanes["skill:negotiation-watch"] == frozenset({"office@firm.example", "second@firm.example"})
