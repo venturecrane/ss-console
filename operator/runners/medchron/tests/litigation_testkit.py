@@ -198,8 +198,13 @@ class ScriptedLit:
         audit: list[dict] | None = None,
         never_finish: bool = False,
         resolve_hits: bool = False,
+        update_fn: Any = None,
     ) -> None:
         self.resolve_hits = resolve_hits
+        #: An update read copies the CURRENT VALUES it is handed, then applies
+        #: ``update_fn(values)`` (identity by default), as a model told to
+        #: change only what the arrived documents change would.
+        self.update_fn = update_fn or (lambda values: values)
         self.result_fn, self.verdicts, self.audit = result_fn, verdicts or [], audit or []
         self.never_finish = never_finish
         self.calls: list[dict[str, Any]] = []
@@ -236,7 +241,11 @@ class ScriptedLit:
                 "input": {"pattern": "answer"},
             }
             return SimpleNamespace(content=[use], stop_reason="tool_use", usage=usage)
-        if "YOUR PASS: determine" in system:
+        if "YOUR PASS: determine" in system and "THIS IS AN UPDATE" in system:
+            marker = "CURRENT VALUES (on the list now):\n"
+            values = json.loads(first_text(params).split(marker, 1)[1])
+            final = {"type": "tool_use", "id": "rec", "name": "record_result", "input": self.update_fn(values)}
+        elif "YOUR PASS: determine" in system:
             final = {
                 "type": "tool_use",
                 "id": "rec",

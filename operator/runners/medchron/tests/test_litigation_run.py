@@ -99,11 +99,12 @@ def test_a_new_court_paper_rereads_but_a_new_medical_bill_does_not(tmp_path):
     p = manifest.plan_matter(pos, prior, man, firm, TODAY)
     assert p["reason"] == "changed" and p["trigger_files"] == ["c"]
     email = files + [{"id": "e", "name": "Re: lunch", "ext": ".msg", "modified": "2026-09-01T00:00:00"}]
-    assert manifest.plan_matter(email, prior, man, firm, TODAY)["reason"] == "changed"  # among the newest emails
+    em = manifest.plan_matter(email, prior, man, firm, TODAY)
+    assert em["reason"] == "changed" and em["unscreened"] == ["e"] and em["read_groups"] == []  # screened by text
     seed = manifest.plan_matter(files, {"fields_read": ["case", "defendants"]}, {"a": ""}, firm, TODAY)
     assert seed["read_groups"] == ["discovery"] and seed["reason"] == "missing_fields"
     two = manifest.plan_matter(files, {**prior, "provenance": {"two_pass": True}}, man, firm, TODAY)
-    assert two["audit"] == "all" and two["read_groups"] == []
+    assert two["audit"] == "none" and two["read_groups"] == []  # the accepted list is not re-audited
 
 
 def test_a_gate_refusal_holds_and_files_nothing(tmp_path):

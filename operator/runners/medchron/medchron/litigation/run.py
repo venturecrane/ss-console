@@ -32,7 +32,7 @@ from . import (
     inventory,
     job as job_mod,
 )
-from . import manifest, parity, passes, read
+from . import manifest, parity, passes, read, update
 from .progress import Progress
 from .runbase import RunBase
 from .outcome import REASON, LitigationFailed, LitigationHold, Verdict
@@ -43,6 +43,7 @@ STAGES = (
     "diff",
     "fetch",
     "extract",
+    "screen",
     "read1",
     "read2",
     "read3",
@@ -220,6 +221,9 @@ class LitigationRun(RunBase):
             int(self.firm.get("doc_context_chars")),
         )
 
+    def _screen(self) -> None:
+        update.screen(self, lambda mid: passes.texts(self, mid))
+
     def _read1(self) -> None:
         passes.read1(self)
 
@@ -366,7 +370,7 @@ class LitigationRun(RunBase):
                 "job_id": self.job.job_id,
                 "read_at": self.today.isoformat(),
                 "two_pass": False,
-                "passes": 3,
+                "read": (self._plan().get(mid) or {}).get("mode") or "full",
             }
             manifest.commit(self.state, mid, keep, inventory.files_of(self.data, mid))
         self._put("flags_new", flags)
@@ -379,6 +383,7 @@ class LitigationRun(RunBase):
                 self._diff,
                 self._fetch,
                 self._extract,
+                self._screen,
                 self._read1,
                 self._read2,
                 self._read3,

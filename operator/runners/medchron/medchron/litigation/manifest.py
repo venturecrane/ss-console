@@ -10,14 +10,13 @@ On the volume (``$MEDCHRON_DATA_DIR/litigation/state/``, the runner's own)::
 Written only after a delivery is read back (``commit``), so a held or failed
 run leaves the next run's baseline exactly where the last good one put it.
 
-Change detection is CANDIDATE-FILTERED. A matter is re-read when a file that
-is new or whose ``dateModified`` moved is one a read would open: a court- or
-discovery-named file, a process server's record, a recent email whose name
-points at the case, or one of the matter's ``email_recent_n`` newest emails. A
-new medical bill does not re-read a matter; a new proof of service does. A
-matter with no prior state is read in full. A matter whose prior state lacks
-a field group (a seed that predates discovery) gets that group read alone. A
-matter seeded from a two-pass run is audited (pass 3) in full once.
+Change detection is CANDIDATE-FILTERED. A matter already on the list is
+UPDATED (``update.py``) when a file that is new or whose ``dateModified``
+moved is a court- or discovery-named file, a process server's record, or a
+recent email whose name or text points at the case; the update reads the
+arrived documents, not the case. A new medical bill starts nothing. A matter
+with no prior state is read in full. A matter whose prior state lacks a field
+group (a seed that predates discovery) gets that group read alone.
 """
 
 from __future__ import annotations
@@ -147,6 +146,16 @@ def classify(f: dict[str, Any], firm: LitigationFirm, today: dt.date) -> str | N
     if server:
         return "server"
     return "discovery" if disc else None
+
+
+def _recent_iso(f: dict[str, Any], today: dt.date, days: int = 45) -> bool:
+    """An arrived email worth screening: saved in the last ``days`` (an old
+    email surfacing as "new" is a re-save, not news)."""
+    d = file_date(f)
+    try:
+        return (today - dt.date.fromisoformat(d)).days <= days
+    except ValueError:
+        return True
 
 
 def is_candidate(f: dict[str, Any], firm: LitigationFirm, today: dt.date) -> bool:
@@ -303,20 +312,22 @@ def _plan(
     d = diff(current_manifest(files), prior_manifest)
     moved = set(d["new"]) | set(d["changed"])
     trigger = [c for c in cands if c in moved]
-    two_pass = bool((prior.get("provenance") or {}).get("two_pass"))
-    if trigger:
-        return {
-            "reason": "changed",
-            "read_groups": groups_for(trigger, classes) if not two_pass else list(vocab.GROUPS),
-            "audit": "all" if two_pass else "changed",
-            "trigger_files": trigger,
-            "candidates": cands,
-        }
+    by_id = {str(f["id"]): f for f in files}
+    moved_emails = sorted(
+        fid for fid in moved if fid in by_id and is_email(by_id[fid]) and _recent_iso(by_id[fid], today)
+    )
+    if trigger or moved_emails:
+        from .update import plan_changed  # update builds on this module
+
+        return plan_changed(trigger, moved_emails, classes)
+    # A seed from a two-pass hand run is NOT re-audited: its values are the
+    # list the firm accepted (2026-10-09). A seed group it could not cite is
+    # read once, as any missing group is.
     missing = _missing_groups(prior)
     return {
-        "reason": "missing_fields" if missing else ("two_pass_audit" if two_pass else "unchanged"),
+        "reason": "missing_fields" if missing else "unchanged",
         "read_groups": missing,
-        "audit": "all" if two_pass else ("changed" if missing else "none"),
+        "audit": "changed" if missing else "none",
         "trigger_files": [],
         "candidates": cands,
     }

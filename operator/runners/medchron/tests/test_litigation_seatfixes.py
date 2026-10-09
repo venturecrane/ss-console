@@ -124,7 +124,10 @@ def test_an_offline_replay_reads_from_cached_text_and_needs_no_seat(replay):
     assert r._state()["gates"]["status"] == "reopened" and r._state()["extract"]["status"] == "done"
     v = r.run()
     assert v.verdict == "held" and v.reason.startswith("rehearsal: ")
-    assert client.calls and all("ANSWER OF DEFENDANT" in first_text(c) for c in client.calls if c.get("system"))
+    # The newly listed matter's reads carry its cached text; the matter
+    # already on the list is an update and sees only what arrived.
+    new_reads = [c for c in client.calls if c.get("system") and "MATTER: 100001" in first_text(c)]
+    assert new_reads and all("ANSWER OF DEFENDANT" in first_text(c) for c in new_reads)
     assert isinstance(r.seat, rehearse.OfflineSeat)
     rep = json.loads((r.report_path).read_text())
     assert rep["matters"]["100001"]["read_calls"]["litigation_read"] >= 1
@@ -206,4 +209,6 @@ def test_a_refresh_rereads_only_the_groups_a_new_paper_can_change(tmp_path):
     pos = manifest.plan_matter(base + [_f("p", "POS Delta", ".pdf", "2026-09-01")], prior, man, firm, TODAY)
     assert pos["read_groups"] == ["case", "defendants"]
     mail = manifest.plan_matter(base + [_f("e", "Re: lunch", ".msg", "2026-09-01")], prior, man, firm, TODAY)
-    assert mail["read_groups"] == ["case"]  # an unnamed newest email: the case status (a settlement) only
+    # An unnamed new email reads nothing by itself: it waits for the text
+    # screen, which keeps it only if its words reach a field group.
+    assert mail["read_groups"] == [] and mail["unscreened"] == ["e"]

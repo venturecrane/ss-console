@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..limits import LimitHold
-from . import fetch as fetch_mod, gates, manifest, parity, read, vocab
+from . import fetch as fetch_mod, gates, manifest, parity, read, update, vocab
 from .tools import MatterContext, ReadIncomplete, dump
 
 UNREAD = "unread.json"
@@ -55,6 +55,17 @@ def _each(r: Any, stage: str, wants: Any, one: Any) -> None:
 def read1(r: Any) -> None:
     def one(m: dict[str, Any], mid: str, p: dict[str, Any]) -> None:
         ctx = r._ctx(mid)
+        if p.get("mode") == update.MODE:
+            prior = manifest.load_prior(r.state, mid) or {}
+            res = read.pass1(
+                r.doorway, r.firm, ctx, r._header(m), p["read_groups"], r._listing(ctx, mid), r.today,
+                extra="\nCURRENT VALUES (on the list now):\n" + read.for_model(prior, ctx), tail=update.TAIL,
+            )
+            merged, log = update.guard(
+                prior, read.merge(prior, res, p["read_groups"]), p["read_groups"], p["trigger_files"], texts(r, mid)
+            )
+            dump(r._mfile(mid, "read1.json"), {"groups": p["read_groups"], "result": res, "guarded": merged, "update": log})
+            return
         res = read.pass1(r.doorway, r.firm, ctx, r._header(m), p["read_groups"], r._listing(ctx, mid), r.today)
         dump(r._mfile(mid, "read1.json"), {"groups": p["read_groups"], "result": res})
 
@@ -64,8 +75,21 @@ def read1(r: Any) -> None:
 def read2(r: Any) -> None:
     def one(m: dict[str, Any], mid: str, p: dict[str, Any]) -> None:
         r1 = r._mjson(mid, "read1.json")
-        merged = read.merge(manifest.load_prior(r.state, mid), r1["result"], r1["groups"])
         ctx = r._ctx(mid)
+        if p.get("mode") == update.MODE:
+            merged = r1["guarded"]
+            changed = r1["update"]["changed"]
+            if not changed:  # nothing changed: nothing to check, no call
+                dump(r._mfile(mid, "read2.json"), {"result": merged, "overturns": [], "verdicts": []})
+                return
+            got = read.check_pass(
+                r.doorway, r.firm, ctx, "verify", r._header(m), merged, r._listing(ctx, mid), r.today,
+                update.check_scope(changed), groups=p["read_groups"] or None,
+            )
+            log = read.apply_verdicts(ctx, merged, got["verdicts"], "verify")
+            dump(r._mfile(mid, "read2.json"), {"result": merged, "overturns": log, "verdicts": got["verdicts"]})
+            return
+        merged = read.merge(manifest.load_prior(r.state, mid), r1["result"], r1["groups"])
         got = read.check_pass(
             r.doorway,
             r.firm,
@@ -92,6 +116,7 @@ def after_read2(r: Any, mid: str) -> tuple[dict[str, Any] | None, list[dict[str,
 
 
 def texts(r: Any, mid: str) -> dict[str, str]:
+    """``{file_id: extracted text}`` for the files this run fetched."""
     d = fetch_mod.matter_dir(r.data, mid) / "txt"
     return {p.stem: p.read_text(encoding="utf-8", errors="replace") for p in d.glob("*.txt")} if d.is_dir() else {}
 
@@ -125,6 +150,16 @@ def read3(r: Any) -> None:
             return
         ctx = r._ctx(mid)
         extra, hits = audit_extra(r, ctx, mid, result, p["audit"])
+        if p.get("mode") == update.MODE:
+            hits = [h for h in hits if h in set(p["trigger_files"])]
+            extra = "AUDIT: only the settlement-scan hits below." + (
+                "\nSETTLEMENT-SCAN HITS to resolve in settlement_reviewed: "
+                + ", ".join(f"[doc {ctx.by_id[h]}]" for h in hits)
+                if hits
+                else "none"
+            )
+            if not hits:
+                extra = "none"
         if extra.endswith("none") and not hits:
             rec = {"result": result, "overturns": log, "settlement_reviewed": [], "hits_asked": []}
             dump(r._mfile(mid, "read3.json"), rec)

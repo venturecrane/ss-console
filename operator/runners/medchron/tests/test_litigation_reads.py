@@ -137,7 +137,7 @@ def test_an_unresolved_settlement_hit_holds_and_a_resolved_one_delivers(tmp_path
     assert v2.verdict == "delivered", v2.reason
 
 
-def test_a_changed_value_with_no_new_document_holds_on_parity(tmp_path):
+def test_an_update_puts_back_a_value_no_arrived_document_carries(tmp_path):
     seat = LitSeat({M1: matter_docs()})
     assert _run(tmp_path, ScriptedLit(), seat).run().verdict == "delivered"
     seat.per[M1].append(
@@ -155,13 +155,17 @@ def test_a_changed_value_with_no_new_document_holds_on_parity(tmp_path):
     seat.blobs["f-p2"] = make_pdf(["PROOF OF SERVICE on a different party, 09/29/2026"])
     seat.per[M1][-1]["size"] = len(seat.blobs["f-p2"])
 
-    def drift(n):
-        res = good_result(n)
-        res["complaint_filed"]["date"] = "2026-03-01"  # same complaint, a different reading
-        return res
+    def drift(values):
+        values["complaint_filed"]["date"] = "2026-03-01"  # same complaint, a different reading
+        return values
 
-    v = _run(tmp_path, ScriptedLit(result_fn=drift), seat, job="j2", job_id="01KTJ0BX0000000000000000BB").run()
-    assert v.verdict == "held" and v.reason.startswith("parity_hold: ") and "complaint_filed" in v.reason
+    v = _run(tmp_path, ScriptedLit(update_fn=drift), seat, job="j2", job_id="01KTJ0BX0000000000000000BB").run()
+    # The update read is handed only the arrived proof of service; a changed
+    # complaint date cites the old complaint, so code puts it back before any
+    # check runs and the list delivers with the value the firm already has.
+    assert v.verdict == "delivered", v.reason
     assert v.matters_reread == 1
+    r1 = json.loads((tmp_path / "j2" / "data" / "m" / M1 / "read1.json").read_text())
+    assert "complaint_filed" in r1["update"]["reverted"]
     prior = json.loads((tmp_path / "state" / "matters" / f"{M1}.json").read_text())
-    assert prior["complaint_filed"]["date"] == "2026-03-02"  # a held run leaves the last good state alone
+    assert prior["complaint_filed"]["date"] == "2026-03-02"  # the uncited drift never reached the list

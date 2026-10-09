@@ -446,14 +446,22 @@ def apply_verdicts(
 
 # ---- the passes ------------------------------------------------------------------------
 def pass1(
-    doorway: Any, firm: Any, ctx: MatterContext, header: str, groups: list[str], listing: str, today: dt.date
+    doorway: Any,
+    firm: Any,
+    ctx: MatterContext,
+    header: str,
+    groups: list[str],
+    listing: str,
+    today: dt.date,
+    extra: str = "",
+    tail: str = "",
 ) -> dict[str, Any]:
     raw = run_loop(
         doorway,
         "litigation_read",
         model=firm.model("read"),
-        system=system_for("read", firm, today),
-        user=ask(header, groups, listing),
+        system=system_for("read", firm, today) + tail,
+        user=ask(header, groups, listing, extra),
         ctx=ctx,
         final_tool=RECORD_RESULT,
         max_iterations=int(firm.get("tool_iterations")),
@@ -461,7 +469,7 @@ def pass1(
     return to_state(ctx, raw, groups)
 
 
-def _for_model(result: dict[str, Any], ctx: MatterContext) -> str:
+def for_model(result: dict[str, Any], ctx: MatterContext) -> str:
     """The result with sources shown as doc numbers (what the reader can open)."""
 
     def conv(x: Any) -> Any:
@@ -495,7 +503,7 @@ def check_pass(
     scope = (
         f"\nCHECK ONLY the values in these field groups: {', '.join(want)}." if set(want) != set(vocab.GROUPS) else ""
     )
-    user = ask(header, want, listing, f"\nTHE RESULT TO CHECK:\n{_for_model(result, ctx)}\n{scope}{extra}")
+    user = ask(header, want, listing, f"\nTHE RESULT TO CHECK:\n{for_model(result, ctx)}\n{scope}{extra}")
     got = run_loop(
         doorway,
         stage,

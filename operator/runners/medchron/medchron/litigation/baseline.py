@@ -15,8 +15,9 @@ to a file only by its id prefix or by a file name of that matter appearing in
 it; an unresolved source is left ``None``. A field group is marked read only
 when every value it carries resolved, so a group the seed cannot cite is read
 again on the first seat run instead of passing the gates on a guess. Discovery
-is in neither shape and is always read. Two-pass matters carry
-``provenance.two_pass`` so the first run audits them (pass 3) in full.
+is in neither shape; the 2026-10-08 discovery run is merged on afterwards
+(``discovery`` mode), and a matter it cannot cite reads the group again. Two-pass matters carry
+``provenance.two_pass`` as a record; the runner does not re-audit them.
 
 The seed's manifest records which files existed (``""`` as the modified date:
 the hand inventories carried dates, not the vendor's ``dateModified``), so a
@@ -234,6 +235,104 @@ def write_state(
     return prov
 
 
+# ---- the discovery seed: the 2026-10-08 discovery run, merged onto the state --------
+_SET_TYPES = {
+    "form_interrogatories": "Form Interrogatories",
+    "special_interrogatories": "Special Interrogatories",
+    "requests_for_production": "Requests for Production",
+    "requests_for_admission": "Requests for Admission",
+    "demand_for_inspection": "Demand for Inspection",
+    "deposition_notice": "Deposition notice",
+    "subpoena": "Subpoena",
+    "other": "Other discovery",
+}
+_RESPONSES = {
+    "responses_served": "yes",
+    "no_responses_found": "no",
+    "only_unsigned_or_draft_responses": "no",
+}
+
+
+def set_name(s: dict[str, Any]) -> str:
+    num = str(s.get("set_number") or "").strip()
+    kind = _SET_TYPES.get(str(s.get("set_type") or ""), "Other discovery")
+    if num and not num.lower().startswith("set"):
+        num = "Set " + num
+    return f"{kind}, {num}" if num else kind
+
+
+def _doc(docs: list[dict[str, Any]], n: Any) -> dict[str, Any] | None:
+    """The discovery run cites ``[DOC n]`` into that matter's ordered snippet
+    list; resolve it to the file, or None. Never a guess."""
+    if not isinstance(n, int) or not 0 < n <= len(docs):
+        return None
+    d = docs[n - 1]
+    return {"file_id": str(d["fid"]), "name": str(d.get("name") or ""), "doc_date": d.get("date")}
+
+
+def from_discovery(sets: list[dict[str, Any]], docs: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """One matter's discovery-run sets in the state schema, or None when a set
+    carries a date it cannot cite (the group is then read again, not trusted)."""
+    prop, theirs = [], []
+    for s in sets:
+        d = s.get("direction")
+        if d not in ("propounded_by_our_client", "served_on_our_client"):
+            continue
+        date = first_date(s.get("served_date"))
+        src = _doc(docs, s.get("served_source_doc"))
+        if date and not src:
+            return None
+        if d == "propounded_by_our_client":
+            prop.append({"set": set_name(s), "served_on": str(s.get("responding_party") or ""), "date": date, "source": src})
+            continue
+        rdate = first_date(s.get("response_date"))
+        rsrc = _doc(docs, s.get("response_source_doc"))
+        if rdate and not rsrc:
+            return None
+        value = _RESPONSES.get(str(s.get("response_status") or ""), "unclear")
+        theirs.append(
+            {
+                "set": set_name(s),
+                "served_by": str(s.get("propounding_party") or ""),
+                "date": date,
+                "source": src,
+                "responses_served": {"value": value, "date": rdate, "source": rsrc},
+            }
+        )
+    return {"discovery_propounded": prop, "discovery_served_on_client": theirs}
+
+
+def merge_discovery(state: Path, root: Path) -> dict[str, int]:
+    """Merge the discovery run under ``root`` (``runs/merged.json``,
+    ``files.json``, ``snip/<number>.json``) onto matters already seeded in
+    ``state``, marking the group read. A matter the runner already read is
+    left alone, as is one whose discovery cannot be fully cited."""
+    merged = json.loads((root / "runs" / "merged.json").read_text(encoding="utf-8"))
+    files = json.loads((root / "files.json").read_text(encoding="utf-8"))
+    out = {"merged": 0, "uncited": 0, "not_seeded": 0, "already_read": 0}
+    for num, v in merged.items():
+        mid = str((files.get(num) or {}).get("id") or "")
+        path = state / "matters" / f"{mid}.json"
+        if not mid or not path.is_file():
+            out["not_seeded"] += 1
+            continue
+        m = json.loads(path.read_text(encoding="utf-8"))
+        if vocab.GROUP_DISCOVERY in (m.get("fields_read") or []):
+            out["already_read"] += 1
+            continue
+        docs = json.loads((root / "snip" / f"{num}.json").read_text(encoding="utf-8"))
+        disc = from_discovery(v.get("sets") or [], docs)
+        if disc is None:
+            out["uncited"] += 1
+            continue
+        m.update(disc)
+        m["fields_read"] = sorted(set(m.get("fields_read") or []) | {vocab.GROUP_DISCOVERY})
+        m.setdefault("provenance", {})["discovery_seed"] = "2026-10-08"
+        _atomic(path, m)
+        out["merged"] += 1
+    return out
+
+
 # ---- the laptop CLI: read the hand-run directories, write a state dir -----------------
 def _tsv_files(path: Path) -> list[dict[str, Any]]:
     out = []
@@ -288,10 +387,13 @@ def load_two_pass(root: Path) -> tuple[dict[str, dict[str, Any]], dict[str, list
 
 
 def main(argv: list[str] | None = None) -> int:
-    """``python -m medchron.litigation.baseline firm|two_pass <hand-run dir> <state dir>``."""
+    """``python -m medchron.litigation.baseline firm|two_pass|discovery <hand-run dir> <state dir>``."""
     args = argv if argv is not None else sys.argv[1:]
+    if len(args) == 3 and args[0] == "discovery":
+        print(json.dumps(merge_discovery(Path(args[2]), Path(args[1]))))
+        return 0
     if len(args) != 3 or args[0] not in ("firm", "two_pass"):
-        print("usage: python -m medchron.litigation.baseline firm|two_pass <hand-run dir> <state dir>", file=sys.stderr)
+        print("usage: python -m medchron.litigation.baseline firm|two_pass|discovery <hand-run dir> <state dir>", file=sys.stderr)
         return 2
     matters, invs = (load_firm if args[0] == "firm" else load_two_pass)(Path(args[1]))
     prov = write_state(Path(args[2]), matters, invs, args[0])
