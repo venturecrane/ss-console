@@ -78,6 +78,8 @@ describe('parseRequestCard: the wire contract', () => {
   it.each([
     ['card_key', { card_key: 'abc:replied' }],
     ['card_key', { card_key: `${HASH}:no_reply` }], // suffix disagrees with kind
+    ['card_key', { card_key: `${HASH}:replied:delivered-2` }], // only job_done carries an ending
+    ['card_key', { card_key: `${HASH}:job_done:delivered-2` }], // kind replied, key job_done
     ['kind', { kind: 'other' }],
     ['received_at', { received_at: 'yesterday' }],
     ['event_at', { event_at: 1700000000 }],
@@ -113,6 +115,25 @@ describe('parseRequestCard: the wire contract', () => {
       body({ ...base, job: { lane: 'medchron', state: 'failed', reason: 'free text here' } })
     )
     expect(badReason.ok).toBe(false)
+  })
+
+  it('a job_done key may carry its job ending, so a resumed job cards again', () => {
+    // FALSIFIER: the pre-fix key pattern (`<hash>:job_done` only) refuses these,
+    // and a resumed job's real ending never reaches SMD.
+    const job = { lane: 'demand', state: 'delivered', reason: null }
+    for (const ending of ['delivered-2', 'failed-1', 'held-12']) {
+      const r = parseRequestCard(
+        body({ card_key: `${HASH}:job_done:${ending}`, kind: 'job_done', job })
+      )
+      expect(r.ok).toBe(true)
+      if (r.ok) expect(r.card.cardKey.split(':')[0]).toBe(HASH)
+    }
+    for (const bad of ['running-1', 'delivered-0', 'delivered-x', 'delivered-12345', 'delivered']) {
+      const r = parseRequestCard(
+        body({ card_key: `${HASH}:job_done:${bad}`, kind: 'job_done', job })
+      )
+      expect(r.ok).toBe(false)
+    }
   })
 
   it('strips line breaks and bidi controls and caps display text', () => {
