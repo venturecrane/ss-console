@@ -283,7 +283,9 @@ def from_discovery(sets: list[dict[str, Any]], docs: list[dict[str, Any]]) -> di
         if date and not src:
             return None
         if d == "propounded_by_our_client":
-            prop.append({"set": set_name(s), "served_on": str(s.get("responding_party") or ""), "date": date, "source": src})
+            prop.append(
+                {"set": set_name(s), "served_on": str(s.get("responding_party") or ""), "date": date, "source": src}
+            )
             continue
         rdate = first_date(s.get("response_date"))
         rsrc = _doc(docs, s.get("response_source_doc"))
@@ -393,7 +395,10 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(merge_discovery(Path(args[2]), Path(args[1]))))
         return 0
     if len(args) != 3 or args[0] not in ("firm", "two_pass"):
-        print("usage: python -m medchron.litigation.baseline firm|two_pass|discovery <hand-run dir> <state dir>", file=sys.stderr)
+        print(
+            "usage: python -m medchron.litigation.baseline firm|two_pass|discovery <hand-run dir> <state dir>",
+            file=sys.stderr,
+        )
         return 2
     matters, invs = (load_firm if args[0] == "firm" else load_two_pass)(Path(args[1]))
     prov = write_state(Path(args[2]), matters, invs, args[0])

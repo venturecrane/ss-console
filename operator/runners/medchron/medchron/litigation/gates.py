@@ -93,8 +93,15 @@ def date_forms(iso: str) -> list[str]:
 
 
 def text_carries(text: str, iso: str) -> bool:
+    """The date appears in the text in a written form. Court forms often
+    print a filled date as spaced characters ("1 / 2 5 / 2 0 2 7", Yolo's CMC
+    notice, 2026-10-06), so the comparison is also made with all whitespace
+    removed; every digit must still match."""
     flat = " ".join(text.split()).lower()
-    return any(f.lower() in flat for f in date_forms(iso))
+    if any(f.lower() in flat for f in date_forms(iso)):
+        return True
+    squeezed = "".join(text.split()).lower()
+    return any("".join(f.split()).lower() in squeezed for f in date_forms(iso))
 
 
 def _case_rules(m: dict[str, Any], n: str, out: dict[str, list[Any]]) -> None:

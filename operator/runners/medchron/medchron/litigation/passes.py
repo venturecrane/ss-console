@@ -58,13 +58,23 @@ def read1(r: Any) -> None:
         if p.get("mode") == update.MODE:
             prior = manifest.load_prior(r.state, mid) or {}
             res = read.pass1(
-                r.doorway, r.firm, ctx, r._header(m), p["read_groups"], r._listing(ctx, mid), r.today,
-                extra="\nCURRENT VALUES (on the list now):\n" + read.for_model(prior, ctx), tail=update.TAIL,
+                r.doorway,
+                r.firm,
+                ctx,
+                r._header(m),
+                p["read_groups"],
+                r._listing(ctx, mid),
+                r.today,
+                extra="\nCURRENT VALUES (on the list now):\n" + read.for_model(prior, ctx),
+                tail=update.TAIL,
             )
             merged, log = update.guard(
                 prior, read.merge(prior, res, p["read_groups"]), p["read_groups"], p["trigger_files"], texts(r, mid)
             )
-            dump(r._mfile(mid, "read1.json"), {"groups": p["read_groups"], "result": res, "guarded": merged, "update": log})
+            dump(
+                r._mfile(mid, "read1.json"),
+                {"groups": p["read_groups"], "result": res, "guarded": merged, "update": log},
+            )
             return
         res = read.pass1(r.doorway, r.firm, ctx, r._header(m), p["read_groups"], r._listing(ctx, mid), r.today)
         dump(r._mfile(mid, "read1.json"), {"groups": p["read_groups"], "result": res})
@@ -83,8 +93,16 @@ def read2(r: Any) -> None:
                 dump(r._mfile(mid, "read2.json"), {"result": merged, "overturns": [], "verdicts": []})
                 return
             got = read.check_pass(
-                r.doorway, r.firm, ctx, "verify", r._header(m), merged, r._listing(ctx, mid), r.today,
-                update.check_scope(changed), groups=p["read_groups"] or None,
+                r.doorway,
+                r.firm,
+                ctx,
+                "verify",
+                r._header(m),
+                merged,
+                r._listing(ctx, mid),
+                r.today,
+                update.check_scope(changed),
+                groups=p["read_groups"] or None,
             )
             log = read.apply_verdicts(ctx, merged, got["verdicts"], "verify")
             dump(r._mfile(mid, "read2.json"), {"result": merged, "overturns": log, "verdicts": got["verdicts"]})

@@ -26,6 +26,7 @@ changes, and the cost should follow the papers, not the size of the case:
 from __future__ import annotations
 
 import copy
+import re
 from typing import Any
 
 from . import gates, manifest, parity, vocab
@@ -66,15 +67,34 @@ def plan_changed(trigger: list[str], moved_emails: list[str], classes: dict[str,
     }
 
 
+#: Litigation words an email's TEXT carries when it can move a list value.
+#: The firm's own patterns are written for file NAMES ("Notice of CMC.pdf")
+#: and miss how people write in mail ("hearing set for 10/21"); these are the
+#: product's, in addition to the firm's (2026-10-09 replay: a CMC email was
+#: screened out on the firm's patterns alone).
+_COURT_WORDS = re.compile(
+    r"(?i)\b(hearing|case management|cmc|trial (?:date|setting|confirmation)|court date|continu(?:ed|ance)|"
+    r"dep(?:artmen)?t\.? ?\d|minute order|tentative ruling|order to show cause|osc|motion|default|"
+    r"dismiss(?:al|ed)?|stipulat\w*|complaint|summons|answer(?:ed)?|cross-complaint|mediation|arbitration)\b"
+)
+_SERVICE_WORDS = re.compile(
+    r"(?i)\b(served|personal service|sub(?:stituted?)? service|proof of service|process server|service of process)\b"
+)
+_DISCOVERY_WORDS = re.compile(
+    r"(?i)\b(interrogator\w*|requests? for (?:production|admission)|deposition|subpoena|discovery|"
+    r"responses? (?:are )?due|meet and confer)\b"
+)
+
+
 def email_hits(text: str, firm: Any) -> list[str]:
     """Which litigation word families an email's text carries."""
     out = []
-    if any(p.search(text) for p in firm.court_rx):
+    if any(p.search(text) for p in firm.court_rx) or _COURT_WORDS.search(text):
         out.append("court")
     low = text.lower()
-    if any(s in low for s in firm.process_servers):
+    if any(s in low for s in firm.process_servers) or _SERVICE_WORDS.search(text):
         out.append("server")
-    if any(p.search(text) for p in firm.discovery_rx):
+    if any(p.search(text) for p in firm.discovery_rx) or _DISCOVERY_WORDS.search(text):
         out.append("discovery")
     if any(p.search(text) for p in firm.settlement_rx):
         out.append("settlement")
@@ -125,7 +145,9 @@ def _same(a: Any, b: Any, *keys: str) -> bool:
     return parity._key(a, *keys) == parity._key(b, *keys)
 
 
-def _guard_case(prior: dict[str, Any], out: dict[str, Any], trigger: set[str], texts: dict[str, str], log: dict) -> None:
+def _guard_case(
+    prior: dict[str, Any], out: dict[str, Any], trigger: set[str], texts: dict[str, str], log: dict
+) -> None:
     for k, keys in (("complaint_filed", ("date",)), ("next_court_date", ("date",)), ("case_status", ("value",))):
         if k not in out or _same(prior.get(k), out.get(k), *keys):
             continue

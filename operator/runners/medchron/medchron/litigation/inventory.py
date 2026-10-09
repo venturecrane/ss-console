@@ -25,9 +25,10 @@ from typing import Any, Callable
 from .firm import LitigationFirm
 from .progress import Progress
 
-from ..arrivals import ArrivalsError as InventoryError
+from ..arrivals import ArrivalsError as InventoryError  # noqa: F401 - re-exported: run.py catches inventory.InventoryError
 from ..arrivals import getter as _getter
 from ..arrivals import open_matters, paged
+
 
 def staff_roster(seat: Any) -> dict[str, str]:
     """``{staff id: "First Last"}``. A roster that cannot be read raises: the

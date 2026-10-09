@@ -33,7 +33,14 @@ PRIOR = {
             "flags": [],
         }
     ],
-    "discovery_propounded": [{"set": "Form Interrogatories, Set One", "served_on": "Zeta Corp", "date": "2026-05-01", "source": _src("old-frog")}],
+    "discovery_propounded": [
+        {
+            "set": "Form Interrogatories, Set One",
+            "served_on": "Zeta Corp",
+            "date": "2026-05-01",
+            "source": _src("old-frog"),
+        }
+    ],
     "discovery_served_on_client": [],
 }
 TEXTS = {"new-answer": "ANSWER of Zeta Corp ... filed 09/30/2026", "new-email": "see attached"}
@@ -82,7 +89,14 @@ def test_a_new_document_cannot_unserve_a_defendant_or_drop_one():
 
 def test_a_dropped_discovery_set_is_restored_and_an_uncited_new_one_refused():
     fresh = copy.deepcopy(PRIOR)
-    fresh["discovery_propounded"] = [{"set": "Special Interrogatories, Set One", "served_on": "Zeta Corp", "date": "2026-09-30", "source": _src("old-frog")}]
+    fresh["discovery_propounded"] = [
+        {
+            "set": "Special Interrogatories, Set One",
+            "served_on": "Zeta Corp",
+            "date": "2026-09-30",
+            "source": _src("old-frog"),
+        }
+    ]
     out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS)
     assert [r["set"] for r in out["discovery_propounded"]] == ["Form Interrogatories, Set One"]
     assert len(log["reverted"]) == 2
@@ -117,6 +131,21 @@ def test_screen_keeps_only_emails_whose_text_carries_litigation_words():
     assert s["read_groups"] == [vocab.GROUP_CASE, vocab.GROUP_DEFENDANTS]
 
 
+def test_screen_reads_how_people_write_about_a_hearing_in_mail():
+    # 2026-10-06: "Mersberg: CMC Statement - hearing set for 10/21" was screened
+    # out on the firm's file-name patterns alone.
+    s = update.screen_plan(update.plan_changed([], ["e1"], {}), {"e1": "the hearing is set for 10/21"}, FIRM)
+    assert s["trigger_files"] == ["e1"] and vocab.GROUP_CASE in s["read_groups"]
+
+
+def test_a_court_form_date_printed_in_spaced_characters_is_carried():
+    from medchron.litigation import gates
+
+    text = "set for a Case Management Conference on  1 / 2 5 / 2 0 2 7 at 9:00 AM"
+    assert gates.text_carries(text, "2027-01-25")
+    assert not gates.text_carries(text, "2027-01-26")  # every digit still has to match
+
+
 def test_screen_with_nothing_kept_reads_nothing():
     s = update.screen_plan(update.plan_changed([], ["e1"], {}), {"e1": "lunch"}, FIRM)
     assert s["read_groups"] == [] and s["audit"] == "none" and s["candidates"] == []
@@ -147,7 +176,10 @@ def test_the_discovery_seed_merges_cited_sets_and_refuses_an_uncited_one(tmp_pat
     for mid in ("m1", "m2"):
         (state / "matters" / f"{mid}.json").write_text(json.dumps({"fields_read": ["case", "defendants"]}))
     (root / "files.json").write_text(json.dumps({"101": {"id": "m1"}, "102": {"id": "m2"}, "103": {"id": "m9"}}))
-    docs = [{"fid": "f-frog", "name": "FROG", "date": "2026-05-01"}, {"fid": "f-resp", "name": "Resp", "date": "2026-06-01"}]
+    docs = [
+        {"fid": "f-frog", "name": "FROG", "date": "2026-05-01"},
+        {"fid": "f-resp", "name": "Resp", "date": "2026-06-01"},
+    ]
     for n in ("101", "102"):
         (root / "snip" / f"{n}.json").write_text(json.dumps(docs))
     ok = {
