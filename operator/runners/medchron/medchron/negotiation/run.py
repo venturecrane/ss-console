@@ -325,6 +325,7 @@ class NegotiationRun:
                     break
                 except Exception as exc:  # noqa: BLE001 - one document's failure stays new for the next run
                     self.log(f"negotiation: a document on a matter could not be read ({type(exc).__name__})")
+                    self._read_failed(matter, f, exc)
                     attempts[fid] = attempts.get(fid, 0) + 1
                     self.counts["docs_failed"] += 1
                     if attempts[fid] < MAX_ATTEMPTS:
@@ -335,6 +336,7 @@ class NegotiationRun:
                 self.counts["docs_read"] += 1
                 attempts.pop(fid, None)
                 plan = rows_mod.plan_document(events, doc, tabs, self._tokens(tabs))
+                self._planned(matter, f, events, plan, tabs)
                 self._write(mid, plan, tabs)
                 for rec in plan["offers"]:
                     self._notice(matter, doc, rec, tabs)
@@ -346,6 +348,13 @@ class NegotiationRun:
         rows = [f for f in files if str(f.get("id")) not in failed]
         rows += [{"id": fid, "modified": prior[fid]} for fid in failed if fid in prior]
         arrivals.commit(LANE, mid, rows, data=self.state)
+
+    # Observation hooks: no-ops here; the dry run (dryrun.py) records through them.
+    def _planned(self, matter: dict[str, Any], f: dict[str, Any], events: list, plan: dict, tabs: list) -> None:
+        return None
+
+    def _read_failed(self, matter: dict[str, Any], f: dict[str, Any], exc: Exception) -> None:
+        return None
 
     def _tokens(self, tabs: list[dict[str, Any]]) -> set[str]:
         import re

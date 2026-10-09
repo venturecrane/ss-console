@@ -157,6 +157,51 @@ def _cmd_negotiate(args: argparse.Namespace) -> int:
     return EXIT.get(str(v.get("verdict")), 2)
 
 
+def _cmd_negotiate_dry_run(args: argparse.Namespace) -> int:
+    """The negotiation watch on real data, stopping before any write or email
+    (``negotiation/dryrun.py``). One JSON summary line on stdout."""
+    import contextlib
+    import json
+
+    from .negotiation import dryrun
+
+    wd = Path(args.workdir)
+    with contextlib.redirect_stdout(sys.stderr):
+        dryrun.write_job(
+            wd,
+            slug=args.slug,
+            seed_saved_before=args.seed_saved_before,
+            design=args.design,
+            firm_words=[w.strip().lower() for w in args.firm_words.split(",") if w.strip()],
+            statuses=[s.strip() for s in args.statuses.split(",") if s.strip()],
+            cap_usd=args.cap_usd,
+            job_id="01DRYRVN000000000000000000",
+        )
+        run = dryrun.NegotiationDryRun(
+            wd,
+            pricing=args.pricing,
+            only_matters=[m.strip() for m in args.matters.split(",") if m.strip()],
+            log=lambda m: print(m, file=sys.stderr),
+        )
+        summary = run.run()
+    print(json.dumps(summary))
+    return 0 if summary.get("verdict") == "delivered" else 2
+
+
+def _add_negotiate_dry_run(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    dr = sub.add_parser("negotiate-dry-run", help="the negotiation watch on real data; no write, no email")
+    dr.add_argument("workdir", help="a THROWAWAY dir: job.json, the cursor and the report land here")
+    dr.add_argument("--slug", required=True)
+    dr.add_argument("--seed-saved-before", default="", help="the first-run cutoff (UTC ISO), as authored")
+    dr.add_argument("--design", default="", help="the firm's Negotiation Details design guid")
+    dr.add_argument("--firm-words", default="")
+    dr.add_argument("--statuses", default="Open")
+    dr.add_argument("--matters", default="", help="limit to these matter ids or numbers, comma-separated")
+    dr.add_argument("--cap-usd", type=float, default=20.0, help="the run's spend cap")
+    dr.add_argument("--pricing", default=None)
+    dr.set_defaults(fn=_cmd_negotiate_dry_run)
+
+
 def _exit_code(outcomes) -> int:
     worst = {"delivered": 0, "dry_run": 0, "rehearsed": 0, "held": 3, "refused": 4, "failed": 1}
     return max(worst.get(o.outcome, 1) for o in outcomes) if outcomes else 1
@@ -278,6 +323,7 @@ def main(argv: list[str] | None = None) -> int:
     ng.add_argument("--pricing", default=None)
     ng.add_argument("--state-dir", default=None, help="the lane's persistent state dir (default: on the volume)")
     ng.set_defaults(fn=_cmd_negotiate)
+    _add_negotiate_dry_run(sub)
     d = sub.add_parser("dag", help="print the stage order and validate it")
     d.set_defaults(fn=_cmd_dag)
     v = sub.add_parser("validate-config", help="validate a firm config file")
