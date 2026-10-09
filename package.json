@@ -27,6 +27,7 @@
     "handbook:adr-index": "npx tsx scripts/handbook-adr-index.ts",
     "handbook:connectors": "npx tsx scripts/handbook-connector-inventory.ts",
     "db:migrate:local": "wrangler d1 migrations apply ss-console-db --local",
+    "db:seed:staging": "node scripts/seed-staging.mjs",
     "prepare": "node -e \"if(process.env.CI)process.exit(0)\" && husky"
   },
   "dependencies": {
