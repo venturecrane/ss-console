@@ -17,6 +17,10 @@ draft can never collect a stale audit).
 What does NOT carry over, so the new job decides it afresh:
 
 * the frozen dates (the re-run files under today's date),
+* the premise decision and its coverage report (free, and it decides whether a
+  demand is drafted at all: a re-run queued after a premise-gate fix copied the
+  old "settled" verdict and delivered the same coverage report again,
+  2026-10-09),
 * the drafting gate's results and the render (cheap, and they decide what is
   filed),
 * the rendered files, the upload manifest and any delivery record,
@@ -34,8 +38,17 @@ import json
 import shutil
 from pathlib import Path
 
-DROP_STATE = ("dates", "render", "gate.json", "gate-gap-audit.json", "gate-coverage.json")
-DROP_PATHS = ("out", "runs", "usage-ledger.jsonl", "gate.json", "gate-gap-audit.json", "gate-coverage.json")
+DROP_STATE = ("dates", "premise", "render", "gate.json", "gate-gap-audit.json", "gate-coverage.json")
+DROP_PATHS = (
+    "out",
+    "runs",
+    "usage-ledger.jsonl",
+    "premise.json",
+    "coverage-report.md",
+    "gate.json",
+    "gate-gap-audit.json",
+    "gate-coverage.json",
+)
 REWRITE_SUFFIXES = (".json", ".jsonl")
 
 
