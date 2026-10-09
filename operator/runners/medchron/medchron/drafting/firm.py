@@ -33,6 +33,8 @@ The schema (the engagements author writes to exactly this)::
     attachments: {decl_2030_050, pos}
     inputs:      {<relative path>: <sha256>}   every file referenced above
     delivery:    {rehearsal_matters: [matter numbers]}   OPTIONAL
+    attorneys:   [{email, block: [lines]}]   OPTIONAL, the caption's attorney block
+                 per attorney (attorneys.py)
 
 ``delivery`` is the one optional section: the matter numbers a job may file to
 when they are not the matter it read (the firm's Operator library matter, for
@@ -49,6 +51,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from . import attorneys as attorneys_mod
 
 ENV_DIR = "MEDCHRON_DRAFTING_INPUTS"
 DEFAULT_DIR = "/var/lib/smd-config/drafting"
@@ -146,7 +150,13 @@ def _section(name: str, body: Any, keys: dict[str, tuple[str, bool]]) -> list[st
 def _shape(data: Any) -> list[str]:
     if not isinstance(data, dict):
         return ["top level must be a map"]
-    out = [f"{s}: unknown section (closed key set)" for s in data if s not in SCHEMA and s not in OPTIONAL]
+    out = [
+        f"{s}: unknown section (closed key set)"
+        for s in data
+        if s not in SCHEMA and s not in OPTIONAL and s != attorneys_mod.KEY
+    ]
+    if attorneys_mod.KEY in data:
+        out += attorneys_mod.validate(data[attorneys_mod.KEY])
     for name, keys in SCHEMA.items():
         if keys == "path":
             if not _type_ok(data.get(name), "path"):
@@ -315,6 +325,11 @@ class DraftingFirm:
     @property
     def rehearsal_matters(self) -> tuple[str, ...]:
         return tuple((self.data.get("delivery") or {}).get("rehearsal_matters") or ())
+
+    @property
+    def attorneys(self) -> list[dict[str, Any]]:
+        """The firm's authored attorney blocks (``attorneys.py``); empty when none."""
+        return list(self.data.get(attorneys_mod.KEY) or [])
 
     @property
     def firm_domains(self) -> tuple[str, ...]:

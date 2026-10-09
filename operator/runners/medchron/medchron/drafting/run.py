@@ -337,11 +337,11 @@ class DraftingRun:
             out = caption_stage.run(
                 self.data,
                 self.doorway,
-                self.firm.model("transcription"),
+                self.firm,
                 self.seat,
                 self.job.matter_id,
                 self._json("facts.json"),
-                self.firm.firm_domains,
+                self.job.requester,
                 self.log,
             )
         except caption_mod.RecordUnreadable as exc:
@@ -365,8 +365,7 @@ class DraftingRun:
             + "\n".join(f"- {r}" for r in rec)
         ]
         if (self.data / "caption.json").is_file():
-            c = self._json("caption.json")
-            out.append(caption_mod.block(c["fields"], c["source"]))
+            out += caption_stage.context(self._json("caption.json"))
         table = self._json("howell.json")["table"] if (self.data / "howell.json").is_file() else []
         if table:
             out.append(

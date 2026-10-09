@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
-from . import caption as caption_mod, caption_fix, caption_read
+from . import attorneys, caption as caption_mod, caption_fix, caption_read
 
 
 def _read(data: Path, doorway: Any, model: str, doc: dict[str, Any], log: Callable[[str], None]) -> dict[str, Any]:
@@ -36,16 +36,26 @@ def _journaled(data: Path) -> list[dict[str, Any]]:
     return [r for r in rows if r.get("event") == "result" and r.get("status") == caption_fix.APPLIED]
 
 
+def context(cap: dict[str, Any]) -> list[str]:
+    """What compose and audit receive from ``caption.json``: the court's caption,
+    then the firm's authored attorney block when one was chosen (attorneys.py)."""
+    out = [caption_mod.block(cap["fields"], cap["source"])]
+    if cap.get("attorney_block"):
+        out.append(attorneys.text(cap["attorney_block"]))
+    return out
+
+
 def run(
     data: Path,
     doorway: Any,
-    model: str,
+    firm: Any,
     seat: Any,
     matter_id: str,
     facts: dict[str, Any],
-    firm_domains: tuple[str, ...],
+    requester: str,
     log: Callable[[str], None],
 ) -> dict[str, Any]:
+    model, firm_domains = firm.model("transcription"), firm.firm_domains
     doc = caption_mod.source_document(data)
     name = str(doc.get("name")) if doc else None
     got = _read(data, doorway, model, doc, log) if doc else None
@@ -85,4 +95,7 @@ def run(
         "restore_incomplete": alarms,
         "compared": compared,
         "none_because": why,
+        # The firm's authored attorney block for this job: the responsible
+        # attorney's, else the requester's, else none (attorneys.py).
+        "attorney_block": attorneys.pick(firm.attorneys, record.get("attorney_email"), requester),
     }

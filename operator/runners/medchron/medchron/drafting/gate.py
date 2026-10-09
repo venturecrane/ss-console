@@ -73,6 +73,11 @@ def collect(
         ("firm declaration attachment", firm.attachment("decl_2030_050")),
         ("firm proof of service attachment", firm.attachment("pos")),
     ]
+    cp = data / "caption.json"
+    chosen = (json.loads(cp.read_text(encoding="utf-8")).get("attorney_block") if cp.is_file() else None) or None
+    if chosen:
+        # The firm's authored attorney block (attorneys.py): its lines are the firm's own, not the record's.
+        sources.append(("firm attorney block", "\n".join(chosen["lines"])))
     wp = data / "walled.json"
     walled = json.loads(wp.read_text(encoding="utf-8")) if wp.is_file() else []
     names = [str(r.get("name") or "") for r in rows] + [str(w.get("name") or "") for w in walled]
