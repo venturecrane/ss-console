@@ -73,7 +73,7 @@ def prepare_records_order(
 ) -> Any:
     """Build a medical-records order for one matter. Orders NOTHING.
 
-    ``from_gap_audit`` true ("order the missing records" on a demand package):
+    ``from_gap_audit`` true (a yes, or any ask to order, in reply to a demand package):
     leave ``facilities`` out; the orders are built from the matter's newest
     filed Gap Audit (gap_orders.py): its orderable rows grouped by provider,
     each provider located from the file's own documents and the vendor's

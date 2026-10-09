@@ -3,7 +3,7 @@
 The demand job files a Records and Billing Gap Audit on the matter: numbered
 item tables, one row per thing the file lacks, each with its provider, what is
 missing, where the file points to it, and a suggested request type. When the
-requester answers the package with "order the missing records", this module
+requester answers the package asking for those records to be ordered, this module
 turns that audit into records orders, with no model in the loop:
 
 1. **Read the audit as filed.** The newest ``Gap Audit - ...docx`` on the
@@ -524,7 +524,10 @@ def build(
 ) -> dict[str, Any]:
     meta, blob = latest_audit(client, matter_id)
     if blob is None:
-        return {"status": "refused", "reason": "No filed gap audit is on this matter. Nothing was ordered."}
+        return {
+            "status": "refused",
+            "reason": "No missing-records list is filed on this matter yet. Nothing was ordered.",
+        }
     kept, skipped = split_rows(audit_rows(blob))
     providers = group(kept, today, first_date(kept, today))
     facilities, questions = resolve_providers(client, yc, matter_id, providers, log)
