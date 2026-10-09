@@ -18,6 +18,7 @@ offer that answered it."""
 from __future__ import annotations
 
 import re
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -146,6 +147,14 @@ def norm(field: str, raw: Any) -> Any:
     return str(raw).strip() if filled(raw) else None
 
 
+def _real_date(text: str) -> bool:
+    try:
+        date.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
+
+
 def parse_row(raw: Any) -> tuple[dict[str, Any] | None, str | None]:
     """Validate one row argument. Returns ``(row, None)`` or ``(None, problem)``.
     An amount is a string or integer with at most two decimals (a float is
@@ -169,8 +178,8 @@ def parse_row(raw: Any) -> tuple[dict[str, Any] | None, str | None]:
         value = raw.get(field)
         if value is None or value == "":
             continue
-        if not isinstance(value, str) or not _DATE.match(value.strip()):
-            return None, f"{field} must be YYYY-MM-DD"
+        if not isinstance(value, str) or not _DATE.match(value.strip()) or not _real_date(value.strip()):
+            return None, f"{field} must be a real date, YYYY-MM-DD"
         out[field] = value.strip()
     note = raw.get("note")
     if note not in (None, ""):

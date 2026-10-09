@@ -21,6 +21,7 @@ from typing import Any, Callable
 
 from .layout_config import load_layout_config
 from .layout_sections import (
+    AMOUNT_FIELDS,
     DETAILS_KEY,
     MINIMUM_KEY,
     NEG_MARK,
@@ -170,6 +171,14 @@ def _negotiation_item(client: Any, matter: str, plaintiff_index: int | None) -> 
         if any(NEG_MARK in k for k in values[i["id"]])
         or (config.negotiation_design and design_base(i) == config.negotiation_design)
     ]
+    plaintiffs = {str(i.get("parentIndex")) for i in items if i.get("parentId") == "Plaintiff"}
+    if plaintiff_index is None and len(plaintiffs) > 1:
+        # A matter with several plaintiffs (a shared matter): even when only one
+        # of them has a negotiation tab, the figures may be another's. Ask.
+        return _refused(
+            "this matter has more than one plaintiff; say which one the figures are for (plaintiff_index)",
+            tabs=[{"plaintiff_index": i.get("parentIndex"), "description": i.get("description")} for i in found],
+        )
     if plaintiff_index is not None:
         found = [i for i in found if str(i.get("parentIndex")) == str(plaintiff_index)]
     if not found:
@@ -186,13 +195,14 @@ def _negotiation_item(client: Any, matter: str, plaintiff_index: int | None) -> 
 def _plan(rows: list[dict[str, Any]], existing: dict[int, dict[str, Any]]) -> dict[str, Any]:
     """Decide, without writing, which row each new entry goes in and which
     keys it sets. Refuses rather than overwrite a filled field."""
-    taken = dict(existing)
+    taken = {n: dict(r) for n, r in existing.items()}
     last = max(existing) if existing else -1
-    nxt = last + 1
     results: list[dict[str, Any]] = []
     writes: dict[str, Any] = {}
     for i, row in enumerate(rows):
-        seen = match_existing(row, existing)
+        # Against ``taken``, not ``existing``: the same entry twice in one call
+        # is one row, not two.
+        seen = match_existing(row, taken)
         if seen and "row" not in row:
             results.append({"entry": i, "status": seen[0], "row": seen[1]})
             continue
@@ -203,18 +213,29 @@ def _plan(rows: list[dict[str, Any]], existing: dict[int, dict[str, Any]]) -> di
             if clash:
                 return _refused(f"row {target} already has a different {', '.join(clash)}; nothing was written")
         else:
-            if nxt >= ROWS:
+            # The next row after every row filled so far, including rows this
+            # call has already claimed (a named ``row`` earlier in the call).
+            target = max(taken, default=-1) + 1
+            if target >= ROWS:
                 return _refused(
                     f"only {ROWS - last - 1} empty row(s) after the last filled one, {len(rows)} asked; nothing was written"
                 )
-            target, nxt = nxt, nxt + 1
         fields = {f: v for f, v in row.items() if f != "row" and not filled(taken.get(target, {}).get(f))}
         for field, value in fields.items():
-            writes[row_key(target, field)] = value
+            writes[row_key(target, field)] = _vendor_value(field, value)
         taken.setdefault(target, {}).update(fields)
         results.append({"entry": i, "status": "to_write" if fields else "already_present", "row": target, "fields": fields})
     gaps = [n for n in range(max(last, 0)) if n not in existing]
     return {"writes": writes, "results": results, "gaps": gaps}
+
+
+def _vendor_value(field: str, value: Any) -> Any:
+    """Amounts go to Smokeball as numbers (proven on a live tab 2026-10-09);
+    dates and notes as text."""
+    if field in AMOUNT_FIELDS or field == "minimum_settlement":
+        amount = norm("demand_amount", value)
+        return int(amount) if amount == amount.to_integral_value() else float(amount)
+    return value
 
 
 def _top_level(values: dict[str, Any], details: str, minimum: str) -> tuple[dict[str, Any], list[str]]:
@@ -226,12 +247,14 @@ def _top_level(values: dict[str, Any], details: str, minimum: str) -> tuple[dict
         if filled(values.get(key)):
             skipped.append(f"{name} already entered; not changed")
         else:
-            writes[key] = value
+            writes[key] = _vendor_value(name, value)
     return writes, skipped
 
 
 def _same(key: str, want: Any, got: Any) -> bool:
     field = next((f for f in ("amount", "date") if key.lower().endswith(f)), "")
+    if key == MINIMUM_KEY:
+        field = "amount"
     if field == "amount":
         return norm("demand_amount", want) == norm("demand_amount", got)
     if field == "date":
@@ -239,7 +262,11 @@ def _same(key: str, want: Any, got: Any) -> bool:
     return str(want).strip() == str(got if got is not None else "").strip()
 
 
-def _write_and_confirm(client: Any, path: str, before: dict[str, Any], writes: dict[str, Any]) -> dict[str, Any]:
+def _row_prefix(key: str) -> str:
+    return key.rsplit("/", 1)[0]
+
+
+def _write_and_confirm(client: Any, path: str, writes: dict[str, Any]) -> dict[str, Any]:
     try:
         fresh = layout_values(client.get(path))
     except Exception as exc:  # noqa: BLE001 - no re-read, no write
@@ -247,15 +274,26 @@ def _write_and_confirm(client: Any, path: str, before: dict[str, Any], writes: d
     raced = [k for k in writes if filled(fresh.get(k))]
     if raced:
         return _refused("someone entered values on this tab while it was being filled; nothing was written", fields=raced)
-    client.request("PATCH", path, json={"values": [{"key": k, "value": v} for k, v in writes.items()]})
+    try:
+        client.request("PATCH", path, json={"values": [{"key": k, "value": v} for k, v in writes.items()]})
+    except Exception as exc:  # noqa: BLE001 - a refused write is reported as one
+        return _refused(f"Smokeball refused the write ({exc.__class__.__name__}: {str(exc)[:200]}); nothing confirmed written")
     after: dict[str, Any] = {}
     for wait in VALUE_WAITS:
         SLEEP(wait)
-        after = layout_values(client.get(path))
+        try:
+            after = layout_values(client.get(path))
+        except Exception:  # noqa: BLE001 - a failed read-back is a mismatch below, never a crash after a write
+            continue
         if all(_same(k, v, after.get(k)) for k, v in writes.items()):
             break
     mismatch = {k: {"wrote": v, "reads": after.get(k)} for k, v in writes.items() if not _same(k, v, after.get(k))}
-    disturbed = [k for k, v in fresh.items() if k not in writes and not _same(k, v, after.get(k))]
+    # Only the rows written into are checked for collateral change: a colleague
+    # editing another field during the poll is not this write's doing.
+    rows_written = {_row_prefix(k) for k in writes}
+    disturbed = [
+        k for k, v in fresh.items() if k not in writes and _row_prefix(k) in rows_written and not _same(k, v, after.get(k))
+    ]
     return {"after": after, "mismatch": mismatch, "disturbed": disturbed}
 
 
@@ -299,7 +337,7 @@ def add_negotiation_rows(
         if problem:
             return _refused(problem)
         parsed.append(row)  # type: ignore[arg-type]
-    if minimum_settlement and norm("demand_amount", minimum_settlement) is None:
+    if minimum_settlement and parse_row({"demand_amount": minimum_settlement})[1]:
         return _refused('minimum_settlement must be the figure as written, e.g. "50000"')
     client = _client()
     found = _negotiation_item(client, matter, plaintiff_index)
@@ -315,7 +353,7 @@ def add_negotiation_rows(
     base = {"matter_id": matter, "item_id": item["id"], "entries": entries, "gap_rows": plan["gaps"], "skipped": skipped}
     if not writes:
         return {"status": "nothing_to_write", "written": False, **base}
-    done = _write_and_confirm(client, f"/matters/{matter}/layouts/{item['id']}", values, writes)
+    done = _write_and_confirm(client, f"/matters/{matter}/layouts/{item['id']}", writes)
     if done.get("status") == "refused":
         return done
     status = "readback_mismatch" if done["mismatch"] or done["disturbed"] else "written"

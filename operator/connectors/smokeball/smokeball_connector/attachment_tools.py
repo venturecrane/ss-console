@@ -44,7 +44,9 @@ def register(server: Any) -> None:
     that. Then ``add_medicals_provider`` (a facility with no bill,
     medicals_provider.py) and ``render_firm_form_letter`` (the firm's own
     rep-letter form, filled, form_letters.py), neither attachment-rooted, last
-    for the same reason."""
+    for the same reason. The records-order, SR1, SR19 and funding-form tools
+    follow, and the layout read and Negotiation Details write
+    (layout_tools.py) register after all of them, for the same reason."""
     _register_vendor_invoice_tools(server)
     _register_letter_tools(server)
     _register_workbook_tools(server)

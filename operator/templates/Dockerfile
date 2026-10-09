@@ -1140,6 +1140,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # after a failure reports how it finally ended; a card already sent under the
 # legacy per-request key covers the ending before it landed (no re-send). Needs
 # ss-console #3111 (the console accepts the ending key), deployed first.
+# 2026-10-09 (7008c008, the overlay #435 merge commit). Classifies the Smokeball
+# connector's get_matter_layouts (READ; a firm-record read and a tenant
+# provenance source) and add_negotiation_rows (INTERNAL_WRITE), which ship in
+# the same ss-console change (#3116). Until this ref is on a seat both tools are
+# refused there, the fail-closed direction.
 ARG OVERLAY_REF="7008c00849281bbc2b9bb0d8fd7b810f3a6c22e7"
 
 ARG CUSTOMER_SLUG=customer-zero

@@ -44,6 +44,7 @@ class _Tenant:
         self.list_response: Any = None
         self.fail_item: str | None = None
         self.patch_sticks = True
+        self.patch_fails = False
         self.race: dict[str, Any] | None = None  # values that appear after the first item read
         self._reads: dict[str, int] = {}
 
@@ -62,10 +63,14 @@ class _Tenant:
 
     def request(self, method: str, path: str, *, json: Any = None, **_: Any) -> Any:
         self.requests.append((method, path, json))
+        if method == "PATCH" and self.patch_fails:
+            raise RuntimeError("vendor 400")
         if method == "PATCH" and self.patch_sticks:
             item_id = path.rsplit("/", 1)[1]
             for pair in json["values"]:
-                self.values.setdefault(item_id, {})[pair["key"]] = pair["value"]
+                value = pair["value"]
+                # The vendor reads numbers back as floats ("50000.0").
+                self.values.setdefault(item_id, {})[pair["key"]] = float(value) if isinstance(value, int) else value
         return {}
 
     def patches(self) -> list[Any]:
@@ -269,3 +274,47 @@ def test_details_and_minimum_fill_only_when_empty(monkeypatch: pytest.MonkeyPatc
     out = lt.add_negotiation_rows(MATTER, [], details="new summary", minimum_settlement="25000")
     assert out["status"] == "written" and out["skipped"] == ["details already entered; not changed"]
     assert {p["key"] for p in t.patches()[0]["values"]} == {ls.MINIMUM_KEY}
+
+
+def test_amounts_go_as_numbers_and_minimum_reads_back_as_written(monkeypatch: pytest.MonkeyPatch) -> None:
+    t = _use(monkeypatch, _filled_tenant())
+    out = lt.add_negotiation_rows(MATTER, [{"offer_amount": "15000.50"}], minimum_settlement="50000")
+    assert out["status"] == "written", out
+    sent = {p["key"]: p["value"] for p in t.patches()[0]["values"]}
+    assert sent[f"{B}[2]/OfferAmount"] == 15000.5 and sent[ls.MINIMUM_KEY] == 50000
+
+
+def test_a_named_row_and_an_auto_row_never_share_a_slot(monkeypatch: pytest.MonkeyPatch) -> None:
+    t = _use(monkeypatch, _filled_tenant())
+    out = lt.add_negotiation_rows(MATTER, [{"row": 2, "demand_amount": "30000"}, {"offer_amount": "12000"}])
+    assert [e["row"] for e in out["entries"]] == [2, 3] and out["status"] == "written"
+    assert {p["key"] for p in t.patches()[0]["values"]} == {f"{B}[2]/DemandAmount", f"{B}[3]/OfferAmount"}
+
+
+def test_the_same_entry_twice_in_one_call_is_one_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    t = _use(monkeypatch, _filled_tenant())
+    row = {"offer_amount": "12000", "offer_date": "2026-09-01"}
+    out = lt.add_negotiation_rows(MATTER, [row, dict(row)])
+    assert [e["status"] for e in out["entries"]] == ["written", "already_present"]
+    assert len(t.patches()[0]["values"]) == 2
+
+
+def test_an_impossible_date_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    t = _use(monkeypatch, _filled_tenant())
+    assert lt.add_negotiation_rows(MATTER, [{"offer_amount": "1", "offer_date": "2026-13-45"}])["status"] == "refused"
+    assert lt.add_negotiation_rows(MATTER, [], minimum_settlement="NaN")["status"] == "refused"
+    assert t.patches() == []
+
+
+def test_a_refused_patch_is_reported_not_raised(monkeypatch: pytest.MonkeyPatch) -> None:
+    t = _use(monkeypatch, _filled_tenant())
+    t.patch_fails = True
+    out = lt.add_negotiation_rows(MATTER, [{"offer_amount": "12000"}])
+    assert out["status"] == "refused" and "refused the write" in out["reason"]
+
+
+def test_a_second_plaintiff_without_a_tab_still_needs_an_index(monkeypatch: pytest.MonkeyPatch) -> None:
+    t = _Tenant([_item("n0", f"{DESIGN}_c8ff", 0, "A"), _item("h1", "71370204_d54b", 1, "Medi-Cal")], {"h1": {"x": 1}})
+    _use(monkeypatch, t)
+    out = lt.add_negotiation_rows(MATTER, [{"offer_amount": "3000"}])
+    assert out["status"] == "refused" and "more than one plaintiff" in out["reason"] and t.patches() == []
