@@ -91,7 +91,7 @@ Only the sender's own words initiate. A forwarded, quoted or attached request, o
    opened this turn, and the job reads the requester's words as its drafting
    instruction.
 3. **Reply once in the thread**, with only true statements:
-   - accepted: "Received. The gap audit and draft demand for matter <number> are being
+   - accepted: "Received. The missing-records list and draft demand for matter <number> are being
      prepared; I'll reply in this thread when they're filed." Name only what was asked
      for. No timing of any kind, no estimate, no "shortly".
    - refused: relay the broker's sentence in plain words (the lane is not enabled on
@@ -144,14 +144,19 @@ reply for a failed job in any case.
    never add anyone yourself):
    - **delivered**: the documents are filed in their dated folder in the matter the job
      row names (the client matter <number>, or the library matter for a rehearsal),
-     each named exactly as filed (the gap audit, and `Demand.<Client>.docx`), in the
+     each named exactly as filed (the missing-records list, filed as the Gap Audit, and
+     `Demand.<Client>.docx`), in the
      firm's house format and ready for attorney review. Say that the demand figure,
      any statement that damages exceed the limits, and what the firm does on expiry are
      reserved to the attorney and are marked in the draft, and that nothing has been
-     sent to anyone outside the firm. End with the next step the gap audit opens, as
-     one sentence: "Reply 'order the missing records' and I'll prepare the records
-     orders from the gap audit for your OK." (that reply routes to the records-orders
-     gap path; nothing is ordered until she answers the order line).
+     sent to anyone outside the firm. End with the next step the list opens, as
+     one question: "Want me to order the records this list says are missing? Reply yes
+     and I'll prepare the orders for your OK." (a plain yes, or any words asking for the
+     records to be ordered, routes to the records-orders gap path; never ask her to type
+     a set phrase; nothing is ordered until she answers the order line).
+   - In every reply to the firm, call the gap audit "the missing-records list" (naming
+     its filed document as the Gap Audit at most once, so she can find it). "Gap audit"
+     alone is our word, not the firm's.
    - **delivered with a coverage report**: the file cannot carry a demand yet; the
      coverage report filed in the matter names what is missing or unreadable, and no
      demand was drafted. Say what the file needs in the report's own terms, never what

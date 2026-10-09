@@ -126,7 +126,10 @@ describe('matter-inbox-router: the demand class', () => {
     expect(deliver).not.toContain('**held** or **failed**')
     // A delivered package names the next step its gap audit opens, so the firm learns
     // it from the Operator itself; nothing is ordered until she answers the order line.
-    expect(deliver).toContain("Reply 'order the missing records'")
+    // It asks a plain question; the firm never has to type a set phrase.
+    expect(deliver).toContain('Want me to order the records this list says are missing? Reply yes')
+    expect(deliver).toContain('never ask her to type')
+    expect(deliver).not.toContain("Reply 'order the missing records'")
     expect(deliver).toContain('nothing is ordered until she answers the order line')
   })
 
