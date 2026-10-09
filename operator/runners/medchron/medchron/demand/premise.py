@@ -57,25 +57,40 @@ _NEGATED = re.compile(
 )
 
 
+#: A settlement spoken of as a future event ("we will be seeking reimbursement
+#: once a settlement has been reached", a med-pay carrier's standard notice) is
+#: not a settlement. Read as one, it ended a live pre-suit file with a coverage
+#: report instead of the demand that was asked for (2026-10-09).
+_CONDITIONAL = re.compile(
+    r"(?i)\b(once|when|whenever|until|unless|if|after|before|upon|in the event( that)?)\s+(a|an|the|any)?\s*$"
+)
+
+
 def _phrase_hits(
-    texts: list[tuple[dict[str, Any], str]], phrases: list[str], *, negatable: bool = False
+    texts: list[tuple[dict[str, Any], str]],
+    phrases: list[str],
+    *,
+    negatable: bool = False,
+    conditional: bool = False,
 ) -> list[dict[str, str]]:
     """The first hit per document. ``negatable``: a phrase directly preceded by
     a negation does not count ("This letter is not a denial of coverage", a
     carrier's reservation-of-rights letter on a 9/24 trial matter, read as a
-    denial by the first version of this gate)."""
+    denial by the first version of this gate). ``conditional``: a phrase
+    directly preceded by a conditional or future lead ("once a", "when the",
+    "until") does not count either."""
     pats = [re.compile(re.escape(p), re.I) for p in phrases]
     hits = []
+
+    def counts(t: str, m: re.Match[str]) -> bool:
+        lead = t[max(0, m.start() - 30) : m.start()]
+        if negatable and _NEGATED.search(lead):
+            return False
+        return not (conditional and _CONDITIONAL.search(lead))
+
     for r, t in texts:
         for p in pats:
-            m = next(
-                (
-                    m
-                    for m in p.finditer(t)
-                    if not (negatable and _NEGATED.search(t[max(0, m.start() - 30) : m.start()]))
-                ),
-                None,
-            )
+            m = next((m for m in p.finditer(t) if counts(t, m)), None)
             if m:
                 hits.append({"document": str(r.get("name")), "quote": _quote(t, m)})
                 break
@@ -280,7 +295,10 @@ def decide(
     blocking += [
         f"{h['document']} (rule: a settlement phrase in its text): {h['quote']}"
         for h in _phrase_hits(
-            [(r, t) for r, t in texts if not firm_authored(r, t, prem)], prem["settled_phrases"], negatable=True
+            [(r, t) for r, t in texts if not firm_authored(r, t, prem)],
+            prem["settled_phrases"],
+            negatable=True,
+            conditional=True,
         )
     ]
     gates.append(
