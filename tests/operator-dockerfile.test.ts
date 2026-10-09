@@ -1510,7 +1510,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // carrying overlay#431 (the litigation status lane).
     // f37225c1 -> bd885888 (overlay#433), 2026-10-08: the request tools take the session_id Hermes
     // passes them, so an emailed drafting or demand request binds its own email (it never had on a seat).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="bd8858836f43a3be4a38197e7525bf5813be0f4d"')
+    // bd885883 -> 60ad6a1e (overlay#434), 2026-10-09: one job_done card per job ending, so a resumed
+    // job reports how it ended (pairs with ss-console #3111).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="60ad6a1efa0ef1cd8afa173f94ffe3db692ee6cc"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

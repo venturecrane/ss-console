@@ -1135,7 +1135,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # dispatch() requires both; the reply relay answers only this turn's email or a
 # binding (find_for_recipient deleted); the gate classifies cc and bcc. Pairs
 # with the broker fence in this same PR.
-ARG OVERLAY_REF="bd8858836f43a3be4a38197e7525bf5813be0f4d"
+# 2026-10-09 (60ad6a1e, the overlay #434 merge commit). One job_done request
+# card per job ENDING (<request>:job_done:<state>-<attempt>), so a job resumed
+# after a failure reports how it finally ended; a card already sent under the
+# legacy per-request key covers the ending before it landed (no re-send). Needs
+# ss-console #3111 (the console accepts the ending key), deployed first.
+ARG OVERLAY_REF="60ad6a1efa0ef1cd8afa173f94ffe3db692ee6cc"
 
 ARG CUSTOMER_SLUG=customer-zero
 
