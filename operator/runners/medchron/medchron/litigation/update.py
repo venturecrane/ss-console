@@ -86,8 +86,30 @@ _DISCOVERY_WORDS = re.compile(
 )
 
 
+_QUOTE_START = re.compile(
+    r"(?im)^\s*(?:from:\s.*\n\s*(?:sent|date):|-{2,}\s*original message\s*-{2,}|on .{4,120} wrote:\s*$|_{20,})"
+)
+_ATTACHMENT = "\n\n[ATTACHMENT] "
+
+
+def fresh_text(text: str) -> str:
+    """What an email itself says: its subject, its body down to the quoted
+    history, and every attachment. A reply that only says "Will do." above a
+    quoted court thread carries no court words of its own (2026-10-09 replay:
+    with the whole text screened, every email passed)."""
+    head, _, rest = text.partition("\n\n")
+    if not head.lower().startswith(("from:", "to:", "date:", "subject:")):
+        head, rest = "", text  # no header block: all of it is the message
+    subject = next((ln for ln in head.splitlines() if ln.lower().startswith("subject:")), "")
+    body, *atts = rest.split(_ATTACHMENT)
+    m = _QUOTE_START.search(body)
+    body = body[: m.start()] if m else body
+    return "\n".join([subject, body, *(_ATTACHMENT.strip() + " " + a for a in atts)])
+
+
 def email_hits(text: str, firm: Any) -> list[str]:
-    """Which litigation word families an email's text carries."""
+    """Which litigation word families an email's own text carries."""
+    text = fresh_text(text)
     out = []
     if any(p.search(text) for p in firm.court_rx) or _COURT_WORDS.search(text):
         out.append("court")

@@ -155,8 +155,12 @@ class LitigationRun(RunBase):
         return self._json("plan.json")
 
     def _active(self) -> list[str]:
-        """Matters this run opens documents for: a read, or an audit."""
-        return [mid for mid, p in self._plan().items() if p["read_groups"] or p["audit"] == "all"]
+        """Matters this run opens documents for: a read, an audit, or new mail
+        the screen must read first (an update with only unscreened emails has
+        no read groups yet; skipping it left the screen nothing to read)."""
+        return [
+            mid for mid, p in self._plan().items() if p["read_groups"] or p["audit"] == "all" or p.get("unscreened")
+        ]
 
     def _fetch(self) -> None:
         report, retry = {}, []

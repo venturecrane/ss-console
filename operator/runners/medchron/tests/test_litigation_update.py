@@ -102,6 +102,23 @@ def test_a_dropped_discovery_set_is_restored_and_an_uncited_new_one_refused():
     assert len(log["reverted"]) == 2
 
 
+def test_a_check_that_replaces_a_discovery_list_cannot_drop_older_sets():
+    # What a verify that "corrects" the whole list with only the arrived set looks like.
+    after_verify = copy.deepcopy(PRIOR)
+    after_verify["discovery_propounded"] = [
+        {
+            "set": "Special Interrogatories, Set One",
+            "served_on": "Zeta Corp",
+            "date": "2026-09-30",
+            "source": _src("new-answer"),
+        }
+    ]
+    out, log = update.guard(PRIOR, after_verify, ALL, ["new-answer"], {"new-answer": "served 09/30/2026"})
+    sets = sorted(r["set"] for r in out["discovery_propounded"])
+    assert sets == ["Form Interrogatories, Set One", "Special Interrogatories, Set One"]
+    assert any("dropped by the read" in x for x in log["reverted"])
+
+
 def test_identity_fields_are_not_an_updates_to_change():
     fresh = copy.deepcopy(PRIOR)
     fresh["case_number"] = "24CV9"
@@ -144,6 +161,24 @@ def test_a_court_form_date_printed_in_spaced_characters_is_carried():
     text = "set for a Case Management Conference on  1 / 2 5 / 2 0 2 7 at 9:00 AM"
     assert gates.text_carries(text, "2027-01-25")
     assert not gates.text_carries(text, "2027-01-26")  # every digit still has to match
+
+
+REPLY = (
+    "From: maricela@firm.example\nTo: edward@firm.example\nDate: 2026-10-06\nSubject: RE: lunch\n\n"
+    "Will do.\n\nMaricela\n\nFrom: Edward <edward@firm.example>\nSent: Tuesday, October 6, 2026 3:36 PM\n"
+    "Subject: FW: the hearing\n\nThe hearing is continued and the answer was served."
+)
+
+
+def test_a_reply_is_screened_on_its_own_words_not_the_quoted_thread():
+    s = update.screen_plan(update.plan_changed([], ["e1"], {}), {"e1": REPLY}, FIRM)
+    assert s["trigger_files"] == [] and s["screened_out"] == ["e1"]
+
+
+def test_an_attachment_below_a_short_note_still_counts():
+    text = REPLY.replace("Will do.", "See attached.") + "\n\n[ATTACHMENT] NOC.pdf\nNotice of Case Management Conference"
+    s = update.screen_plan(update.plan_changed([], ["e1"], {}), {"e1": text}, FIRM)
+    assert s["trigger_files"] == ["e1"]
 
 
 def test_an_email_whose_text_could_not_be_read_is_read_not_screened_out():

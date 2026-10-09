@@ -105,7 +105,9 @@ def read2(r: Any) -> None:
                 groups=p["read_groups"] or None,
             )
             log = read.apply_verdicts(ctx, merged, got["verdicts"], "verify")
-            dump(r._mfile(mid, "read2.json"), {"result": merged, "overturns": log, "verdicts": got["verdicts"]})
+            merged, again = reguard(r, mid, p, merged)
+            rec = {"result": merged, "overturns": log, "verdicts": got["verdicts"], "update": again}
+            dump(r._mfile(mid, "read2.json"), rec)
             return
         merged = read.merge(manifest.load_prior(r.state, mid), r1["result"], r1["groups"])
         got = read.check_pass(
@@ -124,6 +126,15 @@ def read2(r: Any) -> None:
         dump(r._mfile(mid, "read2.json"), {"result": merged, "overturns": log, "verdicts": got["verdicts"]})
 
     _each(r, "read2", lambda p: bool(p["read_groups"]), one)
+
+
+def reguard(r: Any, mid: str, p: dict[str, Any], result: dict[str, Any]) -> tuple[dict[str, Any], dict]:
+    """An update's checks may correct values, never drop or rewrite one that
+    no arrived document carries: the code guard runs again on their output
+    (2026-10-09 replay: a verify that replaced a whole discovery list dropped
+    thirteen older sets the arrived documents never mentioned)."""
+    prior = manifest.load_prior(r.state, mid) or {}
+    return update.guard(prior, result, p["read_groups"], p["trigger_files"], texts(r, mid))
 
 
 def after_read2(r: Any, mid: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
@@ -195,6 +206,8 @@ def read3(r: Any) -> None:
             groups=p["read_groups"] or None,
         )
         log = log + read.apply_verdicts(ctx, result, got["verdicts"], "audit")
+        if p.get("mode") == update.MODE:
+            result, _again = reguard(r, mid, p, result)
         reviewed = [
             {"file_id": (ctx.source(x.get("doc")) or {}).get("file_id"), "finding": x.get("finding")}
             for x in got["settlement_reviewed"]
