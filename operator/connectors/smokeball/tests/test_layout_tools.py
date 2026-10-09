@@ -110,7 +110,8 @@ def _filled_tenant() -> _Tenant:
                 "Matter/Plaintiffs/Person/SocialSecurityNumber": "123-45-6789",
             },
             "neg": {f"{B}/OfferAmount": 5000.0, f"{B}/OfferDate": "2026-08-01T00:00:00", f"{B}[1]/DemandAmount": 40000},
-            "pi": {"Providers[0]/Provider/DisplayName": "AMR"},
+            # A live Medicals tab's first sorted key is a cost field, not a provider.
+            "pi": {"FirmCosts/Total": 120, "Providers[0]/Provider/DisplayName": "AMR"},
         },
     )
 

@@ -79,9 +79,12 @@ def section_of(keys: list[str], base: str, negotiation_design: str | None) -> st
         return "Not named (no fields entered)"
     if any(NEG_MARK in k for k in keys):
         return NEG_SECTION
-    first = keys[0]
-    if first.startswith("Providers["):
+    # Any provider row makes it the Medicals tab, whichever key sorts first:
+    # the tab also carries firm-cost and settlement fields, and a live tab's
+    # first key is a cost field (seen 2026-10-09, labeled "Firm costs").
+    if any(k.startswith("Providers[") for k in keys):
         return "Medicals"
+    first = keys[0]
     if "Witness" in first:
         return "Witnesses"
     parts = [p for p in first.split("/") if p and p not in ("Matter", "Plaintiffs", "Defendants", "CaseDetails")]
