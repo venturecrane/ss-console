@@ -19,6 +19,7 @@ so a document a verifier names is opened, not reported as missing.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -27,6 +28,12 @@ from ..stages.base import read_jsonl
 
 HTTP_ABSENT = 404
 MISSING = "missing_in_smokeball"
+REFUSED = "refused_by_smokeball"
+#: Smokeball answers 403 for a file it will not serve (deleted or restricted
+#: since it was listed). A retry does not change that, and one such file must
+#: not fail the whole list: it is a finding on its own matter (2026-10-09
+#: replay: one 403 email on McHale failed a weekday run of 210 matters).
+_REFUSED = re.compile(r"HTTP 403\b")
 
 
 class FetchError(RuntimeError):
@@ -67,6 +74,8 @@ def classify(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dic
             continue
         if r.get("http_status") == HTTP_ABSENT or "NoSuchKey" in str(r.get("error") or ""):
             missing.append({"file_id": r["id"], "name": r.get("name"), "problem": MISSING})
+        elif r.get("http_status") == 403 or _REFUSED.search(str(r.get("error") or "")):
+            missing.append({"file_id": r["id"], "name": r.get("name"), "problem": REFUSED})
         else:
             retry.append(r)
     return missing, retry

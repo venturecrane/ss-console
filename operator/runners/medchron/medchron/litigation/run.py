@@ -257,6 +257,8 @@ class LitigationRun(RunBase):
     def integrity_flag(rec: dict[str, Any]) -> str:
         if rec.get("problem") == fetch_mod.MISSING:
             return f"The file entry '{rec['name']}' exists in Smokeball but its content is missing; it could not be checked."
+        if rec.get("problem") == fetch_mod.REFUSED:
+            return f"Smokeball would not open the file '{rec['name']}' (deleted or restricted since it was listed); it could not be checked."
         return f"The file '{rec['name']}' could not be read; it could not be checked."
 
     def final(self, m: dict[str, Any]) -> dict[str, Any] | None:

@@ -119,6 +119,16 @@ def test_a_check_that_replaces_a_discovery_list_cannot_drop_older_sets():
     assert any("dropped by the read" in x for x in log["reverted"])
 
 
+def test_a_file_smokeball_refuses_is_a_finding_not_a_retry_that_fails_the_list():
+    from medchron.litigation import fetch
+
+    row = {"id": "x", "name": "RE: claim", "ok": False, "error": "GET .../download -> HTTP 403: (empty body)"}
+    missing, retry = fetch.classify([row])
+    assert retry == [] and missing == [{"file_id": "x", "name": "RE: claim", "problem": fetch.REFUSED}]
+    other = {"id": "y", "name": "z", "ok": False, "error": "timed out"}
+    assert fetch.classify([other])[1] == [other]  # a transient failure is still retried
+
+
 def test_identity_fields_are_not_an_updates_to_change():
     fresh = copy.deepcopy(PRIOR)
     fresh["case_number"] = "24CV9"

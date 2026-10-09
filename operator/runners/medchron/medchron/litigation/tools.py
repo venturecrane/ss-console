@@ -85,6 +85,8 @@ class MatterContext:
         f = self.refs[n]
         fid = str(f["id"])
         if fid in self.integrity:
+            if self.integrity[fid] == fetch_mod.REFUSED:
+                return "Smokeball would not open this file (deleted or restricted since it was listed); do not treat it as absent."
             return "This file entry exists in Smokeball but its content is missing (it cannot be opened)."
         cached = self.cached_text(fid)
         if cached is not None:
@@ -98,8 +100,8 @@ class MatterContext:
             row = fetch_mod.fetch_one(self.seat, self.matter_id, f, self.data, self.log)
             missing, _retry = fetch_mod.classify([row])
             if missing:
-                self.integrity[fid] = fetch_mod.MISSING
-                return "This file entry exists in Smokeball but its content is missing (it cannot be opened)."
+                self.integrity[fid] = missing[0]["problem"]
+                return self.text(n)
             path = fetch_mod.local_path(self.data, self.matter_id, fid)
         if path is None:
             return "This file could not be fetched; do not treat it as absent. Say so in the matter flags."
