@@ -59,8 +59,11 @@ Machine (the negotiation job), run on the firm's weekday schedule.
 
 1. **Finds what is new.** For every open matter it lists the files and compares
    them with what the watch saw last time (the lane's own cursor). A matter the
-   watch has never seen is only recorded, never read: the first run announces
-   nothing, so the firm is not emailed about offers it already has.
+   watch has never seen is recorded first: the files saved before the authored
+   `seed_saved_before` (the time the firm's tabs were last filled in full) are
+   taken as already entered, so the firm is not emailed about offers it already
+   has, and anything saved after it is read like any new document. With no
+   cutoff authored, every file present on the first run is taken as entered.
 2. **Selects offer documents by name.** A file whose name says offer, demand,
    998, tender, counter, settle, evaluation or policy limits, saved as a PDF,
    Word document or email.

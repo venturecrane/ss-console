@@ -60,6 +60,7 @@ _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,}$")
 _SLOT_REF = re.compile(r"^scheduled:\d{4}-\d{2}-\d{2}T\d{2}$")
 _GUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _WORD = re.compile(r"^[a-z]{3,40}$")
+_SEED = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 _MATTER_ID = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 
 CREATE_JOBS_SQL = (
@@ -133,6 +134,7 @@ def validate_envelope(req: Any) -> dict[str, Any]:
         "matter_statuses",
         "negotiation_design",
         "firm_words",
+        "seed_saved_before",
         "per_job_cap_usd",
         "monthly_budget_usd",
     }
@@ -154,6 +156,9 @@ def validate_envelope(req: Any) -> dict[str, Any]:
     design = str(req["negotiation_design"] or "").strip().lower()
     if design and not _GUID.match(design):
         raise EnvelopeError("negotiation_design must be a layout design guid, or empty")
+    seed = req["seed_saved_before"]
+    if not (seed == "" or (isinstance(seed, str) and _SEED.match(seed))):
+        raise EnvelopeError("seed_saved_before must be YYYY-MM-DDTHH:MM:SSZ, or empty")
     words = req["firm_words"]
     if not (isinstance(words, list) and all(isinstance(w, str) and _WORD.match(w) for w in words)):
         raise EnvelopeError("firm_words must be lowercase words")
@@ -165,6 +170,7 @@ def validate_envelope(req: Any) -> dict[str, Any]:
         "matter_statuses": [s.strip() for s in statuses],
         "negotiation_design": design,
         "firm_words": list(words),
+        "seed_saved_before": seed,
         "per_job_cap_usd": _usd(req, "per_job_cap_usd"),
         "monthly_budget_usd": _usd(req, "monthly_budget_usd"),
     }

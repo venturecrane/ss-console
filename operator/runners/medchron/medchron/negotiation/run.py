@@ -50,6 +50,21 @@ def default_state_dir() -> Path:
     return Path(os.environ.get(arrivals.DATA_ENV) or arrivals.DEFAULT_DATA_DIR) / "negotiation" / "state"
 
 
+def _saved_on_or_after(f: dict[str, Any], cutoff: dt.datetime) -> bool:
+    """Whether a file's ``dateCreated`` is at or after ``cutoff``. A file with
+    no readable creation time is taken as older (seeded), never as a flood."""
+    raw = str(f.get("created") or "").strip()
+    if not raw:
+        return False
+    try:
+        when = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=dt.timezone.utc)
+    return when >= cutoff
+
+
 def _dump(path: Path, obj: Any) -> None:
     tmp = path.with_name(f".{path.name}.tmp")
     tmp.write_text(json.dumps(obj, indent=1), encoding="utf-8")
@@ -268,14 +283,30 @@ class NegotiationRun:
         )
         _dump(self.data / "notices.json", self.notices)
 
+    def _seed(self, mid: str, files: list[dict[str, Any]]) -> dict[str, str] | None:
+        """A matter the lane has never seen. Unauthored cutoff: every file now
+        present is taken as handled (nothing read, nothing emailed; returns
+        None). With ``seed_saved_before``: only files saved before it are taken
+        as handled (what the 2026-10-09 fill read); the rest are returned as
+        new, so an offer saved between that fill and this first run is entered
+        and announced like any other."""
+        self.counts["matters_seeded"] += 1
+        cutoff = self.job.seed_saved_before
+        if cutoff is None:
+            arrivals.commit(LANE, mid, files, data=self.state)
+            return None
+        handled = [f for f in files if not _saved_on_or_after(f, cutoff)]
+        arrivals.commit(LANE, mid, handled, data=self.state)
+        return arrivals.manifest_of(handled)
+
     def matter(self, matter: dict[str, Any]) -> None:
         mid = matter["id"]
         files = arrivals.list_files(self.seat, mid)
         prior = arrivals.cursor(LANE, mid, data=self.state)
         if prior is None:
-            arrivals.commit(LANE, mid, files, data=self.state)
-            self.counts["matters_seeded"] += 1
-            return
+            prior = self._seed(mid, files)
+            if prior is None:
+                return
         new = [f for f in arrivals.new_since(files, prior) if select(f)]
         failed: set[str] = set()
         if new and not self.stopped:

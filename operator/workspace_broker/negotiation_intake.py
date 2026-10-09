@@ -84,6 +84,24 @@ def usd(settings: dict[str, Any], key: str) -> float | None:
     return float(value)
 
 
+def seed_saved_before(settings: dict[str, Any]) -> str | None:
+    """The authored first-run seed cutoff, normalized to ``YYYY-MM-DDTHH:MM:SSZ``;
+    "" when unauthored (seed every file present); None when authored but not a
+    UTC ISO timestamp (the submit refuses rather than guess)."""
+    raw = settings.get("seed_saved_before")
+    if raw is None or raw == "":
+        return ""
+    from datetime import datetime, timezone
+
+    try:
+        when = datetime.fromisoformat(str(raw).strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        return None
+    return when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def cron_row_live(path: str | Path) -> bool:
     try:
         doc = _load(path)
@@ -113,6 +131,7 @@ __all__ = [
     "negotiation_design",
     "scheduled_allowed",
     "scheduled_recipients",
+    "seed_saved_before",
     "settings_of",
     "skill_entry",
     "usd",

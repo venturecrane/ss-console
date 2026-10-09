@@ -47,6 +47,7 @@ personas:
           monthly_budget_usd: {budget}
           per_job_cap_usd: 8
           firm_words: 'ashton,price'
+          seed_saved_before: '{seed}'
     cron:{cron}
 """
 LIVE = """
@@ -57,8 +58,8 @@ LIVE = """
 NOTICE = {"matter_id": "m-1", "matter_number": "200123", "status": "entered", "text": "New offer on matter 200123."}
 
 
-def _yaml(scheduled="true", recipients=ADMIN, budget="25", cron=LIVE) -> str:
-    return YAML.format(design=DESIGN, scheduled=scheduled, recipients=recipients, budget=budget, cron=cron)
+def _yaml(scheduled="true", recipients=ADMIN, budget="25", cron=LIVE, seed="2026-10-09T07:00:00-07:00") -> str:
+    return YAML.format(design=DESIGN, scheduled=scheduled, recipients=recipients, budget=budget, cron=cron, seed=seed)
 
 
 @pytest.fixture
@@ -103,6 +104,7 @@ def test_the_cron_submits_one_job_per_slot_with_the_authored_settings(seat):
     assert env["message_ref"] == "scheduled:2026-10-12T08" == slot_ref(FIXED_NOW)
     assert env["negotiation_design"] == DESIGN and env["firm_words"] == ["ashton", "price"]
     assert env["monthly_budget_usd"] == 25.0 and env["per_job_cap_usd"] == 8.0
+    assert env["seed_saved_before"] == "2026-10-09T14:00:00Z"  # normalized to UTC
     assert audit_types(db) == ["NEGOTIATION_JOB_SUBMITTED"]
     again = submit(broker)
     assert again["accepted"] is False and again["job_id"] == out["job_id"]
@@ -139,6 +141,8 @@ def test_the_agent_uid_needs_the_live_cron_row_root_does_not(seat):
         ({"scheduled": "false"}, "not switched on"),
         ({"recipients": "someone@firm.example"}, "Named Administrators"),
         ({"budget": "0"}, "budget is not authored"),
+        ({"seed": "the morning of the fill"}, "not a UTC timestamp"),
+        ({"seed": "2026-10-09T14:00:00"}, "not a UTC timestamp"),
     ],
 )
 def test_each_submit_check_refuses(seat, over, needle):

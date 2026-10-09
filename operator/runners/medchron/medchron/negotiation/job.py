@@ -7,7 +7,8 @@ The envelope (the broker's ``negotiation_job_submit`` writes exactly this)::
     {"kind": "negotiation", "job_id": ULID, "trigger": "scheduled",
      "requester": email, "message_ref": "scheduled:<YYYY-MM-DDTHH>",
      "matter_statuses": [str], "negotiation_design": guid | "",
-     "firm_words": [str], "per_job_cap_usd": n, "monthly_budget_usd": n}
+     "firm_words": [str], "seed_saved_before": "YYYY-MM-DDTHH:MM:SSZ" | "",
+     "per_job_cap_usd": n, "monthly_budget_usd": n}
 
 Re-validated here: the runner refuses an envelope it cannot read the same way
 the broker refused to queue one.
@@ -18,6 +19,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +41,9 @@ class NegotiationJob:
     matter_statuses: tuple[str, ...]
     negotiation_design: str | None
     firm_words: tuple[str, ...]
+    #: First-run seed cutoff (UTC): a never-seen matter's files saved before it
+    #: are taken as already handled; None seeds every file present.
+    seed_saved_before: datetime | None
     per_job_cap_usd: float
     monthly_budget_usd: float
     month_cents_used: int
@@ -53,6 +58,18 @@ def _usd(data: dict[str, Any], key: str) -> float:
     if isinstance(v, bool) or not isinstance(v, (int, float)) or v <= 0:
         raise NegotiationJobError(f"{key} must be a positive number")
     return float(v)
+
+
+def _seed(raw: Any) -> datetime | None:
+    if raw in (None, ""):
+        return None
+    try:
+        when = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        raise NegotiationJobError("seed_saved_before must be an ISO UTC timestamp") from None
+    if when.tzinfo is None:
+        raise NegotiationJobError("seed_saved_before must carry its timezone")
+    return when.astimezone(timezone.utc)
 
 
 def parse(data: Any, job_dir: Path) -> NegotiationJob:
@@ -73,6 +90,7 @@ def parse(data: Any, job_dir: Path) -> NegotiationJob:
     words = data.get("firm_words") or []
     if not isinstance(words, list) or not all(isinstance(w, str) and _WORD.match(w) for w in words):
         raise NegotiationJobError("firm_words must be lowercase words")
+    seed = _seed(data.get("seed_saved_before"))
     month = data.get("month_cents_used")
     if isinstance(month, bool) or not isinstance(month, int) or month < 0:
         raise NegotiationJobError("month_cents_used must be the month's spend in cents")
@@ -83,6 +101,7 @@ def parse(data: Any, job_dir: Path) -> NegotiationJob:
         matter_statuses=tuple(s.strip() for s in statuses),
         negotiation_design=design,
         firm_words=tuple(words),
+        seed_saved_before=seed,
         per_job_cap_usd=_usd(data, "per_job_cap_usd"),
         monthly_budget_usd=_usd(data, "monthly_budget_usd"),
         month_cents_used=month,

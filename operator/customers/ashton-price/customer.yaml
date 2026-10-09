@@ -802,6 +802,13 @@ personas:
           # Words that mark a counter-offer as the firm's own (the reader's
           # "by" field names the firm), beside the plaintiffs' names.
           firm_words: 'ashton,price'
+          # First-run seed cutoff (UTC): on a matter the watch has never seen,
+          # files saved BEFORE this are taken as already entered (the
+          # 2026-10-09 fill read them; its file inventory ran 16:15-16:23Z) and
+          # anything saved at or after it is read and announced. Set earlier
+          # than the inventory on purpose: an offer the fill already entered
+          # reads back as already present and is not emailed twice.
+          seed_saved_before: '2026-10-09T14:00:00Z'
     # Every entry is pre_run-gated (ADR 0021 Stream B, #1748). The escalator's
     # bespoke pre_run decides whether a deadline needs the ladder; the other
     # skills carry the shared empty-seat gate (operator/templates/pre_run_gate.py):

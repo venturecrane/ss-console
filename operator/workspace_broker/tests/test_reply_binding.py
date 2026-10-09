@@ -758,6 +758,7 @@ def _negotiation_notice(tmp_path: Path, state: str = "delivered") -> tuple[str, 
             "matter_statuses": ["Open"],
             "negotiation_design": "",
             "firm_words": [],
+            "seed_saved_before": "",
             "per_job_cap_usd": 10,
             "monthly_budget_usd": 25,
         }

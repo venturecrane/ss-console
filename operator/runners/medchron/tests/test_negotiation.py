@@ -232,7 +232,7 @@ class Layout:
         return {"status": self.status, "entries": [{"status": "written"} for _ in rows]}
 
 
-def _job(tmp_path):
+def _job(tmp_path, **over):
     jd = tmp_path / "job"
     (jd / "data").mkdir(parents=True)
     (jd / "job.json").write_text(
@@ -246,6 +246,7 @@ def _job(tmp_path):
                 "per_job_cap_usd": 5.0,
                 "monthly_budget_usd": 25.0,
                 "month_cents_used": 0,
+                **over,
             }
         )
     )
@@ -254,8 +255,8 @@ def _job(tmp_path):
     return jd, pricing
 
 
-def _run(tmp_path, seat, layout, monkeypatch, events=None, fail_read=False):
-    jd, pricing = _job(tmp_path)
+def _run(tmp_path, seat, layout, monkeypatch, events=None, fail_read=False, **job):
+    jd, pricing = _job(tmp_path, **job)
 
     def read(doorway, doc, text, rows, tabs):
         if fail_read:
@@ -285,6 +286,40 @@ def test_the_first_run_seeds_the_cursor_and_delivers_nothing(tmp_path, monkeypat
     assert v["verdict"] == "delivered" and v["matters_seeded"] == 1 and v["notices"] == [] and v["docs_read"] == 0
     assert layout.calls == []
     assert arrivals.cursor("negotiation", M1, data=tmp_path / "state") == {"f1": "1", "f2": "1"}
+
+
+SEEDED = [
+    {"id": "f1", "name": "Offer letter 9-30", "ext": ".pdf", "modified": "1", "created": "2026-10-08T22:10:00Z"},
+    {"id": "f2", "name": "Offer letter 10-09", "ext": ".pdf", "modified": "1", "created": "2026-10-09T15:30:00.123Z"},
+]
+
+
+def test_a_first_run_seed_cutoff_reads_what_was_saved_after_the_fill(tmp_path, monkeypatch):
+    """FALSIFIER: seed the whole file set on the first run and the offer saved
+    after the 2026-10-09 fill (f2) is never entered or emailed."""
+    layout = Layout()
+    v = _run(tmp_path, Seat(SEEDED), layout, monkeypatch, seed_saved_before="2026-10-09T14:00:00Z").run()
+    assert v["matters_seeded"] == 1 and v["docs_read"] == 1
+    assert len(layout.calls) == 1 and len(v["notices"]) == 1 and v["notices"][0]["status"] == "entered"
+    assert arrivals.cursor("negotiation", M1, data=tmp_path / "state") == {"f1": "1", "f2": "1"}
+
+
+def test_a_file_saved_exactly_at_the_cutoff_is_new_and_one_before_is_not(tmp_path, monkeypatch):
+    files = [
+        {**SEEDED[0], "created": "2026-10-09T13:59:59Z"},
+        {**SEEDED[1], "created": "2026-10-09T14:00:00Z"},
+    ]
+    seen: list[str] = []
+    r = _run(tmp_path, Seat(files), Layout(), monkeypatch, seed_saved_before="2026-10-09T14:00:00Z")
+    monkeypatch.setattr(r, "_text", lambda mid, f: seen.append(f["id"]) or "letter text")
+    r.run()
+    assert seen == ["f2"]
+
+
+def test_an_unauthored_cutoff_keeps_seeding_everything(tmp_path, monkeypatch):
+    layout = Layout()
+    v = _run(tmp_path, Seat(SEEDED), layout, monkeypatch).run()
+    assert v["docs_read"] == 0 and v["notices"] == [] and layout.calls == []
 
 
 def test_a_new_offer_is_written_announced_and_the_cursor_moves_after(tmp_path, monkeypatch):

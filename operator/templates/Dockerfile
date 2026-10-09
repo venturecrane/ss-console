@@ -1145,7 +1145,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # provenance source) and add_negotiation_rows (INTERNAL_WRITE), which ship in
 # the same ss-console change (#3116). Until this ref is on a seat both tools are
 # refused there, the fail-closed direction.
-ARG OVERLAY_REF="7008c00849281bbc2b9bb0d8fd7b810f3a6c22e7"
+# 2026-10-09 (e86b659c, the overlay #436 merge commit). The negotiation watch's
+# seat half: "negotiation job <id>" is a scheduled job wake whose one channel is
+# the broker's new_message binding (every send tool refused), and
+# negotiation_job_status (READ) hands the wake a notice's code-composed message.
+# Ships with ss-console #3118 (the lane, its broker verbs and the binding mode).
+ARG OVERLAY_REF="e86b659caa555d350c78d856460fabb6b2971407"
 
 ARG CUSTOMER_SLUG=customer-zero
 

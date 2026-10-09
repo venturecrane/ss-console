@@ -42,6 +42,7 @@ from .negotiation_intake import (
     negotiation_design,
     scheduled_allowed,
     scheduled_recipients,
+    seed_saved_before,
     settings_of,
     skill_entry,
     usd,
@@ -187,6 +188,12 @@ class NegotiationVerbs:
             settings = self._seat_gates(peer_uid)
             requester = self._recipient(settings)
             monthly, cents = self._budget(settings)
+            seed = seed_saved_before(settings)
+            if seed is None:
+                raise _Refused(
+                    "the negotiation watch's seed_saved_before is not a UTC timestamp "
+                    "(e.g. 2026-10-09T14:00:00Z); nothing was queued"
+                )
             envelope = {
                 "trigger": "scheduled",
                 "requester": requester,
@@ -195,6 +202,7 @@ class NegotiationVerbs:
                 "matter_statuses": matter_statuses(settings),
                 "negotiation_design": negotiation_design(self.customer_yaml),
                 "firm_words": firm_words(settings),
+                "seed_saved_before": seed,
                 "per_job_cap_usd": min(usd(settings, "per_job_cap_usd") or DEFAULT_PER_JOB_USD, monthly),
                 "monthly_budget_usd": monthly,
             }
