@@ -1404,6 +1404,15 @@ staff_mailbox_reads:
 combined_post_intake:
   medical_folder: Medical
 
+# smokeball_layouts.settlement_negotiations_design: the base guid of the firm's
+# Negotiation Details layout, learned 2026-10-09 from matters whose tab carries
+# rows (the design id is that guid plus a per-matter-type suffix). Smokeball
+# names no layout and returns no empty field, so this is how the Smokeball
+# connector (smokeball_connector/layout_config.py) labels a tab with no rows yet
+# and where add_negotiation_rows writes the first one.
+smokeball_layouts:
+  settlement_negotiations_design: f6719448-d924-4c59-9c1e-3bd2b76550ca
+
 # form_letters.signers: how the matter's responsible staff member signs the
 # firm's rep letters, keyed by the staff member's name as Smokeball holds it
 # (or their staff id). Authored ONLY from the firm's own letters (the file

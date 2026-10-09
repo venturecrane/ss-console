@@ -288,3 +288,19 @@ render_sr19 = "internal_write"
 # mcp_smokeball_render_funding_case_eval = ActionClass.INTERNAL_WRITE, shipped by the
 # OVERLAY_REF bump in the same change; until it lands the tool is UNREACHABLE.
 render_funding_case_eval = "internal_write"
+# get_matter_layouts / add_negotiation_rows (2026-10-09, a firm asked about a
+# matter's Negotiation Details and the Operator, holding no layout read, said
+# the fields could not be read). The read returns a matter's custom tabs as a
+# section index or one section's fields, sensitive identifiers masked, and
+# says a missing field was never entered. The write adds demand and offer rows
+# to the Negotiation Details tab, only into EMPTY fields, re-reads before the
+# PATCH and reads back after it.
+# read / internal_write: the firm's own record; nothing sent, signed or settled.
+#
+# COORDINATED CHANGE: hermes-smd-overlay shared/action_classes.py must carry
+# mcp_smokeball_get_matter_layouts = ActionClass.READ and
+# mcp_smokeball_add_negotiation_rows = ActionClass.INTERNAL_WRITE (overlay#435),
+# shipped by the OVERLAY_REF bump in the same change; until it lands both are
+# UNREACHABLE.
+get_matter_layouts = "read"
+add_negotiation_rows = "internal_write"
