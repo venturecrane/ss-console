@@ -33,7 +33,13 @@ B = "Matter/Plaintiffs/SettlementNegotiations/SettlementNegotiationsDetails"
 
 
 def _item(item_id: str, design: str, parent_index: int | None = 0, desc: str | None = None) -> dict[str, Any]:
-    return {"id": item_id, "layoutDesignId": design, "parentId": "Plaintiff", "parentIndex": parent_index, "description": desc}
+    return {
+        "id": item_id,
+        "layoutDesignId": design,
+        "parentId": "Plaintiff",
+        "parentIndex": parent_index,
+        "description": desc,
+    }
 
 
 class _Tenant:
@@ -99,7 +105,10 @@ def _filled_tenant() -> _Tenant:
             _item("pi", "PersonalInjurySettlementDetailsItem"),
         ],
         {
-            "ins": {"Matter/Plaintiffs/InsurancePolicy/Insurer": "StateFarm", "Matter/Plaintiffs/Person/SocialSecurityNumber": "123-45-6789"},
+            "ins": {
+                "Matter/Plaintiffs/InsurancePolicy/Insurer": "StateFarm",
+                "Matter/Plaintiffs/Person/SocialSecurityNumber": "123-45-6789",
+            },
             "neg": {f"{B}/OfferAmount": 5000.0, f"{B}/OfferDate": "2026-08-01T00:00:00", f"{B}[1]/DemandAmount": 40000},
             "pi": {"Providers[0]/Provider/DisplayName": "AMR"},
         },

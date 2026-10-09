@@ -44,9 +44,7 @@ from .medicals_layout import layout_values
 VALUE_WAITS: tuple[float, ...] = (2, 3, 5, 8, 12)
 SLEEP: Callable[[float], None] = time.sleep
 MAX_BYTES = 30_000
-NOT_ENTERED_NOTE = (
-    "Smokeball returns only filled fields. A field missing here was never entered; it is not unreadable."
-)
+NOT_ENTERED_NOTE = "Smokeball returns only filled fields. A field missing here was never entered; it is not unreadable."
 
 
 def _client() -> Any:
@@ -97,9 +95,7 @@ def _capped(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def get_matter_layouts(
-    matter_id: str, section: str = "", item_id: str = "", include_sensitive: bool = False
-) -> Any:
+def get_matter_layouts(matter_id: str, section: str = "", item_id: str = "", include_sensitive: bool = False) -> Any:
     """Read a matter's custom tabs (Smokeball "layouts": Negotiation Details,
     insurance, health insurer, case details, Medicals, witnesses).
 
@@ -224,7 +220,9 @@ def _plan(rows: list[dict[str, Any]], existing: dict[int, dict[str, Any]]) -> di
         for field, value in fields.items():
             writes[row_key(target, field)] = _vendor_value(field, value)
         taken.setdefault(target, {}).update(fields)
-        results.append({"entry": i, "status": "to_write" if fields else "already_present", "row": target, "fields": fields})
+        results.append(
+            {"entry": i, "status": "to_write" if fields else "already_present", "row": target, "fields": fields}
+        )
     gaps = [n for n in range(max(last, 0)) if n not in existing]
     return {"writes": writes, "results": results, "gaps": gaps}
 
@@ -273,11 +271,15 @@ def _write_and_confirm(client: Any, path: str, writes: dict[str, Any]) -> dict[s
         return _refused(f"the tab could not be re-read before writing ({exc.__class__.__name__}); nothing was written")
     raced = [k for k in writes if filled(fresh.get(k))]
     if raced:
-        return _refused("someone entered values on this tab while it was being filled; nothing was written", fields=raced)
+        return _refused(
+            "someone entered values on this tab while it was being filled; nothing was written", fields=raced
+        )
     try:
         client.request("PATCH", path, json={"values": [{"key": k, "value": v} for k, v in writes.items()]})
     except Exception as exc:  # noqa: BLE001 - a refused write is reported as one
-        return _refused(f"Smokeball refused the write ({exc.__class__.__name__}: {str(exc)[:200]}); nothing confirmed written")
+        return _refused(
+            f"Smokeball refused the write ({exc.__class__.__name__}: {str(exc)[:200]}); nothing confirmed written"
+        )
     after: dict[str, Any] = {}
     for wait in VALUE_WAITS:
         SLEEP(wait)
@@ -292,7 +294,9 @@ def _write_and_confirm(client: Any, path: str, writes: dict[str, Any]) -> dict[s
     # editing another field during the poll is not this write's doing.
     rows_written = {_row_prefix(k) for k in writes}
     disturbed = [
-        k for k, v in fresh.items() if k not in writes and _row_prefix(k) in rows_written and not _same(k, v, after.get(k))
+        k
+        for k, v in fresh.items()
+        if k not in writes and _row_prefix(k) in rows_written and not _same(k, v, after.get(k))
     ]
     return {"after": after, "mismatch": mismatch, "disturbed": disturbed}
 
@@ -350,7 +354,13 @@ def add_negotiation_rows(
     top, skipped = _top_level(values, details.strip(), minimum_settlement.strip())
     writes = {**plan["writes"], **top}
     entries = [{**r, "status": "written" if r["status"] == "to_write" else r["status"]} for r in plan["results"]]
-    base = {"matter_id": matter, "item_id": item["id"], "entries": entries, "gap_rows": plan["gaps"], "skipped": skipped}
+    base = {
+        "matter_id": matter,
+        "item_id": item["id"],
+        "entries": entries,
+        "gap_rows": plan["gaps"],
+        "skipped": skipped,
+    }
     if not writes:
         return {"status": "nothing_to_write", "written": False, **base}
     done = _write_and_confirm(client, f"/matters/{matter}/layouts/{item['id']}", writes)
@@ -372,4 +382,12 @@ def register(server: Any) -> None:
     server.tool()(add_negotiation_rows)
 
 
-__all__ = ["MAX_BYTES", "NOT_ENTERED_NOTE", "SLEEP", "VALUE_WAITS", "add_negotiation_rows", "get_matter_layouts", "register"]
+__all__ = [
+    "MAX_BYTES",
+    "NOT_ENTERED_NOTE",
+    "SLEEP",
+    "VALUE_WAITS",
+    "add_negotiation_rows",
+    "get_matter_layouts",
+    "register",
+]
