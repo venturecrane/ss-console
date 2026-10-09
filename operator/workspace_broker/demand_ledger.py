@@ -69,6 +69,11 @@ from .cycle_window import cycle_window
 
 STATES = ("submitted", "running", "held", "delivered", "failed")
 TERMINAL = frozenset({"delivered", "failed"})
+#: A move INTO one of these states with no reason of its own clears the reason
+#: an earlier hold or failure left on the row (medchron_ledger, #3097): a
+#: resumed job delivered with its failure reason still on the row had the
+#: DELIVER turn tell the firm about refusals the filed document never had.
+REASON_CLEARING = frozenset({"running", "delivered"})
 AUDIT_TYPE = {s: f"DEMAND_JOB_{s.upper()}" for s in STATES}
 _ALLOWED_NEXT = {
     "submitted": {"running", "held", "failed"},
@@ -436,7 +441,7 @@ class DemandLedger:
                     resumed,
                     "cents" in fields,
                     cents,
-                    "reason" in fields,
+                    "reason" in fields or (state != cur["state"] and state in REASON_CLEARING),
                     str(fields.get("reason") or "")[:500] or None,
                     "folder_id" in fields,
                     str(fields.get("folder_id") or "") or None,

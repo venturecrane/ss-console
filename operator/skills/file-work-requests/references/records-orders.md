@@ -79,11 +79,13 @@ When she answers a `needs_choice` question, prepare again with what she chose:
 the facility's `custodian_id` from the candidates she picked, or
 `new_custodian: true` with the `address` she gave, or `hipaa_file_id`.
 
-## Turn 1, from the gap audit: "order the missing records"
+## Turn 1, from the gap audit: "yes" to the missing-records question
 
-When she answers a demand package (the gap audit the Operator filed) with
-"order the missing records", "order the records the gap audit lists" or the
-like, she has not named facilities: the audit has. Call
+When she answers a demand package (the gap audit the Operator filed, which the
+firm calls the missing-records list) with a plain "yes", "order them", "order
+the missing records" or any other words asking for those records to be ordered,
+she has not named facilities: the audit has. Never ask her to repeat a set
+phrase; her yes in that thread is the ask. Call
 `prepare_records_order` once with `matter_id`, `order_by_email` (her address)
 and `from_gap_audit: true`, and no `facilities`. The connector reads the
 matter's newest filed Gap Audit, keeps only the rows a records vendor can fill

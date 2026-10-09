@@ -252,6 +252,16 @@ def _recipients(addresses: Any) -> list[dict[str, Any]]:
     return [{"emailAddress": {"address": str(a).strip()}} for a in items if str(a or "").strip()]
 
 
+def _with_cc(body: dict[str, Any], cc: list[str]) -> dict[str, Any]:
+    """A ``/reply`` body with ``message.ccRecipients`` set to ``cc``. Graph's
+    reply ``message`` carries any writeable property, as the redirect path's
+    ``toRecipients`` already does (msgraph_redirect._with_recipient); the
+    sender stays the derived ``to``."""
+    if cc:
+        body.setdefault("message", {})["ccRecipients"] = _recipients(cc)
+    return body
+
+
 class MsGraphOps:
     """Transmit operations bound to one seat's pinned mailbox and authored policy."""
 
@@ -743,7 +753,8 @@ class MsGraphOps:
         # against (ss#2499). Naming them makes the dependency visible to whoever
         # edits this next, instead of leaving it to a default that could narrow.
         source = self._request(
-            self._mail_path("messages", message_id) + "?$select=id,from,sender,replyTo,conversationId",
+            self._mail_path("messages", message_id)
+            + "?$select=id,from,sender,replyTo,conversationId,toRecipients,ccRecipients",
             "GET",
             None,
             credential_path=self._read_credential_path,
@@ -751,6 +762,7 @@ class MsGraphOps:
         )
         sender, policy = self._vetted_sender(source, message_id)
         redirect = self._device_redirect(payload.get("to"), sender, policy)
+        cc = [] if redirect else self._request_participants(source, sender, policy)
         conversation_id = str(source.get("conversationId") or "")
         audit_token = new_row_token()
         if redirect:
@@ -765,7 +777,7 @@ class MsGraphOps:
                 refused=MsGraphRefused,
             )
         else:
-            stamped = self._post_reply(message_id, comment, html, audit_token)
+            stamped = self._post_reply(message_id, comment, html, audit_token, cc)
         located = (
             self._locate_sent(audit_token, conversation_id=conversation_id)
             if stamped
@@ -779,8 +791,9 @@ class MsGraphOps:
         return {
             "message_id": "",
             # For a device redirect, the person it went to. ``sender_key`` below
-            # still names the device, which is who wrote in.
-            "recipients": [redirect or sender],
+            # still names the device, which is who wrote in. Otherwise the
+            # sender, then the request's other authored participants copied.
+            "recipients": [redirect] if redirect else [sender, *cc],
             "mailbox": self.mailbox(),
             # Empty when the header was refused, so the row never claims a key
             # that is not on the message. The reconciler reads a blank token as
@@ -822,11 +835,34 @@ class MsGraphOps:
             )
         return target
 
-    def _post_reply(self, message_id: str, comment: str, html: str, audit_token: str) -> bool:
-        """``POST /messages/{id}/reply`` to the derived sender. True iff stamped."""
+    def _request_participants(self, source: dict[str, Any], sender: str, policy: RecipientPolicy) -> list[str]:
+        """Everyone else the request was addressed or copied to whom this seat may
+        answer, to be copied on the reply (2026-10-08: an administrator asked
+        for a firm document with the office manager copied, and the finished
+        work reached only the administrator).
+
+        The same rule as the sender: on ``scope.inbound_allow_from``, so the
+        firm's own people and nobody the firm did not author. An outside party
+        on the request (opposing counsel copied, a vendor) is left off, never
+        reached; this seat's own mailbox and the sender are not repeated. The
+        list is read from the message the broker fetched itself, never taken
+        from a caller.
+        """
+        own = normalize_address(self.mailbox())
+        out: list[str] = []
+        for field in ("toRecipients", "ccRecipients"):
+            for item in source.get(field) or []:
+                address = normalize_address(item)
+                if address and address not in (sender, own) and address not in out and policy.allows_reply_to(address):
+                    out.append(address)
+        return out
+
+    def _post_reply(self, message_id: str, comment: str, html: str, audit_token: str, cc: list[str]) -> bool:
+        """``POST /messages/{id}/reply`` to the derived sender, copying ``cc``
+        (the request's vetted participants). True iff stamped."""
         reply_path = self._mail_path("messages", message_id, "reply")
         try:
-            self._request(reply_path, "POST", self._reply_body(comment, html, audit_token))
+            self._request(reply_path, "POST", _with_cc(self._reply_body(comment, html, audit_token), cc))
             return True
         except MsGraphTransportError as exc:
             # ONE retry, and only on 400. Graph's reference says the ``message``
@@ -839,7 +875,7 @@ class MsGraphOps:
             # so it propagates rather than risking the same message twice.
             if getattr(exc, "status", None) != 400:
                 raise
-        self._request(reply_path, "POST", self._reply_body(comment, html, ""))
+        self._request(reply_path, "POST", _with_cc(self._reply_body(comment, html, ""), cc))
         return False
 
     @staticmethod

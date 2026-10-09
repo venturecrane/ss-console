@@ -22,6 +22,8 @@ out = [{"unit": "drafting", "kind": "drafting", "outcome": "delivered", "stage":
                   {"name": "Mediation Brief - 100001 - 10-07-26 - attorney notes.docx", "size": 9000, "role": "attorney_notes"}],
         "caption_discrepancies": [{"field": "case_number", "document_value": "CV-0001", "record_value": "CV-0010",
                                    "why": "differs", "source": "Complaint Gamma Example.pdf", "quote": "Case No. CV-0001"}],
+        "caption_corrections": [{"field": "plaintiff", "from": "Gamma Exampel", "to": "GAMMA EXAMPLE",
+                                 "source_document": "Complaint Gamma Example"}],
         "markers": [{"kind": "ATTORNEY", "text": "settlement authority"}]}]
 (jd / 'verdict.json').write_text(json.dumps(out))
 print(json.dumps(out))
@@ -91,6 +93,7 @@ def test_the_lane_claims_from_its_queue_and_records_through_drafting_verbs(tmp_p
     assert f["cents"] == 1250 and f["folder_id"] == "folder-9" and f["delivery"]["cents"] == 1250
     assert f["delivery"]["files"][0]["role"] == "draft"
     assert f["caption_discrepancies"][0]["field"] == "case_number" and f["markers"][0]["kind"] == "ATTORNEY"
+    assert f["caption_corrections"][0]["to"] == "GAMMA EXAMPLE"
     assert {"action": "drafting_allowance", "exclude_job_id": jid} in client.requests
     assert (lane.run_dir / "drafting-jobs" / jid / "job.json").is_file()
 
@@ -111,9 +114,11 @@ def test_the_wake_asks_for_deliver_mode_and_carries_no_client_text(tmp_path):
         "Files: draft (52000 bytes); attorney_notes (9000 bytes).",
         "Requested by: admin@firm.example.",
         "Caption discrepancies: 1.",
+        "Caption corrections: 1.",
     ):
         assert line in task
     assert "Gamma Example" not in task and "CV-0001" not in task
+    assert "GAMMA EXAMPLE" not in task and "Gamma Exampel" not in task  # a correction's names never ride the wake
 
 
 def test_a_failed_job_records_failed_and_wakes_with_the_stage_only(tmp_path):

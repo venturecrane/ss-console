@@ -1309,3 +1309,75 @@ def test_the_wake_carries_no_email_id():
     from medchron import demand_lane
 
     assert "Request ref" not in inspect.getsource(demand_lane.DemandLane._compose_wake)
+
+
+# ---- 2026-10-09: a settlement spoken of as a future event is not a settlement ------------
+MEDPAY_NOTICE = (
+    "Example Mutual Insurance Company has paid medical benefits on behalf of your client in the "
+    "amount of $3,417.21 and we will be seeking reimbursement once a settlement has been reached. "
+    "If suit is filed, please notify us immediately."
+)
+
+
+def _g4_prem() -> dict:
+    return {
+        "denial_phrases": ["coverage is denied"],
+        "fail_on": ["acceptance"],
+        "settled_phrases": ["settlement has been reached", "accept the policy limits"],
+        "carrier_phrases": ["claim number"],
+        "litigation_phrases": ["complaint for damages"],
+        "_firm_signature": "X",
+        "_firm_domains": [],
+    }
+
+
+def test_a_med_pay_reimbursement_notice_is_not_a_settlement(tmp_path):
+    """FALSIFIER: drop conditional=True from the G4 settled-phrase read and this
+    live pre-suit file fails G4 and gets a coverage report instead of its demand
+    (the 10-09 case: a carrier's standard notice, twice in one file)."""
+    from medchron.demand import premise
+
+    t = tmp_path / "a.txt"
+    t.write_text(MEDPAY_NOTICE)
+    out = premise.decide(
+        [{"name": "carrier status update", "text_path": str(t)}], {"premise_hits": []}, {"insurer": "X"}, _g4_prem()
+    )
+    g4 = next(g for g in out["gates"] if g["gate"].startswith("G4"))
+    assert g4["passed"] is True, g4["evidence"]
+
+
+def test_a_settlement_that_has_been_reached_still_fails_g4(tmp_path):
+    from medchron.demand import premise
+
+    t = tmp_path / "a.txt"
+    t.write_text("Please be advised a settlement has been reached in this matter for the policy limits.")
+    out = premise.decide(
+        [{"name": "carrier letter", "text_path": str(t)}], {"premise_hits": []}, {"insurer": "X"}, _g4_prem()
+    )
+    g4 = next(g for g in out["gates"] if g["gate"].startswith("G4"))
+    assert g4["passed"] is False
+
+
+@pytest.mark.parametrize(
+    "lead",
+    [
+        "once a",
+        "when a",
+        "when the",
+        "until a",
+        "unless a",
+        "if a",
+        "after a",
+        "before a",
+        "upon",
+        "in the event that a",
+    ],
+)
+def test_a_conditional_lead_before_a_settled_phrase_does_not_count(lead):
+    from medchron.demand import premise
+
+    text = f"We will seek reimbursement {lead} settlement has been reached."
+    assert premise._phrase_hits([({"name": "letter"}, text)], ["settlement has been reached"], conditional=True) == []
+    assert premise._phrase_hits(
+        [({"name": "letter"}, text)], ["settlement has been reached"]
+    )  # without the guard it hits

@@ -69,6 +69,11 @@ from .cycle_window import cycle_window
 
 STATES = ("submitted", "running", "held", "delivered", "failed")
 TERMINAL = frozenset({"delivered", "failed"})
+#: A move INTO one of these states with no reason of its own clears the reason
+#: an earlier hold or failure left on the row (medchron_ledger, #3097): a
+#: resumed job delivered with its failure reason still on the row had the
+#: DELIVER turn tell the firm about refusals the filed document never had.
+REASON_CLEARING = frozenset({"running", "delivered"})
 AUDIT_TYPE = {s: f"DRAFTING_JOB_{s.upper()}" for s in STATES}
 _ALLOWED_NEXT = {
     "submitted": {"running", "held", "failed"},
@@ -224,7 +229,7 @@ def queue_record(env: dict[str, Any], job_id: str) -> dict[str, Any]:
 #: The delivery report's lists the DELIVER turn names. The runner may send each
 #: inside ``delivery`` or as a top-level field of the record; either lands in
 #: the stored delivery, so the projection has one place to read them from.
-REPORT_LISTS = ("markers", "caption_discrepancies")
+REPORT_LISTS = ("markers", "caption_discrepancies", "caption_corrections")
 
 
 def incoming_delivery(fields: dict[str, Any]) -> dict[str, Any] | None:
@@ -480,7 +485,7 @@ class DraftingLedger:
                     resumed,
                     "cents" in fields,
                     cents,
-                    "reason" in fields,
+                    "reason" in fields or (state != cur["state"] and state in REASON_CLEARING),
                     str(fields.get("reason") or "")[:500] or None,
                     "folder_id" in fields,
                     str(fields.get("folder_id") or "") or None,

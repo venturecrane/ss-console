@@ -517,8 +517,15 @@ rather than commands, and each one was learned from a delivered defect:
 - **The audit runs in image mode by default.** `SMD_AUDIT_MODE=text` (cached
   page text with image fallback) passed its validation bar on one delivered
   matter and missed it by one reverse control on another (2026-08-27); it stays
-  opt-in until `audit_validate.py` passes on a second matter. Never batch the
-  audit; its cache design needs the calls interactive.
+  opt-in until `audit_validate.py` passes on a second matter. The IMAGE audit
+  can be batched at half price (`SMD_AUDIT_BATCH=1`; wall clock becomes hours,
+  two passes per round): the old "never batch, the cache needs it live" rule
+  did not hold for image mode, which sends no cache markers (0 cache reads
+  across 14,286 image calls on record, 2026-10-08). Text mode stays live.
+- **Re-scoping a delivered chronology is a splice, never a rebuild**
+  (`splice_update.py`, RUNBOOK "Re-scoping a DELIVERED chronology"): delivered
+  entries carry over byte-identical so their verdicts stand, and only added
+  claims are paid for.
 - **`build_units` runs after `vision_scan`,** never before. Selecting on
   `text_path` before vision writes it silently dropped every scanned document
   from composition, and a chronology shipped that way before the defect was

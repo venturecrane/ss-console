@@ -42,6 +42,14 @@ def ledger(tmp_path):
     return DemandLedger(str(tmp_path / "audit.db"), tmp_path / "queue")
 
 
+def test_a_resumed_demand_delivered_carries_no_reason_from_its_failure(ledger) -> None:
+    job = ledger.submit(_env())
+    ledger.record(job, "running", {})
+    ledger.record(job, "failed", {"reason": "stage_unfinished: compose"})
+    assert ledger.record(job, "running", {})["reason"] is None
+    assert ledger.record(job, "delivered", {"folder_id": "f"})["reason"] is None
+
+
 def test_the_envelope_is_exact_and_normalized() -> None:
     env = validate_envelope(_env())
     assert env["requested_by"] == "admin@firm.example"

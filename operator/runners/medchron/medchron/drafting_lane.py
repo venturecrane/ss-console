@@ -16,7 +16,8 @@ the drafting CHILD imports demand's kind-agnostic stages, pinned by
   records vendor's env: no drafting stage uses it;
 * its wake: the ``document-drafter`` skill's DELIVER mode, carrying the job id,
   class, outcome, folder id, the read-back files by ROLE and size, and the
-  count of caption discrepancies. Never a file name or a reason: those carry
+  count of caption discrepancies and of the record corrections the job made
+  from the court's paper. Never a file name or a reason: those carry
   client text, and the DELIVER turn reads them from the ledger row.
 
 Memory: the drafting child runs in the DEMAND lane's memory cgroup, under its
@@ -171,6 +172,8 @@ class DraftingLane(Daemon):
             out, _ = proc.communicate()
         (self.run_dir / "drafting-child.pid").unlink(missing_ok=True)
         self.jobs_run += 1
+        if resume_mod.cut_short_by_stop(self, job_id, proc.returncode, out or ""):
+            return "interrupted"
         return self._report(job_id, proc.returncode, out or "")
 
     def _fail_unconfigured(self, job_id: str, exc: Exception) -> str:
@@ -228,8 +231,12 @@ class DraftingLane(Daemon):
         fields: dict[str, Any] = {
             "cents": cents,
             "caption_discrepancies": list(v.get("caption_discrepancies") or []),
+            "caption_corrections": list(v.get("caption_corrections") or []),
             "markers": list(v.get("markers") or []),
         }
+        if v.get("caption_restore_incomplete"):
+            # A record correction that could not be fully put back: SMD must look.
+            logger.error("drafting job %s left a caption correction not fully put back", job_id)
         if v.get("reason"):
             fields["reason"] = str(v["reason"])[:500]
         if state == "delivered":
@@ -267,6 +274,7 @@ class DraftingLane(Daemon):
             f"Files: {files}.",
             f"Requested by: {env.get('requester') or ''}.",
             f"Caption discrepancies: {len(fields.get('caption_discrepancies') or [])}.",
+            f"Caption corrections: {len(fields.get('caption_corrections') or [])}.",
         ]
         if state != "delivered":
             lines.append(f"Reason: stopped at {stage or 'the runner (no verdict)'}.")

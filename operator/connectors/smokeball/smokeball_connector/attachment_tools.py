@@ -29,6 +29,7 @@ from .records_order_tools import register as _register_records_order_tools
 from .sr1_form import register as _register_sr1_tools
 from .sr19_form import register as _register_sr19_tools
 from .funding_case_eval import register as _register_funding_case_eval_tools
+from .layout_tools import register as _register_layout_tools
 
 
 def register(server: Any) -> None:
@@ -43,7 +44,9 @@ def register(server: Any) -> None:
     that. Then ``add_medicals_provider`` (a facility with no bill,
     medicals_provider.py) and ``render_firm_form_letter`` (the firm's own
     rep-letter form, filled, form_letters.py), neither attachment-rooted, last
-    for the same reason."""
+    for the same reason. The records-order, SR1, SR19 and funding-form tools
+    follow, and the layout read and Negotiation Details write
+    (layout_tools.py) register after all of them, for the same reason."""
     _register_vendor_invoice_tools(server)
     _register_letter_tools(server)
     _register_workbook_tools(server)
@@ -60,6 +63,8 @@ def register(server: Any) -> None:
     _register_sr19_tools(server)
     # The funding case evaluation prefill (funding_case_eval.py), after the SR19.
     _register_funding_case_eval_tools(server)
+    # The layout read and the Negotiation Details write (layout_tools.py), last.
+    _register_layout_tools(server)
 
 
 __all__ = ["register"]

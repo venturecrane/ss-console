@@ -175,6 +175,9 @@ class FakeGraph:
         #: Headers seen on the wire, oldest first — the folder replays these.
         self.transmitted_headers: list[list[dict]] = []
         self.sent_items_reads = 0
+        #: The source message's To and Cc lines (set by a test after construction).
+        self.source_to: list[str] = []
+        self.source_cc: list[str] = []
 
     def __call__(self, request, timeout=None):
         url = request.full_url
@@ -202,6 +205,8 @@ class FakeGraph:
                         "from": {"emailAddress": {"address": self._source_from or ""}},
                         "replyTo": [{"emailAddress": {"address": a}} for a in self._source_reply_to],
                         "conversationId": self._conversation_id,
+                        "toRecipients": [{"emailAddress": {"address": a}} for a in self.source_to],
+                        "ccRecipients": [{"emailAddress": {"address": a}} for a in self.source_cc],
                     }
                 )
             )
@@ -537,6 +542,38 @@ def test_reply_allows_an_authored_sender(tmp_path: Path) -> None:
     result = ops.reply({"message_id": "AAMk123", "comment": "sure"})
     assert result["recipients"] == ["scott@smd.services"]
     assert http.graph_posts()[0][1].endswith("/reply")
+
+
+def test_reply_copies_the_requests_authored_participants_and_no_one_else(tmp_path: Path) -> None:
+    """2026-10-08: an admin asked for a firm document with the office manager
+    copied, and the finished work reached only the admin. The reply now copies
+    everyone on the request this seat may answer; an outside party on the same
+    request, the seat's own mailbox and the sender are never added."""
+    http = FakeGraph(source_from="admin@examplefirm.example")
+    http.source_to = [MAILBOX, "paralegal@examplefirm.example"]
+    http.source_cc = [
+        "Manager <manager@examplefirm.example>",
+        UNAUTHORED,
+        "x@blocked.example",
+        "admin@examplefirm.example",
+    ]
+    ops = _ops(tmp_path, http, yaml_text=FIRM_YAML)
+    result = ops.reply({"message_id": "AAMk123", "comment": "filed"})
+    cc = ["paralegal@examplefirm.example", "manager@examplefirm.example"]
+    assert result["recipients"] == ["admin@examplefirm.example", *cc]
+    posted = http.graph_posts()[0][2]
+    assert [r["emailAddress"]["address"] for r in posted["message"]["ccRecipients"]] == cc
+    assert "toRecipients" not in posted["message"]  # the sender stays Graph-derived
+
+
+def test_a_reply_to_a_request_nobody_else_was_on_copies_no_one(tmp_path: Path) -> None:
+    """Control for the test above: no participants, no ccRecipients on the wire."""
+    http = FakeGraph(source_from="admin@examplefirm.example")
+    http.source_to = [MAILBOX]
+    ops = _ops(tmp_path, http, yaml_text=FIRM_YAML)
+    result = ops.reply({"message_id": "AAMk123", "comment": "filed"})
+    assert result["recipients"] == ["admin@examplefirm.example"]
+    assert "ccRecipients" not in (http.graph_posts()[0][2].get("message") or {})
 
 
 def test_reply_refuses_a_reply_to_that_is_not_the_vetted_sender(tmp_path: Path) -> None:

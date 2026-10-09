@@ -1511,7 +1511,13 @@ describe('Operator customer Machine Dockerfile', () => {
     // 099f9fdd -> f37225c1 (overlay#432 merge commit), 2026-10-08: the participant
     // fence's seat half (anchor + lane on every send, find_for_recipient deleted, cc/bcc classified),
     // carrying overlay#431 (the litigation status lane).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="f37225c1d9d43dfc379099c38466d4f638672e46"')
+    // f37225c1 -> bd885888 (overlay#433), 2026-10-08: the request tools take the session_id Hermes
+    // passes them, so an emailed drafting or demand request binds its own email (it never had on a seat).
+    // bd885883 -> 60ad6a1e (overlay#434), 2026-10-09: one job_done card per job ending, so a resumed
+    // job reports how it ended (pairs with ss-console #3111).
+    // 60ad6a1e -> 7008c008 (overlay#435), 2026-10-09: get_matter_layouts (read, a firm-record read and
+    // provenance source) and add_negotiation_rows (internal_write) classified.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="7008c00849281bbc2b9bb0d8fd7b810f3a6c22e7"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

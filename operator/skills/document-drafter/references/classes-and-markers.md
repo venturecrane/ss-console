@@ -38,8 +38,17 @@ It never fills one, and never adds an item the report does not carry.
 
 ## Caption discrepancies
 
-The job compares the caption in the court papers with the practice-management
-record and reports only exact-match fields it can quote (case number, court,
-party names, attorney email): `{field, document_value, record_value, why,
-source, quote}`. The reply lists the field, what the court paper says and what
-the record says. It never corrects the record itself; a person decides.
+The job reads the caption off page 1 of the latest complaint (else an answer,
+else a court notice), compares it with the practice-management record and
+reports only fields it can quote (case number, court, county, party names,
+attorney email): `{field, document_value, record_value, why, source, quote}`.
+The reply lists the field, what the court paper says and what the record says.
+
+## Caption corrections
+
+Where the court's own paper settles a field beyond doubt (a party name the
+record misspells, a case number the record lacks or prints with zeros dropped,
+and the value checked against the page's own text), the JOB corrects the
+record, proves nothing else moved, and reports `{field, from, to,
+source_document}`. The reply lists each one as reported. The turn itself never
+corrects the record; anything else stays a discrepancy for a person to decide.

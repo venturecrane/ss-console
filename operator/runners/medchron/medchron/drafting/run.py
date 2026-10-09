@@ -4,7 +4,7 @@ The graph, per class::
 
     facts -> destination -> pull (privilege wall) -> preflight -> estimate
       -> transcribe -> digest (cited)
-      -> [mediation brief: howell table] -> [court classes: caption + record diff]
+      -> [mediation brief: howell table] -> [court classes: caption read, record diff + corrections]
       -> compose -> audit -> repair -> reaudit -> final pass -> gate
       -> attach / reserve -> render -> format check -> file -> manifest
 
@@ -43,13 +43,23 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import budget as budget_mod, limits as limits_mod
-from . import citefix
+from . import citefix, nestquote
 from . import settle as settle_mod
 from ..demand import deliver, facts as facts_mod, finalpass, preflight, pull, quotefix, summarize, transcribe
 from ..demand.firm import DemandFirm
 from ..ledger import Ledger
 from ..llm import Doorway
-from . import caption as caption_mod, compose, firm as firm_mod, format_check, gate, howell, job as job_mod, render
+from . import (
+    caption as caption_mod,
+    caption_stage,
+    compose,
+    firm as firm_mod,
+    format_check,
+    gate,
+    howell,
+    job as job_mod,
+    render,
+)
 from . import notes as notes_mod
 from .outcome import REASON, WALL_SENTENCE, DraftingFailed, DraftingHold, Verdict, markers
 
@@ -117,7 +127,11 @@ class DraftingRun:
         log: Callable[[str], None] = print,
         today: Callable[[], time.struct_time] = time.localtime,
         readback_pause: float | None = None,
+        reexec: Callable[[], None] | None = None,
     ) -> None:
+        #: Replaces this process with a fresh one on the same job (the CLI's
+        #: os.execv); None in tests and dry runs. See ``_walk``.
+        self.reexec = reexec
         self.job = job_mod.load(job_dir)
         self.firm = firm_mod.load(inputs_dir)
         self.dview = demand_view(self.firm)
@@ -319,27 +333,20 @@ class DraftingRun:
         self._write("howell.json", {"table": table, "notes": notes})
 
     def _caption(self) -> None:
-        doc = caption_mod.source_document(self.data)
-        fields = caption_mod.extract(doc, self.firm.firm_domains) if doc else {}
         try:
-            record = caption_mod.read_record(self.seat, self.job.matter_id, self._json("facts.json"))
+            out = caption_stage.run(
+                self.data,
+                self.doorway,
+                self.firm,
+                self.seat,
+                self.job.matter_id,
+                self._json("facts.json"),
+                self.job.requester,
+                self.log,
+            )
         except caption_mod.RecordUnreadable as exc:
             raise DraftingFailed(f"record_unreadable: the matter record's caption fields: {exc}") from None
-        name = str(doc.get("name")) if doc else None
-        diffs, compared = caption_mod.compare(fields, record, name or "") if doc else ([], [])
-        why = (
-            ""
-            if compared
-            else (
-                "no court document in the file carries a caption"
-                if not doc
-                else "neither the court's paper nor the matter record carries a comparable field"
-            )
-        )
-        self._write(
-            "caption.json",
-            {"source": name, "fields": fields, "discrepancies": diffs, "compared": compared, "none_because": why},
-        )
+        self._write("caption.json", out)
 
     def _context(self) -> list[str]:
         f = self._json("facts.json")
@@ -358,8 +365,7 @@ class DraftingRun:
             + "\n".join(f"- {r}" for r in rec)
         ]
         if (self.data / "caption.json").is_file():
-            c = self._json("caption.json")
-            out.append(caption_mod.block(c["fields"], c["source"]))
+            out += caption_stage.context(self._json("caption.json"))
         table = self._json("howell.json")["table"] if (self.data / "howell.json").is_file() else []
         if table:
             out.append(
@@ -415,8 +421,12 @@ class DraftingRun:
         if self._is_done("gate"):
             return (self.data / FINAL).read_text(encoding="utf-8")
         doc, notes = render.split_notes(md)
+        doc, log = nestquote.repair(doc)
+        if log:
+            md = doc + ("\n" + render.NOTES_MARK + "\n\n" + notes + "\n" if notes else "")
+            self._atomic(FINAL, md)
+            self.log("  " + log[0])
         g = gate.run(self.data, self.firm, self.cls, doc)
-        log: list[str] = []
         if not g["passed"] and quotefix.quote_findings(g["refusals"]):
             doc, log = quotefix.repair(doc, g["refusals"], gate.source_texts(self.data, self.firm, self.cls))
             md = doc + ("\n" + render.NOTES_MARK + "\n\n" + notes + "\n" if notes else "")
@@ -511,10 +521,19 @@ class DraftingRun:
         )
         self._stage("preflight", self._preflight)
         self._estimate()
+        transcribing = not self._is_done("transcribe")
         self._stage(
             "transcribe",
             lambda: transcribe.run(self.data, self.doorway, self.firm.model("transcription"), self.log, CONCURRENCY),
         )
+        if transcribing and self.reexec is not None:
+            # Reading page images grows the heap far past what the rest of the
+            # job needs, and the process does not give it back: a 1,083-page
+            # file was killed at its 1 GiB cap while rendering, long after the
+            # images were done with. Every stage so far is on disk, so a fresh process picks up
+            # at the next one with none of that heap.
+            self.log("  transcription done; continuing in a fresh process")
+            self.reexec()
         client = set(f.get("client_emails") or [])
         self._stage("wall-transcribed", lambda: preflight.wall_printed_emails(self.data, self.dview, client, self.log))
         digest = self._digest()
@@ -550,7 +569,15 @@ class DraftingRun:
         v.document_class = self.cls
         v.dollars = round(self.budget.refresh(), 4)
         if (self.data / "caption.json").is_file():
-            v.caption_discrepancies = self._json("caption.json")["discrepancies"]
+            cap = self._json("caption.json")
+            v.caption_discrepancies = cap["discrepancies"]
+            v.caption_corrections = list(cap.get("corrections") or [])
+            v.caption_restore_incomplete = list(cap.get("restore_incomplete") or [])
+            if v.caption_restore_incomplete and v.outcome != "held":
+                # SMD's alarm: a delivered reply never relays the reason; a held
+                # one does, so a held job carries it in its own field only.
+                lost = "caption_restore_incomplete: " + "; ".join(v.caption_restore_incomplete)
+                v.reason = f"{lost} | {v.reason}" if v.reason else lost
         v.markers = list(self._state().get("render", {}).get("markers") or [])
         if (self.data / "preflight.json").is_file():
             e = self._json("preflight.json")

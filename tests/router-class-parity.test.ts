@@ -126,7 +126,10 @@ describe('matter-inbox-router: the demand class', () => {
     expect(deliver).not.toContain('**held** or **failed**')
     // A delivered package names the next step its gap audit opens, so the firm learns
     // it from the Operator itself; nothing is ordered until she answers the order line.
-    expect(deliver).toContain("Reply 'order the missing records'")
+    // It asks a plain question; the firm never has to type a set phrase.
+    expect(deliver).toContain('Want me to order the records this list says are missing? Reply yes')
+    expect(deliver).toContain('never ask her to type')
+    expect(deliver).not.toContain("Reply 'order the missing records'")
     expect(deliver).toContain('nothing is ordered until she answers the order line')
   })
 
@@ -562,5 +565,26 @@ describe('matter-inbox-router: the file work class', () => {
     // 2026-10-06 rehearsal 7: the reply called the funding form's blanks "markers"; it prints none.
     expect(skill).toContain('This form prints NO marker')
     expect(skill).toContain('Quote every list exactly as returned')
+  })
+
+  it('reads a matter field as file data, and enters negotiation figures only as the sender wrote them', () => {
+    // 2026-10-09: asked about a matter's Negotiation Details, the Operator said
+    // the fields could not be read; it had no layout read, and Smokeball omits
+    // empty fields. A field question is file data, answered from the read.
+    const carve =
+      "Reading or entering a matter's recorded field values (negotiation demands and offers, insurance, case details) is file data, not a legal-substance question."
+    expect(flat(read(ROUTER))).toContain(carve)
+    expect(flat(read(RUBRIC))).toContain(carve)
+    expect(flat(read(ROUTER))).toContain('say "not entered", never that it cannot be read')
+    expect(bullet()).toContain(
+      "demands or offers to be entered on the matter's Negotiation Details tab"
+    )
+    expect(bullet()).toContain('`add_negotiation_rows`')
+    const skill = flat(read(SKILL))
+    expect(skill).toContain(
+      '`add_negotiation_rows(matter_id, rows, plaintiff_index, details, minimum_settlement)`'
+    )
+    expect(skill).toContain('Nothing already entered is ever changed.')
+    expect(skill).toContain('never pick one')
   })
 })

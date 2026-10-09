@@ -161,16 +161,36 @@ def test_a_rerun_starts_where_the_superseded_job_stopped(tmp_path, pricing):
     (old / "data" / "out" / "stale.docx").write_text("x")
     new = make_job(tmp_path / "new", job_id="01DEMANDJOB0000000000000002")
     carried = seed.seed(new, old)
-    assert {"transcribe", "summarize", "premise"} <= set(carried)
+    assert {"transcribe", "summarize"} <= set(carried) and "premise" not in carried
     assert not (new / "data" / "out").exists() and not (new / "data" / "usage-ledger.jsonl").exists()
+    assert not (new / "data" / "premise.json").exists()
     state = json.loads((new / "data" / "state.json").read_text())
-    assert "dates" not in state and "render" not in state
+    assert "dates" not in state and "render" not in state and "premise" not in state
     assert str(old) not in (new / "data" / "extracted.jsonl").read_text()  # paths point at the new dir
     client = ScriptedClient()
     _r, v2, _ = _run(tmp_path, pricing, client, job="new")
     assert v2.outcome == "delivered", v2.reason
     assert "DIGEST" not in client.stages() and "GAP" not in client.stages() and "COMPOSE" not in client.stages()
     assert seed.seed(new, old) == []  # never over a data dir that already has a state file
+
+
+def test_a_rerun_decides_the_premise_afresh(tmp_path):
+    """FALSIFIER: keep "premise" out of DROP_STATE (or premise.json out of
+    DROP_PATHS) and the re-run inherits the old "settled" verdict: queued after
+    a premise-gate fix, it delivered the same coverage report again (2026-10-09)."""
+    old = tmp_path / "old" / "data"
+    old.mkdir(parents=True)
+    (old / "state.json").write_text(
+        json.dumps({"pull": {"status": "done"}, "preflight": {"status": "done"}, "premise": {"status": "done"}})
+    )
+    (old / "premise.json").write_text(json.dumps({"passed": False}))
+    (old / "coverage-report.md").write_text("COVERAGE")
+    (old / "preflight.json").write_text("{}")
+    new = tmp_path / "new"
+    carried = seed.seed(new, tmp_path / "old")
+    assert carried == ["preflight", "pull"]
+    assert not (new / "data" / "premise.json").exists() and not (new / "data" / "coverage-report.md").exists()
+    assert (new / "data" / "preflight.json").exists()
 
 
 def test_the_lane_seeds_a_rerun_from_the_superseded_job_dir(tmp_path):

@@ -80,6 +80,8 @@ EXPECTED_TOOLS = {
     "render_sr1",
     "render_sr19",
     "render_funding_case_eval",
+    "get_matter_layouts",
+    "add_negotiation_rows",
 }
 
 _SCRIPT = shutil.which("smokeball-mcp")
@@ -207,6 +209,9 @@ def test_write_surface_is_memo_document_and_deadline_engine() -> None:
         "render_sr19": "internal_write",
         # A funder's case evaluation form prefilled for the firm to finish; never signed or sent.
         "render_funding_case_eval": "internal_write",
+        # Demand and offer rows on the Negotiation Details tab, empty fields only,
+        # read back; the firm's own record (layout_tools.py).
+        "add_negotiation_rows": "internal_write",
         # A workbook built in code from JSON rows and filed on the matter: the
         # same two-stage upload as add_file, bytes never composed by the model.
         "add_workbook": "internal_write",
