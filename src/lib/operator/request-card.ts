@@ -134,7 +134,8 @@ function parseIdentity(body: Record<string, unknown>): Identity | { field: strin
   const kind = CARD_KINDS.find((k) => k === body.kind)
   if (!kind) return { field: 'kind' }
   const key = body.card_key
-  const keyMatch = typeof key === 'string' ? CARD_KEY_RE.exec(key) : null
+  if (typeof key !== 'string') return { field: 'card_key' }
+  const keyMatch = CARD_KEY_RE.exec(key)
   if (!keyMatch || (keyMatch[1] ?? keyMatch[2]) !== kind) {
     return { field: 'card_key' }
   }
