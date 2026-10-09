@@ -23,7 +23,11 @@ export type CardKind = (typeof CARD_KINDS)[number]
 export const JOB_LANES = ['demand', 'drafting', 'medchron'] as const
 export const JOB_STATES = ['delivered', 'failed', 'held'] as const
 
-const CARD_KEY_RE = /^[0-9a-f]{64}:(replied|no_reply|job_done)$/
+// `<sha256 of the request>:<kind>`. A job_done key may carry its job ENDING
+// (`:<state>-<attempt>`): a resumed job ends again, and that ending is its own
+// card under the same request. The request hash prefix is what groups them.
+const CARD_KEY_RE =
+  /^[0-9a-f]{64}:(?:(replied|no_reply)|(job_done)(?::(?:delivered|failed|held)-[1-9]\d{0,3})?)$/
 const TOKEN_RE = /^[a-z0-9_:.-]{1,64}$/
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/
 
@@ -130,7 +134,8 @@ function parseIdentity(body: Record<string, unknown>): Identity | { field: strin
   const kind = CARD_KINDS.find((k) => k === body.kind)
   if (!kind) return { field: 'kind' }
   const key = body.card_key
-  if (typeof key !== 'string' || !CARD_KEY_RE.test(key) || !key.endsWith(`:${kind}`)) {
+  const keyMatch = typeof key === 'string' ? CARD_KEY_RE.exec(key) : null
+  if (!keyMatch || (keyMatch[1] ?? keyMatch[2]) !== kind) {
     return { field: 'card_key' }
   }
   const receivedAt = parseIso(body.received_at)
