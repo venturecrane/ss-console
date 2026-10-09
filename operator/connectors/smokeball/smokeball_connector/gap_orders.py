@@ -524,7 +524,10 @@ def build(
 ) -> dict[str, Any]:
     meta, blob = latest_audit(client, matter_id)
     if blob is None:
-        return {"status": "refused", "reason": "No missing-records list is filed on this matter yet. Nothing was ordered."}
+        return {
+            "status": "refused",
+            "reason": "No missing-records list is filed on this matter yet. Nothing was ordered.",
+        }
     kept, skipped = split_rows(audit_rows(blob))
     providers = group(kept, today, first_date(kept, today))
     facilities, questions = resolve_providers(client, yc, matter_id, providers, log)
