@@ -66,11 +66,7 @@ def compose(matter: dict[str, Any], doc: dict[str, Any], rec: dict[str, Any], pl
         line = f"A document that may hold an offer was saved, per {source_phrase(doc)}."
     else:
         line = offer_line(rec["event"], doc)
-    parts = [head, _clean(line), _clean(status_line(rec, plaintiff))]
-    if rec.get("accepted") is not None:
-        when = mdy(rec["accepted"]) if rec["accepted"] else ""
-        parts.append(f"The same document shows it was accepted{' on ' + when if when else ''}.")
-    text = "\n".join(parts)
+    text = "\n".join((head, _clean(line), _clean(status_line(rec, plaintiff))))
     return text if len(text) <= MAX else text[: MAX - 3] + "..."
 
 

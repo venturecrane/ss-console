@@ -508,11 +508,34 @@ def test_plaintiff_names_come_from_the_matters_contacts(tmp_path, monkeypatch):
     assert [t["name"] for t in r._tabs(M1)] == ["Ann Example", "Bo LLC"]
 
 
-def test_the_email_does_not_repeat_the_matter_number_and_says_when_accepted():
-    rec = {"event": _offer(), "status": "written", "row": 1, "accepted": "2026-09-23"}
+def test_the_email_does_not_repeat_the_matter_number():
+    rec = {"event": _offer(), "status": "written", "row": 1}
     text = N.compose({"number": "200226", "title": "200226 - Doe, Dana - Motor Vehicle Accident"}, DOC, rec)
     assert text.splitlines()[0] == "New offer on matter 200226, Doe, Dana - Motor Vehicle Accident."
-    assert text.splitlines()[-1] == "The same document shows it was accepted on 9/23/26."
+    assert "accepted" not in text
+
+
+def test_an_accepted_offer_is_entered_but_never_emailed(tmp_path, monkeypatch):
+    """The firm asked to hear "when new offer is received" so an attorney can
+    act; an offer the same document shows was accepted (Peschke's 9/23 tender,
+    accepted and paid) is not actionable. FALSIFIER: notice every written offer
+    and the firm is emailed about a settled case."""
+    arrivals.commit("negotiation", M1, FILES, data=tmp_path / "state")
+    events = [
+        _offer(kind="policy_limits_tender", amount=956000, date="2026-09-23"),
+        _offer(kind="acceptance", by="Ashton & Price for the client", amount=956000, date="2026-09-23"),
+    ]
+    layout = Layout()
+    v = _run(tmp_path, Seat(NEW), layout, monkeypatch, events=events).run()
+    assert len(layout.calls) == 1 and layout.calls[0][1][0]["offer_amount"] == "956000"
+    assert v["notices"] == []
+
+
+def test_an_outstanding_offer_is_emailed_however_old_its_date(tmp_path, monkeypatch):
+    arrivals.commit("negotiation", M1, FILES, data=tmp_path / "state")
+    events = [_offer(amount=9000, date="2025-01-15")]
+    v = _run(tmp_path, Seat(NEW), Layout(), monkeypatch, events=events).run()
+    assert len(v["notices"]) == 1 and "dated 1/15/25" in v["notices"][0]["text"]
 
 
 def test_an_offer_the_same_document_accepted_is_marked():

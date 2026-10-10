@@ -281,6 +281,11 @@ class NegotiationRun:
     ) -> None:
         if rec.get("status") == "already_present":
             return
+        if rec.get("accepted") is not None:
+            # The firm asked to hear "when new offer is received" so an attorney
+            # can act. An offer the same document shows was already accepted
+            # (Peschke's 9/23 tender, accepted and paid) is entered, not sent.
+            return
         multi = len(tabs) > 1
         name = next((t["name"] for t in tabs if t["plaintiff_index"] == rec.get("plaintiff_index")), "")
         plaintiff = "all plaintiffs" if multi and rec.get("joint") else (name if multi else "")
