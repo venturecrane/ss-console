@@ -82,7 +82,12 @@ def clip(text: str) -> str:
 
 def render(doc: dict[str, Any], text: str, rows: list[dict[str, Any]], plaintiffs: list[dict[str, Any]]) -> str:
     """The user turn: the plaintiffs, the current rows, then the document."""
-    who = "\n".join(f"- plaintiff_index {p['index']}: {p.get('name') or 'name not shown'}" for p in plaintiffs)
+    # ``plaintiffs`` are the run's Negotiation Details tabs, keyed
+    # ``plaintiff_index`` (the dry run on the firm's data, 2026-10-10, failed
+    # every read on a key this function had named ``index``).
+    who = "\n".join(
+        f"- plaintiff_index {p['plaintiff_index']}: {p.get('name') or 'name not shown'}" for p in plaintiffs
+    )
     current = (
         "\n".join(
             "- row {row}: demand {da} on {dd}; offer {oa} on {od}".format(

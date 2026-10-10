@@ -384,3 +384,35 @@ def test_the_cli_prints_one_verdict_line(tmp_path):
     lines = [ln for ln in p.stdout.splitlines() if ln.strip()]
     assert len(lines) == 1 and json.loads(lines[0])["verdict"] == "failed" and p.returncode == 2
     assert json.loads((jd / "verdict.json").read_text())["verdict"] == "failed"
+
+
+def test_the_real_read_renders_the_runs_own_tabs_and_parses_the_answer(tmp_path, monkeypatch):
+    """The read itself, unstubbed, with the tab shape NegotiationRun._tabs
+    produces. FALSIFIER: render a key the tabs do not carry (it read
+    ``p["index"]``) and every document fails with KeyError before the model is
+    called; the 2026-10-10 dry run on the firm's data caught exactly that."""
+    seen = {}
+
+    class Doorway:
+        def call(self, stage, **kw):
+            seen.update(kw)
+            block = SimpleNamespace(type="tool_use", name=X.TOOL, input={"events": [_offer()]})
+            return SimpleNamespace(message=SimpleNamespace(content=[block]))
+
+    jd, pricing = _job(tmp_path)
+    layout = Layout(rows=[{"row": 0, "demand_amount": 50000, "demand_date": "2026-09-01"}], details="Entered 10/9/26.")
+    r = run_mod.NegotiationRun(
+        jd,
+        state_dir=tmp_path / "state",
+        pricing=str(pricing),
+        seat_factory=lambda: Seat(NEW),
+        layout=layout,
+        log=lambda m: None,
+    )
+    tabs = r._tabs(M1)
+    events = X.read_document(Doorway(), DOC, "We offer $15,000.", [x for t in tabs for x in t["rows"]], tabs)
+    assert events[0]["amount"] == 15000
+    prompt = seen["messages"][0]["content"]
+    assert "- plaintiff_index 0: Dana Example" in prompt
+    assert "- row 0: demand 50000 on 2026-09-01" in prompt and "We offer $15,000." in prompt
+    assert seen["model"] == X.MODEL and seen["tool_choice"] == {"type": "tool", "name": X.TOOL}
