@@ -1155,7 +1155,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # the broker's new_message binding (every send tool refused), and
 # negotiation_job_status (READ) hands the wake a notice's code-composed message.
 # Ships with ss-console #3118 (the lane, its broker verbs and the binding mode).
-ARG OVERLAY_REF="e86b659caa555d350c78d856460fabb6b2971407"
+# 2026-10-10 (5b802b2a, the overlay #437 merge commit). A scheduled negotiation
+# send's once-only key names its own lane ("negotiation-scheduled:<notice>"),
+# so REPLY_SENT's in_reply_to no longer reads "litigation-scheduled:" for a
+# negotiation notice. Litigation's key is unchanged. Ships with ss-console #3124.
+ARG OVERLAY_REF="5b802b2a46808960c5092ab4d3d680d0d1d82639"
 
 ARG CUSTOMER_SLUG=customer-zero
 

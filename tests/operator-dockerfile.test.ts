@@ -1519,7 +1519,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // provenance source) and add_negotiation_rows (internal_write) classified.
     // 7008c008 -> e86b659c (overlay#436), 2026-10-09: the negotiation watch's wake (a scheduled job
     // wake bound to one new email) and negotiation_job_status (pairs with ss-console #3118).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="e86b659caa555d350c78d856460fabb6b2971407"')
+    // e86b659c -> 5b802b2a (overlay#437), 2026-10-10: a scheduled negotiation send is audited under its
+    // own lane, not litigation's (pairs with ss-console #3124).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="5b802b2a46808960c5092ab4d3d680d0d1d82639"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
