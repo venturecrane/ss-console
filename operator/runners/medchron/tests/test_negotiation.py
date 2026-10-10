@@ -179,11 +179,11 @@ def test_a_not_entered_notice_asks_for_the_letter_to_be_checked():
 
 
 # ---- the read's structured answer ----------------------------------------------------------------
-def test_parse_takes_only_the_tool_answer():
-    msg = SimpleNamespace(content=[SimpleNamespace(type="tool_use", name=X.TOOL, input={"events": [_offer()]})])
-    assert X.parse(msg)[0]["amount"] == 15000
-    with pytest.raises(ValueError):
-        X.parse(SimpleNamespace(content=[SimpleNamespace(type="text", text="{}")]))
+def test_parse_takes_only_the_schemas_json():
+    assert X.parse(json.dumps({"events": [_offer()]}))[0]["amount"] == 15000
+    for bad in ("{}", "not json", json.dumps({"events": "none"})):
+        with pytest.raises(ValueError):
+            X.parse(bad)
 
 
 # ---- the run: seed, deliver, cursor ---------------------------------------------------------------
@@ -396,8 +396,7 @@ def test_the_real_read_renders_the_runs_own_tabs_and_parses_the_answer(tmp_path,
     class Doorway:
         def call(self, stage, **kw):
             seen.update(kw)
-            block = SimpleNamespace(type="tool_use", name=X.TOOL, input={"events": [_offer()]})
-            return SimpleNamespace(message=SimpleNamespace(content=[block]))
+            return SimpleNamespace(text=json.dumps({"events": [_offer()]}), stop_reason="end_turn")
 
     jd, pricing = _job(tmp_path)
     layout = Layout(rows=[{"row": 0, "demand_amount": 50000, "demand_date": "2026-09-01"}], details="Entered 10/9/26.")
@@ -415,4 +414,35 @@ def test_the_real_read_renders_the_runs_own_tabs_and_parses_the_answer(tmp_path,
     prompt = seen["messages"][0]["content"]
     assert "- plaintiff_index 0: Dana Example" in prompt
     assert "- row 0: demand 50000 on 2026-09-01" in prompt and "We offer $15,000." in prompt
-    assert seen["model"] == X.MODEL and seen["tool_choice"] == {"type": "tool", "name": X.TOOL}
+    assert seen["model"] == X.MODEL
+
+
+def test_the_read_asks_for_structured_output_never_a_forced_tool():
+    """claude-opus-5-5 refuses tool_choice of type tool or any with a 400; the
+    ashton-price dry run (2026-10-10) failed every read on it. FALSIFIER: put
+    the forced tool call back and the request carries tool_choice again."""
+    from medchron.llm import build_params
+
+    seen = {}
+
+    class Doorway:
+        def call(self, stage, **kw):
+            seen.update(kw)
+            return SimpleNamespace(text=json.dumps({"events": []}), stop_reason="end_turn")
+
+    X.read_document(Doorway(), DOC, "text", [], [{"plaintiff_index": 0, "name": "A"}])
+    assert "tool_choice" not in seen and "tools" not in seen
+    params = build_params(
+        X.STAGE, model=X.MODEL, messages=[{"role": "user", "content": "x"}], max_tokens=10, effort=seen["effort"]
+    )
+    assert params["output_config"] == {"effort": "medium", "format": {"type": "json_schema", "schema": X.SCHEMA}}
+    assert "tool_choice" not in params
+
+
+def test_a_cut_off_answer_is_a_failed_read_not_an_empty_one():
+    class Doorway:
+        def call(self, stage, **kw):
+            return SimpleNamespace(text='{"events": [', stop_reason="max_tokens")
+
+    with pytest.raises(ValueError, match="max_tokens"):
+        X.read_document(Doorway(), DOC, "text", [], [{"plaintiff_index": 0, "name": "A"}])
