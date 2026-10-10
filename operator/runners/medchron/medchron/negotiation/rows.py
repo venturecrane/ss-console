@@ -120,11 +120,43 @@ def _note(label: str, doc: dict[str, Any], joint: bool) -> str:
     return txt if len(txt) <= NOTE_MAX else txt[: NOTE_MAX - 4].rsplit(" ", 1)[0] + "..."
 
 
+#: The labels a row's own note opens with (the backfill's and this lane's), and
+#: what the "answers our ..." phrase calls that row.
+_ROW_KINDS = (("our 998 offer", "998 offer"), ("our counter", "counter"), ("our demand", "demand"))
+
+
+def _row_kind(row: dict[str, Any]) -> str | None:
+    """What an earlier row of ours IS, from its own note; None when it cannot
+    be told (never guessed: a 998 offer called a demand is a false record)."""
+    note = str(row.get("note") or "").strip().lower()
+    if note.startswith("joint, all plaintiffs."):
+        note = note[len("joint, all plaintiffs.") :].strip()
+    return next((kind for prefix, kind in _ROW_KINDS if note.startswith(prefix)), None)
+
+
+def _answers(row: dict[str, Any]) -> str:
+    """ "answers our counter of 10/2/26", or, when the row's kind is unknown,
+    "answers our 10/2/26 figure of $500,000"."""
+    when = real_date(str(row.get("demand_date") or "")[:10])
+    kind = _row_kind(row)
+    amt = money(_number(row.get("demand_amount")))
+    if kind:
+        return f"answers our {kind} of {mdy(when)}" if when else f"answers our {kind} on the row above"
+    if when:
+        return f"answers our {mdy(when)} figure of {amt}" if amt else f"answers our {mdy(when)} figure"
+    return f"answers our figure of {amt} on the row above" if amt else "answers the row above"
+
+
+def _number(raw: Any) -> float | None:
+    try:
+        return float(str(raw).replace(",", "").replace("$", "")) if raw not in (None, "") else None
+    except ValueError:
+        return None
+
+
 def _answer_note(label: str, demand_row: dict[str, Any], doc: dict[str, Any], joint: bool) -> str:
-    """An offer-only row's note when the demand it answers is already on the tab."""
-    when = real_date(str(demand_row.get("demand_date") or "")[:10])
-    what = f"answers our demand of {mdy(when)}" if when else "answers our demand on the row above"
-    txt = f"{label}; {what}; from {source_phrase(doc)}"
+    """An offer-only row's note when the figure of ours it answers is already on the tab."""
+    txt = f"{label}; {_answers(demand_row)}; from {source_phrase(doc)}"
     if joint:
         txt = "Joint, all plaintiffs. " + txt
     return txt if len(txt) <= NOTE_MAX else txt[: NOTE_MAX - 4].rsplit(" ", 1)[0] + "..."
