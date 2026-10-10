@@ -542,3 +542,48 @@ def test_an_offer_the_same_document_accepted_is_marked():
     events = [_offer(), _offer(kind="acceptance", by="Ashton client", date="2026-10-08")]
     plan = R.plan_document(events, DOC, [_tab()], {"ashton"})
     assert plan["offers"][0]["accepted"] == "2026-10-08"
+
+
+# ---- "answers our ..." names what the earlier row IS (2026-10-10) ---------------------------------
+PESCHKE_ROW = {
+    "row": 0,
+    "demand_amount": "1000000",
+    "demand_date": "2026-07-28",
+    "note": "Our 998 offer, per 'Peschke - 998 to Def Rahimi' letter; no response in the file",
+}
+NERSESYAN_ROW = {
+    "row": 2,
+    "demand_amount": "500000",
+    "demand_date": "2026-10-02",
+    "note": "Our counter, per '3d Counter Demand to Offer Claim Number: 25123597817' email; no response in the file",
+}
+
+
+def test_an_offer_answering_our_998_offer_says_998_offer_not_demand():
+    """FALSIFIER: name every earlier row "our demand" and the firm's $1,000,000
+    998 offer is recorded in its Smokeball as a demand."""
+    tab = _tab([PESCHKE_ROW], "Entered 10/9/26.")
+    ev = _offer(kind="policy_limits_tender", amount=956000, date="2026-09-23")
+    note = R.plan_document([ev], DOC, [tab], set())["tabs"][0].args[0]["note"]
+    assert "; answers our 998 offer of 7/28/26; " in note and "demand" not in note
+
+
+def test_an_offer_answering_our_counter_says_counter():
+    tab = _tab([{"row": 0, "demand_amount": "1", "offer_amount": "1"}, {**NERSESYAN_ROW, "row": 1}], "Entered 10/9/26.")
+    ev = _offer(kind="counter_offer", by="Kemper", amount=28000, date="2026-10-09")
+    note = R.plan_document([ev], DOC, [tab], set())["tabs"][0].args[0]["note"]
+    assert "; answers our counter of 10/2/26; " in note
+
+
+def test_an_unknown_earlier_row_is_named_by_its_date_and_figure_never_guessed():
+    tab = _tab(
+        [{"row": 0, "demand_amount": "1000000", "demand_date": "2026-07-28", "note": "per phone call"}], "Entered x"
+    )
+    note = R.plan_document([_offer()], DOC, [tab], set())["tabs"][0].args[0]["note"]
+    assert "; answers our 7/28/26 figure of $1,000,000; " in note
+
+
+def test_a_joint_prefix_does_not_hide_the_rows_kind():
+    row = {**PESCHKE_ROW, "note": "Joint, all plaintiffs. Our demand, per 'x' letter"}
+    note = R.plan_document([_offer()], DOC, [_tab([row], "Entered x")], set())["tabs"][0].args[0]["note"]
+    assert "; answers our demand of 7/28/26; " in note
