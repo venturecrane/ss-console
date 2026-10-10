@@ -84,7 +84,13 @@ Machine (the negotiation job), run on the firm's weekday schedule.
    the note says to check the letter; a joint offer to every plaintiff once, on
    the first plaintiff, marked joint. Nothing already entered is ever changed, and
    a tab the firm keeps itself (one with rows that the Operator did not enter) is
-   never written.
+   never written. The one exception to "nothing entered is changed" is the
+   summary the Operator itself wrote at the top of the tab (it opens "Entered
+   <date> from the offer letters and emails saved in this file."): after a row
+   goes in, its "Latest:" part is rewritten from the tab as it now stands (the
+   latest offer, who and when, accepted if the document showed it, and any newer
+   figure of ours with no response), then read back. A summary the firm wrote is
+   never touched.
 5. **Records one notice per new offer.** An offer already on the tab is not a
    notice and nobody is emailed. An offer that could not be entered (the same
    amount on another date, a tab the firm keeps, a full tab, an entry Smokeball

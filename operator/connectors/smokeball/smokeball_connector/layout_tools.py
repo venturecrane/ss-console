@@ -9,6 +9,9 @@ returns only filled fields, so "nothing came back" looked like "cannot look".
 missing field was never entered. ``add_negotiation_rows`` fills rows the way
 ``add_medicals_row`` fills Medicals: read first, write only into empty fields,
 re-read immediately before the write, then read back and report each row.
+``refresh_operator_details`` (runner-only, not a tool) is the one change to an
+entered value: a tab summary the Operator itself wrote, kept true after a run
+adds a row. A summary the firm wrote is refused.
 
 Classified READ and INTERNAL_WRITE: the firm's own record, nothing sent,
 signed or settled."""
@@ -23,6 +26,7 @@ from .layout_config import load_layout_config
 from .layout_sections import (
     AMOUNT_FIELDS,
     DETAILS_KEY,
+    DETAILS_MAX,
     MINIMUM_KEY,
     NEG_MARK,
     NEG_SECTION,
@@ -34,6 +38,7 @@ from .layout_sections import (
     negotiation_rows,
     negotiation_view,
     norm,
+    operator_details,
     parse_row,
     row_key,
     section_of,
@@ -375,6 +380,60 @@ def add_negotiation_rows(
     return out
 
 
+def refresh_operator_details(
+    matter_id: str, details: str, expected: str, plaintiff_index: int | None = None
+) -> dict[str, Any]:
+    """Rewrite a Negotiation Details SUMMARY the Operator itself wrote, so it
+    says what the tab now holds. The one change to an entered value this
+    connector makes, and only this narrow: the value on the tab must still be
+    exactly ``expected`` (what the caller read and based ``details`` on) AND
+    open with the Operator's own "Entered <date> from the offer letters ..."
+    sentence, and ``details`` must open with it too. A summary the firm wrote
+    is never changed. Runner-only: not registered as a tool.
+
+    Returns ``written`` (read back as written), ``nothing_to_write``,
+    ``readback_mismatch`` (``reads`` is what Smokeball showed), or
+    ``refused`` (``reason``; nothing was written)."""
+    matter, details, expected = (matter_id or "").strip(), (details or "").strip(), expected or ""
+    if not matter or not operator_details(details) or len(details) > DETAILS_MAX:
+        return _refused("the new summary must open with the Operator's own sentence; nothing was written")
+    if not operator_details(expected):
+        return _refused("the summary on the tab is not the Operator's; nothing was written")
+    client = _client()
+    found = _negotiation_item(client, matter, plaintiff_index)
+    if found.get("status") == "refused":
+        return found
+    if found["values"].get(DETAILS_KEY) != expected:
+        return _refused("the summary on the tab changed since it was read; nothing was written")
+    if expected.strip() == details:
+        return {"status": "nothing_to_write", "written": False}
+    return _patch_details(client, f"/matters/{matter}/layouts/{found['item']['id']}", expected, details)
+
+
+def _patch_details(client: Any, path: str, expected: str, details: str) -> dict[str, Any]:
+    """Re-read, write the one summary field, read it back."""
+    try:
+        fresh = layout_values(client.get(path))
+    except Exception as exc:  # noqa: BLE001 - no re-read, no write
+        return _refused(f"the tab could not be re-read before writing ({exc.__class__.__name__}); nothing was written")
+    if fresh.get(DETAILS_KEY) != expected:
+        return _refused("the summary on the tab changed while it was being updated; nothing was written")
+    try:
+        client.request("PATCH", path, json={"values": [{"key": DETAILS_KEY, "value": details}]})
+    except Exception as exc:  # noqa: BLE001 - a refused write is reported as one
+        return _refused(f"Smokeball refused the write ({exc.__class__.__name__}); nothing confirmed written")
+    reads: Any = None
+    for wait in VALUE_WAITS:
+        SLEEP(wait)
+        try:
+            reads = layout_values(client.get(path)).get(DETAILS_KEY)
+        except Exception:  # noqa: BLE001 - a failed read-back is a mismatch, never a crash after a write
+            continue
+        if _same(DETAILS_KEY, details, reads):
+            return {"status": "written", "written": True, "details": reads}
+    return {"status": "readback_mismatch", "written": True, "wrote": details, "reads": reads}
+
+
 def register(server: Any) -> None:
     """Register the layout read and the Negotiation Details write. Called once,
     from ``attachment_tools.register``."""
@@ -389,5 +448,6 @@ __all__ = [
     "VALUE_WAITS",
     "add_negotiation_rows",
     "get_matter_layouts",
+    "refresh_operator_details",
     "register",
 ]

@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 from . import config as config_mod, dag, driver as driver_mod, rehearsal, verdict as verdict_mod
 
@@ -258,6 +259,40 @@ def _add_negotiate_dry_run(sub: "argparse._SubParsersAction[argparse.ArgumentPar
     dr.set_defaults(fn=_cmd_negotiate_dry_run)
 
 
+def _cmd_negotiate_correct_summary(args: argparse.Namespace) -> int:
+    """One tab's Operator-written summary brought in line with its rows
+    (``negotiation/correct.py``). One JSON line on stdout: before, after."""
+    import contextlib
+    import json
+
+    from .negotiation import correct
+    from .seat import open_seat
+
+    accepted: dict[int, str] = {}
+    for pair in args.accepted:
+        row, _, when = pair.partition("=")
+        accepted[int(row)] = when.strip()
+    with contextlib.redirect_stdout(sys.stderr):
+        seat: Any = open_seat(args.slug)  # the client backend (on the Machine); its .client is the connector's
+        layout = correct.bind_layout(seat.client, args.design)
+        out = correct.correct(layout, args.matter, args.plaintiff_index, accepted, args.write)
+    print(json.dumps(out, default=str))
+    return 0 if out["status"] in ("written", "would_write") or out["status"].startswith("unchanged") else 2
+
+
+def _add_negotiate_correct_summary(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    cs = sub.add_parser("negotiate-correct-summary", help="rewrite one tab's Operator summary from its rows; no email")
+    cs.add_argument("--slug", required=True)
+    cs.add_argument("--design", default="", help="the firm's Negotiation Details design guid")
+    cs.add_argument("--matter", required=True, help="the matter id")
+    cs.add_argument("--plaintiff-index", type=int, default=0)
+    cs.add_argument(
+        "--accepted", action="append", default=[], help="ROW=YYYY-MM-DD: a document showed that row's offer accepted"
+    )
+    cs.add_argument("--write", action="store_true", help="write it (without: show only)")
+    cs.set_defaults(fn=_cmd_negotiate_correct_summary)
+
+
 def _exit_code(outcomes) -> int:
     worst = {"delivered": 0, "dry_run": 0, "rehearsed": 0, "held": 3, "refused": 4, "failed": 1}
     return max(worst.get(o.outcome, 1) for o in outcomes) if outcomes else 1
@@ -398,6 +433,7 @@ def main(argv: list[str] | None = None) -> int:
     ng.add_argument("--state-dir", default=None, help="the lane's persistent state dir (default: on the volume)")
     ng.set_defaults(fn=_cmd_negotiate)
     _add_negotiate_dry_run(sub)
+    _add_negotiate_correct_summary(sub)
     d = sub.add_parser("dag", help="print the stage order and validate it")
     d.set_defaults(fn=_cmd_dag)
     v = sub.add_parser("validate-config", help="validate a firm config file")
