@@ -118,6 +118,14 @@ const EXPECTED_VERBS = [
   'job_list_claimable',
   'job_read',
   'job_record',
+  // The litigation status job's request edge (litigation_verbs.py): submit's
+  // table gate admits gateway, agent and root because it has two forms (the
+  // handler pins a request to gateway-or-root and a scheduled run to the cron
+  // pre_run's agent uid or root); record and resume root only; no allowance.
+  'litigation_job_record',
+  'litigation_job_resume',
+  'litigation_job_status',
+  'litigation_job_submit',
   // ss#2614 routine 11: the chronology-package job seam. Bodies live in
   // operator/workspace_broker/medchron_verbs.py; the table declares the
   // compound gates (submit: gateway or root; record: root only).

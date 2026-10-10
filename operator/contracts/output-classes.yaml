@@ -466,6 +466,12 @@ skill_bindings:
     internal:
       - { artifact: statute_report, seam: email_send, class: staff }
     outbound: derived # the report to the authored recipient; a firm address, so the send resolves internal
+  litigation-status:
+    internal:
+      # The queued litigation job files the status workbook in the firm's own
+      # library matter; the turn itself writes nothing to any matter.
+      - { artifact: status_workbook, seam: smokeball_file, class: staff }
+    outbound: derived # one bound reply (or, scheduled, one new email) to a firm administrator, counts only
   # The negotiation watch: the queued job enters each new offer on the matter's
   # Negotiation Details tab (a record: figures and dates as the document states
   # them, add-only, read back); each notice's wake sends one email, composed in

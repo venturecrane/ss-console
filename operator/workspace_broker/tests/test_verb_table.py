@@ -186,3 +186,15 @@ def test_the_drafting_lane_has_the_demand_lanes_gates_minus_the_rerun() -> None:
     for suffix in ("job_submit", "job_status", "allowance", "job_record", "job_resume"):
         assert gates[f"drafting_{suffix}"] == gates[f"demand_{suffix}"], suffix
     assert "drafting_job_rerun" not in gates
+
+
+def test_the_litigation_lane_gates() -> None:
+    """FALSIFIER: open litigation_job_record or _resume past root and the agent
+    could move a job or re-run a spend nobody decided on; drop the agent class
+    from submit and the weekday cron's pre_run can never queue its run."""
+    gates = {v.name: v.auth for v in verbs.VERBS}
+    assert gates["litigation_job_submit"] == frozenset({verbs.GATEWAY, verbs.ROOT, verbs.AGENT})
+    assert gates["litigation_job_status"] == gates["drafting_job_status"]
+    assert gates["litigation_job_record"] == frozenset({verbs.ROOT})
+    assert gates["litigation_job_resume"] == frozenset({verbs.ROOT})
+    assert "litigation_allowance" not in gates

@@ -72,6 +72,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Syncs a converted lead from your intake CRM into Smokeball, with dedupe and conflict checks.',
   'lien-ledger-tracker':
     'Tracks every provider balance blocking disbursement and chases the open ones, one contact per provider. Never computes a reduction or moves money.',
+  'litigation-status':
+    'Builds a status list of your open litigation cases when an administrator asks: filing, service, answers, court dates and discovery, each date citing its document. Filed in your firm library.',
   'matter-document-review':
     "Reads a matter's documents and surfaces highlights, timelines, and gaps for an attorney. Never drafts legal work product.",
   'matter-inbox-router':

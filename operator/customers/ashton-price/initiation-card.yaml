@@ -321,3 +321,17 @@ stages:
           bracket filled in; a marked item filled from outside the record;
           anything sent.
         rehearsal: pending
+      - say: 'Send me a fresh litigation status list.'
+        backed_by: litigation-status # the queued litigation job (activated 2026-10-07)
+        admin_only: true
+        proves: the firm-wide litigation list, every date citing its document
+        expected: >-
+          One status workbook of every open litigation matter filed in the
+          firm's Operator Library, folder Litigation Status: complaint filed,
+          each defendant served and answered, next court date, discovery
+          both ways, every value naming the document it came from and gaps
+          flagged; the reply in the thread carries counts only.
+        falsifier: >-
+          A value with no source document; a matter fact in the email; a
+          write to a client matter; anything sent outside the firm.
+        rehearsal: pending

@@ -1129,6 +1129,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # the bound reply to the requester its only channel (binding kind medchron_job,
 # ss-console #3096); medchron_job_submit takes the requester and request ref
 # from the verified inbound email.
+# 2026-10-08 (00220a0d, the overlay #431 merge commit). The litigation status
+# lane's seat half: litigation_job_submit / litigation_job_status (requester and
+# request taken from the verified inbound), the litigation wake in the reply
+# binding (every send tool refused; a scheduled run takes only the broker's
+# new_message binding in its own wake), and the litigation lane on request cards.
 # 2026-10-08 (f37225c1, the overlay #432 merge commit). The participant fence's seat half, which also carries #431 (the
 # litigation status lane): every send names its anchor (this turn's email, a
 # job wake, a rule row, or a held send's captured anchor) and its authored lane;
@@ -1235,6 +1240,8 @@ RUN apt-get update \
 # legacy Word .doc with it (the build asserts it).
 # poppler-utils + fonts-dejavu-core (ss#2614): the chronology runner's exhibit
 # rendering fallback and matplotlib's timeline visuals need a real font.
+# antiword (2026-10-07): the litigation status job reads court papers a firm
+# saved as legacy Word .doc; antiword is the extractor (the build asserts it).
 
 # ---------- runtime principals ----------
 # The gateway and credential broker are distinct non-root principals. The
@@ -1654,6 +1661,9 @@ RUN set -eu; \
 # with the voice files, the skeleton and the prompts, each sha-pinned.
 # The drafting job (medchron/drafting/) ships in the same venv the same way:
 # its renderer is the connector's docx_format, its inputs vaults/<slug>/drafting/.
+# The litigation status job (medchron/litigation/) ships in the same venv too:
+# striprtf (hash-pinned in medchron.txt) reads .rtf court papers, the apt
+# antiword above reads .doc, and its inputs come from vaults/<slug>/litigation/.
 COPY operator/runners/ /app/runners/
 # The pricing table the runner's cents cap and ledger price from, beside the
 # venv (NOT under /opt/smd, which is the establishment compilers' contract
@@ -1666,8 +1676,8 @@ RUN set -eu; \
     uv pip install --python /opt/medchron/.venv/bin/python --no-cache --no-deps \
       /app/connectors/_sdk /app/connectors/smokeball /app/runners/medchron; \
     [ -x /opt/medchron/.venv/bin/medchron ] || { echo "FATAL: the medchron runner produced no console-script"; exit 1; }; \
-    /opt/medchron/.venv/bin/python -c "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, medchron.drafting_lane, medchron.drafting.run, medchron.negotiation_lane, medchron.negotiation.run, smokeball_connector.docx_format, docx"; \
-    command -v antiword >/dev/null || { echo "FATAL: antiword is missing (the negotiation watch reads .doc with it)"; exit 1; }; \
+    /opt/medchron/.venv/bin/python -c "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, medchron.drafting_lane, medchron.drafting.run, medchron.negotiation_lane, medchron.negotiation.run, medchron.litigation_lane, medchron.litigation.run, striprtf.striprtf, smokeball_connector.docx_format, docx"; \
+    command -v antiword >/dev/null || { echo "FATAL: antiword is missing (the litigation job and the negotiation watch read .doc with it)"; exit 1; }; \
     chown -R root:root /opt/medchron; \
     chmod -R a+rX /opt/medchron
 
@@ -1687,6 +1697,9 @@ COPY operator/templates/entrypoint.sh /app/entrypoint.sh
 COPY operator/templates/entrypoint-demand.sh /app/entrypoint-demand.sh
 # The drafting lane's twin of it (queue, job dirs, firm inputs from vaults/<slug>/drafting/).
 COPY operator/templates/entrypoint-drafting.sh /app/entrypoint-drafting.sh
+# The litigation status lane's twin (queue, job dirs, state dir, firm inputs
+# from vaults/<slug>/litigation/ and the broker's copy of its budget).
+COPY operator/templates/entrypoint-litigation.sh /app/entrypoint-litigation.sh
 # The negotiation watch's twin (queue, job dirs, state dir; no firm inputs).
 COPY operator/templates/entrypoint-negotiation.sh /app/entrypoint-negotiation.sh
 # REQUIRED_ENV / OPTIONAL_ENV, generated from operator/contracts/env-consumption.yaml

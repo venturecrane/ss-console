@@ -724,8 +724,117 @@ def test_a_chronology_job_id_is_not_read_from_another_ledger(tmp_path: Path) -> 
     assert out["bound"] is False and "no chronology job" in out["reason"]
 
 
+# -- litigation status jobs (2026-10-07). A requested job takes the drafting
+# rules on the litigation ledger; a scheduled one has no request email, so its
+# one message is a NEW email, permitted for exactly that kind and trigger.
+
+LIT_LIBRARY = "1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23"
+LIT_YAML = YAML + (
+    "personas:\n"
+    "  - slug: operator\n"
+    "    skills:\n"
+    "      - name: litigation-status\n"
+    "        enabled: true\n"
+    "        initiation: {manual: true, scheduled: true, webhook: false}\n"
+    "        settings:\n"
+    "          folder_name: 'Litigation Status'\n"
+    f"          file_to_matter_id: '{LIT_LIBRARY}'\n"
+    f"          scheduled_recipients: '{ADMIN}'\n"
+)
+
+
+def _litigation_job(tmp_path: Path, path: list[str], *, trigger: str = "request", requester: str = ADMIN) -> str:
+    from workspace_broker.litigation_ledger import LitigationLedger
+
+    ledger = LitigationLedger(str(tmp_path / "audit.db"), tmp_path / "lq")
+    job = ledger.submit(
+        {
+            "trigger": trigger,
+            "requester": requester,
+            "message_ref": IMID if trigger == "request" else "scheduled:2026-10-08",
+            "request_text": "Send me a fresh litigation status list.",
+            "scope": {"all": True},
+            "file_to_matter_id": LIT_LIBRARY,
+            "file_to_matter_number": "OPS-OPERATOR-LIBRARY",
+            "folder_name": "Litigation Status",
+        }
+    )
+    for step in path:
+        ledger.record(job, step, {})
+    return job
+
+
 def _sendmails(box: FakeMailbox) -> list[str]:
     return [u for m, u in box.calls if m == "POST" and u.endswith("/sendMail")]
+
+
+@pytest.mark.parametrize("ending", ["delivered", "held"])
+def test_a_requested_litigation_job_replies_in_thread_only(tmp_path: Path, ending: str) -> None:
+    """FALSIFIER: let a requested job take the new-message path and the message
+    leaves the requester's thread."""
+    job = _litigation_job(tmp_path, ["running", ending])
+    box = FakeMailbox()
+    _ack_in_thread(box)
+    broker = _broker(tmp_path, box, LIT_YAML)
+    bound = _call(broker, "msgraph_reply_bind", {"kind": "litigation_job", "job_id": job})
+    assert bound["bound"] is True and bound["mode"] == "reply" and bound["graph_message_id"] == GRAPH_ID
+    assert _send(broker, {"kind": "litigation_job", "job_id": job})["recipients"] == [ADMIN]
+    assert len(box.replies()) == 1 and _sendmails(box) == []
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box, LIT_YAML), {"kind": "litigation_job", "job_id": job})
+
+
+def test_a_scheduled_litigation_job_sends_one_new_email_under_the_fixed_subject(tmp_path: Path) -> None:
+    from workspace_broker.litigation_ledger import LitigationLedger
+
+    job = _litigation_job(tmp_path, ["running", "delivered"], trigger="scheduled")
+    box = FakeMailbox()
+    broker = _broker(tmp_path, box, LIT_YAML)
+    bound = _call(broker, "msgraph_reply_bind", {"kind": "litigation_job", "job_id": job})
+    assert bound["bound"] is True and bound["mode"] == "new_message"
+    assert bound["sender"] == ADMIN and bound["subject"] == "Litigation status list, 2026-10-08"
+    _call(
+        broker,
+        "msgraph_reply_bound",
+        {"kind": "litigation_job", "job_id": job},
+        # A caller's recipient and subject are never read.
+        payload={"comment": "Filed: 64 matters.", "to": [STRANGER], "subject": "x"},
+        session_id="sess-1",
+    )
+    assert len(_sendmails(box)) == 1 and box.replies() == []
+    assert LitigationLedger(broker.audit_db_path, tmp_path / "lq").read(job)["reply_key"] == "1:delivered"
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box, LIT_YAML), {"kind": "litigation_job", "job_id": job})
+    assert len(_sendmails(box)) == 1
+
+
+def test_a_scheduled_job_whose_recipient_is_no_longer_authored_sends_nothing(tmp_path: Path) -> None:
+    job = _litigation_job(tmp_path, ["running", "delivered"], trigger="scheduled")
+    box = FakeMailbox()
+    other = LIT_YAML.replace(f"scheduled_recipients: '{ADMIN}'", "scheduled_recipients: 'other@firm.example'")
+    out = _call(_broker(tmp_path, box, other), "msgraph_reply_bind", {"kind": "litigation_job", "job_id": job})
+    assert out["bound"] is False and "nothing was sent" in out["reason"]
+    assert _sendmails(box) == []
+
+
+def test_the_new_message_path_belongs_to_scheduled_litigation_jobs_only(tmp_path: Path) -> None:
+    """A drafting job never binds a new email, whatever the seat authors."""
+    job = _drafting_job(tmp_path, ["running", "delivered"])
+    box = FakeMailbox()
+    _ack_in_thread(box)
+    bound = _call(_broker(tmp_path, box, LIT_YAML), "msgraph_reply_bind", {"kind": "drafting_job", "job_id": job})
+    assert bound["bound"] is True and bound["mode"] == "reply"
+
+
+@pytest.mark.parametrize("trigger", ["request", "scheduled"])
+def test_a_failed_litigation_job_is_never_told(tmp_path: Path, trigger: str) -> None:
+    job = _litigation_job(tmp_path, ["failed"], trigger=trigger)
+    box = FakeMailbox()
+    out = _call(_broker(tmp_path, box, LIT_YAML), "msgraph_reply_bind", {"kind": "litigation_job", "job_id": job})
+    assert out["bound"] is False and "Send nothing to anyone" in out["reason"]
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box, LIT_YAML), {"kind": "litigation_job", "job_id": job})
+    assert box.replies() == [] and _sendmails(box) == []
 
 
 # -- negotiation notices (2026-10-09). The negotiation watch emails the firm once

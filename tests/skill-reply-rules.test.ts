@@ -47,6 +47,7 @@ const SKILL_PATHS = {
   'document-library-establishment': resolve(
     'operator/skills/document-library-establishment/SKILL.md'
   ),
+  'litigation-status': resolve('operator/skills/litigation-status/SKILL.md'),
 } as const
 
 type SkillName = keyof typeof SKILL_PATHS
@@ -240,6 +241,41 @@ describe('setup-turn reply rules are pinned in skill prose', () => {
       expect(text).toContain('earlier versions')
       expect(text).toContain('nothing was deleted')
       expect(text).toContain('Never delete, rename, or overwrite')
+    })
+  })
+
+  describe('litigation-status messages carry counts only, never a matter fact', () => {
+    // The list holds every open litigation matter's dates and parties; the email
+    // is only its pointer. A message that quoted the list would put client facts
+    // into mail, and on a scheduled run into a NEW email no inbound turn vetted.
+    // FALSIFIER: drop the counts-only rule from DELIVER mode and this goes red.
+    it('states the counts-only rule in DELIVER mode and the boundaries', () => {
+      const text = flat('litigation-status')
+      expect(text).toContain('**The message carries COUNTS ONLY, never a matter fact.**')
+      expect(text).toContain('**Never puts a matter fact in an email**')
+      expect(text).toContain(
+        'No matter number, no client name, no party name and no date from a court paper in any message from this skill.'
+      )
+    })
+
+    it('sends the scheduled email through the binding, never a send tool or a subject of its own', () => {
+      // overlay 2412e1d: a scheduled litigation wake refuses every send tool; the
+      // broker's new_message binding sets the recipient and the subject.
+      const text = flat('litigation-status')
+      expect(text).toContain('**Bind first, for either trigger.**')
+      expect(text).toContain(
+        'the broker answers mode `new_message` with the recipient and the subject already set'
+      )
+      expect(text).toContain('the subject is not yours to write')
+      expect(text).toContain('the message is a reply in that thread, never a new message')
+      expect(text).not.toContain('with `smd_send_message` to the')
+    })
+
+    it('tells the firm nothing about a failed job', () => {
+      const text = flat('litigation-status')
+      expect(text).toContain('Send the client NOTHING')
+      expect(text).toContain('**If the bind is refused, send NOTHING to anyone.**')
+      expect(text).toContain('Relay only the sentence AFTER the first `: `')
     })
   })
 

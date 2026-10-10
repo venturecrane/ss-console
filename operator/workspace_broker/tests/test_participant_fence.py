@@ -623,6 +623,92 @@ def test_the_classifier_reads_the_typed_roster_first(tmp_path: Path) -> None:
     assert "skill:retired-watch" not in facts.lanes
 
 
+# -- the litigation status lane (2026-10-08) ---------------------------------------------
+# A requested litigation job anchors on its job id like every job; a SCHEDULED
+# one has no request email, so its one new message is fenced as a send on the
+# skill's authored lane, read from settings.scheduled_recipients.
+
+LIT_LIBRARY = "1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23"
+LIT_YAML = YAML + (
+    "      - name: litigation-status\n"
+    "        enabled: true\n"
+    "        initiation: {manual: true, scheduled: true, webhook: false}\n"
+    "        settings:\n"
+    "          folder_name: 'Litigation Status'\n"
+    f"          file_to_matter_id: '{LIT_LIBRARY}'\n"
+    f"          scheduled_recipients: '{ALICE}, {CARL}'\n"
+)
+
+
+def _litigation_job(tmp_path: Path, *, trigger: str, requester: str = ALICE, ending: str = "delivered") -> str:
+    from workspace_broker.litigation_ledger import LitigationLedger
+
+    ledger = LitigationLedger(str(tmp_path / "audit.db"), tmp_path / "lq")
+    job = ledger.submit(
+        {
+            "trigger": trigger,
+            "requester": requester,
+            "message_ref": "<REQ@mail.firm.example>" if trigger == "request" else "scheduled:2026-10-08",
+            "request_text": "Send me a fresh litigation status list.",
+            "scope": {"all": True},
+            "file_to_matter_id": LIT_LIBRARY,
+            "file_to_matter_number": "OPS-OPERATOR-LIBRARY",
+            "folder_name": "Litigation Status",
+        }
+    )
+    ledger.record(job, "running", {})
+    ledger.record(job, ending, {})
+    return job
+
+
+def test_the_litigation_skill_lane_reads_its_comma_string_of_scheduled_recipients(tmp_path: Path) -> None:
+    """FALSIFIER: drop the scheduled_recipients read and the lane is empty."""
+    customer = tmp_path / "customer.yaml"
+    customer.write_text(LIT_YAML)
+    assert pf.seat_facts(customer).lanes["skill:litigation-status"] == frozenset({ALICE, CARL})
+
+
+def test_a_scheduled_litigation_send_to_its_authored_recipient_is_permitted(tmp_path: Path) -> None:
+    """The broker-bound new message of a scheduled job names no anchor; the
+    fence passes it on the skill's lane. FALSIFIER: drop the internal lane in
+    reply_binding, or the scheduled_recipients read here, and it is refused."""
+    box = FakeMailbox()
+    broker = _broker(tmp_path, box, LIT_YAML)
+    job = _litigation_job(tmp_path, trigger="scheduled")
+    binding = {"kind": "litigation_job", "job_id": job}
+    bound = broker.handle(
+        {"action": "msgraph_reply_bind", "binding": binding}, peer_pid=GATEWAY_PID, peer_uid=AGENT_UID
+    )
+    assert bound["bound"] is True and bound["mode"] == "new_message" and bound["sender"] == ALICE
+    out = broker.handle(
+        {"action": "msgraph_reply_bound", "binding": binding, "payload": {"comment": "Filed: 64 matters."}},
+        peer_pid=GATEWAY_PID,
+        peer_uid=AGENT_UID,
+    )
+    assert out["ok"] is True
+    assert [p for p in box.posts if p.endswith("/sendMail")]
+    assert _rows(broker, "CONFIRM_SEND_DISPATCHED")[-1]["lane"] == "skill:litigation-status"
+
+
+def test_the_litigation_lane_reaches_no_one_else_at_the_firm(tmp_path: Path) -> None:
+    box = FakeMailbox()
+    broker = _broker(tmp_path, box, LIT_YAML)
+    _refused(broker, box, lambda: _send(broker, [BRUNO], lane="skill:litigation-status"))
+
+
+def test_a_requested_litigation_reply_anchors_on_its_job_id(tmp_path: Path) -> None:
+    """FALSIFIER: drop litigation_job from the fence's JOB_KINDS (the anchor is
+    refused as malformed) or from reply_binding.job_ledger (the job is read on
+    another lane's ledger and is unverifiable)."""
+    box = FakeMailbox()
+    broker = _broker(tmp_path, box, LIT_YAML)
+    job = _litigation_job(tmp_path, trigger="request")
+    anchor = {"kind": "litigation_job", "job_id": job}
+    assert _reply(broker, "REQ", anchor=anchor)["ok"] is True
+    box.posts.clear()
+    _refused(broker, box, lambda: _send(broker, [BRUNO], anchor=anchor))
+
+
 def test_a_skills_scheduled_recipients_are_its_lane(tmp_path: Path) -> None:
     """The negotiation watch's offer emails go to the skill's authored
     scheduled_recipients (a comma-separated scalar). FALSIFIER: read only

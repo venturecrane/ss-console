@@ -22,6 +22,14 @@ the recipient. So the broker, which the agent cannot steer, decides:
       per (job, ending), so a job that fails, is resumed and delivers can still
       say it delivered;
     - a drafting job: exactly the demand job's rules, on the drafting ledger;
+    - a litigation status job (2026-10-07): a REQUESTED job takes the drafting
+      rules on the litigation ledger (a reply in the requester's thread, never
+      a new message). A SCHEDULED job has no request email, so it is the one
+      job binding that sends ONE NEW email: to the job's requester, who must
+      still be a Named Administrator and the first authored
+      ``scheduled_recipients`` entry (re-read at bind time and at send time),
+      under the fixed subject ``scheduled_subject`` composes. Nobody names the
+      recipient or the subject, the model least of all;
     - a negotiation notice (2026-10-09): the negotiation watch's one email per
       new offer. A scheduled run has no request email, so this is the one
       binding that sends ONE NEW email: to the notice's requester, who must
@@ -67,6 +75,7 @@ from . import bound_replies, msgraph_lookup
 from .broker_context import BrokerContext
 from .demand_ledger import DemandLedger
 from .drafting_ledger import DraftingLedger
+from .litigation_ledger import LitigationLedger
 from .medchron_ledger import MedchronLedger
 from .negotiation_ledger import NegotiationLedger
 from .negotiation_ledger import subject as negotiation_subject
@@ -74,26 +83,28 @@ from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError
 from .recipient_policy import authored_policy, normalize_address, sender_key
 from .transmit_verbs import dispatch_transmit
 
-KINDS = ("demand_job", "drafting_job", "medchron_job", "negotiation_job", "message")
+KINDS = ("demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "message")
 #: The job kinds: each binds on its own ledger with the same rules.
-JOB_KINDS = frozenset({"demand_job", "drafting_job", "medchron_job", "negotiation_job"})
+JOB_KINDS = frozenset({"demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job"})
 #: The kinds whose ledger carries its own reply mark (``mark_replied``). The
 #: medchron ledger predates it; its once-only rests on the bound_replies claim.
-_LEDGER_MARKED_KINDS = frozenset({"demand_job", "drafting_job", "negotiation_job"})
+_LEDGER_MARKED_KINDS = frozenset({"demand_job", "drafting_job", "litigation_job", "negotiation_job"})
 _NOUN = {
     "demand_job": "demand",
     "drafting_job": "drafting",
+    "litigation_job": "litigation status",
     "medchron_job": "chronology",
     "negotiation_job": "negotiation",
 }
 #: How a binding reaches its person: a reply in their thread, or (a scheduled
-#: run's notice only) one new email to them, whose recipient and subject are
-#: the broker's (the overlay's scheduled wake takes only this mode).
+#: litigation job or a negotiation notice) one new email to them, whose
+#: recipient and subject are the broker's (the overlay's scheduled wake takes
+#: only this mode).
 MODE_REPLY = "reply"
 MODE_NEW_MESSAGE = "new_message"
 #: Each scheduled kind's authored lane (the skill whose scheduled_recipients it
 #: may reach).
-SCHEDULED_LANES = {"negotiation_job": "skill:negotiation-watch"}
+SCHEDULED_LANES = {"litigation_job": "skill:litigation-status", "negotiation_job": "skill:negotiation-watch"}
 #: The outcomes a requester is told about, for EVERY job kind (demand and
 #: drafting alike; the name predates the drafting lane). NOT ``failed``: a
 #: failed job is resumable and SMD's to resolve (a live demand job, 2026-10-06,
@@ -147,15 +158,38 @@ def _drafting_ledger(broker: BrokerContext) -> DraftingLedger:
     return DraftingLedger(str(broker.audit_db_path), queue)
 
 
+def _litigation_ledger(broker: BrokerContext) -> LitigationLedger:
+    # Read-only here; the queue dir is never written on this path.
+    queue = os.environ.get("SMD_LITIGATION_QUEUE_DIR") or "/run/smd-medchron/litigation-queue"
+    return LitigationLedger(str(broker.audit_db_path), queue)
+
+
+def scheduled_subject(request_ref: str) -> str:
+    """The fixed subject of a scheduled litigation run's one email, from its
+    ``scheduled:<YYYY-MM-DD>`` ref."""
+    try:
+        day = datetime.strptime(request_ref.split(":", 1)[1], "%Y-%m-%d")
+    except (IndexError, ValueError) as exc:
+        raise BindingRefused("that scheduled job's date cannot be read; nothing was sent") from exc
+    return f"Litigation status list, {day.date().isoformat()}"
+
+
 def _negotiation_ledger(broker: BrokerContext) -> NegotiationLedger:
     # Read here; the binding marks a notice replied, never writes the queue.
     queue = os.environ.get("SMD_NEGOTIATION_QUEUE_DIR") or "/run/smd-medchron/negotiation-queue"
     return NegotiationLedger(str(broker.audit_db_path), queue)
 
 
-def _negotiation_recipient_ok(broker: BrokerContext, requester: str) -> bool:
+def _scheduled_recipient_ok(broker: BrokerContext, kind: str, requester: str) -> bool:
+    """The scheduled run's requester is still a Named Administrator AND the
+    first authored ``scheduled_recipients`` entry of that kind's skill, read
+    from the live yaml."""
     from .medchron_ledger import admins_from_customer_yaml
-    from .negotiation_intake import scheduled_recipients, settings_of, skill_entry
+
+    if kind == "litigation_job":
+        from .litigation_intake import scheduled_recipients, settings_of, skill_entry
+    else:
+        from .negotiation_intake import scheduled_recipients, settings_of, skill_entry
 
     who = normalize_address(requester)
     recipients = scheduled_recipients(settings_of(skill_entry(broker.customer_path)))
@@ -177,6 +211,8 @@ def job_ledger(broker: BrokerContext, kind: str) -> Any:
 
 def _marking_ledger(broker: BrokerContext, kind: str) -> Any:
     """The ledger of a kind in ``_LEDGER_MARKED_KINDS`` (it carries mark_replied)."""
+    if kind == "litigation_job":
+        return _litigation_ledger(broker)
     if kind == "negotiation_job":
         return _negotiation_ledger(broker)
     return _drafting_ledger(broker) if kind == "drafting_job" else _demand_ledger(broker)
@@ -185,7 +221,9 @@ def _marking_ledger(broker: BrokerContext, kind: str) -> Any:
 def _parse(raw: Any) -> tuple[str, str]:
     """(kind, identifier), where kind is a job kind, message or message_graph."""
     if not isinstance(raw, dict):
-        raise BindingRefused("a reply binding names a demand, drafting, negotiation or chronology job, or an email")
+        raise BindingRefused(
+            "a reply binding names a demand, drafting, litigation status, negotiation or chronology job, or an email"
+        )
     kind = raw.get("kind")
     if kind in JOB_KINDS:
         job_id = str(raw.get("job_id") or "").strip()
@@ -261,12 +299,18 @@ def _verify_job(broker: BrokerContext, kind: str, ident: str, db_path: str) -> t
 
 
 def _verify_scheduled(broker: BrokerContext, kind: str, ident: str, key: str, row: dict[str, Any]) -> Verified:
-    """A negotiation notice has no request email: ONE new email to its
-    requester, who must still be the authored scheduled recipient, or nothing."""
-    if not row.get("notice"):
-        raise BindingRefused(f"{_NOUN[kind]} job {ident} is announced by its notices, never itself; nothing was sent")
-    subject = negotiation_subject(row)
-    if not _negotiation_recipient_ok(broker, str(row["requester"])):
+    """A scheduled run has no request email: ONE new email to its requester,
+    who must still be the authored scheduled recipient, or nothing. A
+    negotiation job is announced by its notices, never itself."""
+    if kind == "negotiation_job":
+        if not row.get("notice"):
+            raise BindingRefused(
+                f"{_NOUN[kind]} job {ident} is announced by its notices, never itself; nothing was sent"
+            )
+        subject = negotiation_subject(row)
+    else:
+        subject = scheduled_subject(str(row["request_ref"]))
+    if not _scheduled_recipient_ok(broker, kind, str(row["requester"])):
         raise BindingRefused(
             f"{_NOUN[kind]} job {ident}'s recipient is no longer the authored scheduled recipient "
             "and a Named Administrator; nothing was sent"
@@ -409,7 +453,7 @@ def bind_verb(
         # and runs its floors against it; it cannot change it.
         "sender": v.sender,
         "conversation_id": v.conversation_id,
-        # "new_message" only for a negotiation notice: the broker sets
+        # "new_message" only for a scheduled litigation job or a negotiation notice: the broker sets
         # the recipient (``sender``) and this subject; the caller sends a body.
         "mode": v.mode,
         **({"subject": v.subject} if v.subject else {}),
@@ -418,7 +462,7 @@ def bind_verb(
 
 def _bound_body(v: Verified, payload: dict[str, Any], bound_ops: MsGraphOps) -> tuple[dict[str, Any], Any]:
     """The wire body and the ops call for a verified binding: a reply on the
-    verified email, or (a negotiation notice) one new message whose
+    verified email, or (a scheduled litigation job or a negotiation notice) one new message whose
     recipient and subject are the broker's; a caller's to/cc/bcc/subject and
     attachments are never read."""
     html = {"html": payload["html"]} if isinstance(payload.get("html"), str) and payload["html"].strip() else {}
@@ -483,7 +527,7 @@ def reply_verb(
             action,
             # The participant fence's anchor is the email the broker just
             # verified, never one the caller named: a bound reply answers it.
-            # A negotiation notice has no such email: its one new
+            # A scheduled litigation job or a negotiation notice has no such email: its one new
             # message is fenced as a send on the skill's authored lane
             # (settings.scheduled_recipients), and names no anchor.
             {
@@ -560,5 +604,6 @@ __all__ = [
     "bind_verb",
     "job_ledger",
     "reply_verb",
+    "scheduled_subject",
     "verify",
 ]

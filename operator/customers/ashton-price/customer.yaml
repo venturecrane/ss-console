@@ -771,6 +771,41 @@ personas:
           # The firm's Operator Library matter, the same rehearsal target the
           # demand lane authors; the broker checks this id and that number.
           rehearsal_matter_id: '1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23'
+      # ---- the litigation status lane: ACTIVATED 2026-10-07 (litigation-status) ----
+      # LANE ACTIVATION RECORD. Letter 93 (2026-09-24, SMD to the office
+      # manager) offered the litigation case review list: every case in
+      # litigation, each date citing its source document, gaps flagged, "a
+      # fresh list saved in Smokeball every weekday morning and on request".
+      # Accepted 2026-10-07 (the firm's ask for the list that day, letter 321;
+      # the Captain approved the activation the same day). ON REQUEST is live
+      # below. THE WEEKDAY RUN is NOT: its cron row ships commented out in the
+      # cron list (the firm runs nothing on a timer until it asks, letter 26),
+      # and `initiation.scheduled: true` here is only the permission for that
+      # row to target this skill. Uncommenting the row IS the enable act.
+      # The skill NEVER reads matters in a turn. REQUEST mode submits a
+      # litigation job (operator/workspace_broker/litigation_verbs.py); the job
+      # on the Machine builds the workbook and files it to the firm's Operator
+      # Library matter (number OPS-OPERATOR-LIBRARY, authored under
+      # self_initiation.document_library.operator_matter), folder below; DELIVER
+      # mode replies in the requester's thread with counts only. A scheduled
+      # run sends ONE new email to the first scheduled_recipients entry. The
+      # per-job and monthly spend caps live in the firm's litigation-firm.yaml
+      # (engagements), as runaway guards. Reserved to scope.admins.
+      - name: litigation-status # admin-requested litigation status workbook, queued as a job; never read in a turn
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          folder_name: 'Litigation Status'
+          # The Operator Library matter's id (the same matter the demand and
+          # drafting lanes author); the broker pairs it with the library number.
+          file_to_matter_id: '1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23'
+          # A comma-separated string (settings are scalars, ADR 0075). The
+          # first entry receives the scheduled run; it must be in scope.admins.
+          scheduled_recipients: 'christa@ashtonandprice.com'
       # ---- the negotiation watch: ENABLED 2026-10-09 (negotiation-watch) ----
       # LANE ACTIVATION RECORD. On 2026-10-09 the Operator filled the
       # Negotiation Details tab on the firm's open matters from every offer
@@ -853,6 +888,15 @@ personas:
         schedule: '7 8,12,16 * * 1-5' # weekdays 0807, 1207 and 1607 seat-local
         pre_run: pre_run.py
         wake_policy: pre_run_decides
+    # The weekday litigation status list (letter 93, accepted 2026-10-07). SHIPS
+    # COMMENTED OUT: the weekday schedule is the firm's enable act (letter 26),
+    # not yet given. Uncommenting these four lines turns it on; the pre_run
+    # submits the day's scheduled job to the broker (one per Pacific date) and
+    # wakes no turn; the list's email goes out when the job finishes.
+    # - skill: litigation-status
+    #   schedule: '37 6 * * 1-5' # weekday 0637 seat-local, so the list is filed before the office opens
+    #   pre_run: pre_run.py
+    #   wake_policy: pre_run_decides
     # - skill: deadline-miss-escalator
     #   schedule: '0 7 * * *' # daily 0700 seat-local (America/Los_Angeles via business_hours; was silently UTC = midnight PT before HERMES_TIMEZONE landed)
     #   pre_run: pre_run.py

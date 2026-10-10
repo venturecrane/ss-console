@@ -281,6 +281,56 @@ describe('matter-inbox-router: the document drafting class', () => {
   })
 })
 
+/**
+ * The queued litigation status class (2026-10-07). The firm asked for one
+ * list of every case in litigation, each date citing its document. Like the
+ * drafting lane it is a queued job, never assembled in a turn, and its email
+ * carries counts only. It must never swallow one client's own status request.
+ */
+describe('matter-inbox-router: the litigation status class', () => {
+  const SLUG = 'litigation-status'
+  const SKILL = `${SKILLS_DIR}/${SLUG}/SKILL.md`
+  const bullet = () => flat(bulletFor(read(ROUTER), '**Litigation status request**'))
+
+  it('is reachable on the email channel, queued and never read in the turn', () => {
+    expect(bullet()).toContain(`/app/skills/${SLUG}/SKILL.md`)
+    expect(bullet()).toContain('`litigation_job_submit`')
+    expect(bullet()).toContain("NEVER read, list, summarize or date any matter's court papers")
+    expect(flat(classTable(read(ROUTER)))).toContain('Litigation status request')
+    const rubric = flat(read(RUBRIC))
+    expect(rubric).toContain('**litigation status request**')
+    expect(rubric).toContain(`/app/skills/${SLUG}/SKILL.md`)
+  })
+
+  it('stays admin-reserved and takes no requester from the model', () => {
+    expect(bullet()).toContain('INITIATION AUTHORITY')
+    expect(bullet()).toContain('Admin-classed')
+    expect(bullet()).toContain("you never pass who asked or the request's words")
+  })
+
+  it("never takes one matter's status, by precedence rule 12", () => {
+    expect(bullet()).toContain("**This is the firm-wide list, never one matter's status.**")
+    const rubric = flat(read(RUBRIC))
+    expect(rubric).toContain(
+      '12. **Litigation status versus status request, general and drafting.**'
+    )
+    expect(rubric).toContain('One client asking where their own matter stands stays status request')
+  })
+
+  it('carries the MAY-list entry and its DELIVER mode keeps failures from the client', () => {
+    expect(flat(read(ROUTER))).toContain(
+      "queue a **Named Administrator's litigation status request**"
+    )
+    const skill = flat(read(SKILL))
+    expect(skill).toContain('**This skill never reads a matter in the turn.**')
+    expect(skill).toContain(
+      "Run the litigation-status skill's DELIVER mode for litigation job <id>."
+    )
+    expect(skill).toContain('Send the client NOTHING')
+    expect(skill).toContain('Call `reply_bind` with ONLY `job_id`')
+  })
+})
+
 describe('matter-inbox-router: the chronology class', () => {
   it('is reachable on the email channel', () => {
     const bullet = flat(bulletFor(read(ROUTER), '**Chronology package request**'))

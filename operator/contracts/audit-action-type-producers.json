@@ -477,6 +477,36 @@
       "producerFile": "operator/workspace_broker/drafting_verbs.py",
       "reason": "A person asked the runner to resume a failed drafting job (drafting_job_resume, root only), with a reason."
     },
+    "LITIGATION_JOB_SUBMITTED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/litigation_verbs.py",
+      "reason": "The litigation status job. The workspace broker appends one row when a Named Administrator's request or the weekday scheduled run is queued through litigation_job_submit: job id, trigger, scope kind, attorney count, requester, the request's message ref; never the request text."
+    },
+    "LITIGATION_JOB_RUNNING": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/litigation_verbs.py",
+      "reason": "The runner daemon reported a litigation job running (litigation_job_record)."
+    },
+    "LITIGATION_JOB_HELD": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/litigation_verbs.py",
+      "reason": "The runner held a litigation job for a cause in the files or the request; the reason is a code-authored sentence, counts only."
+    },
+    "LITIGATION_JOB_DELIVERED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/litigation_verbs.py",
+      "reason": "The runner filed the litigation status workbook and read it back; its name and size and the counts only."
+    },
+    "LITIGATION_JOB_FAILED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/litigation_verbs.py",
+      "reason": "A litigation job failed on SMD's own machinery or stopped at a spend cap; resumable by a person, never reported to the client."
+    },
+    "LITIGATION_JOB_RESUME_REQUESTED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/litigation_verbs.py",
+      "reason": "A person asked the runner to resume a failed litigation job (litigation_job_resume, root only), with a reason."
+    },
     "NEGOTIATION_JOB_SUBMITTED": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/negotiation_verbs.py",

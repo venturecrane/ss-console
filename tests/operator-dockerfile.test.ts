@@ -1505,6 +1505,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // 0415efb1 -> 099f9fdd (overlay#430), 2026-10-07: a chronology job's completion wake is fenced
     // (send tools refused, binds only its own medchron_job), and the chronology submit takes its
     // requester from the verified inbound email.
+    // 099f9fdd -> 00220a0d (overlay#431), 2026-10-08: the litigation status lane's tools, its wake in
+    // the reply binding (send tools refused; a scheduled run binds one broker-addressed new message),
+    // and the litigation lane on request cards.
     // 099f9fdd -> f37225c1 (overlay#432 merge commit), 2026-10-08: the participant
     // fence's seat half (anchor + lane on every send, find_for_recipient deleted, cc/bcc classified),
     // carrying overlay#431 (the litigation status lane).
@@ -1843,6 +1846,23 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
         false
       )
     }
+  })
+
+  it('ships what the litigation status job reads court papers with, and asserts it at build', () => {
+    // FALSIFIER: drop antiword from the apt line, striprtf from the import
+    // line, or the entrypoint COPY, and a seat boots a lane that cannot read
+    // a .doc or .rtf court paper or never makes its queue.
+    expect(DOCKERFILE_CODE).toMatch(/poppler-utils fonts-dejavu-core antiword/)
+    expect(DOCKERFILE_CODE).toContain(
+      'medchron.litigation_lane, medchron.litigation.run, striprtf.striprtf'
+    )
+    expect(DOCKERFILE_CODE).toContain('command -v antiword >/dev/null')
+    expect(DOCKERFILE_CODE).toContain(
+      'COPY operator/templates/entrypoint-litigation.sh /app/entrypoint-litigation.sh'
+    )
+    expect(readFileSync(resolve('operator/requirements/medchron.txt'), 'utf8')).toMatch(
+      /^striprtf==[0-9.]+ \\$/m
+    )
   })
 
   it('the requirements directory is copied into the image before any venv installs from it', () => {
