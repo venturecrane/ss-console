@@ -99,7 +99,7 @@ def build_params_marked(
     messages: list[dict[str, Any]],
     max_tokens: int,
     system: Any = None,
-    effort: str | None = None,
+    effort: str | dict[str, Any] | None = None,
     cache_blocks: tuple[str, ...] = ("system",),
     tools: Any = None,
     tool_choice: Any = None,
@@ -141,8 +141,8 @@ def build_params_marked(
             out_msgs[last_user] = m
     params["messages"] = out_msgs
     e = effort if effort is not None else EFFORT_DEFAULTS.get(stage)
-    if e:
-        params["output_config"] = {"effort": e}
+    if e:  # a dict is a whole output_config: effort plus a structured-output format
+        params["output_config"] = dict(e) if isinstance(e, dict) else {"effort": e}
     t = _validate_thinking(thinking)
     if t is not None:
         params["thinking"] = t
@@ -357,7 +357,7 @@ class Doorway:
         messages: list[dict[str, Any]],
         max_tokens: int,
         system: Any = None,
-        effort: str | None = None,
+        effort: str | dict[str, Any] | None = None,
         cache_blocks: tuple[str, ...] = ("system",),
         stream: bool = False,
         tools: Any = None,

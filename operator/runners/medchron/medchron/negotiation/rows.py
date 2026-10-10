@@ -49,6 +49,9 @@ THEIRS = {
 #: The kinds that are an offer TO the firm's client: each new one is a notice.
 OFFER_KINDS = frozenset({"offer", "998_offer_to_us", "policy_limits_tender"})
 SKIP_KINDS = frozenset({"acceptance", "rejection", "mediation_proposal", "other"})
+#: The kinds that, made by the other side, are an offer the firm is told about:
+#: a carrier's counter-offer included (the firm's data, 2026-10-10).
+NOTICE_KINDS = frozenset(THEIRS)
 OPERATOR_MARK = "Entered "
 NOTE_MAX = 250
 
@@ -240,6 +243,16 @@ def _place(plan: TabPlan, e: dict[str, Any], ours: bool, doc: dict[str, Any], re
     rec.update(status="to_write", row=row, entry=plan.add(row, fields), date_only=date_only)
 
 
+def _accepted_in(events: list[dict[str, Any]], offer: dict[str, Any]) -> str | None:
+    """The date (or "") of an acceptance of this same amount in the same
+    document, or None. An old offer saved late must not read as a fresh one."""
+    amt = offer.get("amount")
+    for e in events:
+        if e.get("kind") == "acceptance" and amt is not None and e.get("amount") == amt:
+            return real_date(e.get("date")) or ""
+    return None
+
+
 def _dated(e: dict[str, Any]) -> str:
     return real_date(e.get("date")) or "9999-99-99"
 
@@ -274,8 +287,11 @@ def plan_document(
         target: int = pidx if isinstance(pidx, int) and pidx in by_idx else host
         own = target == pidx
         rec: dict[str, Any] = {"event": e, "plaintiff_index": target, "joint": multi and not own}
+        if e.get("amount") is None and not real_date(e.get("date")):
+            continue  # a bare mention of an offer: nothing to enter, nothing new to tell
         _place(plans.setdefault(target, TabPlan(by_idx[target])), e, ours, doc, rec)
-        if not ours and kind in OFFER_KINDS and rec["status"] != "already_present":
+        if not ours and kind in NOTICE_KINDS and rec["status"] != "already_present":
+            rec["accepted"] = _accepted_in(events, e)
             offers.append(rec)
     return {"tabs": plans, "offers": offers}
 

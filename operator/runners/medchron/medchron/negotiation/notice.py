@@ -56,8 +56,11 @@ def status_line(rec: dict[str, Any], plaintiff: str) -> str:
 
 
 def compose(matter: dict[str, Any], doc: dict[str, Any], rec: dict[str, Any], plaintiff: str = "") -> str:
-    head = f"New offer on matter {matter.get('number') or 'without a number'}"
+    number = str(matter.get("number") or "")
+    head = f"New offer on matter {number or 'without a number'}"
     title = _clean(str(matter.get("title") or ""))
+    if number and title.startswith(number):
+        title = title[len(number) :].lstrip(" -")
     head += f", {title}." if title else "."
     if rec.get("unread"):
         line = f"A document that may hold an offer was saved, per {source_phrase(doc)}."

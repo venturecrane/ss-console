@@ -13,7 +13,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
-NAME = re.compile(r"offer|demand|998|tender|counter|settle|evaluat|policy[\s_-]*limit", re.IGNORECASE)
+#: "counter" only at the start of a word ("Hospital Encounters.pdf" matched it on
+#: the firm's data, 2026-10-10); "998" only as its own number, never inside one.
+NAME = re.compile(
+    r"offer|demand|(?<!\d)998(?!\d)|tender|(?<![a-z])counter|settle|evaluat|policy[\s_-]*limit", re.IGNORECASE
+)
 EXTENSIONS = frozenset({".pdf", ".docx", ".doc", ".msg", ".eml"})
 
 
