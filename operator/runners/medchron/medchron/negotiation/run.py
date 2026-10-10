@@ -177,16 +177,21 @@ class NegotiationRun:
         if not isinstance(got, dict) or got.get("status") != "ok":
             raise RuntimeError("the matter's Negotiation Details could not be read")
         tabs = []
+        names: dict[int, str] | None = None
         for item in got.get("items") or []:
             view = item.get("negotiation") or {}
             try:
                 pidx = int(item.get("parent_index") or 0)
             except (TypeError, ValueError):
                 pidx = 0
+            name = str(item.get("description") or "")
+            if not name:
+                names = self._plaintiff_names(mid) if names is None else names
+                name = names.get(pidx, "")
             tabs.append(
                 {
                     "plaintiff_index": pidx,
-                    "name": str(item.get("description") or ""),
+                    "name": name,
                     "rows": view.get("rows") or [],
                     "details": view.get("details"),
                 }
@@ -214,6 +219,24 @@ class NegotiationRun:
                 return Path(r["path"])
             r = rows.get(str(r.get("duplicate_of") or ""))
         return None
+
+    def _plaintiff_names(self, mid: str) -> dict[int, str]:
+        """{plaintiff index: name} from the matter's Plaintiff contacts. A tab
+        carries no name of its own (the firm's data, 2026-10-10: a reader could
+        not tell which plaintiff an offer named). A failed read names no one."""
+        out: dict[int, str] = {}
+        try:
+            matter = self.seat.client.get(f"/matters/{mid}")
+            for i, p in enumerate(((matter or {}).get("items") or {}).get("Plaintiff") or []):
+                cid = ((p or {}).get("contact") or {}).get("id")
+                if cid:
+                    c = self.seat.client.get(f"/contacts/{cid}") or {}
+                    person, org = c.get("person") or {}, c.get("company") or c.get("organisation") or {}
+                    first_last = (person.get("firstName"), person.get("lastName"))
+                    out[i] = " ".join(x for x in first_last if x) or str(org.get("name") or "")
+        except Exception as exc:  # noqa: BLE001 - names help the reader; their absence never stops a matter
+            self.log(f"negotiation: plaintiff names could not be read ({type(exc).__name__})")
+        return out
 
     def _text(self, mid: str, f: dict[str, Any]) -> str:
         path = self._fetch(mid, f)

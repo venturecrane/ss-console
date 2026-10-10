@@ -446,3 +446,76 @@ def test_a_cut_off_answer_is_a_failed_read_not_an_empty_one():
 
     with pytest.raises(ValueError, match="max_tokens"):
         X.read_document(Doorway(), DOC, "text", [], [{"plaintiff_index": 0, "name": "A"}])
+
+
+# ---- the firm's-data dry run, 2026-10-10: each defect it found -----------------------------------
+@pytest.mark.parametrize(
+    "name,want",
+    [
+        ("Hospital Encounters 1.25.24+3.7.24", False),
+        ("FW: 3d Counter Demand to Offer", True),
+        ("Counteroffer from carrier", True),
+        ("CCP 998 to defendant", True),
+        ("Claim 1998123 records", False),
+    ],
+)
+def test_the_selector_reads_counter_and_998_only_as_words(name, want):
+    assert select({"id": "f", "name": name, "ext": ".pdf"}) is want
+
+
+def test_a_carrier_counter_offer_is_announced():
+    """FALSIFIER: notice only offer/998/tender kinds and a carrier's counter-offer
+    is written with no email (Kemper's 28k counter, 2026-10-10)."""
+    ev = _offer(kind="counter_offer", by="Kemper (adjuster)", amount=28000)
+    plan = R.plan_document([ev], DOC, [_tab()], {"ashton"})
+    assert plan["offers"] and plan["offers"][0]["status"] == "to_write"
+
+
+def test_a_bare_mention_of_an_offer_is_no_row_and_no_email():
+    """A second-hand "discuss the 998" with no amount and no date (Peschke)."""
+    plan = R.plan_document([_offer(kind="998_offer_to_us", amount=None, date=None)], DOC, [_tab()], set())
+    assert plan["offers"] == [] and not any(tp.args for tp in plan["tabs"].values())
+
+
+def test_an_offer_with_an_unconfirmed_amount_and_no_date_is_still_reported():
+    plan = R.plan_document([_offer(amount_confirmed=False, date=None)], DOC, [_tab()], set())
+    assert plan["offers"][0]["status"] == "not_entered"
+
+
+def test_an_unsent_draft_records_no_event():
+    """The firm's own demand draft (placeholders, attorney notes) saved to the
+    file must not be entered as a demand made (Livingston-Joy, 2026-10-10)."""
+    assert X.parse(json.dumps({"unsent_draft": True, "events": [_offer(kind="demand")]})) == []
+    assert "unsent_draft" in X.SCHEMA["required"]
+
+
+def test_plaintiff_names_come_from_the_matters_contacts(tmp_path, monkeypatch):
+    class Client:
+        def get(self, path, **params):
+            if path == f"/matters/{M1}":
+                return {"items": {"Plaintiff": [{"contact": {"id": "c0"}}, {"contact": {"id": "c1"}}]}}
+            return {
+                "c0": {"person": {"firstName": "Ann", "lastName": "Example"}},
+                "c1": {"company": {"name": "Bo LLC"}},
+            }[path.rsplit("/", 1)[1]]
+
+    class NamelessLayout(Layout):
+        def get_matter_layouts(self, mid, section=""):
+            return {"status": "ok", "items": [{"parent_index": 0, "negotiation": {"rows": []}}, {"parent_index": 1}]}
+
+    r = _run(tmp_path, Seat(NEW), NamelessLayout(), monkeypatch)
+    r._seat = SimpleNamespace(client=Client())
+    assert [t["name"] for t in r._tabs(M1)] == ["Ann Example", "Bo LLC"]
+
+
+def test_the_email_does_not_repeat_the_matter_number_and_says_when_accepted():
+    rec = {"event": _offer(), "status": "written", "row": 1, "accepted": "2026-09-23"}
+    text = N.compose({"number": "200226", "title": "200226 - Doe, Dana - Motor Vehicle Accident"}, DOC, rec)
+    assert text.splitlines()[0] == "New offer on matter 200226, Doe, Dana - Motor Vehicle Accident."
+    assert text.splitlines()[-1] == "The same document shows it was accepted on 9/23/26."
+
+
+def test_an_offer_the_same_document_accepted_is_marked():
+    events = [_offer(), _offer(kind="acceptance", by="Ashton client", date="2026-10-08")]
+    plan = R.plan_document(events, DOC, [_tab()], {"ashton"})
+    assert plan["offers"][0]["accepted"] == "2026-10-08"

@@ -67,6 +67,10 @@ class NegotiationDryRun(NegotiationRun):
         super().__init__(job_dir, state_dir=state, **kw)
         self.entries: list[dict[str, Any]] = []
         self._open: dict[str, Any] | None = None
+        #: matter id -> plaintiff index -> rows this dry run would have written,
+        #: laid over each re-read so a later document on the same matter is
+        #: planned the way a live run plans it (after the first one's write).
+        self._sim: dict[str, dict[int, list[dict[str, Any]]]] = {}
 
     @property
     def layout(self) -> Any:
@@ -112,8 +116,23 @@ class NegotiationDryRun(NegotiationRun):
             }
         )
 
+    def _tabs(self, mid: str) -> list[dict[str, Any]]:
+        tabs = super()._tabs(mid)
+        for t in tabs:
+            extra = self._sim.get(mid, {}).get(t["plaintiff_index"], [])
+            if not extra:
+                continue
+            rows = {int(r["row"]): dict(r) for r in t["rows"]}
+            for a in extra:
+                rows.setdefault(int(a["row"]), {"row": int(a["row"])}).update(a)
+            t["rows"] = [rows[n] for n in sorted(rows)]
+            t["details"] = t.get("details") or "Entered (dry run)"
+        return tabs
+
     def _write(self, mid: str, plan: dict[str, Any], tabs: list[dict[str, Any]]) -> None:
         """What the live write would report if every value read back: no call."""
+        for pidx, tp in plan["tabs"].items():
+            self._sim.setdefault(mid, {}).setdefault(pidx, []).extend(tp.args)
         for rec in plan["offers"]:
             if rec.get("status") == "to_write":
                 rec["status"] = "written"

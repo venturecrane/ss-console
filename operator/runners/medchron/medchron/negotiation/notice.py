@@ -56,14 +56,21 @@ def status_line(rec: dict[str, Any], plaintiff: str) -> str:
 
 
 def compose(matter: dict[str, Any], doc: dict[str, Any], rec: dict[str, Any], plaintiff: str = "") -> str:
-    head = f"New offer on matter {matter.get('number') or 'without a number'}"
+    number = str(matter.get("number") or "")
+    head = f"New offer on matter {number or 'without a number'}"
     title = _clean(str(matter.get("title") or ""))
+    if number and title.startswith(number):
+        title = title[len(number) :].lstrip(" -")
     head += f", {title}." if title else "."
     if rec.get("unread"):
         line = f"A document that may hold an offer was saved, per {source_phrase(doc)}."
     else:
         line = offer_line(rec["event"], doc)
-    text = "\n".join((head, _clean(line), _clean(status_line(rec, plaintiff))))
+    parts = [head, _clean(line), _clean(status_line(rec, plaintiff))]
+    if rec.get("accepted") is not None:
+        when = mdy(rec["accepted"]) if rec["accepted"] else ""
+        parts.append(f"The same document shows it was accepted{' on ' + when if when else ''}.")
+    text = "\n".join(parts)
     return text if len(text) <= MAX else text[: MAX - 3] + "..."
 
 

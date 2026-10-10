@@ -94,3 +94,34 @@ def test_attempts_are_never_recorded(tmp_path, monkeypatch):
 def test_only_matters_limits_the_run(tmp_path, monkeypatch):
     r, _wd = _dry(tmp_path, monkeypatch, Layout(), only_matters=["999999"])
     assert r.run()["candidates"] == 0
+
+
+def test_a_second_copy_of_the_same_letter_plans_as_a_live_run_would(tmp_path, monkeypatch):
+    """The firm's data held four saved copies of one email thread. A live run
+    writes the first and finds the rest already present; the dry run must
+    report the same (one row, one email), not one row per copy."""
+    copies = [
+        {**FILES[1], "id": f"c{i}", "name": f"RE: SETTLEMENT copy {i}", "created": f"2026-10-09T18:5{i}:00Z"}
+        for i in range(3)
+    ]
+    layout = Layout()
+    wd = dryrun.write_job(
+        tmp_path / "dry2",
+        slug="example",
+        seed_saved_before="2026-10-09T14:00:00Z",
+        design="",
+        firm_words=["ashton"],
+        statuses=["Open"],
+        cap_usd=5.0,
+        job_id="01DRYRVN000000000000000000",
+    )
+    pricing = tmp_path / "pricing.json"
+    pricing.write_text(json.dumps(PRICING))
+    monkeypatch.setattr(run_mod.read_mod, "read_document", lambda *a, **k: [_offer()])
+    r = dryrun.NegotiationDryRun(
+        wd, pricing=str(pricing), seat_factory=lambda: Seat([FILES[0], *copies]), layout=layout, log=lambda m: None
+    )
+    monkeypatch.setattr(r, "_text", lambda mid, f: "letter text")
+    summary = r.run()
+    assert summary["candidates"] == 3 and summary["rows_planned"] == 1 and summary["emails"] == 1
+    assert layout.calls == []
