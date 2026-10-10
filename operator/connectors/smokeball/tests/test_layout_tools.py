@@ -328,3 +328,89 @@ def test_a_second_plaintiff_without_a_tab_still_needs_an_index(monkeypatch: pyte
     _use(monkeypatch, t)
     out = lt.add_negotiation_rows(MATTER, [{"offer_amount": "3000"}])
     assert out["status"] == "refused" and "more than one plaintiff" in out["reason"] and t.patches() == []
+
+
+# ---- the Operator's own summary (refresh_operator_details) -----------------
+# The ONE change to an entered value: a summary the Operator wrote, rewritten
+# from the tab after a run's write. A summary the firm wrote is never touched.
+
+OURS = (
+    "Entered 10/9/26 from the offer letters and emails saved in this file. "
+    "Latest: our $1,000,000 demand of 7/28/26 has no response in the file."
+)
+NEW = (
+    "Entered 10/9/26 from the offer letters and emails saved in this file. "
+    "Latest: Defendants / carrier $956,000 (9/23/26), accepted 9/23/26."
+)
+
+
+def _summary_tenant(details: str) -> _Tenant:
+    return _Tenant([_item("neg", f"{DESIGN}_404f")], {"neg": {f"{B}/DemandAmount": 1000000, f"{B}/Details": details}})
+
+
+def test_an_operator_summary_is_rewritten_and_read_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    t = _use(monkeypatch, _summary_tenant(OURS))
+    out = lt.refresh_operator_details(MATTER, NEW, OURS)
+    assert out["status"] == "written" and out["details"] == NEW
+    assert t.patches() == [{"values": [{"key": f"{B}/Details", "value": NEW}]}]
+
+
+@pytest.mark.parametrize(
+    "firm",
+    ["Chris: carrier at limits, client to decide by Friday.", "Entered by Christa, see the file.", ""],
+)
+def test_a_firm_written_summary_is_never_changed(monkeypatch: pytest.MonkeyPatch, firm: str) -> None:
+    """FALSIFIER: drop the marker check and the firm's own words are overwritten."""
+    t = _use(monkeypatch, _summary_tenant(firm))
+    out = lt.refresh_operator_details(MATTER, NEW, firm)
+    assert out["status"] == "refused" and t.patches() == []
+    assert t.values["neg"][f"{B}/Details"] == firm
+
+
+def test_a_summary_the_firm_replaced_after_the_read_is_not_overwritten(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The caller read the Operator's summary; the firm has since replaced it."""
+    t = _use(monkeypatch, _summary_tenant("Chris: settled, do not touch."))
+    out = lt.refresh_operator_details(MATTER, NEW, OURS)
+    assert out["status"] == "refused" and t.patches() == []
+
+
+def test_a_summary_changed_between_the_check_and_the_write_is_not_overwritten(monkeypatch: pytest.MonkeyPatch) -> None:
+    t = _use(monkeypatch, _summary_tenant(OURS))
+    t.race = {f"{B}/Details": "Chris: settled, do not touch."}
+    out = lt.refresh_operator_details(MATTER, NEW, OURS)
+    assert out["status"] == "refused" and t.patches() == []
+
+
+def test_a_new_summary_without_the_marker_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    t = _use(monkeypatch, _summary_tenant(OURS))
+    out = lt.refresh_operator_details(MATTER, "Latest: something.", OURS)
+    assert out["status"] == "refused" and t.patches() == []
+
+
+def test_a_summary_that_does_not_read_back_is_a_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    t = _use(monkeypatch, _summary_tenant(OURS))
+    t.patch_sticks = False
+    out = lt.refresh_operator_details(MATTER, NEW, OURS)
+    assert out["status"] == "readback_mismatch" and out["reads"] == OURS and out["wrote"] == NEW
+
+
+def test_an_unchanged_summary_writes_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    t = _use(monkeypatch, _summary_tenant(OURS))
+    assert lt.refresh_operator_details(MATTER, OURS, OURS)["status"] == "nothing_to_write"
+    assert t.patches() == []
+
+
+def test_the_summary_write_is_not_a_tool() -> None:
+    """Runner-only: an agent can never call it."""
+    registered: list[str] = []
+
+    class _Server:
+        def tool(self) -> Any:
+            def deco(fn: Any) -> Any:
+                registered.append(fn.__name__)
+                return fn
+
+            return deco
+
+    lt.register(_Server())
+    assert "refresh_operator_details" not in registered and "add_negotiation_rows" in registered

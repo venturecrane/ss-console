@@ -30,6 +30,12 @@ Entered in Negotiation Details, row 3, with the date only: the amount could not 
 ```
 New offer on matter 200123, Doe v. Example.
 Example Mutual offer of $15,000 dated 10/7/26, per 'Offer letter 10-07.pdf' letter.
+Entered in Negotiation Details, row 3. The summary at the top of the tab could not be updated, please check it.
+```
+
+```
+New offer on matter 200123, Doe v. Example.
+Example Mutual offer of $15,000 dated 10/7/26, per 'Offer letter 10-07.pdf' letter.
 Not entered in Negotiation Details, please check the letter: the same amount is already on row 2 with a different date.
 ```
 

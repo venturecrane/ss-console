@@ -29,7 +29,7 @@ from ..ledger import Ledger
 from ..llm import Doorway
 from ..demand.pull import fetch_all
 from ..stages.base import read_jsonl
-from . import extract as read_mod, notice as notice_mod, rows as rows_mod, text as text_mod
+from . import extract as read_mod, notice as notice_mod, rows as rows_mod, summary as summary_mod, text as text_mod
 from .job import load as load_job
 from .select import extension, full_name, select
 
@@ -270,11 +270,38 @@ class NegotiationRun:
                     rec.update(status="not_entered", reason="Smokeball did not show it as entered when checked")
                 else:
                     rec.update(status="not_entered", reason="the tab could not be updated")
+            if status == "written" and not self._refresh_summary(mid, pidx, res, plan["offers"]):
+                for rec in plan["offers"]:
+                    if rec.get("plaintiff_index") == pidx and rec.get("status") == "written":
+                        rec["summary_stale"] = True
         for rec in plan["offers"]:
             if rec.get("status") == "to_write":
                 rec.update(status="not_entered", reason="the tab could not be updated")
             if rec.get("status") == "possible_duplicate":
                 rec["status"] = "not_entered"
+
+    def _refresh_summary(self, mid: str, pidx: int, res: dict[str, Any], offers: list[dict[str, Any]]) -> bool:
+        """Bring an Operator-written summary in line with the tab after the
+        write (summary.py). False only when such a summary was left stale: a
+        firm-written summary is never touched, and that is not a failure."""
+        view = res.get("negotiation") or {}
+        accepted = {
+            int(r["row"]): r["accepted"]
+            for r in offers
+            if r.get("plaintiff_index") == pidx and r.get("status") == "written" and r.get("accepted") is not None
+        }
+        new = summary_mod.refreshed(view.get("details"), view.get("rows") or [], accepted)
+        if new is None:
+            return True
+        try:
+            got = self.layout.refresh_operator_details(mid, new, view.get("details"), plaintiff_index=pidx)
+        except Exception as exc:  # noqa: BLE001 - the rows are in; a stale summary is reported, never a crash
+            got = {"status": "refused", "reason": type(exc).__name__}
+        status = got.get("status") if isinstance(got, dict) else "refused"
+        if status in ("written", "nothing_to_write"):
+            return True
+        self.log(f"negotiation: the tab summary was not updated ({status})")
+        return False
 
     def _notice(
         self, matter: dict[str, Any], doc: dict[str, Any], rec: dict[str, Any], tabs: list[dict[str, Any]]

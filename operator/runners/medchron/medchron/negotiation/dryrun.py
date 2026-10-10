@@ -50,6 +50,9 @@ class _ReadOnlyLayout:
     def add_negotiation_rows(self, *a: Any, **k: Any) -> Any:
         raise DryRunWriteRefused("the dry run never writes Negotiation Details")
 
+    def refresh_operator_details(self, *a: Any, **k: Any) -> Any:
+        raise DryRunWriteRefused("the dry run never writes Negotiation Details")
+
 
 def _unsafe_state(state: Path) -> bool:
     """True when ``state`` is, or sits inside, the lane's real state dir."""

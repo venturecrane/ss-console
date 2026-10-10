@@ -46,11 +46,15 @@ def status_line(rec: dict[str, Any], plaintiff: str) -> str:
     if rec["status"] == "written":
         row = int(rec["row"]) + 1
         if rec.get("date_only"):
-            return (
+            line = (
                 f"Entered in Negotiation Details{whose}, row {row}, with the date only: the amount "
                 "could not be confirmed from the letter, please check it."
             )
-        return f"Entered in Negotiation Details{whose}, row {row}."
+        else:
+            line = f"Entered in Negotiation Details{whose}, row {row}."
+        if rec.get("summary_stale"):
+            line += " The summary at the top of the tab could not be updated, please check it."
+        return line
     reason = str(rec.get("reason") or "it could not be confirmed")
     return f"Not entered in Negotiation Details, please check the letter: {reason}."
 

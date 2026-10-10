@@ -109,6 +109,18 @@ def filled(value: Any) -> bool:
     return value not in (None, "")
 
 
+#: The opening sentence of a Negotiation Details summary the Operator wrote
+#: ("Entered 10/9/26 from the offer letters and emails saved in this file.").
+#: A summary that does not open with it is the firm's own, and is never changed.
+OPERATOR_DETAILS = re.compile(r"^Entered \d{1,2}/\d{1,2}/\d{2} from the offer letters and emails saved in this file\.")
+DETAILS_MAX = 1000
+
+
+def operator_details(value: Any) -> bool:
+    """True only for a summary the Operator authored."""
+    return isinstance(value, str) and OPERATOR_DETAILS.match(value) is not None
+
+
 def negotiation_rows(values: dict[str, Any]) -> dict[int, dict[str, Any]]:
     """``{row: {field: value}}`` for every filled field of the ten rows."""
     vendor_to_arg = {v: k for k, v in ROW_FIELDS.items()}
@@ -220,6 +232,9 @@ __all__ = [
     "AMOUNT_FIELDS",
     "DATE_FIELDS",
     "DETAILS_KEY",
+    "DETAILS_MAX",
+    "OPERATOR_DETAILS",
+    "operator_details",
     "MASK",
     "MINIMUM_KEY",
     "NEG_MARK",
