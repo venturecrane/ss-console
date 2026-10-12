@@ -66,30 +66,31 @@ export function parseTokenAgeMap(json: string | null): Record<string, number> | 
 /**
  * Vendor lifetime changes are keyed to a token's ISSUE date, not to today, so
  * one global "lifetime" constant is wrong whenever two seats straddle the
- * change. Smokeball is the live case (verified 2026-09-02 against
- * https://docs.smokeball.com/docs/api-docs/2t26gcuuqf1wk-authorization-code-grant):
- *
- *   "The 180-day expiry took effect on 24 August 2026 and applies to refresh
- *    tokens issued on or after that date. Refresh tokens issued before then
- *    remain valid for 30 days."
- *
- * The configured lifetime is therefore the CURRENT one (180 for smokeball), and
- * a token issued before the cutover is evaluated against the older, shorter
- * one. We can date the token because the reported age IS its file mtime age:
+ * change. We can date the token because the reported age IS its file mtime age:
  * issued_at = now - age. The rule goes inert on its own once every pre-cutover
  * token has been re-consented, so it needs no cleanup.
+ *
+ * Smokeball's cutover for OUR app is 2026-09-21 00:22:30Z, not the 2026-08-24
+ * date in their docs. The docs say "The 180-day expiry took effect on 24 August
+ * 2026" as a DEFAULT; our production app client kept 30 days until Smokeball's
+ * review team raised it when they approved the app (approval email, 2026-09-21
+ * 00:22:30Z: "We have also increased your refresh token expiry to 180 days").
+ * Measured: ashton-price's token, issued 2026-09-10 21:31Z (after 08-24, before
+ * 09-21), died at exactly 30 days on 2026-10-10 with invalid_grant
+ * (vfy_01M4RB4V0M8SQ28CGFZZBVEKH3, vfy_01M4RGNRQFFV7Y22VD06KGEZNH). Keyed to
+ * 08-24 it was judged at 180 and would have warned at day 175; it died with no
+ * warning at all.
  *
  * Why this is not cosmetic. Alerts here are edge-triggered (index.ts
  * processTransition: page on inactive->open, silence while open). Judge a
  * 180-day token by a 30-day constant and it opens at day 25, pages once, then
  * sits open and SILENT for the remaining ~155 days — including through the real
  * expiry, which produces no page at all. Judge a 30-day token by a 180-day
- * constant and it never warns before it dies. Both directions were live on
- * 2026-09-02: ashton-price held a pre-cutover token, pilot-smokeball was about
- * to receive a post-cutover one.
+ * constant and it never warns before it dies. Both directions have now been
+ * live: 2026-09-02 (pre-08-24 token) and 2026-10-10 (pre-09-21 token).
  */
 const PRE_CUTOVER_LIFETIMES: Record<string, { cutoverMs: number; days: number }> = {
-  smokeball: { cutoverMs: Date.parse('2026-08-24T00:00:00Z'), days: 30 },
+  smokeball: { cutoverMs: Date.parse('2026-09-21T00:22:30Z'), days: 30 },
 }
 
 /**

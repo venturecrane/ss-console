@@ -125,8 +125,9 @@ export interface Env {
   CONNECTOR_DOWN_RUN_AGE_SECONDS?: string
   /**
    * The CURRENT vendor refresh-token lifetime for the Smokeball connector, in
-   * days (ss#2148; Smokeball auth docs: 180 since their 2026-08-24 cutover,
-   * 30 before it). This is the lifetime for a token issued TODAY — tokens
+   * days (ss#2148; 180 for our app since Smokeball raised it at approval,
+   * 2026-09-21 00:22Z — their docs' 2026-08-24 date did not apply to our app
+   * client). This is the lifetime for a token issued TODAY — tokens
    * minted before the cutover still die at 30, and ./token-expiry.ts dates each
    * token from its reported age to pick the right one. Do not fold that back
    * into this single value; on 2026-09-02 both regimes were live at once.
