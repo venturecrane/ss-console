@@ -76,7 +76,7 @@ The request names one of these, in the firm's own words. Each maps to one class:
 | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | a mediation brief, a mediation statement                                                                                                           | `mediation_brief`    |
 | propounded discovery: special interrogatories, form interrogatories, requests for admission (RFAs), requests for production (RFPs), a set to serve | `discovery_set`      |
-| the attorney's OWN sets of discovery, attached to the email as Word documents, to be put in the case caption or on pleading paper                    | `discovery_set`      |
+| the attorney's OWN sets of discovery, attached to the email as Word documents, to be put in the case caption or on pleading paper                  | `discovery_set`      |
 | our responses to their discovery: objections and answers to interrogatories, RFAs or RFPs served on our client                                     | `discovery_response` |
 | a drafted memo document (a case or legal memo to the file or the attorney); never a note in the record                                             | `memo`               |
 | a deposition outline, depo outline, questions for a deposition                                                                                     | `depo_outline`       |
