@@ -376,7 +376,7 @@ def reconcile_mailbox(
             return fetch_graph_body(seat, token, str(message.get("graph_id") or ""), opener=opener)
 
         report.body_verdicts, report.invariant_findings, report.invariant_proposals = verifier.verify_inbox(
-            sent, rows, _fetch
+            sent, rows, _fetch, inbox=report.slug or report.inbox
         )
     return report
 
@@ -730,7 +730,7 @@ def reconcile_inbox(
             return text if isinstance(text, str) else None
 
         report.body_verdicts, report.invariant_findings, report.invariant_proposals = verifier.verify_inbox(
-            sent, rows, _fetch
+            sent, rows, _fetch, inbox=report.slug or report.inbox
         )
     return report
 
@@ -818,9 +818,10 @@ def main(argv: list[str] | None = None) -> int:
 
     slugs = sorted(d for d in os.listdir(_customers_dir()) if not d.startswith("_") and not d.startswith("."))
 
-    baseline = set() if args.no_baseline else load_baseline(args.baseline)
+    baseline_path = args.baseline or DEFAULT_BASELINE_PATH  # also holds verify_dispositioned (ss#3030)
+    baseline = set() if args.no_baseline else load_baseline(baseline_path)
     try:
-        verifier = send_verify.verifier_from_contract()
+        verifier = send_verify.verifier_from_contract(dispositions_path=None if args.no_baseline else baseline_path)
     except Exception as exc:  # noqa: BLE001 — a broken contract is the control itself broken
         # Not a hold and not a finding: exit >2 is the "control broke" lane the
         # workflow fails on directly. send-render.yaml is repo-committed and
@@ -851,9 +852,7 @@ def report_dict(r: InboxReport) -> dict:
     """--json shape for one inbox. Field-by-field on purpose: what is listed
     here is ALL that can leave the process, and the phase-4 halves come from
     send_verify.as_dicts, whose own emission is hash-only by construction."""
-    body_verdicts, invariant_findings, invariant_proposals = send_verify.as_dicts(
-        r.body_verdicts, r.invariant_findings, r.invariant_proposals
-    )
+    bv, inv, prop = send_verify.as_dicts(r.body_verdicts, r.invariant_findings, r.invariant_proposals)
     return {
         "inbox": r.inbox,
         "slug": r.slug,
@@ -873,9 +872,9 @@ def report_dict(r: InboxReport) -> dict:
             }
             for m in r.unaccounted
         ],
-        "body_verdicts": body_verdicts,
-        "invariant_findings": invariant_findings,
-        "invariant_proposals": invariant_proposals,
+        "body_verdicts": bv,
+        "invariant_findings": inv,
+        "invariant_proposals": prop,
         # Two counted metrics (claims review 2026-09-04, B3): before the overlay
         # pin that writes the skill_name column, attributed_by_hash > 0; after
         # it, attributed_by_skill > 0 and attributed_by_hash == 0. A column

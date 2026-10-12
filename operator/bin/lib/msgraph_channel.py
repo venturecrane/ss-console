@@ -23,6 +23,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Optional
 
+from .send_verify import UnstampedRepresentation
+
 GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
 GRAPH_TOKEN_HOST = "https://login.microsoftonline.com"
 GRAPH_SCOPE = "https://graph.microsoft.com/.default"
@@ -289,9 +291,16 @@ def fetch_graph_body(seat: MsGraphSeat, token: str, graph_id: str, *, opener=Non
     send-render declaration): the list scan's ``_GRAPH_SELECT`` deliberately
     stays body-free, so bodies enter the process one at a time, flow into
     ``canonical_body_sha256``, and go nowhere else. Graph serves ``body`` as
-    ``{contentType, content}``; the content is returned as-is (an HTML-typed
-    body will canon-mismatch, which the verifier grades as a HOLD until the
-    channel transforms are calibrated on a live rehearsal).
+    ``{contentType, content}``; a Text body is returned as-is.
+
+    An HTML body RAISES ``UnstampedRepresentation`` (ss#3030). When the overlay
+    attaches an html part the broker sends Graph only ``{contentType: HTML}``
+    (workspace_broker/msgraph_ops ``_message``), so Sent Items holds HTML that
+    no stamp hashes: ``plain_body_sha256`` describes text the channel never
+    received. The old comment here said such a body "will canon-mismatch, which
+    the verifier grades as a HOLD"; once the plain-stamp edge existed it graded
+    BODY_DIVERGED instead, and five conformant statute-watch sends reddened
+    every scheduled run from 2026-10-02. Raising names the cause instead.
     """
     if not graph_id:
         return None
@@ -300,6 +309,10 @@ def fetch_graph_body(seat: MsGraphSeat, token: str, graph_id: str, *, opener=Non
     body = payload.get("body")
     if not isinstance(body, dict):
         return None
+    if str(body.get("contentType") or "").lower() == "html":
+        raise UnstampedRepresentation(
+            "msgraph stores this send's html part only; no dispatch stamp hashes html (ss#3030)"
+        )
     content = body.get("content")
     return content if isinstance(content, str) else None
 

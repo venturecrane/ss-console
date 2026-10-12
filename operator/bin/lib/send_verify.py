@@ -137,6 +137,7 @@ from .send_attribution import (
     stamps_plain_at,
 )
 from .failure_note_stamp import derive_failure_note_hashes
+from .send_dispositions import apply_dispositions, load_dispositions
 from .send_invariants import (  # noqa: F401 -- re-exports; callers and tests read unchanged
     DEFAULT_INVARIANTS_PATH,
     InvariantFinding,
@@ -170,6 +171,7 @@ VERDICT_NO_DISPATCH_STAMP = "no_dispatch_stamp"  # hold
 VERDICT_BODY_UNAVAILABLE = "body_unavailable"  # hold
 VERDICT_CHANNEL_MISMATCH = "channel_mismatch_hold"  # hold until rehearsal calibrates
 VERDICT_PRE_EDGE = "pre_stamp_edge"  # neither hold nor finding: unverifiable by construction
+VERDICT_UNSTAMPED_REPR = "channel_unstamped_representation"  # neither: no stamp hashes what the mailbox stores
 
 _HOLD_VERDICTS = (
     VERDICT_NO_WAKE_HASH,
@@ -186,6 +188,22 @@ _ATTRIBUTION_DETAIL = {ATTRIBUTED_BY_HASH: "attributed by hash"}
 
 class SendRenderError(RuntimeError):
     """A malformed send-render contract. Refuse to evaluate; never guess."""
+
+
+class UnstampedRepresentation(Exception):
+    """Raised by a channel's body fetcher when the mailbox stores a body
+    representation that NO stamp describes, so no comparison is possible.
+
+    The msgraph case (ss#3030): when the overlay attaches an html part, the
+    broker hands Graph ONLY ``{contentType: HTML}`` (workspace_broker/msgraph_ops
+    ``_message``) and Sent Items stores HTML. ``plain_body_sha256`` hashes text
+    the channel never received, the wake and rendered stamps hash markdown, so
+    canon(stored html) can match nothing: five statute-watch sends graded
+    BODY_DIVERGED and reddened every run from 2026-10-02, while the primary hash
+    join graded all five match/degraded. Grading it is ``VERDICT_UNSTAMPED_REPR``:
+    neither hold nor finding, counted indented. The primary join still grades the
+    send; what is lost is only the independent channel observation, until a stamp
+    of the stored representation exists."""
 
 
 def canonical_body_sha256(text: str) -> str:
@@ -423,10 +441,19 @@ class BodyVerdict:
     actual_sha256: Optional[str] = None
     detail: Optional[str] = None
     attribution: str = ""  # skill | hash | "" -- how the pair was made (send_attribution)
+    dispositioned_in: Optional[int] = None  # reviewed issue that quieted this finding (send_dispositions)
 
     @property
     def is_finding(self) -> bool:
-        return self.verdict == VERDICT_DIVERGED
+        return self.verdict == VERDICT_DIVERGED and self.dispositioned_in is None
+
+    @property
+    def is_dispositioned(self) -> bool:
+        return self.verdict == VERDICT_DIVERGED and self.dispositioned_in is not None
+
+    @property
+    def is_unstamped_repr(self) -> bool:
+        return self.verdict == VERDICT_UNSTAMPED_REPR
 
     @property
     def is_hold(self) -> bool:
@@ -602,6 +629,8 @@ def _grade_channel_body(wake, message, fetch_body, dispatches, window_s, plain_e
     }
     try:
         body = fetch_body(message)
+    except UnstampedRepresentation as exc:
+        return BodyVerdict(verdict=VERDICT_UNSTAMPED_REPR, detail=str(exc), **common)
     except Exception as exc:  # noqa: BLE001 -- transport discipline: any failure HOLDS
         return BodyVerdict(
             verdict=VERDICT_BODY_UNAVAILABLE,
@@ -754,15 +783,17 @@ def _graded(matched: bool, digest: str, against: str, common: dict, identified: 
 class SendVerifier:
     """Constructed once in reconcile-sends' main(); applied per inbox."""
 
-    def __init__(self, declares: dict[str, RenderDecl], invariants: dict) -> None:
+    def __init__(self, declares: dict[str, RenderDecl], invariants: dict, dispositions=None) -> None:
         self._declares = declares
         self._invariants = invariants
+        self._dispositions = dispositions or {}  # send_dispositions: reviewed findings, by narrow key
 
     def verify_inbox(
         self,
         sent: list[dict],
         rows: list[dict],
         fetch_body: Optional[Callable[[dict], Optional[str]]] = None,
+        inbox: str = "",  # the seat slug (else the address) send_dispositions keys on
     ) -> tuple[list[BodyVerdict], list[InvariantFinding], list[InvariantProposal]]:
         wakes = index_wakes(rows)
         derive_failure_note_hashes(wakes, rows, self._declares)
@@ -775,13 +806,18 @@ class SendVerifier:
         # send-invariants.json PR, never findings.
         findings, proposals = recipient_invariant(rows, self._declares, self._invariants)
         ack_findings, ack_proposals = ack_invariant(wakes, self._declares, self._invariants)
+        apply_dispositions(inbox, verdicts, findings + ack_findings, self._dispositions)
         return verdicts, findings + ack_findings, proposals + ack_proposals
 
 
 def verifier_from_contract(
-    render_path: str = SEND_RENDER_PATH, invariants_path: str = DEFAULT_INVARIANTS_PATH
+    render_path: str = SEND_RENDER_PATH, invariants_path: str = DEFAULT_INVARIANTS_PATH, dispositions_path=None
 ) -> SendVerifier:
-    return SendVerifier(load_send_render(render_path), load_invariants(invariants_path))
+    """``dispositions_path`` is the reconciler's baseline file (None = no
+    dispositions, which over-reports: --no-baseline means report everything)."""
+    return SendVerifier(
+        load_send_render(render_path), load_invariants(invariants_path), load_dispositions(dispositions_path)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -799,6 +835,7 @@ __all__ = [
     "RenderDecl",
     "SendRenderError",
     "SendVerifier",
+    "UnstampedRepresentation",
     "WakeStamp",
     "ack_invariant",
     "as_dicts",

@@ -33,6 +33,18 @@
 # holds; there the stamp may yet arrive. operator/bin/lib/send_verify.py
 # carries the rule and operator/bin/tests/test_send_verify.py its falsifier.
 #
+# FINDINGS CAN BE DISPOSITIONED TOO (ss#3030). The baseline below quieted only
+# unaccounted sends, by message id; a body-verify or invariant finding on a
+# historical send had no reviewed way out, and this job scans the whole mailbox,
+# so it reddened every run forever (2026-10-02 onward, five ashton-price
+# statute-watch sends, #3018/#3030). The same file now carries
+# `verify_dispositioned`: reviewed rows keyed (seat, skill, dispatch ts, actual
+# hash), each naming its issue and why (operator/bin/lib/send_dispositions.py).
+# A new divergence still finds. The root cause of those five was the instrument:
+# msgraph stores only the html part of a send that carries one, and no stamp
+# hashes html, so the channel check now grades that `channel_unstamped_
+# representation` (indented, neither hold nor finding) instead of BODY_DIVERGED.
+#
 # MEMORY (ss#2386). This job used to file a fresh P1 EVERY DAY re-reporting the
 # same 11 historical finds, until five copies of one finding were open at once.
 # Two layers of memory now sit between a find and an issue:
@@ -79,6 +91,8 @@ on:
       # transport factor-out ride this job; a change to any of them must run
       # its tests here.
       - 'operator/bin/lib/send_verify.py'
+      - 'operator/bin/lib/send_dispositions.py'
+      - 'operator/bin/lib/send_report.py'
       - 'operator/bin/lib/msgraph_channel.py'
       - 'operator/bin/send-invariants.json'
       - 'operator/bin/tests/test_send_verify.py'
