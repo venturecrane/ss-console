@@ -45,9 +45,9 @@ def _set(n: int = 3, pos: bool = True, definitions: bool = True) -> str:
     )
 
 
-def _check(tmp_path: Path, md: str, cls: str, digest: str = "", render_fmt=None, check_fmt=None):
+def _check(tmp_path: Path, md: str, cls: str, digest: str = "", render_fmt=None, check_fmt=None, corpus=None):
     path, _ = render.render(md, cls, tmp_path / f"{cls}.docx", render_fmt or FMT)
-    return format_check.check(path, cls, check_fmt or FMT, digest)
+    return format_check.check(path, cls, check_fmt or FMT, digest, corpus)
 
 
 @pytest.mark.parametrize(
@@ -133,18 +133,21 @@ def test_missing_labels_or_definitions_are_content_and_a_missing_proof_of_servic
 def test_the_declaration_check_uses_the_cumulative_rule(tmp_path):
     prior = (
         "## DISCOVERY-SETS\nSpecial Interrogatories, Set One | One | Gamma Example -> Delta Example | "
-        "special interrogatories | 20 | 03/01/2026 | cite\n"
+        "special interrogatories | 20 | 03/01/2026 | FILE: SROG one.pdf\n"
     )
+    corpus = {"SROG one.pdf": "SPECIAL INTERROGATORIES, SET ONE. PROOF OF SERVICE."}
     md = _set(20)
-    assert any("declaration required" in f for f in _check(tmp_path, md, "discovery_set", prior).fails)
+    assert any("declaration required" in f for f in _check(tmp_path, md, "discovery_set", prior, corpus=corpus).fails)
     from drafting_testkit import DECL, POS
 
     class F:
         def attachment(self, k):
             return {"decl_2030_050": DECL, "pos": POS}[k]
 
-    attached, _ = render.attach(md, "discovery_set", F(), prior)
-    assert _check(tmp_path, attached, "discovery_set", prior).ok
+    attached, _ = render.attach(md, "discovery_set", F(), prior, corpus)
+    assert _check(tmp_path, attached, "discovery_set", prior, corpus=corpus).ok
+    # no served copy in the corpus: the same declaration is not allowed
+    assert any("declaration not allowed" in f for f in _check(tmp_path, attached, "discovery_set", prior).fails)
     assert any("declaration not allowed" in f for f in _check(tmp_path, attached, "discovery_set", "").fails)
 
 

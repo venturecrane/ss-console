@@ -376,7 +376,7 @@ def test_the_job_corrects_a_misspelled_client_and_reports_it(tmp_path, pricing):
     ]
     assert sb.get("/contacts/c1")["person"]["lastName"] == "Example"
     assert v.caption_discrepancies == [] and not v.reason
-    notes = r._notes_md([], [])
+    notes = (r.data / "notes-final.md").read_text(encoding="utf-8")
     assert (
         'Corrected in Smokeball from the court\'s Complaint 2-1-26: plaintiff "Gamma Exampel" -> "GAMMA EXAMPLE"'
         in notes

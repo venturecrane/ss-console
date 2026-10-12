@@ -420,25 +420,51 @@ def _digest(*lines: str) -> str:
     return "## MEDICAL | x\nnothing\n\n## DISCOVERY-SETS\n" + "\n".join(lines) + "\n\n## FILES-SEEN\n- x\n"
 
 
-PRIOR20 = "Special Interrogatories, Set One | One | Gamma Example -> Delta Example | special interrogatories | 20 | 03/01/2026 | SROG set one"
+PRIOR20 = "Special Interrogatories, Set One | One | Gamma Example -> Delta Example | special interrogatories | 20 | 03/01/2026 | FILE: SROG set one.pdf, p. 1"
 PRIOR10 = PRIOR20.replace("| 20 |", "| 10 |")
 UNREADABLE = PRIOR20.replace("| 20 |", "| not readable |")
+#: The served copy: the set's own title and its proof of service.
+SERVED = {"SROG set one.pdf": "PLAINTIFF GAMMA EXAMPLE'S SPECIAL INTERROGATORIES, SET ONE\n...\nPROOF OF SERVICE\nServed by mail."}
+#: The 2026-10-12 incident's shape: a matter memo ABOUT discovery, indexed as a set.
+MEMO_ROW = (
+    "Sprogs uploaded | not readable | Gamma Example -> Delta Example | special interrogatories | not readable | "
+    "undated | FILE: Note re discovery.pdf, p. 1"
+)
+MEMO = {"Note re discovery.pdf": "DRAFTED FORM ROGS, RFAS AND SPROGS UPLOADED TO THE RESPONSE TOOL."}
+UNSERVED = {"SROG set one.pdf": "PLAINTIFF GAMMA EXAMPLE'S SPECIAL INTERROGATORIES, SET ONE\nDraft, not served."}
 
 
 @pytest.mark.parametrize(
-    "n, lines, attach",
+    "n, lines, corpus, attach",
     [
-        (20, [PRIOR20], True),  # (a) 20 + 20 prior
-        (36, [], True),  # (b) 36, no prior
-        (20, [PRIOR10], False),  # (c) 20 + 10
-        (20, [UNREADABLE], True),  # (d) prior count unreadable
-        (20, [PRIOR20.replace("Delta Example", "Someone Else")], False),  # prior to another party
-        (35, [], False),
+        (20, [PRIOR20], SERVED, True),  # (a) 20 + 20 served before
+        (36, [], {}, True),  # (b) 36, no prior
+        (20, [PRIOR10], SERVED, False),  # (c) 20 + 10
+        (20, [PRIOR20], {}, False),  # a row no served copy bears out never counts
+        (20, [PRIOR20], UNSERVED, False),  # the set itself, but nothing shows it served
+        (36, [UNREADABLE], SERVED, True),  # over on this set alone; paragraph 4 to the attorney
+        (20, [UNREADABLE], SERVED, False),  # an unreadable count never turns into a declaration
+        (35, [MEMO_ROW], MEMO, False),  # the incident: exactly 35 and a memo about discovery
+        (20, [PRIOR20.replace("Delta Example", "Someone Else")], SERVED, False),  # prior to another party
+        (35, [], {}, False),
     ],
 )
-def test_the_declaration_rule_is_cumulative_per_responding_party(n, lines, attach):
-    d = render.decl_decision(_set(n), _digest(*lines))
+def test_the_declaration_rule_counts_only_served_prior_sets(n, lines, corpus, attach):
+    d = render.decl_decision(_set(n), _digest(*lines), corpus)
     assert d.attach is attach
+
+
+def test_a_set_whose_parties_are_not_stated_never_gets_a_declaration_from_a_prior_set():
+    unstated = _set(20, responding="`{{FILL: responding party | pleading}}`")
+    d = render.decl_decision(unstated, _digest(PRIOR20), SERVED)
+    assert d.attach is False and d.unreadable
+
+
+def test_the_incident_memo_is_read_as_a_mention_and_said_so():
+    doc, notes = render.attach(_set(35), "discovery_set", _Firm(), _digest(MEMO_ROW), MEMO)
+    assert "DECLARATION" not in doc
+    assert any("read as a mention, not a prior set" in n for n in notes)
+    assert any("35 special interrogatories to this party" in n and "no declaration" in n for n in notes)
 
 
 class _Firm:
@@ -449,7 +475,7 @@ class _Firm:
 
 
 def test_the_declaration_is_attached_before_the_proof_of_service_with_its_counts_filled():
-    doc, notes = render.attach(_set(20), "discovery_set", _Firm(), _digest(PRIOR20))
+    doc, notes = render.attach(_set(20), "discovery_set", _Firm(), _digest(PRIOR20), SERVED)
     assert doc.index("DECLARATION FOR ADDITIONAL DISCOVERY") < doc.index("PROOF OF SERVICE")
     assert "authoring comment" not in doc
     assert "a total of 20 interrogatories" in doc and "contains 20 specially" in doc
@@ -457,7 +483,7 @@ def test_the_declaration_is_attached_before_the_proof_of_service_with_its_counts
 
 
 def test_an_unreadable_prior_count_leaves_paragraph_4_to_the_attorney():
-    doc, notes = render.attach(_set(20), "discovery_set", _Firm(), _digest(UNREADABLE))
+    doc, notes = render.attach(_set(36), "discovery_set", _Firm(), _digest(UNREADABLE), SERVED)
     assert "{{ATTORNEY: a prior set's count is not readable" in doc and "{{FILL: number of interrogatories" not in doc
     assert any("paragraph 4 is left to the attorney" in n for n in notes)
 
