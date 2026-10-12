@@ -35,6 +35,8 @@ REASON_CODES = (
     "unexpected",
     "config_missing",
     "caption_restore_incomplete",
+    # The pre-delivery review found a MUST-FIX (review.py): failed, nothing filed, SMD alerted.
+    "review_held",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 

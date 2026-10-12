@@ -1,6 +1,13 @@
 """The attorney notes filed beside the draft: the markers, the caption diff
 and what was compared, the final pass, the gate, the format notes, the wall,
-and the drafter's own end tables."""
+and the end tables.
+
+The end tables are written from the FINAL documents (``review.final_notes``),
+never copied from the drafter's or the auditor's intermediate output: on
+2026-10-12 the delivered notes said terms were undefined that the document
+defined, and carried auditor and drafter lines that contradicted each other.
+The auditor's open items reach the attorney only through that rewrite, as the
+final document still bears them out."""
 
 from __future__ import annotations
 
@@ -14,8 +21,15 @@ def _json(data: Path, name: str) -> Any:
 
 
 def attorney_notes(
-    data: Path, title: str, found: list[dict[str, str]], render_notes: list[str], end_tables: str = ""
+    data: Path,
+    title: str,
+    found: list[dict[str, str]],
+    render_notes: list[str],
+    end_tables: str = "",
+    units: list[tuple[str, Path]] | None = None,
 ) -> str:
+    """``units`` are (label, unit data dir) for a job that drafted several
+    documents; a one-document job reads its records from ``data``."""
     lines = [f"# Attorney notes: {title}", "", "## Items for the attorney", ""]
     lines += [f"- {{{{{m['kind']}}}}} {m['text']}".rstrip() for m in found] or ["- None."]
     cap = _json(data, "caption.json") if (data / "caption.json").is_file() else None
@@ -47,15 +61,20 @@ def attorney_notes(
             lines.append(f"- Fields compared: {compared}. No discrepancy on those fields.")
         else:
             lines.append(f"- Fields compared: {compared}.")
-    fp = _json(data, "final-pass.json")
-    review = [f"Removed or flagged by the final audit: {x}" for x in fp["settled"]]
-    review += [f"Left for the attorney by the auditor: {x}" for x in fp["drifts"]]
+    review: list[str] = []
+    for label, d in units or [("", data)]:
+        pre = f"{label}: " if label else ""
+        fp = _json(d, "final-pass.json")
+        review += [f"{pre}Removed or flagged by the final audit: {x}" for x in fp["settled"]]
+        g = _json(d, "gate.json")
+        review += [f"{pre}Corrected to match the record: {x}" for x in g.get("repairs") or []]
+        review += [f"{pre}Check against the record: {w}" for w in g.get("warnings") or []]
+        if (d / "caps.json").is_file():
+            review += [f"{pre}Defined terms: {x}" for x in _json(d, "caps.json")]
     if (data / "howell.json").is_file():
         review += [f"Howell table: {n}" for n in _json(data, "howell.json")["notes"]]
-    review += [f"Drafting gate repair: {x}" for x in _json(data, "gate.json").get("repairs") or []]
-    review += [f"Drafting gate: {w}" for w in _json(data, "gate.json").get("warnings") or []]
     review += [f"Format: {n}" for n in render_notes]
     walled = _json(data, "walled.json") if (data / "walled.json").is_file() else []
     review += [f"Held out, never read (privilege wall: {w['reason']}): {w['name']}" for w in walled]
-    tail = ["", "## The drafter's end tables", "", end_tables] if end_tables else []
+    tail = ["", "## End tables (from the final document)", "", end_tables] if end_tables else []
     return "\n".join(lines + ["", "## For review", ""] + [f"- {x}" for x in review] + tail) + "\n"

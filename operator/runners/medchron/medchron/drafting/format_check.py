@@ -176,7 +176,7 @@ def check_headings(doc: Any, rules: Any, res: Result) -> None:
             res.fails.append(f"heading: level {lv} not indented {rules.heading_indent_in[i]} inch: {p.text[:40]}")
 
 
-def check_body(doc: Any, rules: Any, res: Result) -> None:
+def check_body(doc: Any, rules: Any, res: Result, pitch: bool = False) -> None:
     from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
     from docx.shared import Inches, Pt
 
@@ -211,7 +211,9 @@ def check_body(doc: Any, rules: Any, res: Result) -> None:
                     f"heading: a provider line not bold italic at {rules.bold_italic_heading_indent_in} inch"
                 )
     prose = [p for p in body if p not in providers]
-    if rules.body_exact_pt:
+    if pitch:
+        pass  # pleading paper: every line at the paper's pitch (pleading.check)
+    elif rules.body_exact_pt:
         bad = [
             p
             for p in prose
@@ -265,7 +267,16 @@ def doc_text(doc: Any) -> str:
     return "\n".join(out)
 
 
-def check_discovery(doc: Any, cls: str, fmt: dict[str, Any], rules: Any, res: Result, digest: str) -> None:
+def check_discovery(
+    doc: Any,
+    cls: str,
+    fmt: dict[str, Any],
+    rules: Any,
+    res: Result,
+    digest: str,
+    corpus: Any = None,
+    pitch: bool = False,
+) -> None:
     from docx.shared import Inches, Pt
 
     paras = _paras(doc)
@@ -278,12 +289,12 @@ def check_discovery(doc: Any, cls: str, fmt: dict[str, Any], rules: Any, res: Re
             _bold(r, p) and _underlined(r, p) and (r.font.all_caps or r.text == r.text.upper()) for r in _text_runs(p)
         ):
             res.fails.append(f"label: not all-caps bold underlined: {p.text[:40]}")
-    for p in labels + items:
+    for p in [] if pitch else labels + items:
         extra = [a for a in ("space_before",) if (_eff(p, a) or Pt(0)) != Pt(0)]
         if _eff(p, "line_spacing") != rules.item_line_spacing or extra:
             res.fails.append(f"spacing: not at {rules.item_line_spacing} with no space before: {p.text[:40]}")
     for p in items:
-        if (_eff(p, "space_after") or Pt(0)) != Pt(rules.item_space_after_pt):
+        if not pitch and (_eff(p, "space_after") or Pt(0)) != Pt(rules.item_space_after_pt):
             res.fails.append(f"spacing: {p.text[:40]} carries space after other than {rules.item_space_after_pt} pt")
         if p.paragraph_format.first_line_indent != Inches(rules.first_line_indent_in):
             res.fails.append(f"request: not first-line indented: {p.text[:40]}")
@@ -297,7 +308,7 @@ def check_discovery(doc: Any, cls: str, fmt: dict[str, Any], rules: Any, res: Re
     if cls == "discovery_set":
         if not any(t.strip().strip(":").upper() == "DEFINITIONS" for t in texts):
             res.model("definitions: no Definitions section")
-        d = decl_decision(doc_text(doc), digest)
+        d = decl_decision(doc_text(doc), digest, corpus)
         if (decl_at is not None) != d.attach:
             want = "required" if d.attach else "not allowed"
             res.fails.append(
@@ -319,9 +330,15 @@ def check_footer(doc: Any, blob: bytes, rules: Any, res: Result) -> None:
             res.fails.append(f"footer: the title {rules.footer_title!r} is not under the page number")
 
 
-def check(path: Path, cls: str, fmt: dict[str, Any], digest: str = "") -> Result:
-    """``digest`` carries the DISCOVERY-SETS index the cumulative section
-    2030.050 rule reads (``render.decl_decision``, the rule the attach used)."""
+def check(
+    path: Path, cls: str, fmt: dict[str, Any], digest: str = "", corpus: Any = None, paper: str = "plain"
+) -> Result:
+    """``digest`` carries the DISCOVERY-SETS index and ``corpus`` the document
+    texts the cumulative section 2030.050 rule reads (``render.decl_decision``,
+    the rule the attach used). ``paper`` is ``pleading`` when the request asked
+    for pleading paper (``pleading.py``): the paper's own geometry and line
+    pitch are checked in place of the plain-paper spacing rules."""
+    from . import pleading
     import docx
 
     blob = Path(path).read_bytes()
@@ -332,10 +349,17 @@ def check(path: Path, cls: str, fmt: dict[str, Any], digest: str = "") -> Result
     if fmt.get("plain_letter_paper"):
         check_paper(doc, res)
     check_headings(doc, rules, res)
-    check_body(doc, rules, res)
+    pitch = paper == "pleading"
+    if pitch:
+        spec = pleading.spec_for(fmt)
+        if spec is None:
+            res.fails.append("pleading: the request asks for pleading paper and the firm has none authored")
+        else:
+            res.fails += pleading.check(doc, blob, spec)
+    check_body(doc, rules, res, pitch)
     check_footer(doc, blob, rules, res)
     if cls == "mediation_brief":
         check_mediation(doc, fmt, res)
     if cls in ("discovery_set", "discovery_response"):
-        check_discovery(doc, cls, fmt, rules, res, digest)
+        check_discovery(doc, cls, fmt, rules, res, digest, corpus, pitch)
     return res

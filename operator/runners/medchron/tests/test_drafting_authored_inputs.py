@@ -99,3 +99,18 @@ def test_the_authored_skeleton_itself_renders_and_passes_the_authored_format(tmp
     md = render.COMMENT.sub("", _firm().skeleton(cls))
     res = _render_check(tmp_path, md, cls)
     assert res.ok, res.fails
+
+
+def test_the_authored_pleading_paper_lays_a_set_out_and_passes(tmp_path):
+    """The firm's authored pleading block: a set rendered and laid on it
+    passes the pleading check (28 numbers, rules, pitch, margins)."""
+    from medchron.drafting import pleading
+
+    firm = _firm()
+    spec = pleading.spec_for(firm.data["format"])
+    assert spec is not None, "the authored inputs carry no format.pleading block"
+    doc, _ = render.attach(_set(3), "discovery_set", firm, "")
+    path, _ = render.render(doc, "discovery_set", tmp_path / "set.docx", firm.data["format"])
+    pleading.apply(path, spec)
+    res = format_check.check(path, "discovery_set", firm.data["format"], "", None, "pleading")
+    assert res.ok, res.fails

@@ -13,9 +13,12 @@ attorney:
   CUMULATIVE over 35 (the statute: "propounding or has propounded more than 35
   specially prepared interrogatories to any other party"): this set's labeled
   special interrogatories plus every prior special interrogatory set to the
-  same responding party in the digest's DISCOVERY-SETS index. A prior count the
-  record cannot read never counts as zero: the declaration is attached and its
-  paragraph-4 counts are left to the attorney. The proof of service's
+  same responding party in the digest's DISCOVERY-SETS index that a SERVED copy
+  in the file bears out (``proof``). The declaration swears under penalty of
+  perjury that the count is exceeded, so only a PROVEN count over 35 attaches it:
+  a mention (a memo about discovery, the 2026-10-12 incident) never counts, and a
+  prior set the file does not bear out, or whose count cannot be read, is named
+  for the attorney instead. The proof of service's
   ``{{FILL: ... | at service}}`` slots stay verbatim for the person serving;
 * reserved judgment: in a mediation brief, the case-value section opens with an
   ``{{ATTORNEY}}`` marker, and a paragraph about settlement authority, the
@@ -33,7 +36,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 DISCOVERY = ("discovery_set", "discovery_response")
 NOTES_MARK = "=== ATTORNEY NOTES ==="
@@ -103,6 +106,8 @@ class PriorSet:
     responding: str
     kind: str
     count: int | None  # None: "not readable"
+    cite: str = ""
+    served: str = ""
 
 
 def prior_sets(digest: str) -> list[PriorSet]:
@@ -120,8 +125,50 @@ def prior_sets(digest: str) -> list[PriorSet]:
             key = (cells[0].casefold(), cells[1].casefold(), _norm(prop), _norm(resp), cells[3].casefold())
             if key not in seen:
                 seen.add(key)
-                out.append(PriorSet(cells[0], prop.strip(), resp.strip(), cells[3].casefold(), count))
+                served = cells[5] if len(cells) > 5 else ""
+                cite = " | ".join(cells[6:]) if len(cells) > 6 else ""
+                out.append(PriorSet(cells[0], prop.strip(), resp.strip(), cells[3].casefold(), count, cite, served))
     return out
+
+
+#: The title a served copy of each set type carries on its own face.
+SET_TITLES = {
+    "special": re.compile(r"(?i)special(?:ly prepared)?\s+interrogatories"),
+    "form": re.compile(r"(?i)form\s+interrogatories"),
+}
+SERVED = re.compile(r"(?i)proof\s+of\s+service|responses?\s+to\s+(?:plaintiff|defendant)\S*\s+.{0,80}?interrogatories")
+
+
+def _stem(name: str) -> str:
+    return re.sub(r"\.(pdf|docx?|msg|txt|rtf|jpe?g|png|tiff?)$", "", name.strip(), flags=re.I).casefold()
+
+
+def cited_documents(cite: str, corpus: Mapping[str, str]) -> list[str]:
+    """The corpus documents a DISCOVERY-SETS line's cite names (by file name or stem)."""
+    c = cite.casefold()
+    return [n for n in corpus if len(_stem(n)) >= 4 and (_stem(n) in c or n.casefold() in c)]
+
+
+def proof(s: PriorSet, corpus: Mapping[str, str]) -> tuple[str, str]:
+    """How the record bears out a prior interrogatory set: ``("served", doc)``
+    when a cited document IS that set (its own title) and carries a proof of
+    service or is the responding party's responses to it; ``("doubtful", why)``
+    when a cited document is that set but nothing shows it was served, or its
+    count cannot be read; ``("mention", why)`` when no cited document is that
+    set at all (a memo, a note, an email ABOUT discovery): noise, never a count.
+    The 2026-10-12 incident: a matter memo about the other side's discovery
+    read as the plaintiff's own prior set, and a declaration under penalty of
+    perjury followed."""
+    kind = "special" if "special" in s.kind else "form"
+    docs = [d for d in cited_documents(s.cite, corpus) if SET_TITLES[kind].search(corpus[d])]
+    if not docs:
+        return "mention", f"{s.title}: no cited document is the set itself ({s.cite or 'no cite'})"
+    served = [d for d in docs if SERVED.search(corpus[d])]
+    if not served:
+        return "doubtful", f"{s.title}: {docs[0]} is the set but carries no proof of service"
+    if s.count is None:
+        return "doubtful", f"{s.title}: served ({served[0]}) but its count is not readable"
+    return "served", served[0]
 
 
 @dataclass
@@ -130,6 +177,11 @@ class DeclDecision:
     prior_special: int
     prior_form: int
     unreadable: list[str] = field(default_factory=list)
+    #: Prior sets to this party the record does not bear out (attorney's call).
+    doubtful: list[str] = field(default_factory=list)
+    #: Mentions that are not the set itself (a memo about discovery): not counted.
+    ignored: list[str] = field(default_factory=list)
+    served: list[str] = field(default_factory=list)
 
     @property
     def total(self) -> int:
@@ -137,11 +189,15 @@ class DeclDecision:
 
     @property
     def attach(self) -> bool:
-        return self.this_set > 0 and (self.total > SPECIAL_LIMIT or bool(self.unreadable))
+        """Only a PROVEN cumulative count over the limit: the declaration's
+        paragraph 3 says so under penalty of perjury."""
+        return self.this_set > 0 and self.total > SPECIAL_LIMIT
 
 
-def decl_decision(md: str, digest: str) -> DeclDecision:
-    """The cumulative count, the same rule render and format_check apply."""
+def decl_decision(md: str, digest: str, corpus: Mapping[str, str] | None = None) -> DeclDecision:
+    """The cumulative count over SERVED prior sets only, the same rule render,
+    format_check and the pre-delivery review apply. ``corpus`` is the matter's
+    document texts by name; without it no prior set can be proven."""
     doc, _ = split_notes(md)
     n = len({int(x) for x in SPECIAL.findall(doc)})
     resp, prop = party(doc, "RESPONDING PARTY"), party(doc, "PROPOUNDING PARTY")
@@ -149,17 +205,24 @@ def decl_decision(md: str, digest: str) -> DeclDecision:
     for s in prior_sets(digest):
         if "interrogator" not in s.kind:
             continue
-        if resp is None:  # the set's own responding party is unread: any prior could be to them
-            d.unreadable.append(f"{s.title} (this set's responding party is not stated)")
+        if resp is None or prop is None:
+            d.unreadable.append(f"{s.title} (this set's propounding or responding party is not stated)")
             continue
-        if not _same(s.responding, resp) or (prop and not _same(s.propounding, prop)):
+        if not _same(s.responding, resp) or not _same(s.propounding, prop):
             continue
-        if s.count is None:
-            d.unreadable.append(s.title)
+        how, what = proof(s, corpus or {})
+        if how == "mention":
+            d.ignored.append(what)
+        elif how == "doubtful":
+            d.doubtful.append(what)
+            if s.count is None:
+                d.unreadable.append(s.title)
         elif "special" in s.kind:
-            d.prior_special += s.count
+            d.prior_special += int(s.count or 0)
+            d.served.append(f"{s.title} ({s.count}, {what})")
         else:
-            d.prior_form += s.count
+            d.prior_form += int(s.count or 0)
+            d.served.append(f"{s.title} ({s.count}, {what})")
     return d
 
 
@@ -201,33 +264,40 @@ def strip_attachments(doc: str) -> tuple[str, bool]:
     return doc, False
 
 
-def attach(doc: str, cls: str, firm: Any, digest: str) -> tuple[str, list[str]]:
+def attach(
+    doc: str, cls: str, firm: Any, digest: str, corpus: Mapping[str, str] | None = None
+) -> tuple[str, list[str]]:
     """The served attachments, appended by the job in the order the firm serves
     them: the document, then the section 2030.050 declaration (a special
-    interrogatory set over the cumulative limit), then the proof of service
-    (every discovery set and response). Authoring comments are stripped; every
-    ``{{FILL: ... | at service}}`` slot stays verbatim for the person serving.
-    Appended after the audit and the gate: the firm's fixed text is never
-    audited."""
+    interrogatory set over the PROVEN cumulative limit), then the proof of
+    service (every discovery set and response). Authoring comments are
+    stripped; every ``{{FILL: ... | at service}}`` slot stays verbatim for the
+    person serving. Appended after the audit and the gate: the firm's fixed
+    text is never audited. ``corpus`` (document texts by name) is what proves a
+    prior set served (``decl_decision``)."""
     if cls not in DISCOVERY:
         return doc, []
     doc, removed = strip_attachments(doc)
-    notes = ["removed a model-written declaration or proof of service; the job attaches the firm's"] if removed else []
+    notes = ["the firm's own declaration and proof of service forms are used"] if removed else []
     parts = [doc.rstrip()]
     if cls == "discovery_set":
-        d = decl_decision(doc, digest)
+        d = decl_decision(doc, digest, corpus)
         if d.attach:
             parts.append(_fill_decl(firm.attachment("decl_2030_050"), d, doc))
             why = (
-                f"{d.total} special interrogatories to this party ({d.this_set} in this set, {d.prior_special} before)"
+                f"{d.total} special interrogatories to this party ({d.this_set} in this set, {d.prior_special} "
+                f"before in served sets: {'; '.join(d.served) or 'none'})"
             )
             if d.unreadable:
                 why += "; a prior count is not readable, so paragraph 4 is left to the attorney"
             notes.append(f"section 2030.050 declaration attached: {why}")
         elif d.this_set:
             notes.append(
-                f"section 2030.050: {d.total} special interrogatories to this party ({d.this_set} in this set); no declaration"
+                f"section 2030.050: {d.total} special interrogatories to this party ({d.this_set} in this set, "
+                f"{d.prior_special} in served prior sets); no declaration, the count does not exceed {SPECIAL_LIMIT}"
             )
+        notes += [f"section 2030.050: a prior set the record does not bear out, not counted: {x}" for x in d.doubtful]
+        notes += [f"section 2030.050: {x}; read as a mention, not a prior set" for x in d.ignored]
     parts.append(COMMENT.sub("", firm.attachment("pos")).strip())
     notes.append("the firm's proof of service is attached; its at-service slots are for the person serving")
     return "\n\n".join(parts) + "\n", notes
@@ -274,6 +344,7 @@ def render(md: str, cls: str, out: Path, fmt: dict[str, Any]) -> tuple[Path, dic
 
     from .house import house_for
 
+    md = re.sub(r"`+(\{\{[^{}]*\}\})`+", r"\1", md)  # a slot never carries stray backticks
     blob, report = render_document(md, cls, None, house=house_for(fmt, cls))
     out.parent.mkdir(parents=True, exist_ok=True)
     part = out.with_name(f".{out.name}.tmp")

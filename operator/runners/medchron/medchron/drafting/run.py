@@ -5,8 +5,15 @@ The graph, per class::
     facts -> destination -> pull (privilege wall) -> preflight -> estimate
       -> transcribe -> digest (cited)
       -> [mediation brief: howell table] -> [court classes: caption read, record diff + corrections]
-      -> compose -> audit -> repair -> reaudit -> final pass -> gate
-      -> attach / reserve -> render -> format check -> file -> manifest
+      -> per document (finish.py; one per set a discovery request names):
+         compose -> audit -> repair -> reaudit -> final pass -> defined terms -> gate
+         -> attach / reserve -> render -> [pleading paper, when asked] -> format check
+      -> attorney notes from the final documents -> independent review (review.py)
+      -> manifest -> file
+
+    The attorney's OWN attached sets (placing.py): facts -> destination -> pull
+      -> preflight -> caption -> each set placed verbatim in the caption
+      -> [pleading paper] -> format check -> notes -> review -> manifest -> file
 
 Every stage records itself in ``data/state.json``; a resume skips finished
 stages and every paid stage resumes from its own artifacts. The run's dates are
@@ -43,9 +50,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import budget as budget_mod, limits as limits_mod
-from . import citefix, nestquote
-from . import settle as settle_mod
-from ..demand import deliver, facts as facts_mod, finalpass, preflight, pull, quotefix, summarize, transcribe
+from ..demand import deliver, facts as facts_mod, preflight, pull, summarize, transcribe
 from ..demand.firm import DemandFirm
 from ..ledger import Ledger
 from ..llm import Doorway
@@ -54,18 +59,13 @@ from . import (
     caption_stage,
     compose,
     firm as firm_mod,
-    format_check,
-    gate,
     howell,
     job as job_mod,
-    render,
 )
-from . import notes as notes_mod
-from .outcome import REASON, WALL_SENTENCE, DraftingFailed, DraftingHold, Verdict, markers
+from .placing import Placing
+from .outcome import REASON, DraftingFailed, DraftingHold, Verdict
 
 
-MAX_REPAIRS = 2
-FINAL = "draft-final.md"
 CHUNK_CHARS = 120_000
 CONCURRENCY = 4
 DIGEST_MAX_TOKENS = 64_000
@@ -83,7 +83,6 @@ TITLES = {
     "memo": "Memo",
     "depo_outline": "Deposition Outline",
 }
-WALL_GATE = "[1]"
 CONDENSE_PROMPT = (
     "Condense these record digests to about the target length. Keep every citation exactly as written, every "
     "date, figure and name; drop repetition only. Never add a fact. Time window: {{WINDOW}}."
@@ -115,7 +114,7 @@ def demand_view(firm: firm_mod.DraftingFirm) -> DemandFirm:
     )
 
 
-class DraftingRun:
+class DraftingRun(Placing):
     def __init__(
         self,
         job_dir: Path,
@@ -229,14 +228,6 @@ class DraftingRun:
     @property
     def _title(self) -> str:
         return TITLES[self.cls]
-
-    def _names(self) -> dict[str, str]:
-        base = f"{self._title} - {self.job.matter_number} - {self.date_stamp}"
-        return {
-            "folder": f"{self._title} {self.date_stamp} (Operator {self.job.job_id[-6:]})",
-            "draft": f"{base}.docx",
-            "notes": f"{base} - attorney notes.docx",
-        }
 
     # ---- free stages -----------------------------------------------------------------
     def _facts(self) -> None:
@@ -376,118 +367,11 @@ class DraftingRun:
             )
         return out
 
-    def _drafter(self) -> compose.Drafter:
-        return compose.Drafter(
-            self.data, self.doorway, self.firm, self.cls, self.job.request_text, self._context(), CONCURRENCY, self.log
-        )
-
     def _corpus_text(self) -> str:
         return "\n".join(
             Path(r["text_path"]).read_text(encoding="utf-8", errors="replace")
             for r in summarize.corpus_files(self.data)
         )
-
-    def _draft(self, digest: str) -> str:
-        """compose, audit, repair, re-audit, then the final pass settles what
-        the repairs left (never a hold): ``draft-final.md``."""
-        out = self.data / FINAL
-        if out.is_file():
-            return out.read_text(encoding="utf-8")
-        d = self._drafter()
-        refused = render.needs_attorney(d.compose(digest))
-        if refused:
-            raise DraftingHold(f"request_incomplete: the request is missing what the draft needs: {refused}")
-        self._done("compose")
-        corpus, version = self._corpus_text(), 1
-        result = d.audit(version, digest, corpus)
-        while compose.blocking_findings(result) and version <= MAX_REPAIRS:
-            d.repair(digest, version)
-            version += 1
-            result = d.audit(version, digest, corpus)
-        self._done("audit")
-        md = (self.data / f"draft-v{version}.md").read_text(encoding="utf-8")
-        audit_md = (self.data / f"audit-v{version}.md").read_text(encoding="utf-8")
-        try:
-            md, settled = settle_mod.settle(md, audit_md)
-        except finalpass.Unlocated as exc:
-            raise DraftingFailed(f"audit_unsettled: the final audit pass could not settle a finding: {exc}") from None
-        drifts = compose.finding_lines(audit_md, ("DRIFTS", *compose.EXTRA_VERDICTS))
-        self._write("final-pass.json", {"version": version, "settled": settled, "drifts": drifts})
-        self._atomic(FINAL, md)
-        self._done("finalpass")
-        return md
-
-    def _gate(self, md: str) -> str:
-        if self._is_done("gate"):
-            return (self.data / FINAL).read_text(encoding="utf-8")
-        doc, notes = render.split_notes(md)
-        doc, log = nestquote.repair(doc)
-        if log:
-            md = doc + ("\n" + render.NOTES_MARK + "\n\n" + notes + "\n" if notes else "")
-            self._atomic(FINAL, md)
-            self.log("  " + log[0])
-        g = gate.run(self.data, self.firm, self.cls, doc)
-        if not g["passed"] and quotefix.quote_findings(g["refusals"]):
-            doc, log = quotefix.repair(doc, g["refusals"], gate.source_texts(self.data, self.firm, self.cls))
-            md = doc + ("\n" + render.NOTES_MARK + "\n\n" + notes + "\n" if notes else "")
-            self._atomic(FINAL, md)
-            g = gate.run(self.data, self.firm, self.cls, doc)
-        if not g["passed"] and citefix.findings(g["refusals"]):
-            doc, fixed = citefix.repair(doc, g["refusals"])
-            if fixed:
-                log += fixed
-                md = doc + ("\n" + render.NOTES_MARK + "\n\n" + notes + "\n" if notes else "")
-                self._atomic(FINAL, md)
-                g = gate.run(self.data, self.firm, self.cls, doc)
-        if not g["passed"]:
-            if any(str(r).startswith(WALL_GATE) for r in g["refusals"]):
-                # Held, so the reply relays this reason to the firm: a fixed
-                # sentence only. The refusals (which can name a held-out email)
-                # stay in gate.json for SMD.
-                raise DraftingHold(f"gate_refused: {WALL_SENTENCE}")
-            raise DraftingFailed(
-                f"gate_refused: the drafting gate refused the document ({g['disposition']}): "
-                + "; ".join(g["refusals"])[:400]
-            )
-        self._write("gate.json", {**g, "repairs": log})
-        self._done("gate")
-        return md
-
-    # ---- render once, then file -----------------------------------------------------------
-    def _render(self, md: str, digest: str) -> None:
-        if self._is_done("render"):
-            return
-        doc, end_tables = render.split_notes(md)
-        doc, attached = render.attach(doc, self.cls, self.firm, digest)
-        doc, reserved = render.reserve_judgment(doc, self.cls)
-        out, nm = deliver.out_dir(self.data), self._names()
-        path, report = render.render(doc, self.cls, out / nm["draft"], self.firm.data["format"])
-        res = format_check.check(path, self.cls, self.firm.data["format"], digest)
-        if res.content and not res.ours and not self._is_done("format_repair"):
-            # The model's document lacks something the format requires (a
-            # section, the court lines, the item labels): one bounded repair,
-            # then the gate and this check again. Our render's own defects
-            # fail at once below.
-            self.log(f"  format check: {len(res.content)} content finding(s); one repair pass")
-            model_doc, end = render.split_notes(md)
-            fixed = self._drafter().repair_format(model_doc, res.content)
-            self._atomic(FINAL, fixed.rstrip() + ("\n\n" + render.NOTES_MARK + "\n\n" + end + "\n" if end else "\n"))
-            self._done("format_repair")
-            self._put("gate", {"status": "reopened"})
-            self._render(self._gate(self._json_text(FINAL)), digest)
-            return
-        if not res.ok:
-            raise DraftingFailed(
-                "format_check: the format check refused the rendered document: " + "; ".join(res.fails)[:400]
-            )
-        found = markers(doc)
-        notes_md = self._notes_md(found, [*attached, *reserved, *report.get("notes", [])], end_tables)
-        notes = deliver.render_plain(notes_md, out, nm["notes"], str(self.firm.get("firm", "display_name")))
-        deliver.write_manifest(out, nm["folder"], [("draft", path), ("attorney_notes", notes)])
-        self._done("render", markers=found)
-
-    def _notes_md(self, found: list[dict[str, str]], render_notes: list[str], end_tables: str = "") -> str:
-        return notes_mod.attorney_notes(self.data, self._title, found, render_notes, end_tables)
 
     def _file(self) -> Verdict:
         manifest = json.loads((deliver.out_dir(self.data) / "upload_manifest.json").read_text(encoding="utf-8"))
@@ -507,7 +391,7 @@ class DraftingRun:
         )
 
     def _walk(self) -> Verdict:
-        if self._is_done("render"):
+        if self._is_done("manifest"):
             return self._file()
         self._stage("facts", self._facts)
         self._check_facts()
@@ -520,6 +404,13 @@ class DraftingRun:
             ),
         )
         self._stage("preflight", self._preflight)
+        if self.placing():
+            # The attorney's own sets: no transcription, no digest, no compose.
+            # The caption is read off the court's paper; his text is placed as
+            # it is (placing.py).
+            self._stage("caption", self._caption)
+            self._place_finish()
+            return self._file()
         self._estimate()
         transcribing = not self._is_done("transcribe")
         self._stage(
@@ -542,8 +433,7 @@ class DraftingRun:
             self._stage("howell", self._howell)
         if self.cls in COURT_CLASSES:
             self._stage("caption", self._caption)
-        md = self._gate(self._draft(digest))
-        self._render(md, digest)
+        self._finish(digest)
         return self._file()
 
     def run(self) -> Verdict:
@@ -585,22 +475,13 @@ class DraftingRun:
         return v
 
     def _current(self) -> str:
-        order = (
-            "facts",
-            "destination",
-            "pull",
-            "preflight",
-            "transcribe",
-            "summarize",
-            "howell",
-            "caption",
-            "compose",
-            "audit",
-            "finalpass",
-            "gate",
-            "render",
-        )
+        head = ("facts", "destination", "pull", "preflight", "transcribe", "summarize", "howell", "caption")
         st = self._state()
         skip = {"howell"} if self.cls not in CHARGES_CLASSES else set()
         skip |= {"caption"} if self.cls not in COURT_CLASSES else set()
-        return next((s for s in order if s not in skip and st.get(s, {}).get("status") != "done"), "file")
+        order = [s for s in head if s not in skip]
+        for u in self.units() if "units" in st else []:
+            per_unit = ("placed",) if self.placing() else ("compose", "audit", "finalpass", "gate", "rendered")
+            order += [u.stage(s) for s in per_unit]
+        order += ["review", "manifest"]
+        return next((s for s in order if st.get(s, {}).get("status") != "done"), "file")

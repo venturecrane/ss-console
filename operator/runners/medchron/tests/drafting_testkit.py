@@ -90,6 +90,7 @@ def firm_data(**over: Any) -> dict[str, Any]:
             "depo_outline_page_numbers": True,
             "plain_letter_paper": True,
             "layout": LAYOUT,
+            "pleading": {"lines": 28, "line_pitch_pt": 24, "margins_in": [0.5, 0.5, 0.69, 1.5]},
         },
         "classes": {
             c: {
@@ -242,15 +243,31 @@ HOWELL_ROWS = (
 )
 
 
+CLEAN_REVIEW = "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+FINAL_NOTES = "## NOT IN RECORD\n\nNone.\n\n## Open items from the audit\n\nNone."
+
+
 class ScriptedClient(_DemandClient):
     """Answers by the prompt the system block carries; the billing reader is
     recognized by its own in-code prompt."""
 
-    def __init__(self, draft: str = BRIEF, caption: list[str] | None = None, **kw: Any) -> None:
+    def __init__(
+        self,
+        draft: str = BRIEF,
+        caption: list[str] | None = None,
+        review: str = CLEAN_REVIEW,
+        drafts: dict[str, str] | None = None,
+        notes: str = FINAL_NOTES,
+        **kw: Any,
+    ) -> None:
         """``caption``: the successive answers to the caption read (the last
-        one repeats); by default the complaint's caption as JSON."""
+        one repeats); by default the complaint's caption as JSON. ``review``:
+        the pre-delivery review's answer. ``drafts``: per-set composes, keyed
+        by the set label the job's instruction names ("draft ONLY the <label>
+        set"); a compose naming none gets ``draft``."""
         super().__init__(draft=draft, **kw)
         self.caption = list(caption or [CAPTION_JSON])
+        self.review, self.drafts, self.notes = review, dict(drafts or {}), notes
 
     def _answer(self, params: dict[str, Any]) -> str:
         system = json.dumps(params.get("system"))
@@ -258,6 +275,15 @@ class ScriptedClient(_DemandClient):
             return HOWELL_ROWS
         if "COPY THE CAPTION" in system:
             return self.caption.pop(0) if len(self.caption) > 1 else self.caption[0]
+        if "INDEPENDENT PRE-DELIVERY REVIEW" in system:
+            return self.review
+        if "THE ATTORNEY NOTES, FROM THE FINAL DOCUMENT" in system:
+            return self.notes
+        if "COMPOSE-PROMPT" in system and "REPAIR-PROMPT" not in system and self.drafts:
+            user = json.dumps(params.get("messages"))
+            for label, text in self.drafts.items():
+                if f"draft ONLY the {label} set" in user:
+                    return text
         return super()._answer(params)
 
 

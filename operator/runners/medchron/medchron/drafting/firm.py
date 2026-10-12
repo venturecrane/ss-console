@@ -22,6 +22,7 @@ The schema (the engagements author writes to exactly this)::
     format:      {font, size_pt, mediation_brief_sections: [11 titles],
                   discovery_label_style, depo_outline_page_numbers,
                   plain_letter_paper?: bool,
+                  pleading?: {lines, line_pitch_pt, margins_in: [4]},
                   layout?: {<class>: {line_spacing, line_spacing_pt, justify,
                             first_line_indent_in, heading_indent_in: [3],
                             heading_underline: [3], item_line_spacing,
@@ -108,6 +109,10 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]] | None | str] = {
         # Optional: {<class>: {LAYOUT_KEYS}}, the attorney's per-class layout
         # (house.py turns it into the renderer's HouseStyle override).
         "layout": ("map", False),
+        # Optional: the firm's pleading paper, used ONLY when a request asks
+        # for it (pleading.py): {lines, line_pitch_pt, margins_in: [top, right,
+        # bottom, left]}. Absent, a pleading request is held for SMD.
+        "pleading": ("map", False),
     },
     "classes": None,
     "attachments": {"decl_2030_050": ("str", True), "pos": ("str", True)},
@@ -225,6 +230,27 @@ def _layout(layout: dict) -> list[str]:
     return out
 
 
+PLEADING_KEYS = ("lines", "line_pitch_pt", "margins_in")
+
+
+def _pleading(p: dict) -> list[str]:
+    where = "format.pleading"
+    out = [f"{where}.{k}: unknown key (closed key set)" for k in p if k not in PLEADING_KEYS]
+    out += [f"{where}.{k}: required" for k in PLEADING_KEYS if k not in p]
+    if out:
+        return out
+    if not (isinstance(p["lines"], int) and not isinstance(p["lines"], bool) and 20 <= p["lines"] <= 40):
+        out.append(f"{where}.lines: expected an integer 20..40")
+    if not (_num(p["line_pitch_pt"]) and 12 <= p["line_pitch_pt"] <= 36):
+        out.append(f"{where}.line_pitch_pt: expected 12..36")
+    m = p["margins_in"]
+    if not (isinstance(m, list) and len(m) == 4 and all(_num(x) and x <= 3 for x in m)):
+        out.append(f"{where}.margins_in: expected [top, right, bottom, left] in inches")
+    elif 11.0 - m[0] - m[2] < p["lines"] * float(p["line_pitch_pt"]) / 72.0:
+        out.append(f"{where}: {p['lines']} lines at {p['line_pitch_pt']} point do not fit between the margins")
+    return out
+
+
 def _models(models: dict) -> list[str]:
     """Every configured model must have a known output maximum: a model the
     table does not know would silently get a small ceiling and truncate."""
@@ -262,7 +288,7 @@ def _semantics(data: dict[str, Any]) -> list[str]:
         out.append(f"format.discovery_label_style: expected one of {list(LABEL_STYLES)}")
     if not 8 <= float(fmt["size_pt"]) <= 16:
         out.append("format.size_pt: expected 8..16")
-    out += _layout(fmt.get("layout") or {})
+    out += _layout(fmt.get("layout") or {}) + (_pleading(fmt["pleading"]) if "pleading" in fmt else [])
     out += _models(data["models"])
     for p in data["selection"]["exclude_folder_patterns"] + data["selection"]["exclude_name_patterns"]:
         try:

@@ -11,6 +11,7 @@ import pytest
 from drafting_testkit import ScriptedClient, make_inputs, make_job, seat_with, standard_docs
 from medchron_testkit import PRICING
 from medchron.drafting import run as run_mod
+from medchron.drafting.outcome import WALL_SENTENCE
 from medchron.drafting.run import DraftingRun
 
 
@@ -198,7 +199,8 @@ def test_every_reason_literal_in_the_runner_leads_with_a_known_code():
     runner builds, starts with one of REASON_CODES."""
     import re
 
-    src = Path(run_mod.__file__).read_text(encoding="utf-8")
+    here = Path(run_mod.__file__).parent
+    src = "".join((here / n).read_text(encoding="utf-8") for n in ("run.py", "finish.py", "review.py"))
     starts = re.findall(r"raise (?:DraftingHold|DraftingFailed|exc)\(\s*f?\"([^\"]*)", src)
     starts += re.findall(r"reason=f?\"([^\"]*)", src)
     assert len(starts) >= 12
@@ -327,7 +329,7 @@ def test_a_privilege_wall_refusal_holds_with_a_fixed_sentence_only(tmp_path, pri
         },
     )
     _r, v, _ = _run(tmp_path, pricing, seat_with(standard_docs()), ScriptedClient())
-    assert v.outcome == "held" and v.reason == f"gate_refused: {run_mod.WALL_SENTENCE}"
+    assert v.outcome == "held" and v.reason == f"gate_refused: {WALL_SENTENCE}"
     assert "msg" not in v.reason
 
 
@@ -354,7 +356,7 @@ def test_the_caption_notes_never_say_agrees_when_nothing_was_compared(tmp_path, 
     )
     r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient())
     assert v.outcome == "delivered"
-    notes = r._notes_md([], [])
+    notes = (r.data / "notes-final.md").read_text(encoding="utf-8")
     assert "Fields compared: none" in notes and "agrees" not in notes
 
 
@@ -368,9 +370,11 @@ def test_an_unreadable_caption_record_fails_with_record_unreadable(tmp_path, pri
 def test_every_artifact_a_resume_trusts_is_written_atomically():
     import re
 
-    src = Path(run_mod.__file__).read_text(encoding="utf-8")
+    here = Path(run_mod.__file__).parent
+    src = "".join((here / n).read_text(encoding="utf-8") for n in ("run.py", "finish.py", "review.py"))
     direct = [m.group(0) for m in re.finditer(r"[a-zA-Z_./()\"]+\.write_text\(", src)]
-    assert direct == ["tmp.write_text(", "tmp.write_text("], direct  # state.json and _atomic, each via .tmp
+    # state.json, _atomic, the unit writers and review.json: each via .tmp
+    assert direct and set(direct) == {"tmp.write_text("}, direct
     from medchron.drafting import howell, render
 
     for mod in (howell, render):
