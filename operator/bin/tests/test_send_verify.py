@@ -26,6 +26,8 @@ from pathlib import Path
 import pytest
 
 from bin.lib import send_verify as sv
+from bin.lib.html_channel import HtmlBody
+from workspace_broker.html_canon import html_body_sha256
 
 _BIN = Path(__file__).resolve().parents[1]
 
@@ -1132,7 +1134,7 @@ def test_the_dispatch_stamp_leak_check_can_fail():
     """The falsifier for the test above -- a check that cannot fail measured
     nothing. The pattern must accept today's hash fields and reject the field
     names a convenience regression would actually reach for."""
-    for allowed in ("rendered_body_sha256", "plain_body_sha256", "body_variant", "ts"):
+    for allowed in ("rendered_body_sha256", "plain_body_sha256", "html_body_sha256", "body_variant", "ts"):
         assert not _BODY_FIELD_PATTERN.search(allowed), allowed
     for regressed in ("body", "body_text", "plain_body", "html_body", "rendered_text"):
         assert _BODY_FIELD_PATTERN.search(regressed), regressed
@@ -1258,7 +1260,7 @@ def test_the_committed_invariants_file_parses():
 # LEAK SAFETY (the public-repo constraint)
 # ---------------------------------------------------------------------------
 
-_BODY_FIELD_PATTERN = re.compile(r"body(?!_sha256|_variant)|text|content|html", re.IGNORECASE)
+_BODY_FIELD_PATTERN = re.compile(r"body(?!_sha256|_variant)|text|content|html(?!_body_sha256)", re.IGNORECASE)
 
 
 def _walk_for_sentinel(value, path="$"):
@@ -1605,11 +1607,108 @@ class _GraphBody:
         return self._payload
 
 
-def test_fetch_graph_body_raises_on_html_and_returns_text():
+def test_fetch_graph_body_tags_html_and_returns_text_untagged():
     seat = rec.MsGraphSeat(slug="s", mailbox="m@example.invalid", tenant_id="t", client_id="c")
-    with pytest.raises(sv.UnstampedRepresentation):
-        rec.fetch_graph_body(seat, "tok", "gid", opener=_GraphBody("html"))
-    assert rec.fetch_graph_body(seat, "tok", "gid", opener=_GraphBody("text")) == "<p>x</p>"
+    html = rec.fetch_graph_body(seat, "tok", "gid", opener=_GraphBody("html"))
+    assert isinstance(html, HtmlBody) and html == "<p>x</p>"
+    text = rec.fetch_graph_body(seat, "tok", "gid", opener=_GraphBody("text"))
+    assert text == "<p>x</p>" and not isinstance(text, HtmlBody)
+
+
+# ---------------------------------------------------------------------------
+# html_body_sha256: the broker's stamp of the html Graph got, graded per row
+# against Exchange's stored rewrite (lib/html_channel.py). The bodies are the
+# calibration fixture: submitted to Graph, and what Graph stored, from the
+# internal smd-staging mailbox. Synthetic content only.
+# ---------------------------------------------------------------------------
+
+_CAL = json.loads(
+    (Path(__file__).resolve().parents[2] / "contracts" / "fixtures" / "html-canon-calibration.json").read_text()
+)["cases"]
+
+
+def _html_rows(stamps):
+    """Wake + one dispatch row per (minute, html_stamp|None, message_id)."""
+    raw = "**Statute** watch body\n"
+    wake = _wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])
+    rows = []
+    for minute, html_stamp, mid in stamps:
+        extra = {"html_body_sha256": html_stamp} if html_stamp else None
+        rows.append(_dispatch_row(minute=minute, sha=sv.canonical_body_sha256(raw), message_id=mid, extra=extra))
+    return sv.index_wakes([wake]), sv.index_dispatches(rows)
+
+
+def _stored(name):
+    return lambda message: HtmlBody(_CAL[name]["stored"])
+
+
+def test_a_stored_html_body_matching_the_broker_stamp_grades_match():
+    wakes, dispatches = _html_rows([(1, html_body_sha256(_CAL["report"]["submitted"]), "<m1>")])
+    verdicts = sv.verify_channel_bodies([_sent_message()], wakes, _declares(), _stored("report"), dispatches=dispatches)
+    assert [v.verdict for v in verdicts] == [sv.VERDICT_MATCH]
+    assert "html_body_sha256" in verdicts[0].detail
+
+
+def test_falsifier_a_stored_html_body_one_word_off_is_a_finding():
+    wakes, dispatches = _html_rows([(1, html_body_sha256(_CAL["report"]["submitted"]), "<m1>")])
+    verdicts = sv.verify_channel_bodies(
+        [_sent_message()], wakes, _declares(), _stored("report_plus1"), dispatches=dispatches
+    )
+    assert [v.verdict for v in verdicts] == [sv.VERDICT_DIVERGED]
+    assert verdicts[0].is_finding
+
+
+def test_an_html_mismatch_no_row_identifies_holds_and_never_accuses():
+    wakes, dispatches = _html_rows([(1, html_body_sha256(_CAL["report"]["submitted"]), "")])
+    verdicts = sv.verify_channel_bodies(
+        [_sent_message()], wakes, _declares(), _stored("report_plus1"), dispatches=dispatches
+    )
+    assert [v.verdict for v in verdicts] == [sv.VERDICT_CHANNEL_MISMATCH]
+
+
+def test_the_html_edge_is_per_row_pre_edge_rows_stay_unstamped_not_held():
+    """The reprovision window: the 09:01 row predates the broker that stamps, the
+    09:20 row carries the stamp. The first keeps the non-hold unstamped verdict
+    (no action can ever stamp it), the second grades MATCH."""
+    stamp = html_body_sha256(_CAL["report"]["submitted"])
+    wakes, dispatches = _html_rows([(1, None, "<m1>"), (20, stamp, "<m2>")])
+    wakes += sv.index_wakes(
+        [_wake_row(minute=19, hashes=[{"body_sha256_full": sv.canonical_body_sha256("**Statute** watch body\n")}])]
+    )
+    sent = [_sent_message(minute=1, mid="<m1>"), _sent_message(minute=20, mid="<m2>")]
+    verdicts = sv.verify_channel_bodies(sent, wakes, _declares(), _stored("report"), dispatches=dispatches)
+    assert [v.verdict for v in verdicts] == [sv.VERDICT_UNSTAMPED_REPR, sv.VERDICT_MATCH]
+    assert "predates" in verdicts[0].detail
+    lines = sv.render_lines("inbox@example.invalid", verdicts, [])
+    assert not any(line.startswith("HOLD") for line in lines)
+
+
+def test_an_inbox_with_no_html_stamp_yet_keeps_todays_unstamped_verdict():
+    wakes, dispatches = _html_rows([(1, None, "<m1>")])
+    verdicts = sv.verify_channel_bodies([_sent_message()], wakes, _declares(), _stored("report"), dispatches=dispatches)
+    assert [v.verdict for v in verdicts] == [sv.VERDICT_UNSTAMPED_REPR]
+    assert not verdicts[0].is_finding and not verdicts[0].is_hold
+
+
+def test_a_post_edge_row_without_the_stamp_is_unstamped_never_a_finding():
+    """A reply / send-as row: the broker stamps sendMail bodies only, so a
+    stored html no stamp describes is unstamped, not divergent."""
+    stamp = html_body_sha256(_CAL["report"]["submitted"])
+    wakes, dispatches = _html_rows([(1, stamp, "<m0>"), (2, None, "<m1>")])
+    verdicts = sv.verify_channel_bodies(
+        [_sent_message(minute=2, mid="<m1>")], wakes, _declares(), _stored("report_plus1"), dispatches=dispatches
+    )
+    assert [v.verdict for v in verdicts] == [sv.VERDICT_UNSTAMPED_REPR]
+    assert "sendMail bodies only" in verdicts[0].detail
+
+
+def test_html_dispatch_stamp_is_parsed_and_never_defaulted():
+    rows = [
+        _dispatch_row(extra={"html_body_sha256": "ab" * 32}),
+        _dispatch_row(minute=2, extra={"html_body_sha256": 7}),
+    ]
+    stamps = sv.index_dispatches(rows)
+    assert [s.html_body_sha256 for s in stamps] == ["ab" * 32, ""]
 
 
 from bin.lib import send_dispositions as sd  # noqa: E402 -- grouped with the tests that use it

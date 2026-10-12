@@ -1159,7 +1159,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # send's once-only key names its own lane ("negotiation-scheduled:<notice>"),
 # so REPLY_SENT's in_reply_to no longer reads "litigation-scheduled:" for a
 # negotiation notice. Litigation's key is unchanged. Ships with ss-console #3124.
-ARG OVERLAY_REF="5b802b2a46808960c5092ab4d3d680d0d1d82639"
+# 2026-10-12 (323d865c, the overlay #438 merge commit). Contract mirror only:
+# tests/contract/send-render.yaml gains the broker's html_body_sha256 stamp
+# (msgraph html bodies, graded by the console's channel check). No overlay
+# runtime change; the stamp itself is written by this repo's broker.
+ARG OVERLAY_REF="323d865c92fadafbb29241a3622c0859f8b09d3b"
 
 ARG CUSTOMER_SLUG=customer-zero
 

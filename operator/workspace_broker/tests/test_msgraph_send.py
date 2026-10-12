@@ -2065,3 +2065,49 @@ def test_a_malformed_attachment_sha256_is_dropped_from_the_row(tmp_path: Path, b
         peer_uid=AGENT_UID,
     )
     assert "attachment_sha256" not in _meta(broker)
+
+
+# ---------------------------------------------------------------------------
+# html_body_sha256: the broker stamps the html it handed Graph (ss#3030 follow-up)
+# ---------------------------------------------------------------------------
+
+
+def _send_row(tmp_path: Path, payload: dict, audit_extra: dict | None = None) -> tuple[dict, dict]:
+    broker = _broker(tmp_path, FakeGraph())
+    request = {"action": "msgraph_send", "payload": payload}
+    if audit_extra is not None:
+        request["audit_extra"] = audit_extra
+    response = broker.handle(request, peer_pid=GATEWAY_PID, peer_uid=AGENT_UID)
+    return response, _meta(broker)
+
+
+def test_an_html_send_stamps_the_hash_of_the_html_graph_received(tmp_path: Path) -> None:
+    from workspace_broker.html_canon import html_body_sha256
+
+    html = '<div style="color:#111;"><p>rich &amp; ready</p></div>'
+    response, meta = _send_row(tmp_path, {"to": ["scott@smd.services"], "text": "plain", "html": html})
+    assert meta["html_body_sha256"] == html_body_sha256(html)
+    # Audit provenance, like the audit token: it stays in the ledger.
+    assert "html_body_sha256" not in response
+
+
+def test_a_text_send_carries_no_html_stamp_because_absence_is_the_fact(tmp_path: Path) -> None:
+    _response, meta = _send_row(tmp_path, {"to": ["scott@smd.services"], "text": "plain only"})
+    assert "html_body_sha256" not in meta
+
+
+def test_a_whitespace_html_is_sent_as_text_and_so_is_not_stamped(tmp_path: Path) -> None:
+    """The stamp follows what went on the wire, not what the caller passed:
+    ``_message`` sends a blank html as Text, so there is no html to vouch for."""
+    _response, meta = _send_row(tmp_path, {"to": ["scott@smd.services"], "text": "t", "html": "   "})
+    assert "html_body_sha256" not in meta
+
+
+def test_a_caller_cannot_pre_stamp_the_html_hash(tmp_path: Path) -> None:
+    forged = "f" * 64
+    _r, meta = _send_row(tmp_path, {"to": ["scott@smd.services"], "text": "t"}, {"html_body_sha256": forged})
+    assert "html_body_sha256" not in meta
+    _r, meta = _send_row(
+        tmp_path, {"to": ["scott@smd.services"], "text": "t", "html": "<p>x</p>"}, {"html_body_sha256": forged}
+    )
+    assert meta["html_body_sha256"] != forged

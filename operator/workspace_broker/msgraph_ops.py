@@ -68,6 +68,7 @@ from pathlib import Path
 from typing import Any
 
 from .audit_ledger import new_row_token
+from .html_canon import html_body_sha256
 from .msgraph_attachments import AttachmentRefused, carries_attachments, graph_attachments
 from .msgraph_auth import load_credential, seat_mailbox
 from .msgraph_redirect import send_redirected
@@ -250,6 +251,23 @@ def _recipients(addresses: Any) -> list[dict[str, Any]]:
     """Flat addresses → Graph's ``toRecipients``/``ccRecipients`` nesting."""
     items = [addresses] if isinstance(addresses, str) else list(addresses or [])
     return [{"emailAddress": {"address": str(a).strip()}} for a in items if str(a or "").strip()]
+
+
+def _html_stamp(message: dict[str, Any]) -> dict[str, str]:
+    """``html_body_sha256`` of the body Graph was handed, iff that body is HTML.
+
+    Computed from the built ``message`` (the dict that went on the wire), not
+    from the caller's payload, so the stamp describes what Graph received. A
+    Text body yields nothing: Sent Items then holds text that the existing
+    stamps describe, and the key's absence says so (html_canon has the
+    calibration of what Exchange does to stored html).
+    """
+    body = message.get("body")
+    if isinstance(body, dict) and body.get("contentType") == "HTML":
+        content = body.get("content")
+        if isinstance(content, str) and content:
+            return {"html_body_sha256": html_body_sha256(content)}
+    return {}
 
 
 def _with_cc(body: dict[str, Any], cc: list[str]) -> dict[str, Any]:
@@ -514,10 +532,11 @@ class MsGraphOps:
         enforce_recipients(policy, recipients)
         mailbox = self.mailbox()
         audit_token = new_row_token()
+        message = self._message(payload, audit_token)
         self._request(
             self._mail_path("sendMail"),
             "POST",
-            {"message": self._message(payload, audit_token), "saveToSentItems": save_to_sent_items},
+            {"message": message, "saveToSentItems": save_to_sent_items},
         )
         return {
             # Graph still answers sendMail with 202 and no body, so this stays
@@ -530,6 +549,7 @@ class MsGraphOps:
             "recipients": recipients,
             "mailbox": mailbox,
             "audit_row_token": audit_token,
+            **_html_stamp(message),
             **(self._locate_sent(audit_token) if save_to_sent_items else {}),
         }
 

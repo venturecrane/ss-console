@@ -21,7 +21,7 @@
     "re-reads build_payload at the new ref and re-stamps this file. Read the",
     "limits of that in the test's header before trusting it further than it goes."
   ],
-  "overlay_ref": "5b802b2a46808960c5092ab4d3d680d0d1d82639",
+  "overlay_ref": "323d865c92fadafbb29241a3622c0859f8b09d3b",
   "fields": [
     {
       "name": "heartbeat_ts",
