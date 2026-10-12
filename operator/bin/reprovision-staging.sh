@@ -72,5 +72,13 @@ exec infisical run --env=prod --path=/ss --silent -- bash -c '
   unset GEN_JSON
 
   # Non-interactive: Machine secrets persist; nothing to paste.
+  # The exit status is provision-customer.sh, never `yes`: when provisioning
+  # finishes, `yes` dies of SIGPIPE (141), and under pipefail that alone made a
+  # fully successful reprovision (boot smoke 66/66, 2026-10-12) exit 1. A red
+  # that cannot go green measures nothing.
+  set +o pipefail
   yes s | "${HERE}/provision-customer.sh" "${SLUG}"
+  _rc=${PIPESTATUS[1]}
+  set -o pipefail
+  exit "${_rc}"
 ' _ "${HERE}" "${SLUG}" "${ISOLATE_NAMES}"
