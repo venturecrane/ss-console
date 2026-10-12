@@ -27,6 +27,7 @@ from ..demand.gapaudit import output_max
 from ..demand.summarize import sha
 
 AUDIT_MAX_TOKENS = 32_000
+AUDIT_EFFORT = "high"
 #: Verdicts a class's audit prompt may add to demand's four (the discovery
 #: classes: a compound or undefined-term request; a response that does not
 #: restate the served item verbatim, or skips one). Each blocks like INVENTED:
@@ -277,6 +278,9 @@ class Drafter:
                 messages=[{"role": "user", "content": f"## SECTION UNDER AUDIT: {head}\n\n{body}"}],
                 stream=True,
                 custom_id=f"draudit-{key}-{attempt}",
+                # Explicit: the audit is the drafter's own gate, and claude-opus-5-5
+                # defaults to medium where opus-5 defaulted to high (llm.py).
+                effort=AUDIT_EFFORT,
             )
             if d.audit_complete(r.stop_reason, r.text):
                 return r.text

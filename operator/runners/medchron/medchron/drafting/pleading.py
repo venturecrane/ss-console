@@ -171,6 +171,30 @@ def title_of(doc: Any) -> str:
     return next((" ".join(p.text.split()) for p in doc.paragraphs if pat.search(p.text)), "")
 
 
+_ATTACHMENT_TITLE = re.compile(r"(?i)^\s*(proof of service|declaration for additional discovery)\b")
+
+
+def _court_and_attachments(doc: Any) -> None:
+    """The court's name centered above the caption table (bold lines before
+    it), and each attachment (a declaration, the proof of service) on a new
+    page, as the firm's papers set them."""
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    for el in doc.element.body.iterchildren():
+        if el.tag.endswith("}tbl"):
+            break
+        if el.tag.endswith("}p"):
+            from docx.text.paragraph import Paragraph
+
+            p = Paragraph(el, doc)
+            runs = [r for r in p.runs if r.text.strip()]
+            if runs and all(r.bold for r in runs) and re.search(r"(?i)\bcourt\b|\bcounty\b", p.text):
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    for p in doc.paragraphs:
+        if _ATTACHMENT_TITLE.match(p.text) and len(p.text) < 120:
+            p.paragraph_format.page_break_before = True
+
+
 def apply(path: Path, spec: Spec) -> list[str]:
     """Lay the rendered file at ``path`` onto pleading paper, in place."""
     import docx
@@ -197,6 +221,7 @@ def apply(path: Path, spec: Spec) -> list[str]:
         sec._sectPr.remove(ln)
     for p in _all_paragraphs(doc):
         _exact(p.paragraph_format, spec.pitch_pt)
+    _court_and_attachments(doc)
     header = sec.header
     header.is_linked_to_previous = False
     hp = header.paragraphs[0] if header.paragraphs else header.add_paragraph()

@@ -105,6 +105,25 @@ OUTPUT, and nothing else: one line per finding, exactly
 then a final line exactly `VERDICT: <n> MUST-FIX, <n> SHOULD-FIX, <n> NOTE`. No preamble, no summary, no em dashes. If you find nothing, write only the VERDICT line with zeros."""
 
 
+PLACE_PROMPT = """## INDEPENDENT PRE-DELIVERY REVIEW: THE ATTORNEY'S OWN SETS, PLACED IN THE CAPTION
+
+The attorney wrote these discovery sets himself and asked for each to be put in the case caption on the firm's paper. A system did that; nothing has been delivered. Your review decides whether it may be. The REQUESTS ARE HIS: never grade, rewrite or second-guess their wording. Grade only what the system did, and that it changed nothing of his:
+
+1. THE CAPTION against the court's own filings (the caption source in the matter record): court, county, case number, parties exactly as captioned. A disagreement is MUST-FIX.
+2. THE ATTORNEY BLOCK, THE TITLE AND THE SIGNATURE LINES: the right attorney and firm, a title that names the right set, party and set number as his document states them, signature lines for the right party. A wrong one is MUST-FIX.
+3. HIS TEXT UNCHANGED: every request, definition and line of his set present, in order, word for word. A dropped, altered or added word is MUST-FIX.
+4. ONE SET PER DOCUMENT, ONE PROOF OF SERVICE PER DOCUMENT, and the paper the request asked for. MUST-FIX.
+5. Anything in his own text an attorney would want flagged before signing (a declaration that contradicts his own count): NOTE only.
+
+The CODE FINDINGS block lists what code already found; do not repeat them. Every finding cites where it is.
+
+OUTPUT, and nothing else: one line per finding, exactly
+
+| <MUST-FIX or SHOULD-FIX or NOTE> | <check number and name> | <the finding> | <citation> |
+
+then a final line exactly `VERDICT: <n> MUST-FIX, <n> SHOULD-FIX, <n> NOTE`. No preamble, no em dashes."""
+
+
 NOTES_PROMPT = """## THE ATTORNEY NOTES, FROM THE FINAL DOCUMENT
 
 The drafting system has finished the documents below. Its drafter wrote end tables (request basis, items not in the record, the attorney's reserved decisions, items held out) while drafting, and its auditor left open items; both were written about EARLIER versions. Write the end tables again so that every row is true of the FINAL documents:
@@ -144,10 +163,13 @@ def code_findings(
     digest: str,
     corpus: Mapping[str, str],
     pleading_authored: bool,
+    theirs: bool = False,
 ) -> list[Finding]:
-    """What code can settle, graded."""
+    """What code can settle, graded. ``theirs``: the documents are the
+    attorney's own (place.py): what they SAY (a declaration, a defined term) is
+    his and is reported as a NOTE; what the job did to them is graded as ever."""
     out: list[Finding] = []
-    asked = sets.variants(request) if cls == "discovery_set" else []
+    asked = sets.variants(request) if cls == "discovery_set" and not theirs else []
     wants = pleading.wants_pleading(request)
     for p in papers:
         where = p.label
@@ -189,6 +211,11 @@ def code_findings(
         if wants and p.paper != "pleading":
             why = "the firm has no pleading paper authored" if not pleading_authored else "it was rendered on plain paper"
             out.append(Finding(MUST, "2 the request's paper", f"the request asks for pleading paper; {where} is not ({why})", "the request", "code"))
+    if theirs:
+        for f in out:
+            if f.check[:2] in ("1 ", "4 "):
+                f.grade = NOTE
+                f.finding = f"in the attorney's own text (not changed): {f.finding}"
     if asked:
         have = {sets.kinds_in(p.text)[0] for p in papers if sets.kinds_in(p.text)}
         for u in asked:
@@ -237,12 +264,14 @@ def review_user(
     )
 
 
-def run_model(doorway: Any, model: str, system_digest: str, user: str, key: str) -> list[Finding]:
+def run_model(
+    doorway: Any, model: str, system_digest: str, user: str, key: str, prompt: str | None = None
+) -> list[Finding]:
     """The model review: one call, retried once when it does not finish."""
     from ..demand.gapaudit import output_max
     from .compose import DraftingError
 
-    system = REVIEW_PROMPT + "\n\n---\n\n## THE RECORD DIGEST (every cite in it is the record)\n\n" + system_digest
+    system = (prompt or REVIEW_PROMPT) +"\n\n---\n\n## THE RECORD DIGEST (every cite in it is the record)\n\n" + system_digest
     for attempt in (1, 2):
         r = doorway.call(
             "review",
@@ -281,6 +310,7 @@ def final_notes(doorway: Any, model: str, digest: str, papers: list[Paper], draf
             messages=[{"role": "user", "content": user}],
             max_tokens=output_max(model, REVIEW_MAX_TOKENS),
             stream=True,
+            effort="high",
             custom_id=f"notes-{key}-{attempt}",
         )
         if r.stop_reason != "max_tokens" and r.text.strip():

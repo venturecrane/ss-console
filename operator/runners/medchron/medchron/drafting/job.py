@@ -51,6 +51,10 @@ class DraftingJob:
     month_cents_used: int
     #: Drafting jobs left this cycle with this one excluded; None on a laptop run.
     allowance_remaining: int | None = None
+    #: The request email's own Word attachments, (filename, bytes), as the
+    #: broker carried them (sha256-checked here again): an attorney's own sets
+    #: to place in the caption (place.py).
+    attachments: tuple[tuple[str, bytes], ...] = ()
 
     @property
     def data(self) -> Path:
@@ -106,7 +110,40 @@ def parse(data: Any, job_dir: Path) -> DraftingJob:
         file_to_number=str(fnum),
         month_cents_used=cents,
         allowance_remaining=remaining if isinstance(remaining, int) and not isinstance(remaining, bool) else None,
+        attachments=_attachments(data.get("attachments")),
     )
+
+
+MAX_ATTACHMENTS = 6
+_SAFE_NAME = re.compile(r"^[^/\\\x00]{1,200}\.docx$", re.I)
+
+
+def _attachments(raw: Any) -> tuple[tuple[str, bytes], ...]:
+    """The envelope's ``attachments`` ([{filename, sha256, b64}]), decoded and
+    re-checked: each a .docx whose bytes match their sha256. Absent is none."""
+    import base64
+    import binascii
+    import hashlib
+
+    if raw is None:
+        return ()
+    if not isinstance(raw, list) or len(raw) > MAX_ATTACHMENTS:
+        raise DraftingJobError(f"attachments must be a list of at most {MAX_ATTACHMENTS}")
+    out = []
+    for a in raw:
+        if not isinstance(a, dict) or set(a) != {"filename", "sha256", "b64"}:
+            raise DraftingJobError("each attachment carries exactly filename, sha256 and b64")
+        name = a["filename"]
+        if not (isinstance(name, str) and _SAFE_NAME.match(name)):
+            raise DraftingJobError("an attachment's filename must be a plain .docx name")
+        try:
+            blob = base64.b64decode(str(a["b64"]), validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise DraftingJobError(f"an attachment is not base64: {exc}") from None
+        if hashlib.sha256(blob).hexdigest() != a["sha256"]:
+            raise DraftingJobError("an attachment's bytes do not match its sha256")
+        out.append((name, blob))
+    return tuple(out)
 
 
 def load(job_dir: Path) -> DraftingJob:

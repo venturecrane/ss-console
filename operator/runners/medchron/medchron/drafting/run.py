@@ -56,6 +56,7 @@ from . import (
     job as job_mod,
 )
 from .finish import Finish
+from .placing import Placing
 from .outcome import REASON, DraftingFailed, DraftingHold, Verdict
 
 
@@ -107,7 +108,7 @@ def demand_view(firm: firm_mod.DraftingFirm) -> DemandFirm:
     )
 
 
-class DraftingRun(Finish):
+class DraftingRun(Placing, Finish):
     def __init__(
         self,
         job_dir: Path,
@@ -397,6 +398,13 @@ class DraftingRun(Finish):
             ),
         )
         self._stage("preflight", self._preflight)
+        if self.placing():
+            # The attorney's own sets: no transcription, no digest, no compose.
+            # The caption is read off the court's paper; his text is placed as
+            # it is (placing.py).
+            self._stage("caption", self._caption)
+            self._place_finish()
+            return self._file()
         self._estimate()
         transcribing = not self._is_done("transcribe")
         self._stage(
@@ -467,6 +475,7 @@ class DraftingRun(Finish):
         skip |= {"caption"} if self.cls not in COURT_CLASSES else set()
         order = [s for s in head if s not in skip]
         for u in self.units() if "units" in st else []:
-            order += [u.stage(s) for s in ("compose", "audit", "finalpass", "gate", "rendered")]
+            per_unit = ("placed",) if self.placing() else ("compose", "audit", "finalpass", "gate", "rendered")
+            order += [u.stage(s) for s in per_unit]
         order += ["review", "manifest"]
         return next((s for s in order if st.get(s, {}).get("status") != "done"), "file")
