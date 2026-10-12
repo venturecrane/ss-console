@@ -1043,8 +1043,9 @@ describe('connector_token_expiring (ss#2148)', () => {
   describe('per-seat lifetime override (staging tenant)', () => {
     const seatStates = (r: FleetStatusRow, seats: Record<string, Record<string, number>>) =>
       // Post-cutover clock: at the file's NOW (07-04) every token predates
-      // 2026-08-24 and the pre-cutover 30d rule would mask the override.
-      evaluateConditions([r], Date.parse('2026-10-03T13:00:00Z'), RED, {
+      // the 2026-09-21 cutover and the pre-cutover 30d rule would mask the
+      // override. 10-25 minus 26d lands after it.
+      evaluateConditions([r], Date.parse('2026-10-25T13:00:00Z'), RED, {
         overdueThresholdSeconds: OVERDUE,
         tokenLifetimesDays: { smokeball: 180 },
         tokenSeatLifetimesDays: seats,

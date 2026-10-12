@@ -159,8 +159,14 @@ both keeping this ADR's deterministic-predicate discipline:
    resolve an open `connector_down` alert. The worker's
    `connector_token_expiring:<server>` condition opens at
    `lifetime − warn_days` (Smokeball: 180 − 5 for a token issued on or after
-   the vendor's 2026-08-24 cutover, 30 − 5 for one issued before it) and
-   resolves when the file is rewritten.
+   our app's cutover, 30 − 5 for one issued before it) and resolves when the
+   file is rewritten.
+
+   CORRECTED 2026-10-12: the cutover for OUR app is 2026-09-21 00:22:30Z, when
+   Smokeball approved the app and "increased your refresh token expiry to 180
+   days", not the 2026-08-24 default date in their docs. ashton-price's token,
+   issued 2026-09-10, died at exactly 30 days on 2026-10-10 with no warning,
+   because the 08-24 key judged it at 180.
 
    CORRECTED 2026-09-02, same retraction as item 1 above: this paragraph used
    to say "in normal operation the keepalive rotates the file daily and this

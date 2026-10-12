@@ -550,8 +550,9 @@ describe('worker runOnce — connector_token_expiring lifecycle', () => {
 // ---------------------------------------------------------------------------
 // 4b. The vendor lifetime cutover (2026-09-02 incident).
 //
-// Smokeball raised refresh-token validity 30d -> 180d effective 2026-08-24,
-// keyed to the token's ISSUE date. Both regimes were live at once: ashton-price
+// Smokeball raised refresh-token validity 30d -> 180d, keyed to the token's
+// ISSUE date. Their docs date it 2026-08-24; for OUR app client it took effect
+// at approval, 2026-09-21 00:22:30Z (measured by the 2026-10-10 outage). Both regimes were live at once: ashton-price
 // held a pre-cutover token while pilot-smokeball was about to receive a
 // post-cutover one, so a single global lifetime constant is wrong for one of
 // them whichever value it takes.
@@ -562,7 +563,7 @@ describe('worker runOnce — connector_token_expiring lifecycle', () => {
 // one-constant bug is silent in both.
 // ---------------------------------------------------------------------------
 
-describe('worker runOnce — Smokeball 2026-08-24 lifetime cutover', () => {
+describe('worker runOnce — Smokeball 2026-09-21 lifetime cutover', () => {
   const NOW = Date.parse('2026-09-02T15:00:00.000Z')
   const FRESH = '2026-09-02T14:59:30.000Z'
 
@@ -616,7 +617,7 @@ describe('worker runOnce — Smokeball 2026-08-24 lifetime cutover', () => {
   }
 
   it('a PRE-cutover token still warns at its real 30d horizon (the ashton-price case)', async () => {
-    // Issued 2026-08-07, i.e. before the 08-24 cutover, so it genuinely dies at
+    // Issued 2026-08-07, i.e. before the cutover, so it genuinely dies at
     // 30 days. At 26 days old it is inside the 25-day warn horizon and MUST
     // page. Judged flat against 180 it would stay silent all the way to death.
     await setTokenAge(26 * 86400)
@@ -627,20 +628,34 @@ describe('worker runOnce — Smokeball 2026-08-24 lifetime cutover', () => {
     expect(opened[0]?.detail).toContain('pre-cutover token')
   })
 
+  it('the 2026-10-10 outage: a token issued after 08-24 but before 09-21 warns at 30d', async () => {
+    // ashton-price's real token: issued 2026-09-10 21:31Z, died 2026-10-10 at
+    // exactly 30 days (vfy_01M4RB4V0M8SQ28CGFZZBVEKH3). Keyed to the docs'
+    // 08-24 date it was judged at 180 and the warning never fired. This fails
+    // if the cutover moves back to 08-24.
+    const issued = Date.parse('2026-09-10T21:31:14Z')
+    const now = Date.parse('2026-10-06T15:00:00Z')
+    await setTokenAge(Math.floor((now - issued) / 1000))
+    const opened = tokenTransitions(await runOnce(workerEnv(), now))
+    expect(opened).toHaveLength(1)
+    expect(opened[0]?.kind).toBe('opened')
+    expect(opened[0]?.detail).toContain('recorded lifetime 30d')
+  })
+
   it('a POST-cutover token stays quiet at 26d instead of latching open for ~155d', async () => {
     // Same age, but `now` is far enough past the cutover that issued_at lands
-    // after 2026-08-24, so it lives 180 days and 26 days is nowhere near its
+    // after 2026-09-21, so it lives 180 days and 26 days is nowhere near its
     // horizon. Judged flat against 30 it would open here, page once, then sit
     // open and SILENT through the real expiry — the edge-triggered failure that
     // made the 2026-08-27 warning useless.
     await setTokenAge(26 * 86400)
-    const quiet = tokenTransitions(await runOnce(workerEnv(), Date.parse('2026-10-01T15:00:00Z')))
+    const quiet = tokenTransitions(await runOnce(workerEnv(), Date.parse('2026-10-20T15:00:00Z')))
     expect(quiet).toEqual([])
   })
 
   it('a post-cutover token DOES warn once it reaches the 175d horizon', async () => {
     await setTokenAge(176 * 86400)
-    const opened = tokenTransitions(await runOnce(workerEnv(), Date.parse('2027-03-01T15:00:00Z')))
+    const opened = tokenTransitions(await runOnce(workerEnv(), Date.parse('2027-03-20T15:00:00Z')))
     expect(opened).toHaveLength(1)
     expect(opened[0]?.kind).toBe('opened')
     expect(opened[0]?.detail).toContain('recorded lifetime 180d')
