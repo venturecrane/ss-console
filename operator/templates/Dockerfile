@@ -1173,7 +1173,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # holds the delivery as duplicate_reply; and a relayed reply's working Graph
 # draft is discarded through msgraph_discard_draft (this repo's broker, same
 # change) once the reply is sent. No tracked twin moved.
-ARG OVERLAY_REF="9dc43b00dc11b7ec0d020eddf65fc9b98685a7f0"
+# 2026-10-12 (33463809, the overlay #442 merge commit). drafting_job_submit
+# carries a discovery-set request email's own .docx attachments (an attorney's
+# own sets) in the envelope's optional `attachments` field; this repo's broker
+# validates it (drafting_attachments.py) and the runner places each set in the
+# caption (drafting/place.py). No tracked twin moved.
+ARG OVERLAY_REF="33463809e4aa7a4f5a63d2436b9aa8e6934f0817"
 
 ARG CUSTOMER_SLUG=customer-zero
 
