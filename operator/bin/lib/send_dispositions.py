@@ -69,15 +69,15 @@ def _entry_key(entry: dict) -> Optional[str]:
     inbox = entry.get("seat") or entry.get("inbox")
     if not isinstance(inbox, str) or not inbox:
         return None
-    if entry.get("kind") == "body":
-        fields = [entry.get(k) for k in ("skill_name", "dispatch_ts", "actual_sha256")]
-        if all(isinstance(f, str) and f for f in fields):
-            return body_key(inbox, *fields)
-    elif entry.get("kind") == "invariant":
-        fields = [entry.get(k) for k in ("rule", "hashed_key", "actual")]
-        if all(isinstance(f, str) and f for f in fields):
-            return invariant_key(inbox, *fields)
-    return None
+    names = {"body": ("skill_name", "dispatch_ts", "actual_sha256"), "invariant": ("rule", "hashed_key", "actual")}
+    kind = entry.get("kind")
+    if kind not in names:
+        return None
+    fields = [entry.get(k) for k in names[kind]]
+    strings = [f for f in fields if isinstance(f, str) and f]
+    if len(strings) != len(fields):
+        return None
+    return (body_key if kind == "body" else invariant_key)(inbox, strings[0], strings[1], strings[2])
 
 
 def load_dispositions(path: Optional[str]) -> dict[str, int]:
