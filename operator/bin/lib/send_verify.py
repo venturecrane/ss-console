@@ -136,6 +136,7 @@ from .send_attribution import (
     plain_stamp_edge,
     stamps_plain_at,
 )
+from .failure_note_stamp import derive_failure_note_hashes
 from .send_invariants import (  # noqa: F401 -- re-exports; callers and tests read unchanged
     DEFAULT_INVARIANTS_PATH,
     InvariantFinding,
@@ -268,6 +269,9 @@ class WakeStamp:
     items: list[dict] = field(default_factory=list)  # [{item_key, ack_code}]
     row_id: Optional[str] = None
     consumed: int = 0  # dispatch pairings consumed against this wake
+    # "" = the row's own stamp; else where the hashes came from instead
+    # (lib/failure_note_stamp.py). A derived hash can MATCH but never accuse.
+    derived_from: str = ""
 
     @property
     def dispatch_capacity(self) -> int:
@@ -494,7 +498,12 @@ def _grade_pair(wake: WakeStamp, dispatch: DispatchStamp, attribution: str) -> B
             **common,
         )
     if dispatch.rendered_body_sha256 in wake.hashes_full:
-        return BodyVerdict(verdict=VERDICT_MATCH, detail=_ATTRIBUTION_DETAIL.get(attribution), **common)
+        detail = "against the authored failure note" if wake.derived_from else None
+        return BodyVerdict(verdict=VERDICT_MATCH, detail=detail or _ATTRIBUTION_DETAIL.get(attribution), **common)
+    if wake.derived_from:
+        # The wake stamped nothing; today's authored note may postdate the row.
+        detail = "unstamped failure-note wake; dispatch differs from today's authored note"
+        return BodyVerdict(verdict=VERDICT_NO_WAKE_HASH, detail=detail, **common)
     if dispatch.rendered_body_sha256 in wake.hashes_skeleton:
         # The authored fallback ladder delivered the identifier-free skeleton.
         # Designed behavior under a render fault -- reported, never a finding.
@@ -756,6 +765,7 @@ class SendVerifier:
         fetch_body: Optional[Callable[[dict], Optional[str]]] = None,
     ) -> tuple[list[BodyVerdict], list[InvariantFinding], list[InvariantProposal]]:
         wakes = index_wakes(rows)
+        derive_failure_note_hashes(wakes, rows, self._declares)
         dispatches = index_dispatches(rows)
         verdicts = verify_hash_join(wakes, dispatches, self._declares)
         if fetch_body is not None:

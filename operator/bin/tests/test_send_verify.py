@@ -1430,3 +1430,109 @@ def test_proposals_alone_neither_find_nor_redden():
 def test_a_clean_report_stays_clean_with_the_verifier_attached():
     report = rec.InboxReport(inbox="i@agentmail.to", slug="pilot-smokeball")
     assert rec.exit_code([report]) == rec.EXIT_CLEAN
+
+
+# ---------------------------------------------------------------------------
+# unstamped failure-note wakes (lib/failure_note_stamp.py; pilot-smokeball
+# 2026-10-03..05: three blind-wake failure notes held `no_wake_hash` forever)
+# ---------------------------------------------------------------------------
+
+_ESCALATOR_RENDER = "operator/skills/deadline-miss-escalator/render.py"
+
+
+def _render_declares():
+    declares = _declares()
+    declares["deadline-miss-escalator"] = sv.RenderDecl(
+        skill="deadline-miss-escalator", render="templated", template=_ESCALATOR_RENDER
+    )
+    return declares
+
+
+def _failure_note_wake_row(minute=0):
+    """The row blind_wake.write_row wrote before the skill stamped the note:
+    variant failure_note, no body_sha256."""
+    return {
+        "id": f"wake-failure-note-{minute}",
+        "ts": _ts(minute),
+        "action_type": "EMITTED_WAKE",
+        "skill_name": "deadline-miss-escalator",
+        "metadata": json.dumps(
+            {
+                "blind_wake": True,
+                "dispatch_variant": "failure_note",
+                "failure_note_reason": "pre_run_crashed_fail_open",
+                "render_mode": "templated",
+                "dispatch_count": 1,
+                "dispatch_expected": True,
+            }
+        ),
+    }
+
+
+def _authored_note_sha():
+    from bin.lib import failure_note_stamp as fns
+
+    note = fns.authored_failure_note(_ESCALATOR_RENDER)
+    assert note and "failed" in note  # the literal parsed, not a fallback
+    return sv.canonical_body_sha256(note)
+
+
+def _verify(rows):
+    verifier = sv.SendVerifier(_render_declares(), {"recipients": {}, "ack_codes": {}})
+    verdicts, findings, _proposals = verifier.verify_inbox([], rows, None)
+    return verdicts, findings
+
+
+def test_an_unstamped_failure_note_wake_grades_against_the_authored_note():
+    """The live scene, in shape. Before the fix this was `no_wake_hash` -- a
+    hold no deploy could clear, because the wake row is already written. The
+    dispatch is the authored note, so it MATCHES, and says how."""
+    verdicts, findings = _verify([_failure_note_wake_row(), _dispatch_row(minute=0, sha=_authored_note_sha())])
+    assert [v.verdict for v in verdicts] == [sv.VERDICT_MATCH]
+    assert verdicts[0].detail == "against the authored failure note"
+    assert verdicts[0].attribution == "skill"
+    assert not sv.has_holds(verdicts) and findings == []
+
+
+def test_the_derivation_is_what_clears_the_hold():
+    """Falsifier for the test above: the same rows without the derivation
+    reproduce the live hold, so the match is the derivation's doing."""
+    rows = [_failure_note_wake_row(), _dispatch_row(minute=0, sha=_authored_note_sha())]
+    verdicts = sv.verify_hash_join(sv.index_wakes(rows), sv.index_dispatches(rows), _render_declares())
+    assert [v.verdict for v in verdicts] == [sv.VERDICT_NO_WAKE_HASH]
+
+
+def test_a_failure_note_wake_whose_dispatch_differs_holds_never_accuses():
+    """The authored note may have been reworded since the row was written. A
+    derived hash cannot tell a revision from a divergence, so it never files."""
+    verdicts, findings = _verify([_failure_note_wake_row(), _dispatch_row(minute=0, sha=sv.canonical_body_sha256("x"))])
+    assert [v.verdict for v in verdicts] == [sv.VERDICT_NO_WAKE_HASH]
+    assert not sv.has_findings(verdicts, findings)
+
+
+def test_only_failure_note_wakes_are_derived():
+    """An unstamped DIGEST wake is not the failure note: deriving for it would
+    grade a digest against a one-line note. It keeps its hold."""
+    verdicts, _findings = _verify([_wake_row(minute=0), _dispatch_row(minute=0, sha=_authored_note_sha())])
+    assert [v.verdict for v in verdicts] == [sv.VERDICT_NO_WAKE_HASH]
+
+
+def test_a_stamped_failure_note_wake_keeps_its_own_stamp():
+    """After the skill fix the row carries body_sha256; its own stamp wins and
+    the detail says nothing about derivation."""
+    sha = _authored_note_sha()
+    row = _failure_note_wake_row()
+    meta = json.loads(row["metadata"])
+    meta["body_sha256"] = [{"body_sha256_full": sha, "body_sha256_skeleton": sha}]
+    row["metadata"] = json.dumps(meta)
+    verdicts, _findings = _verify([row, _dispatch_row(minute=0, sha=sha)])
+    assert [(v.verdict, v.detail) for v in verdicts] == [(sv.VERDICT_MATCH, None)]
+
+
+def test_a_template_without_a_literal_note_derives_nothing(tmp_path):
+    from bin.lib import failure_note_stamp as fns
+
+    (tmp_path / "r.py").write_text("FAILURE_NOTE = build()\n", encoding="utf-8")
+    assert fns.authored_failure_note("r.py", str(tmp_path)) is None
+    assert fns.authored_failure_note("missing.py", str(tmp_path)) is None
+    assert fns.authored_failure_note(None) is None

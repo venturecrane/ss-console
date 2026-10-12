@@ -1484,6 +1484,17 @@ def test_blind_wake_row_failure_never_changes_the_wake(tmp_path, monkeypatch):
     assert bad == ok
 
 
+def test_blind_wake_row_stamps_the_failure_note_hash(tmp_path, monkeypatch):
+    """Twin of the escalator's (pilot-smokeball 2026-10-03..05): a failure-note
+    wake with no body_sha256 grades `no_wake_hash` on the reconciler forever."""
+    envelope_path = _authored_seat(tmp_path, monkeypatch)
+    writer = _FakeWakeWriter()
+    _blind(monkeypatch, "pre_run_crashed_fail_open", writer)
+    d = json.loads(envelope_path.read_text(encoding="utf-8"))["dispatches"][0]
+    stamped = writer.calls[0]["extra_metadata"]["body_sha256"]
+    assert stamped == [{"body_sha256_full": d["body_sha256_full"], "body_sha256_skeleton": d["body_sha256_skeleton"]}]
+
+
 def test_envelope_build_fault_writes_the_failure_note(tmp_path, monkeypatch):
     """build_and_write's own fault path. Today it degraded to 'no envelope',
     which is precisely the state that let the model compose."""
