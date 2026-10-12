@@ -148,6 +148,7 @@ def _role(fields: dict[str, Any], side: str, word: str) -> str:
 def caption_md(fields: dict[str, Any], block: list[str] | None, title: str) -> str:
     """The caption: attorney block, the court in two lines, the parties and the
     case number, the title. Missing court facts are markers, never guesses."""
+
     def nir(what: str) -> str:
         return f"{{{{NOT IN RECORD: {what}, not in the court's filings read for the caption}}}}"
 

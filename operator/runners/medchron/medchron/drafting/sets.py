@@ -167,7 +167,10 @@ def enforce_caps(doc: str) -> tuple[str, list[str]]:
         return seg
 
     body = _outside(body, fix)
-    return head + body + tail, [f'defined term "{t}" written in capitals where the set used it in lower case ({n} use(s))' for t, n in counts.items()]
+    return head + body + tail, [
+        f'defined term "{t}" written in capitals where the set used it in lower case ({n} use(s))'
+        for t, n in counts.items()
+    ]
 
 
 def lowercase_uses(doc: str) -> list[str]:
@@ -206,7 +209,11 @@ def undefined_caps(doc: str) -> list[str]:
         return []
     terms = set(defined_terms(doc))
     term_words = {w for t in terms for w in t.split()}
-    parties = set(re.findall(r"[A-Z][A-Z'&.-]+", " ".join(re.findall(r"(?i)(?:PROPOUNDING|RESPONDING) PARTY:\s*\|?\s*([^|\n]+)", doc))))
+    parties = set(
+        re.findall(
+            r"[A-Z][A-Z'&.-]+", " ".join(re.findall(r"(?i)(?:PROPOUNDING|RESPONDING) PARTY:\s*\|?\s*([^|\n]+)", doc))
+        )
+    )
     body = _LABEL_LINE.sub("", doc[at:end])
     body = re.sub(r"(?m)^#{1,6}\s.*$", "", body)
     out: list[str] = []

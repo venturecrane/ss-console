@@ -24,7 +24,7 @@ from __future__ import annotations
 import io
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from ..demand import deliver, finalpass, quotefix, summarize
 from . import citefix, compose, format_check, gate, nestquote, pleading, render, review as review_mod, sets
@@ -52,6 +52,29 @@ class Finish:
     """Mixin: ``DraftingRun`` supplies data, job, firm, cls, doorway, log,
     seat, _state/_put/_done/_is_done/_json/_atomic/_write, _context,
     _corpus_text, _title, date_stamp."""
+
+    if TYPE_CHECKING:  # what DraftingRun (run.py) supplies
+        data: Path
+        job: Any
+        firm: Any
+        cls: str
+        doorway: Any
+        log: Callable[[str], None]
+        date_stamp: str
+        _units: list[Unit] | None
+        _corpus: dict[str, str] | None
+
+        @property
+        def _title(self) -> str: ...
+        def _state(self) -> dict[str, Any]: ...
+        def _put(self, key: str, value: Any) -> None: ...
+        def _done(self, stage: str, **info: Any) -> None: ...
+        def _is_done(self, stage: str) -> bool: ...
+        def _json(self, name: str) -> Any: ...
+        def _atomic(self, name: str, text: str) -> None: ...
+        def _context(self) -> list[str]: ...
+        def _corpus_text(self) -> str: ...
+        def _caption(self) -> None: ...
 
     # ---- units ----------------------------------------------------------------------
     def units(self) -> list[Unit]:
@@ -83,12 +106,14 @@ class Finish:
         return "pleading" if asked and pleading.spec_for(self.firm.data["format"]) is not None else "plain"
 
     def corpus(self) -> dict[str, str]:
-        if getattr(self, "_corpus", None) is None:
-            self._corpus = {
+        got = getattr(self, "_corpus", None)
+        if got is None:
+            got = {
                 str(r["name"]): Path(r["text_path"]).read_text(encoding="utf-8", errors="replace")
                 for r in summarize.corpus_files(self.data)
             }
-        return self._corpus
+            self._corpus = got
+        return got
 
     def _uwrite(self, u: Unit, name: str, obj: Any) -> None:
         tmp = u.data / f".{name}.tmp"
@@ -103,7 +128,9 @@ class Finish:
     # ---- compose, audit, repair, final pass, per unit ---------------------------------
     def _drafter(self, u: Unit) -> compose.Drafter:
         context = ([u.instruction] if u.instruction else []) + self._context()
-        return compose.Drafter(u.data, self.doorway, self.firm, self.cls, self.job.request_text, context, CONCURRENCY, self.log)
+        return compose.Drafter(
+            u.data, self.doorway, self.firm, self.cls, self.job.request_text, context, CONCURRENCY, self.log
+        )
 
     def _draft(self, u: Unit, digest: str) -> str:
         out = u.data / FINAL
@@ -199,7 +226,9 @@ class Finish:
             self.log(f"  format check: {len(res.content)} content finding(s); one repair pass")
             model_doc, end = render.split_notes(md)
             fixed = self._drafter(u).repair_format(model_doc, res.content)
-            self._uatomic(u, FINAL, fixed.rstrip() + ("\n\n" + render.NOTES_MARK + "\n\n" + end + "\n" if end else "\n"))
+            self._uatomic(
+                u, FINAL, fixed.rstrip() + ("\n\n" + render.NOTES_MARK + "\n\n" + end + "\n" if end else "\n")
+            )
             self._done(u.stage("format_repair"))
             self._put(u.stage("gate"), {"status": "reopened"})
             self._render_unit(u, self._gate(u, (u.data / FINAL).read_text(encoding="utf-8")), digest)
@@ -256,7 +285,13 @@ class Finish:
             open_items += [(f"{u.label}: " if u.key else "") + x for x in fp["drifts"]]
         papers = self._papers()
         end_tables = review_mod.final_notes(
-            self.doorway, self.firm.model("audit"), digest, papers, "\n\n".join(tables), open_items, self.job.job_id[-6:]
+            self.doorway,
+            self.firm.model("audit"),
+            digest,
+            papers,
+            "\n\n".join(tables),
+            open_items,
+            self.job.job_id[-6:],
         )
         render_notes = []
         for u in self.units():
@@ -277,8 +312,13 @@ class Finish:
                 digest,
                 self.corpus(),
                 pleading.spec_for(self.firm.data["format"]) is not None,
+                notes_md=notes_md,
             )
-            served = review_mod.discovery_papers(self.corpus()) if self.cls in render.DISCOVERY else "(not a discovery document)"
+            served = (
+                review_mod.discovery_papers(self.corpus())
+                if self.cls in render.DISCOVERY
+                else "(not a discovery document)"
+            )
             user = review_mod.review_user(self.job.request_text, self._context(), papers, notes_md, found, served)
             found += review_mod.run_model(self.doorway, self.firm.model("compose"), digest, user, self.job.job_id[-6:])
             rec = review_mod.save(self.data, found)

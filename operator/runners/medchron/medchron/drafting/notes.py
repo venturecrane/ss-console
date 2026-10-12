@@ -67,8 +67,8 @@ def attorney_notes(
         fp = _json(d, "final-pass.json")
         review += [f"{pre}Removed or flagged by the final audit: {x}" for x in fp["settled"]]
         g = _json(d, "gate.json")
-        review += [f"{pre}Drafting gate repair: {x}" for x in g.get("repairs") or []]
-        review += [f"{pre}Drafting gate: {w}" for w in g.get("warnings") or []]
+        review += [f"{pre}Corrected to match the record: {x}" for x in g.get("repairs") or []]
+        review += [f"{pre}Check against the record: {w}" for w in g.get("warnings") or []]
         if (d / "caps.json").is_file():
             review += [f"{pre}Defined terms: {x}" for x in _json(d, "caps.json")]
     if (data / "howell.json").is_file():

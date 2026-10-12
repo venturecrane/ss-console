@@ -13,15 +13,17 @@ from typing import Any
 
 from ..demand import deliver
 from . import format_check, pleading, place, render, review as review_mod
-from .finish import Unit
+from .finish import Finish, Unit
 from .outcome import DraftingFailed, DraftingHold, markers
 
 #: Format findings about HIS content (his labels, his Definitions, a declaration
 #: he wrote): his to decide, reported in the notes, never a refusal of ours.
-HIS = re.compile(r"(?i)^(discovery: no item labels|definitions:|attachments: section 2030\.050|label:|request:|spacing:)")
+HIS = re.compile(
+    r"(?i)^(discovery: no item labels|definitions:|attachments: section 2030\.050|label:|request:|spacing:)"
+)
 
 
-class Placing:
+class Placing(Finish):
     def placing(self) -> bool:
         return self.cls == "discovery_set" and bool(self.job.attachments)
 
@@ -66,9 +68,7 @@ class Placing:
         res = format_check.check(path, self.cls, fmt, "", None, paper)
         ours = [f for f in res.fails if not HIS.match(f)]
         if ours:
-            raise DraftingFailed(
-                "format_check: the format check refused the placed document: " + "; ".join(ours)[:400]
-            )
+            raise DraftingFailed("format_check: the format check refused the placed document: " + "; ".join(ours)[:400])
         his = [f for f in res.fails if HIS.match(f)]
         self._uwrite(u, "theirs.json", {"name": t.name, "body": placed.body, "added": placed.added})
         self._uwrite(
@@ -79,8 +79,8 @@ class Placing:
                 "paper": paper,
                 "markers": markers(placed.markdown),
                 "notes": [
-                    f"placed {t.name} verbatim; the job added: " + ", ".join(placed.added),
-                    *[f"in his text, for his eye only (not changed): {f}" for f in his],
+                    f"placed {t.name} word for word; added: " + ", ".join(placed.added),
+                    *[f"in the attorney's own text (not changed): {f}" for f in his],
                     *report.get("notes", []),
                     *laid,
                 ],
@@ -112,8 +112,14 @@ class Placing:
         if rec is None:
             papers = self._papers()
             found = review_mod.code_findings(
-                self.cls, papers, self.job.request_text, "", {}, pleading.spec_for(self.firm.data["format"]) is not None,
+                self.cls,
+                papers,
+                self.job.request_text,
+                "",
+                {},
+                pleading.spec_for(self.firm.data["format"]) is not None,
                 theirs=True,
+                notes_md=notes_md,
             )
             for (u, _t), p in zip(self._theirs(), papers):
                 body = json.loads((u.data / "theirs.json").read_text(encoding="utf-8"))["body"]
@@ -133,13 +139,21 @@ class Placing:
             if not (cap.get("fields") or {}).get("case_number"):
                 found.append(
                     review_mod.Finding(
-                        review_mod.MUST, "3 caption", "the court's caption could not be read from the file", "caption", "code"
+                        review_mod.MUST,
+                        "3 caption",
+                        "the court's caption could not be read from the file",
+                        "caption",
+                        "code",
                     )
                 )
             user = review_mod.review_user(self.job.request_text, self._context(), papers, notes_md, found, "")
             found += review_mod.run_model(
-                self.doorway, self.firm.model("compose"), "(the documents are the attorney's own)", user,
-                self.job.job_id[-6:], prompt=review_mod.PLACE_PROMPT,
+                self.doorway,
+                self.firm.model("compose"),
+                "(the documents are the attorney's own)",
+                user,
+                self.job.job_id[-6:],
+                prompt=review_mod.PLACE_PROMPT,
             )
             rec = review_mod.save(self.data, found)
             self.log(f"  review: {rec['must_fix']} must-fix, {rec['should_fix']} should-fix, {rec['notes']} note(s)")

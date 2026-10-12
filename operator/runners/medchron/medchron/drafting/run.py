@@ -62,7 +62,6 @@ from . import (
     howell,
     job as job_mod,
 )
-from .finish import Finish
 from .placing import Placing
 from .outcome import REASON, DraftingFailed, DraftingHold, Verdict
 
@@ -115,7 +114,7 @@ def demand_view(firm: firm_mod.DraftingFirm) -> DemandFirm:
     )
 
 
-class DraftingRun(Placing, Finish):
+class DraftingRun(Placing):
     def __init__(
         self,
         job_dir: Path,

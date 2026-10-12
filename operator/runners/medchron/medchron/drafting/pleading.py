@@ -262,7 +262,9 @@ def apply(path: Path, spec: Spec) -> list[str]:
     part = path.with_name(f".{path.name}.pleading.tmp")
     part.write_bytes(buf.getvalue())
     part.replace(path)
-    notes = [f"laid on the firm's pleading paper ({spec.lines} numbered lines at {spec.pitch_pt:g} point), as requested"]
+    notes = [
+        f"laid on the firm's pleading paper ({spec.lines} numbered lines at {spec.pitch_pt:g} point), as requested"
+    ]
     if not title:
         notes.append("pleading paper: no title was found for the footer; the footer carries the page number only")
     return notes
@@ -287,7 +289,11 @@ def check(doc: Any, blob: bytes, spec: Spec) -> list[str]:
     nums = re.findall(r"<w:t>(\d+)</w:t>", box.group(1)) if box else []
     if nums != [str(n) for n in range(1, spec.lines + 1)]:
         fails.append(f"pleading: the header does not number lines 1 to {spec.lines}")
-    elif box and len(re.findall(rf'w:line="{int(round(spec.pitch_pt * 20))}" w:lineRule="exact"', box.group(1))) != spec.lines:
+    elif (
+        box
+        and len(re.findall(rf'w:line="{int(round(spec.pitch_pt * 20))}" w:lineRule="exact"', box.group(1)))
+        != spec.lines
+    ):
         fails.append(f"pleading: the line numbers are not at exactly {spec.pitch_pt:g} point")
     if sum(headers.count(f'name="{n}"') for n in RULE_NAMES) != len(RULE_NAMES):
         fails.append("pleading: the margin rules are missing")
@@ -305,7 +311,9 @@ def check(doc: Any, blob: bytes, spec: Spec) -> list[str]:
         )
     ]
     if off:
-        fails.append(f"pleading: {len(off)} paragraph(s) off the {spec.pitch_pt:g}-point line pitch: {off[0].text[:40]}")
+        fails.append(
+            f"pleading: {len(off)} paragraph(s) off the {spec.pitch_pt:g}-point line pitch: {off[0].text[:40]}"
+        )
     footers = "".join(z.read(n).decode("utf-8", "replace") for n in z.namelist() if n.startswith("word/footer"))
     if not re.search(r"<w:instrText[^>]*>\s*PAGE\b", footers) and 'w:instr=" PAGE' not in footers:
         fails.append("pleading: no page number in the footer")

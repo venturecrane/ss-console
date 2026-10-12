@@ -278,7 +278,7 @@ def attach(
     if cls not in DISCOVERY:
         return doc, []
     doc, removed = strip_attachments(doc)
-    notes = ["removed a model-written declaration or proof of service; the job attaches the firm's"] if removed else []
+    notes = ["the firm's own declaration and proof of service forms are used"] if removed else []
     parts = [doc.rstrip()]
     if cls == "discovery_set":
         d = decl_decision(doc, digest, corpus)
@@ -344,6 +344,7 @@ def render(md: str, cls: str, out: Path, fmt: dict[str, Any]) -> tuple[Path, dic
 
     from .house import house_for
 
+    md = re.sub(r"`+(\{\{[^{}]*\}\})`+", r"\1", md)  # a slot never carries stray backticks
     blob, report = render_document(md, cls, None, house=house_for(fmt, cls))
     out.parent.mkdir(parents=True, exist_ok=True)
     part = out.with_name(f".{out.name}.tmp")

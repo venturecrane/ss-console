@@ -29,7 +29,11 @@ REQUEST = (
 )
 KINDS = {
     "Requests for Admission": ("REQUEST FOR ADMISSION", "REQUESTS FOR ADMISSION", "Admit that YOU owned the PREMISES."),
-    "Requests for Production": ("REQUEST FOR PRODUCTION", "REQUESTS FOR PRODUCTION", "All DOCUMENTS showing the PREMISES."),
+    "Requests for Production": (
+        "REQUEST FOR PRODUCTION",
+        "REQUESTS FOR PRODUCTION",
+        "All DOCUMENTS showing the PREMISES.",
+    ),
     "Special Interrogatories": (
         "SPECIAL INTERROGATORY",
         "SPECIAL INTERROGATORIES",
@@ -90,7 +94,12 @@ class Client(ScriptedClient):
 def docs_with_note():
     return [
         *standard_docs(),
-        ("d9", "Note re discovery 3-1-26.pdf", make_pdf(["DRAFTED FORM ROGS, RFAS AND SPROGS UPLOADED TO THE TOOL."]), "f-plead"),
+        (
+            "d9",
+            "Note re discovery 3-1-26.pdf",
+            make_pdf(["DRAFTED FORM ROGS, RFAS AND SPROGS UPLOADED TO THE TOOL."]),
+            "f-plead",
+        ),
     ]
 
 
@@ -203,6 +212,78 @@ def test_the_audit_and_the_review_ask_for_high_effort(tmp_path, pricing):
     for marker in ("AUDIT-PROMPT", "INDEPENDENT PRE-DELIVERY REVIEW"):
         calls = [c for c in client.calls if marker in json.dumps(c.get("system"))]
         assert calls and all((c.get("output_config") or {}).get("effort") == "high" for c in calls), marker
+
+
+# ---- the review of the corrected 2026-10-12 run: assembly and wording defects -------------
+
+
+def _clean_paper() -> str:
+    return one_set("Requests for Admission").split("=== ATTORNEY NOTES")[0] + "\n# PROOF OF SERVICE\n\nServed.\n"
+
+
+def test_a_second_document_that_landed_in_the_notes_is_must_fix():
+    """(a) Documents 2 and 3 were split into the notes file after the first
+    notes marker, with no proof of service."""
+    leaked = (
+        "## REQUEST BASIS\n\nNone.\n\n=== DOCUMENT 2 OF 3: REQUESTS FOR PRODUCTION ===\n\n"
+        "REQUEST FOR PRODUCTION NO. 1\n\nAll DOCUMENTS.\n\nREQUEST FOR PRODUCTION NO. 2\n\nAll photos.\n"
+    )
+    found = review.code_findings("discovery_set", [_paper(_clean_paper())], "draft RFAs", "", {}, True, notes_md=leaked)
+    assert any(f.grade == review.MUST and f.check == "5 assembly" for f in found), found
+
+
+def test_three_requested_sets_with_one_document_is_must_fix():
+    found = review.code_findings("discovery_set", [_paper(_clean_paper())], REQUEST, "", {}, True)
+    missing = [f for f in found if f.check == "2 the sets asked for"]
+    assert {f.finding.split("asks for ")[1].split(";")[0] for f in missing} == {
+        "Requests for Production",
+        "Special Interrogatories",
+    }
+
+
+def test_the_systems_vocabulary_in_the_notes_is_must_fix():
+    """(b) "Under the job rule, code counts the interrogatories"."""
+    found = review.code_findings(
+        "discovery_set",
+        [_paper(_clean_paper())],
+        "draft RFAs",
+        "",
+        {},
+        True,
+        notes_md="Under the job rule, code counts the interrogatories.",
+    )
+    assert any(f.check == "9 notes wording" and f.grade == review.MUST for f in found)
+
+
+def test_a_marker_standing_as_a_request_is_must_fix():
+    """(d) A bare NOT IN RECORD marker left as a numbered request."""
+    text = _clean_paper().replace(
+        "REQUEST FOR ADMISSION NO. 2\n\nAdmit that YOU owned the PREMISES.",
+        "REQUEST FOR ADMISSION NO. 2\n\n{{NOT IN RECORD: the date, not in the file}}",
+    )
+    found = review.code_findings("discovery_set", [_paper(text)], "draft RFAs", "", {}, True)
+    assert any("is a marker, not a request" in f.finding and f.grade == review.MUST for f in found), found
+
+
+def test_a_backticked_slot_renders_without_its_backticks(tmp_path):
+    """(d) Stray backticks around a {{FILL}} slot."""
+    from drafting_testkit import firm_data
+    from medchron.drafting import format_check
+
+    md = "# PROOF OF SERVICE\n\nOn `{{FILL: date of service | at service}}`, I served it.\n"
+    path, _ = render.render(md, "memo", tmp_path / "x.docx", firm_data()["format"])
+    text = format_check.doc_text(_docx(path))
+    assert "`" not in text and "{{FILL: date of service | at service}}" in text
+
+
+def test_the_notes_prompt_and_the_review_prompt_carry_the_three_wording_rules():
+    """(b), (c), (e): the model-written notes never use the system's
+    vocabulary, adopt a fact the request states, and run each request in the
+    direction its words run; the review grades each of those MUST-FIX."""
+    for phrase in ("never mention the job", "adopt it as stated", "direction its words run"):
+        assert phrase in review.NOTES_PROMPT
+    for phrase in ("on either reading", "opposite direction", "CONSISTENCY ACROSS THE DOCUMENTS"):
+        assert phrase in review.REVIEW_PROMPT
 
 
 def test_a_must_fix_without_a_citation_is_graded_should_fix():

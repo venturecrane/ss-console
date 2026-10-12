@@ -424,7 +424,9 @@ PRIOR20 = "Special Interrogatories, Set One | One | Gamma Example -> Delta Examp
 PRIOR10 = PRIOR20.replace("| 20 |", "| 10 |")
 UNREADABLE = PRIOR20.replace("| 20 |", "| not readable |")
 #: The served copy: the set's own title and its proof of service.
-SERVED = {"SROG set one.pdf": "PLAINTIFF GAMMA EXAMPLE'S SPECIAL INTERROGATORIES, SET ONE\n...\nPROOF OF SERVICE\nServed by mail."}
+SERVED = {
+    "SROG set one.pdf": "PLAINTIFF GAMMA EXAMPLE'S SPECIAL INTERROGATORIES, SET ONE\n...\nPROOF OF SERVICE\nServed by mail."
+}
 #: The 2026-10-12 incident's shape: a matter memo ABOUT discovery, indexed as a set.
 MEMO_ROW = (
     "Sprogs uploaded | not readable | Gamma Example -> Delta Example | special interrogatories | not readable | "
@@ -495,7 +497,7 @@ def test_a_model_written_declaration_and_proof_of_service_are_replaced_by_the_fi
     doc, notes = render.attach(model, "discovery_set", _Firm(), _digest())
     assert "DECLARATION" not in doc and "I declare." not in doc and "Served." not in doc
     assert doc.count("PROOF OF SERVICE") == 1 and "# PROOF OF SERVICE" in doc
-    assert notes[0].startswith("removed a model-written")
+    assert notes[0].startswith("the firm's own declaration and proof of service forms")
 
 
 @pytest.mark.parametrize("cls", ["discovery_set", "discovery_response"])

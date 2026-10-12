@@ -92,7 +92,10 @@ Check, at minimum, each of these, against the sources given (the attorney's requ
 4. DEFINED TERMS. Every capitalized defined term used consistently; a term defined and then used in lower case or in an undefined variant, or a capitalized term never defined. SHOULD-FIX.
 5. ONE PROOF OF SERVICE PER SEPARATE DOCUMENT, after that document's own signature (and declaration, if any). Two papers in one file, or one proof of service for several papers, is MUST-FIX.
 6. THE ATTORNEY NOTES against the documents. A note that contradicts a document (says a term is undefined when it is defined, says no declaration when one is attached, lines that contradict each other, a line that says nothing) is MUST-FIX; a note that omits something the attorney must know (a held statement, a reserved call) is SHOULD-FIX.
-7. Anything else an attorney would be embarrassed to sign or to have drafted: an invented fact, a request whose premise the record contradicts, a compound request, a wrong party, a wrong date. Grade by consequence.
+7. CONSISTENCY ACROSS THE DOCUMENTS. Requests in different sets (or the same set) that contradict each other (who sent what to whom, a date, a party, a direction of communication), or that leave an inconsistency the attorney notes say the audit flagged. MUST-FIX.
+8. THE REQUEST'S OWN STATEMENTS OF FACT. Where the attorney's request states a fact about the file (for example which side served a document), the notes and the documents adopt it; a note that hedges on it ("on either reading") or contradicts it is MUST-FIX. A note that describes a request in the opposite direction from the attorney's words (who produces what to whom) is MUST-FIX.
+9. ARTIFACTS. A request that is only a marker ({{NOT IN RECORD}} standing as the request), stray markup (backticks, brackets) around a slot, a heading or sentinel the system wrote ("=== ... ==="), or the system's own vocabulary in the notes (the job, code, a rule of the system, the auditor, the drafter). MUST-FIX for a marker standing as a request or a sentinel; SHOULD-FIX otherwise.
+10. Anything else an attorney would be embarrassed to sign or to have drafted: an invented fact, a request whose premise the record contradicts, a compound request, a wrong party, a wrong date. Grade by consequence.
 
 The CODE FINDINGS block lists what code already found; do not repeat them, and do not contradict them.
 
@@ -131,6 +134,9 @@ The drafting system has finished the documents below. Its drafter wrote end tabl
 - keep a row only if the final document still bears it out; correct a row the final document contradicts; drop a row about text the final document no longer has;
 - never claim a term is undefined, a section missing, or an item absent without checking the final document;
 - keep each auditor item only if the final document still has the problem, stated plainly;
+- write to the attorney, about his documents: never mention the job, code, a rule of the system, the drafter, the auditor, a gate or a pipeline;
+- where the attorney's request states a fact about the file (for example which side served a document), adopt it as stated; never hedge on it ("on either reading") and never contradict it;
+- describe each request in the direction its words run (who produces what to whom, who sent what to whom), never the reverse;
 - add nothing that the final documents and the digest do not support; a row cites its source as the drafter's did.
 
 OUTPUT: markdown only, the same tables under the same headings the drafter used (one set of tables per document when there are several, under a heading naming the document), then `## Open items from the audit` (a bulleted list, or the single line `None.`). No preamble, no em dashes."""
@@ -156,6 +162,62 @@ def complete(text: str) -> bool:
     return bool(_VERDICT.search(text))
 
 
+_SENTINEL = re.compile(r"(?m)^\W*===\s*[A-Z][A-Z ]+[^=\n]*===\s*$")
+_LABEL_ALONE = re.compile(
+    r"(?m)^\W*(SPECIAL INTERROGATORY|REQUEST FOR ADMISSION|REQUEST FOR PRODUCTION)\s+NO\.?\s*\d+\s*:?\s*$"
+)
+#: The system's own vocabulary, which never belongs in what an attorney reads.
+_INTERNAL = re.compile(
+    r"(?i)\b(job rule|under the job|the job's|code counts|counted by code|by code|the pipeline|the auditor|"
+    r"the drafter|the gate|drafting gate|compose stage|the model)\b"
+)
+_MARKER_ONLY = re.compile(r"^\s*`?\{\{[^{}]*\}\}`?\s*\.?\s*$")
+
+
+def _artifact_findings(cls: str, papers: list[Paper], notes_md: str) -> list[Finding]:
+    """Assembly and wording defects code can see (the 2026-10-12 review of a
+    corrected run): a document's requests landing in the notes, a sentinel in a
+    document, a request that is only a marker, stray backticks, the system's
+    vocabulary in the notes."""
+    out: list[Finding] = []
+    if len(_LABEL_ALONE.findall(notes_md)) >= 2 or _SENTINEL.search(notes_md) or _POS.search(notes_md):
+        out.append(
+            Finding(
+                MUST,
+                "5 assembly",
+                "requests or a proof of service are in the attorney notes, not a document",
+                "attorney notes",
+                "code",
+            )
+        )
+    m = _INTERNAL.search(notes_md)
+    if m:
+        out.append(
+            Finding(
+                MUST,
+                "9 notes wording",
+                f'the attorney notes use the system\'s own vocabulary: "{m.group(0)}"',
+                "attorney notes",
+                "code",
+            )
+        )
+    for p in papers:
+        if _SENTINEL.search(p.text):
+            out.append(Finding(MUST, "9 artifacts", f"{p.label} carries a system sentinel line", p.label, "code"))
+        if "`" in p.text:
+            out.append(Finding(SHOULD, "9 artifacts", f"{p.label} carries stray backticks", p.label, "code"))
+        if cls == "discovery_set":
+            lines = [ln for ln in p.text.splitlines() if ln.strip()]
+            for i, ln in enumerate(lines[:-1]):
+                if _LABEL_ALONE.match(ln) and _MARKER_ONLY.match(lines[i + 1]):
+                    out.append(
+                        Finding(
+                            MUST, "9 artifacts", f"{p.label}: {ln.strip()} is a marker, not a request", p.label, "code"
+                        )
+                    )
+    return out
+
+
 def code_findings(
     cls: str,
     papers: list[Paper],
@@ -164,6 +226,7 @@ def code_findings(
     corpus: Mapping[str, str],
     pleading_authored: bool,
     theirs: bool = False,
+    notes_md: str = "",
 ) -> list[Finding]:
     """What code can settle, graded. ``theirs``: the documents are the
     attorney's own (place.py): what they SAY (a declaration, a defined term) is
@@ -176,12 +239,22 @@ def code_findings(
         if cls in render.DISCOVERY:
             n = len(_POS.findall(p.text))
             if n != 1:
-                out.append(Finding(MUST, "5 proof of service", f"{where} carries {n} proofs of service, not one", where, "code"))
+                out.append(
+                    Finding(
+                        MUST, "5 proof of service", f"{where} carries {n} proofs of service, not one", where, "code"
+                    )
+                )
         if cls == "discovery_set":
             kinds = sets.kinds_in(p.text)
             if len(kinds) > 1:
                 out.append(
-                    Finding(MUST, "5 one paper per set", f"{where} carries {len(kinds)} kinds of set in one file: {', '.join(kinds)}", where, "code")
+                    Finding(
+                        MUST,
+                        "5 one paper per set",
+                        f"{where} carries {len(kinds)} kinds of set in one file: {', '.join(kinds)}",
+                        where,
+                        "code",
+                    )
                 )
             decl = bool(render.DECL_LINE.search(p.text))
             if decl:
@@ -200,17 +273,52 @@ def code_findings(
                 m = _PARA5.search(p.text)
                 if m and int(m.group(1)) != d.this_set:
                     out.append(
-                        Finding(MUST, "1 section 2030.050 declaration", f"{where}: the declaration counts {m.group(1)}; the set has {d.this_set}", where, "code")
+                        Finding(
+                            MUST,
+                            "1 section 2030.050 declaration",
+                            f"{where}: the declaration counts {m.group(1)}; the set has {d.this_set}",
+                            where,
+                            "code",
+                        )
                     )
             if _DECL_2033.search(p.text):
-                out.append(Finding(MUST, "1 section 2033.050 declaration", f"{where} carries a section 2033.050 declaration the job never authors", where, "code"))
+                out.append(
+                    Finding(
+                        MUST,
+                        "1 section 2033.050 declaration",
+                        f"{where} carries a section 2033.050 declaration the job never authors",
+                        where,
+                        "code",
+                    )
+                )
             for t in sets.lowercase_uses(p.text):
-                out.append(Finding(SHOULD, "4 defined terms", f'{where}: the defined term "{t}" is used in lower case', where, "code"))
+                out.append(
+                    Finding(
+                        SHOULD,
+                        "4 defined terms",
+                        f'{where}: the defined term "{t}" is used in lower case',
+                        where,
+                        "code",
+                    )
+                )
             for t in sets.undefined_caps(p.text)[:12]:
-                out.append(Finding(NOTE, "4 defined terms", f'{where}: "{t}" is capitalized but not defined', where, "code"))
+                out.append(
+                    Finding(NOTE, "4 defined terms", f'{where}: "{t}" is capitalized but not defined', where, "code")
+                )
         if wants and p.paper != "pleading":
-            why = "the firm has no pleading paper authored" if not pleading_authored else "it was rendered on plain paper"
-            out.append(Finding(MUST, "2 the request's paper", f"the request asks for pleading paper; {where} is not ({why})", "the request", "code"))
+            why = (
+                "the firm has no pleading paper authored" if not pleading_authored else "it was rendered on plain paper"
+            )
+            out.append(
+                Finding(
+                    MUST,
+                    "2 the request's paper",
+                    f"the request asks for pleading paper; {where} is not ({why})",
+                    "the request",
+                    "code",
+                )
+            )
+    out += _artifact_findings(cls, papers, notes_md)
     if theirs:
         for f in out:
             if f.check[:2] in ("1 ", "4 "):
@@ -220,7 +328,15 @@ def code_findings(
         have = {sets.kinds_in(p.text)[0] for p in papers if sets.kinds_in(p.text)}
         for u in asked:
             if u.key not in have:
-                out.append(Finding(MUST, "2 the sets asked for", f"the request asks for {u.label}; no document carries them", "the request", "code"))
+                out.append(
+                    Finding(
+                        MUST,
+                        "2 the sets asked for",
+                        f"the request asks for {u.label}; no document carries them",
+                        "the request",
+                        "code",
+                    )
+                )
     return out
 
 
@@ -271,7 +387,11 @@ def run_model(
     from ..demand.gapaudit import output_max
     from .compose import DraftingError
 
-    system = (prompt or REVIEW_PROMPT) +"\n\n---\n\n## THE RECORD DIGEST (every cite in it is the record)\n\n" + system_digest
+    system = (
+        (prompt or REVIEW_PROMPT)
+        + "\n\n---\n\n## THE RECORD DIGEST (every cite in it is the record)\n\n"
+        + system_digest
+    )
     for attempt in (1, 2):
         r = doorway.call(
             "review",
@@ -288,7 +408,9 @@ def run_model(
     raise DraftingError("the pre-delivery review did not complete")
 
 
-def final_notes(doorway: Any, model: str, digest: str, papers: list[Paper], drafter_tables: str, open_items: list[str], key: str) -> str:
+def final_notes(
+    doorway: Any, model: str, digest: str, papers: list[Paper], drafter_tables: str, open_items: list[str], key: str
+) -> str:
     """The end tables rewritten from the FINAL documents (never intermediate state)."""
     from ..demand.gapaudit import output_max
     from .compose import DraftingError
@@ -349,4 +471,6 @@ def notes_section(rec: dict[str, Any]) -> list[str]:
 def held_reason(rec: dict[str, Any]) -> str:
     musts = [f for f in rec["findings"] if f["grade"] == MUST]
     first = "; ".join(f"{f['check']}: {f['finding']}" for f in musts)
-    return f"review_held: the pre-delivery review found {len(musts)} must-fix finding(s); nothing was filed: {first}"[:480]
+    return f"review_held: the pre-delivery review found {len(musts)} must-fix finding(s); nothing was filed: {first}"[
+        :480
+    ]

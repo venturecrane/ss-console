@@ -22,12 +22,25 @@ CHECKER = Path(__file__).resolve().parents[3] / "templates" / "drafting" / "draf
 REQUEST = "Attached are my three sets. Please put each one into the caption on pleading paper and file them."
 LEAD = {
     "email": "admin@firm.example",
-    "block": ["Alpha Example, Esq. (SBN 000001)", "EXAMPLE & EXAMPLE, LLP", "1 Example Way", "Exampletown, California 90000"],
+    "block": [
+        "Alpha Example, Esq. (SBN 000001)",
+        "EXAMPLE & EXAMPLE, LLP",
+        "1 Example Way",
+        "Exampletown, California 90000",
+    ],
 }
 KINDS = {
-    "special": ("SPECIAL INTERROGATORIES", "SPECIAL INTERROGATORY", "State each fact supporting YOUR contention that the floor was dry."),
+    "special": (
+        "SPECIAL INTERROGATORIES",
+        "SPECIAL INTERROGATORY",
+        "State each fact supporting YOUR contention that the floor was dry.",
+    ),
     "admission": ("REQUESTS FOR ADMISSION", "REQUEST FOR ADMISSION", "Admit that YOU mopped the floor at 10:00 a.m."),
-    "production": ("REQUESTS FOR PRODUCTION", "REQUEST FOR PRODUCTION", "All video of the aisle on the day of the fall."),
+    "production": (
+        "REQUESTS FOR PRODUCTION",
+        "REQUEST FOR PRODUCTION",
+        "All video of the aisle on the day of the fall.",
+    ),
 }
 
 
@@ -89,7 +102,13 @@ def _run(tmp_path, pricing, client, attachments, request=REQUEST):
     (jd / "job.json").write_text(json.dumps(doc))
     seat = seat_with(standard_docs())
     r = DraftingRun(
-        jd, inputs_dir=str(inputs), pricing=str(pricing), seat_factory=lambda: seat, client=client, log=lambda _m: None, readback_pause=0.0
+        jd,
+        inputs_dir=str(inputs),
+        pricing=str(pricing),
+        seat_factory=lambda: seat,
+        client=client,
+        log=lambda _m: None,
+        readback_pause=0.0,
     )
     return r, r.run(), seat
 
@@ -116,7 +135,7 @@ def test_three_attached_sets_are_placed_verbatim_each_on_its_own_pleading_paper(
         path = deliver.out_dir(r.data) / f["name"]
         text = _text(path)
         theirs = place.read(f"{k}.docx", blob)
-        assert place.missing(theirs.plain[place._start(theirs):], text) == [], f["name"]
+        assert place.missing(theirs.plain[place._start(theirs) :], text) == [], f["name"]
         assert "Case No. CV-0001" in text and "EXAMPLE & EXAMPLE, LLP" in text
         assert text.upper().count("PROOF OF SERVICE") == 1
         import docx
@@ -126,7 +145,7 @@ def test_three_attached_sets_are_placed_verbatim_each_on_its_own_pleading_paper(
     prod = _text(deliver.out_dir(r.data) / v.files[2]["name"])
     assert "By: ______________________________" in prod and "Attorneys for Plaintiff GAMMA EXAMPLE" in prod
     notes = (r.data / "notes-final.md").read_text()
-    assert "placed production.docx verbatim" in notes
+    assert "placed production.docx word for word" in notes
 
 
 def test_a_placement_that_loses_his_words_is_held_for_smd(tmp_path, pricing, monkeypatch):
@@ -157,7 +176,12 @@ def test_attachments_that_are_not_sets_hold_with_a_sentence(tmp_path, pricing):
 def test_his_title_is_kept_and_a_missing_title_is_built_from_his_identification_block():
     blob = his_set("admission", title=False)
     t = place.read("a.docx", blob)
-    out = place.place(t, {"plaintiffs": [{"value": "GAMMA EXAMPLE"}], "defendants": [{"value": "DELTA EXAMPLE"}]}, None, "# PROOF OF SERVICE")
+    out = place.place(
+        t,
+        {"plaintiffs": [{"value": "GAMMA EXAMPLE"}], "defendants": [{"value": "DELTA EXAMPLE"}]},
+        None,
+        "# PROOF OF SERVICE",
+    )
     assert "PLAINTIFF GAMMA EXAMPLE'S REQUESTS FOR ADMISSION TO DEFENDANT DELTA EXAMPLE, SET ONE" in out.markdown
     assert "{{NOT IN RECORD: case number" in out.markdown  # never a guessed case number
 
