@@ -288,9 +288,7 @@ def _semantics(data: dict[str, Any]) -> list[str]:
         out.append(f"format.discovery_label_style: expected one of {list(LABEL_STYLES)}")
     if not 8 <= float(fmt["size_pt"]) <= 16:
         out.append("format.size_pt: expected 8..16")
-    out += _layout(fmt.get("layout") or {})
-    if "pleading" in fmt:
-        out += _pleading(fmt["pleading"])
+    out += _layout(fmt.get("layout") or {}) + (_pleading(fmt["pleading"]) if "pleading" in fmt else [])
     out += _models(data["models"])
     for p in data["selection"]["exclude_folder_patterns"] + data["selection"]["exclude_name_patterns"]:
         try:

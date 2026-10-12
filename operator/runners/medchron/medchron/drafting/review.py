@@ -218,6 +218,98 @@ def _artifact_findings(cls: str, papers: list[Paper], notes_md: str) -> list[Fin
     return out
 
 
+def _f(grade: str, check: str, finding: str, where: str) -> Finding:
+    return Finding(grade, check, finding, where, "code")
+
+
+def _decl_findings(where: str, text: str, digest: str, corpus: Mapping[str, str]) -> list[Finding]:
+    """A section 2030.050 declaration only over a PROVEN count, and counting the
+    set it is attached to; a section 2033.050 declaration never."""
+    out: list[Finding] = []
+    if render.DECL_LINE.search(text):
+        d = render.decl_decision(text, digest, corpus)
+        if not d.attach:
+            out.append(
+                _f(
+                    MUST,
+                    "1 section 2030.050 declaration",
+                    f"{where} carries a section 2030.050 declaration, but the proven cumulative count is {d.total} "
+                    f"({d.this_set} in this set, {d.prior_special} in served prior sets), not over 35",
+                    where,
+                )
+            )
+        m = _PARA5.search(text)
+        if m and int(m.group(1)) != d.this_set:
+            out.append(
+                _f(
+                    MUST,
+                    "1 section 2030.050 declaration",
+                    f"{where}: the declaration counts {m.group(1)}; the set has {d.this_set}",
+                    where,
+                )
+            )
+    if _DECL_2033.search(text):
+        out.append(_f(MUST, "1 section 2033.050 declaration", f"{where} carries a section 2033.050 declaration", where))
+    return out
+
+
+def _set_findings(where: str, text: str, digest: str, corpus: Mapping[str, str]) -> list[Finding]:
+    """One propounded set: one kind per file, the declaration rule, defined terms."""
+    out: list[Finding] = []
+    kinds = sets.kinds_in(text)
+    if len(kinds) > 1:
+        out.append(
+            _f(
+                MUST,
+                "5 one paper per set",
+                f"{where} carries {len(kinds)} kinds of set in one file: {', '.join(kinds)}",
+                where,
+            )
+        )
+    out += _decl_findings(where, text, digest, corpus)
+    out += [
+        _f(SHOULD, "4 defined terms", f'{where}: the defined term "{t}" is used in lower case', where)
+        for t in sets.lowercase_uses(text)
+    ]
+    out += [
+        _f(NOTE, "4 defined terms", f'{where}: "{t}" is capitalized but not defined', where)
+        for t in sets.undefined_caps(text)[:12]
+    ]
+    return out
+
+
+def _paper_findings(
+    cls: str, p: Paper, wants: bool, pleading_authored: bool, digest: str, corpus: Mapping[str, str]
+) -> list[Finding]:
+    out: list[Finding] = []
+    if cls in render.DISCOVERY:
+        n = len(_POS.findall(p.text))
+        if n != 1:
+            out.append(_f(MUST, "5 proof of service", f"{p.label} carries {n} proofs of service, not one", p.label))
+    if cls == "discovery_set":
+        out += _set_findings(p.label, p.text, digest, corpus)
+    if wants and p.paper != "pleading":
+        why = "the firm has no pleading paper authored" if not pleading_authored else "it was rendered on plain paper"
+        out.append(
+            _f(
+                MUST,
+                "2 the request's paper",
+                f"the request asks for pleading paper; {p.label} is not ({why})",
+                "the request",
+            )
+        )
+    return out
+
+
+def _asked_findings(asked: list[Any], papers: list[Paper]) -> list[Finding]:
+    have = {sets.kinds_in(p.text)[0] for p in papers if sets.kinds_in(p.text)}
+    return [
+        _f(MUST, "2 the sets asked for", f"the request asks for {u.label}; no document carries them", "the request")
+        for u in asked
+        if u.key not in have
+    ]
+
+
 def code_findings(
     cls: str,
     papers: list[Paper],
@@ -231,112 +323,18 @@ def code_findings(
     """What code can settle, graded. ``theirs``: the documents are the
     attorney's own (place.py): what they SAY (a declaration, a defined term) is
     his and is reported as a NOTE; what the job did to them is graded as ever."""
-    out: list[Finding] = []
-    asked = sets.variants(request) if cls == "discovery_set" and not theirs else []
     wants = pleading.wants_pleading(request)
+    out: list[Finding] = []
     for p in papers:
-        where = p.label
-        if cls in render.DISCOVERY:
-            n = len(_POS.findall(p.text))
-            if n != 1:
-                out.append(
-                    Finding(
-                        MUST, "5 proof of service", f"{where} carries {n} proofs of service, not one", where, "code"
-                    )
-                )
-        if cls == "discovery_set":
-            kinds = sets.kinds_in(p.text)
-            if len(kinds) > 1:
-                out.append(
-                    Finding(
-                        MUST,
-                        "5 one paper per set",
-                        f"{where} carries {len(kinds)} kinds of set in one file: {', '.join(kinds)}",
-                        where,
-                        "code",
-                    )
-                )
-            decl = bool(render.DECL_LINE.search(p.text))
-            if decl:
-                d = render.decl_decision(p.text, digest, corpus)
-                if not d.attach:
-                    out.append(
-                        Finding(
-                            MUST,
-                            "1 section 2030.050 declaration",
-                            f"{where} carries a section 2030.050 declaration, but the proven cumulative count is {d.total} "
-                            f"({d.this_set} in this set, {d.prior_special} in served prior sets), not over 35",
-                            where,
-                            "code",
-                        )
-                    )
-                m = _PARA5.search(p.text)
-                if m and int(m.group(1)) != d.this_set:
-                    out.append(
-                        Finding(
-                            MUST,
-                            "1 section 2030.050 declaration",
-                            f"{where}: the declaration counts {m.group(1)}; the set has {d.this_set}",
-                            where,
-                            "code",
-                        )
-                    )
-            if _DECL_2033.search(p.text):
-                out.append(
-                    Finding(
-                        MUST,
-                        "1 section 2033.050 declaration",
-                        f"{where} carries a section 2033.050 declaration the job never authors",
-                        where,
-                        "code",
-                    )
-                )
-            for t in sets.lowercase_uses(p.text):
-                out.append(
-                    Finding(
-                        SHOULD,
-                        "4 defined terms",
-                        f'{where}: the defined term "{t}" is used in lower case',
-                        where,
-                        "code",
-                    )
-                )
-            for t in sets.undefined_caps(p.text)[:12]:
-                out.append(
-                    Finding(NOTE, "4 defined terms", f'{where}: "{t}" is capitalized but not defined', where, "code")
-                )
-        if wants and p.paper != "pleading":
-            why = (
-                "the firm has no pleading paper authored" if not pleading_authored else "it was rendered on plain paper"
-            )
-            out.append(
-                Finding(
-                    MUST,
-                    "2 the request's paper",
-                    f"the request asks for pleading paper; {where} is not ({why})",
-                    "the request",
-                    "code",
-                )
-            )
+        out += _paper_findings(cls, p, wants, pleading_authored, digest, corpus)
     out += _artifact_findings(cls, papers, notes_md)
     if theirs:
         for f in out:
             if f.check[:2] in ("1 ", "4 "):
                 f.grade = NOTE
                 f.finding = f"in the attorney's own text (not changed): {f.finding}"
-    if asked:
-        have = {sets.kinds_in(p.text)[0] for p in papers if sets.kinds_in(p.text)}
-        for u in asked:
-            if u.key not in have:
-                out.append(
-                    Finding(
-                        MUST,
-                        "2 the sets asked for",
-                        f"the request asks for {u.label}; no document carries them",
-                        "the request",
-                        "code",
-                    )
-                )
+    elif cls == "discovery_set":
+        out += _asked_findings(sets.variants(request), papers)
     return out
 
 
