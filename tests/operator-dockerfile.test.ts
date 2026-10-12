@@ -1521,7 +1521,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // wake bound to one new email) and negotiation_job_status (pairs with ss-console #3118).
     // e86b659c -> 5b802b2a (overlay#437), 2026-10-10: a scheduled negotiation send is audited under its
     // own lane, not litigation's (pairs with ss-console #3124).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="a215f00da515c385ac25be695d519a1a2b0a9089"')
+    // a215f00d -> 9dc43b00 (overlay#440 + #441), 2026-10-12: a job-bound delivery is keyed on its
+    // binding, not the request email; working drafts discarded once sent (msgraph_discard_draft).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="9dc43b00dc11b7ec0d020eddf65fc9b98685a7f0"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
