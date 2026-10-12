@@ -91,7 +91,7 @@
       "message_id": "<0100019ff87c75d4-52514dc9-0f8f-49aa-a77e-654d1269849f-000000@email.amazonses.com>",
       "timestamp": "2026-08-13T00:18:54.002Z",
       "to": "scott@smd.services",
-      "subject": "[UNAUDITED-KILLTEST-2258] deliberate unaudited send \u2014 reconciler kill test",
+      "subject": "[UNAUDITED-KILLTEST-2258] deliberate unaudited send — reconciler kill test",
       "reported_in": 2344
     },
     {
@@ -138,6 +138,54 @@
       "to": "test-adjuster@smdopslab.onmicrosoft.com, operator@smdopslab.onmicrosoft.com",
       "subject": "[sendas-probe-7a398698] Send As test",
       "reported_in": 2859
+    }
+  ],
+  "verify_dispositioned_what": "Reviewed dispositions for body-verify and invariant FINDINGS (operator/bin/lib/send_dispositions.py, ss#3030). Keyed narrowly: body = (seat, skill_name, dispatch_ts, actual_sha256); invariant = (seat, rule, hashed_key, actual). An entry without an int reported_in and a non-empty why is ignored, so it over-reports. A dispositioned finding is still printed, indented, with its issue.",
+  "verify_dispositioned": [
+    {
+      "seat": "ashton-price",
+      "kind": "body",
+      "skill_name": "statute-watch",
+      "dispatch_ts": "2026-09-30T23:52:43.372000+00:00",
+      "actual_sha256": "45bf758095d6e6ad68ac417df1ffba0fd624e66a932d8041789e5961d28b3c1a",
+      "reported_in": 3030,
+      "why": "Channel check hashed the Graph-stored HTML body against plain_body_sha256, a hash of text the broker never sent (on msgraph the broker sends only the html part when one is attached). The primary hash join graded this dispatch match/degraded against its own wake. Instrument defect, fixed in the same PR (msgraph html now grades channel_unstamped_representation, so this row is dormant); evidence vfy_01M4RD1579N57P5WJGQRKAZFH1."
+    },
+    {
+      "seat": "ashton-price",
+      "kind": "body",
+      "skill_name": "statute-watch",
+      "dispatch_ts": "2026-10-01T15:14:22.431000+00:00",
+      "actual_sha256": "f33ef53f5b85273adbcbbf41b7a86dc6080a02f070799dc155e883f36cf6e66f",
+      "reported_in": 3030,
+      "why": "Channel check hashed the Graph-stored HTML body against plain_body_sha256, a hash of text the broker never sent (on msgraph the broker sends only the html part when one is attached). The primary hash join graded this dispatch match/degraded against its own wake. Instrument defect, fixed in the same PR (msgraph html now grades channel_unstamped_representation, so this row is dormant); evidence vfy_01M4RD1579N57P5WJGQRKAZFH1."
+    },
+    {
+      "seat": "ashton-price",
+      "kind": "body",
+      "skill_name": "statute-watch",
+      "dispatch_ts": "2026-10-01T15:48:48.531000+00:00",
+      "actual_sha256": "b84238372e3da4ef7ed573846b8d4861099e7fe78b09ea95900b06fd941f6a58",
+      "reported_in": 3030,
+      "why": "Channel check hashed the Graph-stored HTML body against plain_body_sha256, a hash of text the broker never sent (on msgraph the broker sends only the html part when one is attached). The primary hash join graded this dispatch match/degraded against its own wake. Instrument defect, fixed in the same PR (msgraph html now grades channel_unstamped_representation, so this row is dormant); evidence vfy_01M4RD1579N57P5WJGQRKAZFH1."
+    },
+    {
+      "seat": "ashton-price",
+      "kind": "body",
+      "skill_name": "statute-watch",
+      "dispatch_ts": "2026-10-01T17:06:44.654000+00:00",
+      "actual_sha256": "07f0f456424555f00b9c0884966f84dc86765b0e439e17299310452bbac16c51",
+      "reported_in": 3030,
+      "why": "Channel check hashed the Graph-stored HTML body against plain_body_sha256, a hash of text the broker never sent (on msgraph the broker sends only the html part when one is attached). The primary hash join graded this dispatch match/degraded against its own wake. Instrument defect, fixed in the same PR (msgraph html now grades channel_unstamped_representation, so this row is dormant); evidence vfy_01M4RD1579N57P5WJGQRKAZFH1."
+    },
+    {
+      "seat": "ashton-price",
+      "kind": "body",
+      "skill_name": "statute-watch",
+      "dispatch_ts": "2026-10-01T19:51:18.092000+00:00",
+      "actual_sha256": "5caf220316ed6f66fba46afae43ef1be338fe50764b3b37c426253c2a0a0699f",
+      "reported_in": 3030,
+      "why": "Channel check hashed the Graph-stored HTML body against plain_body_sha256, a hash of text the broker never sent (on msgraph the broker sends only the html part when one is attached). The primary hash join graded this dispatch match/degraded against its own wake. Instrument defect, fixed in the same PR (msgraph html now grades channel_unstamped_representation, so this row is dormant); evidence vfy_01M4RD1579N57P5WJGQRKAZFH1."
     }
   ]
 }

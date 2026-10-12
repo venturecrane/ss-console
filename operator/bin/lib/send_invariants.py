@@ -48,6 +48,7 @@ class InvariantFinding:
     expected: Optional[str] = None
     actual: Optional[str] = None
     detail: Optional[str] = None
+    dispositioned_in: Optional[int] = None  # reviewed issue that quieted this conflict (send_dispositions)
 
 
 @dataclass

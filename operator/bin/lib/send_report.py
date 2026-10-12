@@ -27,7 +27,13 @@ WHAT REDDENS AND WHAT DOES NOT. Four verdict classes leave this module:
   seventeen unresolved critical notifications, nobody acting -- the exact
   "control that pages on its own blips gets muted" the workflow header warns
   about). Reported so the number is visible; never a signal;
-* PROPOSAL -- paste-ready rows for a reviewed send-invariants.json PR.
+* PROPOSAL -- paste-ready rows for a reviewed send-invariants.json PR;
+* CHANNEL-UNSTAMPED -- an indented count (ss#3030): the mailbox stores a body
+  representation no stamp hashes (msgraph keeps only the html part), so the
+  channel check has no counterpart; the primary hash join still grades it;
+* DISPOSITIONED -- a finding a reviewed ``verify_dispositioned`` entry names
+  (lib/send_dispositions.py): printed indented with its issue, out of the
+  finding set and the fingerprint.
 """
 
 from __future__ import annotations
@@ -37,8 +43,13 @@ from typing import Optional
 from .send_attribution import attribution_counts
 
 
+def _live(invariants: list) -> list:
+    """Invariant conflicts no reviewed disposition has quieted (send_dispositions)."""
+    return [f for f in invariants if getattr(f, "dispositioned_in", None) is None]
+
+
 def has_findings(verdicts: list, invariants: list) -> bool:
-    return any(v.is_finding for v in verdicts) or bool(invariants)
+    return any(v.is_finding for v in verdicts) or bool(_live(invariants))
 
 
 def has_holds(verdicts: list) -> bool:
@@ -67,9 +78,9 @@ def render_lines(
         elif verdict.is_degraded:
             lines.append(
                 f"        degraded {verdict.skill_name} "
-                f"dispatch={verdict.dispatch_ts or '-'} (skeleton fallback delivered)"
+                f"dispatch={verdict.dispatch_ts or '-'} ({verdict.detail or 'skeleton fallback delivered'})"
             )
-    for finding in invariants:
+    for finding in _live(invariants):
         lines.append(
             f"        INVARIANT {finding.rule} {finding.skill_name} key={finding.hashed_key} "
             f"expected={finding.expected or '-'} actual={finding.actual or '-'}"
@@ -95,6 +106,25 @@ def render_lines(
             f"        pre-edge {count} send(s) unverifiable by construction [{skill}] "
             "(dispatched before the inbox's first plain_body_sha256 stamp)"
         )
+    unstamped = _count_by_skill(v for v in verdicts if getattr(v, "is_unstamped_repr", False))
+    for skill, count in sorted(unstamped.items()):
+        # Indented, not `HOLD` (ss#3030): the mailbox stores a representation no
+        # stamp hashes (msgraph keeps only the html part), so no comparison exists.
+        lines.append(
+            f"        channel-unstamped {count} send(s) [{skill}] (mailbox stores a body representation "
+            "no stamp hashes; primary hash join still grades these)"
+        )
+    quieted = [
+        f"{v.skill_name} dispatch={v.dispatch_ts or v.wake_ts} (#{v.dispositioned_in})"
+        for v in verdicts
+        if getattr(v, "is_dispositioned", False)
+    ] + [
+        f"{f.rule} {f.skill_name} key={f.hashed_key} (#{f.dispositioned_in})"
+        for f in invariants
+        if getattr(f, "dispositioned_in", None) is not None
+    ]
+    for item in quieted:
+        lines.append(f"        dispositioned {item} (reconcile-sends-baseline.json verify_dispositioned)")
     holds = _count_by_skill((v for v in verdicts if v.is_hold), with_verdict=True)
     for reason, count in sorted(holds.items()):
         lines.append(f"HOLD  {inbox}: body-verify {count} send(s) {reason}")
@@ -123,7 +153,7 @@ def digest_keys(inbox: str, verdicts: list, invariants: list) -> list[str]:
     keys = [
         f"{inbox}|body:{v.skill_name}|{v.dispatch_ts or v.wake_ts}|{v.actual_sha256}" for v in verdicts if v.is_finding
     ]
-    keys += [f"{inbox}|inv:{f.rule}|{f.hashed_key}|{f.actual or ''}" for f in invariants]
+    keys += [f"{inbox}|inv:{f.rule}|{f.hashed_key}|{f.actual or ''}" for f in _live(invariants)]
     return keys
 
 
@@ -141,6 +171,7 @@ _VERDICT_EMIT_KEYS = (
     "actual_sha256",
     "detail",
     "attribution",
+    "dispositioned_in",
 )
 _INVARIANT_EMIT_KEYS = (
     "rule",
@@ -149,6 +180,7 @@ _INVARIANT_EMIT_KEYS = (
     "expected",
     "actual",
     "detail",
+    "dispositioned_in",
 )
 _PROPOSAL_EMIT_KEYS = ("rule", "skill_name", "hashed_key", "value")
 

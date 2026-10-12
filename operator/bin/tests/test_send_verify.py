@@ -1536,3 +1536,200 @@ def test_a_template_without_a_literal_note_derives_nothing(tmp_path):
     assert fns.authored_failure_note("r.py", str(tmp_path)) is None
     assert fns.authored_failure_note("missing.py", str(tmp_path)) is None
     assert fns.authored_failure_note(None) is None
+
+
+# ss#3030: msgraph stores the HTML part only; and reviewed dispositions
+#
+# Live shape (vfy_01M4RD1579N57P5WJGQRKAZFH1): five statute-watch sends on the
+# ashton-price msgraph inbox, each primary-graded match/degraded against its own
+# wake, each channel-graded BODY_DIVERGED because Graph Sent Items stored the
+# html part (the broker sends only HTML when an html part is attached) and the
+# check hashed it against plain_body_sha256 -- a hash of text never sent.
+# ---------------------------------------------------------------------------
+
+
+def _html_scene():
+    raw = "**Statute** watch body\n"
+    plain = "Statute watch body\n"
+    wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}])])
+    dispatches = sv.index_dispatches(
+        [
+            _dispatch_row(
+                sha=sv.canonical_body_sha256(raw),
+                plain=sv.canonical_body_sha256(plain),
+                message_id="<m1>",
+            )
+        ]
+    )
+    return wakes, dispatches
+
+
+def _raise_html(message):
+    raise sv.UnstampedRepresentation("msgraph stores this send's html part only")
+
+
+def test_a_stored_html_body_is_unstamped_never_a_finding_or_a_hold():
+    wakes, dispatches = _html_scene()
+    verdicts = sv.verify_channel_bodies([_sent_message()], wakes, _declares(), _raise_html, dispatches=dispatches)
+    assert [v.verdict for v in verdicts] == [sv.VERDICT_UNSTAMPED_REPR]
+    assert not verdicts[0].is_finding and not verdicts[0].is_hold and verdicts[0].is_unstamped_repr
+    lines = sv.render_lines("inbox@example.invalid", verdicts, [])
+    assert not any(line.startswith("HOLD") for line in lines)
+    assert any("channel-unstamped 1 send(s)" in line for line in lines)
+
+
+def test_falsifier_the_same_scene_with_a_text_body_still_finds():
+    """The new verdict is earned by the RAISE, not by the scene: the identical
+    send whose channel returns a mismatching text body is still a finding."""
+    wakes, dispatches = _html_scene()
+    verdicts = sv.verify_channel_bodies(
+        [_sent_message()], wakes, _declares(), lambda m: "not what was sent", dispatches=dispatches
+    )
+    assert [v.verdict for v in verdicts] == [sv.VERDICT_DIVERGED]
+
+
+class _GraphBody:
+    def __init__(self, content_type):
+        self._payload = json.dumps({"body": {"contentType": content_type, "content": "<p>x</p>"}}).encode()
+
+    def __call__(self, request, timeout=None):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self):
+        return self._payload
+
+
+def test_fetch_graph_body_raises_on_html_and_returns_text():
+    seat = rec.MsGraphSeat(slug="s", mailbox="m@example.invalid", tenant_id="t", client_id="c")
+    with pytest.raises(sv.UnstampedRepresentation):
+        rec.fetch_graph_body(seat, "tok", "gid", opener=_GraphBody("html"))
+    assert rec.fetch_graph_body(seat, "tok", "gid", opener=_GraphBody("text")) == "<p>x</p>"
+
+
+from bin.lib import send_dispositions as sd  # noqa: E402 -- grouped with the tests that use it
+
+
+def _diverged(ts="2026-10-01T15:48:48.531000+00:00", actual="ab" * 32, skill="statute-watch"):
+    return sv.BodyVerdict(skill_name=skill, verdict=sv.VERDICT_DIVERGED, dispatch_ts=ts, actual_sha256=actual)
+
+
+def _write(tmp_path, entries):
+    path = tmp_path / "baseline.json"
+    path.write_text(json.dumps({"dispositioned": [], sd.DISPOSITIONS_KEY: entries}))
+    return str(path)
+
+
+def _entry(**over):
+    entry = {
+        "seat": "ashton-price",
+        "kind": "body",
+        "skill_name": "statute-watch",
+        "dispatch_ts": "2026-10-01T15:48:48.531Z",  # Z spelling: normalised against +00:00
+        "actual_sha256": "ab" * 32,
+        "reported_in": 3030,
+        "why": "reviewed",
+    }
+    entry.update(over)
+    return entry
+
+
+def test_a_reviewed_disposition_quiets_exactly_its_finding(tmp_path):
+    dispositions = sd.load_dispositions(_write(tmp_path, [_entry()]))
+    named, later, other_hash = _diverged(), _diverged(ts="2026-11-01T15:00:00+00:00"), _diverged(actual="cd" * 32)
+    verdicts = [named, later, other_hash]
+    sd.apply_dispositions("ashton-price", verdicts, [], dispositions)
+    assert named.is_dispositioned and not named.is_finding and named.dispositioned_in == 3030
+    # New divergence from the same routine still finds: different time, different hash.
+    assert later.is_finding and other_hash.is_finding
+    lines = sv.render_lines("ashton-price", verdicts, [])
+    assert any("dispositioned statute-watch" in line and "#3030" in line for line in lines)
+    assert sum("BODY_DIVERGED" in line for line in lines) == 2
+
+
+def test_a_disposition_is_scoped_to_its_seat(tmp_path):
+    dispositions = sd.load_dispositions(_write(tmp_path, [_entry()]))
+    verdict = _diverged()
+    sd.apply_dispositions("some-other-seat", [verdict], [], dispositions)
+    assert verdict.is_finding
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [{"reported_in": None}, {"reported_in": "3030"}, {"reported_in": True}, {"why": ""}, {"why": "  "}, {"kind": "x"}],
+)
+def test_an_unreviewed_entry_is_ignored_so_it_over_reports(tmp_path, bad):
+    dispositions = sd.load_dispositions(_write(tmp_path, [_entry(**bad)]))
+    verdict = _diverged()
+    sd.apply_dispositions("ashton-price", [verdict], [], dispositions)
+    assert verdict.is_finding
+
+
+def test_a_missing_or_corrupt_file_yields_no_dispositions(tmp_path):
+    assert sd.load_dispositions(str(tmp_path / "absent.json")) == {}
+    corrupt = tmp_path / "c.json"
+    corrupt.write_text("{not json")
+    assert sd.load_dispositions(str(corrupt)) == {}
+    assert sd.load_dispositions(None) == {}
+
+
+def test_a_hold_cannot_be_dispositioned(tmp_path):
+    dispositions = sd.load_dispositions(_write(tmp_path, [_entry()]))
+    hold = sv.BodyVerdict(
+        skill_name="statute-watch",
+        verdict=sv.VERDICT_NO_WAKE_HASH,
+        dispatch_ts="2026-10-01T15:48:48.531000+00:00",
+        actual_sha256="ab" * 32,
+    )
+    sd.apply_dispositions("ashton-price", [hold], [], dispositions)
+    assert hold.is_hold and hold.dispositioned_in is None
+
+
+def test_a_dispositioned_invariant_leaves_the_finding_set_and_the_fingerprint(tmp_path):
+    entry = {
+        "seat": "s",
+        "kind": "invariant",
+        "rule": "ack_stability",
+        "hashed_key": "k" * 64,
+        "actual": "ACK-NEW",
+        "reported_in": 1,
+        "why": "reviewed",
+    }
+    dispositions = sd.load_dispositions(_write(tmp_path, [entry]))
+    quiet = sv.InvariantFinding(rule="ack_stability", skill_name="x", hashed_key="k" * 64, actual="ACK-NEW")
+    live = sv.InvariantFinding(rule="ack_stability", skill_name="x", hashed_key="k" * 64, actual="ACK-OTHER")
+    sd.apply_dispositions("s", [], [quiet], dispositions)
+    assert not sv.has_findings([], [quiet])
+    assert sv.digest_keys("s", [], [quiet]) == []
+    sd.apply_dispositions("s", [], [live], dispositions)
+    assert sv.has_findings([], [live])
+
+
+def test_the_committed_3030_rows_load_and_name_only_the_seat_slug():
+    """The five statute-watch rows are reviewed (#3030) and key on the seat
+    slug, so the public file names no client mailbox."""
+    dispositions = sd.load_dispositions(rec.DEFAULT_BASELINE_PATH)
+    rows = [k for k, issue in dispositions.items() if issue == 3030]
+    assert len(rows) == 5
+    assert all(k.startswith("ashton-price|body:statute-watch|") for k in rows)
+    raw = json.loads(Path(rec.DEFAULT_BASELINE_PATH).read_text())[sd.DISPOSITIONS_KEY]
+    assert all("inbox" not in row and "@" not in json.dumps(row) for row in raw)
+
+
+def test_the_verifier_applies_dispositions_per_seat(tmp_path):
+    raw = "**Statute** watch body\n"
+    rows = [
+        _wake_row(hashes=[{"body_sha256_full": sv.canonical_body_sha256(raw)}]),
+        _dispatch_row(sha="ef" * 32),
+    ]
+    path = _write(tmp_path, [_entry(skill_name="deadline-miss-escalator", dispatch_ts=_ts(1), actual_sha256="ef" * 32)])
+    verifier = sv.SendVerifier(_declares(), {"recipients": {}, "ack_codes": {}}, sd.load_dispositions(path))
+    verdicts, _, _ = verifier.verify_inbox([], rows, inbox="ashton-price")
+    assert [v.is_dispositioned for v in verdicts] == [True]
+    verdicts, _, _ = verifier.verify_inbox([], rows, inbox="another-seat")
+    assert [v.is_finding for v in verdicts] == [True]
