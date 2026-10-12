@@ -6,7 +6,8 @@ The envelope (the broker's ``drafting_job_submit`` writes exactly this)::
 
     {"kind": "drafting", "job_id": <ULID>, "matter_id": str, "matter_number": str,
      "document_class": one of CLASSES, "requester": email, "message_ref": str,
-     "request_text": str, "file_to_matter_id": str|null, "file_to_matter_number": str|null}
+     "request_text": str, "file_to_matter_id": str|null, "file_to_matter_number": str|null,
+     "attachments"?: [{"filename": .docx, "sha256", "b64"}]}   (the request email's own Word documents)
 
 Re-validated here rather than imported from the broker, whose package is not on
 the runner's venv: the runner refuses an envelope it cannot read the same way

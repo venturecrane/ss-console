@@ -195,6 +195,16 @@ def test_a_review_must_fix_holds_the_job_for_smd_and_files_nothing(tmp_path, pri
     assert seat.created == []
 
 
+def test_the_audit_and_the_review_ask_for_high_effort(tmp_path, pricing):
+    """claude-opus-5-5 defaults to medium effort; the drafter's audit (the gate
+    that passed the false declaration) and the review state high explicitly."""
+    client = Client(draft=one_set("Special Interrogatories"))
+    _run(tmp_path, pricing, client, request="Please draft special interrogatories, set one.")
+    for marker in ("AUDIT-PROMPT", "INDEPENDENT PRE-DELIVERY REVIEW"):
+        calls = [c for c in client.calls if marker in json.dumps(c.get("system"))]
+        assert calls and all((c.get("output_config") or {}).get("effort") == "high" for c in calls), marker
+
+
 def test_a_must_fix_without_a_citation_is_graded_should_fix():
     rows = review._rows("| MUST-FIX | 2 request | Something seems off. |  |\nVERDICT: 0 MUST-FIX")
     assert [f.grade for f in rows] == [review.SHOULD]

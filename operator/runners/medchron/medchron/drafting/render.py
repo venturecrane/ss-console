@@ -13,9 +13,12 @@ attorney:
   CUMULATIVE over 35 (the statute: "propounding or has propounded more than 35
   specially prepared interrogatories to any other party"): this set's labeled
   special interrogatories plus every prior special interrogatory set to the
-  same responding party in the digest's DISCOVERY-SETS index. A prior count the
-  record cannot read never counts as zero: the declaration is attached and its
-  paragraph-4 counts are left to the attorney. The proof of service's
+  same responding party in the digest's DISCOVERY-SETS index that a SERVED copy
+  in the file bears out (``proof``). The declaration swears under penalty of
+  perjury that the count is exceeded, so only a PROVEN count over 35 attaches it:
+  a mention (a memo about discovery, the 2026-10-12 incident) never counts, and a
+  prior set the file does not bear out, or whose count cannot be read, is named
+  for the attorney instead. The proof of service's
   ``{{FILL: ... | at service}}`` slots stay verbatim for the person serving;
 * reserved judgment: in a mediation brief, the case-value section opens with an
   ``{{ATTORNEY}}`` marker, and a paragraph about settlement authority, the

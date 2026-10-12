@@ -5,8 +5,15 @@ The graph, per class::
     facts -> destination -> pull (privilege wall) -> preflight -> estimate
       -> transcribe -> digest (cited)
       -> [mediation brief: howell table] -> [court classes: caption read, record diff + corrections]
-      -> compose -> audit -> repair -> reaudit -> final pass -> gate
-      -> attach / reserve -> render -> format check -> file -> manifest
+      -> per document (finish.py; one per set a discovery request names):
+         compose -> audit -> repair -> reaudit -> final pass -> defined terms -> gate
+         -> attach / reserve -> render -> [pleading paper, when asked] -> format check
+      -> attorney notes from the final documents -> independent review (review.py)
+      -> manifest -> file
+
+    The attorney's OWN attached sets (placing.py): facts -> destination -> pull
+      -> preflight -> caption -> each set placed verbatim in the caption
+      -> [pleading paper] -> format check -> notes -> review -> manifest -> file
 
 Every stage records itself in ``data/state.json``; a resume skips finished
 stages and every paid stage resumes from its own artifacts. The run's dates are
