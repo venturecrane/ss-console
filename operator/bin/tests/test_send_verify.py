@@ -1536,6 +1536,8 @@ def test_a_template_without_a_literal_note_derives_nothing(tmp_path):
     assert fns.authored_failure_note("r.py", str(tmp_path)) is None
     assert fns.authored_failure_note("missing.py", str(tmp_path)) is None
     assert fns.authored_failure_note(None) is None
+
+
 # ss#3030: msgraph stores the HTML part only; and reviewed dispositions
 #
 # Live shape (vfy_01M4RD1579N57P5WJGQRKAZFH1): five statute-watch sends on the
