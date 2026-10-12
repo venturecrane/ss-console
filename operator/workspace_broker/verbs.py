@@ -48,6 +48,7 @@ from typing import Any, Callable
 from .broker_context import BrokerContext
 from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
 from . import demand_verbs, drafting_verbs, litigation_verbs, medchron_verbs, negotiation_verbs, reply_binding
+from . import msgraph_drafts
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
 
@@ -201,6 +202,10 @@ VERBS: tuple[Verb, ...] = (
     # it reads the mailbox.
     Verb("msgraph_reply_bind", _only(GATEWAY), reply_binding.bind_verb),
     Verb("msgraph_reply_bound", _only(GATEWAY), reply_binding.reply_verb),
+    # The relay's working draft, deleted once its reply has gone out
+    # (msgraph_drafts.py: the Drafts-folder leak, ashton-price 2026-10-12).
+    # Gateway-only: the relay is the only caller, and only a draft is deleted.
+    Verb("msgraph_discard_draft", _only(GATEWAY), msgraph_drafts.discard_draft_verb),
     # ADR 0089 staff send-as: propose and decide transmit (the approval email;
     # the send AS a staff member), so they are gateway-only like the channels.
     # The reply notice goes to a fixed recipient about an already-sent draft and

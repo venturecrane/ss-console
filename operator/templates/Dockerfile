@@ -1167,7 +1167,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # no longer reports a 200 {"status":"duplicate"|"ignored"} from the webhook
 # adapter as a delivery; the dead-letter file stays and the exit is 1.
 # Poller behaviour unchanged. No tracked twin moved.
-ARG OVERLAY_REF="a215f00da515c385ac25be695d519a1a2b0a9089"
+# 2026-10-12 (9dc43b00, the overlay #441 merge commit; carries #440, the
+# Smokeball re-consent token written 0660). A job-bound delivery is keyed on its
+# binding, not the request email, so an earlier ack to that email no longer
+# holds the delivery as duplicate_reply; and a relayed reply's working Graph
+# draft is discarded through msgraph_discard_draft (this repo's broker, same
+# change) once the reply is sent. No tracked twin moved.
+ARG OVERLAY_REF="9dc43b00dc11b7ec0d020eddf65fc9b98685a7f0"
 
 ARG CUSTOMER_SLUG=customer-zero
 

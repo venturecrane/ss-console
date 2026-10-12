@@ -139,6 +139,8 @@ const EXPECTED_VERBS = [
   'medchron_job_resume',
   'medchron_job_status',
   'medchron_job_submit',
+  // The relay's working draft, deleted once its reply is out (msgraph_drafts.py).
+  'msgraph_discard_draft',
   'msgraph_reply',
   // The verified reply binding (reply_binding.py): a turn no inbound opened
   // answers one earlier email once, to the sender the broker verified.
