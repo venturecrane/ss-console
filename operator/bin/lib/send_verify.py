@@ -62,6 +62,15 @@ TWO CHECKS, DIFFERENT STRENGTHS (cross-workstream contract, item 1):
   a HOLD throughout -- a body we could not fetch is a transport fact, not a
   divergence.
 
+  HTML IS ITS OWN REPRESENTATION. On msgraph a report send reaches Graph as
+  its html part ONLY, so Sent Items holds HTML that neither hash above
+  describes. The broker stamps ``html_body_sha256`` (html_canon_v1 of the html
+  it put on the wire) and ``lib/html_channel.py`` grades the stored body
+  against it with the same canon, which undoes Exchange's storage rewrite
+  (calibrated 2026-10-12, operator/contracts/fixtures/html-canon-calibration.json).
+  Same per-row deploy edge as the plain stamp; rows behind it keep
+  ``channel_unstamped_representation``.
+
   NOT EVERY SEND IS STAMPED, BY DESIGN. The overlay stamps at exactly one site
   (``_dispatch_internal_message``); ``_dispatch_approved_send`` -- the
   model-composed approved sends -- stamps neither hash, because those bodies are
@@ -137,6 +146,7 @@ from .send_attribution import (
     stamps_plain_at,
 )
 from .failure_note_stamp import derive_failure_note_hashes
+from .html_channel import HtmlBody, grade_html_body, html_stamp_edge
 from .send_dispositions import apply_dispositions, load_dispositions
 from .send_invariants import (  # noqa: F401 -- re-exports; callers and tests read unchanged
     DEFAULT_INVARIANTS_PATH,
@@ -203,7 +213,10 @@ class UnstampedRepresentation(Exception):
     join graded all five match/degraded. Grading it is ``VERDICT_UNSTAMPED_REPR``:
     neither hold nor finding, counted indented. The primary join still grades the
     send; what is lost is only the independent channel observation, until a stamp
-    of the stored representation exists."""
+    of the stored representation exists. For msgraph html that stamp now exists
+    (``html_body_sha256``, lib/html_channel.py), and the verdict remains only for
+    rows the stamp cannot reach; this exception stays for any channel that
+    stores a representation nothing stamps."""
 
 
 def canonical_body_sha256(text: str) -> str:
@@ -317,6 +330,7 @@ class DispatchStamp:
     plain_body_sha256: str = ""  # "" == overlay predates the stamp; hold, never find
     plain_consumed: bool = False  # one stamp vouches for exactly one channel body
     join_keys: frozenset = frozenset()  # message ids / audit token: the identity join (B7)
+    html_body_sha256: str = ""  # broker's hash of the html Graph got (lib/html_channel.py)
 
 
 def _parse_ts(value) -> datetime:
@@ -417,6 +431,7 @@ def index_dispatches(rows: list[dict]) -> list[DispatchStamp]:
                 # signal the channel check reads to keep holding.
                 plain_body_sha256=plain if isinstance(plain, str) else "",
                 join_keys=frozenset(_usable_ids(meta)),
+                html_body_sha256=meta["html_body_sha256"] if isinstance(meta.get("html_body_sha256"), str) else "",
             )
         )
     return sorted(out, key=lambda stamp: stamp.ts)
@@ -590,6 +605,7 @@ def verify_channel_bodies(
     # deliberate omission (send_attribution.plain_stamp_edge has the incident).
     # Fail-safe direction unchanged: no edge => never a finding on this path.
     plain_edge = plain_stamp_edge(stamps)
+    edges = (plain_edge, html_stamp_edge(stamps))  # the html stamp's edge: same rule, own key
     ordered = sorted(sent, key=lambda m: str(m.get("timestamp") or ""))
     for wake in wakes:
         decl = declares.get(wake.skill_name)
@@ -601,7 +617,7 @@ def verify_channel_bodies(
             if capacity_used >= wake.dispatch_capacity:
                 break
             claimed.add(index)
-            verdicts.append(_grade_channel_body(wake, message, fetch_body, stamps, window_s, plain_edge, identified))
+            verdicts.append(_grade_channel_body(wake, message, fetch_body, stamps, window_s, edges, identified))
     return verdicts
 
 
@@ -620,7 +636,8 @@ def _messages_in_window(ordered, wake, window_s, claimed, attribute):
             yield index, message, owner is not None
 
 
-def _grade_channel_body(wake, message, fetch_body, dispatches, window_s, plain_edge, identified) -> BodyVerdict:
+def _grade_channel_body(wake, message, fetch_body, dispatches, window_s, edges, identified) -> BodyVerdict:
+    plain_edge, html_edge = edges
     common = {
         "skill_name": wake.skill_name,
         "wake_ts": wake.ts.isoformat(),
@@ -643,6 +660,8 @@ def _grade_channel_body(wake, message, fetch_body, dispatches, window_s, plain_e
             detail="channel returned no text body",
             **common,
         )
+    if isinstance(body, HtmlBody):  # msgraph Sent Items html: its own stamp, its own canon
+        return grade_html_body(body, wake, message, dispatches, window_s, html_edge, identified, common)
     digest = canonical_body_sha256(body)
     if digest in wake.hashes_full:
         return BodyVerdict(verdict=VERDICT_MATCH, actual_sha256=digest, **common)

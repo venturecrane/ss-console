@@ -23,7 +23,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Optional
 
-from .send_verify import UnstampedRepresentation
+from .html_channel import HtmlBody
 
 GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
 GRAPH_TOKEN_HOST = "https://login.microsoftonline.com"
@@ -293,14 +293,15 @@ def fetch_graph_body(seat: MsGraphSeat, token: str, graph_id: str, *, opener=Non
     ``canonical_body_sha256``, and go nowhere else. Graph serves ``body`` as
     ``{contentType, content}``; a Text body is returned as-is.
 
-    An HTML body RAISES ``UnstampedRepresentation`` (ss#3030). When the overlay
-    attaches an html part the broker sends Graph only ``{contentType: HTML}``
+    An HTML body is returned as :class:`~lib.html_channel.HtmlBody`, the
+    representation tag the verifier dispatches on. When the overlay attaches an
+    html part the broker sends Graph only ``{contentType: HTML}``
     (workspace_broker/msgraph_ops ``_message``), so Sent Items holds HTML that
-    no stamp hashes: ``plain_body_sha256`` describes text the channel never
-    received. The old comment here said such a body "will canon-mismatch, which
-    the verifier grades as a HOLD"; once the plain-stamp edge existed it graded
-    BODY_DIVERGED instead, and five conformant statute-watch sends reddened
-    every scheduled run from 2026-10-02. Raising names the cause instead.
+    neither ``plain_body_sha256`` nor the markdown stamps describe; until the
+    broker stamped ``html_body_sha256`` this raised ``UnstampedRepresentation``
+    (ss#3030: five conformant statute-watch sends had graded BODY_DIVERGED).
+    Now ``lib/html_channel`` grades it against that stamp, and keeps the
+    unstamped verdict for rows written before the broker carried it.
     """
     if not graph_id:
         return None
@@ -309,12 +310,12 @@ def fetch_graph_body(seat: MsGraphSeat, token: str, graph_id: str, *, opener=Non
     body = payload.get("body")
     if not isinstance(body, dict):
         return None
-    if str(body.get("contentType") or "").lower() == "html":
-        raise UnstampedRepresentation(
-            "msgraph stores this send's html part only; no dispatch stamp hashes html (ss#3030)"
-        )
     content = body.get("content")
-    return content if isinstance(content, str) else None
+    if not isinstance(content, str):
+        return None
+    if str(body.get("contentType") or "").lower() == "html":
+        return HtmlBody(content)
+    return content
 
 
 __all__ = [

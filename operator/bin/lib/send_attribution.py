@@ -261,13 +261,17 @@ def claim_dispatch_stamp(
     """
     keys = message_keys(message)
     for stamp in dispatches:
-        if stamp.plain_consumed or not (stamp.plain_body_sha256 or stamp.rendered_body_sha256):
+        if stamp.plain_consumed or not (
+            stamp.plain_body_sha256 or stamp.rendered_body_sha256 or stamp.html_body_sha256
+        ):
             continue
         if keys & stamp.join_keys:
             stamp.plain_consumed = True
             return stamp
     for stamp in dispatches:
-        if stamp.plain_consumed or not (stamp.plain_body_sha256 or stamp.rendered_body_sha256):
+        if stamp.plain_consumed or not (
+            stamp.plain_body_sha256 or stamp.rendered_body_sha256 or stamp.html_body_sha256
+        ):
             continue
         if not _in_window(wake, stamp, window_s):
             continue

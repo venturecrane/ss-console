@@ -61,10 +61,17 @@ _OPS_AUDIT_KEYS: tuple[str, ...] = (
     "lookup",
     "thread_id",
     "conversation_id",
+    # ``html_body_sha256``: html_canon.html_body_sha256 of the exact html the
+    # msgraph verb handed Graph as the body. Graph gets ONLY that part when one
+    # exists, so Sent Items stores (Exchange's rewrite of) it, and the console's
+    # channel check grades that stored body against this. An OPS key, never a
+    # caller key: the broker hashes the message it built, so no caller can
+    # pre-stamp it. Absent on a Text body, and that absence is a fact.
+    "html_body_sha256",
 )
 
 #: Of those, the ones that stay in the ledger and never travel back to the agent.
-_AUDIT_ONLY_KEYS = frozenset({"sender_key", "audit_row_token"})
+_AUDIT_ONLY_KEYS = frozenset({"sender_key", "audit_row_token", "html_body_sha256"})
 
 #: What a CALLER may contribute to a transmit's audit row, by name (WS-RENDER).
 #: Same posture as ``session_id``/``matter_ref`` (ss#2497): attribution the
