@@ -76,6 +76,7 @@ The request names one of these, in the firm's own words. Each maps to one class:
 | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | a mediation brief, a mediation statement                                                                                                           | `mediation_brief`    |
 | propounded discovery: special interrogatories, form interrogatories, requests for admission (RFAs), requests for production (RFPs), a set to serve | `discovery_set`      |
+| the attorney's OWN sets of discovery, attached to the email as Word documents, to be put in the case caption or on pleading paper                    | `discovery_set`      |
 | our responses to their discovery: objections and answers to interrogatories, RFAs or RFPs served on our client                                     | `discovery_response` |
 | a drafted memo document (a case or legal memo to the file or the attorney); never a note in the record                                             | `memo`               |
 | a deposition outline, depo outline, questions for a deposition                                                                                     | `depo_outline`       |
@@ -85,6 +86,15 @@ class, each on its own call. An ask that fits none of these (a demand is never t
 skill; a motion, a letter to opposing counsel; a note or memo entry in the
 practice-management record, such as "add a note to file") submits nothing here and is
 never a paid job.
+
+**The attorney's own sets.** When the email ATTACHES Word documents that are sets the
+attorney drafted himself and asks for them to be put in the caption or on pleading paper,
+submit `discovery_set` as usual: the tool carries the email's own Word attachments to the
+job, which places each set, word for word, under the court's caption on the firm's paper
+and files one document per set. It never rewrites his requests. Acknowledge it in those
+terms ("Received. The sets you attached for matter <number> are being placed in the
+caption; I'll reply in this thread when they're filed."). Attachments ride only from the
+email itself; never ask for them to be sent another way.
 
 **Discovery responses** are drafted as objections plus answers drawn from the record.
 Facts only the client knows are left as `{{CLIENT}}` items, and the verification is left

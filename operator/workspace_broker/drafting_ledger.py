@@ -65,6 +65,7 @@ from pathlib import Path
 from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
+from . import drafting_attachments
 from .cycle_window import cycle_window
 
 STATES = ("submitted", "running", "held", "delivered", "failed")
@@ -183,8 +184,12 @@ def _matter(raw: Any, field: str) -> dict[str, str]:
 def validate_envelope(req: Any) -> dict[str, Any]:
     """The submit envelope, normalized, or ``EnvelopeError``."""
     keys = {"matter", "file_to", "requested_by", "request_ref", "request_text", "document_class"}
-    if not isinstance(req, dict) or set(req) != keys:
-        raise EnvelopeError(f"a drafting envelope carries exactly {sorted(keys)}")
+    if not isinstance(req, dict) or not keys <= set(req) <= keys | {"attachments"}:
+        raise EnvelopeError(f"a drafting envelope carries exactly {sorted(keys)}, and optionally attachments")
+    try:
+        attachments = drafting_attachments.validate(req["attachments"]) if req.get("attachments") else []
+    except drafting_attachments.AttachmentError as exc:
+        raise EnvelopeError(str(exc)) from None
     matter = _matter(req["matter"], "matter")
     file_to = _matter(req["file_to"], "file_to") if req["file_to"] is not None else None
     who = req["requested_by"]
@@ -199,7 +204,7 @@ def validate_envelope(req: Any) -> dict[str, Any]:
     klass = req["document_class"]
     if klass not in DOCUMENT_CLASSES:
         raise EnvelopeError(f"document_class must be one of {list(DOCUMENT_CLASSES)}")
-    return {
+    out = {
         "matter": matter,
         "file_to": file_to,
         "requested_by": who.strip().lower(),
@@ -207,12 +212,17 @@ def validate_envelope(req: Any) -> dict[str, Any]:
         "request_text": text,
         "document_class": klass,
     }
+    if attachments:  # absent unless the request email carried Word documents
+        out["attachments"] = attachments
+    return out
 
 
 def queue_record(env: dict[str, Any], job_id: str) -> dict[str, Any]:
     """The runner's job file, from a validated envelope. Exactly these keys."""
     file_to = env["file_to"]
+    extra = {"attachments": env["attachments"]} if env.get("attachments") else {}
     return {
+        **extra,
         "kind": "drafting",
         "job_id": job_id,
         "matter_id": env["matter"]["id"],

@@ -408,6 +408,7 @@ RUNNER_REASON_CODES = (
     "no_verdict",
     "unexpected",
     "config_missing",
+    "review_held",
 )
 
 
@@ -425,3 +426,43 @@ def test_every_runner_reason_code_is_recorded_verbatim(seat, code) -> None:
     meta = json.loads(conn.execute("SELECT metadata FROM audit_log ORDER BY rowid DESC LIMIT 1").fetchone()[0])
     conn.close()
     assert meta["reason"] == reason
+
+
+# -- the request email's own Word attachments ------------------------------------
+
+
+def _att(blob: bytes, name: str = "Special Interrogatories Set One.docx") -> dict:
+    import base64
+    import hashlib
+
+    return {"filename": name, "sha256": hashlib.sha256(blob).hexdigest(), "b64": base64.b64encode(blob).decode()}
+
+
+def test_attachments_ride_into_the_runners_job_file(seat) -> None:
+    broker, _db, _, queue = seat
+    a = _att(b"PK synthetic docx bytes")
+    out = submit(broker, document_class="discovery_set", attachments=[a])
+    assert out["accepted"] is True, out
+    job = json.loads((queue / f"{out['job_id']}.json").read_text())
+    assert job["attachments"] == [a]
+
+
+@pytest.mark.parametrize(
+    "bad, why",
+    [
+        ([{"filename": "x.pdf", "sha256": "0" * 64, "b64": ""}], "Word document"),
+        ([{**_att(b"abc"), "sha256": "1" * 64}], "do not match"),
+        ([_att(b"x" * 800_000)], "over the"),
+        ([_att(b"a")] * 7, "at most"),
+    ],
+)
+def test_malformed_attachments_refuse_the_submit(seat, bad, why) -> None:
+    broker, *_ = seat
+    out = submit(broker, document_class="discovery_set", attachments=bad)
+    assert out["accepted"] is False and why in out["reason"]
+
+
+def test_a_request_without_attachments_queues_no_attachments_key(seat) -> None:
+    broker, _db, _, queue = seat
+    out = submit(broker)
+    assert "attachments" not in json.loads((queue / f"{out['job_id']}.json").read_text())
