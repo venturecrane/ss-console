@@ -228,8 +228,14 @@ def write_failure_note_envelope(
         }
         if not _H.write_dispatch_envelope(SKILL_NAME, envelope):
             return write_failure_note_envelope(reason="envelope_write_failed", customer_yaml_path=customer_yaml_path)
+        note_sha = _H.canonical_body_sha256(body)
         return {
             "render_mode": "slot-templated",
+            # The wake's half of the hash join, exactly as the decision path
+            # stamps it. Without it every failure note graded `no_wake_hash`
+            # on the reconciler (pilot-smokeball 2026-10-03..05): a hold no
+            # later deploy could clear, because the row is already written.
+            "body_sha256": [{"body_sha256_full": note_sha, "body_sha256_skeleton": note_sha}],
             "dispatch_expected": True,
             "dispatch_count": 1,
             "dispatch_variant": "failure_note",

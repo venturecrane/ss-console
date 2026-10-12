@@ -1654,6 +1654,27 @@ def test_blind_wake_dispatches_the_authored_failure_note(tmp_path, monkeypatch):
     assert d["appends"] == []
 
 
+def test_blind_wake_row_stamps_the_failure_note_hash(tmp_path, monkeypatch):
+    """The wake's half of the hash join (pilot-smokeball 2026-10-03..05). The
+    row carried no body_sha256, so the reconciler graded every failure note
+    `no_wake_hash` -- a hold no later deploy could clear. The row must stamp
+    the same hash the envelope hands the overlay, the shape the decision path
+    uses, or the dispatch has nothing to pair with."""
+    envelope_path = _authored_seat(tmp_path, monkeypatch)
+    writer = _FakeWakeWriter()
+    _blind(monkeypatch, "pre_run_crashed_fail_open", writer)
+    d = json.loads(envelope_path.read_text(encoding="utf-8"))["dispatches"][0]
+    stamped = writer.calls[0]["extra_metadata"]["body_sha256"]
+    assert stamped == [{"body_sha256_full": d["body_sha256_full"], "body_sha256_skeleton": d["body_sha256_skeleton"]}]
+
+
+def test_envelope_fault_failure_note_stamps_its_hash(tmp_path, monkeypatch):
+    _authored_seat(tmp_path, monkeypatch)
+    out = _envelope.write_failure_note_envelope(reason="envelope_build_failed")
+    assert len(out["body_sha256"]) == out["dispatch_count"] == 1
+    assert out["body_sha256"][0]["body_sha256_full"] == out["body_sha256"][0]["body_sha256_skeleton"]
+
+
 def test_blind_wake_falls_back_to_authored_fallback_recipients(tmp_path, monkeypatch):
     envelope_path = _authored_seat(tmp_path, monkeypatch, red_flag=(), fallback=("ops@smd.services",))
     _blind(monkeypatch, "pre_run_crashed_fail_open", _FakeWakeWriter())
