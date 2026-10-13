@@ -147,6 +147,23 @@ scope:
     - tim@thebrokery.com
     # SMD, for setup proofs and support.
     - smdurgan@smdurgan.com
+  # Who may answer an operations request (ss-console#2546): the broker asks the
+  # assistant to add his agents, the assistant passes the exact addresses to
+  # SMD's desk, and SMD's "done" reply tells him it is finished. Same three
+  # addresses and the same reasoning as ashton-price: team@smd.services is an
+  # alias of the bare mailbox, so a reply from it carries the bare address.
+  # Empty = no reply resolves anything and every request lapses at seven days.
+  ops_reply_from:
+    - scott@smd.services
+    - team@smd.services
+    - smdurgan@smdurgan.com
+  # SMD's operations desk, so that request can be SENT. Outbound classification
+  # only: team@ is deliberately absent from inbound_allow_from, so mail
+  # claiming to come from it cannot instruct the seat.
+  outbound_roster:
+    - address: team@smd.services
+      class: firm_staff
+      note: 'SMD operations desk; outbound classification only, never inbound trust'
 
 # ---- RECORD STORES ----
 # One store for the whole brokerage. Each agent opens only records stamped with
