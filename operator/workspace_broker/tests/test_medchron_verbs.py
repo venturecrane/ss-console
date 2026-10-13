@@ -803,6 +803,82 @@ def test_the_refusal_says_what_is_true_of_THAT_job(verbs, state, phrase):
     assert again["accepted"] is False and phrase in again["reason"]
 
 
+def _held(v) -> str:
+    j = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state="running", fields={})
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state="held", fields={"reason": "upload: short"})
+    return j
+
+
+def _set_updated_at(v, job_id: str, when: str) -> None:
+    import sqlite3
+
+    conn = sqlite3.connect(v._db._db_path)
+    conn.execute("UPDATE medchron_jobs SET updated_at=? WHERE id=?", (when, job_id))
+    conn.commit()
+    conn.close()
+
+
+def test_a_hold_superseded_by_a_later_delivery_does_not_refuse_a_fresh_request(verbs):
+    """A&P 201666, 2026-10-13: a 09-23 upload hold whose package was delivered
+    09-24 (a backfill row) and re-delivered 10-09 refused Christa's request for
+    the complete chronology as a 'duplicate', and the request left the
+    chronology lane for the operations route. A later delivery on the matter
+    means the held work is not waiting on anything."""
+    v, _, queue = verbs
+    held = _held(v)
+    # Falsifier first: with no later delivery the hold still refuses.
+    assert call(v, "medchron_job_submit", envelope=envelope())["accepted"] is False
+    v._db.backfill_delivered(
+        matter_id="m-1",
+        matter_number="2026-PI-102",
+        covered={"covered": ["d1"], "uncovered": [], "pulled": 1},
+        delivered_at="2099-01-01",
+        source="test backfill",
+    )
+    again = call(v, "medchron_job_submit", envelope=envelope())
+    assert again["accepted"] is True and again["job_id"] != held
+    assert len(list(queue.glob("*.json"))) == 2
+
+
+def test_an_earlier_delivery_does_not_supersede_a_later_hold(verbs):
+    """Direction matters: a delivery that PREDATES the hold is the reason the
+    firm asked again, and the hold is still the live attempt at that ask."""
+    v, _, _ = verbs
+    v._db.backfill_delivered(
+        matter_id="m-1",
+        matter_number="2026-PI-102",
+        covered={"covered": ["d1"], "uncovered": [], "pulled": 1},
+        delivered_at="2000-01-01",
+        source="test backfill",
+    )
+    _held(v)
+    r = call(v, "medchron_job_submit", envelope=envelope())
+    assert r["accepted"] is False and "waiting on a decision" in r["reason"]
+
+
+def test_a_hold_past_the_retention_window_does_not_refuse_a_fresh_request(verbs):
+    """The runner wipes a held job's workdir and queue file after a working
+    week, so a hold that old can never resume: refusing against it strands the
+    request forever. Falsifier: six days old still refuses."""
+    v, _, _ = verbs
+    held = _held(v)
+    _set_updated_at(v, held, "2000-01-01T00:00:00.000Z")
+    r = call(v, "medchron_job_submit", envelope=envelope())
+    assert r["accepted"] is True and r["job_id"] != held
+
+
+def test_a_recent_hold_still_refuses(verbs):
+    from datetime import UTC, datetime, timedelta
+
+    v, _, _ = verbs
+    held = _held(v)
+    six_days = datetime.now(UTC) - timedelta(days=6)
+    _set_updated_at(v, held, six_days.strftime("%Y-%m-%dT%H:%M:%S.000Z"))
+    r = call(v, "medchron_job_submit", envelope=envelope())
+    assert r["accepted"] is False and r["job_id"] == held
+
+
 def test_provenance_does_not_make_it_a_different_job(verbs):
     """The duplicate key is the WORK, not who asked or how they worded it. An
     administrator who asks again in the same thread produces a different

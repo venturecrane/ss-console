@@ -850,6 +850,19 @@ personas:
           # than the inventory on purpose: an offer the fill already entered
           # reads back as already present and is not emailed twice.
           seed_saved_before: '2026-10-09T14:00:00Z'
+      # SMD ops, not firm work (Captain, 2026-10-13: actively check every
+      # connector's sign-in). The hourly Smokeball sign-in check: its pre_run
+      # makes one refresh grant at Smokeball's auth host, reads no matter,
+      # writes nothing to Smokeball and never wakes a turn; the verdict row is
+      # read by SMD's hourly work-health email. Why: the firm's authorization
+      # died 2026-10-10 and nothing said so for 42 hours.
+      - name: connector-auth-check
+        version: pending
+        initiation:
+          manual: false
+          scheduled: true
+          webhook: false
+        enabled: true
     # Every entry is pre_run-gated (ADR 0021 Stream B, #1748). The escalator's
     # bespoke pre_run decides whether a deadline needs the ladder; the other
     # skills carry the shared empty-seat gate (operator/templates/pre_run_gate.py):
@@ -892,6 +905,13 @@ personas:
       # email goes out when the job enters it.
       - skill: negotiation-watch
         schedule: '7 8,12,16 * * 1-5' # weekdays 0807, 1207 and 1607 seat-local
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      # SMD ops (Captain, 2026-10-13), not a firm routine: the hourly Smokeball
+      # sign-in check above. No turn, no firm-visible output, no Smokeball data
+      # read or written; a dead connection reaches team@ within the hour.
+      - skill: connector-auth-check
+        schedule: '13 * * * *' # hourly at :13, off the other rows' minutes
         pre_run: pre_run.py
         wake_policy: pre_run_decides
     # The weekday litigation status list (letter 93, accepted 2026-10-07). SHIPS

@@ -102,3 +102,28 @@ describe('medical-chronology-maintainer: a review hold is SMD work (2026-10-13)'
     expect(held).toMatch(/do not ask anyone at the firm to review anything/i)
   })
 })
+
+describe('medical-chronology-maintainer: a refused submission never leaves the lane', () => {
+  // A&P 201666, 2026-10-13: a duplicate refusal naming a stale hold sent an
+  // administrator's chronology request to SMD as an "operations change".
+  const run = body.slice(body.indexOf('## RUN'), body.indexOf('## UPDATE')).replace(/\s+/g, ' ')
+
+  it('forbids passing a chronology request to operations_request', () => {
+    expect(run).toContain(
+      'A refused submission stays a chronology answer, never an operations change.'
+    )
+    expect(run).toMatch(/Never pass a chronology request[^.]*to `operations_request`/)
+  })
+
+  it('reads the job a duplicate refusal names instead of escalating', () => {
+    expect(run).toMatch(
+      /duplicate refusal that names a job[^]*`medchron_job_status` with that `job_id`/
+    )
+  })
+
+  it('treats a request for every record on the matter as a RUN', () => {
+    expect(run).toMatch(
+      /ONE chronology covering every medical record on the matter[^]*is a RUN even when a chronology was delivered before/
+    )
+  })
+})
