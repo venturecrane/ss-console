@@ -1533,7 +1533,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // alone or with attorneys (pairs with the broker's paralegal resolution and the runner's scope).
     // b748c6e0 -> 38792717 (overlay#452), 2026-10-13: the heartbeat pages SMD on a
     // DELIVERY_PROOF_FAILED row and a failed chronology job (pairs with proven delivery, #3152).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="3879271779f87c247144b88ed308dae7372f8934"')
+    // 38792717 -> 8ed871e9 (overlay#453, #454), 2026-10-13: a config ahead of the image skips what
+    // the image lacks and alerts; a scheduled turn of a `settings.recipients: roster` skill sends
+    // under its lane (pairs with the broker's roster lane in participant_fence.py).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="8ed871e9bab964aca55e3e0c749067e4c049a460"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

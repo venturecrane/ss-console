@@ -92,7 +92,27 @@ function checkSkillSettings(
       })
     }
   }
+  checkRosterRecipients(out, path, errors)
   return Object.keys(out).length > 0 ? out : undefined
+}
+
+/**
+ * `settings.recipients: roster` opts the skill's scheduled turns into the
+ * participant fence's roster lane (the seat's exact `scope.inbound_allow_from`
+ * addresses). One value is meaningful; any other would author a lane nobody
+ * gets. Mirrors the overlay's `_validate_skill`.
+ */
+function checkRosterRecipients(
+  settings: Record<string, string | number | boolean>,
+  path: string,
+  errors: ValidationError[]
+): void {
+  if (settings['recipients'] === undefined || settings['recipients'] === 'roster') return
+  errors.push({
+    code: 'InvalidSkillSetting',
+    path: `${path}.recipients`,
+    message: `${path}.recipients must be 'roster' when present`,
+  })
 }
 
 function checkSkillName(name: unknown, path: string, errors: ValidationError[]): void {
