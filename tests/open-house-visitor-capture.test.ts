@@ -29,6 +29,15 @@ import { parse as parseYaml } from 'yaml'
 const SKILL = resolve('operator/skills/open-house-visitor-capture/SKILL.md')
 const SEAT = resolve('operator/customers/scott/customer.yaml')
 const STORE_NAME = 'open-house-visitors'
+const BROKERY_SEAT = resolve('operator/customers/brokery/customer.yaml')
+
+type StoreEntry = { name: string; owner_field?: string; readers?: string[]; index?: string[] }
+
+function storeOf(config: unknown): StoreEntry | undefined {
+  return (config as { record_stores?: StoreEntry[] }).record_stores?.find(
+    (s) => s.name === STORE_NAME
+  )
+}
 const STORE_PATH = '/opt/data/open-house/visitors'
 
 const skill = readFileSync(SKILL, 'utf8')
@@ -172,24 +181,21 @@ describe('open-house-visitor-capture: the scott seat binds it (the /wired chain)
     expect(stores?.find((s) => s.name === STORE_NAME)?.path).toBe(STORE_PATH)
   })
 
-  it('authors the broker view: private per agent, the broker reads across, the index is shared', () => {
-    const stores = (
-      seat as unknown as {
-        record_stores?: {
-          name: string
-          owner_field?: string
-          readers?: string[]
-          index?: string[]
-        }[]
-      }
-    ).record_stores
-    const store = stores?.find((s) => s.name === STORE_NAME)
+  it('stays private per agent with the index shared; the broker view moved to the brokery seat', () => {
+    const store = storeOf(seat)
     expect(store?.owner_field).toBe('agent')
-    expect(store?.readers).toHaveLength(1)
+    expect(store?.readers ?? []).toEqual([])
     expect(store?.index).toEqual(['visitor', 'property', 'visit_date', 'contact'])
-    // the broker is also on the roster, or the read grant reaches nobody
-    const roster = (seat as unknown as { scope: { inbound_allow_from: string[] } }).scope
-      .inbound_allow_from
+  })
+
+  it('the brokery seat authors the broker view: private per agent, a broker reads across', () => {
+    const brokery = parseYaml(readFileSync(BROKERY_SEAT, 'utf8'))
+    const store = storeOf(brokery)
+    expect(store?.owner_field).toBe('agent')
+    expect((store?.readers ?? []).length).toBeGreaterThan(0)
+    expect(store?.index).toEqual(['visitor', 'property', 'visit_date', 'contact'])
+    // every reader is also on the roster, or the read grant reaches nobody
+    const roster = (brokery as { scope: { inbound_allow_from: string[] } }).scope.inbound_allow_from
     for (const reader of store?.readers ?? []) expect(roster).toContain(reader)
   })
 
