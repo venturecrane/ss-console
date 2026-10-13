@@ -336,7 +336,9 @@ def job_items(
 # ---------------------------------------------------------------------------
 
 
-def request_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> list[Item]:
+def request_items(
+    seat: str, rows: list[dict], cfg: Config, now: datetime, closed: Optional[set[tuple[str, str]]] = None
+) -> list[Item]:
     """A firm person's request (INBOUND_RECEIVED, trust_class internal) with no
     REPLY_SENT threaded to it. Unlike the seat's own NO REPLY card, a job row
     does NOT excuse it: the acknowledgement is owed whether or not a job runs."""
@@ -365,6 +367,8 @@ def request_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> li
         if now < due:
             continue
         card = card_id(vid)
+        if closed and (seat, card) in closed:
+            continue
         if vid in held:
             held_at, why = held[vid]
             out.append(

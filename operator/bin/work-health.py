@@ -234,8 +234,9 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
     deployed = src.deployed_cron(console.personas.get(slug))
     has_smokeball, authored = seat_shape(config)
     why = probe_not_scheduled_why(has_smokeball, authored, deployed)
-    items += wh.request_items(slug, rows, cfg, now)
-    items += wh.job_items(slug, rows, cfg, now, wh.load_closed())
+    closed = wh.load_closed()
+    items += wh.request_items(slug, rows, cfg, now, closed)
+    items += wh.job_items(slug, rows, cfg, now, closed)
     if has_smokeball:
         items += auth.smokeball_auth_items(slug, rows, cfg, now, probe_scheduled=why is None)
         items += auth.probe_not_scheduled_items(slug, now, why=why)

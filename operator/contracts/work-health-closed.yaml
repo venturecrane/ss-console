@@ -12,8 +12,8 @@
 # This repository is PUBLIC: name the job by its id only. The reason says why
 # no action is owed in words that name no client, matter, person or document.
 #
-# Fields: seat, job (the full job id from the audit row), closed (date),
-# closed_by, reason.
+# Fields: seat, job (a job id from the audit row, or a request's card id as
+# the email prints it), closed (date), closed_by, reason.
 closed:
   - seat: ashton-price
     job: 01M4S9MQE7XZ3E67Q5TDCKJGC6
@@ -23,3 +23,10 @@ closed:
       SMD's own drafting test request on the library matter; the pre-delivery
       review held it as designed (it was the review's proof run). Nothing is
       owed to the firm and no rerun is wanted.
+  - seat: smd-staging
+    job: 36e65fd77d52
+    closed: '2026-10-13'
+    closed_by: work-health session for the team lead
+    reason: >-
+      SMD's own no-reply falsifier sent to the staging test mailbox; it was
+      meant to get no reply and it proved both no-reply alarms. Nothing owed.

@@ -85,6 +85,11 @@ def test_a_job_row_does_not_excuse_a_missing_reply():
     assert "no_reply" in _kinds(wh.request_items(SEAT, rows, CFG, NOW))
 
 
+def test_a_request_smd_closed_drops_off():
+    rows = [_inbound(NOW - timedelta(minutes=31))]
+    assert wh.request_items(SEAT, rows, CFG, NOW, {(SEAT, wh.card_id(VID))}) == []
+
+
 def test_mail_from_outside_the_firm_is_not_a_request():
     assert wh.request_items(SEAT, [_inbound(NOW - timedelta(hours=1), trust="external")], CFG, NOW) == []
 
