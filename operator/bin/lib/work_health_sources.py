@@ -159,6 +159,25 @@ def schedule_drift(git_config: dict, deployed: set[tuple[str, str]]) -> dict[str
     }
 
 
+def schedule_adopted_at(synced_at: Optional[str], boot: Optional[dict]) -> Optional[datetime]:
+    """Since when the Machine has run the provisioned schedule, or None when it
+    has not adopted it yet.
+
+    A merge publishes customer.yaml at once (deploy.yml), but the Machine's cron
+    store changes only when it next boots. On 2026-10-13 A&P's new hourly row
+    was published 20:35Z and adopted at the 21:12Z rebuild, and a grid that
+    ignored the gap reported 23 "missed" runs from a schedule the seat had never
+    held. Slots before adoption are not owed."""
+    synced = parse_ts(synced_at)
+    window = cron_slots.boot_window((boot or {}).get("last_heartbeat_ts"), (boot or {}).get("process_uptime_seconds"))
+    booted = window[0] + timedelta(minutes=45) if window else None
+    if synced is None:
+        return booted
+    if booted is None or booted < synced:
+        return None
+    return booted
+
+
 def missed_slot_items(
     seat: str,
     rows: list[dict],
@@ -167,6 +186,9 @@ def missed_slot_items(
     boot: Optional[dict],
     git_config: dict,
     deployed: Optional[set[tuple[str, str]]],
+    adopted_at: Optional[datetime] = None,
+    *,
+    adoption_known: bool = True,
 ) -> list[Item]:
     """Scheduled runs that did not happen, ONE line per skill (never one per
     slot), graded only where git and the seat's provisioned schedule AGREE.
@@ -189,7 +211,23 @@ def missed_slot_items(
         if r.wake_policy == "pre_run_decides" and r.skill not in drift and (r.skill, r.schedule) in deployed
     ]
     tz = cron_slots.seat_timezone(git_config)
-    slots = cron_slots.expand_slots(graded, tz, now - timedelta(hours=cfg.reconcile_window_hours), now)
+    if adoption_known and adopted_at is None:
+        # Published but not yet booted into: nothing on the Machine to grade.
+        return [
+            item(
+                seat,
+                "schedule_drift",
+                "not-adopted",
+                now,
+                "This seat's published schedule is newer than its running Machine (it has not been rebuilt since "
+                "the config changed); scheduled runs are not graded until it is.",
+                "Rebuild the seat so it runs what is published.",
+            )
+        ]
+    start = now - timedelta(hours=cfg.reconcile_window_hours)
+    if adopted_at is not None:
+        start = max(start, adopted_at)
+    slots = cron_slots.expand_slots(graded, tz, start, now)
     gradable = [x for x in slots if x.fires_at + timedelta(seconds=SLOT_TOLERANCE_S) <= now]
     verdicts = cron_slots.match_slots(gradable, rows, tolerance_s=SLOT_TOLERANCE_S)
     if boot:

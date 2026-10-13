@@ -328,10 +328,10 @@ def test_a_daily_cron_that_ran_on_time_is_not_missed():
     is ONE drift line, not 24 missed slots."""
     deployed = {("connector-auth-check", "47 5 * * *"), ("daily-thing", "47 5 * * *")}
     rows = [_wake("daily-thing", datetime(2026, 10, 13, 12, 48, tzinfo=UTC))]
-    assert src.missed_slot_items("pilot", rows, CFG, NOW, None, PILOT_GIT, deployed) == []
+    assert src.missed_slot_items("pilot", rows, CFG, NOW, None, PILOT_GIT, deployed, adoption_known=False) == []
     # Any other routine's drift is one line naming both schedules.
     deployed = {("connector-auth-check", "13 * * * *"), ("daily-thing", "7 9 * * *")}
-    items = src.missed_slot_items("pilot", rows, CFG, NOW, None, PILOT_GIT, deployed)
+    items = src.missed_slot_items("pilot", rows, CFG, NOW, None, PILOT_GIT, deployed, adoption_known=False)
     drift = [i for i in items if i.kind == "schedule_drift"]
     assert len(drift) == 1 and "47 5 * * *" in drift[0].what and "7 9 * * *" in drift[0].what
 
@@ -339,20 +339,20 @@ def test_a_daily_cron_that_ran_on_time_is_not_missed():
 def test_a_daily_cron_that_did_not_run_is_one_line():
     deployed = {("connector-auth-check", "13 * * * *"), ("daily-thing", "47 5 * * *")}
     rows = [_wake("connector-auth-check", NOW - timedelta(minutes=m)) for m in range(17, 1440, 60)]
-    items = src.missed_slot_items("pilot", rows, CFG, NOW, None, PILOT_GIT, deployed)
+    items = src.missed_slot_items("pilot", rows, CFG, NOW, None, PILOT_GIT, deployed, adoption_known=False)
     assert _kinds(items) == ["missed_slot"] and "daily-thing" in items[0].what
 
 
 def test_many_missed_slots_of_one_routine_are_one_line():
     deployed = {("connector-auth-check", "13 * * * *"), ("daily-thing", "47 5 * * *")}
     rows = [_wake("daily-thing", datetime(2026, 10, 13, 12, 48, tzinfo=UTC))]
-    items = src.missed_slot_items("pilot", rows, CFG, NOW, None, PILOT_GIT, deployed)
+    items = src.missed_slot_items("pilot", rows, CFG, NOW, None, PILOT_GIT, deployed, adoption_known=False)
     assert _kinds(items) == ["missed_slot"]
     assert "scheduled runs missed" in items[0].what
 
 
 def test_an_unreadable_provisioned_schedule_is_an_item_not_a_guess():
-    items = src.missed_slot_items("pilot", [], CFG, NOW, None, PILOT_GIT, None)
+    items = src.missed_slot_items("pilot", [], CFG, NOW, None, PILOT_GIT, None, adoption_known=False)
     assert _kinds(items) == ["unreadable"]
 
 
@@ -776,3 +776,27 @@ def test_a_missed_hourly_run_is_an_item_and_breaks_the_all_clear():
         items=gap, seats=[SEAT], gaps={}, previous=None, since=NOW - timedelta(hours=3), now=NOW, all_clear_hour_utc=15
     )
     assert plan.send and "all clear" not in plan.subject and "== work-health" in plan.text
+
+
+def test_slots_before_the_machine_adopted_the_schedule_are_not_owed():
+    """The 2026-10-13 21:21Z A&P false line: published 20:35Z, booted 21:12Z,
+    and 23 hourly slots before the boot were reported missed."""
+    deployed = {("connector-auth-check", "13 * * * *"), ("daily-thing", "47 5 * * *")}
+    rows = [_wake("daily-thing", datetime(2026, 10, 13, 12, 48, tzinfo=UTC))]
+    booted = NOW - timedelta(minutes=40)  # 15:50Z boot; the 16:13Z slot is not yet gradable at 16:30Z
+    boot = {"last_heartbeat_ts": NOW.isoformat(), "process_uptime_seconds": 40 * 60}
+    assert src.schedule_adopted_at((booted - timedelta(minutes=37)).isoformat(), boot) == booted
+    assert src.schedule_adopted_at((booted + timedelta(minutes=5)).isoformat(), boot) is None
+    items = src.missed_slot_items("pilot", rows, CFG, NOW, boot, PILOT_GIT, deployed, booted)
+    assert items == []
+    # Not yet booted into the published schedule: one line, no grading.
+    items = src.missed_slot_items("pilot", rows, CFG, NOW, boot, PILOT_GIT, deployed, None)
+    assert _kinds(items) == ["schedule_drift"] and "not been rebuilt" in items[0].what
+
+
+def test_a_job_a_person_ended_as_superseded_is_not_open_work():
+    rows = [
+        _job("MEDCHRON", "SUBMITTED", NOW - timedelta(minutes=10)),
+        _job("MEDCHRON", "FAILED", NOW - timedelta(minutes=9), reason="superseded: relaunched"),
+    ]
+    assert wh.job_items(SEAT, rows, CFG, NOW) == []

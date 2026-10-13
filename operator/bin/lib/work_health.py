@@ -45,6 +45,8 @@ LANE_PREFIXES = {
     "NEGOTIATION": "negotiation",
     "MEDCHRON": "medchron",
 }
+#: Leading reason tokens a person writes when ending a job on purpose.
+_CLOSED_REASONS = frozenset({"superseded", "closed", "cancelled", "canceled"})
 IN_FLIGHT = {"SUBMITTED": "queued", "QUEUED": "queued", "RUNNING": "running"}
 ENDED_BAD = {"HELD": "held", "FAILED": "failed"}
 _JOB_TYPE = re.compile(r"^(DEMAND|DRAFTING|LITIGATION|NEGOTIATION|MEDCHRON)_JOB_([A-Z_]+)$")
@@ -363,6 +365,10 @@ def job_items(
             )
         elif state in ENDED_BAD:
             if now - ts > timedelta(hours=cfg.ended_job_hours) or _superseded(job, jobs):
+                continue
+            if reason in _CLOSED_REASONS:
+                # Ended on purpose by a person ("superseded": a relaunch replaced
+                # this attempt): decided work, not open work.
                 continue
             why = f" ({reason})" if reason else ""
             kind = "job_held" if state == "HELD" else "job_failed"
