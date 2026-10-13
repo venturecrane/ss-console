@@ -46,12 +46,9 @@ fly_region: lax # nearest to Phoenix; Fly has no phx region
 model: claude-sonnet-4-6
 hermes_ref: v2026.9.14@345cd2b057a452236de401d3534b8502a7465e8d
 
-# 2 GB, not the template's 1: every seat boots the chronology and demand
-# lanes, and boot smoke's lane-memory-caps-leave-gateway-reserve requires their
-# cgroup caps plus a 512 MiB gateway reserve to fit (the #2465 shape).
 machine:
   size: shared-cpu-1x
-  memory_mb: 2048
+  memory_mb: 1024
 
 # ---- HUMANS WITH PORTAL ACCESS ----
 # SMD runs the pilot; portal access for The Brokery was not decided.
