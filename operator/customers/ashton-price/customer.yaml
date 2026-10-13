@@ -98,7 +98,13 @@ fly_region: sjc # Fair Oaks (Sacramento), CA — San Jose is the nearest Fly reg
 # conversation, inbox triage, simple replies — cheaply; genuinely heavy work
 # (matter-document-review et al., pre-weighted) escalates to Opus via the SOUL
 # instruction translate.py renders when escalation_model is set.
-model: claude-sonnet-4-6
+# Sonnet 5.5 (2026-10-13, Captain go): $2/$10 against 4.6's $3/$15, cache
+# reads 0.05x. Gated on the smd-staging trial (vfy_01M4V9SM3Y7GVN2X38H3ZFA3ZZ):
+# every request shape the pinned runtime renders returned 200 and two live
+# turns ran on 5.5 with no API 4xx, at ~35% less per turn than the same tokens
+# on 4.6. Needs overlay #448 (pinned since 05767aa4): 5.5 rejects thinking
+# {type: disabled}, so thinking-off now goes out adaptive at low effort.
+model: claude-sonnet-5-5
 # Opus 5.5 (2026-09-23): $4/$20 against 4.8's $5/$25; proven on smd-staging
 # and pilot-smokeball first (ss-console #2888).
 escalation_model: claude-opus-5-5
