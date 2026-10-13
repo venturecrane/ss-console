@@ -77,7 +77,6 @@ import {
   entityIdForSeat,
   findOpenByKey,
   listOwedObligations,
-  markCancelledAttested,
   markDeliveredAttested,
 } from '../../../src/lib/db/obligation-capture.ts'
 
@@ -89,6 +88,7 @@ import {
   validateCancellation,
   validateDelivery,
 } from './register-close.mjs'
+import { cmdCancel, cmdReopen } from './register-retire.mjs'
 
 // Re-exported so the CLI stays the single import surface for its own tests and
 // for any caller that thinks in terms of `register`, not of where the rendering
@@ -367,6 +367,7 @@ function usage() {
       --evidence <sent letter path> --quote "<verbatim from that letter>" [--kind <kind>]
   register cancel --client <slug> --key <stable-key> \\
       --evidence <the client's withdrawing letter> --quote "<verbatim from it>" [--kind <kind>]
+  register reopen --client <slug> --key <key> --evidence <letter> --quote "<verbatim>" --why "<why>"
   register sync
   register list [--client <slug>]`)
 }
@@ -586,82 +587,9 @@ async function cmdDeliver(args) {
   return 0
 }
 
-/** Write the cancellation through the module, which guards the state and reads it back. */
-async function recordCancellation(row, letter) {
-  let write
-  try {
-    write = await markCancelledAttested(registerDb(), {
-      obligationId: row.obligation_id,
-      fromState: row.state,
-      surface: 'engagements',
-      locator: letter.locator,
-      disposition: `client withdrew the ask: ${letter.locator}`,
-    })
-  } catch (err) {
-    return { ok: false, error: `the write failed (${firstLine(err)})` }
-  }
-  if (write.ok) return { ok: true }
-  if (write.error === 'illegal_transition') {
-    return { ok: false, error: `the register refuses ${row.state} -> cancelled` }
-  }
-  const reads = write.reads ? `"${write.reads}"` : 'unreadable'
-  return { ok: false, error: `the write did not land: row ${row.obligation_id} reads ${reads}` }
-}
-
-/**
- * Retire a letter-captured obligation the client withdrew, citing the client's
- * letter that withdrew it.
- *
- * `deliver` closes a promise that was kept; this closes one that was released.
- * Without it a withdrawn ask sat `open` until the age ladder called it
- * critical, and the only ways out were a reconciler that refuses captured rows
- * or a hand-written UPDATE nobody could audit (found 2026-09-28, A&P letter
- * 145). Same evidence discipline as `deliver`: the letter is read off the
- * archive's origin/main, it cannot be the letter that made the promise, and
- * the quote must be in it. The row goes to `cancelled` with a disposition that
- * names the client's letter; it never passes through `delivered`. A Captain
- * act: the CLI does not decide a promise is released, it records that the
- * client said so.
- */
-async function cmdCancel(args) {
-  const absent = ['client', 'key', 'evidence', 'quote'].find((field) => !args[field])
-  if (absent) {
-    console.error(`register: --${absent} is required`)
-    usage()
-    return 1
-  }
-  const found = await findOpenRow(args)
-  if (!found.ok) {
-    if (found.error === 'ambiguous_key') explainRefusal(found, args)
-    else console.error(`register: ${found.error}`)
-    return 1
-  }
-  const row = found.row
-  const letter = row ? readArchivedLetter(args.evidence) : { ok: false, error: 'no_such_obligation' }
-  const check = validateCancellation(row, letter, args.quote)
-  if (!check.ok) {
-    explainRefusal(check, args)
-    return 1
-  }
-  const recorded = await recordCancellation(row, letter)
-  if (!recorded.ok) {
-    console.error(`register: ${recorded.error}`)
-    return 1
-  }
-  journalAppend({
-    ts: new Date().toISOString(),
-    kind: 'cancelled',
-    client: args.client,
-    key: row.stable_key,
-    obligation_id: row.obligation_id,
-    evidence: letter.locator,
-    quote: args.quote,
-    session: sessionId(),
-    synced: true,
-  })
-  console.log(`register: cancelled ${row.customer_slug}/${row.kind}/${row.stable_key}`)
-  console.log(`  the client withdrew it: ${letter.locator}`)
-  return 0
+/** The CLI helpers the retire commands (register-retire.mjs) borrow. */
+function retireCli() {
+  return { findOpenRow, registerDb, journalAppend, sessionId, usage }
 }
 
 async function cmdList(args) {
@@ -698,7 +626,9 @@ export async function main(argv) {
     case 'deliver':
       return cmdDeliver(args)
     case 'cancel':
-      return cmdCancel(args)
+      return cmdCancel(args, retireCli())
+    case 'reopen':
+      return cmdReopen(args, retireCli())
     case 'sync':
       return cmdSync()
     case 'list':

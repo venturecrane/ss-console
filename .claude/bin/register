@@ -8,6 +8,13 @@
 #   .claude/bin/register add --kind none --client <slug> --why "<why nothing was owed>"
 #   .claude/bin/register deliver --client <slug> --key <stable-key> \
 #       --evidence <sent letter path> --quote "<verbatim from that letter>"
+#   .claude/bin/register cancel --client <slug> --key <stable-key> \
+#       --evidence <the client's withdrawing letter> --quote "<verbatim from it>"
+#   .claude/bin/register reopen --client <slug> --key <stable-key> \
+#       --evidence <letter showing the delivery did not hold> \
+#       --quote "<verbatim from it>" --why "<one sentence>"
+#       (Captain act; delivered -> active only. `cancel` it afterwards if the
+#       client's letter also released the ask.)
 #   .claude/bin/register sync
 #   .claude/bin/register list [--client <slug>]
 #
