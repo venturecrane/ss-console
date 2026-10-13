@@ -372,6 +372,11 @@ class DraftingVerbs:
         twin = self._db.active_on_matter(row["matter_id"], row["document_class"])
         if twin is not None and twin != job_id:
             raise ValueError(f"job {twin} is already underway on this matter; resuming {job_id} would run it twice")
+        again = self._db.live_for_ref(row["request_ref"], row["document_class"], job_id)
+        if again is not None:
+            raise ValueError(
+                f"job {again} was submitted since for the same request email; resuming {job_id} would answer it twice"
+            )
         self._db.queue_dir.mkdir(parents=True, exist_ok=True)
         marker = self._db.queue_dir / f".resume-{job_id}.json"
         marker.write_text(

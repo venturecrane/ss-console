@@ -127,9 +127,15 @@ CREATE_SQL = (
     ")"
 )
 CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_drafting_jobs_created ON drafting_jobs(created_at)"
-#: One job per (request email, class): one email may ask for two documents.
+#: One live job per (request email, class): one email may ask for two
+#: documents. A FAILED job does not hold the email (2026-10-13, the litigation
+#: lane's twin rule): it filed nothing and the firm was told nothing, so the
+#: same email asked again is a legitimate fresh request. The pre-2026-10-13
+#: full index is dropped on upgrade.
+DROP_OLD_UNIQUE_REF_SQL = "DROP INDEX IF EXISTS uq_drafting_jobs_request_ref_class"
 CREATE_UNIQUE_REF_SQL = (
-    "CREATE UNIQUE INDEX IF NOT EXISTS uq_drafting_jobs_request_ref_class ON drafting_jobs(request_ref, document_class)"
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_drafting_jobs_request_ref_class_live "
+    "ON drafting_jobs(request_ref, document_class) WHERE state != 'failed'"
 )
 CREATE_SPEND_SQL = (
     "CREATE TABLE IF NOT EXISTS drafting_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
@@ -288,6 +294,7 @@ class DraftingLedger:
         try:
             conn.execute(CREATE_SQL)
             conn.execute(CREATE_INDEX_SQL)
+            conn.execute(DROP_OLD_UNIQUE_REF_SQL)
             conn.execute(CREATE_UNIQUE_REF_SQL)
             conn.execute(CREATE_SPEND_SQL)
             conn.execute(CREATE_SPEND_INDEX_SQL)
@@ -338,6 +345,20 @@ class DraftingLedger:
             conn.close()
 
     # -- intake ------------------------------------------------------------
+    def live_for_ref(self, ref: str, document_class: str, exclude: str) -> str | None:
+        """Another non-failed job holding this (request email, class), so a
+        resume of a failed one cannot collide with a fresh submission since."""
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT id FROM drafting_jobs WHERE request_ref=? AND document_class=? AND id != ? "
+                "AND state != 'failed' LIMIT 1",
+                (ref, document_class, exclude),
+            ).fetchone()
+            return row["id"] if row else None
+        finally:
+            conn.close()
+
     def active_on_matter(self, matter_id: str, document_class: str) -> str | None:
         """An unfinished draft of this class on this matter."""
         conn = self._connect()
@@ -368,7 +389,8 @@ class DraftingLedger:
         try:
             conn.execute("BEGIN IMMEDIATE")
             dup = conn.execute(
-                "SELECT id FROM drafting_jobs WHERE request_ref=? AND document_class=?",
+                "SELECT id FROM drafting_jobs WHERE request_ref=? AND document_class=? AND state != 'failed' "
+                "ORDER BY created_at DESC LIMIT 1",
                 (env["request_ref"], klass),
             ).fetchone()
             if dup is not None:

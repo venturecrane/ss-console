@@ -108,9 +108,18 @@ CREATE_SQL = (
     ")"
 )
 CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_litigation_jobs_created ON litigation_jobs(created_at)"
-#: One job per request email, and (``scheduled:<date>``) one scheduled job per Pacific date.
+#: One live job per request email, and (``scheduled:<date>``) one scheduled job
+#: per Pacific date. A FAILED job of a requested run does not hold the email
+#: (2026-10-13, A&P): it delivered nothing and the firm was told nothing, so
+#: its email asking again is a legitimate fresh request, and before this the
+#: only way forward for a request whose run died was a resume of that exact
+#: scope. Scheduled refs keep the old rule: the cron's pre_run may tick again
+#: the same day, and one scheduled job per date is the point of the ref.
+#: The pre-2026-10-13 full index is dropped on upgrade.
+DROP_OLD_UNIQUE_REF_SQL = "DROP INDEX IF EXISTS uq_litigation_jobs_request_ref"
 CREATE_UNIQUE_REF_SQL = (
-    "CREATE UNIQUE INDEX IF NOT EXISTS uq_litigation_jobs_request_ref ON litigation_jobs(request_ref)"
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_litigation_jobs_request_ref_live ON litigation_jobs(request_ref) "
+    "WHERE NOT (state = 'failed' AND trigger = 'request')"
 )
 CREATE_SPEND_SQL = (
     "CREATE TABLE IF NOT EXISTS litigation_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
@@ -286,7 +295,14 @@ class LitigationLedger:
     def ensure_schema(self) -> None:
         conn = self._connect()
         try:
-            for sql in (CREATE_SQL, CREATE_INDEX_SQL, CREATE_UNIQUE_REF_SQL, CREATE_SPEND_SQL, CREATE_SPEND_INDEX_SQL):
+            for sql in (
+                CREATE_SQL,
+                CREATE_INDEX_SQL,
+                DROP_OLD_UNIQUE_REF_SQL,
+                CREATE_UNIQUE_REF_SQL,
+                CREATE_SPEND_SQL,
+                CREATE_SPEND_INDEX_SQL,
+            ):
                 conn.execute(sql)
             conn.commit()
         finally:
@@ -301,6 +317,21 @@ class LitigationLedger:
                 (start, end, exclude),
             ).fetchone()
             return int(row["c"])
+        finally:
+            conn.close()
+
+    def live_for_ref(self, ref: str, exclude: str) -> str | None:
+        """Another job holding this request email (anything but a failed
+        requested run), so a resume of a failed one cannot collide with a
+        fresh submission the same email made since."""
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT id FROM litigation_jobs WHERE request_ref=? AND id != ? "
+                "AND NOT (state = 'failed' AND trigger = 'request') LIMIT 1",
+                (ref, exclude),
+            ).fetchone()
+            return row["id"] if row else None
         finally:
             conn.close()
 
@@ -326,7 +357,11 @@ class LitigationLedger:
         conn = self._connect()
         try:
             conn.execute("BEGIN IMMEDIATE")
-            dup = conn.execute("SELECT id FROM litigation_jobs WHERE request_ref=?", (env["message_ref"],)).fetchone()
+            dup = conn.execute(
+                "SELECT id FROM litigation_jobs WHERE request_ref=? "
+                "AND NOT (state = 'failed' AND trigger = 'request') ORDER BY created_at DESC LIMIT 1",
+                (env["message_ref"],),
+            ).fetchone()
             if dup is not None:
                 conn.rollback()
                 what = "today's scheduled run" if env["trigger"] == "scheduled" else "that request email"
