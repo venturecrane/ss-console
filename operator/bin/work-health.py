@@ -142,6 +142,7 @@ class Console:
         self.shortfalls: dict[str, list[dict]] = {}
         self.sentry: dict[str, list[dict]] = {}
         self.personas: dict[str, Optional[str]] = {}
+        self.lane_holds: dict[str, list[dict]] = {}
         try:
             self._load(d1)
         except Exception as exc:  # noqa: BLE001 - reported as an item on every seat
@@ -149,10 +150,16 @@ class Console:
 
     def _load(self, d1) -> None:
         since = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%Y-%m-%d")
+        week = (datetime.now(timezone.utc) - timedelta(days=9)).strftime("%Y-%m-%d")
         for row in d1.execute(
             "SELECT customer_slug, last_heartbeat_ts, process_uptime_seconds, connectors_json FROM fleet_status"
         ):
             self.status[str(row["customer_slug"])] = row
+        for row in d1.execute(
+            "SELECT customer_slug, job_lane, lane_key, event_at FROM operator_request_cards "  # noqa: S608 - since is a strftime date, not input
+            f"WHERE kind = 'lane_unproven' AND job_lane IS NOT NULL AND event_at >= '{week}'"
+        ):
+            self.lane_holds.setdefault(str(row["customer_slug"]), []).append(row)
         for row in d1.execute("SELECT customer_slug, personas_json FROM customer_configs"):
             self.personas[str(row["customer_slug"])] = row.get("personas_json")
         for row in d1.execute(
@@ -238,7 +245,8 @@ def _operator_items(
     has_smokeball, authored = seat_shape(config)
     why = probe_not_scheduled_why(has_smokeball, authored, deployed)
     closed = wh.load_closed()
-    items = wh.request_items(slug, rows, cfg, now, closed) + wh.job_items(slug, rows, cfg, now, closed)
+    items = wh.request_items(slug, rows, cfg, now, closed)
+    items += wh.job_items(slug, rows, cfg, now, closed, console.lane_holds.get(slug))
     if has_smokeball:
         items += auth.smokeball_auth_items(slug, rows, cfg, now, probe_scheduled=why is None)
         items += auth.probe_not_scheduled_items(slug, now, why=why)

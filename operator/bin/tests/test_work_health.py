@@ -734,3 +734,19 @@ def test_the_no_reply_threshold_is_per_seat():
     rows = [_inbound(NOW - timedelta(minutes=6))]
     assert _kinds(wh.request_items("smd-staging", rows, CFG, NOW)) == ["no_reply"]
     assert wh.request_items(SEAT, rows, CFG, NOW) == []
+
+
+def test_a_drafting_job_held_by_the_lane_gate_is_waiting_not_stuck_in_queue():
+    """For drafting the hold writes no audit row; the seat's lane_unproven card is
+    the signal. Without the card the same row IS stuck (the falsifier)."""
+    rows = [_job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=3))]
+    assert _kinds(wh.job_items(SEAT, rows, CFG, NOW)) == ["job_stuck"]
+    card = {
+        "job_lane": "drafting",
+        "lane_key": "document-drafter.discovery_set",
+        "event_at": (NOW - timedelta(hours=3) + timedelta(seconds=40)).isoformat(),
+    }
+    items = wh.job_items(SEAT, rows, CFG, NOW, None, [card])
+    assert _kinds(items) == ["job_held"] and "document-drafter.discovery_set" in items[0].what
+    other_lane = {**card, "job_lane": "demand"}
+    assert _kinds(wh.job_items(SEAT, rows, CFG, NOW, None, [other_lane])) == ["job_stuck"]

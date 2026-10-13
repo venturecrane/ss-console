@@ -292,8 +292,33 @@ def load_closed(path: Path = CLOSED_PATH) -> set[tuple[str, str]]:
     return out
 
 
+def _lane_hold(job: Job, holds: Optional[list[dict]]) -> Optional[str]:
+    """The lane key a queued job is held on by the lane gate (PR #3148), or None.
+
+    Medchron writes the hold as a second SUBMITTED row with reason
+    "lane_unproven: <key>". The other lanes record it as a same-state ledger
+    note, which writes NO audit row, so their signal is the seat's
+    ``lane_unproven`` request card (D1 operator_request_cards, job_lane set)
+    for the same lane at the job's submit time."""
+    for _t, _s, reason in reversed(job.events):
+        if reason and reason.startswith("lane_unproven"):
+            return "unproven lane"
+    for card in holds or []:
+        at = parse_ts(card.get("event_at"))
+        if card.get("job_lane") != job.lane or at is None:
+            continue
+        if job.submitted_at - timedelta(minutes=5) <= at <= job.submitted_at + timedelta(minutes=30):
+            return str(card.get("lane_key") or "unproven lane")
+    return None
+
+
 def job_items(
-    seat: str, rows: list[dict], cfg: Config, now: datetime, closed: Optional[set[tuple[str, str]]] = None
+    seat: str,
+    rows: list[dict],
+    cfg: Config,
+    now: datetime,
+    closed: Optional[set[tuple[str, str]]] = None,
+    holds: Optional[list[dict]] = None,
 ) -> list[Item]:
     jobs = jobs_from_rows(rows)
     out: list[Item] = []
@@ -303,8 +328,8 @@ def job_items(
         ts, state, reason = job.last
         lane = cfg.lanes[job.lane]
         name = _job_name(job, cfg)
-        held_reason = next((r for _t, _s, r in reversed(job.events) if r), None)
-        if state in IN_FLIGHT and held_reason and held_reason.startswith("lane_unproven"):
+        lane_key = _lane_hold(job, holds) if state in IN_FLIGHT else None
+        if lane_key:
             # Held by the lane gate (PR #3148) until SMD's proof run: waiting,
             # not running and not stuck.
             out.append(
@@ -313,7 +338,7 @@ def job_items(
                     "job_held",
                     f"{job.lane}:{job.job_id}:lane_unproven",
                     ts,
-                    f"The {name} is waiting on SMD's proof run for its lane (held {span(now - ts)}); "
+                    f"The {name} is waiting on SMD's proof run: {lane_key} (held {span(now - ts)}); "
                     "nothing runs until the lane is proven.",
                     f"Run the lane's proof: operator/bin/lane-proof.sh {seat} status.",
                 )
