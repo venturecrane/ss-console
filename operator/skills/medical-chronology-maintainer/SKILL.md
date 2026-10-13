@@ -234,6 +234,11 @@ A Named Administrator asks, by email or on the Claude channel, for a chronology 
 matter ("build the chronology for matter 12345", "run a chronology on that matter").
 That request is the initiation; this mode runs only on such a request, never on a
 schedule or a signal. In replies, call it a run, never a "re-run" or a "refresh".
+A request for ONE chronology covering every medical record on the matter ("the
+full chronology", "all records in the file, pre-loss to the most recent") is a
+RUN even when a chronology was delivered before: the firm is asking for the
+complete document, and an update delivers only the records added since. An
+update is the ask to bring the delivered chronology current.
 
 1. **Resolve the matter by dual probe; never trust a stored id.** Probe one: page
    `list_matters` and match the requested matter NUMBER exactly (heed the paging
@@ -279,6 +284,23 @@ schedule or a signal. In replies, call it a run, never a "re-run" or a "refresh"
    in pages, and it is the figure to quote if the requester asks. Make no promise
    about timing: the delivery lands on the matter in its own dated folder, and
    this skill reports when it does.
+6. **A refused submission stays a chronology answer, never an operations
+   change.** When `medchron_job_submit` refuses, the reply relays the refusal
+   sentence and what it means for this request, and stops. Never pass a
+   chronology request, or the work a refusal left undone, to
+   `operations_request`: that tool is for SMD changes to routines, schedules,
+   channels and settings (ADR 0085), and a chronology the firm asked for is
+   client work on this lane, not a change to the seat. A duplicate refusal that
+   names a job (`job_id`, `job_state`) means that job IS the work in flight:
+   call `medchron_job_status` with that `job_id` and tell the requester what
+   its record shows (submitted or running: it is under way and its delivery
+   will be reported here; held: the hold's substance in the words of
+   DELIVER's hold list, which says whose it is to clear). The broker no longer
+   names a hold that a later delivery on the matter superseded, or one too old
+   to resume, so a named job is never history (2026-10-13: a three-week-old
+   upload hold, delivered twice since, refused an administrator's request for
+   the complete chronology, and the request was mailed to SMD as an
+   "operations change" with the work undone).
 
 ## UPDATE - only the records the delivery did not cover (the router's UPDATE mode)
 
