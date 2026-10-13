@@ -25,6 +25,9 @@
  *     `index` are frontmatter keys the listing exposes so a capture can notice
  *     a colleague already holds this visitor without opening their notes.
  *     `readers` needs `owner_field`: a shared store has nothing to grant.
+ *     `writers` are addresses that may write to the store at all: on an
+ *     inbound turn nobody else may create or change a record (a program the
+ *     roster reads and only the broker edits). With or without `owner_field`.
  *   - no other keys.
  *
  * Validate-only (pushes errors); the block is materialized by the overlay and
@@ -37,7 +40,7 @@ import { isPlainObject } from './helpers'
 const STORE_NAME = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/
 // A frontmatter key, as the overlay's FIELD_RE spells it.
 const FIELD_NAME = /^[a-z][a-z0-9_]{0,63}$/
-const POLICY_KEYS = ['owner_field', 'readers', 'index'] as const
+const POLICY_KEYS = ['owner_field', 'readers', 'index', 'writers'] as const
 const ALLOWED_KEYS = new Set<string>(['name', 'path', ...POLICY_KEYS])
 const VOLUME_ROOT = '/opt/data'
 const RESERVED_PREFIXES = [
@@ -161,7 +164,7 @@ function checkStorePolicy(
       })
     }
   }
-  for (const key of ['readers', 'index'] as const) {
+  for (const key of ['readers', 'index', 'writers'] as const) {
     if (!(key in entry)) continue
     const value = entry[key]
     if (!Array.isArray(value) || !value.every((v) => typeof v === 'string' && v.length > 0)) {
@@ -172,33 +175,39 @@ function checkStorePolicy(
       })
       continue
     }
-    if (key === 'readers') {
-      if (!('owner_field' in entry)) {
+    if (key === 'readers' && !('owner_field' in entry)) {
+      errors.push({
+        code: 'InvalidFormat',
+        path: `${prefix}.readers`,
+        message: `${prefix}.readers: needs owner_field (a shared store has nothing to grant)`,
+      })
+    }
+    checkPolicyValues(key, value as string[], prefix, errors)
+  }
+}
+
+/** Each value of a list-valued posture key: an email address, or a frontmatter key for `index`. */
+function checkPolicyValues(
+  key: 'readers' | 'index' | 'writers',
+  values: string[],
+  prefix: string,
+  errors: ValidationError[]
+): void {
+  for (const v of values) {
+    if (key === 'index') {
+      if (!FIELD_NAME.test(v)) {
         errors.push({
           code: 'InvalidFormat',
-          path: `${prefix}.readers`,
-          message: `${prefix}.readers: needs owner_field (a shared store has nothing to grant)`,
+          path: `${prefix}.index`,
+          message: `${prefix}.index: '${v}' is not a frontmatter key (a-z, 0-9, _)`,
         })
       }
-      for (const v of value as string[]) {
-        if (!v.includes('@') || v.trim() !== v) {
-          errors.push({
-            code: 'InvalidFormat',
-            path: `${prefix}.readers`,
-            message: `${prefix}.readers: '${v}' is not an email address`,
-          })
-        }
-      }
-    } else {
-      for (const v of value as string[]) {
-        if (!FIELD_NAME.test(v)) {
-          errors.push({
-            code: 'InvalidFormat',
-            path: `${prefix}.index`,
-            message: `${prefix}.index: '${v}' is not a frontmatter key (a-z, 0-9, _)`,
-          })
-        }
-      }
+    } else if (!v.includes('@') || v.trim() !== v) {
+      errors.push({
+        code: 'InvalidFormat',
+        path: `${prefix}.${key}`,
+        message: `${prefix}.${key}: '${v}' is not an email address`,
+      })
     }
   }
 }

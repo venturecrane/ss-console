@@ -1525,7 +1525,7 @@ describe('Operator customer Machine Dockerfile', () => {
     // binding, not the request email; working drafts discarded once sent (msgraph_discard_draft).
     // 9dc43b00 -> 33463809 (overlay#442), 2026-10-12: a discovery-set request carries the request
     // email's own Word documents to the drafting job (an attorney's own sets, placed in the caption).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="33463809e4aa7a4f5a63d2436b9aa8e6934f0817"')
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="c2bf5877527d5eba34d58f2b8907678386bd5ef2"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
