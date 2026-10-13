@@ -234,11 +234,20 @@ A Named Administrator asks, by email or on the Claude channel, for a chronology 
 matter ("build the chronology for matter 12345", "run a chronology on that matter").
 That request is the initiation; this mode runs only on such a request, never on a
 schedule or a signal. In replies, call it a run, never a "re-run" or a "refresh".
-A request for ONE chronology covering every medical record on the matter ("the
-full chronology", "all records in the file, pre-loss to the most recent") is a
-RUN even when a chronology was delivered before: the firm is asking for the
-complete document, and an update delivers only the records added since. An
-update is the ask to bring the delivered chronology current.
+**On a matter that already holds a delivered chronology, every chronology
+request is an UPDATE, never a RUN.** "The full chronology", "all records in the
+file, pre-loss to the most recent", "renewed chronology", "bring it current":
+the firm holds a chronology and wants it complete, and the update makes it so
+by reading only what the delivery did not cover. A RUN on such a matter
+re-reads, and counts against the allowance, the whole file, for a document the
+firm already has most of (2026-10-13: two "all records, pre and post loss"
+asks were queued as full runs, one of them about to fold another person's
+emailed records into the file). Check first: `medchron_job_status` with the
+`matter_id` you resolved this turn; `covered_document_ids` present means a
+delivered chronology exists, and the request goes to UPDATE below. A RUN is
+for a matter with no delivered chronology, or for a requester who asks in so
+many words to rebuild it from scratch, and then the reply says it re-reads
+and counts the whole file.
 
 1. **Resolve the matter by dual probe; never trust a stored id.** Probe one: page
    `list_matters` and match the requested matter NUMBER exactly (heed the paging
@@ -327,6 +336,14 @@ matter. In replies, call it an update, never an "append" or a "re-run".
    `covered_document_ids`**, which therefore includes every previously uncovered
    document as well as everything that has landed since. A scan that arrived
    without a text layer is NOT covered, and an update reads it again.
+   **Name medical records only.** The named ids override the runner's folder
+   rules, so this list IS the selection: keep medical records and medical
+   bills (files in the matter's medical folders, or plainly records by their
+   name), and leave out photos, correspondence and emails, demands, pleadings,
+   investigation and background reports, and expert or life-care reports. Say
+   in the reply which kinds were left out. A record that names another person
+   (a different name or date of birth than the client's) is never named; say
+   that you left it out and why.
 2. **The ledger memo as cross-check.** The covered-set header this skill writes at
    delivery should name the same job ids. Where the two disagree, take the job
    record and say in your reply that the memo and the job record disagreed.
