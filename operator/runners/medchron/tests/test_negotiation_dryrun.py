@@ -12,7 +12,9 @@ from medchron import arrivals
 from medchron.negotiation import dryrun, run as run_mod
 
 FILES = [
-    {"id": "f1", "name": "Offer letter 9-30", "ext": ".pdf", "modified": "1", "created": "2026-10-08T22:10:00Z"},
+    # Not offer-named: a seeded matter with an empty tab reads its earlier
+    # offer-named files (test_negotiation.py); these tests are about f2.
+    {"id": "f1", "name": "Intake 9-30", "ext": ".pdf", "modified": "1", "created": "2026-10-08T22:10:00Z"},
     {"id": "f2", "name": "Offer letter 10-09", "ext": ".pdf", "modified": "1", "created": "2026-10-09T15:30:00Z"},
 ]
 

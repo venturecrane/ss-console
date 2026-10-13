@@ -113,8 +113,19 @@ class NegotiationRun:
         self._seat_factory, self._seat = seat_factory, None
         self._layout = layout
         self.today = (today or (lambda: dt.date.today()))().isoformat()
-        self.counts = {"matters_total": 0, "matters_seeded": 0, "docs_read": 0, "docs_failed": 0}
+        self.counts = {
+            "matters_total": 0,
+            "matters_seeded": 0,
+            "docs_read": 0,
+            "docs_failed": 0,
+            "offers_held": 0,
+            "events_excluded": 0,
+            "seed_offers_entered": 0,
+        }
         self.notices: list[dict[str, Any]] = _load(self.data / "notices.json", [])
+        #: Offers a document showed with no date: neither entered nor emailed,
+        #: listed in the verdict for SMD (never dropped without a record).
+        self.held: list[dict[str, Any]] = []
         self.stopped: str | None = None
 
     # ---- plumbing --------------------------------------------------------------
@@ -338,19 +349,47 @@ class NegotiationRun:
         )
         _dump(self.data / "notices.json", self.notices)
 
-    def _seed(self, mid: str, files: list[dict[str, Any]]) -> dict[str, str] | None:
-        """A matter the lane has never seen. Unauthored cutoff: every file now
-        present is taken as handled (nothing read, nothing emailed; returns
-        None). With ``seed_saved_before``: only files saved before it are taken
-        as handled (what the 2026-10-09 fill read); the rest are returned as
-        new, so an offer saved between that fill and this first run is entered
-        and announced like any other."""
+    def _quiet(self) -> dict[str, list[str]]:
+        return _load(self.state / "seed-quiet.json", {})
+
+    def _set_quiet(self, value: dict[str, list[str]]) -> None:
+        self.state.mkdir(parents=True, exist_ok=True)
+        _dump(self.state / "seed-quiet.json", {k: v for k, v in value.items() if v})
+
+    def _uncovered(self, mid: str) -> bool:
+        """True when no Negotiation Details tab on the matter holds an offer
+        and the Operator may write one: what the file says about offers has
+        never been entered. A failed read is NOT uncovered (never a flood)."""
+        try:
+            tabs = self._tabs(mid)
+        except Exception as exc:  # noqa: BLE001 - "could not look" must not read as "nothing there"
+            self.log(f"negotiation: a seeded matter's tabs could not be read ({type(exc).__name__})")
+            return False
+        if not tabs or not any(rows_mod.operator_kept(t) for t in tabs):
+            return False
+        return not any(r.get("offer_amount") or r.get("offer_date") for t in tabs for r in t["rows"])
+
+    def _seed(self, mid: str, files: list[dict[str, Any]]) -> dict[str, str]:
+        """A matter the lane has never seen. Files saved before
+        ``seed_saved_before`` (all of them when it is unauthored) are what an
+        earlier fill already read, and are taken as handled: nothing read,
+        nothing emailed. Files saved after it are new like any other.
+
+        EXCEPT when the matter's Negotiation Details hold no offer at all
+        (2026-10-12: a carrier's tender emailed a month before the first run
+        was taken as handled and never entered). Then the earlier offer-named
+        files are read too, and their offers ENTERED QUIETLY: written to the
+        tab, never emailed as new (they are not new; the firm has had them)."""
         self.counts["matters_seeded"] += 1
         cutoff = self.job.seed_saved_before
-        if cutoff is None:
-            arrivals.commit(LANE, mid, files, data=self.state)
-            return None
-        handled = [f for f in files if not _saved_on_or_after(f, cutoff)]
+        handled = [f for f in files if cutoff is None or not _saved_on_or_after(f, cutoff)]
+        early = [f for f in handled if select(f)]
+        if early and self._uncovered(mid):
+            quiet = self._quiet()
+            quiet[mid] = sorted({*quiet.get(mid, []), *(str(f["id"]) for f in early)})
+            self._set_quiet(quiet)
+            ids = {str(f["id"]) for f in early}
+            handled = [f for f in handled if str(f["id"]) not in ids]
         arrivals.commit(LANE, mid, handled, data=self.state)
         return arrivals.manifest_of(handled)
 
@@ -360,9 +399,8 @@ class NegotiationRun:
         prior = arrivals.cursor(LANE, mid, data=self.state)
         if prior is None:
             prior = self._seed(mid, files)
-            if prior is None:
-                return
         new = [f for f in arrivals.new_since(files, prior) if select(f)]
+        quiet = set(self._quiet().get(mid, []))
         failed: set[str] = set()
         if new and not self.stopped:
             tabs = self._tabs(mid)
@@ -393,7 +431,13 @@ class NegotiationRun:
                 plan = rows_mod.plan_document(events, doc, tabs, self._tokens(tabs))
                 self._planned(matter, f, events, plan, tabs)
                 self._write(mid, plan, tabs)
+                self._hold(matter, f, doc, plan)
                 for rec in plan["offers"]:
+                    if fid in quiet:
+                        # A seeded matter's earlier offer, entered so the tab is
+                        # true; the firm has had it, so it is not "new".
+                        self.counts["seed_offers_entered"] += rec.get("status") == "written"
+                        continue
                     self._notice(matter, doc, rec, tabs)
                 if any(tp.args for tp in plan["tabs"].values()):
                     tabs = self._tabs(mid)
@@ -403,6 +447,28 @@ class NegotiationRun:
         rows = [f for f in files if str(f.get("id")) not in failed]
         rows += [{"id": fid, "modified": prior[fid]} for fid in failed if fid in prior]
         arrivals.commit(LANE, mid, rows, data=self.state)
+        if quiet:
+            left = self._quiet()
+            left[mid] = sorted(quiet & failed)
+            self._set_quiet(left)
+
+    def _hold(self, matter: dict[str, Any], f: dict[str, Any], doc: dict[str, Any], plan: dict[str, Any]) -> None:
+        """Record what a document showed but the run did not enter or email."""
+        self.counts["events_excluded"] += len(plan.get("excluded") or [])
+        for h in plan.get("held") or []:
+            self.counts["offers_held"] += 1
+            e = h["event"]
+            self.held.append(
+                {
+                    "matter_number": matter.get("number") or "",
+                    "file_id": str(f.get("id")),
+                    "file": doc["name"],
+                    "by": str(e.get("by") or ""),
+                    "amount": e.get("amount"),
+                    "reason": h["reason"],
+                }
+            )
+            self.log("negotiation: an offer with no date was held from the notice")
 
     # Observation hooks: no-ops here; the dry run (dryrun.py) records through them.
     def _planned(self, matter: dict[str, Any], f: dict[str, Any], events: list, plan: dict, tabs: list) -> None:
@@ -439,6 +505,7 @@ class NegotiationRun:
             "cents": int(round(self.budget.refresh() * 100)),
             **self.counts,
             "notices": list(self.notices) if verdict == "delivered" else [],
+            "held": list(self.held),
         }
         if reason:
             out["reason"] = str(reason)[:500]

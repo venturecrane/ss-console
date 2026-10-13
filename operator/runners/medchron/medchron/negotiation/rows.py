@@ -52,6 +52,10 @@ SKIP_KINDS = frozenset({"acceptance", "rejection", "mediation_proposal", "other"
 #: The kinds that, made by the other side, are an offer the firm is told about:
 #: a carrier's counter-offer included (the firm's data, 2026-10-10).
 NOTICE_KINDS = frozenset(THEIRS)
+#: Who wrote the document an event came from, and to whom: the reader's
+#: document-level answer, stamped on every event by ``extract.parse``.
+PAYING_SIDE = "paying_side"
+OUR_SIDE = frozenset({"our_firm", "our_client"})
 OPERATOR_MARK = "Entered "
 NOTE_MAX = 250
 
@@ -96,6 +100,32 @@ def is_ours(e: dict[str, Any], tokens: set[str]) -> bool:
         return False
     by = (e.get("by") or "").lower()
     return "plaintiff" in by or any(t in by for t in tokens)
+
+
+def admissible(e: dict[str, Any], ours: bool) -> str | None:
+    """None when the event may be entered, else why not.
+
+    WHY (2026-10-12): the firm's OWN letter to a lienholder recited that the
+    client "has received a policy-limits settlement offer" and the run entered
+    and announced it as a new offer, undated, with that letter as its source.
+    The real tender was the carrier's email a month earlier. So an offer is
+    entered only from a document the PAYING side (an insurer, a defendant or
+    their counsel) wrote TO the firm or its client. A document addressed to a
+    third party (a lienholder, a medical provider) adds nothing, whoever wrote
+    it. Our own figures come from our letters to the paying side, or from the
+    paying side's letters that answer them. An unstated side is not admitted."""
+    author, to = e.get("author_side"), e.get("addressed_to")
+    if to == "third_party" or author == "third_party":
+        return "the document is addressed to or written by a third party"
+    if ours:
+        if author not in OUR_SIDE and author != PAYING_SIDE:
+            return "the document's author is not known"
+        return None
+    if author != PAYING_SIDE:
+        return "the document was not written by the paying side"
+    if to not in OUR_SIDE:
+        return "the document is not addressed to the firm or its client"
+    return None
 
 
 def operator_kept(tab: dict[str, Any]) -> bool:
@@ -299,7 +329,30 @@ def plan_document(
     candidate: ``status`` is ``to_write`` (``entry`` indexes its TabPlan's
     args; ``date_only`` when the amount was not confirmed), ``already_present``
     (no notice), or ``not_entered`` / ``possible_duplicate`` with the
-    ``reason`` the firm is told."""
+    ``reason`` the firm is told.
+
+    ``excluded``: events from a document the paying side did not write to the
+    firm (``admissible``); nothing is entered or announced. ``held``: an offer
+    with an amount but no date the document shows (``extract.parse`` has
+    already tried the document's own date); neither entered nor announced,
+    because "(date not stated)" on a notice sent the firm looking for an offer
+    that was not new."""
+    held: list[dict[str, Any]] = []
+    excluded: list[dict[str, Any]] = []
+    kept: list[dict[str, Any]] = []
+    for e in events:
+        if str(e.get("kind")) in SKIP_KINDS:
+            continue
+        ours = is_ours(e, tokens)
+        why = admissible(e, ours)
+        if why is not None:
+            excluded.append({"event": e, "reason": why})
+        elif not ours and str(e.get("kind")) in NOTICE_KINDS and not real_date(e.get("date")):
+            if e.get("amount") is not None:
+                held.append({"event": e, "status": "held", "reason": "the offer's date is not shown in the document"})
+        else:
+            kept.append(e)
+    shown, events = events, kept  # acceptances are SKIP_KINDS but still mark an offer accepted
     by_idx = {int(t["plaintiff_index"]): t for t in tabs}
     plans: dict[int, TabPlan] = {}
     if not by_idx:
@@ -307,7 +360,7 @@ def plan_document(
         offers = [
             {"event": e, "status": "not_entered", "reason": reason} for e in events if e.get("kind") in OFFER_KINDS
         ]
-        return {"tabs": plans, "offers": offers}
+        return {"tabs": plans, "offers": offers, "held": held, "excluded": excluded}
     offers = []
     host, multi = min(by_idx), len(by_idx) > 1
     for e in sorted(events, key=_dated):
@@ -323,9 +376,9 @@ def plan_document(
             continue  # a bare mention of an offer: nothing to enter, nothing new to tell
         _place(plans.setdefault(target, TabPlan(by_idx[target])), e, ours, doc, rec)
         if not ours and kind in NOTICE_KINDS and rec["status"] != "already_present":
-            rec["accepted"] = _accepted_in(events, e)
+            rec["accepted"] = _accepted_in(shown, e)
             offers.append(rec)
-    return {"tabs": plans, "offers": offers}
+    return {"tabs": plans, "offers": offers, "held": held, "excluded": excluded}
 
 
 def details_for(tab: dict[str, Any], today: str) -> str:
@@ -339,6 +392,7 @@ __all__ = [
     "OFFER_KINDS",
     "OPERATOR_MARK",
     "TabPlan",
+    "admissible",
     "amount_text",
     "details_for",
     "is_ours",

@@ -64,6 +64,10 @@ Machine (the negotiation job), run on the firm's weekday schedule.
    taken as already entered, so the firm is not emailed about offers it already
    has, and anything saved after it is read like any new document. With no
    cutoff authored, every file present on the first run is taken as entered.
+   **Except** a matter whose Negotiation Details hold no offer at all: its
+   earlier offer-named files are read too and their offers entered quietly (on
+   the tab, never emailed as new: the firm has had them). A tab that cannot be
+   read is never taken as empty.
 2. **Selects offer documents by name.** A file whose name says offer, demand,
    998, tender, counter, settle, evaluation or policy limits, saved as a PDF,
    Word document or email.
@@ -75,6 +79,14 @@ Machine (the negotiation job), run on the firm's weekday schedule.
    rows beside it, under the rules the firm approved: each demand, offer,
    counter-offer, 998 offer, policy-limits tender, acceptance, rejection or
    mediator's proposal, with the amount and date from the document itself.
+   **Who wrote it, to whom.** An offer is entered and announced only from a
+   document the paying side (an insurer, a defendant or their counsel) wrote to
+   the firm or its client. The firm's own letters, and anything addressed to a
+   third party (a lienholder, a medical provider), add no offer, however they
+   recite one (2026-10-12: the firm's letter to a lienholder reciting a tender
+   was announced as a new offer). An offer the document shows with no date is
+   dated by that document (an email's sent date first); when it still has none
+   it is HELD: neither entered nor emailed, and listed in the job's verdict.
 4. **Enters the rows** the way the firm approved: an offer answering a demand
    already on the tab goes on its own row, its note naming the demand it answers
    (a row already entered is never added to, so its note never turns false); a
