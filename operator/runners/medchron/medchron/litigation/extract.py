@@ -25,6 +25,7 @@ import json
 import re
 import shutil
 import subprocess
+import threading
 from email import policy
 from email.parser import BytesParser
 from pathlib import Path
@@ -54,35 +55,81 @@ def _pages(texts: list[str]) -> str:
     return "\n".join(f"{PAGE_MARK.format(n=i)}\n{t.strip()}" for i, t in enumerate(texts, 1))
 
 
-def render_png(pdf_bytes: bytes, page: int, long_side: int = 1600) -> bytes:
+# MEMORY (2026-10-13: A&P litigation job 01M4V2G6 was OOM-killed in its 1 GiB
+# cgroup at 2525 of 4808 documents). MuPDF keeps a PROCESS-WIDE store of
+# decoded images and fonts that outlives ``doc.close()`` (it fills toward its
+# 256 MB default and stays there), and pymupdf appends every MuPDF warning to a
+# module-level list nothing trims. Both grow with the number of documents read,
+# not with the largest one. So every MuPDF use here runs under ``_MUPDF`` and
+# ends with ``_release()``, a PDF is opened from its path (its bytes are never
+# all in Python at once), and no PDF stays open across a vision call: a
+# document's footprint is gone before the next one starts.
+_MUPDF = threading.Lock()
+RENDER_LONG_SIDE = 1600
+
+
+def _release() -> None:
+    """Drop MuPDF's cached decoded objects and pymupdf's warning list. What an
+    open document still references MuPDF keeps; only the leftovers go."""
     import pymupdf
 
-    doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
-    try:
-        pg = doc[page - 1]
-        zoom = long_side / (max(pg.rect.width, pg.rect.height) or 1.0)
-        return pg.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom)).tobytes("png")
-    finally:
-        doc.close()
+    pymupdf.TOOLS.store_shrink(100)
+    pymupdf.TOOLS.reset_mupdf_warnings()
 
 
-def pdf_text(data: bytes, ocr: Ocr | None) -> tuple[str, int]:
-    """(paged text, scanned pages sent to vision)."""
+def _open_pdf(src: bytes | Path) -> Any:
     import pymupdf
 
-    try:
-        doc = pymupdf.open(stream=data, filetype="pdf")
-    except Exception as exc:  # noqa: BLE001 - a PDF that does not open is one failure record
-        raise ExtractFailure(f"pdf_unreadable: {type(exc).__name__}") from None
-    try:
-        texts = [pg.get_text() or "" for pg in doc]
-    finally:
-        doc.close()
-    scanned, picks = 0, ocr_pages(texts)
-    for i in picks:
-        if ocr is None:
-            raise ExtractFailure("scan_without_vision: a page has no text layer and no vision reader was given")
-        texts[i] = ocr(render_png(data, i + 1))
+    if isinstance(src, Path):
+        return pymupdf.open(str(src), filetype="pdf")
+    return pymupdf.open(stream=src, filetype="pdf")
+
+
+def _png(doc: Any, page: int, long_side: int) -> bytes:
+    import pymupdf
+
+    pg = doc[page - 1]
+    zoom = long_side / (max(pg.rect.width, pg.rect.height) or 1.0)
+    return pg.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom)).tobytes("png")
+
+
+def render_png(pdf: bytes | Path, page: int, long_side: int = RENDER_LONG_SIDE) -> bytes:
+    with _MUPDF:
+        try:
+            doc = _open_pdf(pdf)
+        except Exception:
+            _release()
+            raise
+        try:
+            return _png(doc, page, long_side)
+        finally:
+            doc.close()
+            _release()
+
+
+def pdf_text(data: bytes | Path, ocr: Ocr | None) -> tuple[str, int]:
+    """(paged text, scanned pages sent to vision). The page images vision
+    needs (at most ``HEAD + TAIL``) are rendered and the document closed
+    BEFORE the first vision call."""
+    with _MUPDF:
+        try:
+            doc = _open_pdf(data)
+        except Exception as exc:  # noqa: BLE001 - a PDF that does not open is one failure record
+            _release()
+            raise ExtractFailure(f"pdf_unreadable: {type(exc).__name__}") from None
+        try:
+            texts = [pg.get_text() or "" for pg in doc]
+            picks = ocr_pages(texts)
+            if picks and ocr is None:
+                raise ExtractFailure("scan_without_vision: a page has no text layer and no vision reader was given")
+            images = [(i, _png(doc, i + 1, RENDER_LONG_SIDE)) for i in picks]
+        finally:
+            doc.close()
+            _release()
+    scanned = 0
+    while images and ocr is not None:
+        i, png = images.pop(0)  # each image is let go once it is transcribed
+        texts[i] = ocr(png)
         scanned += 1
     for i, t in enumerate(texts):
         if len(t.strip()) < SCAN_FLOOR and i not in picks:
@@ -243,13 +290,13 @@ def doc_text(path: Path) -> str:
 def text_of(path: Path, ext: str, ocr: Ocr | None) -> tuple[str, int]:
     """(text, scanned pages); raises ExtractFailure."""
     ext = ext.lower()
-    data = path.read_bytes()
-    if not data:
+    if path.stat().st_size == 0:
         raise ExtractFailure("empty_file: the file has no bytes")
     if ext == ".pdf":
-        return pdf_text(data, ocr)
+        return pdf_text(path, ocr)  # from disk: MuPDF reads what it needs, Python never holds the file
     if ext == ".msg":
         return msg_text(path, ocr), 0
+    data = path.read_bytes()
     if ext == ".eml":
         return eml_text(data, ocr), 0
     if ext in (".htm", ".html"):
@@ -288,9 +335,12 @@ def extract_matter(
 ) -> list[dict[str, Any]]:
     """Every ok pulled row of one matter; resumable through extracted.jsonl.
     Documents are read ``concurrency`` at a time (each one's vision calls in
-    turn), records written by this thread only. ``progress`` (a
-    ``progress.Progress``) is stepped once per document."""
-    from concurrent.futures import ThreadPoolExecutor
+    turn), records written by this thread only, each the moment its document
+    finishes. At most ``concurrency`` documents are in flight: a slow scan at
+    the head never lets finished work pile up behind it (``pool.map`` submits
+    every document at once and holds each result until the head is done).
+    ``progress`` (a ``progress.Progress``) is stepped once per document."""
+    from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 
     log = mdir / "extracted.jsonl"
     done = {r["file_id"]: r for r in read_jsonl(log)}
@@ -304,14 +354,27 @@ def extract_matter(
         rec = extract_file(Path(r["path"]), r.get("ext") or "", mdir / "txt" / f"{fid}.txt", ocr)
         return {"file_id": fid, "name": r.get("name"), **rec}
 
-    with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
-        for rec in pool.map(one, todo):
-            append_jsonl(log, rec)
-            done[rec["file_id"]] = rec
-            if progress is not None:
-                if not rec.get("ok"):
-                    progress.add("failures")
-                progress.step()
+    def record(rec: dict[str, Any]) -> None:
+        append_jsonl(log, rec)
+        done[rec["file_id"]] = rec
+        if progress is not None:
+            if not rec.get("ok"):
+                progress.add("failures")
+            progress.step()
+
+    width = max(1, concurrency)
+    queue = iter(todo)
+    with ThreadPoolExecutor(max_workers=width) as pool:
+        live: set[Future[dict[str, Any]]] = set()
+        for r in queue:
+            live.add(pool.submit(one, r))
+            if len(live) < width:
+                continue
+            finished, live = wait(live, return_when=FIRST_COMPLETED)
+            for f in finished:
+                record(f.result())
+        for f in live:
+            record(f.result())
     return [done[str(r["id"])] for r in rows if str(r["id"]) in done]
 
 

@@ -183,7 +183,7 @@ class MatterContext:
         if path.suffix.lower() != ".pdf":
             return "only a PDF page can be viewed as an image"
         try:
-            png = extract_mod.render_png(path.read_bytes(), page)
+            png = extract_mod.render_png(path, page)
         except Exception:  # noqa: BLE001 - an unrenderable page is said, never guessed at
             return "that page could not be rendered"
         b64 = base64.standard_b64encode(png).decode()
