@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 from bin.lib import work_health as wh
+from bin.lib import work_health_auth as auth
 from bin.lib import work_health_mail as mail
 from bin.lib import work_health_sources as src
 
@@ -170,6 +171,20 @@ def test_a_delivered_job_is_not_an_item():
     assert wh.job_items(SEAT, rows, CFG, NOW) == []
 
 
+def test_a_job_smd_closed_with_a_reason_drops_off(tmp_path):
+    rows = [
+        _job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=2), job_id="J9"),
+        _job("DRAFTING", "FAILED", NOW - timedelta(hours=1), job_id="J9", reason="review_held"),
+    ]
+    assert _kinds(wh.job_items(SEAT, rows, CFG, NOW)) == ["job_failed"]
+    assert wh.job_items(SEAT, rows, CFG, NOW, {(SEAT, "J9")}) == []
+    bad = tmp_path / "closed.yaml"
+    bad.write_text("closed:\n  - seat: x\n    job: J9\n")
+    with pytest.raises(ValueError):
+        wh.load_closed(bad)
+    assert (SEAT, "01M4S9MQE7XZ3E67Q5TDCKJGC6") in wh.load_closed()
+
+
 def test_config_lanes_must_match_the_broker_lanes(tmp_path):
     bad = tmp_path / "wh.yaml"
     raw = wh.CONTRACT_PATH.read_text().replace("  medchron:\n", "  medchronx:\n")
@@ -182,104 +197,185 @@ def test_config_lanes_must_match_the_broker_lanes(tmp_path):
 # Smokeball sign-in
 # ---------------------------------------------------------------------------
 
-
-def _probe(at: datetime, ok: bool) -> dict:
-    basis = "connector_auth_ok:smokeball" if ok else "connector_auth_failed:smokeball:SmokeballAuthError"
-    return _row("SUPPRESSED_WAKE", at, skill=wh.AUTH_PROBE_SKILL, decision_basis=basis)
+AP_DEPLOYED = {("statute-watch", "7 12 1 * *"), ("negotiation-watch", "7 8,12,16 * * 1-5")}
 
 
-def test_a_failed_hourly_check_is_an_item():
-    rows = [_probe(NOW - timedelta(minutes=70), True), _probe(NOW - timedelta(minutes=10), False)]
-    items = wh.smokeball_auth_items(SEAT, rows, CFG, NOW, has_smokeball=True, probe_authored=True)
+def _probe(at: datetime, outcome: str, detail: str = "") -> dict:
+    basis = {
+        "ok": "connector_auth_ok:smokeball",
+        "refused": "connector_auth_refused:smokeball:http_400",
+        "unchecked": "connector_auth_unchecked:smokeball:ModuleNotFoundError",
+    }[outcome]
+    return _row("SUPPRESSED_WAKE", at, skill=auth.AUTH_PROBE_SKILL, decision_basis=basis, error_detail=detail)
+
+
+def _auth(rows, scheduled=True):
+    return auth.smokeball_auth_items(SEAT, rows, CFG, NOW, probe_scheduled=scheduled)
+
+
+def test_only_an_explicit_refusal_pages_dead():
+    rows = [_probe(NOW - timedelta(minutes=70), "ok"), _probe(NOW - timedelta(minutes=10), "refused")]
+    items = _auth(rows)
     assert _kinds(items) == ["auth_failed"]
     assert items[0].page == f"ACTION: {SEAT} Smokeball sign-in is dead"
 
 
-def test_a_later_success_clears_the_failure():
-    rows = [_probe(NOW - timedelta(minutes=70), False), _probe(NOW - timedelta(minutes=10), True)]
-    assert wh.smokeball_auth_items(SEAT, rows, CFG, NOW, has_smokeball=True, probe_authored=True) == []
+def test_a_check_that_could_not_run_is_never_called_dead():
+    """The 2026-10-13 review: a probe's own failure (venv, import, network) is
+    not a dead token. It is an item with the error, and it never pages."""
+    items = _auth([_probe(NOW - timedelta(minutes=10), "unchecked", "No module named smokeball_connector")])
+    assert _kinds(items) == ["auth_unchecked"]
+    assert items[0].page is None
+    assert "could not run" in items[0].what and "No module named" in items[0].what
+    assert "dead" not in items[0].what.lower().replace("not a dead token", "")
 
 
-def test_an_idle_seat_with_a_job_failing_on_auth_is_an_item_without_the_probe():
-    """The 2026-10-12 A&P shape: no probe authored, a scheduled job failed on
-    SmokeballAuthError, nothing succeeded after."""
+def test_the_first_builds_failed_basis_reads_as_could_not_run():
+    row = _row(
+        "SUPPRESSED_WAKE",
+        NOW - timedelta(minutes=10),
+        skill=auth.AUTH_PROBE_SKILL,
+        decision_basis="connector_auth_failed:smokeball:SmokeballAuthError",
+    )
+    assert all(i.page is None for i in _auth([row]))
+
+
+def test_a_later_success_clears_the_refusal():
+    rows = [_probe(NOW - timedelta(minutes=70), "refused"), _probe(NOW - timedelta(minutes=10), "ok")]
+    assert _auth(rows) == []
+
+
+def test_a_job_failing_on_auth_is_an_item_but_not_a_page():
+    """The 2026-10-12 A&P shape: a scheduled job failed on SmokeballAuthError.
+    Second-hand, so it cannot tell a refusal from a transport fault."""
     rows = [
         _job("NEGOTIATION", "SUBMITTED", NOW - timedelta(hours=2), trigger="scheduled"),
         _job("NEGOTIATION", "FAILED", NOW - timedelta(hours=2), reason="inventory_unreadable: SmokeballAuthError"),
     ]
-    items = wh.smokeball_auth_items(SEAT, rows, CFG, NOW, has_smokeball=True, probe_authored=False)
-    assert _kinds(items) == ["auth_failed"]
+    items = _auth(rows, scheduled=False)
+    assert _kinds(items) == ["auth_unchecked"] and items[0].page is None
 
 
-def test_a_silent_probe_is_an_item():
-    rows = [_probe(NOW - timedelta(hours=4), True)]
-    items = wh.smokeball_auth_items(SEAT, rows, CFG, NOW, has_smokeball=True, probe_authored=True)
-    assert _kinds(items) == ["auth_unchecked"]
+def test_a_silent_scheduled_check_is_an_action_item():
+    items = _auth([_probe(NOW - timedelta(hours=4), "ok")])
+    assert _kinds(items) == ["auth_unchecked"] and items[0].what.startswith("ACTION")
 
 
-def test_a_smokeball_seat_whose_check_is_not_running_is_an_action_item():
-    """The check is the only detector of a dead Smokeball token (PR #3144), so
-    its absence is an ACTION item, never a quiet skip."""
+def test_a_smokeball_seat_whose_check_is_not_scheduled_is_an_action_item():
+    def why(authored, deployed):
+        return cli.probe_not_scheduled_why(True, authored, deployed)
 
-    def run(authored, running, smokeball=True):
-        return wh.probe_not_running_items(
-            SEAT, NOW, has_smokeball=smokeball, probe_authored=authored, probe_running=running
-        )
-
-    assert _kinds(run(False, False)) == ["auth_unchecked"] and "ACTION" in run(False, False)[0].what
-    assert "adopts" in run(True, False)[0].what
-    assert run(True, True) == []
-    assert run(False, False, smokeball=False) == []
+    assert why(None, AP_DEPLOYED).startswith("no connector-auth-check")
+    assert "not been rebuilt" in why("13 * * * *", AP_DEPLOYED)
+    assert why("13 * * * *", AP_DEPLOYED | {("connector-auth-check", "13 * * * *")}) is None
+    assert cli.probe_not_scheduled_why(False, None, None) is None
+    items = auth.probe_not_scheduled_items(SEAT, NOW, why="x")
+    assert _kinds(items) == ["auth_unchecked"] and items[0].what.startswith("ACTION")
 
 
-def test_authored_but_not_yet_running_is_a_gap_and_its_slots_are_not_missed(monkeypatch):
-    """The window between merging the A&P cron row and the seat's rebuild: the
-    Machine has no such job, so its slots are not 'missed'."""
-    monkeypatch.setattr(cli, "graph_check", lambda slug: (None, None, None))
+def _console(deployed=AP_DEPLOYED):
     console = cli.Console(cli._NoD1())
-    items, gaps = cli.evaluate_seat(SEAT, CFG, console, NOW, [])
-    assert not any(f"|missed_slot|{wh.AUTH_PROBE_SKILL}|" in i.key for i in items)
-    assert any("adopts" in i.what for i in items)
-    # Adopted 5h ago by the schedule: slots after that are owed, slots before are not.
-    probe = _probe(NOW - timedelta(hours=5), True)
-    items, gaps = cli.evaluate_seat(SEAT, CFG, console, NOW, [probe])
-    assert not any("adopts" in i.what for i in items)
-    missed = [i for i in items if f"|missed_slot|{wh.AUTH_PROBE_SKILL}|" in i.key]
-    assert missed and all(i.onset >= probe_ts(probe) for i in missed)
-    # A run by hand (run_by) is not adoption.
-    manual = _probe(NOW - timedelta(hours=5), True)
-    md = json.loads(manual["metadata"])
-    md["run_by"] = "seat-probe"
-    manual["metadata"] = json.dumps(md)
-    items, gaps = cli.evaluate_seat(SEAT, CFG, console, NOW, [manual])
-    assert any("adopts" in i.what for i in items)
+    console.personas[SEAT] = json.dumps([{"cron": [{"skill": k, "schedule": v} for k, v in sorted(deployed)]}])
+    return console
 
 
-def probe_ts(row):
-    return wh.parse_ts(row["ts"])
-
-
-def test_a_seat_that_has_never_reported_is_not_live_yet(monkeypatch):
+def test_a_seat_that_has_never_reported_is_not_live_yet():
     console = cli.Console(cli._NoD1())
     console.status["new-seat"] = {"customer_slug": "new-seat", "last_heartbeat_ts": None}
-    items, gaps = cli.evaluate_seat("new-seat", CFG, console, NOW, None)
+    items, gaps, _resolved = cli.evaluate_seat("new-seat", CFG, console, NOW, None)
     assert items == [] and "not live yet" in gaps[0]
 
 
 # ---------------------------------------------------------------------------
-# console records
+# scheduled runs: graded against what the seat was PROVISIONED with
+# ---------------------------------------------------------------------------
+
+PILOT_GIT = {
+    "business_hours": {"timezone": "America/Los_Angeles"},
+    "personas": [
+        {
+            "cron": [
+                {
+                    "skill": "connector-auth-check",
+                    "schedule": "13 * * * *",
+                    "pre_run": "pre_run.py",
+                    "wake_policy": "pre_run_decides",
+                },
+                {
+                    "skill": "daily-thing",
+                    "schedule": "47 5 * * *",
+                    "pre_run": "pre_run.py",
+                    "wake_policy": "pre_run_decides",
+                },
+            ]
+        }
+    ],
+}
+
+
+def _wake(skill: str, at: datetime) -> dict:
+    return _row("SUPPRESSED_WAKE", at, skill=skill, decision_basis="x")
+
+
+def test_a_daily_cron_that_ran_on_time_is_not_missed():
+    """The falsifier for the 2026-10-13 false lines: a daily 05:47 Pacific row
+    (12:47Z) that ran is not "never ran"; the authored-but-unadopted hourly row
+    is ONE drift line, not 24 missed slots."""
+    deployed = {("connector-auth-check", "47 5 * * *"), ("daily-thing", "47 5 * * *")}
+    rows = [_wake("daily-thing", datetime(2026, 10, 13, 12, 48, tzinfo=UTC))]
+    assert src.missed_slot_items("pilot", rows, CFG, NOW, None, PILOT_GIT, deployed) == []
+    # Any other routine's drift is one line naming both schedules.
+    deployed = {("connector-auth-check", "13 * * * *"), ("daily-thing", "7 9 * * *")}
+    items = src.missed_slot_items("pilot", rows, CFG, NOW, None, PILOT_GIT, deployed)
+    drift = [i for i in items if i.kind == "schedule_drift"]
+    assert len(drift) == 1 and "47 5 * * *" in drift[0].what and "7 9 * * *" in drift[0].what
+
+
+def test_a_daily_cron_that_did_not_run_is_one_line():
+    deployed = {("connector-auth-check", "13 * * * *"), ("daily-thing", "47 5 * * *")}
+    rows = [_wake("connector-auth-check", NOW - timedelta(minutes=m)) for m in range(17, 1440, 60)]
+    items = src.missed_slot_items("pilot", rows, CFG, NOW, None, PILOT_GIT, deployed)
+    assert _kinds(items) == ["missed_slot"] and "daily-thing" in items[0].what
+
+
+def test_many_missed_slots_of_one_routine_are_one_line():
+    deployed = {("connector-auth-check", "13 * * * *"), ("daily-thing", "47 5 * * *")}
+    rows = [_wake("daily-thing", datetime(2026, 10, 13, 12, 48, tzinfo=UTC))]
+    items = src.missed_slot_items("pilot", rows, CFG, NOW, None, PILOT_GIT, deployed)
+    assert _kinds(items) == ["missed_slot"]
+    assert "scheduled runs missed" in items[0].what
+
+
+def test_an_unreadable_provisioned_schedule_is_an_item_not_a_guess():
+    items = src.missed_slot_items("pilot", [], CFG, NOW, None, PILOT_GIT, None)
+    assert _kinds(items) == ["unreadable"]
+
+
+# ---------------------------------------------------------------------------
+# console records, and open work only
 # ---------------------------------------------------------------------------
 
 
-def test_shortfalls_group_by_tool_and_skip_job_echoes():
+def test_shortfalls_are_one_line_per_tool_and_only_while_unanswered():
     rows = [
         {"ts": "2026-10-13T10:00:00Z", "class": "failed", "tool": "mcp_smokeball_list_matters", "code": "http_400"},
-        {"ts": "2026-10-13T11:00:00Z", "class": "failed", "tool": "mcp_smokeball_list_matters", "code": "http_400"},
+        {"ts": "2026-10-13T11:00:00Z", "class": "failed", "tool": "mcp_smokeball_list_matters", "code": "http_500"},
         {"ts": "2026-10-13T11:00:00Z", "class": "failed", "tool": "drafting_job_status", "code": "drafting_job_failed"},
         {"ts": "2026-10-10T11:00:00Z", "class": "limit", "tool": "x", "code": "old"},
     ]
-    items = src.shortfall_items(SEAT, rows, CFG, NOW)
-    assert len(items) == 1 and "2 times" in items[0].what
+    items, resolved = src.shortfall_items(SEAT, rows, CFG, NOW, [])
+    assert len(items) == 1 and "2 times" in items[0].what and resolved == 0
+    later = [_row("REPLY_SENT", datetime(2026, 10, 13, 12, 0, tzinfo=UTC), in_reply_to="x")]
+    items, resolved = src.shortfall_items(SEAT, rows, CFG, NOW, later)
+    assert items == [] and resolved == 2
+
+
+def test_a_held_reply_whose_message_went_out_is_history():
+    held = _row("REPLY_HELD", NOW - timedelta(hours=3), message_id=VID, reason="duplicate_reply")
+    held["id"] = "HELD1"
+    sent = _row("REPLY_SENT", NOW - timedelta(hours=4), in_reply_to=VID)
+    assert src._held_then_sent([held, sent], "HELD1")
+    assert not src._held_then_sent([held], "HELD1")
 
 
 def test_a_stale_heartbeat_is_an_item_and_a_fresh_one_is_not():
@@ -303,14 +399,6 @@ def test_an_idle_smokeball_with_an_old_success_is_not_an_item():
     assert src.connector_items(SEAT, idle, NOW) == []
 
 
-def test_missed_scheduled_slots_come_from_the_watchdog():
-    """A weekday with the A&P negotiation-watch rows authored and NO wake rows:
-    the 08:07 Pacific slot (15:07Z) passed with neither row."""
-    items = src.missed_slot_items(SEAT, [], CFG, NOW, None)
-    assert "missed_slot" in _kinds(items)
-    assert any("negotiation-watch" in i.what for i in items)
-
-
 # ---------------------------------------------------------------------------
 # a seat that cannot be read
 # ---------------------------------------------------------------------------
@@ -329,7 +417,7 @@ class _EmptyClient:
 def test_an_unreadable_ledger_is_an_item(monkeypatch):
     monkeypatch.setattr(cli.seam_pull, "seam_client_from_env", lambda slug: _DeadClient())
     console = cli.Console(cli._NoD1())
-    items, _gaps = cli.evaluate_seat(SEAT, CFG, console, NOW, None)
+    items, _gaps, _resolved = cli.evaluate_seat(SEAT, CFG, console, NOW, None)
     assert "unreadable" in _kinds(items)
 
 
@@ -438,6 +526,7 @@ _PRE_RUN = Path(__file__).resolve().parents[2] / "skills" / "connector-auth-chec
 
 def _pre_run():
     spec = importlib.util.spec_from_file_location("auth_pre_run", _PRE_RUN)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -450,22 +539,56 @@ def _fake_python(tmp_path, line: str) -> str:
     return str(script)
 
 
-def test_pre_run_ok_and_failure_verdicts(tmp_path, monkeypatch):
+def test_pre_run_tells_a_refusal_from_a_check_that_could_not_run(tmp_path, monkeypatch):
     module = _pre_run()
     monkeypatch.setenv("SMD_CONNECTOR_VENV_PYTHON", _fake_python(tmp_path, '{"ok": true}'))
-    assert module.check() == (True, "")
+    assert module.check()[0] == "ok"
     monkeypatch.setenv(
-        "SMD_CONNECTOR_VENV_PYTHON", _fake_python(tmp_path, '{"ok": false, "error": "SmokeballAuthError"}')
+        "SMD_CONNECTOR_VENV_PYTHON",
+        _fake_python(
+            tmp_path, '{"ok": false, "refused": true, "error": "http_400", "detail": "rejected with HTTP 400"}'
+        ),
     )
-    assert module.check() == (False, "SmokeballAuthError")
+    assert module.check()[:2] == ("refused", "http_400")
+    monkeypatch.setenv(
+        "SMD_CONNECTOR_VENV_PYTHON",
+        _fake_python(
+            tmp_path, '{"ok": false, "refused": false, "error": "ModuleNotFoundError", "detail": "import failed"}'
+        ),
+    )
+    assert module.check()[:2] == ("unchecked", "ModuleNotFoundError")
     monkeypatch.setenv("SMD_CONNECTOR_VENV_PYTHON", str(tmp_path / "absent"))
-    assert module.check() == (False, "connector_python_missing")
+    assert module.check()[:2] == ("unchecked", "connector_python_missing")
+
+
+def test_the_snippet_reads_a_4xx_refusal_as_refused(tmp_path):
+    """Runs the real snippet against a stub connector whose token mint raises
+    exactly what client._mint_token raises on invalid_grant."""
+    pkg = tmp_path / "smokeball_connector"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "client.py").write_text(
+        "class SmokeballAuthError(RuntimeError):\n    pass\n"
+        "class _C:\n    def auth_status(self):\n"
+        "        raise SmokeballAuthError('token mint (authorization_code) rejected with HTTP 400 at https://x/oauth2/token')\n"
+        "def build_client_from_env():\n    return _C()\n"
+    )
+    import subprocess
+
+    out = subprocess.run(  # noqa: S603 - sys.executable and a module-constant snippet from the pre_run under test; no shell
+        [sys.executable, "-c", _pre_run()._CHECK_SNIPPET], capture_output=True, text=True, cwd=tmp_path, check=True
+    ).stdout
+    verdict = json.loads(out.strip().splitlines()[-1])
+    assert verdict["refused"] is True and verdict["error"] == "http_400"
 
 
 def test_pre_run_never_wakes_and_records_the_basis(tmp_path, monkeypatch, capsys):
     module = _pre_run()
     monkeypatch.setenv(
-        "SMD_CONNECTOR_VENV_PYTHON", _fake_python(tmp_path, '{"ok": false, "error": "SmokeballAuthError"}')
+        "SMD_CONNECTOR_VENV_PYTHON",
+        _fake_python(
+            tmp_path, '{"ok": false, "refused": true, "error": "http_400", "detail": "rejected with HTTP 400"}'
+        ),
     )
     seen = []
     monkeypatch.setattr(module, "_broker", lambda req: seen.append(req) or {"ok": True})
@@ -474,16 +597,16 @@ def test_pre_run_never_wakes_and_records_the_basis(tmp_path, monkeypatch, capsys
     assert out["wakeAgent"] is False
     row_meta = json.loads(seen[0]["row"]["metadata"])
     assert seen[0]["action"] == "suppressed_wake_append"
-    assert row_meta["decision_basis"] == "connector_auth_failed:smokeball:SmokeballAuthError"
-    # And the email reads that very row as a failure.
+    assert row_meta["decision_basis"] == "connector_auth_refused:smokeball:http_400"
+    # And the email reads that very row as a dead sign-in that pages.
     row = {
         "ts": NOW.isoformat(),
         "action_type": "SUPPRESSED_WAKE",
         "skill_name": "connector-auth-check",
         "metadata": seen[0]["row"]["metadata"],
     }
-    assert _kinds(wh.smokeball_auth_items(SEAT, [row], CFG, NOW, has_smokeball=True, probe_authored=True)) == [
-        "auth_failed"
+    assert [i.page for i in auth.smokeball_auth_items(SEAT, [row], CFG, NOW, probe_scheduled=True)] == [
+        f"ACTION: {SEAT} Smokeball sign-in is dead"
     ]
 
 
@@ -492,10 +615,9 @@ def test_every_smokeball_seat_authors_the_hourly_check():
 
     customers = Path(__file__).resolve().parents[2] / "customers"
     for path in sorted(customers.glob("[!_]*/customer.yaml")):
-        has_smokeball, authored = cli.seat_shape(yaml.safe_load(path.read_text()))
+        has_smokeball, schedule = cli.seat_shape(yaml.safe_load(path.read_text()))
         # Every Smokeball seat authors the hourly check: it is the only detector.
-        assert authored or not has_smokeball, f"{path.parent.name} has Smokeball but no hourly sign-in check"
-    assert cli.seat_shape(yaml.safe_load((customers / SEAT / "customer.yaml").read_text())) == (True, True)
+        assert schedule or not has_smokeball, f"{path.parent.name} has Smokeball but no hourly sign-in check"
 
 
 def test_the_state_file_names_no_work():
@@ -506,36 +628,61 @@ def test_the_state_file_names_no_work():
     assert "201208" not in blob and "drafting" not in blob and SEAT not in blob
 
 
+def _offline(monkeypatch, tmp_path, rows):
+    path = tmp_path / "rows.json"
+    path.write_text(json.dumps(rows))
+    monkeypatch.setattr(cli, "graph_check", lambda slug: (None, None, None))
+    monkeypatch.setattr(cli, "_NoD1", _ApD1)
+    return path
+
+
+class _ApD1:
+    def execute(self, sql: str) -> list[dict]:
+        if "customer_configs" in sql:
+            deployed = sorted(AP_DEPLOYED | {("connector-auth-check", "13 * * * *")})
+            return [
+                {
+                    "customer_slug": SEAT,
+                    "personas_json": json.dumps([{"cron": [{"skill": k, "schedule": v} for k, v in deployed]}]),
+                }
+            ]
+        return []
+
+
 def test_the_run_log_carries_counts_never_the_email_text(tmp_path, capsys, monkeypatch):
     """The CI log of this public repository must never carry a matter number."""
-    rows = tmp_path / "rows.json"
-    rows.write_text(
-        json.dumps(
-            [
-                _job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=2), matter_number="201208"),
-                _job("DRAFTING", "FAILED", NOW - timedelta(hours=1), reason="review_held: x"),
-            ]
-        )
+    rows = _offline(
+        monkeypatch,
+        tmp_path,
+        [
+            _job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=2), matter_number="201208"),
+            _job("DRAFTING", "FAILED", NOW - timedelta(hours=1), reason="review_held: x"),
+        ],
     )
-    monkeypatch.setattr(cli, "graph_check", lambda slug: (None, None, None))
     assert cli.main(["--rows", f"{SEAT}={rows}", "--now", NOW.isoformat(), "--dry-run"]) == 0
     out = capsys.readouterr().out
     assert "job_failed" in out and "201208" not in out
 
 
 def test_a_dead_sign_in_pages_every_run_on_its_own(monkeypatch, tmp_path):
-    """The falsifier for the page: a failed hourly check produces its own
-    ACTION email (not only a digest line), on this run and the next."""
-    rows = tmp_path / "rows.json"
-    rows.write_text(json.dumps([_probe(NOW - timedelta(minutes=10), False)]))
-    monkeypatch.setattr(cli, "graph_check", lambda slug: (None, None, None))
+    """A refused check produces its own ACTION email (not only a digest line),
+    on this run and the next."""
+    rows = _offline(monkeypatch, tmp_path, [_probe(NOW - timedelta(minutes=10), "refused")])
     sent = []
     monkeypatch.setattr(cli, "send", lambda subject, text, key: sent.append((subject, key)) or None)
-    for now in (NOW, NOW + timedelta(hours=1)):
+    for now in (NOW, NOW + timedelta(minutes=40)):
         assert cli.main(["--rows", f"{SEAT}={rows}", "--now", now.isoformat()]) == 0
     pages = [s for s in sent if s[0].startswith("ACTION:")]
     assert [p[0] for p in pages] == [f"ACTION: {SEAT} Smokeball sign-in is dead"] * 2
     assert pages[0][1] != pages[1][1]  # a fresh idempotency key each hour, so the repeat is not deduped away
+
+
+def test_a_check_that_could_not_run_never_pages(monkeypatch, tmp_path):
+    rows = _offline(monkeypatch, tmp_path, [_probe(NOW - timedelta(minutes=10), "unchecked", "boom")])
+    sent = []
+    monkeypatch.setattr(cli, "send", lambda subject, text, key: sent.append(subject) or None)
+    assert cli.main(["--rows", f"{SEAT}={rows}", "--now", NOW.isoformat()]) == 0
+    assert not [s for s in sent if s.startswith("ACTION:")]
 
 
 def test_a_mailbox_sign_in_failure_pages():

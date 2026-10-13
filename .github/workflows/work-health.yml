@@ -36,6 +36,7 @@ on:
       - 'operator/bin/lib/work_health*.py'
       - 'operator/bin/tests/test_work_health.py'
       - 'operator/contracts/work-health.yaml'
+      - 'operator/contracts/work-health-closed.yaml'
       - 'operator/skills/connector-auth-check/**'
       - '.github/workflows/work-health.yml'
 

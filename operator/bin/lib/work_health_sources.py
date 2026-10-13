@@ -23,7 +23,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from bin.lib.work_health import Config, Item, hhmm, item, parse_ts, span
+from bin.lib import cron_slots
+from bin.lib.work_health import Config, Item, hhmm, item, meta, parse_ts, span
 
 _BIN = Path(__file__).resolve().parents[1]
 
@@ -42,6 +43,12 @@ _CLASS_WORDS = {
 #: The connector whose seat-side poller calls it every few seconds; a stale
 #: last success there means the mailbox is not being read, idle or not.
 POLLED_CONNECTORS = {"msgraph_mail": 900}
+
+#: The sign-in check's skill (work_health_auth owns its lines).
+AUTH_PROBE_SKILL = "connector-auth-check"
+
+#: How long after its instant a slot's wake row may land (reconcile-wakes.py).
+SLOT_TOLERANCE_S = 1800
 
 
 def load_module(name: str, filename: str):
@@ -69,7 +76,20 @@ def _words(tool: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def silent_run_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> list[Item]:
+def _held_then_sent(rows: list[dict], row_id: Optional[str]) -> bool:
+    """A held output whose message later went out anyway (released, rewritten,
+    or the duplicate of a reply already sent): history, not open work."""
+    held = next((r for r in rows if r.get("id") == row_id), None) if row_id else None
+    if held is None or held.get("action_type") != "REPLY_HELD":
+        return False
+    message_id = meta(held).get("message_id")
+    held_at = parse_ts(held.get("ts"))
+    if not message_id or held_at is None:
+        return False
+    return any(r.get("action_type") == "REPLY_SENT" and meta(r).get("in_reply_to") == message_id for r in rows)
+
+
+def silent_run_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> tuple[list[Item], int]:
     """Scheduled and held runs that ended with no observable outcome
     (reconcile-outcomes' finding), opened inside the reconcile window. Inbound
     runs are left to the request items, which name the request."""
@@ -78,8 +98,12 @@ def silent_run_items(seat: str, rows: list[dict], cfg: Config, now: datetime) ->
     usable = [r for r in rows if r.get("ts")]
     since = now - timedelta(hours=cfg.reconcile_window_hours)
     out: list[Item] = []
+    resolved = 0
     for ob in outcomes.analyze(contract, seat, usable, now=now):
         if not ob.is_finding or ob.trigger_kind == "inbound" or ob.opened_at < since:
+            continue
+        if _held_then_sent(usable, ob.row_id):
+            resolved += 1
             continue
         routine = f"{ob.skill_name} run" if ob.skill_name else "unnamed run (no skill recorded)"
         if ob.shape == outcomes.SHAPE_HELD_WITHOUT_NOTICE:
@@ -96,37 +120,112 @@ def silent_run_items(seat: str, rows: list[dict], cfg: Config, now: datetime) ->
                 "Check whether the work it owed was done; a silent run looks the same as success from the firm's side.",
             )
         )
+    return out, resolved
+
+
+def deployed_cron(personas_json: Optional[str]) -> Optional[set[tuple[str, str]]]:
+    """(skill, schedule) pairs the seat was PROVISIONED with: the
+    ``customer_configs.personas_json`` projection written at provision. None
+    when it cannot be read. This, not git, is what the Machine runs: on
+    2026-10-13 a git-only grid expected an hourly check pilot-smokeball had
+    never been rebuilt to run, and reported 24 "never ran" lines that were
+    false (the live store ran its daily row on time)."""
+    if not isinstance(personas_json, str) or not personas_json:
+        return None
+    try:
+        personas = json.loads(personas_json)
+    except ValueError:
+        return None
+    out: set[tuple[str, str]] = set()
+    for persona in personas if isinstance(personas, list) else [personas]:
+        for row in (persona or {}).get("cron") or [] if isinstance(persona, dict) else []:
+            if isinstance(row, dict) and isinstance(row.get("skill"), str) and isinstance(row.get("schedule"), str):
+                out.add((row["skill"], row["schedule"]))
     return out
 
 
-def missed_slot_items(seat: str, rows: list[dict], cfg: Config, now: datetime, boot: Optional[dict]) -> list[Item]:
-    """Authored schedule slots that passed with neither wake row (reconcile-wakes)."""
-    wakes = load_module("reconcile_wakes", "reconcile-wakes.py")
-    outcomes = load_module("reconcile_outcomes", "reconcile-outcomes.py")
-    since = now - timedelta(hours=cfg.reconcile_window_hours)
-    report = wakes.reconcile_seat(seat, now=now, since=since, boot_info=boot, outcomes=outcomes, rows=rows)
-    if report.held:
+def schedule_drift(git_config: dict, deployed: set[tuple[str, str]]) -> dict[str, tuple[list[str], list[str]]]:
+    """skill -> (authored schedules, provisioned schedules), where they differ."""
+    authored: dict[str, list[str]] = {}
+    for row in cron_slots.authored_cron_rows(git_config):
+        authored.setdefault(row.skill, []).append(row.schedule)
+    seat: dict[str, list[str]] = {}
+    for skill, schedule in deployed:
+        seat.setdefault(skill, []).append(schedule)
+    return {
+        skill: (sorted(authored.get(skill, [])), sorted(seat.get(skill, [])))
+        for skill in set(authored) | set(seat)
+        if sorted(authored.get(skill, [])) != sorted(seat.get(skill, []))
+    }
+
+
+def missed_slot_items(
+    seat: str,
+    rows: list[dict],
+    cfg: Config,
+    now: datetime,
+    boot: Optional[dict],
+    git_config: dict,
+    deployed: Optional[set[tuple[str, str]]],
+) -> list[Item]:
+    """Scheduled runs that did not happen, ONE line per skill (never one per
+    slot), graded only where git and the seat's provisioned schedule AGREE.
+    Where they disagree that is one drift line, not a guess at either grid."""
+    if deployed is None:
         return [
             item(
                 seat,
                 "unreadable",
                 "schedule",
-                now - timedelta(minutes=1),
-                f"Could not check this seat's scheduled runs: {report.held}.",
-                "Fix the read; until then a missed scheduled run would not show here.",
+                now,
+                "Could not read which schedule this seat was provisioned with; missed scheduled runs are unchecked.",
+                "Check the customer_configs row for this seat.",
             )
         ]
+    drift = schedule_drift(git_config, deployed)
+    graded = [
+        r
+        for r in cron_slots.authored_cron_rows(git_config)
+        if r.wake_policy == "pre_run_decides" and r.skill not in drift and (r.skill, r.schedule) in deployed
+    ]
+    tz = cron_slots.seat_timezone(git_config)
+    slots = cron_slots.expand_slots(graded, tz, now - timedelta(hours=cfg.reconcile_window_hours), now)
+    gradable = [x for x in slots if x.fires_at + timedelta(seconds=SLOT_TOLERANCE_S) <= now]
+    verdicts = cron_slots.match_slots(gradable, rows, tolerance_s=SLOT_TOLERANCE_S)
+    if boot:
+        window = cron_slots.boot_window(boot.get("last_heartbeat_ts"), boot.get("process_uptime_seconds"))
+        cron_slots.apply_boot_suppression(verdicts, window)
+    by_skill: dict[str, list[datetime]] = {}
+    for v in verdicts:
+        if v.is_missing:
+            by_skill.setdefault(v.slot.skill, []).append(v.slot.fires_at)
     out = []
-    for verdict in report.missing:
-        slot = verdict.slot
+    for skill, times in sorted(by_skill.items()):
+        times.sort()
+        count = f"{len(times)} scheduled runs missed" if len(times) > 1 else "1 scheduled run missed"
         out.append(
             item(
                 seat,
                 "missed_slot",
-                f"{slot.skill}|{slot.fires_at.isoformat()}",
-                slot.fires_at,
-                f"The scheduled {slot.skill} run due {hhmm(slot.fires_at)} never ran (no run and no skip recorded).",
+                f"{skill}|{times[0].isoformat()}",
+                times[0],
+                f"The scheduled {skill} has not run since {hhmm(times[0])}: {count}, last due {hhmm(times[-1])} "
+                "(no run and no skip recorded).",
                 "Check the seat's scheduler; work the firm switched on did not happen.",
+            )
+        )
+    for skill, (authored, provisioned) in sorted(drift.items()):
+        if skill == AUTH_PROBE_SKILL:
+            continue  # the sign-in check's own "not scheduled" ACTION line already says this
+        out.append(
+            item(
+                seat,
+                "schedule_drift",
+                f"{skill}|{authored}|{provisioned}",
+                now,
+                f"Schedule drift for {skill}: authored {authored or 'none'}, the seat runs {provisioned or 'none'}. "
+                "Its runs are not graded until the two agree.",
+                "Rebuild the seat to adopt the authored schedule, or revert the authoring.",
             )
         )
     return out
@@ -232,33 +331,52 @@ def _is_echo(code: str) -> bool:
     return code.endswith(_ECHO_CODE_SUFFIXES) or code.startswith(_ECHO_CODE_PREFIXES)
 
 
-def shortfall_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> list[Item]:
-    """Refused / limit / failed / partial tool results in the window, one item
-    per (class, tool, code) with its count, so a retry loop is one line."""
+def answered_after(ledger: Optional[list[dict]], ts: datetime) -> bool:
+    """Did the seat deliver anything after ``ts`` (a reply sent, a job
+    delivered)? A refusal or failure followed by delivered work is history,
+    not open work (review 2026-10-13: the email lists only OPEN work)."""
+    for row in ledger or []:
+        when = parse_ts(row.get("ts"))
+        action = str(row.get("action_type") or "")
+        if when and when > ts and (action == "REPLY_SENT" or action.endswith("_JOB_DELIVERED")):
+            return True
+    return False
+
+
+def shortfall_items(
+    seat: str, rows: list[dict], cfg: Config, now: datetime, ledger: Optional[list[dict]] = None
+) -> tuple[list[Item], int]:
+    """Refused / limit / failed / partial tool results in the window, ONE line
+    per (class, tool) with its count and reasons, and only while nothing was
+    delivered after the last one. Returns (items, how many were resolved)."""
     since = now - timedelta(hours=cfg.event_window_hours)
-    groups: dict[tuple[str, str, str], list[datetime]] = {}
+    groups: dict[tuple[str, str], list[tuple[datetime, str]]] = {}
     for row in rows:
         ts = parse_ts(row.get("ts"))
         code = str(row.get("code") or "")
         if ts is None or ts < since or _is_echo(code):
             continue
-        key = (str(row.get("class") or ""), str(row.get("tool") or ""), code)
-        groups.setdefault(key, []).append(ts)
-    out = []
-    for (klass, tool, code), times in sorted(groups.items()):
-        times.sort()
-        count = f"{len(times)} times, " if len(times) > 1 else ""
+        groups.setdefault((str(row.get("class") or ""), str(row.get("tool") or "")), []).append((ts, code))
+    out, resolved = [], 0
+    for (klass, tool), hits in sorted(groups.items()):
+        hits.sort()
+        if ledger is not None and answered_after(ledger, hits[-1][0]):
+            resolved += len(hits)
+            continue
+        codes = ", ".join(sorted({c for _t, c in hits}))
+        count = f"{len(hits)} times, " if len(hits) > 1 else ""
         out.append(
             item(
                 seat,
                 "shortfall",
-                f"shortfall:{klass}:{tool}:{code}:{times[0].isoformat()}",
-                times[0],
-                f"A {_words(tool)} call {_CLASS_WORDS.get(klass, klass)} ({code}; {count}last {hhmm(times[-1])}).",
-                "If a person was waiting on it, check they got an answer; if it repeats, the tool or the rule needs fixing.",
+                f"shortfall:{klass}:{tool}:{hits[0][0].isoformat()}",
+                hits[0][0],
+                f"A {_words(tool)} call {_CLASS_WORDS.get(klass, klass)} ({codes}; {count}last {hhmm(hits[-1][0])}) "
+                "and nothing was delivered after it.",
+                "Check whether the person or routine it served got what it needed; if it repeats, fix the tool or the rule.",
             )
         )
-    return out
+    return out, resolved
 
 
 def sentry_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> list[Item]:

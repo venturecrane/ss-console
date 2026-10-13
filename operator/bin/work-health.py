@@ -46,6 +46,7 @@ import yaml
 
 from bin.lib import console_d1, msgraph_channel, seam_pull
 from bin.lib import work_health as wh
+from bin.lib import work_health_auth as auth
 from bin.lib import work_health_mail as mail
 from bin.lib import work_health_sources as src
 
@@ -94,18 +95,33 @@ def customer_yaml(slug: str) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def seat_shape(config: dict) -> tuple[bool, bool]:
-    """(has_smokeball, hourly auth probe authored) from the seat's own config."""
+def seat_shape(config: dict) -> tuple[bool, Optional[str]]:
+    """(has_smokeball, the hourly check's authored schedule or None) from git."""
     connectors = config.get("connectors") or {}
     has_smokeball = any(
         isinstance(c, dict) and str(c.get("backend") or "").endswith("smokeball") for c in connectors.values()
     )
-    authored = False
+    schedule = None
     for persona in config.get("personas") or []:
         for row in (persona or {}).get("cron") or []:
-            if isinstance(row, dict) and row.get("skill") == wh.AUTH_PROBE_SKILL and row.get("pre_run"):
-                authored = True
-    return has_smokeball, authored
+            if isinstance(row, dict) and row.get("skill") == auth.AUTH_PROBE_SKILL and row.get("pre_run"):
+                schedule = str(row.get("schedule") or "")
+    return has_smokeball, schedule
+
+
+def probe_not_scheduled_why(
+    has_smokeball: bool, authored: Optional[str], deployed: Optional[set[tuple[str, str]]]
+) -> Optional[str]:
+    """None when the hourly check is scheduled on the Machine, else why not."""
+    if not has_smokeball:
+        return None
+    if authored is None:
+        return "no connector-auth-check row with pre_run.py is authored in its customer.yaml"
+    if deployed is None:
+        return "the seat's provisioned schedule could not be read"
+    if (auth.AUTH_PROBE_SKILL, authored) not in deployed:
+        return "it is authored but the seat has not been rebuilt to run it yet"
+    return None
 
 
 class Console:
@@ -118,6 +134,7 @@ class Console:
         self.alerts: dict[str, list[dict]] = {}
         self.shortfalls: dict[str, list[dict]] = {}
         self.sentry: dict[str, list[dict]] = {}
+        self.personas: dict[str, Optional[str]] = {}
         try:
             self._load(d1)
         except Exception as exc:  # noqa: BLE001 - reported as an item on every seat
@@ -129,6 +146,8 @@ class Console:
             "SELECT customer_slug, last_heartbeat_ts, process_uptime_seconds, connectors_json FROM fleet_status"
         ):
             self.status[str(row["customer_slug"])] = row
+        for row in d1.execute("SELECT customer_slug, personas_json FROM customer_configs"):
+            self.personas[str(row["customer_slug"])] = row.get("personas_json")
         for row in d1.execute(
             "SELECT customer_slug, condition, opened_at FROM fleet_alert_state WHERE status = 'open'"
         ):
@@ -169,17 +188,17 @@ def graph_check(slug: str) -> tuple[Optional[str], Optional[str], Optional[str]]
 
 
 def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, rows: Optional[list[dict]]):
+    """(items, gaps, resolved): resolved counts problems in the window that
+    later work answered (history: one trailing count, never a line each)."""
     items: list[wh.Item] = []
-    gaps: list[str] = []
     status = console.status.get(slug)
     if status is not None and not status.get("last_heartbeat_ts") and rows is None:
         # Provisioning-gray, the fleet pager's rule: a seat that has never
         # reported is being built, not broken. Named, never an item.
-        return items, ["not live yet: this seat has never reported a heartbeat, so it was not evaluated."]
+        return items, ["not live yet: this seat has never reported a heartbeat, so it was not evaluated."], 0
     items += src.heartbeat_items(slug, status, cfg, now)
     items += src.connector_items(slug, status, now)
     items += src.alert_items(slug, console.alerts.get(slug, []), now)
-    items += src.shortfall_items(slug, console.shortfalls.get(slug, []), cfg, now)
     items += src.sentry_items(slug, console.sentry.get(slug, []), cfg, now)
     if console.error:
         items.append(
@@ -209,30 +228,23 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
                     "Nothing about this seat's requests or jobs is known until the read works; check the Machine and the seam.",
                 )
             )
-            return items, gaps
+            shortfalls, _ = src.shortfall_items(slug, console.shortfalls.get(slug, []), cfg, now, None)
+            return items + shortfalls, [], 0
     config = customer_yaml(slug)
+    deployed = src.deployed_cron(console.personas.get(slug))
     has_smokeball, authored = seat_shape(config)
-    # Authored in git is not running on the seat: the check adopts at the
-    # seat's next rebuild. Until its first row lands it is a coverage gap, and
-    # its slots are not "missed" (they were never scheduled on the Machine).
-    adopted_at = wh.first_scheduled_probe(rows) if authored else None
-    probe_running = adopted_at is not None
+    why = probe_not_scheduled_why(has_smokeball, authored, deployed)
     items += wh.request_items(slug, rows, cfg, now)
-    items += wh.job_items(slug, rows, cfg, now)
-    items += wh.smokeball_auth_items(slug, rows, cfg, now, has_smokeball=has_smokeball, probe_authored=probe_running)
-    items += wh.probe_not_running_items(
-        slug, now, has_smokeball=has_smokeball, probe_authored=authored, probe_running=probe_running
-    )
-    items += src.silent_run_items(slug, rows, cfg, now)
+    items += wh.job_items(slug, rows, cfg, now, wh.load_closed())
+    if has_smokeball:
+        items += auth.smokeball_auth_items(slug, rows, cfg, now, probe_scheduled=why is None)
+        items += auth.probe_not_scheduled_items(slug, now, why=why)
+    shortfalls, resolved_shortfalls = src.shortfall_items(slug, console.shortfalls.get(slug, []), cfg, now, rows)
+    silent, resolved_silent = src.silent_run_items(slug, rows, cfg, now)
+    items += shortfalls + silent
     if config:
         boot = {k: (status or {}).get(k) for k in ("last_heartbeat_ts", "process_uptime_seconds")}
-        missed = src.missed_slot_items(slug, rows, cfg, now, boot)
-        missed = [
-            i
-            for i in missed
-            if f"|missed_slot|{wh.AUTH_PROBE_SKILL}|" not in i.key or (adopted_at is not None and i.onset >= adopted_at)
-        ]
-        items += missed
+        items += src.missed_slot_items(slug, rows, cfg, now, boot, config, deployed)
     mailbox, error, unchecked = graph_check(slug)
     items += src.graph_probe_item(slug, mailbox or "", error, now)
     if unchecked:
@@ -246,7 +258,7 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
                 "Add the seat's read secret to the work-health workflow's env and Actions secrets.",
             )
         )
-    return items, gaps
+    return items, [], resolved_shortfalls + resolved_silent
 
 
 def live_seats(console: Console, wanted: list[str]) -> list[str]:
@@ -350,10 +362,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     seats = live_seats(console, args.slug or list(offline))
     items: list[wh.Item] = []
     gaps: dict[str, list[str]] = {}
+    resolved: dict[str, int] = {}
     for slug in seats:
         rows = json.loads(Path(offline[slug]).read_text(encoding="utf-8")) if slug in offline else None
-        seat_items, seat_gaps = evaluate_seat(slug, cfg, console, now, rows)
+        seat_items, seat_gaps, seat_resolved = evaluate_seat(slug, cfg, console, now, rows)
         items += seat_items
+        if seat_resolved:
+            resolved[slug] = seat_resolved
         if seat_gaps:
             gaps[slug] = seat_gaps
 
@@ -365,6 +380,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         since=since,
         now=now,
         all_clear_hour_utc=cfg.all_clear_hour_utc,
+        resolved=resolved,
     )
     if args.state_out:
         Path(args.state_out).write_text(json.dumps(plan.state, indent=1, sort_keys=True), encoding="utf-8")

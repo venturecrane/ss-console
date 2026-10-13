@@ -1,0 +1,25 @@
+# Jobs SMD has CLOSED for the work-health email: a held or failed job that needs
+# no rerun, release, or note to anyone. Read by operator/bin/work-health.py.
+#
+# WHY A FILE. Every held or failed job needs a way to end other than a rerun
+# (team lead, 2026-10-13). The seat's job ledgers have no cancel state: held is
+# final for demand and drafting, failed is terminal unless a person resumes it,
+# and a same-state note writes no audit row, so nothing the console reads can
+# say "done with this one". Closing here is an SMD-only act, reviewed in a PR,
+# with the reason written down. It changes nothing on the seat; it only stops
+# the email from asking someone to act on work that is already decided.
+#
+# This repository is PUBLIC: name the job by its id only. The reason says why
+# no action is owed in words that name no client, matter, person or document.
+#
+# Fields: seat, job (the full job id from the audit row), closed (date),
+# closed_by, reason.
+closed:
+  - seat: ashton-price
+    job: 01M4S9MQE7XZ3E67Q5TDCKJGC6
+    closed: '2026-10-13'
+    closed_by: work-health session for the team lead
+    reason: >-
+      SMD's own drafting test request on the library matter; the pre-delivery
+      review held it as designed (it was the review's proof run). Nothing is
+      owed to the firm and no rerun is wanted.

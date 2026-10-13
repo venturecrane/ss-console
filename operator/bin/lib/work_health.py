@@ -49,15 +49,6 @@ IN_FLIGHT = {"SUBMITTED": "queued", "QUEUED": "queued", "RUNNING": "running"}
 ENDED_BAD = {"HELD": "held", "FAILED": "failed"}
 _JOB_TYPE = re.compile(r"^(DEMAND|DRAFTING|LITIGATION|NEGOTIATION|MEDCHRON)_JOB_([A-Z_]+)$")
 _REASON_HEAD = re.compile(r"^[a-z0-9_.-]+")
-_AUTH_FAILURE = re.compile(r"auth(entication)?error|invalid_grant|unauthori[sz]ed|\b401\b", re.IGNORECASE)
-
-#: Smokeball's auth probe: the connector-auth-check pre_run writes one
-#: SUPPRESSED_WAKE per run with one of these decision bases, and the agent-run
-#: version of the skill calls this tool.
-AUTH_PROBE_SKILL = "connector-auth-check"
-AUTH_OK_BASIS = "connector_auth_ok"
-AUTH_FAILED_BASIS = "connector_auth_failed"
-AUTH_TOOL = "mcp_smokeball_auth_status"
 
 
 @dataclass(frozen=True)
@@ -129,6 +120,7 @@ RANK = {
     "heartbeat_stale": 32,
     "auth_unchecked": 34,
     "missed_slot": 40,
+    "schedule_drift": 44,
     "silent_run": 42,
     "shortfall": 50,
     "sentry": 60,
@@ -275,10 +267,34 @@ def _superseded(job: Job, jobs: list[Job]) -> bool:
     return False
 
 
-def job_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> list[Item]:
+CLOSED_PATH = CONTRACT_PATH.parent / "work-health-closed.yaml"
+
+
+def load_closed(path: Path = CLOSED_PATH) -> set[tuple[str, str]]:
+    """(seat, job id) pairs SMD closed with a written reason (see the file).
+    An entry without a reason is refused: the reason is the record."""
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else None
+    out: set[tuple[str, str]] = set()
+    for entry in (raw or {}).get("closed") or []:
+        if not (
+            isinstance(entry, dict)
+            and entry.get("seat")
+            and entry.get("job")
+            and str(entry.get("reason") or "").strip()
+        ):
+            raise ValueError(f"{path}: every closed entry needs seat, job and a reason: {entry!r}")
+        out.add((str(entry["seat"]), str(entry["job"])))
+    return out
+
+
+def job_items(
+    seat: str, rows: list[dict], cfg: Config, now: datetime, closed: Optional[set[tuple[str, str]]] = None
+) -> list[Item]:
     jobs = jobs_from_rows(rows)
     out: list[Item] = []
     for job in jobs:
+        if closed and (seat, job.job_id) in closed:
+            continue
         ts, state, reason = job.last
         lane = cfg.lanes[job.lane]
         name = _job_name(job, cfg)
@@ -374,119 +390,3 @@ def request_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> li
             )
         )
     return out
-
-
-# ---------------------------------------------------------------------------
-# connector auth, from the ledger
-# ---------------------------------------------------------------------------
-
-
-def _auth_evidence(rows: list[dict]) -> list[tuple[datetime, bool, str]]:
-    """(when, ok, how) for every row that says whether Smokeball accepted the
-    seat's credentials: the hourly probe, the agent-run probe tool, and any job
-    or tool failure whose reason is an auth refusal."""
-    out = []
-    for ts, row in stamped(rows):
-        action = row.get("action_type")
-        md = meta(row)
-        basis = str(md.get("decision_basis") or "")
-        if action == "SUPPRESSED_WAKE" and row.get("skill_name") == AUTH_PROBE_SKILL:
-            if basis.startswith(AUTH_OK_BASIS):
-                out.append((ts, True, "hourly sign-in check"))
-            elif basis.startswith(AUTH_FAILED_BASIS):
-                out.append((ts, False, "hourly sign-in check"))
-        elif action == "TOOL_CALL_COMPLETED" and md.get("tool") == AUTH_TOOL:
-            out.append((ts, md.get("outcome") == "ok", "sign-in check"))
-        elif action == "TOOL_CALL_COMPLETED" and str(md.get("tool") or "").startswith("mcp_smokeball_"):
-            if md.get("outcome") == "ok":
-                out.append((ts, True, "a Smokeball call"))
-            elif _AUTH_FAILURE.search(str(md.get("error_type") or "")):
-                out.append((ts, False, "a Smokeball call"))
-        elif _JOB_TYPE.match(str(action or "")) and _AUTH_FAILURE.search(str(md.get("reason") or "")):
-            out.append((ts, False, "a job"))
-    return out
-
-
-def smokeball_auth_items(
-    seat: str, rows: list[dict], cfg: Config, now: datetime, *, has_smokeball: bool, probe_authored: bool
-) -> list[Item]:
-    if not has_smokeball:
-        return []
-    evidence = _auth_evidence(rows)
-    out: list[Item] = []
-    failed_since: Optional[datetime] = None
-    for ts, ok, how in evidence:
-        if ok:
-            failed_since = None
-        elif failed_since is None:
-            failed_since = ts
-    if failed_since is not None:
-        out.append(
-            item(
-                seat,
-                "auth_failed",
-                f"smokeball:{failed_since.isoformat()}",
-                failed_since,
-                f"Smokeball is refusing this seat's sign-in since {hhmm(failed_since)} (last seen by {evidence[-1][2]}); "
-                "every Smokeball read and write fails until it is fixed.",
-                "Re-consent the Smokeball connection for this seat (memory: smokeball token program).",
-                page=f"ACTION: {seat} Smokeball sign-in is dead",
-            )
-        )
-    probes = [ts for ts, _ok, how in evidence if how == "hourly sign-in check"]
-    if probe_authored and (not probes or now - probes[-1] > timedelta(minutes=cfg.auth_probe_stale_minutes)):
-        since = probes[-1] if probes else now - timedelta(hours=cfg.ledger_lookback_hours)
-        out.append(
-            item(
-                seat,
-                "auth_unchecked",
-                "smokeball:probe-silent",
-                since + timedelta(minutes=cfg.auth_probe_stale_minutes),
-                f"The hourly Smokeball sign-in check has not reported since {hhmm(since) if probes else 'the window began'}.",
-                "Check the seat's connector-auth-check schedule; a silent check is a dead detector.",
-            )
-        )
-    return out
-
-
-def first_scheduled_probe(rows: list[dict]) -> Optional[datetime]:
-    """When the hourly check first ran FROM THE SCHEDULE on this seat (rows a
-    person ran by hand carry ``run_by`` and do not count). Authored in git is
-    not running on the Machine, which only changes at the seat's rebuild: None
-    means the schedule has not been adopted yet, and slots before this instant
-    were never on the Machine to be missed."""
-    for ts, row in stamped(rows):
-        if row.get("action_type") != "SUPPRESSED_WAKE" or row.get("skill_name") != AUTH_PROBE_SKILL:
-            continue
-        md = meta(row)
-        if md.get("run_by"):
-            continue
-        if str(md.get("decision_basis") or "").startswith(("connector_auth_ok", "connector_auth_failed")):
-            return ts
-    return None
-
-
-def probe_not_running_items(
-    seat: str, now: datetime, *, has_smokeball: bool, probe_authored: bool, probe_running: bool
-) -> list[Item]:
-    """A Smokeball seat whose hourly sign-in check is not running is an ACTION
-    item, never a quiet skip: the check is the ONLY detector of a dead Smokeball
-    token (the connector-health ledger never sees the Python-connector runners,
-    PR #3144), so without it a dead token shows only when work hits it."""
-    if not has_smokeball or probe_running:
-        return []
-    why = (
-        "it is authored but not running on the Machine yet (it adopts at the seat's next rebuild)"
-        if probe_authored
-        else "no connector-auth-check row with pre_run.py is authored in its customer.yaml"
-    )
-    return [
-        item(
-            seat,
-            "auth_unchecked",
-            "smokeball:probe-not-running",
-            now,
-            f"ACTION: Smokeball sign-in is NOT being checked on this seat: {why}. A dead token would show only when work fails on it.",
-            "Rebuild the seat (or author the row) so the hourly check runs.",
-        )
-    ]

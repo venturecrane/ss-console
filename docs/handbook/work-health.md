@@ -23,8 +23,9 @@ Machine health has always paged within minutes: a seat that stops reporting, a c
 - **Hourly, only when there is something to act on.** Subject: `[SMD Ops] Work health: N new, M still open (ashton-price 3, ...)`. A&P first, then every other live seat.
 - **NEW** lines carry the full text and a "To do". **OPEN Nh** lines are items already reported in an earlier email, one line each with their age, so an unchanged problem never re-sends at full volume.
 - **Once a day**, on the first run at or after 15:00Z (08:00 Phoenix), a run with nothing to report still sends `[SMD Ops] Work health: all clear`. If neither email arrives in a day, the check itself is broken: look at the `work-health` workflow runs.
+- **Open work only, one line per problem.** A refusal or failure followed by delivered work is history: it is counted on one trailing "Resolved in the window" line, never listed. Repeats of one routine or one tool are one line with a count.
 - **A seat that could not be read is an item**, never silence. "Could not read this seat's work ledger" means nothing about that seat is known.
-- **ACTION pages.** A dead sign-in (Smokeball refusing the seat's token, SMD's mailbox sign-in check failing, a connection failing repeatedly) also gets its OWN email, subject `ACTION: <seat> Smokeball sign-in is dead` (or `mailbox sign-in is dead`), on every run while it stays dead. The hourly Smokeball check is the only detector of a dead Smokeball token: the connector-health ledger never sees the scheduled jobs' Smokeball calls (PR #3144). A Smokeball seat whose hourly check is not running is an ACTION line in the digest.
+- **ACTION pages.** A dead sign-in (Smokeball's token endpoint explicitly REFUSING the seat's token, SMD's mailbox sign-in check failing, a connection failing repeatedly) also gets its OWN email, subject `ACTION: <seat> Smokeball sign-in is dead` (or `mailbox sign-in is dead`), on every run while it stays dead. The hourly Smokeball check is the only detector of a dead Smokeball token: the connector-health ledger never sees the scheduled jobs' Smokeball calls (PR #3144). A Smokeball seat whose hourly check is not scheduled, or a check that could not run (its own fault, never "dead"), is an ACTION line in the digest, not a page.
 - **Not checked this run** lists what the run could not vouch for (today: a seat that has never reported a heartbeat, which is being built rather than broken).
 
 ## What each line means
@@ -38,7 +39,8 @@ Machine health has always paged within minutes: a seat that stops reporting, a c
 | Smokeball refusing sign-in | The hourly sign-in check, the sign-in tool, or a job failed on authorization, and nothing has succeeded since. | Re-consent the seat's Smokeball connection. |
 | Connection failing / mailbox not read | The seat's own counters show repeated failures, or the mail poller has not succeeded for 15 minutes. | Check the credentials and the vendor. |
 | Open alert | A pager condition opened earlier and has not closed. | Work the alert email's runbook. |
-| Scheduled run never ran | An authored schedule slot passed with no run and no recorded skip (the cron-slot watchdog's finding). | Check the seat's scheduler. |
+| Scheduled run has not run since T: N missed | Slots of a schedule the seat was PROVISIONED with (D1 `customer_configs`, not git) passed with no run and no recorded skip. | Check the seat's scheduler. |
+| Schedule drift | git authors a different schedule than the seat runs; that routine is not graded until a rebuild makes them agree. | Rebuild the seat, or revert the authoring. |
 | Run ended with no outcome / held and nobody told | A scheduled or held run ended silently (the terminal-state reconciler's finding). | Check whether the work it owed was done. |
 | A call was refused / failed / hit a limit | Refused, limit, failed or partial tool results in the last 24 hours, one line per tool and reason with a count. | If a person was waiting, check they got an answer. |
 | New Operator error | A Sentry error reported in the last 24 hours. | Triage it in Sentry. |
@@ -46,6 +48,10 @@ Machine health has always paged within minutes: a seat that stops reporting, a c
 ## What the email never carries
 
 Only what team@ alert mail already carries: lanes, matter numbers, a reason's first word, times, card ids. Never a sender, a subject line or a document name. The run's GitHub Actions log prints counts only, and its saved state holds hashes only, because ss-console is a public repository.
+
+## Closing a held or failed job
+
+The seat's ledgers have no cancel state. When a held or failed job needs no rerun, release or note (for example SMD's own test request), add it to `operator/contracts/work-health-closed.yaml` with a reason in a PR. It changes nothing on the seat; it stops the email asking for action. The repository is public: the job id and a reason that names no client.
 
 ## Changing it
 

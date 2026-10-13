@@ -91,6 +91,7 @@ def render(
     gaps: dict[str, list[str]],
     now: datetime,
     state: dict[str, str],
+    resolved: Optional[dict[str, int]] = None,
 ) -> tuple[str, str]:
     lines: list[str] = []
     for seat in _seat_order(seats):
@@ -105,6 +106,10 @@ def render(
         for it in seat_old:
             seen = datetime.fromisoformat(state[state_key(it.key)])
             lines.append(f"OPEN {span(now - seen)}  {it.what}")
+        lines.append("")
+    if resolved:
+        done = ", ".join(f"{s} {resolved[s]}" for s in _seat_order(list(resolved)))
+        lines.append(f"Resolved in the window (history: later work answered them, no action): {done}.")
         lines.append("")
     gap_lines = [f"  {seat}: {g}" for seat in _seat_order(list(gaps)) for g in gaps[seat]]
     if gap_lines:
@@ -142,11 +147,14 @@ def decide(
     since: Optional[datetime],
     now: datetime,
     all_clear_hour_utc: int,
+    resolved: Optional[dict[str, int]] = None,
 ) -> Plan:
     now = now.astimezone(timezone.utc)
     new, still, state = split_new(items, previous, since, now)
     if items:
-        subject, text = render(new=new, still_open=still, seats=seats, gaps=gaps, now=now, state=state)
+        subject, text = render(
+            new=new, still_open=still, seats=seats, gaps=gaps, now=now, state=state, resolved=resolved
+        )
         return Plan(True, subject, text, new, still, state)
     if all_clear_due(now, since, all_clear_hour_utc):
         subject, text = render_all_clear(seats, gaps, now)
