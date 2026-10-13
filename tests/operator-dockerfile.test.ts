@@ -1527,7 +1527,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // email's own Word documents to the drafting job (an attorney's own sets, placed in the caption).
     // c2bf5877 -> 22c0948a (overlay#446), 2026-10-13: the session auto-title runs on Haiku 4.5, so an
     // Opus 5.5 seat no longer 400s on thinking {type: disabled} (Sentry SMD-OPERATOR-1M).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="22c0948ab75d6ced7624d3332efccad053f0807d"')
+    // 22c0948a -> 05767aa4 (overlay#445 with #447-#449), 2026-10-13: a job held by the lane-proof
+    // gate pages SMD at once (lane_unproven card; pairs with this repo's lane_proof.py, migration 0125).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="05767aa41905e75f3cee3f651cb90e368cf8cce3"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
