@@ -219,7 +219,9 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
     items += wh.request_items(slug, rows, cfg, now)
     items += wh.job_items(slug, rows, cfg, now)
     items += wh.smokeball_auth_items(slug, rows, cfg, now, has_smokeball=has_smokeball, probe_authored=probe_running)
-    gaps += wh.coverage_gaps(has_smokeball=has_smokeball, probe_authored=authored, probe_running=probe_running)
+    items += wh.probe_not_running_items(
+        slug, now, has_smokeball=has_smokeball, probe_authored=authored, probe_running=probe_running
+    )
     items += src.silent_run_items(slug, rows, cfg, now)
     if config:
         boot = {k: (status or {}).get(k) for k in ("last_heartbeat_ts", "process_uptime_seconds")}
@@ -227,10 +229,19 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
         if not probe_running:
             missed = [i for i in missed if f"|missed_slot|{wh.AUTH_PROBE_SKILL}|" not in i.key]
         items += missed
-    mailbox, error, gap = graph_check(slug)
+    mailbox, error, unchecked = graph_check(slug)
     items += src.graph_probe_item(slug, mailbox or "", error, now)
-    if gap:
-        gaps.append(gap)
+    if unchecked:
+        items.append(
+            wh.item(
+                slug,
+                "auth_unchecked",
+                "graph:probe-not-running",
+                now,
+                f"ACTION: {unchecked}",
+                "Add the seat's read secret to the work-health workflow's env and Actions secrets.",
+            )
+        )
     return items, gaps
 
 
@@ -277,6 +288,23 @@ def send(subject: str, text: str, run_key: str) -> Optional[str]:
         return f"resend unreachable: {exc}"
     print(f"sent: resend id {payload.get('id')}")
     return None
+
+
+def send_pages(pages: list[wh.Item], now: datetime) -> Optional[str]:
+    """One ACTION email per paging item, EVERY run while it stands: a dead
+    sign-in stops all of a seat's work, so it is not left to the digest's
+    one-line "still open" repeat. Returns the first send error, if any."""
+    first_error = None
+    for it in pages:
+        text = (
+            f"Seat: {it.seat}\n\n{it.what}\n\nTo do: {it.todo}\n\n"
+            f"This repeats every hour until the sign-in works again (work-health, {now.strftime('%Y-%m-%d %H:%MZ')}).\n"
+        )
+        error = send(it.page or "", text, f"work-health-page:{mail.state_key(it.key)}:{now.strftime('%Y%m%dT%H')}")
+        if error:
+            print(f"PAGE SEND FAILED: {error}", file=sys.stderr)
+            first_error = first_error or error
+    return first_error
 
 
 def _ts(value: Optional[str]) -> Optional[datetime]:
@@ -341,8 +369,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     for it in items:
         kinds[it.kind] = kinds.get(it.kind, 0) + 1
     print(f"evaluated {len(seats)} seat(s): {len(items)} item(s), {len(plan.new)} new; send={plan.send}; {kinds}")
+    pages = [it for it in items if it.page]
+    page_error = None if args.dry_run else send_pages(pages, now)
+    if pages:
+        print(f"pages: {len(pages)} ACTION email(s){' (dry run)' if args.dry_run else ''}")
     if not plan.send:
-        return EXIT_OK
+        return EXIT_SEND_FAILED if page_error else EXIT_OK
     if args.print_body:
         print(f"Subject: {plan.subject}\n\n{plan.text}")
     if args.dry_run:
@@ -351,7 +383,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if error:
         print(f"SEND FAILED: {error}", file=sys.stderr)
         return EXIT_SEND_FAILED
-    return EXIT_OK
+    return EXIT_SEND_FAILED if page_error else EXIT_OK
 
 
 class _NoD1:

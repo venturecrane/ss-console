@@ -108,6 +108,9 @@ class Item:
     what: str
     todo: str
     rank: int = 50
+    #: Set on an item that must PAGE (its own ACTION email every run while it
+    #: stands), not only sit in the digest: a dead sign-in stops all work.
+    page: Optional[str] = None
 
     def age_text(self, now: datetime) -> str:
         return span(now - self.onset)
@@ -132,8 +135,8 @@ RANK = {
 }
 
 
-def item(seat: str, kind: str, key: str, onset: datetime, what: str, todo: str) -> Item:
-    return Item(seat, kind, f"{seat}|{kind}|{key}", onset, what, todo, RANK.get(kind, 50))
+def item(seat: str, kind: str, key: str, onset: datetime, what: str, todo: str, page: Optional[str] = None) -> Item:
+    return Item(seat, kind, f"{seat}|{kind}|{key}", onset, what, todo, RANK.get(kind, 50), page)
 
 
 # ---------------------------------------------------------------------------
@@ -427,6 +430,7 @@ def smokeball_auth_items(
                 f"Smokeball is refusing this seat's sign-in since {hhmm(failed_since)} (last seen by {evidence[-1][2]}); "
                 "every Smokeball read and write fails until it is fixed.",
                 "Re-consent the Smokeball connection for this seat (memory: smokeball token program).",
+                page=f"ACTION: {seat} Smokeball sign-in is dead",
             )
         )
     probes = [ts for ts, _ok, how in evidence if how == "hourly sign-in check"]
@@ -456,18 +460,27 @@ def probe_has_reported(rows: list[dict]) -> bool:
     )
 
 
-def coverage_gaps(*, has_smokeball: bool, probe_authored: bool, probe_running: bool) -> list[str]:
-    """What this run could NOT vouch for on a seat. Listed in every email and in
-    the all-clear, never an item on its own: a gap that will not close until a
-    rebuild would otherwise re-send at full volume every hour."""
+def probe_not_running_items(
+    seat: str, now: datetime, *, has_smokeball: bool, probe_authored: bool, probe_running: bool
+) -> list[Item]:
+    """A Smokeball seat whose hourly sign-in check is not running is an ACTION
+    item, never a quiet skip: the check is the ONLY detector of a dead Smokeball
+    token (the connector-health ledger never sees the Python-connector runners,
+    PR #3144), so without it a dead token shows only when work hits it."""
     if not has_smokeball or probe_running:
         return []
-    if probe_authored:
-        return [
-            "Smokeball sign-in: the hourly check is authored but not running on the seat yet (it adopts at the "
-            "seat's next rebuild); until then a dead idle connection shows only when work hits it."
-        ]
+    why = (
+        "it is authored but not running on the Machine yet (it adopts at the seat's next rebuild)"
+        if probe_authored
+        else "no connector-auth-check row with pre_run.py is authored in its customer.yaml"
+    )
     return [
-        "Smokeball sign-in is not checked hourly on this seat (no connector-auth-check pre_run row is authored); "
-        "a dead idle connection shows only when work hits it."
+        item(
+            seat,
+            "auth_unchecked",
+            "smokeball:probe-not-running",
+            now,
+            f"ACTION: Smokeball sign-in is NOT being checked on this seat: {why}. A dead token would show only when work fails on it.",
+            "Rebuild the seat (or author the row) so the hourly check runs.",
+        )
     ]

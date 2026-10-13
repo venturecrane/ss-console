@@ -192,6 +192,7 @@ def test_a_failed_hourly_check_is_an_item():
     rows = [_probe(NOW - timedelta(minutes=70), True), _probe(NOW - timedelta(minutes=10), False)]
     items = wh.smokeball_auth_items(SEAT, rows, CFG, NOW, has_smokeball=True, probe_authored=True)
     assert _kinds(items) == ["auth_failed"]
+    assert items[0].page == f"ACTION: {SEAT} Smokeball sign-in is dead"
 
 
 def test_a_later_success_clears_the_failure():
@@ -216,11 +217,19 @@ def test_a_silent_probe_is_an_item():
     assert _kinds(items) == ["auth_unchecked"]
 
 
-def test_an_unauthored_probe_is_a_coverage_gap_not_an_hourly_item():
-    assert wh.smokeball_auth_items(SEAT, [], CFG, NOW, has_smokeball=True, probe_authored=False) == []
-    assert wh.coverage_gaps(has_smokeball=True, probe_authored=False, probe_running=False)
-    assert "adopts" in wh.coverage_gaps(has_smokeball=True, probe_authored=True, probe_running=False)[0]
-    assert wh.coverage_gaps(has_smokeball=True, probe_authored=True, probe_running=True) == []
+def test_a_smokeball_seat_whose_check_is_not_running_is_an_action_item():
+    """The check is the only detector of a dead Smokeball token (PR #3144), so
+    its absence is an ACTION item, never a quiet skip."""
+
+    def run(authored, running, smokeball=True):
+        return wh.probe_not_running_items(
+            SEAT, NOW, has_smokeball=smokeball, probe_authored=authored, probe_running=running
+        )
+
+    assert _kinds(run(False, False)) == ["auth_unchecked"] and "ACTION" in run(False, False)[0].what
+    assert "adopts" in run(True, False)[0].what
+    assert run(True, True) == []
+    assert run(False, False, smokeball=False) == []
 
 
 def test_authored_but_not_yet_running_is_a_gap_and_its_slots_are_not_missed(monkeypatch):
@@ -230,10 +239,10 @@ def test_authored_but_not_yet_running_is_a_gap_and_its_slots_are_not_missed(monk
     console = cli.Console(cli._NoD1())
     items, gaps = cli.evaluate_seat(SEAT, CFG, console, NOW, [])
     assert not any(f"|missed_slot|{wh.AUTH_PROBE_SKILL}|" in i.key for i in items)
-    assert any("adopts" in g for g in gaps)
+    assert any("adopts" in i.what for i in items)
     probe = _probe(NOW - timedelta(minutes=20), True)
     items, gaps = cli.evaluate_seat(SEAT, CFG, console, NOW, [probe])
-    assert not any("adopts" in g for g in gaps)
+    assert not any("adopts" in i.what for i in items)
     assert any(f"|missed_slot|{wh.AUTH_PROBE_SKILL}|" in i.key for i in items)
 
 
@@ -465,11 +474,15 @@ def test_pre_run_never_wakes_and_records_the_basis(tmp_path, monkeypatch, capsys
     ]
 
 
-def test_ap_authors_the_hourly_check():
+def test_every_smokeball_seat_authors_the_hourly_check():
     import yaml
 
-    config = yaml.safe_load((Path(__file__).resolve().parents[2] / "customers" / SEAT / "customer.yaml").read_text())
-    assert cli.seat_shape(config) == (True, True)
+    customers = Path(__file__).resolve().parents[2] / "customers"
+    for path in sorted(customers.glob("[!_]*/customer.yaml")):
+        has_smokeball, authored = cli.seat_shape(yaml.safe_load(path.read_text()))
+        # Every Smokeball seat authors the hourly check: it is the only detector.
+        assert authored or not has_smokeball, f"{path.parent.name} has Smokeball but no hourly sign-in check"
+    assert cli.seat_shape(yaml.safe_load((customers / SEAT / "customer.yaml").read_text())) == (True, True)
 
 
 def test_the_state_file_names_no_work():
@@ -495,3 +508,23 @@ def test_the_run_log_carries_counts_never_the_email_text(tmp_path, capsys, monke
     assert cli.main(["--rows", f"{SEAT}={rows}", "--now", NOW.isoformat(), "--dry-run"]) == 0
     out = capsys.readouterr().out
     assert "job_failed" in out and "201208" not in out
+
+
+def test_a_dead_sign_in_pages_every_run_on_its_own(monkeypatch, tmp_path):
+    """The falsifier for the page: a failed hourly check produces its own
+    ACTION email (not only a digest line), on this run and the next."""
+    rows = tmp_path / "rows.json"
+    rows.write_text(json.dumps([_probe(NOW - timedelta(minutes=10), False)]))
+    monkeypatch.setattr(cli, "graph_check", lambda slug: (None, None, None))
+    sent = []
+    monkeypatch.setattr(cli, "send", lambda subject, text, key: sent.append((subject, key)) or None)
+    for now in (NOW, NOW + timedelta(hours=1)):
+        assert cli.main(["--rows", f"{SEAT}={rows}", "--now", now.isoformat()]) == 0
+    pages = [s for s in sent if s[0].startswith("ACTION:")]
+    assert [p[0] for p in pages] == [f"ACTION: {SEAT} Smokeball sign-in is dead"] * 2
+    assert pages[0][1] != pages[1][1]  # a fresh idempotency key each hour, so the repeat is not deduped away
+
+
+def test_a_mailbox_sign_in_failure_pages():
+    items = src.graph_probe_item(SEAT, "ops@example.test", "msgraph token mint rejected with HTTP 401", NOW)
+    assert items[0].page == f"ACTION: {SEAT} mailbox sign-in is dead"

@@ -67,9 +67,11 @@ pre_run_decides` runs the same check as code and never wakes a turn: one
 row with `decision_basis` `connector_auth_ok:smokeball` or
 `connector_auth_failed:smokeball:<ErrorClass>`. SMD's hourly work-health email
 (console-side, it reads the ledger) picks that row up: a failure reaches team@ within
-the hour, and a check that stops reporting is an item too. Authored hourly on
-ashton-price; pilot-smokeball keeps its daily agent-run row (`wake_policy:
-always`, no pre_run), which the body above describes.
+the hour as its own ACTION email (repeated hourly while it stays dead), and
+a Smokeball seat whose check is not running is an ACTION item too. Authored
+hourly on every seat with a Smokeball connector (ashton-price,
+pilot-smokeball); pilot's former daily agent-run row (`wake_policy: always`,
+the body above) is replaced by it. The agent-run body stays for a manual run.
 
 ## What this skill never does
 

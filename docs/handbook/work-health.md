@@ -24,7 +24,8 @@ Machine health has always paged within minutes: a seat that stops reporting, a c
 - **NEW** lines carry the full text and a "To do". **OPEN Nh** lines are items already reported in an earlier email, one line each with their age, so an unchanged problem never re-sends at full volume.
 - **Once a day**, on the first run at or after 15:00Z (08:00 Phoenix), a run with nothing to report still sends `[SMD Ops] Work health: all clear`. If neither email arrives in a day, the check itself is broken: look at the `work-health` workflow runs.
 - **A seat that could not be read is an item**, never silence. "Could not read this seat's work ledger" means nothing about that seat is known.
-- **Not checked this run** lists what the run could not vouch for (today: Smokeball sign-in on seats where the hourly check has not been deployed yet).
+- **ACTION pages.** A dead sign-in (Smokeball refusing the seat's token, SMD's mailbox sign-in check failing, a connection failing repeatedly) also gets its OWN email, subject `ACTION: <seat> Smokeball sign-in is dead` (or `mailbox sign-in is dead`), on every run while it stays dead. The hourly Smokeball check is the only detector of a dead Smokeball token: the connector-health ledger never sees the scheduled jobs' Smokeball calls (PR #3144). A Smokeball seat whose hourly check is not running is an ACTION line in the digest.
+- **Not checked this run** lists what the run could not vouch for (today: a seat that has never reported a heartbeat, which is being built rather than broken).
 
 ## What each line means
 

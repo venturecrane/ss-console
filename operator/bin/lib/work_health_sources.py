@@ -185,6 +185,7 @@ def connector_items(seat: str, status: Optional[dict], now: datetime) -> list[It
                 onset,
                 what,
                 "Check the connection's credentials and the vendor's status; requests through it are failing.",
+                page=f"ACTION: {seat} {_words(server)} connection is failing",
             )
         )
     return out
@@ -293,5 +294,6 @@ def graph_probe_item(seat: str, mailbox: str, error: Optional[str], now: datetim
             now - timedelta(minutes=1),
             f"SMD's hourly sign-in check of the {mailbox} mailbox failed ({error}).",
             "Check the mailbox's app credentials; if the seat's own connection is healthy, SMD's copy of the secret is stale.",
+            page=f"ACTION: {seat} mailbox sign-in is dead",
         )
     ]
