@@ -2722,12 +2722,22 @@ describe('validate — record_stores block (#2793)', () => {
     expect(validate(f).ok).toBe(true)
   })
 
+  it('accepts a writers list on a shared store: the roster reads, named people change it', () => {
+    const f = validFixture()
+    f['record_stores'] = [
+      { name: 'program', path: '/opt/data/program', writers: ['broker@firm.example'] },
+    ]
+    expect(validate(f).ok).toBe(true)
+  })
+
   it.each([
     [{ readers: ['tim@x.example'] }, 'readers', /needs owner_field/],
     [{ owner_field: 'agent', readers: ['tim'] }, 'readers', /not an email address/],
     [{ owner_field: 'agent', readers: 'tim@x.example' }, 'readers', /list of non-empty strings/],
     [{ owner_field: 'Agent Name' }, 'owner_field', /frontmatter key/],
     [{ index: ['Visitor Name'] }, 'index', /not a frontmatter key/],
+    [{ writers: ['tim'] }, 'writers', /not an email address/],
+    [{ writers: 'tim@x.example' }, 'writers', /list of non-empty strings/],
   ])('refuses a bad posture key by name: %j', (extra, field, pattern) => {
     const f = validFixture()
     f['record_stores'] = [{ name: 's', path: '/opt/data/s', ...extra }]

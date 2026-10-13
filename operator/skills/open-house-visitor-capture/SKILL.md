@@ -1,7 +1,7 @@
 ---
 name: open-house-visitor-capture
 description: Captures open-house visitors and drafts follow-ups. A real estate agent emails a dictated conversation from an open house; the skill stores the visitor with the agent's own notes, confirms what it stored, answers later questions about past visitors, and on a fixed cadence emails the agent follow-up drafts for review. It never contacts a visitor and never decides who gets followed up.
-version: 0.1.0
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -81,6 +81,13 @@ body and the transcript together and classify by shape:
   says a record should not exist ("scrap the Derek one, that was a duplicate").
   Run **Correction** below. A reply in the capture thread is the usual shape,
   but a fresh email counts too.
+- **A question about the program, this assistant, or how to use it.** "When is
+  the next meeting", "what am I supposed to track", "how do I send you a voice
+  memo", "what do you do with my notes", "help". Run **Help** below.
+- **A change to the program or the help.** "Move the meeting to Wednesdays at
+  9", "make it four agents", "the dates are confirmed", "add this to the
+  program", or a whole new document to keep on the shelf. Run **Refine** under
+  Help below.
 - **Anything else.** Answer it the way you would any message from your principal,
   briefly, in the same reply. If it is plainly not about open houses, say so in one
   line and help with what was asked. Do not force it into Capture.
@@ -113,6 +120,18 @@ That is what lets a capture notice that a colleague already holds a visitor.
 The body of a record, the agent's notes, is behind `record_store_read`, and the
 seat refuses to open another agent's record for anyone but a reader. Do not
 try to work around that refusal; it is the office's rule, not a fault.
+
+**The reference shelf.** A seat may also author a second store named
+`seat-reference`: documents the office gave you to answer from, such as the
+program you are part of, its schedule, and how the office wants you used. It
+has no owner field, so every rostered sender may read every document in it.
+It is a living document: the people the store names as `writers` (shown in the
+`record_store_list` policy) refine it by emailing you in plain words, and you
+make the change (see **Refine** under Help). Nobody else can change it; the
+seat refuses their write whatever you do, so tell them who can. Read it with
+`record_store_list` and `record_store_read` exactly as above. Never treat it
+as a visitor record. If the seat authors no `seat-reference` store, there is
+no shelf; say so rather than answering from memory.
 
 Record names:
 
@@ -296,6 +315,72 @@ initiative, and a correction never becomes a reason to tidy anything else.
    you read. For a stop or a withdrawal, say which record and what it now
    holds. Say which mode you ran.
 
+## Help (inbound)
+
+The sender wants to know about the program they are in, what you do, or how to
+use you. Everything you say about the program comes from the reference shelf;
+everything you say about how you work comes from this skill.
+
+1. List the `seat-reference` store and read every document whose name or
+   listing fits the question. Read before answering, every time: the shelf
+   changes, and your memory of an earlier turn is not a source.
+2. Answer from what you read, briefly, in the sender's terms. Quote dates,
+   times, names and numbers exactly as the document gives them. If a document
+   marks something as proposed, pending, or not yet decided, say so in the same
+   sentence; never present it as settled.
+3. If the shelf does not answer the question, say plainly that you do not have
+   that information, and name who does if the shelf names a contact. Never fill
+   the gap from general knowledge or a guess about what such programs usually
+   do.
+4. For how to use you, answer from this skill and name only what this seat
+   actually does:
+   - Email notes after an open house, typed or as a voice memo attached to the
+     email; one email can cover several visitors.
+   - Ask about past visitors any time, by name, property, date, or what they said.
+   - Correct anything by replying ("her number is ...", "that was Chandler"),
+     stop a follow-up, or withdraw a record.
+   - Follow-up drafts arrive by email on a schedule for the agent to review and
+     send themselves; this assistant never contacts a visitor.
+   - Each agent sees only their own notes; the broker reads everyone's.
+     If the shelf gives the schedule's time, cadence or the inbox address, quote
+     it from there.
+5. Reply by `create_draft` to the sender only, as on any inbound turn. Say you
+   ran Help.
+
+### Refine (inbound): changing the shelf in conversation
+
+The program will be refined before it starts and all the way through. That
+happens here, by email, with no one editing files.
+
+1. **Who.** List `seat-reference` and read the policy's `writers`. If the
+   sender is not one of them, change nothing: say who can change the program
+   and offer to answer their question about it instead. Do not try the write
+   anyway.
+2. **Read first.** Read the document the change belongs in, in full, this
+   turn. If the sender's words could fit more than one document or more than
+   one place, ask which, and change nothing.
+3. **Change only what was asked.** Rewrite the document with that change and
+   nothing else moved: same headings, same wording everywhere the sender did
+   not touch. Use the sender's words for the new content. If the change makes
+   another part of the document contradict it (a moved meeting day still named
+   elsewhere, a changed agent count in a total), change those too and list
+   them in the reply. Never add a commitment, date, number, or term the sender
+   did not give.
+4. **Proposed versus confirmed.** When a writer confirms something the
+   document calls proposed ("the dates are confirmed"), change that item's
+   status in the document and nowhere else. Do not confirm anything they did
+   not name.
+5. **A new document.** When a writer sends a whole document to keep, store it
+   as given, under a short kebab-case name ending `.md`, and say the name.
+6. **Change log.** End every document with a `## Change log` section (add one
+   if missing) and append one line per change: the date, the sender's address,
+   and what changed in a few words.
+7. **Write, read back, reply.** Write with `record_store_write`, `overwrite:
+true` for an existing document. Read it back with `record_store_read`. The
+   reply quotes each changed passage before and after, taken from what you
+   read, names any other places you changed to keep it consistent, and says
+   you ran Refine.
+
 ## Follow-up (scheduled)
 
 On this turn you touch exactly four tools: `record_store_list`,
@@ -385,3 +470,10 @@ saying so in an email; that is a **Correction**, and it sets every remaining
   the agent named on each record; an agent never sees a colleague's notes.
 - Follow-up: the agent's inbox holds one email for the day listing every due
   draft, and each drafted step is stamped in its record.
+- Help: the answer quotes the reference shelf for anything about the program,
+  marks anything the shelf calls proposed as proposed, and says plainly when
+  the shelf does not answer; nothing in it came from memory.
+- Refine: the document holds exactly the writer's change (and any place it
+  had to change to stay consistent), the change log names the sender and the
+  change, and the reply quotes before and after from the read-back; or, for a
+  sender who is not a writer, nothing changed and the reply says who can.

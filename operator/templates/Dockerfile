@@ -1178,7 +1178,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # own sets) in the envelope's optional `attachments` field; this repo's broker
 # validates it (drafting_attachments.py) and the runner places each set in the
 # caption (drafting/place.py). No tracked twin moved.
-ARG OVERLAY_REF="33463809e4aa7a4f5a63d2436b9aa8e6934f0817"
+# 2026-10-13 (c2bf5877, the overlay #444 merge commit). A record store may
+# author `writers`: on an inbound turn only those addresses may write to it (a
+# program the roster reads and the broker refines by email). Also carries #443,
+# the seat gate snapshot mirror. No tracked twin moved.
+ARG OVERLAY_REF="c2bf5877527d5eba34d58f2b8907678386bd5ef2"
 
 ARG CUSTOMER_SLUG=customer-zero
 
