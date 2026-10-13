@@ -138,6 +138,15 @@
       "to": "test-adjuster@smdopslab.onmicrosoft.com, operator@smdopslab.onmicrosoft.com",
       "subject": "[sendas-probe-7a398698] Send As test",
       "reported_in": 2859
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB71601DBF120FF506DEE09AAD979F2@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-10-12T17:31:38Z",
+      "to": "ScottDurgan@smdopslab.onmicrosoft.com",
+      "subject": "[SMD-PROBE] html stamp proof",
+      "reported_in": 3141
     }
   ],
   "verify_dispositioned_what": "Reviewed dispositions for body-verify and invariant FINDINGS (operator/bin/lib/send_dispositions.py, ss#3030). Keyed narrowly: body = (seat, skill_name, dispatch_ts, actual_sha256); invariant = (seat, rule, hashed_key, actual). An entry without an int reported_in and a non-empty why is ignored, so it over-reports. A dispositioned finding is still printed, indented, with its issue.",
