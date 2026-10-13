@@ -194,16 +194,73 @@ def graph_check(slug: str) -> tuple[Optional[str], Optional[str], Optional[str]]
     return seat.mailbox, None, None
 
 
+def _seat_ledger(slug: str, cfg: wh.Config, now: datetime) -> tuple[Optional[list[dict]], Optional[wh.Item]]:
+    """The seat's ledger window, or the 'unreadable' item that replaces it."""
+    client = seam_pull.seam_client_from_env(slug)
+    try:
+        if client is None:
+            raise RuntimeError("no runtime-read credential in this environment")
+        return read_ledger(client, now - timedelta(hours=cfg.ledger_lookback_hours)), None
+    except Exception as exc:  # noqa: BLE001 - an unreadable seat is an item, never all-clear
+        return None, wh.item(
+            slug,
+            "unreadable",
+            "ledger",
+            now,
+            f"Could not read this seat's work ledger ({type(exc).__name__}: {str(exc)[:160]}).",
+            "Nothing about this seat's requests or jobs is known until the read works; check the Machine and the seam.",
+        )
+
+
+def _graph_items(slug: str, now: datetime) -> list[wh.Item]:
+    mailbox, error, unchecked = graph_check(slug)
+    items = src.graph_probe_item(slug, mailbox or "", error, now)
+    if unchecked:
+        items.append(
+            wh.item(
+                slug,
+                "auth_unchecked",
+                "graph:probe-not-running",
+                now,
+                f"ACTION: {unchecked}",
+                "Add the seat's read secret to the work-health workflow's env and Actions secrets.",
+            )
+        )
+    return items
+
+
+def _operator_items(
+    slug: str, cfg: wh.Config, console: Console, now: datetime, rows: list[dict]
+) -> tuple[list[wh.Item], int]:
+    """The Operator-only checks over a readable ledger: (items, resolved count)."""
+    config = customer_yaml(slug)
+    deployed = src.deployed_cron(console.personas.get(slug))
+    has_smokeball, authored = seat_shape(config)
+    why = probe_not_scheduled_why(has_smokeball, authored, deployed)
+    closed = wh.load_closed()
+    items = wh.request_items(slug, rows, cfg, now, closed) + wh.job_items(slug, rows, cfg, now, closed)
+    if has_smokeball:
+        items += auth.smokeball_auth_items(slug, rows, cfg, now, probe_scheduled=why is None)
+        items += auth.probe_not_scheduled_items(slug, now, why=why)
+    shortfalls, resolved_shortfalls = src.shortfall_items(slug, console.shortfalls.get(slug, []), cfg, now, rows)
+    silent, resolved_silent = src.silent_run_items(slug, rows, cfg, now)
+    items += shortfalls + silent
+    if config:
+        status = console.status.get(slug) or {}
+        boot = {k: status.get(k) for k in ("last_heartbeat_ts", "process_uptime_seconds")}
+        items += src.missed_slot_items(slug, rows, cfg, now, boot, config, deployed)
+    return items + _graph_items(slug, now), resolved_shortfalls + resolved_silent
+
+
 def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, rows: Optional[list[dict]]):
     """(items, gaps, resolved): resolved counts problems in the window that
     later work answered (history: one trailing count, never a line each)."""
-    items: list[wh.Item] = []
     status = console.status.get(slug)
     if status is not None and not status.get("last_heartbeat_ts") and rows is None:
         # Provisioning-gray, the fleet pager's rule: a seat that has never
         # reported is being built, not broken. Named, never an item.
-        return items, ["not live yet: this seat has never reported a heartbeat, so it was not evaluated."], 0
-    items += src.heartbeat_items(slug, status, cfg, now)
+        return [], ["not live yet: this seat has never reported a heartbeat, so it was not evaluated."], 0
+    items = src.heartbeat_items(slug, status, cfg, now)
     items += src.connector_items(slug, status, now)
     items += src.alert_items(slug, console.alerts.get(slug, []), now)
     items += src.sentry_items(slug, console.sentry.get(slug, []), cfg, now)
@@ -212,14 +269,8 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
         # A hosted agent (seat.product: hosted-agent; scott, brokery) has no
         # request cards, job lanes or Smokeball: grading it against Operator
         # expectations would invent findings. Machine checks only, said so.
-        return (
-            items,
-            [
-                f"{product or 'unknown product'}: machine checks only (gateway, connections, alerts, Sentry); "
-                "no Operator request, job or schedule checks apply."
-            ],
-            0,
-        )
+        gap = f"{product or 'unknown product'}: machine checks only (gateway, connections, alerts, Sentry); "
+        return items, [gap + "no Operator request, job or schedule checks apply."], 0
     if console.error:
         items.append(
             wh.item(
@@ -232,54 +283,12 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
             )
         )
     if rows is None:
-        client = seam_pull.seam_client_from_env(slug)
-        try:
-            if client is None:
-                raise RuntimeError("no runtime-read credential in this environment")
-            rows = read_ledger(client, now - timedelta(hours=cfg.ledger_lookback_hours))
-        except Exception as exc:  # noqa: BLE001 - an unreadable seat is an item, never all-clear
-            items.append(
-                wh.item(
-                    slug,
-                    "unreadable",
-                    "ledger",
-                    now,
-                    f"Could not read this seat's work ledger ({type(exc).__name__}: {str(exc)[:160]}).",
-                    "Nothing about this seat's requests or jobs is known until the read works; check the Machine and the seam.",
-                )
-            )
+        rows, unreadable = _seat_ledger(slug, cfg, now)
+        if rows is None:
             shortfalls, _ = src.shortfall_items(slug, console.shortfalls.get(slug, []), cfg, now, None)
-            return items + shortfalls, [], 0
-    config = customer_yaml(slug)
-    deployed = src.deployed_cron(console.personas.get(slug))
-    has_smokeball, authored = seat_shape(config)
-    why = probe_not_scheduled_why(has_smokeball, authored, deployed)
-    closed = wh.load_closed()
-    items += wh.request_items(slug, rows, cfg, now, closed)
-    items += wh.job_items(slug, rows, cfg, now, closed)
-    if has_smokeball:
-        items += auth.smokeball_auth_items(slug, rows, cfg, now, probe_scheduled=why is None)
-        items += auth.probe_not_scheduled_items(slug, now, why=why)
-    shortfalls, resolved_shortfalls = src.shortfall_items(slug, console.shortfalls.get(slug, []), cfg, now, rows)
-    silent, resolved_silent = src.silent_run_items(slug, rows, cfg, now)
-    items += shortfalls + silent
-    if config:
-        boot = {k: (status or {}).get(k) for k in ("last_heartbeat_ts", "process_uptime_seconds")}
-        items += src.missed_slot_items(slug, rows, cfg, now, boot, config, deployed)
-    mailbox, error, unchecked = graph_check(slug)
-    items += src.graph_probe_item(slug, mailbox or "", error, now)
-    if unchecked:
-        items.append(
-            wh.item(
-                slug,
-                "auth_unchecked",
-                "graph:probe-not-running",
-                now,
-                f"ACTION: {unchecked}",
-                "Add the seat's read secret to the work-health workflow's env and Actions secrets.",
-            )
-        )
-    return items, [], resolved_shortfalls + resolved_silent
+            return [*items, *([unreadable] if unreadable else []), *shortfalls], [], 0
+    operator_items, resolved = _operator_items(slug, cfg, console, now, rows)
+    return items + operator_items, [], resolved
 
 
 def live_seats(console: Console, wanted: list[str]) -> list[str]:
