@@ -129,7 +129,9 @@ class Console:
             "SELECT customer_slug, last_heartbeat_ts, process_uptime_seconds, connectors_json FROM fleet_status"
         ):
             self.status[str(row["customer_slug"])] = row
-        for row in d1.execute("SELECT customer_slug, condition, opened_at FROM fleet_alert_state WHERE status = 'open'"):
+        for row in d1.execute(
+            "SELECT customer_slug, condition, opened_at FROM fleet_alert_state WHERE status = 'open'"
+        ):
             self.alerts.setdefault(str(row["customer_slug"]), []).append(row)
         for row in d1.execute(
             "SELECT customer_slug, ts, class, tool, code FROM operator_shortfalls "  # noqa: S608 - since is a strftime date, not input
@@ -151,7 +153,11 @@ def graph_check(slug: str) -> tuple[Optional[str], Optional[str], Optional[str]]
         return None, None, None
     secret = os.environ.get(seat.secret_env)
     if not secret:
-        return seat.mailbox, None, f"Mailbox sign-in for {seat.mailbox} not checked: SMD holds no read secret ({seat.secret_env})."
+        return (
+            seat.mailbox,
+            None,
+            f"Mailbox sign-in for {seat.mailbox} not checked: SMD holds no read secret ({seat.secret_env}).",
+        )
     try:
         token = msgraph_channel.graph_token(seat, secret)
         msgraph_channel._graph_get(
@@ -177,8 +183,14 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
     items += src.sentry_items(slug, console.sentry.get(slug, []), cfg, now)
     if console.error:
         items.append(
-            wh.item(slug, "unreadable", "console", now, f"Could not read SMD's own records ({console.error}).",
-                    "Fix the D1 read; heartbeat, alerts, refusals and Sentry are unchecked until then.")
+            wh.item(
+                slug,
+                "unreadable",
+                "console",
+                now,
+                f"Could not read SMD's own records ({console.error}).",
+                "Fix the D1 read; heartbeat, alerts, refusals and Sentry are unchecked until then.",
+            )
         )
     if rows is None:
         client = seam_pull.seam_client_from_env(slug)
@@ -188,8 +200,14 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
             rows = read_ledger(client, now - timedelta(hours=cfg.ledger_lookback_hours))
         except Exception as exc:  # noqa: BLE001 - an unreadable seat is an item, never all-clear
             items.append(
-                wh.item(slug, "unreadable", "ledger", now, f"Could not read this seat's work ledger ({type(exc).__name__}: {str(exc)[:160]}).",
-                        "Nothing about this seat's requests or jobs is known until the read works; check the Machine and the seam.")
+                wh.item(
+                    slug,
+                    "unreadable",
+                    "ledger",
+                    now,
+                    f"Could not read this seat's work ledger ({type(exc).__name__}: {str(exc)[:160]}).",
+                    "Nothing about this seat's requests or jobs is known until the read works; check the Machine and the seam.",
+                )
             )
             return items, gaps
     config = customer_yaml(slug)
@@ -266,7 +284,7 @@ def _ts(value: Optional[str]) -> Optional[datetime]:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap = argparse.ArgumentParser(description="Email team@ about the state of the work on every live seat.")
     ap.add_argument("--since", help="previous successful run start (ISO); new = after this")
     ap.add_argument("--state-in", help="previous run's state file ({key: first_seen})")
     ap.add_argument("--state-out", help="where to write this run's state")
@@ -306,8 +324,15 @@ def main(argv: Optional[list[str]] = None) -> int:
         if seat_gaps:
             gaps[slug] = seat_gaps
 
-    plan = mail.decide(items=items, seats=seats, gaps=gaps, previous=previous, since=since, now=now,
-                       all_clear_hour_utc=cfg.all_clear_hour_utc)
+    plan = mail.decide(
+        items=items,
+        seats=seats,
+        gaps=gaps,
+        previous=previous,
+        since=since,
+        now=now,
+        all_clear_hour_utc=cfg.all_clear_hour_utc,
+    )
     if args.state_out:
         Path(args.state_out).write_text(json.dumps(plan.state, indent=1, sort_keys=True), encoding="utf-8")
     # Counts only: this line lands in a PUBLIC repository's Actions log, and the

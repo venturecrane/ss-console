@@ -152,4 +152,3 @@ def decide(
         subject, text = render_all_clear(seats, gaps, now)
         return Plan(True, subject, text, [], [], state)
     return Plan(False, "", "", [], [], state)
-

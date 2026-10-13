@@ -118,7 +118,10 @@ def test_a_job_running_past_its_lane_limit_is_stuck():
 
 
 def test_a_job_running_inside_its_lane_limit_is_not_stuck():
-    rows = [_job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=1)), _job("DRAFTING", "RUNNING", NOW - timedelta(minutes=59))]
+    rows = [
+        _job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=1)),
+        _job("DRAFTING", "RUNNING", NOW - timedelta(minutes=59)),
+    ]
     assert wh.job_items(SEAT, rows, CFG, NOW) == []
 
 
@@ -131,7 +134,12 @@ def test_a_job_that_never_started_is_stuck_in_the_queue():
 def test_a_held_job_shows_only_its_reason_token_never_the_sentence():
     rows = [
         _job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=2), matter_number="201208"),
-        _job("DRAFTING", "FAILED", NOW - timedelta(hours=1), reason="review_held: the Smith deposition.docx cites 2030.050"),
+        _job(
+            "DRAFTING",
+            "FAILED",
+            NOW - timedelta(hours=1),
+            reason="review_held: the Smith deposition.docx cites 2030.050",
+        ),
     ]
     items = wh.job_items(SEAT, rows, CFG, NOW)
     assert _kinds(items) == ["job_failed"]
@@ -155,7 +163,10 @@ def test_a_bad_ending_older_than_the_window_drops_off():
 
 
 def test_a_delivered_job_is_not_an_item():
-    rows = [_job("DEMAND", "SUBMITTED", NOW - timedelta(hours=2)), _job("DEMAND", "DELIVERED", NOW - timedelta(hours=1))]
+    rows = [
+        _job("DEMAND", "SUBMITTED", NOW - timedelta(hours=2)),
+        _job("DEMAND", "DELIVERED", NOW - timedelta(hours=1)),
+    ]
     assert wh.job_items(SEAT, rows, CFG, NOW) == []
 
 
@@ -307,7 +318,15 @@ def test_a_ledger_that_reads_back_empty_is_unreadable_not_quiet():
 
 def test_an_unreadable_seat_can_never_produce_an_all_clear():
     unread = wh.item(SEAT, "unreadable", "ledger", NOW, "x", "y")
-    plan = mail.decide(items=[unread], seats=[SEAT], gaps={}, previous=None, since=NOW - timedelta(hours=2), now=NOW, all_clear_hour_utc=15)
+    plan = mail.decide(
+        items=[unread],
+        seats=[SEAT],
+        gaps={},
+        previous=None,
+        since=NOW - timedelta(hours=2),
+        now=NOW,
+        all_clear_hour_utc=15,
+    )
     assert plan.send and "all clear" not in plan.subject
 
 
@@ -324,21 +343,39 @@ def test_the_ulid_floor_sorts_at_its_instant():
 def test_an_item_seen_last_run_is_still_open_one_line():
     it = wh.item(SEAT, "no_reply", "abc", NOW - timedelta(hours=5), "A request ... NO reply", "do")
     previous = {mail.state_key(it.key): (NOW - timedelta(hours=5)).isoformat()}
-    plan = mail.decide(items=[it], seats=[SEAT], gaps={}, previous=previous, since=NOW - timedelta(hours=1), now=NOW, all_clear_hour_utc=15)
+    plan = mail.decide(
+        items=[it],
+        seats=[SEAT],
+        gaps={},
+        previous=previous,
+        since=NOW - timedelta(hours=1),
+        now=NOW,
+        all_clear_hour_utc=15,
+    )
     assert plan.new == [] and plan.still_open == [it]
     assert "OPEN 5h" in plan.text and "To do" not in plan.text
 
 
 def test_an_item_not_seen_last_run_is_new_full_text():
     it = wh.item(SEAT, "job_held", "j", NOW - timedelta(minutes=20), "held", "decide")
-    plan = mail.decide(items=[it], seats=[SEAT], gaps={}, previous={}, since=NOW - timedelta(hours=1), now=NOW, all_clear_hour_utc=15)
+    plan = mail.decide(
+        items=[it], seats=[SEAT], gaps={}, previous={}, since=NOW - timedelta(hours=1), now=NOW, all_clear_hour_utc=15
+    )
     assert plan.new == [it] and "NEW  held" in plan.text and "To do: decide" in plan.text
 
 
 def test_without_state_onset_decides_new():
     old = wh.item(SEAT, "job_held", "old", NOW - timedelta(hours=3), "old", "x")
     fresh = wh.item(SEAT, "job_held", "fresh", NOW - timedelta(minutes=10), "fresh", "x")
-    plan = mail.decide(items=[old, fresh], seats=[SEAT], gaps={}, previous=None, since=NOW - timedelta(hours=1), now=NOW, all_clear_hour_utc=15)
+    plan = mail.decide(
+        items=[old, fresh],
+        seats=[SEAT],
+        gaps={},
+        previous=None,
+        since=NOW - timedelta(hours=1),
+        now=NOW,
+        all_clear_hour_utc=15,
+    )
     assert plan.new == [fresh] and plan.still_open == [old]
 
 
@@ -358,7 +395,15 @@ def test_the_daily_all_clear(now, since, sends):
 
 
 def test_nothing_to_report_sends_nothing_off_the_hour():
-    plan = mail.decide(items=[], seats=[SEAT], gaps={}, previous=None, since=NOW - timedelta(minutes=30), now=NOW, all_clear_hour_utc=15)
+    plan = mail.decide(
+        items=[],
+        seats=[SEAT],
+        gaps={},
+        previous=None,
+        since=NOW - timedelta(minutes=30),
+        now=NOW,
+        all_clear_hour_utc=15,
+    )
     assert not plan.send
 
 
@@ -387,7 +432,9 @@ def test_pre_run_ok_and_failure_verdicts(tmp_path, monkeypatch):
     module = _pre_run()
     monkeypatch.setenv("SMD_CONNECTOR_VENV_PYTHON", _fake_python(tmp_path, '{"ok": true}'))
     assert module.check() == (True, "")
-    monkeypatch.setenv("SMD_CONNECTOR_VENV_PYTHON", _fake_python(tmp_path, '{"ok": false, "error": "SmokeballAuthError"}'))
+    monkeypatch.setenv(
+        "SMD_CONNECTOR_VENV_PYTHON", _fake_python(tmp_path, '{"ok": false, "error": "SmokeballAuthError"}')
+    )
     assert module.check() == (False, "SmokeballAuthError")
     monkeypatch.setenv("SMD_CONNECTOR_VENV_PYTHON", str(tmp_path / "absent"))
     assert module.check() == (False, "connector_python_missing")
@@ -395,7 +442,9 @@ def test_pre_run_ok_and_failure_verdicts(tmp_path, monkeypatch):
 
 def test_pre_run_never_wakes_and_records_the_basis(tmp_path, monkeypatch, capsys):
     module = _pre_run()
-    monkeypatch.setenv("SMD_CONNECTOR_VENV_PYTHON", _fake_python(tmp_path, '{"ok": false, "error": "SmokeballAuthError"}'))
+    monkeypatch.setenv(
+        "SMD_CONNECTOR_VENV_PYTHON", _fake_python(tmp_path, '{"ok": false, "error": "SmokeballAuthError"}')
+    )
     seen = []
     monkeypatch.setattr(module, "_broker", lambda req: seen.append(req) or {"ok": True})
     assert module.main() == 0
@@ -405,8 +454,15 @@ def test_pre_run_never_wakes_and_records_the_basis(tmp_path, monkeypatch, capsys
     assert seen[0]["action"] == "suppressed_wake_append"
     assert row_meta["decision_basis"] == "connector_auth_failed:smokeball:SmokeballAuthError"
     # And the email reads that very row as a failure.
-    row = {"ts": NOW.isoformat(), "action_type": "SUPPRESSED_WAKE", "skill_name": "connector-auth-check", "metadata": seen[0]["row"]["metadata"]}
-    assert _kinds(wh.smokeball_auth_items(SEAT, [row], CFG, NOW, has_smokeball=True, probe_authored=True)) == ["auth_failed"]
+    row = {
+        "ts": NOW.isoformat(),
+        "action_type": "SUPPRESSED_WAKE",
+        "skill_name": "connector-auth-check",
+        "metadata": seen[0]["row"]["metadata"],
+    }
+    assert _kinds(wh.smokeball_auth_items(SEAT, [row], CFG, NOW, has_smokeball=True, probe_authored=True)) == [
+        "auth_failed"
+    ]
 
 
 def test_ap_authors_the_hourly_check():
@@ -427,10 +483,14 @@ def test_the_state_file_names_no_work():
 def test_the_run_log_carries_counts_never_the_email_text(tmp_path, capsys, monkeypatch):
     """The CI log of this public repository must never carry a matter number."""
     rows = tmp_path / "rows.json"
-    rows.write_text(json.dumps([
-        _job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=2), matter_number="201208"),
-        _job("DRAFTING", "FAILED", NOW - timedelta(hours=1), reason="review_held: x"),
-    ]))
+    rows.write_text(
+        json.dumps(
+            [
+                _job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=2), matter_number="201208"),
+                _job("DRAFTING", "FAILED", NOW - timedelta(hours=1), reason="review_held: x"),
+            ]
+        )
+    )
     monkeypatch.setattr(cli, "graph_check", lambda slug: (None, None, None))
     assert cli.main(["--rows", f"{SEAT}={rows}", "--now", NOW.isoformat(), "--dry-run"]) == 0
     out = capsys.readouterr().out

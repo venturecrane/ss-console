@@ -49,6 +49,8 @@ def load_module(name: str, filename: str):
     if name in sys.modules:
         return sys.modules[name]
     spec = importlib.util.spec_from_file_location(name, _BIN / filename)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {filename}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
     spec.loader.exec_module(module)
@@ -293,4 +295,3 @@ def graph_probe_item(seat: str, mailbox: str, error: Optional[str], now: datetim
             "Check the mailbox's app credentials; if the seat's own connection is healthy, SMD's copy of the secret is stale.",
         )
     ]
-
