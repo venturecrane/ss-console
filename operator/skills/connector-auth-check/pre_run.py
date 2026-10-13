@@ -118,6 +118,11 @@ def record(basis: str) -> bool:
         "customer": os.environ.get("CUSTOMER_SLUG", ""),
         "server": SERVER,
     }
+    # A run by hand (seat-probe, a falsifier) is marked so it never reads as
+    # the cron having adopted the schedule.
+    run_by = "".join(ch for ch in os.environ.get("SMD_PROBE_RUN_BY", "") if ch.isalnum() or ch in "_.:@-")[:64]
+    if run_by:
+        metadata["run_by"] = run_by
     row = {
         "action_type": "SUPPRESSED_WAKE",
         "actor": "agent",

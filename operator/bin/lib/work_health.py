@@ -449,15 +449,21 @@ def smokeball_auth_items(
     return out
 
 
-def probe_has_reported(rows: list[dict]) -> bool:
-    """True once the hourly check has written a row: authored in git is not the
-    same as running on the Machine, which only changes at the seat's rebuild."""
-    return any(
-        row.get("action_type") == "SUPPRESSED_WAKE"
-        and row.get("skill_name") == AUTH_PROBE_SKILL
-        and str(meta(row).get("decision_basis") or "").startswith(("connector_auth_ok", "connector_auth_failed"))
-        for row in rows
-    )
+def first_scheduled_probe(rows: list[dict]) -> Optional[datetime]:
+    """When the hourly check first ran FROM THE SCHEDULE on this seat (rows a
+    person ran by hand carry ``run_by`` and do not count). Authored in git is
+    not running on the Machine, which only changes at the seat's rebuild: None
+    means the schedule has not been adopted yet, and slots before this instant
+    were never on the Machine to be missed."""
+    for ts, row in stamped(rows):
+        if row.get("action_type") != "SUPPRESSED_WAKE" or row.get("skill_name") != AUTH_PROBE_SKILL:
+            continue
+        md = meta(row)
+        if md.get("run_by"):
+            continue
+        if str(md.get("decision_basis") or "").startswith(("connector_auth_ok", "connector_auth_failed")):
+            return ts
+    return None
 
 
 def probe_not_running_items(

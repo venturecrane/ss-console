@@ -215,7 +215,8 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
     # Authored in git is not running on the seat: the check adopts at the
     # seat's next rebuild. Until its first row lands it is a coverage gap, and
     # its slots are not "missed" (they were never scheduled on the Machine).
-    probe_running = authored and wh.probe_has_reported(rows)
+    adopted_at = wh.first_scheduled_probe(rows) if authored else None
+    probe_running = adopted_at is not None
     items += wh.request_items(slug, rows, cfg, now)
     items += wh.job_items(slug, rows, cfg, now)
     items += wh.smokeball_auth_items(slug, rows, cfg, now, has_smokeball=has_smokeball, probe_authored=probe_running)
@@ -226,8 +227,11 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
     if config:
         boot = {k: (status or {}).get(k) for k in ("last_heartbeat_ts", "process_uptime_seconds")}
         missed = src.missed_slot_items(slug, rows, cfg, now, boot)
-        if not probe_running:
-            missed = [i for i in missed if f"|missed_slot|{wh.AUTH_PROBE_SKILL}|" not in i.key]
+        missed = [
+            i
+            for i in missed
+            if f"|missed_slot|{wh.AUTH_PROBE_SKILL}|" not in i.key or (adopted_at is not None and i.onset >= adopted_at)
+        ]
         items += missed
     mailbox, error, unchecked = graph_check(slug)
     items += src.graph_probe_item(slug, mailbox or "", error, now)

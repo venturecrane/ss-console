@@ -240,10 +240,23 @@ def test_authored_but_not_yet_running_is_a_gap_and_its_slots_are_not_missed(monk
     items, gaps = cli.evaluate_seat(SEAT, CFG, console, NOW, [])
     assert not any(f"|missed_slot|{wh.AUTH_PROBE_SKILL}|" in i.key for i in items)
     assert any("adopts" in i.what for i in items)
-    probe = _probe(NOW - timedelta(minutes=20), True)
+    # Adopted 5h ago by the schedule: slots after that are owed, slots before are not.
+    probe = _probe(NOW - timedelta(hours=5), True)
     items, gaps = cli.evaluate_seat(SEAT, CFG, console, NOW, [probe])
     assert not any("adopts" in i.what for i in items)
-    assert any(f"|missed_slot|{wh.AUTH_PROBE_SKILL}|" in i.key for i in items)
+    missed = [i for i in items if f"|missed_slot|{wh.AUTH_PROBE_SKILL}|" in i.key]
+    assert missed and all(i.onset >= probe_ts(probe) for i in missed)
+    # A run by hand (run_by) is not adoption.
+    manual = _probe(NOW - timedelta(hours=5), True)
+    md = json.loads(manual["metadata"])
+    md["run_by"] = "seat-probe"
+    manual["metadata"] = json.dumps(md)
+    items, gaps = cli.evaluate_seat(SEAT, CFG, console, NOW, [manual])
+    assert any("adopts" in i.what for i in items)
+
+
+def probe_ts(row):
+    return wh.parse_ts(row["ts"])
 
 
 def test_a_seat_that_has_never_reported_is_not_live_yet(monkeypatch):
