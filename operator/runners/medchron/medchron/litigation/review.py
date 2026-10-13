@@ -66,59 +66,62 @@ def _trim(row: list[str]) -> list[str]:
     return row
 
 
-def findings(xlsx: bytes, finals: list[dict[str, Any]], in_scope: list[dict[str, Any]]) -> list[proof_review.Finding]:
-    """The code review of one built workbook. Empty means it may be filed."""
-    out: list[proof_review.Finding] = []
-    try:
-        sheets = read_sheets(xlsx)
-    except Exception as exc:  # noqa: BLE001 - an unreadable workbook is the finding
-        return [proof_review.code(proof_review.MUST, "workbook", f"the built workbook does not open: {exc}"[:300])]
-    notes = sheets.get(CASE_NOTES)
+def _matters(notes: list[list[str]] | None, in_scope: list[dict[str, Any]]) -> list[proof_review.Finding]:
+    """Every in-scope matter listed exactly once in Case notes, and nothing else."""
     if notes is None:
-        out.append(proof_review.code(proof_review.MUST, "matters", "the Case notes tab is missing"))
-    else:
-        seen: dict[str, int] = {}
-        for r in notes:
-            if len(r) > 1 and r[1]:
-                seen[r[1]] = seen.get(r[1], 0) + 1
-        want = {_norm(m.get("number")) for m in in_scope}
-        for n in sorted(want):
-            if seen.get(n, 0) != 1:
-                out.append(
-                    proof_review.code(
-                        proof_review.MUST, "matters", f"matter {n} has {seen.get(n, 0)} rows in Case notes, not one"
-                    )
+        return [proof_review.code(proof_review.MUST, "matters", "the Case notes tab is missing")]
+    out: list[proof_review.Finding] = []
+    seen: dict[str, int] = {}
+    for r in notes:
+        if len(r) > 1 and r[1]:
+            seen[r[1]] = seen.get(r[1], 0) + 1
+    want = {_norm(m.get("number")) for m in in_scope}
+    for n in sorted(want):
+        if seen.get(n, 0) != 1:
+            out.append(
+                proof_review.code(
+                    proof_review.MUST, "matters", f"matter {n} has {seen.get(n, 0)} rows in Case notes, not one"
                 )
-        for n in sorted(set(seen) - want):
-            out.append(proof_review.code(proof_review.MUST, "matters", f"matter {n} is in the list and not in scope"))
-    got = sheets.get(ALL_DEFENDANTS)
-    built = [_trim([_norm(book.clean(v)) for v in r["cells"]]) for r in book.defendant_rows(finals)]
+            )
+    for n in sorted(set(seen) - want):
+        out.append(proof_review.code(proof_review.MUST, "matters", f"matter {n} is in the list and not in scope"))
+    return out
+
+
+def _rows(got: list[list[str]] | None, finals: list[dict[str, Any]]) -> list[proof_review.Finding]:
+    """The All defendants tab equals the rows built from the data: the count,
+    then the first row that differs (one finding is enough to hold)."""
     if got is None:
-        out.append(proof_review.code(proof_review.MUST, "rows", "the All defendants tab is missing"))
-    else:
-        got = [_trim(r) for r in got]
-        if len(got) != len(built):
+        return [proof_review.code(proof_review.MUST, "rows", "the All defendants tab is missing")]
+    built = [_trim([_norm(book.clean(v)) for v in r["cells"]]) for r in book.defendant_rows(finals)]
+    got = [_trim(r) for r in got]
+    out: list[proof_review.Finding] = []
+    if len(got) != len(built):
+        out.append(
+            proof_review.code(
+                proof_review.MUST,
+                "rows",
+                f"All defendants has {len(got)} rows in the file and {len(built)} in the data it was built from",
+            )
+        )
+    for i, (g, b) in enumerate(zip(got, built), start=2):
+        if g != b:
+            col = next((j for j in range(max(len(g), len(b))) if (g[j : j + 1] or [""]) != (b[j : j + 1] or [""])), 0)
             out.append(
                 proof_review.code(
                     proof_review.MUST,
                     "rows",
-                    f"All defendants has {len(got)} rows in the file and {len(built)} in the data it was built from",
+                    f"All defendants row {i}, column {col + 1}, differs from the data it was built from",
+                    f"{ALL_DEFENDANTS}!row {i}",
                 )
             )
-        for i, (g, b) in enumerate(zip(got, built), start=2):
-            if g != b:
-                col = next(
-                    (j for j in range(max(len(g), len(b))) if (g[j : j + 1] or [""]) != (b[j : j + 1] or [""])), 0
-                )
-                out.append(
-                    proof_review.code(
-                        proof_review.MUST,
-                        "rows",
-                        f"All defendants row {i}, column {col + 1}, differs from the data it was built from",
-                        f"{ALL_DEFENDANTS}!row {i}",
-                    )
-                )
-                break
+            break
+    return out
+
+
+def _vocabulary(sheets: dict[str, list[list[str]]]) -> list[proof_review.Finding]:
+    """No system wording or sentinel in any cell of any tab."""
+    out: list[proof_review.Finding] = []
     for title, rows in sheets.items():
         for i, r in enumerate(rows, start=2):
             for cell in r:
@@ -133,6 +136,15 @@ def findings(xlsx: bytes, finals: list[dict[str, Any]], in_scope: list[dict[str,
                         )
                     )
     return out
+
+
+def findings(xlsx: bytes, finals: list[dict[str, Any]], in_scope: list[dict[str, Any]]) -> list[proof_review.Finding]:
+    """The code review of one built workbook. Empty means it may be filed."""
+    try:
+        sheets = read_sheets(xlsx)
+    except Exception as exc:  # noqa: BLE001 - an unreadable workbook is the finding
+        return [proof_review.code(proof_review.MUST, "workbook", f"the built workbook does not open: {exc}"[:300])]
+    return _matters(sheets.get(CASE_NOTES), in_scope) + _rows(sheets.get(ALL_DEFENDANTS), finals) + _vocabulary(sheets)
 
 
 def run(data: Path, job_dir: Path, xlsx: Path, finals: list[dict[str, Any]], in_scope: list[dict[str, Any]]) -> str:
