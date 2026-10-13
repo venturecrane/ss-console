@@ -51,13 +51,20 @@ function authoredSeatMemoryMb(): number {
   throw new Error(`no machine.memory_mb found in ${SEAT_YAML}`)
 }
 
+/** The vCPU count the seat's authored `machine.size` (`shared-cpu-<N>x`) names. */
+function authoredSeatCpus(): number {
+  const m = /^machine:[\s\S]*?^\s+size:\s*shared-cpu-(\d+)x/m.exec(readFileSync(SEAT_YAML, 'utf8'))
+  if (!m) throw new Error(`no machine.size shared-cpu-<N>x found in ${SEAT_YAML}`)
+  return Number(m[1])
+}
+
 /** `fly` and `uv` stubs; `fly` runs ONLY the staged-scripts program for real. */
 function stubDir(): string {
   const dir = tmp('boot-smoke-staged-stub-')
   const fly = `#!/usr/bin/env bash
 for a in "$@"; do
   [ "$a" = "status" ] && {
-    echo '{"Machines":[{"state":"started","config":{"guest":{"cpu_kind":"shared","cpus":1,"memory_mb":${authoredSeatMemoryMb()}}}}]}'
+    echo '{"Machines":[{"state":"started","config":{"guest":{"cpu_kind":"shared","cpus":${authoredSeatCpus()},"memory_mb":${authoredSeatMemoryMb()}}}}]}'
     exit 0
   }
 done
