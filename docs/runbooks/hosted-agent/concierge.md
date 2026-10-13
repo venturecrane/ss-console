@@ -20,6 +20,17 @@ Email to team@smd.services ("Hosted Agent purchase") + a new row in the admin qu
 8. **Send-a-message check.** From an allowlisted sender, email the agent; confirm the digest cron is scheduled; confirm Telegram round-trip if wired.
 9. **Activate** in the admin queue: author the channel-details paragraph (bot handle, agent email address, allowlisted senders) and submit. This flips the subscription `active`, closes the work item, and emails the buyer.
 
+## Adding or removing senders on request
+
+A rostered sender can ask the agent to add people ("add these agents, here are their emails"). The open-house skill's **Access request** passes the exact addresses to team@smd.services as an operations request (subject `Operations request from <sender> [ops <tag>]`) and tells the sender it was passed on. To act on it:
+
+1. In one PR, change **only** `scope.inbound_allow_from` in `operator/customers/<slug>/customer.yaml`. Any other non-live key in the same diff (`record_stores`, `outbound_roster`, `ops_reply_from`) holds the whole change back.
+2. Merge it, and wait for CI to publish `vaults/<slug>/customer.yaml` to R2.
+3. Restart the Machine (`fly machine restart <id> -a hermes-<slug>`). The agent sees the new sender within seconds of the publish, but the workspace broker replies from a boot-time copy, so a new sender gets no reply until the restart.
+4. Reply "done" to the `[ops <tag>]` email. The seat tells the sender. A request nobody answers lapses after seven days and the sender is told.
+
+On the open-house seat, a new agent needs only `inbound_allow_from`: `owner_field: agent` makes them the owner of their own records. `readers` is for the broker.
+
 ## Hard rules
 
 - `external_send: confirm` (ADR 0071, supersedes ADR 0067's launch draft-only posture) and a non-empty `inbound_allow_from` are the tier's channel constraint (ADR 0032 deferred list). `confirm` means the agent prepares the send and completes it only after an explicit in-turn owner approval over channel; the taint-gate still blocks even a confirmed send on a tainted turn. Do not raise to `autonomous` per customer during authoring — promotion is a per-skill control-plane act the owner performs later (ADR 0071 decision 5). Tightening to `draft_for_review` (agent never sends) is allowed if a customer asks for it.
