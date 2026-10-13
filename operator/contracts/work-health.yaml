@@ -1,0 +1,77 @@
+# work-health: the hourly email to team@smd.services about the state of the WORK
+# on every seat (Captain, 2026-10-13). Read by operator/bin/work-health.py.
+#
+# WHY. Machine health pages within minutes (heartbeat, connector_down, Sentry),
+# but nothing watched the work itself: a job stuck in "running" looked like
+# work in progress forever, the daily reconcilers' findings lived only in
+# GitHub issues nobody read, and an idle dead Smokeball token stayed silent for
+# 42 hours (2026-10-10). This contract is what the email measures against.
+#
+# THE INTERVAL is ONE value and it is not in this file: the `cron:` line of
+# .github/workflows/work-health.yml. The script keeps no copy of it, because
+# "new since the last email" is read from the previous successful run's start
+# time (GitHub's own record), so changing the cron line is the whole change.
+
+# A request from a firm person (trust_class internal) with no reply sent and
+# no reply held after this long is an item. Same value as the seat's own
+# NO REPLY card (overlay shared/request_cards.py NO_REPLY_AFTER).
+no_reply_minutes: 30
+
+# Requests older than this drop off the email (the seat's request index keeps
+# 7 days of text; past that nobody can act on the card either).
+request_horizon_hours: 168
+
+# How far back the seat's ledger is read. Must cover the longest-running job's
+# SUBMITTED row or a stuck job vanishes from view: the longest real job on the
+# A&P seat ran 29 hours (medchron, 2026-09-23).
+ledger_lookback_hours: 192
+
+# A job that ended held or failed stays on the email this long after it ended,
+# unless a later job in the same lane on the same matter delivered.
+ended_job_hours: 72
+
+# Silent runs and missed scheduled slots are graded over this trailing window
+# (the daily reconcilers grade the whole ledger; the email shows what is fresh).
+reconcile_window_hours: 24
+
+# Refused / limit / not-allowed / failed / partial tool results (the seat's
+# shortfall ledger) and new Sentry issues are listed for this trailing window.
+event_window_hours: 24
+
+# A seat whose last heartbeat is older than this cannot be vouched for.
+heartbeat_stale_minutes: 15
+
+# Smokeball's hourly auth probe (connector-auth-check pre_run): a result older
+# than this means the probe itself is not running.
+auth_probe_stale_minutes: 150
+
+# The all-clear: on the first run at or after this UTC hour each day, a run
+# with nothing to report still sends one short line, so silence is provable.
+# 15:00Z is 08:00 in Phoenix.
+all_clear_hour_utc: 15
+
+# Per lane: how long a job may wait to start, and how long it may run, before
+# it is "stuck". Measured from the A&P ledger 2026-08-31..2026-10-13: drafting
+# runs 1-43 min (one 248), demand 1-130 min (one 944), negotiation <=23 min,
+# medchron 4-550 min (one 1754).
+lanes:
+  demand:
+    label: demand letter
+    queue_minutes: 15
+    run_minutes: 360
+  drafting:
+    label: drafting
+    queue_minutes: 15
+    run_minutes: 120
+  litigation:
+    label: litigation status list
+    queue_minutes: 15
+    run_minutes: 180
+  negotiation:
+    label: negotiation watch
+    queue_minutes: 15
+    run_minutes: 60
+  medchron:
+    label: medical chronology
+    queue_minutes: 30
+    run_minutes: 720

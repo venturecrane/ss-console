@@ -1,0 +1,338 @@
+#!/usr/bin/env python3
+"""Email team@smd.services about the state of the WORK on every live seat.
+
+WHY (Captain, 2026-10-13). Machine health is paged within minutes; the work was
+not watched at all. A job stuck in "running" looked like progress forever, the
+seat's NO REPLY card switched off once any job existed and had never fired in
+production, the daily reconcilers wrote to GitHub issues nobody read, and an
+idle dead Smokeball token stayed silent for 42 hours. This run reads every live
+seat and emails the work that needs a person, in plain language.
+
+CONSOLE-SIDE, like the reconcilers it folds in (a seat cannot audit its own
+silence): the seat's ledger via the ADR 0043 runtime-read seam, the console's
+records via D1, Graph sign-in via SMD's read credential. Rules for what counts
+live in ``operator/contracts/work-health.yaml``; the item logic in
+``bin/lib/work_health*.py``.
+
+A FAILED READ IS AN ITEM, never an empty result: a seat that could not be read
+appears in the email as such, so it can never produce an all-clear.
+
+THE INTERVAL is the workflow's cron line (``.github/workflows/work-health.yml``).
+``--since`` (the previous successful run's start) and ``--state-in`` (its item
+keys) make "new" vs "still open" exact without this script knowing the period.
+
+EXIT: 0 evaluated (sent, or nothing to send); 2 the email could not be sent;
+3 HOLD, nothing could be evaluated (no credentials).
+
+Usage:
+    infisical run --env=prod --path=/ss -- python3 operator/bin/work-health.py --dry-run
+    ... --since 2026-10-13T15:23:00Z --state-in prev.json --state-out next.json
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Optional
+
+import yaml
+
+from bin.lib import console_d1, msgraph_channel, seam_pull
+from bin.lib import work_health as wh
+from bin.lib import work_health_mail as mail
+from bin.lib import work_health_sources as src
+
+EXIT_OK = 0
+EXIT_SEND_FAILED = 2
+EXIT_HOLD = 3
+
+CUSTOMERS = Path(__file__).resolve().parents[1] / "customers"
+RESEND_URL = "https://api.resend.com/emails"
+DEFAULT_TO = "team@smd.services"
+DEFAULT_FROM = "SMD Services Ops <team@smd.services>"
+_CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def ulid_floor(ts: datetime) -> str:
+    """The smallest ULID at ``ts``: audit_export pages ``id > cursor`` in ULID
+    (= time) order, so this reads only the window instead of the whole ledger."""
+    ms = int(ts.timestamp() * 1000)
+    out = ""
+    for _ in range(10):
+        out = _CROCKFORD[ms % 32] + out
+        ms //= 32
+    return out + "0" * 16
+
+
+def read_ledger(client, since: datetime) -> list[dict]:
+    """The window's rows. An empty window is checked against the ledger's
+    first page: a seat with rows somewhere is quiet, a seat with none at all
+    (the seam serves an empty page on a database error) is UNREADABLE."""
+    rows: list[dict] = []
+    cursor: Optional[str] = ulid_floor(since)
+    while cursor:
+        page = client.read_page("audit_export", cursor=cursor)
+        rows.extend(e for e in page["entries"] if isinstance(e, dict))
+        cursor = page.get("cursor")
+    if not rows and not client.read_page("audit_export")["entries"]:
+        raise RuntimeError("the seat's ledger read back empty")
+    return rows
+
+
+def customer_yaml(slug: str) -> dict:
+    try:
+        data = yaml.safe_load((CUSTOMERS / slug / "customer.yaml").read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def seat_shape(config: dict) -> tuple[bool, bool]:
+    """(has_smokeball, hourly auth probe authored) from the seat's own config."""
+    connectors = config.get("connectors") or {}
+    has_smokeball = any(
+        isinstance(c, dict) and str(c.get("backend") or "").endswith("smokeball") for c in connectors.values()
+    )
+    authored = False
+    for persona in config.get("personas") or []:
+        for row in (persona or {}).get("cron") or []:
+            if isinstance(row, dict) and row.get("skill") == wh.AUTH_PROBE_SKILL and row.get("pre_run"):
+                authored = True
+    return has_smokeball, authored
+
+
+class Console:
+    """The four console reads, done once per run. A failure is kept, not raised:
+    every seat then carries an 'unreadable' item for the part it could not see."""
+
+    def __init__(self, d1) -> None:
+        self.error: Optional[str] = None
+        self.status: dict[str, dict] = {}
+        self.alerts: dict[str, list[dict]] = {}
+        self.shortfalls: dict[str, list[dict]] = {}
+        self.sentry: dict[str, list[dict]] = {}
+        try:
+            self._load(d1)
+        except Exception as exc:  # noqa: BLE001 - reported as an item on every seat
+            self.error = f"{type(exc).__name__}: {str(exc)[:200]}"
+
+    def _load(self, d1) -> None:
+        since = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%Y-%m-%d")
+        for row in d1.execute(
+            "SELECT customer_slug, last_heartbeat_ts, process_uptime_seconds, connectors_json FROM fleet_status"
+        ):
+            self.status[str(row["customer_slug"])] = row
+        for row in d1.execute("SELECT customer_slug, condition, opened_at FROM fleet_alert_state WHERE status = 'open'"):
+            self.alerts.setdefault(str(row["customer_slug"]), []).append(row)
+        for row in d1.execute(
+            "SELECT customer_slug, ts, class, tool, code FROM operator_shortfalls "  # noqa: S608 - since is a strftime date, not input
+            f"WHERE ts >= '{since}'"
+        ):
+            self.shortfalls.setdefault(str(row["customer_slug"]), []).append(row)
+        for row in d1.execute(
+            "SELECT customer_slug, detected_at, alert_date, driver, summary FROM cost_anomaly_alerts "  # noqa: S608 - since is a strftime date, not input
+            f"WHERE source = 'sentry' AND detected_at >= '{since}'"
+        ):
+            self.sentry.setdefault(str(row["customer_slug"]), []).append(row)
+
+
+def graph_check(slug: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """(mailbox, error, gap). SMD's own read credential, a token mint plus one
+    GET of the mailbox's inbox folder id: no message is read."""
+    seat = next((s for s in msgraph_channel.msgraph_seats(str(CUSTOMERS)) if s.slug == slug), None)
+    if seat is None:
+        return None, None, None
+    secret = os.environ.get(seat.secret_env)
+    if not secret:
+        return seat.mailbox, None, f"Mailbox sign-in for {seat.mailbox} not checked: SMD holds no read secret ({seat.secret_env})."
+    try:
+        token = msgraph_channel.graph_token(seat, secret)
+        msgraph_channel._graph_get(
+            f"{msgraph_channel.GRAPH_API_BASE}/users/{seat.mailbox}/mailFolders/inbox?$select=id", token
+        )
+    except msgraph_channel.ReconcileError as exc:
+        return seat.mailbox, str(exc)[:120], None
+    return seat.mailbox, None, None
+
+
+def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, rows: Optional[list[dict]]):
+    items: list[wh.Item] = []
+    gaps: list[str] = []
+    status = console.status.get(slug)
+    if status is not None and not status.get("last_heartbeat_ts") and rows is None:
+        # Provisioning-gray, the fleet pager's rule: a seat that has never
+        # reported is being built, not broken. Named, never an item.
+        return items, ["not live yet: this seat has never reported a heartbeat, so it was not evaluated."]
+    items += src.heartbeat_items(slug, status, cfg, now)
+    items += src.connector_items(slug, status, now)
+    items += src.alert_items(slug, console.alerts.get(slug, []), now)
+    items += src.shortfall_items(slug, console.shortfalls.get(slug, []), cfg, now)
+    items += src.sentry_items(slug, console.sentry.get(slug, []), cfg, now)
+    if console.error:
+        items.append(
+            wh.item(slug, "unreadable", "console", now, f"Could not read SMD's own records ({console.error}).",
+                    "Fix the D1 read; heartbeat, alerts, refusals and Sentry are unchecked until then.")
+        )
+    if rows is None:
+        client = seam_pull.seam_client_from_env(slug)
+        try:
+            if client is None:
+                raise RuntimeError("no runtime-read credential in this environment")
+            rows = read_ledger(client, now - timedelta(hours=cfg.ledger_lookback_hours))
+        except Exception as exc:  # noqa: BLE001 - an unreadable seat is an item, never all-clear
+            items.append(
+                wh.item(slug, "unreadable", "ledger", now, f"Could not read this seat's work ledger ({type(exc).__name__}: {str(exc)[:160]}).",
+                        "Nothing about this seat's requests or jobs is known until the read works; check the Machine and the seam.")
+            )
+            return items, gaps
+    config = customer_yaml(slug)
+    has_smokeball, authored = seat_shape(config)
+    # Authored in git is not running on the seat: the check adopts at the
+    # seat's next rebuild. Until its first row lands it is a coverage gap, and
+    # its slots are not "missed" (they were never scheduled on the Machine).
+    probe_running = authored and wh.probe_has_reported(rows)
+    items += wh.request_items(slug, rows, cfg, now)
+    items += wh.job_items(slug, rows, cfg, now)
+    items += wh.smokeball_auth_items(slug, rows, cfg, now, has_smokeball=has_smokeball, probe_authored=probe_running)
+    gaps += wh.coverage_gaps(has_smokeball=has_smokeball, probe_authored=authored, probe_running=probe_running)
+    items += src.silent_run_items(slug, rows, cfg, now)
+    if config:
+        boot = {k: (status or {}).get(k) for k in ("last_heartbeat_ts", "process_uptime_seconds")}
+        missed = src.missed_slot_items(slug, rows, cfg, now, boot)
+        if not probe_running:
+            missed = [i for i in missed if f"|missed_slot|{wh.AUTH_PROBE_SKILL}|" not in i.key]
+        items += missed
+    mailbox, error, gap = graph_check(slug)
+    items += src.graph_probe_item(slug, mailbox or "", error, now)
+    if gap:
+        gaps.append(gap)
+    return items, gaps
+
+
+def live_seats(console: Console, wanted: list[str]) -> list[str]:
+    if wanted:
+        return wanted
+    authored = {d.name for d in CUSTOMERS.iterdir() if d.is_dir() and not d.name.startswith(("_", "."))}
+    if console.status:
+        return sorted(console.status)
+    return sorted(authored)
+
+
+def send(subject: str, text: str, run_key: str) -> Optional[str]:
+    key = os.environ.get("RESEND_API_KEY")
+    if not key:
+        return "RESEND_API_KEY is not set"
+    body = json.dumps(
+        {
+            "from": os.environ.get("ALERT_FROM_EMAIL") or DEFAULT_FROM,
+            "to": [os.environ.get("ALERT_TO_EMAIL") or DEFAULT_TO],
+            "subject": subject,
+            "text": text,
+        }
+    ).encode()
+    req = urllib.request.Request(  # noqa: S310 - RESEND_URL is an https constant
+        RESEND_URL,
+        data=body,
+        method="POST",
+        # A User-Agent is required: Resend sits behind Cloudflare, which answers
+        # urllib's default agent with 403 "error code: 1010" (found 2026-10-13).
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "Idempotency-Key": run_key,
+            "User-Agent": "smd-work-health/1.0",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 - the request URL is the RESEND_URL https constant, never input
+            payload = json.loads(resp.read() or b"{}")
+    except urllib.error.HTTPError as exc:
+        return f"resend HTTP {exc.code}"
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        return f"resend unreachable: {exc}"
+    print(f"sent: resend id {payload.get('id')}")
+    return None
+
+
+def _ts(value: Optional[str]) -> Optional[datetime]:
+    return wh.parse_ts(value) if value else None
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--since", help="previous successful run start (ISO); new = after this")
+    ap.add_argument("--state-in", help="previous run's state file ({key: first_seen})")
+    ap.add_argument("--state-out", help="where to write this run's state")
+    ap.add_argument("--slug", action="append", default=[], help="evaluate only this seat (repeatable)")
+    ap.add_argument("--rows", action="append", default=[], help="offline: <slug>=<audit rows json>")
+    ap.add_argument("--now", help="evaluate as of this instant (ISO); default: now")
+    ap.add_argument("--dry-run", action="store_true", help="do not send")
+    ap.add_argument(
+        "--print-body",
+        action="store_true",
+        help="print the email text (LOCAL ONLY: the CI log of this public repo must never carry it)",
+    )
+    args = ap.parse_args(argv)
+
+    now = _ts(args.now) or datetime.now(timezone.utc)
+    since = _ts(args.since)
+    previous = None
+    if args.state_in and Path(args.state_in).exists():
+        try:
+            previous = json.loads(Path(args.state_in).read_text(encoding="utf-8"))
+        except ValueError:
+            previous = None
+    offline = dict(spec.split("=", 1) for spec in args.rows)
+    if not offline and not os.environ.get("OPERATOR_RUNTIME_READ_SECRET"):
+        print("HOLD: no runtime-read credential; nothing can be evaluated", file=sys.stderr)
+        return EXIT_HOLD
+
+    cfg = wh.load_config()
+    console = Console(console_d1.ConsoleD1()) if not offline else Console(_NoD1())
+    seats = live_seats(console, args.slug or list(offline))
+    items: list[wh.Item] = []
+    gaps: dict[str, list[str]] = {}
+    for slug in seats:
+        rows = json.loads(Path(offline[slug]).read_text(encoding="utf-8")) if slug in offline else None
+        seat_items, seat_gaps = evaluate_seat(slug, cfg, console, now, rows)
+        items += seat_items
+        if seat_gaps:
+            gaps[slug] = seat_gaps
+
+    plan = mail.decide(items=items, seats=seats, gaps=gaps, previous=previous, since=since, now=now,
+                       all_clear_hour_utc=cfg.all_clear_hour_utc)
+    if args.state_out:
+        Path(args.state_out).write_text(json.dumps(plan.state, indent=1, sort_keys=True), encoding="utf-8")
+    # Counts only: this line lands in a PUBLIC repository's Actions log, and the
+    # email text names matters. The text goes to team@ and nowhere else.
+    kinds: dict[str, int] = {}
+    for it in items:
+        kinds[it.kind] = kinds.get(it.kind, 0) + 1
+    print(f"evaluated {len(seats)} seat(s): {len(items)} item(s), {len(plan.new)} new; send={plan.send}; {kinds}")
+    if not plan.send:
+        return EXIT_OK
+    if args.print_body:
+        print(f"Subject: {plan.subject}\n\n{plan.text}")
+    if args.dry_run:
+        return EXIT_OK
+    error = send(plan.subject, plan.text, f"work-health:{now.strftime('%Y%m%dT%H%M')}:{int(time.time()) // 3600}")
+    if error:
+        print(f"SEND FAILED: {error}", file=sys.stderr)
+        return EXIT_SEND_FAILED
+    return EXIT_OK
+
+
+class _NoD1:
+    def execute(self, sql: str) -> list[dict]:
+        return []
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

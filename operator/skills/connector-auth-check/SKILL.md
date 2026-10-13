@@ -59,6 +59,18 @@ expired unrotated at day 30 because nothing had exercised the auth path),
 not merely a detector. The console's token-age horizon alert
 (`connector_token_expiring`) is the backstop for this probe itself dying.
 
+## The hourly, turn-free form (`pre_run.py`, 2026-10-13)
+
+A cron row that names `pre_run: pre_run.py` with `wake_policy:
+pre_run_decides` runs the same check as code and never wakes a turn: one
+`auth_status` refresh grant in the connector venv, then one `SUPPRESSED_WAKE`
+row with `decision_basis` `connector_auth_ok:smokeball` or
+`connector_auth_failed:smokeball:<ErrorClass>`. SMD's hourly work-health email
+(console-side, it reads the ledger) picks that row up: a failure reaches team@ within
+the hour, and a check that stops reporting is an item too. Authored hourly on
+ashton-price; pilot-smokeball keeps its daily agent-run row (`wake_policy:
+always`, no pre_run), which the body above describes.
+
 ## What this skill never does
 
 - Never calls any Smokeball data endpoint (no matters, no contacts, no tasks).
