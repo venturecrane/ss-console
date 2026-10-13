@@ -405,15 +405,6 @@ class Driver:
         if self.rehearse:
             notes.append(f"rehearse {stage.name}: skipped (done)")
 
-    def _proof_stop(self, stage: dag.Stage, unit: job_mod.Unit, extracted: Path, notes: list[str]) -> Outcome | None:
-        """A proof run (proof_mode.py) stops at the one write: everything before
-        the upload ran for real, and the package stays staged under out/."""
-        if stage.name != "upload" or not proof_mode.active():
-            return None
-        why = "proof run: stopped before the upload; the package is staged under out/"
-        pages = budget_mod.pages_read(extracted)
-        return Outcome(unit.unit, proof_mode.OUTCOME, why, stage.name, self.budget.refresh(), pages, notes)
-
     def _decide(self, stage: dag.Stage, unit: job_mod.Unit, st: RunState, notes: list[str]) -> Outcome | None:
         hook_name = stage.decision or ""
         if hook_name in decisions.HOOKS:
@@ -466,8 +457,8 @@ class Driver:
             return None
         if self.rehearse and (stage.paid or stage.external):
             return rehearsal.stop(self, stage, ctx, extracted, notes)
-        if (stopped := self._proof_stop(stage, unit, extracted, notes)) is not None:
-            return stopped
+        if (stop := proof_mode.upload_stop(stage.name, unit.unit, self.budget, notes, Outcome)) is not None:
+            return stop
         if stage.paid:
             rehearsal.probe_before_spend(self, stage, ctx, notes)
             try:

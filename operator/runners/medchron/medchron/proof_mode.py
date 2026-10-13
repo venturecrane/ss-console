@@ -20,14 +20,27 @@ defect, and the proof run FAILS on it instead of reaching the client's file.
 from __future__ import annotations
 
 import os
+from typing import Any
 
 PROOF_ENV = "MEDCHRON_PROOF_RUN"
 #: The outcome a proof run ends with when it reached the write stage clean.
 OUTCOME = "dry_run"
+#: The chronology's stop: everything before the upload ran for real.
+UPLOAD_WHY = "proof run: stopped before the upload; the package is staged under out/"
 
 
 def active() -> bool:
     return os.environ.get(PROOF_ENV, "").strip() == "1"
 
 
-__all__ = ["OUTCOME", "PROOF_ENV", "active"]
+def upload_stop(stage: str, unit: str, budget: Any, notes: list[str], outcome_cls: Any) -> Any:
+    """The chronology driver's stop: in a proof run, the ``upload`` stage (the
+    one write) returns a dry_run Outcome instead of running; else None. Here,
+    not in driver.py, because that module and its ``_execute`` sit at their
+    size ceilings."""
+    if stage != "upload" or not active():
+        return None
+    return outcome_cls(unit, OUTCOME, UPLOAD_WHY, stage, budget.refresh(), 0, notes)
+
+
+__all__ = ["OUTCOME", "PROOF_ENV", "UPLOAD_WHY", "active", "upload_stop"]
