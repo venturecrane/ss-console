@@ -761,9 +761,15 @@ personas:
         schedule: '5 8-11 * * 1-5' # weekdays at 0805, 0905, 1005, 1105 seat-local: one matter per tick (the matter-mixing fence), so up to four briefs a morning
         pre_run: pre_run.py
         wake_policy: pre_run_decides
+      # Hourly and turn-free since 2026-10-13 (was daily 0547 with a model turn,
+      # wake_policy: always): the pre_run makes the auth_status refresh grant
+      # itself and records connector_auth_ok/failed as the slot's wake row, which
+      # SMD's hourly work-health run reads and pages on (ss#2148 keepalive kept:
+      # every fire is still a real refresh grant).
       - skill: connector-auth-check
-        schedule: '47 5 * * *' # daily 0547 seat-local — before the morning routines, so the auth keepalive fires before the day's Smokeball work (ss#2148)
-        wake_policy: always # never suppressed: a skipped probe is a dead keepalive AND a silent detector
+        schedule: '13 * * * *' # hourly at :13 seat-local
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
     # Native Google/Himalaya mail skills disabled — the Operator's inbox is AgentMail.
     skills_disabled:
       - google-workspace

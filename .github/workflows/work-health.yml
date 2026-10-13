@@ -1,0 +1,129 @@
+# Email team@smd.services about the state of the WORK on every live seat.
+#
+# WHY (Captain, 2026-10-13). Machine health pages within minutes; the work was
+# not watched: a job stuck "running" looked like progress forever, the seat's
+# NO REPLY card went quiet once any job existed and had never fired in
+# production, the daily reconcilers wrote to GitHub issues nobody read
+# (#2593, #2693), and an idle dead Smokeball token stayed silent 42 hours. This
+# run reads every live seat and emails the work that needs a person.
+#
+# THE INTERVAL IS THE CRON LINE BELOW, AND ONLY IT. "Hourly for now; we can
+# adjust when it gets too noisy or is stabilized." The script keeps no copy of
+# the period: "new since the last email" comes from the previous successful
+# run's start time and its saved item keys (the work-health-state artifact).
+#
+# EXIT: 0 evaluated (sent or nothing to send), 2 the email could not be sent
+# (red), 3 HOLD nothing could be evaluated (red). A seat that could not be read
+# is an item IN the email, never a silent pass.
+#
+# Rules: operator/contracts/work-health.yaml. Logic: operator/bin/work-health.py
+# and operator/bin/lib/work_health*.py. Handbook: docs/handbook/work-health.md.
+
+name: work-health
+
+on:
+  schedule:
+    - cron: '23 * * * *' # THE interval knob: hourly at :23 (off the hour, off the other controls)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Print the email, do not send (true/false)'
+        required: false
+        default: 'false'
+  pull_request:
+    paths:
+      - 'operator/bin/work-health.py'
+      - 'operator/bin/lib/work_health*.py'
+      - 'operator/bin/tests/test_work_health.py'
+      - 'operator/contracts/work-health.yaml'
+      - 'operator/contracts/work-health-closed.yaml'
+      - 'operator/skills/connector-auth-check/**'
+      - '.github/workflows/work-health.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: work-health
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '>=3.11'
+
+      - name: Install
+        run: python3 -m pip install --quiet pytest pyyaml -e ./operator
+
+      # The falsifiers gate the scheduled run: an evaluator whose item logic is
+      # broken reports nothing or everything, and both are worse than no email.
+      - name: Test the evaluator
+        run: python3 -m pytest operator/bin/tests/test_work_health.py -q
+
+      # The previous successful run: its start time and its item keys decide
+      # what is NEW in this email and what is "still open, Nh".
+      - name: Fetch the previous run's state
+        if: github.event_name != 'pull_request'
+        id: prev
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          PREV="$(gh run list --repo "$REPO" --workflow work-health.yml --status success \
+                   --limit 1 --json databaseId,createdAt --jq '.[0] | "\(.databaseId) \(.createdAt)"' || true)"
+          ID="${PREV%% *}"
+          SINCE="${PREV#* }"
+          echo "since=${SINCE}" >> "$GITHUB_OUTPUT"
+          if [ -n "$ID" ] && gh run download "$ID" --repo "$REPO" -n work-health-state -D prev-state 2>/dev/null; then
+            echo "state=prev-state/state.json" >> "$GITHUB_OUTPUT"
+          else
+            echo "No previous state; new is decided by onset after ${SINCE:-never}."
+            echo "state=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Evaluate every seat and email team@
+        if: github.event_name != 'pull_request'
+        env:
+          OPERATOR_RUNTIME_READ_SECRET: ${{ secrets.OPERATOR_RUNTIME_READ_SECRET }}
+          OPERATOR_RUNTIME_READ_URL: ${{ secrets.OPERATOR_RUNTIME_READ_URL }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MSGRAPH_CLIENT_SECRET__ASHTON_PRICE: ${{ secrets.MSGRAPH_CLIENT_SECRET__ASHTON_PRICE }}
+          MSGRAPH_CLIENT_SECRET__SMD_STAGING: ${{ secrets.MSGRAPH_CLIENT_SECRET__SMD_STAGING }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          SINCE: ${{ steps.prev.outputs.since }}
+          STATE_IN: ${{ steps.prev.outputs.state }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          set -u
+          mkdir -p state
+          ARGS=(--state-out state/state.json)
+          if [ -n "${SINCE:-}" ]; then ARGS+=(--since "$SINCE"); fi
+          if [ -n "${STATE_IN:-}" ]; then ARGS+=(--state-in "$STATE_IN"); fi
+          if [ "${DRY_RUN:-false}" = "true" ]; then ARGS+=(--dry-run); fi
+          # `|| STATUS=$?` keeps the report printed before a non-zero exit (ss#2309).
+          STATUS=0
+          python3 operator/bin/work-health.py "${ARGS[@]}" > report.txt 2>&1 || STATUS=$?
+          cat report.txt
+          {
+            echo '```'
+            cat report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$STATUS"
+
+      - name: Keep this run's state for the next one
+        if: github.event_name != 'pull_request' && success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: work-health-state
+          path: state/state.json
+          retention-days: 7
