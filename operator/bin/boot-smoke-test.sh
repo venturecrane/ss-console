@@ -768,7 +768,14 @@ ssh_exec "litigation-broker-config-matches-runner" "r=/var/lib/smd-config/litiga
 # not made yet (no job since boot) counts at its code default, read from the
 # runner itself, so a bigger default fails here before the first job. The
 # litigation and drafting lanes share the demand cgroup, so it counts once.
-# FALSIFIER: raise a lane default or shrink machine.memory_mb and this fails.
+# A lane that CANNOT run a job on this seat counts zero: with no firm inputs
+# staged it refuses or defers every job (provision-customer.sh steps 2b-2f), so
+# its cgroup is never filled. Counting it anyway demanded a 4 GB guest of every
+# seat, including a hosted agent that will never run a chronology (2026-10-13,
+# the brokery seat failed this at 1 and 2 GB with no lane inputs at all). A
+# cgroup that already exists has run a job and always counts at its live limit.
+# FALSIFIER: raise a lane default or shrink machine.memory_mb on a seat with
+# that lane's inputs staged and this fails.
 ssh_exec_script "lane-memory-caps-leave-gateway-reserve" "/opt/medchron/.venv/bin/python -c '
 import os, sys, yaml
 from pathlib import Path
@@ -778,11 +785,19 @@ mb = int((doc.get(\"machine\") or {}).get(\"memory_mb\") or 0)
 if mb <= 0:
     sys.exit(\"machine.memory_mb is not authored\")
 defaults = {\"medchron\": d.DEFAULT_MEMORY_MAX, \"demand\": dl.DEFAULT_MEMORY}
+cfg = Path(\"/var/lib/smd-config\")
+runnable = {
+    \"medchron\": (cfg / \"medchron-firm.yaml\").is_file(),
+    \"demand\": any((cfg / lane / (lane + \"-firm.yaml\")).is_file() for lane in (\"demand\", \"drafting\", \"litigation\")),
+}
 caps = {}
 for name, default in defaults.items():
     live = [Path(\"/sys/fs/cgroup\", name, \"memory.max\"), Path(\"/sys/fs/cgroup/memory\", name, \"memory.limit_in_bytes\")]
     vals = [f.read_text().strip() for f in live if f.is_file()]
-    caps[name] = int(vals[0]) if vals and vals[0].isdigit() else int(default)
+    if vals and vals[0].isdigit():
+        caps[name] = int(vals[0])
+    elif runnable[name]:
+        caps[name] = int(default)
 budget = (mb - 512) * 1024 * 1024
 total = sum(caps.values())
 sys.exit(0 if total <= budget else f\"lane memory caps {caps} sum {total} > machine {mb} MiB minus 512 MiB gateway reserve\")
