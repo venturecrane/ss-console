@@ -81,6 +81,8 @@ personas:
           tool_calls_per_run: <int>
           runs_per_day_typical: <int>
         scope: <list<string>> # OPTIONAL skill-specific scope tags
+        settings: # OPTIONAL; flat map of scalar knobs the runtime reads verbatim (ADR 0075)
+          recipients: roster # OPTIONAL; the only value. The skill's SCHEDULED turns may email the seat's exact scope.inbound_allow_from addresses (participant fence roster lane)
     voice_overrides: <object|null> # OPTIONAL; inherits voice_library when null
     escalation_overrides: <object|null> # OPTIONAL; inherits top-level escalation when null
     channel_bindings: # OPTIONAL; integrations this persona drives

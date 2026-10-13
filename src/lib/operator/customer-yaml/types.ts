@@ -1529,6 +1529,9 @@ export type ValidationErrorCode =
    * a target off `scope.admins`, an unknown key, or a device twice. */
   | 'InvalidDeviceSenders'
   | 'LegacyEntitlementField'
+  /** A skill setting with a closed vocabulary holds another value
+   * (`settings.recipients` is only ever `roster`). */
+  | 'InvalidSkillSetting'
   | 'UnknownAuthorityDomain'
   | 'DuplicateRelationshipPersonId'
   | 'CustodyGuardViolation'

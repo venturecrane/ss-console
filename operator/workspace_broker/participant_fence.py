@@ -23,7 +23,10 @@ THE RULE, per recipient (to, cc AND bcc; bcc delivers):
       ``skill:<name>`` is that enabled skill's own ``settings.recipient``
       (and, for a skill that authors one, ``settings.scheduled_recipients``,
       a comma-separated string: the litigation status list's weekday email and the
-      negotiation watch's offer emails);
+      negotiation watch's offer emails), and for a skill that authors
+      ``settings.recipients: roster`` the seat's exact ``scope.inbound_allow_from``
+      addresses (the open-house follow-up's rostered agents; the overlay sends
+      that lane only on the skill's own scheduled turn);
   (c) the anchor came from SMD and they are on ``scope.admins``.
 
   When the anchor's From is an authored device (``scope.device_senders``), its
@@ -183,6 +186,10 @@ def _roster_entry(raw: str) -> str:
 #: A skill setting naming the recipients of its scheduled run, authored as a
 #: comma-separated string (skill settings are scalars, ADR 0075).
 SCHEDULED_RECIPIENTS_KEY = "scheduled_recipients"
+#: A skill setting opting the skill's lane into the seat's roster: every exact
+#: ``scope.inbound_allow_from`` address (never a domain entry). One value.
+ROSTER_RECIPIENTS_KEY = "recipients"
+ROSTER_RECIPIENTS_VALUE = "roster"
 
 
 def _comma_addresses(value: Any) -> list[str]:
@@ -191,7 +198,7 @@ def _comma_addresses(value: Any) -> list[str]:
     return _addresses(value) if isinstance(value, list) else []
 
 
-def _skill_lanes(personas: Any) -> dict[str, frozenset[str]]:
+def _skill_lanes(personas: Any, roster: frozenset[str] = frozenset()) -> dict[str, frozenset[str]]:
     lanes: dict[str, frozenset[str]] = {}
     for persona in personas if isinstance(personas, list) else []:
         skills = persona.get("skills") if isinstance(persona, dict) else None
@@ -202,6 +209,8 @@ def _skill_lanes(personas: Any) -> dict[str, frozenset[str]]:
             if not isinstance(name, str) or not isinstance(settings, dict):
                 continue
             found = _addresses(settings.get("recipient")) + _comma_addresses(settings.get(SCHEDULED_RECIPIENTS_KEY))
+            if settings.get(ROSTER_RECIPIENTS_KEY) == ROSTER_RECIPIENTS_VALUE:
+                found += sorted(roster)
             if found:
                 key = LANE_SKILL_PREFIX + name
                 lanes[key] = lanes.get(key, frozenset()) | frozenset(found)
@@ -242,7 +251,7 @@ def seat_facts(customer_path: Path) -> SeatFacts:
         LANE_RULE_DISPATCH: frozenset(routing),
         LANE_ESCALATION: _escalation_lane(data.get("escalation")),
         LANE_SEND_AS: frozenset(staff),
-        **_skill_lanes(data.get("personas")),
+        **_skill_lanes(data.get("personas"), frozenset(inbound_exact)),
     }
     return SeatFacts(
         typed=typed,

@@ -724,3 +724,69 @@ def test_a_skills_scheduled_recipients_are_its_lane(tmp_path: Path) -> None:
     )
     lanes = pf.seat_facts(p).lanes
     assert lanes["skill:negotiation-watch"] == frozenset({"office@firm.example", "second@firm.example"})
+
+
+# -- the roster lane (settings.recipients: roster) ---------------------------------------
+
+ROSTER_YAML = f"""
+scope:
+  inbound_allow_from:
+    - tim@brokery.example
+    - '@team.brokery.example'
+    - {SCOTT}
+  admins: [boss@brokery.example]
+  rule_requests_to: [router@brokery.example]
+personas:
+  - slug: brokery-agent
+    skills:
+      - name: open-house-visitor-capture
+        enabled: true
+        settings: {{recipients: roster}}
+      - name: parked
+        enabled: false
+        settings: {{recipients: roster}}
+      - name: single
+        enabled: true
+        settings: {{recipient: roster}}
+"""
+
+
+def _roster_facts(tmp_path: Path) -> pf.SeatFacts:
+    path = tmp_path / "customer.yaml"
+    path.write_text(ROSTER_YAML)
+    return pf.seat_facts(path)
+
+
+def _no_lookup(_anchor):
+    raise AssertionError("a lane-covered send must read no mailbox")
+
+
+def test_the_roster_lane_reaches_the_exact_rostered_addresses(tmp_path: Path) -> None:
+    facts = _roster_facts(tmp_path)
+    pf.check_send(facts, ["tim@brokery.example"], lane="skill:open-house-visitor-capture", anchor=None, resolve=_no_lookup)
+
+
+@pytest.mark.parametrize(
+    "recipient",
+    [
+        # firm, but authored as admin / routing, not on the roster
+        "boss@brokery.example",
+        "router@brokery.example",
+        # a domain entry admits nobody by name
+        "anyone@team.brokery.example",
+    ],
+)
+def test_the_roster_lane_admits_nobody_off_the_exact_roster(tmp_path: Path, recipient: str) -> None:
+    facts = _roster_facts(tmp_path)
+    assert facts.classify(recipient) == "firm"
+    with pytest.raises(pf.FenceRefused):
+        pf.check_send(facts, [recipient], lane="skill:open-house-visitor-capture", anchor=None, resolve=_no_lookup)
+
+
+@pytest.mark.parametrize("lane", ["skill:parked", "skill:single", None])
+def test_no_roster_lane_without_an_enabled_opt_in(tmp_path: Path, lane) -> None:
+    """A disabled skill, the single-recipient key holding the word, and no lane
+    at all each leave a rostered agent refused."""
+    facts = _roster_facts(tmp_path)
+    with pytest.raises(pf.FenceRefused):
+        pf.check_send(facts, ["tim@brokery.example"], lane=lane, anchor=None, resolve=_no_lookup)

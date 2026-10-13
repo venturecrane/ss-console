@@ -22,8 +22,8 @@
  * exposure the scheduled email to the agent needs. Parsed, never grepped.
  */
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 
 const SKILL = resolve('operator/skills/open-house-visitor-capture/SKILL.md')
@@ -197,6 +197,33 @@ describe('open-house-visitor-capture: the scott seat binds it (the /wired chain)
     // every reader is also on the roster, or the read grant reaches nobody
     const roster = (brokery as { scope: { inbound_allow_from: string[] } }).scope.inbound_allow_from
     for (const reader of store?.readers ?? []) expect(roster).toContain(reader)
+  })
+
+  it('the brokery follow-up opts into the roster lane, or every scheduled draft to an agent is refused', () => {
+    const brokery = parseYaml(readFileSync(BROKERY_SEAT, 'utf8')) as {
+      personas: { skills: { name: string; settings?: Record<string, unknown> }[] }[]
+    }
+    const bound = brokery.personas[0]?.skills.find((s) => s.name === 'open-house-visitor-capture')
+    expect(bound?.settings?.['recipients']).toBe('roster')
+  })
+
+  it('no seat that opts into the roster lane lets its model create cron jobs (the lane trusts the cron store)', () => {
+    // The overlay's routine_turn_lane trusts the cron store's managed job name.
+    // `cronjob` is CODE_EXECUTION; a seat authoring it could let the model mint
+    // a managed-named job and borrow the lane.
+    const dir = resolve('operator/customers')
+    for (const slug of readdirSync(dir)) {
+      const path = join(dir, slug, 'customer.yaml')
+      if (!existsSync(path)) continue
+      const text = readFileSync(path, 'utf8')
+      if (!/recipients:\s*roster/.test(text)) continue
+      const doc = parseYaml(text) as {
+        personas?: { entitlements?: { exposure?: Record<string, unknown> } }[]
+      }
+      for (const p of doc.personas ?? []) {
+        expect(p.entitlements?.exposure?.['code_execution'], `${slug}`).toBeUndefined()
+      }
+    }
   })
 
   it('one persona carries it; no second profile was opened for the POC', () => {

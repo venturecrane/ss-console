@@ -90,6 +90,12 @@ personas:
           scheduled: true
           webhook: true
         enabled: true
+        # The scheduled follow-up emails each rostered agent their own drafts.
+        # `roster` lets this skill's SCHEDULED turns reach the exact
+        # scope.inbound_allow_from addresses past the participant fence; a
+        # cron turn answers no email, so without it every agent is refused.
+        settings:
+          recipients: roster
     cron:
       # Follow-up drafts at 8:00 MST (15:00 UTC). `always`: the skill reads a
       # small records directory and exits silently when nothing is due.
