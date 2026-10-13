@@ -195,6 +195,7 @@ def _traversable(d: Any, root: Path) -> None:
     top = Path(d.run_dir) / PROOFS_DIR
     for p in (top, top / d.LANE, root):
         os.chown(p, 0, gid)
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions - root-owned, group execute-only: the tightest mode that lets the child traverse to its own dir (the jobs/ tree's mode).
         os.chmod(p, 0o710)
 
 
