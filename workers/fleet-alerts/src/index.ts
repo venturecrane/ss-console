@@ -78,11 +78,15 @@ import {
   sendShortfallDigest,
   type ShortfallNotification,
 } from './shortfalls'
-import { mintAlertMessageId } from './alert-thread'
-import { sendTransitionEmail } from './transition-email'
+import { processTransition } from './transition'
 import { getOpenSpecControlKeys, specControlConditions } from './spec-control'
 import { getStaleHolds } from './stale-holds'
-import { parseSeatLifetimes, tokenExpiryConditions } from './token-expiry'
+import {
+  parseSeatLifetimes,
+  tokenExpiryConditions,
+  type TokenExpiryOptions,
+  type VendorLifetimeRule,
+} from './token-expiry'
 import { toolFailingConditions } from './tool-failing'
 import { getOpenWebhookSurfaceKeys, webhookSurfaceConditions } from './webhook-surface'
 import { gatewayLoopConditions, gatewayLoopRedSeconds } from './gateway-loop'
@@ -211,7 +215,7 @@ export interface ConditionState {
 export interface Transition {
   customer_slug: string
   condition: FleetCondition
-  kind: 'opened' | 'resolved'
+  kind: 'opened' | 'resolved' | 'reminder'
   detail: string
   emailed: boolean
   resendId?: string
@@ -377,6 +381,18 @@ export interface EvaluateOptions {
   openWebhookSurfaceKeys?: Record<string, string[]>
   /** gateway_loop_wedged threshold (ss#2488 part 2). See Env.GATEWAY_LOOP_RED_SECONDS. */
   gatewayLoopRedSeconds?: number
+  /** Vendor lifetime cutovers and their proof state. See token-expiry.ts. */
+  tokenVendorRules?: Record<string, VendorLifetimeRule>
+}
+
+function tokenExpiryOptions(o: EvaluateOptions, nowMs: number): TokenExpiryOptions {
+  return {
+    lifetimesDays: o.tokenLifetimesDays ?? {},
+    warnDays: o.tokenWarnDays ?? DEFAULT_TOKEN_EXPIRY_WARN_DAYS,
+    nowMs,
+    seatLifetimesBySlug: o.tokenSeatLifetimesDays,
+    rules: o.tokenVendorRules,
+  }
 }
 
 export function evaluateConditions(
@@ -388,13 +404,11 @@ export function evaluateConditions(
   const {
     overdueThresholdSeconds = DEFAULT_WORK_OVERDUE_SECONDS,
     connectorRunAgeThresholdSeconds = DEFAULT_CONNECTOR_RUN_AGE_SECONDS,
-    tokenLifetimesDays = {},
-    tokenSeatLifetimesDays: seatDays = {},
-    tokenWarnDays = DEFAULT_TOKEN_EXPIRY_WARN_DAYS,
     openSpecControlKeys = {},
     openWebhookSurfaceKeys = {},
     gatewayLoopRedSeconds: loopRed = gatewayLoopRedSeconds(undefined),
   } = options
+  const tokenOpts = tokenExpiryOptions(options, nowMs)
   const out: ConditionState[] = []
   for (const row of rows) {
     let hbActive = false
@@ -445,7 +459,7 @@ export function evaluateConditions(
       })
     }
     out.push(...connectorConditions(row, connectorRunAgeThresholdSeconds))
-    out.push(...tokenExpiryConditions(row, tokenLifetimesDays, tokenWarnDays, nowMs, seatDays))
+    out.push(...tokenExpiryConditions(row, tokenOpts))
     // Indexed straight in, no `?? []`: both helpers default an absent list to
     // empty, and the extra branches pushed this function over its complexity
     // ceiling once the ss#2287 condition joined.
@@ -520,49 +534,6 @@ function connectorConditions(row: FleetStatusRow, runAgeThreshold: number): Cond
   return out
 }
 
-async function getAlertState(
-  db: D1Database,
-  slug: string,
-  condition: FleetCondition
-): Promise<{ status: 'open' | 'resolved'; alert_message_id: string | null } | null> {
-  const row = await db
-    .prepare(
-      'SELECT status, alert_message_id FROM fleet_alert_state WHERE customer_slug = ? AND condition = ?'
-    )
-    .bind(slug, condition)
-    .first<{ status: 'open' | 'resolved'; alert_message_id: string | null }>()
-  return row ?? null
-}
-
-async function markOpen(
-  db: D1Database,
-  s: ConditionState,
-  resendId: string | null,
-  messageId: string
-): Promise<void> {
-  await db
-    .prepare(
-      `INSERT INTO fleet_alert_state (customer_slug, condition, status, opened_at, resolved_at, last_alert_id, alert_message_id, updated_at)
-       VALUES (?, ?, 'open', datetime('now'), NULL, ?, ?, datetime('now'))
-       ON CONFLICT (customer_slug, condition) DO UPDATE SET
-         status = 'open', opened_at = datetime('now'), resolved_at = NULL,
-         last_alert_id = excluded.last_alert_id,
-         alert_message_id = excluded.alert_message_id, updated_at = datetime('now')`
-    )
-    .bind(s.customer_slug, s.condition, resendId, messageId)
-    .run()
-}
-
-async function markResolved(db: D1Database, s: ConditionState): Promise<void> {
-  await db
-    .prepare(
-      `UPDATE fleet_alert_state SET status = 'resolved', resolved_at = datetime('now'), updated_at = datetime('now')
-       WHERE customer_slug = ? AND condition = ?`
-    )
-    .bind(s.customer_slug, s.condition)
-    .run()
-}
-
 /**
  * Fail-soft self-ping to the alerter's own healthchecks.io check at the end of
  * a successful run. Skipped when unset; errors are swallowed. If runOnce throws
@@ -577,45 +548,6 @@ async function pingAlerterHealthcheck(env: Env): Promise<void> {
   } catch (err) {
     console.error('[fleet-alerts] healthcheck self-ping failed:', err)
   }
-}
-
-/**
- * Fire the edge transition for one condition, if any. Marks alert state ONLY on
- * a successful send: a failed Resend POST leaves the row unmarked so the next
- * 2-minute cron retries — otherwise one transient failure silences the alert
- * forever (it would exist only in Worker logs). Returns the recorded transition
- * or null (silent / send-failed).
- */
-async function processTransition(env: Env, s: ConditionState): Promise<Transition | null> {
-  const prior = await getAlertState(env.DB, s.customer_slug, s.condition)
-  if (s.active && prior?.status !== 'open') {
-    const messageId = mintAlertMessageId()
-    const sent = await sendTransitionEmail(env, s, 'opened', messageId)
-    if (!sent.ok) return null
-    await markOpen(env.DB, s, sent.resendId ?? null, messageId)
-    return {
-      customer_slug: s.customer_slug,
-      condition: s.condition,
-      kind: 'opened',
-      detail: s.detail,
-      emailed: true,
-      resendId: sent.resendId,
-    }
-  }
-  if (!s.active && prior?.status === 'open') {
-    const sent = await sendTransitionEmail(env, s, 'resolved', prior.alert_message_id)
-    if (!sent.ok) return null
-    await markResolved(env.DB, s)
-    return {
-      customer_slug: s.customer_slug,
-      condition: s.condition,
-      kind: 'resolved',
-      detail: s.detail,
-      emailed: true,
-      resendId: sent.resendId,
-    }
-  }
-  return null
 }
 
 /** One log line per non-empty result list, so a quiet tick logs nothing. */
@@ -666,7 +598,7 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
   for (const [slug, states] of bySeat) {
     try {
       for (const s of states) {
-        const t = await processTransition(env, s)
+        const t = await processTransition(env, s, nowMs)
         if (t) transitions.push(t)
       }
     } catch (err) {
@@ -681,7 +613,7 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
   const edge = await runEdgePolls(env, nowMs)
   for (const s of edge.conditions) {
     try {
-      const t = await processTransition(env, s)
+      const t = await processTransition(env, s, nowMs)
       if (t) transitions.push(t)
     } catch (err) {
       console.error('[fleet-alerts] edge transition failed:', s.customer_slug, err)

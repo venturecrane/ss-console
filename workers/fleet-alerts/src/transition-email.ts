@@ -13,7 +13,7 @@ import type { ConditionState, Env } from './index'
 export async function sendTransitionEmail(
   env: Env,
   s: ConditionState,
-  kind: 'opened' | 'resolved',
+  kind: 'opened' | 'resolved' | 'reminder',
   messageId: string | null
 ): Promise<{ ok: boolean; resendId?: string }> {
   if (!env.RESEND_API_KEY) {
@@ -24,17 +24,20 @@ export async function sendTransitionEmail(
   // A recovery replies to its alert (same subject, In-Reply-To the alert's
   // Message-ID) so Gmail threads the pair as one inbox item. See ./alert-thread.
   const alertSubject = `[SMD Ops] ALERT ${s.customer_slug}: ${label}`
+  // A reminder (./reminder) threads under the alert like a recovery does.
+  const standalone = kind === 'reminder' ? 'STILL OPEN' : 'RECOVERED'
   const subject =
     kind === 'opened'
       ? alertSubject
       : messageId
         ? `Re: ${alertSubject}`
-        : `[SMD Ops] RECOVERED ${s.customer_slug}: ${label}`
+        : `[SMD Ops] ${standalone} ${s.customer_slug}: ${label}`
+  const heading = kind === 'opened' ? 'ALERT' : kind === 'reminder' ? 'STILL OPEN' : 'RECOVERED'
   const dashboard = `${env.ADMIN_BASE_URL ?? 'https://admin.smd.services'}/operator`
   // Escaped: connector_down details embed the seat's `last_error_message`,
   // which is arbitrary text from a customer Machine.
   const html =
-    `<p><strong>${kind === 'opened' ? 'ALERT' : 'RECOVERED'}</strong>: ${escapeHtml(label)}</p>` +
+    `<p><strong>${heading}</strong>: ${escapeHtml(label)}</p>` +
     `<ul><li>${s.condition === EDGE_DOWN_CONDITION ? 'Host' : 'Seat'}: ${escapeHtml(s.customer_slug)}</li>` +
     `<li>Detail: ${escapeHtml(s.detail)}</li>` +
     `<li>Severity: SEV1 per ADR 0064 - work begins on detection</li></ul>` +

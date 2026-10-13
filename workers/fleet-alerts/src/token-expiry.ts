@@ -89,24 +89,61 @@ export function parseTokenAgeMap(json: string | null): Record<string, number> | 
  * constant and it never warns before it dies. Both directions have now been
  * live: 2026-09-02 (pre-08-24 token) and 2026-10-10 (pre-09-21 token).
  */
-const PRE_CUTOVER_LIFETIMES: Record<string, { cutoverMs: number; days: number }> = {
-  smokeball: { cutoverMs: Date.parse('2026-09-21T00:22:30Z'), days: 30 },
+/**
+ * ANNOUNCED IS NOT OBSERVED (2026-10-13). `provenAtMs` records when a token
+ * issued after the cutover was first seen alive past the old lifetime. Until
+ * then the longer lifetime is the vendor's word, and their word has been wrong
+ * for us twice: the docs' 08-24 date did not apply to our app (10-10 outage),
+ * and the 180 days did not reach their staging tenant (10-02 outage). Both
+ * times the token was judged by the announced lifetime and died with no
+ * warning. So while `provenAtMs` is null EVERY token is judged by the old
+ * lifetime: a warning at day 25 that turns out to be early costs one email; a
+ * missing one costs the firm's Smokeball access with nobody told.
+ *
+ * ashton-price re-consented 2026-10-12 19:36:39Z, the first production token
+ * issued after 09-21. It warns 2026-11-06 under this rule. If it is still
+ * working after 2026-11-11 19:36Z, set `provenAtMs` to that observation (cite
+ * the crane_verify id); the open warning then resolves on the next tick.
+ */
+export interface VendorLifetimeRule {
+  cutoverMs: number
+  days: number
+  provenAtMs: number | null
 }
 
+export const VENDOR_LIFETIME_RULES: Record<string, VendorLifetimeRule> = {
+  smokeball: { cutoverMs: Date.parse('2026-09-21T00:22:30Z'), days: 30, provenAtMs: null },
+}
+
+type Basis = 'configured' | 'pre-cutover' | 'unproven'
+
 /**
- * The lifetime to judge THIS token by: the configured (current) value, unless
- * the token predates a known vendor cutover, in which case the older value.
+ * The lifetime to judge THIS token by, and why: the configured (current)
+ * value, unless the token predates a known vendor cutover or the current
+ * value has never been observed on our app, in which case the older value.
  */
-function effectiveLifetimeDays(
+function effectiveLifetime(
   server: string,
   configuredDays: number,
   ageSeconds: number,
-  nowMs: number
-): number {
-  const rule = PRE_CUTOVER_LIFETIMES[server]
-  if (rule === undefined) return configuredDays
+  nowMs: number,
+  rules: Record<string, VendorLifetimeRule>
+): { days: number; basis: Basis } {
+  const rule = rules[server]
+  if (rule === undefined || rule.days >= configuredDays) {
+    return { days: configuredDays, basis: 'configured' }
+  }
   const issuedAtMs = nowMs - ageSeconds * 1000
-  return issuedAtMs < rule.cutoverMs ? rule.days : configuredDays
+  if (issuedAtMs < rule.cutoverMs) return { days: rule.days, basis: 'pre-cutover' }
+  if (rule.provenAtMs === null) return { days: rule.days, basis: 'unproven' }
+  return { days: configuredDays, basis: 'configured' }
+}
+
+const PROVENANCE: Record<Basis, string> = {
+  configured: '',
+  'pre-cutover': ' — pre-cutover token, older vendor lifetime applies',
+  unproven:
+    " — the vendor's longer lifetime has never been observed on our app, so the older one applies until a token outlives it",
 }
 
 /**
@@ -128,13 +165,21 @@ function effectiveLifetimeDays(
  * the ops email, and telling a responder to "rotate" a credential that cannot
  * be rotated sends them after a fix that does not exist.
  */
+export interface TokenExpiryOptions {
+  lifetimesDays: Record<string, number>
+  warnDays: number
+  nowMs: number
+  seatLifetimesBySlug?: Record<string, Record<string, number>>
+  /** Defaults to VENDOR_LIFETIME_RULES; tests pass a proven variant. */
+  rules?: Record<string, VendorLifetimeRule>
+}
+
 export function tokenExpiryConditions(
   row: FleetStatusRow,
-  lifetimesDays: Record<string, number>,
-  warnDays: number,
-  nowMs: number,
-  seatLifetimesBySlug: Record<string, Record<string, number>> = {}
+  opts: TokenExpiryOptions
 ): ConditionState[] {
+  const { lifetimesDays, warnDays, nowMs, seatLifetimesBySlug = {} } = opts
+  const rules = opts.rules ?? VENDOR_LIFETIME_RULES
   const ages = parseTokenAgeMap(row.connector_token_age_json)
   if (ages === null) return []
   const out: ConditionState[] = []
@@ -145,11 +190,16 @@ export function tokenExpiryConditions(
   for (const [server, configuredDays] of Object.entries(effective)) {
     const age = ages[server]
     if (age === undefined) continue
-    const lifetimeDays = effectiveLifetimeDays(server, configuredDays, age, nowMs)
+    const { days: lifetimeDays, basis } = effectiveLifetime(
+      server,
+      configuredDays,
+      age,
+      nowMs,
+      rules
+    )
     const thresholdSeconds = Math.max(0, lifetimeDays - warnDays) * 86400
     const ageDays = Math.floor(age / 86400)
-    const provenance =
-      lifetimeDays === configuredDays ? '' : ' — pre-cutover token, older vendor lifetime applies'
+    const provenance = PROVENANCE[basis]
     out.push({
       customer_slug: row.customer_slug,
       condition: `${CONNECTOR_TOKEN_EXPIRING_PREFIX}${server}`,

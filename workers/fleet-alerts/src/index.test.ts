@@ -18,7 +18,7 @@ import {
   type FleetStatusRow,
   type StaleHold,
 } from './index'
-import { parseSeatLifetimes } from './token-expiry'
+import { parseSeatLifetimes, VENDOR_LIFETIME_RULES } from './token-expiry'
 
 const NOW = Date.parse('2026-07-04T12:00:00.000Z')
 const RED = 300
@@ -1041,6 +1041,15 @@ describe('connector_token_expiring (ss#2148)', () => {
   // 2026-10-03: staging tenant still issues 30-day tokens. pilot-smokeball
   // died ~30d after a post-cutover consent with no warning under the fleet 180.
   describe('per-seat lifetime override (staging tenant)', () => {
+    // These cases are about the seat override, so they run with the 180-day
+    // lifetime already PROVEN; the unproven case is covered in
+    // tests/connector-observability.test.ts.
+    const proven = {
+      smokeball: {
+        ...VENDOR_LIFETIME_RULES.smokeball,
+        provenAtMs: Date.parse('2026-11-12T00:00:00Z'),
+      },
+    }
     const seatStates = (r: FleetStatusRow, seats: Record<string, Record<string, number>>) =>
       // Post-cutover clock: at the file's NOW (07-04) every token predates
       // the 2026-09-21 cutover and the pre-cutover 30d rule would mask the
@@ -1050,6 +1059,7 @@ describe('connector_token_expiring (ss#2148)', () => {
         tokenLifetimesDays: { smokeball: 180 },
         tokenSeatLifetimesDays: seats,
         tokenWarnDays: WARN,
+        tokenVendorRules: proven,
       }).filter((c) => c.condition.startsWith('connector_token_expiring:'))
 
     it('a 26-day-old staging token is quiet under 180 and OPENS under its seat override', () => {
