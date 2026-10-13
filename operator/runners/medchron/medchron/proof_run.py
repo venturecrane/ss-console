@@ -170,17 +170,29 @@ def run_pending(d: Any) -> bool:
         marker.unlink(missing_ok=True)
         return True
     root = proofs_root(d.run_dir, d.LANE) / attempt
-    env = d.queue / f"{job_id}.json"
+    env = source_envelope(d, job_id)
     jd = root / job_id
     if not (jd / "envelope.json").is_file():
-        if not env.is_file():
-            _finish(root, job_id, d, {"status": "refused", "why": "no queued envelope for that job in this lane"})
+        if env is None:
+            _finish(root, job_id, d, {"status": "refused", "why": "no envelope for that job in this lane"})
             marker.unlink(missing_ok=True)
             return True
         jd.mkdir(parents=True, exist_ok=True, mode=0o700)
         shutil.copyfile(env, jd / "envelope.json")
         _traversable(d, root)
     return _run(d, marker, root, job_id)
+
+
+def source_envelope(d: Any, job_id: str) -> Path | None:
+    """The envelope a proof run copies: the held job's, still in the queue,
+    or else a FINISHED job's of this lane, still in its job dir (wiped at 72 h).
+    The second is how SMD proves a lane before the firm next asks for it: a
+    real request's own envelope, run again without filing, no ledger row and
+    no allowance used (2026-10-13, the lead's proactive-proof ask)."""
+    for candidate in (d.queue / f"{job_id}.json", d.job_dir(job_id) / "envelope.json"):
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def _traversable(d: Any, root: Path) -> None:
