@@ -223,6 +223,7 @@ jobs:
           # this GH secret it is harmlessly empty and the checker reports the
           # seat as a noted skip naming exactly this variable.
           AGENTMAIL_API_KEY__PILOT_SMOKEBALL: ${{ secrets.AGENTMAIL_API_KEY__PILOT_SMOKEBALL }}
+          AGENTMAIL_API_KEY__BROKERY: ${{ secrets.AGENTMAIL_API_KEY__BROKERY }}
         run: |
           set -u
           # Same `|| STATUS=$?` discipline as the reconcile step (ss#2309):

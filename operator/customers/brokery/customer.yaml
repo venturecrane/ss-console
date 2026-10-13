@@ -1,0 +1,192 @@
+schema_version: 1
+
+# HOSTED AGENT seat: The Brokery (real-estate brokerage), the six-week agent
+# pilot. Authored 2026-10-13 from _hosted-template plus the open-house pieces
+# proven on the scott seat (#2793, #2979, #3042). Engagement record, including
+# the Captain's decisions this file encodes: engagements repo,
+# operator/customers/brokery/dossier.md.
+#
+# A general assistant with the open-house add-on (the open-house-visitor-capture
+# skill). It starts as the open-house agent and is meant to grow; the inbox is
+# named generally for that reason (Captain, 2026-10-13).
+#
+# TWO DEPARTURES FROM THE HOSTED-AGENT RULES, both Captain decisions for the
+# promotional pilot (dossier, Settled items):
+#   1. ANTHROPIC_API_KEY is SMD's own key, not the customer's. No per-seat
+#      ANTHROPIC_API_KEY__BROKERY is vaulted, so provisioning stages the /ss
+#      ANTHROPIC_API_KEY (provision-customer.sh). If The Brokery continues,
+#      vault their key as ANTHROPIC_API_KEY__BROKERY and reprovision.
+#   2. external_send_internal is authored autonomous at setup (see the persona).
+#
+# ADR 0067 hard rules honored: inbound allowlist non-empty and exact addresses
+# only; external_send stays confirm.
+
+# ---- IDENTITY ----
+customer_id: 'brokery'
+customer_name: 'The Brokery'
+
+# ---- SEAT DESCRIPTOR ----
+# What this seat IS. Kind and product only; lifecycle state is DERIVED from
+# probes of the running system and is deliberately absent here — a state field
+# is a claim an agent can write, and a claim an agent can write is one that rots.
+# `customer`: the records on this seat are a real brokerage's visitor data.
+seat:
+  kind: customer
+  product: hosted-agent
+
+vertical: mixed
+# The open-house add-on is the skill below. No real-estate vertical exists in
+# the addon catalog, and none is built ahead of need.
+addons: []
+practice_areas:
+  - general
+fly_region: lax # nearest to Phoenix; Fly has no phx region
+
+# ---- RUNTIME ----
+model: claude-sonnet-4-6
+hermes_ref: v2026.9.14@345cd2b057a452236de401d3534b8502a7465e8d
+
+machine:
+  size: shared-cpu-1x
+  memory_mb: 1024
+
+# ---- HUMANS WITH PORTAL ACCESS ----
+# SMD runs the pilot; portal access for The Brokery was not decided.
+users:
+  - email: scott@smd.services
+    role: principal
+    full_name: Scott Durgan
+
+# ---- PERSONA ----
+personas:
+  - slug: brokery-agent
+    status: active
+    name: Brokery Agent
+    title: Assistant
+    tone:
+      - plainspoken
+      - warm-but-professional
+      - concise
+    entitlements:
+      exposure:
+        internal_write: autonomous
+        external_send: confirm
+        # Sends to a ROSTERED address (scope.inbound_allow_from) only. The
+        # 8:00 follow-up drafts go to each agent on a scheduled turn, and this
+        # seat has no Telegram channel on which a confirm could be answered,
+        # so without this line they could never be delivered. Authored at
+        # setup, a departure from the concierge rule that promotion is the
+        # owner's later act (ADR 0071 decision 5): the Captain's decision for
+        # the pilot (dossier). Anything off the roster stays confirm.
+        external_send_internal: autonomous
+    skills:
+      # The open-house add-on. Woken by the inbound-email trigger below for
+      # capture, recall and correction, and by cron for the follow-up drafts.
+      # Its "anything else" branch answers other questions as the assistant.
+      - name: open-house-visitor-capture
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: true
+        enabled: true
+    cron:
+      # Follow-up drafts at 8:00 MST (15:00 UTC). `always`: the skill reads a
+      # small records directory and exits silently when nothing is due.
+      - skill: open-house-visitor-capture
+        schedule: '0 15 * * *'
+        wake_policy: always
+
+# ---- CONNECTORS ----
+connectors:
+  Email:
+    adapter: agentmail
+    backend: 'mcp:agentmail'
+    enabled: true
+    webhook_url: 'https://hermes-brokery.fly.dev/webhooks/agentmail'
+    # Authored, not derived: the inbox is not named after the slug, and the
+    # workspace broker refuses every send from an address the account does not
+    # list (operator/workspace_broker/agentmail_auth.py seat_inbox_address).
+    inbox_address: brokery-agent@agentmail.to
+
+webhook_triggers:
+  - source: agentmail
+    event_type: message.received
+    skill: open-house-visitor-capture
+    persona: brokery-agent
+
+# ---- SEND POLICY ----
+# Rostered senders exempt from the reply throttle: a capture, a correction and
+# a recall inside ten minutes must not go quiet mid-thread. Same authored
+# values as scott and ashton-price.
+send_policy:
+  reply:
+    internal_exempt: true
+    per_sender_max: 3
+    per_sender_window_seconds: 600
+    global_max: 20
+    global_window_seconds: 3600
+    backstop_max: 60
+    backstop_window_seconds: 3600
+  held_release:
+    enabled: true
+    ttl_seconds: 86400
+
+# ---- SCOPE ----
+scope:
+  email_folders_visible:
+    - Inbox
+    - Sent
+  email_folders_blind: []
+  email_keyword_blocks: []
+  domain_blocks: []
+  # ADR 0067 channel constraint: the allowlist IS the inbound surface. Exact
+  # addresses only. The pilot agents are added as Tim supplies them.
+  inbound_allow_from:
+    # The broker.
+    - tim@thebrokery.com
+    # SMD, for setup proofs and support.
+    - smdurgan@smdurgan.com
+    # SMD probe harness, setup proofs only (a second agent and a broker
+    # stand-in). Removed once the live proofs are recorded.
+    - ss-probe-runner@agentmail.to
+    - ss-probe-admin@agentmail.to
+
+# ---- RECORD STORES ----
+# One store for the whole brokerage. Each agent opens only records stamped with
+# their own address (owner_field); the readers (the broker) read every agent's
+# records and rewrite none. The index is what everyone sees in the listing, so a
+# capture can see a colleague already holds a visitor without opening the notes.
+record_stores:
+  - name: open-house-visitors
+    path: /opt/data/open-house/visitors
+    owner_field: agent
+    readers:
+      - tim@thebrokery.com
+      # Broker stand-in for the setup proof; removed with the probe senders.
+      - ss-probe-admin@agentmail.to
+    index: [visitor, property, visit_date, contact]
+
+# ---- ESCALATION ----
+escalation:
+  red_flag_recipients:
+    - scott@smd.services
+  failure_recipients:
+    - team@smd.services
+
+# ---- SAFETY ----
+# On SMD's key, this is the runaway guard for the pilot.
+safety:
+  sticky_stop:
+    cost_cap_daily_cents: 1000
+    inbound_daily_cap: 100
+
+# ---- VOICE LIBRARY ----
+voice_library:
+  samples_path: 'r2://vaults/brokery/voice/samples/'
+
+# ---- MEMORY (isolation invariants; must match customer_id) ----
+memory:
+  d1_namespace: brokery
+  r2_vault_path: 'vaults/brokery/'
+  vectorize_index: 'hermes-brokery-vault'

@@ -71,7 +71,7 @@ const SNAPSHOT_PATH = 'operator/contracts/gate-coverage-snapshot.json'
  * repos when seat coverage changes; `vitest -u`-style regeneration deliberately
  * does NOT update this line, so the cross-repo half stays a human edit.
  */
-const PINNED_SEATS_SHA256 = '13cb962ebe7f095fdf5967abf4b19e24e54bed07effda422d32e84f0bcdedbfc'
+const PINNED_SEATS_SHA256 = '2958bc54fd92c5d3fba2a18c4725735e697aaa60647532c1726d7efb62a1270a'
 
 /** A seat's gate-relevant declaration, as the overlay consumes it. */
 interface SeatCoverage {

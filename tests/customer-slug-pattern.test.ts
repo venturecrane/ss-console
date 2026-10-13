@@ -97,6 +97,7 @@ const RUNTIME = (() => {
 const CANDIDATES: readonly string[] = [
   // live seats
   'ashton-price',
+  'brokery',
   'pilot-smokeball',
   'scott',
   'smd-staging',
@@ -132,8 +133,14 @@ const MUST_REJECT: readonly string[] = [
   'a/b',
 ]
 
-/** The four live seats, asserted separately so a regression names them. */
-const LIVE_SLUGS: readonly string[] = ['ashton-price', 'pilot-smokeball', 'scott', 'smd-staging']
+/** The live seats, asserted separately so a regression names them. */
+const LIVE_SLUGS: readonly string[] = [
+  'ashton-price',
+  'brokery',
+  'pilot-smokeball',
+  'scott',
+  'smd-staging',
+]
 
 /**
  * Evaluate a bash ERE the way bash evaluates it — via bash, not via a

@@ -147,6 +147,15 @@
       "to": "ScottDurgan@smdopslab.onmicrosoft.com",
       "subject": "[SMD-PROBE] html stamp proof",
       "reported_in": 3141
+    },
+    {
+      "inbox": "agentcrane@agentmail.to",
+      "channel": "agentmail",
+      "message_id": "<010001a10f016e92-c38fe7f3-2f24-4dd4-bf10-7d56868c948f-000000@email.amazonses.com>",
+      "timestamp": "2026-10-06T02:18:34.418Z",
+      "to": "pilot-smokeball@agentmail.to",
+      "subject": "Unrostered-sender test (SMD alert path)",
+      "reported_in": 3143
     }
   ],
   "verify_dispositioned_what": "Reviewed dispositions for body-verify and invariant FINDINGS (operator/bin/lib/send_dispositions.py, ss#3030). Keyed narrowly: body = (seat, skill_name, dispatch_ts, actual_sha256); invariant = (seat, rule, hashed_key, actual). An entry without an int reported_in and a non-empty why is ignored, so it over-reports. A dispositioned finding is still printed, indented, with its issue.",
