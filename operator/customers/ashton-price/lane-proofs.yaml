@@ -1,0 +1,65 @@
+# The kinds of job PROVEN on this seat (the lane-proof gate,
+# operator/runners/medchron/medchron/lane_proof.py; runbook
+# docs/runbooks/operator/lane-proof.md).
+#
+# A job of a kind listed here runs the moment it is asked for. A job of any
+# other kind WAITS (queued, never failed), and SMD is paged at once with the
+# request and the lane, until SMD runs it as a proof run on the request's own
+# matter (nothing written, nothing emailed), reads what it produced, and
+# accepts it on the seat. The in-turn skills listed here are the asks the
+# Operator answers inside a turn; those are never held, but an unlisted one
+# pages SMD on its first live use.
+#
+# Seeded 2026-10-13 from the seat's own ledgers (vfy_01M4V168KX39PHM10KG1K7RVV6,
+# read-only census of the job tables) and the request cards. Only clean live
+# deliveries count. Evidence names job ids, PR numbers and dates, never a
+# client, a matter or a file name: this repo is public.
+#
+# Deliberately NOT here:
+#   document-drafter.discovery_set  three sets delivered 10-12/10-13, but the
+#       10-12 set carried a false declaration and was withdrawn; the lane was
+#       rebuilt by ss#3137 (pre-delivery review, one document per set,
+#       pleading paper). The rebuilt lane proves itself on its first request.
+#   document-drafter.(discovery_response|memo|depo_outline)  never run here.
+#   litigation-status  never run on this seat's job ledger (zero rows); the
+#       first status list ran off-seat, and the job lane (ss#3100) has not.
+#
+# Revocations go under `revoked:` and win over every runtime proof until this
+# file changes (a runtime `medchron lane-proof revoke` is the faster, undoable
+# kind).
+schema: 1
+lanes:
+  medical-chronology-maintainer:
+    proven_at: '2026-09-24'
+    evidence: >-
+      15 chronology jobs delivered on this seat 08-25..10-07, clean since the
+      09-24 upload read-back fix (ss#2914); latest 01M38FGTPRGSQG3QJCN8PJZFNF
+      (09-24) and 01M4BXJ2DYY5ARPXSMG869YMCR (10-07).
+  demand-letter-drafter:
+    proven_at: '2026-10-07'
+    evidence: >-
+      7 demand jobs delivered 10-06..10-09, after the on-seat dry-run harness
+      that fixed the last five defects (ss#3087); latest
+      01M4GYV9H6Z7MDZHZT59WRAG1C (10-09).
+  document-drafter.mediation_brief:
+    proven_at: '2026-10-08'
+    evidence: >-
+      01M4E85M4G5D4AS601G11W0778 delivered 10-08 and accepted by the firm.
+  negotiation-watch:
+    proven_at: '2026-10-10'
+    evidence: >-
+      Dry run on the firm's real data before the first live run (ss#3119,
+      2026-10-10); 3 runs delivered since, latest 01M4TWVFW5M06Z5AGDKNJ4G1X7
+      (10-13).
+  matter-inbox-router:
+    proven_at: '2026-10-13'
+    evidence: >-
+      The webhook router itself: every request emailed to this seat since
+      09-13 was answered (12 requests, 0 NO REPLY alarms;
+      .claude/bin/requests --client ashton-price --since 30d).
+  file-work-requests:
+    proven_at: '2026-10-08'
+    evidence: >-
+      Rehearsed on this seat before live use (ss#3050, ss#3053, ss#3072,
+      ss#3084); 9 live sessions 10-05..10-08.
+revoked: []

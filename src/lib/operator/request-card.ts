@@ -4,7 +4,10 @@
  *
  * A seat posts one card per request a person emailed it: `replied` once the
  * first reply has settled, `no_reply` when nothing answered inside the alarm
- * window, `job_done` when a queued job the request started ends. ss-web turns
+ * window, `job_done` when a queued job the request started ends, and
+ * `lane_unproven` the moment a request asks for a kind of job not proven on
+ * that seat (the lane-proof gate, migration 0125; the job waits until SMD
+ * proves the lane, runbook docs/runbooks/operator/lane-proof.md). ss-web turns
  * each card into one plain-text email to SMD ops. The wire contract is fixed
  * by the seat side (hermes-smd-overlay `shared/request_cards.py`); change it
  * in both repos or neither.
@@ -18,17 +21,23 @@
  * that does not match the contract is a 400, never a partial card.
  */
 
-export const CARD_KINDS = ['replied', 'no_reply', 'job_done'] as const
+export const CARD_KINDS = ['replied', 'no_reply', 'job_done', 'lane_unproven'] as const
 export type CardKind = (typeof CARD_KINDS)[number]
-export const JOB_LANES = ['demand', 'drafting', 'litigation', 'medchron'] as const
+export const JOB_LANES = ['demand', 'drafting', 'litigation', 'medchron', 'negotiation'] as const
 export const JOB_STATES = ['delivered', 'failed', 'held'] as const
 
 // `<sha256 of the request>:<kind>`. A job_done key may carry its job ENDING
 // (`:<state>-<attempt>`): a resumed job ends again, and that ending is its own
 // card under the same request. The request hash prefix is what groups them.
+// A lane_unproven key carries its lane key: one card per request per lane (a
+// scheduled job's hash is of its job id; an in-turn first use's, of its lane).
 const CARD_KEY_RE =
-  /^[0-9a-f]{64}:(?:(replied|no_reply)|(job_done)(?::(?:delivered|failed|held)-[1-9]\d{0,3})?)$/
+  /^[0-9a-f]{64}:(?:(replied|no_reply)|(job_done)(?::(?:delivered|failed|held)-[1-9]\d{0,3})?|(lane_unproven):([a-z0-9][a-z0-9-]{0,63}(?:\.[a-z0-9_]{1,40})?))$/
 const TOKEN_RE = /^[a-z0-9_:.-]{1,64}$/
+/** A lane key: the skill that queues the job, plus the drafting class. */
+const LANE_KEY_RE = /^[a-z0-9][a-z0-9-]{0,63}(?:\.[a-z0-9_]{1,40})?$/
+const JOB_ID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/
+const LANE_WHY = ['never_proven', 'revoked', 'unreadable'] as const
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/
 
 const CAP_WHO = 160
@@ -46,6 +55,17 @@ export interface CardJob {
   reason: string | null
 }
 
+/**
+ * The lane a lane_unproven card is about. `heldJob` is the queued job that
+ * waits for the proof (null for an in-turn ask, which is paged, never held).
+ */
+export interface CardLane {
+  key: string
+  jobLane: (typeof JOB_LANES)[number] | null
+  heldJob: string | null
+  why: (typeof LANE_WHY)[number]
+}
+
 export interface RequestCard {
   cardKey: string
   kind: CardKind
@@ -61,6 +81,7 @@ export interface RequestCard {
   refused: number
   failed: number
   job: CardJob | null
+  lane: CardLane | null
 }
 
 export type ParseResult = { ok: true; card: RequestCard } | { ok: false; field: string }
@@ -122,9 +143,35 @@ function parseJob(v: unknown): CardJob | null | undefined {
   return { lane, state, reason }
 }
 
+/** null for none, the lane for a known one, undefined for anything else. */
+function parseJobLane(v: unknown): CardLane['jobLane'] | undefined {
+  return v === null || v === undefined ? null : JOB_LANES.find((l) => l === v)
+}
+
+function parseHeldJob(v: unknown): string | null | undefined {
+  if (v === null || v === undefined) return null
+  return typeof v === 'string' && JOB_ID_RE.test(v) ? v : undefined
+}
+
+function parseLane(v: unknown, keyLane: string | undefined): CardLane | null | undefined {
+  if (v === null || v === undefined) return null
+  if (typeof v !== 'object' || Array.isArray(v)) return undefined
+  const lane = v as Record<string, unknown>
+  if (typeof lane.key !== 'string' || !LANE_KEY_RE.test(lane.key) || lane.key !== keyLane)
+    return undefined
+  const why = LANE_WHY.find((w) => w === lane.why)
+  const jobLane = parseJobLane(lane.job_lane)
+  const heldJob = parseHeldJob(lane.held_job)
+  if (!why || jobLane === undefined || heldJob === undefined) return undefined
+  // A held job belongs to a job lane; an in-turn first use has neither.
+  if ((heldJob === null) !== (jobLane === null)) return undefined
+  return { key: lane.key, jobLane, heldJob, why }
+}
+
 interface Identity {
   cardKey: string
   kind: CardKind
+  laneKey?: string
   receivedAt: string
   eventAt: string
   minutes: number
@@ -136,15 +183,16 @@ function parseIdentity(body: Record<string, unknown>): Identity | { field: strin
   const key = body.card_key
   if (typeof key !== 'string') return { field: 'card_key' }
   const keyMatch = CARD_KEY_RE.exec(key)
-  if (!keyMatch || (keyMatch[1] ?? keyMatch[2]) !== kind) {
+  if (!keyMatch || (keyMatch[1] ?? keyMatch[2] ?? keyMatch[3]) !== kind) {
     return { field: 'card_key' }
   }
+  const laneKey = keyMatch[4]
   const receivedAt = parseIso(body.received_at)
   if (!receivedAt) return { field: 'received_at' }
   const eventAt = parseIso(body.event_at)
   if (!eventAt) return { field: 'event_at' }
   if (!isCount(body.minutes, MAX_MINUTES)) return { field: 'minutes' }
-  return { cardKey: key, kind, receivedAt, eventAt, minutes: body.minutes }
+  return { cardKey: key, kind, receivedAt, eventAt, minutes: body.minutes, laneKey }
 }
 
 interface Content {
@@ -182,16 +230,23 @@ export function parseRequestCard(body: Record<string, unknown>): ParseResult {
   if (job === undefined || (id.kind === 'job_done') !== (job !== null)) {
     return { ok: false, field: 'job' }
   }
+  // A lane card carries its lane, the same lane its key names; no other does.
+  const lane = parseLane(body.lane, id.laneKey)
+  if (lane === undefined || (id.kind === 'lane_unproven') !== (lane !== null)) {
+    return { ok: false, field: 'lane' }
+  }
+  const { laneKey: _laneKey, ...identity } = id
   return {
     ok: true,
     card: {
-      ...id,
+      ...identity,
       ...content,
       tools,
       replies: body.replies as number,
       refused: body.refused as number,
       failed: body.failed as number,
       job,
+      lane,
     },
   }
 }
@@ -216,7 +271,37 @@ export function cardSubject(slug: string, card: RequestCard): string {
       return `[SMD Ops] ${slug} NO REPLY after ${card.minutes}m: ${s}`
     case 'job_done':
       return `[SMD Ops] ${slug} ${card.job?.lane ?? 'job'} job ${card.job?.state ?? 'ended'}: ${s}`
+    case 'lane_unproven':
+      return card.lane?.heldJob
+        ? `[SMD Ops] ${slug} NEW KIND OF ASK, job waiting: ${card.lane.key}: ${s}`
+        : `[SMD Ops] ${slug} NEW KIND OF ASK, first use: ${card.lane?.key ?? 'unknown'}: ${s}`
   }
+}
+
+const LANE_WHY_TEXT: Record<(typeof LANE_WHY)[number], string> = {
+  never_proven: 'it has never been proven on this seat',
+  revoked: 'its proof was revoked',
+  unreadable: "the seat could not read its proven-lane record (see the seat's lane-proof status)",
+}
+
+function laneLines(slug: string, card: RequestCard): string[] {
+  const lane = card.lane
+  if (!lane) return []
+  const head = `Lane: ${lane.key} is not proven on this seat: ${LANE_WHY_TEXT[lane.why]}.`
+  if (!lane.heldJob) {
+    return [
+      head,
+      'An in-turn ask: the Operator answered it in the turn (nothing is held). Read that answer;',
+      "once it is right, add the skill to the seat's lane-proofs.yaml with its evidence.",
+    ]
+  }
+  return [
+    head,
+    `The ${lane.jobLane} job ${lane.heldJob} is QUEUED and will not run until the lane is proven.`,
+    'The requester has the acknowledgement the Operator already sent; nothing more goes out.',
+    `Prove it: operator/bin/lane-proof.sh ${slug} dry-run ${lane.heldJob} --wait 3600`,
+    'Runbook: docs/runbooks/operator/lane-proof.md',
+  ]
 }
 
 function outcomeLines(card: RequestCard): string[] {
@@ -235,6 +320,8 @@ function outcomeLines(card: RequestCard): string[] {
         `Job: ${job?.lane ?? 'unknown'} ${job?.state ?? 'ended'}${reason} at ${card.eventAt}, ${card.minutes} min after the request`,
       ]
     }
+    case 'lane_unproven':
+      return [`Noticed: ${card.eventAt} (${card.minutes} min after the request)`]
   }
 }
 
@@ -246,6 +333,7 @@ export function cardText(slug: string, card: RequestCard): string {
     `Subject: ${card.subject.length > 0 ? card.subject : '(no subject)'}`,
     `Received: ${card.receivedAt}`,
     ...outcomeLines(card),
+    ...laneLines(slug, card),
     `Matter: ${card.matter ?? 'none named'}`,
   ]
   if (card.replyOpening) lines.push('', 'Reply opening:', `  ${card.replyOpening}`)
@@ -321,8 +409,8 @@ export async function recordCard(
     .prepare(
       `INSERT INTO operator_request_cards
          (customer_slug, card_key, kind, received_at, event_at, minutes, tools_count,
-          replies, refused, failed, job_lane, job_state)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          replies, refused, failed, job_lane, job_state, lane_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (customer_slug, card_key) DO NOTHING`
     )
     .bind(
@@ -336,8 +424,9 @@ export async function recordCard(
       card.replies,
       card.refused,
       card.failed,
-      card.job?.lane ?? null,
-      card.job?.state ?? null
+      card.job?.lane ?? card.lane?.jobLane ?? null,
+      card.job?.state ?? null,
+      card.lane?.key ?? null
     )
     .run()
   const row = await db

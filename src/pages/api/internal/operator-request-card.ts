@@ -4,7 +4,9 @@
  * A seat reports one request a person emailed it, and SMD ops gets one email
  * (migration 0122). Kinds: `replied` (first reply settled), `no_reply` (the
  * alarm: nothing answered inside the seat's window), `job_done` (a queued job
- * the request started reached a terminal state).
+ * the request started reached a terminal state), `lane_unproven` (the request
+ * asked for a kind of job not proven on the seat; the job waits for SMD's proof
+ * run, migration 0125, docs/runbooks/operator/lane-proof.md).
  *
  * Auth: per-seat Bearer key + X-Tenant-Slug header, the heartbeat's
  * credential (`src/lib/auth/machine-key.ts`).

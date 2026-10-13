@@ -39,7 +39,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import budget as budget_mod, limits as limits_mod
+from .. import budget as budget_mod, limits as limits_mod, proof_mode
 from ..ledger import Ledger
 from ..llm import Doorway
 from . import (
@@ -502,6 +502,10 @@ class DemandRun:
 
     def _file(self) -> Verdict:
         manifest = json.loads((deliver.out_dir(self.data) / "upload_manifest.json").read_text(encoding="utf-8"))
+        files = [{"name": m["name"], "size": m["bytes"], "role": m.get("role")} for m in manifest]
+        coverage = bool(self._state().get("render", {}).get("coverage"))
+        if proof_mode.active():  # a proof run stops here: the rendered files stay under out/ (proof_mode.py)
+            return Verdict(proof_mode.OUTCOME, stage="file", coverage_report=coverage, files=files)
         kw = {} if self.readback_pause is None else {"pause": self.readback_pause}
         rec = deliver.file_to_matter(self.data, self.seat, self.job.file_to_id, self.log, **kw)
         if rec["exit"] == 1:
@@ -514,8 +518,8 @@ class DemandRun:
             "delivered",
             stage="file",
             folder_id=str(rec.get("folder_id")),
-            coverage_report=bool(self._state().get("render", {}).get("coverage")),
-            files=[{"name": m["name"], "size": m["bytes"], "role": m.get("role")} for m in manifest],
+            coverage_report=coverage,
+            files=files,
         )
 
     def _coverage(self, md: str, *, gated: bool) -> Verdict:

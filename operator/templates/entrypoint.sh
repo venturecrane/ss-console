@@ -277,8 +277,8 @@ export SMD_MEDCHRON_QUEUE_DIR="${MEDCHRON_RUN_DIR}/queue"
 # lane's (2026-10-07) and the negotiation watch's (2026-10-09) queues, job dirs
 # and inputs: sourced, same shell, so their exports reach the broker launch and
 # the daemon below. One loop line: the ratchet holds this file.
-# shellcheck disable=SC1090 # /app/entrypoint-{demand,drafting,litigation,negotiation}.sh
-for _lane in demand drafting litigation negotiation; do . "/app/entrypoint-${_lane}.sh"; done
+# shellcheck disable=SC1090 # /app/entrypoint-{demand,drafting,litigation,negotiation,lane-proofs}.sh
+for _lane in demand drafting litigation negotiation lane-proofs; do . "/app/entrypoint-${_lane}.sh"; done
 
 # 2026-09-04: the chronology runner's INSTALL-level artifacts — the scanned-page
 # classifier's authored control pages (`controls.json` + the PDFs it names) and

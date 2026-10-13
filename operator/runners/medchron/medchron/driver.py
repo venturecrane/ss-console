@@ -34,6 +34,7 @@ from . import (
     icd_tables,
     job as job_mod,
     limits as limits_mod,
+    proof_mode,
     rehearsal,
     seat as seat_mod,
 )
@@ -456,6 +457,8 @@ class Driver:
             return None
         if self.rehearse and (stage.paid or stage.external):
             return rehearsal.stop(self, stage, ctx, extracted, notes)
+        if (stop := proof_mode.upload_stop(stage.name, unit.unit, self.budget, notes, Outcome)) is not None:
+            return stop
         if stage.paid:
             rehearsal.probe_before_spend(self, stage, ctx, notes)
             try:

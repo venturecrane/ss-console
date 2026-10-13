@@ -70,6 +70,27 @@ class WriteNotRecorded(RuntimeError):
     """The audit row for this write could not be written, so the write was not sent."""
 
 
+#: Set by the medchron daemon on a PROOF RUN's child only (runners/medchron/
+#: medchron/proof_mode.py): the lane's real pipeline on a real matter, which
+#: must reach no firm record. Checked here, below every runner, so a runner
+#: that forgets its own stop still cannot write.
+PROOF_RUN_ENV = "MEDCHRON_PROOF_RUN"
+
+
+class ProofRunWriteRefused(WriteNotRecorded):
+    """A write attempted during a proof run. Nothing was sent."""
+
+
+def refuse_proof_run_write(method: str, path: str) -> None:
+    """Raise when this process is a proof run and ``method`` is not a read."""
+    if method.upper() in _READ_METHODS or os.environ.get(PROOF_RUN_ENV, "").strip() != "1":
+        return
+    raise ProofRunWriteRefused(
+        f"refused: {method.upper()} {path[:120]} during a proof run; a proof run writes nothing "
+        "to the firm's Smokeball. Nothing was sent."
+    )
+
+
 def _proc_cmdline(pid: int) -> str:
     try:
         with open(f"/proc/{pid}/cmdline", "rb") as f:

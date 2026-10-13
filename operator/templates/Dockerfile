@@ -1186,7 +1186,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # profile config pins auxiliary.title_generation.model to Haiku 4.5, so the
 # session auto-title no longer sends Opus 5.5 thinking {type: disabled} and
 # 400s (Sentry SMD-OPERATOR-1M). No tracked twin moved.
-ARG OVERLAY_REF="22c0948ab75d6ced7624d3332efccad053f0807d"
+# 2026-10-13 (05767aa4, the overlay #445 merge commit). The lane-proof gate's
+# page: a job the root daemon holds because its kind is not proven on the seat
+# is carded to SMD at once (lane_unproven), as is an in-turn skill's first use.
+# Also carries #447 and #449 (Sonnet 5.5 and Haiku 5.5 prices) and #448
+# (thinking-off is adaptive at low effort). No tracked twin moved.
+ARG OVERLAY_REF="05767aa41905e75f3cee3f651cb90e368cf8cce3"
 
 ARG CUSTOMER_SLUG=customer-zero
 
@@ -1733,6 +1738,9 @@ COPY operator/templates/entrypoint-drafting.sh /app/entrypoint-drafting.sh
 COPY operator/templates/entrypoint-litigation.sh /app/entrypoint-litigation.sh
 # The negotiation watch's twin (queue, job dirs, state dir; no firm inputs).
 COPY operator/templates/entrypoint-negotiation.sh /app/entrypoint-negotiation.sh
+# The lane-proof gate's seed and modes (lane-proofs.yaml from the vault, the
+# holds and proof-run trees), after the lanes' own trees.
+COPY operator/templates/entrypoint-lane-proofs.sh /app/entrypoint-lane-proofs.sh
 # REQUIRED_ENV / OPTIONAL_ENV, generated from operator/contracts/env-consumption.yaml
 # (operator/bin/gen-env-arrays.py); bootstrap.sh sources this instead of hardcoding them.
 COPY operator/templates/_env-arrays.generated.sh /app/_env-arrays.generated.sh

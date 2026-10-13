@@ -49,7 +49,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import budget as budget_mod, limits as limits_mod
+from .. import budget as budget_mod, limits as limits_mod, proof_mode
 from ..demand import deliver, facts as facts_mod, preflight, pull, summarize, transcribe
 from ..demand.firm import DemandFirm
 from ..ledger import Ledger
@@ -375,6 +375,12 @@ class DraftingRun(Placing):
 
     def _file(self) -> Verdict:
         manifest = json.loads((deliver.out_dir(self.data) / "upload_manifest.json").read_text(encoding="utf-8"))
+        if proof_mode.active():  # a proof run stops here: the rendered files stay under out/ (proof_mode.py)
+            return Verdict(
+                proof_mode.OUTCOME,
+                stage="file",
+                files=[{"name": m["name"], "size": m["bytes"], "role": m.get("role")} for m in manifest],
+            )
         kw = {} if self.readback_pause is None else {"pause": self.readback_pause}
         rec = deliver.file_to_matter(self.data, self.seat, self.job.file_to_id, self.log, **kw)
         if rec["exit"] == 1:

@@ -109,4 +109,20 @@ def fake_pipeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return pdir
 
 
+@pytest.fixture
+def real_lane_gate() -> None:
+    """Ask for this to run a daemon test against the REAL lane-proof gate
+    (test_lane_proof.py). Every other daemon test predates the gate and is
+    about its own lane's behavior, so it sees every lane proven."""
+
+
+@pytest.fixture(autouse=True)
+def _every_lane_proven(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    if "real_lane_gate" in request.fixturenames:
+        return
+    from medchron import lane_proof
+
+    monkeypatch.setattr(lane_proof, "admits", lambda *a, **k: True)
+
+
 os.environ.setdefault("MEDCHRON_TEST", "1")

@@ -42,7 +42,8 @@ from .broker_client import BrokerClient, BrokerError
 from .covered import delivery_fields
 from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
-from . import config as config_mod, job as job_mod, resume as resume_mod, retention, verdict as verdict_mod
+from . import config as config_mod, job as job_mod, lane_proof, proof_run, resume as resume_mod, retention
+from . import verdict as verdict_mod
 
 logger = logging.getLogger("medchron.daemon")
 
@@ -196,7 +197,10 @@ class Daemon:
 
     def claim_next(self) -> str | None:
         """Move the oldest envelope into its job dir. A file the broker has no
-        row for is quarantined."""
+        row for is quarantined. An idle lane runs a requested proof first; a
+        job whose kind is not proven on this seat waits (``lane_proof.py``)."""
+        if proof_run.run_pending(self):
+            return None
         for env_path in self._queued():
             job_id = env_path.stem
             try:
@@ -209,6 +213,8 @@ class Daemon:
                 q.mkdir(exist_ok=True, mode=0o700)
                 env_path.replace(q / env_path.name)
                 logger.error("quarantined %s: the broker has no ledger row for it", job_id)
+                continue
+            if not lane_proof.admits(self, job_id, env_path, row):
                 continue
             jd = self.job_dir(job_id)
             jd.mkdir(parents=True, exist_ok=True, mode=0o700)

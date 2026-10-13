@@ -145,6 +145,87 @@ describe('parseRequestCard: the wire contract', () => {
   })
 })
 
+const HELD = '01M4RW99P9XHWPJ228MSSWEXGG'
+function laneBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return body({
+    card_key: `${HASH}:lane_unproven:document-drafter.discovery_set`,
+    kind: 'lane_unproven',
+    reply_opening: null,
+    lane: {
+      key: 'document-drafter.discovery_set',
+      job_lane: 'drafting',
+      held_job: HELD,
+      why: 'never_proven',
+    },
+    ...overrides,
+  })
+}
+
+describe('parseRequestCard: the lane_unproven card (0125)', () => {
+  it('accepts a held-job card and an in-turn first-use card', () => {
+    const held = parseRequestCard(laneBody())
+    expect(held.ok && held.card.lane).toEqual({
+      key: 'document-drafter.discovery_set',
+      jobLane: 'drafting',
+      heldJob: HELD,
+      why: 'never_proven',
+    })
+    const inTurn = parseRequestCard(
+      laneBody({
+        card_key: `${HASH}:lane_unproven:file-work-requests`,
+        lane: { key: 'file-work-requests', job_lane: null, held_job: null, why: 'never_proven' },
+      })
+    )
+    expect(inTurn.ok && inTurn.card.lane?.heldJob).toBeNull()
+  })
+
+  it.each([
+    ['the key names a different lane', { card_key: `${HASH}:lane_unproven:demand-letter-drafter` }],
+    ['no lane object', { lane: null }],
+    [
+      'a job id that is not one',
+      {
+        lane: {
+          key: 'document-drafter.discovery_set',
+          job_lane: 'drafting',
+          held_job: 'x',
+          why: 'never_proven',
+        },
+      },
+    ],
+    [
+      'a held job with no job lane',
+      {
+        lane: {
+          key: 'document-drafter.discovery_set',
+          job_lane: null,
+          held_job: HELD,
+          why: 'never_proven',
+        },
+      },
+    ],
+    [
+      'an unknown why',
+      {
+        lane: {
+          key: 'document-drafter.discovery_set',
+          job_lane: 'drafting',
+          held_job: HELD,
+          why: 'because',
+        },
+      },
+    ],
+  ])('refuses %s', (_name, overrides) => {
+    const r = parseRequestCard(laneBody(overrides))
+    expect(r.ok).toBe(false)
+  })
+
+  it('no other kind may carry a lane', () => {
+    const r = parseRequestCard(body({ lane: laneBody().lane }))
+    expect(r.ok === false && r.field).toBe('lane')
+  })
+})
+
 describe('the email', () => {
   it('subject lines per kind, with the subject cut to 70', () => {
     expect(cardSubject(SLUG, parsed())).toBe(
@@ -337,6 +418,30 @@ describe('POST /api/internal/operator-request-card', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
+  it('a lane_unproven card is recorded with its lane and job lane, and its email says how to prove it (0125)', async () => {
+    // FALSIFIER: drop migration 0125 and the kind CHECK rejects the INSERT
+    // (500); drop 'lane_unproven' from CARD_KINDS and the parse refuses (400).
+    const res = await post(
+      laneBody({
+        card_key: `${HASH}:lane_unproven:negotiation-watch`,
+        lane: { key: 'negotiation-watch', job_lane: 'negotiation', held_job: HELD, why: 'revoked' },
+      })
+    )
+    expect(res.status).toBe(200)
+    const [row] = await rows()
+    expect(row).toMatchObject({
+      kind: 'lane_unproven',
+      lane_key: 'negotiation-watch',
+      job_lane: 'negotiation',
+    })
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const sent = JSON.parse(String(init.body)) as { subject: string; text: string }
+    expect(sent.subject).toContain('NEW KIND OF ASK, job waiting: negotiation-watch')
+    expect(sent.text).toContain(`operator/bin/lane-proof.sh ${SLUG} dry-run ${HELD}`)
+    expect(sent.text).toContain('QUEUED and will not run until the lane is proven')
+    expect(sent.text).not.toMatch(/\u2014/)
+  })
+
   it('no Resend key is a failure, never a pretend send', async () => {
     delete (testEnv as unknown as Record<string, unknown>).RESEND_API_KEY
     expect((await post(body())).status).toBe(502)
@@ -370,6 +475,7 @@ describe('POST /api/internal/operator-request-card', () => {
         'job_lane',
         'job_state',
         'kind',
+        'lane_key',
         'minutes',
         'received_at',
         'refused',
