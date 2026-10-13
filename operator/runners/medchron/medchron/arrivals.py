@@ -76,6 +76,28 @@ def getter(seat: Any) -> Callable[..., Any]:
     return client.get
 
 
+#: Where a matter row names its Person Assisting. The firm's tenant carries
+#: both a single ``personAssistingStaffId`` and a ``personAssistingStaffs``
+#: list of ``{"id": ...}`` links on the /matters LIST row, and the two can
+#: disagree (the list empty while the single id is set); all are read, the
+#: same tolerant shape as the routing skills' staff pull.
+ASSISTING_KEYS = ("personAssistingStaffIds", "personAssistingStaffId", "personAssistingStaffs")
+
+
+def assisting_ids(row: dict[str, Any]) -> list[str]:
+    """Every Person Assisting staff id on a matter row, lowercased, in order,
+    once each: a string, a list of strings, or a list of ``{"id": ...}``."""
+    out: list[str] = []
+    for key in ASSISTING_KEYS:
+        raw = row.get(key)
+        items = [raw] if isinstance(raw, (str, dict)) else raw if isinstance(raw, list) else []
+        for item in items:
+            sid = item.get("id") if isinstance(item, dict) else item
+            if isinstance(sid, str) and sid.strip():
+                out.append(sid.strip().lower())
+    return list(dict.fromkeys(out))
+
+
 def open_matters(seat: Any, statuses: Iterable[str]) -> list[dict[str, Any]]:
     get = getter(seat)
     out: dict[str, dict[str, Any]] = {}
@@ -89,6 +111,7 @@ def open_matters(seat: Any, statuses: Iterable[str]) -> list[dict[str, Any]]:
                 "number": str(row.get("number") or ""),
                 "title": str(row.get("title") or ""),
                 "staff_id": str(row.get("personResponsibleStaffId") or "").lower(),
+                "assisting_ids": assisting_ids(row),
                 "status": status,
             }
     return list(out.values())

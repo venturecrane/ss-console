@@ -25,6 +25,8 @@ The schema::
                                            the product's vocabulary (vocab.py)
     # optional
     attorneys:             {display name: staff uuid}   the broker's scope resolver
+    paralegals:            {display name: staff uuid}   the same, for a paralegal's
+                                           files (the matter's Person Assisting)
     discovery_patterns:    [regex]         file names that read as discovery papers
     email_months:          int >= 1        older emails are not candidates (12)
     min_court_hits:        int >= 1        court-named files a matter needs (1)
@@ -70,6 +72,7 @@ REQUIRED: dict[str, str] = {
 }
 OPTIONAL: dict[str, tuple[str, Any]] = {
     "attorneys": ("attorneys", {}),
+    "paralegals": ("attorneys", {}),
     "discovery_patterns": ("regexes", []),
     "email_months": ("int1", 12),
     "min_court_hits": ("int1", 1),

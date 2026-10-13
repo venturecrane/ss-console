@@ -45,6 +45,18 @@ def test_attorney_resolution() -> None:
     assert li.resolve_attorneys(["Stone"], roster)[1]
     assert li.resolve_attorneys(["Dana"], roster)[1]
     assert li.resolve_attorneys([], roster)[1]
+    assert "is not an attorney" in li.resolve_attorneys(["Dana"], roster)[1]
+
+
+def test_paralegal_resolution_and_roster() -> None:
+    firm = {"paralegals": {" Irma Campos ": "AAA", "Payton Dildine": "b", "bad": 3}, "attorneys": {"Chris": "c"}}
+    roster = li.paralegal_roster(firm)
+    assert roster == {"Irma Campos": "aaa", "Payton Dildine": "b"}
+    assert li.resolve_paralegals(["Irma's"], roster) == (["aaa"], None)
+    assert li.resolve_paralegals(["irma campos", "Payton"], roster) == (["aaa", "b"], None)
+    why = li.resolve_paralegals(["Chris"], roster)[1]
+    assert why.startswith('"Chris" is not a paralegal on the firm\'s list') and why.endswith("nothing was queued")
+    assert li.paralegal_roster({}) == {}
 
 
 def test_budget_must_be_positive() -> None:

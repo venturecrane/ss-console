@@ -30,8 +30,12 @@ and the message ref as ``scheduled:<Pacific date>``, so the unique index on
 THE QUEUE FILE (``<queue>/<job_id>.json``) is the runner's input, exactly::
 
     {"kind": "litigation", "job_id", "trigger", "requester", "message_ref",
-     "request_text", "scope": {"attorney_staff_ids": [...]} | {"all": true},
-     "file_to_matter_id", "file_to_matter_number", "folder_name"}
+     "request_text", "scope", "file_to_matter_id", "file_to_matter_number",
+     "folder_name"}
+
+with ``scope`` one of ``{"all": true}``, ``{"attorney_staff_ids": [...]}``,
+``{"paralegal_staff_ids": [...]}`` (a paralegal's files: the matter's Person
+Assisting) or both id lists together (a matter must match each).
 
 THE RUNNER'S REPORT is counts and file metadata only (``REPORT_FIELDS``):
 nothing in this ledger names a matter, a party or a date from a file.
@@ -146,18 +150,40 @@ def digest(obj: Any) -> str:
     return hashlib.sha256(json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+#: The id lists a scope may carry, in the order ``scope_key`` writes them.
+SCOPE_ID_KEYS = ("attorney_staff_ids", "paralegal_staff_ids")
+
+
+def _ids(raw: Any) -> list[str] | None:
+    if isinstance(raw, list) and 0 < len(raw) <= 50 and all(isinstance(i, str) and _UUID.match(i) for i in raw):
+        return sorted({i.strip().lower() for i in raw})
+    return None
+
+
 def _scope(raw: Any) -> dict[str, Any]:
     if raw == {"all": True}:
         return {"all": True}
-    if isinstance(raw, dict) and set(raw) == {"attorney_staff_ids"}:
-        ids = raw["attorney_staff_ids"]
-        if isinstance(ids, list) and 0 < len(ids) <= 50 and all(isinstance(i, str) and _UUID.match(i) for i in ids):
-            return {"attorney_staff_ids": sorted({i.strip().lower() for i in ids})}
-    raise EnvelopeError('scope must be {"all": true} or {"attorney_staff_ids": [staff id, ...]}')
+    if isinstance(raw, dict) and raw and set(raw) <= set(SCOPE_ID_KEYS):
+        got = {k: _ids(raw[k]) for k in SCOPE_ID_KEYS if k in raw}
+        if all(v is not None for v in got.values()):
+            return got
+    raise EnvelopeError(
+        'scope must be {"all": true} or staff id lists under "attorney_staff_ids", "paralegal_staff_ids" or both'
+    )
 
 
 def scope_key(scope: dict[str, Any]) -> str:
-    return "all" if scope.get("all") is True else "staff:" + ",".join(scope["attorney_staff_ids"])
+    """One string per distinct scope, so a job underway for one scope never
+    blocks a different one: ``all``; ``staff:<ids>`` (attorneys, the key every
+    earlier row carries); ``paralegal:<ids>``; ``staff:<ids>|paralegal:<ids>``."""
+    if scope.get("all") is True:
+        return "all"
+    parts = []
+    if scope.get("attorney_staff_ids"):
+        parts.append("staff:" + ",".join(scope["attorney_staff_ids"]))
+    if scope.get("paralegal_staff_ids"):
+        parts.append("paralegal:" + ",".join(scope["paralegal_staff_ids"]))
+    return "|".join(parts)
 
 
 def validate_envelope(req: Any) -> dict[str, Any]:

@@ -1191,7 +1191,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # is carded to SMD at once (lane_unproven), as is an in-turn skill's first use.
 # Also carries #447 and #449 (Sonnet 5.5 and Haiku 5.5 prices) and #448
 # (thinking-off is adaptive at low effort). No tracked twin moved.
-ARG OVERLAY_REF="05767aa41905e75f3cee3f651cb90e368cf8cce3"
+# 2026-10-13 (b748c6e0, the overlay #451 merge commit). litigation_job_submit
+# names paralegals ("Irma's files"), alone or with attorneys; pairs with this
+# repo's broker paralegal resolution and the runner's Person Assisting scope.
+# No tracked twin moved.
+ARG OVERLAY_REF="b748c6e03ecebc28fc98792cf2da3eec4e78bec6"
 
 ARG CUSTOMER_SLUG=customer-zero
 

@@ -12,8 +12,10 @@ Three sources, all authored, none from the model:
   for the broker at ``$SMD_LITIGATION_FIRM_CONFIG``, root:workspace-broker
   0640): the monthly budget the broker
   enforces at submit, and the ``attorneys`` map (display name -> Smokeball
-  staff id) the broker resolves a requester's "for <attorney>" against. The
-  broker has no Smokeball access, so the map is the authored roster.
+  staff id) the broker resolves a requester's "for <attorney>" against, and
+  the ``paralegals`` map the same for "<paralegal>'s files" (the matter's
+  Person Assisting). The broker has no Smokeball access, so the maps are the
+  authored roster.
 
 ``operator_library_number`` is this lane's copy of
 ``drafting_intake.operator_library_number``; ``tests/test_litigation_intake.py``
@@ -23,6 +25,7 @@ drives both through the same cases, so a divergence is a visible failure.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -124,9 +127,8 @@ def monthly_budget_cents(firm: dict[str, Any] | None) -> int | None:
     return int(round(value * 100))
 
 
-def attorney_roster(firm: dict[str, Any] | None) -> dict[str, str]:
-    """name -> staff id, both stripped; the id lowercased."""
-    raw = (firm or {}).get("attorneys")
+def _roster(firm: dict[str, Any] | None, key: str) -> dict[str, str]:
+    raw = (firm or {}).get(key)
     if not isinstance(raw, dict):
         return {}
     return {
@@ -136,25 +138,46 @@ def attorney_roster(firm: dict[str, Any] | None) -> dict[str, str]:
     }
 
 
-def resolve_attorneys(names: list[str], roster: dict[str, str]) -> tuple[list[str], str | None]:
-    """(staff ids, None) or ([], the refusal sentence). A name matches a
-    roster name exactly (case-insensitive), or else one roster entry by a
-    single word of it (a first or last name). Ambiguous or unknown refuses."""
+def attorney_roster(firm: dict[str, Any] | None) -> dict[str, str]:
+    """name -> staff id, both stripped; the id lowercased."""
+    return _roster(firm, "attorneys")
+
+
+def paralegal_roster(firm: dict[str, Any] | None) -> dict[str, str]:
+    """The ``paralegals`` map (name -> the staff id a matter carries as its
+    Person Assisting), read the same way as the attorneys'."""
+    return _roster(firm, "paralegals")
+
+
+def _resolve(names: list[str], roster: dict[str, str], noun: str, article: str) -> tuple[list[str], str | None]:
     ids: list[str] = []
     for raw in names:
         name = " ".join(str(raw).split()).lower()
+        name = re.sub(r"['’]s$", "", name)  # "Irma's" is Irma
         if not name:
             continue
         exact = [sid for full, sid in roster.items() if " ".join(full.split()).lower() == name]
         hits = exact or [sid for full, sid in roster.items() if name in full.lower().split()]
         if len(set(hits)) != 1:
             known = ", ".join(sorted(roster)) or "none authored"
-            why = "matches more than one attorney" if hits else "is not an attorney on the firm's list"
+            why = f"matches more than one {noun}" if hits else f"is not {article} {noun} on the firm's list"
             return [], f'"{raw}" {why} (the list: {known}); nothing was queued'
         ids.append(hits[0])
     if not ids:
-        return [], "no attorney was named; nothing was queued"
+        return [], f"no {noun} was named; nothing was queued"
     return sorted(set(ids)), None
+
+
+def resolve_attorneys(names: list[str], roster: dict[str, str]) -> tuple[list[str], str | None]:
+    """(staff ids, None) or ([], the refusal sentence). A name matches a
+    roster name exactly (case-insensitive), or else one roster entry by a
+    single word of it (a first or last name). Ambiguous or unknown refuses."""
+    return _resolve(names, roster, "attorney", "an")
+
+
+def resolve_paralegals(names: list[str], roster: dict[str, str]) -> tuple[list[str], str | None]:
+    """The same rules against the firm's paralegal list."""
+    return _resolve(names, roster, "paralegal", "a")
 
 
 __all__ = [
@@ -167,7 +190,9 @@ __all__ = [
     "initiation_allows",
     "monthly_budget_cents",
     "operator_library_number",
+    "paralegal_roster",
     "resolve_attorneys",
+    "resolve_paralegals",
     "scheduled_recipients",
     "settings_of",
     "skill_entry",

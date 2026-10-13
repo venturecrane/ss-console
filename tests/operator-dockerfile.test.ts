@@ -1529,7 +1529,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // Opus 5.5 seat no longer 400s on thinking {type: disabled} (Sentry SMD-OPERATOR-1M).
     // 22c0948a -> 05767aa4 (overlay#445 with #447-#449), 2026-10-13: a job held by the lane-proof
     // gate pages SMD at once (lane_unproven card; pairs with this repo's lane_proof.py, migration 0125).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="05767aa41905e75f3cee3f651cb90e368cf8cce3"')
+    // 05767aa4 -> b748c6e0 (overlay#451), 2026-10-13: the litigation status tool names paralegals,
+    // alone or with attorneys (pairs with the broker's paralegal resolution and the runner's scope).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="b748c6e03ecebc28fc98792cf2da3eec4e78bec6"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

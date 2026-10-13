@@ -38,7 +38,9 @@ THE SUBMIT CHECKS, in order, none of which spends anything:
    in the skill's settings and the firm's library matter number;
 6. the firm's litigation config is staged and its monthly budget authored and
    not yet spent this Pacific month;
-7. any attorneys named resolve, one each, against the firm's authored roster;
+7. any attorneys named resolve, one each, against the firm's authored roster,
+   and any paralegals named against its ``paralegals`` list (both named: a
+   matter must match each);
 8. no unfinished job for the same scope, and this email (or this Pacific
    date's scheduled run) has not already queued one (re-checked in the
    ledger's write transaction).
@@ -65,7 +67,9 @@ from .litigation_intake import (
     initiation_allows,
     monthly_budget_cents,
     operator_library_number,
+    paralegal_roster,
     resolve_attorneys,
+    resolve_paralegals,
     scheduled_recipients,
     settings_of,
     skill_entry,
@@ -120,6 +124,13 @@ VERBS = (
 )
 
 _REQUEST_KEYS = {"trigger", "requester", "message_ref", "request_text", "scope"}
+#: Scope keys only root may set (resolved ids); a turn names people.
+_STAFF_ID_KEYS = ("attorney_staff_ids", "paralegal_staff_ids")
+#: A turn's named scope: each key -> (roster reader, resolver, envelope key).
+_NAMED_SCOPE = {
+    "attorneys": (attorney_roster, resolve_attorneys, "attorney_staff_ids"),
+    "paralegals": (paralegal_roster, resolve_paralegals, "paralegal_staff_ids"),
+}
 
 
 def pacific_today(now: datetime | None = None) -> date:
@@ -249,8 +260,8 @@ class LitigationVerbs:
         if set(raw) != _REQUEST_KEYS:
             raise EnvelopeError(f"a request envelope carries exactly {sorted(_REQUEST_KEYS)}")
         scope = raw["scope"]
-        if isinstance(scope, dict) and "attorney_staff_ids" in scope and peer_uid != 0:
-            raise PermissionError("staff ids are named by root only; a turn names attorneys")
+        if isinstance(scope, dict) and set(scope) & set(_STAFF_ID_KEYS) and peer_uid != 0:
+            raise PermissionError("staff ids are named by root only; a turn names attorneys or paralegals")
         text = raw["request_text"]
         if isinstance(text, str) and len(text) > MAX_REQUEST_TEXT:
             raise EnvelopeError(f"request_text must be at most {MAX_REQUEST_TEXT} characters")
@@ -354,17 +365,36 @@ class LitigationVerbs:
 
     @staticmethod
     def _resolve_scope(scope_in: Any, firm: dict[str, Any] | None) -> Any:
-        """Named attorneys become staff ids from the firm's roster; any other
-        scope passes through for the envelope check."""
-        if not (isinstance(scope_in, dict) and set(scope_in) == {"attorneys"}):
+        """Named attorneys and paralegals become staff ids from the firm's
+        rosters (both named: the envelope carries both, and a matter must
+        match each); any other scope passes through for the envelope check.
+
+        A name passed on one side that is on NO roster of that side but
+        names exactly one person on the other side's roster is that person,
+        on that side: the rosters are authored lists of different people, so
+        "Irma's files" passed as an attorney is still Irma's files. Unknown on
+        both sides, or ambiguous, refuses with the passed side's sentence."""
+        if not (isinstance(scope_in, dict) and scope_in and set(scope_in) <= set(_NAMED_SCOPE)):
             return scope_in
-        names = scope_in["attorneys"]
-        if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
-            raise _Refused("scope.attorneys must be a list of names; nothing was queued")
-        ids, why = resolve_attorneys(names, attorney_roster(firm))
-        if why:
-            raise _Refused(why)
-        return {"attorney_staff_ids": ids}
+        found: dict[str, set[str]] = {}
+        for key in sorted(scope_in):
+            names = scope_in[key]
+            if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+                raise _Refused(f"scope.{key} must be a list of names; nothing was queued")
+            other = next(k for k in _NAMED_SCOPE if k != key)
+            for name in names:
+                side = key
+                ids, why = _NAMED_SCOPE[key][1]([name], _NAMED_SCOPE[key][0](firm))
+                if why and " is not a" in why:
+                    alt, alt_why = _NAMED_SCOPE[other][1]([name], _NAMED_SCOPE[other][0](firm))
+                    if not alt_why:
+                        side, ids, why = other, alt, None
+                if why:
+                    raise _Refused(why)
+                found.setdefault(_NAMED_SCOPE[side][2], set()).update(ids)
+        if not found:
+            raise _Refused(f"no {'attorney' if 'attorneys' in scope_in else 'paralegal'} was named; nothing was queued")
+        return {k: sorted(v) for k, v in sorted(found.items())}
 
     def _audit_submitted(self, job_id: str, valid: dict[str, Any], cents: int) -> None:
         scope = valid["scope"]
@@ -373,8 +403,13 @@ class LitigationVerbs:
             {
                 "job_id": job_id,
                 "trigger": valid["trigger"],
-                "scope": "all" if scope.get("all") else "attorneys",
+                "scope": "all"
+                if scope.get("all")
+                else "+".join(
+                    n for n, k in (("attorneys", "attorney_staff_ids"), ("paralegals", "paralegal_staff_ids")) if scope.get(k)
+                ),
                 "attorney_count": len(scope.get("attorney_staff_ids") or []),
+                "paralegal_count": len(scope.get("paralegal_staff_ids") or []),
                 "requested_by": valid["requester"],
                 "request_ref": valid["message_ref"],
                 "month_cents_used": cents,
