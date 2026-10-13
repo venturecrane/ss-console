@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 from bin.lib import cron_slots
-from bin.lib.work_health import Config, Item, hhmm, item, meta, parse_ts, span
+from bin.lib.work_health import Config, Item, hhmm, item, meta, parse_ts, reason_token, span, stamped
 
 _BIN = Path(__file__).resolve().parents[1]
 
@@ -159,37 +159,30 @@ def schedule_drift(git_config: dict, deployed: set[tuple[str, str]]) -> dict[str
     }
 
 
-def missed_slot_items(
-    seat: str,
-    rows: list[dict],
-    cfg: Config,
-    now: datetime,
-    boot: Optional[dict],
-    git_config: dict,
-    deployed: Optional[set[tuple[str, str]]],
-) -> list[Item]:
-    """Scheduled runs that did not happen, ONE line per skill (never one per
-    slot), graded only where git and the seat's provisioned schedule AGREE.
-    Where they disagree that is one drift line, not a guess at either grid."""
-    if deployed is None:
-        return [
-            item(
-                seat,
-                "unreadable",
-                "schedule",
-                now,
-                "Could not read which schedule this seat was provisioned with; missed scheduled runs are unchecked.",
-                "Check the customer_configs row for this seat.",
-            )
-        ]
-    drift = schedule_drift(git_config, deployed)
-    graded = [
-        r
-        for r in cron_slots.authored_cron_rows(git_config)
-        if r.wake_policy == "pre_run_decides" and r.skill not in drift and (r.skill, r.schedule) in deployed
-    ]
-    tz = cron_slots.seat_timezone(git_config)
-    slots = cron_slots.expand_slots(graded, tz, now - timedelta(hours=cfg.reconcile_window_hours), now)
+def schedule_adopted_at(synced_at: Optional[str], boot: Optional[dict]) -> Optional[datetime]:
+    """Since when the Machine has run the provisioned schedule, or None when it
+    has not adopted it yet.
+
+    A merge publishes customer.yaml at once (deploy.yml), but the Machine's cron
+    store changes only when it next boots. On 2026-10-13 A&P's new hourly row
+    was published 20:35Z and adopted at the 21:12Z rebuild, and a grid that
+    ignored the gap reported 23 "missed" runs from a schedule the seat had never
+    held. Slots before adoption are not owed."""
+    synced = parse_ts(synced_at)
+    window = cron_slots.boot_window((boot or {}).get("last_heartbeat_ts"), (boot or {}).get("process_uptime_seconds"))
+    booted = window[0] + timedelta(minutes=45) if window else None
+    if synced is None:
+        return booted
+    if booted is None or booted < synced:
+        return None
+    return booted
+
+
+def _missing_by_skill(
+    graded: list, git_config: dict, rows: list[dict], start: datetime, now: datetime, boot: Optional[dict]
+) -> dict[str, list[datetime]]:
+    """Owed slots with neither wake row, grouped by routine."""
+    slots = cron_slots.expand_slots(graded, cron_slots.seat_timezone(git_config), start, now)
     gradable = [x for x in slots if x.fires_at + timedelta(seconds=SLOT_TOLERANCE_S) <= now]
     verdicts = cron_slots.match_slots(gradable, rows, tolerance_s=SLOT_TOLERANCE_S)
     if boot:
@@ -199,6 +192,10 @@ def missed_slot_items(
     for v in verdicts:
         if v.is_missing:
             by_skill.setdefault(v.slot.skill, []).append(v.slot.fires_at)
+    return by_skill
+
+
+def _missed_lines(seat: str, by_skill: dict[str, list[datetime]]) -> list[Item]:
     out = []
     for skill, times in sorted(by_skill.items()):
         times.sort()
@@ -214,6 +211,11 @@ def missed_slot_items(
                 "Check the seat's scheduler; work the firm switched on did not happen.",
             )
         )
+    return out
+
+
+def _drift_lines(seat: str, drift: dict[str, tuple[list[str], list[str]]], now: datetime) -> list[Item]:
+    out = []
     for skill, (authored, provisioned) in sorted(drift.items()):
         if skill == AUTH_PROBE_SKILL:
             continue  # the sign-in check's own "not scheduled" ACTION line already says this
@@ -223,12 +225,64 @@ def missed_slot_items(
                 "schedule_drift",
                 f"{skill}|{authored}|{provisioned}",
                 now,
-                f"Schedule drift for {skill}: authored {authored or 'none'}, the seat runs {provisioned or 'none'}. "
-                "Its runs are not graded until the two agree.",
+                f"Schedule drift for {skill}: authored {', '.join(authored) or 'none'}, the seat runs "
+                f"{', '.join(provisioned) or 'none'}. Its runs are not graded until the two agree.",
                 "Rebuild the seat to adopt the authored schedule, or revert the authoring.",
             )
         )
     return out
+
+
+def missed_slot_items(
+    seat: str,
+    rows: list[dict],
+    cfg: Config,
+    now: datetime,
+    boot: Optional[dict],
+    git_config: dict,
+    deployed: Optional[set[tuple[str, str]]],
+    adopted_at: Optional[datetime] = None,
+    *,
+    adoption_known: bool = True,
+) -> list[Item]:
+    """Scheduled runs that did not happen, ONE line per skill (never one per
+    slot), graded only where git and the seat's provisioned schedule AGREE and
+    only after the Machine booted into it. Disagreement is one drift line."""
+    if deployed is None:
+        return [
+            item(
+                seat,
+                "unreadable",
+                "schedule",
+                now,
+                "Could not read which schedule this seat was provisioned with; missed scheduled runs are unchecked.",
+                "Check the customer_configs row for this seat.",
+            )
+        ]
+    if adoption_known and adopted_at is None:
+        # Published but not yet booted into: nothing on the Machine to grade.
+        return [
+            item(
+                seat,
+                "schedule_drift",
+                "not-adopted",
+                now,
+                "This seat's published schedule is newer than its running Machine (it has not been rebuilt since "
+                "the config changed); scheduled runs are not graded until it is.",
+                "Rebuild the seat so it runs what is published.",
+            )
+        ]
+    drift = schedule_drift(git_config, deployed)
+    graded = [
+        r
+        for r in cron_slots.authored_cron_rows(git_config)
+        if r.wake_policy == "pre_run_decides" and r.skill not in drift and (r.skill, r.schedule) in deployed
+    ]
+    start = now - timedelta(hours=cfg.reconcile_window_hours)
+    if adopted_at is not None:
+        start = max(start, adopted_at)
+    by_skill = _missing_by_skill(graded, git_config, rows, start, now, boot)
+    return _missed_lines(seat, by_skill) + _drift_lines(seat, drift, now)
 
 
 # ---------------------------------------------------------------------------
@@ -415,3 +469,54 @@ def graph_probe_item(seat: str, mailbox: str, error: Optional[str], now: datetim
             page=f"ACTION: {seat} mailbox sign-in is dead",
         )
     ]
+
+
+# ---------------------------------------------------------------------------
+# delivery proof (PR #3152)
+# ---------------------------------------------------------------------------
+
+_PROOF_WORDS = {
+    "proof_missing": "no proof of delivery was recorded",
+    "readback_unproven": "the delivered files could not be read back",
+    "readback_mismatch": "the files on the matter differ from what was built",
+    "review_missing": "the pre-delivery review never ran",
+    "review_held": "the pre-delivery review held it",
+    "dry_run_reported": "a dry run was reported as delivered",
+    "wake_lost": "the delivery wake was lost",
+    "reply_unproven": "the requester's reply is not in Sent Items",
+    "reply_not_in_sent_items": "the requester's reply is not in Sent Items",
+}
+
+
+def delivery_proof_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> list[Item]:
+    """A DELIVERY_PROOF_FAILED row (the seat refused to call a job delivered,
+    or its requester reply never reached Sent Items) is open work until a
+    DELIVERY_PROVEN row for the same job lands after it."""
+    proven: dict[str, datetime] = {}
+    failures: dict[str, tuple[datetime, dict]] = {}
+    for ts, row in stamped(rows):
+        md = meta(row)
+        job_id = str(md.get("job_id") or "")
+        if not job_id:
+            continue
+        if row.get("action_type") == "DELIVERY_PROVEN":
+            proven[job_id] = ts
+        elif row.get("action_type") == "DELIVERY_PROOF_FAILED":
+            failures[job_id] = (ts, md)
+    out: list[Item] = []
+    for job_id, (ts, md) in failures.items():
+        if (job_id in proven and proven[job_id] > ts) or now - ts > timedelta(hours=cfg.ended_job_hours):
+            continue
+        code = reason_token(md.get("code")) or "unknown"
+        lane = cfg.lanes[md["lane"]].label if md.get("lane") in cfg.lanes else str(md.get("lane") or "a")
+        out.append(
+            item(
+                seat,
+                "job_failed",
+                f"proof:{job_id}:{code}",
+                ts,
+                f"The {lane} job {job_id[-8:]} is NOT proven delivered: {_PROOF_WORDS.get(code, code)} ({code}, {hhmm(ts)}).",
+                "Check what the requester actually received before anyone says it was delivered.",
+            )
+        )
+    return out

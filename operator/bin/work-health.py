@@ -142,6 +142,7 @@ class Console:
         self.shortfalls: dict[str, list[dict]] = {}
         self.sentry: dict[str, list[dict]] = {}
         self.personas: dict[str, Optional[str]] = {}
+        self.synced_at: dict[str, Optional[str]] = {}
         self.lane_holds: dict[str, list[dict]] = {}
         try:
             self._load(d1)
@@ -160,8 +161,9 @@ class Console:
             f"WHERE kind = 'lane_unproven' AND job_lane IS NOT NULL AND event_at >= '{week}'"
         ):
             self.lane_holds.setdefault(str(row["customer_slug"]), []).append(row)
-        for row in d1.execute("SELECT customer_slug, personas_json FROM customer_configs"):
+        for row in d1.execute("SELECT customer_slug, personas_json, synced_at FROM customer_configs"):
             self.personas[str(row["customer_slug"])] = row.get("personas_json")
+            self.synced_at[str(row["customer_slug"])] = row.get("synced_at")
         for row in d1.execute(
             "SELECT customer_slug, condition, opened_at FROM fleet_alert_state WHERE status = 'open'"
         ):
@@ -247,7 +249,7 @@ def _operator_items(
     closed = wh.load_closed()
     items = wh.request_items(slug, rows, cfg, now, closed)
     items += wh.job_items(slug, rows, cfg, now, closed, console.lane_holds.get(slug))
-    items += wh.delivery_proof_items(slug, rows, cfg, now)
+    items += src.delivery_proof_items(slug, rows, cfg, now)
     if has_smokeball:
         items += auth.smokeball_auth_items(slug, rows, cfg, now, probe_scheduled=why is None)
         items += auth.probe_not_scheduled_items(slug, now, why=why)
@@ -257,7 +259,8 @@ def _operator_items(
     if config:
         status = console.status.get(slug) or {}
         boot = {k: status.get(k) for k in ("last_heartbeat_ts", "process_uptime_seconds")}
-        items += src.missed_slot_items(slug, rows, cfg, now, boot, config, deployed)
+        adopted = src.schedule_adopted_at(console.synced_at.get(slug), boot)
+        items += src.missed_slot_items(slug, rows, cfg, now, boot, config, deployed, adopted)
     return items + _graph_items(slug, now), resolved_shortfalls + resolved_silent
 
 
@@ -367,7 +370,7 @@ def _ts(value: Optional[str]) -> Optional[datetime]:
     return wh.parse_ts(value) if value else None
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description="Email team@ about the state of the work on every live seat.")
     ap.add_argument("--since", help="previous successful run start (ISO); new = after this")
     ap.add_argument("--state-in", help="previous run's state file ({key: first_seen})")
@@ -384,8 +387,27 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument(
         "--pages-only", action="store_true", help="send ACTION pages but not the digest (deliberate proofs)"
     )
-    args = ap.parse_args(argv)
+    return ap
 
+
+def _evaluate_all(cfg: wh.Config, console: Console, seats: list[str], offline: dict[str, str], now: datetime):
+    """(items, gaps, resolved) over every seat."""
+    items: list[wh.Item] = []
+    gaps: dict[str, list[str]] = {}
+    resolved: dict[str, int] = {}
+    for slug in seats:
+        rows = json.loads(Path(offline[slug]).read_text(encoding="utf-8")) if slug in offline else None
+        seat_items, seat_gaps, seat_resolved = evaluate_seat(slug, cfg, console, now, rows)
+        items += seat_items
+        if seat_resolved:
+            resolved[slug] = seat_resolved
+        if seat_gaps:
+            gaps[slug] = seat_gaps
+    return items, gaps, resolved
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    args = _parser().parse_args(argv)
     now = _ts(args.now) or datetime.now(timezone.utc)
     since = _ts(args.since)
     previous = None
@@ -402,18 +424,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     cfg = wh.load_config()
     console = Console(console_d1.ConsoleD1()) if not offline else Console(_NoD1())
     seats = live_seats(console, args.slug or list(offline))
-    items: list[wh.Item] = []
-    gaps: dict[str, list[str]] = {}
-    resolved: dict[str, int] = {}
-    for slug in seats:
-        rows = json.loads(Path(offline[slug]).read_text(encoding="utf-8")) if slug in offline else None
-        seat_items, seat_gaps, seat_resolved = evaluate_seat(slug, cfg, console, now, rows)
-        items += seat_items
-        if seat_resolved:
-            resolved[slug] = seat_resolved
-        if seat_gaps:
-            gaps[slug] = seat_gaps
-
+    items, gaps, resolved = _evaluate_all(cfg, console, seats, offline, now)
+    items += wh.missed_run_items(since, cfg, now)
     plan = mail.decide(
         items=items,
         seats=seats,

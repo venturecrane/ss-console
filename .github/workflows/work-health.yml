@@ -77,8 +77,11 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -u
-          PREV="$(gh run list --repo "$REPO" --workflow work-health.yml --status success \
-                   --limit 1 --json databaseId,createdAt --jq '.[0] | "\(.databaseId) \(.createdAt)"' || true)"
+          # Evaluating runs only (schedule / dispatch): a pull_request run tests
+          # code and reads no seat, so it must never count as "the last run".
+          PREV="$(gh run list --repo "$REPO" --workflow work-health.yml --status success --limit 20 \
+                   --json databaseId,createdAt,event \
+                   --jq '[.[] | select(.event != "pull_request")][0] | select(. != null) | "\(.databaseId) \(.createdAt)"' || true)"
           ID="${PREV%% *}"
           SINCE="${PREV#* }"
           echo "since=${SINCE}" >> "$GITHUB_OUTPUT"
