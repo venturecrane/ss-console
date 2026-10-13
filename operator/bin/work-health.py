@@ -280,6 +280,7 @@ def send(subject: str, text: str, run_key: str) -> Optional[str]:
         },
     )
     try:
+        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected — the Request's URL is the RESEND_URL https module constant; nothing user-supplied reaches it.
         with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 - the request URL is the RESEND_URL https constant, never input
             payload = json.loads(resp.read() or b"{}")
     except urllib.error.HTTPError as exc:
