@@ -11,6 +11,8 @@ import pytest
 from litigation_testkit import (
     LIBRARY,
     M1,
+    M2,
+    STAFF_B,
     LitSeat,
     ScriptedLit,
     first_text,
@@ -196,3 +198,26 @@ def test_a_missing_file_is_an_integrity_flag_not_absence(tmp_path):
     assert v.verdict == "delivered", v.reason
     final = json.loads((r.data / "final.json").read_text())[0]
     assert any("Answer Other.pdf" in f and "content is missing" in f for f in final["matter_flags"])
+
+
+PARALEGAL = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+
+
+def test_a_paralegal_scope_lists_only_the_matters_she_assists(tmp_path):
+    seat = LitSeat({M1: matter_docs(), M2: matter_docs()})
+    seat.matters[0]["personAssistingStaffs"] = [{"id": PARALEGAL}]
+    seat.matters[1]["personAssistingStaffId"] = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+    r, _ = _run(tmp_path, ScriptedLit(), seat=seat, scope={"paralegal_staff_ids": [PARALEGAL]})
+    v = r.run()
+    assert v.verdict == "delivered", v.reason
+    inv = json.loads((r.data / "inventory.json").read_text())
+    assert inv["listed"] == 1 and [m["id"] for m in inv["matters"]] == [M1]
+
+
+def test_a_paralegal_and_attorney_scope_that_matches_nothing_holds(tmp_path):
+    seat = LitSeat({M1: matter_docs()})
+    seat.matters[0]["personAssistingStaffs"] = [{"id": PARALEGAL}]
+    scope = {"attorney_staff_ids": [STAFF_B], "paralegal_staff_ids": [PARALEGAL]}
+    r, _ = _run(tmp_path, ScriptedLit(), seat=seat, scope=scope)
+    v = r.run()
+    assert v.verdict == "held" and v.reason.startswith("scope_empty: ")

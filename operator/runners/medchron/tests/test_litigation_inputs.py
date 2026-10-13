@@ -7,8 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from litigation_testkit import LIBRARY, STAFF_A, envelope, firm_data, make_inputs
-from medchron.litigation import baseline, firm as firm_mod, job as job_mod, manifest, vocab
+from litigation_testkit import LIBRARY, STAFF_A, STAFF_B, envelope, firm_data, make_inputs
+from medchron import arrivals
+from medchron.litigation import baseline, firm as firm_mod, inventory, job as job_mod, manifest, vocab
 
 
 def _job(**over):
@@ -22,6 +23,53 @@ def test_a_good_envelope_parses_both_scopes():
     assert j2.attorney_staff_ids == (STAFF_A,) and not j2.scope_all
     s = _job(trigger="scheduled", message_ref="scheduled:2026-10-08", request_text="")
     assert s.trigger == "scheduled"
+    assert j.paralegal_staff_ids == () and j2.paralegal_staff_ids == ()
+
+
+def test_a_paralegal_scope_parses_alone_and_with_attorneys():
+    p = _job(scope={"paralegal_staff_ids": [STAFF_B.upper()]})
+    assert p.paralegal_staff_ids == (STAFF_B,) and p.attorney_staff_ids == () and not p.scope_all
+    both = _job(scope={"attorney_staff_ids": [STAFF_A], "paralegal_staff_ids": [STAFF_B]})
+    assert both.attorney_staff_ids == (STAFF_A,) and both.paralegal_staff_ids == (STAFF_B,)
+
+
+def _row(staff, *assist_ids, single=None):
+    return {
+        "staff_id": staff,
+        "assisting_ids": arrivals.assisting_ids(
+            {"personAssistingStaffId": single, "personAssistingStaffs": [{"id": a} for a in assist_ids]}
+        ),
+    }
+
+
+def test_the_scope_filter_ands_attorney_and_paralegal():
+    a, b, p, q = STAFF_A, STAFF_B, "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+    rows = {
+        "a-p": _row(a, p),
+        "a-q": _row(a, q),
+        "b-p-single": _row(b, single=p.upper()),
+        "b-none": _row(b),
+    }
+
+    def kept(staff=(), assist=(), everything=False):
+        return sorted(k for k, m in rows.items() if inventory.in_scope(m, staff, everything, assist))
+
+    assert kept(everything=True) == sorted(rows)
+    assert kept(staff=(a,)) == ["a-p", "a-q"]
+    assert kept(assist=(p,)) == ["a-p", "b-p-single"]
+    assert kept(staff=(a, b), assist=(p,)) == ["a-p", "b-p-single"]
+    assert kept(staff=(a,), assist=(p,)) == ["a-p"]
+    assert kept() == []
+
+
+def test_assisting_ids_reads_every_shape_once():
+    row = {
+        "personAssistingStaffId": STAFF_A.upper(),
+        "personAssistingStaffs": [{"id": STAFF_A}, {"id": STAFF_B}, {"href": "x"}],
+        "personAssistingStaffIds": [STAFF_B, ""],
+    }
+    assert arrivals.assisting_ids(row) == [STAFF_B, STAFF_A]
+    assert arrivals.assisting_ids({"personAssistingStaffId": None, "personAssistingStaffs": []}) == []
 
 
 @pytest.mark.parametrize(
@@ -34,6 +82,10 @@ def test_a_good_envelope_parses_both_scopes():
         ({"scope": {"attorney_staff_ids": []}}, "scope"),
         ({"scope": {"all": False}}, "scope"),
         ({"scope": {"attorney_staff_ids": ["Chris"]}}, "scope"),
+        ({"scope": {"paralegal_staff_ids": []}}, "scope"),
+        ({"scope": {"paralegal_staff_ids": ["Irma"]}}, "scope"),
+        ({"scope": {"all": True, "paralegal_staff_ids": [STAFF_A]}}, "scope"),
+        ({"scope": {"paralegals": ["Irma"]}}, "scope"),
         ({"trigger": "scheduled", "message_ref": "<x@y>"}, "scheduled"),
         ({"request_text": ""}, "request_text"),
         ({"file_to_matter_id": "nope"}, "filing matter"),
@@ -66,6 +118,7 @@ def test_the_firm_config_loads_and_the_validator_cli_answers(tmp_path, capsys):
         ({"surprise": 1}, "unknown key"),
         ({"monthly_budget_usd": 10.0}, "monthly_budget_usd"),
         ({"attorneys": {"Alpha": "not-a-uuid"}}, "attorneys.Alpha"),
+        ({"paralegals": {"Beta": "not-a-uuid"}}, "paralegals.Beta"),
         ({"models": {"read": "m"}}, "models"),
         ({"timezone": "Mars/Base"}, "timezone"),
     ],

@@ -71,6 +71,19 @@ def test_scope_keys_are_order_free() -> None:
     a = validate_envelope(_env(scope={"attorney_staff_ids": [STAFF, LIBRARY]}))["scope"]
     b = validate_envelope(_env(scope={"attorney_staff_ids": [LIBRARY, STAFF]}))["scope"]
     assert scope_key(a) == scope_key(b) != "all"
+    assert scope_key(a) == "staff:" + ",".join(sorted([STAFF, LIBRARY]))  # the key earlier rows carry
+
+
+def test_a_paralegal_scope_validates_and_keys_apart() -> None:
+    p = validate_envelope(_env(scope={"paralegal_staff_ids": [STAFF.upper()]}))["scope"]
+    assert p == {"paralegal_staff_ids": [STAFF.lower()]}
+    both = validate_envelope(_env(scope={"paralegal_staff_ids": [STAFF], "attorney_staff_ids": [LIBRARY]}))["scope"]
+    atty = validate_envelope(_env(scope={"attorney_staff_ids": [LIBRARY]}))["scope"]
+    keys = {scope_key(p), scope_key(both), scope_key(atty), scope_key({"all": True})}
+    assert len(keys) == 4 and scope_key(both) == f"staff:{LIBRARY.lower()}|paralegal:{STAFF.lower()}"
+    for bad in ({"paralegal_staff_ids": []}, {"paralegals": ["Irma"]}, {"all": True, "paralegal_staff_ids": [STAFF]}):
+        with pytest.raises(EnvelopeError):
+            validate_envelope(_env(scope=bad))
 
 
 def test_submit_writes_the_row_then_the_queue_file(ledger) -> None:

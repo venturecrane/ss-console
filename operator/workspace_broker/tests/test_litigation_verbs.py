@@ -26,6 +26,8 @@ AGENT_UID = 10000
 LIBRARY = "1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23"
 ATTORNEY_A = "11111111-2222-3333-4444-555555555555"
 ATTORNEY_B = "66666666-7777-8888-9999-000000000000"
+PARALEGAL_P = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"
+PARALEGAL_Q = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb"
 ADMIN = "admin@firm.example"
 REF = "<CA1x2y3z@mail.firm.example>"
 FIXED_NOW = datetime(2026, 10, 8, 14, 0, tzinfo=timezone.utc)  # 07:00 Pacific, Oct 8
@@ -65,7 +67,10 @@ per_job_cap_usd: 500
 attorneys:
   Avery Stone: '{a}'
   Blake Stone: '{b}'
-""".format(budget="{budget}", a=ATTORNEY_A, b=ATTORNEY_B)
+paralegals:
+  Dana Field: '{p}'
+  Ellis Ng: '{q}'
+""".format(budget="{budget}", a=ATTORNEY_A, b=ATTORNEY_B, p=PARALEGAL_P, q=PARALEGAL_Q)
 
 
 def _yaml(manual="true", scheduled="true", enabled="true", recipients=ADMIN, cron=" []", library=LIBRARY) -> str:
@@ -181,8 +186,64 @@ def test_an_ambiguous_or_unknown_attorney_is_refused(seat) -> None:
     assert queued(queue) == []
 
 
+def test_a_named_paralegal_alone_and_with_attorneys_resolves(seat) -> None:
+    broker, db, _, queue, _ = seat
+    out = submit(broker, scope={"paralegals": ["Dana's"]})
+    assert out["accepted"] is True
+    assert json.loads(queued(queue)[0].read_text())["scope"] == {"paralegal_staff_ids": [PARALEGAL_P]}
+    out = submit(
+        broker,
+        scope={"paralegals": ["Dana"], "attorneys": ["Avery", "Blake"]},
+        message_ref="<both@mail.firm.example>",
+    )
+    assert out["accepted"] is True
+    scopes = [json.loads(p.read_text())["scope"] for p in queued(queue)]
+    assert {"attorney_staff_ids": sorted([ATTORNEY_A, ATTORNEY_B]), "paralegal_staff_ids": [PARALEGAL_P]} in scopes
+    metas = [m for k, m in audit_rows(db) if k == "LITIGATION_JOB_SUBMITTED"]
+    assert [(m["scope"], m["attorney_count"], m["paralegal_count"]) for m in metas] == [
+        ("paralegals", 0, 1),
+        ("attorneys+paralegals", 2, 1),
+    ]
+
+
+def test_a_name_on_only_the_other_roster_lands_on_that_side(seat) -> None:
+    broker, _, _, queue, _ = seat
+    out = submit(broker, scope={"attorneys": ["Dana"]})
+    assert out["accepted"] is True
+    out = submit(broker, scope={"paralegals": ["Avery"]}, message_ref="<swapped@mail.firm.example>")
+    assert out["accepted"] is True
+    scopes = sorted(json.dumps(json.loads(p.read_text())["scope"]) for p in queued(queue))
+    assert scopes == sorted(
+        [json.dumps({"paralegal_staff_ids": [PARALEGAL_P]}), json.dumps({"attorney_staff_ids": [ATTORNEY_A]})]
+    )
+
+
+def test_an_unknown_paralegal_is_refused_in_a_sentence(seat) -> None:
+    broker, _, _, queue, _ = seat
+    out = submit(broker, scope={"paralegals": ["Irma"], "attorneys": ["Avery"]})
+    assert out["accepted"] is False
+    assert out["reason"].startswith('"Irma" is not a paralegal on the firm\'s list (the list: Dana Field, Ellis Ng)')
+    assert queued(queue) == []
+
+
+def test_a_firm_wide_job_underway_does_not_block_a_paralegal_scope(seat) -> None:
+    broker, _, _, queue, _ = seat
+    assert submit(broker)["accepted"] is True
+    out = submit(broker, scope={"paralegals": ["Dana"]}, message_ref="<para@mail.firm.example>")
+    assert out["accepted"] is True, out
+    out = submit(
+        broker, scope={"paralegals": ["Dana"], "attorneys": ["Avery"]}, message_ref="<paraatty@mail.firm.example>"
+    )
+    assert out["accepted"] is True
+    out = submit(broker, scope={"paralegals": ["Dana Field"]}, message_ref="<paratwo@mail.firm.example>")
+    assert out["accepted"] is False and "already underway" in out["reason"]
+    assert len(queued(queue)) == 3
+
+
 def test_a_turn_may_not_name_staff_ids_but_root_may(seat) -> None:
     broker, _, _, _, _ = seat
+    with pytest.raises(PermissionError):
+        submit(broker, scope={"paralegal_staff_ids": [PARALEGAL_P]})
     with pytest.raises(PermissionError):
         submit(broker, scope={"attorney_staff_ids": [ATTORNEY_A]})
     out = submit(broker, pid=1, uid=0, scope={"attorney_staff_ids": [ATTORNEY_A]})

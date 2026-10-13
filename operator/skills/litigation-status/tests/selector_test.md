@@ -6,13 +6,15 @@ near-neighbors?
 
 ## Synthetic queries (each selects this skill, REQUEST mode)
 
-| Query (from a Named Administrator)                                       | Scope                   |
-| ------------------------------------------------------------------------ | ----------------------- |
-| "Send me a fresh litigation status list."                                | every case              |
-| "Can I get the litigation case review list?"                             | every case              |
-| "Which of our complaints are filed, served and answered? Need the list." | every case              |
-| "The litigation list for Pat's cases, please."                           | `attorneys: ["Pat"]`    |
-| "Litigation status for Pat Doe and Sam Roe."                             | `attorneys` (two names) |
+| Query (from a Named Administrator)                                       | Scope                                               |
+| ------------------------------------------------------------------------ | --------------------------------------------------- |
+| "Send me a fresh litigation status list."                                | every case                                          |
+| "Can I get the litigation case review list?"                             | every case                                          |
+| "Which of our complaints are filed, served and answered? Need the list." | every case                                          |
+| "The litigation list for Pat's cases, please."                           | `attorneys: ["Pat"]`                                |
+| "Litigation status for Pat Doe and Sam Roe."                             | `attorneys` (two names)                             |
+| "The litigation status list for Dana's files, please."                   | `paralegals: ["Dana"]`                              |
+| "How can I have it only do Dana's case files for Pat/Sam?"               | `paralegals: ["Dana"]`, `attorneys: ["Pat", "Sam"]` |
 
 ## Boundary (should NOT select this skill)
 
@@ -30,7 +32,8 @@ near-neighbors?
 
 - A sender who is not a Named Administrator: a polite decline naming the
   reservation; nothing submitted.
-- An attorney name the broker cannot place: the broker's sentence, relayed.
+- An attorney or paralegal name the broker cannot place: the broker's
+  sentence, relayed.
 - A forwarded or quoted request: nothing submitted.
 
 ## Result

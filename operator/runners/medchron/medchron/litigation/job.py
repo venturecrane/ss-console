@@ -6,7 +6,10 @@ The envelope (the broker's ``litigation_job_submit`` writes exactly this)::
 
     {"kind": "litigation", "job_id": ULID, "trigger": "request"|"scheduled",
      "requester": email, "message_ref": str, "request_text": str,
-     "scope": {"attorney_staff_ids": [uuid, ...]} | {"all": true},
+     "scope": {"all": true}
+            | {"attorney_staff_ids": [uuid, ...]}
+            | {"paralegal_staff_ids": [uuid, ...]}
+            | {"attorney_staff_ids": [...], "paralegal_staff_ids": [...]},
      "file_to_matter_id": uuid, "file_to_matter_number": str, "folder_name": str}
 
 Re-validated here (the broker's package is not on the runner's venv): the
@@ -55,6 +58,9 @@ class LitigationJob:
     month_cents_used: int
     per_job_cap_usd: float | None = None
     monthly_budget_usd: float | None = None
+    #: Person Assisting staff ids (a paralegal's files). With attorney ids
+    #: too, a matter must match both; empty when no paralegal was named.
+    paralegal_staff_ids: tuple[str, ...] = ()
 
     @property
     def data(self) -> Path:
@@ -68,14 +74,27 @@ def _str(data: dict[str, Any], key: str, *, empty_ok: bool = False) -> str:
     return v.strip()
 
 
-def _scope(raw: Any) -> tuple[tuple[str, ...], bool]:
+SCOPE_ID_KEYS = ("attorney_staff_ids", "paralegal_staff_ids")
+
+
+def _ids(raw: Any) -> tuple[str, ...] | None:
+    if isinstance(raw, list) and raw and all(isinstance(i, str) and _UUID.match(i) for i in raw):
+        return tuple(dict.fromkeys(i.lower() for i in raw))
+    return None
+
+
+def _scope(raw: Any) -> tuple[tuple[str, ...], bool, tuple[str, ...]]:
+    """(attorney ids, every matter, paralegal ids)."""
     if raw == {"all": True}:
-        return (), True
-    if isinstance(raw, dict) and set(raw) == {"attorney_staff_ids"}:
-        ids = raw["attorney_staff_ids"]
-        if isinstance(ids, list) and ids and all(isinstance(i, str) and _UUID.match(i) for i in ids):
-            return tuple(dict.fromkeys(i.lower() for i in ids)), False
-    raise LitigationJobError('scope must be {"attorney_staff_ids": [uuid, ...]} (non-empty) or {"all": true}')
+        return (), True, ()
+    if isinstance(raw, dict) and raw and set(raw) <= set(SCOPE_ID_KEYS):
+        got = {k: _ids(raw[k]) for k in raw}
+        if all(v is not None for v in got.values()):
+            return got.get("attorney_staff_ids") or (), False, got.get("paralegal_staff_ids") or ()
+    raise LitigationJobError(
+        'scope must be {"all": true} or non-empty staff id lists under "attorney_staff_ids", '
+        '"paralegal_staff_ids" or both'
+    )
 
 
 def _cap(data: dict[str, Any], key: str) -> float | None:
@@ -103,7 +122,7 @@ def parse(data: Any, job_dir: Path) -> LitigationJob:
     if trigger == "scheduled" and not _SCHEDULED_REF.match(ref):
         raise LitigationJobError("a scheduled job's message_ref is scheduled:<YYYY-MM-DD>")
     text = _str(data, "request_text", empty_ok=(trigger == "scheduled"))
-    ids, everything = _scope(data.get("scope"))
+    ids, everything, paralegals = _scope(data.get("scope"))
     fid, fnum = data.get("file_to_matter_id"), data.get("file_to_matter_number")
     if not (isinstance(fid, str) and _UUID.match(fid) and isinstance(fnum, str) and _NUMBER.match(fnum)):
         raise LitigationJobError("file_to_matter_id and file_to_matter_number must name the filing matter")
@@ -131,6 +150,7 @@ def parse(data: Any, job_dir: Path) -> LitigationJob:
         month_cents_used=cents,
         per_job_cap_usd=_cap(data, "per_job_cap_usd"),
         monthly_budget_usd=_cap(data, "monthly_budget_usd"),
+        paralegal_staff_ids=paralegals,
     )
 
 

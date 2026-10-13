@@ -5,7 +5,9 @@ and every file on each. $0, read-only.
   leads excluded), paged with Offset until a short page, the way the
   statute-watch pull reads them; a listing that does not parse refuses the job
   rather than passing a partial list for a whole one.
-* Scope is the envelope's: the staff ids responsible, or every matter.
+* Scope is the envelope's: the staff ids responsible, the staff ids assisting
+  (Smokeball's Person Assisting: a paralegal's files), both (a matter must
+  match each side named), or every matter.
 * A matter is a litigation matter when at least ``min_court_hits`` of its file
   names read as court papers (``court_paper_patterns``), or when an earlier run
   already tracked it (it stays on the list until a person closes it).
@@ -46,8 +48,22 @@ def court_hits(files: list[dict[str, Any]], firm: LitigationFirm) -> int:
     return sum(1 for f in files if not f.get("deleted") and any(p.search(str(f.get("name") or "")) for p in rx))
 
 
-def in_scope(matter: dict[str, Any], staff_ids: tuple[str, ...], everything: bool) -> bool:
-    return everything or matter["staff_id"] in staff_ids
+def in_scope(
+    matter: dict[str, Any],
+    staff_ids: tuple[str, ...],
+    everything: bool,
+    paralegal_ids: tuple[str, ...] = (),
+) -> bool:
+    """Every matter, or one matching EACH side the job names: its responsible
+    attorney among ``staff_ids`` when any are named, AND one of its Person
+    Assisting among ``paralegal_ids`` when any are named."""
+    if everything:
+        return True
+    if not staff_ids and not paralegal_ids:
+        return False
+    if staff_ids and matter["staff_id"] not in staff_ids:
+        return False
+    return not paralegal_ids or bool(set(matter.get("assisting_ids") or ()) & set(paralegal_ids))
 
 
 def build(
@@ -62,7 +78,7 @@ def build(
     listed = [
         m
         for m in open_matters(seat, list(firm.get("matter_statuses")))
-        if in_scope(m, job.attorney_staff_ids, job.scope_all)
+        if in_scope(m, job.attorney_staff_ids, job.scope_all, job.paralegal_staff_ids)
     ]
     log(f"{len(listed)} open matters in scope")
     files_dir = data / "files"

@@ -14,7 +14,10 @@ The counts and the workbook's file name are the whole of the facts.
   prepared, so nothing new was queued."
 - **Not a Named Administrator.** A sentence naming the reservation and who at
   the firm can ask. Nothing is submitted.
-- **Attorney unclear.** One question: which attorney's cases the email means.
+- **Attorney or paralegal unclear.** One question: whose cases or files the
+  email means.
+- **A name the broker cannot place.** Its sentence, which names the firm's
+  list: '"Pat" is not a paralegal on the firm's list (the list: ...)'.
 - **Asked to schedule it.** The weekday list is switched on by the firm
   through SMD; the one list asked for now is queued as usual.
 

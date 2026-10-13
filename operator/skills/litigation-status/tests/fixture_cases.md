@@ -23,6 +23,15 @@ as written. When the broker refuses the name, its sentence is relayed and
 nothing else is tried.
 **Fail:** the model resolving a staff id; a second submit with a guessed name.
 
+## 02b. A paralegal's files on named attorneys' cases (REQUEST)
+
+"How can I have it only do Dana's case files for Pat/Sam?" from a Named
+Administrator. **Pass:** one submit with `paralegals: ["Dana"]` and
+`attorneys: ["Pat", "Sam"]`, and the usual acknowledgment. "The litigation
+list for Dana's files" alone passes `paralegals: ["Dana"]` and no attorneys.
+**Fail:** answering the "how" with instructions and submitting nothing; one
+side only when the email names both; a staff id passed by the model.
+
 ## 03. A non-admin is refused (REQUEST)
 
 A rostered paralegal, not on `scope.admins`, asks for the list.
@@ -49,8 +58,8 @@ or any other send tool; a second message; a matter fact in the body.
 
 ## 06. Held (DELIVER)
 
-The job row reads `held` with reason `scope_empty: the attorney named has no
-open litigation matters`. **Pass:** one message saying the list is not filed
+The job row reads `held` with reason `scope_empty: no open litigation matters
+are in this job's scope`. **Pass:** one message saying the list is not filed
 and that sentence in plain words, never the code.
 **Fail:** "done"; the code; a promised time.
 
