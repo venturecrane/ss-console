@@ -19,10 +19,19 @@
 #   document-drafter.discovery_set  three sets delivered 10-12/10-13, but the
 #       10-12 set carried a false declaration and was withdrawn; the lane was
 #       rebuilt by ss#3137 (pre-delivery review, one document per set,
-#       pleading paper). The rebuilt lane proves itself on its first request.
-#   document-drafter.(discovery_response|memo|depo_outline)  never run here.
-#   litigation-status  never run on this seat's job ledger (zero rows); the
-#       first status list ran off-seat, and the job lane (ss#3100) has not.
+#       pleading paper). The rebuilt lane is proved by a proof run of a real
+#       past request (`lane-proof dry-run <finished job>`), then accepted.
+#   document-drafter.(discovery_response|memo|depo_outline)  no delivery here
+#       at the census.
+#   litigation-status  NOT YET EVIDENCE, not "never run": the census
+#       (vfy_01M4V168KX39PHM10KG1K7RVV6) read the ledger before the lane's first
+#       on-seat job finished (01M4V2G68R1MSHCAD1BJSXZY0G, running since
+#       2026-10-13T16:46Z). A job in flight proves nothing yet; when it
+#       delivers clean and is read, it is added here with its id.
+#
+# A census row count is only the rows that existed at its timestamp. A lane
+# with no delivered job is "no evidence yet", never "never run": check the
+# ledger for an in-flight job before saying more.
 #
 # Revocations go under `revoked:` and win over every runtime proof until this
 # file changes (a runtime `medchron lane-proof revoke` is the faster, undoable

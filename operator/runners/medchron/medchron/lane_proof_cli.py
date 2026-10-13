@@ -2,8 +2,10 @@
 on the seat (``operator/bin/lane-proof.sh`` wraps it from a laptop).
 
 * ``status``     the proven set, the jobs waiting on a proof, recent proof runs.
-* ``dry-run ID`` ask the held job's lane for a proof run; ``--wait`` polls for
-                 its result and prints it.
+* ``dry-run ID`` ask the job's lane for a proof run of it: a held job, or a
+                 FINISHED one whose job dir still keeps its envelope (prove a
+                 lane on a real past request before the firm next asks);
+                 ``--wait`` polls for its result and prints it.
 * ``accept ID --evidence vfy_... --by NAME``
                  record the lane proven, from that job's latest PASSED proof
                  run, naming the verify id of SMD reading its artifacts. The
@@ -42,10 +44,26 @@ QUEUES = {
 }
 
 
-def _lane_of(run_dir: Path, job_id: str) -> str | None:
+#: Each daemon lane's job dirs (a finished job's envelope, kept 72 h).
+JOBS = {
+    "medchron": "jobs",
+    "demand": "demand-jobs",
+    "drafting": "drafting-jobs",
+    "litigation": "litigation-jobs",
+    "negotiation": "negotiation-jobs",
+}
+
+
+def _lane_of(run_dir: Path, job_id: str, *, finished: bool = False) -> str | None:
+    """The lane holding the job: queued (waiting), or with ``finished`` a job
+    dir that still keeps its envelope (a proactive proof of a real request)."""
     for lane, q in QUEUES.items():
         if (run_dir / q / f"{job_id}.json").is_file():
             return lane
+    if finished:
+        for lane, j in JOBS.items():
+            if (run_dir / j / job_id / "envelope.json").is_file():
+                return lane
     return None
 
 
@@ -75,9 +93,9 @@ def _status(run_dir: Path) -> int:
 
 
 def _dry_run(run_dir: Path, job_id: str, wait: float) -> int:
-    lane = _lane_of(run_dir, job_id)
+    lane = _lane_of(run_dir, job_id, finished=True)
     if lane is None:
-        print(f"no queued envelope {job_id} in any lane; only a waiting job can be proof-run")
+        print(f"no envelope for {job_id}: neither waiting in a queue nor kept in a job dir (wiped at 72 h)")
         return 2
     marker = proof_run.request(run_dir / QUEUES[lane], job_id)
     print(f"proof run requested: {lane} job {job_id} ({marker.name}); the lane runs it when it is idle")

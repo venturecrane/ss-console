@@ -67,6 +67,16 @@ prove its own lanes.
 7. **Write it down.** Add the lane to the seat's `lane-proofs.yaml` with the
    job id, the date and the verify id, in a PR, so a recreated volume keeps it.
 
+## Proving a lane before the firm asks
+
+Do not wait for a client request to find out whether a lane passes. `dry-run`
+also takes a FINISHED job of the lane whose job dir still keeps its envelope
+(job dirs are wiped 72 h after they end): the twin runs that real request again,
+nothing is filed or emailed, the finished job's row and dir are untouched, and
+no allowance is used. Pick the most recent real request of that kind, read the
+artifacts, and `accept` on a pass. The next request of that kind then runs
+straight through.
+
 ## Undoing a proof
 
 `operator/bin/lane-proof.sh <slug> revoke <key> --why "..." --by <you>`: new

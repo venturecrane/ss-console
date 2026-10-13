@@ -276,11 +276,30 @@ def test_accept_needs_a_passed_proof_and_a_verify_id_then_the_job_runs_live(lane
     assert lane_proof.holds(d.run_dir) == []
 
 
-def test_a_proof_of_a_job_not_waiting_is_refused(lane):
+def test_a_proof_of_a_job_with_no_envelope_anywhere_is_refused(lane):
     d, _client = lane
     proof_run.request(d.queue, A)
     d.tick()
     assert proof_run.results(d.run_dir)[-1]["status"] == "refused"
+
+
+def test_a_finished_real_request_can_be_proved_again_without_touching_it(lane):
+    """The proactive proof: a delivered job's own envelope, run again in the
+    twin tree. Its job dir, its ledger row and the firm's matter are untouched."""
+    d, client = lane
+    _authored(d.run_dir, {"demand-letter-drafter": {"evidence": "x"}})
+    _submit(d, client, B)
+    assert d.tick() == "delivered"  # an ordinary live job, proven lane
+    before = (list(client.records), (d.jobs / B / "daemon.json").read_text(), (d.run_dir / "FILED").read_text())
+    lane_proof.append_event(d.run_dir, {"event": "revoked", "key": "demand-letter-drafter"})
+    assert _cli(d.run_dir, "dry-run", B) == 0  # found in its job dir, not the queue
+    d.tick()
+    res = proof_run.results(d.run_dir)[-1]
+    assert res["status"] == "passed" and res["job_id"] == B
+    after = (list(client.records), (d.jobs / B / "daemon.json").read_text(), (d.run_dir / "FILED").read_text())
+    assert after == before
+    assert _cli(d.run_dir, "accept", B, evidence=VFY, by="smd") == 0
+    assert lane_proof.load(d.run_dir).is_proven("demand-letter-drafter")
 
 
 def test_judge_needs_every_verdict_to_be_dry_run():
