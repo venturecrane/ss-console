@@ -320,6 +320,10 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "MEDCHRON_JOB_FAILED",
         # The verified reply binding's verdicts (operator/workspace_broker/reply_binding.py).
         "REPLY_BINDING",
+        # Proven delivery (operator/workspace_broker/delivery_proof.py): a job whose
+        # delivery could not be proven (paged), and the evidence a delivered one rests on.
+        "DELIVERY_PROOF_FAILED",
+        "DELIVERY_PROVEN",
         # The demand job (gap audit + draft demand), same shape as the chronology's:
         # one broker-written row per transition (operator/workspace_broker/demand_verbs.py).
         "DEMAND_JOB_SUBMITTED",

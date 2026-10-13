@@ -61,6 +61,7 @@ from .extract import MECHANICAL_METHODS, METHOD_XLSX_OPERATOR
 from .expense_ledger import classify_against_ledger, read_whole_ledger, row_amount
 from .letter_pages import FILED_PAGES, SCANNED_PAGES, PageReadError
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML, find_folder_id
+from .readback import MISMATCH, confirmed, prove_file, shortfall
 from .resolution_token import ResolutionRefused
 from .resolution_token import consume as consume_resolution
 from .resolution_token import verify as verify_resolution
@@ -398,7 +399,29 @@ def _file_invoice(client: Any, matter_id: str, file_name: str, blob: bytes, cfg:
         result = client.add_file(matter_id, file_name, blob, folder_id=folder_id)
     except Exception as exc:  # noqa: BLE001 - the expense already exists; the failure is reported, never raised
         return {"filed": False, "error": f"{exc.__class__.__name__}: {str(exc)[:300]}"}
-    return {"filed": True, "fileId": result.get("fileId"), "folderId": folder_id, "note": note}
+    file_id = result.get("fileId") if isinstance(result, dict) else None
+    proof = prove_file(client, matter_id, file_id, blob, file_name=file_name, folder_id=folder_id)
+    return {"filed": True, "fileId": file_id, "folderId": folder_id, "note": note, "proof": proof}
+
+
+def _verdict(out: dict[str, Any], readback: dict[str, Any], filed: dict[str, Any]) -> dict[str, Any]:
+    """The shared read-back verdict (readback.py, 2026-10-13). ``staged_unverified``
+    and ``staged_file_failed`` used to score ok; both are now
+    ``status: readback_mismatch`` (SMD paged), and so is a PDF that filed but
+    did not read back at its bytes. The stage's own word stays in
+    ``stage_status``. ``readback`` already holds the expense read-back, so the
+    verdict is ``readback_verdict``."""
+    out["stage_status"] = out["status"]
+    if not readback["verified"]:
+        detail = "the expense entry: " + "; ".join(readback.get("problems") or ["not confirmed"])
+        return shortfall(out, MISMATCH, detail, key="readback_verdict")
+    if not filed["filed"]:
+        detail = f"the expense is written but the invoice PDF did not file ({filed.get('error')})"
+        return shortfall(out, MISMATCH, detail, key="readback_verdict")
+    proof = filed.get("proof") or {}
+    if not proof.get("ok"):
+        return shortfall(out, proof["status"], "the invoice PDF: " + proof["detail"], key="readback_verdict")
+    return confirmed(out, "the expense and its invoice PDF read back", key="readback_verdict")
 
 
 def _source_note(sha: str, bounds: tuple[int, int] | None) -> tuple[str | None, bool]:
@@ -480,7 +503,7 @@ def _write_expense(
         "defaulted": cfg.defaulted,
         "ignored_config_keys": list(cfg.ignored_keys),
     }
-    return out
+    return _verdict(out, readback, filed)
 
 
 def _preflight(

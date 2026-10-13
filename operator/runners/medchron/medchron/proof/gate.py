@@ -1,0 +1,86 @@
+"""The daemon's side of proven delivery: a delivered outcome is believed only
+with its proof block.
+
+A verdict saying ``delivered`` is the runner's claim. The block it must carry::
+
+    "proof": {
+        "readback": "confirmed",          # the far end re-read (readback.py)
+        "files": [{name, file_id, size, sha256}]   # what was proven there,
+          | "rows": N                              # or rows written and re-read,
+          | "nothing_to_file": true,               # or a run with nothing to file
+        "review": "passed" | "released" | "code_only",
+        "review_cents": 123,              # what the review cost (P7)
+        "review_model": "model-id",       # "" for a code-only review
+        "alerts": ["review_held", ...],   # optional: codes from CODES to page
+    }
+
+EVERY delivered outcome is checked, not the worst-ranked one: a chronology job
+carries one outcome per unit, and the daemon's rank puts every delivered unit
+level, so checking only the one it picks would let an unproven unit ride on a
+proven sibling (critique of the plan, 2026-10-13).
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from . import PROOF_KEY, REVIEW_PASSED
+
+#: The closed vocabulary of proof-failure codes. Each is a wire token the
+#: overlay heartbeat carries as ``proof:<code>`` (nothing else of a job reaches
+#: the wire); the detail stays in the seat's own audit row.
+CODES = frozenset(
+    {
+        "proof_missing",  # a delivered verdict without a proof block
+        "readback_unproven",  # proof block present, read-back not confirmed
+        "readback_mismatch",  # the far end's bytes / rows are not ours
+        "review_missing",  # delivered with no review status
+        "review_held",  # the pre-delivery review held the job
+        "dry_run_reported",  # a dry run reached the daemon as a verdict
+        "wake_lost",  # the DELIVER turn could not be started
+        "reply_unproven",  # the requester's reply was not seen in Sent Items
+        "reply_not_in_sent_items",  # the broker sent it and could not find it
+    }
+)
+
+
+def problem(outcome: dict[str, Any]) -> tuple[str, str] | None:
+    """``(code, detail)`` when one delivered outcome is not proven, else None."""
+    proof = outcome.get(PROOF_KEY)
+    unit = str(outcome.get("unit") or outcome.get("kind") or "job")
+    if not isinstance(proof, dict):
+        return "proof_missing", f"{unit}: the verdict says delivered and carries no proof block"
+    if proof.get("readback") != "confirmed":
+        return "readback_unproven", f"{unit}: read-back {proof.get('readback')!r}, not confirmed"
+    if not (proof.get("files") or int(proof.get("rows") or 0) > 0 or proof.get("nothing_to_file")):
+        return "readback_unproven", f"{unit}: the proof names nothing it read back"
+    if proof.get("review") not in REVIEW_PASSED:
+        return "review_missing", f"{unit}: review {proof.get('review')!r}"
+    return None
+
+
+def check(outcomes: list[Any]) -> tuple[str, str] | None:
+    """The first unproven delivered outcome's ``(code, detail)``, else None."""
+    for o in outcomes:
+        if isinstance(o, dict) and str(o.get("outcome") or o.get("verdict")) == "delivered":
+            p = problem(o)
+            if p:
+                return p
+    return None
+
+
+def review_cents(outcomes: list[Any]) -> int:
+    """The review spend the outcomes carry, in cents (already inside the job's
+    total; recorded separately so the review's cost is visible per job)."""
+    total = 0
+    for o in outcomes:
+        proof = o.get(PROOF_KEY) if isinstance(o, dict) else None
+        if isinstance(proof, dict):
+            try:
+                total += max(0, int(proof.get("review_cents") or 0))
+            except (TypeError, ValueError):
+                continue
+    return total
+
+
+__all__ = ["CODES", "check", "problem", "review_cents"]

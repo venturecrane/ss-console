@@ -13,6 +13,7 @@ import base64
 import httpx
 import pytest
 
+from fake_files import FileStore, FilesMixin
 from smokeball_connector.client import SmokeballApiError, SmokeballClient, SmokeballWriteError
 
 _UPLOAD_URL = "https://s3.example.com/apiuploads/abc-123?X-Amz-Signature=deadbeef"
@@ -134,15 +135,20 @@ def test_server_add_file_decodes_base64_and_delegates(monkeypatch) -> None:
 
     seen: dict = {}
 
-    class _FakeClient:
+    class _FakeClient(FilesMixin):
+        store = FileStore()
+
         def add_file(self, matter_id, file_name, data, *, folder_id=None):
             seen.update(matter_id=matter_id, file_name=file_name, data=data, folder_id=folder_id)
-            return {"fileId": "f-1", "uploaded": True}
+            return super().add_file(matter_id, file_name, data, folder_id=folder_id)
+
+        def get(self, path, **_params):
+            return self.store.read(path)
 
     monkeypatch.setattr(server, "_get_client", lambda: _FakeClient())
     payload = base64.b64encode(b"hello bytes").decode()
     out = server.add_file("m-2", "note.txt", content_base64=payload, folder_id="fld-1")
-    assert out == {"fileId": "f-1", "uploaded": True}
+    assert out["uploaded"] is True and out["fileId"] and out["readback"] == "confirmed"
     assert seen == {"matter_id": "m-2", "file_name": "note.txt", "data": b"hello bytes", "folder_id": "fld-1"}
 
 
@@ -154,15 +160,20 @@ def test_server_add_file_decodes_base64_and_delegates(monkeypatch) -> None:
 # be model-encoded — the connector encodes text server-side instead.
 
 
-class _RecordingClient:
-    """Captures the bytes handed to the client layer (which is unchanged)."""
+class _RecordingClient(FilesMixin):
+    """Captures the bytes handed to the client layer (which is unchanged), and
+    serves them back to the read-back."""
 
     def __init__(self) -> None:
         self.seen: dict = {}
+        self.store = FileStore()
 
     def add_file(self, matter_id, file_name, data, *, folder_id=None):
         self.seen.update(matter_id=matter_id, file_name=file_name, data=data, folder_id=folder_id)
-        return {"fileId": "f-2", "uploaded": True}
+        return super().add_file(matter_id, file_name, data, folder_id=folder_id)
+
+    def get(self, path, **_params):
+        return self.store.read(path)
 
 
 def test_server_add_file_encodes_content_text_utf8_and_delegates(monkeypatch) -> None:
@@ -174,7 +185,7 @@ def test_server_add_file_encodes_content_text_utf8_and_delegates(monkeypatch) ->
     text = "DRAFT FOR REVIEW\n§ 4.2 — café résumé ✓\n"
     out = server.add_file("m-3", "brief.txt", content_text=text, folder_id="fld-2")
 
-    assert out == {"fileId": "f-2", "uploaded": True}
+    assert out["uploaded"] is True and out["readback"] == "confirmed"
     assert fake.seen["data"] == text.encode("utf-8")
     # round-trips losslessly: no mojibake survives this path
     assert fake.seen["data"].decode("utf-8") == text

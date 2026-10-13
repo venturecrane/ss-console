@@ -207,6 +207,11 @@ export const AUDIT_ACTION_TYPES = [
   'NEGOTIATION_JOB_FAILED',
   'NEGOTIATION_JOB_RESUME_REQUESTED',
   'REPLY_BINDING',
+  // Proven delivery: a job whose delivery could not be proven (SMD is paged),
+  // and the evidence a delivered job rests on. Written by the workspace broker
+  // (delivery_proof.py).
+  'DELIVERY_PROOF_FAILED',
+  'DELIVERY_PROVEN',
   // Case-manager casework: a person's answer to a numbered line about the
   // task list, and a task the Operator closed on the record's evidence.
   // Written by the workspace broker (casework_verbs.py).

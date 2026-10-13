@@ -34,24 +34,37 @@ the firm hears nothing (the broker refuses a failed job's reply), and SMD's
 shortfall alert carries the job. ``review.json`` is the record; a resume reads
 it and holds again without paying twice. SHOULD-FIX and NOTE findings ride
 into the attorney notes.
+
+Since 2026-10-13 the record, the hold and its two ways out are the shared
+``proof.review`` (the domain checks and prompts stay here): a ``redo`` reviews
+again after a fix, and an SMD release files as it stands with every finding,
+the released MUST-FIX ones included, in the attorney notes. A model MUST-FIX
+holds only on a check its prompt defines as MUST-FIX-capable (``HOLD_CHECKS``:
+defined terms, check 4, and the catch-all, check 10, never hold), and the
+review runs on the firm's ``review`` model, else its ``audit`` model, never
+the drafter's own ``compose`` model.
 """
 
 from __future__ import annotations
 
-import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
+from ..proof import review as R
 from . import pleading, render, sets
+from .outcome import DraftingFailed
 
-MUST, SHOULD, NOTE = "MUST-FIX", "SHOULD-FIX", "NOTE"
-GRADES = (MUST, SHOULD, NOTE)
+MUST, SHOULD, NOTE = R.MUST, R.SHOULD, R.NOTE
+GRADES = R.GRADES
 REVIEW_MAX_TOKENS = 32_000
 DISCOVERY_PAPERS_MAX_CHARS = 300_000
-_ROW = re.compile(r"^\s*\|\s*(MUST-FIX|SHOULD-FIX|NOTE)\s*\|(.*)\|\s*$", re.I)
-_VERDICT = re.compile(r"(?im)^\s*VERDICT:\s*(\d+)\s*MUST-FIX\b")
+#: REVIEW_PROMPT's MUST-FIX-capable checks; 4 (defined terms) and 10 (anything
+#: else) never hold, whatever grade the model writes.
+HOLD_CHECKS = (1, 2, 3, 5, 6, 7, 8, 9)
+#: PLACE_PROMPT's; 5 (his own text, flagged) never holds.
+PLACE_HOLD_CHECKS = (1, 2, 3, 4)
 _DECL_2033 = re.compile(r"(?i)declaration\b[^\n]{0,80}2033\.050|2033\.050[^\n]{0,80}declaration")
 _PARA5 = re.compile(r"(?i)contains\s+a\s+total\s+of\s+(\d+)\s+specially\s+prepared")
 _POS = re.compile(r"(?im)^\W*proof of service\W*$")
@@ -61,13 +74,8 @@ _DISCOVERY_PAPER = re.compile(
 )
 
 
-@dataclass
-class Finding:
-    grade: str
-    check: str
-    finding: str
-    cite: str
-    by: str  # "code" or "model"
+#: One finding (grade, check, finding, cite, by): the shared record's shape.
+Finding = R.Finding
 
 
 @dataclass
@@ -142,24 +150,15 @@ The drafting system has finished the documents below. Its drafter wrote end tabl
 OUTPUT: markdown only, the same tables under the same headings the drafter used (one set of tables per document when there are several, under a heading naming the document), then `## Open items from the audit` (a bulleted list, or the single line `None.`). No preamble, no em dashes."""
 
 
-def _rows(text: str) -> list[Finding]:
-    out = []
-    for ln in text.splitlines():
-        m = _ROW.match(ln)
-        if not m:
-            continue
-        cells = [c.strip() for c in m.group(2).split("|")]
-        cells += [""] * (3 - len(cells))
-        grade = m.group(1).upper()
-        check, finding, cite = cells[0], " | ".join(cells[1:-1]) if len(cells) > 3 else cells[1], cells[-1]
-        if grade == MUST and not cite:
-            grade = SHOULD
-        out.append(Finding(grade, check, finding, cite, "model"))
-    return out
+def _rows(text: str, hold_checks: tuple[int, ...] = HOLD_CHECKS) -> list[Finding]:
+    """The model's rows, graded under the closed-list rule (``proof.review``):
+    a MUST-FIX without a citation, or on a check outside ``hold_checks``, is
+    SHOULD-FIX."""
+    return R.parse(text, hold_checks)
 
 
 def complete(text: str) -> bool:
-    return bool(_VERDICT.search(text))
+    return R.complete(text)
 
 
 _SENTINEL = re.compile(r"(?m)^\W*===\s*[A-Z][A-Z ]+[^=\n]*===\s*$")
@@ -379,9 +378,16 @@ def review_user(
 
 
 def run_model(
-    doorway: Any, model: str, system_digest: str, user: str, key: str, prompt: str | None = None
+    doorway: Any,
+    model: str,
+    system_digest: str,
+    user: str,
+    key: str,
+    prompt: str | None = None,
+    hold_checks: tuple[int, ...] = HOLD_CHECKS,
 ) -> list[Finding]:
-    """The model review: one call, retried once when it does not finish."""
+    """The model review: one call, retried once when it does not finish
+    (``proof.review.run_model``), graded under the closed-list rule."""
     from ..demand.gapaudit import output_max
     from .compose import DraftingError
 
@@ -390,20 +396,35 @@ def run_model(
         + "\n\n---\n\n## THE RECORD DIGEST (every cite in it is the record)\n\n"
         + system_digest
     )
-    for attempt in (1, 2):
-        r = doorway.call(
-            "review",
-            model=model,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-            max_tokens=output_max(model, REVIEW_MAX_TOKENS),
-            stream=True,
-            effort="high",
-            custom_id=f"review-{key}-{attempt}",
+    try:
+        return R.run_model(
+            doorway, model, system, user, key, hold_checks, max_tokens=output_max(model, REVIEW_MAX_TOKENS)
         )
-        if r.stop_reason != "max_tokens" and complete(r.text):
-            return _rows(r.text)
-    raise DraftingError("the pre-delivery review did not complete")
+    except R.ReviewIncomplete:
+        raise DraftingError("the pre-delivery review did not complete") from None
+
+
+def model_for(firm: Any) -> str:
+    """The firm's ``review`` model when authored, else its ``audit`` model:
+    never ``compose``, the drafter's own (2026-10-13)."""
+    from ..demand.review import model_for as shared
+
+    return shared(firm)
+
+
+def decide(
+    data: Path, job_dir: Path, fresh: Callable[[], tuple[list[Finding], str]], log: Callable[[str], None]
+) -> dict[str, Any]:
+    """The review's decision for this attempt: SMD's redo or release applied,
+    the review run when there is no record, and a hold raised as
+    ``review_held`` (failed, resumable, nothing filed)."""
+    from ..demand.review import decide as shared
+
+    status, rec = shared(data, job_dir, fresh, lane="drafting")
+    log(f"  review: {rec['must_fix']} must-fix, {rec['should_fix']} should-fix, {rec['notes']} note(s): {status}")
+    if status == "held":
+        raise DraftingFailed(held_reason(rec))
+    return rec
 
 
 def final_notes(
@@ -438,37 +459,19 @@ def final_notes(
     raise DraftingError("the final attorney notes did not complete")
 
 
-def save(data: Path, findings: list[Finding]) -> dict[str, Any]:
-    out = {
-        "must_fix": sum(f.grade == MUST for f in findings),
-        "should_fix": sum(f.grade == SHOULD for f in findings),
-        "notes": sum(f.grade == NOTE for f in findings),
-        "findings": [asdict(f) for f in findings],
-    }
-    tmp = data / ".review.json.tmp"
-    tmp.write_text(json.dumps(out, indent=1), encoding="utf-8")
-    tmp.replace(data / "review.json")
-    return out
+def save(data: Path, findings: list[Finding], model: str = "") -> dict[str, Any]:
+    return R.save(data, findings, model=model, lane="drafting")
 
 
 def load(data: Path) -> dict[str, Any] | None:
-    p = data / "review.json"
-    return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else None
+    return R.load(data)
 
 
-def notes_section(rec: dict[str, Any]) -> list[str]:
-    """The review's SHOULD-FIX and NOTE findings for the attorney notes."""
-    rows = [f for f in rec["findings"] if f["grade"] in (SHOULD, NOTE)]
-    if not rows:
-        return []
-    return ["", "## Independent review before delivery", ""] + [
-        f"- {f['grade']}: {f['finding']}" + (f" ({f['cite']})" if f["cite"] else "") for f in rows
-    ]
+def notes_section(rec: dict[str, Any] | None) -> list[str]:
+    """The review's SHOULD-FIX and NOTE findings for the attorney notes, and
+    the MUST-FIX ones too when SMD released past them."""
+    return R.notes_section(rec)
 
 
 def held_reason(rec: dict[str, Any]) -> str:
-    musts = [f for f in rec["findings"] if f["grade"] == MUST]
-    first = "; ".join(f"{f['check']}: {f['finding']}" for f in musts)
-    return f"review_held: the pre-delivery review found {len(musts)} must-fix finding(s); nothing was filed: {first}"[
-        :480
-    ]
+    return R.held_reason(rec)

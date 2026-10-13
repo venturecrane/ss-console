@@ -49,6 +49,12 @@ runner: the read-back looks for it by name across the index lag, a 0-byte row
 counts as presence (the POST's placeholder) but not as confirmation, and a
 pending name the read-back cannot find at its size holds (exit 2) for a person
 to read the folder. A send failing outright holds the same way.
+
+**Size is not bytes (proven delivery, 2026-10-13).** After the listing reads
+back complete, every file is downloaded by its file id and hashed against the
+manifest (``proof/readback.confirm_files``, one implementation for every
+lane). Only a row proven that way carries ``proven: true``, and the driver
+claims a confirmed read-back only when every row does.
 """
 
 from __future__ import annotations
@@ -59,6 +65,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from ..proof import readback
 from .base import StageRun
 
 READBACK_TRIES = 8
@@ -306,4 +313,46 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
         _note_unresolved(sr, [n for n in short if n in pending], folder_id)
         return 2
     sr.log(f"read-back complete: {len(expected)} file(s) at the expected byte counts in folder {folder_id}")
+    return _prove(sr, seat, matter_id, folder_id, manifest, delivery, delivery_path, pause=pause, tries=tries)
+
+
+def _prove(
+    sr: StageRun,
+    seat: Any,
+    matter_id: str,
+    folder_id: str,
+    manifest: list[dict[str, Any]],
+    delivery: dict[str, Any],
+    delivery_path: Path,
+    *,
+    pause: float,
+    tries: int,
+) -> int:
+    """The bytes, not just the sizes (proven delivery, 2026-10-13): every file
+    downloaded back by its id and its sha256 compared with the manifest's.
+    Name and size cannot tell a file the vendor stored truncated-then-padded or
+    swapped at the same length from ours. Wrong bytes are exit 1 with a
+    ``readback_mismatch:`` line, the stage's LAST (the daemon pages on that
+    prefix, and ``demand/deliver.py`` reports the last line as the reason); a
+    file that cannot be fetched yet is exit 2, the same resumable hold as a
+    short listing. Proven rows gain ``file_id`` and ``proven``; no key is
+    removed, so the demand and drafting lanes' readers are unchanged."""
+    expected = [{"name": m["name"], "sha256": m["sha256"], "bytes": m["bytes"]} for m in manifest]
+    scratch = sr.slug_dir / "runs" / sr.unit.unit / "readback"
+    try:
+        got = readback.confirm_files(
+            seat, matter_id, folder_id, expected, scratch, tries=tries, pause=pause, log=sr.log, sleep=time.sleep
+        )
+    except readback.ReadbackShort as exc:
+        sr.log(f"read-back by hash could not fetch every file yet: {exc}")
+        return 2
+    except readback.ReadbackMismatch as exc:
+        sr.log(f"readback_mismatch: {exc.name}: {exc.why} (folder {folder_id}); nothing further is sent")
+        return 1
+    by_name = {f["name"]: f for f in got["files"]}
+    for row in delivery.get("files") or []:
+        p = by_name.get(str(row.get("name")))
+        if p:
+            row.update({"file_id": p["file_id"], "sha256": p["sha256"], "proven": True})
+    delivery_path.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
     return 0

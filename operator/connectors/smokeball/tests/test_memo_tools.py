@@ -164,6 +164,7 @@ def test_unchanged_on_the_same_day_writes_nothing() -> None:
     assert out == {
         "id": "m1",
         "confirmed": True,
+        "readback": "confirmed",
         "unchanged": True,
         "confirm_detail": "already current; nothing written",
     }

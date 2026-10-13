@@ -136,7 +136,10 @@ def _poll(client: Any, path: str, waits: tuple[float, ...], until: Callable[[dic
     values: dict[str, Any] = {}
     for wait in waits:
         SLEEP(wait)
-        values = layout_values(client.get(path))
+        try:
+            values = layout_values(client.get(path))
+        except Exception:  # noqa: BLE001 - after a write, a failed read-back GET is a mismatch reported by the caller, never a crash (as layout_tools)
+            continue
         if until(values):
             break
     return values

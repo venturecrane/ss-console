@@ -32,6 +32,8 @@ import re
 import time
 from typing import Any
 
+from . import readback
+
 #: Read-back attempts and the pause before each retry (seconds).
 _ATTEMPTS = 3
 _BACKOFF = (0.5, 1.5)
@@ -103,6 +105,13 @@ def _readback(
 
 
 def _with(resp: Any, confirmed: Any, detail: str) -> Any:
-    if isinstance(resp, dict):
-        return {**resp, "confirmed": confirmed, "confirm_detail": detail}
-    return {"response": resp, "confirmed": confirmed, "confirm_detail": detail}
+    """Add ``confirmed`` / ``confirm_detail`` and the shared read-back verdict
+    (readback.py, 2026-10-13): ``False`` became ``status: readback_mismatch``
+    and ``"unknown"`` ``status: link_not_visible``, because the audit plugin
+    never read ``confirmed`` and a memo that did not land paged nobody."""
+    base = resp if isinstance(resp, dict) else {"response": resp}
+    out = {**base, "confirmed": confirmed, "confirm_detail": detail}
+    if confirmed is True:
+        return readback.confirmed(out)
+    status = readback.MISMATCH if confirmed is False else readback.NOT_VISIBLE
+    return readback.shortfall(out, status, f"memo {base.get('id') or '(no id)'}: {detail}")

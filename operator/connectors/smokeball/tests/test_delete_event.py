@@ -122,6 +122,7 @@ def test_confirmed_manifest_deletes_and_reports_the_read_back() -> None:
     assert out["counts"] == {"proposed": 3, "deleted": 3, "pending": 0, "skipped": 0, "failed": 0}
     assert all(d["readback"]["isDeleted"] is True for d in out["deleted"])
     assert out["ref"] == "deleted=3 pending=0 skipped=0 failed=0"
+    assert out["readback"] == "confirmed" and "status" not in out
 
 
 def test_async_delete_is_polled_and_never_resent() -> None:
@@ -135,6 +136,9 @@ def test_still_live_after_every_poll_is_pending() -> None:
     out = event_delete.delete_set(fake, event_delete.prepare(fake, [M1])["events"], sleep=_nosleep)
     assert [p["event_id"] for p in out["pending"]] == ["e1"]
     assert fake.deletes() == ["e1"]
+    # 2026-10-13: a delete still present after the polls pages SMD (it scored ok).
+    assert out["status"] == "readback_mismatch" and "still read present" in out["readback_detail"]
+    assert "Do NOT retry" in out["readback_note"]
 
 
 def test_a_404_read_back_counts_as_gone() -> None:
@@ -229,6 +233,7 @@ def test_a_vendor_refusal_is_reported_per_event_and_the_rest_proceed() -> None:
     out = event_delete.delete_set(fake, manifest, sleep=_nosleep)
     assert [f["event_id"] for f in out["failed"]] == ["e1"]
     assert [d["event_id"] for d in out["deleted"]] == ["e2"]
+    assert out["status"] == "readback_mismatch" and "refused by the vendor" in out["readback_detail"]
 
 
 def test_over_the_cap_refuses_before_any_call() -> None:

@@ -144,6 +144,10 @@ class _Record:
         self.uploads.append((matter_id, file_name, data))
         return {"fileId": "f-new", "matterId": matter_id, "fileName": file_name, "uploaded": True}
 
+    def download_file(self, matter_id: str, file_id: str) -> tuple[dict[str, Any], bytes]:
+        """The read-back's hash leg serves the bytes uploaded (readback.py)."""
+        return {"fileId": file_id}, self.uploads[-1][2]
+
 
 @pytest.fixture
 def signers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -492,6 +496,38 @@ def test_files_under_the_firms_name_and_reports_gaps(record: _Record, monkeypatc
     assert out["same_name_on_matter"] == ["f-old"]
     assert "signer_initials" not in out["facts_used"], "a field the form does not carry is not reported as used"
     assert out["facts_used"]["claim_number"] == "layout Matter/Plaintiffs/InsurancePolicy/Claims/Number"
+    assert out["readback"] == "confirmed"
+
+
+# ---- the read-back (readback.py, 2026-10-13) ----------------------------------
+# A form that never appeared used to come back ``filed_not_visible``, which the
+# audit plugin scored ok. It is now a top-level shortfall that pages SMD, and a
+# form stored with other bytes is caught by the hash.
+
+
+def test_a_form_that_never_appears_is_link_not_visible(record: _Record, monkeypatch: pytest.MonkeyPatch) -> None:
+    _resolves(monkeypatch, FIRST)
+    real_get = record.get
+
+    def hidden(path: str, **params: Any) -> Any:
+        if path == f"/matters/{MATTER}/documents/files/f-new":
+            raise LookupError("404 while materializing")
+        return real_get(path, **params)
+
+    monkeypatch.setattr(record, "get", hidden)
+    out = fl.render_firm_form_letter(MATTER, "first_party_rep", "2026-10-05")
+    assert out["status"] == "link_not_visible" and out["write_status"] == "filed"
+    assert out["fileId"] == "f-new" and "Do NOT retry" in out["readback_note"]
+
+
+def test_a_form_stored_with_other_bytes_is_a_readback_mismatch(
+    record: _Record, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _resolves(monkeypatch, FIRST)
+    monkeypatch.setattr(record, "download_file", lambda _m, _f: ({}, b"PK not the letter"))
+    out = fl.render_firm_form_letter(MATTER, "first_party_rep", "2026-10-05")
+    assert out["status"] == "readback_mismatch"
+    assert "downloaded bytes differ" in out["readback_detail"]
 
 
 def test_the_third_party_letter_files_with_its_own_paragraph_layout(

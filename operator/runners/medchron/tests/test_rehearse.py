@@ -170,7 +170,7 @@ def test_an_undone_external_stage_stops_the_walk_and_never_opens_the_seat(
 ) -> None:
     job_dir, client = _delivered(tmp_path, data_root, firm_config_path, pricing_path)
     sd = data_root / "example-matter"
-    _truncate(sd, "manifest")
+    _truncate(sd, "review")  # the review (paid) sits between manifest and upload
     before = _snapshot(sd)
     copy, outs = _rehearse(job_dir, firm_config_path, pricing_path, client=client, seat_factory=_no_seat)
     o = outs[0]

@@ -31,7 +31,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-from . import letter_pages, vision
+from . import letter_pages, readback, vision
 from .attachment_source import fetch_bytes
 from .extract import METHOD_PYPDF, METHOD_VISION, METHOD_VISION_CACHED
 from .letter_pages import FILED_DOCS, FILED_PAGES, SCANNED_PAGES, PageReadError
@@ -354,9 +354,11 @@ def file_attachment_pages_to_matter(
 
     Returns ``status``: ``filed`` (the range was cut and uploaded; ``fileId``,
     ``fileName``, ``pages`` and ``fromScan`` say what) or ``refused``
-    (``reason`` says why and NOTHING was created). Materialization in
-    Smokeball is async, so a filed document may take a moment to appear; do
-    not re-read to confirm it.
+    (``reason`` says why and NOTHING was created). The tool reads the filed
+    document back itself (by id, size and sha256; ``readback: "confirmed"``);
+    do not re-read to confirm it. When that read-back fails ``status`` is
+    ``link_not_visible`` or ``readback_mismatch``: SMD is alerted, and the
+    pages must NOT be filed again (a retry duplicates the document).
 
     ``document_kind`` is ``"medical"`` for a medical record or a medical bill
     (an imaging report, a provider's statement), and ``"letter"`` for anything
@@ -434,7 +436,10 @@ def file_attachment_pages_to_matter(
         # What opens ``add_medicals_row`` for this letter: the bill this run
         # filed, on the matter it was filed on. See ``letter_pages.FiledDocs``.
         FILED_DOCS.record(matter, file_id, safe_name, first, last, from_scan=from_scan)
-    return {
+    # Read back by id, size and sha256 (readback.py). A shortfall keeps the
+    # pages claimed: the letter may have landed, and filing it again duplicates it.
+    proof = readback.prove_file(_client(), matter, file_id, cut, file_name=safe_name, folder_id=folder.get("id"))
+    out = {
         "status": "filed",
         "created": True,
         "matter_id": matter,
@@ -447,6 +452,7 @@ def file_attachment_pages_to_matter(
         "byteLength": len(cut),
         "file": result,
     }
+    return readback.verdict(out, proof)
 
 
 def _folder_for(matter: str, kind: str) -> dict[str, Any]:

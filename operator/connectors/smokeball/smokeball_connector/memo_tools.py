@@ -443,6 +443,7 @@ def _replace(client: Any, matter_id: str, latest: dict, body: str, sleep: Any) -
             return {
                 "id": memo_id,
                 "confirmed": True,
+                "readback": "confirmed",  # the note just read IS the far end
                 "unchanged": True,
                 "confirm_detail": "already current; nothing written",
             }

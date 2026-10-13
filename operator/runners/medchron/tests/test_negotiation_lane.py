@@ -21,7 +21,7 @@ jd = pathlib.Path(sys.argv[1])
 job = json.loads(jd.joinpath('job.json').read_text())
 assert job['kind'] == 'negotiation' and job['month_cents_used'] == 77 and job['slug'] == 'example', job
 v = {"verdict": "delivered", "stage": "report", "cents": 40, "matters_total": 9, "matters_seeded": 0,
-     "docs_read": 2, "docs_failed": 0, "notices": NOTICES}
+     "docs_read": 2, "docs_failed": 0, "notices": NOTICES, "proof": {"readback": "confirmed", "rows": 1, "review": "code_only", "review_cents": 0}}
 print(json.dumps(v))
 """
 
@@ -41,6 +41,8 @@ class FakeClient:
         if a == "negotiation_job_record":
             self.records.append((req["job_id"], req["state"], req["fields"]))
             return {"ok": True, "notice_ids": self.notice_ids if req["state"] == "delivered" else []}
+        if a.startswith("delivery_"):  # the daemon's proven-delivery verbs (proof/watch.py)
+            return {"ok": True, "replies": []}
         raise AssertionError(f"the negotiation lane speaks only negotiation verbs, not {a}")
 
 

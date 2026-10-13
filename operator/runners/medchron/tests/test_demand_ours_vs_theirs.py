@@ -136,7 +136,8 @@ def test_an_audit_that_cannot_finish_fails_and_a_resume_pays_only_for_it(tmp_pat
     _r, v2, _ = _run(tmp_path, pricing, client)
     assert v2.outcome == "delivered", v2.reason
     again = client.stages()[before:]
-    assert set(again) == {"AUDIT"}  # only the unfinished section's audit; every other stage was on disk
+    # only the unfinished section's audit and the pre-delivery review; every other stage was on disk
+    assert set(again) == {"AUDIT", "REVIEW"}
 
 
 def test_file_side_reasons_still_hold(tmp_path, pricing):

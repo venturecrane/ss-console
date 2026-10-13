@@ -1,13 +1,15 @@
 """`medchron litigate <job_dir>`: one litigation status job, resumable.
 
     inventory -> diff -> fetch -> extract -> read1 -> read2 -> read3
-      -> gates -> parity -> book -> file -> report
+      -> gates -> parity -> book -> review -> file -> report
 
 Every stage records itself in ``data/state.json``; a resume skips finished
 stages, and the per-matter reads resume per matter (``data/m/<id>/readN.json``).
 The run's "today" is frozen on the first attempt, so a resume judges dates the
 way the first attempt did. The lane's state on the volume (``manifest.py``) is
-written only by ``report``, after the workbook is read back.
+written only by ``report``, after the workbook is read back. ``review``
+(2026-10-13, proven delivery) re-reads the built file's bytes against the data
+it was built from before anything is filed (``review.py``).
 """
 
 from __future__ import annotations
@@ -32,7 +34,7 @@ from . import (
     inventory,
     job as job_mod,
 )
-from . import manifest, parity, passes, read, update
+from . import manifest, parity, passes, read, review as review_mod, update
 from .progress import Progress
 from .runbase import RunBase
 from .outcome import REASON, LitigationFailed, LitigationHold, Verdict
@@ -50,6 +52,7 @@ STAGES = (
     "gates",
     "parity",
     "book",
+    "review",
     "file",
     "report",
 )
@@ -347,6 +350,10 @@ class LitigationRun(RunBase):
                 + "; ".join(f"{c} {w}" for c, w, _ in leaks)[:300]
             )
 
+    def _review(self) -> None:
+        status = review_mod.run(self.data, self.job.job_dir, self._out(), self._json("final.json"), self._matters())
+        self._put("review_status", status)
+
     def _file(self) -> None:
         pause = deliver.READBACK_PAUSE_SECONDS if self.readback_pause is None else self.readback_pause
         rec = deliver.file_workbook(
@@ -396,6 +403,7 @@ class LitigationRun(RunBase):
                 self._gates,
                 self._parity,
                 self._book,
+                self._review,
                 self._file,
                 self._report,
             ),
@@ -425,6 +433,20 @@ class LitigationRun(RunBase):
             ],
             folder_id=filed["folder_id"],
             flags_new=int(self._state().get("flags_new") or 0),
+            proof={
+                "readback": "confirmed",
+                "files": [
+                    {
+                        "name": filed["name"],
+                        "file_id": filed["file_id"],
+                        "size": filed["size"],
+                        "sha256": filed["sha256"],
+                    }
+                ],
+                "review": str(self._state().get("review_status") or "code_only"),
+                "review_cents": 0,
+                "review_model": "",
+            },
         )
 
     def _current(self) -> str:

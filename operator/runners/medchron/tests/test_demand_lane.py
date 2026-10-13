@@ -20,7 +20,8 @@ job = json.loads(jd.joinpath('job.json').read_text())
 assert job['kind'] == 'demand' and job['month_cents_used'] == 1234, job
 out = [{"unit": "demand", "kind": "demand", "outcome": "delivered", "stage": "file", "reason": None, "dollars": 6.5,
         "folder_id": "folder-7", "coverage_report": False,
-        "files": [{"name": "Demand.Alpha Example.docx", "size": 41000, "role": "demand"}, {"name": "Gap Audit - 100001 - 10-06-26.docx", "size": 9000, "role": "gap_audit"}]}]
+        "files": [{"name": "Demand.Alpha Example.docx", "size": 41000, "role": "demand"}, {"name": "Gap Audit - 100001 - 10-06-26.docx", "size": 9000, "role": "gap_audit"}],
+        "proof": {"readback": "confirmed", "files": [{"name": "x.docx", "file_id": "f1", "size": 10, "sha256": "a" * 64}], "review": "passed", "review_cents": 0}}]
 (jd / 'verdict.json').write_text(json.dumps(out))
 print(json.dumps(out))
 """
@@ -60,6 +61,8 @@ class FakeClient:
                 "remaining": 5,
                 **({"cents_used": self.cents} if self.cents is not None else {}),
             }
+        if a.startswith("delivery_"):  # the daemon's proven-delivery verbs (proof/watch.py)
+            return {"ok": True, "replies": []}
         raise AssertionError(f"the demand lane must speak only demand verbs, not {a}")
 
 

@@ -43,7 +43,8 @@ from typing import Any
 from . import cited_facts
 from . import form_letter_facts as facts
 from .form_letter_facts import Fact
-from .form_letters import READBACK_WAITS, _read_back  # noqa: F401 - READBACK_WAITS re-exported for tests
+from . import readback
+from .form_letters import READBACK_WAITS, _file_proved  # noqa: F401 - READBACK_WAITS re-exported for tests
 from .library import ResolvedTemplate, list_matter_files, load_library_config, name_matches, resolve_template
 
 DOCUMENT_CLASS = "sr1_form"
@@ -313,7 +314,7 @@ def render_sr1(matter_id: str, cited: dict[str, Any] | None = None) -> Any:
     if the file shows she was a passenger, do not call it and say so.
 
     Files ``DMV SR1 - for client signature.pdf`` at the matter's root and reads
-    it back. Returns ``status`` (``filed``, ``filed_not_visible``, or
+    it back. Returns ``status`` (``filed``, ``link_not_visible`` / ``readback_mismatch`` (read back by id, size and sha256; SMD is alerted, do NOT file again), or
     ``refused`` with ``reason``), ``fileId``, ``fileName``, ``filled`` (the
     boxes filled, by name, NEVER their values), ``left_for_client`` (what she
     completes), ``cited_refused``, ``same_name_on_matter``. Mails nothing,
@@ -337,11 +338,9 @@ def render_sr1(matter_id: str, cited: dict[str, Any] | None = None) -> Any:
     except Exception as exc:  # noqa: BLE001 - a form pypdf cannot fill is refused, never filed half-made
         return _refused(f"{resolved.name!r} could not be filled ({exc.__class__.__name__}); nothing was filed")
     same = [str(e.get("id")) for e in list_matter_files(client, matter) if name_matches(e, FILE_NAME)]
-    result = client.add_file(matter, FILE_NAME, data)
-    file_id = result.get("fileId") if isinstance(result, dict) else None
-    seen = _read_back(client, matter, str(file_id)) if file_id else None
-    return {
-        "status": "filed" if seen else "filed_not_visible",
+    file_id, proof = _file_proved(client, matter, FILE_NAME, data)
+    out = {
+        "status": "filed",
         "fileId": file_id,
         "fileName": FILE_NAME,
         "matterId": matter,
@@ -352,6 +351,7 @@ def render_sr1(matter_id: str, cited: dict[str, Any] | None = None) -> Any:
         "template": {"name": resolved.name, "fileId": resolved.file_id},
         "sha256": hashlib.sha256(data).hexdigest(),
     }
+    return readback.verdict(out, proof)
 
 
 def register(server: Any) -> None:

@@ -179,7 +179,7 @@ class RehearsalRun(LitigationRun):
         try:
             super()._stage(name, fn)
         except (LitigationHold, LitigationFailed) as exc:
-            if name not in ("gates", "parity", "book") and not (self.offline and name == "fetch"):
+            if name not in ("gates", "parity", "book", "review") and not (self.offline and name == "fetch"):
                 raise
             self._put(f"{name}_refusal", str(exc))
             self._put(name, {"status": "done", "refused": True})

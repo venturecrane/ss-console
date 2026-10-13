@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from test_negotiation import M1, PRICING, Layout, Seat, _offer
+from test_negotiation import LETTER, M1, PRICING, Layout, Seat, _offer, _review_passes  # noqa: F401 - _review_passes is an autouse fixture; importing it applies it here
 
 from medchron import arrivals
 from medchron.negotiation import dryrun, run as run_mod
@@ -36,7 +36,7 @@ def _dry(tmp_path, monkeypatch, layout, events=None, **kw):
     r = dryrun.NegotiationDryRun(
         wd, pricing=str(pricing), seat_factory=lambda: Seat(FILES), layout=layout, log=lambda m: None, **kw
     )
-    monkeypatch.setattr(r, "_text", lambda mid, f: "letter text")
+    monkeypatch.setattr(r, "_text", lambda mid, f: LETTER)
     return r, wd
 
 
@@ -123,7 +123,7 @@ def test_a_second_copy_of_the_same_letter_plans_as_a_live_run_would(tmp_path, mo
     r = dryrun.NegotiationDryRun(
         wd, pricing=str(pricing), seat_factory=lambda: Seat([FILES[0], *copies]), layout=layout, log=lambda m: None
     )
-    monkeypatch.setattr(r, "_text", lambda mid, f: "letter text")
+    monkeypatch.setattr(r, "_text", lambda mid, f: LETTER)
     summary = r.run()
     assert summary["candidates"] == 3 and summary["rows_planned"] == 1 and summary["emails"] == 1
     assert layout.calls == []

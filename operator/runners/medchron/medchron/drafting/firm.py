@@ -13,7 +13,7 @@ Closed key set: a misspelled key is an error, never a default.
 The schema (the engagements author writes to exactly this)::
 
     firm:        {slug, display_name}
-    models:      {transcription, digest, compose, audit, repair}
+    models:      {transcription, digest, compose, audit, repair, review?}
     budget:      {per_job_cap_usd, monthly_budget_usd, usd_per_million_chars,
                   usd_per_scanned_page, usd_drafting_fixed}
     privilege:   {firm_domains, consumer_domains}
@@ -61,6 +61,10 @@ CONFIG_NAME = "drafting-firm.yaml"
 
 CLASSES = ("mediation_brief", "discovery_set", "discovery_response", "memo", "depo_outline")
 MODEL_KEYS = ("transcription", "digest", "compose", "audit", "repair")
+#: Optional: the independent pre-delivery review's model (``review.py``).
+#: Absent, the review uses ``audit``, never ``compose``: on 2026-10-12 the
+#: review ran on the drafter's own model and the drafter's blind spot was its.
+OPTIONAL_MODEL_KEYS = ("review",)
 PROMPT_KEYS = ("digest", "compose", "audit", "repair")
 LABEL_STYLES = ("caps_bold_underline", "all caps, bold, underlined")
 MEDIATION_SECTIONS = 11
@@ -83,7 +87,7 @@ LAYOUT_KEYS = {
 # section -> {key: (type, required)}; None: a free-keyed map checked by its own rules
 SCHEMA: dict[str, dict[str, tuple[str, bool]] | None | str] = {
     "firm": {"slug": ("str", True), "display_name": ("str", True)},
-    "models": {k: ("str", True) for k in MODEL_KEYS},
+    "models": {**{k: ("str", True) for k in MODEL_KEYS}, **{k: ("str", False) for k in OPTIONAL_MODEL_KEYS}},
     "budget": {
         "per_job_cap_usd": ("float", True),
         "monthly_budget_usd": ("float", True),

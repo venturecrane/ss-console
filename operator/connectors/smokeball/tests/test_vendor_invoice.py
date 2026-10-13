@@ -95,6 +95,8 @@ class Tenant:
         self.ignore_offset = False
         self.ledger_status = 200
         self.folders: list[dict[str, Any]] = [{"id": FOLDER_ID, "name": "Vendor Invoices"}]
+        self.uploaded: bytes | None = None
+        self.stored_bytes: bytes | None = None  # plant: the vendor serves other bytes
 
     def client(self) -> SmokeballClient:
         c = SmokeballClient(region="us", environment="staging", client_id="c", client_secret="s", api_key="k")
@@ -137,7 +139,15 @@ class Tenant:
                 return httpx.Response(500, text="upload broke")
             return httpx.Response(202, json={"uploadUrl": "https://s3.example.com/up?sig=1", "fileId": "file-new"})
         if method == "PUT" and "s3.example.com" in str(request.url):
+            self.uploaded = request.content
             return httpx.Response(200)
+        # The PDF's read-back (readback.py): by id, then the download it mints.
+        if path.endswith("/documents/files/file-new") and method == "GET" and self.uploaded is not None:
+            return httpx.Response(200, json={"id": "file-new", "sizeBytes": len(self.uploaded)})
+        if path.endswith("/documents/files/file-new/download") and self.uploaded is not None:
+            return httpx.Response(200, json={"downloadUrl": "https://s3.example.com/down/file-new"})
+        if method == "GET" and str(request.url) == "https://s3.example.com/down/file-new":
+            return httpx.Response(200, content=self.stored_bytes or self.uploaded)
         return httpx.Response(404, json={"error": f"unscripted {method} {path}"})
 
 
@@ -226,6 +236,7 @@ def test_happy_path_stages_unfinalized_reads_back_and_files() -> None:
     tenant = Tenant()
     out = _stage(tenant)
     assert out["status"] == "staged", out
+    assert out["readback_verdict"] == "confirmed" and out["file"]["proof"]["ok"] is True
     (body,) = tenant.posted
     assert body["finalized"] is False
     assert body["price"] == 1250.0 and body["quantity"] == 1
@@ -310,7 +321,9 @@ def test_readback_that_shows_finalized_is_reported_not_passed() -> None:
     tenant = Tenant()
     tenant.readback_override = {"finalized": True}
     out = _stage(tenant)
-    assert out["status"] == "staged_unverified"
+    # Since 2026-10-13 a top-level shortfall (pages SMD); the stage's own word is kept.
+    assert out["status"] == "readback_mismatch" and out["stage_status"] == "staged_unverified"
+    assert "Do NOT retry" in out["readback_note"]
     assert any("finalized" in p for p in out["readback"]["problems"])
     assert not [r for r in tenant.requests if r.method == "DELETE"]
 
@@ -319,7 +332,7 @@ def test_readback_amount_mismatch_is_reported() -> None:
     tenant = Tenant()
     tenant.readback_override = {"price": 125.0}
     out = _stage(tenant)
-    assert out["status"] == "staged_unverified"
+    assert out["status"] == "readback_mismatch" and out["stage_status"] == "staged_unverified"
     assert any("amount" in p for p in out["readback"]["problems"])
 
 
@@ -528,10 +541,21 @@ def test_filing_failure_after_create_reports_the_expense_and_deletes_nothing() -
     tenant = Tenant()
     tenant.upload_fails = True
     out = _stage(tenant)
-    assert out["status"] == "staged_file_failed"
+    assert out["status"] == "readback_mismatch" and out["stage_status"] == "staged_file_failed"
     assert out["expense_id"] == "exp-new"
     assert out["file"]["filed"] is False
     assert not [r for r in tenant.requests if r.method == "DELETE"]
+
+
+def test_a_pdf_stored_with_other_bytes_is_a_readback_mismatch() -> None:
+    """Falsifier (2026-10-13): the expense reads back right and the PDF
+    uploads, but the vendor serves other bytes at the same id. That scored
+    ``staged`` before; it is wrong content on the firm's matter."""
+    tenant = Tenant()
+    tenant.stored_bytes = b"%PDF-1.4 a different document"
+    out = _stage(tenant)
+    assert out["status"] == "readback_mismatch" and out["stage_status"] == "staged"
+    assert "invoice PDF" in out["readback_detail"]
 
 
 def test_authored_folder_is_used_when_found() -> None:

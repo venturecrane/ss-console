@@ -129,11 +129,12 @@ other side's carrier), and `date` omitted unless she named the letter date.
 
 Read the result by `status`:
 
-| status              | what happened                            | the reply line                                                                 |
-| ------------------- | ---------------------------------------- | ------------------------------------------------------------------------------ |
-| `filed`             | filed at the matter's root and read back | `Filed: <fileName> on matter <matter-number>.` then its gaps, below            |
-| `filed_not_visible` | the upload was accepted but not seen yet | `Filed: <fileName> on matter <matter-number>; Smokeball has not shown it yet.` |
-| `refused`           | nothing filed; `reason` says why         | `Not made: the <1st/3rd> party letter. <reason in plain words>`                |
+| status              | what happened                                            | the reply line                                                                                                          |
+| ------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `filed`             | filed at the matter's root and read back                 | `Filed: <fileName> on matter <matter-number>.` then its gaps, below                                                     |
+| `link_not_visible`  | the upload was accepted but not seen yet; SMD is alerted | `Filed: <fileName> on matter <matter-number>; Smokeball has not shown it yet.` (never make it again)                    |
+| `readback_mismatch` | it filed but did not read back as sent; SMD is alerted   | `Filed: <fileName> on matter <matter-number>, but it did not read back as made; please check it.` (never make it again) |
+| `refused`           | nothing filed; `reason` says why                         | `Not made: the <1st/3rd> party letter. <reason in plain words>`                                                         |
 
 Every entry in `unfilled` goes on its own line under that letter, verbatim:
 `  <the marker>`, e.g. `  [Not in the file: 1st party insurer name]`. When
@@ -460,7 +461,7 @@ note: which files were filed on which matter number, how many facilities were
 entered, and how many items are waiting on her.
 
 Never state that a letter was filed unless `render_firm_form_letter` (or, for
-the SR1, `render_sr1`) returned `filed` or `filed_not_visible` for it, that a
+the SR1, `render_sr1`) returned `filed`, `link_not_visible` or `readback_mismatch` for it (the last two said as the table above says), that a
 task was closed unless `update_task` returned it completed, or that a facility is on the tab unless
 `add_medicals_provider` returned `written` or `already_present`, or that a demand or offer is on
 Negotiation Details unless `add_negotiation_rows` returned it `written` or `already_present`.

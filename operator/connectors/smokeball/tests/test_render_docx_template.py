@@ -567,8 +567,8 @@ def test_tool_is_on_the_served_surface() -> None:
         "skeleton_markdown",
     }
     # the model only ever sees the description, so the refusal contract has to be
-    # THERE: it must know the gate refuses rather than repairs, and that
-    # materialization is async.
+    # THERE: it must know the gate refuses rather than repairs, and that a
+    # failed read-back of the filed file is not a reason to file it again.
     description = tool.description or ""
     assert "refuses" in description
-    assert "ASYNCHRONOUS" in description
+    assert "readback_mismatch" in description and "do NOT file" in description

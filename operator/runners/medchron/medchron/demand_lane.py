@@ -38,6 +38,7 @@ from typing import Any, Callable
 
 from . import resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
+from .proof import watch as proof_watch
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon, sticky_level
 
 logger = logging.getLogger("medchron.demand")
@@ -201,6 +202,7 @@ class DemandLane(Daemon):
                 "coverage_report": bool(v.get("coverage_report")),
                 "cents": fields["cents"],
             }
+        state, fields = proof_watch.settle(self, job_id, outcomes or [v], state, fields)
         try:
             self.broker.record(job_id, state, fields)
         except BrokerError as exc:

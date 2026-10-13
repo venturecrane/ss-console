@@ -41,6 +41,7 @@ from typing import Any, Callable
 from . import resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, Daemon
+from .proof import watch as proof_watch
 from .drafting_lane import DraftingLane
 
 logger = logging.getLogger("medchron.negotiation")
@@ -226,6 +227,8 @@ class NegotiationLane(DraftingLane):
         fields["notices"] = [n for n in v.get("notices") or [] if isinstance(n, dict)] if state == "delivered" else []
         if v.get("reason"):
             fields["reason"] = str(v["reason"])[:500]
+        state, fields = proof_watch.settle(self, job_id, [v], state, fields)
+        fields.setdefault("notices", [])
         notice_ids: list[str] = []
         try:
             answer = self.broker.record(job_id, state, fields)

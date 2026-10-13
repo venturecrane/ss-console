@@ -90,3 +90,15 @@ describe('medical-chronology-maintainer: a delivered package never relays the jo
     )
   })
 })
+
+describe('medical-chronology-maintainer: a review hold is SMD work (2026-10-13)', () => {
+  // Proven delivery: the independent pre-delivery review holds a package with
+  // a must-fix before anything is filed. Like the audit gate, the hold is SMD's
+  // to clear; the firm is told nothing is needed and never shown the findings.
+  it('names review_held as SMD work, with nothing asked of the firm', () => {
+    const held = flat.slice(flat.indexOf('`review_held:`'), flat.indexOf('`dry_run_reported:`'))
+    expect(held).toContain("SMD's to clear")
+    expect(held).toContain('nothing is needed from the firm')
+    expect(held).toMatch(/do not ask anyone at the firm to review anything/i)
+  })
+})

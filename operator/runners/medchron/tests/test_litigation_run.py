@@ -75,7 +75,11 @@ def test_a_full_run_delivers_a_read_back_workbook_and_commits_state(tmp_path):
         "flags_new",
         "files",
         "folder_id",
+        "proof",
     }
+    proof = out["proof"]
+    assert proof["readback"] == "confirmed" and proof["review"] == "code_only" and proof["review_cents"] == 0
+    assert proof["files"] == [{k: f[k] for k in ("name", "file_id", "size", "sha256")}]
 
 
 def test_an_unchanged_matter_is_not_read_again(tmp_path):

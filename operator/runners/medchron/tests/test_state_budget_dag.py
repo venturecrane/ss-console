@@ -170,6 +170,7 @@ def test_paid_stages_are_the_model_stages() -> None:
         "summarize",
         "classify_scanned",
         "audit",
+        "review",  # the pre-delivery review's one model call (2026-10-13)
     }
 
 

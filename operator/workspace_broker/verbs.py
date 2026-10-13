@@ -48,7 +48,7 @@ from typing import Any, Callable
 from .broker_context import BrokerContext
 from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
 from . import demand_verbs, drafting_verbs, litigation_verbs, medchron_verbs, negotiation_verbs, reply_binding
-from . import msgraph_drafts
+from . import delivery_proof, msgraph_drafts
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
 
@@ -190,6 +190,11 @@ VERBS: tuple[Verb, ...] = (
     Verb("negotiation_job_status", GATEWAY_ROOT_OR_AGENT, negotiation_verbs.negotiation_dispatch),
     Verb("negotiation_job_record", _only(ROOT), negotiation_verbs.negotiation_dispatch),
     Verb("negotiation_job_resume", _only(ROOT), negotiation_verbs.negotiation_dispatch),
+    # Proven delivery (2026-10-13): the runner daemon's alert row and its read
+    # of a job's bound replies. Root only: no turn raises or reads them.
+    Verb("delivery_proof_alert", _only(ROOT), delivery_proof.alert_verb),
+    Verb("delivery_proof_record", _only(ROOT), delivery_proof.record_verb),
+    Verb("delivery_reply_status", _only(ROOT), delivery_proof.reply_status_verb),
     # Gateway-only from here down.
     Verb("audit_append", _only(GATEWAY), audit_verbs.audit_append),
     Verb("agentmail_send", _only(GATEWAY), transmit_verbs.agentmail),

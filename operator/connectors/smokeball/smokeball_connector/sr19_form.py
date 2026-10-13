@@ -31,7 +31,8 @@ from typing import Any
 
 from . import cited_facts
 from . import form_letter_facts as facts
-from .form_letters import _read_back
+from . import readback
+from .form_letters import _file_proved
 from .library import ResolvedTemplate, list_matter_files, load_library_config, name_matches, resolve_template
 from .sr1_form import _address_parts, _birth_date, _other_driver, fill_acroform
 
@@ -181,11 +182,9 @@ def render_sr19(matter_id: str, cited: dict[str, Any] | None = None) -> Any:
     except Exception as exc:  # noqa: BLE001 - a form pypdf cannot fill is refused, never filed half-made
         return _refused(f"{resolved.name!r} could not be filled ({exc.__class__.__name__}); nothing was filed")
     same = [str(e.get("id")) for e in list_matter_files(client, matter) if name_matches(e, FILE_NAME)]
-    result = client.add_file(matter, FILE_NAME, data)
-    file_id = result.get("fileId") if isinstance(result, dict) else None
-    seen = _read_back(client, matter, str(file_id)) if file_id else None
-    return {
-        "status": "filed" if seen else "filed_not_visible",
+    file_id, proof = _file_proved(client, matter, FILE_NAME, data)
+    out = {
+        "status": "filed",
         "fileId": file_id,
         "fileName": FILE_NAME,
         "matterId": matter,
@@ -196,6 +195,7 @@ def render_sr19(matter_id: str, cited: dict[str, Any] | None = None) -> Any:
         "template": {"name": resolved.name, "fileId": resolved.file_id},
         "sha256": hashlib.sha256(data).hexdigest(),
     }
+    return readback.verdict(out, proof)
 
 
 def register(server: Any) -> None:

@@ -176,10 +176,12 @@ def stage_vendor_invoice(
     left to Smokeball's default and listed in ``defaulted``.
 
     Returns ``status``: ``staged`` (entry written, read back finalized false
-    at the exact amount, PDF filed), ``staged_file_failed`` (the entry exists,
-    the PDF did not file; say so with the ``expense_id``),
-    ``staged_unverified`` (the entry exists but the read-back did not confirm
-    it; ``readback.problems`` says what), ``duplicate`` or
+    at the exact amount, PDF filed and read back by id, size and sha256;
+    ``readback_verdict: "confirmed"``), ``readback_mismatch`` or
+    ``link_not_visible`` (the entry was written but the entry or its PDF did
+    not read back right: ``stage_status`` keeps ``staged_file_failed`` or
+    ``staged_unverified``, ``readback_detail`` says what; SMD is alerted and
+    it must NOT be staged again, a retry duplicates the expense), ``duplicate`` or
     ``possible_duplicate`` (``existing`` lists the matching entries; NOTHING
     was created), or ``refused`` (``reason`` says why; nothing was created).
     Every page of the matter's expenses is read before the write, and a

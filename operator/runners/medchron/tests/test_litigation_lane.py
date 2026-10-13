@@ -23,7 +23,7 @@ time.sleep(float(job.get('sleep', 0)))
 print('a library banner on stdout')
 v = {"verdict": "delivered", "stage": "report", "cents": 1234, "matters_total": 12, "matters_reread": 3, "flags_new": 2,
      "files": [{"role": "workbook", "name": "Litigation status 2026-10-07 (Operator 0000AA).xlsx", "size": 20480, "sha256": "ab", "file_id": "up-1"}],
-     "folder_id": "folder-7"}
+     "folder_id": "folder-7", "proof": {"readback": "confirmed", "files": [{"name": "x.docx", "file_id": "f1", "size": 10, "sha256": "a" * 64}], "review": "passed", "review_cents": 0}}
 (jd / 'verdict.json').write_text(json.dumps(v))
 print(json.dumps(v))
 """
@@ -48,6 +48,8 @@ class FakeClient:
         if a == "litigation_job_record":
             self.records.append((req["job_id"], req["state"], req["fields"]))
             return {"ok": True}
+        if a.startswith("delivery_"):  # the daemon's proven-delivery verbs (proof/watch.py)
+            return {"ok": True, "replies": []}
         raise AssertionError(f"the litigation lane speaks only litigation verbs, not {a}")
 
 
