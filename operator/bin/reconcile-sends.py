@@ -140,7 +140,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from bin.lib import seam_pull, send_verify
+from bin.lib import seam_pull, seat_inbox, send_verify
 
 #: ``_usable_ids`` -- every exact join key a row's metadata offers -- moved to
 #: lib/send_attribution.py (claims review 2026-09-04, B7) so the verifier's
@@ -208,7 +208,6 @@ KNOWN_NON_SEAT_INBOXES: dict[str, str] = {
     "ap-records-standin@agentmail.to": "A&P rehearsal: records-vendor stand-in",
     "ap-client-standin@agentmail.to": "A&P rehearsal: client stand-in",
     "sim-opposing-counsel@agentmail.to": "Halloran Sload LLP opposing-counsel simulator",
-    "agentcrane@agentmail.to": "Crane venture mailbox, not an SMD Operator seat",
     "smdcrane@agentmail.to": "Crane SMD Services mailbox, not an Operator seat",
 }
 
@@ -649,11 +648,13 @@ def baseline_entries(reports: list[InboxReport]) -> list[dict]:
     ]
 
 
-def slug_for_inbox(inbox: str, slugs: list[str]) -> str | None:
-    """The seat that owns this inbox, by local part. None ⇒ nobody owns it, which
-    is a finding in itself rather than a reason to skip the inbox."""
-    local = inbox.split("@", 1)[0].lower()
-    return next((s for s in slugs if s.lower() == local), None)
+def _authored_inbox(slug: str) -> str | None:
+    return seat_inbox.authored_inbox(_customers_dir(), slug)
+
+
+def slug_for_inbox(inbox: str, slugs: list[str], authored: dict[str, str | None] | None = None) -> str | None:
+    """The seat that owns this inbox; see ``bin.lib.seat_inbox.slug_for_inbox``."""
+    return seat_inbox.slug_for_inbox(inbox, slugs, authored, _authored_inbox)
 
 
 def reconcile_inbox(

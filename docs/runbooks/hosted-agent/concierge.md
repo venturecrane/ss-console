@@ -13,7 +13,7 @@ Email to team@smd.services ("Hosted Agent purchase") + a new row in the admin qu
 3. **Key staging.** Two paths:
    - Portal relay wired (`INFISICAL_UA_*` env present): the buyer pastes the key in their portal; queue shows `key received`.
    - Relay not wired: collect at go-live via `crane_secret_set` (clipboard path) into `/ss/hosted/<slug>` as `ANTHROPIC_API_KEY`. Never ask for the key over chat/email in plaintext.
-4. **AgentMail inbox.** Create the per-customer inbox in the AgentMail dashboard; register the webhook to `https://hermes-<slug>.fly.dev/webhooks/email`; stage the Svix signing secret as `WEBHOOK_SECRET_AGENTMAIL__<SLUG>` in `/ss`.
+4. **AgentMail inbox.** Create the per-customer inbox in the AgentMail dashboard; register the webhook to `https://hermes-<slug>.fly.dev/webhooks/agentmail` (the path every live seat's `connectors.Email.webhook_url` names); stage the Svix signing secret as `WEBHOOK_SECRET_AGENTMAIL__<SLUG>` in `/ss`.
 5. **Telegram bot** (when the intake row has a handle): create via BotFather, stage `TELEGRAM_BOT_TOKEN` as a Fly secret, resolve the buyer's numeric Telegram id, put it in `telegram.allowed_users` (MANDATORY: empty allowlist fails open).
 6. **Author customer.yaml** from `operator/customers/_hosted-template/` using the queue row's fields. Validate: `npx tsx scripts/validate-customer-yaml.ts operator/customers/<slug>/customer.yaml`. Commit via PR (git is the config source of truth, ADR 0012).
 7. **Provision:** `operator/bin/reprovision.sh <slug>` then `operator/bin/boot-smoke-test.sh <slug>`.

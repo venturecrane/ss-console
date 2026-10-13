@@ -55,6 +55,8 @@ const CUSTOMER_FLY_APPS: Readonly<Record<string, string>> = Object.freeze({
   // customer-zero.
   scott: 'hermes-scott',
   'smd-staging': 'hermes-smd-staging',
+  // Hosted-agent seat for a real-estate brokerage's agent pilot, 2026-10-13.
+  brokery: 'hermes-brokery',
 })
 
 /**

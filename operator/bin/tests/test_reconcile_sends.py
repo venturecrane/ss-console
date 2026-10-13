@@ -8,6 +8,7 @@ everything and it measures nothing. Both are pinned here.
 
 from __future__ import annotations
 
+import os
 import importlib.util
 import json
 import sys
@@ -221,8 +222,36 @@ def test_allowlist_is_not_a_blanket_skip_of_seatless_inboxes():
 
 def test_slug_for_inbox_matches_local_part():
     slugs = ["pilot-smokeball", "ashton-price"]
-    assert rec.slug_for_inbox("ashton-price@agentmail.to", slugs) == "ashton-price"
-    assert rec.slug_for_inbox("ss-probe-admin@agentmail.to", slugs) is None
+    none = {s: None for s in slugs}
+    assert rec.slug_for_inbox("ashton-price@agentmail.to", slugs, none) == "ashton-price"
+    assert rec.slug_for_inbox("ss-probe-admin@agentmail.to", slugs, none) is None
+
+
+def test_slug_for_inbox_prefers_the_authored_address():
+    """A seat whose inbox is not named after its slug is still its owner, and
+    the convention address it did NOT author is nobody's."""
+    slugs = ["brokery", "scott", "ashton-price"]
+    authored = {"brokery": "brokery-agent@agentmail.to", "scott": "agentcrane@agentmail.to", "ashton-price": None}
+    assert rec.slug_for_inbox("brokery-agent@agentmail.to", slugs, authored) == "brokery"
+    assert rec.slug_for_inbox("AgentCrane@agentmail.to", slugs, authored) == "scott"
+    assert rec.slug_for_inbox("scott@agentmail.to", slugs, authored) is None
+    assert rec.slug_for_inbox("ashton-price@agentmail.to", slugs, authored) == "ashton-price"
+
+
+def test_slug_for_inbox_reads_the_real_seat_configs():
+    """No injection: the shipped scott config owns agentcrane@ (falsifier for
+    the yaml read; it returned None before the authored lookup existed)."""
+    slugs = sorted(d for d in os.listdir(rec._customers_dir()) if not d.startswith(("_", ".")))
+    assert rec.slug_for_inbox("agentcrane@agentmail.to", slugs) == "scott"
+
+
+def test_no_seat_inbox_is_allowlisted_as_a_non_seat():
+    """An inbox a seat authors must never sit on the non-seat allowlist: that
+    is how scott's sends went unreconciled while labelled a Crane mailbox."""
+    slugs = sorted(d for d in os.listdir(rec._customers_dir()) if not d.startswith(("_", ".")))
+    owned = {rec._authored_inbox(s) for s in slugs} - {None}
+    assert owned, "read no authored inbox at all; the check below would pass vacuously"
+    assert not owned & set(rec.KNOWN_NON_SEAT_INBOXES)
 
 
 def test_window_is_tight_enough_to_be_meaningful():
