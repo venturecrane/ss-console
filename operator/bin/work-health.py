@@ -342,6 +342,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         action="store_true",
         help="print the email text (LOCAL ONLY: the CI log of this public repo must never carry it)",
     )
+    ap.add_argument(
+        "--pages-only", action="store_true", help="send ACTION pages but not the digest (deliberate proofs)"
+    )
     args = ap.parse_args(argv)
 
     now = _ts(args.now) or datetime.now(timezone.utc)
@@ -394,7 +397,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     page_error = None if args.dry_run else send_pages(pages, now)
     if pages:
         print(f"pages: {len(pages)} ACTION email(s){' (dry run)' if args.dry_run else ''}")
-    if not plan.send:
+    if not plan.send or args.pages_only:
         return EXIT_SEND_FAILED if page_error else EXIT_OK
     if args.print_body:
         print(f"Subject: {plan.subject}\n\n{plan.text}")
