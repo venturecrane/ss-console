@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from .readback_records import prove_event
+
 
 def _attendee_ids(current: dict[str, Any]) -> list[str]:
     ids: list[str] = []
@@ -96,7 +98,9 @@ def put_event_update(
     subject, description = changes.get("subject"), changes.get("description")
     if subject is not None or description is not None:
         verify(client, link or "", subject, description)
-    return client.request("PUT", f"/events/{event_id}", json=body)
+    # Read the event back after the PUT and compare every field sent (the
+    # full-replace PUT is exactly where a dropped field hides; readback.py).
+    return prove_event(client, body, client.request("PUT", f"/events/{event_id}", json=body), event_id)
 
 
 def _responsible_staff_id(matter: Any) -> str | None:

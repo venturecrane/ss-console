@@ -167,7 +167,7 @@ def test_update_event_moving_a_date_keeps_the_matter_link(rec: _Recorder) -> Non
     rec.responses["/events/e-2"] = dict(_LINKED_EVENT)
     server.update_event(event_id="e-2", start_time="2026-10-09T00:00:00", end_time="2026-10-10T00:00:00")
     assert rec.calls[0] == {"method": "GET", "path": "/events/e-2", "params": {}}
-    put = rec.calls[-1]
+    put = next(c for c in rec.calls if c["method"] == "PUT")  # the read-back GETs follow it
     assert put["method"] == "PUT" and put["path"] == "/events/e-2"
     assert put["json"] == {
         "subject": "[Operator] Discovery: responses due",
@@ -185,7 +185,7 @@ def test_update_event_moving_a_date_keeps_the_matter_link(rec: _Recorder) -> Non
 def test_update_event_explicit_matter_id_relinks(rec: _Recorder) -> None:
     rec.responses["/events/e-2"] = {**_LINKED_EVENT, "matter": None}
     server.update_event(event_id="e-2", matter_id="m-9")
-    assert rec.calls[-1]["json"]["matterId"] == "m-9"
+    assert next(c for c in rec.calls if c["method"] == "PUT")["json"]["matterId"] == "m-9"
 
 
 def test_update_event_recurring_refuses_before_the_wire(rec: _Recorder) -> None:

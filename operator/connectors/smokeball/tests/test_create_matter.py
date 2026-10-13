@@ -17,7 +17,8 @@ So the load-bearing assertions here are the ones about NOT creating:
   open a second matter every time the case system hiccuped;
 * the POST carries ``status``, because the API refuses it otherwise (400 "Must
   provide a valid Status") while the published docs call the field optional;
-* a slow materialization is a SUCCESS with a pending flag, never an exception.
+* a slow materialization is never an exception (since 2026-10-13 it carries
+  ``status: link_not_visible`` so SMD is paged, with a do-not-recreate note).
   The vendor answers 404 on the new matter's own id for several seconds after
   accepting it (probed live 2026-08-21: 404 at 0.6s, 2.8s, 4.9s, 7.2s, 200 at
   9.6s), and a created-but-slow matter that surfaced as a failure would invite a
@@ -28,7 +29,7 @@ from __future__ import annotations
 
 import pytest
 
-from smokeball_connector import server
+from smokeball_connector import matter_create, server
 from smokeball_connector.client import SmokeballApiError
 
 NUMBER = "OPS-OPERATOR-LIBRARY"
@@ -90,7 +91,7 @@ class _FakeClient:
 def _no_real_sleep(monkeypatch):
     """The poll interval is two seconds and there are fifteen of them. Nothing
     here is testing the clock."""
-    monkeypatch.setattr(server.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(matter_create.time, "sleep", lambda _seconds: None)
 
 
 def _install(monkeypatch, client: _FakeClient) -> _FakeClient:
@@ -120,6 +121,7 @@ def test_the_matter_is_created_and_read_back_after_the_vendors_own_delay(monkeyp
         "created": True,
         "readback": record,
         "accepted": {"id": NEW_ID, "href": "/matters/x"},
+        "readback_verdict": "confirmed",
     }
     assert client.matter_gets == 3
 
@@ -141,18 +143,17 @@ def test_the_post_body_carries_status_open_because_the_api_requires_it(monkeypat
     }
 
 
-def test_a_slow_materialization_is_a_success_with_a_pending_flag(monkeypatch) -> None:
-    """Never an exception. A created matter that surfaced as a failure would
-    invite a second create."""
+def test_a_slow_materialization_pages_smd_but_never_invites_a_second_create(monkeypatch) -> None:
+    """Never an exception: a created matter that surfaced as a failure would
+    invite a second create. No longer a quiet success either (2026-10-13):
+    ``status: link_not_visible`` pages SMD, and the note says do not retry."""
     client = _install(monkeypatch, _FakeClient(get_sequence=[404] * 15))
     result = _create()
-    assert result == {
-        "created": True,
-        "pending": True,
-        "matter_id": NEW_ID,
-        "accepted": {"id": NEW_ID, "href": "/matters/x"},
-        "readback": None,
-    }
+    assert result["created"] is True and result["pending"] is True
+    assert result["matter_id"] == NEW_ID and result["readback"] is None
+    assert result["accepted"] == {"id": NEW_ID, "href": "/matters/x"}
+    assert result["status"] == "link_not_visible"
+    assert "Do NOT retry" in result["readback_note"]
     assert client.matter_gets == 15
 
 

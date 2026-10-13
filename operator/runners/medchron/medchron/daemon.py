@@ -44,6 +44,7 @@ from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
 from . import config as config_mod, job as job_mod, lane_proof, proof_run, resume as resume_mod, retention
 from . import verdict as verdict_mod
+from .proof import watch as proof_watch
 
 logger = logging.getLogger("medchron.daemon")
 
@@ -379,7 +380,7 @@ class Daemon:
             stage = str(worst.get("stage") or "") or None
             if outcome == "refused":
                 state, reason = "held", f"refused: {reason}"
-            elif outcome in ("delivered", "dry_run"):
+            elif outcome == "delivered":
                 state = "delivered"
             elif outcome == "held":
                 state = "held"
@@ -392,6 +393,9 @@ class Daemon:
                 # The delivery's own fields, including the covered/uncovered
                 # document id sets a later UPDATE reads its delta from.
                 fields.update(delivery_fields(worst, outcomes))
+        # Proven delivery: a dry run is never a delivery, a delivered claim
+        # without its proof is a failure, and a hold or read-back failure pages.
+        state, fields = proof_watch.settle(self, job_id, outcomes, state, fields)
         try:
             self.broker.record(job_id, state, fields)
         except BrokerError as exc:
@@ -451,9 +455,15 @@ class Daemon:
     def dispatch_wakes(self) -> None:
         """At-most-once with a loud loss: consumed on a 2xx answer AND on a
         timeout after the request was sent (a duplicate deliver turn is worse
-        than a lost one; the loss escalates). A paused seat's 503 retries
-        without consuming an attempt; five real failures write a same-state
-        ledger note (an audit row) and stop."""
+        than a lost one). Consuming a wake is NOT counting the reply as sent:
+        a consumed wake arms the reply watch (``proof/watch.py``), which pages
+        SMD when the requester's reply is not seen in Sent Items in time. A
+        paused seat's 503 retries without consuming an attempt; five real
+        failures write a same-state ledger note (an audit row) and page."""
+        self._dispatch_wakes()
+        proof_watch.check_reply_watches(self)
+
+    def _dispatch_wakes(self) -> None:
         import http.client
         from urllib.parse import urlparse
 
@@ -492,6 +502,7 @@ class Daemon:
             if outcome == "delivered" or (sent and outcome.startswith("timeout")):
                 wake.update(pending=False, sent_at=self.clock(), outcome=outcome)
                 self._write_state(job_id, wake=wake)
+                proof_watch.arm_reply_watch(self, job_id)
                 continue
             if outcome == "paused":
                 logger.info("seat paused; wake for %s stays pending without consuming an attempt", job_id)
@@ -508,6 +519,7 @@ class Daemon:
                     self.broker.record(job_id, state, {"wake": {"wake_failed": True, "outcome": outcome}})
                 except BrokerError as exc:
                     logger.error("could not record the lost wake for %s: %s", job_id, exc)
+                proof_watch.wake_lost(self, job_id, outcome)
             self._write_state(job_id, wake=wake)
 
     # -- the loop ------------------------------------------------------------------

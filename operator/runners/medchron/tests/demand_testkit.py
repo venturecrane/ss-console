@@ -210,6 +210,15 @@ class DemandSeat(FakeSeat):
             "errors": [],
         }
 
+    def add_file(self, matter_id: str, folder_id: str, name: str, data: bytes) -> dict:
+        """The vendor keeps the bytes it was sent, so the read-back can mint
+        and download them by id (``proof.readback``). ``corrupt`` names a file
+        whose stored bytes differ from the ones sent (same length)."""
+        out = super().add_file(matter_id, folder_id, name, data)
+        stored = bytes(reversed(data)) if name in getattr(self, "corrupt", set()) else data
+        self.blobs[f"up-{len(self.sent)}"] = stored
+        return out
+
     def matter_facts(self, matter_id: str) -> dict[str, Any]:
         return self.facts
 
@@ -346,6 +355,9 @@ def _echo_sections(user: str) -> str:
     return "\n\n".join(out)
 
 
+CLEAN_REVIEW_VERDICT = "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+
+
 class _Stream:
     def __init__(self, msg: Any) -> None:
         self.msg = msg
@@ -371,7 +383,11 @@ class ScriptedClient:
         gap: str | None = None,
         gap_fn: Any = None,
         compose_stops: list[str] | None = None,
+        review: Any = None,
     ) -> None:
+        """``review``: the pre-delivery review's answer, a string or
+        ``fn(params) -> str``; by default a clean verdict."""
+        self.review = review if review is not None else CLEAN_REVIEW_VERDICT
         """``gap_fn(params) -> (text, stop_reason)`` scripts the gap audit per
         call; ``compose_stops`` are the stop reasons of successive compose
         calls (each returning the next third of ``draft``), then end_turn."""
@@ -384,6 +400,8 @@ class ScriptedClient:
 
     def _answer(self, params: dict[str, Any]) -> str:
         system = json.dumps(params.get("system"))
+        if "INDEPENDENT PRE-DELIVERY REVIEW" in system:
+            return self.review(params) if callable(self.review) else self.review
         if "DIGEST-PROMPT" in system:
             if self.truncate_once:
                 self.truncate_once = False
@@ -424,6 +442,9 @@ class ScriptedClient:
         out = []
         for c in self.calls:
             s = json.dumps(c.get("system"))
+            if "INDEPENDENT PRE-DELIVERY REVIEW" in s:
+                out.append("REVIEW")
+                continue
             out.append(
                 next((k for k in ("DIGEST", "GAP", "REPAIR", "COMPOSE", "AUDIT") if f"{k}-PROMPT" in s), "VISION")
             )

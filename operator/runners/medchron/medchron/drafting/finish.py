@@ -301,31 +301,39 @@ class Finish:
         self._atomic("notes-final.md", md)
         return md
 
+    def _fresh_review(self, digest: str, notes_md: str) -> tuple[list[review_mod.Finding], str]:
+        papers = self._papers()
+        found = review_mod.code_findings(
+            self.cls,
+            papers,
+            self.job.request_text,
+            digest,
+            self.corpus(),
+            pleading.spec_for(self.firm.data["format"]) is not None,
+            notes_md=notes_md,
+        )
+        served = (
+            review_mod.discovery_papers(self.corpus()) if self.cls in render.DISCOVERY else "(not a discovery document)"
+        )
+        user = review_mod.review_user(self.job.request_text, self._context(), papers, notes_md, found, served)
+        # The review's own model, else the auditor's: never compose, the
+        # drafter grading its own document (2026-10-13).
+        model = review_mod.model_for(self.firm)
+        return found + review_mod.run_model(self.doorway, model, digest, user, self.job.job_id[-6:]), model
+
     def _review(self, digest: str, notes_md: str) -> dict[str, Any]:
-        rec = review_mod.load(self.data)
-        if rec is None:
-            papers = self._papers()
-            found = review_mod.code_findings(
-                self.cls,
-                papers,
-                self.job.request_text,
-                digest,
-                self.corpus(),
-                pleading.spec_for(self.firm.data["format"]) is not None,
-                notes_md=notes_md,
-            )
-            served = (
-                review_mod.discovery_papers(self.corpus())
-                if self.cls in render.DISCOVERY
-                else "(not a discovery document)"
-            )
-            user = review_mod.review_user(self.job.request_text, self._context(), papers, notes_md, found, served)
-            found += review_mod.run_model(self.doorway, self.firm.model("compose"), digest, user, self.job.job_id[-6:])
-            rec = review_mod.save(self.data, found)
-            self.log(f"  review: {rec['must_fix']} must-fix, {rec['should_fix']} should-fix, {rec['notes']} note(s)")
-        if rec["must_fix"]:
-            raise DraftingFailed(review_mod.held_reason(rec))
-        self._done("review", must_fix=0, should_fix=rec["should_fix"], notes=rec["notes"])
+        """The independent review (``review.py``): a hold raises ``review_held``
+        before anything is filed; SMD's redo and release arrive as markers in
+        the job dir and are applied here."""
+        rec = review_mod.decide(self.data, self.job.job_dir, lambda: self._fresh_review(digest, notes_md), self.log)
+        self._done(
+            "review",
+            review="released" if rec.get("released") else "passed",
+            model=str(rec.get("model") or ""),
+            must_fix=rec["must_fix"],
+            should_fix=rec["should_fix"],
+            notes=rec["notes"],
+        )
         return rec
 
     def _finish(self, digest: str) -> None:

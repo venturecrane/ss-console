@@ -23,6 +23,12 @@ import time
 from typing import Any
 
 from . import verdict as verdict_mod
+from .proof import review as _review
+
+#: The job-dir markers ``proof/review.gate`` reads: review.py's own constants,
+#: so the daemon that writes them and the child that reads them cannot drift.
+RELEASE_MARKER: str = _review.RELEASE_MARKER
+REDO_MARKER: str = _review.REDO_MARKER
 
 logger = logging.getLogger("medchron.daemon")
 
@@ -87,6 +93,9 @@ def take_requests(d: Any) -> list[str]:
             resumes=int(st.get("resumes") or 0) + 1,
             resume_reason=str(req.get("reason") or "")[:500],
             resume_redo=[str(s) for s in (req.get("redo") or [])],
+            # SMD's release of a review hold (proof/review.py): carried to the
+            # attempt it is for, consumed there like ``resume_redo``.
+            resume_release=bool(req.get("release_review")),
         )
         marker.unlink(missing_ok=True)
         logger.info("resume %s: re-queued, redo=%s", job_id, req.get("redo") or [])
@@ -110,7 +119,35 @@ def start_run(d: Any, job_id: str, base: list[str]) -> list[str]:
     """
     st = d._daemon_state(job_id)
     redo = [str(x) for x in (st.get("resume_redo") or [])]
-    d._write_state(job_id, state="running", attempts=int(st.get("attempts", 0)) + 1, held_paused=False, resume_redo=[])
+    marker = d.job_dir(job_id) / RELEASE_MARKER
+    if st.get("resume_release"):
+        # The child reads this file, never argv: one marker every lane's runner
+        # reads the same way (proof/review.release_requested), and a release
+        # is for exactly this attempt.
+        marker.write_text(json.dumps({"reason": st.get("resume_reason") or "released by SMD"}), encoding="utf-8")
+        d._chown_child(marker)
+        logger.info("resuming %s with its review hold RELEASED by SMD", job_id)
+    else:
+        marker.unlink(missing_ok=True)
+    redo_marker = d.job_dir(job_id) / REDO_MARKER
+    if "review" in redo:
+        redo_marker.write_text("{}", encoding="utf-8")
+        d._chown_child(redo_marker)
+    else:
+        redo_marker.unlink(missing_ok=True)
+    d._write_state(
+        job_id,
+        state="running",
+        attempts=int(st.get("attempts", 0)) + 1,
+        held_paused=False,
+        resume_redo=[],
+        resume_release=False,
+    )
+    # ``review`` travels as the marker above, never as argv: it is no DAG stage
+    # (the driver refuses an unknown --redo name) and the demand and
+    # negotiation runners take no --redo at all, so passing it would turn
+    # SMD's "review it again" into an argparse failure (2026-10-13).
+    redo = [s for s in redo if s != "review"]
     if not redo:
         return base
     logger.info("resuming %s with --redo %s", job_id, ",".join(redo))

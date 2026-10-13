@@ -17,7 +17,7 @@ extract_after_fold (PR 2); vision, billing_extract, build_units (PR 4); map,
 repair_truncated, assemble, merge (PR 5); group, filter, exhibits,
 condense, summarize (PR 6); the audit loop (PR 7); build_doc, the classifiers,
 the strip, the coverage gate, the billing chart and worksheet (PR 8); identity, the ICD
-fetch, render and manifest (PR 9). Nothing runs as a subprocess any more;
+fetch, render and manifest (PR 9); the pre-delivery review (2026-10-13). Nothing runs as a subprocess any more;
 `script` stays on the Stage for the strangler's history and is always "".
 """
 
@@ -53,6 +53,7 @@ from .stages import (
     merge as _merge,
     msg as _msg,
     repair as _repair,
+    review as _review,
     scope as _scope,
     summarize as _summarize,
     units as _units,
@@ -417,8 +418,25 @@ STAGES: tuple[Stage, ...] = (
         "",
         lambda c: [c.slug, c.unit.unit, c.unit.client_name, c.date_stamp],
         requires=("render",),
+        invalidates=("review",),
         runner=_manifest.run,
         exit_map={1: (FAILED, "manifest: a required deliverable is missing")},
+    ),
+    # 2026-10-13 proven delivery: an independent review of the package as the
+    # attorney reads it, before anything is filed. A MUST-FIX holds (resumable:
+    # `--redo review` after a fix, or SMD's release); the driver takes the
+    # reason from the stage's own `review_held:` line, which the daemon pages on.
+    Stage(
+        "review",
+        "",
+        _slug_unit,
+        paid=True,
+        requires=("manifest",),
+        runner=_review.run,
+        exit_map={
+            1: (FAILED, "review: the pre-delivery review did not complete; nothing was filed, a rerun reviews again"),
+            2: (HELD, "review_held: the pre-delivery review found a must-fix; nothing was filed"),
+        },
     ),
     # ss#2614: the deliverable set onto the matter. The only stage that writes
     # to the firm's system; idempotent through the recorded folder id.
@@ -426,11 +444,15 @@ STAGES: tuple[Stage, ...] = (
         "upload",
         "",
         lambda c: [c.slug, c.unit.unit],
-        requires=("manifest",),
+        requires=("review",),
         runner=_upload.run,
         external=True,
         exit_map={
-            1: (FAILED, "upload: refused (a folder of that name is not ours, or the local bytes changed)"),
+            1: (
+                FAILED,
+                "upload: refused (a folder of that name is not ours, the local bytes changed, or the read-back "
+                "found other bytes than ours)",
+            ),
             2: (
                 HELD,
                 "upload: the folder read back short after the retries; the files may still be "

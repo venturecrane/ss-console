@@ -26,6 +26,7 @@ import io
 from typing import Any
 
 import pytest
+from fake_files import FileStore
 from smokeball_connector import letter_pages as lp
 from smokeball_connector import letter_tools as lt
 from smokeball_connector import resolution_token
@@ -100,12 +101,20 @@ class _Client:
     def __init__(self) -> None:
         self.uploads: list[tuple[str, str, bytes]] = []
         self.fail = False
+        self.store = FileStore()  # serves the filed letter back to its read-back
 
     def add_file(self, matter_id: str, file_name: str, blob: bytes, folder_id: Any = None) -> dict:
         if self.fail:
             raise RuntimeError("Smokeball said no")
         self.uploads.append((matter_id, file_name, blob))
-        return {"fileId": f"file-{len(self.uploads)}"}
+        fid = self.store.add(matter_id, file_name, blob, folder_id, file_id=f"file-{len(self.uploads)}")
+        return {"fileId": fid}
+
+    def get(self, path: str, **_params: Any) -> Any:
+        return self.store.read(path)
+
+    def download_file(self, matter_id: str, file_id: str) -> tuple[dict, bytes]:
+        return self.store.download(matter_id, file_id)
 
 
 @pytest.fixture

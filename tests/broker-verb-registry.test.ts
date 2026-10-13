@@ -82,6 +82,11 @@ const EXPECTED_VERBS = [
   'correction_propose',
   // The demand job's request edge (demand_verbs.py): submit gateway-or-root,
   // reads open to the agent, record and resume root only.
+  // Proven delivery (delivery_proof.py): the runner daemon's alert row and its
+  // read of a job's bound replies, root only.
+  'delivery_proof_alert',
+  'delivery_proof_record',
+  'delivery_reply_status',
   'demand_allowance',
   'demand_job_record',
   'demand_job_rerun',

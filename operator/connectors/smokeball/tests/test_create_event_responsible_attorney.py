@@ -31,6 +31,9 @@ class _FakeClient:
         self.posts: list[dict] = []
 
     def get(self, path: str, **_: Any) -> Any:
+        if path == "/events/evt-1":  # the write's own read-back serves what was posted
+            body = dict(self.posts[-1])
+            return {**body, "id": "evt-1", "matter": {"id": body.get("matterId")}}
         self.gets.append(path)
         if self.raise_on_get:
             raise RuntimeError("matter read failed")

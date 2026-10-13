@@ -39,7 +39,8 @@ import io
 from typing import Any
 
 from . import form_letter_facts as facts
-from .form_letters import _read_back
+from . import readback
+from .form_letters import _file_proved
 from .letterhead import load_firm_identity
 from .library import ResolvedTemplate, list_matter_files, load_library_config, name_matches, resolve_template
 from .medicals_layout import layout_values, provider_rows
@@ -299,7 +300,7 @@ def render_funding_case_eval(matter_id: str) -> Any:
     signature: those come back in ``left_for_firm`` and ``left_for_client``.
 
     Files ``Funding Case Evaluation - prefilled.pdf`` at the matter's root and
-    reads it back. Returns ``status`` (``filed``, ``filed_not_visible`` or
+    reads it back. Returns ``status`` (``filed``, ``link_not_visible`` / ``readback_mismatch`` (read back by id, size and sha256; SMD is alerted, do NOT file again) or
     ``refused`` with ``reason``), ``fileId``, ``fileName``, ``filled`` (box
     names read back off the filed PDF, NEVER values), ``not_in_file`` (boxes
     this tool fills that the record had no value for), ``left_for_firm``, ``left_for_client``, ``providers_beyond_four``,
@@ -341,11 +342,9 @@ def render_funding_case_eval(matter_id: str) -> Any:
     except Exception as exc:  # noqa: BLE001 - a form pypdf cannot fill is refused, never filed half-made
         return _refused(f"{resolved.name!r} could not be filled ({exc.__class__.__name__}); nothing was filed")
     same = [str(e.get("id")) for e in list_matter_files(client, matter) if name_matches(e, FILE_NAME)]
-    result = client.add_file(matter, FILE_NAME, data)
-    file_id = result.get("fileId") if isinstance(result, dict) else None
-    seen = _read_back(client, matter, str(file_id)) if file_id else None
-    return {
-        "status": "filed" if seen else "filed_not_visible",
+    file_id, proof = _file_proved(client, matter, FILE_NAME, data)
+    out = {
+        "status": "filed",
         "fileId": file_id,
         "fileName": FILE_NAME,
         "matterId": matter,
@@ -358,6 +357,7 @@ def render_funding_case_eval(matter_id: str) -> Any:
         "template": {"name": resolved.name, "fileId": resolved.file_id},
         "sha256": hashlib.sha256(data).hexdigest(),
     }
+    return readback.verdict(out, proof)
 
 
 def register(server: Any) -> None:

@@ -41,6 +41,15 @@ def _connect(db_path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout=5000")
     conn.execute(CREATE_SQL)
     conn.execute(CREATE_INDEX_SQL)
+    # ``located`` (proven delivery, 2026-10-13): whether the send's own Sent
+    # Items lookup found the message by its audit header
+    # (``msgraph_ops._locate_sent``). NULL until a ``sent`` is settled, and on
+    # rows written before the column. The runner daemon's reply watch reads it
+    # (``delivery_proof.reply_rows``): a POST that returned is the vendor
+    # accepting, not the requester's mailbox receiving.
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(bound_replies)")}
+    if "located" not in cols:
+        conn.execute("ALTER TABLE bound_replies ADD COLUMN located INTEGER")
     return conn
 
 
@@ -90,12 +99,15 @@ def release(db_path: str, key: str) -> None:
         conn.close()
 
 
-def settle(db_path: str, key: str, outcome: str) -> None:
+def settle(db_path: str, key: str, outcome: str, located: bool | None = None) -> None:
     if outcome not in ("sent", "unknown"):
         raise ValueError(f"unknown bound reply outcome {outcome!r}")
     conn = _connect(db_path)
     try:
-        conn.execute("UPDATE bound_replies SET outcome=? WHERE binding_key=?", (outcome, key))
+        conn.execute(
+            "UPDATE bound_replies SET outcome=?, located=? WHERE binding_key=?",
+            (outcome, None if located is None else int(bool(located)), key),
+        )
         conn.commit()
     finally:
         conn.close()

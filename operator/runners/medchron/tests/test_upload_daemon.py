@@ -311,6 +311,7 @@ class FakeBroker:
             "cents_used": 0,
         }
         self.allowance_calls: list[str | None] = []
+        self.proof_requests: list[dict] = []
 
     def status(self, job_id):
         if self.down:
@@ -330,6 +331,12 @@ class FakeBroker:
         self.rows.setdefault(job_id, {})["state"] = state
         return {"ok": True}
 
+    def _request(self, req):
+        """The daemon's proven-delivery verbs (proof/watch.py) ride the raw client."""
+        assert req["action"].startswith("delivery_"), req
+        self.proof_requests.append(req)
+        return {"ok": True, "replies": []}
+
 
 def _fake_runner(tmp_path: Path, script: str) -> list[str]:
     p = tmp_path / "fake-medchron.py"
@@ -348,7 +355,8 @@ if n == 1 and (jd / 'crash-once').exists():
     sys.exit(137)
 print(json.dumps([{"unit": "alpha", "outcome": "delivered", "reason": None, "stage": None, "dollars": 12.34,
                    "pages": 300, "documents": 40, "folder_id": "folder-9",
-                   "files": [{"name": "A.docx", "sha256": "ab", "bytes": 10, "confirmed": True}]}]))
+                   "files": [{"name": "A.docx", "sha256": "ab", "bytes": 10, "confirmed": True}],
+                   "proof": {"readback": "confirmed", "files": [{"name": "x.docx", "file_id": "f1", "size": 10, "sha256": "a" * 64}], "review": "passed", "review_cents": 0}}]))
 """
 
 
@@ -693,7 +701,7 @@ def test_a_resume_passes_redo_to_the_runner_and_consumes_it(tmp_path):
 import json, pathlib, sys
 pathlib.Path(sys.argv[1], 'argv.json').write_text(json.dumps(sys.argv[1:]))
 print(json.dumps([{"unit": "alpha", "outcome": "delivered", "reason": None, "stage": None, "dollars": 1.0,
-                   "pages": 1, "documents": 1, "folder_id": "f", "files": []}]))
+                   "pages": 1, "documents": 1, "folder_id": "f", "files": [], "proof": {"readback": "confirmed", "files": [{"name": "x.docx", "file_id": "f1", "size": 10, "sha256": "a" * 64}], "review": "passed", "review_cents": 0}}]))
 """
     d, broker = _daemon(tmp_path, script=script)
     _fail_job(d, broker)
@@ -713,7 +721,8 @@ print(json.dumps([{"unit": "alpha", "outcome": "delivered", "reason": None, "sta
 
 _DELIVERED = (
     '[{"unit": "alpha", "outcome": "delivered", "reason": null, "stage": null, '
-    '"dollars": 5.0, "pages": 7, "documents": 2, "folder_id": "f", "files": []}]'
+    '"dollars": 5.0, "pages": 7, "documents": 2, "folder_id": "f", "files": [], '
+    '"proof": {"readback": "confirmed", "rows": 1, "review": "passed", "review_cents": 0}}]'
 )
 
 BANNER_RUNNER = f"""

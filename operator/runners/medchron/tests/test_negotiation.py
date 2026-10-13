@@ -13,13 +13,27 @@ from types import SimpleNamespace
 import pytest
 
 from medchron import arrivals
-from medchron.negotiation import extract as X, notice as N, rows as R, run as run_mod
+from medchron.negotiation import extract as X, notice as N, offer_check, rows as R, run as run_mod
 from medchron.negotiation.select import select
 from medchron_testkit import PRICING
 
 JOB = "01KTJ0BX0000000000000000NG"
 M1 = "11111111-1111-4111-8111-111111111111"
 DOC = {"name": "Offer letter 10-07.pdf", "ext": ".pdf"}
+#: The fixture document's text: it prints every amount and date the run tests'
+#: events carry, so the pre-write code check (offer_check) passes them; the
+#: falsifiers for that check live in test_negotiation_proof.py.
+LETTER = (
+    "We offer $15,000 to settle, dated October 7, 2026. Our tender of $956,000 on 9/23/2026 stands. "
+    "Offer of $9,000 dated 2025-01-15."
+)
+
+
+@pytest.fixture(autouse=True)
+def _review_passes(monkeypatch):
+    """The independent model review, stubbed to find nothing (no paid call in
+    unit tests); test_negotiation_proof.py drives its holds."""
+    monkeypatch.setattr(offer_check, "model_holds", lambda *a, **k: {})
 
 
 def _offer(**over):
@@ -276,7 +290,7 @@ def _run(tmp_path, seat, layout, monkeypatch, events=None, fail_read=False, **jo
         layout=layout,
         log=lambda m: None,
     )
-    monkeypatch.setattr(r, "_text", lambda mid, f: "letter text")
+    monkeypatch.setattr(r, "_text", lambda mid, f: LETTER)
     return r
 
 
@@ -324,7 +338,7 @@ def test_a_file_saved_exactly_at_the_cutoff_is_new_and_one_before_is_not(tmp_pat
     ]
     seen: list[str] = []
     r = _run(tmp_path, Seat(files), Layout(**COVERED), monkeypatch, seed_saved_before="2026-10-09T14:00:00Z")
-    monkeypatch.setattr(r, "_text", lambda mid, f: seen.append(f["id"]) or "letter text")
+    monkeypatch.setattr(r, "_text", lambda mid, f: seen.append(f["id"]) or LETTER)
     r.run()
     assert seen == ["f2"]
 

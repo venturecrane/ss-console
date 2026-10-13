@@ -29,7 +29,9 @@ firm config, its drafter, its gate sources) have drafting's own copies here.
 
 Outcomes (the drafting ledger, the same edges as demand's):
 
-* ``delivered``: the document and its attorney notes are on the matter, read back.
+* ``delivered``: the document and its attorney notes passed the independent
+  review, are on the matter, and were read back by file id, size and sha256;
+  the verdict carries the ``proof`` block the daemon requires (2026-10-13).
 * ``held``: the FILE or the REQUEST needs a person, nothing was filed: the
   matter id does not carry the number asked for, the destination is neither
   the matter nor an authored rehearsal matter, the file has nothing to draft
@@ -37,7 +39,10 @@ Outcomes (the drafting ledger, the same edges as demand's):
   on the matter. Final; the reply relays the reason.
 * ``failed``: OUR machinery (a read that did not finish, a limit, a truncated
   or unfinished stage, a gate or format refusal of our own output, a short
-  read-back): resumable, no client message, SMD alerted.
+  read-back): resumable, no client message, SMD alerted. ``review_held``
+  (the review found a MUST-FIX; SMD redoes or releases it) and
+  ``readback_mismatch`` (the bytes on the matter are not ours) are failures
+  of this kind too.
 """
 
 from __future__ import annotations
@@ -54,6 +59,7 @@ from ..demand import deliver, facts as facts_mod, preflight, pull, summarize, tr
 from ..demand.firm import DemandFirm
 from ..ledger import Ledger
 from ..llm import Doorway
+from ..proof import readback as readback_mod, review as proof_review
 from . import (
     caption as caption_mod,
     caption_stage,
@@ -61,6 +67,7 @@ from . import (
     firm as firm_mod,
     howell,
     job as job_mod,
+    review as review_mod,
 )
 from .placing import Placing
 from .outcome import REASON, DraftingFailed, DraftingHold, Verdict
@@ -69,6 +76,7 @@ from .outcome import REASON, DraftingFailed, DraftingHold, Verdict
 CHUNK_CHARS = 120_000
 CONCURRENCY = 4
 DIGEST_MAX_TOKENS = 64_000
+SHORT = "stage_unfinished: file: the read-back is short after its retries; the files may still be materializing"
 #: The digest compose reads, condensed under this many characters (about 400K
 #: tokens, under demand's 2M-character lever): with the house style, the
 #: skeleton, one exemplar and the context, the compose request stays under
@@ -383,17 +391,28 @@ class DraftingRun(Placing):
             )
         kw = {} if self.readback_pause is None else {"pause": self.readback_pause}
         rec = deliver.file_to_matter(self.data, self.seat, self.job.file_to_id, self.log, **kw)
+        if rec["exit"] == 1 and str(rec.get("said") or "").startswith("readback_mismatch:"):
+            raise DraftingFailed(str(rec["said"]))  # the upload stage's sha read-back: not our bytes
         if rec["exit"] == 1:
             raise DraftingHold(f"filing_refused: {rec.get('said') or 'the upload stage refused'}")
         if rec["exit"] != 0:
-            raise DraftingFailed(
-                "stage_unfinished: file: the read-back is short after its retries; the files may still be materializing"
-            )
+            raise DraftingFailed(SHORT)
+        # Proven, not claimed (2026-10-13): every filed file downloaded by id
+        # and its sha256 compared with the bytes built.
+        try:
+            proof = deliver.prove(self.data, self.seat, self.job.file_to_id, rec, manifest, self.log, **kw)
+        except readback_mod.ReadbackMismatch as exc:
+            raise DraftingFailed(f"readback_mismatch: {exc.name}: {exc.why}") from None
+        except readback_mod.ReadbackShort:
+            raise DraftingFailed(SHORT) from None
+        rv = review_mod.load(self.data) or {}
+        proof.update(review="released" if rv.get("released") else "passed", review_model=str(rv.get("model") or ""))
         return Verdict(
             "delivered",
             stage="file",
             folder_id=str(rec.get("folder_id")),
             files=[{"name": m["name"], "size": m["bytes"], "role": m.get("role")} for m in manifest],
+            proof=proof,
         )
 
     def _walk(self) -> Verdict:
@@ -464,6 +483,8 @@ class DraftingRun(Placing):
             v.reason = f"unexpected: {v.reason}"
         v.document_class = self.cls
         v.dollars = round(self.budget.refresh(), 4)
+        if v.proof is not None:
+            v.proof["review_cents"] = proof_review.stage_cents(self.budget.by_stage)
         if (self.data / "caption.json").is_file():
             cap = self._json("caption.json")
             v.caption_discrepancies = cap["discrepancies"]

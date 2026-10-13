@@ -158,7 +158,7 @@ def test_the_months_demand_spend_holds_the_estimate_too(tmp_path, pricing):
     assert v.outcome == "failed" and v.stage == "monthly_budget_usd" and client.calls == []
 
 
-def test_a_premise_failure_files_a_coverage_report_and_pays_nothing(tmp_path, pricing):
+def test_a_premise_failure_files_a_coverage_report_and_pays_only_for_its_review(tmp_path, pricing):
     docs = standard_docs() + [
         ("d5", "Demand Acceptance letter.pdf", make_pdf(["We accept the policy limits demand."]), "f-corr")
     ]
@@ -166,7 +166,8 @@ def test_a_premise_failure_files_a_coverage_report_and_pays_nothing(tmp_path, pr
     client = ScriptedClient()
     _r, v, _ = _run(tmp_path, pricing, seat, client)
     assert v.outcome == "delivered" and v.coverage_report is True
-    assert client.calls == [] and v.dollars == 0
+    # nothing of the demand is paid; the report's own review is (2026-10-13)
+    assert client.stages() == ["REVIEW"] and v.proof["review"] == "passed"
     assert [f["name"].startswith("Coverage Posture Report") for f in v.files] == [True]
     report = (tmp_path / "job" / "data" / "coverage-report.md").read_text()
     assert (
@@ -835,7 +836,7 @@ def test_an_acceptance_found_only_in_a_documents_text_fails_g4(tmp_path, pricing
     ]
     client = ScriptedClient()
     _r, v, _ = _run(tmp_path, pricing, seat_with(docs), client)
-    assert v.coverage_report is True and client.calls == []
+    assert v.coverage_report is True and client.stages() == ["REVIEW"]  # only the report's own review is paid
 
 
 def test_g1_does_not_pass_on_a_medical_bill_or_a_blank_claim_field():
@@ -1261,7 +1262,8 @@ def test_gate_quote_failures_left_after_repair_are_failed_and_resume_repays_noth
     monkeypatch.setattr(quotefix, "repair", real)
     _r, v2, _ = _run(tmp_path, pricing, seat, client)
     assert v2.outcome == "delivered", v2.reason
-    assert len(client.calls) == paid  # resume re-ran repair, gate, render and file only
+    # resume re-ran repair, gate, render, the pre-delivery review (never reached before) and file only
+    assert client.stages()[paid:] == ["REVIEW"]
 
 
 # ---- 2026-10-06: a workers' comp policy's boilerplate stopped G2 ----------------------------

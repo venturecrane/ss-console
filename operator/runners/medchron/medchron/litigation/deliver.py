@@ -12,8 +12,10 @@ refusal. What stays the same are the lessons the upload stage paid for:
   become a second copy on the firm's matter);
 * the read-back is the only confirmation: the folder listed until the name
   appears at its byte count, then the file DOWNLOADED and its sha256 compared
-  with the bytes built here. A short read-back fails (resumable), it is
-  never reported delivered.
+  with the bytes built here (``proof.readback``, the one implementation every
+  lane shares since 2026-10-13). A short read-back fails (resumable), it is
+  never reported delivered; different bytes fail as ``readback_mismatch``,
+  which pages SMD (wrong content on the firm's matter, never a lag).
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from ..stages.upload import _vendor_name
+from ..proof.readback import remote_sha, vendor_name
 from .outcome import LitigationFailed, LitigationHold
 
 READBACK_TRIES = 8
@@ -40,26 +42,13 @@ def _folder(seat: Any, matter_id: str, name: str) -> str | None:
 
 def _in_folder(seat: Any, matter_id: str, folder_id: str, name: str) -> dict[str, Any] | None:
     for f in seat.list_files(matter_id):
-        if str(f.get("folderId") or "") == folder_id and not f.get("deleted") and _vendor_name(f) == name:
+        if str(f.get("folderId") or "") == folder_id and not f.get("deleted") and vendor_name(f) == name:
             return f
     return None
 
 
 def _save(path: Path, rec: dict[str, Any]) -> None:
     path.write_text(json.dumps(rec, indent=1), encoding="utf-8")
-
-
-def _sha_of_remote(seat: Any, matter_id: str, row: dict[str, Any], scratch: Path) -> str | None:
-    minted = seat.mint(matter_id, [str(row["id"])])
-    url = (minted[0] if minted else {}).get("url")
-    if not url:
-        return None
-    dest = scratch / f"readback-{row['id']}"
-    try:
-        seat.fetch(url, dest, None)
-        return hashlib.sha256(dest.read_bytes()).hexdigest()
-    finally:
-        dest.unlink(missing_ok=True)
 
 
 def file_workbook(
@@ -108,7 +97,7 @@ def file_workbook(
     for attempt in range(tries):
         row = _in_folder(seat, matter_id, str(folder_id), name)
         if row is not None and int(row.get("size") or 0) == len(blob):
-            got = _sha_of_remote(seat, matter_id, row, data)
+            got = remote_sha(seat, matter_id, str(row["id"]), data)
             if got == sha:
                 rec.update(confirmed=True, file_id=str(row["id"]))
                 _save(rec_path, rec)
@@ -120,7 +109,10 @@ def file_workbook(
                     "sha256": sha,
                 }
             if got is not None:
-                raise LitigationFailed("stage_unfinished: file: the read-back bytes differ from the workbook built")
+                raise LitigationFailed(
+                    "readback_mismatch: file: the read-back bytes differ from the workbook built; "
+                    "the file on the matter is not the one built here"
+                )
         if attempt + 1 < tries:
             time.sleep(pause)
     raise LitigationFailed(

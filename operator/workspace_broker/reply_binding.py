@@ -64,6 +64,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -71,7 +72,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from . import bound_replies, msgraph_lookup
+from . import bound_replies, delivery_proof, msgraph_lookup
 from .broker_context import BrokerContext
 from .demand_ledger import DemandLedger
 from .drafting_ledger import DraftingLedger
@@ -111,6 +112,7 @@ SCHEDULED_LANES = {"litigation_job": "skill:litigation-status", "negotiation_job
 #: told the firm to narrow its request after our own stage failed), so its
 #: reply is refused here and the failure goes to SMD's shortfall alert instead.
 REPLYABLE_DEMAND_STATES = frozenset({"delivered", "held"})
+logger = logging.getLogger(__name__)
 #: How old an email a bare message binding may still answer.
 RECENCY_DAYS = 14
 AUDIT_TYPE = "REPLY_BINDING"
@@ -277,6 +279,14 @@ def _inbound_turn_did_not_reply(db_path: str, graph_message_id: str, since: str)
     return None
 
 
+def reply_key(kind: str, ident: str, row: dict[str, Any]) -> str:
+    """The bound-reply key a job's reply is claimed under. One reply per
+    (attempt, outcome): a resumed job (attempt + 1) that ends again is owed a
+    reply for its new outcome. Also what the runner daemon's reply watch
+    matches (``delivery_proof.reply_status_verb``), so the two never disagree."""
+    return f"{kind}:{ident}:{row.get('attempt') or 1}:{row['state']}"
+
+
 def _verify_job(broker: BrokerContext, kind: str, ident: str, db_path: str) -> tuple[dict[str, Any], str]:
     """A job binding's ledger checks: (the row, its reply key), or refused."""
     noun = _NOUN[kind]
@@ -290,9 +300,7 @@ def _verify_job(broker: BrokerContext, kind: str, ident: str, db_path: str) -> t
         )
     if row["state"] not in REPLYABLE_DEMAND_STATES:
         raise BindingRefused(f"{noun} job {ident} has not ended (it is {row['state']}); its reply waits for that")
-    # One reply per (attempt, outcome): a resumed job (attempt + 1) that
-    # ends again is owed a reply for its new outcome.
-    key = f"{kind}:{ident}:{row.get('attempt') or 1}:{row['state']}"
+    key = reply_key(kind, ident, row)
     if bound_replies.claimed(db_path, key):
         raise BindingRefused(f"{noun} job {ident} has already had its reply for this outcome")
     return row, key
@@ -555,8 +563,32 @@ def reply_verb(
         if state["claimed"]:
             _settle_failed_post(broker, ops, v, raw, exc, str(state["claimed_at"]))
         raise
-    bound_replies.settle(db_path, v.key, "sent")
+    _settle_sent(broker, db_path, v, result)
     return result
+
+
+def _settle_sent(broker: BrokerContext, db_path: str, v: Verified, result: Any) -> None:
+    """Settle a POST that returned. The send's own Sent Items lookup
+    (``msgraph_ops._locate_sent``, retried with backoff) is the requester-side
+    proof. Not found is not a failed send (the message is gone; resending would
+    duplicate it), so it is settled ``sent`` and, for a job's reply, SMD is
+    paged to look (proven delivery, 2026-10-13)."""
+    lookup = str(result.get("lookup") or "") if isinstance(result, dict) else ""
+    located = lookup.startswith("ok") if lookup else None
+    bound_replies.settle(db_path, v.key, "sent", located)
+    if located is not False or v.kind not in JOB_KINDS:
+        return
+    try:
+        delivery_proof.append_alert(
+            broker,
+            lane=v.kind[: -len("_job")],
+            job_id=v.job_id or v.key.split(":")[1],
+            code="reply_not_in_sent_items",
+            attempt=int(v.key.split(":")[2]) if v.key.count(":") >= 3 else 1,
+            detail=f"the reply was sent and its Sent Items lookup said: {lookup}",
+        )
+    except (ValueError, OSError, sqlite3.Error):
+        logger.exception("could not record the unlocated reply for %s", v.key)
 
 
 def _outcome(v: Verified) -> str:

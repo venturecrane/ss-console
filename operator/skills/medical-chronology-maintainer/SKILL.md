@@ -421,6 +421,15 @@ nothing, stop.
        the matter, that nothing is needed from the firm, and that SMD is finishing
        it. SMD sees the hold on the job's own record and resumes it from that
        check; the stages before it are not paid for again. Nothing else is sent.
+     - `review_held:` - the independent review read the finished package before
+       filing and found something that must be fixed (2026-10-13). **SMD's to
+       clear, exactly like `audit coverage:`.** Do not list or quote the
+       findings and do not ask anyone at the firm to review anything. Tell the
+       requester the package stopped at its final review before anything was
+       filed on the matter, that nothing is needed from the firm, and that SMD
+       is finishing it. Nothing else is sent.
+     - `dry_run_reported:` - a rehearsal reached the job record; nothing was
+       filed. SMD's to clear: say nothing was filed and SMD is looking at it.
      - `per_job_cap_usd` - the job's own cost cap. A bigger matter than the cap
        was sized for; SMD raises it or the package is split.
      - `chronology_package_page_allowance_per_month` - the seat's cycle page

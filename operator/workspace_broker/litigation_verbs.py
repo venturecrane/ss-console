@@ -57,6 +57,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from . import delivery_proof
 from .broker_context import BrokerContext
 from .litigation_intake import (
     FILE_TO_KEY,
@@ -465,7 +466,12 @@ class LitigationVerbs:
             raise ValueError(f"job {twin} is already underway for this scope; resuming {job_id} would run it twice")
         self._db.queue_dir.mkdir(parents=True, exist_ok=True)
         marker = self._db.queue_dir / f".resume-{job_id}.json"
-        marker.write_text(json.dumps({"job_id": job_id, "reason": reason[:500]}, sort_keys=True), encoding="utf-8")
+        marker.write_text(
+            json.dumps(
+                {"job_id": job_id, "reason": reason[:500], **delivery_proof.resume_extras(request)}, sort_keys=True
+            ),
+            encoding="utf-8",
+        )
         self._audit(RESUME_AUDIT_TYPE, {"job_id": job_id, "reason": reason[:500]})
         return {"ok": True, "job_id": job_id, "queued": True}
 

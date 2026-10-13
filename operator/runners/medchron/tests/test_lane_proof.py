@@ -40,7 +40,9 @@ if os.environ.get('MEDCHRON_PROOF_RUN') == '1':
 else:
     (jd.parent.parent / 'FILED').write_text(jd.name)
     v = [{"unit": "demand", "outcome": "delivered", "stage": "file", "dollars": 4.25,
-          "folder_id": "f1", "files": [{"name": "Demand.docx", "size": 5, "role": "demand"}]}]
+          "folder_id": "f1", "files": [{"name": "Demand.docx", "size": 5, "role": "demand"}],
+          "proof": {"readback": "confirmed", "review": "passed", "review_cents": 0, "review_model": "m",
+                    "files": [{"name": "Demand.docx", "file_id": "u1", "size": 5, "sha256": "a" * 64}]}}]
 (jd / 'verdict.json').write_text(json.dumps(v))
 print(json.dumps(v))
 """
@@ -53,6 +55,7 @@ class Client:
     def __init__(self) -> None:
         self.rows: dict[str, dict] = {}
         self.records: list[tuple[str, str, dict]] = []
+        self.proof: list[dict] = []
 
     def _request(self, req: dict) -> dict:
         a = req["action"]
@@ -64,6 +67,9 @@ class Client:
             return {"ok": True}
         if a == "demand_allowance":
             return {"ok": True, "used": 0, "remaining": 5, "cents_used": 0}
+        if a in ("delivery_proof_record", "delivery_proof_alert"):  # proven delivery (proof/watch.py)
+            self.proof.append(req)
+            return {"ok": True}
         raise AssertionError(a)
 
 
@@ -274,6 +280,8 @@ def test_accept_needs_a_passed_proof_and_a_verify_id_then_the_job_runs_live(lane
     assert states == ["submitted", "submitted", "running", "delivered"]  # note, clear, then the ordinary run
     assert (d.run_dir / "FILED").read_text() == A
     assert lane_proof.holds(d.run_dir) == []
+    # The proof run paged nothing; the live delivery recorded its proof once.
+    assert [r["action"] for r in client.proof] == ["delivery_proof_record"]
 
 
 def test_a_proof_of_a_job_with_no_envelope_anywhere_is_refused(lane):
@@ -376,6 +384,8 @@ def test_demand_and_drafting_stop_before_filing(module, tmp_path, monkeypatch):
     r.data, r.readback_pause, r.log = tmp_path, 0, print
     r.job = argparse.Namespace(file_to_id="m1")
     _staged(tmp_path)
+    if hasattr(run_mod, "review_stage"):  # the demand's pre-delivery review is its own suite's concern
+        monkeypatch.setattr(run_mod.review_stage, "run_stage", lambda _run: None)
 
     def no_filing(*a, **k):
         raise AssertionError("filed during a proof run")

@@ -19,13 +19,19 @@ names exactly those fields in plain words (`costType` is "cost type",
 `isBillable` is "billable", `activityCode` is "activity code", `staffId` is
 "staff").
 
-**Staged, PDF not filed** (`staged_file_failed`):
+The two lines below are for a `status` of `readback_mismatch` or
+`link_not_visible`; pick by `stage_status` (SMD is alerted either way, and
+the stage is never called again). When `stage_status` is `staged`, use the
+not-confirmed line with "the invoice PDF did not read back as filed" as the
+problem.
+
+**Staged, PDF not filed** (`stage_status` `staged_file_failed`):
 
 ```
 Staged: Acme Records invoice INV-2026-001, $1,250.00 per the entry staged on matter <matterNumber>. Unfinalized for your review. The invoice PDF did not file to the matter and still needs filing.
 ```
 
-**Staged, not confirmed** (`staged_unverified`). No figure: the read did not
+**Staged, not confirmed** (`stage_status` `staged_unverified`). No figure: the read did not
 confirm one.
 
 ```

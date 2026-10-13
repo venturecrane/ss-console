@@ -41,6 +41,7 @@ import json
 import re
 from typing import Any
 
+from . import delivery_proof
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
 from .medchron_ledger import (
@@ -95,7 +96,11 @@ def _audit_gate_hold(row: dict[str, Any]) -> bool:
     cached verdicts for the price of the handful of claims still open. Every
     other hold stays out: a refusal (`refused: ...`) needs the firm's decision,
     a limit hold lifts through the limit, and a seat-pause hold self-resumes."""
-    return row.get("state") == "held" and str(row.get("reason") or "").startswith(AUDIT_GATE_HOLD_PREFIX)
+    # The pre-delivery review's hold (proof/review.py, 2026-10-13) is the same
+    # kind: resumable by SMD, as a redo of the review or a release past it; and
+    # so is a dry run that reached the ledger (nothing was filed).
+    reason = str(row.get("reason") or "")
+    return row.get("state") == "held" and reason.startswith((AUDIT_GATE_HOLD_PREFIX, "review_held", "dry_run_reported"))
 
 
 _COVERAGE_KEYS = ("covered_json", "covered_document_ids", "uncovered_document_ids")
@@ -332,7 +337,9 @@ class MedchronVerbs:
             )
         self._db.queue_dir.mkdir(parents=True, exist_ok=True)
         marker = self._db.queue_dir / f".resume-{job_id}.json"
-        payload = {"job_id": job_id, "reason": reason[:500], "redo": [s.strip() for s in redo]}
+        extras = delivery_proof.resume_extras(request)
+        stages = [s.strip() for s in redo] + [s for s in extras.pop("redo", []) if s not in redo]
+        payload = {"job_id": job_id, "reason": reason[:500], "redo": stages, **extras}
         marker.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
         self._audit(
             "MEDCHRON_JOB_RUNNING",

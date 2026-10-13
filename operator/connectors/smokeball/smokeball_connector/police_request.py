@@ -30,7 +30,7 @@ import re
 from datetime import date
 from typing import Any
 
-from . import cited_facts
+from . import cited_facts, readback
 from . import form_letter_facts as facts
 from .form_letter_facts import Fact
 from .form_letters import MARKER, FormSpec, ResolvedTemplate, _fill_and_file, _refused, _resolve_form
@@ -229,7 +229,7 @@ def render_police(
     if not isinstance(resolved, ResolvedTemplate):
         return _refused(f"the firm's {spec.label} form did not resolve ({resolved.reason}); nothing was filed")
     out = _fill_and_file(client, matter, spec, when, resolved, cited, gather=_gather_for(agency, agency.kind))
-    if out.get("status") in ("filed", "filed_not_visible"):
+    if out.get("status") in ("filed", readback.MISMATCH, readback.NOT_VISIBLE):
         record = client.get(f"/matters/{matter}")
         number = str(record.get("number") or matter) if isinstance(record, dict) else matter
         out["agency"] = {"name": agency.name, "source": agency.source, "channel": agency.channel}

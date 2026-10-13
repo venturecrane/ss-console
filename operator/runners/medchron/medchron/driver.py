@@ -37,6 +37,7 @@ from . import (
     proof_mode,
     rehearsal,
     seat as seat_mod,
+    unit_proof,
 )
 from .covered import covered_sets
 from .stages.base import StageRefusal, StageRun
@@ -71,6 +72,11 @@ class Outcome:
     # no coverage artifacts: nothing is guessed, and the skill says the record
     # is unknown rather than approximating a delta.
     covered: dict[str, Any] | None = None
+    # 2026-10-13 proven delivery: what the daemon requires before it believes
+    # `delivered` (proof/gate.py): the read-back by id, size and sha256 off
+    # delivery.json's proven rows, and the pre-delivery review's status, model
+    # and cost. None on every other outcome.
+    proof: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
@@ -614,7 +620,7 @@ class Driver:
             outcome, reason = "refused", refusal
         else:
             outcome, reason = stage.exit_map.get(code, ("failed", f"exit {code}"))
-            reason = f"{reason}; last output: {' | '.join(lines)[-400:]}"
+            reason = unit_proof.paged_line(lines) or f"{reason}; last output: {' | '.join(lines)[-400:]}"
         st.finish(stage.name, status=outcome, exit_code=code, dollars=dollars, pages=pages, note=reason)
         st.end(outcome, reason)
         return Outcome(unit.unit, outcome, reason, stage.name, dollars, pages, notes)
@@ -634,6 +640,7 @@ class Driver:
                     o.files = list(d.get("files") or [])
                 except (OSError, ValueError):
                     pass
+            o.proof = unit_proof.for_outcome(o, self.slug_dir / "runs" / unit.unit, self.pricing)
             if o.outcome in ("delivered", "dry_run"):
                 try:
                     o.covered = covered_sets(self.slug_dir, unit.unit, self.cfg)

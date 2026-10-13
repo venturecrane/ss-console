@@ -45,11 +45,15 @@ INPUT_KEYS = (
     "prompt_repair",
 )
 MODEL_KEYS = ("transcription", "digest", "gap_audit", "compose", "audit", "repair")
+#: Optional: the independent pre-delivery review's model (``review.py``).
+#: Absent, the review uses ``audit``, never ``compose`` (the drafter grading
+#: its own letter).
+OPTIONAL_MODEL_KEYS = ("review",)
 
 # section -> {key: (type, required)}
 SCHEMA: dict[str, dict[str, tuple[str, bool]] | None] = {
     "firm": {"slug": ("str", True), "display_name": ("str", True)},
-    "models": {k: ("str", True) for k in MODEL_KEYS},
+    "models": {**{k: ("str", True) for k in MODEL_KEYS}, **{k: ("str", False) for k in OPTIONAL_MODEL_KEYS}},
     "budget": {
         "per_job_cap_usd": ("float", True),
         "monthly_budget_usd": ("float", True),

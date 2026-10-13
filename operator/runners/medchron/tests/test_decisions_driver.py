@@ -377,6 +377,9 @@ class _NoNetwork:
 
     def stream(self, **kw):
         self.calls.append(kw)
+        if "INDEPENDENT PRE-DELIVERY REVIEW" in self._system(kw):
+            # The pre-delivery review (stages/review.py) of a clean package.
+            return _Stream(_text_msg("VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"))
         return _Stream(_text_msg(REAL_MAP))
 
 

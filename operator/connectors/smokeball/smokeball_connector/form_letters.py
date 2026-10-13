@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any, Callable
 
-from . import cited_facts
+from . import cited_facts, readback
 from . import form_letter_facts as facts
 from .form_docx import FormError, fill_form, placeholders_in
 from .form_letter_facts import Fact
@@ -176,8 +176,9 @@ _MAX_EMPLOYER = 200
 PARAGRAPH_FIELDS = FORMS["first_party_rep"].paragraph_fields
 MARKER = "[Not in the file: {}]"
 
-#: Read-back waits after the upload, in seconds; module-level so a test can
-#: shorten them. Smokeball materializes an upload asynchronously.
+#: Read-back waits after the upload, in seconds. Since 2026-10-13 every form
+#: files through ``readback.prove_file`` (whose own ``WAITS``/``SLEEP`` run the
+#: poll); these stay exported because the form tests and sr1 import them.
 READBACK_WAITS: tuple[float, ...] = (2, 3, 5, 8)
 SLEEP: Callable[[float], None] = time.sleep
 
@@ -444,16 +445,14 @@ def _resolve_form(client: Any, spec: FormSpec) -> Any:  # ResolvedTemplate | Not
     return resolve_template(client, dataclasses.replace(cfg, templates=templates), spec.document_class)
 
 
-def _read_back(client: Any, matter_id: str, file_id: str) -> dict[str, Any] | None:
-    for wait in READBACK_WAITS:
-        SLEEP(wait)
-        try:
-            record = client.get(f"/matters/{matter_id}/documents/files/{file_id}")
-        except Exception:  # noqa: BLE001 - a 404 is "still materializing"; any failure is retried, then reported as not visible
-            continue
-        if isinstance(record, dict) and record:
-            return record
-    return None
+def _file_proved(client: Any, matter_id: str, file_name: str, data: bytes) -> tuple[Any, dict[str, Any]]:
+    """Upload a filled form and prove it (readback.py): ``(fileId, proof)``.
+    Until 2026-10-13 the forms read back existence only and reported a miss as
+    ``filed_not_visible``, which paged nobody; every form now proves id, size
+    and sha256, and a miss is ``status: link_not_visible``."""
+    result = client.add_file(matter_id, file_name, data)
+    file_id = result.get("fileId") if isinstance(result, dict) else None
+    return file_id, readback.prove_file(client, matter_id, file_id, data, file_name=file_name)
 
 
 def render_firm_form_letter(
@@ -519,9 +518,12 @@ def render_firm_form_letter(
 
     The letter files at the matter's root as ``1st party letter.docx`` or
     ``3rd Party Letter.docx`` (the names the firm's own toolbar uses) and is
-    read back. Returns ``status`` (``filed``, ``filed_not_visible`` when the
-    upload was accepted but the file did not appear in time, or ``refused``
-    with ``reason`` and nothing filed), ``fileId``, ``fileName``, ``unfilled``,
+    read back by id, size and sha256. Returns ``status`` (``filed`` with
+    ``readback: "confirmed"``; ``link_not_visible`` when the upload was
+    accepted but the file did not appear in time, or ``readback_mismatch``
+    when it appeared with other bytes: SMD is alerted on both, and the letter
+    must NOT be made again, a retry files a duplicate; or ``refused`` with
+    ``reason`` and nothing filed), ``fileId``, ``fileName``, ``unfilled``,
     ``facts_used`` (each field and where it was read), ``template`` (the form
     used) and ``same_name_on_matter`` (ids of files already carrying this
     name, which the person should know about). A health notice also returns
@@ -625,11 +627,9 @@ def _fill_and_file(
     unfilled += [MARKER.format(name) for name in filled.unknown]
     unfilled += [MARKER.format(f.missing) for k, f in found.items() if k.endswith("_mailing_address")]
     same = [str(e.get("id")) for e in list_matter_files(client, matter) if name_matches(e, spec.file_name)]
-    result = client.add_file(matter, spec.file_name, filled.data)
-    file_id = result.get("fileId") if isinstance(result, dict) else None
-    seen = _read_back(client, matter, str(file_id)) if file_id else None
+    file_id, proof = _file_proved(client, matter, spec.file_name, filled.data)
     out = {
-        "status": "filed" if seen else "filed_not_visible",
+        "status": "filed",
         "fileId": file_id,
         "fileName": spec.file_name,
         "matterId": matter,
@@ -644,7 +644,7 @@ def _fill_and_file(
     if confirmed is not None:
         out["card_values_to_check"] = {cited_facts.WORDS[k]: v for k, v in confirmed.shown.items() if k in used}
         out["cited_refused"] = {cited_facts.WORDS.get(k, k): why for k, why in confirmed.refused.items()}
-    return out
+    return readback.verdict(out, proof)
 
 
 def _police(matter: str, date: str | None, cited: Any, words: str | None, given: Any) -> dict[str, Any]:

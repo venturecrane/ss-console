@@ -9,6 +9,8 @@ inherits every lesson it paid for: the folder id recorded before the first
 file, a send recorded as it happens so a lagging vendor list can never cause a
 second copy, a folder of the same name that this job did not create refused,
 and the read-back that composes the vendor's name and extension (ss#2914).
+Then ``prove``: every filed file downloaded by its id and its sha256 compared
+with the bytes built, before the job may say delivered (2026-10-13).
 """
 
 from __future__ import annotations
@@ -128,6 +130,43 @@ def file_to_matter(
     # create, local bytes changed, no folder id, an empty manifest): one exit
     # code covers all four, so the caller must not guess which.
     return {"exit": code, "said": said[-1] if said else "", **delivery}
+
+
+def prove(
+    data: Path,
+    seat: Any,
+    matter_id: str,
+    rec: dict[str, Any],
+    manifest: list[dict[str, Any]],
+    log: Callable[[str], None],
+    *,
+    pause: float | None = None,
+) -> dict[str, Any]:
+    """The read-back half of the proof block, by file id, size and sha256
+    (2026-10-13: name and size alone read a same-length wrong file as
+    delivered). The upload stage is being taught to prove each row itself
+    (``proven``, ``file_id``, ``sha256`` on ``delivery.json``); when every
+    manifest row already carries that, it is used as it stands. Otherwise this
+    downloads and hashes each file here, so the demand and drafting jobs never
+    depend on which side landed first. Raises ``ReadbackShort`` (a lag;
+    resumable) or ``ReadbackMismatch`` (the bytes there are not ours)."""
+    from ..proof import readback
+
+    rows = {str(f.get("name")): f for f in (rec.get("files") or [])}
+    folder_id = str(rec.get("folder_id") or "")
+    files = []
+    for m in manifest:
+        r = rows.get(str(m["name"])) or {}
+        if not (r.get("proven") is True and r.get("file_id") and r.get("sha256") == m["sha256"]):
+            files = []
+            break
+        files.append({"name": m["name"], "file_id": str(r["file_id"]), "size": int(m["bytes"]), "sha256": m["sha256"]})
+    if files:
+        log(f"read-back proven by the upload stage: {len(files)} file(s) by id, size and sha256")
+        return {"readback": "confirmed", "folder_id": folder_id, "files": files}
+    expected = [{"name": m["name"], "sha256": m["sha256"], "bytes": m["bytes"]} for m in manifest]
+    kw: dict[str, Any] = {} if pause is None else {"pause": pause}
+    return readback.confirm_files(seat, matter_id, folder_id, expected, data / "readback", log=log, **kw)
 
 
 def out_dir(data: Path) -> Path:

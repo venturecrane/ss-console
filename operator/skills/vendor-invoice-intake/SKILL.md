@@ -180,17 +180,18 @@ the SAME `"spool:<token>"` reference you read from as `download_url`; the
 connector reads those bytes again and refuses if they differ, and it files the
 PDF itself. Read its `status`:
 
-| status               | meaning                                         | line                                                              |
-| -------------------- | ----------------------------------------------- | ----------------------------------------------------------------- |
-| `staged`             | entry written unfinalized, read back, PDF filed | staged (step 5 supplies the figure)                               |
-| `staged_file_failed` | entry written, the PDF did not file             | staged, and say the PDF still needs filing                        |
-| `staged_unverified`  | entry written, the read-back did not confirm it | staged but unconfirmed: name `readback.problems`, ask for a check |
-| `duplicate`          | already on the matter; NOTHING created          | flag: already entered                                             |
-| `possible_duplicate` | a close match exists; NOTHING created           | flag: possible duplicate, a person decides                        |
-| `refused`            | nothing created; `reason` says why              | flag with the reason in plain words                               |
+| status                                    | meaning                                                                  | line                                                                                                                                                                                                                                                     |
+| ----------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `staged`                                  | entry written unfinalized, read back, PDF filed                          | staged (step 5 supplies the figure)                                                                                                                                                                                                                      |
+| `readback_mismatch` or `link_not_visible` | entry written, but it or its PDF did not read back right; SMD is alerted | by `stage_status`: `staged_file_failed` says the PDF still needs filing; `staged_unverified` is staged but unconfirmed (name `readback.problems`, ask for a check); `staged` means the PDF filed but did not read back as sent, so say it needs checking |
+| `duplicate`                               | already on the matter; NOTHING created                                   | flag: already entered                                                                                                                                                                                                                                    |
+| `possible_duplicate`                      | a close match exists; NOTHING created                                    | flag: possible duplicate, a person decides                                                                                                                                                                                                               |
+| `refused`                                 | nothing created; `reason` says why                                       | flag with the reason in plain words                                                                                                                                                                                                                      |
 
 Never retry a `duplicate` or `possible_duplicate` with changed facts to get it
-through. Never call the stage twice for one invoice.
+through. Never call the stage twice for one invoice, above all after a
+`readback_mismatch` or `link_not_visible`: the entry exists, and a second stage
+duplicates the expense.
 
 ### 5. Re-read the ledger before replying (HARD STEP, never skip)
 

@@ -24,7 +24,8 @@ out = [{"unit": "drafting", "kind": "drafting", "outcome": "delivered", "stage":
                                    "why": "differs", "source": "Complaint Gamma Example.pdf", "quote": "Case No. CV-0001"}],
         "caption_corrections": [{"field": "plaintiff", "from": "Gamma Exampel", "to": "GAMMA EXAMPLE",
                                  "source_document": "Complaint Gamma Example"}],
-        "markers": [{"kind": "ATTORNEY", "text": "settlement authority"}]}]
+        "markers": [{"kind": "ATTORNEY", "text": "settlement authority"}],
+        "proof": {"readback": "confirmed", "files": [{"name": "x.docx", "file_id": "f1", "size": 10, "sha256": "a" * 64}], "review": "passed", "review_cents": 0}}]
 (jd / 'verdict.json').write_text(json.dumps(out))
 print(json.dumps(out))
 """
@@ -52,6 +53,8 @@ class FakeClient:
             return {"ok": True}
         if a == "drafting_allowance":
             return {"ok": True, "used": 0, "remaining": 5, "cents_used": 1234}
+        if a.startswith("delivery_"):  # the daemon's proven-delivery verbs (proof/watch.py)
+            return {"ok": True, "replies": []}
         raise AssertionError(f"the drafting lane must speak only drafting verbs, not {a}")
 
 

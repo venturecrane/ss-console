@@ -370,8 +370,10 @@ The one write files the bill's pages as their own document and stages one
 UNFINALIZED expense beside them; the entry's description says which pages it
 came from and, when they were transcribed, that it was read from a scan. Read
 the `status` exactly as `vendor-invoice-intake` does: `staged` (the line says
-"staged as an expense of <amount>, unfinalized"), `staged_unverified` or
-`staged_file_failed` (say which), `duplicate` or `possible_duplicate`
+"staged as an expense of <amount>, unfinalized"), `readback_mismatch` or
+`link_not_visible` (the entry exists but did not fully read back; SMD is
+alerted; say which by `stage_status`, `staged_unverified` or
+`staged_file_failed`, and never stage it again), `duplicate` or `possible_duplicate`
 (nothing created; name the existing entry), `refused` (nothing created; the
 reason in plain words). The amount on the line is the tool's returned
 `amount`. Never call the filing tool for a bill that was staged: its pages

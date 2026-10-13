@@ -13,8 +13,11 @@ path), and nothing is emailed.
 It writes ``<workdir>/dry-run-report.json`` and a plain-text twin, one entry
 per candidate document: the matter number, the file name, its dateCreated,
 the extracted events, the planned row for each (or ``already_present``,
-``possible_duplicate``, a firm-kept-tab skip, a full tab), and the exact email
-text the live run would send for it. Stdout carries one JSON summary line.
+``possible_duplicate``, a firm-kept-tab skip, a full tab), every row the
+pre-write checks would HOLD and why (``offer_check``: the amount or date not
+printed in the document, or the independent review's must-fix; 2026-10-13),
+and the exact email text the live run would send for it. Stdout carries one
+JSON summary line.
 
 It is not a mode of the lane's ``negotiate`` command on purpose: that
 command's verdict goes to the broker, which turns each notice into an email.
@@ -165,12 +168,18 @@ class NegotiationDryRun(NegotiationRun):
                 | {"event": rec["event"]}
                 for rec in e["plan"]["offers"]
             ]
+            held = [
+                {k: h["event"].get(k) for k in ("kind", "by", "amount", "date")}
+                | {"reason": h.get("reason"), "held_by": h.get("by") or "undated"}
+                for h in e["plan"].get("held") or []
+            ]
             out.append(
                 {
                     **{k: e[k] for k in ("matter_number", "matter_title", "file", "file_id", "date_created", "events")},
                     "rows_planned": rows,
                     "details_planned": details,
                     "offers": offers,
+                    "held": held,
                     "emails": [n["text"] for n in self.notices[e["notice_from"] : nxt]],
                 }
             )
@@ -187,6 +196,8 @@ class NegotiationDryRun(NegotiationRun):
             "candidates": len(entries),
             "read_errors": sum(1 for e in entries if "read_error" in e),
             "rows_planned": sum(len(e.get("rows_planned") or []) for e in entries),
+            "held": sum(len(e.get("held") or []) for e in entries),
+            "reviewed": verdict.get("offers_reviewed"),
             "emails": sum(len(e.get("emails") or []) for e in entries),
             "cents": verdict.get("cents"),
             "dry_run": True,
@@ -215,6 +226,11 @@ def render_text(summary: dict[str, Any], entries: list[dict[str, Any]]) -> str:
             lines.append(f"   would set details: {d}")
         for o in e["offers"]:
             lines.append(f"   offer -> {o['status']} row={o.get('row')} reason={o.get('reason')!r}")
+        for h in e.get("held") or []:
+            lines.append(
+                f"   would hold ({h['held_by']}): {h.get('kind')} {h.get('amount')} {h.get('date')} "
+                f"reason={h.get('reason')!r}"
+            )
         for t in e["emails"]:
             lines += ["   --- email ---", *("   " + ln for ln in t.splitlines()), "   -------------"]
         lines.append("")

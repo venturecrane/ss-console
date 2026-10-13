@@ -14,6 +14,15 @@ The verdict is ONE JSON object (stdout's only line and ``verdict.json``):
 ``delivered`` with counts and the notices, or ``failed`` (our machinery: the
 matter list could not be read, the job could not start). A spend cap reached
 part way stops the reading and still delivers what was entered.
+
+PROVEN, NOT CLAIMED (2026-10-13). Every row about to be written is checked
+against the document first (``offer_check``: the amount and date printed in the
+text, then an independent model read of side, amount, date and kind); a miss is
+HELD, never entered or announced, and its document stays new for a retry. A
+delivered verdict carries the ``proof`` block the daemon requires: the rows
+written and read back, the review's status and spend, and the alerts
+(``review_held``, ``readback_mismatch``) that page SMD while the run's notices
+still go out.
 """
 
 from __future__ import annotations
@@ -29,7 +38,8 @@ from ..ledger import Ledger
 from ..llm import Doorway
 from ..demand.pull import fetch_all
 from ..stages.base import read_jsonl
-from . import extract as read_mod, notice as notice_mod, rows as rows_mod, summary as summary_mod, text as text_mod
+from . import extract as read_mod, notice as notice_mod, offer_check, rows as rows_mod, summary as summary_mod
+from . import text as text_mod
 from .job import load as load_job
 from .select import extension, full_name, select
 
@@ -121,6 +131,10 @@ class NegotiationRun:
             "offers_held": 0,
             "events_excluded": 0,
             "seed_offers_entered": 0,
+            "offers_reviewed": 0,
+            "offers_held_review": 0,
+            "rows_read_back": 0,
+            "rows_readback_mismatch": 0,
         }
         self.notices: list[dict[str, Any]] = _load(self.data / "notices.json", [])
         #: Offers a document showed with no date: neither entered nor emailed,
@@ -268,6 +282,8 @@ class NegotiationRun:
             )
             status = res.get("status") if isinstance(res, dict) else "refused"
             entries = res.get("entries") or [] if isinstance(res, dict) else []
+            if status == "written":
+                self.counts["rows_read_back"] += sum(1 for x in entries if x.get("status") == "written")
             for rec in plan["offers"]:
                 if rec.get("plaintiff_index") != pidx or rec.get("status") != "to_write":
                     continue
@@ -278,6 +294,7 @@ class NegotiationRun:
                     if got == "possible_duplicate":
                         rec["reason"] = "the same amount is already on that row with a different date"
                 elif status == "readback_mismatch":
+                    self.counts["rows_readback_mismatch"] += 1
                     rec.update(status="not_entered", reason="Smokeball did not show it as entered when checked")
                 else:
                     rec.update(status="not_entered", reason="the tab could not be updated")
@@ -409,9 +426,9 @@ class NegotiationRun:
                 fid = str(f["id"])
                 doc = {"name": full_name(f), "ext": extension(f), "saved": str(f.get("modified") or "")[:10]}
                 try:
-                    events = read_mod.read_document(
-                        self.doorway, doc, self._text(mid, f), [r for t in tabs for r in t["rows"]], tabs
-                    )
+                    text = self._text(mid, f)
+                    events = read_mod.read_document(self.doorway, doc, text, [r for t in tabs for r in t["rows"]], tabs)
+                    checked = offer_check.screen(self.doorway, doc, text, events, self._tokens(tabs), fid)
                 except limits_mod.LimitHold as exc:
                     self.stopped = exc.reason
                     failed.update(str(x["id"]) for x in new[new.index(f) :])
@@ -428,10 +445,13 @@ class NegotiationRun:
                     continue
                 self.counts["docs_read"] += 1
                 attempts.pop(fid, None)
-                plan = rows_mod.plan_document(events, doc, tabs, self._tokens(tabs))
+                self.counts["offers_reviewed"] += checked["reviewed"]
+                plan = rows_mod.plan_document(checked["events"], doc, tabs, self._tokens(tabs))
+                plan["held"] = list(plan.get("held") or []) + checked["held"]
                 self._planned(matter, f, events, plan, tabs)
                 self._write(mid, plan, tabs)
-                self._hold(matter, f, doc, plan)
+                if self._hold(matter, f, doc, plan, attempts):
+                    failed.add(fid)
                 for rec in plan["offers"]:
                     if fid in quiet:
                         # A seeded matter's earlier offer, entered so the tab is
@@ -452,23 +472,47 @@ class NegotiationRun:
             left[mid] = sorted(quiet & failed)
             self._set_quiet(left)
 
-    def _hold(self, matter: dict[str, Any], f: dict[str, Any], doc: dict[str, Any], plan: dict[str, Any]) -> None:
-        """Record what a document showed but the run did not enter or email."""
+    def _hold(
+        self, matter: dict[str, Any], f: dict[str, Any], doc: dict[str, Any], plan: dict[str, Any], attempts: dict
+    ) -> bool:
+        """Record what a document showed but the run did not enter or email.
+        True when the document must stay NEW: a row the pre-write checks held
+        (``offer_check``) is read again next run, up to ``MAX_ATTEMPTS``; after
+        the last try the hold is kept in the lane's state for SMD."""
         self.counts["events_excluded"] += len(plan.get("excluded") or [])
+        reviewed: list[dict[str, Any]] = []
         for h in plan.get("held") or []:
-            self.counts["offers_held"] += 1
             e = h["event"]
-            self.held.append(
-                {
-                    "matter_number": matter.get("number") or "",
-                    "file_id": str(f.get("id")),
-                    "file": doc["name"],
-                    "by": str(e.get("by") or ""),
-                    "amount": e.get("amount"),
-                    "reason": h["reason"],
-                }
-            )
-            self.log("negotiation: an offer with no date was held from the notice")
+            rec = {
+                "matter_number": matter.get("number") or "",
+                "file_id": str(f.get("id")),
+                "file": doc["name"],
+                "by": str(e.get("by") or ""),
+                "kind": str(e.get("kind") or ""),
+                "amount": e.get("amount"),
+                "date": e.get("date"),
+                "reason": h["reason"],
+            }
+            if h.get("by") in ("code", "review"):
+                self.counts["offers_held_review"] += 1
+                rec["held_by"] = h["by"]
+                reviewed.append(rec)
+                self.log(f"negotiation: a row was held by the pre-write {h['by']} check")
+            else:
+                self.counts["offers_held"] += 1
+                self.log("negotiation: an offer with no date was held from the notice")
+            self.held.append(rec)
+        if not reviewed:
+            return False
+        key = f"held:{f.get('id')}"
+        attempts[key] = attempts.get(key, 0) + 1
+        retry = attempts[key] < MAX_ATTEMPTS
+        for rec in reviewed:
+            rec["retry"] = retry
+        if not retry:
+            attempts.pop(key, None)
+            offer_check.remember(self.state, reviewed)
+        return retry
 
     # Observation hooks: no-ops here; the dry run (dryrun.py) records through them.
     def _planned(self, matter: dict[str, Any], f: dict[str, Any], events: list, plan: dict, tabs: list) -> None:
@@ -507,6 +551,8 @@ class NegotiationRun:
             "notices": list(self.notices) if verdict == "delivered" else [],
             "held": list(self.held),
         }
+        if verdict == "delivered":
+            out["proof"] = offer_check.proof(self.counts, self.budget.by_stage())
         if reason:
             out["reason"] = str(reason)[:500]
         return out

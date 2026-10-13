@@ -18,6 +18,7 @@ import io
 from typing import Any
 
 import pytest
+from fake_files import FileStore
 from smokeball_connector import letter_pages as lp
 from smokeball_connector import letter_tools as lt
 from smokeball_connector import library
@@ -49,14 +50,21 @@ class _Folders:
     def __init__(self, tree: Any = TREE) -> None:
         self.tree = tree
         self.uploads: list[tuple[str, str, Any]] = []
+        self.store = FileStore()  # serves the filed document back to its read-back
 
     def get(self, path: str, **_params: Any) -> Any:
+        record = self.store.read(path)
+        if record is not None:
+            return record
         assert path.endswith("/documents/folders"), path
         return self.tree
 
     def add_file(self, matter_id: str, file_name: str, blob: bytes, folder_id: Any = None) -> dict:
         self.uploads.append((matter_id, file_name, folder_id))
-        return {"fileId": f"file-{len(self.uploads)}"}
+        return {"fileId": self.store.add(matter_id, file_name, blob, folder_id, file_id=f"file-{len(self.uploads)}")}
+
+    def download_file(self, matter_id: str, file_id: str) -> tuple[dict, bytes]:
+        return self.store.download(matter_id, file_id)
 
 
 # ---- find_folder_id ----------------------------------------------------------

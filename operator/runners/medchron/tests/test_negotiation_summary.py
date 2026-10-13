@@ -14,7 +14,7 @@ import pytest
 from medchron import arrivals
 from medchron.negotiation import correct as C, dryrun as D, summary as S
 
-from test_negotiation import FILES, M1, NEW, Layout, Seat, _offer, _run
+from test_negotiation import FILES, M1, NEW, Layout, Seat, _offer, _review_passes, _run  # noqa: F401 - _review_passes is an autouse fixture; importing it applies it here
 
 HEAD = "Entered 10/9/26 from the offer letters and emails saved in this file."
 OURS = f"{HEAD} Latest: our $1,000,000 demand of 7/28/26 has no response in the file."

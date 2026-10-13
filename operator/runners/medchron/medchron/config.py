@@ -86,7 +86,7 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
         "worksheet_glob": ("str", True),
     },
     "models": {
-        "tiers": ("map", True),  # {transcription, mechanical, composition, audit, judgment}
+        "tiers": ("map", True),  # {transcription, mechanical, composition, audit, judgment[, review]}
     },
     "levers": {
         # `audit` is never a legal member: its cache design needs live calls
@@ -253,6 +253,11 @@ def _model_tier_checks(data: dict[str, Any]) -> list[str]:
     for tier in ("transcription", "mechanical", "composition", "audit", "judgment"):
         if tiers and tier not in tiers:
             out.append(f"models.tiers.{tier}: required")
+    # `review` is OPTIONAL (2026-10-13): the pre-delivery review's model
+    # (stages/review.py). Absent, the review runs on the `audit` tier; present,
+    # it must name a model, since an empty row would silently mean the default.
+    if "review" in tiers and not (isinstance(tiers["review"], str) and tiers["review"].strip()):
+        out.append("models.tiers.review: when present, must name a model")
     # The audit forces its verdict tool (audit/verify.py TOOL_CHOICE); these
     # models answer a forced tool_choice with HTTP 400, so the audit - the gate
     # every chronology passes - would fail on every claim.

@@ -37,6 +37,8 @@ REASON_CODES = (
     "caption_restore_incomplete",
     # The pre-delivery review found a MUST-FIX (review.py): failed, nothing filed, SMD alerted.
     "review_held",
+    # The read-back downloaded a filed file and its bytes are not ours (2026-10-13).
+    "readback_mismatch",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 
@@ -76,6 +78,9 @@ class Verdict:
     #: A correction that could not be fully put back: SMD's alarm.
     caption_restore_incomplete: list[str] = field(default_factory=list)
     markers: list[dict[str, str]] = field(default_factory=list)
+    #: The daemon's proof block (``proof.gate``), on a delivered verdict only.
+    proof: dict[str, Any] | None = None
 
     def to_list(self) -> list[dict[str, Any]]:
-        return [{**self.__dict__, "unit": "drafting", "kind": "drafting"}]
+        d = {k: v for k, v in self.__dict__.items() if not (k == "proof" and v is None)}
+        return [{**d, "unit": "drafting", "kind": "drafting"}]

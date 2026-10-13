@@ -20,9 +20,19 @@ below still governs every agent-side write.
 
 So the rule is uniform, not scoped to one write:
 
-- A write is only reported as done **after a confirming read** shows it landed
-  (`list_tasks`/`get_task` after `create_task`; `get_files_on_matter` after
-  `add_file`; `list_folders` after `create_folder`). A memo is the exception:
+- Since 2026-10-13 **every write tool reads itself back** (the connector's
+  `readback.py`): a file by id, size and the sha256 of its bytes; a task or
+  event by id, field by field (event times on their local clock, the matter
+  link from the single event); a folder, reminder or webhook from its listing;
+  a delete until it reads deleted. A clean read-back returns
+  `readback: "confirmed"` (or `readback_verdict` on `create_matter` and
+  `stage_vendor_invoice`, whose `readback` holds the record read). A failed one
+  sets `status` to `readback_mismatch` or `link_not_visible`, which alerts SMD,
+  and `readback_note` says it plainly: the write may have landed, so **never
+  retry it** (a retry duplicates the event, task, file or expense); report it
+  as made but unconfirmed, with `readback_detail`. You need no confirming read
+  of your own for these; a write is reported as done only on that
+  `readback: "confirmed"`. A memo also carries the older `confirmed` field:
   `create_memo` reads its own memo back by id and returns `confirmed`. Report a
   memo as logged only when `confirmed` is `true`. On `"unknown"`, never write it
   again (it very likely exists); report its id as unconfirmed. On `false`,

@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from .readback import file_and_prove
 from .xlsx_io import WorkbookRefused, build_workbook, normalize_sheets, verify_workbook
 
 
@@ -93,8 +94,9 @@ def add_workbook(
     mismatches = verify_workbook(data, normalized)
     if mismatches:
         return _refused(matter_id, name, "the built workbook did not read back as sent: " + "; ".join(mismatches[:5]))
-    result = _client().add_file(matter_id, name, data, folder_id=folder_id)
-    out = dict(result) if isinstance(result, dict) else {"result": result}
+    # Filed and read back by id, size and sha256 (readback.py): a shortfall
+    # carries ``status`` and pages SMD; every key below is kept either way.
+    out = file_and_prove(_client(), matter_id, name, data, folder_id=folder_id)
     out["sha256"] = hashlib.sha256(data).hexdigest()
     out["sizeBytes"] = len(data)
     out["sheets"] = [{"name": s["name"], "rows": len(s["rows"]), "totals": s["totals"]} for s in normalized]

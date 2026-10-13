@@ -107,59 +107,69 @@ class Placing(Finish):
         return md
 
     def _place_review(self, notes_md: str) -> dict[str, Any]:
-        rec = review_mod.load(self.data)
-        if rec is None:
-            papers = self._papers()
-            found = review_mod.code_findings(
-                self.cls,
-                papers,
-                self.job.request_text,
-                "",
-                {},
-                pleading.spec_for(self.firm.data["format"]) is not None,
-                theirs=True,
-                notes_md=notes_md,
-            )
-            for (u, _t), p in zip(self._theirs(), papers):
-                body = json.loads((u.data / "theirs.json").read_text(encoding="utf-8"))["body"]
-                lost = place.missing(body, p.text)
-                if lost:
-                    found.append(
-                        review_mod.Finding(
-                            review_mod.MUST,
-                            "2 his text verbatim",
-                            f"{u.label}: {len(lost)} paragraph(s) of the attorney's own set are not in the placed "
-                            f"document word for word; first: {lost[0]}",
-                            u.label,
-                            "code",
-                        )
-                    )
-            cap = self._json("caption.json") if (self.data / "caption.json").is_file() else {}
-            if not (cap.get("fields") or {}).get("case_number"):
+        """The independent review of what the job did to his sets; redo and
+        release as for a drafted document (``review.decide``)."""
+        rec = review_mod.decide(self.data, self.job.job_dir, lambda: self._fresh_place_review(notes_md), self.log)
+        self._done(
+            "review",
+            review="released" if rec.get("released") else "passed",
+            model=str(rec.get("model") or ""),
+            must_fix=rec["must_fix"],
+            should_fix=rec["should_fix"],
+            notes=rec["notes"],
+        )
+        return rec
+
+    def _fresh_place_review(self, notes_md: str) -> tuple[list[review_mod.Finding], str]:
+        # The review's own model, else the auditor's: never compose (2026-10-13).
+        model = review_mod.model_for(self.firm)
+        papers = self._papers()
+        found = review_mod.code_findings(
+            self.cls,
+            papers,
+            self.job.request_text,
+            "",
+            {},
+            pleading.spec_for(self.firm.data["format"]) is not None,
+            theirs=True,
+            notes_md=notes_md,
+        )
+        for (u, _t), p in zip(self._theirs(), papers):
+            body = json.loads((u.data / "theirs.json").read_text(encoding="utf-8"))["body"]
+            lost = place.missing(body, p.text)
+            if lost:
                 found.append(
                     review_mod.Finding(
                         review_mod.MUST,
-                        "3 caption",
-                        "the court's caption could not be read from the file",
-                        "caption",
+                        "2 his text verbatim",
+                        f"{u.label}: {len(lost)} paragraph(s) of the attorney's own set are not in the placed "
+                        f"document word for word; first: {lost[0]}",
+                        u.label,
                         "code",
                     )
                 )
-            user = review_mod.review_user(self.job.request_text, self._context(), papers, notes_md, found, "")
-            found += review_mod.run_model(
-                self.doorway,
-                self.firm.model("compose"),
-                "(the documents are the attorney's own)",
-                user,
-                self.job.job_id[-6:],
-                prompt=review_mod.PLACE_PROMPT,
+        cap = self._json("caption.json") if (self.data / "caption.json").is_file() else {}
+        if not (cap.get("fields") or {}).get("case_number"):
+            found.append(
+                review_mod.Finding(
+                    review_mod.MUST,
+                    "3 caption",
+                    "the court's caption could not be read from the file",
+                    "caption",
+                    "code",
+                )
             )
-            rec = review_mod.save(self.data, found)
-            self.log(f"  review: {rec['must_fix']} must-fix, {rec['should_fix']} should-fix, {rec['notes']} note(s)")
-        if rec["must_fix"]:
-            raise DraftingFailed(review_mod.held_reason(rec))
-        self._done("review", must_fix=0, should_fix=rec["should_fix"], notes=rec["notes"])
-        return rec
+        user = review_mod.review_user(self.job.request_text, self._context(), papers, notes_md, found, "")
+        found += review_mod.run_model(
+            self.doorway,
+            model,
+            "(the documents are the attorney's own)",
+            user,
+            self.job.job_id[-6:],
+            prompt=review_mod.PLACE_PROMPT,
+            hold_checks=review_mod.PLACE_HOLD_CHECKS,
+        )
+        return found, model
 
     def _place_finish(self) -> None:
         for u, t in self._theirs():

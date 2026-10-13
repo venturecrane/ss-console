@@ -174,6 +174,11 @@ class FakeSeat:
                 },
             )
         )
+        # The bytes as stored (when the whole file landed), so the read-back by
+        # hash (proof/readback.py) downloads what was sent; a test plants other
+        # bytes here to prove the mismatch is caught.
+        if landed is None or landed == len(data):
+            self.blobs[f"up-{len(self.sent)}"] = data
         if landed is not None:
             raise RuntimeError("the response was lost after the POST")
         return {"fileId": None}

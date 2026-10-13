@@ -217,6 +217,10 @@ class _Record:
         self.uploads.append((matter_id, file_name, data))
         return {"fileId": "f-new"}
 
+    def download_file(self, matter_id: str, file_id: str) -> tuple[dict[str, Any], bytes]:
+        """The read-back's hash leg serves the bytes uploaded (readback.py)."""
+        return {"fileId": file_id}, self.uploads[-1][2]
+
 
 @pytest.fixture
 def seat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:

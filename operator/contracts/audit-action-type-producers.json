@@ -417,6 +417,16 @@
       "producerFile": "operator/workspace_broker/reply_binding.py",
       "reason": "The workspace broker appends one row per verified-reply-binding verdict (bound or refused) so a reply a non-inbound turn sent, or was refused, can be traced to the email it answered."
     },
+    "DELIVERY_PROOF_FAILED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/delivery_proof.py",
+      "reason": "Proven delivery (2026-10-13): a job's delivery could not be proven (review hold, read-back failure, unproven delivered verdict, dry run, lost wake, requester reply not in Sent Items). The overlay heartbeat pages SMD on it as a failed shortfall."
+    },
+    "DELIVERY_PROVEN": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/delivery_proof.py",
+      "reason": "Proven delivery (2026-10-13): the evidence a delivered job rests on (files re-read by id, size and sha256; the review status) and the review's spend, written once per delivered job by the runner daemon's root-only delivery_proof_record."
+    },
     "DEMAND_JOB_SUBMITTED": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/demand_verbs.py",

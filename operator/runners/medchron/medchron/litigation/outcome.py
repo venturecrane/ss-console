@@ -5,7 +5,14 @@ it, and the verdict the lane reads.
   what the reads produced, an unexplained divergence from the last list, the
   filing folder is not ours to write). Final for this job; nothing filed.
 * ``failed``: OUR machinery (a limit, a read that did not finish, a fetch a
-  retry can fix, a short read-back). Resumable; SMD is alerted.
+  retry can fix, a short read-back). Resumable; SMD is alerted. Since
+  2026-10-13 two failures page SMD by their own code: ``review_held`` (the
+  pre-delivery review of the built workbook found a must-fix; nothing filed)
+  and ``readback_mismatch`` (the file on the matter is not the bytes built).
+
+A delivered verdict carries the ``proof`` block the daemon requires
+(``medchron.proof.gate``): the workbook read back by id, size and sha256, and
+the review's status (``code_only``: code checks, no model) and spend.
 
 The verdict is ONE JSON object, the only line on stdout, and the same JSON in
 ``verdict.json`` (the lane prefers the file). Exit 0 delivered, 1 held,
@@ -30,6 +37,8 @@ REASON_CODES = (
     "leak_found",
     "parity_hold",
     "filing_refused",
+    "readback_mismatch",
+    "review_held",
     "stage_unfinished",
     "limit",
     "no_verdict",
@@ -59,6 +68,7 @@ class Verdict:
     files: list[dict[str, Any]] = field(default_factory=list)
     folder_id: str = ""
     reason: str | None = None
+    proof: dict[str, Any] | None = None
 
     def to_json(self) -> str:
         """The interface's verdict. ``reason`` rides only when the run did not
@@ -75,6 +85,8 @@ class Verdict:
         }
         if self.reason and self.verdict != "delivered":
             d["reason"] = self.reason[:500]
+        if self.proof is not None and self.verdict == "delivered":
+            d["proof"] = dict(self.proof)
         return json.dumps(d)
 
     @property

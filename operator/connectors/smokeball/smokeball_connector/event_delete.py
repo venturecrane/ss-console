@@ -50,6 +50,7 @@ import time
 from typing import Any
 
 from .client import _MATTER_NUMBERISH, SmokeballApiError
+from .readback import MISMATCH, confirmed, shortfall
 
 #: The most events one act may delete. See the module docstring.
 MAX_EVENTS_PER_ACT = 50
@@ -330,25 +331,41 @@ def delete_set(client: Any, events: Any, *, sleep: Any = time.sleep) -> dict[str
     gone = _read_back(client, [e["event_id"] for e in sent], sleep)
     deleted = [{**e, "readback": gone[e["event_id"]]} for e in sent if e["event_id"] in gone]
     pending = [e for e in sent if e["event_id"] not in gone]
-    return {
-        "deleted": deleted,
-        "pending": pending,
-        "skipped": skipped,
-        "failed": failed,
-        "counts": {
-            "proposed": len(manifest),
-            "deleted": len(deleted),
-            "pending": len(pending),
-            "skipped": len(skipped),
-            "failed": len(failed),
+    return _verdict(
+        {
+            "deleted": deleted,
+            "pending": pending,
+            "skipped": skipped,
+            "failed": failed,
+            "counts": {
+                "proposed": len(manifest),
+                "deleted": len(deleted),
+                "pending": len(pending),
+                "skipped": len(skipped),
+                "failed": len(failed),
+            },
+            # The ledger's reference for this act (the trust plugin records ``ref``).
+            "ref": (f"deleted={len(deleted)} pending={len(pending)} skipped={len(skipped)} failed={len(failed)}"),
+            "note": (
+                "pending means the vendor accepted the delete and had not applied it when last read; "
+                "it is never a reason to delete again."
+            ),
         },
-        # The ledger's reference for this act (the trust plugin records ``ref``).
-        "ref": (f"deleted={len(deleted)} pending={len(pending)} skipped={len(skipped)} failed={len(failed)}"),
-        "note": (
-            "pending means the vendor accepted the delete and had not applied it when last read; "
-            "it is never a reason to delete again."
-        ),
-    }
+        failed,
+        pending,
+    )
+
+
+def _verdict(result: dict[str, Any], failed: list[dict[str, Any]], pending: list[dict[str, Any]]) -> dict[str, Any]:
+    """The shared read-back verdict (readback.py, 2026-10-13). A refused or
+    still-pending delete used to score ok; either is now
+    ``status: readback_mismatch``, which pages SMD. A skipped event is a
+    deliberate non-delete (it changed since it was proposed) and is not one."""
+    if not failed and not pending:
+        return confirmed(result, "every deleted event reads back deleted or 404")
+    parts = [f"{len(failed)} delete(s) refused by the vendor"] if failed else []
+    parts += [f"{len(pending)} still read present after every poll"] if pending else []
+    return shortfall(result, MISMATCH, "; ".join(parts))
 
 
 # ---- MCP tools ------------------------------------------------------------

@@ -167,8 +167,17 @@ def test_filing_to_a_matter_reads_from_the_spool(spool: Path, monkeypatch: pytes
             filed.append((matter_id, file_name, blob))
             return {"fileId": "file-new"}
 
+        # The upload's read-back (readback.py): by id, then the bytes.
+        def get(self, path: str, **_params: Any) -> dict[str, Any]:
+            assert path == "/matters/m-1/documents/files/file-new", path
+            return {"id": "file-new", "sizeBytes": len(filed[-1][2])}
+
+        def download_file(self, matter_id: str, file_id: str) -> tuple[dict[str, Any], bytes]:
+            return {}, filed[-1][2]
+
     monkeypatch.setattr(srv, "_get_client", lambda: _Client())
-    assert srv.file_attachment_to_matter("m-1", REF, "served.pdf") == {"fileId": "file-new"}
+    out = srv.file_attachment_to_matter("m-1", REF, "served.pdf")
+    assert out["fileId"] == "file-new" and out["readback"] == "confirmed"
     assert filed == [("m-1", "served.pdf", PDF)]
 
 

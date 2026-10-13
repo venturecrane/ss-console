@@ -11,8 +11,10 @@ send a second, differently-dated copy onto the firm's matter.
 
 Outcomes, as the daemon records them in the demand ledger:
 
-* ``delivered``  the files are on the matter and read back. Either the
-  deliverables, or (premise failed) the coverage report.
+* ``delivered``  the files passed the independent review (``review.py``),
+  are on the matter, and were read back by file id, size and sha256. Either
+  the deliverables, or (premise failed) the coverage report. The verdict
+  carries the ``proof`` block the daemon requires (2026-10-13).
 * ``held``       a person must look, and nothing was filed: the matter record
   could not be read, the destination is not the matter (nor an authored
   rehearsal matter), the letter still carries invented or miscalculated facts
@@ -22,7 +24,11 @@ Outcomes, as the daemon records them in the demand ledger:
   and asks again.
 * ``failed``     resumable: a limit stopped it (the pre-paid estimate over the
   cap or the month's budget, or spend reaching either during a stage), the pull
-  could not finish, a call failed, or the read-back was short.
+  could not finish, a call failed, or the read-back was short. Also the two
+  proven-delivery outcomes, each paging SMD: ``review_held:`` (the review
+  found a MUST-FIX; nothing was filed; a ``redo`` reviews again, an SMD
+  release files with the findings in the notes) and ``readback_mismatch:``
+  (the bytes on the matter are not the bytes built).
 
 Spend: the estimate is checked after the free preflight, BEFORE anything is
 paid (on a resume, against what is left to spend), then every paid call checks
@@ -35,13 +41,13 @@ import json
 import os
 import time
 import traceback
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
 from .. import budget as budget_mod, limits as limits_mod, proof_mode
 from ..ledger import Ledger
 from ..llm import Doorway
+from ..proof import review as proof_review
 from . import (
     crosscheck,
     deliver,
@@ -55,10 +61,13 @@ from . import (
     premise,
     pull,
     quotefix,
+    review as review_mod,
+    review_stage,
     summarize,
     transcribe,
     vendor,
 )
+from .outcome import DemandFailed, DemandHold, GateQuotesLeft, Verdict
 
 MAX_REPAIRS = 2
 FINAL = "draft-final.md"  # the letter after the final audit pass; what is gated and rendered
@@ -70,49 +79,9 @@ def _vendor_from_env() -> Any:
     return client_from_env()
 
 
-class GateQuotesLeft(RuntimeError):
-    """Quote findings left after the deterministic repair: recorded failed, so a
-    resume re-runs only repair and gate (the paid stages are on disk)."""
-
-
-class DemandHold(RuntimeError):
-    """Something about the FILE or the REQUEST that a person at the firm must
-    decide (premise, variant, an unmapped attorney, a letter that contradicts
-    the matter record, privileged text the wall caught): ``held``, final, and
-    the firm is told. Nothing is filed."""
-
-
-class DemandFailed(RuntimeError):
-    """Something about OUR machinery (a read that did not complete, a draft
-    the audit loop could not clean, a gate or format refusal of our own
-    output): ``failed``, resumable, no client message, SMD
-    alerted (ss#3085). A held job cannot resume, so a machinery fault must
-    never hold."""
-
-
 #: The drafting gate's privilege-and-wall gate. A refusal there means text from
 #: behind the wall reached the letter: the attorney must see it, so it holds.
 WALL_GATE = "[1]"
-
-
-@dataclass
-class Verdict:
-    outcome: str
-    stage: str | None = None
-    reason: str | None = None
-    dollars: float = 0.0
-    documents: int = 0
-    pages: int = 0
-    folder_id: str | None = None
-    files: list[dict[str, Any]] = field(default_factory=list)
-    coverage_report: bool = False
-    notes: list[str] = field(default_factory=list)
-
-    def to_list(self) -> list[dict[str, Any]]:
-        d = dict(self.__dict__)
-        d["unit"] = "demand"
-        d["kind"] = "demand"
-        return [d]
 
 
 class DemandRun:
@@ -372,14 +341,17 @@ class DemandRun:
             raise DemandHold("the letter's RE block contradicts the matter record: " + "; ".join(cc["mismatches"]))
         g, md = self._gate("gate.json", md, self.data / FINAL)
         audit_md = (self.data / f"audit-v{version}.md").read_text(encoding="utf-8")
+        # Firm-facing words only: the review holds on the system's own
+        # vocabulary ("the auditor", "drafting gate") in anything the firm reads.
         notes = [
-            f"Left for the attorney by the auditor (DRIFTS): {x}" for x in draft.finding_lines(audit_md, ("DRIFTS",))
+            f"Left for the attorney (the record bears it out only in part): {x}"
+            for x in draft.finding_lines(audit_md, ("DRIFTS",))
         ]
         notes += [f"Removed or flagged by the final audit: {x}" for x in settled]
         notes += [f"Not checked against the matter record: {x}" for x in cc["unchecked"]]
         notes += [f"Held out, never read (privilege wall: {w['reason']}): {w['name']}" for w in self._walled()]
-        notes += [f"Drafting gate repair (the letter): {x}" for x in g.get("repairs") or []]
-        return notes + [f"Drafting gate: {w}" for w in g["warnings"]]
+        notes += [f"Quotation repaired before filing (the letter): {x}" for x in g.get("repairs") or []]
+        return notes + [f"Quotation check: {w}" for w in g["warnings"]]
 
     def _final_pass(self, version: int) -> tuple[str, list[str]]:
         """``draft-final.md`` from the last draft and its audit, once: a resume
@@ -478,6 +450,7 @@ class DemandRun:
             if (self.data / "vendor.json").is_file():
                 gap += vendor.section(self._json("vendor.json"))
             gap += self._wall_section()
+            review_stage.keep_md(self.data, "gap_audit", gap)
             files.append(("gap_audit", deliver.render_plain(gap, out, nm["gap_audit"], self._author)))
         if self.job.wants("demand"):
             md = (self.data / FINAL).read_text(encoding="utf-8")
@@ -486,11 +459,15 @@ class DemandRun:
                 path, end_lists, fmt_notes = deliver.render_demand(self.firm, md, out, client)
             except deliver.FormatRefused as exc:
                 raise DemandFailed("the format check refused the demand file: " + "; ".join(exc.fails)[:400]) from None
-            gap_fixes = [f"Drafting gate repair (the gap audit): {x}" for x in self._repairs.get("the gap audit") or []]
+            gap_fixes = [
+                f"Quotation repaired before filing (the gap audit): {x}"
+                for x in self._repairs.get("the gap audit") or []
+            ]
             extra = "\n".join(f"- {n}" for n in [*notes, *gap_fixes, *fmt_notes])
             notes_md = f"# Attorney notes: {path.stem}\n\n{end_lists}\n" + (
                 f"\n## For review\n\n{extra}\n" if extra else ""
             )
+            review_stage.keep_md(self.data, "attorney_notes", notes_md)
             files += [
                 ("demand", path),
                 (
@@ -501,6 +478,7 @@ class DemandRun:
         return files
 
     def _file(self) -> Verdict:
+        review_stage.run_stage(self)  # nothing is filed before it passes (or SMD released it)
         manifest = json.loads((deliver.out_dir(self.data) / "upload_manifest.json").read_text(encoding="utf-8"))
         files = [{"name": m["name"], "size": m["bytes"], "role": m.get("role")} for m in manifest]
         coverage = bool(self._state().get("render", {}).get("coverage"))
@@ -508,18 +486,23 @@ class DemandRun:
             return Verdict(proof_mode.OUTCOME, stage="file", coverage_report=coverage, files=files)
         kw = {} if self.readback_pause is None else {"pause": self.readback_pause}
         rec = deliver.file_to_matter(self.data, self.seat, self.job.file_to_id, self.log, **kw)
+        if rec["exit"] == 1 and str(rec.get("said") or "").startswith("readback_mismatch:"):
+            # The upload stage's own sha read-back: the bytes on the matter are
+            # not ours. A failure that pages SMD, never a firm-side hold.
+            raise DemandFailed(str(rec["said"]))
         if rec["exit"] == 1:
             # The matter's own state refused it (a same-named folder already
             # there): a person at the firm decides, so it holds.
             raise DemandHold(f"filing refused: {rec.get('said') or 'the upload stage refused'}")
         if rec["exit"] != 0:
-            raise RuntimeError("the read-back is short after its retries; the files may still be materializing")
+            raise RuntimeError(review_stage.SHORT)
         return Verdict(
             "delivered",
             stage="file",
             folder_id=str(rec.get("folder_id")),
             coverage_report=coverage,
             files=files,
+            proof=review_stage.proof(self, rec, manifest, **kw),  # read back by id, size and sha256
         )
 
     def _coverage(self, md: str, *, gated: bool) -> Verdict:
@@ -527,6 +510,8 @@ class DemandRun:
             _g, md = self._gate("gate-coverage.json", md)
         out = deliver.out_dir(self.data)
         nm = deliver.names(self.firm, self.job, self.date_stamp)
+        if not self._is_done("render"):
+            review_stage.keep_md(self.data, "coverage_report", md)
         self._render(lambda: [("coverage_report", deliver.render_plain(md, out, nm["coverage"], self._author))], True)
         return self._file()
 
@@ -614,6 +599,10 @@ class DemandRun:
             v = Verdict("failed", stage=hold.setting, reason=hold.reason)
         except GateQuotesLeft as exc:
             v = Verdict("failed", stage="gate", reason=str(exc))
+        except review_mod.ReviewHeld as exc:
+            v = Verdict("failed", stage="review", reason=str(exc))
+        except proof_review.ReviewIncomplete as exc:
+            v = Verdict("failed", stage="review", reason=f"review_unfinished: {exc}; nothing was filed")
         except DemandFailed as exc:
             v = Verdict("failed", stage=self._current(), reason=str(exc))
         except DemandHold as h:
@@ -622,6 +611,8 @@ class DemandRun:
             self.log(traceback.format_exc())
             v = Verdict("failed", stage=self._current(), reason=f"{type(exc).__name__}: {str(exc)[:300]}")
         v.dollars = round(self.budget.refresh(), 4)
+        if v.proof is not None:
+            v.proof["review_cents"] = proof_review.stage_cents(self.budget.by_stage)
         pf = self.data / "preflight.json"
         if pf.is_file():
             e = self._json("preflight.json")
@@ -629,6 +620,6 @@ class DemandRun:
         return v
 
     def _current(self) -> str:
-        order = ("facts", "destination", "pull", "preflight", "premise", "transcribe", "summarize", "render")
+        order = ("facts", "destination", "pull", "preflight", "premise", "transcribe", "summarize", "render", "review")
         st = self._state()
         return next((s for s in order if st.get(s, {}).get("status") != "done"), "file")

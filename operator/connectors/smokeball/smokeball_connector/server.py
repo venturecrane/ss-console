@@ -29,15 +29,16 @@ import base64
 import hashlib
 import os
 import re
-import time
 from typing import Any
 
 from operator_connector_sdk.server import ConnectorServer
 
-from .client import SmokeballApiError, SmokeballClient, build_client_from_env
+from .client import SmokeballClient, build_client_from_env
 from .event_update import put_event_update, with_responsible_attorney
 from .expense_ledger import drop_deleted as drop_deleted_expenses
-from .library import LOOKUP_FAILED, lookup_matter
+from .matter_create import create_operator_matter
+from .readback import file_and_prove, prove_file_deleted, prove_folder
+from .readback_records import prove_event, prove_reminder, prove_task, prove_webhook
 from .local_time import _next_day  # noqa: F401 - re-exported; tests import it from the server
 from .local_time import enrich_events, enrich_task, enrich_tasks, event_span, refuse_shifted_clocks
 from .listing import contact_listing_is_complete as _contact_listing_is_complete
@@ -804,18 +805,15 @@ def create_task(
     task list can tell machine from person."""
     client = _get_client()
     _verify_matter_reference(client, matter_id or "", subject, note)
-    return client.request(
-        "POST",
-        "/tasks",
-        json=_body(
-            staffId=staff_id,
-            subject=_stamp(subject),
-            matterId=matter_id,
-            note=note,
-            dueDateOnly=due_date,
-            assigneeIds=assignee_ids,
-        ),
+    body = _body(
+        staffId=staff_id,
+        subject=_stamp(subject),
+        matterId=matter_id,
+        note=note,
+        dueDateOnly=due_date,
+        assigneeIds=assignee_ids,
     )
+    return prove_task(client, body, client.request("POST", "/tasks", json=body))
 
 
 @server.tool()
@@ -854,7 +852,7 @@ def update_task(
     )
     if subject is not None or note is not None:
         _verify_matter_reference(client, matter_id or "", subject, note)
-    return client.request("PUT", f"/tasks/{task_id}", json=body)
+    return prove_task(client, body, client.request("PUT", f"/tasks/{task_id}", json=body), task_id)
 
 
 # ---- Calendar / events ----------------------------------------------------
@@ -956,22 +954,19 @@ def create_event(
     start_time, end_time = event_span("create_event", start_time, end_time, all_day)
     client = _get_client()
     _verify_matter_reference(client, matter_id or "", subject, description)
-    return client.request(
-        "POST",
-        "/events",
-        json=_body(
-            subject=_stamp(subject),
-            startTime=start_time,
-            endTime=end_time,
-            matterId=matter_id,
-            description=description,
-            location=location,
-            allDay=all_day,
-            attendees=with_responsible_attorney(client, matter_id, attendees),
-            timeZone=time_zone,
-            type="Normal",
-        ),
+    body = _body(
+        subject=_stamp(subject),
+        startTime=start_time,
+        endTime=end_time,
+        matterId=matter_id,
+        description=description,
+        location=location,
+        allDay=all_day,
+        attendees=with_responsible_attorney(client, matter_id, attendees),
+        timeZone=time_zone,
+        type="Normal",
     )
+    return prove_event(client, body, client.request("POST", "/events", json=body))
 
 
 @server.tool()
@@ -1012,17 +1007,10 @@ def create_event_reminder(
     """Add a reminder to an event — the reminder cascade on a deadline. ``offset``
     + ``offset_type_id`` set how far ahead it fires (the unit encoding is confirmed
     at the connect step against a live tenant). ``user_ids`` are the staff to remind.
-    Classified INTERNAL_WRITE."""
-    return _get_client().request(
-        "POST",
-        f"/events/{event_id}/reminders",
-        json=_body(
-            offset=offset,
-            offsetTypeId=offset_type_id,
-            isAllDayReminder=is_all_day_reminder,
-            userIds=user_ids,
-        ),
-    )
+    Classified INTERNAL_WRITE. Read back from the event's reminders."""
+    client = _get_client()
+    body = _body(offset=offset, offsetTypeId=offset_type_id, isAllDayReminder=is_all_day_reminder, userIds=user_ids)
+    return prove_reminder(client, event_id, body, client.request("POST", f"/events/{event_id}/reminders", json=body))
 
 
 # ---- Staff ----------------------------------------------------------------
@@ -1225,40 +1213,13 @@ def create_folder(matter_id: str, name: str, parent_folder_id: str | None = None
     """Create a document folder on a matter — e.g. a ``Discovery/[set]`` folder the
     Operator stages served requests + supporting docs into for BriefPoint/CoCounsel
     to draw from. ``parent_folder_id`` nests it (matter root if omitted). Classified
-    INTERNAL_WRITE."""
-    return _get_client().create_folder(matter_id, name, parent_folder_id)
+    INTERNAL_WRITE. Read back from the parent's folder tree."""
+    client = _get_client()
+    created = client.create_folder(matter_id, name, parent_folder_id)
+    return prove_folder(client, matter_id, name, parent_folder_id, created)
 
 
-# ---- the Operator's own matter (ss-console#2536) ----------------------------
-#
-# OBSERVED WIRE SHAPE, probed live on the pilot's sandbox tenant 2026-08-21
-# (vfy_01M0K2CMQBTMZCXZWKBTESSV5A), and every number below is from that probe
-# rather than from the vendor's documentation:
-#
-#   POST /matters {description, matterTypeId, clientIds:[id], number, status}
-#     -> 202 {id, href}, where ``id`` is the FINAL matter id
-#   ``status`` is REQUIRED. Without it the API answers 400 "Must provide a
-#     valid Status"; the published docs list it optional, and they are wrong.
-#   GET /matters/{id} answers 404 WHILE THE MATTER MATERIALIZES and the full
-#     record afterwards: 404 at 0.6s, 2.8s, 4.9s, 7.2s, then 200 at 9.6s.
-#   The supplied ``number`` is honored verbatim, and /matters?Search=<number>
-#     finds the matter immediately once it materializes.
-#
-# So the poll below treats a 404 as "not yet" and anything else as an answer,
-# and running out of polls is reported as CREATED AND PENDING rather than as a
-# failure. A created-but-slow matter that looked like a failure would invite a
-# second create, which is the duplicate this tool exists to prevent.
-_CREATE_MATTER_POLL_ATTEMPTS = 15
-_CREATE_MATTER_POLL_SECONDS = 2.0
-_CREATE_MATTER_STATUS = "Open"
-
-
-def _require_arg(value: Any, name: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"create_matter: {name} is required and must be a non-empty string")
-    return value.strip()
-
-
+# ---- the Operator's own matter (ss-console#2536); wire notes in matter_create.py
 @server.tool()
 def create_matter(description: str, matter_type_id: str, client_contact_id: str, number: str) -> Any:
     """Create the Operator's OWN internal matter, and only that.
@@ -1288,77 +1249,12 @@ def create_matter(description: str, matter_type_id: str, client_contact_id: str,
     there" are different facts and only one of them makes it safe to write.
 
     Returns ``{created, readback, accepted}`` once the matter is readable, or
-    ``{created, pending, matter_id, accepted, readback: null}`` when it was
-    accepted but has not materialized yet. The second is a success: Smokeball
-    has the matter, and it can be read back on the next turn.
+    ``{created, pending, matter_id, accepted, readback: null}`` plus
+    ``status: link_not_visible`` when it was accepted but has not materialized
+    yet. SMD is alerted on the second; Smokeball very likely has the matter, so
+    NEVER create it again (``readback_note`` says so).
     """
-    description = _require_arg(description, "description")
-    matter_type_id = _require_arg(matter_type_id, "matter_type_id")
-    client_contact_id = _require_arg(client_contact_id, "client_contact_id")
-    number = _require_arg(number, "number")
-
-    client = _get_client()
-    existing = lookup_matter(
-        client,
-        number=number,
-        description=description,
-        client_contact_id=client_contact_id,
-    )
-    if existing.state == LOOKUP_FAILED:
-        raise ValueError(
-            "create_matter: refusing to create because the existing-matter check could "
-            f"not complete ({existing.reason}). Nothing was created. Try again once the "
-            "case system is reachable."
-        )
-    if existing.found:
-        raise ValueError(
-            f"create_matter: a matter matching this one already exists (matched on "
-            f"{existing.matched_on}; id {existing.matter_id}). Nothing was created. "
-            "Use that matter."
-        )
-
-    accepted = client.request(
-        "POST",
-        "/matters",
-        json=_body(
-            description=description,
-            matterTypeId=matter_type_id,
-            clientIds=[client_contact_id],
-            number=number,
-            # REQUIRED by the API despite the docs (see the note above).
-            status=_CREATE_MATTER_STATUS,
-        ),
-    )
-    matter_id = None
-    if isinstance(accepted, dict):
-        matter_id = accepted.get("id") or accepted.get("matterId")
-    if not matter_id:
-        raise ValueError(
-            "create_matter: Smokeball accepted the request but returned no matter id, so "
-            f"the result cannot be read back or de-duplicated. Response: {accepted!r}"
-        )
-    matter_id = str(matter_id)
-
-    for attempt in range(_CREATE_MATTER_POLL_ATTEMPTS):
-        try:
-            record = client.get(f"/matters/{matter_id}")
-        except SmokeballApiError as exc:
-            # A 404 is "still materializing". Anything else is an answer, and a
-            # wrong answer here must not be swallowed into a pending result.
-            if exc.status != 404:
-                raise
-        else:
-            if record:
-                return {"created": True, "readback": record, "accepted": accepted}
-        if attempt < _CREATE_MATTER_POLL_ATTEMPTS - 1:
-            time.sleep(_CREATE_MATTER_POLL_SECONDS)
-    return {
-        "created": True,
-        "pending": True,
-        "matter_id": matter_id,
-        "accepted": accepted,
-        "readback": None,
-    }
+    return create_operator_matter(_get_client(), _body, description, matter_type_id, client_contact_id, number)
 
 
 @server.tool()
@@ -1386,8 +1282,11 @@ def add_file(
 
     ``folder_id`` is optional (matter root if omitted). Runs Smokeball's
     two-stage upload (metadata POST -> presigned S3 PUT); materialization is
-    asynchronous, so the file may take a moment to appear in
-    ``get_files_on_matter``. Returns the new ``fileId``.
+    asynchronous, so the tool then reads the file back by id until it shows at
+    the uploaded size and its downloaded sha256 equals the bytes sent
+    (readback.py). Returns the new ``fileId`` and ``readback: "confirmed"``, or
+    ``status`` ``readback_mismatch`` / ``link_not_visible`` (SMD is alerted;
+    do NOT upload it again, a retry files a duplicate).
 
     Classified INTERNAL_WRITE at the overlay: this is the agent saving its own
     work product into the firm's record — the save-back half of the read ->
@@ -1405,7 +1304,7 @@ def add_file(
             data = base64.b64decode(content_base64, validate=True)
         except (ValueError, TypeError) as exc:
             raise ValueError(f"content_base64 is not valid base64: {exc}") from exc
-    return _get_client().add_file(matter_id, file_name, data, folder_id=folder_id)
+    return file_and_prove(_get_client(), matter_id, file_name, data, folder_id=folder_id)
 
 
 @server.tool()
@@ -1416,8 +1315,11 @@ def delete_file(matter_id: str, file_id: str) -> Any:
     Classified DESTRUCTIVE at the overlay: it is taint-gated (an untrusted-fed
     turn can never trigger it autonomously) and requires an authored
     ``destructive`` ceiling on the seat — fail-closed otherwise. Returns the
-    async tracking link."""
-    return _get_client().delete_file(matter_id, file_id)
+    async tracking link, then polls the file by id until it reads deleted
+    (``readback: "confirmed"``) or reports ``status: readback_mismatch`` when
+    it still reads present."""
+    client = _get_client()
+    return prove_file_deleted(client, matter_id, file_id, client.delete_file(matter_id, file_id))
 
 
 @server.tool()
@@ -1439,12 +1341,11 @@ def file_attachment_to_matter(matter_id: str, download_url: str, file_name: str,
       ``SMOKEBALL_ATTACHMENT_URL_HOSTS``); redirects are not followed; 25 MB cap.
 
     No credentials cross connectors either way. Classified INTERNAL_WRITE (a
-    matter-file write; never an external send). Materialization is async — poll
-    ``get_file`` to confirm, or use ``read_document`` on the returned fileId once
-    ingested."""
+    matter-file write; never an external send). Read back exactly as
+    ``add_file`` is (by id, size and sha256), with the same result keys."""
     client = _get_client()
     blob = fetch_bytes(client, download_url)
-    return client.add_file(matter_id, file_name, blob, folder_id=folder_id)
+    return file_and_prove(client, matter_id, file_name, blob, folder_id=folder_id)
 
 
 def _render_with_format(markdown: str, document_class: str | None) -> tuple[bytes, dict[str, Any] | None, str | None]:
@@ -1540,9 +1441,10 @@ def render_docx_template(
     root if omitted).
 
     Returns ``fileId``, ``sha256`` and ``sizeBytes`` of the rendered bytes, and
-    an empty ``refusals``. Smokeball materialization is ASYNCHRONOUS and this
-    tool does not poll: confirm the file exists with ``get_file``, and confirm
-    it is the document with ``read_document``, before reporting it delivered.
+    an empty ``refusals``. The filed file is read back by id, size and sha256
+    (as ``add_file``): ``readback: "confirmed"``, or ``status``
+    ``readback_mismatch`` / ``link_not_visible`` (SMD is alerted; do NOT file
+    it again).
 
 
 
@@ -1769,9 +1671,10 @@ def render_docx_draft(
     optional (matter root if omitted).
 
     Returns ``fileId``, ``sha256`` and ``sizeBytes`` of the rendered bytes, and
-    an empty ``refusals``. Smokeball materialization is ASYNCHRONOUS and this
-    tool does not poll: confirm with ``get_file``, and confirm it is the document
-    with ``read_document``, before reporting it delivered.
+    an empty ``refusals``. The filed file is read back by id, size and sha256
+    (as ``add_file``): ``readback: "confirmed"``, or ``status``
+    ``readback_mismatch`` / ``link_not_visible`` (SMD is alerted; do NOT file
+    it again).
 
     **Firm format (``document_class``).** Pass ``document_class`` (one of
     ``discovery_set``, ``discovery_response``, ``demand_letter``,
@@ -2021,7 +1924,8 @@ def create_webhook_subscription(
     resolved_key = key or os.environ.get("WEBHOOK_SECRET_SMOKEBALL")
     if resolved_key:
         body["key"] = resolved_key
-    return _get_client().request("POST", "/webhooks", json=body)
+    client = _get_client()
+    return prove_webhook(client, body, client.request("POST", "/webhooks", json=body))
 
 
 # ---- Attachment-rooted tool surfaces (registered last, from their own modules)
