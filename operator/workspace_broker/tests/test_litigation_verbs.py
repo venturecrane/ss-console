@@ -231,7 +231,9 @@ def test_a_firm_wide_job_underway_does_not_block_a_paralegal_scope(seat) -> None
     assert submit(broker)["accepted"] is True
     out = submit(broker, scope={"paralegals": ["Dana"]}, message_ref="<para@mail.firm.example>")
     assert out["accepted"] is True, out
-    out = submit(broker, scope={"paralegals": ["Dana"], "attorneys": ["Avery"]}, message_ref="<paraatty@mail.firm.example>")
+    out = submit(
+        broker, scope={"paralegals": ["Dana"], "attorneys": ["Avery"]}, message_ref="<paraatty@mail.firm.example>"
+    )
     assert out["accepted"] is True
     out = submit(broker, scope={"paralegals": ["Dana Field"]}, message_ref="<paratwo@mail.firm.example>")
     assert out["accepted"] is False and "already underway" in out["reason"]

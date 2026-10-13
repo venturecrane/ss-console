@@ -406,7 +406,9 @@ class LitigationVerbs:
                 "scope": "all"
                 if scope.get("all")
                 else "+".join(
-                    n for n, k in (("attorneys", "attorney_staff_ids"), ("paralegals", "paralegal_staff_ids")) if scope.get(k)
+                    n
+                    for n, k in (("attorneys", "attorney_staff_ids"), ("paralegals", "paralegal_staff_ids"))
+                    if scope.get(k)
                 ),
                 "attorney_count": len(scope.get("attorney_staff_ids") or []),
                 "paralegal_count": len(scope.get("paralegal_staff_ids") or []),
