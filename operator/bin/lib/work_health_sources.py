@@ -178,56 +178,11 @@ def schedule_adopted_at(synced_at: Optional[str], boot: Optional[dict]) -> Optio
     return booted
 
 
-def missed_slot_items(
-    seat: str,
-    rows: list[dict],
-    cfg: Config,
-    now: datetime,
-    boot: Optional[dict],
-    git_config: dict,
-    deployed: Optional[set[tuple[str, str]]],
-    adopted_at: Optional[datetime] = None,
-    *,
-    adoption_known: bool = True,
-) -> list[Item]:
-    """Scheduled runs that did not happen, ONE line per skill (never one per
-    slot), graded only where git and the seat's provisioned schedule AGREE.
-    Where they disagree that is one drift line, not a guess at either grid."""
-    if deployed is None:
-        return [
-            item(
-                seat,
-                "unreadable",
-                "schedule",
-                now,
-                "Could not read which schedule this seat was provisioned with; missed scheduled runs are unchecked.",
-                "Check the customer_configs row for this seat.",
-            )
-        ]
-    drift = schedule_drift(git_config, deployed)
-    graded = [
-        r
-        for r in cron_slots.authored_cron_rows(git_config)
-        if r.wake_policy == "pre_run_decides" and r.skill not in drift and (r.skill, r.schedule) in deployed
-    ]
-    tz = cron_slots.seat_timezone(git_config)
-    if adoption_known and adopted_at is None:
-        # Published but not yet booted into: nothing on the Machine to grade.
-        return [
-            item(
-                seat,
-                "schedule_drift",
-                "not-adopted",
-                now,
-                "This seat's published schedule is newer than its running Machine (it has not been rebuilt since "
-                "the config changed); scheduled runs are not graded until it is.",
-                "Rebuild the seat so it runs what is published.",
-            )
-        ]
-    start = now - timedelta(hours=cfg.reconcile_window_hours)
-    if adopted_at is not None:
-        start = max(start, adopted_at)
-    slots = cron_slots.expand_slots(graded, tz, start, now)
+def _missing_by_skill(
+    graded: list, git_config: dict, rows: list[dict], start: datetime, now: datetime, boot: Optional[dict]
+) -> dict[str, list[datetime]]:
+    """Owed slots with neither wake row, grouped by routine."""
+    slots = cron_slots.expand_slots(graded, cron_slots.seat_timezone(git_config), start, now)
     gradable = [x for x in slots if x.fires_at + timedelta(seconds=SLOT_TOLERANCE_S) <= now]
     verdicts = cron_slots.match_slots(gradable, rows, tolerance_s=SLOT_TOLERANCE_S)
     if boot:
@@ -237,6 +192,10 @@ def missed_slot_items(
     for v in verdicts:
         if v.is_missing:
             by_skill.setdefault(v.slot.skill, []).append(v.slot.fires_at)
+    return by_skill
+
+
+def _missed_lines(seat: str, by_skill: dict[str, list[datetime]]) -> list[Item]:
     out = []
     for skill, times in sorted(by_skill.items()):
         times.sort()
@@ -252,6 +211,11 @@ def missed_slot_items(
                 "Check the seat's scheduler; work the firm switched on did not happen.",
             )
         )
+    return out
+
+
+def _drift_lines(seat: str, drift: dict[str, tuple[list[str], list[str]]], now: datetime) -> list[Item]:
+    out = []
     for skill, (authored, provisioned) in sorted(drift.items()):
         if skill == AUTH_PROBE_SKILL:
             continue  # the sign-in check's own "not scheduled" ACTION line already says this
@@ -261,12 +225,64 @@ def missed_slot_items(
                 "schedule_drift",
                 f"{skill}|{authored}|{provisioned}",
                 now,
-                f"Schedule drift for {skill}: authored {authored or 'none'}, the seat runs {provisioned or 'none'}. "
-                "Its runs are not graded until the two agree.",
+                f"Schedule drift for {skill}: authored {', '.join(authored) or 'none'}, the seat runs "
+                f"{', '.join(provisioned) or 'none'}. Its runs are not graded until the two agree.",
                 "Rebuild the seat to adopt the authored schedule, or revert the authoring.",
             )
         )
     return out
+
+
+def missed_slot_items(
+    seat: str,
+    rows: list[dict],
+    cfg: Config,
+    now: datetime,
+    boot: Optional[dict],
+    git_config: dict,
+    deployed: Optional[set[tuple[str, str]]],
+    adopted_at: Optional[datetime] = None,
+    *,
+    adoption_known: bool = True,
+) -> list[Item]:
+    """Scheduled runs that did not happen, ONE line per skill (never one per
+    slot), graded only where git and the seat's provisioned schedule AGREE and
+    only after the Machine booted into it. Disagreement is one drift line."""
+    if deployed is None:
+        return [
+            item(
+                seat,
+                "unreadable",
+                "schedule",
+                now,
+                "Could not read which schedule this seat was provisioned with; missed scheduled runs are unchecked.",
+                "Check the customer_configs row for this seat.",
+            )
+        ]
+    if adoption_known and adopted_at is None:
+        # Published but not yet booted into: nothing on the Machine to grade.
+        return [
+            item(
+                seat,
+                "schedule_drift",
+                "not-adopted",
+                now,
+                "This seat's published schedule is newer than its running Machine (it has not been rebuilt since "
+                "the config changed); scheduled runs are not graded until it is.",
+                "Rebuild the seat so it runs what is published.",
+            )
+        ]
+    drift = schedule_drift(git_config, deployed)
+    graded = [
+        r
+        for r in cron_slots.authored_cron_rows(git_config)
+        if r.wake_policy == "pre_run_decides" and r.skill not in drift and (r.skill, r.schedule) in deployed
+    ]
+    start = now - timedelta(hours=cfg.reconcile_window_hours)
+    if adopted_at is not None:
+        start = max(start, adopted_at)
+    by_skill = _missing_by_skill(graded, git_config, rows, start, now, boot)
+    return _missed_lines(seat, by_skill) + _drift_lines(seat, drift, now)
 
 
 # ---------------------------------------------------------------------------
