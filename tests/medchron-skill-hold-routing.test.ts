@@ -121,9 +121,20 @@ describe('medical-chronology-maintainer: a refused submission never leaves the l
     )
   })
 
-  it('treats a request for every record on the matter as a RUN', () => {
-    expect(run).toMatch(
-      /ONE chronology covering every medical record on the matter[^]*is a RUN even when a chronology was delivered before/
+  it('sends every chronology ask on a matter with a delivery to UPDATE, never a RUN', () => {
+    // 2026-10-13: the opposite sentence (#3160) queued two full re-runs.
+    expect(run).toContain(
+      'On a matter that already holds a delivered chronology, every chronology request is an UPDATE, never a RUN.'
     )
+    expect(run).not.toMatch(/is a RUN even when a chronology was delivered before/)
+    expect(run).toMatch(/`covered_document_ids` present means a delivered chronology exists/)
+  })
+
+  it('names medical records only, and never another person’s record, in an update', () => {
+    const update = body
+      .slice(body.indexOf('## UPDATE'), body.indexOf('## DELIVER'))
+      .replace(/\s+/g, ' ')
+    expect(update).toContain('**Name medical records only.**')
+    expect(update).toMatch(/names another person[^.]*is never named/)
   })
 })
