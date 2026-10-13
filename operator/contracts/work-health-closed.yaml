@@ -30,3 +30,11 @@ closed:
     reason: >-
       SMD's own no-reply falsifier sent to the staging test mailbox; it was
       meant to get no reply and it proved both no-reply alarms. Nothing owed.
+  - seat: ashton-price
+    job: 01M4V2G68R1MSHCAD1BJSXZY0G
+    closed: '2026-10-13'
+    closed_by: work-health session for the team lead, on the Captain's decision
+    reason: >-
+      The firm-wide litigation status run was stopped by the Captain in favour
+      of a narrower ask; it then ended on an out-of-memory failure. Decided
+      work: no rerun of this attempt is owed.
