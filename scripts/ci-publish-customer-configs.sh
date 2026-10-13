@@ -15,8 +15,10 @@
 #     match. The seat adopts it on its next boot (entrypoint.sh re-fetches every
 #     boot); live-writable fields are picked up sooner by the ADR 0044 poller.
 #   - No object (never provisioned) → WARN and skip. See "never create" below.
+#   - Config names a skill / pre_run the seat's running image lacks → refuse
+#     (IMAGE GUARD, below; scripts/check-config-against-image.mjs).
 #
-# Two guards, both load-bearing:
+# Three guards, all load-bearing (the third, IMAGE GUARD, is inline below):
 #
 #   NEVER CREATE. A merge must not be able to conjure config for a seat nobody
 #   provisioned. Provisioning binds a config to a Machine, a volume, and a secret
@@ -44,6 +46,7 @@
 # on the secrets the repo already has.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BEFORE="${BEFORE_SHA:?BEFORE_SHA required}"
 AFTER="${AFTER_SHA:?AFTER_SHA required}"
 
@@ -210,6 +213,28 @@ for slug in "${slugs[@]}"; do
   else
     echo "::error::$slug: could not read s3://${R2_BUCKET_CONFIG}/${key} (not a 404); refusing to guess whether the seat is provisioned"
     sed 's/^/    /' "$head_err"
+    fail=1
+    continue
+  fi
+
+  # IMAGE GUARD (2026-10-13 A&P outage). The seat re-fetches this object on
+  # every boot, so a config naming a skill or pre_run the seat's running image
+  # lacks takes effect at the next reboot or crash-restart of THAT image. Read
+  # what the image carries from the manifest its entrypoint uploads at boot
+  # (vaults/<slug>/image-manifest.json; READ here, never written), plus the
+  # object the seat boots from now. A missing or unreadable manifest is
+  # "cannot determine": the checker refuses unless this publish adds no
+  # requirement over the current object. A refusal leaves the object as it is;
+  # the seat's rebuild (provision-customer.sh step 2) publishes the config with
+  # the image that carries it.
+  manifest="${work_dir}/${slug}.image-manifest.json"
+  r2 s3 cp "s3://${R2_BUCKET_CONFIG}/vaults/${slug}/image-manifest.json" "$manifest" \
+    --only-show-errors 2>/dev/null || manifest=""
+  published="${work_dir}/${slug}.published.yaml"
+  r2 s3 cp "s3://${R2_BUCKET_CONFIG}/${key}" "$published" \
+    --only-show-errors 2>/dev/null || published=""
+  if ! node "${SCRIPT_DIR}/check-config-against-image.mjs" "$cfg" "$manifest" "$published"; then
+    echo "::error::$slug: not publishing; the seat's running image cannot run this config (above). Reprovision the seat to ship it."
     fail=1
     continue
   fi
