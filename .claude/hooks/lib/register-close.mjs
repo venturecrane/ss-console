@@ -130,6 +130,38 @@ export function validateCancellation(row, letter, quote) {
   return { ok: true }
 }
 
+// ------------------------------------------------------------------- reopen
+
+/**
+ * The ONE state a row can be reopened from. VALID_TRANSITIONS lets `delivered`
+ * go back to `active`, and nothing else is a reopening: `verified` and `closed`
+ * have their own exits (`parked`, `open`), and every working state is already
+ * open. tests/register-reopen.test.ts walks every state to prove the rest are
+ * refused.
+ */
+export const REOPENABLE_FROM = ['delivered']
+
+/**
+ * Validate a reopening: a recorded delivery that turned out not to be one.
+ * Same gate as cancellation -- a captured row, the right state, a letter on
+ * the archive's main that is not the promise, and a quote it contains -- plus
+ * a stated reason, because "reopened" with no why is a row nobody can audit.
+ */
+export function validateReopen(row, letter, quote, why) {
+  if (!row) return { ok: false, error: 'no_such_obligation' }
+  if (row.origin !== 'captured') return { ok: false, error: 'imported_rows_close_from_their_source' }
+  if (!REOPENABLE_FROM.includes(row.state)) {
+    return { ok: false, error: 'not_reopenable_from_state', state: row.state }
+  }
+  if (!String(why ?? '').trim()) return { ok: false, error: 'reopen_needs_a_reason' }
+  if (!letter.ok) return { ok: false, error: letter.error }
+  const promise = suffixOf(row.source_ref) || row.source_ref
+  if (promise === letter.suffix) return { ok: false, error: 'evidence_is_the_promise' }
+  const quoteCheck = checkQuote(letter.text, quote ?? '')
+  if (!quoteCheck.ok) return { ok: false, ...quoteCheck }
+  return { ok: true }
+}
+
 export function explainRefusal(check, args) {
   console.error(`register: REFUSED (${check.error})`)
   const why = {
@@ -139,6 +171,8 @@ export function explainRefusal(check, args) {
       '  this row was imported; it closes on the nightly run when its source (issue, alert, change request) clears.',
     not_deliverable_from_state: `  the row is "${check.state}"; only ${DELIVERABLE_FROM.join(', ')} rows can be delivered.`,
     not_cancellable_from_state: `  the row is "${check.state}"; only ${CANCELLABLE_FROM.join(', ')} rows can be cancelled.`,
+    not_reopenable_from_state: `  the row is "${check.state}"; only ${REOPENABLE_FROM.join(', ')} rows can be reopened.`,
+    reopen_needs_a_reason: '  --why is required: say in one sentence why the delivery was not one.',
     engagements_repo_absent: `  ${engagementsDir()} is not checked out; the delivery cannot be proven, so it is refused.`,
     engagements_unreachable: '  could not fetch the engagements repo; an unread archive proves nothing either way.',
     evidence_not_on_main: `  ${args.evidence} is not on engagements origin/main. Merge the letter's archive PR first.`,

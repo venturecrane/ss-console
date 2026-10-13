@@ -194,3 +194,39 @@ export async function markCancelledAttested(
   }
   return { ok: true }
 }
+
+/**
+ * Reopen a captured row whose recorded delivery turned out not to be one
+ * (`delivered` -> `active`), then READ IT BACK.
+ *
+ * The delivery's evidence is CLEARED, not kept beside the new state. The
+ * reconciler treats an attested row with a receipt as `present`, so an
+ * `active` row still carrying the withdrawn delivery's receipt would probe
+ * present every night and be refused certification every night. With the
+ * evidence gone the row probes `absent` and is owed work again, which is what
+ * a reopened promise is. The disposition names the letter and the reason, so
+ * the row still says why it left `delivered`.
+ */
+export async function markReopenedAttested(
+  db: D1Database,
+  input: { obligationId: string; fromState: ObligationState; disposition: string }
+): Promise<DeliveryWrite> {
+  const legal = checkTransition(input.fromState, 'active', null)
+  if (!legal.ok || input.fromState !== 'delivered')
+    return { ok: false, error: 'illegal_transition' }
+
+  await db
+    .prepare(
+      `UPDATE client_obligations SET state = 'active', evidence_class = NULL, ` +
+        `evidence_surface = NULL, evidence_locator = NULL, evidence_last_verified_at = NULL, ` +
+        `disposition = ? WHERE obligation_id = ? AND state = ?`
+    )
+    .bind(input.disposition, input.obligationId, input.fromState)
+    .run()
+
+  const after = await getObligation(db, input.obligationId)
+  if (!after || after.state !== 'active' || after.disposition !== input.disposition) {
+    return { ok: false, error: 'did_not_land', reads: after?.state ?? null }
+  }
+  return { ok: true }
+}
