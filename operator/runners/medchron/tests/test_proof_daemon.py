@@ -85,7 +85,7 @@ class _ProofTwin:
     LANE = "demand"
     child_env = {"MEDCHRON_PROOF_RUN": "1"}
 
-    class broker:  # noqa: N801 - stands in for the lane's broker attribute
+    class broker:
         @staticmethod
         def _request(body):
             raise AssertionError(f"a proof run wrote to the broker: {body}")

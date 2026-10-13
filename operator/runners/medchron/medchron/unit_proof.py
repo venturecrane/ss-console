@@ -49,6 +49,12 @@ def block(rd: Path, files: list[dict[str, Any]], pricing: Any) -> dict[str, Any]
     }
 
 
+def for_outcome(o: Any, rd: Path, pricing: Any) -> dict[str, Any] | None:
+    """The proof block a delivered outcome carries; None on any other (the
+    driver sits at its module-size ceiling, so the branch lives here)."""
+    return block(rd, o.files, pricing) if o.outcome == "delivered" else None
+
+
 def unit_by_stage(rd: Path, pricing: Any) -> dict[str, float]:
     """Spend by stage off ONE unit's ledger. ``Budget.by_stage`` sums every
     unit's, which on a joint matter would book each client's review cost on
@@ -67,4 +73,4 @@ def unit_by_stage(rd: Path, pricing: Any) -> dict[str, float]:
     return out
 
 
-__all__ = ["PAGED_PREFIXES", "block", "paged_line", "unit_by_stage"]
+__all__ = ["PAGED_PREFIXES", "block", "for_outcome", "paged_line", "unit_by_stage"]

@@ -640,8 +640,7 @@ class Driver:
                     o.files = list(d.get("files") or [])
                 except (OSError, ValueError):
                     pass
-            if o.outcome == "delivered":
-                o.proof = unit_proof.block(self.slug_dir / "runs" / unit.unit, o.files, self.pricing)
+            o.proof = unit_proof.for_outcome(o, self.slug_dir / "runs" / unit.unit, self.pricing)
             if o.outcome in ("delivered", "dry_run"):
                 try:
                     o.covered = covered_sets(self.slug_dir, unit.unit, self.cfg)
