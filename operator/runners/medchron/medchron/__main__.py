@@ -317,6 +317,15 @@ def _add_negotiate_correct_summary(sub: "argparse._SubParsersAction[argparse.Arg
     cs.set_defaults(fn=_cmd_negotiate_correct_summary)
 
 
+def _add_tools(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    """The commands SMD runs by hand on a seat, beside the lanes' own."""
+    from . import lane_proof_cli
+
+    _add_negotiate_dry_run(sub)
+    _add_negotiate_correct_summary(sub)
+    lane_proof_cli.add(sub)
+
+
 def _exit_code(outcomes) -> int:
     worst = {"delivered": 0, "dry_run": 0, "rehearsed": 0, "held": 3, "refused": 4, "failed": 1}
     return max(worst.get(o.outcome, 1) for o in outcomes) if outcomes else 1
@@ -456,9 +465,7 @@ def main(argv: list[str] | None = None) -> int:
     ng.add_argument("--pricing", default=None)
     ng.add_argument("--state-dir", default=None, help="the lane's persistent state dir (default: on the volume)")
     ng.set_defaults(fn=_cmd_negotiate)
-    _add_negotiate_dry_run(sub)
-    _add_negotiate_correct_summary(sub)
-    __import__("medchron.lane_proof_cli", fromlist=["add"]).add(sub)
+    _add_tools(sub)
     d = sub.add_parser("dag", help="print the stage order and validate it")
     d.set_defaults(fn=_cmd_dag)
     v = sub.add_parser("validate-config", help="validate a firm config file")
