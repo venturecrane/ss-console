@@ -593,6 +593,43 @@ describe('validate — EnumViolation', () => {
     if (r.ok) return
     expect(r.errors.some((e) => e.path === 'machine.memory_mb')).toBe(true)
   })
+
+  // machine.lane_memory_mb (2026-10-13): optional lane cgroup caps in MiB; the
+  // seat entrypoint exports them to the medchron daemon.
+  it('leaves machine.lane_memory_mb absent when unauthored', () => {
+    const r = validate(validFixture())
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.value.machine.lane_memory_mb).toBeUndefined()
+  })
+
+  it('accepts authored lane memory caps, each lane optional', () => {
+    for (const lanes of [{ medchron: 1024, demand: 512 }, { demand: 512 }, { medchron: 256 }]) {
+      const f = validFixture()
+      ;(f['machine'] as Record<string, unknown>)['lane_memory_mb'] = lanes
+      const r = validate(f)
+      expect(r.ok).toBe(true)
+      if (!r.ok) return
+      expect(r.value.machine.lane_memory_mb).toEqual(lanes)
+    }
+  })
+
+  it.each([
+    ['a string', '1024', 'machine.lane_memory_mb'],
+    ['a list', [1024], 'machine.lane_memory_mb'],
+    ['below the floor', { medchron: 255 }, 'machine.lane_memory_mb.medchron'],
+    ['above the ceiling', { demand: 8193 }, 'machine.lane_memory_mb.demand'],
+    ['a non-integer', { demand: 512.5 }, 'machine.lane_memory_mb.demand'],
+    ['a quoted number', { medchron: '1024' }, 'machine.lane_memory_mb.medchron'],
+    ['an unknown lane', { drafting: 512 }, 'machine.lane_memory_mb.drafting'],
+  ])('refuses machine.lane_memory_mb as %s', (_label, lanes, path) => {
+    const f = validFixture()
+    ;(f['machine'] as Record<string, unknown>)['lane_memory_mb'] = lanes
+    const r = validate(f)
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.errors.some((e) => e.path === path)).toBe(true)
+  })
 })
 
 // -----------------------------------------------------------------------------

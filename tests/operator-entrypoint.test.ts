@@ -246,6 +246,18 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
     expect(ENTRYPOINT_CODE).toMatch(/Root medchron daemon NOT launched/)
   })
 
+  // machine.lane_memory_mb (2026-10-13): the authored caps reach the daemon as
+  // SMD_*_MEMORY_MAX_BYTES on the SAME command line that starts it, re-read
+  // from the live root-owned customer.yaml on every respawn. medchron.lane_memory
+  // prints nothing when unauthored, so the code defaults stand.
+  it('passes the authored lane memory caps to every daemon start', () => {
+    // Inside the respawn loop, so each start re-reads the config; an unscrubbed
+    // env (never env -i), since the daemon copies its child allow-list from it.
+    expect(ENTRYPOINT_CODE).toMatch(
+      /while\s+true;?\s*do\s+\/usr\/bin\/env \$\(\/opt\/medchron\/\.venv\/bin\/python -m medchron\.lane_memory "\$\{LIVE_CUSTOMER_YAML\}" 2>\/dev\/null \|\| true\) SMD_MEDCHRON_RUN_DIR="[^"]*" \\\n(\s+[A-Z_]+="[^"]*" \\\n)+\s+\/opt\/medchron\/\.venv\/bin\/python -m medchron\.daemon/
+    )
+  })
+
   it('shares the Smokeball token with the medchron uid through a setgid dir, never by widening the file to world', () => {
     expect(ENTRYPOINT_CODE).toMatch(/chmod 2770 "\$\{SMOKEBALL_TOKEN_DIR\}"/)
     expect(ENTRYPOINT_CODE).toMatch(/chmod 0660 "\$\{SMOKEBALL_TOKEN_DIR\}\/refresh_token"/)

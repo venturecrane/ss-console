@@ -765,8 +765,13 @@ ssh_exec "litigation-broker-config-matches-runner" "r=/var/lib/smd-config/litiga
 # sum of every lane cgroup's limit must not exceed the authored machine memory
 # minus a 512 MiB gateway reserve (the #2465 shape: a 1 GB guest went
 # health-critical when a job and the gateway shared it). A cgroup a lane has
-# not made yet (no job since boot) counts at its code default, read from the
-# runner itself, so a bigger default fails here before the first job. The
+# not made yet (no job since boot) counts at the cap the daemon WILL write: the
+# authored machine.lane_memory_mb value when the customer.yaml authors one
+# (2026-10-13; the entrypoint exports it to the daemon through
+# medchron.lane_memory, the same function counted here), else the code default
+# read from the runner itself, so a bigger default fails here before the first
+# job. An image without medchron.lane_memory exports nothing, so its lanes
+# count at their defaults, which is what that daemon would write. The
 # litigation and drafting lanes share the demand cgroup, so it counts once.
 # A lane that CANNOT run a job on this seat counts zero: with no firm inputs
 # staged it refuses or defers every job (provision-customer.sh steps 2b-2f), so
@@ -774,8 +779,9 @@ ssh_exec "litigation-broker-config-matches-runner" "r=/var/lib/smd-config/litiga
 # seat, including a hosted agent that will never run a chronology (2026-10-13,
 # the brokery seat failed this at 1 and 2 GB with no lane inputs at all). A
 # cgroup that already exists has run a job and always counts at its live limit.
-# FALSIFIER: raise a lane default or shrink machine.memory_mb on a seat with
-# that lane's inputs staged and this fails.
+# FALSIFIER: raise a lane default (or an authored lane_memory_mb value) or
+# shrink machine.memory_mb on a seat with that lane's inputs staged and this
+# fails.
 ssh_exec_script "lane-memory-caps-leave-gateway-reserve" "/opt/medchron/.venv/bin/python -c '
 import os, sys, yaml
 from pathlib import Path
@@ -785,6 +791,11 @@ mb = int((doc.get(\"machine\") or {}).get(\"memory_mb\") or 0)
 if mb <= 0:
     sys.exit(\"machine.memory_mb is not authored\")
 defaults = {\"medchron\": d.DEFAULT_MEMORY_MAX, \"demand\": dl.DEFAULT_MEMORY}
+try:
+    from medchron.lane_memory import authored_bytes
+except ImportError:
+    authored_bytes = lambda doc: {}
+defaults.update(authored_bytes(doc))
 cfg = Path(\"/var/lib/smd-config\")
 runnable = {
     \"medchron\": (cfg / \"medchron-firm.yaml\").is_file(),

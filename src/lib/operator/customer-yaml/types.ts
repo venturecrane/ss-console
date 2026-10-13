@@ -1231,9 +1231,24 @@ export const OBSERVABILITY_DEFAULTS: Observability = {
   health: { period_seconds: 60, grace_minutes: 5 },
 }
 
+/**
+ * Authored lane memory cgroup caps in MiB (2026-10-13). Optional per lane;
+ * unauthored means the runner's code default (medchron 2560, demand 1024).
+ * The seat entrypoint exports them to the medchron daemon
+ * (operator/runners/medchron/medchron/lane_memory.py holds the same bounds).
+ * `demand` caps the cgroup the drafting, litigation and negotiation lanes share.
+ */
+export interface LaneMemoryMb {
+  medchron?: number
+  demand?: number
+}
+
+export const LANE_MEMORY_MB_BOUNDS = { min: 256, max: 8192 } as const
+
 export interface MachineSpec {
   size: string
   memory_mb: number
+  lane_memory_mb?: LaneMemoryMb
 }
 
 /**
