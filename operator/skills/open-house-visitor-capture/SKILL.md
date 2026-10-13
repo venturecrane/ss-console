@@ -98,13 +98,35 @@ body and the transcript together and classify by shape:
 Reply on an inbound turn by creating a draft with the AgentMail `create_draft` tool
 addressed only to the sender, subject `Re: <their subject>`. Your draft is relayed
 to a rostered sender automatically; you do not decide that, so just write the
-reply. Say which mode you ran.
+reply. Write it to the standard in **How you write** below.
 
 **2. A scheduled wake (cron).** Run **Follow-up** below. No email arrived; there is
 no thread to reply into. If nothing is due, write nothing and send nothing.
 
 **3. A person on the seat asked for this skill by name** on any channel. Do what
 they asked in the mode that fits, and reply on that channel.
+
+## How you write
+
+Every email you write, a reply or a scheduled one, follows this standard. The
+seat renders your markdown into the formatted email the reader sees, so the
+markdown IS the formatting: a heading you write as a plain line arrives as a
+plain line.
+
+- **Structure in markdown.** An email that covers more than one topic gets a
+  heading per topic on its own line, starting `## `; a long document you are
+  sending in full gets its title as `# ` and each of its sections as `## `,
+  keeping the document's own numbering. Lists are bullets starting `- `. A
+  bullet that carries a label puts the label in bold: `- **Dates:** ...`.
+  Turn a table into bullets, one per row.
+- **Plain, warm, short paragraphs.** Lead with what the reader asked for or
+  needs. One blank line between paragraphs and around each heading.
+- **No internal words.** Never name your modes (Capture, Recall, Help, Refine,
+  Access request), your tools, the record store, the reference shelf, or this
+  skill. Say what you did in the reader's terms: "I stored...", "I changed...".
+- **No dashes as punctuation.** No em dashes and no double hyphens; use a comma
+  or a period.
+- **Sign off** with the persona's name on its own line.
 
 ## The record store
 
@@ -316,7 +338,7 @@ initiative, and a correction never becomes a reason to tidy anything else.
    `record_store_read` before you reply. The reply names the record, and for
    each field that changed, the old value and the new one, both taken from what
    you read. For a stop or a withdrawal, say which record and what it now
-   holds. Say which mode you ran.
+   holds.
 
 ## Help (inbound)
 
@@ -347,8 +369,7 @@ everything you say about how you work comes from this skill.
    - Each agent sees only their own notes; the broker reads everyone's.
      If the shelf gives the schedule's time, cadence or the inbox address, quote
      it from there.
-5. Reply by `create_draft` to the sender only, as on any inbound turn. Say you
-   ran Help.
+5. Reply by `create_draft` to the sender only, as on any inbound turn.
 
 ### Refine (inbound): changing the shelf in conversation
 
@@ -381,8 +402,7 @@ happens here, by email, with no one editing files.
 7. **Write, read back, reply.** Write with `record_store_write`, `overwrite:
 true` for an existing document. Read it back with `record_store_read`. The
    reply quotes each changed passage before and after, taken from what you
-   read, names any other places you changed to keep it consistent, and says
-   you ran Refine.
+   read, and names any other places you changed to keep it consistent.
 
 ## Access request (inbound)
 
@@ -398,8 +418,7 @@ sender you did.
    sender asked. Nothing else goes in it.
 3. Reply by `create_draft` to the sender only: list the people and addresses
    you passed on, read back exactly, say they have gone to SMD Services to be
-   added and that you will tell them when it is done. Promise no time. Say you
-   ran Access request.
+   added and that you will tell them when it is done. Promise no time.
 4. Never tell the sender anyone has been added: that is SMD's answer to give,
    and it reaches the sender on its own.
 
