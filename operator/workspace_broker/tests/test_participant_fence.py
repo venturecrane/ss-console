@@ -763,7 +763,9 @@ def _no_lookup(_anchor):
 
 def test_the_roster_lane_reaches_the_exact_rostered_addresses(tmp_path: Path) -> None:
     facts = _roster_facts(tmp_path)
-    pf.check_send(facts, ["tim@brokery.example"], lane="skill:open-house-visitor-capture", anchor=None, resolve=_no_lookup)
+    pf.check_send(
+        facts, ["tim@brokery.example"], lane="skill:open-house-visitor-capture", anchor=None, resolve=_no_lookup
+    )
 
 
 @pytest.mark.parametrize(
