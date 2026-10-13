@@ -71,6 +71,10 @@ class Config:
     auth_probe_stale_minutes: int
     all_clear_hour_utc: int
     lanes: dict[str, Lane]
+    no_reply_minutes_by_seat: dict[str, int]
+
+    def no_reply_for(self, seat: str) -> int:
+        return self.no_reply_minutes_by_seat.get(seat, self.no_reply_minutes)
 
 
 def load_config(path: Path = CONTRACT_PATH) -> Config:
@@ -82,8 +86,9 @@ def load_config(path: Path = CONTRACT_PATH) -> Config:
         lanes[name] = Lane(name, str(spec["label"]), int(spec["queue_minutes"]), int(spec["run_minutes"]))
     if set(lanes) != set(LANE_PREFIXES.values()):
         raise ValueError(f"{path}: lanes must be exactly {sorted(LANE_PREFIXES.values())}")
-    keys = [k for k in Config.__dataclass_fields__ if k != "lanes"]
-    return Config(**{k: int(raw[k]) for k in keys}, lanes=lanes)
+    keys = [k for k in Config.__dataclass_fields__ if k not in ("lanes", "no_reply_minutes_by_seat")]
+    by_seat = {str(k): int(v) for k, v in (raw.get("no_reply_minutes_by_seat") or {}).items()}
+    return Config(**{k: int(raw[k]) for k in keys}, lanes=lanes, no_reply_minutes_by_seat=by_seat)
 
 
 @dataclass
@@ -298,6 +303,22 @@ def job_items(
         ts, state, reason = job.last
         lane = cfg.lanes[job.lane]
         name = _job_name(job, cfg)
+        held_reason = next((r for _t, _s, r in reversed(job.events) if r), None)
+        if state in IN_FLIGHT and held_reason and held_reason.startswith("lane_unproven"):
+            # Held by the lane gate (PR #3148) until SMD's proof run: waiting,
+            # not running and not stuck.
+            out.append(
+                item(
+                    seat,
+                    "job_held",
+                    f"{job.lane}:{job.job_id}:lane_unproven",
+                    ts,
+                    f"The {name} is waiting on SMD's proof run for its lane (held {span(now - ts)}); "
+                    "nothing runs until the lane is proven.",
+                    f"Run the lane's proof: operator/bin/lane-proof.sh {seat} status.",
+                )
+            )
+            continue
         if state in IN_FLIGHT:
             phase = IN_FLIGHT[state]
             limit = lane.queue_minutes if phase == "queued" else lane.run_minutes
@@ -363,7 +384,7 @@ def request_items(
     for vid, received in first_seen.items():
         if vid in replied or received < horizon:
             continue
-        due = received + timedelta(minutes=cfg.no_reply_minutes)
+        due = received + timedelta(minutes=cfg.no_reply_for(seat))
         if now < due:
             continue
         card = card_id(vid)

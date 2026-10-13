@@ -693,3 +693,44 @@ def test_a_check_that_could_not_run_never_pages(monkeypatch, tmp_path):
 def test_a_mailbox_sign_in_failure_pages():
     items = src.graph_probe_item(SEAT, "ops@example.test", "msgraph token mint rejected with HTTP 401", NOW)
     assert items[0].page == f"ACTION: {SEAT} mailbox sign-in is dead"
+
+
+def test_a_hosted_agent_seat_gets_machine_checks_only():
+    """brokery and scott are hosted agents: no request cards, job lanes or
+    Smokeball. Rows that would be Operator findings on an Operator seat must
+    produce nothing there, and the email says why."""
+    import yaml
+
+    customers = Path(__file__).resolve().parents[2] / "customers"
+    hosted = [
+        p.parent.name
+        for p in customers.glob("[!_]*/customer.yaml")
+        if cli.seat_product(yaml.safe_load(p.read_text())) == "hosted-agent"
+    ]
+    assert "scott" in hosted
+    console = cli.Console(cli._NoD1())
+    rows = [_inbound(NOW - timedelta(hours=1)), _job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=5))]
+    for seat in hosted:
+        console.status[seat] = {"last_heartbeat_ts": (NOW - timedelta(minutes=1)).isoformat()}
+        items, gaps, _ = cli.evaluate_seat(seat, CFG, console, NOW, rows)
+        assert items == [] and "machine checks only" in gaps[0]
+    # The same rows on an Operator seat ARE findings (the falsifier).
+    console.status[SEAT] = {"last_heartbeat_ts": (NOW - timedelta(minutes=1)).isoformat()}
+    items, _gaps, _ = cli.evaluate_seat(SEAT, CFG, _console(), NOW, rows)
+    assert {"no_reply", "job_stuck"} <= set(_kinds(items))
+
+
+def test_a_job_held_for_an_unproven_lane_is_waiting_not_stuck():
+    rows = [
+        _job("LITIGATION", "SUBMITTED", NOW - timedelta(hours=5), reason="lane_unproven: litigation"),
+    ]
+    items = wh.job_items(SEAT, rows, CFG, NOW)
+    assert _kinds(items) == ["job_held"]
+    assert "proof run" in items[0].what and "lane-proof.sh" in items[0].todo
+
+
+def test_the_no_reply_threshold_is_per_seat():
+    assert CFG.no_reply_for("smd-staging") == 5 and CFG.no_reply_for(SEAT) == 30
+    rows = [_inbound(NOW - timedelta(minutes=6))]
+    assert _kinds(wh.request_items("smd-staging", rows, CFG, NOW)) == ["no_reply"]
+    assert wh.request_items(SEAT, rows, CFG, NOW) == []

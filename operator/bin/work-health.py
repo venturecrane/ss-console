@@ -95,6 +95,13 @@ def customer_yaml(slug: str) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def seat_product(config: dict) -> Optional[str]:
+    """``seat.product`` from the seat's customer.yaml: operator or hosted-agent."""
+    seat = config.get("seat") if isinstance(config, dict) else None
+    product = seat.get("product") if isinstance(seat, dict) else None
+    return str(product) if product else None
+
+
 def seat_shape(config: dict) -> tuple[bool, Optional[str]]:
     """(has_smokeball, the hourly check's authored schedule or None) from git."""
     connectors = config.get("connectors") or {}
@@ -200,6 +207,19 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
     items += src.connector_items(slug, status, now)
     items += src.alert_items(slug, console.alerts.get(slug, []), now)
     items += src.sentry_items(slug, console.sentry.get(slug, []), cfg, now)
+    product = seat_product(customer_yaml(slug))
+    if product != "operator":
+        # A hosted agent (seat.product: hosted-agent; scott, brokery) has no
+        # request cards, job lanes or Smokeball: grading it against Operator
+        # expectations would invent findings. Machine checks only, said so.
+        return (
+            items,
+            [
+                f"{product or 'unknown product'}: machine checks only (gateway, connections, alerts, Sentry); "
+                "no Operator request, job or schedule checks apply."
+            ],
+            0,
+        )
     if console.error:
         items.append(
             wh.item(
