@@ -247,7 +247,7 @@ def _operator_items(
     closed = wh.load_closed()
     items = wh.request_items(slug, rows, cfg, now, closed)
     items += wh.job_items(slug, rows, cfg, now, closed, console.lane_holds.get(slug))
-    items += wh.delivery_proof_items(slug, rows, cfg, now)
+    items += src.delivery_proof_items(slug, rows, cfg, now)
     if has_smokeball:
         items += auth.smokeball_auth_items(slug, rows, cfg, now, probe_scheduled=why is None)
         items += auth.probe_not_scheduled_items(slug, now, why=why)
@@ -414,6 +414,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         if seat_gaps:
             gaps[slug] = seat_gaps
 
+    items += wh.missed_run_items(since, cfg, now)
     plan = mail.decide(
         items=items,
         seats=seats,

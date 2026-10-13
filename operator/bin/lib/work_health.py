@@ -68,6 +68,7 @@ class Config:
     reconcile_window_hours: int
     event_window_hours: int
     heartbeat_stale_minutes: int
+    missed_run_after_minutes: int
     auth_probe_stale_minutes: int
     all_clear_hour_utc: int
     lanes: dict[str, Lane]
@@ -114,6 +115,7 @@ class Item:
 
 # Ordering in the email: the work a firm person is waiting on first.
 RANK = {
+    "monitor_gap": -1,
     "unreadable": 0,
     "no_reply": 10,
     "reply_held": 12,
@@ -442,52 +444,23 @@ def request_items(
     return out
 
 
-# ---------------------------------------------------------------------------
-# delivery proof (PR #3152)
-# ---------------------------------------------------------------------------
-
-_PROOF_WORDS = {
-    "proof_missing": "no proof of delivery was recorded",
-    "readback_unproven": "the delivered files could not be read back",
-    "readback_mismatch": "the files on the matter differ from what was built",
-    "review_missing": "the pre-delivery review never ran",
-    "review_held": "the pre-delivery review held it",
-    "dry_run_reported": "a dry run was reported as delivered",
-    "wake_lost": "the delivery wake was lost",
-    "reply_unproven": "the requester's reply is not in Sent Items",
-    "reply_not_in_sent_items": "the requester's reply is not in Sent Items",
-}
+#: The pseudo-seat for findings about this email itself.
+MONITOR_SEAT = "work-health"
 
 
-def delivery_proof_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> list[Item]:
-    """A DELIVERY_PROOF_FAILED row (the seat refused to call a job delivered,
-    or its requester reply never reached Sent Items) is open work until a
-    DELIVERY_PROVEN row for the same job lands after it."""
-    proven: dict[str, datetime] = {}
-    failures: dict[str, tuple[datetime, dict]] = {}
-    for ts, row in stamped(rows):
-        md = meta(row)
-        job_id = str(md.get("job_id") or "")
-        if not job_id:
-            continue
-        if row.get("action_type") == "DELIVERY_PROVEN":
-            proven[job_id] = ts
-        elif row.get("action_type") == "DELIVERY_PROOF_FAILED":
-            failures[job_id] = (ts, md)
-    out: list[Item] = []
-    for job_id, (ts, md) in failures.items():
-        if (job_id in proven and proven[job_id] > ts) or now - ts > timedelta(hours=cfg.ended_job_hours):
-            continue
-        code = reason_token(md.get("code")) or "unknown"
-        lane = cfg.lanes[md["lane"]].label if md.get("lane") in cfg.lanes else str(md.get("lane") or "a")
-        out.append(
-            item(
-                seat,
-                "job_failed",
-                f"proof:{job_id}:{code}",
-                ts,
-                f"The {lane} job {job_id[-8:]} is NOT proven delivered: {_PROOF_WORDS.get(code, code)} ({code}, {hhmm(ts)}).",
-                "Check what the requester actually received before anyone says it was delivered.",
-            )
+def missed_run_items(since: Optional[datetime], cfg: Config, now: datetime) -> list[Item]:
+    """The previous successful run started too long ago: hourly slots were
+    dropped or failed, and the hours between were unwatched."""
+    if since is None or now - since <= timedelta(minutes=cfg.missed_run_after_minutes):
+        return []
+    return [
+        item(
+            MONITOR_SEAT,
+            "monitor_gap",
+            f"gap:{since.isoformat()}",
+            since,
+            f"Previous run missing: the last successful work-health run started {hhmm(since)}, "
+            f"{span(now - since)} ago. Problems in between were reported late or not at all.",
+            "Check the work-health workflow's runs (schedule dropped, or runs failing).",
         )
-    return out
+    ]

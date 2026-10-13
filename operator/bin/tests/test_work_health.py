@@ -761,7 +761,18 @@ def test_a_failed_delivery_proof_is_open_until_proven():
         code="readback_mismatch",
         detail="x",
     )
-    items = wh.delivery_proof_items(SEAT, [fail], CFG, NOW)
+    items = src.delivery_proof_items(SEAT, [fail], CFG, NOW)
     assert _kinds(items) == ["job_failed"] and "readback_mismatch" in items[0].what
     proven = _row("DELIVERY_PROVEN", NOW - timedelta(minutes=30), job_id="J7", lane="drafting")
-    assert wh.delivery_proof_items(SEAT, [fail, proven], CFG, NOW) == []
+    assert src.delivery_proof_items(SEAT, [fail, proven], CFG, NOW) == []
+
+
+def test_a_missed_hourly_run_is_an_item_and_breaks_the_all_clear():
+    """A dropped schedule slot must never read as silence."""
+    assert wh.missed_run_items(NOW - timedelta(minutes=60), CFG, NOW) == []
+    gap = wh.missed_run_items(NOW - timedelta(hours=3), CFG, NOW)
+    assert _kinds(gap) == ["monitor_gap"] and "Previous run missing" in gap[0].what
+    plan = mail.decide(
+        items=gap, seats=[SEAT], gaps={}, previous=None, since=NOW - timedelta(hours=3), now=NOW, all_clear_hour_utc=15
+    )
+    assert plan.send and "all clear" not in plan.subject and "== work-health" in plan.text
