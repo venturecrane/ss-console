@@ -63,7 +63,7 @@ class Placing(Finish):
         pos = render.COMMENT.sub("", self.firm.attachment("pos")).strip()
         placed = place.place(t, fields, block, pos)
         out, fmt, paper = deliver.out_dir(self.data), self.firm.data["format"], self.paper()
-        path, report = render.render(placed.markdown, self.cls, out / self._names(u)["draft"], fmt)
+        path, _report = render.render(placed.markdown, self.cls, out / self._names(u)["draft"], fmt)
         laid = pleading.apply(path, pleading.spec_for(fmt)) if paper == "pleading" else []  # type: ignore[arg-type]
         res = format_check.check(path, self.cls, fmt, "", None, paper)
         ours = [f for f in res.fails if not HIS.match(f)]
@@ -81,7 +81,6 @@ class Placing(Finish):
                 "notes": [
                     f"placed {t.name} word for word; added: " + ", ".join(placed.added),
                     *[f"in the attorney's own text (not changed): {f}" for f in his],
-                    *report.get("notes", []),
                     *laid,
                 ],
             },
@@ -100,7 +99,7 @@ class Placing(Finish):
             f'reads "{x["record_value"] or "nothing"}"'
             for x in cap.get("discrepancies") or []
         ]
-        lines += ["", "## What the job did", ""]
+        lines += ["", "## What was done", ""]
         for u, _t in self._theirs():
             lines += [f"- {u.label}: {n}" for n in self._rendered(u)["notes"]]
         md = "\n".join(lines) + "\n"

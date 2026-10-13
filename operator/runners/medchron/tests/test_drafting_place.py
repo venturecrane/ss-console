@@ -173,6 +173,21 @@ def test_attachments_that_are_not_sets_hold_with_a_sentence(tmp_path, pricing):
     assert v.outcome == "held" and "carry no discovery requests" in v.reason
 
 
+def test_the_notes_speak_to_the_attorney_not_about_the_machinery(tmp_path, pricing):
+    """Rehearsal 2026-10-13: the notes said "What the job did" and carried the
+    renderer's own lines ("named styles defined on the starter base")."""
+    r, v, _ = _run(tmp_path, pricing, ScriptedClient(), [att("special.docx", his_set("special"))])
+    assert v.outcome == "delivered", v.reason
+    notes = (r.data / "notes-final.md").read_text()
+    for internal in ("the job", "starter base", "page number field"):
+        assert internal not in notes, internal
+
+
+def test_without_an_authored_block_the_courts_attorney_block_prints_as_a_block():
+    att_ = {"name": "ALPHA EXAMPLE", "state_bar_number": "000001", "firm": "EXAMPLE LAW", "email": "a@x.example"}
+    assert place.court_attorney_block(att_) == ["ALPHA EXAMPLE (SBN 000001)", "EXAMPLE LAW", "Email: a@x.example"]
+
+
 def test_his_title_is_kept_and_a_missing_title_is_built_from_his_identification_block():
     blob = his_set("admission", title=False)
     t = place.read("a.docx", blob)
