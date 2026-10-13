@@ -57,6 +57,18 @@ function authoredSeatMemoryMb(): number {
 }
 
 /**
+ * The vCPU count pilot-smokeball's authored `machine.size` names
+ * (`shared-cpu-<N>x`), for the same stub and for the same reason as the memory:
+ * the seat moved from shared-cpu-1x to shared-cpu-2x (2026-10-13) and a literal
+ * 1 here would turn this file red for a reason that is not its own.
+ */
+function authoredSeatCpus(): number {
+  const m = /^machine:[\s\S]*?^\s+size:\s*shared-cpu-(\d+)x/m.exec(readFileSync(SEAT_YAML, 'utf8'))
+  if (!m) throw new Error(`no machine.size shared-cpu-<N>x found in ${SEAT_YAML}`)
+  return Number(m[1])
+}
+
+/**
  * The stub dir plus a bare system PATH, and nothing else.
  *
  * Inheriting `process.env.PATH` would leave the developer's real `uv` reachable
@@ -116,10 +128,11 @@ function stubDir(failOn: string[]): string {
   // `guest-matches-authored-size` compared nothing, this stub could report any
   // number and the suite would not notice.
   const authoredMemoryMb = authoredSeatMemoryMb()
+  const authoredCpus = authoredSeatCpus()
   const fly = `#!/usr/bin/env bash
 for a in "$@"; do
   [ "$a" = "status" ] && {
-    echo '{"Machines":[{"state":"started","config":{"guest":{"cpu_kind":"shared","cpus":1,"memory_mb":${authoredMemoryMb}}}}]}'
+    echo '{"Machines":[{"state":"started","config":{"guest":{"cpu_kind":"shared","cpus":${authoredCpus},"memory_mb":${authoredMemoryMb}}}}]}'
     exit 0
   }
 done

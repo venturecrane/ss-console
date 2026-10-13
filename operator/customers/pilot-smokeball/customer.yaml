@@ -109,7 +109,7 @@ escalation_model: claude-opus-5-5
 hermes_ref: v2026.9.14@345cd2b057a452236de401d3534b8502a7465e8d
 
 machine:
-  size: shared-cpu-1x
+  size: shared-cpu-2x
   # 2048 is this seat's FLOOR, not a preference. The 2026-09-01 crash loop
   # (00:12-02:45 UTC) ran here: at 1024 the gateway's startup crawl -- the
   # synchronous platform-plugin imports inside gateway/channel_directory.py's
@@ -130,16 +130,14 @@ machine:
   # watchdog budget (not configurable at this pin -- see
   # docs/runbooks/operator/incidents/2026-09-01-gateway-startup-watchdog-collision.md) or
   # making the platform-plugin import lazy.
-  memory_mb: 2048
-  # Lane memory caps (decision 2026-10-13). The 2048 MiB guest minus the 512
-  # MiB gateway reserve leaves 1536 MiB for the lane cgroups, and the runner's
-  # defaults (chronology 2560 + demand 1024) assume a 4 GB guest. This pilot
-  # runs small fictional matters, and raising the guest costs money for a demo
-  # seat, so the caps come down instead: 1024 + 512 = 1536. Boot smoke
-  # lane-memory-caps-leave-gateway-reserve counts these values.
-  lane_memory_mb:
-    medchron: 1024
-    demand: 512
+  memory_mb: 4096
+  # 4096 and shared-cpu-2x (Captain decision 2026-10-13): the same guest as the
+  # client seat it rehearses for (ashton-price), so pilot runs the job lanes at
+  # the runner's default memory caps (chronology 2560 + demand 1024 MiB, plus
+  # the 512 MiB gateway reserve that boot smoke lane-memory-caps-leave-gateway-
+  # reserve checks). Lowering pilot's caps instead was rejected: a rehearsal
+  # seat that runs smaller caps than the client proves less. Fly's
+  # shared-cpu-1x tops out at 2048 MB, hence the size change with it.
 
 # ---- HUMANS WITH PORTAL ACCESS ----
 users:
