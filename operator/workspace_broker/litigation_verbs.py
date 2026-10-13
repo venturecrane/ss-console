@@ -43,7 +43,9 @@ THE SUBMIT CHECKS, in order, none of which spends anything:
    matter must match each);
 8. no unfinished job for the same scope, and this email (or this Pacific
    date's scheduled run) has not already queued one (re-checked in the
-   ledger's write transaction).
+   ledger's write transaction). A FAILED requested run does not count: it
+   delivered nothing and told nobody, so its email may ask again
+   (2026-10-13); a failed scheduled run still holds its date.
 
 Audit rows carry ids, counts and states, never the request text and never a
 matter fact.
@@ -464,6 +466,11 @@ class LitigationVerbs:
         twin = self._db.unfinished_for_scope(row["scope_key"])
         if twin is not None and twin != job_id:
             raise ValueError(f"job {twin} is already underway for this scope; resuming {job_id} would run it twice")
+        again = self._db.live_for_ref(row["request_ref"], job_id)
+        if again is not None:
+            raise ValueError(
+                f"job {again} was submitted since for the same request email; resuming {job_id} would answer it twice"
+            )
         self._db.queue_dir.mkdir(parents=True, exist_ok=True)
         marker = self._db.queue_dir / f".resume-{job_id}.json"
         marker.write_text(

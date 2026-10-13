@@ -120,6 +120,22 @@ def test_the_duplicate_is_per_matter_and_class(ledger) -> None:
     assert ledger.active_on_matter(MATTER, "discovery_response") is None
 
 
+def test_a_failed_job_frees_its_email_and_class(ledger) -> None:
+    """2026-10-13, the litigation lane's twin rule: a failed job filed nothing
+    and told nobody, so the same email may queue the same class again.
+    FALSIFIER: the old full unique index refuses the second submit."""
+    job = ledger.submit(_env())
+    ledger.record(job, "running", {})
+    ledger.record(job, "failed", {"reason": "render"})
+    again = ledger.submit(_env())
+    assert again != job
+    assert ledger.live_for_ref(_env()["request_ref"], "discovery_response", job) == again
+    ledger.record(again, "held", {"reason": "the record lacks the pleadings"})
+    with pytest.raises(SubmitRefused) as dup:
+        ledger.submit(_env())
+    assert "request email" in str(dup.value)
+
+
 def test_concurrent_submits_take_one_slot(ledger) -> None:
     import threading
     import uuid
