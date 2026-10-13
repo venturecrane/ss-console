@@ -42,6 +42,8 @@ export interface CardRow {
   job_state: string | null
   status: string
   attempts: number
+  /** The lane a lane_unproven card names (migration 0125); absent before it. */
+  lane_key?: string | null
 }
 
 export interface RequestsArgs {
@@ -91,6 +93,9 @@ export function requestIdOf(cardKey: string): string {
 function outcome(row: CardRow): string {
   if (row.kind === 'replied') return `replied in ${row.minutes}m`
   if (row.kind === 'no_reply') return `NO REPLY after ${row.minutes}m`
+  if (row.kind === 'lane_unproven') {
+    return `NEW KIND ${row.lane_key ?? '?'} ${row.job_lane ? 'job waiting' : 'first use'}`
+  }
   return `${row.job_lane ?? 'job'} ${row.job_state ?? 'ended'} at +${row.minutes}m`
 }
 
@@ -115,6 +120,7 @@ export interface Summary {
   replied: number
   noReply: number
   jobDone: number
+  laneUnproven: number
   notEmailed: number
   stillUnanswered: number
 }
@@ -130,6 +136,7 @@ export function summarize(rows: readonly CardRow[]): Summary {
     replied: rows.filter((r) => r.kind === 'replied').length,
     noReply: alarms.length,
     jobDone: rows.filter((r) => r.kind === 'job_done').length,
+    laneUnproven: rows.filter((r) => r.kind === 'lane_unproven').length,
     notEmailed: rows.filter((r) => r.status !== 'sent').length,
     stillUnanswered: alarms.filter((r) => !answered.has(requestIdOf(r.card_key))).length,
   }
@@ -142,7 +149,8 @@ export function renderReport(rows: readonly CardRow[], sinceLabel: string): stri
     ...rows.map(renderLine),
     '',
     `${s.requests} requests, ${s.cards} cards since ${sinceLabel}: ` +
-      `${s.replied} replied, ${s.noReply} NO REPLY alarms, ${s.jobDone} job endings.`,
+      `${s.replied} replied, ${s.noReply} NO REPLY alarms, ${s.jobDone} job endings, ` +
+      `${s.laneUnproven} new kinds of ask.`,
     `Still unanswered (an alarm with no later reply card): ${s.stillUnanswered}.`,
     `Not emailed yet: ${s.notEmailed}.`,
   ].join('\n')
@@ -161,7 +169,7 @@ export async function readCards(args: RequestsArgs, nowMs: number): Promise<Card
   const result = await db
     .prepare(
       `SELECT customer_slug, card_key, kind, received_at, event_at, minutes, tools_count,
-              replies, refused, failed, job_lane, job_state, status, attempts
+              replies, refused, failed, job_lane, job_state, status, attempts, lane_key
          FROM operator_request_cards
         WHERE received_at >= ?${seatFilter}
         ORDER BY received_at DESC, customer_slug, kind

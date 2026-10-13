@@ -19,7 +19,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import budget as budget_mod, limits as limits_mod
+from .. import budget as budget_mod, limits as limits_mod, proof_mode
 from ..ledger import Ledger
 from ..llm import Doorway
 from . import (
@@ -400,6 +400,13 @@ class LitigationRun(RunBase):
                 self._report,
             ),
         ):
+            if name == "file" and proof_mode.active():  # a proof run stops here (proof_mode.py)
+                out = self._out()
+                return Verdict(
+                    proof_mode.OUTCOME,
+                    stage="file",
+                    files=[{"role": "workbook", "name": out.name, "size": out.stat().st_size}],
+                )
             self._stage(name, fn)
             if name == "inventory" and not self._matters():
                 raise LitigationHold("scope_empty: no open litigation matters are in this job's scope")

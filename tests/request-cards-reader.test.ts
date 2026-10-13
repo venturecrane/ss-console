@@ -74,6 +74,18 @@ describe('the footer', () => {
     expect(text).toContain('demand delivered')
   })
 
+  it('a new kind of ask is listed and counted', () => {
+    const rows = [
+      row(A, 'lane_unproven', { job_lane: 'drafting', lane_key: 'document-drafter.discovery_set' }),
+      row(B, 'lane_unproven', { lane_key: 'file-work-requests' }),
+    ]
+    expect(summarize(rows).laneUnproven).toBe(2)
+    const text = renderReport(rows, 'then')
+    expect(text).toContain('NEW KIND document-drafter.discovery_set job waiting')
+    expect(text).toContain('NEW KIND file-work-requests first use')
+    expect(text).toContain('2 new kinds of ask.')
+  })
+
   it('a card not yet emailed says so', () => {
     const text = renderReport([row(A, 'replied', { status: 'pending', attempts: 3 })], 'then')
     expect(text).toContain('NOT EMAILED (3 tries)')
@@ -126,7 +138,16 @@ process.stdout.write(JSON.stringify([{ results, success: true }]))
     const { DatabaseSync } = await import('node:sqlite')
     const file = join(dir, 'd1.sqlite')
     const db = new DatabaseSync(file)
-    db.exec(readFileSync(resolve('migrations/0122_operator_request_cards.sql'), 'utf8'))
+    // Every migration that shapes the table, in order: the reader selects the
+    // newest columns (0125's lane_key), so a database short of one fails here.
+    for (const m of [
+      '0122_operator_request_cards',
+      '0123_request_card_drafting_lane',
+      '0124_request_card_litigation_lane',
+      '0125_request_card_lane_unproven',
+    ]) {
+      db.exec(readFileSync(resolve(`migrations/${m}.sql`), 'utf8'))
+    }
     const recent = new Date(Date.now() - 3_600_000).toISOString()
     const old = new Date(Date.now() - 30 * 86_400_000).toISOString()
     const insert = db.prepare(

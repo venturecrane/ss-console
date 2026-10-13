@@ -34,6 +34,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from .. import proof_mode
 from . import caption_rules as rules
 from .caption import CASE_KEY, case_item
 
@@ -190,6 +191,10 @@ def _journal(data: Path, row: dict[str, Any]) -> None:
 
 
 def _attempt(client: Any, matter_id: str, d: dict[str, Any], fix: dict[str, Any]) -> dict[str, Any]:
+    if proof_mode.active():
+        # A proof run writes nothing to the firm (proof_mode.py). The document
+        # is built as the live run would build it; the journal says so.
+        return {"status": APPLIED, "proof": True, "why": "proof run: the correction was not written"}
     try:
         if fix["kind"] == "case_number":
             return fix_case_number(client, matter_id, d["document_value"])

@@ -1733,6 +1733,9 @@ COPY operator/templates/entrypoint-drafting.sh /app/entrypoint-drafting.sh
 COPY operator/templates/entrypoint-litigation.sh /app/entrypoint-litigation.sh
 # The negotiation watch's twin (queue, job dirs, state dir; no firm inputs).
 COPY operator/templates/entrypoint-negotiation.sh /app/entrypoint-negotiation.sh
+# The lane-proof gate's seed and modes (lane-proofs.yaml from the vault, the
+# holds and proof-run trees), after the lanes' own trees.
+COPY operator/templates/entrypoint-lane-proofs.sh /app/entrypoint-lane-proofs.sh
 # REQUIRED_ENV / OPTIONAL_ENV, generated from operator/contracts/env-consumption.yaml
 # (operator/bin/gen-env-arrays.py); bootstrap.sh sources this instead of hardcoding them.
 COPY operator/templates/_env-arrays.generated.sh /app/_env-arrays.generated.sh

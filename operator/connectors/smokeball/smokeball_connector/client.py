@@ -46,7 +46,7 @@ from typing import Any
 
 import httpx
 
-from .write_record import WriteRecord
+from .write_record import WriteRecord, refuse_proof_run_write
 
 # /matters/{id} paths take the matter's UUID, never its human matter number.
 # Guarded in request() - see the docstring there for the 2026-09-01 incident.
@@ -342,7 +342,9 @@ class SmokeballClient:
         prefix = f"/{self._account_id}" if self._account_id else ""
         url = f"{self.api_host}{prefix}{path}"
         # A write is recorded in the seat's audit ledger before it is sent, or it
-        # is not sent (write_record.py). Reads pass straight through.
+        # is not sent (write_record.py). Reads pass straight through. A proof
+        # run sends no write at all.
+        refuse_proof_run_write(method, path)
         record = WriteRecord(method, path, seg.group(1) if seg else None, json)
         record.begin()
         refreshed = False
@@ -511,6 +513,7 @@ class SmokeballClient:
         """PUT raw bytes to a presigned S3 upload URL. The URL is pre-authenticated
         by its signature, so we send NO ``x-api-key``/``Authorization`` and an
         EMPTY ``Content-Type`` (the header is not part of the signed request)."""
+        refuse_proof_run_write("PUT", "presigned upload")
         try:
             resp = self._http.put(url, content=data, headers={"Content-Type": ""})
         except httpx.HTTPError as exc:

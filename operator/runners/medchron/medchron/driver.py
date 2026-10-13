@@ -34,6 +34,7 @@ from . import (
     icd_tables,
     job as job_mod,
     limits as limits_mod,
+    proof_mode,
     rehearsal,
     seat as seat_mod,
 )
@@ -456,6 +457,12 @@ class Driver:
             return None
         if self.rehearse and (stage.paid or stage.external):
             return rehearsal.stop(self, stage, ctx, extracted, notes)
+        if stage.name == "upload" and proof_mode.active():
+            # A proof run (proof_mode.py): everything before the one write ran
+            # for real; the package stays staged under out/ for SMD to read.
+            pages = budget_mod.pages_read(extracted)
+            why = "proof run: stopped before the upload; the package is staged under out/"
+            return Outcome(unit.unit, proof_mode.OUTCOME, why, stage.name, self.budget.refresh(), pages, notes)
         if stage.paid:
             rehearsal.probe_before_spend(self, stage, ctx, notes)
             try:

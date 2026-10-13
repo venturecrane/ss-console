@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import config as config_mod, dag, driver as driver_mod, rehearsal, verdict as verdict_mod
+from . import config as config_mod, dag, driver as driver_mod, proof_mode, rehearsal, verdict as verdict_mod
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
@@ -199,19 +199,43 @@ def _cmd_negotiate(args: argparse.Namespace) -> int:
 
     with contextlib.redirect_stdout(sys.stderr):
         try:
-            run = NegotiationRun(
-                Path(args.job_dir),
-                state_dir=args.state_dir,
-                pricing=args.pricing,
-                log=lambda m: print(m, file=sys.stderr),
-            )
-            v = run.run()
+            if proof_mode.active():
+                v = _negotiate_proof(args)
+            else:
+                run = NegotiationRun(
+                    Path(args.job_dir),
+                    state_dir=args.state_dir,
+                    pricing=args.pricing,
+                    log=lambda m: print(m, file=sys.stderr),
+                )
+                v = run.run()
         except Exception as exc:  # noqa: BLE001 - a verdict, never a trace on stdout
             v = {"verdict": "failed", "stage": "setup", "reason": f"unexpected: {type(exc).__name__}: {str(exc)[:300]}"}
     payload = json.dumps(v)
     verdict_mod.write(Path(args.job_dir), payload)
     print(payload)
     return EXIT.get(str(v.get("verdict")), 2)
+
+
+def _negotiate_proof(args: argparse.Namespace) -> dict[str, Any]:
+    """A proof run of the negotiation watch (``proof_mode.py``): the job's own
+    envelope through the dry-run path (``negotiation/dryrun.py``), with a
+    throwaway cursor inside the job dir. Its report is the artifact SMD reads."""
+    from .negotiation import dryrun
+
+    run = dryrun.NegotiationDryRun(
+        Path(args.job_dir),
+        state_dir=Path(args.job_dir) / "state",
+        pricing=args.pricing,
+        log=lambda m: print(m, file=sys.stderr),
+    )
+    summary = run.run()
+    ok = summary.get("verdict") == "delivered"
+    return {
+        **summary,
+        "verdict": proof_mode.OUTCOME if ok else "failed",
+        "stage": "write" if ok else str(summary.get("stage") or "dry_run"),
+    }
 
 
 def _cmd_negotiate_dry_run(args: argparse.Namespace) -> int:
@@ -434,6 +458,7 @@ def main(argv: list[str] | None = None) -> int:
     ng.set_defaults(fn=_cmd_negotiate)
     _add_negotiate_dry_run(sub)
     _add_negotiate_correct_summary(sub)
+    __import__("medchron.lane_proof_cli", fromlist=["add"]).add(sub)
     d = sub.add_parser("dag", help="print the stage order and validate it")
     d.set_defaults(fn=_cmd_dag)
     v = sub.add_parser("validate-config", help="validate a firm config file")
