@@ -5,6 +5,7 @@ after the write reads back. Every name, number and date is invented."""
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 
 from types import SimpleNamespace
@@ -31,6 +32,9 @@ def _offer(**over):
         "date": "2026-10-07",
         "plaintiff_index": None,
         "note": "",
+        # The document's sides, stamped by extract.parse: the carrier wrote to the firm.
+        "author_side": "paying_side",
+        "addressed_to": "our_firm",
     }
     e.update(over)
     return e
@@ -280,8 +284,17 @@ FILES = [{"id": "f1", "name": "Intake", "ext": ".pdf", "modified": "1"}]
 NEW = FILES + [{"id": "f2", "name": "Offer letter 10-07", "ext": ".pdf", "modified": "1"}]
 
 
+#: A tab the 2026-10-09 fill already covered: an offer row under the Operator's summary.
+COVERED = {
+    "rows": [
+        {"row": 0, "offer_amount": "9000", "offer_date": "2026-08-01", "note": "Example Mutual offer, per 'x' letter"}
+    ],
+    "details": "Entered 10/9/26 from the offer letters and emails saved in this file.",
+}
+
+
 def test_the_first_run_seeds_the_cursor_and_delivers_nothing(tmp_path, monkeypatch):
-    layout = Layout()
+    layout = Layout(**COVERED)
     v = _run(tmp_path, Seat(NEW), layout, monkeypatch).run()
     assert v["verdict"] == "delivered" and v["matters_seeded"] == 1 and v["notices"] == [] and v["docs_read"] == 0
     assert layout.calls == []
@@ -297,7 +310,7 @@ SEEDED = [
 def test_a_first_run_seed_cutoff_reads_what_was_saved_after_the_fill(tmp_path, monkeypatch):
     """FALSIFIER: seed the whole file set on the first run and the offer saved
     after the 2026-10-09 fill (f2) is never entered or emailed."""
-    layout = Layout()
+    layout = Layout(**COVERED)
     v = _run(tmp_path, Seat(SEEDED), layout, monkeypatch, seed_saved_before="2026-10-09T14:00:00Z").run()
     assert v["matters_seeded"] == 1 and v["docs_read"] == 1
     assert len(layout.calls) == 1 and len(v["notices"]) == 1 and v["notices"][0]["status"] == "entered"
@@ -310,16 +323,53 @@ def test_a_file_saved_exactly_at_the_cutoff_is_new_and_one_before_is_not(tmp_pat
         {**SEEDED[1], "created": "2026-10-09T14:00:00Z"},
     ]
     seen: list[str] = []
-    r = _run(tmp_path, Seat(files), Layout(), monkeypatch, seed_saved_before="2026-10-09T14:00:00Z")
+    r = _run(tmp_path, Seat(files), Layout(**COVERED), monkeypatch, seed_saved_before="2026-10-09T14:00:00Z")
     monkeypatch.setattr(r, "_text", lambda mid, f: seen.append(f["id"]) or "letter text")
     r.run()
     assert seen == ["f2"]
 
 
 def test_an_unauthored_cutoff_keeps_seeding_everything(tmp_path, monkeypatch):
-    layout = Layout()
+    layout = Layout(**COVERED)
     v = _run(tmp_path, Seat(SEEDED), layout, monkeypatch).run()
     assert v["docs_read"] == 0 and v["notices"] == [] and layout.calls == []
+
+
+def test_a_seeded_matter_with_no_offer_entered_reads_its_earlier_offers_quietly(tmp_path, monkeypatch):
+    """FALSIFIER (2026-10-12): seed every pre-cutoff file as handled and a
+    carrier's tender saved a month before the first run, on a matter whose tab
+    holds no offer, is never entered. It is entered now, and NOT emailed as new
+    (the firm has had it); the offer saved after the cutoff still is."""
+    layout = Layout()
+    v = _run(tmp_path, Seat(SEEDED), layout, monkeypatch, seed_saved_before="2026-10-09T14:00:00Z").run()
+    assert v["docs_read"] == 2 and len(layout.calls) == 2
+    assert v["seed_offers_entered"] == 1 and len(v["notices"]) == 1
+    assert arrivals.cursor("negotiation", M1, data=tmp_path / "state") == {"f1": "1", "f2": "1"}
+    assert (
+        not (tmp_path / "state" / "seed-quiet.json").exists()
+        or json.loads((tmp_path / "state" / "seed-quiet.json").read_text()) == {}
+    )
+
+
+def test_a_quiet_seed_read_that_fails_stays_quiet_for_the_next_run(tmp_path, monkeypatch):
+    layout = Layout()
+    _run(
+        tmp_path, Seat(SEEDED[:1]), layout, monkeypatch, fail_read=True, seed_saved_before="2026-10-09T14:00:00Z"
+    ).run()
+    assert json.loads((tmp_path / "state" / "seed-quiet.json").read_text()) == {M1: ["f1"]}
+    shutil.rmtree(tmp_path / "job")  # the next run's job dir; the lane's state carries over
+    v = _run(tmp_path, Seat(SEEDED[:1]), layout, monkeypatch, seed_saved_before="2026-10-09T14:00:00Z").run()
+    assert v["seed_offers_entered"] == 1 and v["notices"] == []
+
+
+def test_a_seed_whose_tabs_cannot_be_read_is_not_taken_as_empty(tmp_path, monkeypatch):
+    """A failed read must not look like "no offer entered" (it would read the whole file)."""
+    layout = Layout()
+    layout.get_matter_layouts = lambda mid, section="": {"status": "refused"}
+    v = _run(tmp_path, Seat(SEEDED), layout, monkeypatch, seed_saved_before="2026-10-09T14:00:00Z").run()
+    assert v["seed_offers_entered"] == 0
+    assert arrivals.cursor("negotiation", M1, data=tmp_path / "state") == {"f1": "1"}  # f1 seeded as handled
+    assert not (tmp_path / "state" / "seed-quiet.json").exists()
 
 
 def test_a_new_offer_is_written_announced_and_the_cursor_moves_after(tmp_path, monkeypatch):
@@ -477,9 +527,115 @@ def test_a_bare_mention_of_an_offer_is_no_row_and_no_email():
     assert plan["offers"] == [] and not any(tp.args for tp in plan["tabs"].values())
 
 
-def test_an_offer_with_an_unconfirmed_amount_and_no_date_is_still_reported():
-    plan = R.plan_document([_offer(amount_confirmed=False, date=None)], DOC, [_tab()], set())
-    assert plan["offers"][0]["status"] == "not_entered"
+def test_an_offer_with_no_date_is_held_neither_entered_nor_announced():
+    """FALSIFIER (2026-10-12): an undated $100,000 tender was written with no
+    date and emailed as "(date not stated)". It is held instead, and listed."""
+    for ev in (_offer(date=None), _offer(amount_confirmed=False, date=None)):
+        plan = R.plan_document([ev], DOC, [_tab()], set())
+        assert plan["offers"] == [] and not any(tp.args for tp in plan["tabs"].values())
+        assert plan["held"][0]["status"] == "held"
+
+
+def test_a_held_offer_is_listed_in_the_verdict_never_emailed(tmp_path, monkeypatch):
+    arrivals.commit("negotiation", M1, FILES, data=tmp_path / "state")
+    layout = Layout()
+    v = _run(tmp_path, Seat(NEW), layout, monkeypatch, events=[_offer(date=None)]).run()
+    assert v["notices"] == [] and layout.calls == [] and v["offers_held"] == 1
+    assert v["held"][0]["file_id"] == "f2" and v["held"][0]["amount"] == 15000
+
+
+# ---- who wrote the document, and to whom (2026-10-12) -----------------------------------------------
+@pytest.mark.parametrize(
+    "author,to",
+    [
+        ("our_firm", "third_party"),  # the firm's letter to a lienholder reciting the offer
+        ("our_firm", "paying_side"),  # the firm's own letter quoting the carrier's offer back
+        ("paying_side", "third_party"),  # the carrier writing to a medical provider
+        ("third_party", "our_firm"),  # a lienholder's letter mentioning the settlement
+        ("unknown", "our_firm"),
+        ("paying_side", "unknown"),
+    ],
+)
+def test_an_offer_is_entered_only_from_the_paying_side_writing_to_us(author, to):
+    """FALSIFIER: drop rows.admissible and each of these documents' recital of
+    an offer is entered and announced as a new offer."""
+    plan = R.plan_document([_offer(author_side=author, addressed_to=to)], DOC, [_tab()], set())
+    assert plan["offers"] == [] and not any(tp.args for tp in plan["tabs"].values())
+    assert plan["excluded"] and plan["excluded"][0]["reason"]
+
+
+@pytest.mark.parametrize("to", ["our_firm", "our_client"])
+def test_the_paying_sides_offer_to_the_firm_or_client_is_entered(to):
+    plan = R.plan_document([_offer(addressed_to=to)], DOC, [_tab()], set())
+    assert plan["offers"][0]["status"] == "to_write"
+
+
+def test_our_demand_in_our_letter_to_the_carrier_is_entered_but_not_one_to_a_lienholder():
+    demand = _offer(kind="demand", by="Ashton for the client", author_side="our_firm", addressed_to="paying_side")
+    plan = R.plan_document([demand], DOC, [_tab()], {"ashton"})
+    assert any(tp.args for tp in plan["tabs"].values())
+    plan = R.plan_document([{**demand, "addressed_to": "third_party"}], DOC, [_tab()], {"ashton"})
+    assert not any(tp.args for tp in plan["tabs"].values())
+
+
+def test_a_carriers_counter_recited_in_our_own_letter_is_not_their_offer():
+    ev = _offer(kind="counter_offer", by="Example Mutual", author_side="our_firm", addressed_to="paying_side")
+    plan = R.plan_document([ev], DOC, [_tab()], {"ashton"})
+    assert plan["offers"] == [] and not any(tp.args for tp in plan["tabs"].values())
+
+
+def _answer(**doc):
+    return json.dumps(
+        {
+            "unsent_draft": False,
+            "author_side": "paying_side",
+            "addressed_to": "our_firm",
+            "document_date": "2026-09-08",
+            **doc,
+            "events": [_offer(kind="policy_limits_tender", amount=100000, date=None)],
+        }
+    )
+
+
+def test_parse_dates_the_paying_sides_undated_offer_by_its_own_document():
+    """The offer IS the letter: an undated tender in the carrier's own email is
+    dated by that email, the header's sent date first."""
+    assert X.parse(_answer())[0]["date"] == "2026-09-08"
+    assert X.parse(_answer(), sent="2026-09-09")[0]["date"] == "2026-09-09"
+    e = X.parse(_answer(document_date=None))[0]
+    assert e["date"] is None and e["author_side"] == "paying_side" and e["addressed_to"] == "our_firm"
+
+
+def test_parse_never_dates_a_recital_by_the_reciting_letter():
+    """FALSIFIER: date every undated event by its document and the firm's 9/15
+    letter to a lienholder would date the carrier's tender 9/15."""
+    e = X.parse(_answer(author_side="our_firm", addressed_to="third_party", document_date="2026-09-15"))[0]
+    assert e["date"] is None and e["author_side"] == "our_firm"
+
+
+def test_parse_reads_an_unknown_side_as_unknown():
+    e = X.parse(_answer(author_side="the moon", addressed_to=None))[0]
+    assert e["author_side"] == "unknown" and e["addressed_to"] == "unknown"
+
+
+@pytest.mark.parametrize(
+    "header,ext,want",
+    [
+        ("Date: 2026-09-08 12:49:00-07:00", ".msg", "2026-09-08"),
+        ("Date: Tue, 08 Sep 2026 12:49:00 -0700", ".eml", "2026-09-08"),
+        ("Date: 2026-09-08 12:49:00-07:00", ".pdf", None),
+        ("Date: not a date", ".msg", None),
+    ],
+)
+def test_an_emails_sent_date_comes_from_its_header(header, ext, want):
+    text = f"From: a@example.com\nTo: b@example.com\n{header}\nSubject: x\n\nbody"
+    assert X.sent_date(text, ext) == want
+
+
+def test_the_schema_asks_who_wrote_the_document_and_to_whom():
+    for key in ("author_side", "addressed_to", "document_date"):
+        assert key in X.SCHEMA["required"]
+    assert "addressed_to" in X.SYSTEM and "third_party" in X.SYSTEM
 
 
 def test_an_unsent_draft_records_no_event():
