@@ -247,6 +247,7 @@ def _operator_items(
     closed = wh.load_closed()
     items = wh.request_items(slug, rows, cfg, now, closed)
     items += wh.job_items(slug, rows, cfg, now, closed, console.lane_holds.get(slug))
+    items += wh.delivery_proof_items(slug, rows, cfg, now)
     if has_smokeball:
         items += auth.smokeball_auth_items(slug, rows, cfg, now, probe_scheduled=why is None)
         items += auth.probe_not_scheduled_items(slug, now, why=why)

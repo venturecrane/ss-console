@@ -750,3 +750,18 @@ def test_a_drafting_job_held_by_the_lane_gate_is_waiting_not_stuck_in_queue():
     assert _kinds(items) == ["job_held"] and "document-drafter.discovery_set" in items[0].what
     other_lane = {**card, "job_lane": "demand"}
     assert _kinds(wh.job_items(SEAT, rows, CFG, NOW, None, [other_lane])) == ["job_stuck"]
+
+
+def test_a_failed_delivery_proof_is_open_until_proven():
+    fail = _row(
+        "DELIVERY_PROOF_FAILED",
+        NOW - timedelta(hours=1),
+        job_id="J7",
+        lane="drafting",
+        code="readback_mismatch",
+        detail="x",
+    )
+    items = wh.delivery_proof_items(SEAT, [fail], CFG, NOW)
+    assert _kinds(items) == ["job_failed"] and "readback_mismatch" in items[0].what
+    proven = _row("DELIVERY_PROVEN", NOW - timedelta(minutes=30), job_id="J7", lane="drafting")
+    assert wh.delivery_proof_items(SEAT, [fail, proven], CFG, NOW) == []
