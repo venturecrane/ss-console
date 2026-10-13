@@ -153,9 +153,6 @@ scope:
     - tim@thebrokery.com
     # SMD, for setup proofs and support.
     - smdurgan@smdurgan.com
-    # SMD probe, TEMPORARY (2026-10-13): one live-conversation recording test of
-    # the capture skill. Removed by the next PR once the test is recorded.
-    - ss-probe-runner@agentmail.to
   # Who may answer an operations request (ss-console#2546): the broker asks the
   # assistant to add his agents, the assistant passes the exact addresses to
   # SMD's desk, and SMD's "done" reply tells him it is finished. Same three
