@@ -147,10 +147,6 @@ scope:
     - tim@thebrokery.com
     # SMD, for setup proofs and support.
     - smdurgan@smdurgan.com
-    # SMD probe harness, setup proofs only (a second agent and a broker
-    # stand-in). Removed once the live proofs are recorded.
-    - ss-probe-runner@agentmail.to
-    - ss-probe-admin@agentmail.to
 
 # ---- RECORD STORES ----
 # One store for the whole brokerage. Each agent opens only records stamped with
@@ -163,8 +159,6 @@ record_stores:
     owner_field: agent
     readers:
       - tim@thebrokery.com
-      # Broker stand-in for the setup proof; removed with the probe senders.
-      - ss-probe-admin@agentmail.to
     index: [visitor, property, visit_date, contact]
   # The reference shelf: the pilot program, its schedule, and how-to-use help.
   # The seat answers from it, so nobody needs a website or outside document,
