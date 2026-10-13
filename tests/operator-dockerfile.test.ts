@@ -1525,7 +1525,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // binding, not the request email; working drafts discarded once sent (msgraph_discard_draft).
     // 9dc43b00 -> 33463809 (overlay#442), 2026-10-12: a discovery-set request carries the request
     // email's own Word documents to the drafting job (an attorney's own sets, placed in the caption).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="c2bf5877527d5eba34d58f2b8907678386bd5ef2"')
+    // c2bf5877 -> 22c0948a (overlay#446), 2026-10-13: the session auto-title runs on Haiku 4.5, so an
+    // Opus 5.5 seat no longer 400s on thinking {type: disabled} (Sentry SMD-OPERATOR-1M).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="22c0948ab75d6ced7624d3332efccad053f0807d"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
