@@ -23,11 +23,6 @@
 #       past request (`lane-proof dry-run <finished job>`), then accepted.
 #   document-drafter.(discovery_response|memo|depo_outline)  no delivery here
 #       at the census.
-#   litigation-status  NOT YET EVIDENCE, not "never run": the census
-#       (vfy_01M4V168KX39PHM10KG1K7RVV6) read the ledger before the lane's first
-#       on-seat job finished (01M4V2G68R1MSHCAD1BJSXZY0G, running since
-#       2026-10-13T16:46Z). A job in flight proves nothing yet; when it
-#       delivers clean and is read, it is added here with its id.
 #
 # A census row count is only the rows that existed at its timestamp. A lane
 # with no delivered job is "no evidence yet", never "never run": check the
@@ -60,6 +55,15 @@ lanes:
       Dry run on the firm's real data before the first live run (ss#3119,
       2026-10-10); 3 runs delivered since, latest 01M4TWVFW5M06Z5AGDKNJ4G1X7
       (10-13).
+  litigation-status:
+    proven_at: '2026-10-13'
+    evidence: >-
+      Proof run of held job 01M4VKNWGS33KFTWVNQZMMZ4V2 (2026-10-13T21:47Z to
+      23:17Z, paralegal-scoped, 16 matters): runner verdict dry_run, gates
+      passed, review 0 findings, no leaks; workbook read by SMD, every date
+      cites its source (vfy_01M4VS38QASVGM7V8J89JRVQHM). The harness scored it
+      "no dry_run verdict" although verdict.json carries one; that harness
+      defect is fixed separately, so this run is recorded here by hand.
   matter-inbox-router:
     proven_at: '2026-10-13'
     evidence: >-
