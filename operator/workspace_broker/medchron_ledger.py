@@ -42,7 +42,7 @@ import hashlib
 import json
 import re
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -132,11 +132,28 @@ CREATE_WORK_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_medchron_jobs_work ON me
 _TERMINAL_ORDERED = tuple(sorted(TERMINAL))
 if len(_TERMINAL_ORDERED) != 2:  # pragma: no cover - a wiring error, not a runtime path
     raise RuntimeError(f"_ACTIVE_TWIN_SQL is written for 2 terminal states, TERMINAL has {len(_TERMINAL_ORDERED)}")
+#
+# A HELD row stops blocking in two cases (2026-10-13, A&P 201666): when a later
+# delivery on the same matter exists (the held work was delivered or replaced,
+# so a resubmission is a new ask, not a twin), and when the hold is older than
+# the runner's held-job retention window (its workdir and queue file are wiped,
+# so it can never resume and nothing is waiting behind it). Before this, a
+# 3-week-old upload hold whose package had been delivered twice since refused
+# a Named Administrator's fresh request as a "duplicate", and the request left
+# the chronology lane entirely.
 _ACTIVE_TWIN_SQL = (
-    "SELECT id, state FROM medchron_jobs "
-    "WHERE work_digest = ? AND work_digest IS NOT NULL AND state NOT IN (?, ?) "
-    "ORDER BY created_at DESC LIMIT 1"
+    "SELECT j.id, j.state FROM medchron_jobs j "
+    "WHERE j.work_digest = ? AND j.work_digest IS NOT NULL AND j.state NOT IN (?, ?) "
+    "AND NOT (j.state = 'held' AND (j.updated_at < ? OR EXISTS ("
+    "SELECT 1 FROM medchron_jobs d WHERE d.matter_id = j.matter_id "
+    "AND d.state = 'delivered' AND d.created_at > j.created_at))) "
+    "ORDER BY j.created_at DESC LIMIT 1"
 )
+
+#: The runner wipes a held job's workdir AND its queue file after this long
+#: (`medchron/retention.py` DEFAULT_HELD_WIPE_HOURS, one working week). A hold
+#: past it cannot resume, so it is not work a resubmission would duplicate.
+HELD_STALE_AFTER = timedelta(hours=24 * 7)
 
 # ONE debit rule for pages, documents and cents: a job DEBITS THE MONTH IT WAS
 # CREATED IN whenever it recorded cents, in whatever state it ended. Two halves:
@@ -703,7 +720,11 @@ class MedchronLedger:
         wants rebuilt, or a failed one worth retrying, is a legitimate second
         submission. A HELD job is matched, because a resubmission of held work
         would hold again at the same gate and the useful answer is to name the
-        job waiting on a decision rather than to queue a twin behind it.
+        job waiting on a decision rather than to queue a twin behind it -- unless
+        the hold is SUPERSEDED (a later delivery on the matter) or STALE (past the
+        runner's held-job retention, so it cannot resume). Either kind is not work
+        in flight, and refusing a fresh request against it strands the request
+        (A&P 201666, 2026-10-13; see `_ACTIVE_TWIN_SQL`).
 
         The state rides along so the refusal can say what is true of THIS job.
         "Already running" reads as reassurance, and saying it about a job that
@@ -711,9 +732,11 @@ class MedchronLedger:
         wrong sentence a person then relays to a client.
         """
         want = work_digest(envelope)
+        cutoff = datetime.now(UTC) - HELD_STALE_AFTER
+        stale_before = cutoff.strftime("%Y-%m-%dT%H:%M:%S.") + f"{cutoff.microsecond // 1000:03d}Z"
         conn = self._connect()
         try:
-            row = conn.execute(_ACTIVE_TWIN_SQL, (want, *_TERMINAL_ORDERED)).fetchone()
+            row = conn.execute(_ACTIVE_TWIN_SQL, (want, *_TERMINAL_ORDERED, stale_before)).fetchone()
             return (str(row["id"]), str(row["state"])) if row is not None else None
         finally:
             conn.close()
