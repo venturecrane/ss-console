@@ -162,6 +162,21 @@ both keeping this ADR's deterministic-predicate discipline:
    our app's cutover, 30 − 5 for one issued before it) and resolves when the
    file is rewritten.
 
+   CORRECTED 2026-10-13: an announced lifetime is not an observed one. Until
+   a token issued after the cutover is seen alive past 30 days, EVERY
+   Smokeball token is judged at 30 (`VENDOR_LIFETIME_RULES.smokeball.provenAtMs`
+   is null). The vendor's stated lifetime has been wrong for us twice (the
+   08-24 date, then the staging tenant), and both times the token died
+   without warning because it was judged by what was announced. The first
+   production token issued after 09-21 is ashton-price's, re-consented
+   2026-10-12 19:36:39Z: it warns 2026-11-06, and if it still works after
+   2026-11-11 19:36Z, `provenAtMs` is set and the warning resolves.
+
+   ALSO 2026-10-13: while open, this condition re-sends once a day, threaded
+   under the original alert (`workers/fleet-alerts/src/reminder.ts`). It is
+   the only condition that does: it counts down to a hard outage, and the one
+   email on 2026-08-27 went unactioned for five days.
+
    CORRECTED 2026-10-12: the cutover for OUR app is 2026-09-21 00:22:30Z, when
    Smokeball approved the app and "increased your refresh token expiry to 180
    days", not the 2026-08-24 default date in their docs. ashton-price's token,
@@ -192,6 +207,17 @@ both keeping this ADR's deterministic-predicate discipline:
   durable-credential connectors by the 2026-08-09 amendment above (probe +
   horizon). Still true for connectors with neither a probe cron nor a
   recorded lifetime; detection latency there equals natural call cadence.
+- **Runner traffic is not counted (measured 2026-10-13).** The ledger records
+  only the agent's MCP tool calls (the connector-health plugin) and the
+  overlay's own Graph client (`shared/msgraph_client.py`). Scheduled jobs that
+  call Smokeball directly through the Python connector (drafting, the
+  negotiation watch, litigation reports) never write it. ashton-price's
+  heartbeat map holds `msgraph_mail` and no `smokeball` key at all, so when
+  its token died on 2026-10-10, `connector_down:smokeball` had nothing to
+  count and never opened. The ledger is also tmpfs and empties on every
+  restart. Cover today: the credential-age warning above, which fires before
+  death. Cover after death: the hourly per-seat auth probe being built on
+  `feat/work-health-email`, not yet merged as of this amendment.
   The original rejection of synthetic _data-plane_ probes stands: a probe is
   a write path into vendor APIs, the incident class this monitoring family
   exists to prevent.

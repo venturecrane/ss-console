@@ -23,9 +23,9 @@ export function mintAlertMessageId(): string {
   return `<smd-alert.${crypto.randomUUID()}@${MESSAGE_ID_DOMAIN}>`
 }
 
-/** Headers for the Resend `headers` field: the alert names itself, the recovery replies to it. */
+/** Headers for the Resend `headers` field: the alert names itself; a recovery or reminder replies to it. */
 export function threadHeaders(
-  kind: 'opened' | 'resolved',
+  kind: 'opened' | 'resolved' | 'reminder',
   messageId: string | null
 ): Record<string, string> | undefined {
   if (!messageId) return undefined

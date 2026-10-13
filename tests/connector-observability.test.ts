@@ -24,7 +24,16 @@ import { seedMachineCredential } from './helpers/machine-credential'
 import path from 'node:path'
 import { readFileSync } from 'node:fs'
 import { POST } from '../src/pages/api/internal/heartbeat'
-import { runOnce, type Env as WorkerEnv } from '../workers/fleet-alerts/src/index'
+import {
+  runOnce,
+  type Env as WorkerEnv,
+  type FleetStatusRow,
+} from '../workers/fleet-alerts/src/index'
+import {
+  tokenExpiryConditions,
+  VENDOR_LIFETIME_RULES,
+} from '../workers/fleet-alerts/src/token-expiry'
+import { reminderDue, remindsWhileOpen } from '../workers/fleet-alerts/src/reminder'
 import { env as testEnv } from 'cloudflare:workers'
 
 installWorkerdPolyfills()
@@ -642,24 +651,78 @@ describe('worker runOnce — Smokeball 2026-09-21 lifetime cutover', () => {
     expect(opened[0]?.detail).toContain('recorded lifetime 30d')
   })
 
-  it('a POST-cutover token stays quiet at 26d instead of latching open for ~155d', async () => {
-    // Same age, but `now` is far enough past the cutover that issued_at lands
-    // after 2026-09-21, so it lives 180 days and 26 days is nowhere near its
-    // horizon. Judged flat against 30 it would open here, page once, then sit
-    // open and SILENT through the real expiry — the edge-triggered failure that
-    // made the 2026-08-27 warning useless.
+  it('a POST-cutover token is judged at 30d while the 180d lifetime is unproven', async () => {
+    // 2026-10-13: the vendor's 180 days has never been observed on our app.
+    // Twice their stated lifetime was wrong for us and the token died with no
+    // warning, so until a post-cutover token outlives 30 days, a 26-day-old
+    // one opens the warning. Fails if the rule collapses back to "after the
+    // cutover means 180".
     await setTokenAge(26 * 86400)
-    const quiet = tokenTransitions(await runOnce(workerEnv(), Date.parse('2026-10-20T15:00:00Z')))
-    expect(quiet).toEqual([])
-  })
-
-  it('a post-cutover token DOES warn once it reaches the 175d horizon', async () => {
-    await setTokenAge(176 * 86400)
-    const opened = tokenTransitions(await runOnce(workerEnv(), Date.parse('2027-03-20T15:00:00Z')))
+    const opened = tokenTransitions(await runOnce(workerEnv(), Date.parse('2026-10-20T15:00:00Z')))
     expect(opened).toHaveLength(1)
     expect(opened[0]?.kind).toBe('opened')
-    expect(opened[0]?.detail).toContain('recorded lifetime 180d')
-    expect(opened[0]?.detail).not.toContain('pre-cutover token')
+    expect(opened[0]?.detail).toContain('recorded lifetime 30d')
+    expect(opened[0]?.detail).toContain('never been observed on our app')
+  })
+
+  it('the 2026-10-12 ashton-price re-consent warns on 2026-11-06, five days before day 30', async () => {
+    // The first production token issued after 09-21. If Smokeball's 180 days
+    // did not reach it, it dies 2026-11-11 19:36Z; this is the warning that
+    // leaves five days to re-consent. Update this case on purpose when the
+    // lifetime is proven (token-expiry.ts provenAtMs).
+    const issued = Date.parse('2026-10-12T19:36:39Z')
+    const day24 = issued + 24 * 86400 * 1000
+    await setTokenAge(Math.floor((day24 - issued) / 1000))
+    expect(tokenTransitions(await runOnce(workerEnv(), day24))).toEqual([])
+    const nov6 = Date.parse('2026-11-06T20:00:00Z')
+    await setTokenAge(Math.floor((nov6 - issued) / 1000))
+    const opened = tokenTransitions(await runOnce(workerEnv(), nov6))
+    expect(opened).toHaveLength(1)
+    expect(opened[0]?.kind).toBe('opened')
+  })
+
+  describe('once the 180d lifetime is proven', () => {
+    const proven = {
+      smokeball: {
+        ...VENDOR_LIFETIME_RULES.smokeball,
+        provenAtMs: Date.parse('2026-11-12T00:00:00Z'),
+      },
+    }
+    const row = (ageSeconds: number): FleetStatusRow =>
+      ({
+        customer_slug: 'seat',
+        connector_token_age_json: JSON.stringify({ smokeball: ageSeconds }),
+      }) as FleetStatusRow
+    const judge = (ageDays: number, nowIso: string) =>
+      tokenExpiryConditions(row(ageDays * 86400), {
+        lifetimesDays: { smokeball: 180 },
+        warnDays: 5,
+        nowMs: Date.parse(nowIso),
+        rules: proven,
+      })
+
+    it('a post-cutover token stays quiet at 26d instead of latching open for ~155d', () => {
+      // Judged flat against 30 it would open here, page, then sit open through
+      // the real expiry: the edge-triggered failure that made the 2026-08-27
+      // warning useless.
+      const [state] = judge(26, '2026-12-01T15:00:00Z')
+      expect(state?.active).toBe(false)
+      expect(state?.detail).toContain('recorded lifetime 180d')
+    })
+
+    it('a post-cutover token DOES warn once it reaches the 175d horizon', () => {
+      const [state] = judge(176, '2027-03-20T15:00:00Z')
+      expect(state?.active).toBe(true)
+      expect(state?.detail).toContain('recorded lifetime 180d')
+      expect(state?.detail).not.toContain('pre-cutover token')
+      expect(state?.detail).not.toContain('never been observed')
+    })
+
+    it('a PRE-cutover token is still judged at 30d', () => {
+      const [state] = judge(26, '2026-10-01T15:00:00Z')
+      expect(state?.active).toBe(true)
+      expect(state?.detail).toContain('pre-cutover token')
+    })
   })
 
   // The cases above supply their own env, so none of them can see the DEPLOYED
@@ -675,5 +738,123 @@ describe('worker runOnce — Smokeball 2026-09-21 lifetime cutover', () => {
     // post-cutover token until ~5 days before death, and latch it open and
     // silent for months. src/token-expiry.ts owns the pre-cutover case.
     expect(source).not.toMatch(/^SMOKEBALL_REFRESH_TOKEN_LIFETIME_DAYS = "30"$/m)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 4c. Daily reminders while a token warning stays open (2026-10-13).
+//
+// On 2026-08-27 the single warning email went unactioned for five days and the
+// token died on schedule. An open connector_token_expiring alert now re-sends
+// once a day, threaded under the original, until a re-consent resolves it.
+// ---------------------------------------------------------------------------
+
+describe('worker runOnce — connector_token_expiring reminds daily while open', () => {
+  const ISSUED = Date.parse('2026-10-12T19:36:39Z')
+  const OPEN_AT = Date.parse('2026-11-06T20:00:00Z')
+  const HOUR = 3600 * 1000
+
+  let db: D1Database
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(async () => {
+    db = createTestD1()
+    await runMigrations(db, { files: allMigrations() })
+    await seedOrgEntityConfig(db, 'seat')
+    fetchMock = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({ id: 'rk-1' }), { status: 200 }))
+      )
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function workerEnv(): WorkerEnv {
+    return {
+      DB: db,
+      RESEND_API_KEY: 'rk_test',
+      SMOKEBALL_REFRESH_TOKEN_LIFETIME_DAYS: '180',
+      TOKEN_EXPIRY_WARN_DAYS: '5',
+    }
+  }
+
+  // Ages the token to `nowMs` (or sets a fresh one after a re-consent) and
+  // keeps the heartbeat fresh, so only the token condition moves.
+  async function tick(nowMs: number, issuedMs: number = ISSUED) {
+    await db
+      .prepare(
+        `INSERT INTO fleet_status (entity_id, customer_slug, last_heartbeat_ts, heartbeat_status, connector_token_age_json)
+         VALUES (?, 'seat', ?, 'green', ?)
+         ON CONFLICT(customer_slug) DO UPDATE SET
+           last_heartbeat_ts = excluded.last_heartbeat_ts,
+           connector_token_age_json = excluded.connector_token_age_json`
+      )
+      .bind(
+        ENTITY_A,
+        new Date(nowMs - 30_000).toISOString(),
+        JSON.stringify({ smokeball: Math.floor((nowMs - issuedMs) / 1000) })
+      )
+      .run()
+    const result = await runOnce(workerEnv(), nowMs)
+    return result.transitions
+      .filter((t) => t.condition === 'connector_token_expiring:smokeball')
+      .map((t) => t.kind)
+  }
+
+  function resendBodies(): Array<{
+    subject: string
+    html: string
+    headers?: Record<string, string>
+  }> {
+    return fetchMock.mock.calls
+      .filter(([url]) => String(url).includes('api.resend.com'))
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)))
+  }
+
+  it('opens once, stays quiet within the day, re-sends every 24h, and stops on re-consent', async () => {
+    expect(await tick(OPEN_AT)).toEqual(['opened'])
+    expect(await tick(OPEN_AT + 1 * HOUR)).toEqual([])
+    expect(await tick(OPEN_AT + 23 * HOUR)).toEqual([])
+    expect(await tick(OPEN_AT + 24 * HOUR)).toEqual(['reminder'])
+    expect(await tick(OPEN_AT + 25 * HOUR)).toEqual([])
+    expect(await tick(OPEN_AT + 48 * HOUR)).toEqual(['reminder'])
+    // Re-consent: a fresh token file, so the condition goes inactive.
+    const reconsent = OPEN_AT + 50 * HOUR
+    expect(await tick(reconsent, reconsent - 60_000)).toEqual(['resolved'])
+    expect(await tick(reconsent + 48 * HOUR, reconsent - 60_000)).toEqual([])
+  })
+
+  it('a reminder threads under the original alert and says it is still open', async () => {
+    await tick(OPEN_AT)
+    await tick(OPEN_AT + 24 * HOUR)
+    const [alert, reminder] = resendBodies()
+    expect(alert?.subject).toMatch(/^\[SMD Ops\] ALERT seat: /)
+    expect(reminder?.subject).toBe(`Re: ${alert?.subject}`)
+    expect(reminder?.headers?.['In-Reply-To']).toBe(alert?.headers?.['Message-ID'])
+    expect(reminder?.html).toContain('STILL OPEN')
+  })
+
+  it('a failed reminder send is retried on the next tick, not skipped for a day', async () => {
+    await tick(OPEN_AT)
+    fetchMock.mockImplementationOnce(() => Promise.resolve(new Response('no', { status: 500 })))
+    expect(await tick(OPEN_AT + 24 * HOUR)).toEqual([])
+    expect(await tick(OPEN_AT + 24 * HOUR + 120_000)).toEqual(['reminder'])
+  })
+
+  it('only deadline conditions remind; a flapping level keeps the one-email shape', () => {
+    expect(remindsWhileOpen('connector_token_expiring:smokeball')).toBe(true)
+    expect(remindsWhileOpen('heartbeat_red')).toBe(false)
+    expect(remindsWhileOpen('connector_down:smokeball')).toBe(false)
+    const day = Date.parse('2026-11-08T00:00:00Z')
+    expect(reminderDue('heartbeat_red', '2026-11-01 00:00:00', day)).toBe(false)
+    expect(reminderDue('connector_token_expiring:smokeball', '2026-11-07 00:00:01', day)).toBe(
+      false
+    )
+    expect(reminderDue('connector_token_expiring:smokeball', '2026-11-07 00:00:00', day)).toBe(true)
+    expect(reminderDue('connector_token_expiring:smokeball', 'garbage', day)).toBe(true)
   })
 })
