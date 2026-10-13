@@ -145,6 +145,21 @@ def _role(fields: dict[str, Any], side: str, word: str) -> str:
     return word + ("s" if len(fields.get(side) or []) > 1 else "")
 
 
+def court_attorney_block(att: dict[str, Any]) -> list[str]:
+    """The attorney block as the court's paper prints it, when the firm authored
+    none: the name with its State Bar number on one line, then the firm, the
+    address, telephone, facsimile and email."""
+    name, sbn = att.get("name"), att.get("state_bar_number")
+    first = f"{name} (SBN {sbn})" if name and sbn else (name or "")
+    rest = [att.get(k) for k in ("firm", "street", "city_state_zip")]
+    rest += [
+        f"{label}: {att[k]}"
+        for k, label in (("phone", "Telephone"), ("fax", "Facsimile"), ("email", "Email"))
+        if att.get(k)
+    ]
+    return [x for x in [first, *rest] if x]
+
+
 def caption_md(fields: dict[str, Any], block: list[str] | None, title: str) -> str:
     """The caption: attorney block, the court in two lines, the parties and the
     case number, the title. Missing court facts are markers, never guesses."""
@@ -160,7 +175,7 @@ def caption_md(fields: dict[str, Any], block: list[str] | None, title: str) -> s
     lines = list(block or [])
     if not lines:
         att = fields.get("attorney") or {}
-        lines = [v for k, v in att.items() if k != "attorney_for" and v] or [nir("attorney block")]
+        lines = court_attorney_block(att) or [nir("attorney block")]
     paras = [*lines, f"Attorneys for Plaintiff {plaintiffs}", f"**{court.upper()}**"]
     if county and county.upper() not in court.upper():
         paras.append(f"**FOR THE COUNTY OF {county.upper()}**")
