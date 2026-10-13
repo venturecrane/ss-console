@@ -686,10 +686,17 @@ fi
 # Google credentials never reach it). Import-gated so an image whose venv is
 # missing degrades to a loud "NOT launched" line, never a broken boot. Runs
 # from its own root-owned venv, not the Hermes one.
+#
+# Lane memory caps (2026-10-13): customer.yaml machine.lane_memory_mb, when
+# authored, becomes the SMD_*_MEMORY_MAX_BYTES env each lane writes into its
+# cgroup (medchron.lane_memory prints the NAME=BYTES words; nothing when
+# unauthored, so the code defaults stand). Re-read on every respawn so a live
+# config change reaches the next daemon start. The words are digits only.
 if [ -x /opt/medchron/.venv/bin/python ] \
    && /opt/medchron/.venv/bin/python -c "import medchron.daemon" 2>/dev/null; then
   ( while true; do
-      SMD_MEDCHRON_RUN_DIR="${MEDCHRON_RUN_DIR}" \
+      # shellcheck disable=SC2046  # word-split on purpose: NAME=BYTES words
+      /usr/bin/env $(/opt/medchron/.venv/bin/python -m medchron.lane_memory "${LIVE_CUSTOMER_YAML}" 2>/dev/null || true) SMD_MEDCHRON_RUN_DIR="${MEDCHRON_RUN_DIR}" \
       SMOKEBALL_REFRESH_TOKEN_FILE="${SMOKEBALL_TOKEN_RUN_DIR}/refresh_token" \
       MEDCHRON_FIRM_CONFIG="${MEDCHRON_FIRM_CONFIG}" \
       MEDCHRON_PRICING_JSON="/opt/medchron/anthropic_pricing.json" \

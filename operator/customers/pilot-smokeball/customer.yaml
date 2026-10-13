@@ -131,6 +131,15 @@ machine:
   # docs/runbooks/operator/incidents/2026-09-01-gateway-startup-watchdog-collision.md) or
   # making the platform-plugin import lazy.
   memory_mb: 2048
+  # Lane memory caps (decision 2026-10-13). The 2048 MiB guest minus the 512
+  # MiB gateway reserve leaves 1536 MiB for the lane cgroups, and the runner's
+  # defaults (chronology 2560 + demand 1024) assume a 4 GB guest. This pilot
+  # runs small fictional matters, and raising the guest costs money for a demo
+  # seat, so the caps come down instead: 1024 + 512 = 1536. Boot smoke
+  # lane-memory-caps-leave-gateway-reserve counts these values.
+  lane_memory_mb:
+    medchron: 1024
+    demand: 512
 
 # ---- HUMANS WITH PORTAL ACCESS ----
 users:

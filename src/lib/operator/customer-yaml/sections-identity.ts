@@ -6,7 +6,9 @@
 import {
   ACCEPTED_SCHEMA_VERSIONS,
   ACCEPTED_USER_ROLES,
+  LANE_MEMORY_MB_BOUNDS,
   SLUG_PATTERN,
+  type LaneMemoryMb,
   type MachineSpec,
   type User,
   type UserRole,
@@ -216,7 +218,72 @@ function checkMachineFields(
     })
     ok = false
   }
-  return ok ? { size: size as string, memory_mb: mem as number } : null
+  const lanes = checkLaneMemory(m['lane_memory_mb'], errors)
+  if (lanes === false || !ok) return null
+  const spec: MachineSpec = { size: size as string, memory_mb: mem as number }
+  if (lanes) spec.lane_memory_mb = lanes
+  return spec
+}
+
+const LANE_MEMORY_KEYS = ['medchron', 'demand'] as const
+
+function checkLaneMemoryValue(
+  key: (typeof LANE_MEMORY_KEYS)[number],
+  v: unknown,
+  errors: ValidationError[]
+): boolean {
+  const path = `machine.lane_memory_mb.${key}`
+  if (typeof v !== 'number' || !Number.isInteger(v)) {
+    errors.push({ code: 'TypeMismatch', path, message: `${path} must be an integer (MiB)` })
+    return false
+  }
+  if (v < LANE_MEMORY_MB_BOUNDS.min || v > LANE_MEMORY_MB_BOUNDS.max) {
+    errors.push({
+      code: 'EnumViolation',
+      path,
+      message: `${path} must be between ${LANE_MEMORY_MB_BOUNDS.min} and ${LANE_MEMORY_MB_BOUNDS.max}`,
+    })
+    return false
+  }
+  return true
+}
+
+/**
+ * `machine.lane_memory_mb`: optional; each lane optional, an integer MiB in
+ * bounds. Returns undefined when unauthored, false when invalid (errors pushed).
+ */
+function checkLaneMemory(
+  raw: unknown,
+  errors: ValidationError[]
+): LaneMemoryMb | undefined | false {
+  if (raw === undefined || raw === null) return undefined
+  if (!isPlainObject(raw)) {
+    errors.push({
+      code: 'TypeMismatch',
+      path: 'machine.lane_memory_mb',
+      message: 'machine.lane_memory_mb must be an object',
+    })
+    return false
+  }
+  let ok = true
+  for (const key of Object.keys(raw)) {
+    if (!(LANE_MEMORY_KEYS as readonly string[]).includes(key)) {
+      errors.push({
+        code: 'EnumViolation',
+        path: `machine.lane_memory_mb.${key}`,
+        message: `machine.lane_memory_mb.${key}: unknown lane (known: ${LANE_MEMORY_KEYS.join(', ')})`,
+      })
+      ok = false
+    }
+  }
+  const out: LaneMemoryMb = {}
+  for (const key of LANE_MEMORY_KEYS) {
+    const v = raw[key]
+    if (v === undefined) continue
+    if (checkLaneMemoryValue(key, v, errors)) out[key] = v as number
+    else ok = false
+  }
+  return ok ? out : false
 }
 
 export function checkUsers(root: Record<string, unknown>, errors: ValidationError[]): User[] {
