@@ -74,10 +74,17 @@ fly_region: lax
 # ---- RUNTIME ----
 # claude-opus-5-5 (2026-09-23): staging leads the fleet onto Opus 5.5 as its
 # MAIN model, so the runtime's own side-calls (session titles, compression)
-# meet 5.5 here before any client seat does. 5.5 cannot run with thinking off,
-# so the session title runs on Haiku 4.5 (overlay translate.py pins
-# auxiliary.title_generation.model; overlay #446, Sentry SMD-OPERATOR-1M).
-model: claude-opus-5-5
+# meet 5.5 here before any client seat does. 5.5 rejects thinking {type:
+# disabled}, so the overlay sends every thinking-off request on a Claude 4.6+
+# model as adaptive thinking at low effort, and session titles run on
+# claude-haiku-5-5 (overlay #448, Sentry SMD-OPERATOR-1M).
+# claude-sonnet-5-5 (2026-10-13, Captain go): staging takes A&P's shape, light
+# main + Opus 5.5 escalation, to trial Sonnet 5.5 as the main model before A&P
+# moves off claude-sonnet-4-6 ($2/$10 vs $3/$15 per MTok, cache reads 0.05x vs
+# 0.1x). Sonnet 5.5 rejects thinking-off too; #448 covers it the same way.
+# Escalation turns still run Opus 5.5, so that path stays exercised.
+model: claude-sonnet-5-5
+escalation_model: claude-opus-5-5
 # Hermes v0.18.0 → v0.20.4 promotion (staging leads the fleet, ss#2444). Rollback
 # pin: v2026.7.1@7c1a029553d87c43ecff8a3821336bc95872213b (uv.lock + uv sync --frozen
 # make the Python rebuild reproducible; proven to build on the Node-26 image by
