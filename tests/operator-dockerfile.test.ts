@@ -1531,7 +1531,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // gate pages SMD at once (lane_unproven card; pairs with this repo's lane_proof.py, migration 0125).
     // 05767aa4 -> b748c6e0 (overlay#451), 2026-10-13: the litigation status tool names paralegals,
     // alone or with attorneys (pairs with the broker's paralegal resolution and the runner's scope).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="b748c6e03ecebc28fc98792cf2da3eec4e78bec6"')
+    // b748c6e0 -> 38792717 (overlay#452), 2026-10-13: the heartbeat pages SMD on a
+    // DELIVERY_PROOF_FAILED row and a failed chronology job (pairs with proven delivery, #3152).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="3879271779f87c247144b88ed308dae7372f8934"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

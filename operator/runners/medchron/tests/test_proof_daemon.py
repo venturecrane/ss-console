@@ -342,6 +342,66 @@ def test_the_broker_named_reply_key_is_what_the_watch_matches(tmp_path):
     assert _codes(broker2) == ["reply_unproven"]
 
 
+class AgentMailBroker(ReplyBroker):
+    """An AgentMail seat: no bound replies, a count of dispatched sends."""
+
+    def __init__(self, sends: int) -> None:
+        super().__init__()
+        self.sends = sends
+
+    def _request(self, req):
+        if req["action"] == "delivery_reply_status":
+            self.proof_requests.append(req)
+            return {"ok": True, "replies": [], "channel": "agentmail", "sends_to_requester": self.sends}
+        return super()._request(req)
+
+
+def _agentmail_watching(tmp_path: Path, sends: int):
+    d, _ = _watching(tmp_path)
+    broker = AgentMailBroker(sends)
+    d.broker = broker
+    (d.job_dir("01A") / "envelope.json").write_text(json.dumps({"requested_by": "admin@example.test"}))
+    return d, broker
+
+
+def test_on_agentmail_a_dispatched_send_to_the_requester_closes_the_watch(tmp_path):
+    """An AgentMail seat writes no bound reply; without this path every job
+    with a requester there paged reply_unproven (2026-10-13 audit)."""
+    d, broker = _agentmail_watching(tmp_path, sends=1)
+    d.dispatch_wakes()
+    w = d._daemon_state("01A")["reply_watch"]
+    assert w["done"] is True and w["outcome"] == "dispatched" and _codes(broker) == []
+    req = [r for r in broker.proof_requests if r["action"] == "delivery_reply_status"][-1]
+    assert req["requester"] == "admin@example.test" and req["since"].endswith("Z")
+
+
+def test_on_agentmail_no_send_to_the_requester_still_pages_at_the_deadline(tmp_path):
+    d, broker = _agentmail_watching(tmp_path, sends=0)
+    d.dispatch_wakes()
+    assert _codes(broker) == []
+    d._now["t"] += watch.REPLY_DEADLINE_SECONDS + 1
+    d.dispatch_wakes()
+    assert _codes(broker) == ["reply_unproven"]
+
+
+def test_a_graph_seat_never_takes_the_dispatched_path(tmp_path):
+    """Graph stays strict: a send count is not evidence where Sent Items is."""
+    d, broker = _watching(tmp_path)
+    broker.expected_key = "medchron_job:01A:1:delivered"
+    orig = broker._request
+
+    def graph(req):
+        out = orig(req)
+        if req["action"] == "delivery_reply_status":
+            out.update(channel="msgraph", sends_to_requester=3)
+        return out
+
+    broker._request = graph
+    d._now["t"] += watch.REPLY_DEADLINE_SECONDS + 1
+    d.dispatch_wakes()
+    assert _codes(broker) == ["reply_unproven"]
+
+
 def test_alerts_deduplicate_per_code_and_attempt_and_re_raise_after_a_day(tmp_path):
     d, broker = ud._daemon(tmp_path)
     d.job_dir("01A").mkdir(parents=True)

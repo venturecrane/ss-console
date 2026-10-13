@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from .. import proof_mode
@@ -201,6 +202,11 @@ def settle(d: Any, job_id: str, outcomes: list[Any], state: str, fields: dict[st
     return state, fields
 
 
+def _iso(epoch: float) -> str:
+    """UTC ISO-8601 with a Z, the audit log's own ``ts`` shape."""
+    return datetime.fromtimestamp(max(0.0, epoch), timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
 def _requester(d: Any, job_id: str) -> str:
     try:
         env = json.loads((d.job_dir(job_id) / "envelope.json").read_text(encoding="utf-8"))
@@ -264,11 +270,28 @@ def check_reply_watches(d: Any) -> None:
         st = d._daemon_state(job_id)
         w = dict(st["reply_watch"])
         try:
-            resp = _client(d)._request({"action": "delivery_reply_status", "kind": w["kind"], "job_id": job_id})
+            resp = _client(d)._request(
+                {
+                    "action": "delivery_reply_status",
+                    "kind": w["kind"],
+                    "job_id": job_id,
+                    # An AgentMail seat has no bound replies; the broker counts its own
+                    # dispatched sends to this requester since the watch was armed.
+                    "requester": _requester(d, job_id),
+                    "since": _iso(float(w.get("due") or 0) - REPLY_DEADLINE_SECONDS - 60.0),
+                }
+            )
         except (BrokerError, OSError, AttributeError, TypeError, ValueError) as exc:
             logger.warning("%s job %s: reply status unreadable (%s); watch stays open", d.LANE, job_id, exc)
             continue
         rows = _rows_for(job_id, w, resp)
+        if not rows and resp.get("channel") == "agentmail" and int(resp.get("sends_to_requester") or 0) > 0:
+            # AgentMail's strongest evidence: the broker's own dispatched send to
+            # the requester (there is no Sent Items to read back). A Graph seat
+            # never takes this path and stays on the stricter located proof.
+            w.update(done=True, proven_at=d.clock(), outcome="dispatched")
+            d._write_state(job_id, reply_watch=w)
+            continue
         if any(r.get("outcome") == "sent" and r.get("located") is not False for r in rows):
             w.update(done=True, proven_at=d.clock())
             d._write_state(job_id, reply_watch=w)

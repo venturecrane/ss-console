@@ -228,11 +228,52 @@ def reply_status_verb(
     if kind not in REPLY_KINDS:
         raise ValueError(f"kind must be one of {sorted(REPLY_KINDS)}")
     ident = _ident(request, "job_id")
-    return {
+    out: dict[str, Any] = {
         "ok": True,
         "replies": reply_rows(str(broker.audit_db_path), kind, ident),
         "expected_key": _expected_key(broker, kind, ident),
+        "channel": "msgraph" if broker.msgraph is not None else "agentmail",
     }
+    if out["channel"] == "agentmail":
+        out["sends_to_requester"] = sends_to(
+            str(broker.audit_db_path), str(request.get("requester") or ""), str(request.get("since") or "")
+        )
+    return out
+
+
+def sends_to(db_path: str, requester: str, since: str) -> int:
+    """On an AgentMail seat: this broker's own dispatched sends to the
+    requester since ``since`` (a ``CONFIRM_SEND_DISPATCHED`` row, outcome
+    ``sent``, whose recipients include the address).
+
+    WHY THIS IS THE EVIDENCE THERE. A bound reply exists only on a Microsoft
+    Graph seat (``msgraph_reply_bind``/``msgraph_reply_bound``), and only Graph
+    has a Sent Items folder to read the message back from. An AgentMail seat's
+    DELIVER turn replies through the AgentMail transmit verbs, which write no
+    bound-reply row, so a watch that required one would page every job there
+    (2026-10-13 audit). The broker is the only transmit path on the Machine and
+    writes this row itself, so the agent can forge none of it; it is the
+    strongest proof the channel offers ("the vendor accepted a message to that
+    person"), and weaker than Graph's, which is why a Graph seat never uses it.
+    0 when either argument is missing: no evidence is no evidence."""
+    who = requester.strip().lower()
+    if "@" not in who or not since:
+        return 0
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5.0)
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM audit_log a, json_each(json_extract(a.metadata,'$.recipients')) r "
+            "WHERE a.action_type='CONFIRM_SEND_DISPATCHED' "
+            "AND json_extract(a.metadata,'$.outcome')='sent' "
+            "AND substr(a.ts,1,19) >= substr(?,1,19) AND lower(trim(r.value)) = ?",
+            (since, who),
+        ).fetchone()
+        return int(row[0] if row else 0)
+    except sqlite3.Error as exc:
+        logger.warning("delivery_reply_status: dispatched sends unreadable: %s", exc)
+        return 0
+    finally:
+        conn.close()
 
 
 def _expected_key(broker: BrokerContext, kind: str, ident: str) -> str:

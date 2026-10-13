@@ -340,3 +340,36 @@ def test_a_failed_demand_resume_carries_the_release_into_its_marker(tmp_path):
     assert json.loads((queue / f".resume-{job}.json").read_text())["release_review"] is True
     with pytest.raises(ValueError):
         dt.call(broker, "demand_job_resume", uid=ROOT, job_id=job, reason="x", release_review=True, redo_review=True)
+
+
+# ---- AgentMail seats: dispatched sends are the reply evidence ---------------------
+
+
+def _dispatched(broker, recipients: list[str]) -> None:
+    broker.ledger.append(
+        {
+            "action_type": "CONFIRM_SEND_DISPATCHED",
+            "actor": "workspace-broker",
+            "actor_role": "broker",
+            "metadata": json.dumps({"outcome": "sent", "recipients": recipients, "message_id": "m"}),
+        }
+    )
+
+
+def test_a_graph_seat_reports_its_channel_and_counts_no_sends(tmp_path):
+    out = _root(_broker(tmp_path), "delivery_reply_status", kind="demand_job", job_id="01J", requester="a@x.test")
+    assert out["channel"] == "msgraph" and "sends_to_requester" not in out
+
+
+def test_an_agentmail_seat_counts_only_sends_to_the_requester_since_the_watch(tmp_path):
+    broker = _broker(tmp_path)
+    broker.msgraph = None
+    _dispatched(broker, ["Admin@Example.Test"])
+    _dispatched(broker, ["someone@else.test"])
+    base = {"kind": "demand_job", "job_id": "01J"}
+    out = _root(broker, "delivery_reply_status", **base, requester="admin@example.test", since="2000-01-01T00:00:00Z")
+    assert out["channel"] == "agentmail" and out["sends_to_requester"] == 1
+    later = _root(broker, "delivery_reply_status", **base, requester="admin@example.test", since="2999-01-01T00:00:00Z")
+    assert later["sends_to_requester"] == 0
+    nobody = _root(broker, "delivery_reply_status", **base, requester="", since="2000-01-01T00:00:00Z")
+    assert nobody["sends_to_requester"] == 0
