@@ -50,6 +50,11 @@ heartbeat_stale_minutes: 15
 # than this means the probe itself is not running.
 auth_probe_stale_minutes: 150
 
+# A run that starts this long after the previous successful run reports the
+# gap as an item ("previous hourly run missing"): GitHub's schedule is
+# best-effort and can drop a slot, and a dropped slot must not be silence.
+missed_run_after_minutes: 90
+
 # The all-clear: on the first run at or after this UTC hour each day, a run
 # with nothing to report still sends one short line, so silence is provable.
 # 15:00Z is 08:00 in Phoenix.

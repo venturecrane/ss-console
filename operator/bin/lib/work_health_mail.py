@@ -94,7 +94,7 @@ def render(
     resolved: Optional[dict[str, int]] = None,
 ) -> tuple[str, str]:
     lines: list[str] = []
-    for seat in _seat_order(seats):
+    for seat in _seat_order(sorted({*seats, *(i.seat for i in new + still_open)})):
         seat_new = [i for i in new if i.seat == seat]
         seat_old = [i for i in still_open if i.seat == seat]
         if not seat_new and not seat_old:

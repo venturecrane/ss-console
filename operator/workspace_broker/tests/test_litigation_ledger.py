@@ -101,6 +101,53 @@ def test_a_held_job_frees_its_scope(ledger) -> None:
     assert ledger.submit(_env(message_ref="<abc2@mail.firm.example>"))
 
 
+def test_a_failed_request_frees_its_email_but_a_live_or_held_one_does_not(ledger) -> None:
+    """A&P 2026-10-13: a requested run died (-9) with nothing delivered and
+    nothing told; the same email asked again with a narrower scope was refused
+    as already queued. FALSIFIER: the old full unique index and unfiltered dup
+    lookup refuse the resubmission below."""
+    job = ledger.submit(_env())
+    with pytest.raises(SubmitRefused):  # queued: still holds the email
+        ledger.submit(_env(scope={"paralegal_staff_ids": [STAFF]}))
+    ledger.record(job, "running", {})
+    ledger.record(job, "failed", {"reason": "no_verdict: exited -9"})
+    again = ledger.submit(_env(scope={"paralegal_staff_ids": [STAFF]}))
+    assert again != job and ledger.read(again)["state"] == "queued"
+    assert ledger.live_for_ref("<abc1@mail.firm.example>", job) == again
+    # The new one holds the email again (held too: held is an answer).
+    ledger.record(again, "held", {"reason": "scope_empty: nothing open"})
+    with pytest.raises(SubmitRefused):
+        ledger.submit(_env(scope={"all": True}))
+
+
+def test_a_failed_scheduled_run_still_holds_its_date(ledger) -> None:
+    """The cron's pre_run may tick again the same day; one scheduled job per
+    Pacific date stays the rule even after a failure."""
+    ref = "scheduled:2026-10-13"
+    job = ledger.submit(_env(trigger="scheduled", message_ref=ref))
+    ledger.record(job, "running", {})
+    ledger.record(job, "failed", {"reason": "no_verdict"})
+    with pytest.raises(SubmitRefused):
+        ledger.submit(_env(trigger="scheduled", message_ref=ref))
+
+
+def test_an_upgraded_db_drops_the_old_full_index(tmp_path) -> None:
+    import sqlite3
+
+    db = str(tmp_path / "audit.db")
+    conn = sqlite3.connect(db)
+    LitigationLedger(db, tmp_path / "q")  # schema
+    conn.execute("DROP INDEX uq_litigation_jobs_request_ref_live")
+    conn.execute("CREATE UNIQUE INDEX uq_litigation_jobs_request_ref ON litigation_jobs(request_ref)")
+    conn.commit()
+    conn.close()
+    led = LitigationLedger(db, tmp_path / "q")
+    job = led.submit(_env())
+    led.record(job, "running", {})
+    led.record(job, "failed", {"reason": "x"})
+    assert led.submit(_env(scope={"paralegal_staff_ids": [STAFF]})) != job
+
+
 def test_spend_is_the_delta_and_files_are_metadata_only(ledger) -> None:
     job = ledger.submit(_env())
     ledger.record(job, "running", {"cents": 100})
