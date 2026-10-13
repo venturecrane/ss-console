@@ -1182,7 +1182,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # author `writers`: on an inbound turn only those addresses may write to it (a
 # program the roster reads and the broker refines by email). Also carries #443,
 # the seat gate snapshot mirror. No tracked twin moved.
-ARG OVERLAY_REF="c2bf5877527d5eba34d58f2b8907678386bd5ef2"
+# 2026-10-13 (22c0948a, the overlay #446 merge commit). Every Claude seat's
+# profile config pins auxiliary.title_generation.model to Haiku 4.5, so the
+# session auto-title no longer sends Opus 5.5 thinking {type: disabled} and
+# 400s (Sentry SMD-OPERATOR-1M). No tracked twin moved.
+ARG OVERLAY_REF="22c0948ab75d6ced7624d3332efccad053f0807d"
 
 ARG CUSTOMER_SLUG=customer-zero
 
