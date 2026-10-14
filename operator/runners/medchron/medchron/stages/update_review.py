@@ -335,6 +335,7 @@ def finish(c: Ctx, md: str, found: list[RR.Finding], base: list[str], doc: Path)
                 e.outcome = ""
         new_md, edited = _apply(c, md, edits, base)
     settled = FN.settle(todo, edits, left)
+    _mark_refiled(c.sr, FN.refiled(edits, ents, base, new_md, {int(r["exhibit"]) for r in _new_records(c.sr)}))
     c.sr.log(
         f"  finisher: {len(edits)} edit(s), {sum(e.outcome == 'applied' for e in edits)} applied, {len(bad)} reverted"
     )
@@ -344,6 +345,26 @@ def finish(c: Ctx, md: str, found: list[RR.Finding], base: list[str], doc: Path)
     doc.write_text(new_md, encoding="utf-8")
     rc = audit_loop.run(c.sr)  # every remaining new sentence is audited on its page, to the gate
     return doc.read_text(encoding="utf-8"), edited, settled, rc
+
+
+def _new_records(sr: StageRun) -> list[dict[str, Any]]:
+    rows = read_json(update_dir(sr) / "new_exhibits.final.json", [])
+    return [r for r in rows if isinstance(r, dict) and isinstance(r.get("exhibit"), int)]
+
+
+def _mark_refiled(sr: StageRun, homes: dict[int, str]) -> None:
+    """Each new exhibit the finisher left uncited by dropping a copy of a
+    delivered visit, recorded as a re-filed copy of that delivered exhibit:
+    its number is kept, its Exhibit List row says so, and it is not filed
+    again (``update_finish``)."""
+    if not homes:
+        return
+    rows = _new_records(sr)
+    for r in rows:
+        if r["exhibit"] in homes:
+            r["refiled"] = homes[r["exhibit"]]
+            sr.log(f"  Exhibit {r['exhibit']}: a re-filed copy of delivered {homes[r['exhibit']]}; not filed again")
+    (update_dir(sr) / "new_exhibits.final.json").write_text(json.dumps(rows, indent=1), encoding="utf-8")
 
 
 # ---- the loop ---------------------------------------------------------------------

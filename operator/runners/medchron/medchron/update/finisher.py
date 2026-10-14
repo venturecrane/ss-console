@@ -187,5 +187,27 @@ def settle(findings: list[RR.Finding], edits: list[RR.Finding], left: dict[str, 
     return n
 
 
+def refiled(
+    edits: list[RR.Finding], ents: list[RR.Entry], delivered: list[str], md_after: str, new: set[int]
+) -> dict[int, str]:
+    """{new exhibit: "Exhibit H"} for each new exhibit an applied drop of a
+    copy of a DELIVERED visit left uncited: the exhibit is a re-filed copy of
+    delivered pages (the words of ``select.delivered_home``'s path), its
+    number is kept, it is not filed again, and H is the delivered exhibit the
+    surviving entry cites."""
+    still = {n for e in B.entries_of(md_after)[1] for n in B.cited(e)}
+    by = {x.anchor: x.text for x in ents}
+    out: dict[int, str] = {}
+    for e in edits:
+        if e.action != "drop_entry" or e.outcome != "applied" or not e.survivor.startswith("D"):
+            continue
+        k = int(e.survivor[1:]) - 1
+        homes = sorted(B.cited(delivered[k])) if 0 <= k < len(delivered) else []
+        for n in sorted(B.cited(by.get(e.anchor, "")) & new - still):
+            if homes:
+                out[n] = f"Exhibit {homes[0]}"
+    return out
+
+
 def delivered_of(base_md: str) -> list[str]:
     return B.entries_of(base_md)[1]

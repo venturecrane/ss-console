@@ -71,7 +71,7 @@ def _run(
 ) -> tuple[int, SimpleNamespace, str]:
     sd = tmp_path / "matter"
     ud = sd / "runs" / "alpha" / "update"
-    ud.mkdir(parents=True)
+    ud.mkdir(parents=True, exist_ok=True)
     out = sd / "out" / "alpha"
     out.mkdir(parents=True)
     for n in (2, 3):
@@ -238,6 +238,52 @@ def test_the_loop_stops_when_a_review_finds_no_fewer_must_fix(tmp_path: Path, mo
     assert rc == 2
     assert _review_rounds(sr) == {"r1", "r2"} and UR.ROUNDS > 2  # stopped at no progress, not at the cap
     assert any("no fewer than the last review" in m for m in sr.logged)
+
+
+# a copy of a delivered visit whose exhibit nothing else cites -------------------
+COPY_OF_D2 = (
+    "01/20/2026\nExample Clinic | Medical Diagnoses\n\nMedical Diagnoses\n"
+    "Cervical strain after the collision, pain rated 6 of 10 at intake. (Exhibit 3 - p. 1)"
+)
+NEW_EXHIBITS = [
+    {"exhibit": 2, "id": "n2", "title": "Exhibit 2 - Sample Imaging Center (Medical Records)", "pages": 3},
+    {"exhibit": 3, "id": "n3", "title": "Exhibit 3 - Hospital Encounters (Medical Records)", "pages": 1},
+]
+
+
+def test_a_copy_of_a_delivered_visit_is_dropped_and_its_exhibit_kept_as_a_refiled_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The only entry citing new Exhibit 3 repeats delivered D2. Before, the
+    drop was refused (it would leave Exhibit 3 uncited) and the job held. Now
+    the entry is dropped into D2 and Exhibit 3 is recorded as a re-filed copy
+    of delivered Exhibit 1: its number kept, not filed again."""
+    dup = _review(_finding("N1", "4 duplicate", "N1 repeats the delivered visit D2", exhibit=3))
+    drop = _edits({"finding": "F1", "anchor": "N1", "action": "drop_entry", "exhibit": 3, "page": 1, "survivor": "D2"})
+    ud = tmp_path / "matter" / "runs" / "alpha" / "update"
+    ud.mkdir(parents=True)
+    (ud / "new_exhibits.final.json").write_text(json.dumps(NEW_EXHIBITS))
+    rc, sr, md = _run(tmp_path, monkeypatch, [COPY_OF_D2, N1], [dup, K.CLEAN_REVIEW], [drop])
+    assert rc == 0, [f["outcome"] for f in _record(sr)["open"]]
+    assert B.entries_of(md)[1] == [N1]
+    rows = json.loads((ud / "new_exhibits.final.json").read_text())
+    assert [r.get("refiled") for r in rows] == [None, "Exhibit 1"]
+
+
+def test_a_refiled_copy_gets_its_exhibit_list_row_and_is_not_an_uncited_exhibit() -> None:
+    from medchron.update import assemble as A, collect as C
+
+    nex = [{**NEW_EXHIBITS[0]}, {**NEW_EXHIBITS[1], "refiled": "Exhibit 1"}]
+    md, rep = A.assemble(
+        K.base_md(),
+        C.audit_document(K.base_md(), [N1], nex),
+        describe=lambda code, on, text: (code, None, "x"),
+        canon=str,
+        headings=K.HEADINGS,
+        new_exhibits=nex,
+    )
+    assert rep["new_exhibits_uncited"] == []
+    assert "| 3 | Hospital Encounters (Medical Records) (re-filed pages of Exhibit 1; not filed again) |" in md
 
 
 # the delivered visit a re-filed copy repeats -----------------------------------

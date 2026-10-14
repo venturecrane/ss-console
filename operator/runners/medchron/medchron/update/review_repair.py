@@ -427,7 +427,9 @@ def apply(
     for f in [x for x in findings if x.action == "drop_entry" and x.outcome == "applied"]:
         left = {n for a, t in texts.items() if a not in dropped for n in B.cited(t)}
         orphans = sorted(B.cited(by_e[f.anchor].text) - left)
-        if orphans:
+        # A copy of a DELIVERED visit may leave its new exhibit uncited: the
+        # exhibit is then a re-filed copy of delivered pages (``finisher.refiled``).
+        if orphans and not f.survivor.startswith("D"):
             dropped.discard(f.anchor)
             f.removed = []
             f.outcome = f"dropping the entry would leave Exhibit {orphans[0]} uncited"
