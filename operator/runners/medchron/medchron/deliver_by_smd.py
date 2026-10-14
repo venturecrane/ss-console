@@ -149,12 +149,13 @@ def plan(d: Any, job_id: str, rec: dict[str, Any], *, update: bool) -> dict[str,
     if not env.get("requested_by") or not env.get("request_ref"):
         raise Refused(f"job {job_id}'s envelope names no requester or request email; there is no thread to answer")
     wake = st.get("wake") or {}
-    if st.get("state") == "delivered" or (wake.get("pending") and st.get("state") != "failed"):
-        # A failed job's wake tells the firm nothing (DELIVER sends nothing on
-        # `failed`), and a dispatched hold wake has had its own one reply under
-        # its own key. A delivered state, or a hold reply still to go, does
-        # stand in the way.
-        raise Refused(f"job {job_id} is already delivered or has a reply still to go; one delivery wake per job")
+    # A CONSUMED wake for a failed job is replaced: DELIVER sends nothing on
+    # `failed` (both 2026-10-13 jobs carry one). A consumed hold wake had its
+    # one reply under its own key. A wake still pending is the daemon's to send
+    # and is never overwritten, whatever its outcome; a delivered state or a
+    # consumed delivered wake means the delivery was already announced.
+    if st.get("state") == "delivered" or wake.get("pending") or "Outcome: delivered." in str(wake.get("task") or ""):
+        raise Refused(f"job {job_id} is already delivered or has a wake still to go; one delivery wake per job")
     replies = d.broker._request({"action": "delivery_reply_status", "kind": REPLY_KIND, "job_id": job_id})
     if any(str(r.get("key") or "").endswith(":delivered") for r in replies.get("replies") or []):
         raise Refused(f"job {job_id} already has its delivered reply; a second would be a second send")

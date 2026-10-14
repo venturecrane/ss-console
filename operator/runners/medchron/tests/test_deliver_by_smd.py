@@ -173,7 +173,7 @@ def test_a_second_run_refuses(tmp_path):
         ({"envelope": {**ud._envelope(JOB)}}, "no requester"),
         (
             {"row_state": "held", "state": {"state": "held", "wake": {"pending": True, "task": "Outcome: held."}}},
-            "reply still to go",
+            "wake still to go",
         ),
         ({"row_state": "running", "state": {"state": "running", "claimed": True}}, "only a failed or held job"),
     ],
@@ -181,6 +181,49 @@ def test_a_second_run_refuses(tmp_path):
 def test_what_it_refuses(tmp_path, kw, match):
     d, broker = _seat(tmp_path, **kw)
     with pytest.raises(dbs.Refused, match=match):
+        dbs.plan(d, JOB, json.loads(json.dumps(RECORD)), update=True)
+    assert broker.records == []
+
+
+#: The shape both 2026-10-13 jobs carry on the seat: the failed-outcome wake,
+#: dispatched (``sent_at`` set, ``outcome`` the dispatch result).
+CONSUMED_FAILED = {
+    "claimed": True,
+    "state": "failed",
+    "finished_at": 1791931099.0,
+    "wake": {
+        "pending": False,
+        "attempts": 0,
+        "task": f"Run the medical-chronology-maintainer skill's DELIVER mode for chronology job {JOB}.\nOutcome: failed.",
+        "sent_at": 1791931104.0,
+        "outcome": "delivered",
+    },
+}
+
+
+def test_a_consumed_failed_wake_is_replaced_by_the_delivered_wake(tmp_path):
+    d, broker = _seat(tmp_path, state=json.loads(json.dumps(CONSUMED_FAILED)))
+    _deliver(d)
+    wake = d._daemon_state(JOB)["wake"]
+    assert wake["pending"] is True and "Outcome: delivered." in wake["task"]
+    assert "sent_at" not in wake and "outcome" not in wake  # a fresh wake, not the old one edited
+    assert JOB in d._wakes_pending()
+
+
+def test_a_pending_failed_wake_is_never_overwritten(tmp_path):
+    st = json.loads(json.dumps(CONSUMED_FAILED))
+    st["wake"] = {"pending": True, "attempts": 1, "task": st["wake"]["task"]}
+    d, broker = _seat(tmp_path, state=st)
+    with pytest.raises(dbs.Refused, match="wake still to go"):
+        dbs.plan(d, JOB, json.loads(json.dumps(RECORD)), update=True)
+    assert broker.records == []
+
+
+def test_a_consumed_delivered_wake_is_refused(tmp_path):
+    st = json.loads(json.dumps(CONSUMED_FAILED))
+    st["wake"]["task"] = st["wake"]["task"].replace("Outcome: failed.", "Outcome: delivered.")
+    d, broker = _seat(tmp_path, state=st)
+    with pytest.raises(dbs.Refused, match="already delivered"):
         dbs.plan(d, JOB, json.loads(json.dumps(RECORD)), update=True)
     assert broker.records == []
 
