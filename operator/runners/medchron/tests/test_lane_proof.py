@@ -35,6 +35,8 @@ jd = pathlib.Path(sys.argv[1])
 out = jd / 'data' / 'out'
 out.mkdir(parents=True, exist_ok=True)
 (out / 'Demand.docx').write_text('draft')
+(jd / 'data' / 'raw').mkdir(exist_ok=True)
+(jd / 'data' / 'raw' / 'pulled-matter-file.docx').write_text('a document from the matter')
 if os.environ.get('MEDCHRON_PROOF_RUN') == '1':
     v = [{"unit": "demand", "outcome": "dry_run", "stage": "file", "dollars": 4.25, "files": []}]
 else:
@@ -246,7 +248,7 @@ def test_a_proof_run_writes_nothing_records_nothing_and_passes(lane, tmp_path):
     assert res["status"] == "passed" and res["key"] == "demand-letter-drafter" and res["cents"] == 425
     twin = Path(res["path"]) / A
     assert json.loads((twin / "env.json").read_text())["proof"] == "1"
-    assert any(a["path"].endswith("Demand.docx") for a in res["artifacts"])
+    assert [a["path"] for a in res["artifacts"]] == ["data/out/Demand.docx"]  # what it made, not what it pulled
     assert not (d.jobs / A).exists()  # nothing in the real job dirs, so no deliver wake can fire
     assert (d.queue / f"{A}.json").is_file()  # the firm's job still waits
     assert not list(d.queue.glob(".prove-*"))

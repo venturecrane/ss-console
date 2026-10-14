@@ -166,15 +166,17 @@ def judge(raw: list[Any]) -> tuple[bool, list[dict[str, Any]]]:
 
 
 def _artifacts(jd: Path) -> list[dict[str, Any]]:
-    """What the run produced, by path under the twin and size. Stays on the
-    seat; the laptop wrapper copies it out for reading."""
+    """What the run PRODUCED (its staged ``out/`` tree, plus a negotiation dry
+    run's report), by path under the twin and size. Never the matter's own
+    pulled files: on 2026-10-14 a discovery-set proof listed 21 pulled .docx
+    from data/raw beside its 3 sets, burying the deliverable. Stays on the seat;
+    the laptop wrapper copies it out for reading."""
     out = []
     for p in sorted(jd.rglob("*")):
         if not p.is_file():
             continue
-        office = p.suffix.lower() in (".docx", ".xlsx")
-        staged = "out" in p.relative_to(jd).parts and p.suffix.lower() in (".pdf", ".md", ".txt", ".json")
-        if office or staged or p.name == "dry-run-report.txt":
+        staged = "out" in p.relative_to(jd).parts and "raw" not in p.relative_to(jd).parts
+        if staged or p.name == "dry-run-report.txt":
             out.append({"path": str(p.relative_to(jd)), "bytes": p.stat().st_size})
     return out[:200]
 
