@@ -14,6 +14,13 @@ source file's save date and is not in that file's text, a source no longer on
 the matter, a status outside the vocabulary) is explained: the last list's
 value was the defect, and this run read it again for exactly that reason.
 
+A value the last list carried that its document did not support, which this
+run read again and found no date for, is explained the same way.
+
+Values are compared by IDENTITY, not wording (``identity.py``, 2026-10-14):
+a discovery set is its kind and set number, a combined name is one entry per
+set, a party is its ``party_key``. A renaming alone is never a change.
+
 Every divergence, explained or not, is also the workbook's "What changed" tab.
 """
 
@@ -22,6 +29,8 @@ from __future__ import annotations
 import datetime as dt
 import re
 from typing import Any
+
+from . import identity
 
 
 def _src_id(v: Any) -> str | None:
@@ -36,34 +45,10 @@ def _key(v: Any, *fields: str) -> Any:
     return None if all(x in (None, "") for x in vals) else (vals[0] if len(vals) == 1 else vals)
 
 
-_NOISE = {
-    "md",
-    "do",
-    "np",
-    "pa",
-    "rn",
-    "dds",
-    "inc",
-    "llc",
-    "lp",
-    "llp",
-    "corp",
-    "co",
-    "the",
-    "dba",
-    "aka",
-    "sued",
-    "as",
-}
-
-
 def party_key(name: str) -> str:
     """One defendant across two lists whose names are spelled differently
-    ("X (sued as Y), M.D." / "X, MD"): the name's letters, parentheticals,
-    initials and credentials dropped."""
-    words = re.findall(r"[a-z]+", re.sub(r"\([^)]*\)", " ", name.lower()))
-    words = [w for w in words if len(w) > 1 and w not in _NOISE]
-    return "".join(words) or name
+    (``identity.party_key``; kept here, where its callers have always looked)."""
+    return identity.party_key(name)
 
 
 def _keyed(path: str) -> str:
@@ -88,8 +73,8 @@ def points(m: dict[str, Any] | None) -> dict[str, tuple[Any, dict[str, Any] | No
         out[f"defendants[{name}].served"] = (_key(d.get("served"), "date"), d.get("served"))
         out[f"defendants[{name}].answered"] = (_key(d.get("answered"), "date"), d.get("answered"))
     for kind in ("discovery_propounded", "discovery_served_on_client"):
-        for r in m.get(kind) or []:
-            label = f"{kind}[{r.get('set')}|{r.get('served_on') or r.get('served_by')}]"
+        for key, r in identity.keyed_rows(m.get(kind)):
+            label = f"{kind}[{key}]"
             out[label + ".date"] = (r.get("date"), r)
             if kind == "discovery_served_on_client":
                 rs = r.get("responses_served") or {}
@@ -148,6 +133,8 @@ def compare(
             why = "the last list's court date has passed"
         elif cur is not None and _src_id(cur_obj) and _unsupported(path, old, old_obj, unsupported, on_matter):
             why = "a cited value replacing one the last list carried that its document did not support"
+        elif cur is None and _unsupported(path, old, old_obj, unsupported, on_matter):
+            why = "the last list's value was not supported by its document, and no document gives one"
         out.append(
             {
                 "path": path,
@@ -166,12 +153,19 @@ def unexplained(changes: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _label(path: str, *results: dict[str, Any]) -> str:
-    """The path with the defendant's name as a list spells it (for people)."""
+    """The path with the defendant's name, or the discovery set and party,
+    as a list spells them (for people)."""
     m = re.match(r"^defendants\[(.*)\](.*)$", path)
-    if not m:
+    if m:
+        for res in results:
+            for d in res.get("defendants") or []:
+                if party_key(str(d.get("name") or "")) == m.group(1):
+                    return f"defendants[{d.get('name')}]{m.group(2)}"
         return path
-    for res in results:
-        for d in res.get("defendants") or []:
-            if party_key(str(d.get("name") or "")) == m.group(1):
-                return f"defendants[{d.get('name')}]{m.group(2)}"
+    m = re.match(r"^(discovery_\w+)\[(.*)\](\.\w+)$", path)
+    if m:
+        for res in results:
+            for key, r in identity.keyed_rows(res.get(m.group(1))):
+                if key == m.group(2):
+                    return f"{m.group(1)}[{r.get('set')}|{identity.row_party(r)}]{m.group(3)}"
     return path

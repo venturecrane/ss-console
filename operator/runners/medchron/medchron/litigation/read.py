@@ -24,7 +24,7 @@ import datetime as dt
 import json
 from typing import Any
 
-from . import vocab
+from . import identity, vocab
 from .tools import MatterContext, run_loop
 
 _REF = {"doc": {"type": ["integer", "null"]}, "doc_date": {"type": ["string", "null"]}}
@@ -285,7 +285,7 @@ def _discovery(ctx: MatterContext, rows: Any, theirs: bool) -> list[dict[str, An
         if theirs:
             row["responses_served"] = _val(ctx, r.get("responses_served"), ("value", "date"))
         out.append(row)
-    return out
+    return identity.split_rows(out)  # one row per set, as the papers are served (identity.py)
 
 
 def to_state(ctx: MatterContext, raw: dict[str, Any], groups: list[str]) -> dict[str, Any]:
@@ -325,6 +325,8 @@ def merge(prior: dict[str, Any] | None, fresh: dict[str, Any], groups: list[str]
         for k in vocab.GROUP_FIELDS[g]:
             if k in fresh:
                 base[k] = fresh[k]
+    if vocab.GROUP_DEFENDANTS in groups:
+        base["defendants"] = identity.merge_defendants(base.get("defendants") or [])
     full = set(groups) == set(vocab.GROUPS)
     if full or not base.get("matter_flags"):
         base["matter_flags"] = fresh.get("matter_flags", [])
