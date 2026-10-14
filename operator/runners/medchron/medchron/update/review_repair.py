@@ -46,7 +46,8 @@ from . import body as B, handwritten as H, icd, uncited as U
 from .values import lost, numbers
 
 MUST, SHOULD = "MUST", "SHOULD"
-ACTIONS = ("replace", "drop", "redate", "drop_entry", "add", "none")
+ACTIONS = ("replace", "drop", "redate", "drop_entry", "add", "provider", "none")
+MIN_CLAIM_CHARS = 30  # shorter claims are never audited (``claims._walk``)
 _MDY = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
 _ANCHOR = re.compile(r"^([ND])(\d+)(?:\.[cu](\d+))?$")
 #: (exhibit, page) -> the page's text, or None when there is none to read.
@@ -69,6 +70,12 @@ class Finding:
     #: the values an applied correction took out of the document, named so
     #: proof 10 reads them as named by the review, not silently dropped
     removed: list[str] = field(default_factory=list)
+    #: what the page the finding relies on actually says (the review's reading)
+    page_says: str = ""
+    #: a ``drop_entry`` edit: the entry that holds the dropped entry's content
+    survivor: str = ""
+    #: a finisher edit: the review finding (``F<n>``) it settles
+    fid: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -174,6 +181,9 @@ def _one(item: object) -> Finding:
         action if action in ACTIONS else "none",
         _str(item.get("corrected")),
         _str(item.get("reason")),
+        page_says=_str(item.get("page_says")),
+        survivor=_str(item.get("survivor")),
+        fid=_str(item.get("finding")),
     )
     if sev is None:
         f.outcome = "severity not MUST or SHOULD; held as MUST"
@@ -228,7 +238,7 @@ def grounded_text(f: Finding, keep: set[int]) -> str:
         return f"the corrected text does not cite the page the finding names (Exhibit {f.exhibit} p. {f.page})"
     if n not in keep:
         return f"Exhibit {n} is not an added exhibit"
-    if "\n\n" in t.strip() or not CL.graded(t[: cites[0].start()]):
+    if "\n\n" in t.strip() or len(CL.NTD.sub("", t[: cites[0].start()]).strip()) < MIN_CLAIM_CHARS:
         return "the corrected text is not one auditable paragraph"
     if icd.CLAIM.match(t.strip()):
         return "a diagnosis claim is never rewritten by the review"
@@ -267,7 +277,7 @@ def _add_ok(f: Finding, e: Entry, keep: set[int], headings: set[str], shown: dic
     finding names, a page shown to the review as an uncited page of this
     entry's own document."""
     if (f.exhibit, f.page) not in (shown.get(e.anchor) or []):
-        return f"Exhibit {f.exhibit} p. {f.page} is not an uncited page of the entry's document shown to the review"
+        return f"Exhibit {f.exhibit} p. {f.page} is not a page of a document the entry cites"
     _, para = _split_add(f.corrected, headings)
     return grounded_text(Finding(**{**f.as_dict(), "corrected": para}), keep)
 
@@ -407,9 +417,12 @@ def apply(
             texts[f.anchor] = f.corrected + texts[f.anchor][10:]
             redates.append((head, f.corrected, by_e[f.anchor].cites()))
             f.removed = sorted(numbers(texts[f.anchor]))
-        else:
+        elif f.action == "drop_entry":
             dropped.add(f.anchor)
             f.removed = sorted(numbers(by_e[f.anchor].text))
+        else:  # a provider line is the finisher's own edit (``update/finisher.py``)
+            f.outcome = f"{f.action} is not applied here"
+            continue
         f.outcome = "applied"
     for f in [x for x in findings if x.action == "drop_entry" and x.outcome == "applied"]:
         left = {n for a, t in texts.items() if a not in dropped for n in B.cited(t)}

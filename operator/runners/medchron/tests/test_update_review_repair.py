@@ -39,25 +39,31 @@ def _must(anchor: str, corrected: str, *, page: int = 1, action: str = "replace"
 
 
 class _Reviewer(_Model):
-    """The e2e model, with the update review scripted: one reply per call,
-    the last repeated."""
+    """The e2e model, with the update review and finisher scripted: review
+    round r (r - 1 finisher calls so far) answers reviews[r - 1] (the last
+    repeated), cut to each part's entries; the finisher answers in order."""
 
-    def __init__(self, *replies: str) -> None:
+    def __init__(self, reviews: list[str], finishes: list[str] | None = None) -> None:
         super().__init__()
-        self.replies = list(replies)
+        self.scripted, self.finishes = reviews, list(finishes or ['{"edits": [], "complete": true}'])
         self.reviews: list[dict] = []
+        self.finished = 0
 
     def stream(self, **kw):
+        if "UPDATE FINISHER" in self._system(kw):
+            self.calls.append(kw)
+            self.finished += 1
+            return _Stream(_text(self.finishes.pop(0) if len(self.finishes) > 1 else self.finishes[0]))
         if "UPDATE REVIEW AND REPAIR" in self._system(kw):
             self.calls.append(kw)
             self.reviews.append(kw)
-            return _Stream(_text(self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]))
+            reply = self.scripted[min(self.finished, len(self.scripted) - 1)]
+            return _Stream(_text(K.review_for_part(reply, kw["messages"][0]["content"])))
         return super().stream(**kw)
 
 
 def _reviewed_anchors(kw: dict) -> list[str]:
-    head = kw["messages"][0]["content"][0]["text"]
-    return head.split("ADDED ENTRIES IN THIS PART: ", 1)[1].split(", ")
+    return K.part_anchors(kw["messages"][0]["content"])
 
 
 def test_a_grounded_must_fix_is_applied_reaudited_rereviewed_and_proven(
@@ -66,7 +72,8 @@ def test_a_grounded_must_fix_is_applied_reaudited_rereviewed_and_proven(
     job_dir, seat = scene
     _upload_pause(monkeypatch)
     delivered_note = {**_must("D1", "no", action="none"), "problem": "a delivered entry reads oddly"}
-    model = _Reviewer(_reply(_must("N1.c1", FIXED_N1), delivered_note), _reply())
+    first = _reply(_must("N1.c1", FIXED_N1), delivered_note)
+    model = _Reviewer([first, _reply()], [K.finish_reply(first)])
     o = _driver(job_dir, firm_config_path, pricing_path, seat, model).run()[0]
     assert o.outcome == "delivered" and o.stage is None, o
     sd = data_root / "example-matter"
@@ -98,13 +105,14 @@ def test_a_must_fix_that_never_settles_holds_for_smd_and_nothing_is_filed(
     _upload_pause(monkeypatch)
     # Cites a page the finding does not name: never grounded, never applied.
     ungrounded = _must("N2.c1", "MRI showed a disc protrusion measuring 4 mm at that level. (Exhibit 2 - p. 1)", page=2)
-    model = _Reviewer(_reply(ungrounded))
+    model = _Reviewer([_reply(ungrounded)], [K.finish_reply(_reply(ungrounded))])
     o = _driver(job_dir, firm_config_path, pricing_path, seat, model).run()[0]
     assert o.outcome == "held" and o.stage == "update_review", o
     assert o.reason.startswith("update_held:")
     assert holds.classify("medchron", o.reason)[0] == holds.SMD_FINISHING
     assert seat.sent == [] and seat.deleted == []
-    assert len(model.reviews) == UR.ROUNDS
+    # The finisher settled nothing: no progress, held after the first review.
+    assert len(model.reviews) == 1
     ud = data_root / "example-matter" / "runs" / "alpha" / "update"
     rec = json.loads((ud / "review_repair.json").read_text())
     assert rec["status"] == "held" and [f["anchor"] for f in rec["open"]] == ["N2.c1"]
@@ -193,18 +201,21 @@ def test_a_reply_that_is_not_one_complete_json_object_is_never_read_as_clean() -
     assert [f.severity for f in got] == ["MUST", "MUST"] and all(f.outcome for f in got)
 
 
-def test_a_part_that_runs_out_is_split_and_reviewed_in_halves() -> None:
+def test_a_part_that_runs_out_is_split_by_pages_then_entries() -> None:
+    from medchron.update import review_parts as RP
+
     class _R:
         def __init__(self, text: str, stop: str) -> None:
             self.text, self.stop_reason, self.usage = text, stop, None
 
-    seen: list[list[str]] = []
+    seen: list[tuple[list[str], list[str]]] = []
 
     class _Door:
         def call(self, stage, **kw):
-            names = _reviewed_anchors(kw)
-            seen.append(names)
-            return _R("", "max_tokens") if len(names) > 1 else _R(_reply(), "end_turn")
+            content = kw["messages"][0]["content"]
+            pages = [b["text"] for b in content if b.get("text", "").startswith("Exhibit 2 p.")]
+            seen.append((K.part_anchors(content), pages))
+            return _R("", "max_tokens") if len(pages) > 1 else _R(_reply(), "end_turn")
 
     class _SR:
         doorway = _Door()
@@ -213,9 +224,12 @@ def test_a_part_that_runs_out_is_split_and_reviewed_in_halves() -> None:
         log = staticmethod(lambda _m: None)
 
     ents = RR.anchor_entries(AUDIT_DOC, KEEP, HEADS)
-    c = UR.Ctx(_SR(), "m", "s", lambda _e, _p: None)  # type: ignore[arg-type]
-    assert UR._review_part(c, ents, AUDIT_DOC, "p1") == []
-    assert seen[-2:] == [["N1"], ["N2"]]
+    c = UR.Ctx(
+        _SR(), "m", "s", "f", lambda _e, _p: {"type": "image"}, lambda _e, _p: None, lambda _x: 2, lambda _a, _b: []
+    )  # type: ignore[arg-type]
+    part = RP.Part("pages", ents[:1], 2, [1, 2])
+    assert UR._review_part(c, part, ents, [], "p1") == []
+    assert [len(p) for _, p in seen] == [2, 1, 1]  # split at once into one page each
 
 
 def test_proof_10_still_fails_a_value_the_review_removed_without_naming_it(
@@ -226,7 +240,8 @@ def test_proof_10_still_fails_a_value_the_review_removed_without_naming_it(
     job_dir, seat = scene
     _upload_pause(monkeypatch)
     monkeypatch.setattr(RR, "named_values", lambda _rec: set())
-    model = _Reviewer(_reply(_must("N1.c1", FIXED_N1)), _reply())
+    first = _reply(_must("N1.c1", FIXED_N1))
+    model = _Reviewer([first, _reply()], [K.finish_reply(first)])
     o = _driver(job_dir, firm_config_path, pricing_path, seat, model).run()[0]
     assert o.outcome == "failed" and o.stage == "update_proofs", o
     assert seat.sent == []

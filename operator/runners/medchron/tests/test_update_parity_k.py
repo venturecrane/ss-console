@@ -24,7 +24,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
 
 import pytest
 
@@ -111,20 +110,6 @@ def test_process_notes_never_reach_the_firm_and_an_unsettled_date_is_reported_no
 
 
 # ---- K3 -------------------------------------------------------------------------
-class _R:
-    def __init__(self, text: str) -> None:
-        self.text, self.stop_reason, self.usage = text, "end_turn", None
-
-
-class _Door:
-    def __init__(self, *replies: str) -> None:
-        self.replies, self.calls = list(replies), 0
-
-    def call(self, _stage: str, **_kw: Any) -> _R:
-        self.calls += 1
-        return _R(self.replies.pop(0) if len(self.replies) > 1 else self.replies[0])
-
-
 def _redate(corrected: str) -> str:
     f = {
         "severity": "MUST",
@@ -140,7 +125,9 @@ def _redate(corrected: str) -> str:
     return json.dumps({"findings": [f], "complete": True})
 
 
-def _review(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *replies: str) -> tuple[int, SimpleNamespace, str]:
+def _review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reviews: list[str], finishes: list[str]
+) -> tuple[int, SimpleNamespace, str]:
     """Collect re-dates the 2/18 visit onto the statement's 02/13 (the one
     statement date, a different visit); the review then corrects it."""
     stmt = "Sample Chiropractic\nPatient statement\nDate of service 02/13/2026 Spinal manipulation charges 65.00"
@@ -164,12 +151,12 @@ def _review(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *replies: str) -> t
     (ud / "new_exhibits.final.json").write_text(json.dumps([{"exhibit": 2, "id": "n2"}, {"exhibit": 3, "id": "n3"}]))
     doc = sr.slug_dir / "runs" / "alpha" / "final-chronology.md"
     doc.write_text(md)
-    sr.doorway = _Door(*replies)
+    sr.doorway = K.ScriptedDoor(reviews, finishes)
     sr.cfg = SimpleNamespace(get=lambda *_a: {"review": "m"} if _a[-1] == "tiers" else sorted(K.HEADINGS))
     sr.log = sr.logged.append
-    monkeypatch.setattr(UR.prompts, "load", lambda *_a: "UPDATE REVIEW AND REPAIR")
+    monkeypatch.setattr(UR.prompts, "load", lambda name, _cfg: name)
     monkeypatch.setattr(UR.audit_loop, "run", lambda _sr: 0)
-    rc = UR.run(sr, images=lambda _e, _p: None)  # type: ignore[arg-type]
+    rc = UR.run(sr, images=lambda _e, _p: None, verify=lambda _a, _b: [], npages=lambda _x: 1)  # type: ignore[arg-type]
     return rc, sr, doc.read_text()
 
 
@@ -177,7 +164,7 @@ def test_the_review_corrects_a_wrong_redate_from_the_page_and_the_entry_moves_in
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     clean = json.dumps({"findings": [], "complete": True})
-    rc, sr, md = _review(tmp_path, monkeypatch, _redate("02/18/2026"), clean)
+    rc, sr, md = _review(tmp_path, monkeypatch, [_redate("02/18/2026"), clean], [K.finish_reply(_redate("02/18/2026"))])
     _, ents = B.entries_of(md)
     assert rc == 0, sr.logged
     assert [B.iso(e) for e in ents] == ["2026-02-15", "2026-02-18"]  # moved after 02/15
@@ -190,7 +177,7 @@ def test_the_review_corrects_a_wrong_redate_from_the_page_and_the_entry_moves_in
 def test_a_redate_the_cited_page_does_not_state_is_never_applied(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    rc, sr, md = _review(tmp_path, monkeypatch, _redate("02/19/2026"))
+    rc, sr, md = _review(tmp_path, monkeypatch, [_redate("02/19/2026")], [K.finish_reply(_redate("02/19/2026"))])
     assert rc == 2  # held for SMD with the finding open, the date unchanged
     assert "02/19/2026" not in md and B.entries_of(md)[1][0].startswith("02/13/2026")
     rec = json.loads((sr.slug_dir / "runs" / "alpha" / "update" / "review_repair.json").read_text())

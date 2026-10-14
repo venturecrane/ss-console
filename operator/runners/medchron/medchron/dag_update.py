@@ -101,8 +101,10 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         },
     ),
     _reuse("audit", requires=("update_summary",), invalidates=("update_review",)),
-    # Review the added entries against their pages and REPAIR what it finds,
-    # re-auditing every corrected sentence, until a review finds no MUST-FIX
+    # The gate before assemble: an INDEPENDENT review of the added entries
+    # against every page of the documents they cite, then a FINISHER that
+    # corrects each must-fix finding (every new sentence audited, an
+    # unsupported edit undone), looped until a review finds no must-fix
     # (``stages/update_review.py``). The proofs then run on the corrected text,
     # and the pre-delivery ``review`` below is the final read.
     Stage(
@@ -116,11 +118,11 @@ UPDATE_STAGES: tuple[Stage, ...] = (
             1: (FAILED, "update_review: a part of the update's review did not finish; a rerun reviews again"),
             2: (
                 HELD,
-                "update_held: the review of the update left must-fix findings its repair rounds could not "
-                "correct against the pages; SMD finishes it",
+                "update_held: the independent review of the update left must-fix findings the finisher could "
+                "not correct against the pages; SMD finishes it",
             ),
-            3: (HELD, "audit coverage: a claim the update review corrected is not finally SUPPORTED"),
-            4: (FAILED, "audit INVALID after the update review's corrections: a control failed or no exhibit bytes"),
+            3: (HELD, "audit coverage: a sentence the update finisher wrote is not finally SUPPORTED"),
+            4: (FAILED, "audit INVALID after the update finisher's corrections: a control failed or no exhibit bytes"),
         },
     ),
     Stage(

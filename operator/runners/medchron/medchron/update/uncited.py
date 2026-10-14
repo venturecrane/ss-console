@@ -24,10 +24,9 @@ names only a page the entry already cites, so no exhibit becomes cited by
 this alone.
 
 Two shapes the audit would still skip are folded into an audited paragraph:
-text after a paragraph's last citation moves before it, and a value-free
-paragraph shorter than the audit's floor (``claims.graded``: 30 characters)
-joins its neighbour (the next one, or the previous when the next opens a
-subsection). A short paragraph that carries a value is graded on its own.
+text after a paragraph's last citation moves before it, and a paragraph
+shorter than the audit's floor (``claims._walk``: 30 characters) joins its
+neighbour (the next one, or the previous when the next opens a subsection).
 A heading standing alone carries no assertion and is left as it is.
 """
 
@@ -39,6 +38,7 @@ from typing import Any
 from ..audit import claims as CL
 from . import body as B
 
+MIN_CHARS = 30  # ``claims._walk`` audits nothing shorter
 _ALNUM = re.compile(r"[A-Za-z0-9]")
 _LEAD = re.compile(r"^[\s.;,]*")
 
@@ -66,7 +66,7 @@ def is_header(p: str) -> bool:
 
 
 def _short(p: str) -> bool:
-    return not CL.graded(p)
+    return len(CL.NTD.sub("", p).strip()) < MIN_CHARS
 
 
 def _opens_heading(p: str, headings: set[str]) -> bool:
