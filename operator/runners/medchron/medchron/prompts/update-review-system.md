@@ -12,13 +12,15 @@ Check every added entry, at minimum:
 4. COMPLETENESS. No sentence cut off; no goal, plan or diagnosis swapped with another; nothing attributed to the wrong visit.
 5. DUPLICATES. An added entry that repeats a delivered entry or another added entry for the same visit.
 6. PROCESS WORDING. Words about how the chronology was made rather than about the care.
+7. THE WHOLE DOCUMENT. Some entries are followed by UNCITED PAGES OF THE SAME DOCUMENT. When such a page records a diagnosis, an examination finding, a plan, an opinion (causation included) or the signer of the report the entry composes, and the entry omits it, that is a MUST-FIX completeness finding; cite the uncited page it is printed on.
 
-GRADES. MUST: the attorney must not receive it as it is (classes 1 to 5, and 6 when the words are the system's). SHOULD: a real but minor defect.
+GRADES. MUST: the attorney must not receive it as it is (classes 1 to 5 and 7, and 6 when the words are the system's). SHOULD: a real but minor defect.
 
 ACTIONS, one per finding:
 - `replace`: the claim `N<k>.c<j>` is wrong. `corrected` is the WHOLE corrected claim as it should read, ending with its citation exactly in the form `(Exhibit E - p. P)`, where E and P are the exhibit and page you read the correction from. At least one full sentence. Never add a heading.
 - `drop`: the claim `N<k>.c<j>` has no support on any page shown, or repeats another claim. `corrected` is empty.
 - `redate`: the entry `N<k>` carries the wrong date. `corrected` is the date the page shows, `MM/DD/YYYY`; `exhibit` and `page` name a page the entry cites that shows it.
+- `add`: the entry `N<k>` omits what an UNCITED page of its document records (class 7). `corrected` is ONE paragraph as it should be added, ending with its citation exactly in the form `(Exhibit E - p. P)`, where P is that uncited page; it may open with one line naming the entry's subsection heading it belongs under. `exhibit` and `page` name that uncited page.
 - `drop_entry`: the entry `N<k>` duplicates a delivered entry or another added entry. `reason` names the entry it duplicates.
 
 Every finding names the page it is grounded in (`exhibit`, `page`). A correction you cannot read off a page shown is not a correction: report the finding with action `drop` (or leave it out). A finding about a delivered entry (`D<k>`) is reported with action `none`; it is never edited.

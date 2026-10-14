@@ -19,6 +19,10 @@ of the loop that fixes (``stages/update_review.py`` is the paid half):
   (``Evidence``: a model never rewrites a date on its reading alone), and the
   redated entry moves to its place in date order; an entry drop never leaves
   a new exhibit uncited;
+* an ``add`` puts ONE grounded paragraph into the entry (under the heading
+  it names, when the entry has it or the heading is a known one), citing a
+  page the review was SHOWN as an uncited page of the entry's own document:
+  what the document records and the entry omits;
 * a finding about a DELIVERED entry (``D<k>``) is reported, never applied: the
   update never edits the firm's delivered text;
 * diagnosis and provider claims (the preamble grammars of ``update/icd.py``
@@ -42,7 +46,7 @@ from . import body as B, handwritten as H, icd
 from .values import lost, numbers
 
 MUST, SHOULD = "MUST", "SHOULD"
-ACTIONS = ("replace", "drop", "redate", "drop_entry", "none")
+ACTIONS = ("replace", "drop", "redate", "drop_entry", "add", "none")
 MIN_CLAIM_CHARS = 30  # shorter claims are never audited (``claims._walk``)
 _MDY = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
 _ANCHOR = re.compile(r"^([ND])(\d+)(?:\.c(\d+))?$")
@@ -234,7 +238,45 @@ def _date_on_page(f: Finding, entry: Entry, evidence: Evidence | None) -> str:
     return ""
 
 
-def check(f: Finding, ents: list[Entry], keep: set[int], evidence: Evidence | None = None) -> str:
+def _split_add(t: str, headings: set[str]) -> tuple[str, str]:
+    """(the heading an add names, or "", the paragraph)."""
+    first, _, rest = t.strip().partition("\n")
+    return (first.strip(), rest.strip()) if rest and first.strip() in headings else ("", t.strip())
+
+
+def _add_ok(f: Finding, e: Entry, keep: set[int], headings: set[str], shown: dict[str, list[tuple[int, int]]]) -> str:
+    """'' when an add is grounded: one auditable paragraph citing the page the
+    finding names, a page shown to the review as an uncited page of this
+    entry's own document."""
+    if (f.exhibit, f.page) not in (shown.get(e.anchor) or []):
+        return f"Exhibit {f.exhibit} p. {f.page} is not an uncited page of the entry's document shown to the review"
+    _, para = _split_add(f.corrected, headings)
+    return grounded_text(Finding(**{**f.as_dict(), "corrected": para}), keep)
+
+
+def _add(text: str, corrected: str, headings: set[str]) -> str:
+    """The entry with the added paragraph at the end of the subsection its
+    heading names (or at the entry's end, under that heading when given)."""
+    head, para = _split_add(corrected, headings)
+    blocks = text.split("\n\n")
+    at = [i for i, b in enumerate(blocks) if head and b.split("\n", 1)[0].strip() == head]
+    if at:
+        j = at[0] + 1
+        while j < len(blocks) and blocks[j].split("\n", 1)[0].strip() not in headings:
+            j += 1
+        blocks[j - 1] += "\n" + para
+        return "\n\n".join(blocks)
+    return text.rstrip("\n") + "\n\n" + (f"{head}\n{para}" if head else para)
+
+
+def check(
+    f: Finding,
+    ents: list[Entry],
+    keep: set[int],
+    evidence: Evidence | None = None,
+    headings: set[str] | None = None,
+    shown: dict[str, list[tuple[int, int]]] | None = None,
+) -> str:
     """'' when the finding may be applied, else why it may not."""
     m = _ANCHOR.match(f.anchor)
     if f.outcome:
@@ -246,7 +288,7 @@ def check(f: Finding, ents: list[Entry], keep: set[int], evidence: Evidence | No
     if f.action == "none":
         return "no action given"
     by_e, by_c = _by_anchor(ents)
-    want_claim = f.action in ("replace", "drop")
+    want_claim = f.action in ("replace", "drop")  # an add names its entry
     if want_claim and f.anchor not in by_c:
         return f"{f.anchor} is not a claim of an added entry"
     if not want_claim and f.anchor not in by_e:
@@ -255,6 +297,8 @@ def check(f: Finding, ents: list[Entry], keep: set[int], evidence: Evidence | No
         return "the finding names no exhibit and page"
     if f.action == "replace":
         return grounded_text(f, keep)
+    if f.action == "add":
+        return _add_ok(f, by_e[f.anchor], keep, headings or set(), shown or {})
     if f.action == "redate":
         if not _valid_mdy(f.corrected):
             return "the corrected date is not MM/DD/YYYY"
@@ -298,12 +342,18 @@ def _redate_diag(pre: str, old: str, new: str, cites: set[tuple[int, int]]) -> s
 
 
 def apply(
-    md: str, findings: list[Finding], keep: set[int], headings: set[str], evidence: Evidence | None = None
+    md: str,
+    findings: list[Finding],
+    keep: set[int],
+    headings: set[str],
+    evidence: Evidence | None = None,
+    shown: dict[str, list[tuple[int, int]]] | None = None,
 ) -> tuple[str, set[int]]:
     """Apply every grounded finding to the audit document. MUST findings are
     applied; SHOULD findings only as a ``replace`` or ``redate`` (confined to
     one entry). A redate applies only when the cited page's text states the
-    date (`evidence`); without page text it is not applied. Returns the new
+    date (`evidence`); without page text it is not applied. An add applies
+    only on a page `shown` to the review for that entry. Returns the new
     document and the 0-based indexes, in the new order, of the entries it
     edited (a dropped entry names its neighbours). Each finding's ``outcome``
     is set: "applied" or why not."""
@@ -313,7 +363,7 @@ def apply(
     dropped: set[str] = set()
     redates: list[tuple[str, str, set[tuple[int, int]]]] = []
     for f in findings:
-        why = check(f, ents, keep, evidence)
+        why = check(f, ents, keep, evidence, headings, shown)
         if not why and f.severity == SHOULD and f.action not in ("replace", "redate"):
             why = "a SHOULD finding is applied only as a replace or redate; recorded"
         if why:
@@ -330,6 +380,8 @@ def apply(
             else:
                 texts[e.anchor] = _drop_claim(texts[e.anchor], c, headings)
                 f.removed = sorted(numbers(c.text))
+        elif f.action == "add":
+            texts[f.anchor] = _add(texts[f.anchor], f.corrected, headings)
         elif f.action == "redate":
             # Every value of the entry moves to the corrected date: named, so
             # proof 10 does not read the move as a loss on the old date.
