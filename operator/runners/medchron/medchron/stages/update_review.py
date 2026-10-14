@@ -325,7 +325,7 @@ def finish(c: Ctx, md: str, found: list[RR.Finding], base: list[str], doc: Path)
     ents = RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg))
     edits, left = _finish_calls(c, todo, ents, base)
     new_md, edited = _apply(c, md, edits, base)
-    bad = FN.failed(edits, c.verify(md, new_md)) if new_md != md else []
+    bad, untraced = FN.failed(edits, c.verify(md, new_md)) if new_md != md else ([], 0)
     if bad:
         ids = {id(e) for e in bad}
         for e in edits:
@@ -337,7 +337,8 @@ def finish(c: Ctx, md: str, found: list[RR.Finding], base: list[str], doc: Path)
     settled = FN.settle(todo, edits, left)
     _mark_refiled(c.sr, FN.refiled(edits, ents, base, new_md, {int(r["exhibit"]) for r in _new_records(c.sr)}))
     c.sr.log(
-        f"  finisher: {len(edits)} edit(s), {sum(e.outcome == 'applied' for e in edits)} applied, {len(bad)} reverted"
+        f"  finisher: {len(edits)} edit(s), {sum(e.outcome == 'applied' for e in edits)} applied, {len(bad)} reverted; "
+        f"{untraced} unsupported sentence(s) no edit wrote, left to the audit loop"
     )
     if new_md == md:
         doc.write_text(md, encoding="utf-8")
