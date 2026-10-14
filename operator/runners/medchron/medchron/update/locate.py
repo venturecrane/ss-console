@@ -31,15 +31,26 @@ def vendor_name(row: dict[str, Any]) -> str:
 
 
 def name_pattern(template: str, client: str) -> re.Pattern[str]:
-    """The template as a pattern: {CLIENT} the client's name, {MM-DD-YY} a date."""
-    rx = re.escape(template).replace(re.escape("{CLIENT}"), re.escape(client))
-    rx = rx.replace(re.escape("{MM-DD-YY}"), r"(\d{2})-(\d{2})-(\d{2})")
+    """The template as a pattern: {CLIENT} the client's name, {MM-DD-YY} a
+    date, and an optional " (k)" before the extension: a same-day update files
+    its chronology VERSIONED rather than over a file of the same name
+    (``stages/update_upload.versioned``), and the next update must find it."""
+    stem, dot, ext = template.rpartition(".")
+    if not dot or "{" in ext:
+        stem, ext = template, ""
+
+    def esc(t: str) -> str:
+        r = re.escape(t).replace(re.escape("{CLIENT}"), re.escape(client))
+        return r.replace(re.escape("{MM-DD-YY}"), r"(\d{2})-(\d{2})-(\d{2})")
+
+    rx = esc(stem) + r"(?: \((\d+)\))?" + (re.escape("." + ext) if ext else "")
     return re.compile("^" + rx + "$", re.I)
 
 
 def _stamp(m: re.Match[str]) -> str:
-    mm, dd, yy = m.groups()
-    return f"{yy}{mm}{dd}"
+    """Date, then version: a versioned file of a date is the newer one."""
+    mm, dd, yy = m.groups()[:3]
+    return f"{yy}{mm}{dd}.{int(m.group(4) or 1):04d}"
 
 
 def _pick(cands: list[tuple[dict[str, Any], re.Match[str]]], file_id: str | None) -> dict[str, Any]:
@@ -58,7 +69,8 @@ def _pick(cands: list[tuple[dict[str, Any], re.Match[str]]], file_id: str | None
     top = [d for d, m in cands if _stamp(m) == newest]
     if len(top) > 1:
         raise LocateHold(
-            f"{len(top)} chronology documents for this client carry the newest date; name the one to update by id"
+            f"{len(top)} chronology documents for this client carry the newest date and version; "
+            "name the one to update by id"
         )
     return top[0]
 

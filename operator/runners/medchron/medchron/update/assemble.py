@@ -8,7 +8,8 @@ Output, in build_doc's shape:
 
 * every delivered entry byte-identical, in its delivered order, each new entry
   placed after the last delivered entry dated on or before it;
-* the delivered preamble minus the omission note, its Prior Medical History
+* the delivered preamble, its note that pre-incident encounters were not
+  itemized carried verbatim (unless the new entries itemize them), its Prior Medical History
   block replaced by the audited rewrite when the update made one;
 * the Treatment Timeline computed from the whole entry set (build_doc's
   arithmetic; a delivered row that disagreed with its own entries is reported
@@ -21,7 +22,7 @@ Output, in build_doc's shape:
 * the delivered Records Reviewed section plus the update's own paragraph.
 
 Refuses (ValueError) when a delivered entry is not carried verbatim or in its
-delivered order, the omission note survives, or a new citation names an
+delivered order, the pre-incident note is not carried as it must be, or a new citation names an
 exhibit that is neither delivered nor new.
 """
 
@@ -228,26 +229,77 @@ def exhibit_titles_for(
     return retitled, uncited
 
 
-def _check_carried(md: str, base_ents: list[str]) -> list[str]:
+def _notes(text: str) -> list[str]:
+    return [m.group(0).strip() for m in B.PRE_NOTE.finditer(text or "")]
+
+
+def _check_carried(md: str, base_ents: list[str], want_notes: list[str]) -> list[str]:
     _, out_ents = B.entries_of(md)
     oc = Counter(out_ents)
     lost = [e[:60] for e, n in Counter(base_ents).items() if oc[e] < n]
     if lost:
         raise ValueError(f"REFUSED: {len(lost)} delivered entr(y/ies) not carried verbatim: {lost[:3]}")
-    if B.PRE_NOTE.search(md):
-        raise ValueError("REFUSED: the omission note survived")
+    if _notes(md) != want_notes:
+        raise ValueError(
+            f"REFUSED: the pre-incident note is not as it must be ({len(_notes(md))} in the update, "
+            f"{len(want_notes)} required)"
+        )
     base = Counter(base_ents)
     if [e for e in out_ents if e in base] != base_ents:
         raise ValueError("REFUSED: delivered entries are not in their delivered order")
     return out_ents
 
 
-def _preamble(pre: str, audit_pre: str) -> tuple[str, bool]:
+_ISO_SPAN = re.compile(r"(\d{4}-\d{2}-\d{2})\s+(?:to|-|through)\s+(\d{4}-\d{2}-\d{2})")
+_MDY_SPAN = re.compile(r"(\d{2})/(\d{2})/(\d{4})\s+(?:to|-|through)\s+(\d{2})/(\d{2})/(\d{4})")
+
+
+def note_span(note: str) -> tuple[int, str, str] | None:
+    """(N, first iso, last iso) the note states, or None when it states no span
+    this can read (then nothing is taken as itemized)."""
+    n = re.search(r"\[NTD: (\d+) additional", note)
+    m = _ISO_SPAN.search(note)
+    if n and m:
+        return int(n.group(1)), m.group(1), m.group(2)
+    m = _MDY_SPAN.search(note)
+    if n and m:
+        g = m.groups()
+        return int(n.group(1)), f"{g[2]}-{g[0]}-{g[1]}", f"{g[5]}-{g[3]}-{g[4]}"
+    return None
+
+
+def itemizes(note: str, new_ents: list[str]) -> bool:
+    """True only when the update's OWN new entries itemize what the note
+    says was not: at least N new entries dated inside the span it states.
+    An update reads new documents (pages already read in a delivered exhibit
+    are not read again), so this is rare; anything less keeps the note."""
+    span = note_span(note)
+    if span is None:
+        return False
+    n, a, b = span
+    return sum(1 for e in new_ents if a <= B.iso(e) <= b) >= n
+
+
+def _preamble(pre: str, audit_pre: str, new_ents: list[str]) -> tuple[str, bool, list[str], list[str]]:
+    """(preamble, PMH replaced, notes carried, notes the update itemized).
+
+    The delivered note that pre-incident encounters were reviewed and not
+    itemized is CARRIED verbatim, after the Prior Medical History block where
+    build_doc puts it, unless the update's own entries itemize those
+    encounters. Deleting it would leave the firm's document silent on
+    encounters it no longer lists."""
+    notes = _notes(pre)
+    gone = [n for n in notes if itemizes(n, new_ents)]
+    keep = [n for n in notes if n not in gone]
     pre = B.PRE_NOTE.sub("", pre)
-    if not B.PMH_HEAD.search(audit_pre or ""):
-        return pre, False
-    m = B.PMH_HEAD.search(pre)
-    return (pre[: m.start()] if m else pre) + audit_pre.strip("\n") + "\n", True
+    audit_pre = B.PRE_NOTE.sub("", audit_pre or "")
+    replaced = bool(B.PMH_HEAD.search(audit_pre))
+    if replaced:
+        m = B.PMH_HEAD.search(pre)
+        pre = (pre[: m.start()] if m else pre) + audit_pre.strip("\n") + "\n"
+    if keep:
+        pre = pre.rstrip("\n") + ("\n\n" if pre.strip() else "") + "\n\n".join(keep) + "\n"
+    return pre, replaced, keep, gone
 
 
 def assemble(
@@ -278,7 +330,7 @@ def assemble(
         entries,
         describe,
     )
-    pre, pmh_replaced = _preamble(pre, audit_pre)
+    pre, pmh_replaced, notes_kept, notes_itemized = _preamble(pre, audit_pre, new_ents)
     body = (pre.rstrip("\n") + "\n\n" if pre.strip() else "\n") + "\n\n".join(entries) + "\n\n"
     final_rows = provider_rows(entries, canon, name_of)
     retitled, uncited = exhibit_titles_for(new_exhibits, new_ents, name_of)
@@ -307,7 +359,7 @@ def assemble(
         + ex_sec
         + (B.SECTIONS[4] + rr if rr is not None else "")
     )
-    out_ents = _check_carried(md, base_ents)
+    out_ents = _check_carried(md, base_ents, notes_kept)
     return md, {
         "delivered_entries": len(base_ents),
         "new_entries": len(new_ents),
@@ -316,7 +368,8 @@ def assemble(
         "timeline_changes": lane_diff(delivered_rows[1:], final_rows),
         "lanes_named_for_heading_slots": name_log,
         "icd_rows_added_or_moved": changed,
-        "pre_note_removed": bool(B.PRE_NOTE.search(b["## Medical Chronology"])),
+        "pre_note_carried": len(notes_kept),
+        "pre_note_itemized": bool(notes_itemized),
         "prior_medical_history_replaced": pmh_replaced,
         "new_exhibits_titled": {str(k): v for k, v in retitled.items()},
         "new_exhibits_uncited": uncited,

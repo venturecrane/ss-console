@@ -14,11 +14,18 @@ text. Only zero differences is a base. The one section left out of the
 comparison is the Treatment Timeline: its pictures and gap bars are computed
 from the entries on every render, and an update recomputes them by design.
 
-A chronology some other renderer produced (the laptop pipeline's, or a hand
-edit by the firm) will usually fail this proof, and then the update holds: an
-update that cannot reproduce the delivered document cannot promise to carry
-it byte-identical, and silently reshaping a filed litigation document is the
-failure this module exists to prevent.
+A chronology some other renderer produced (the laptop pipeline's) will
+usually fail that exact proof on style or bold runs alone: the words are the
+firm's document, the formatting is another program's. Then `prove_text` is
+the proof: the markdown is rebuilt WITHOUT bold markup (`docx_to_md(...,
+plain=True)`; a foreign bold run is not the seat's emphasis) and the seat's
+rendering of it must read the same as the delivered document paragraph by
+paragraph: section and whitespace-collapsed text, table cells included, empty
+paragraphs and the Treatment Timeline left out. Entries are then carried as
+TEXT (the update records ``renderer: "foreign"``). A document whose WORDS the
+markdown does not reproduce (a hand edit by the firm, a paragraph added) fails
+both proofs and the update holds: silently reshaping a filed litigation
+document is the failure this module exists to prevent.
 """
 
 from __future__ import annotations
@@ -98,9 +105,19 @@ def summary_lines(docx_path: Path) -> list[str]:
     return [t for sec, _st, _b, t in structure(docx_path) if sec == SUMMARY and t and t != "4. Medical Summary"]
 
 
-def _runs_md(p: Any) -> str:
+def text_rows(docx_path: Path) -> list[tuple[str, str]]:
+    """(section, text) for every NON-EMPTY paragraph a reader sees, table
+    cells included, Treatment Timeline left out: what `prove_text` compares.
+    Style and bold runs are a renderer's; the words are the document."""
+    return [(sec, t) for sec, _st, _b, t in structure(docx_path) if t]
+
+
+def _runs_md(p: Any, plain: bool = False) -> str:
     """Paragraph text with bold runs as **...**, adjacent same-weight runs
-    joined first (the renderer emits one run per span)."""
+    joined first (the renderer emits one run per span). `plain`: the text
+    alone, for a document another renderer bolded its own way."""
+    if plain:
+        return "".join(r.text for r in p.runs if r.text)
     spans: list[list[Any]] = []
     for r in p.runs:
         if not r.text:
@@ -150,8 +167,9 @@ def _preamble_md(paras: list[tuple[str, str]]) -> list[str]:
     return [b.rstrip("\x00") for b in blocks]
 
 
-def docx_to_md(docx_path: Path, subsections: set[str]) -> str:
-    """Rebuild build_doc's markdown from a chronology the seat renderer made."""
+def docx_to_md(docx_path: Path, subsections: set[str], plain: bool = False) -> str:
+    """Rebuild build_doc's markdown from a chronology the seat renderer made
+    (or, `plain`, from one another renderer made: no bold markup)."""
     import docx
 
     d = docx.Document(str(docx_path))
@@ -165,9 +183,9 @@ def docx_to_md(docx_path: Path, subsections: set[str]) -> str:
             elif _section_of(x) is not None:
                 sec = _section_of(x)
             elif sec == LIMITS and x.text.strip():
-                limits.append(("* " if st == "List Bullet" else "") + _runs_md(x))
+                limits.append(("* " if st == "List Bullet" else "") + _runs_md(x, plain))
             elif sec == SUMMARY and x.text.strip():
-                pre.append((st, _runs_md(x)))
+                pre.append((st, _runs_md(x, plain)))
             continue
         if sec == "Past Treatment History":
             prov = _table_md(x)
@@ -208,4 +226,17 @@ def prove(md_text: str, delivered: Path, render: Callable[[str, Path], int], wor
     if render(md_text, out) != 0 or not out.is_file():
         return {"rows": 0, "diffs": [(0, "render", "the renderer refused the rebuilt markdown")], "rendered": None}
     a, b = structure(delivered), structure(out)
+    return {"rows": len(a), "diffs": diff(a, b), "rendered": out}
+
+
+def prove_text(md_text: str, delivered: Path, render: Callable[[str, Path], int], workdir: Path | None = None) -> dict:
+    """`prove` on the words only: {'rows', 'diffs', 'rendered'}, a diff being
+    a (section, collapsed text) paragraph the delivered document and the
+    seat's rendering of `md_text` do not share in the same position."""
+    wd = Path(workdir or tempfile.mkdtemp(prefix="update-prove-text-"))
+    wd.mkdir(parents=True, exist_ok=True)
+    out = wd / "rendered.docx"
+    if render(md_text, out) != 0 or not out.is_file():
+        return {"rows": 0, "diffs": [(0, "render", "the renderer refused the rebuilt markdown")], "rendered": None}
+    a, b = text_rows(delivered), text_rows(out)
     return {"rows": len(a), "diffs": diff(a, b), "rendered": out}

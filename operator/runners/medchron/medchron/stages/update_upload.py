@@ -10,8 +10,10 @@ chronology at all:
    delivered document BY ID (a firm that moved or replaced it since is the
    firm's decision; the update holds rather than act on a stale plan);
 2. a file in that folder carrying a name this update would send, and that
-   this run did not send, refuses: a name collision is never resolved by
-   writing over a file that is not ours;
+   this run did not send (a same-day update's chronology name is the
+   delivered document's own), is never written over: the new file is
+   VERSIONED, "<name> (2)<ext>", and the manifest rewritten before any send so
+   a resume keeps that name;
 3. the updated document and the new exhibits go up through the ordinary
    upload machinery (intent rows written through, never sent twice, the
    listing read back at size, then every file downloaded by id and hashed);
@@ -56,6 +58,46 @@ def _collisions(rows: list[dict[str, Any]], manifest: list[dict[str, Any]], ours
     """Manifest names already in the folder that this run did not send."""
     want = {m["name"] for m in manifest}
     return sorted(n for n in (_vendor_name(r) for r in rows) if n in want and n not in ours)
+
+
+def versioned(name: str, taken: set[str]) -> str:
+    """`name` with the first " (k)" (k >= 2) before its extension that no file
+    in `taken` carries: "X 10-13-26.docx" -> "X 10-13-26 (2).docx"."""
+    stem, dot, ext = name.rpartition(".")
+    if not dot:
+        stem, ext = name, ""
+    k = 2
+    while True:
+        cand = f"{stem} ({k})" + (f".{ext}" if ext else "")
+        if cand.lower() not in {t.lower() for t in taken}:
+            return cand
+        k += 1
+
+
+def _version_clashes(
+    sr: StageRun, out: Path, rows: list[dict[str, Any]], manifest: list[dict[str, Any]], ours: set[str]
+) -> list[dict[str, Any]]:
+    """A manifest name a file in the folder already carries, and that this run
+    did not send (a same-day update's chronology name equals the delivered
+    one's; the firm may have filed a file of that name), is VERSIONED: the new
+    file goes up as "<name> (2)<ext>" and nothing in the folder is written
+    over or renamed. The manifest is rewritten before anything is sent, so a
+    resume sends under the same name and never versions twice."""
+    clash = set(_collisions(rows, manifest, ours))
+    if not clash:
+        return manifest
+    taken = {_vendor_name(r) for r in rows} | {m["name"] for m in manifest}
+    for m in manifest:
+        if m["name"] in clash:
+            new = versioned(m["name"], taken)
+            sr.log(
+                f"the chronology folder already holds a file named {m['name']} that this update did not send; filing as {new}"
+            )
+            m.setdefault("intended_name", m["name"])
+            m["name"] = new
+            taken.add(new)
+    (out / "upload_manifest.json").write_text(json.dumps(manifest, indent=1), encoding="utf-8")
+    return manifest
 
 
 def _readback(
@@ -128,10 +170,7 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
         sr.log(f"update_held: the delivered chronology (id {old['id']}) is no longer in its folder; nothing was filed")
         return 2
     ours = {str(f.get("name")) for f in delivery["files"] if f.get("sent") or f.get("pending") or f.get("confirmed")}
-    clash = _collisions(rows, manifest, ours)
-    if clash:
-        sr.log(f"the chronology folder already holds file(s) named {clash} that this update did not send; refusing")
-        return 1
+    manifest = _version_clashes(sr, out, rows, manifest, ours)
     dpath.parent.mkdir(parents=True, exist_ok=True)
     dpath.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
     present = _files_in(seat, matter_id, folder_id)

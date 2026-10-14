@@ -107,13 +107,45 @@ def test_bytes_the_matter_does_not_hold_stop_the_filing_before_any_delete(
     assert seat.deleted == [] and any(ln.startswith("readback_mismatch:") for ln in log)
 
 
-def test_a_name_in_the_folder_that_is_not_ours_refuses_and_sends_nothing(
+def test_a_name_in_the_folder_that_is_not_ours_is_versioned_never_written_over(
     job_dir: Path, firm_config_path: Path, data_root: Path
 ) -> None:
-    sr, seat = _scene(job_dir, firm_config_path, data_root, [])
+    """Before: a same-day name collision FAILED the job (and a failed job
+    emails nobody). Now the new file goes up as "<name> (2)", the firm's file
+    of that name is untouched, and a resume keeps the versioned name."""
+    log: list[str] = []
+    sr, seat = _scene(job_dir, firm_config_path, data_root, log)
     seat.docs.append(doc_row("z1", NEW, FOLDER, 3))  # a same-day chronology the firm filed
-    assert update_upload.run(sr, pause=0, tries=2) == 1
-    assert seat.sent == [] and seat.deleted == []
+    seat.docs.append(doc_row("z2", NEW.replace(".docx", " (2).docx"), FOLDER, 3))  # and its own second copy
+    assert update_upload.run(sr, pause=0, tries=2) == 0, log
+    versioned = NEW.replace(".docx", " (3).docx")
+    assert [s["name"] for s in seat.sent] == [versioned, EX2]
+    assert seat.deleted == ["c1"]  # the delivered document only; never z1 or z2
+    manifest = json.loads((sr.slug_dir / "out" / "alpha" / "upload_manifest.json").read_text())
+    assert manifest[0]["name"] == versioned and manifest[0]["intended_name"] == NEW
+    rec = json.loads((sr.slug_dir / "runs" / "alpha" / "delivery.json").read_text())
+    assert all(f["proven"] for f in rec["files"]) and {f["name"] for f in rec["files"]} == {versioned, EX2}
+    assert update_upload.run(sr, pause=0, tries=2) == 0 and len(seat.sent) == 2 and seat.deleted == ["c1"]
+
+
+def test_a_same_day_update_whose_name_is_the_delivered_documents_own_is_versioned(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    log: list[str] = []
+    sr, seat = _scene(job_dir, firm_config_path, data_root, log)
+    seat.docs[0]["name"] = NEW.removesuffix(".docx")  # delivered today, under today's name
+    plan_path = sr.slug_dir / "runs" / "alpha" / "update" / "update_plan.json"
+    plan = json.loads(plan_path.read_text())
+    plan["chronology"]["name"] = NEW
+    plan_path.write_text(json.dumps(plan))
+    assert update_upload.run(sr, pause=0, tries=2) == 0, log
+    assert seat.sent[0]["name"] == NEW.replace(".docx", " (2).docx") and seat.deleted == ["c1"]
+
+
+def test_versioned_picks_the_first_free_number() -> None:
+    assert update_upload.versioned("A 10-13-26.docx", {"A 10-13-26.docx"}) == "A 10-13-26 (2).docx"
+    assert update_upload.versioned("A.docx", {"a (2).DOCX"}) == "A (3).docx"
+    assert update_upload.versioned("noext", set()) == "noext (2)"
 
 
 def test_a_delivered_document_moved_since_the_plan_holds(
