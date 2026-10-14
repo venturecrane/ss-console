@@ -119,6 +119,63 @@ def keep_decision(e: str, base_ents: list[str], canon: Canon) -> tuple[str, str 
     return ("keep: additional findings", row) if row else ("keep", e)
 
 
+_DRAW_TIME = re.compile(r"\b(\d{1,2}:\d{2})\b")
+_ACCESSION = re.compile(
+    r"(?i)\b(?:accession|acc|specimen(?:\s*id)?)\s*(?:no\.?|number|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9-]{4,})"
+)
+_PANEL = re.compile(
+    r"(?i)\b(cbc|complete blood count|cmp|comprehensive metabolic panel|bmp|basic metabolic panel|lipid panel|"
+    r"urinalysis|hemoglobin a1c|a1c|tsh|hepatic function panel|coagulation panel|pt/inr)\b"
+)
+SAME_DRAW = "merged: one lab draw entered from two new documents"
+
+
+def _draw(e: str) -> tuple[frozenset[str], frozenset[str]] | None:
+    """(draw time or accession marks, panels) of a lab entry, or None."""
+    body = "\n".join(e.splitlines()[2:])
+    panels = frozenset(p.lower() for p in _PANEL.findall(body))
+    marks = frozenset(_DRAW_TIME.findall(body)) | frozenset(a.upper() for a in _ACCESSION.findall(body))
+    return (marks, panels) if panels and marks else None
+
+
+def merge_draws(kept: list[str]) -> tuple[list[str], int]:
+    """New entries with one lab draw entered twice (the same date, the same
+    draw time or accession, the same panels: two documents carrying one
+    report) become one entry: the longer one, plus each sentence of the other
+    stating a value it lacks, plus a line citing the other document, so no
+    value is lost and both sources are cited."""
+    out = list(kept)
+    merged = 0
+    i = 0
+    while i < len(out):
+        j, joined = None, ""
+        for k in range(i + 1, len(out)):
+            joined = _merge_one(out[i], out[k])
+            if joined:
+                j = k
+                break
+        if j is None:
+            i += 1
+            continue
+        out[i] = joined
+        del out[j]
+        merged += 1
+    return out, merged
+
+
+def _merge_one(a: str, b: str) -> str:
+    """The two entries as one when they carry one lab draw and nothing is
+    lost by joining them, else ''."""
+    da, db = _draw(a), _draw(b)
+    if not (da and db and B.iso(a) == B.iso(b) and da[1] == db[1] and da[0] & db[0]):
+        return ""
+    big, small = (a, b) if len(a) >= len(b) else (b, a)
+    extra = [f"{s} {c}" for s, c in _sentences(small) if numbers(s) - numbers(big)]
+    cites = sorted({m.group(0) for m in B.CITE.finditer(small)} - {m.group(0) for m in B.CITE.finditer(big)})
+    joined = "\n".join([big, *extra, *[f"The same results are reported in {c}." for c in cites[:1]]])
+    return "" if numbers(small) - numbers(joined) else joined
+
+
 def _covered(e: str, by: str) -> bool:
     if _plain(e):
         return _restates(e, by)

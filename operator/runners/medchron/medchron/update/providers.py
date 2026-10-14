@@ -13,6 +13,7 @@ initial and credential, so the pre-delivery review can settle it.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from . import body as B
@@ -41,6 +42,57 @@ def _qualifies(new: str, old: str) -> bool:
     if len(n) < MIN_LEN or len(o) < MIN_LEN or nc != oc:
         return False
     return n.split()[0][:1] == o.split()[0][:1] and edits(n, o) <= MAX_EDITS
+
+
+#: The audited claim a near provider name becomes: the auditor reads the name
+#: off the cited page image, and a repair writes the spelling the page shows.
+CLAIM = re.compile(r"^Provider named on the record: (.+?)\. \((Exhibit \d+(?: - p\. [0-9,\s\-]+)?)\)\s*$")
+
+
+def claims(entries: list[str], log: list[dict[str, Any]]) -> tuple[list[str], dict[str, str]]:
+    """(claim lines, {citation: composed name}) for each flagged name the
+    safe rule marks likely the same person as a delivered one: its spelling
+    is settled by the audit against the page, never by edit distance."""
+    lines: list[str] = []
+    composed: dict[str, str] = {}
+    for row in log:
+        if not row.get("likely_same_person"):
+            continue
+        name = row["composed"]
+        cite = next((m.group(0) for e in entries if B.provider_of(e) == name for m in B.CITE.finditer(e)), None)
+        if cite is None or cite[1:-1] in composed:
+            continue
+        lines.append(f"Provider named on the record: {name}. {cite}")
+        composed[cite[1:-1]] = name
+    return lines, composed
+
+
+def split_claims(pre: str) -> tuple[str, list[tuple[str, str]]]:
+    """(the preamble without provider claims, [(audited name, ref)])."""
+    keep: list[str] = []
+    got: list[tuple[str, str]] = []
+    for para in re.split(r"\n\s*\n", pre or ""):
+        m = CLAIM.match(para.strip())
+        if m:
+            got.append((m.group(1).strip(), m.group(2)))
+        elif para.strip():
+            keep.append(para.strip("\n"))
+    return "\n\n".join(keep), got
+
+
+def respell(entries: list[str], audited: list[tuple[str, str]], composed: dict[str, str]) -> tuple[list[str], dict]:
+    """New entries with each audited spelling applied where the audit changed
+    the composed one; {composed: confirmed} of what changed."""
+    change = {composed[ref]: name for name, ref in audited if ref in composed and composed[ref] != name}
+    out = []
+    for e in entries:
+        p = B.provider_of(e)
+        if p in change:
+            lines = e.splitlines()
+            lines[1] = change[p] + lines[1][len(lines[1].split("|")[0].rstrip()) :]
+            e = "\n".join(lines)
+        out.append(e)
+    return out, change
 
 
 def snap(entries: list[str], base_ents: list[str]) -> tuple[list[str], list[dict[str, Any]]]:

@@ -29,24 +29,43 @@ from ..audit import claims as CL, coverage as audit_coverage
 from ..audit.page_text import exhibit_paths
 from ..audit.run import AuditPaths
 from ..update import assemble as A, body as B, collect as C, docx_md, proofs as P
-from ..update.select import BLANK
+from ..update.select import ALREADY, BLANK, OVERLAP
 from .base import StageRefusal, StageRun, read_json
 from .group import Canon
 from .render import chronology_name, render_text
 from .update_base import headings, plan, update_dir
 
 
+def _pages(n: int) -> str:
+    return f"{n:,} page" + ("" if n == 1 else "s")
+
+
+def page_counts(r: dict[str, Any]) -> dict[str, int]:
+    """What happened to a new document's pages, counted, never concluded."""
+    ex = r.get("excluded") or {}
+    return {
+        "read": len(r.get("read") or []),
+        "repeat": int(ex.get(ALREADY, 0)) + int(ex.get(OVERLAP, 0)),
+        "blank": int(ex.get(BLANK, 0)),
+        "unread": len(r.get("unread") or []),
+    }
+
+
 def uncited_name(r: dict[str, Any]) -> str:
     """An uncited new document as the Records Reviewed note names it: its
-    file name and page count, and "cover sheet only" when no page of it was
-    read and at most one page carried text."""
-    n = int(r.get("pages") or 0)
-    blank = int((r.get("excluded") or {}).get(BLANK, 0))
+    file name and what was done with its pages. Only what was read is
+    stated: an 834-page file was once said to "record no visit" while 64 of
+    its image pages had never been read (2026-10-13)."""
+    c = page_counts(r)
+    parts = [f"{_pages(c['read'])} read"]
+    if c["repeat"]:
+        parts.append(f"{c['repeat']:,} repeating page{'' if c['repeat'] == 1 else 's'} already read")
+    if c["blank"]:
+        parts.append(f"{_pages(c['blank'])} with no text")
+    if c["unread"]:
+        parts.append(f"{_pages(c['unread'])} not transcribed")
     name = str(r.get("source_name") or r.get("title") or "a document")
-    what = f"{n} page" + ("" if n == 1 else "s")
-    if not r.get("read") and blank >= n - 1:
-        what += ", cover sheet only"
-    return f"{name} ({what})"
+    return f"{name} ({_pages(int(r.get('pages') or 0))}: {', '.join(parts)})"
 
 
 def update_note(sr: StageRun, ud: Path) -> Any:
@@ -59,22 +78,20 @@ def update_note(sr: StageRun, ud: Path) -> Any:
         today = time.strftime("%m/%d/%Y")
         docs = len(keep) + len(uncited)
         pages = sum(int(r["pages"]) for r in keep + uncited)
-        repeat = sum(
-            int((r.get("excluded") or {}).get("already read in a delivered exhibit", 0)) for r in keep + uncited
-        )
+        c = {k: sum(page_counts(r)[k] for r in keep + uncited) for k in ("read", "repeat", "blank")}
         names = "; ".join(f"Exhibit {n} - {t}" for n, t in sorted(retitled.items()))
         out = (
             f"Update of {today}: {docs} medical record document(s) filed on the matter after the earlier delivery "
-            f"were reviewed ({pages:,} pages). Visits they record that this chronology did not already list were "
-            f"added, before and after the incident, and they are cited as {names}."
+            f"({_pages(pages)}) were reviewed: {_pages(c['read'])} were read. Visits they record that this "
+            f"chronology did not already list were added, before and after the incident, and they are cited as "
+            f"{names}."
         )
-        if repeat:
-            out += f" {repeat:,} of their pages repeat a record already cited here and were not read again."
+        if c["repeat"]:
+            out += f" {_pages(c['repeat'])} repeat pages already read and were not read again."
+        if c["blank"]:
+            out += f" {_pages(c['blank'])} carry no text."
         if uncited:
-            out += (
-                f" {len(uncited)} of those documents record no visit this chronology did not already list, so none "
-                f"is cited: {'; '.join(uncited_name(r) for r in uncited)}."
-            )
+            out += f" {len(uncited)} of those documents are not cited: {'; '.join(uncited_name(r) for r in uncited)}."
         same = len((sel.get("skipped") or {}).get("byte-identical to a delivered exhibit") or [])
         if same:
             out += f" {same} document(s) were identical to an exhibit already delivered."
@@ -103,6 +120,7 @@ def run_assemble(sr: StageRun) -> int:
             new_exhibits=keep,
             update_note=update_note(sr, ud),
             folder=plan(sr).get("exhibits") or [],
+            provider_names=read_json(ud / "provider_claims.json", {}).get("composed") or {},
         )
     except ValueError as exc:
         raise StageRefusal(str(exc)) from exc

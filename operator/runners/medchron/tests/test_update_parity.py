@@ -248,13 +248,20 @@ def test_the_audit_of_a_handwritten_page_is_given_the_providers_typed_statements
 
 
 # ---- change 7: Records Reviewed names every uncited new file ------------------------------
-def test_records_reviewed_names_each_uncited_file_with_its_pages_and_a_cover_sheet() -> None:
+def test_records_reviewed_names_each_uncited_file_with_what_was_done_to_its_pages() -> None:
+    """Change 7, as review fix 19 states it: counts of pages read, repeating,
+    without text and not transcribed; never a conclusion ("cover sheet")."""
     from medchron.stages.update_finish import uncited_name
 
     cover = {"source_name": "Records request.pdf", "pages": 1, "read": [], "excluded": {"no text on the page": 1}}
-    repeat = {"source_name": "Refiled clinic notes.pdf", "pages": 9, "read": [], "excluded": {"already": 9}}
-    assert uncited_name(cover) == "Records request.pdf (1 page, cover sheet only)"
-    assert uncited_name(repeat) == "Refiled clinic notes.pdf (9 pages)"
+    repeat = {
+        "source_name": "Refiled clinic notes.pdf",
+        "pages": 9,
+        "read": [],
+        "excluded": {"already read in a delivered exhibit": 9},
+    }
+    assert uncited_name(cover) == "Records request.pdf (1 page: 0 pages read, 1 page with no text)"
+    assert uncited_name(repeat) == "Refiled clinic notes.pdf (9 pages: 0 pages read, 9 repeating pages already read)"
 
 
 # ---- change 8: provider spelling and labels ---------------------------------------------

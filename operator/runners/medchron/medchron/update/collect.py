@@ -97,6 +97,9 @@ def collect(
         keep.append(kept)
         if verdict != "keep":
             rep[verdict] += 1
+    keep, draws = R.merge_draws(keep)
+    if draws:
+        rep[R.SAME_DRAW] += draws
     keep, twins = R.dedupe_new(keep, canon)
     if twins:
         rep[R.REPEAT_NEW] += twins

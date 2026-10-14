@@ -88,9 +88,30 @@ def widen_cite(old_cite: str, widened: list[int]) -> str:
 def replace_in(text: str, anchor: str, replacement: str) -> tuple[str, bool]:
     if anchor not in text:
         return text, False
-    if replacement == "" and anchor + "\n" in text:
-        return text.replace(anchor + "\n", "", 1), True
+    if replacement == "":
+        return remove_claim(text, anchor), True
     return text.replace(anchor, replacement, 1), True
+
+
+def remove_claim(text: str, anchor: str) -> str:
+    """`text` without the claim `anchor`, its sentence punctuation, and the
+    line or paragraph it leaves empty. Composed text ends a claim ")." and
+    the bare "." a plain removal left was proof 6's failure on a real update
+    (2026-10-13)."""
+    i = text.index(anchor)
+    j = i + len(anchor)
+    while j < len(text) and text[j] in ".;,":
+        j += 1
+    while j < len(text) and text[j] in " \t":
+        j += 1
+    start = text.rfind("\n", 0, i) + 1
+    if not text[start:i].strip() and (j == len(text) or text[j] == "\n"):
+        j = min(j + 1, len(text))  # the line is now empty: remove it whole
+        i = start
+    head, tail = text[:i], text[j:]
+    while head.endswith("\n\n") and tail.startswith("\n"):
+        tail = tail[1:]  # the paragraph it emptied leaves no extra blank line
+    return head + tail
 
 
 def problems_of(r: dict[str, Any]) -> list[str]:

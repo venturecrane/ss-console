@@ -456,4 +456,4 @@ def test_a_refiled_copy_of_a_new_record_is_not_read_twice_and_is_named_in_record
     assert sel["Imaging refax.pdf"]["read"] == []
     assert sel["Imaging refax.pdf"]["excluded"] == {"repeats an earlier page of the new documents": 2}
     upd = (ud / "updated-chronology.md").read_text()
-    assert "so none is cited: Imaging refax.pdf (2 pages)." in upd
+    assert "are not cited: Imaging refax.pdf (2 pages: 0 pages read, 2 repeating pages already read)." in upd

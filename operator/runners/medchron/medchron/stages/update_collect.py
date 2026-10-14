@@ -165,6 +165,9 @@ def run_collect(sr: StageRun) -> int:
     except icd_tables.TablesMissing as exc:
         sr.log(str(exc))
         return 1
+    names, composed = P.claims(entries, rep["provider_spelling"])  # a near name's spelling is audited
+    (ud / "provider_claims.json").write_text(json.dumps({"claims": names, "composed": composed}), encoding="utf-8")
+    claims = claims + names
     _rename(out, provisional, keep, uncited, ud)
     _page_map(out, keep, {r["exhibit"]: r["title"] for r in provisional})
     (ud / "new_exhibits.final.json").write_text(json.dumps(keep, indent=1), encoding="utf-8")
@@ -239,6 +242,7 @@ def run_summary(sr: StageRun) -> int:
     added = added_history_line(sr, keep) + "\n" + text.strip("\n")
     (ud / "pmh.md").write_text(added + "\n", encoding="utf-8")
     claims = read_json(ud / "icd_claims.json", {}).get("claims") or []
+    claims += read_json(ud / "provider_claims.json", {}).get("claims") or []
     doc = C.audit_document(base_md, new_ents, keep, added, icd_claims=claims, folder=plan(sr).get("exhibits") or [])
     (rd / "final-chronology.md").write_text(doc, encoding="utf-8")
     sr.log(f"prior history added from {len(added_pre)} pre-incident entr(y/ies), under the delivered one")

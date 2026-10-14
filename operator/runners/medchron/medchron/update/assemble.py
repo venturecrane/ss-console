@@ -36,7 +36,7 @@ import re
 from collections import Counter, defaultdict
 from typing import Any, Callable
 
-from . import body as B, icd
+from . import body as B, icd, providers as P
 
 TIMELINE_HEAD = "| Medical Provider | Treatment Period | Visits | Reference |"
 
@@ -283,14 +283,16 @@ def _sections_md(
     )
 
 
-def _split_audit_pre(audit_pre: str) -> tuple[str, list[tuple[str, str, str]]]:
+def _split_audit_pre(audit_pre: str) -> tuple[str, list[tuple[str, str, str]], list[tuple[str, str]]]:
     """(the dated prior-history paragraph or '', the audited diagnosis
-    claims). Anything else ahead of the first new entry refuses: the audit
-    document holds nothing else, and text this cannot place must not vanish."""
+    claims, the audited provider-name claims). Anything else ahead of the
+    first new entry refuses: the audit document holds nothing else, and text
+    this cannot place must not vanish."""
     rest, claims = icd.split_claims(B.PRE_NOTE.sub("", audit_pre or ""))
+    rest, names = P.split_claims(rest)
     if rest.strip() and not ADDED_HISTORY.search(rest):
         raise ValueError("REFUSED: the audit document carries text ahead of its entries that is not the added history")
-    return rest, claims
+    return rest, claims, names
 
 
 def assemble(
@@ -303,17 +305,20 @@ def assemble(
     new_exhibits: list[dict[str, Any]],
     update_note: Callable[[dict[int, str]], str] | None = None,
     folder: list[dict[str, Any]] | None = None,
+    provider_names: dict[str, str] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """(updated markdown, report). Raises ValueError on any refusal.
     `folder`: the chronology folder's numbered files (the update plan's
     exhibits), so a firm-numbered file the delivered list never named gets a
-    row and may be cited."""
+    row and may be cited. `provider_names`: {citation: composed name} of the
+    provider-name claims; the audited spelling replaces the composed one."""
     from .collect import folder_rows, with_rows
 
     b = B.sections(base_md)
     pre, base_ents = B.split_body(b["## Medical Chronology"])
     audit_pre, new_ents = B.entries_of(audit_md)
-    addition, icd_claims = _split_audit_pre(audit_pre)
+    addition, icd_claims, names = _split_audit_pre(audit_pre)
+    new_ents, spelled = P.respell(new_ents, names, provider_names or {})
     delivered_rows = B.table_rows(b["## Treatment Timeline"])
     name_of, name_log = lane_namer(headings, delivered_rows[1:], exhibit_providers(b["## Exhibit List"]))
     taken = {r["exhibit"] for r in new_exhibits}
@@ -345,6 +350,7 @@ def assemble(
         "lanes_named_for_heading_slots": name_log,
         "icd_rows_added_or_moved": changed,
         "icd_codes_not_legible": illegible,
+        "provider_spelling_from_audit": spelled,
         "pre_note_carried": len(notes_kept),
         "pre_note_itemized": bool(notes_itemized),
         "prior_history_added": added,
