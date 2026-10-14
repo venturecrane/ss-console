@@ -18,8 +18,8 @@ SUBSET_FRAC of its digit-stripped shingles and every date, every word and every
 clinical value it states (footer, fax and print lines aside). Two visits on one
 template differ in a date or a word and never match, and pages of one document
 are never compared with each other, so a run of template visits is never
-excluded (review fix 1). No image hash: the vision pass has transcribed every
-image page before this runs, so a page with no text is blank either way.
+excluded (review fix 1). A SCANNED extract is found by its pictures before
+the vision pass (``update/pageid``); this rule is the words-side signal.
 """
 
 from __future__ import annotations

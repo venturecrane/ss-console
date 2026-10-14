@@ -274,5 +274,8 @@ def run(sr: StageRun) -> int:
     if sr.job.update is not None:
         scans = [rec for rec in scans if first_page_only(rec)]
     (d / "scan_queue.json").write_text(json.dumps(scans, indent=1), encoding="utf-8")
+    # A new scan queue is never read against an older picture record: only an
+    # update's `update_pages`, which runs after this, writes the skip list.
+    (d / "vision_skip.json").unlink(missing_ok=True)
     sr.log(f"DONE {len(ok)} files, {len(scans)} to scan queue, {dupes} byte-duplicates skipped")
     return 0

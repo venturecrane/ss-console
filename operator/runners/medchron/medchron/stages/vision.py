@@ -15,6 +15,11 @@ handwritten. A date or vital read off handwriting is a reading: the typed
 statements of the same provider settle a date, and the audit re-reads the
 image for every value.
 
+An update writes ``vision_skip.json`` ({document id: [page, ...]}) before
+this runs (``stages/update_pages``): pages whose picture is a page already
+read. Each is recorded as SKIPPED without a request: a re-filed scan is never
+paid for twice.
+
 One change from the frozen script, the 2026-08-29 review's item 12: a file
 left incomplete (a batch still processing, a page that never returned) is an
 exit 1, not a printed line under "VISION DONE". The driver records the stage
@@ -30,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import llm
+from ..update.pageid import SKIPPED
 from .base import StageRun, append_jsonl, read_jsonl
 from .transcript import UNREAD, merge_pages, merged, recorded_ids, transcript_state
 
@@ -77,6 +83,23 @@ def load_partial(path: Path) -> dict[int, str]:
         except (KeyError, TypeError, ValueError):
             continue
     return done
+
+
+def load_skips(slug_dir: Path) -> dict[str, set[int]]:
+    """{document id: pages} the update lane found already read by their
+    picture (``stages/update_pages``); empty when no update wrote one."""
+    p = slug_dir / "vision_skip.json"
+    try:
+        raw = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, set[int]] = {}
+    for k, v in raw.items():
+        if isinstance(v, list):
+            out[str(k)] = {int(x) for x in v if isinstance(x, int) and not isinstance(x, bool)}
+    return out
 
 
 def render_page(page: Any, log, name: str, pno: int) -> str:
@@ -134,6 +157,7 @@ def _gather(
     files: dict[str, dict[str, Any]] = {}
     pending: list[tuple[dict[str, Any], int, str]] = []
     recorded = recorded_ids(d)
+    skips = load_skips(d)
     for rec in queue:
         only = [int(p) for p in rec.get("vision_pages") or []]
         if only:
@@ -151,6 +175,8 @@ def _gather(
             continue
         part_path = d / "partial" / f"{rec['id']}.jsonl"
         done = load_partial(part_path)
+        for pno in skips.get(rec["id"], ()):
+            done.setdefault(pno, SKIPPED)
         try:
             doc = pymupdf.open(path)
             npages = len(doc)
