@@ -100,11 +100,20 @@ def carry_forward(
         "text_of": text_of,
         "today": today,
     }
+    return _carry_top(prior, result, kw) + _carry_defendants(prior, result, kw) + _carry_discovery(prior, result, kw)
+
+
+def _carry_top(prior: dict[str, Any], result: dict[str, Any], kw: dict[str, Any]) -> list[str]:
     out: list[str] = []
     for k in ("complaint_filed", "next_court_date"):
         if k in result and _empty(result.get(k)) and _qualifies(prior.get(k), court=k == "next_court_date", **kw):
             result[k] = copy.deepcopy(prior[k])
             out.append(k)
+    return out
+
+
+def _carry_defendants(prior: dict[str, Any], result: dict[str, Any], kw: dict[str, Any]) -> list[str]:
+    out: list[str] = []
     olds = identity.merge_defendants(prior.get("defendants") or [])
     for d in result.get("defendants") or []:
         old = next((o for o in olds if identity.same_person(str(o.get("name") or ""), str(d.get("name") or ""))), None)
@@ -119,20 +128,30 @@ def carry_forward(
             if ok and _empty(d.get(f)) and _qualifies(old.get(f), **kw):
                 d[f] = copy.deepcopy(old[f])
                 out.append(f"defendants[{d.get('name')}].{f}")
+    return out
+
+
+def _carry_discovery(prior: dict[str, Any], result: dict[str, Any], kw: dict[str, Any]) -> list[str]:
+    out: list[str] = []
     for kind in DISCOVERY:
         before = dict(identity.keyed_rows(prior.get(kind)))
         for key, r in identity.keyed_rows(result.get(kind)):
             old = before.get(key)
-            if old is None:
-                continue
-            if not r.get("date") and _qualifies(old, **kw):
-                r["date"], r["source"] = old.get("date"), copy.deepcopy(old.get("source"))
-                out.append(f"{kind}[{key}].date")
-            if kind != "discovery_served_on_client":
-                continue
-            rs, ors = r.get("responses_served") or {}, old.get("responses_served") or {}
-            same_answer = rs.get("value") in (None, "", ors.get("value"))
-            if same_answer and _empty(rs) and _qualifies(ors, **kw):
-                r["responses_served"] = copy.deepcopy(ors)
-                out.append(f"{kind}[{key}].responses")
+            if old is not None:
+                out += _carry_row(kind, key, r, old, kw)
+    return out
+
+
+def _carry_row(kind: str, key: Any, r: dict[str, Any], old: dict[str, Any], kw: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    if not r.get("date") and _qualifies(old, **kw):
+        r["date"], r["source"] = old.get("date"), copy.deepcopy(old.get("source"))
+        out.append(f"{kind}[{key}].date")
+    if kind != "discovery_served_on_client":
+        return out
+    rs, ors = r.get("responses_served") or {}, old.get("responses_served") or {}
+    same_answer = rs.get("value") in (None, "", ors.get("value"))
+    if same_answer and _empty(rs) and _qualifies(ors, **kw):
+        r["responses_served"] = copy.deepcopy(ors)
+        out.append(f"{kind}[{key}].responses")
     return out
