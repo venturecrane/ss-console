@@ -15,7 +15,12 @@ The twin is the held job's envelope in a separate tree
 lane object whose broker READS through (allowance, month spend) and whose
 ``record`` writes nothing: the firm's job row never moves, no wake is queued
 where the deliver loop looks, and no notice reaches a broker. A lane with a
-persistent cursor (litigation, negotiation) gets a throwaway one.
+persistent cursor (litigation, negotiation) gets a throwaway COPY of the real
+one (``seed_state``): a proof measures what the live job would do from the
+state the live job reads. 2026-10-13: the A&P litigation proof ran on an
+EMPTY state, read every matter fresh and passed, while the live job on the
+same scope held at the gates on the stored seed. The copy is written by the
+twin and thrown away with it; nothing is ever copied back.
 
 WHAT COUNTS. ``proof.json`` beside the twin says ``passed`` only when every
 verdict the runner wrote is ``dry_run``: the pipeline reached the write stage
@@ -90,8 +95,24 @@ def twin(d: Any, root: Path) -> Any:
     p.broker = ProofBroker(d.broker)
     p.child_env = {**d.child_env, proof_mode.PROOF_ENV: "1"}
     if hasattr(p, "state_dir"):
-        p.state_dir = str(root / "state")
+        p.state_dir = str(seed_state(d, root))
     return p
+
+
+def seed_state(d: Any, root: Path) -> Path:
+    """The twin's state dir: a copy of the lane's real one when it exists
+    (made once per attempt, so a resumed proof keeps its own progress), an
+    empty dir otherwise. Read from the real dir, written only under ``root``."""
+    dest = Path(root) / "state"
+    real = Path(d.state_dir) if getattr(d, "state_dir", None) else None
+    if dest.exists():
+        return dest
+    if real is not None and real.is_dir() and real.resolve() != dest.resolve():
+        shutil.copytree(real, dest, symlinks=False, ignore_dangling_symlinks=True)
+        chown = getattr(d, "_chown_child", None)
+        if callable(chown):
+            chown(dest)  # the child owns the copy, as it owns its job dir
+    return dest
 
 
 def request(queue: Path, job_id: str) -> Path:
@@ -305,5 +326,6 @@ __all__ = [
     "request",
     "results",
     "run_pending",
+    "seed_state",
     "twin",
 ]

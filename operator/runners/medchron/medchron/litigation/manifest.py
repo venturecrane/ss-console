@@ -28,7 +28,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from . import vocab
+from . import seedcheck, vocab
 from .firm import LitigationFirm
 
 STATE_ENV = "MEDCHRON_LITIGATION_STATE_DIR"
@@ -323,21 +323,38 @@ def _plan(
     moved_emails = sorted(
         fid for fid in moved if fid in by_id and is_email(by_id[fid]) and _recent_iso(by_id[fid], today)
     )
+    # Every prior value the gates would refuse is read again or checked
+    # against its fetched text, never handed to the gates as-is
+    # (``seedcheck``; 2026-10-13 live hold on the hand-run seed).
+    seed = seedcheck.gaps(prior, files, today)
+    fresh = seedcheck.ordered([*_missing_groups(prior), *seed["hard"]])
+    soft = seed["soft"]
     if trigger or moved_emails:
         from .update import plan_changed  # update builds on this module
 
-        return plan_changed(trigger, moved_emails, classes)
+        p = plan_changed(trigger, moved_emails, classes)
+        p["full_candidates"] = cands
+        if fresh:
+            # A changed matter with groups to read fresh reads BOTH: its
+            # update groups and the missing/gap groups. Returning the update
+            # plan alone left a seed gap on a changed matter unread forever
+            # (the screen stage turns this into one full read, ``settle``).
+            p["read_groups"] = seedcheck.ordered([*p["read_groups"], *fresh, *soft])
+        return seedcheck.attach(p, fresh, soft)
     # A seed from a two-pass hand run is NOT re-audited: its values are the
-    # list the firm accepted (2026-10-09). A seed group it could not cite is
-    # read once, as any missing group is.
-    missing = _missing_groups(prior)
-    return {
-        "reason": "missing_fields" if missing else "unchanged",
-        "read_groups": missing,
-        "audit": "changed" if missing else "none",
+    # list the firm accepted (2026-10-09). A value the gates would refuse is
+    # not "accepted": its group is read once, as any missing group is.
+    groups = seedcheck.ordered([*fresh, *soft])
+    reason = "missing_fields" if _missing_groups(prior) else ("seed_gaps" if groups else "unchanged")
+    out = {
+        "reason": reason,
+        "read_groups": groups,
+        "audit": "changed" if groups else "none",
         "trigger_files": [],
         "candidates": cands,
+        "seed_base": [],
     }
+    return seedcheck.attach(out, fresh, soft)
 
 
 def commit(state: Path, matter_id: str, result: dict[str, Any], files: list[dict[str, Any]]) -> None:

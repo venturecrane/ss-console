@@ -220,9 +220,23 @@ def _cmd_negotiate(args: argparse.Namespace) -> int:
 def _negotiate_proof(args: argparse.Namespace) -> dict[str, Any]:
     """A proof run of the negotiation watch (``proof_mode.py``): the job's own
     envelope through the dry-run path (``negotiation/dryrun.py``), with a
-    throwaway cursor inside the job dir. Its report is the artifact SMD reads."""
-    from .negotiation import dryrun
+    throwaway cursor inside the job dir. Its report is the artifact SMD reads.
 
+    The throwaway cursor starts as a COPY of the cursor the lane hands the
+    child (in a proof run, the twin's own copy of the real one,
+    ``proof_run.seed_state``), so the proof measures what the live run would
+    do from the state it would read; with none, the dry run seeds as a first
+    run does. Nothing is ever written back (2026-10-13: a litigation proof on
+    an empty state passed while live held on the stored one)."""
+    import shutil
+
+    from .negotiation import dryrun
+    from .negotiation.run import default_state_dir
+
+    state = Path(args.job_dir) / "state"
+    src = default_state_dir()
+    if not state.exists() and src.is_dir() and src.resolve() != state.resolve():
+        shutil.copytree(src, state, symlinks=False, ignore_dangling_symlinks=True)
     run = dryrun.NegotiationDryRun(
         Path(args.job_dir),
         state_dir=Path(args.job_dir) / "state",

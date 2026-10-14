@@ -8,7 +8,11 @@ simply vanished) is UNEXPLAINED, and an unexplained divergence holds the job:
 a person decides which read is right before the firm sees either.
 
 One divergence is explained by the calendar alone: a next court date that
-has passed since the last run is expected to move on.
+has passed since the last run is expected to move on. And a cited value
+replacing one the gates could not pass (``seedcheck``: a date that was its
+source file's save date and is not in that file's text, a source no longer on
+the matter, a status outside the vocabulary) is explained: the last list's
+value was the defect, and this run read it again for exactly that reason.
 
 Every divergence, explained or not, is also the workbook's "What changed" tab.
 """
@@ -93,6 +97,20 @@ def points(m: dict[str, Any] | None) -> dict[str, tuple[Any, dict[str, Any] | No
     return out
 
 
+def _unsupported(
+    path: str, old: Any, old_obj: Any, pairs: set[tuple[str, str]] | frozenset, on_matter: set[str] | None
+) -> bool:
+    from . import vocab
+
+    src = _src_id(old_obj)
+    if path == "case_status" and old is not None and old not in vocab.CASE_STATUSES:
+        return True
+    if src and on_matter is not None and src not in on_matter:
+        return True
+    date = old_obj.get("date") if isinstance(old_obj, dict) else None
+    return bool(src and isinstance(date, str) and (src, date) in pairs)
+
+
 def compare(
     prior: dict[str, Any] | None,
     new: dict[str, Any],
@@ -100,8 +118,13 @@ def compare(
     moved_files: set[str],
     overturns: list[dict[str, Any]],
     today: dt.date,
+    unsupported: set[tuple[str, str]] | frozenset = frozenset(),
+    on_matter: set[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Every divergence on one matter, each marked explained or not."""
+    """Every divergence on one matter, each marked explained or not.
+    ``unsupported``: ``(file_id, date)`` pairs of prior values read again
+    because their source's text does not carry their date; ``on_matter``: the
+    matter's file ids now (a prior source not among them was read again)."""
     if prior is None:
         return [{"path": "matter", "old": None, "new": "added to the list", "explained": True, "why": "new matter"}]
     before, after = points(prior), points(new)
@@ -123,6 +146,8 @@ def compare(
             why = "a cited value replacing one the last list carried without a source"
         elif path == "next_court_date" and isinstance(old, str) and old < today.isoformat():
             why = "the last list's court date has passed"
+        elif cur is not None and _src_id(cur_obj) and _unsupported(path, old, old_obj, unsupported, on_matter):
+            why = "a cited value replacing one the last list carried that its document did not support"
         out.append(
             {
                 "path": path,

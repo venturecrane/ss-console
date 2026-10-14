@@ -45,7 +45,14 @@ def test_the_fetch_is_capped_and_prioritized_by_class(tmp_path):
 def test_an_emptied_seed_marker_reads_every_group(tmp_path):
     firm = load(make_inputs(tmp_path / "in"))
     files = [_f("a", "Complaint", ".pdf", "2026-03-01")]
-    prior = {"fields_read": [], "defendants": [{"name": "Delta"}], "case_status": {"value": vocab.ACTIVE}}
+    # A prior the gates would pass (an active case cited to the complaint, a
+    # defendant with a status): only the marker decides what is read.
+    prior = {
+        "fields_read": [],
+        "defendants": [{"name": "Delta", "status": vocab.NOT_SERVED}],
+        "case_status": {"value": vocab.ACTIVE, "source": {"file_id": "a"}},
+        "complaint_filed": {"date": "2026-02-27", "source": {"file_id": "a"}},
+    }
     p = manifest.plan_matter(files, prior, {"a": ""}, firm, TODAY)
     assert p["read_groups"] == list(vocab.GROUPS)  # defendants included: the marker was struck, not absent
     legacy = {k: v for k, v in prior.items() if k != "fields_read"}
@@ -200,7 +207,8 @@ def test_an_answer_written_as_json_text_is_taken():
 def test_a_refresh_rereads_only_the_groups_a_new_paper_can_change(tmp_path):
     firm = load(make_inputs(tmp_path / "in"))
     base = [_f("c", "Complaint", ".pdf", "2026-03-01")]
-    prior = {"fields_read": list(vocab.GROUPS)}
+    # A prior the gates would pass, so only the new paper decides what is read.
+    prior = {"fields_read": list(vocab.GROUPS), "case_status": {"value": vocab.NOT_FILED, "source": {"file_id": "c"}}}
     man = manifest.current_manifest(base)
     disc = manifest.plan_matter(
         base + [_f("d", "Interrogatories set two", ".pdf", "2026-09-01")], prior, man, firm, TODAY

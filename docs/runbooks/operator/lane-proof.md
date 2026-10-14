@@ -24,7 +24,7 @@ class for drafting, whose classes are different jobs.
 | `medical-chronology-maintainer` | the upload stage (package staged under `out/`)                 |
 | `demand-letter-drafter`         | filing (letter, gap audit, attorney notes under `out/`)        |
 | `document-drafter.<class>`      | filing; caption corrections are journaled, not written         |
-| `litigation-status`             | filing the workbook; the state cursor is a throwaway           |
+| `litigation-status`             | filing the workbook; runs on a copy of the real state cursor   |
 | `negotiation-watch`             | any Negotiation Details write or notice (its dry run, ss#3119) |
 
 An in-turn skill (`file-work-requests`, the router) is never held: the turn is
