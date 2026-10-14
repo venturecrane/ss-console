@@ -330,7 +330,7 @@ def test_a_chronology_another_renderer_made_is_updated_and_its_scope_note_carrie
     document is filed."""
     _upload_pause(monkeypatch)
     job_dir = _job(tmp_path, data_root, ["n1", "n2", "n3"])
-    foreign = K.foreign_docx(tmp_path / "laptop" / OLD_DOCX, note=K.NOTE).read_bytes()
+    foreign = K.foreign_docx(tmp_path / "laptop" / OLD_DOCX, note=K.NOTE, labels=True).read_bytes()
     seat = _seat(tmp_path, K.base_md(note=K.NOTE), docx=foreign)
     o = _driver(job_dir, firm_config_path, pricing_path, seat, _Model()).run()[0]
     sd = data_root / "example-matter"
@@ -350,6 +350,11 @@ def test_a_chronology_another_renderer_made_is_updated_and_its_scope_note_carrie
     got = tmp_path / "got.docx"
     got.write_bytes(seat.blobs[new_id])
     assert K.NOTE in docx_md.summary_lines(got)
+    # The laptop document's formatting is carried, not re-rendered plain: the
+    # review note's bold label and the title's own bold run read as delivered.
+    runs = K.runs_of(got)
+    assert [(K.LIMITS_LABEL[0], True), (K.LIMITS_LABEL[1], False)] in runs
+    assert runs[0] == [("Alpha Example - Medical Chronology", True)]
 
 
 def test_a_laptop_chronology_the_firm_edited_still_holds_and_the_reason_quotes_no_chronology_text(

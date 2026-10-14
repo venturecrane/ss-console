@@ -73,6 +73,34 @@ def test_a_chronology_another_renderer_made_is_proven_by_its_words(tmp_path: Pat
     assert B.delivered_numbers(md) == {1}
 
 
+def test_a_foreign_documents_bold_labels_come_back_in_the_updated_document(tmp_path: Path) -> None:
+    """Carried as text, the laptop document's bold labels (Prior Medical
+    History, the review note) would render plain. `carry_runs` gives every
+    delivered paragraph its delivered runs back; an added entry keeps the
+    seat's own formatting."""
+    delivered = K.foreign_docx(tmp_path / "foreign.docx", labels=True)
+    md = docx_md.docx_to_md(delivered, K.HEADINGS, plain=True)
+    added = (
+        "02/10/2026\nExample Imaging | Medical Diagnoses\n\nMedical Diagnoses\n"
+        "MRI showed a disc protrusion measuring 3 mm. (Exhibit 2 - p. 2)\n\n"
+    )
+    updated = K.render(md.replace("## Exhibit List", added + "## Exhibit List", 1), tmp_path / "updated.docx")
+    pmh = [(K.PMH_LABEL[0], True), (K.PMH_LABEL[1], False)]
+    limits = [(K.LIMITS_LABEL[0], True), (K.LIMITS_LABEL[1], False)]
+    assert pmh not in K.runs_of(updated) and limits not in K.runs_of(updated), "the plain render loses the labels"
+    assert docx_md.carry_runs(delivered, updated) >= 2
+    got = K.runs_of(updated)
+    assert pmh in got and limits in got
+    # Every delivered paragraph reads with its delivered runs (the timeline's
+    # gap lines are recomputed on every render, by design), and the added
+    # entry is there; the words are unchanged.
+    for segs in K.runs_of(delivered):
+        if not segs[0][0].startswith("Treatment Gap"):
+            assert segs in got, segs
+    assert [("MRI showed a disc protrusion measuring 3 mm. (Exhibit 2 - p. 2)", False)] in got
+    assert docx_md.prove_text(md, delivered, _render0, tmp_path / "text")["diffs"] == []
+
+
 def test_the_words_only_proof_still_fails_on_a_paragraph_the_markdown_cannot_place(tmp_path: Path) -> None:
     delivered = K.foreign_docx(tmp_path / "typed.docx", typed="A note the firm typed under the entries.")
     md = docx_md.docx_to_md(delivered, K.HEADINGS, plain=True)

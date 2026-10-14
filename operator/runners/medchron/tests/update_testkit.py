@@ -78,7 +78,34 @@ def render(md: str, dst: Path, incident: str = INCIDENT) -> Path:
 HEADINGS = {"Medical Diagnoses", "All Other Information", "Discharge / Discontinuation in Care"}
 
 
-def foreign_docx(dst: Path, *, note: str | None = None, typed: str | None = None) -> Path:
+#: Bold labels a laptop-rendered document carries ahead of the text (label, rest).
+LIMITS_LABEL = ("Scope: ", "This chronology was prepared from 1 document on the matter.")
+PMH_LABEL = ("Cardiovascular: ", PMH.split("\n", 1)[1])
+
+
+def runs_of(path: Path) -> list[list[tuple[str, bool]]]:
+    """Every non-empty paragraph's runs, body and table cells, in order, as
+    (text, bold) with adjacent same-weight runs joined: how a reader sees
+    the formatting. Independent of the runner's own helpers."""
+    import docx
+
+    d = docx.Document(str(path))
+    paras = list(d.paragraphs) + [p for t in d.tables for row in t.rows for c in row.cells for p in c.paragraphs]
+    out = []
+    for p in paras:
+        segs: list[tuple[str, bool]] = []
+        for r in p.runs:
+            if r.text:
+                if segs and segs[-1][1] == bool(r.bold):
+                    segs[-1] = (segs[-1][0] + r.text, segs[-1][1])
+                else:
+                    segs.append((r.text, bool(r.bold)))
+        if segs:
+            out.append(segs)
+    return out
+
+
+def foreign_docx(dst: Path, *, note: str | None = None, typed: str | None = None, labels: bool = False) -> Path:
     """The chronology `base_md(note=note)` describes, as ANOTHER renderer made
     it (the laptop pipeline's shape, built here with python-docx directly):
     title, the review note at the front, numbered sections, the Prior Medical
@@ -106,8 +133,17 @@ def foreign_docx(dst: Path, *, note: str | None = None, typed: str | None = None
                 t.cell(i, j).text = txt
 
     para("Alpha Example - Medical Chronology", "Title", bold=True)
+
+    def labelled(label: str, rest: str) -> None:
+        p = d.add_paragraph()
+        p.add_run(label).bold = True
+        p.add_run(rest).bold = False
+
     para("Records Reviewed and Limitations", "Heading 1")
-    para("This chronology was prepared from 1 document on the matter.", split=True)
+    if labels:
+        labelled(*LIMITS_LABEL)
+    else:
+        para("This chronology was prepared from 1 document on the matter.", split=True)
     para("One record set was reviewed in full.", "List Bullet")
     para("1. Treatment Timeline", "Heading 1")
     para("Treatment Gap  Dec 1, 2025 - Jan 20, 2026  (50 days)", bold=True)
@@ -128,7 +164,10 @@ def foreign_docx(dst: Path, *, note: str | None = None, typed: str | None = None
     para("4.  Medical Summary", "Heading 1")
     head, body = PMH.split("\n", 1)
     para(head, bold=True)
-    para(body, split=True)
+    if labels:
+        labelled(*PMH_LABEL)
+    else:
+        para(body, split=True)
     if note:
         para(note)
     t = d.add_table(rows=2, cols=2)

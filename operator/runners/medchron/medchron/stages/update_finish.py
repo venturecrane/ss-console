@@ -5,7 +5,9 @@
   the Records Reviewed paragraph about the update, every figure from the
   run's own artifacts. Refuses when the audit left a new exhibit uncited (a
   repair dropped every claim citing it): its number is fixed by then.
-* `update_render`: the updated markdown through the seat renderer.
+* `update_render`: the updated markdown through the seat renderer; for a
+  chronology another renderer made, every delivered paragraph then gets its
+  delivered runs back (``docx_md.carry_runs``), bold labels included.
 * `update_proofs`: every proof in ``update/proofs.py``; exit 1 (the job FAILS)
   when any does not hold. Proof 10 is the hard gate on a dropped value.
 * `update_manifest`: what goes onto the matter, into the delivered chronology's
@@ -111,7 +113,15 @@ def run_render(sr: StageRun) -> int:
     ud = update_dir(sr)
     text = (ud / "updated-chronology.md").read_text(encoding="utf-8")
     dst = sr.slug_dir / "out" / sr.unit.unit / chronology_name(sr)
-    return render_text(text, dst, cfg=sr.cfg, incident_date=sr.job.incident_date, log=sr.log)
+    rc = render_text(text, dst, cfg=sr.cfg, incident_date=sr.job.incident_date, log=sr.log)
+    p = plan(sr)
+    if rc != 0 or p.get("renderer") != "foreign":
+        return rc
+    # A chronology another renderer made was carried as text; its delivered
+    # paragraphs get their delivered runs back (bold labels included).
+    n = docx_md.carry_runs(sr.slug_dir / "delivered" / p["chronology"]["name"], dst)
+    sr.log(f"  delivered formatting carried: {n} paragraph(s) given their delivered runs")
+    return 0
 
 
 def _composed(ud: Path, rd: Path) -> tuple[list[str], set[int]]:

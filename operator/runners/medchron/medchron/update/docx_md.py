@@ -22,7 +22,9 @@ plain=True)`; a foreign bold run is not the seat's emphasis) and the seat's
 rendering of it must read the same as the delivered document paragraph by
 paragraph: section and whitespace-collapsed text, table cells included, empty
 paragraphs and the Treatment Timeline left out. Entries are then carried as
-TEXT (the update records ``renderer: "foreign"``). A document whose WORDS the
+TEXT (the update records ``renderer: "foreign"``), and after the updated
+document is rendered `carry_runs` gives every delivered paragraph back its
+delivered runs (bold labels included). A document whose WORDS the
 markdown does not reproduce (a hand edit by the firm, a paragraph added) fails
 both proofs and the update holds: silently reshaping a filed litigation
 document is the failure this module exists to prevent.
@@ -227,6 +229,80 @@ def prove(md_text: str, delivered: Path, render: Callable[[str, Path], int], wor
         return {"rows": 0, "diffs": [(0, "render", "the renderer refused the rebuilt markdown")], "rendered": None}
     a, b = structure(delivered), structure(out)
     return {"rows": len(a), "diffs": diff(a, b), "rendered": out}
+
+
+def _paragraphs(document: Any) -> Iterator[tuple[str, Any]]:
+    """(section, paragraph) for every paragraph `structure` reads, in the
+    same order, table cells included, the Treatment Timeline left out."""
+    sec = "Title"
+    for kind, x in _blocks(document):
+        if kind == "p":
+            head = _section_of(x)
+            if head is not None:
+                sec = head
+            if sec != TIMELINE or head is not None:
+                yield sec, x
+            continue
+        for row in x.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    yield sec, p
+
+
+def _segments(p: Any) -> list[tuple[str, bool | None]]:
+    """The paragraph's runs as (text, bold), adjacent same-bold runs joined."""
+    out: list[tuple[str, bool | None]] = []
+    for r in p.runs:
+        if not r.text:
+            continue
+        if out and out[-1][1] == r.bold:
+            out[-1] = (out[-1][0] + r.text, r.bold)
+        else:
+            out.append((r.text, r.bold))
+    return out
+
+
+def carry_runs(delivered: Path, updated: Path) -> int:
+    """Give every paragraph of `updated` that the delivered document carries
+    (same section, same collapsed text, taken in order) the delivered
+    paragraph's runs: its text and bold pattern. A foreign-rendered chronology
+    is carried as text through the seat renderer, which would otherwise drop
+    the delivered bold labels; this puts them back, so the firm's document
+    looks as it did except for what the update added. Font, size and colour
+    stay the seat run's. Returns the number of paragraphs restyled."""
+    import copy
+    from collections import defaultdict, deque
+
+    import docx
+
+    d, u = docx.Document(str(delivered)), docx.Document(str(updated))
+    want: dict[tuple[str, str], deque[list[tuple[str, bool | None]]]] = defaultdict(deque)
+    for sec, p in _paragraphs(d):
+        t = _flat(p.text)
+        if t:
+            want[(sec, t)].append(_segments(p))
+    changed = 0
+    for sec, p in _paragraphs(u):
+        t = _flat(p.text)
+        q = want.get((sec, t))
+        if not t or not q:
+            continue
+        segs = q.popleft()
+        if _segments(p) == segs:
+            continue
+        runs = p.runs
+        tmpl = runs[0]._r.rPr if runs and runs[0]._r.rPr is not None else None
+        tmpl = copy.deepcopy(tmpl) if tmpl is not None else None
+        for r in runs:
+            p._p.remove(r._r)
+        for text, bold in segs:
+            r = p.add_run(text)
+            if tmpl is not None:
+                r._r.insert(0, copy.deepcopy(tmpl))
+            r.bold = bold
+        changed += 1
+    u.save(str(updated))
+    return changed
 
 
 def prove_text(md_text: str, delivered: Path, render: Callable[[str, Path], int], workdir: Path | None = None) -> dict:
