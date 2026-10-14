@@ -24,7 +24,7 @@ from __future__ import annotations
 import io
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, NoReturn
 
 from ..demand import deliver, finalpass, quotefix, summarize
 from . import citefix, compose, format_check, gate, nestquote, pleading, render, review as review_mod, sets
@@ -34,7 +34,9 @@ from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, markers
 
 MAX_REPAIRS = 2
 #: A served paper's audit findings are repaired or the job fails (compose.STRICT_CLASSES).
-MAX_REPAIRS_STRICT = 3
+#: The runaway guard on a served set's repairs; ``Finish._converge`` stops on
+#: non-convergence well before it in practice.
+REPAIR_CEILING = 8
 FINAL = "draft-final.md"
 CONCURRENCY = 4
 WALL_GATE = "[1]"
@@ -128,6 +130,67 @@ class Finish:
         tmp.replace(u.data / name)
 
     # ---- compose, audit, repair, final pass, per unit ---------------------------------
+    def _repair_rounds(self, d: compose.Drafter, digest: str, corpus: str) -> int:
+        """Every other class: audit, repair while findings block, up to
+        ``MAX_REPAIRS``; what survives is settled and noted (``settle``)."""
+        version = 1
+        result = d.audit(version, digest, corpus)
+        while compose.blocking_findings(result, self.cls) and version <= MAX_REPAIRS:
+            d.repair(digest, version)
+            version += 1
+            result = d.audit(version, digest, corpus)
+        return version
+
+    def _converge(self, u: Unit, d: compose.Drafter, digest: str, corpus: str) -> int:
+        """A served set (``compose.STRICT_CLASSES``) is clean or the job fails.
+
+        Repair rounds re-audit only the requests a repair changed (the delta
+        audit, ``compose.delta``), so a round's findings are the repair's. A set
+        clean on a delta read then gets a FULL read before it passes: a defect
+        in a request no repair touched (2026-10-14: an interrogatory stating the
+        other side's information-and-belief allegation as fact, first seen on
+        the fourth read) is found there, repaired, and checked again. The
+        budget stops on non-convergence, not on a round count: a repair that
+        changes nothing, two delta rounds without fewer findings, or a full
+        read that finds no fewer than the last full read did. ``REPAIR_CEILING``
+        is the runaway guard behind those."""
+        version, full, stalled, last_full = 1, True, 0, None
+        result = d.audit(version, digest, corpus)
+
+        def left() -> int:
+            return compose.blocking_findings(result, self.cls, d._read(f"audit-v{version}.md"))
+
+        def fail(why: str) -> NoReturn:
+            # Counts only, never the claims or a heading (a title names the
+            # parties): a reason reaches SMD's alerts. audit-v<n>.md has the rows.
+            raise DraftingFailed(
+                f"audit_unrepaired: {left()} audit finding(s) in the {u.label} {why}; see audit-v{version}.md"
+            )
+
+        n = left()
+        while True:
+            if n == 0 and full:
+                return version
+            if n == 0:
+                result, full = d.audit(version, digest, corpus, full=True), True
+                n = left()
+                if n and last_full is not None and n >= last_full:
+                    fail(f"on a full read after {version - 1} repair(s), no fewer than the last full read found")
+                last_full = n if n else last_full
+                continue
+            if version > REPAIR_CEILING:
+                fail(f"after {REPAIR_CEILING} repairs")
+            before = d._read(f"draft-v{version}.md")
+            if d.repair(digest, version) == before:
+                fail("that a repair could not place")
+            version += 1
+            result, full = d.audit(version, digest, corpus), False
+            m = left()
+            stalled = stalled + 1 if m >= n else 0
+            n = m
+            if stalled >= 2:
+                fail("after two repairs that did not reduce them")
+
     def _canon(self, u: Unit) -> Unit | None:
         """The set the others align to: the first one gated, never ``u``."""
         for o in self.units():
@@ -171,36 +234,11 @@ class Finish:
             fronted, _ = self._front(u, doc)
             if fronted != doc:
                 self._uatomic(u, "draft-v1.md", self._join(fronted, end))
-        corpus, version = self._corpus_text(), 1
+        corpus = self._corpus_text()
         strict = self.cls in compose.STRICT_CLASSES
-        repairs = MAX_REPAIRS_STRICT if strict else MAX_REPAIRS
-        result = d.audit(version, digest, corpus)
-
-        def left() -> int:
-            return compose.blocking_findings(result, self.cls, d._read(f"audit-v{version}.md"))
-
-        unplaced = False
-        while left() and version <= repairs:
-            before = (u.data / f"draft-v{version}.md").read_text(encoding="utf-8")
-            after = d.repair(digest, version)
-            if strict and after == before:
-                unplaced = True  # a repair that changed nothing will not converge: stop paying
-                break
-            version += 1
-            result = d.audit(version, digest, corpus)
+        version = self._converge(u, d, digest, corpus) if strict else self._repair_rounds(d, digest, corpus)
         audit_md = (u.data / f"audit-v{version}.md").read_text(encoding="utf-8")
         md = (u.data / f"draft-v{version}.md").read_text(encoding="utf-8")
-        n = left()
-        if strict and n:
-            # Applied or failed, never forwarded, and never a request dropped
-            # from the attorney's set: a finding the repairs did not clear is a
-            # known defect in a served paper. Counts only, never the claims or
-            # a heading (a title names the parties): a reason reaches SMD's
-            # alerts. audit-v<n>.md has the rows.
-            how = "that a repair could not place" if unplaced else f"that survived {repairs} repair(s)"
-            raise DraftingFailed(
-                f"audit_unrepaired: {n} audit finding(s) in the {u.label} {how}; see audit-v{version}.md"
-            )
         self._done(u.stage("audit"))
         try:
             md, settled = settle_mod.settle(md, audit_md)

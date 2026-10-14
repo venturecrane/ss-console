@@ -172,9 +172,11 @@ def _audit_flagging(word: str):
 
 
 class AuditClient(Client):
-    def __init__(self, *a, audit_fn=None, repair_fix: tuple[str, str] | None = None, **kw):
+    def __init__(self, *a, audit_fn=None, repair_fix: tuple[str, str] | None = None, fixes=None, **kw):
         super().__init__(*a, **kw)
         self.audit_fn, self.repair_fix = audit_fn, repair_fix
+        #: Successive repairs' replacements, one pair per repair call, after repair_fix.
+        self.fixes = list(fixes or [])
 
     def _answer(self, params):
         system = json.dumps(params.get("system"))
@@ -183,6 +185,8 @@ class AuditClient(Client):
         text = super()._answer(params)
         if "REPAIR-PROMPT" in system and self.repair_fix:
             text = text.replace(*self.repair_fix)
+        if "REPAIR-PROMPT" in system and "SCOPED REPAIR" in json.dumps(params.get("messages")) and self.fixes:
+            text = text.replace(*self.fixes.pop(0))
         return text
 
 
@@ -216,7 +220,7 @@ def test_a_drift_the_repairs_never_clear_fails_and_is_never_forwarded_as_an_open
     assert client.count("INDEPENDENT PRE-DELIVERY REVIEW") == 0  # nothing paid past the failure
 
 
-def test_repairs_that_change_the_text_but_never_clear_the_drift_stop_at_three(tmp_path, pricing):
+def test_repairs_that_change_the_text_but_never_clear_the_drift_stop_on_non_convergence(tmp_path, pricing):
     bad = one_set(RFA).replace('"PREMISES" means the store.', '"PREMISES" means the WRONGSTORE.')
     client = AuditClient(
         drafts=_drafts(**{RFA: bad}),
@@ -225,7 +229,7 @@ def test_repairs_that_change_the_text_but_never_clear_the_drift_stop_at_three(tm
     )
     _r, v, _ = _run(tmp_path, pricing, client)
     assert v.outcome == "failed" and v.reason.startswith("audit_unrepaired: "), (v.stage, v.reason)
-    assert client.count("REPAIR-PROMPT") == 3
+    assert client.count("REPAIR-PROMPT") == 2  # two repairs that did not reduce the findings
 
 
 def test_an_unsupported_premise_in_a_served_paper_is_never_marked_in_place(tmp_path, pricing):
@@ -644,3 +648,210 @@ def test_the_audit_reads_the_front_matter_code_sets(tmp_path, pricing):
     assert v.outcome == "delivered", (v.stage, v.reason)
     audited = [json.dumps(c["messages"]) for c in client.calls if "AUDIT-PROMPT" in json.dumps(c.get("system"))]
     assert audited and not any("date of signing" in a for a in audited)
+
+
+# ---- a later round re-audits only what changed (2026-10-14, the second re-proof) ----
+
+
+def _late_reader():
+    """RFA No. 1 is flagged whenever it is read with WRONGSTORE in it; No. 3
+    is flagged for WRONGLOT only from the SECOND time it is ever read: the
+    2026-10-14 interrogatory first found on a late read, in a request no
+    repair had touched."""
+    reads = {"n3": 0}
+
+    def answer(params):
+        body = params["messages"][-1]["content"]
+        rows = []
+        if "REQUEST FOR ADMISSION NO. 1\n" in body and "WRONGSTORE" in body:
+            rows.append("- `RFA 1: WRONGSTORE` | DRIFTS | the file says otherwise")
+        if "REQUEST FOR ADMISSION NO. 3\n" in body:
+            reads["n3"] += 1
+            if reads["n3"] >= 2 and "WRONGLOT" in body:
+                rows.append("- `RFA 3: WRONGLOT` | DRIFTS | states the other side's allegation as fact")
+        if not rows:
+            return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+        return "\n".join(rows) + f"\nSUPPORTED=0 DRIFTS={len(rows)} INVENTED=0 ARITHMETIC=0"
+
+    return answer, reads
+
+
+def _two_defects() -> str:
+    return (
+        one_set(RFA, 3)
+        .replace(
+            "REQUEST FOR ADMISSION NO. 1\n\nAdmit that YOU owned the PREMISES.",
+            "REQUEST FOR ADMISSION NO. 1\n\nAdmit that YOU owned the WRONGSTORE.",
+        )
+        .replace(
+            "REQUEST FOR ADMISSION NO. 3\n\nAdmit that YOU owned the PREMISES.",
+            "REQUEST FOR ADMISSION NO. 3\n\nAdmit that YOU owned the WRONGLOT.",
+        )
+    )
+
+
+def test_a_defect_in_a_request_no_repair_touched_is_found_on_the_full_read_and_repaired(tmp_path, pricing):
+    answer, reads = _late_reader()
+    client = AuditClient(
+        drafts=_drafts(**{RFA: _two_defects()}),
+        audit_fn=answer,
+        fixes=[("WRONGSTORE", "PREMISES"), ("WRONGLOT", "PREMISES")],
+    )
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    final = (r.data / "set-1" / "draft-final.md").read_text()
+    assert "WRONGLOT" not in final and "WRONGSTORE" not in final
+    assert reads["n3"] >= 2  # the full read reached the untouched request
+
+
+def test_a_defect_in_a_request_no_repair_touched_that_cannot_be_repaired_blocks_delivery(tmp_path, pricing):
+    answer, _reads = _late_reader()
+    client = AuditClient(drafts=_drafts(**{RFA: _two_defects()}), audit_fn=answer, fixes=[("WRONGSTORE", "PREMISES")])
+    r, v, seat = _run(tmp_path, pricing, client)
+    assert v.outcome == "failed" and v.reason.startswith("audit_unrepaired: "), (v.stage, v.reason)
+    assert seat.created == [] and not (r.data / "set-1" / "draft-final.md").exists()
+
+
+def test_a_later_round_reaudits_only_the_requests_a_repair_changed(tmp_path, pricing):
+    """Between repairs, an untouched request is not read again (its later read
+    is the full one before the set passes)."""
+    answer, reads = _late_reader()
+    one = one_set(RFA, 3).replace(
+        "REQUEST FOR ADMISSION NO. 1\n\nAdmit that YOU owned the PREMISES.",
+        "REQUEST FOR ADMISSION NO. 1\n\nAdmit that YOU owned the WRONGSTORE.",
+    )
+    client = AuditClient(drafts=_drafts(**{RFA: one}), audit_fn=answer, fixes=[("WRONGSTORE", "PREMISES")])
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    assert reads["n3"] == 2  # the first full read, the delta round skipped it, the final full read
+
+
+def test_a_finding_the_delta_cannot_place_falls_back_to_a_full_audit():
+    from medchron.drafting import compose as c
+
+    body = "intro\n\nREQUEST FOR ADMISSION NO. 1\n\nA.\n\nREQUEST FOR ADMISSION NO. 2\n\nB.\n"
+    after = body.replace("B.", "B2.")
+    # an unchanged request keeps its finding; a changed one is read again
+    assert c.delta("R", after, body, "- `RFA 1: x` | DRIFTS | y") == (
+        ["- `RFA 1: x` | DRIFTS | y"],
+        ["REQUEST FOR ADMISSION NO. 2\n\nB2."],
+    )
+    assert c.delta("R", after, body, "- `RFA 2: x` | DRIFTS | y") == ([], ["REQUEST FOR ADMISSION NO. 2\n\nB2."])
+    assert c.delta("R", after, body, "- `the set as a whole` | DRIFTS | y") is None  # unplaceable: full audit
+    assert c.delta("R", after.replace("intro", "changed intro"), body, "") is None
+
+
+def test_a_long_set_is_read_a_dozen_requests_at_a_time_so_a_defect_one_read_misses_is_found(tmp_path, pricing):
+    """An auditor that, like the real one, notices request No. 20's defect only
+    when it is reading a dozen requests or fewer, never in one read of thirty."""
+    import re as _re
+
+    def answer(params):
+        body = params["messages"][-1]["content"]
+        labels = _re.findall(r"(?m)^REQUEST FOR ADMISSION NO\. (\d+)$", body)
+        if "20" in labels and len(labels) <= 12 and "WRONGLOT" in body:
+            return "- `RFA 20: WRONGLOT` | DRIFTS | assumes a fact\nSUPPORTED=0 DRIFTS=1 INVENTED=0 ARITHMETIC=0"
+        return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+
+    long = one_set(RFA, 30).replace(
+        "REQUEST FOR ADMISSION NO. 20\n\nAdmit that YOU owned the PREMISES.",
+        "REQUEST FOR ADMISSION NO. 20\n\nAdmit that YOU owned the WRONGLOT.",
+    )
+    client = AuditClient(drafts=_drafts(**{RFA: long}), audit_fn=answer, fixes=[("WRONGLOT", "PREMISES")])
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    assert "WRONGLOT" not in (r.data / "set-1" / "draft-final.md").read_text()
+    reads = [
+        len(_re.findall(r"REQUEST FOR ADMISSION NO\. \d+\\n", json.dumps(c["messages"])))
+        for c in client.calls
+        if "AUDIT-PROMPT" in json.dumps(c.get("system"))
+    ]
+    assert max(reads) <= 12
+
+
+def test_one_full_read_finds_assumed_facts_planted_across_several_chunks_of_sixty(tmp_path, pricing):
+    """Three requests in three different chunks of a sixty-request set each
+    assume a fact. The auditor notices one only with a dozen or fewer requests
+    in view. One full read finds all three, and one repair clears them."""
+    import re as _re
+
+    seen: set[str] = set()
+
+    def answer(params):
+        body = params["messages"][-1]["content"]
+        labels = _re.findall(r"(?m)^REQUEST FOR ADMISSION NO\. (\d+)$", body)
+        if len(labels) > 12:
+            return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+        rows = []
+        for n in ("5", "30", "55"):
+            if n in labels and _re.search(rf"NO\. {n}\n\nAdmit that YOU owned the WRONGLOT", body):
+                rows.append(f"- `RFA {n}: WRONGLOT` | DRIFTS | assumes a fact")
+                seen.add(n)
+        if not rows:
+            return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+        return "\n".join(rows) + f"\nSUPPORTED=0 DRIFTS={len(rows)} INVENTED=0 ARITHMETIC=0"
+
+    sixty = one_set(RFA, 60)
+    for n in (5, 30, 55):
+        sixty = sixty.replace(
+            f"REQUEST FOR ADMISSION NO. {n}\n\nAdmit that YOU owned the PREMISES.",
+            f"REQUEST FOR ADMISSION NO. {n}\n\nAdmit that YOU owned the WRONGLOT.",
+        )
+    client = AuditClient(drafts=_drafts(**{RFA: sixty}), audit_fn=answer, repair_fix=("WRONGLOT", "PREMISES"))
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    assert seen == {"5", "30", "55"}
+    repairs = [c for c in client.calls if "SCOPED REPAIR" in json.dumps(c.get("messages"))]
+    assert len(repairs) == 1  # found together on one full read, cleared by one repair
+    assert "WRONGLOT" not in (r.data / "set-1" / "draft-final.md").read_text()
+
+
+def test_a_served_sets_audit_never_reads_the_drafters_notes(tmp_path, pricing):
+    """A finding on the drafter's end tables (rewritten from the final
+    documents anyway) never holds a served set (2026-10-14)."""
+
+    def answer(params):
+        body = params["messages"][-1]["content"]
+        if "REQUEST BASIS" in body:
+            return "- `Notes RFA 1: cite` | DRIFTS | the cite names the wrong paragraph\nSUPPORTED=0 DRIFTS=1 INVENTED=0 ARITHMETIC=0"
+        return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+
+    table = "## REQUEST BASIS\n\n| Request | Basis | Cite |\n| --- | --- | --- |\n" + "".join(
+        f"| RFA {n} | the store's ownership as the complaint pleads it on 01/15/2026 | Complaint 2-1-26, p. {n} |\n"
+        for n in range(1, 8)
+    )
+    drafts = {label: one_set(label).replace("## REQUEST BASIS\n\nNone.\n", table) for label in KINDS}
+    client = AuditClient(drafts=drafts, audit_fn=answer)
+    _r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    assert not any(
+        "REQUEST BASIS" in json.dumps(c["messages"])
+        for c in client.calls
+        if "AUDIT-PROMPT" in json.dumps(c.get("system"))
+    )
+
+
+def test_the_review_reads_the_final_notes_and_holds_on_a_wrong_cite(tmp_path, pricing):
+    """The served set's audit does not read the drafter's notes; the final
+    notes are checked by the independent review, which holds on a cite that
+    does not carry what the note says (2026-10-14)."""
+    from medchron.drafting import review as review_mod
+
+    assert "a note whose cite does not carry what the note says it does" in review_mod.REVIEW_PROMPT
+
+    def review(params):
+        user = json.dumps(params["messages"])
+        if "Complaint 2-1-26, para. 99" in user:
+            return (
+                "| MUST-FIX | 6 the attorney notes | The note cites para. 99 of the complaint for ownership; the "
+                "complaint has no such paragraph. | attorney notes, REQUEST BASIS; FILE: Complaint 2-1-26, p. 1 |\n"
+                "VERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+            )
+        return "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+
+    planted = "## REQUEST BASIS\n\n| RFA 1 | ownership | Complaint 2-1-26, para. 99 |\n\n## Open items\n\nNone."
+    client = Client(drafts=_drafts(), notes=planted, review=review)
+    r, v, seat = _run(tmp_path, pricing, client)
+    assert v.outcome == "failed" and v.reason.startswith("review_held: "), (v.stage, v.reason)
+    assert seat.created == []
+    assert "para. 99" in (r.data / "notes-final.md").read_text()  # the review read the notes as delivered

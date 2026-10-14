@@ -27,6 +27,8 @@ from ..demand.gapaudit import output_max
 from ..demand.summarize import sha
 
 AUDIT_MAX_TOKENS = 32_000
+#: A served set's requests are read this many at a time (``Drafter._chunked``).
+AUDIT_CHUNK_ITEMS = 12
 AUDIT_EFFORT = "high"
 #: Verdicts a class's audit prompt may add to demand's four (the discovery
 #: classes: a compound or undefined-term request; a response that does not
@@ -124,6 +126,64 @@ def repair_scope(draft: str, audit: str, digest: str) -> tuple[list[tuple[str, s
         if len(stem) >= 6 and stem in finding_text:
             keep.append(block)
     return flagged, ("".join(keep) if keep else digest)
+
+
+# ---- the delta audit (a served set's later rounds) ----------------------------------
+#
+# A set's requests are one section, so every round re-read all sixty of them
+# and found something new in requests no repair had touched: the 2026-10-14
+# re-proof's special interrogatories went 9, 10, 1, 1 findings, the last a
+# request first flagged in the fourth read. In a strict class a later round
+# re-audits only what changed; an unchanged request keeps the verdict it had.
+
+_ITEM = re.compile(
+    r"(?im)^\W*(?:SPECIAL INTERROGATORY|REQUEST FOR ADMISSION|REQUEST FOR PRODUCTION(?: OF DOCUMENTS)?)\s+NO\.?\s*(\d+)\b"
+)
+_ROW_ITEM = re.compile(
+    r"(?i)\b(?:SI|SROG|RFA|RFPD?|special\s+interrogator(?:y|ies)|requests?\s+for\s+(?:admission|production)"
+    r"(?:\s+of\s+documents)?)\s*(?:nos?\.?\s*)?(\d+)\b"
+)
+
+
+def split_items(body: str) -> tuple[str, dict[int, str]]:
+    """A requests section as (the text before its first request, {number: the
+    request's own text from its label to the next})."""
+    marks = list(_ITEM.finditer(body))
+    if not marks:
+        return body, {}
+    items: dict[int, str] = {}
+    for m, nxt in zip(marks, [*marks[1:], None]):
+        items.setdefault(int(m.group(1)), body[m.start() : nxt.start() if nxt else len(body)].strip())
+    return body[: marks[0].start()], items
+
+
+def row_item(line: str) -> int | None:
+    """The request a finding row names, read from its claim (before the verdict)."""
+    m = FINDING.search(line)
+    got = _ROW_ITEM.search(line[: m.start()] if m else line)
+    return int(got.group(1)) if got else None
+
+
+def delta(head: str, body: str, prev_body: str, prev_audit: str) -> tuple[str, list[str]] | None:
+    """For a requests section that changed: (the rows of the prior audit to
+    keep, the requests to audit again), or None when only a full audit will
+    do (the text around the requests changed, or a prior finding names no
+    request this can place)."""
+    pre, now = split_items(body)
+    ppre, before = split_items(prev_body)
+    if not now or not before or " ".join(pre.split()) != " ".join(ppre.split()):
+        return None
+    changed = [n for n, t in now.items() if " ".join(before.get(n, "").split()) != " ".join(t.split())]
+    keep = []
+    for ln in prev_audit.splitlines():
+        if not FINDING.search(ln):
+            continue
+        n = row_item(ln)
+        if n is None:
+            return None
+        if n in now and n not in changed:
+            keep.append(ln)
+    return keep, [now[n] for n in changed]
 
 
 COMPOSE_FALLBACK_MAX = 64_000
@@ -260,7 +320,10 @@ class Drafter:
         return r.text
 
     # ---- audit -----------------------------------------------------------------------
-    def audit(self, version: int, digest: str, corpus_text: str) -> dict[str, Any]:
+    def audit(self, version: int, digest: str, corpus_text: str, full: bool = False) -> dict[str, Any]:
+        """``full``: read every section afresh even in a later round (a served
+        set's read before it passes); the delta round's own audit of this
+        version is kept as ``audit-v<n>-delta.md``."""
         draft = self._read(f"draft-v{version}.md")
         # The quotation check reads the document, never the drafter's notes
         # under it: on 2026-10-14 three "quotations not found" were the notes
@@ -273,15 +336,26 @@ class Drafter:
             + "\n\n---\n\n## THE MATTER RECORD, THE CAPTION AND THE HOWELL TABLE (valid sources; the request itself "
             "is NOT one)\n\n" + self.context + "\n\n---\n\n## THE RECORD DIGEST\n\n" + digest
         )
-        secs = d.auditable(d.sections(draft))
-        dsha = sha(draft)[:8]
+        # A served set's audit reads the document only. The drafter's end tables
+        # under it are written again from the final documents (review.final_notes);
+        # on 2026-10-14 two cites in them held a set past four repairs.
+        audited = draft.partition("=== ATTORNEY NOTES ===")[0] if self.cls in STRICT_CLASSES else draft
+        secs = d.auditable(d.sections(audited))
+        dsha = sha(draft)[:8] + ("f" if full else "")
+        prev = None if full else self._prior(version)
+        if (
+            full
+            and (self.data / f"audit-v{version}.md").is_file()
+            and not (self.data / f"audit-v{version}-delta.md").is_file()
+        ):
+            self._commit(f"audit-v{version}-delta.md", self._read(f"audit-v{version}.md"))
 
         def one(ix: tuple[int, tuple[str, str]]) -> tuple[int, str]:
             i, (head, body) = ix
             cache = self.data / "audit" / f"v{version}-{dsha}-{i:02d}.md"
             if cache.is_file():
                 return i, cache.read_text(encoding="utf-8")
-            text = self._audit_part(system, f"{version}-{dsha}-{i:02d}", head, body)
+            text = self._section_audit(system, f"{version}-{dsha}-{i:02d}", head, body, prev)
             cache.parent.mkdir(exist_ok=True)
             cache.write_text(f"## AUDIT: {head}\n\n{text}\n", encoding="utf-8")
             return i, cache.read_text(encoding="utf-8")
@@ -302,6 +376,50 @@ class Drafter:
         out = {"tallies": tallies, "quotes": len(mech["quotes"]), "quotes_not_found": mech["quotes_not_found"]}
         self._commit(f"audit-v{version}.json", json.dumps(out, indent=1))
         return out
+
+    def _prior(self, version: int) -> tuple[dict[str, str], dict[str, str]] | None:
+        """The previous round's sections and their audits, for a strict
+        class's delta audit; None in the first round or another class."""
+        if self.cls not in STRICT_CLASSES or version <= 1:
+            return None
+        try:
+            draft, audit = self._read(f"draft-v{version - 1}.md"), self._read(f"audit-v{version - 1}.md")
+        except OSError:
+            return None
+        return dict(d.sections(draft.partition("=== ATTORNEY NOTES ===")[0])), d.audit_sections(audit)
+
+    def _section_audit(
+        self, system: str, key: str, head: str, body: str, prev: tuple[dict[str, str], dict[str, str]] | None
+    ) -> str:
+        """A section's audit rows: the previous round's when the section is
+        unchanged, the previous round's for its unchanged requests plus a fresh
+        audit of the changed ones (``delta``), or a full audit."""
+        if prev is not None and head in prev[0] and head in prev[1]:
+            old_body, old_audit = prev[0][head], prev[1][head]
+            if " ".join(old_body.split()) == " ".join(body.split()):
+                return old_audit.strip()
+            got = delta(head, body, old_body, old_audit)
+            if got is not None:
+                keep, changed = got
+                fresh = self._chunked(system, key, head, "", changed) if changed else ""
+                return "\n".join([*keep, fresh]).strip()
+        pre, items = split_items(body)
+        if self.cls in STRICT_CLASSES and len(items) > AUDIT_CHUNK_ITEMS:
+            return self._chunked(system, key, head, pre, list(items.values()))
+        return self._audit_part(system, key, head, body)
+
+    def _chunked(self, system: str, key: str, head: str, pre: str, items: list[str]) -> str:
+        """Requests audited ``AUDIT_CHUNK_ITEMS`` at a time (the text before
+        them with the first chunk). One read of sixty interrogatories noticed
+        about one defect per read, a different one each time (2026-10-14:
+        SI 32, 24, 43 and 4 on four reads of one draft); a read of a dozen
+        gives every request its attention, so one full read finds them all."""
+        out = []
+        for k in range(0, len(items), AUDIT_CHUNK_ITEMS):
+            part = "\n\n".join(items[k : k + AUDIT_CHUNK_ITEMS])
+            body = (pre.strip() + "\n\n" + part) if k == 0 and pre.strip() else part
+            out.append(self._audit_part(system, f"{key}c{k // AUDIT_CHUNK_ITEMS}", head, body))
+        return "\n".join(out)
 
     def _audit_part(self, system: str, key: str, head: str, body: str) -> str:
         mx = output_max(self.firm.model("audit"), AUDIT_MAX_TOKENS)

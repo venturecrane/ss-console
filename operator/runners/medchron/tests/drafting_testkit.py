@@ -276,7 +276,7 @@ class ScriptedClient(_DemandClient):
         if "COPY THE CAPTION" in system:
             return self.caption.pop(0) if len(self.caption) > 1 else self.caption[0]
         if "INDEPENDENT PRE-DELIVERY REVIEW" in system:
-            return self.review
+            return self.review(params) if callable(self.review) else self.review
         if "THE ATTORNEY NOTES, FROM THE FINAL DOCUMENT" in system:
             return self.notes
         if "COMPOSE-PROMPT" in system and "REPAIR-PROMPT" not in system and self.drafts:
