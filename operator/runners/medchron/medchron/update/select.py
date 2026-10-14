@@ -15,8 +15,11 @@ delivered exhibit PDFs are what the firm holds, and they are the page truth.
   clinical value it states, fax and print lines aside) is EXCLUDED: the second
   copy costs a compose read and yields a duplicate entry. Template visits
   differ in a date or a word and are both read; pages within one document are
-  never compared. No image hash: the vision pass runs before this, so a hash
-  saves nothing.
+  never compared.
+* Before any of that, a page whose PICTURE is a delivered page or a page of an
+  earlier new document (``update/pageid``, computed before the vision pass so
+  a re-filed scan is never transcribed) is EXCLUDED as already read or as a
+  repeat: a scanned page has no words for the rules above to compare.
 * A page with no text after the vision pass is excluded as blank and counted.
 * A BILLING page (``update/billing_page``: a claim form, or an itemized
   statement or ledger with no clinical narrative) is excluded: the base lane
@@ -36,13 +39,16 @@ from typing import Any
 
 from ..stages.chunking import context_block
 from .billing_page import BILLING, is_billing
+from .pageid import SKIPPED
 from .values import clinical_values
 
 MIN_CHARS = 80
 COVERED_FRAC = 0.8
 SHINGLE = 8
 PAGE_MARK = re.compile(r"^\[p\.(\d+)\][^\n]*$", re.M)
-FAILED_MARKS = ("[page transcription failed]", "[page transcription refused]")
+#: A page the vision pass failed on, refused, or skipped by its picture
+#: (``pageid.SKIPPED``): unread unless ``update/pageid`` accounts for it.
+FAILED_MARKS = ("[page transcription failed]", "[page transcription refused]", SKIPPED)
 
 READ, EXCLUDED, UNREAD = "text", "excluded", "unread"
 ALREADY = "already read in a delivered exhibit"
@@ -165,17 +171,26 @@ def _decide(t: str, seen: set[str], earlier: Earlier | None) -> tuple[str, str]:
 
 
 def classify_new(
-    pages: dict[int, str], npages: int, seen: set[str], earlier: Earlier | None = None
+    pages: dict[int, str],
+    npages: int,
+    seen: set[str],
+    earlier: Earlier | None = None,
+    image: dict[int, str] | None = None,
 ) -> dict[int, tuple[str, str]]:
     """Per page of one new document: (text | excluded | unread, reason).
     `unread` is a page the transcription could not read: it is never skipped
     silently, the stage holds on it. `earlier`, when given, holds the pages of
-    the new documents before this one; this document's pages join it."""
+    the new documents before this one; this document's pages join it.
+    `image`: {page: ALREADY | OVERLAP} for the pages ``update/pageid`` found
+    by their picture; those were never transcribed and are excluded first."""
     if earlier is not None:
         earlier.next_document()
     out: dict[int, tuple[str, str]] = {}
     for i in range(1, npages + 1):
         t = (pages.get(i) or "").strip()
+        if image and i in image:
+            out[i] = (EXCLUDED, image[i])
+            continue
         out[i] = _decide(t, seen, earlier)
         if earlier is not None and out[i][0] != UNREAD and len(t) >= MIN_CHARS:
             earlier.add(t)

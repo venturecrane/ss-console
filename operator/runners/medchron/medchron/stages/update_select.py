@@ -17,7 +17,9 @@ attachment folded from a named email) is a candidate, in pull order:
   exhibit page the citation would point at);
 * its text names a different person (``gates/foreign_identity``): HOLD, exit 2,
   until a person releases it;
-* a page-for-page extract of a LARGER new document (``update/subsets.py``):
+* a page-for-page extract of a LARGER new document or of a delivered exhibit,
+  by its words (``update/subsets.py``) or by its pictures (``update/pageid``,
+  ``stages/update_pages``, which runs before the vision pass):
   not an exhibit; the whole document is, and the extract is recorded in
   ``selection.json`` "subsets" (its id, name and the whole one's exhibit) so
   Records Reviewed names it as a re-filed extract;
@@ -42,11 +44,12 @@ import json
 import re
 import shutil
 from io import BytesIO
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from ..gates import foreign_identity as FI
-from ..update import body as B, medlegal as ML, select as S, subsets as SUB
+from ..update import body as B, medlegal as ML, pageid_io as PG, select as S, subsets as SUB
 from ..update.locate import vendor_name
 from .base import StageRun, read_json, read_jsonl
 from .transcript import split_pages
@@ -132,7 +135,14 @@ def _firm_stem(name: str) -> str:
 
 
 def _exhibit(
-    sr: StageRun, r: dict[str, Any], n: int, seen: set[str], cdir: Path, earlier: S.Earlier, firm: str | None = None
+    sr: StageRun,
+    r: dict[str, Any],
+    n: int,
+    seen: set[str],
+    cdir: Path,
+    earlier: S.Earlier,
+    firm: str | None = None,
+    image: dict[int, str] | None = None,
 ) -> tuple[dict, dict]:
     """(new exhibit record, units row) for one candidate. `firm`: the name of
     the firm's numbered file in the chronology folder this source is
@@ -147,7 +157,7 @@ def _exhibit(
     if medlegal:  # an expert's report is reviewed, never itemized as treatment
         row = S.row(n, title, {i: (S.EXCLUDED, ML.REASON) for i in range(1, npages + 1)}, pages)
     else:
-        row = S.row(n, title, S.classify_new(pages, npages, seen, earlier), pages)
+        row = S.row(n, title, S.classify_new(pages, npages, seen, earlier, image), pages)
     text_path = cdir / f"{r['id']}.txt"
     text_path.write_text(S.selected_text(pages, row["read"]), encoding="utf-8")
     rec = {**row, "id": str(r["id"]), "source_name": vendor_name(r), "sha256": r.get("sha256")}
@@ -165,6 +175,19 @@ def _exhibit(
     return rec, unit_row
 
 
+def delivered_read(sr: StageRun, p: dict[str, Any]) -> list[dict[str, Any]]:
+    """The plan's exhibits the delivered Exhibit List names: what the delivery
+    READ. A firm-numbered file in the folder the list never named was never
+    read, so it covers nothing."""
+    base = update_dir(sr) / "base.md"  # update_base writes it with the plan; without it every folder exhibit counts
+    listed = (
+        B.delivered_numbers(base.read_text(encoding="utf-8"))
+        if base.is_file()
+        else {e["exhibit"] for e in p["exhibits"]}
+    )
+    return [e for e in p["exhibits"] if e["exhibit"] in listed]
+
+
 def run(sr: StageRun) -> int:
     p = plan(sr)
     if not p:
@@ -173,13 +196,8 @@ def run(sr: StageRun) -> int:
     ud = update_dir(sr)
     cdir = ud / "compose"
     cdir.mkdir(parents=True, exist_ok=True)
-    base = ud / "base.md"  # update_base writes it with the plan; without it every folder exhibit counts as read
-    listed = (
-        B.delivered_numbers(base.read_text(encoding="utf-8"))
-        if base.is_file()
-        else {e["exhibit"] for e in p["exhibits"]}
-    )
-    read_by_delivery = [e for e in p["exhibits"] if e["exhibit"] in listed]
+    read_by_delivery = delivered_read(sr, p)
+    listed = {e["exhibit"] for e in read_by_delivery}
     firm = {e["sha256"]: e for e in p["exhibits"] if e["exhibit"] not in listed}
     delivered_sha = {e["sha256"]: e["name"] for e in read_by_delivery}
     rows, skipped = _candidates(sr, delivered_sha)
@@ -195,24 +213,30 @@ def run(sr: StageRun) -> int:
     # Only what the delivery READ is "already read": a firm-numbered file the
     # delivered list never named was never read, so its words exclude nothing.
     seen = S.seen_shingles([sr.slug_dir / "delivered" / e["name"] for e in read_by_delivery])
-    extracts = SUB.refiled_subsets(
-        [(str(r["id"]), _texts(sr, str(r["id"]))) for r in rows],
-        {str(r["id"]) for r in rows if (r.get("sha256") or "") in firm},
+    ident = PG.load(ud)
+    extracts = PG.merge_extracts(
+        SUB.refiled_subsets(
+            [(str(r["id"]), _texts(sr, str(r["id"]))) for r in rows if str(r["id"]) not in ident.extracts],
+            {str(r["id"]) for r in rows if (r.get("sha256") or "") in firm},
+        ),
+        ident.extracts,
     )
+    text_of = _text_of(sr, {int(e["exhibit"]): e["name"] for e in read_by_delivery})
     recs, units, earlier, k = [], [], S.Earlier(), 0
     for r in (x for x in rows if str(x["id"]) not in extracts):
         f = firm.get(r.get("sha256") or "")
         if f is None:
             k += 1
         n = int(f["exhibit"]) if f else int(p["top_exhibit"]) + k
-        rec, urow = _exhibit(sr, r, n, seen, cdir, earlier, f["name"] if f else None)
+        image = PG.reasons(ident.pages.get(str(r["id"])) or {}, _texts(sr, str(r["id"])), text_of)
+        rec, urow = _exhibit(sr, r, n, seen, cdir, earlier, f["name"] if f else None, image)
         recs.append(rec)
         units.append(urow)
     unread = [f"Exhibit {r['exhibit']} p. {r['unread'][:6]}" for r in recs if r["unread"]]
     if unread:
         sr.log(HELD + f"page(s) the transcription could not read: {unread[:5]}")
         return 2
-    subs = _subset_records(rows, recs, extracts)
+    subs = _subset_records(rows, recs, extracts, {int(e["exhibit"]): e["name"] for e in read_by_delivery})
     _write(sr, ud, recs, units, skipped, subs)
     pages = sum(len(r["read"]) for r in recs)
     if not pages:
@@ -225,26 +249,47 @@ def run(sr: StageRun) -> int:
     return 0
 
 
+def _text_of(sr: StageRun, delivered: dict[int, str]) -> Callable[[str, int], str]:
+    """Reads the page a picture matched: a delivered exhibit's text layer
+    ("exhibit:N") or a new document's transcription."""
+    cache: dict[str, dict[int, str]] = {}
+
+    def get(other: str, page: int) -> str:
+        if other not in cache:
+            n = PG.delivered_exhibit(other)
+            pdf = sr.slug_dir / "delivered" / delivered.get(n, "") if n is not None else None
+            if pdf is not None:
+                cache[other] = dict(enumerate(S.pdf_pages(pdf), 1)) if pdf.is_file() else {}
+            else:
+                cache[other] = _texts(sr, other)
+        return cache[other].get(page, "")
+
+    return get
+
+
 def _texts(sr: StageRun, rid: str) -> dict[int, str]:
     tp = sr.slug_dir / "text" / f"{rid}.txt"
     return S.pages_of_text(tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else "")
 
 
-def _subset_records(rows: list[dict], recs: list[dict], extracts: dict[str, SUB.Subset]) -> list[dict[str, Any]]:
+def _subset_records(
+    rows: list[dict], recs: list[dict], extracts: dict[str, SUB.Subset], delivered: dict[int, str]
+) -> list[dict[str, Any]]:
     """One record per re-filed extract: what it is and the exhibit it is
-    cited in (the whole document's)."""
+    cited in (the whole document's, or the delivered exhibit it re-files)."""
     by_id = {r["id"]: r for r in recs}
     src = {str(r["id"]): r for r in rows}
-    return [
-        {
-            "id": d,
-            "source_name": vendor_name(src[d]),
-            "pages": s.pages,
-            "matched": s.matched,
-            "subset_of": {"id": s.parent, "exhibit": by_id[s.parent]["exhibit"], "title": by_id[s.parent]["title"]},
-        }
-        for d, s in extracts.items()
-    ]
+    out = []
+    for d, s in extracts.items():
+        n = PG.delivered_exhibit(s.parent)
+        if n is not None:
+            sup = {"id": "", "exhibit": n, "title": delivered.get(n, f"Exhibit {n}")}
+        else:
+            sup = {"id": s.parent, "exhibit": by_id[s.parent]["exhibit"], "title": by_id[s.parent]["title"]}
+        out.append(
+            {"id": d, "source_name": vendor_name(src[d]), "pages": s.pages, "matched": s.matched, "subset_of": sup}
+        )
+    return out
 
 
 def _write(sr: StageRun, ud: Path, recs: list[dict], units: list[dict], skipped: dict, subs: list[dict]) -> None:

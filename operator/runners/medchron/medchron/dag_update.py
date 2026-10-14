@@ -22,6 +22,7 @@ from .stages import (
     update_base as _ubase,
     update_collect as _ucollect,
     update_finish as _ufinish,
+    update_pages as _upages,
     update_select as _uselect,
     update_review as _ureview,
     update_upload as _uupload,
@@ -55,7 +56,17 @@ UPDATE_STAGES: tuple[Stage, ...] = (
     BY_NAME["decide_fold"],
     BY_NAME["fold_msg"],
     BY_NAME["extract_after_fold"],
-    BY_NAME["vision"],
+    # Page identity by picture before any page is transcribed: a re-filed
+    # scan is never paid for (``update/pageid``).
+    Stage(
+        "update_pages",
+        "",
+        _slug_unit,
+        requires=("extract_after_fold",),
+        runner=_upages.run,
+        exit_map={1: (FAILED, "update_pages: no update plan; update_base has not run")},
+    ),
+    _reuse("vision", requires=("update_pages",)),
     _reuse("identity", requires=("vision",)),
     Stage("update_select", "", _slug_unit, requires=("identity",), runner=_uselect.run, exit_map={2: _HELD_UPDATE}),
     _reuse("map", requires=("update_select",)),
