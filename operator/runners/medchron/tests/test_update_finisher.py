@@ -234,10 +234,11 @@ def test_the_loop_stops_when_a_review_finds_no_fewer_must_fix(tmp_path: Path, mo
         {"finding": "F1", "anchor": "N1.c1", "action": "replace", "exhibit": 2, "page": 1, "corrected": good},
         unresolved=[{"finding": "F2", "why": "the page does not show the rest"}],
     )
-    rc, sr, md = _run(tmp_path, monkeypatch, [N1, LATER], [r1, r2], [fix])
+    decline = _edits(unresolved=[{"finding": "F1", "why": "x"}, {"finding": "F2", "why": "y"}])
+    rc, sr, md = _run(tmp_path, monkeypatch, [N1, LATER], [r1, r2], [fix, decline])
     assert rc == 2
     assert _review_rounds(sr) == {"r1", "r2"} and UR.ROUNDS > 2  # stopped at no progress, not at the cap
-    assert any("no fewer than the last review" in m for m in sr.logged)
+    assert any("no fewer than the last round" in m for m in sr.logged)
 
 
 # a copy of a delivered visit whose exhibit nothing else cites -------------------
@@ -384,17 +385,39 @@ def test_a_finding_the_finisher_declines_is_held_with_its_reason_never_an_empty_
     assert any("OPEN" in m and "too faint" in m for m in sr.logged)
 
 
-def test_the_last_reviews_findings_are_held_as_not_finished_with_why(
+def test_a_review_that_finds_new_must_fix_after_edits_is_finished_not_called_a_stall(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    good = "Lumbar MRI showed a disc protrusion of 5 mm at the fourth and fifth lumbar level. (Exhibit 2 - p. 1)"
+    """F5. Round 1 finds one must-fix and the finisher settles it; round 2,
+    reading the edited entries, finds two NEW ones. Before, the loop stopped
+    on the review count (2, no fewer than 1) WITHOUT running the finisher on
+    round 2 (a real update held with 59 open that way). Now the finisher acts
+    on every review, and the loop ends clean at round 3."""
+    sent = "Lumbar MRI showed a disc protrusion of {} mm at the fourth and fifth lumbar level. (Exhibit 2 - p. 1)"
+    other = "Therapy evaluation recorded lumbar flexion limited to {} degrees. (Exhibit 3 - p. 1)"
+    later = LATER.split("\n\nAll Other Information\n")[0] + "\n\nAll Other Information\n" + other.format("forty")
     r1 = _review(_finding("N1.c1", "1 wrong value", "size misread"))
-    fix = _edits({"finding": "F1", "anchor": "N1.c1", "action": "replace", "exhibit": 2, "page": 1, "corrected": good})
-    rc, sr, _md = _run(tmp_path, monkeypatch, [N1, LATER], [r1, r1], [fix])
-    assert rc == 2
-    assert [f["outcome"] for f in _record(sr)["open"]] == [
-        "not finished: no progress: 1 must-fix, no fewer than the last review"
-    ]
+    r2 = _review(
+        _finding("N1.c1", "1 wrong value", "level misread"), _finding("N2.c1", "1 wrong value", "x", exhibit=3)
+    )
+    f1 = _edits(
+        {"finding": "F1", "anchor": "N1.c1", "action": "replace", "exhibit": 2, "page": 1, "corrected": sent.format(5)}
+    )
+    f2 = _edits(
+        {"finding": "F1", "anchor": "N1.c1", "action": "replace", "exhibit": 2, "page": 1, "corrected": sent.format(6)},
+        {
+            "finding": "F2",
+            "anchor": "N2.c1",
+            "action": "replace",
+            "exhibit": 3,
+            "page": 1,
+            "corrected": other.format("thirty"),
+        },
+    )
+    rc, sr, md = _run(tmp_path, monkeypatch, [N1, later], [r1, r2, K.CLEAN_REVIEW], [f1, f2])
+    assert rc == 0, [f["outcome"] for f in _record(sr)["open"]]
+    assert _review_rounds(sr) == {"r1", "r2", "r3"}
+    assert sent.format(6) in md and other.format("thirty") in md
 
 
 def test_a_handwritten_row_takes_its_provider_from_the_statement_page_of_the_same_document(
@@ -460,8 +483,47 @@ def test_a_converging_loop_goes_past_four_reviews_and_finishes_clean(
     assert UR.ROUNDS == 4 and UR.MAX_ROUNDS == 6
 
 
+def test_a_finisher_edit_is_graded_on_the_page_image_by_the_review_tier(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F5. About 36 corrections a round were reverted on a real update, every
+    one on a handwritten ledger page the review (the review tier, reading the
+    image) had read correctly, because the audit tier graded them. The edit is
+    still audited, by the audit's own Round, now with the review tier and on
+    the image."""
+    seen: dict[str, Any] = {}
+
+    class _Round:
+        def __init__(self, _door: Any, model: str, _paths: Any, _log: Any, mode: str = "image") -> None:
+            seen.update(model=model, mode=mode)
+
+        def execute(self) -> int:
+            return 0
+
+    monkeypatch.setattr(UR, "Round", _Round)
+    out = tmp_path / "matter" / "out" / "alpha"
+    out.mkdir(parents=True)
+    (out / "Exhibit 2 - Sample.pdf").write_bytes(b"%PDF")
+    tiers = {"review": "review-tier", "audit": "audit-tier", "judgment": "judgment-tier"}
+    sr = SimpleNamespace(
+        slug_dir=tmp_path / "matter",
+        unit=SimpleNamespace(unit="alpha"),
+        cfg=SimpleNamespace(get=lambda *a: tiers if a[-1] == "tiers" else "text"),
+        doorway=None,
+        log=lambda _m: None,
+    )
+    doc = "Alpha - Medical Chronology\n\n## Medical Chronology\n\n{}\n\n## Exhibit List\n"
+    before = doc.format(N1)
+    after = doc.format(N1.replace("4 mm", "5 mm"))
+    (tmp_path / "matter" / "runs" / "alpha").mkdir(parents=True)
+    UR._audit_verify(sr)(before, after)  # type: ignore[arg-type]
+    assert seen == {"model": "review-tier", "mode": "image"}
+
+
 def test_past_four_reviews_a_loop_that_stops_converging_holds() -> None:
-    assert UR._limit(5, 3, 3, 1).startswith("no progress")
-    assert UR._limit(4, 2, 3, 0) == "the review limit was reached at round 4"  # falling, but nothing settled
-    assert UR._limit(4, 2, 3, 1) == ""  # falling and settling: go on
-    assert UR._limit(6, 1, 2, 1) == "the review limit was reached at round 6"
+    assert UR._stop(2, 3, 3, 0).startswith("no progress")  # settled nothing, no fewer left
+    assert UR._stop(1, 3, None, 0).startswith("no progress")  # the first finish settled nothing
+    assert UR._stop(2, 4, 3, 2) == ""  # more found, but the finisher settled some: go on
+    assert UR._stop(4, 2, 3, 0) == "the review limit was reached at round 4"  # falling, but nothing settled
+    assert UR._stop(4, 2, 3, 1) == ""  # falling and settling: go on
+    assert UR._stop(6, 1, 2, 1) == "the review limit was reached at round 6"
