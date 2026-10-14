@@ -34,7 +34,7 @@ from . import (
     inventory,
     job as job_mod,
 )
-from . import manifest, parity, passes, read, review as review_mod, update
+from . import manifest, parity, passes, read, review as review_mod, seedcheck, update
 from .progress import Progress
 from .runbase import RunBase
 from .outcome import REASON, LitigationFailed, LitigationHold, Verdict
@@ -162,15 +162,25 @@ class LitigationRun(RunBase):
         the screen must read first (an update with only unscreened emails has
         no read groups yet; skipping it left the screen nothing to read)."""
         return [
-            mid for mid, p in self._plan().items() if p["read_groups"] or p["audit"] == "all" or p.get("unscreened")
+            mid
+            for mid, p in self._plan().items()
+            if p["read_groups"] or p["audit"] == "all" or p.get("unscreened") or p.get("seed_files")
         ]
+
+    @staticmethod
+    def _fetch_ids(p: dict[str, Any]) -> list[str]:
+        """The candidates, the seed values' source files (``seedcheck``: their
+        text decides whether a seed group is read again), and, for an update
+        that will be read in full for a seed gap, the matter's whole list."""
+        whole = (p.get("full_candidates") or []) if p.get("seed_fresh") else []
+        return list(dict.fromkeys([*p["candidates"], *(p.get("seed_files") or []), *whole]))
 
     def _fetch(self) -> None:
         report, retry = {}, []
         for mid in self._active():
             p = self._plan()[mid]
             r = fetch_mod.fetch_matter(
-                self.seat, mid, inventory.files_of(self.data, mid), p["candidates"], self.data, self.log
+                self.seat, mid, inventory.files_of(self.data, mid), self._fetch_ids(p), self.data, self.log
             )
             report[mid] = r
             retry += r["retry"]
@@ -230,6 +240,7 @@ class LitigationRun(RunBase):
 
     def _screen(self) -> None:
         update.screen(self, lambda mid: passes.texts(self, mid))
+        seedcheck.settle_all(self, self._text_of)
 
     def _read1(self) -> None:
         passes.read1(self)
@@ -312,6 +323,13 @@ class LitigationRun(RunBase):
                 + "; ".join(f"{k} ({len(v)})" for k, v in g["issues"].items())[:400]
             )
 
+    @staticmethod
+    def _unsupported(p: dict[str, Any]) -> set[tuple[str, str]]:
+        """The seed values this run read again because their source's text
+        did not carry their date (``seedcheck.settle``)."""
+        left = set(p.get("seed_unresolved") or [])
+        return {(fid, d) for g, pairs in (p.get("seed_soft") or {}).items() if g in left for fid, d in pairs}
+
     def _parity(self) -> None:
         changes, held = {}, []
         for m in self._json("final.json"):
@@ -325,6 +343,8 @@ class LitigationRun(RunBase):
                 moved_files=set(p["moved"]),
                 overturns=m.get("overturns") or [],
                 today=self.today,
+                unsupported=self._unsupported(p),
+                on_matter={str(f["id"]) for f in inventory.files_of(self.data, mid)},
             )
             changes[mid] = cs
             held += [(m["number"], c["path"]) for c in parity.unexplained(cs)]

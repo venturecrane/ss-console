@@ -237,9 +237,11 @@ def test_a_named_paper_plans_an_update_of_its_groups_only():
 
 
 def test_a_matter_on_the_list_with_no_arrivals_reads_nothing_and_a_two_pass_seed_is_not_reaudited():
-    files = [{"id": "a", "name": "Complaint.pdf", "modified": "x", "created": "2026-01-01"}]
+    # Every source the prior cites is on the matter, none dated its save date.
+    ids = ("a", "old-complaint", "old-notice", "old-pos", "old-frog")
+    files = [{"id": i, "name": f"{i}.pdf", "modified": "x", "created": "2026-01-01"} for i in ids]
     prior = {**copy.deepcopy(PRIOR), "fields_read": ALL, "provenance": {"two_pass": True}}
-    p = manifest._plan(files, prior, {"a": "x"}, ["a"], dt.date(2026, 10, 9))
+    p = manifest._plan(files, prior, {i: "x" for i in ids}, ["a"], dt.date(2026, 10, 9))
     assert p["read_groups"] == [] and p["audit"] == "none"
 
 

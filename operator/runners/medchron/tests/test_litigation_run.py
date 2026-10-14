@@ -97,7 +97,8 @@ def test_a_new_court_paper_rereads_but_a_new_medical_bill_does_not(tmp_path):
 
     firm = load(make_inputs(tmp_path / "in"))
     files = [{"id": "a", "name": "Complaint", "ext": ".pdf", "modified": "2026-03-01T00:00:00"}]
-    prior = {"fields_read": list(vocab.GROUPS)}
+    # A prior the gates would pass, so only the new files decide what is read.
+    prior = {"fields_read": list(vocab.GROUPS), "case_status": {"value": vocab.NOT_FILED, "source": {"file_id": "a"}}}
     man = manifest.current_manifest(files)
     bill = files + [{"id": "b", "name": "Clinic bill", "ext": ".pdf", "modified": "2026-09-01T00:00:00"}]
     assert manifest.plan_matter(bill, prior, man, firm, TODAY)["reason"] == "unchanged"
@@ -107,7 +108,7 @@ def test_a_new_court_paper_rereads_but_a_new_medical_bill_does_not(tmp_path):
     email = files + [{"id": "e", "name": "Re: lunch", "ext": ".msg", "modified": "2026-09-01T00:00:00"}]
     em = manifest.plan_matter(email, prior, man, firm, TODAY)
     assert em["reason"] == "changed" and em["unscreened"] == ["e"] and em["read_groups"] == []  # screened by text
-    seed = manifest.plan_matter(files, {"fields_read": ["case", "defendants"]}, {"a": ""}, firm, TODAY)
+    seed = manifest.plan_matter(files, {**prior, "fields_read": ["case", "defendants"]}, {"a": ""}, firm, TODAY)
     assert seed["read_groups"] == ["discovery"] and seed["reason"] == "missing_fields"
     two = manifest.plan_matter(files, {**prior, "provenance": {"two_pass": True}}, man, firm, TODAY)
     assert two["audit"] == "none" and two["read_groups"] == []  # the accepted list is not re-audited
