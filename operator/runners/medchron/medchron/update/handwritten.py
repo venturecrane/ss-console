@@ -6,9 +6,10 @@ line ``[handwritten]`` (``stages/vision.SYSTEM``). A handwritten 7 reads as a
 statements and bills of the same provider state the dates of service, so:
 
 * the reading is a typed date of service of that provider: confirmed;
-* between the reading's confirmed neighbours the statement has exactly ONE
-  date no entry reads, it is within 7 days, and no other entry's reading is
-  unconfirmed there: the entry takes that date (``decide``);
+* between the reading's confirmed neighbours (or the statement's start or
+  end) as many statement dates no entry reads as unconfirmed readings: the
+  readings take those dates in chronological order, within 7 days when the
+  interval is open at either end (``decide``);
 * anything else: the date is unsupported, and the entry shows the
   reading as an OPEN date, "MM/DD/YYYY (handwritten date, unconfirmed)",
   never a guess between candidates.
@@ -114,24 +115,34 @@ def decide(reading: date, dos: set[date], readings: tuple[date, ...] = ()) -> tu
     """('confirmed' | 'redated', the date) or ('open', None).
 
     `readings` are every handwritten reading of the provider (this one
-    included). A reading on the statement is confirmed. Another is re-dated
-    only inside the gap between its confirmed neighbours, and only when that
-    gap holds exactly ONE statement date no entry reads and exactly ONE
-    unconfirmed reading, within 7 days of each other. Anything else is open:
-    with two free dates in the gap, the nearer one may be the visit a further
-    misread belongs to (2026-10-14 parity run: a visit misread 10 days early
-    sat nearest the date of a second visit whose own entry was misread two
-    weeks early), and a guess between them moves one visit onto another."""
+    included). A reading on the statement is confirmed. The others are
+    settled per INTERVAL between confirmed neighbouring visits (or the
+    statement's start or end): when the interval holds as many unconfirmed
+    readings as statement dates no entry reads (at least one), visits being
+    chronological, the i-th reading in date order is the i-th unread date.
+    Between two confirmed visits the bracket is the constraint and no day
+    window applies; at the statement's start or end only one side bounds the
+    interval, so each pair must also lie within 7 days.
+    Unequal counts, or two entries sharing one unconfirmed reading, leave
+    every reading of the interval open: a guess moves one visit onto
+    another (2026-10-14 parity run)."""
     if reading in dos:
         return "confirmed", reading
     ok = sorted({r for r in readings if r in dos})
     lo = max((d for d in ok if d < reading), default=date.min)
     hi = min((d for d in ok if d > reading), default=date.max)
     free = sorted(d for d in dos if lo < d < hi and d not in ok)
-    rivals = [r for r in set(readings) | {reading} if lo < r < hi and r not in dos]
-    if len(free) != 1 or len(rivals) != 1 or abs((free[0] - reading).days) > WINDOW_DAYS:
+    every = readings if reading in readings else (*readings, reading)
+    mine = sorted(r for r in every if lo < r < hi and r not in dos)
+    if not free or len(set(mine)) != len(mine) or len(mine) != len(free):
         return "open", None
-    return "redated", free[0]
+    pairs = list(zip(mine, free))
+    if any(not lo < d < hi for _, d in pairs) or any(a[1] >= b[1] for a, b in zip(pairs, pairs[1:])):
+        return "open", None  # never out of order with its neighbours
+    bracketed = lo != date.min and hi != date.max
+    if not bracketed and any(abs((d - r).days) > WINDOW_DAYS for r, d in pairs):
+        return "open", None  # at the statement's edge only one side bounds it: the 7-day window stands in
+    return "redated", dict(pairs)[reading]
 
 
 def _mdy(d: date) -> str:
