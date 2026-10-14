@@ -221,8 +221,9 @@ def keep(run_dir: Path, lane: str, job_dir: Path, job_id: str) -> Path:
         raise FileNotFoundError(f"no envelope in {src.parent}")
     dest_dir = kept_dir(run_dir, lane)
     dest_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-    os.chmod(dest_dir.parent, 0o700)
-    os.chmod(dest_dir, 0o700)
+    for p in (dest_dir.parent, dest_dir):
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions - 0o700 is owner-only (root): no group, no other; the tightest mode a directory can have and still be used.
+        os.chmod(p, 0o700)
     dest = dest_dir / f"{job_id}.json"
     tmp = dest_dir / f".{job_id}.json.tmp"
     shutil.copyfile(src, tmp)
