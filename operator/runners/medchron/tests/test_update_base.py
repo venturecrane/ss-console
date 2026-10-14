@@ -56,6 +56,57 @@ def test_summary_lines_are_the_entries_the_reader_sees(tmp_path: Path) -> None:
     assert "Prior Medical History" in lines and "4. Medical Summary" not in lines
 
 
+def test_a_chronology_another_renderer_made_is_proven_by_its_words(tmp_path: Path) -> None:
+    """The laptop-rendered chronology: the seat cannot reproduce its styles
+    or bold runs, so the exact proof fails (that is the old hold); its words
+    re-render paragraph for paragraph, so the words-only proof passes and the
+    entries come back as the delivered text."""
+    delivered = K.foreign_docx(tmp_path / "foreign.docx", note=K.NOTE)
+    exact = docx_md.docx_to_md(delivered, K.HEADINGS)
+    assert docx_md.prove(exact, delivered, _render0, tmp_path / "exact")["diffs"], "the fixture must not be seat-shaped"
+    md = docx_md.docx_to_md(delivered, K.HEADINGS, plain=True)
+    r = docx_md.prove_text(md, delivered, _render0, tmp_path / "text")
+    assert r["rows"] > 20 and r["diffs"] == [], r["diffs"][:5]
+    pre, ents = B.entries_of(md)
+    assert ents == [K.ENTRY_PRE, K.ENTRY_POST]
+    assert K.NOTE in pre and "**" not in md
+    assert B.delivered_numbers(md) == {1}
+
+
+def test_a_foreign_documents_bold_labels_come_back_in_the_updated_document(tmp_path: Path) -> None:
+    """Carried as text, the laptop document's bold labels (Prior Medical
+    History, the review note) would render plain. `carry_runs` gives every
+    delivered paragraph its delivered runs back; an added entry keeps the
+    seat's own formatting."""
+    delivered = K.foreign_docx(tmp_path / "foreign.docx", labels=True)
+    md = docx_md.docx_to_md(delivered, K.HEADINGS, plain=True)
+    added = (
+        "02/10/2026\nExample Imaging | Medical Diagnoses\n\nMedical Diagnoses\n"
+        "MRI showed a disc protrusion measuring 3 mm. (Exhibit 2 - p. 2)\n\n"
+    )
+    updated = K.render(md.replace("## Exhibit List", added + "## Exhibit List", 1), tmp_path / "updated.docx")
+    pmh = [(K.PMH_LABEL[0], True), (K.PMH_LABEL[1], False)]
+    limits = [(K.LIMITS_LABEL[0], True), (K.LIMITS_LABEL[1], False)]
+    assert pmh not in K.runs_of(updated) and limits not in K.runs_of(updated), "the plain render loses the labels"
+    assert docx_md.carry_runs(delivered, updated) >= 2
+    got = K.runs_of(updated)
+    assert pmh in got and limits in got
+    # Every delivered paragraph reads with its delivered runs (the timeline's
+    # gap lines are recomputed on every render, by design), and the added
+    # entry is there; the words are unchanged.
+    for segs in K.runs_of(delivered):
+        if not segs[0][0].startswith("Treatment Gap"):
+            assert segs in got, segs
+    assert [("MRI showed a disc protrusion measuring 3 mm. (Exhibit 2 - p. 2)", False)] in got
+    assert docx_md.prove_text(md, delivered, _render0, tmp_path / "text")["diffs"] == []
+
+
+def test_the_words_only_proof_still_fails_on_a_paragraph_the_markdown_cannot_place(tmp_path: Path) -> None:
+    delivered = K.foreign_docx(tmp_path / "typed.docx", typed="A note the firm typed under the entries.")
+    md = docx_md.docx_to_md(delivered, K.HEADINGS, plain=True)
+    assert docx_md.prove_text(md, delivered, _render0, tmp_path / "text")["diffs"]
+
+
 TEMPLATE = "{CLIENT} - Medical Chronology {MM-DD-YY}.docx"
 FOLDERS = [
     {
@@ -93,6 +144,21 @@ def test_a_named_chronology_must_be_this_clients_chronology() -> None:
         L.locate(docs, FOLDERS, template=TEMPLATE, client="Alpha Example", file_id="z")
     with pytest.raises(L.LocateHold):
         L.locate(docs, FOLDERS, template=TEMPLATE, client="Beta Example", file_id=None)
+
+
+def test_a_versioned_same_day_chronology_is_the_newest() -> None:
+    """A same-day update files "<name> (2).docx" rather than over a file of
+    the same name; the next update must find that one."""
+    docs = [
+        _row("c2", "Alpha Example - Medical Chronology 09-01-26", "fold-chron"),
+        _row("c3", "Alpha Example - Medical Chronology 09-01-26 (2)", "fold-chron"),
+        _row("c1", "Alpha Example - Medical Chronology 03-02-26 (3)", "fold-old"),
+    ]
+    got = L.locate(docs, FOLDERS, template=TEMPLATE, client="Alpha Example", file_id=None)
+    assert got["chronology"]["id"] == "c3"
+    assert (
+        L.locate(docs[:1], FOLDERS, template=TEMPLATE, client="Alpha Example", file_id=None)["chronology"]["id"] == "c2"
+    )
 
 
 def test_two_chronologies_of_the_newest_date_hold() -> None:

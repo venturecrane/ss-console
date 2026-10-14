@@ -5,7 +5,9 @@
   the Records Reviewed paragraph about the update, every figure from the
   run's own artifacts. Refuses when the audit left a new exhibit uncited (a
   repair dropped every claim citing it): its number is fixed by then.
-* `update_render`: the updated markdown through the seat renderer.
+* `update_render`: the updated markdown through the seat renderer; for a
+  chronology another renderer made, every delivered paragraph then gets its
+  delivered runs back (``docx_md.carry_runs``), bold labels included.
 * `update_proofs`: every proof in ``update/proofs.py``; exit 1 (the job FAILS)
   when any does not hold. Proof 10 is the hard gate on a dropped value.
 * `update_manifest`: what goes onto the matter, into the delivered chronology's
@@ -111,7 +113,15 @@ def run_render(sr: StageRun) -> int:
     ud = update_dir(sr)
     text = (ud / "updated-chronology.md").read_text(encoding="utf-8")
     dst = sr.slug_dir / "out" / sr.unit.unit / chronology_name(sr)
-    return render_text(text, dst, cfg=sr.cfg, incident_date=sr.job.incident_date, log=sr.log)
+    rc = render_text(text, dst, cfg=sr.cfg, incident_date=sr.job.incident_date, log=sr.log)
+    p = plan(sr)
+    if rc != 0 or p.get("renderer") != "foreign":
+        return rc
+    # A chronology another renderer made was carried as text; its delivered
+    # paragraphs get their delivered runs back (bold labels included).
+    n = docx_md.carry_runs(sr.slug_dir / "delivered" / p["chronology"]["name"], dst)
+    sr.log(f"  delivered formatting carried: {n} paragraph(s) given their delivered runs")
+    return 0
 
 
 def _composed(ud: Path, rd: Path) -> tuple[list[str], set[int]]:
@@ -141,6 +151,7 @@ def run_proofs(sr: StageRun) -> int:
     paths = AuditPaths(sr.slug_dir, sr.unit.unit)
     gate, _ = audit_coverage.check(paths, lambda _m: None)
     composed, new_ex = _composed(ud, rd)
+    rep = read_json(ud / "assemble_report.json", {})
     x = P.Inputs(
         delivered_lines=docx_md.summary_lines(sr.slug_dir / "delivered" / p["chronology"]["name"]),
         updated_lines=docx_md.summary_lines(out / chronology_name(sr)),
@@ -152,8 +163,9 @@ def run_proofs(sr: StageRun) -> int:
         composed=composed,
         audit_claims=CL.extract_claims(CL.body_of(paths.doc.read_text(encoding="utf-8")), keep_ex),
         new_exhibits=new_ex,
-        pmh_replaced=bool(read_json(ud / "assemble_report.json", {}).get("prior_medical_history_replaced")),
+        pmh_replaced=bool(rep.get("prior_medical_history_replaced")),
         gate_passed=gate,
+        pre_note_itemized=bool(rep.get("pre_note_itemized")),
     )
     r = P.run(x)
     for ln in r.lines:
@@ -190,7 +202,8 @@ def run_manifest(sr: StageRun) -> int:
     (out / "upload_manifest.json").write_text(json.dumps(manifest, indent=1), encoding="utf-8")
     (ud / "already_filed.json").write_text(json.dumps([e["name"] for e in p["exhibits"]], indent=1), encoding="utf-8")
     sr.log(
-        f"{len(manifest)} file(s) into the delivered chronology's folder '{p['folder_name']}'; replaces {p['chronology']['name']}"
+        f"{len(manifest)} file(s) into the delivered chronology's folder '{p['folder_name']}'; replaces {p['chronology']['name']} "
+        f"(renderer of the delivered document: {p.get('renderer', 'seat')})"
     )
     _, ents = B.entries_of((ud / "updated-chronology.md").read_text(encoding="utf-8"))
     sr.log(f"  {len(ents)} entries in the updated chronology")

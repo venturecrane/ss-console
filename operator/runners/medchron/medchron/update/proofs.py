@@ -5,7 +5,9 @@
     History block is the one delivered text not required: it is new text,
     audited under proof 4), and no delivered sentence is carried MORE often
     (a visit already itemized, added again as new);
- 2. the pre-incident omission note is absent from the updated document;
+ 2. the delivered note that pre-incident encounters were reviewed and not
+    itemized is in the updated document verbatim, as often as delivered;
+    absent only when the update's own entries itemize those encounters;
  3. ZERO delivered claims were audited: no audit row is on a delivered
     claim the audit document does not itself carry (a rewritten Prior
     Medical History sentence may repeat a delivered one word for word, and
@@ -58,6 +60,7 @@ class Inputs:
     new_exhibits: set[int]
     pmh_replaced: bool = False
     gate_passed: bool = True
+    pre_note_itemized: bool = False  # assemble found the new entries itemize what the note left out
 
 
 @dataclass
@@ -131,8 +134,16 @@ def _delivered_text(x: Inputs, r: Result) -> None:
     missing = [ln for ln, n in want.items() if have[ln] < n]
     dup = [ln for ln, n in Counter(ln for ln in a if len(ln) > 80).items() if have[ln] > n]
     r.check("1", not missing and not dup, f"delivered lines {len(a)}; missing {len(missing)}; duplicated {len(dup)}")
-    note = [ln for ln in x.updated_lines if NOTE_LINE.search(ln)]
-    r.check("2", not note, f"omission note in the update: {'PRESENT' if note else 'absent'}")
+    was = Counter(ln for ln in x.delivered_lines if NOTE_LINE.search(ln))
+    now = Counter(ln for ln in x.updated_lines if NOTE_LINE.search(ln))
+    if x.pre_note_itemized:
+        ok, state = not now, "removed: the update itemizes those encounters" if not now else "PRESENT though itemized"
+    else:
+        ok = now == was
+        state = (
+            (f"carried verbatim ({sum(now.values())})" if was else "none delivered, none added") if ok else "CHANGED"
+        )
+    r.check("2", ok, f"pre-incident note: {state}")
 
 
 def _audit(x: Inputs, r: Result) -> None:

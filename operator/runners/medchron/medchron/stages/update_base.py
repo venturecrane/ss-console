@@ -6,15 +6,21 @@ delivered chronology by the firm's own name for it (``update/locate.py``),
 pulls that document and every delivered exhibit in its folder into
 ``delivered/``, rebuilds the chronology's markdown from the document
 (``update/docx_md.docx_to_md``), and renders it again with the seat's own
-renderer. Only a markdown that renders to the delivered document with ZERO
-differing paragraphs becomes ``runs/<unit>/update/base.md``: the update then
-carries every delivered entry from it byte-identical.
+renderer. A markdown that renders to the delivered document with ZERO
+differing paragraphs (style, bold runs and text) becomes
+``runs/<unit>/update/base.md`` and the plan records ``renderer: "seat"``: the
+update carries every delivered entry from it byte-identical. A chronology
+another renderer produced (the laptop pipeline's) fails that exact proof on
+formatting alone; then the words-only proof (``docx_md.prove_text``) decides,
+and when every paragraph reads the same the plan records ``renderer:
+"foreign"`` and the entries are carried as text.
 
 Holds (exit 2, a ``update_held:`` line naming why) when the delivered
 chronology cannot be placed, when its Exhibit List names an exhibit its
-folder does not hold, or when the proof finds a difference: an update that
-cannot reproduce the delivered document cannot promise to carry it. A pull
-that fails for a retryable reason is exit 1.
+folder does not hold, or when the words-only proof also finds a difference:
+an update that cannot reproduce the delivered document's text cannot promise
+to carry it. The hold line gives counts and paragraph indexes, never the
+chronology's words. A pull that fails for a retryable reason is exit 1.
 
 The delivered exhibits are copied to ``out/<unit>/`` as well: the audit of the
 new claims renders cited pages from there (the rewritten Prior Medical History
@@ -91,15 +97,37 @@ def _locate(sr: StageRun) -> dict[str, Any]:
     )
 
 
-def _prove(sr: StageRun, docx: Path, ud: Path) -> tuple[str | None, list[Any]]:
-    md = docx_md.docx_to_md(docx, headings(sr.cfg))
-    (ud / "base.rebuilt.md").write_text(md, encoding="utf-8")
+def _prove(sr: StageRun, docx: Path, ud: Path) -> tuple[str | None, str, list[Any]]:
+    """(base markdown or None, renderer, diffs of the proof that decided).
+
+    The exact proof first (style, bold runs and text): a chronology the seat
+    rendered passes it and its entries are carried byte-identical
+    (``renderer: "seat"``). When it fails, the words-only proof on a markdown
+    rebuilt without bold markup: a chronology another renderer produced passes
+    it and its entries are carried as text (``renderer: "foreign"``). The diffs
+    returned on a hold are the words-only proof's: what a reader would see
+    differ."""
 
     def render(text: str, dst: Path) -> int:
         return render_text(text, dst, cfg=sr.cfg, incident_date=sr.job.incident_date, log=lambda _m: None)
 
-    r = docx_md.prove(md, docx, render, ud / "prove")
-    return (md if not r["diffs"] else None), r["diffs"]
+    md = docx_md.docx_to_md(docx, headings(sr.cfg))
+    (ud / "base.rebuilt.md").write_text(md, encoding="utf-8")
+    if not docx_md.prove(md, docx, render, ud / "prove")["diffs"]:
+        return md, "seat", []
+    plain = docx_md.docx_to_md(docx, headings(sr.cfg), plain=True)
+    (ud / "base.rebuilt.text.md").write_text(plain, encoding="utf-8")
+    r = docx_md.prove_text(plain, docx, render, ud / "prove-text")
+    return (plain if not r["diffs"] else None), "foreign", r["diffs"]
+
+
+def _where(diffs: list[Any]) -> str:
+    """Where the documents differ, as paragraph indexes only: the hold reason
+    travels to the job record and on to people, so it never quotes a word of
+    the chronology (it once logged five delivered/rebuilt paragraph pairs of
+    medical text into the job's reason)."""
+    ix = [str(int(d[0])) for d in diffs]
+    return ", ".join(ix[:12]) + (f" and {len(ix) - 12} more" if len(ix) > 12 else "")
 
 
 def run(sr: StageRun) -> int:
@@ -119,17 +147,25 @@ def run(sr: StageRun) -> int:
         sr.log(f"the delivered package could not be pulled in full: {'; '.join(failed[:5])}")
         return 1
     docx = dd / where["chronology"]["name"]
-    md, diffs = _prove(sr, docx, ud)
+    md, renderer, diffs = _prove(sr, docx, ud)
+    # The local proof record (on the seat's data root, never in the job's
+    # reason) keeps the differing paragraphs for whoever finishes the hold.
     (ud / "base_proof.json").write_text(
-        json.dumps({"proven": md is not None, "diffs": [list(map(str, d)) for d in diffs[:20]]}, indent=1),
+        json.dumps(
+            {
+                "proven": md is not None,
+                "renderer": renderer,
+                "differing_paragraphs": len(diffs),
+                "diffs": [list(map(str, d)) for d in diffs[:20]],
+            },
+            indent=1,
+        ),
         encoding="utf-8",
     )
     if md is None:
-        for i, a, b in diffs[:5]:
-            sr.log(f"  @{i} delivered {str(a)[:160]} | rebuilt {str(b)[:160]}")
         sr.log(
-            HELD + f"the delivered chronology does not re-render to itself ({len(diffs)} differing paragraph(s)); "
-            "its entries cannot be carried byte-identical"
+            HELD + f"the delivered chronology's text does not re-render to itself ({len(diffs)} differing "
+            f"paragraph(s), at index {_where(diffs)}); its entries cannot be carried"
         )
         return 2
     listed = B.delivered_numbers(md)
@@ -137,6 +173,7 @@ def run(sr: StageRun) -> int:
     if listed - have:
         sr.log(HELD + f"the Exhibit List names exhibit(s) {sorted(listed - have)} that its folder does not hold")
         return 2
+    where["renderer"] = renderer
     return _stage(sr, ud, dd, where, md, docx)
 
 
@@ -152,8 +189,13 @@ def _stage(sr: StageRun, ud: Path, dd: Path, where: dict[str, Any], md: str, doc
     (ud / "base.md").write_text(md, encoding="utf-8")
     (ud / "update_plan.json").write_text(json.dumps(where, indent=1), encoding="utf-8")
     _, ents = B.entries_of(md)
+    how = (
+        "re-renders to itself"
+        if where["renderer"] == "seat"
+        else "was rendered by another renderer; its text re-renders to itself and its entries are carried as text"
+    )
     sr.log(
-        f"BASE PROVEN: {where['chronology']['name']} re-renders to itself; {len(ents)} delivered entries, "
+        f"BASE PROVEN (renderer: {where['renderer']}): {where['chronology']['name']} {how}; {len(ents)} delivered entries, "
         f"{len(where['exhibits'])} delivered exhibit(s), {len(where['others'])} other file(s) in its folder left alone"
     )
     return 0

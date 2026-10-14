@@ -125,8 +125,8 @@ def _install(root: Path) -> None:
     (icd / "VERSION.json").write_text("{}")
 
 
-def _seat(tmp: Path, delivered_md: str) -> FakeSeat:
-    docx = K.render(delivered_md, tmp / "delivered-src" / OLD_DOCX).read_bytes()
+def _seat(tmp: Path, delivered_md: str, docx: bytes | None = None) -> FakeSeat:
+    docx = docx if docx is not None else K.render(delivered_md, tmp / "delivered-src" / OLD_DOCX).read_bytes()
     ex1, n1 = make_pdf(EX1_PAGES), make_pdf(NEW_PAGES)
     photo = make_pdf(["scene"])
     notes = b"PK firm-authored notes"
@@ -234,6 +234,8 @@ def test_an_update_files_one_complete_document_into_the_delivered_folder(
     assert not any("Return to clinic in four weeks" in c for c in claims)
     assert any("3 mm" in c for c in claims)
     assert json.loads((sd / "runs" / "alpha" / "update" / "proofs.json").read_text())["fails"] == []
+    # A chronology the seat rendered keeps the exact proof.
+    assert json.loads((sd / "runs" / "alpha" / "update" / "update_plan.json").read_text())["renderer"] == "seat"
 
 
 def test_a_dropped_value_fails_the_update_and_nothing_is_filed(
@@ -285,6 +287,8 @@ def test_a_delivered_chronology_the_seat_cannot_reproduce_holds_before_anything_
     o = _driver(job_dir, firm_config_path, pricing_path, seat, _Model()).run()[0]
     assert o.outcome == "held" and o.stage == "update_base", o
     assert not any("n1" in m for m in seat.mints) and seat.sent == [] and seat.deleted == []
+    # The reason reaches the job record and people: it never quotes the document.
+    assert "firm typed" not in (o.reason or "") and "Exhibit 1" not in (o.reason or "")
 
 
 def test_a_named_record_of_another_person_holds_before_any_paid_read(
@@ -298,3 +302,74 @@ def test_a_named_record_of_another_person_holds_before_any_paid_read(
     o = _driver(job_dir, firm_config_path, pricing_path, seat, model).run()[0]
     assert o.outcome == "held" and o.stage == "update_select", o
     assert model.calls == [] and seat.sent == [] and seat.deleted == []
+
+
+def _job(tmp_path: Path, data_root: Path, ids: list[str]) -> Path:
+    install = tmp_path / "install"
+    _install(install)
+    job_dir = tmp_path / "job"
+    job_dir.mkdir()
+    body = yaml.safe_load(job_yaml(data_root, install_root=install))
+    body.update(selection={"include_file_ids": ids}, update={"into": "delivered_chronology"})
+    (job_dir / "job.yaml").write_text(yaml.safe_dump(body, sort_keys=False))
+    return job_dir
+
+
+def test_a_chronology_another_renderer_made_is_updated_and_its_scope_note_carried(
+    tmp_path: Path,
+    data_root: Path,
+    firm_config_path: Path,
+    pricing_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The firm's real case: the delivered chronology was rendered on the
+    laptop. Before, update_base held (the seat renderer could not reproduce
+    its styles). Now its words are proven, the plan records renderer foreign,
+    the delivered entries are carried, the note that pre-incident encounters
+    were not itemized is in the filed document verbatim, and one complete
+    document is filed."""
+    _upload_pause(monkeypatch)
+    job_dir = _job(tmp_path, data_root, ["n1", "n2", "n3"])
+    foreign = K.foreign_docx(tmp_path / "laptop" / OLD_DOCX, note=K.NOTE, labels=True).read_bytes()
+    seat = _seat(tmp_path, K.base_md(note=K.NOTE), docx=foreign)
+    o = _driver(job_dir, firm_config_path, pricing_path, seat, _Model()).run()[0]
+    sd = data_root / "example-matter"
+    ud = sd / "runs" / "alpha" / "update"
+    assert o.outcome == "delivered" and o.stage is None, o
+    plan = json.loads((ud / "update_plan.json").read_text())
+    assert plan["renderer"] == "foreign"
+    assert json.loads((ud / "base_proof.json").read_text())["renderer"] == "foreign"
+    _, ents = B.entries_of((ud / "updated-chronology.md").read_text())
+    assert ents[1:3] == [K.ENTRY_PRE, K.ENTRY_POST]
+    assert seat.deleted == ["c1"] and seat.sent[0]["name"].startswith("Alpha Example - Medical Chronology ")
+    proofs = json.loads((ud / "proofs.json").read_text())
+    assert proofs["fails"] == [] and any(
+        ln.startswith("2. pre-incident note: carried verbatim") for ln in proofs["lines"]
+    )
+    new_id = next(f["file_id"] for f in o.proof["files"] if f["name"] == seat.sent[0]["name"])
+    got = tmp_path / "got.docx"
+    got.write_bytes(seat.blobs[new_id])
+    assert K.NOTE in docx_md.summary_lines(got)
+    # The laptop document's formatting is carried, not re-rendered plain: the
+    # review note's bold label and the title's own bold run read as delivered.
+    runs = K.runs_of(got)
+    assert [(K.LIMITS_LABEL[0], True), (K.LIMITS_LABEL[1], False)] in runs
+    assert runs[0] == [("Alpha Example - Medical Chronology", True)]
+
+
+def test_a_laptop_chronology_the_firm_edited_still_holds_and_the_reason_quotes_no_chronology_text(
+    tmp_path: Path, data_root: Path, firm_config_path: Path, pricing_path: Path
+) -> None:
+    job_dir = _job(tmp_path, data_root, ["n1"])
+    typed = "A note the firm typed under the entries."
+    foreign = K.foreign_docx(tmp_path / "laptop" / OLD_DOCX, typed=typed).read_bytes()
+    seat = _seat(tmp_path, K.base_md(), docx=foreign)
+    o = _driver(job_dir, firm_config_path, pricing_path, seat, _Model()).run()[0]
+    assert o.outcome == "held" and o.stage == "update_base", o
+    assert not any("n1" in m for m in seat.mints) and seat.sent == [] and seat.deleted == []
+    reason = o.reason or ""
+    assert "differing paragraph" in reason
+    for words in (typed, "blood pressure", "Cervical strain", "Example Clinic", "Prior Medical History"):
+        assert words not in reason, words
+    proof = json.loads((data_root / "example-matter" / "runs" / "alpha" / "update" / "base_proof.json").read_text())
+    assert proof["proven"] is False and proof["renderer"] == "foreign" and proof["differing_paragraphs"] >= 1

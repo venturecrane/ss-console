@@ -218,6 +218,74 @@ def test_proof_8_fails_on_an_added_entry_that_cites_only_delivered_exhibits() ->
     assert "8" in P.run(_inputs(md, [NEW_PRE])).fails
 
 
+# ---- the note that pre-incident encounters were not itemized ---------------------
+def _assemble_noted(new_ents: list[str], pmh: str | None = None):
+    nex = [{"exhibit": 2, "title": "Exhibit 2 - Example Imaging (Medical Records)", "pages": 2}]
+    base = K.base_md(note=K.NOTE)
+    return base, A.assemble(
+        base,
+        C.audit_document(base, new_ents, nex, pmh),
+        [],
+        describe=lambda c: "",
+        canon=str,
+        headings=K.HEADINGS,
+        new_exhibits=nex,
+        update_note=lambda retitled: "Update.",
+    )
+
+
+def _noted_inputs(base: str, md: str, composed: list[str], **kw) -> P.Inputs:
+    x = _inputs(md, composed, **kw)
+    x.base_md = base
+    x.delivered_lines = [ln for ln in B.chronology_lines(base) if ln.strip()]
+    from medchron.audit import claims as CL
+
+    x.base_claims = CL.extract_claims(CL.body_of(base), {1, 2})
+    return x
+
+
+@pytest.mark.parametrize("pmh", [None, "Prior Medical History\nRadiographs before the incident. (Exhibit 2 - p. 1)"])
+def test_the_delivered_scope_note_is_carried_verbatim_and_the_proofs_accept_it(pmh: str | None) -> None:
+    """Before: the update deleted the note and proof 2 refused it, so the
+    filed document went silent on encounters it never listed. Now it is
+    carried verbatim after the Prior Medical History (rewritten or not)."""
+    base, (md, rep) = _assemble_noted([NEW_PRE, NEW_POST], pmh)
+    pre, _ = B.entries_of(md)
+    assert K.NOTE in pre and md.count("[NTD:") == 1
+    assert pre.index(K.NOTE) > pre.index("Prior Medical History")
+    assert rep["pre_note_carried"] == 1 and rep["pre_note_itemized"] is False
+    r = P.run(_noted_inputs(base, md, [NEW_PRE, NEW_POST], pmh_replaced=rep["prior_medical_history_replaced"]))
+    assert r.fails == [], r.lines
+    assert "2. pre-incident note: carried verbatim (1)" in r.lines
+
+
+def test_proof_2_fails_when_the_note_is_dropped_or_changed() -> None:
+    base, (md, rep) = _assemble_noted([NEW_PRE, NEW_POST])
+    dropped = md.replace(K.NOTE, "")
+    assert "2" in P.run(_noted_inputs(base, dropped, [NEW_PRE, NEW_POST])).fails
+    changed = md.replace("3 additional", "2 additional")
+    assert "2" in P.run(_noted_inputs(base, changed, [NEW_PRE, NEW_POST])).fails
+    with pytest.raises(ValueError, match="pre-incident note"):
+        A._check_carried(dropped, B.entries_of(base)[1], [K.NOTE])
+
+
+def test_the_note_goes_only_when_the_update_itself_itemizes_those_encounters() -> None:
+    def visit(mm: str, dd: str) -> str:
+        return (
+            f"{mm}/{dd}/2025\nExample Imaging | Medical Diagnoses\n\nMedical Diagnoses\n"
+            f"Routine check on {mm}/{dd}/2025 recorded pulse 7{mm[1]}. (Exhibit 2 - p. 1)"
+        )
+
+    three = [visit("06", "10"), visit("07", "12"), visit("09", "01")]
+    assert A.itemizes(K.NOTE, three) and not A.itemizes(K.NOTE, three[:2])
+    assert not A.itemizes(K.NOTE, [visit("10", "05")] * 3)  # outside the span it states
+    assert not A.itemizes("[NTD: 3 additional pre-incident encounters were reviewed and are not itemized.]", three)
+    base, (md, rep) = _assemble_noted([*three, NEW_POST])
+    assert "[NTD:" not in md and rep["pre_note_itemized"] is True and rep["pre_note_carried"] == 0
+    r = P.run(_noted_inputs(base, md, [*three, NEW_POST], pre_note_itemized=True))
+    assert "2" not in r.fails, r.lines
+
+
 # ---- values ---------------------------------------------------------------------
 def test_values_normalise_spellings_and_ignore_citation_pages() -> None:
     assert numbers("209.0 and 02/03/25 (Exhibit 4 - p. 17)") == {"209", "2/3/2025"}
