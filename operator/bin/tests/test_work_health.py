@@ -168,6 +168,23 @@ def test_a_bad_ending_older_than_the_window_drops_off():
     assert wh.job_items(SEAT, rows, CFG, NOW) == []
 
 
+def test_a_medchron_update_held_for_smd_finishing_is_visible_as_held_and_unproven():
+    """The update's review and finisher loop holds with ``update_held:``
+    (smd_finishing): the HELD job row is a job_held item, and its
+    DELIVERY_PROOF_FAILED row (code update_held) is open work, never silence."""
+    reason = "update_held: the independent review of the update left 1 must-fix finding(s); SMD finishes it"
+    rows = [
+        _job("MEDCHRON", "SUBMITTED", NOW - timedelta(hours=3), job_id="J5"),
+        _job("MEDCHRON", "HELD", NOW - timedelta(hours=1), job_id="J5", reason=reason),
+    ]
+    assert _kinds(wh.job_items(SEAT, rows, CFG, NOW)) == ["job_held"]
+    fail = _row(
+        "DELIVERY_PROOF_FAILED", NOW - timedelta(hours=1), job_id="J5", lane="medchron", code="update_held", detail="x"
+    )
+    items = src.delivery_proof_items(SEAT, [fail], CFG, NOW)
+    assert _kinds(items) == ["job_failed"] and "update into the delivered chronology" in items[0].what
+
+
 def test_a_delivered_job_is_not_an_item():
     rows = [
         _job("DEMAND", "SUBMITTED", NOW - timedelta(hours=2)),

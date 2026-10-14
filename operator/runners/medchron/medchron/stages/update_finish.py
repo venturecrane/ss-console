@@ -132,6 +132,11 @@ def update_note(sr: StageRun, ud: Path) -> Any:
             n = len(filed["copies"])
             what = "was a copy and was" if n == 1 else "were copies and were"
             out += f" {n} {what} not read again: {'; '.join(filed['copies'])}."
+        refiled = [A.refiled_row(r) for r in keep if r.get("refiled")]
+        if refiled:
+            out += (
+                f" {len(refiled)} of those documents repeat visits the chronology already listed: {'; '.join(refiled)}."
+            )
         if filed["unreadable"]:
             out += (
                 f" {len(filed['unreadable'])} could not be read as record pages (not a PDF or an image): "
@@ -173,7 +178,7 @@ def run_assemble(sr: StageRun) -> int:
             f"new exhibit(s) {rep['new_exhibits_uncited']} are cited by no added entry after the audit; "
             "their numbers are fixed by the audit, so the update stops rather than leave a gap"
         )
-    for r in (x for x in keep if not x.get("reused")):  # a reused exhibit is the firm's file
+    for r in (x for x in keep if not x.get("reused") and not x.get("refiled")):  # the firm's file, or a re-filed copy
         final = f"Exhibit {r['exhibit']} - {rep['new_exhibits_titled'][str(r['exhibit'])]}"
         if final != r["title"] and (out / f"{r['title']}.pdf").is_file():
             os.replace(out / f"{r['title']}.pdf", out / f"{final}.pdf")
@@ -263,8 +268,9 @@ def run_manifest(sr: StageRun) -> int:
     ud = update_dir(sr)
     out = sr.slug_dir / "out" / sr.unit.unit
     p = plan(sr)
-    # A new exhibit that reuses a firm-numbered file is already on the matter.
-    filed = [r for r in read_json(ud / "new_exhibits.final.json", []) if not r.get("reused")]
+    # A new exhibit that reuses a firm-numbered file is already on the matter;
+    # a re-filed copy of a delivered exhibit (the update review) is not filed again.
+    filed = [r for r in read_json(ud / "new_exhibits.final.json", []) if not r.get("reused") and not r.get("refiled")]
     names = [chronology_name(sr)] + [f"{r['title']}.pdf" for r in filed]
     manifest = []
     for n in names:

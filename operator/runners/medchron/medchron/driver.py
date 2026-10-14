@@ -310,6 +310,10 @@ class Driver:
         if stage.name == "audit":
             n = self._claims(ctx)
             return None if n is None else n * self.limits.usd_per_audit_claim
+        if stage.name == "update_review":
+            from .stages import update_review
+
+            return update_review.projected_usd(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing)
         return None
 
     def _claims(self, ctx: dag.Ctx) -> int | None:

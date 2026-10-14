@@ -1,79 +1,83 @@
-"""`update_review`: review the update's added entries against their pages and
-REPAIR what the review finds, before the document is assembled and proven.
-Paid (the strongest tier, plus the audit loop's re-audit of what changed).
+"""`update_review`: the update's INDEPENDENT REVIEW and FINISHER loop, the
+gate before the update is assembled, proven and filed. Paid (the review tier
+for both passes, plus the audit of every sentence the finisher writes).
 
-WHY (2026-10-14). The pre-delivery review (``stages/review.py``) only holds.
-On two real matters independent reviewers, reading only the update and the
-page images, found 13 and 15 MUST-FIX defects and could have corrected each
-one from the page: what made the laptop's chronologies deliverable was exactly
-that loop, review then fix against the images, until clean. This stage is that
-loop, in the update lane:
+WHY (2026-10-14). The laptop's two chronology updates were delivered clean;
+the seat's update lane failed for a day on the same files. The difference
+was the laptop's last step: after the pipeline an Opus agent ran an
+independent review against the page images, then corrected every MUST-FIX
+finding by hand, and looped until the reviewer found nothing must-fix. The
+lane had encoded each such judgment as a rule (and its own review saw only
+cited pages and could repair only claim anchors), so every real file exposed
+a new case. This stage is the laptop's step, in the lane, as one loop:
 
-1. REVIEW. The ``review`` tier (else ``judgment``) reads the added entries in
-   parts sized to finish, each entry WITH the page images it cites, plus the
-   delivered entries that share its date. A part whose reply runs out is split
-   in half and reviewed again (at most SPLIT_DEPTH times); a single entry that
-   cannot finish fails the stage resumably: nothing unreviewed goes on.
-2. REPAIR. MUST findings are applied to the audit document as targeted edits
-   to the anchored entries (``update/review_repair.py``: grounded or not
-   applied; delivered entries never edited). SHOULD findings apply only as a
-   grounded edit confined to one entry; otherwise they are recorded. A
-   REDATE is the one edit to a date line: it applies only when the cited
-   page's text states the corrected date (``page_text``), and the entry moves
-   to its place in date order. The review reads the image; the page's text
-   is the second, independent read a date is never changed without.
-   UNCITED PAGES. Each added entry is shown, besides the pages it cites, the
-   pages of the same new exhibit that follow its last cited page, up to the
-   next page any added entry cites (or the exhibit's end), at most
-   EXTRA_PAGES: on a real update a 6-page report reached compose as its first
-   2 pages, the review saw only those, agreed with them, and passed an entry
-   missing its exam, diagnoses, plan, causation opinion and signer. A finding
-   that such a page records what the entry omits is repaired by an ``add``
-   (``update/review_repair.py``) citing that page, then re-audited.
-3. RE-AUDIT. The audit loop (``stages/audit_loop.py``) runs again: every
-   corrected sentence is a new claim and is audited against its page.
-4. LOOP. Only the edited entries and their neighbours are reviewed again, at
-   most ROUNDS reviews. Exit when a review returns 0 MUST. Otherwise HOLD
-   (``update_held:``, an SMD-finishing class in ``proof/holds.py``) listing the
-   open findings for SMD. Never assembled, proven or filed with a MUST open.
+1. REVIEW (``update/review_parts.py``). A fresh pass with no access to
+   compose's reasoning reads every added entry against EVERY page of the new
+   documents it cites, in windows sized to finish, plus a text-only duplicate
+   part per long document. It returns findings only: severity, class, where
+   (anchor), the page it relies on and what that page says. A part whose
+   reply runs out is split in half; a single page that cannot finish fails
+   the stage resumably (nothing unreviewed goes on).
+2. FINISH (``update/finisher.py``). A second pass, shown the findings, the
+   entries and the pages they rely on, returns edits: any text of an added
+   entry (date, provider, body, an omitted paragraph, a duplicate deleted in
+   favour of the entry that holds its content). Each edit is checked
+   (grounded, never dropping content that exists nowhere else), applied, the
+   entries re-sorted, and every new sentence AUDITED against its page; an
+   edit the audit does not support is reverted and its finding stays open.
+   The audit loop then runs to its gate on what remains.
+3. LOOP. The edited entries, the entries still carrying a MUST, and their
+   neighbours are reviewed again, at most ROUNDS reviews. A round that applies
+   nothing, or a review that finds no fewer MUST-FIX than the last, ends it.
+   0 MUST -> assemble, proofs and the existing delivery path. Otherwise HOLD
+   (``update_held:``, ``smd_finishing``) with the open findings listed in
+   plain language in the job log and the reason. SHOULD findings are finished
+   when the finisher can; they never hold the job.
 
-Every call is a ledger row under stage ``update_review`` with the round in its
-custom id; the driver's job cap binds each call (``before_request``), a
-runaway guard. ``review_repair.json`` is the record: a rerun on the same
-audit document does not pay again.
+The delivered entries are never edited. Every call is a ledger row under this
+stage with its round in the custom id; the driver's cap binds each call, and
+each round logs its calls, tokens and dollars. ``review_repair.json`` is the
+record (``review_repair.named_values`` reads it for proof 10); a rerun on the
+document this stage already settled does not pay again.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import llm, prompts
+from .. import budget, llm, prompts
+from ..audit import claims as CL
 from ..audit.page_text import exhibit_paths
 from ..audit.render import img_block, render
+from ..audit.run import AuditPaths, Round
 from ..proof import review as PR
-from ..update import body as B, review_repair as RR, select as S
+from ..update import body as B, finisher as FN, review_parts as RP, review_repair as RR, select as S
 from . import audit_loop
 from .base import StageRun, read_json
 from .update_base import headings, update_dir
 
-ROUNDS = 4  # reviews: up to three repairs, each verified by the next review
-SPLIT_DEPTH = 4
-PART_MAX_ENTRIES = 6
-PART_MAX_IMAGES = 24
-EXTRA_PAGES = 6  # uncited pages of the same document shown per entry, counted in the part
+ROUNDS = 4  # reviews: up to three finishes, each verified by the next review
+SPLIT_DEPTH = 5
 MAX_TOKENS = 32_000
 RECORD = "review_repair.json"
 STAGE = "update_review"
+#: The projection's input per page shown (an image plus its label) and the
+#: share of round one the later rounds and the finisher add.
+PAGE_TOKENS = 1_800
+LATER_SHARE = 1.0
 
 Images = Callable[[int, int], dict[str, Any] | None]
+#: (document before, document after) -> the new claims the audit did not support
+Verify = Callable[[str, str], list[dict[str, Any]]]
 
 
 class ReviewIncomplete(RuntimeError):
-    """A single entry's review did not finish: the stage fails resumably."""
+    """A single page's review did not finish: the stage fails resumably."""
 
 
 @dataclass
@@ -81,18 +85,20 @@ class Ctx:
     sr: StageRun
     model: str
     system: str
+    fsystem: str
     images: Images
-    evidence: RR.Evidence | None = None
-    #: anchor -> the uncited pages of its exhibits shown with it (``_extra``)
-    extra: dict[str, list[tuple[int, int]]] = field(default_factory=dict)
+    evidence: RR.Evidence
+    npages: Callable[[int], int]
+    verify: Verify
+    already: RP.Already = field(default_factory=dict)
     rnd: int = 0
     calls: int = 0
-    tokens: int = 0
+    usage: list[dict[str, Any]] = field(default_factory=list)
 
 
-def _model(sr: StageRun) -> str:
-    tiers = sr.cfg.get("models", "tiers") or {}
-    return str(tiers.get("review") or llm.model_for(sr.cfg, "judgment"))
+def _model(cfg: Any) -> str:
+    tiers = cfg.get("models", "tiers") or {}
+    return str(tiers.get("review") or llm.model_for(cfg, "judgment"))
 
 
 def _image_source(sr: StageRun) -> Images:
@@ -106,6 +112,22 @@ def _image_source(sr: StageRun) -> Images:
         return img_block(p) if p else None
 
     return get
+
+
+def page_counts(out: Path) -> Callable[[int], int]:
+    from pypdf import PdfReader
+
+    pdfs, cache = exhibit_paths(out), {}
+
+    def n(ex: int) -> int:
+        if ex not in cache:
+            try:
+                cache[ex] = len(PdfReader(str(pdfs[ex])).pages) if ex in pdfs else 0
+            except Exception:  # noqa: BLE001 - an unreadable exhibit shows no pages; its claims still audit
+                cache[ex] = 0
+        return cache[ex]
+
+    return n
 
 
 def page_text(sr: StageRun) -> RR.Evidence:
@@ -124,110 +146,72 @@ def page_text(sr: StageRun) -> RR.Evidence:
     return get
 
 
-def _extra(c: Ctx, e: RR.Entry, cited: set[tuple[int, int]], keep: set[int]) -> list[tuple[int, int]]:
-    """The pages of each added exhibit `e` cites that follow its last cited
-    page there, up to the next page any added entry cites or the exhibit's
-    end, at most EXTRA_PAGES in all: what the entry's document says that the
-    entry may have left out."""
-    out: list[tuple[int, int]] = []
-    for ex in sorted({x for x, _ in e.cites() if x in keep}):
-        p = max(pg for x, pg in e.cites() if x == ex) + 1
-        while len(out) < EXTRA_PAGES and (ex, p) not in cited and c.images(ex, p) is not None:
-            out.append((ex, p))
-            p += 1
+def already_pages(sr: StageRun) -> RP.Already:
+    """exhibit -> {page: the delivered page it is a copy of}, from the page
+    identity the update decided before vision (``update/pageid``): a new
+    exhibit's page the delivery already read."""
+    ud = update_dir(sr)
+    ident = (read_json(ud / "page_identity.json", {}) or {}).get("pages") or {}
+    out: RP.Already = {}
+    for r in read_json(ud / "new_exhibits.final.json", []):
+        ex, doc = (r.get("exhibit"), r.get("id")) if isinstance(r, dict) else (None, None)
+        rows = ident.get(doc) if isinstance(doc, str) and isinstance(ident, dict) else None
+        if not isinstance(ex, int) or not isinstance(rows, dict):
+            continue
+        for page, v in rows.items():
+            if isinstance(v, list) and len(v) >= 3 and v[0] == "already" and str(page).isdigit():
+                home = str(v[1]).replace("exhibit:", "Exhibit ")
+                out.setdefault(ex, {})[int(page)] = f"{home} p. {v[2]}"
     return out
 
 
-def _same_date(base_md: str, ents: list[RR.Entry]) -> list[tuple[str, str]]:
-    want = {B.iso(e.text) for e in ents}
-    _, delivered = B.entries_of(base_md)
-    return [(f"D{i}", d) for i, d in enumerate(delivered, 1) if B.iso(d) in want]
+def _audit_verify(sr: StageRun) -> Verify:
+    """One audit round over the edited document: the new claims (keys the
+    document before did not have) whose verdict is not SUPPORTED."""
+
+    def verify(before: str, after: str) -> list[dict[str, Any]]:
+        paths = AuditPaths(sr.slug_dir, sr.unit.unit)
+        keep = _keep(sr)
+        old = {c["key"] for c in CL.extract_claims(CL.body_of(before), keep)}
+        new = [c for c in CL.extract_claims(CL.body_of(after), keep) if c["key"] not in old]
+        if not new:
+            return []
+        paths.doc.write_text(after, encoding="utf-8")
+        mode = str(sr.cfg.get("levers", "audit_mode", "image"))
+        Round(sr.doorway, llm.model_for(sr.cfg, "audit"), paths, sr.log, mode=mode).execute()
+        got = CL.latest_real(CL.read_rows(paths.results), {c["key"] for c in new})
+        return [c for c in new if (got.get(c["key"]) or {}).get("verdict") != "SUPPORTED"]
+
+    return verify
 
 
-def _content(c: Ctx, ents: list[RR.Entry], delivered: list[tuple[str, str]]) -> list[dict[str, Any]]:
-    u = c.sr.unit
-    out: list[dict[str, Any]] = [
-        {
-            "type": "text",
-            "text": f"CLIENT: {u.client_name}; date of birth {u.dob or 'not known'}; "
-            f"incident {c.sr.job.incident_date}\n\nADDED ENTRIES IN THIS PART: {', '.join(e.anchor for e in ents)}",
-        }
-    ]
-    shown = 0
-    for e in ents:
-        claims = "\n".join(f"{x.anchor}: {x.text}" for x in e.claims) or "(no cited claim)"
-        loose = "".join(f"\n{x.anchor}: {x.head}{x.text}" for x in e.uncited)
-        loose = f"\n\nUNCITED PARAGRAPHS:{loose}" if loose else ""
-        out.append({"type": "text", "text": f"=== {e.anchor} (ADDED) ===\n{e.text}\n\nCLAIMS:\n{claims}{loose}"})
-        extra = c.extra.get(e.anchor) or []
-        if extra:
-            out.append({"type": "text", "text": f"UNCITED PAGES OF THE SAME DOCUMENT follow {e.anchor}'s cited pages."})
-        for (ex, pg), label in [(x, "") for x in sorted(e.cites())] + [(x, " (uncited)") for x in extra]:
-            if shown >= PART_MAX_IMAGES:
-                out.append({"type": "text", "text": f"Exhibit {ex} p. {pg}{label}: not shown in this part"})
-                continue
-            img = c.images(ex, pg)
-            if img is not None:
-                out += [{"type": "text", "text": f"Exhibit {ex} p. {pg}{label}:"}, img]
-                shown += 1
-    if delivered:
-        out.append(
-            {
-                "type": "text",
-                "text": "DELIVERED ENTRIES ON THE SAME DATES (read only):\n\n"
-                + "\n\n".join(f"=== {a} (DELIVERED) ===\n{t}" for a, t in delivered),
-            }
-        )
-    return out
+def _keep(sr: StageRun) -> set[int]:
+    return set(exhibit_paths(sr.slug_dir / "out" / sr.unit.unit))
 
 
-def _parts(ents: list[RR.Entry], extra: dict[str, list[tuple[int, int]]] | None = None) -> list[list[RR.Entry]]:
-    """Added entries in parts of at most PART_MAX_ENTRIES entries and about
-    PART_MAX_IMAGES pages shown (cited and uncited): sized to finish."""
-    out: list[list[RR.Entry]] = []
-    cur: list[RR.Entry] = []
-    pages = 0
-    for e in ents:
-        n = len(e.cites()) + len((extra or {}).get(e.anchor) or [])
-        if cur and (len(cur) >= PART_MAX_ENTRIES or pages + n > PART_MAX_IMAGES):
-            out.append(cur)
-            cur, pages = [], 0
-        cur.append(e)
-        pages += n
-    return [*out, cur] if cur else out
+def _client(sr: StageRun) -> str:
+    u = sr.unit
+    return f"CLIENT: {u.client_name}; date of birth {u.dob or 'not known'}; incident {sr.job.incident_date}"
 
 
-def _review_part(c: Ctx, ents: list[RR.Entry], base_md: str, key: str, depth: int = 0) -> list[RR.Finding]:
-    """One part's findings. A reply that runs out or does not parse is split
-    in half and reviewed again (the part is too big to finish); a single entry
-    that still does not finish raises ReviewIncomplete."""
-    for attempt in (1, 2):
-        r = c.sr.doorway.call(
-            STAGE,
-            model=c.model,
-            system=c.system,
-            messages=[{"role": "user", "content": _content(c, ents, _same_date(base_md, ents))}],
-            max_tokens=MAX_TOKENS,
-            stream=True,
-            effort="high",
-            custom_id=f"{STAGE}-r{c.rnd}-{key}-{attempt}",
-        )
-        c.calls += 1
-        c.tokens += sum(llm_usage(r.usage).values())
-        if r.stop_reason != "max_tokens":
-            try:
-                return RR.parse_reply(r.text)
-            except RR.ReplyUnparsed as exc:
-                c.sr.log(f"  {key}: {exc}")
-        if len(ents) > 1 and depth < SPLIT_DEPTH:
-            h = len(ents) // 2
-            return _review_part(c, ents[:h], base_md, f"{key}a", depth + 1) + _review_part(
-                c, ents[h:], base_md, f"{key}b", depth + 1
-            )
-    raise ReviewIncomplete(f"the review of {ents[0].anchor} did not finish")
+# ---- the paid calls ---------------------------------------------------------------
+def _call(c: Ctx, system: str, content: list[dict[str, Any]], key: str) -> Any:
+    r = c.sr.doorway.call(
+        STAGE,
+        model=c.model,
+        system=system,
+        messages=[{"role": "user", "content": content}],
+        max_tokens=MAX_TOKENS,
+        stream=True,
+        effort="high",
+        custom_id=f"{STAGE}-r{c.rnd}-{key}",
+    )
+    c.calls += 1
+    c.usage.append({"model": c.model, **_usage(r.usage)})
+    return r
 
 
-def llm_usage(usage: Any) -> dict[str, int]:
+def _usage(usage: Any) -> dict[str, int]:
     from ..ledger import usage_dict
 
     try:
@@ -236,25 +220,49 @@ def llm_usage(usage: Any) -> dict[str, int]:
         return {}
 
 
-def _sha(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
+def _halves(p: RP.Part) -> list[RP.Part] | None:
+    if len(p.pages) > 1:
+        h = len(p.pages) // 2
+        return [RP.Part(p.kind, p.entries, p.exhibit, p.pages[:h]), RP.Part(p.kind, p.entries, p.exhibit, p.pages[h:])]
+    if len(p.entries) > 1:
+        h = len(p.entries) // 2
+        return [RP.Part(p.kind, p.entries[:h], p.exhibit, p.pages), RP.Part(p.kind, p.entries[h:], p.exhibit, p.pages)]
+    return None
 
 
-def _keep(sr: StageRun) -> set[int]:
-    return set(exhibit_paths(sr.slug_dir / "out" / sr.unit.unit))
+def _review_part(c: Ctx, p: RP.Part, ents: list[RR.Entry], base: list[str], key: str, depth: int = 0) -> list:
+    """One part's findings. A reply that runs out or does not parse is split
+    in half (by pages, then entries) and reviewed again; one that cannot be
+    split raises ReviewIncomplete."""
+    content = RP.review_content(p, _client(c.sr), c.images, ents, base)
+    for attempt in (1, 2):
+        r = _call(c, c.system, content, f"{key}-{attempt}")
+        if r.stop_reason != "max_tokens":
+            try:
+                return RR.parse_reply(r.text)
+            except RR.ReplyUnparsed as exc:
+                c.sr.log(f"  {key}: {exc}")
+        halves = _halves(p) if depth < SPLIT_DEPTH else None
+        if halves:
+            return [
+                f for i, h in enumerate(halves) for f in _review_part(c, h, ents, base, f"{key}{'ab'[i]}", depth + 1)
+            ]
+    raise ReviewIncomplete(f"the review of {p.entries[0].anchor} (Exhibit {p.exhibit}) did not finish")
 
 
-def review_round(c: Ctx, md: str, base_md: str, targets: set[int] | None) -> tuple[list[RR.Finding], int]:
-    """Review the targeted added entries (all when None). Returns the findings
-    and the number of entries reviewed."""
-    keep = _keep(c.sr)
-    ents = RR.anchor_entries(md, keep, headings(c.sr.cfg))
-    cited = {x for e in ents for x in e.cites()}
+def review_round(c: Ctx, md: str, base: list[str], targets: set[int] | None) -> tuple[list[RR.Finding], int]:
+    """The independent review of the targeted added entries (all when None):
+    deduplicated findings and the number of entries reviewed."""
+    ents = RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg))
     pick = [e for i, e in enumerate(ents) if targets is None or i in targets]
-    c.extra = {e.anchor: _extra(c, e, cited, keep) for e in pick}
     found: list[RR.Finding] = []
-    for i, part in enumerate(_parts(pick, c.extra), 1):
-        found += _review_part(c, part, base_md, f"p{i}")
+    seen: set[tuple] = set()
+    for i, part in enumerate(RP.plan(pick, _keep(c.sr), c.npages, c.already), 1):
+        for f in _review_part(c, part, ents, base, f"p{i}"):
+            k = (f.anchor, f.klass, f.exhibit, f.page, f.problem[:80])
+            if k not in seen:
+                seen.add(k)
+                found.append(f)
     return found, len(pick)
 
 
@@ -263,11 +271,117 @@ def _must(found: list[RR.Finding]) -> list[RR.Finding]:
     return [f for f in found if f.severity == RR.MUST and not f.anchor.startswith("D")]
 
 
+def _finish_calls(c: Ctx, todo: list[RR.Finding], ents: list[RR.Entry], base: list[str]) -> tuple[list, dict]:
+    """The finisher's edits for `todo`, part by part. A part whose reply does
+    not finish is split by entries; one that still does not leaves its
+    findings to the next review (never a guess)."""
+    edits: list[RR.Finding] = []
+    left: dict[str, str] = {}
+    queue = [(es, fs, f"f{i}") for i, (es, fs) in enumerate(RP.finish_parts(todo, ents), 1)]
+    while queue:
+        es, fs, key = queue.pop(0)
+        content = RP.finish_content(es, fs, _client(c.sr), c.images, ents, base)
+        r = _call(c, c.fsystem, content, key)
+        try:
+            if r.stop_reason == "max_tokens":
+                raise FN.EditsUnparsed("the reply ran out")
+            got, why = FN.parse_edits(r.text, {f.fid: f for f in fs})
+            edits += got
+            left |= why
+        except FN.EditsUnparsed as exc:
+            c.sr.log(f"  finisher {key}: {exc}")
+            if len(es) > 1:
+                h = len(es) // 2
+                for j, sub in enumerate((es[:h], es[h:])):
+                    names = {e.anchor for e in sub}
+                    queue.append((sub, [f for f in fs if f.anchor.split(".")[0] in names], f"{key}{'ab'[j]}"))
+    return edits, left
+
+
+def _apply(c: Ctx, md: str, edits: list[RR.Finding], base: list[str]) -> tuple[str, set[int]]:
+    keep, heads = _keep(c.sr), headings(c.sr.cfg)
+    ents = RR.anchor_entries(md, keep, heads)
+    FN.precheck(edits, ents, base, c.evidence)
+    md1 = FN.set_provider(md, edits, ents)
+    shown = {
+        e.anchor: [(x, p) for x in sorted({x for x, _ in e.cites()}) for p in range(1, c.npages(x) + 1)] for e in ents
+    }
+    rest = [e for e in edits if e.action != "provider"]
+    md2, edited = RR.apply(md1, rest, keep, heads, c.evidence, shown)
+    old = set(B.entries_of(md)[1])
+    return md2, edited | {i for i, t in enumerate(B.entries_of(md2)[1]) if t not in old}
+
+
+def finish(c: Ctx, md: str, found: list[RR.Finding], base: list[str], doc: Path) -> tuple[str, set[int], int, int]:
+    """Edit, check, apply, audit, revert what the audit does not support, and
+    run the audit loop to its gate. Returns (document, edited entries,
+    findings settled, the audit loop's exit)."""
+    for f in found:
+        if f.anchor.startswith("D"):
+            f.outcome = "carried: a delivered entry is never edited by an update"
+    todo = [f for f in found if not f.anchor.startswith("D") and f.severity in (RR.MUST, RR.SHOULD)]
+    for i, f in enumerate(todo, 1):
+        f.fid = f"F{i}"
+    ents = RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg))
+    edits, left = _finish_calls(c, todo, ents, base)
+    new_md, edited = _apply(c, md, edits, base)
+    bad = FN.failed(edits, c.verify(md, new_md)) if new_md != md else []
+    if bad:
+        ids = {id(e) for e in bad}
+        for e in edits:
+            if id(e) in ids:
+                e.outcome = "reverted: the audit did not find the edited sentence on its page"
+            elif e.outcome == "applied":
+                e.outcome = ""
+        new_md, edited = _apply(c, md, edits, base)
+    settled = FN.settle(todo, edits, left)
+    _mark_refiled(c.sr, FN.refiled(edits, ents, base, new_md, {int(r["exhibit"]) for r in _new_records(c.sr)}))
+    c.sr.log(
+        f"  finisher: {len(edits)} edit(s), {sum(e.outcome == 'applied' for e in edits)} applied, {len(bad)} reverted"
+    )
+    if new_md == md:
+        doc.write_text(md, encoding="utf-8")
+        return md, set(), 0, 0
+    doc.write_text(new_md, encoding="utf-8")
+    rc = audit_loop.run(c.sr)  # every remaining new sentence is audited on its page, to the gate
+    return doc.read_text(encoding="utf-8"), edited, settled, rc
+
+
+def _new_records(sr: StageRun) -> list[dict[str, Any]]:
+    rows = read_json(update_dir(sr) / "new_exhibits.final.json", [])
+    return [r for r in rows if isinstance(r, dict) and isinstance(r.get("exhibit"), int)]
+
+
+def _mark_refiled(sr: StageRun, homes: dict[int, str]) -> None:
+    """Each new exhibit the finisher left uncited by dropping a copy of a
+    delivered visit, recorded as a re-filed copy of that delivered exhibit:
+    its number is kept, its Exhibit List row says so, and it is not filed
+    again (``update_finish``)."""
+    if not homes:
+        return
+    rows = _new_records(sr)
+    for r in rows:
+        if r["exhibit"] in homes:
+            r["refiled"] = homes[r["exhibit"]]
+            sr.log(f"  Exhibit {r['exhibit']}: a re-filed copy of delivered {homes[r['exhibit']]}; not filed again")
+    (update_dir(sr) / "new_exhibits.final.json").write_text(json.dumps(rows, indent=1), encoding="utf-8")
+
+
+# ---- the loop ---------------------------------------------------------------------
+def _sha(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _plain(f: RR.Finding) -> str:
+    where = f" (Exhibit {f.exhibit}, page {f.page})" if f.exhibit and f.page else ""
+    return f"entry {f.anchor or 'unnamed'}{where}: {f.problem or f.klass}"
+
+
 def _hold_line(open_: list[RR.Finding]) -> str:
-    first = "; ".join(f"{f.anchor} {f.klass}: {f.problem}" for f in open_[:4])
+    first = "; ".join(_plain(f) for f in open_[:4])
     return (
-        f"update_held: the review of the update left {len(open_)} must-fix finding(s) its repair rounds could "
-        f"not settle against the pages; SMD finishes it: {first}"
+        f"update_held: the independent review of the update left {len(open_)} must-fix finding(s) the finisher "
+        f"could not correct against the pages; SMD finishes it: {first}"
     )[:480]
 
 
@@ -297,65 +411,94 @@ def _reuse(sr: StageRun, rec: dict[str, Any], md: str) -> int | None:
     return None
 
 
-def _repair(c: Ctx, md: str, found: list[RR.Finding], doc: Path) -> tuple[str, set[int], int]:
-    """Apply the round's grounded findings and re-audit what changed. Returns
-    the document, the edited entries and the audit loop's exit (0 when clean)."""
-    new_md, edited = RR.apply(md, found, _keep(c.sr), headings(c.sr.cfg), c.evidence, c.extra)
-    for f in found:
-        if f.action == "redate":
-            c.sr.log(f"  redate {f.anchor} to {f.corrected} (Exhibit {f.exhibit} p. {f.page}): {f.outcome}")
-    if new_md == md:
-        return md, edited, 0
-    doc.write_text(new_md, encoding="utf-8")
-    rc = audit_loop.run(c.sr)  # every corrected sentence is a new claim, audited on its page
-    return doc.read_text(encoding="utf-8"), edited, rc
+def _dollars(usage: list[dict[str, Any]]) -> str:
+    path = Path(os.environ.get(budget.PRICING_ENV, budget.PRICING_DEFAULT))
+    try:
+        p = budget.Pricing.load(path)
+        return f"{sum(p.price_row(u) for u in usage):.2f} USD"
+    except (OSError, ValueError, KeyError, budget.BudgetError):
+        return "not priced here"
 
 
-def run(sr: StageRun, *, images: Images | None = None, evidence: RR.Evidence | None = None) -> int:
+def _ctx(sr: StageRun, images: Images | None, evidence: RR.Evidence | None, verify: Verify | None) -> Ctx:
+    return Ctx(
+        sr,
+        _model(sr.cfg),
+        prompts.load("update-review-system", sr.cfg),
+        prompts.load("update-finish-system", sr.cfg),
+        images or _image_source(sr),
+        evidence or page_text(sr),
+        page_counts(sr.slug_dir / "out" / sr.unit.unit),
+        verify or _audit_verify(sr),
+    )
+
+
+def run(
+    sr: StageRun,
+    *,
+    images: Images | None = None,
+    evidence: RR.Evidence | None = None,
+    verify: Verify | None = None,
+    npages: Callable[[int], int] | None = None,
+) -> int:
     ud, doc = update_dir(sr), sr.slug_dir / "runs" / sr.unit.unit / "final-chronology.md"
     md = doc.read_text(encoding="utf-8")
     again = _reuse(sr, read_json(ud / RECORD, {}), md)
     if again is not None:
         return again
-    base_md = (ud / "base.md").read_text(encoding="utf-8")
-    c = Ctx(sr, _model(sr), prompts.load("update-review-system", sr.cfg), images or _image_source(sr))
-    c.evidence = evidence or page_text(sr)
+    base = FN.delivered_of((ud / "base.md").read_text(encoding="utf-8"))
+    c = _ctx(sr, images, evidence, verify)
+    c.npages, c.already = npages or c.npages, already_pages(sr)
     rec: dict[str, Any] = {"model": c.model, "doc_sha_in": _sha(md), "rounds": []}
+    return _loop(c, rec, md, base, doc, ud)
+
+
+def _loop(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: Path) -> int:
     targets: set[int] | None = None
     found: list[RR.Finding] = []
+    last_must: int | None = None
     for rnd in range(1, ROUNDS + 1):
-        c.rnd, c.calls, c.tokens = rnd, 0, 0
+        c.rnd, c.calls, c.usage = rnd, 0, []
         try:
-            found, n = review_round(c, md, base_md, targets)
+            found, n = review_round(c, md, base, targets)
         except ReviewIncomplete as exc:
-            sr.log(f"update review: {exc}; nothing goes on, a rerun reviews again")
+            c.sr.log(f"update review: {exc}; nothing goes on, a rerun reviews again")
             return 1
         must = _must(found)
-        row: dict[str, Any] = {"round": rnd, "entries": n}
+        row: dict[str, Any] = {"round": rnd, "entries": n, "must": len(must)}
         rec["rounds"].append(row)
-        if not must or rnd == ROUNDS:
-            # Clean, or the last review: nothing is applied that no later review would read.
-            row.update(calls=c.calls, tokens=c.tokens, findings=[f.as_dict() for f in found])
-            sr.log(f"update review round {rnd}/{ROUNDS}: {n} entr(ies), {len(must)} must-fix; {c.calls} call(s)")
-            if not must:
-                _save(ud / RECORD, rec, "clean", doc)
-                return 0
-            break
-        md, edited, rc = _repair(c, md, found, doc)
-        row.update(calls=c.calls, tokens=c.tokens, findings=[f.as_dict() for f in found])
-        sr.log(
-            f"update review round {rnd}/{ROUNDS}: {n} entr(ies), {len(must)} must-fix, "
-            f"{sum(f.outcome == 'applied' for f in found)} correction(s) applied; {c.calls} call(s), {c.tokens} token(s)"
+        stop = rnd == ROUNDS or (last_must is not None and len(must) >= last_must)
+        settled, rc = 0, 0
+        if (must and not stop) or (not must and found):
+            md, edited, settled, rc = finish(c, md, found, base, doc)
+            targets = _targets(md, c.sr, edited, found)
+        row.update(calls=c.calls, usage=c.usage, findings=[f.as_dict() for f in found])
+        c.sr.log(
+            f"update review round {rnd}/{ROUNDS}: {n} entr(ies) reviewed, {len(must)} must-fix, "
+            f"{len(found) - len(must)} other; {settled} settled by the finisher; {c.calls} call(s), {_dollars(c.usage)}"
         )
         if rc != 0:
             _save(ud / RECORD, rec, "audit_failed", doc)
             return 3 if rc == 1 else 4
-        targets = _targets(md, sr, edited, found)
-    open_ = _must(found)
+        if not must:
+            _save(ud / RECORD, rec, "clean", doc)
+            return 0
+        if stop or settled == 0:
+            if not stop:
+                c.sr.log("update review: the finisher settled nothing this round; no progress")
+            elif rnd < ROUNDS:
+                c.sr.log(f"update review: {len(must)} must-fix, no fewer than the last review; no progress")
+            break
+        last_must = len(must)
+    return _hold(c, rec, found, doc, ud)
+
+
+def _hold(c: Ctx, rec: dict[str, Any], found: list[RR.Finding], doc: Path, ud: Path) -> int:
+    open_ = [f for f in _must(found) if f.outcome != "applied"] or _must(found)
     _save(ud / RECORD, rec, "held", doc, open_)
     for f in open_:
-        sr.log(f"  OPEN {f.anchor} [{f.klass}] Exhibit {f.exhibit} p. {f.page}: {f.problem}")
-    sr.log(_hold_line(open_))
+        c.sr.log(f"  OPEN [{f.klass}] {_plain(f)}" + (f"; not settled: {f.outcome}" if f.outcome else ""))
+    c.sr.log(_hold_line(open_))
     return 2
 
 
@@ -365,3 +508,21 @@ def _save(path: Path, rec: dict[str, Any], status: str, doc: Path, open_: list[R
     rec["open"] = [f.as_dict() for f in open_ or []]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(rec, indent=1), encoding="utf-8")
+
+
+def projected_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing) -> float | None:
+    """What this stage is projected to cost, from this matter's own pages:
+    every page of the new exhibits shown once to the review, the same again
+    for the later rounds and the finisher, priced at the review model's input
+    rate (output is bounded by the parts and small beside the pages)."""
+    out = slug_dir / "out" / unit
+    new = [r.get("exhibit") for r in read_json(slug_dir / "runs" / unit / "update" / "new_exhibits.final.json", [])]
+    exs = [x for x in new if isinstance(x, int)]
+    if not exs:
+        return None
+    n = page_counts(out)
+    pages = sum(n(x) for x in exs)
+    rate = pricing.rate_for(_model(cfg))
+    tokens_in = pages * PAGE_TOKENS * (1 + LATER_SHARE)
+    parts = max(1, pages // RP.WINDOW_PAGES + 1)
+    return (tokens_in * rate.input_per_million_cents + parts * 4_000 * rate.output_per_million_cents) / 1e8

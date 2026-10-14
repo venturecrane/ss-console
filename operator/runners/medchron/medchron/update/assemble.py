@@ -237,6 +237,16 @@ def exhibit_titles_for(
     return retitled, uncited
 
 
+def refiled_row(r: dict[str, Any]) -> str:
+    """A new exhibit the update review found to be a re-filed copy of a
+    delivered exhibit (``stages/update_review``): its number is kept and its
+    row says so, in the words of the update's other re-filed copies
+    (``update/reviewed.py``)."""
+    title = str(r.get("provisional_title") or r.get("title") or "")
+    name = title.split(" - ", 1)[1] if " - " in title else str(r.get("source_name") or "A document")
+    return f"{name} (re-filed pages of {r['refiled']}; not filed again)"
+
+
 def _notes(text: str) -> list[str]:
     return [m.group(0).strip() for m in B.PRE_NOTE.finditer(text or "")]
 
@@ -387,9 +397,11 @@ def assemble(
     body = (pre.rstrip("\n") + "\n\n" if pre.strip() else "\n") + "\n\n".join(entries) + "\n\n"
     lane = delivered_lanes(delivered_rows[1:], base_ents, canon, name_of)
     final_rows = provider_rows(entries, str, lane)
-    retitled, uncited = exhibit_titles_for([r for r in new_exhibits if not r.get("reused")], new_ents, name_of)
+    filed = [r for r in new_exhibits if not r.get("reused") and not r.get("refiled")]
+    retitled, uncited = exhibit_titles_for(filed, new_ents, name_of)
     firm = folder_rows(base_md, folder or [], taken)
     firm += [f"| {r['exhibit']} | {r['reused']} |" for r in new_exhibits if r.get("reused")]
+    firm += [f"| {r['exhibit']} | {refiled_row(r)} |" for r in new_exhibits if r.get("refiled")]
     ex_sec = with_rows(b["## Exhibit List"], [f"| {n} | {t} |" for n, t in sorted(retitled.items())] + firm)
     rr = b.get(B.SECTIONS[4])
     if rr is not None and update_note and retitled:
