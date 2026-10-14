@@ -18,6 +18,10 @@ delivered exhibit PDFs are what the firm holds, and they are the page truth.
   never compared. No image hash: the vision pass runs before this, so a hash
   saves nothing.
 * A page with no text after the vision pass is excluded as blank and counted.
+* A BILLING page (``update/billing_page``: a claim form, or an itemized
+  statement or ledger with no clinical narrative) is excluded: the base lane
+  never itemizes a bill. Its text stays in the transcript the handwritten-date
+  check reads, so its dates of service are still evidence.
 * Every other page is read (no date window: a new record may hold visits
   before or after the incident).
 """
@@ -31,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from ..stages.chunking import context_block
+from .billing_page import BILLING, is_billing
 from .values import clinical_values
 
 MIN_CHARS = 80
@@ -149,6 +154,8 @@ def _decide(t: str, seen: set[str], earlier: Earlier | None) -> tuple[str, str]:
         return UNREAD, "the page could not be transcribed"
     if len(t) < MIN_CHARS:
         return EXCLUDED, BLANK
+    if is_billing(t):
+        return EXCLUDED, BILLING
     sh = shingles(t)
     if sh and len(sh & seen) >= COVERED_FRAC * len(sh):
         return EXCLUDED, ALREADY

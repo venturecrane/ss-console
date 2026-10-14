@@ -183,3 +183,58 @@ def test_on_an_update_vision_reads_only_page_one_of_a_scanned_life_care_plan(tmp
     queue = {q["id"]: q for q in json.loads((d / "scan_queue.json").read_text())}
     assert queue["lc"].get("vision_pages") == [1]  # the old code queued all three pages
     assert not queue["rx"].get("vision_pages")  # a treatment record is read in full
+
+
+# ---- billing pages inside a medical-and-billing file ------------------------------
+CLINICAL_1 = (
+    "Example Spine Works\nDate of visit 02/03/2026\nSubjective: neck pain 6 of 10 after the collision.\n"
+    "Assessment: cervical strain. Plan: adjustment and home exercise, return in one week. " * 2
+)
+CLINICAL_2 = (
+    "Example Spine Works\nDate of visit 02/10/2026\nSubjective: neck pain 4 of 10, improving.\n"
+    "Exam: reduced rotation to the left. Plan: continue care twice weekly. " * 2
+)
+CMS_1500 = (
+    "HEALTH INSURANCE CLAIM FORM\nAPPROVED BY NATIONAL UNIFORM CLAIM COMMITTEE (NUCC) CMS-1500\n"
+    "Example Spine Works\n24A 02/03/2026 98941 65.00\n24A 02/10/2026 98941 65.00\nTOTAL CHARGE 130.00"
+)
+LEDGER = (
+    "Example Spine Works\nPatient Ledger\nDate of Service Code Charges Payments Balance\n"
+    "02/03/2026 98941 65.00 0.00 65.00\n02/10/2026 98941 65.00 0.00 130.00\n"
+    "02/17/2026 98941 65.00 0.00 195.00\nBalance due 195.00"
+)
+
+
+def test_billing_pages_in_a_medical_and_billing_file_are_not_composed_but_stay_evidence(tmp_path: Path) -> None:
+    from datetime import date
+
+    from medchron.stages import update_collect as UC, update_select as US
+    from medchron.update import coverage as UCov, handwritten as H, select as S
+
+    sr = _select_sr(tmp_path)
+    (tmp_path / "runs" / "alpha" / "update").mkdir(parents=True)
+    pages = [CLINICAL_1, CLINICAL_2, CMS_1500, LEDGER]
+    pdf = tmp_path / "mb.pdf"
+    pdf.write_bytes(make_pdf(pages))
+    (tmp_path / "text" / "mb.txt").write_text("".join(f"[p.{i}]\n{t}\n" for i, t in enumerate(pages, 1)))
+    r = {"id": "mb", "path": str(pdf), "ext": ".pdf", "name": "Example Spine Works Medical and Billing Records"}
+    rec, unit_row = US._exhibit(sr, {**r, "sha256": "mb"}, 2, set(), tmp_path / "c", S.Earlier())  # type: ignore[arg-type]
+    assert rec["read"] == [1, 2]  # the old code composed the claim form and the ledger as visits
+    assert rec["excluded"] == {"billing page": 2}
+    composed = Path(unit_row["text_path"]).read_text()
+    assert "CLAIM FORM" not in composed and "Ledger" not in composed
+    # The handwritten-date check still reads the ledger's typed dates of service.
+    _, pool = UC._page_texts(sr, [rec])  # type: ignore[arg-type]
+    assert H.service_dates(pool, "Example Spine Works") >= {date(2026, 2, 3), date(2026, 2, 17)}
+    # A document read in full is covered: the next update does not read it again.
+    (tmp_path / "runs" / "alpha" / "update" / "selection.json").write_text(
+        json.dumps({"exhibits": [{**rec, "read": [], "excluded": {"billing page": 4}}]})
+    )
+    assert UCov.covered_sets(tmp_path, "alpha")["covered"] == ["mb"]
+
+
+def test_a_clinical_page_that_mentions_a_charge_is_still_read() -> None:
+    from medchron.update import billing_page as BP
+
+    assert not BP.is_billing(CLINICAL_1 + "\nCharges 65.00 payment 0.00 balance 65.00")
+    assert BP.is_billing(CMS_1500) and BP.is_billing(LEDGER)
