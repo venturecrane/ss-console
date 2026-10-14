@@ -27,8 +27,11 @@ a new case. This stage is the laptop's step, in the lane, as one loop:
    edit the audit does not support is reverted and its finding stays open.
    The audit loop then runs to its gate on what remains.
 3. LOOP. The edited entries, the entries still carrying a MUST, and their
-   neighbours are reviewed again, at most ROUNDS reviews. A round that applies
-   nothing, or a review that finds no fewer MUST-FIX than the last, ends it.
+   neighbours are reviewed again: ROUNDS reviews, up to MAX_ROUNDS while the
+   loop converges. A round that settles nothing, or a review that finds no
+   fewer MUST-FIX than the last, ends it; the last review's findings are then
+   marked "not finished" with why, and a finding the finisher will not edit is
+   "declined by the finisher" with its reason, so the hold names each one.
    0 MUST -> assemble, proofs and the existing delivery path. Otherwise HOLD
    (``update_held:``, ``smd_finishing``) with the open findings listed in
    plain language in the job log and the reason. SHOULD findings are finished
@@ -62,6 +65,10 @@ from .base import StageRun, read_json
 from .update_base import headings, update_dir
 
 ROUNDS = 4  # reviews: up to three finishes, each verified by the next review
+#: Past ROUNDS a loop goes on only while it is converging: the last finish
+#: settled a finding and the must-fix count is still falling (a real update
+#: was cut off at round 4 with 52 open after 123, 98, 54).
+MAX_ROUNDS = 6
 SPLIT_DEPTH = 5
 MAX_TOKENS = 32_000
 RECORD = "review_repair.json"
@@ -301,11 +308,13 @@ def _finish_calls(c: Ctx, todo: list[RR.Finding], ents: list[RR.Entry], base: li
 def _apply(c: Ctx, md: str, edits: list[RR.Finding], base: list[str]) -> tuple[str, set[int]]:
     keep, heads = _keep(c.sr), headings(c.sr.cfg)
     ents = RR.anchor_entries(md, keep, heads)
-    FN.precheck(edits, ents, base, c.evidence)
-    md1 = FN.set_provider(md, edits, ents)
+    # The pages of each entry's own documents: the review read them for it, so
+    # a correction grounded on any of them is a correction on its page.
     shown = {
         e.anchor: [(x, p) for x in sorted({x for x, _ in e.cites()}) for p in range(1, c.npages(x) + 1)] for e in ents
     }
+    FN.precheck(edits, ents, base, c.evidence, shown)
+    md1 = FN.set_provider(md, edits, ents)
     rest = [e for e in edits if e.action != "provider"]
     md2, edited = RR.apply(md1, rest, keep, heads, c.evidence, shown)
     old = set(B.entries_of(md)[1])
@@ -477,6 +486,7 @@ class At:
     rec: dict[str, Any]
     targets: set[int] | None
     last_must: int | None
+    last_settled: int = 0
 
 
 def compose_sha(ud: Path) -> str:
@@ -495,6 +505,7 @@ def _checkpoint(ud: Path, at: At) -> None:
         "rec": at.rec,
         "targets": None if at.targets is None else sorted(at.targets),
         "last_must": at.last_must,
+        "last_settled": at.last_settled,
     }
     (ud / CHECKPOINT).write_text(json.dumps(row), encoding="utf-8")
 
@@ -510,18 +521,32 @@ def _resume(sr: StageRun, ud: Path) -> At | None:
         return None
     sr.log(f"update review: resuming after round {done}; rounds 1 to {done} are not paid again")
     targets = {int(x) for x in t if isinstance(x, int)} if isinstance(t, list) else None
-    return At(done, str(row["md"]), row["rec"], targets, lm if isinstance(lm, int) else None)
+    ls = row.get("last_settled")
+    return At(
+        done, str(row["md"]), row["rec"], targets, lm if isinstance(lm, int) else None, ls if isinstance(ls, int) else 0
+    )
 
 
 def _end(ud: Path) -> None:
     (ud / CHECKPOINT).unlink(missing_ok=True)
 
 
+def _limit(rnd: int, must: int, last_must: int | None, last_settled: int) -> str:
+    """Why this round is the last review (its findings are not finished), or ""."""
+    falling = last_must is not None and must < last_must
+    if last_must is not None and not falling:
+        return f"no progress: {must} must-fix, no fewer than the last review"
+    if rnd >= MAX_ROUNDS or (rnd >= ROUNDS and not (falling and last_settled > 0)):
+        return f"the review limit was reached at round {rnd}"
+    return ""
+
+
 def _loop(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: Path, at: At | None = None) -> int:
     targets: set[int] | None = at.targets if at else None
     found: list[RR.Finding] = []
     last_must: int | None = at.last_must if at else None
-    for rnd in range((at.done if at else 0) + 1, ROUNDS + 1):
+    last_settled = at.last_settled if at else 0
+    for rnd in range((at.done if at else 0) + 1, MAX_ROUNDS + 1):
         c.rnd, c.calls, c.usage = rnd, 0, []
         try:
             found, n = review_round(c, md, base, targets)
@@ -531,14 +556,14 @@ def _loop(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: 
         must = _must(found)
         row: dict[str, Any] = {"round": rnd, "entries": n, "must": len(must)}
         rec["rounds"].append(row)
-        stop = rnd == ROUNDS or (last_must is not None and len(must) >= last_must)
+        stop = _limit(rnd, len(must), last_must, last_settled) if must else ""
         settled, rc = 0, 0
         if (must and not stop) or (not must and found):
             md, edited, settled, rc = finish(c, md, found, base, doc)
             targets = _targets(md, c.sr, edited, found)
         row.update(calls=c.calls, usage=c.usage, findings=[f.as_dict() for f in found])
         c.sr.log(
-            f"update review round {rnd}/{ROUNDS}: {n} entr(ies) reviewed, {len(must)} must-fix, "
+            f"update review round {rnd}: {n} entr(ies) reviewed, {len(must)} must-fix, "
             f"{len(found) - len(must)} other; {settled} settled by the finisher; {c.calls} call(s), {_dollars(c.usage)}"
         )
         if rc != 0:
@@ -548,13 +573,14 @@ def _loop(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: 
             _save(ud / RECORD, rec, "clean", doc)
             return 0
         if stop or settled == 0:
-            if not stop:
-                c.sr.log("update review: the finisher settled nothing this round; no progress")
-            elif rnd < ROUNDS:
-                c.sr.log(f"update review: {len(must)} must-fix, no fewer than the last review; no progress")
+            why = stop or "no progress: the finisher settled nothing this round"
+            c.sr.log(f"update review: {why}")
+            for f in found:
+                f.outcome = f.outcome or f"not finished: {why}"
+            row["findings"] = [f.as_dict() for f in found]
             break
-        last_must = len(must)
-        _checkpoint(ud, At(rnd, md, rec, targets, last_must))
+        last_must, last_settled = len(must), settled
+        _checkpoint(ud, At(rnd, md, rec, targets, last_must, last_settled))
     return _hold(c, rec, found, doc, ud)
 
 

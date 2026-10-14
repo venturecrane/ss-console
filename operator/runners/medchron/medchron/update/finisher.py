@@ -61,9 +61,12 @@ def parse_edits(text: str, by_id: dict[str, RR.Finding]) -> tuple[list[RR.Findin
     edits: list[RR.Finding] = []
     for item in obj["edits"]:
         e = RR._one({**item, "severity": "MUST"} if isinstance(item, dict) else item)
+        said = str(item.get("action") or "").strip().lower() if isinstance(item, dict) else ""
+        if said in ("", "decline", "none"):  # a finding the finisher will not edit, said so
+            e.action, e.outcome = "none", f"declined by the finisher: {e.reason or 'no action and no reason given'}"
         src = by_id.get(e.fid)
         if src is None:
-            e.outcome = e.outcome or f"the edit names no finding of this part ({e.fid or 'none'})"
+            e.outcome = f"the edit names no finding of this part ({e.fid or 'none'})"
         else:
             e.severity, e.klass, e.problem = src.severity, src.klass, src.problem
         edits.append(e)
@@ -102,16 +105,22 @@ def _words(name: str) -> list[str]:
     return [w.lower() for w in _NAME_WORD.findall(name) if w.lower().strip(".") not in _CRED]
 
 
-def check_provider(e: RR.Finding, ents: list[RR.Entry], evidence: RR.Evidence | None) -> str:
-    """'' when the corrected provider name is stated on a page the entry cites."""
+def check_provider(
+    e: RR.Finding, ents: list[RR.Entry], evidence: RR.Evidence | None, shown: dict[str, list[tuple[int, int]]]
+) -> str:
+    """'' when the corrected provider name is stated, in the page's text, on a
+    page of a document the entry cites (`shown`: the pages the review read
+    for it). A handwritten ledger row names no one; the typed statement of the
+    same document does (a real update, 2026-10-14: 27 provider lines a round
+    were refused because the statement page was not one the row cited)."""
     ent = next((x for x in ents if x.anchor == e.anchor), None)
     if ent is None:
         return f"{e.anchor} is not an added entry"
     name = e.corrected.strip()
     if not name or "\n" in name or "|" in name or "(Exhibit" in name:
         return "the corrected provider is not one name"
-    if e.exhibit is None or e.page is None or (e.exhibit, e.page) not in ent.cites():
-        return "the provider is grounded on a page the entry does not cite"
+    if e.exhibit is None or e.page is None or (e.exhibit, e.page) not in shown.get(e.anchor, ent.cites()):
+        return "the provider is grounded on a page of no document the entry cites"
     text = evidence(e.exhibit, e.page) if evidence else None
     if text is None:
         return f"no page text to check the provider against (Exhibit {e.exhibit} p. {e.page})"
@@ -141,14 +150,20 @@ def set_provider(md: str, edits: list[RR.Finding], ents: list[RR.Entry]) -> str:
     return out
 
 
-def precheck(edits: list[RR.Finding], ents: list[RR.Entry], delivered: list[str], ev: RR.Evidence | None) -> None:
+def precheck(
+    edits: list[RR.Finding],
+    ents: list[RR.Entry],
+    delivered: list[str],
+    ev: RR.Evidence | None,
+    shown: dict[str, list[tuple[int, int]]] | None = None,
+) -> None:
     for e in edits:
         if e.outcome:
             continue
         if e.action == "drop_entry":
             e.outcome = check_drop(e, ents, delivered)
         elif e.action == "provider":
-            e.outcome = check_provider(e, ents, ev)
+            e.outcome = check_provider(e, ents, ev, shown or {})
 
 
 # ---- the audit's verdict on what changed ----------------------------------------
@@ -189,7 +204,7 @@ def settle(findings: list[RR.Finding], edits: list[RR.Finding], left: dict[str, 
         elif mine:
             f.outcome = "; ".join(dict.fromkeys(e.outcome for e in mine))[:400]
         else:
-            f.outcome = "the finisher made no edit" + (f": {left[f.fid]}" if left.get(f.fid) else "")
+            f.outcome = "declined by the finisher: " + (left.get(f.fid) or "no edit and no reason given")
     return n
 
 

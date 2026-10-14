@@ -186,7 +186,7 @@ def _one(item: object) -> Finding:
     )
     if sev is None:
         f.outcome = "severity not MUST or SHOULD; held as MUST"
-    elif action not in ACTIONS:
+    elif action and action not in ACTIONS:  # a review finding names no action
         f.outcome = f"unknown action {action!r}"
     return f
 
@@ -329,8 +329,10 @@ def check(
     if f.action == "redate":
         if not _valid_mdy(f.corrected):
             return "the corrected date is not MM/DD/YYYY"
-        if (f.exhibit, f.page) not in by_e[f.anchor].cites():
-            return "the redate is grounded on a page the entry does not cite"
+        # A page of the entry's own documents shown to the review (``shown``),
+        # else a page the entry cites; its text must state the date either way.
+        if (f.exhibit, f.page) not in (shown or {}).get(f.anchor, by_e[f.anchor].cites()):
+            return "the redate is grounded on a page of no document the entry cites"
         return _date_on_page(f, by_e[f.anchor], evidence)
     if not f.reason:
         return "a drop gives no reason"
