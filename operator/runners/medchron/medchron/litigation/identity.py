@@ -163,6 +163,37 @@ def row_key(r: dict[str, Any]) -> str:
     return f"{set_identity(str(r.get('set') or ''))}|{party_key(ROLE_WORDS.sub(' ', row_party(r)))}"
 
 
+def _party_words(r: dict[str, Any]) -> frozenset[str]:
+    return frozenset(w for w in _words(ROLE_WORDS.sub(" ", row_party(r))) if w != "and")
+
+
+def pair_rows(old: Any, new: Any) -> dict[str, str]:
+    """``{new key: old key}`` for sets whose party a read wrote shorter or
+    longer than the last list did: the same kind and set number, one party's
+    words all within the other's ("Bartholome, Ramirez and Roseville City
+    School District" / "Bill Bartholome, Susanna Ramirez, Roseville City
+    School District"; 2026-10-14 proof run). Only a key neither list shares,
+    and only when exactly one row on each side can be its pair; any other
+    reading of the parties stays two sets."""
+    olds = {k: r for k, r in keyed_rows(old)}
+    news = {k: r for k, r in keyed_rows(new)}
+    lone_old = {k: r for k, r in olds.items() if k not in news}
+    lone_new = {k: r for k, r in news.items() if k not in olds}
+
+    def fits(a: dict[str, Any], b: dict[str, Any]) -> bool:
+        if set_identity(str(a.get("set") or "")) != set_identity(str(b.get("set") or "")):
+            return False
+        wa, wb = _party_words(a), _party_words(b)
+        return bool(wa and wb) and (wa <= wb or wb <= wa)
+
+    out: dict[str, str] = {}
+    for nk, nr in lone_new.items():
+        cands = [ok for ok, orow in lone_old.items() if fits(orow, nr)]
+        if len(cands) == 1 and [k for k, r in lone_new.items() if fits(lone_old[cands[0]], r)] == [nk]:
+            out[nk] = cands[0]
+    return out
+
+
 def keyed_rows(rows: Any) -> list[tuple[str, dict[str, Any]]]:
     """(key, row) for every set in ``rows``, combined names split. Two rows
     that share a key (two deposition notices to one party) are told apart by
