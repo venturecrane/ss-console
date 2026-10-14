@@ -95,7 +95,15 @@ def attorney_notes(
         review += [f"Howell table: {n}" for n in _json(data, "howell.json")["notes"]]
     review += list(render_notes)
     walled = _json(data, "walled.json") if (data / "walled.json").is_file() else []
-    review += [f"Kept out of drafting as the firm's own papers ({w['reason']}): {w['name']}" for w in walled]
+    # Each is an EMAIL (a .msg with its attachments, or a printed one). Named as one:
+    # an email's subject can equal a filed document's name ("LIEN - SIGNED" in
+    # the mail and the signed lien in the liens folder), and on 2026-10-13 the
+    # review read the line as the filed document excluded and then used.
+    review += [
+        f'Email kept out of drafting ({w["reason"]}): "{w["name"]}"; a filed document '
+        "with the same name is a separate paper"
+        for w in walled
+    ]
     review = _once(review, [label for label, _d in units or []])
     tail = ["", "## End tables (from the final document)", "", end_tables] if end_tables else []
     return "\n".join(lines + ["", "## For review", ""] + [f"- {x}" for x in review] + tail) + "\n"
