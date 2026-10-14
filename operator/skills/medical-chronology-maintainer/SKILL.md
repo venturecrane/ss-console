@@ -248,9 +248,20 @@ delivered chronology exists, and the request goes to UPDATE below. So does a
 matter whose record is absent but whose files hold a delivered chronology
 document (named "<Client> - Medical Chronology MM-DD-YY"): a chronology
 delivered before the record existed is still delivered. A RUN is
-for a matter with no delivered chronology, or for a requester who asks in so
-many words to rebuild it from scratch, and then the reply says it re-reads
-and counts the whole file.
+for a matter with no delivered chronology. **The broker and the runner enforce
+this, not only this text.** `medchron_job_submit` refuses a RUN, and a plain
+append (`selection.include_file_ids` without the `update` block), on a matter
+whose ledger records a delivery; the runner refuses one at its first step, before
+anything is read or charged, when the matter's files hold the firm's delivered
+chronology name. Either refusal names the shape to send instead,
+`update: {into: "delivered_chronology", chronology_file_id: "<id>"}` with
+`selection.include_file_ids` naming only what the delivery did not cover: resubmit
+as the UPDATE below in the same turn, and never relay the refusal to the firm.
+A refusal that says whether the matter holds a delivery could not be read is not
+a "no": nothing was queued, and you ask again rather than resubmit as a RUN. A
+requester who asks to rebuild a delivered chronology from scratch gets the
+update, which makes it complete by reading every record it did not cover; the
+seat does not queue a second full run on a delivered matter.
 
 1. **Resolve the matter by dual probe; never trust a stored id.** Probe one: page
    `list_matters` and match the requested matter NUMBER exactly (heed the paging

@@ -88,6 +88,91 @@ def test_list_matter_writes_the_manifest_and_tree(
     assert d.payload["include_prefixes"] == ["/MEDICAL"]
 
 
+# ---- list_matter: a RUN on a matter with a delivered chronology (2026-10-13) ---
+def _with_delivered_chronology(seat: FakeSeat, client: str, *, deleted: bool = False) -> None:
+    row = doc_row("chrono", f"{client} - Medical Chronology 08-01-26.docx", MEDICAL, 100)
+    seat.docs.append({**row, "deleted": deleted})
+
+
+def test_a_run_on_a_matter_holding_a_delivered_chronology_is_refused_before_anything_is_read(
+    job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
+) -> None:
+    """The laptop-delivered case the broker's ledger cannot see: the firm's own
+    file name for the chronology is on the matter, so the RUN stops at the
+    listing ($0) and the reason carries the update shape."""
+    from medchron import dag
+
+    sr = _sr(job_dir, firm_config_path, data_root, seat)
+    _with_delivered_chronology(seat, sr.job.units[0].client_name)
+    log: list[str] = []
+    sr = _sr(job_dir, firm_config_path, data_root, seat, log=log)
+    assert listing.run(sr) == listing.DELIVERED_EXIT
+    assert any("Medical Chronology 08-01-26.docx" in line for line in log)
+    outcome, reason = dag.BY_NAME["list_matter"].exit_map[listing.DELIVERED_EXIT]
+    assert outcome == dag.REFUSED and '"into": "delivered_chronology"' in reason and "include_file_ids" in reason
+
+
+def test_a_plain_append_on_a_delivered_matter_is_refused_too(
+    job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
+) -> None:
+    import yaml
+
+    body = yaml.safe_load((job_dir / "job.yaml").read_text())
+    body["selection"] = {"include_file_ids": ["f1"]}
+    (job_dir / "job.yaml").write_text(yaml.safe_dump(body, sort_keys=False))
+    sr = _sr(job_dir, firm_config_path, data_root, seat)
+    _with_delivered_chronology(seat, sr.job.units[0].client_name)
+    assert listing.run(sr) == listing.DELIVERED_EXIT
+
+
+def test_the_update_and_an_undelivered_matter_list_through(
+    job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
+) -> None:
+    """Falsifiers: a deleted chronology is not a delivery, another client's is
+    not this one's, and an update reads the delivered one on purpose."""
+    import yaml
+
+    sr = _sr(job_dir, firm_config_path, data_root, seat)
+    client = sr.job.units[0].client_name
+    _with_delivered_chronology(seat, client, deleted=True)
+    seat.docs.append(doc_row("other", "Someone Else - Medical Chronology 08-01-26.docx", MEDICAL, 100))
+    assert listing.run(sr) == 0
+    _with_delivered_chronology(seat, client)
+    assert listing.run(_sr(job_dir, firm_config_path, data_root, seat)) == listing.DELIVERED_EXIT
+    body = yaml.safe_load((job_dir / "job.yaml").read_text())
+    body["selection"] = {"include_file_ids": ["f1"]}
+    body["update"] = {"into": "delivered_chronology"}
+    (job_dir / "job.yaml").write_text(yaml.safe_dump(body, sort_keys=False))
+    assert listing.run(_sr(job_dir, firm_config_path, data_root, seat)) == 0
+
+
+def test_a_resume_after_this_jobs_own_upload_lists_through(
+    job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
+) -> None:
+    """A job that has begun delivering re-lists onto its own chronology; that
+    is not someone else's delivery."""
+    sr = _sr(job_dir, firm_config_path, data_root, seat)
+    _with_delivered_chronology(seat, sr.job.units[0].client_name)
+    own = sr.slug_dir / "runs" / sr.job.units[0].unit
+    own.mkdir(parents=True)
+    (own / "delivery.json").write_text("{}")
+    assert listing.run(sr) == 0
+
+
+def test_a_listing_that_cannot_be_read_fails_the_stage(
+    job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
+) -> None:
+    """A listing that cannot be read is never "none": the read error propagates, the stage
+    fails, and no paid stage runs on an unexamined matter."""
+
+    def broken(_matter_id: str) -> list:
+        raise seat_mod.SeatError("listing unavailable")
+
+    seat.list_files = broken  # type: ignore[method-assign]
+    with pytest.raises(seat_mod.SeatError):
+        listing.run(_sr(job_dir, firm_config_path, data_root, seat))
+
+
 # ---- download -----------------------------------------------------------------
 def test_download_pulls_the_selection_dedupes_by_content_and_verifies_size(
     job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat, corpus: dict[str, bytes]

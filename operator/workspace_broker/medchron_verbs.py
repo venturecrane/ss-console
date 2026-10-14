@@ -55,6 +55,7 @@ from .medchron_ledger import (
     cycle_from_customer_yaml,
     validate_envelope,
 )
+from .medchron_update import delivered_count, delivered_refusal
 
 #: Addresses inside a free-text ``requested_by`` ("Christa Barrera
 #: <christa@example.com>", "christa@example.com", "Christa, Firm LLP"). The
@@ -373,8 +374,8 @@ class MedchronVerbs:
             }
         # Order is deliberate. The two checks above say "this seat cannot do
         # this at all", which is ours or the firm's to fix and is worth naming
-        # before anything about the requester. These two say "not you" and "not
-        # twice". None of the four spends anything.
+        # before anything about the requester. The next three say "not you",
+        # "not twice" and "not a run: an update". None of them spends anything.
         refusal = self._requester_refusal(envelope)
         if refusal is not None:
             return {"ok": True, "accepted": False, "reason": refusal}
@@ -394,6 +395,14 @@ class MedchronVerbs:
                 "job_id": twin_id,
                 "job_state": twin_state,
             }
+        # A RUN or plain append on a matter that already holds a delivered
+        # chronology is an UPDATE the agent mis-routed (2026-10-13: a $150 full
+        # run queued on a client matter). Refused with the update shape so the
+        # agent resubmits in the same turn. After the duplicate check, so a live
+        # twin is still named by its job id.
+        routed = delivered_refusal(envelope, lambda mid: delivered_count(self._db, mid))
+        if routed is not None:
+            return {"ok": True, "accepted": False, "reason": routed}
         if state["remaining"] <= 0:
             return {
                 "ok": True,

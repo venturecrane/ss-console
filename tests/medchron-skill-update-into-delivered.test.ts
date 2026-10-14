@@ -78,4 +78,11 @@ describe('medical-chronology-maintainer: an update goes into the delivered chron
     )
     expect(update).toContain('**Name medical records only.**')
   })
+
+  it('says the routing is enforced and how to self-correct on the refusal (2026-10-13)', () => {
+    expect(run).toContain('**The broker and the runner enforce this, not only this text.**')
+    expect(run).toContain('resubmit as the UPDATE below in the same turn')
+    expect(run).toMatch(/could not be read is not a "no"/)
+    expect(run).not.toMatch(/asks in so many words to rebuild it from scratch/)
+  })
 })
