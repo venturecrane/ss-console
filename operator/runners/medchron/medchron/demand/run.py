@@ -336,7 +336,7 @@ class DemandRun:
         holds only on what a person at the firm must decide. Returns what the
         attorney notes must carry."""
         md, settled = self._final_pass(version)
-        cc = crosscheck.check(md, self._json("facts.json"))
+        cc = crosscheck.check(md, self._json("facts.json"), deliver.front_keys(self.firm))
         if cc["mismatches"]:
             raise DemandHold("the letter's RE block contradicts the matter record: " + "; ".join(cc["mismatches"]))
         g, md = self._gate("gate.json", md, self.data / FINAL)
@@ -454,7 +454,7 @@ class DemandRun:
             files.append(("gap_audit", deliver.render_plain(gap, out, nm["gap_audit"], self._author)))
         if self.job.wants("demand"):
             md = (self.data / FINAL).read_text(encoding="utf-8")
-            client = crosscheck.matched_client(md, self._json("facts.json"))
+            client = crosscheck.matched_client(md, self._json("facts.json"), deliver.front_keys(self.firm))
             try:
                 path, end_lists, fmt_notes = deliver.render_demand(self.firm, md, out, client)
             except deliver.FormatRefused as exc:
@@ -578,13 +578,16 @@ class DemandRun:
                 + "; ".join(variant.get("evidence") or ["no evidence either way"])[:300]
                 + ". Nothing was spent."
             )
-        if name not in self.firm.data["variants"]:
-            raise DemandHold(
-                f"this is a {name.replace('_', '-')} demand and no {name.replace('_', '-')} format is "
-                "authored for the firm. Nothing was spent."
-            )
         who = self._json("facts.json").get("responsible_attorney")
         signs = self.firm.attorney_for(who)
+        # The format is the responsible attorney's (an attorney row may name
+        # its own, e.g. Craig Ashton's, 2026-10-14); unmapped, the firm's default.
+        if name not in self.firm.variants_for(signs):
+            whose = f"{who}'s demands" if (signs or {}).get("format") else "the firm"
+            raise DemandHold(
+                f"this is a {name.replace('_', '-')} demand and no {name.replace('_', '-')} format is "
+                f"authored for {whose}. Nothing was spent."
+            )
         if not signs:
             raise DemandHold(
                 f"no signature is authored for the responsible attorney ({who or 'none on the matter'}); "

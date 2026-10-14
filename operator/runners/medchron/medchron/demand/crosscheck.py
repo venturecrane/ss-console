@@ -15,7 +15,7 @@ import re
 from datetime import date, datetime
 from typing import Any
 
-from .house import RenderError, parse
+from .house import FRONT_KEYS, RenderError, parse
 
 _MARKER = re.compile(r"\{\{|\[(TO BE SUPPLIED|ATTORNEY|CONFIRM|INSERT)")
 
@@ -34,23 +34,24 @@ def _date(raw: str) -> date | None:
     return None
 
 
-def matched_client(draft_md: str, facts: dict[str, Any]) -> str:
+def matched_client(draft_md: str, facts: dict[str, Any], keys: tuple[str, ...] = FRONT_KEYS) -> str:
     """The matter record's own spelling of the client the letter names (the
     file label; on a multi-plaintiff matter, the right one of several). Falls
     back to the matter's first client when the letter leaves a marker."""
     names = [str(n) for n in (facts.get("client_names") or []) if n] or [str(facts.get("client_name") or "")]
     try:
-        client = parse(draft_md)[0].get("client", "")
+        client = parse(draft_md, keys)[0].get("client", "")
     except RenderError:
         return names[0]
     hits = [w for w in names if _tokens(w) <= _tokens(client) or _tokens(client) <= _tokens(w)]
     return hits[0] if len(hits) == 1 else names[0]
 
 
-def check(draft_md: str, facts: dict[str, Any]) -> dict[str, list[str]]:
-    """``{"mismatches": [...], "unchecked": [...]}``."""
+def check(draft_md: str, facts: dict[str, Any], keys: tuple[str, ...] = FRONT_KEYS) -> dict[str, list[str]]:
+    """``{"mismatches": [...], "unchecked": [...]}``. ``keys``: the selected
+    format's front matter (``deliver.front_keys``)."""
     try:
-        front, _body, _notes = parse(draft_md)
+        front, _body, _notes = parse(draft_md, keys)
     except RenderError as exc:
         return {"mismatches": [f"the letter's front matter does not parse: {exc}"], "unchecked": []}
     out: dict[str, list[str]] = {"mismatches": [], "unchecked": []}
