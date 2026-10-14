@@ -30,7 +30,7 @@ from ..demand import deliver, finalpass, quotefix, summarize
 from . import citefix, compose, format_check, gate, nestquote, pleading, render, review as review_mod, sets
 from . import notes as notes_mod, wording
 from . import settle as settle_mod
-from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, markers
+from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, markers, markers_located
 
 MAX_REPAIRS = 2
 #: A served paper's audit findings are repaired or the job fails (compose.STRICT_CLASSES).
@@ -204,9 +204,10 @@ class Finish:
             return []
         doc, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
         return [
-            f"THE {c.label.upper()} SET ALREADY DRAFTED FOR THIS REQUEST (binding on this set: print its attorney "
-            "block and signature block exactly; every term this set defines that it defines is defined in the same "
-            "words; define a new term only when this set's requests need it):\n\n" + sets.front_matter(doc)
+            f"THE {c.label.upper()} SET ALREADY DRAFTED FOR THIS REQUEST (it binds how SHARED words read: print its "
+            "attorney block and signature block exactly, and define every term both sets define in the same words. "
+            "It is not this set's whole list of terms: this set's own DEFINITIONS define every further term its "
+            "requests use):\n\n" + sets.front_matter(doc)
         ]
 
     def _drafter(self, u: Unit) -> compose.Drafter:
@@ -266,9 +267,11 @@ class Finish:
         """The firm's authored attorney block, the draft's date on the Dated
         line, then the first set's front matter (``sets.align``): one wording
         across the sets of one request."""
-        doc, notes = sets.authored_head(doc, self._block_lines())
+        doc, notes = sets.strip_system_lines(doc)
+        doc, headed = sets.authored_head(doc, self._block_lines())
         doc, dated = sets.dated(doc, self._long_date())
-        notes += dated
+        doc, numbered = sets.set_number(doc, self.job.request_text)
+        notes += headed + dated + numbered
         c = self._canon(u) if u.key else None
         if c is not None:
             canon, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
@@ -344,6 +347,16 @@ class Finish:
         path, report = render.render(doc, self.cls, out / self._names(u)["draft"], fmt)
         laid = pleading.apply(path, pleading.spec_for(fmt)) if paper == "pleading" else []  # type: ignore[arg-type]
         res = format_check.check(path, self.cls, fmt, digest, self.corpus(), paper)
+        if self.cls == "discovery_set":
+            # A capitalized term the set uses and never defines: the code check
+            # that blocks, behind the audit's TERM verdict (compose.py).
+            undefined = sets.undefined_caps(render.split_notes(md)[0])
+            if undefined:
+                res.model(
+                    "defined terms: capitalized as defined terms but not defined in this set's DEFINITIONS: "
+                    + ", ".join(undefined[:12])
+                    + " (define each, or write it in lower case)"
+                )
         if res.content and not res.ours and not self._is_done(u.stage("format_repair")):
             self.log(f"  format check: {len(res.content)} content finding(s); one repair pass")
             model_doc, end = render.split_notes(md)
@@ -366,6 +379,7 @@ class Finish:
                 "path": str(path),
                 "paper": paper,
                 "markers": markers(doc),
+                "located": markers_located(doc),
                 # The renderer's own report stays here, never in the attorney
                 # notes ("named styles defined on the starter base", 2026-10-13).
                 "notes": [*attached, *reserved, *laid],
@@ -395,6 +409,19 @@ class Finish:
                 if k not in seen:
                     seen.add(k)
                     out.append(m)
+        return out
+
+    def _located_markers(self) -> list[dict[str, str]]:
+        """Every marker once per document and place, named by both (notes)."""
+        seen, out = set(), []
+        for u in self.units():
+            r = self._rendered(u)
+            for m in r.get("located") or [{**x, "where": ""} for x in r["markers"]]:
+                where = ", ".join(x for x in ((u.label if u.key else ""), m.get("where") or "") if x)
+                k = (m["kind"], m["text"], where)
+                if k not in seen:
+                    seen.add(k)
+                    out.append({"kind": m["kind"], "text": m["text"], "where": where})
         return out
 
     # ---- the notes from the final documents, then the review, then the files -----------
@@ -441,7 +468,7 @@ class Finish:
             render_notes += [(f"{u.label}: " if u.key else "") + n for n in self._rendered(u)["notes"]]
         units = [(u.label, u.data) for u in self.units()] if any(u.key for u in self.units()) else None
         render_notes = [f"Attorney block: {facts[-1]}", *render_notes]
-        md = notes_mod.attorney_notes(self.data, self._title, self._all_markers(), render_notes, end_tables, units)
+        md = notes_mod.attorney_notes(self.data, self._title, self._located_markers(), render_notes, end_tables, units)
         self._atomic("notes-final.md", md)
         return md
 

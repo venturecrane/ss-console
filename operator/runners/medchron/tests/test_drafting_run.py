@@ -154,6 +154,8 @@ DISCOVERY_DRAFT = """| | |
 
 1. "INCIDENT" means the collision on January 15, 2026 (ER record 1-15-26, p. 1).
 
+2. "PERSON" means a natural person.
+
 # SPECIAL INTERROGATORIES
 
 SPECIAL INTERROGATORY NO. 1

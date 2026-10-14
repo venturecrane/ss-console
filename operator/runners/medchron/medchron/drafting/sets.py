@@ -168,7 +168,7 @@ def enforce_caps(doc: str) -> tuple[str, list[str]]:
 
     body = _outside(body, fix)
     return head + body + tail, [
-        f'defined term "{t}" written in capitals where the set used it in lower case ({n} use(s))'
+        f'{n} lower-case use(s) of the defined term "{t}" were capitalized to match its definition'
         for t, n in counts.items()
     ]
 
@@ -193,7 +193,8 @@ def lowercase_uses(doc: str) -> list[str]:
     return found
 
 
-_CAPS = re.compile(r"\b[A-Z][A-Z'&.-]{2,}(?:\s+[A-Z][A-Z'&.-]{2,})*\b")
+#: A capitalized phrase: its words on one line (a phrase never spans a line break).
+_CAPS = re.compile(r"\b[A-Z][A-Z'&.-]{2,}(?:[ \t]+[A-Z][A-Z'&.-]{2,})*\b")
 _COMMON = {
     "YOU", "YOUR", "PLAINTIFF", "PLAINTIFFS", "DEFENDANT", "DEFENDANTS", "NOT", "AND", "THE", "SET", "ONE",
     "TWO", "THREE", "IDENTIFY", "DESCRIBE", "STATE", "ADMIT", "CODE", "CIVIL", "PROCEDURE", "CALIFORNIA", "DEFINITIONS",
@@ -214,15 +215,24 @@ def undefined_caps(doc: str) -> list[str]:
             r"[A-Z][A-Z'&.-]+", " ".join(re.findall(r"(?i)(?:PROPOUNDING|RESPONDING) PARTY:\s*\|?\s*([^|\n]+)", doc))
         )
     )
+    # The caption, the title, the attorney block and the signature block name
+    # the firm and the parties; their words are never a defined term.
+    framing = {w.strip(".,;:'&") for w in re.findall(r"[A-Z][A-Z'&.,-]+", doc[: _defs_start(doc)] + doc[end:])}
     body = _LABEL_LINE.sub("", doc[at:end])
     body = re.sub(r"(?m)^#{1,6}\s.*$", "", body)
+    body = re.sub(r"(?m)^.*\|.*$", "", body)  # a table row is a caption or a block, never a request
     out: list[str] = []
+
+    def known(w: str) -> bool:
+        w = w.strip(".,;:'&-")
+        stems = {w, w[:-1] if w.endswith("S") else w, w[:-2] if w.endswith("ES") else w}
+        return bool(stems & (_COMMON | parties | term_words | framing)) or not w
 
     def scan(seg: str) -> str:
         for m in _CAPS.finditer(seg):
             phrase = m.group(0).strip(".-'")
             words = phrase.split()
-            if phrase in terms or all(w in _COMMON or w in parties or w in term_words for w in words):
+            if phrase in terms or all(known(w) for w in words):
                 continue
             if phrase not in out:
                 out.append(phrase)
@@ -420,3 +430,57 @@ def dated(doc: str, when: str) -> tuple[str, list[str]]:
     if not m or m.group(2).strip().strip("`*") == when:
         return doc, []
     return doc[: m.end(1)] + " " + when + doc[m.end(2) :], [f"the Dated line carries the draft's date ({when})"]
+
+
+# ---- what the pipeline itself may leave, and the set number the request states ----------
+
+_SYSTEM_LINE = re.compile(r"(?im)^[ \t]*#*[ \t]*(?:SECTION TO REPAIR:[ \t]*)?PREAMBLE[ \t]*\n?")
+
+
+def strip_system_lines(doc: str) -> tuple[str, list[str]]:
+    """A heading the pipeline wrote ("PREAMBLE", the repair's section name)
+    never reaches a served paper (2026-10-14: one sat above an attorney block)."""
+    out, n = _SYSTEM_LINE.subn("", doc)
+    return out, ([f"removed {n} system heading line(s)"] if n else [])
+
+
+_ORDINAL = {"first": "ONE", "second": "TWO", "third": "THREE", "fourth": "FOUR", "fifth": "FIVE"}
+_CARDINAL = {"one": "ONE", "two": "TWO", "three": "THREE", "four": "FOUR", "five": "FIVE"}
+_STATED = re.compile(
+    r"(?i)\b(first|second|third|fourth|fifth)\s+sets?\b|\bsets?\s+(?:no\.?\s*)?(one|two|three|four|five|[1-5])\b"
+)
+_SET_NO = re.compile(r"(?im)^(\|?\s*SET NO\.?:?\s*\|?\s*)([^|\n]*?)(\s*\|?\s*)$")
+
+
+def stated_set_number(request: str) -> str | None:
+    """The set number the attorney's request states, when it states exactly
+    one ("plaintiff's first set", "set one"); None when it states none or
+    several (the sets differ and the compose reads them per set)."""
+    found = set()
+    for m in _STATED.finditer(request or ""):
+        if m.group(1):
+            found.add(_ORDINAL[m.group(1).lower()])
+        else:
+            v = m.group(2).lower()
+            found.add(_CARDINAL.get(v) or list(_CARDINAL.values())[int(v) - 1])
+    return found.pop() if len(found) == 1 else None
+
+
+def set_number(doc: str, request: str) -> tuple[str, list[str]]:
+    """The identification block's SET NO. carries the number the request
+    states (its statement of fact is adopted; 2026-10-14: one set carried an
+    {{ATTORNEY: confirm the set number}} marker where the request said "first
+    set"), and so does a title whose set number is a marker."""
+    want = stated_set_number(request)
+    if not want:
+        return doc, []
+    notes: list[str] = []
+    m = _SET_NO.search(doc)
+    if m and " ".join(m.group(2).strip("` ").split()).upper() != want:
+        doc = doc[: m.start(2)] + want + doc[m.end(2) :]
+        notes.append(f"set number written as {want}, as the request states it")
+    titled = re.sub(r"(?i)(\bSET\s+)`?\{\{[^{}]*\}\}`?", lambda t: t.group(1) + want, doc)
+    if titled != doc:
+        doc = titled
+        notes.append(f"the title's set number written as {want}, as the request states it")
+    return doc, notes

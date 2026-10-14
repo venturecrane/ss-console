@@ -68,21 +68,23 @@ def blocking_findings(result: dict[str, Any], cls: str | None = None, audit_md: 
     return d.blocking_findings(result) + sum(int(t.get(k) or 0) for k in EXTRA_VERDICTS) + drifts
 
 
-#: A form finding about a defined term's case: code owns capitals
-#: (``sets.enforce_caps``) and the review grades them SHOULD-FIX, so in a
-#: strict class they drive a repair but never fail the job (2026-10-14: a
-#: proof run failed on "person" in lower case inside PERSON's own definition).
-_CASE_ONLY = re.compile(r"\|\s*DRIFTS\s*\|\s*`?undefined:", re.I)
+#: A defined-term form finding is its own verdict, TERM, in the audit's
+#: verdict column (the firm's audit prompt): never a finding row here, because
+#: code settles the class deterministically and BLOCKS on it: a defined term in
+#: lower case is capitalized (``sets.enforce_caps``) and a capitalized term the
+#: set never defines fails the format check after one repair
+#: (``sets.undefined_caps``, ``finish._render_unit``). Classified on the
+#: verdict, never on where the words "undefined:" sit in a row (2026-10-14).
 
 
 def strict_rows(audit_md: str) -> list[tuple[str, str, str]]:
     """(section, claim, detail) for every finding row a strict class must
-    clear: every verdict but SUPPORTED, less the defined-term case rows."""
+    clear: every finding verdict (SUPPORTED, UNPROVEN and TERM are not)."""
     out = []
     for head, body in d.audit_sections(audit_md).items():
         for ln in body.splitlines():
             m = FINDING.search(ln)
-            if not m or _CASE_ONLY.search(ln):
+            if not m:
                 continue
             out.append((head, ln[: m.start()].strip().lstrip("-*").strip(), ln[m.end() :].strip()))
     return out
@@ -143,6 +145,15 @@ _ROW_ITEM = re.compile(
     r"(?i)\b(?:SI|SROG|RFA|RFPD?|special\s+interrogator(?:y|ies)|requests?\s+for\s+(?:admission|production)"
     r"(?:\s+of\s+documents)?)\s*(?:nos?\.?\s*)?(\d+)\b"
 )
+
+
+_DEFS_SECTION = re.compile(r"(?ims)^#{1,6}\s*\**\s*DEFINITIONS\b.*?$(.*?)(?=^#{1,6}\s|\Z)")
+
+
+def own_definitions(doc: str) -> str:
+    """The set's own Definitions section text, or ""."""
+    m = _DEFS_SECTION.search(doc)
+    return m.group(1).strip() if m else ""
 
 
 def split_items(body: str) -> tuple[str, dict[int, str]]:
@@ -341,6 +352,12 @@ class Drafter:
         # on 2026-10-14 two cites in them held a set past four repairs.
         audited = draft.partition("=== ATTORNEY NOTES ===")[0] if self.cls in STRICT_CLASSES else draft
         secs = d.auditable(d.sections(audited))
+        # What a chunk of requests is read against: the set's own Definitions
+        # and where the chunk sits (2026-10-14: a chunk without them read
+        # PERSON, DOCUMENT and IDENTIFY as undefined, and "No. 60" as a first
+        # set misnumbered).
+        self._own_defs = own_definitions(audited)
+        self._total = max((len(split_items(b)[1]) for _h, b in secs), default=0)
         dsha = sha(draft)[:8] + ("f" if full else "")
         prev = None if full else self._prior(version)
         if (
@@ -416,10 +433,29 @@ class Drafter:
         gives every request its attention, so one full read finds them all."""
         out = []
         for k in range(0, len(items), AUDIT_CHUNK_ITEMS):
-            part = "\n\n".join(items[k : k + AUDIT_CHUNK_ITEMS])
+            chunk = items[k : k + AUDIT_CHUNK_ITEMS]
+            part = "\n\n".join(chunk)
             body = (pre.strip() + "\n\n" + part) if k == 0 and pre.strip() else part
-            out.append(self._audit_part(system, f"{key}c{k // AUDIT_CHUNK_ITEMS}", head, body))
+            out.append(self._audit_part(system, f"{key}c{k // AUDIT_CHUNK_ITEMS}", head, self._framed(chunk, body)))
         return "\n".join(out)
+
+    def _framed(self, chunk: list[str], body: str) -> str:
+        """A chunk of requests with what it is read against, marked as context."""
+        nums = [int(m.group(1)) for t in chunk for m in [_ITEM.search(t)] if m]
+        where = (
+            f"These are requests {min(nums)} to {max(nums)} of this set's {getattr(self, '_total', 0) or max(nums)}, "
+            "numbered from 1; the rest are read separately."
+            if nums
+            else ""
+        )
+        defs = getattr(self, "_own_defs", "")
+        ctx = (
+            "=== CONTEXT, NOT UNDER AUDIT (report no row for it) ===\n"
+            + (f"THIS SET'S OWN DEFINITIONS (they define the capitalized terms below):\n{defs}\n\n" if defs else "")
+            + where
+            + "\n=== THE REQUESTS UNDER AUDIT ===\n\n"
+        )
+        return ctx + body
 
     def _audit_part(self, system: str, key: str, head: str, body: str) -> str:
         mx = output_max(self.firm.model("audit"), AUDIT_MAX_TOKENS)

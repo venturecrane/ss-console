@@ -392,7 +392,11 @@ def prior_set_notes(doc: str, digest: str, corpus: Mapping[str, str] | None) -> 
         f"set number: earlier {words} from {prop} to {resp} the file shows served: "
         + ("; ".join(p.served) if p.served else "none")
     ]
-    out += [f"set number: not counted, the file does not show it served: {x}" for x in p.doubtful]
+    if p.doubtful:
+        out.append(
+            f"set number: the file also holds {len(p.doubtful)} unserved set(s) of this kind, which are not "
+            "earlier sets: " + "; ".join(p.doubtful)
+        )
     return out
 
 

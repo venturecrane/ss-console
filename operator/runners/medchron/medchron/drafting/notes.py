@@ -47,7 +47,13 @@ def attorney_notes(
     """``units`` are (label, unit data dir) for a job that drafted several
     documents; a one-document job reads its records from ``data``."""
     lines = [f"# Attorney notes: {title}", "", "## Items for the attorney", ""]
-    lines += [f"- {KIND_LABEL.get(m['kind'], m['kind'].title())}: {m['text']}" for m in found if m["text"].strip()]
+    lines += [
+        f"- {KIND_LABEL.get(m['kind'], m['kind'].title())}"
+        + (f" ({m['where']})" if m.get("where") else "")
+        + f": {m['text']}"
+        for m in found
+        if m["text"].strip()
+    ]
     if lines[-1] == "":
         lines.append("- None.")
     cap = _json(data, "caption.json") if (data / "caption.json").is_file() else None

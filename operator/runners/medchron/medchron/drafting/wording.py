@@ -61,7 +61,7 @@ HEDGE = re.compile(
     r"(?i)\b(on either reading|(?:it is )?unclear whether|may or may not|presumably|we assume|it is assumed|"
     r"if (?:\S+\s+){0,6}is the (?:handling|responsible|requesting) attorney|"
     r"whether (?:\S+\s+){0,8}(?:is|was) the (?:handling|responsible|requesting) attorney|"
-    r"(?:may|might) (?:not )?have been served|"
+    r"(?:may|might) (?:not )?have been served|if (?:the|that|an?|any) (?:\w+ ){0,2}(?:set|paper)s? (?:was|were|is|had been) served|"
     r"confirm (?:\S+\s+){0,6}(?:is|as) the (?:handling|signing|responsible|requesting) attorney)\b"
 )
 _QUOTED = re.compile(r"\"[^\"\n]*\"|“[^”\n]*”")

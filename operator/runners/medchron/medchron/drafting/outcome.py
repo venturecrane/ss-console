@@ -55,6 +55,27 @@ class DraftingFailed(RuntimeError):
     """Our machinery: failed, resumable, no client message, SMD alerted."""
 
 
+_WHERE = re.compile(
+    r"(?im)^\W*((?:SPECIAL INTERROGATORY|REQUEST FOR ADMISSION|REQUEST FOR PRODUCTION(?: OF DOCUMENTS)?)\s+NO\.?\s*\d+"
+    r"|#{1,6}\s+[^\n]+)"
+)
+
+
+def markers_located(md: str) -> list[dict[str, str]]:
+    """``markers`` with where each sits: the request label or the heading
+    above it (2026-10-14: notes lines like "signature" or "compound under
+    section 2030.060(f)?" named no document or request)."""
+    seen, out = set(), []
+    for m in MARKERS.finditer(md):
+        prev = [w for w in _WHERE.finditer(md, 0, m.start())]
+        where = " ".join(prev[-1].group(1).lstrip("#").split()).strip("*`: ") if prev else ""
+        item = (m.group(1), " ".join((m.group(2) or "").split()), where)
+        if item not in seen:
+            seen.add(item)
+            out.append({"kind": item[0], "text": item[1], "where": where})
+    return out
+
+
 def markers(md: str) -> list[dict[str, str]]:
     seen, out = set(), []
     for m in MARKERS.finditer(md):

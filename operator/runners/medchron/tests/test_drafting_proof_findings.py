@@ -182,6 +182,9 @@ class AuditClient(Client):
         system = json.dumps(params.get("system"))
         if "AUDIT-PROMPT" in system and self.audit_fn is not None:
             return self.audit_fn(params)
+        user = params["messages"][-1]["content"]
+        if "REPAIR-PROMPT" in system and user.startswith("FORMAT REPAIR"):
+            return user.split("=== DOCUMENT ===\n", 1)[1]  # a repair that changes nothing
         text = super()._answer(params)
         if "REPAIR-PROMPT" in system and self.repair_fix:
             text = text.replace(*self.repair_fix)
@@ -549,7 +552,7 @@ def test_a_walled_email_named_like_a_filed_document_stays_out_and_the_document_s
 def test_a_case_only_finding_never_blocks_and_notes_quotes_are_not_the_document():
     audit = (
         "## AUDIT: DEFINITIONS\n\n"
-        '- `Def. 3, "PERSON" means "a natural person"` | DRIFTS | undefined: lower case inside its own definition\n'
+        '- `Def. 3, "PERSON" means "a natural person"` | TERM | lower case inside its own definition\n'
         "## AUDIT: REQUESTS FOR ADMISSION\n\n- `RFA 2: X` | DRIFTS | not stated\n"
     )
     rows = compose.strict_rows(audit)
@@ -855,3 +858,94 @@ def test_the_review_reads_the_final_notes_and_holds_on_a_wrong_cite(tmp_path, pr
     assert v.outcome == "failed" and v.reason.startswith("review_held: "), (v.stage, v.reason)
     assert seat.created == []
     assert "para. 99" in (r.data / "notes-final.md").read_text()  # the review read the notes as delivered
+
+
+def test_a_chunk_is_read_against_the_sets_own_definitions_and_its_place_in_the_set(tmp_path, pricing):
+    """2026-10-14, run 5: a chunk read without the set's Definitions or its
+    place called defined terms undefined and "No. 13" a misnumbered first set.
+    The auditor here, like that one, objects when the frame is missing."""
+
+    def answer(params):
+        body = params["messages"][-1]["content"]
+        if "REQUEST FOR ADMISSION NO. 13\n" in body and "numbered from 1" not in body:
+            return "- `Label REQUEST FOR ADMISSION NO. 13 in a first set` | DRIFTS | a first set is numbered from 1\nSUPPORTED=0 DRIFTS=1 INVENTED=0 ARITHMETIC=0"
+        if "REQUEST FOR ADMISSION NO." in body and "THIS SET'S OWN DEFINITIONS" in body:
+            assert '"PREMISES" means the store.' in body  # the set's own Definitions travel with the chunk
+        return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+
+    client = AuditClient(drafts=_drafts(**{RFA: one_set(RFA, 30)}), audit_fn=answer)
+    _r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+
+
+def test_a_term_verdict_never_blocks_and_a_drifts_row_always_does():
+    """Classified on the verdict column, never on where "undefined:" sits."""
+    audit = (
+        "## AUDIT: SPECIAL INTERROGATORIES\n\n"
+        '- `"ANSWER" in SPECIAL INTERROGATORY NO. 60` | TERM | not among the definitions\n'
+        "- `IDENTIFY (SROG 62)` | DRIFTS | undefined: capitalized as a defined term\n"
+        "- `SI 4: the INCIDENT was witnessed` | DRIFTS | the record conflicts\n"
+    )
+    assert [c for _h, c, _d in compose.strict_rows(audit)] == [
+        "`IDENTIFY (SROG 62)`",
+        "`SI 4: the INCIDENT was witnessed`",
+    ]
+
+
+def test_a_term_the_set_never_defines_is_held_by_code_not_by_the_model(tmp_path, pricing):
+    """The audit reports defined terms as TERM, which never blocks; the code
+    check does: strip PERSON's definition from the interrogatories and the
+    format check holds delivery after its one repair (2026-10-14)."""
+    stripped = one_set(SROG).replace('4. "PERSON" means a natural person.\n\n', "")
+    assert "PERSON" in stripped and '"PERSON"' not in stripped
+
+    def answer(params):
+        body = params["messages"][-1]["content"]
+        if "PERSON" in body:
+            return "- `PERSON` | TERM | not defined\nSUPPORTED=0 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+        return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+
+    client = AuditClient(drafts=_drafts(**{SROG: stripped}), audit_fn=answer)
+    _r, v, seat = _run(tmp_path, pricing, client)
+    assert v.outcome == "failed" and v.reason.startswith("format_check: "), (v.stage, v.reason)
+    assert "not defined in this set's DEFINITIONS: PERSON" in v.reason
+    assert seat.created == []
+
+
+# ---- run 6's review (2026-10-14): five MUST-FIX, each settled in code ---------------------
+
+
+def test_the_set_number_the_request_states_is_written_where_a_marker_stood():
+    doc = (
+        "| | **PLAINTIFF'S REQUESTS FOR ADMISSION, SET `{{ATTORNEY: confirm the set number}}`** |\n\n"
+        "| PROPOUNDING PARTY: | GAMMA |\n| SET NO.: | {{ATTORNEY: confirm the set number}} |\n"
+    )
+    out, notes = sets.set_number(doc, "Please draft plaintiff's first set of RFAs, RFPs and SROGs.")
+    assert "{{" not in out and "SET ONE**" in out and "| SET NO.: | ONE |" in out and len(notes) == 2
+    assert sets.set_number(doc, "RFAs set one and SROGs set two") == (doc, [])  # two numbers: never guessed
+    assert sets.stated_set_number("draft the RFAs") is None
+
+
+def test_a_system_heading_never_reaches_a_served_paper():
+    out, notes = sets.strip_system_lines("PREAMBLE\nAlpha Example (SBN 1)\n\n## SECTION TO REPAIR: PREAMBLE\nBody.\n")
+    assert "PREAMBLE" not in out and "Alpha Example" in out and notes
+
+
+def test_a_hedge_on_an_unserved_set_is_caught_and_the_caps_note_says_what_code_did():
+    assert wording.hedges("If the earlier set was served, this paper is Set Two.")
+    out, lines = sets.enforce_caps(
+        '# DEFINITIONS\n\n1. "DOCUMENT" means a writing.\n\n# X\n\nAll documents.\n\nDated: x\n'
+    )
+    assert lines == ['1 lower-case use(s) of the defined term "DOCUMENT" were capitalized to match its definition']
+
+
+def test_each_item_for_the_attorney_names_its_document_and_place(tmp_path, pricing):
+    rfp = one_set(RFP).replace(
+        "All DOCUMENTS showing the PREMISES.",
+        "All DOCUMENTS showing the PREMISES. {{ATTORNEY: compound under section 2030.060(f)?}}",
+    )
+    client = Client(drafts=_drafts(**{RFP: rfp}))
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    notes = (r.data / "notes-final.md").read_text()
+    assert "- For your decision (Requests for Production, REQUEST FOR PRODUCTION NO. 1): one category, or two" in notes
