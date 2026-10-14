@@ -5,11 +5,20 @@ line ``[handwritten]`` (``stages/vision.SYSTEM``). A handwritten 7 reads as a
 1, a 3 as an 8; the visit is real, its date is a reading. The typed
 statements and bills of the same provider state the dates of service, so:
 
-* exactly ONE typed date of service of that provider within 7 days of the
-  reading: the entry takes that date (re-dated when it differs);
-* none, or more than one: the date is unsupported, and the entry shows the
+* the reading is a typed date of service of that provider: confirmed;
+* between the reading's confirmed neighbours the statement has exactly ONE
+  date no entry reads, it is within 7 days, and no other entry's reading is
+  unconfirmed there: the entry takes that date (``decide``);
+* anything else: the date is unsupported, and the entry shows the
   reading as an OPEN date, "MM/DD/YYYY (handwritten date, unconfirmed)",
   never a guess between candidates.
+
+A statement is the provider's when it names the provider, or when it is a
+typed page of the SAME document as the handwritten page (a chiropractor's
+"records and bills" file: the itemized statement prints the doctor and the
+street address, never the trade name the chronology uses; 2026-10-14 parity
+run, where no statement was found and every visit stayed unconfirmed). Dates
+read as MM/DD/YY or MM-DD-YY, and a line item may sit in a table cell.
 
 The audit of a claim cited to a handwritten page is given the same typed
 statements as evidence (``statement_block``).
@@ -32,7 +41,7 @@ REREAD = (
 STATEMENT = re.compile(
     r"(?i)\b(?:statement|date of service|dates of service|dos|charges?|balance due|ledger|invoice|itemi[sz]ed)\b"
 )
-_DATE = re.compile(r"(?<![\d/])(\d{1,2})/(\d{1,2})/(\d{4}|\d{2})(?![\d/])")
+_DATE = re.compile(r"(?<![\d/-])(\d{1,2})([/-])(\d{1,2})\2(\d{4}|\d{2})(?![\d/-])")
 _GENERIC = {
     "clinic", "center", "centre", "medical", "health", "group", "associates", "hospital", "care", "services",
     "chiropractic", "therapy", "physical", "imaging", "radiology", "orthopedic", "orthopedics", "family",
@@ -55,7 +64,7 @@ def _names(provider: str, text: str) -> bool:
 
 def _dates(text: str) -> set[date]:
     out: set[date] = set()
-    for mm, dd, yy in _DATE.findall(text or ""):
+    for mm, _sep, dd, yy in _DATE.findall(text or ""):
         y = int(yy) + (2000 if len(yy) == 2 else 0)
         try:
             out.add(date(y, int(mm), int(dd)))
@@ -64,25 +73,35 @@ def _dates(text: str) -> set[date]:
     return out
 
 
-def statements(pages: list[str], provider: str) -> list[str]:
-    """The typed statement and bill pages of `pages` that name `provider`."""
-    return [t for t in pages if not is_handwritten(t) and STATEMENT.search(t or "") and _names(provider, t)]
+def _typed_statement(t: str | None) -> bool:
+    return not is_handwritten(t) and bool(STATEMENT.search(t or ""))
+
+
+def statements(pages: list[str], provider: str, same_doc: list[str] | tuple[str, ...] = ()) -> list[str]:
+    """The typed statement and bill pages of `pages` that name `provider`,
+    and those of `same_doc` (the handwritten page's own document), named or
+    not. Each page once, in order."""
+    got = [t for t in same_doc if _typed_statement(t)]
+    got += [t for t in pages if _typed_statement(t) and _names(provider, t)]
+    return list(dict.fromkeys(got))
 
 
 _DOS_LABEL = re.compile(r"(?i)\b(?:dos|dates? of service|service date)\b")
-_LINE_ITEM = re.compile(r"^\s*\d{1,2}/\d{1,2}/\d{2,4}\b.*(?:\b\d{5}\b|\b[A-Z]\d{4}\b|\$?\d+\.\d{2}\b)")
+_LINE_ITEM = re.compile(
+    r"^[\s|\u2502\u2503]*\d{1,2}([/-])\d{1,2}\1\d{2,4}\b.*(?:\b\d{5}\b|\b[A-Z]\d{4}\b|\$?\d+\.\d{2}\b)"
+)
 #: A statement's other dates: when it was printed, due, paid or posted.
 _NOT_SERVICE = re.compile(r"(?i)\b(?:statement date|due|payment|paid|print|billing date|posted|balance|deposit)\b")
 
 
-def service_dates(pages: list[str], provider: str) -> set[date]:
+def service_dates(pages: list[str], provider: str, same_doc: list[str] | tuple[str, ...] = ()) -> set[date]:
     """Dates of SERVICE on the provider's typed statements: a date on a line
     labelled DOS / Date of Service / Service Date, or the date leading a
     line-item row that carries a procedure code or a charge. A statement's
     print, due and payment dates never count; anything unclear counts as no
     date, and the visit then shows its reading as unconfirmed."""
     out: set[date] = set()
-    for t in statements(pages, provider):
+    for t in statements(pages, provider, same_doc):
         for ln in t.splitlines():
             if _NOT_SERVICE.search(ln):
                 continue
@@ -91,36 +110,62 @@ def service_dates(pages: list[str], provider: str) -> set[date]:
     return out
 
 
-def decide(reading: date, dos: set[date]) -> tuple[str, date | None]:
-    """('confirmed' | 'redated', the date) or ('open', None)."""
-    near = sorted(d for d in dos if abs((d - reading).days) <= WINDOW_DAYS)
-    if len(near) != 1:
+def decide(reading: date, dos: set[date], readings: tuple[date, ...] = ()) -> tuple[str, date | None]:
+    """('confirmed' | 'redated', the date) or ('open', None).
+
+    `readings` are every handwritten reading of the provider (this one
+    included). A reading on the statement is confirmed. Another is re-dated
+    only inside the gap between its confirmed neighbours, and only when that
+    gap holds exactly ONE statement date no entry reads and exactly ONE
+    unconfirmed reading, within 7 days of each other. Anything else is open:
+    with two free dates in the gap, the nearer one may be the visit a further
+    misread belongs to (2026-10-14 parity run: a visit misread 10 days early
+    sat nearest the date of a second visit whose own entry was misread two
+    weeks early), and a guess between them moves one visit onto another."""
+    if reading in dos:
+        return "confirmed", reading
+    ok = sorted({r for r in readings if r in dos})
+    lo = max((d for d in ok if d < reading), default=date.min)
+    hi = min((d for d in ok if d > reading), default=date.max)
+    free = sorted(d for d in dos if lo < d < hi and d not in ok)
+    rivals = [r for r in set(readings) | {reading} if lo < r < hi and r not in dos]
+    if len(free) != 1 or len(rivals) != 1 or abs((free[0] - reading).days) > WINDOW_DAYS:
         return "open", None
-    return ("confirmed" if near[0] == reading else "redated"), near[0]
+    return "redated", free[0]
 
 
 def _mdy(d: date) -> str:
     return f"{d.month:02d}/{d.day:02d}/{d.year}"
 
 
-def redate(entry: str, dos: set[date]) -> tuple[str, dict[str, str]]:
+def reading_of(entry: str) -> date | None:
+    m = re.match(r"(\d{2})/(\d{2})/(\d{4})", entry)
+    try:
+        return date(int(m.group(3)), int(m.group(1)), int(m.group(2))) if m else None
+    except ValueError:
+        return None
+
+
+def redate(entry: str, dos: set[date], readings: tuple[date, ...] = ()) -> tuple[str, dict[str, str]]:
     """(the entry with its date settled, a log row). The entry's own date is
-    the handwritten reading."""
+    the handwritten reading; `readings` are the provider's others (``decide``)."""
     head, _, rest = entry.partition("\n")
     m = re.match(r"(\d{2})/(\d{2})/(\d{4})", head)
     if not m:
         return entry, {"entry": head, "verdict": "no date"}
     reading = date(int(m.group(3)), int(m.group(1)), int(m.group(2)))
     tail = head[m.end() :].replace(" " + OPEN, "")  # whatever else the date line carried is kept
-    verdict, got = decide(reading, dos)
+    verdict, got = decide(reading, dos, readings)
     if got is not None:
         return _mdy(got) + tail + "\n" + rest, {"reading": _mdy(reading), "verdict": verdict, "date": _mdy(got)}
     return f"{_mdy(reading)} {OPEN}{tail}\n" + rest, {"reading": _mdy(reading), "verdict": "open"}
 
 
-def statement_block(pages: list[str], provider: str, limit: int = 12_000) -> str:
+def statement_block(
+    pages: list[str], provider: str, limit: int = 12_000, same_doc: list[str] | tuple[str, ...] = ()
+) -> str:
     """The audit's extra evidence for a claim cited to a handwritten page."""
-    got = statements(pages, provider)
+    got = statements(pages, provider, same_doc)
     if not got:
         return ""
     body = "\n\n".join(t.strip() for t in got)[:limit]
