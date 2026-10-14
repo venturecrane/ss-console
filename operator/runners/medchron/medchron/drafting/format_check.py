@@ -362,4 +362,25 @@ def check(
         check_mediation(doc, fmt, res)
     if cls in ("discovery_set", "discovery_response"):
         check_discovery(doc, cls, fmt, rules, res, digest, corpus, pitch)
+    if cls in wording_served():
+        check_wording(doc, cls, res)
     return res
+
+
+def wording_served() -> tuple[str, ...]:
+    from .wording import SERVED_PAPERS
+
+    return SERVED_PAPERS
+
+
+def check_wording(doc: Any, cls: str, res: Result) -> None:
+    """No unfilled slot and none of the system's words in what the attorney
+    receives (``wording.py``): content findings, so one repair pass, then the
+    job fails rather than delivering them."""
+    from . import wording
+
+    text = doc_text(doc)
+    for f in wording.slots(cls, text):
+        res.model(f)
+    for w in wording.document_vocabulary(text):
+        res.model(f"wording: the system's own word {w!r} in the document")

@@ -42,7 +42,7 @@ def test_a_paraphrased_claim_is_placed_by_its_quoted_span():
         finalpass.settle(DRAFT, au)
     md, notes = settle.settle(DRAFT, au)
     assert "A 1,000,000/1,000,000/1,000,000" not in md
-    assert "{{NOT IN RECORD: a statement here was removed by the final audit (no cite)" in md
+    assert "{{NOT IN RECORD: a statement here was removed, the file does not bear it out (no cite)" in md
     assert any("removed" in n for n in notes)
 
 
@@ -55,15 +55,15 @@ def test_a_claim_the_same_audit_supports_elsewhere_is_kept_and_marked():
     )
     md, notes = settle.settle(DRAFT, au)
     assert "The umbrella policy is $3 Million." in md  # kept
-    assert "the final audit disagrees with itself" in md
-    assert any("contradicts itself" in n for n in notes)
+    assert "two readings of the file disagree on the next statement" in md
+    assert any("two readings of the file disagree" in n for n in notes)
 
 
 def test_an_unplaceable_claim_is_marked_at_the_section_top_not_fatal():
     au = _audit({XI: ["- looks forward to the mediator's assistance | INVENTED | no cite"]})
     md, notes = settle.settle(DRAFT, au)
     head, rest = md.split("# XI. CONCLUSION", 1)
-    assert rest.lstrip().startswith("{{ATTORNEY: the final audit flags a statement or figure in this section")
+    assert rest.lstrip().startswith("{{ATTORNEY: a statement or figure in this section is not borne out")
     assert any("not located" in n for n in notes)
 
 

@@ -145,9 +145,11 @@ The drafting system has finished the documents below. Its drafter wrote end tabl
 - write to the attorney, about his documents: never mention the job, code, a rule of the system, the drafter, the auditor, a gate or a pipeline;
 - where the attorney's request states a fact about the file (for example which side served a document), adopt it as stated; never hedge on it ("on either reading") and never contradict it;
 - describe each request in the direction its words run (who produces what to whom, who sent what to whom), never the reverse;
-- add nothing that the final documents and the digest do not support; a row cites its source as the drafter's did.
+- add nothing that the final documents and the digest do not support; a row cites its source as the drafter's did;
+- state every fact as the record or THE FACTS block below states it, or write "not in the record"; never hedge ("unclear whether", "appears", "possibly", "presumably", "if ... is the handling attorney"): who requested the documents, who the responsible attorney is and whose attorney block the documents carry are given below as facts;
+- write every slot in words ("not in the file: ...", "for your decision: ..."), never as a {{marker}}; a line that names a thing must say something about it.
 
-OUTPUT: markdown only, the same tables under the same headings the drafter used (one set of tables per document when there are several, under a heading naming the document), then `## Open items from the audit` (a bulleted list, or the single line `None.`). No preamble, no em dashes."""
+OUTPUT: markdown only, the same tables under the same headings the drafter used (one set of tables per document when there are several, under a heading naming the document), then `## Open items` (a bulleted list of what the attorney must still decide or supply, or the single line `None.`). No preamble, no em dashes."""
 
 
 def _rows(text: str, hold_checks: tuple[int, ...] = HOLD_CHECKS) -> list[Finding]:
@@ -428,21 +430,42 @@ def decide(
 
 
 def final_notes(
-    doorway: Any, model: str, digest: str, papers: list[Paper], drafter_tables: str, open_items: list[str], key: str
+    doorway: Any,
+    model: str,
+    digest: str,
+    papers: list[Paper],
+    drafter_tables: str,
+    open_items: list[str],
+    key: str,
+    facts: list[str] | None = None,
+    refused: list[str] | None = None,
 ) -> str:
-    """The end tables rewritten from the FINAL documents (never intermediate state)."""
+    """The end tables rewritten from the FINAL documents (never intermediate
+    state). ``facts``: what the request and the matter record settle (who asked,
+    the responsible attorney, whose attorney block), stated so the notes never
+    hedge on them. ``refused``: what a previous answer carried that the notes
+    may not (``wording.notes_findings``); the rewrite is told."""
     from ..demand.gapaudit import output_max
     from .compose import DraftingError
 
     docs = "\n\n".join(f"=== FINAL DOCUMENT: {p.label} ===\n{p.text}" for p in papers)
     user = (
         docs
+        + "\n\n---\n\n=== THE FACTS (from the request and the matter record; state them as facts) ===\n"
+        + ("\n".join(f"- {x}" for x in facts or []) or "(none)")
         + "\n\n---\n\n=== THE DRAFTER'S END TABLES (about an earlier version) ===\n"
         + (drafter_tables or "(none)")
         + "\n\n---\n\n=== THE AUDITOR'S OPEN ITEMS (about an earlier version) ===\n"
         + ("\n".join(f"- {x}" for x in open_items) or "(none)")
     )
+    if refused:
+        user += (
+            "\n\n---\n\nYOUR PREVIOUS ANSWER WAS REFUSED for carrying: "
+            + "; ".join(refused)
+            + ". Write the tables again without any of these."
+        )
     system = NOTES_PROMPT + "\n\n---\n\n## THE RECORD DIGEST\n\n" + digest
+    tag = "r" if refused else ""
     for attempt in (1, 2):
         r = doorway.call(
             "notes",
@@ -452,7 +475,7 @@ def final_notes(
             max_tokens=output_max(model, REVIEW_MAX_TOKENS),
             stream=True,
             effort="high",
-            custom_id=f"notes-{key}-{attempt}",
+            custom_id=f"notes-{key}{tag}-{attempt}",
         )
         if r.stop_reason != "max_tokens" and r.text.strip():
             return r.text.strip()

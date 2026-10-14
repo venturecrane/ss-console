@@ -244,7 +244,7 @@ HOWELL_ROWS = (
 
 
 CLEAN_REVIEW = "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
-FINAL_NOTES = "## NOT IN RECORD\n\nNone.\n\n## Open items from the audit\n\nNone."
+FINAL_NOTES = "## NOT IN RECORD\n\nNone.\n\n## Open items\n\nNone."
 
 
 class ScriptedClient(_DemandClient):

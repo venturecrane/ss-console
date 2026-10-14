@@ -31,7 +31,11 @@ def test_every_marker_kind_is_balanced_for_the_gate():
         }
     )
     md, _ = settle.settle(DRAFT, au)
-    assert "disagrees with itself" in md and "removed by the final audit" in md and "could not place" in md
+    assert (
+        "two readings of the file disagree" in md
+        and "the file does not bear it out" in md
+        and "could not be placed" in md
+    )
     _spans, unclosed = _gate_check().marker_spans(md)
     assert unclosed == []
 

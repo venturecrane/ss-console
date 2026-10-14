@@ -28,11 +28,13 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from ..demand import deliver, finalpass, quotefix, summarize
 from . import citefix, compose, format_check, gate, nestquote, pleading, render, review as review_mod, sets
-from . import notes as notes_mod
+from . import notes as notes_mod, wording
 from . import settle as settle_mod
 from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, markers
 
 MAX_REPAIRS = 2
+#: A served paper's audit findings are repaired or the job fails (compose.STRICT_CLASSES).
+MAX_REPAIRS_STRICT = 3
 FINAL = "draft-final.md"
 CONCURRENCY = 4
 WALL_GATE = "[1]"
@@ -126,8 +128,26 @@ class Finish:
         tmp.replace(u.data / name)
 
     # ---- compose, audit, repair, final pass, per unit ---------------------------------
+    def _canon(self, u: Unit) -> Unit | None:
+        """The set the others align to: the first one gated, never ``u``."""
+        for o in self.units():
+            if o.key and o.key != u.key and self._is_done(o.stage("gate")):
+                return o
+        return None
+
+    def _shared(self, u: Unit) -> list[str]:
+        c = self._canon(u) if u.key else None
+        if c is None:
+            return []
+        doc, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
+        return [
+            f"THE {c.label.upper()} SET ALREADY DRAFTED FOR THIS REQUEST (binding on this set: print its attorney "
+            "block and signature block exactly; every term this set defines that it defines is defined in the same "
+            "words; define a new term only when this set's requests need it):\n\n" + sets.front_matter(doc)
+        ]
+
     def _drafter(self, u: Unit) -> compose.Drafter:
-        context = ([u.instruction] if u.instruction else []) + self._context()
+        context = ([u.instruction] if u.instruction else []) + self._shared(u) + self._context()
         return compose.Drafter(
             u.data, self.doorway, self.firm, self.cls, self.job.request_text, context, CONCURRENCY, self.log
         )
@@ -142,14 +162,34 @@ class Finish:
             raise DraftingHold(f"request_incomplete: the request is missing what the draft needs: {refused}")
         self._done(u.stage("compose"))
         corpus, version = self._corpus_text(), 1
+        strict = self.cls in compose.STRICT_CLASSES
+        repairs = MAX_REPAIRS_STRICT if strict else MAX_REPAIRS
         result = d.audit(version, digest, corpus)
-        while compose.blocking_findings(result) and version <= MAX_REPAIRS:
-            d.repair(digest, version)
+        while compose.blocking_findings(result, self.cls) and version <= repairs:
+            before = (u.data / f"draft-v{version}.md").read_text(encoding="utf-8")
+            after = d.repair(digest, version)
+            if strict and after == before:
+                # A repair that changed nothing will not converge (a finding no
+                # section carries): never pay to audit the same text again.
+                raise DraftingFailed(
+                    f"audit_unrepaired: {compose.blocking_findings(result, self.cls)} audit finding(s) in the "
+                    f"{u.label} that a repair could not place; see audit-v{version}.md"
+                )
             version += 1
             result = d.audit(version, digest, corpus)
+        audit_md = (u.data / f"audit-v{version}.md").read_text(encoding="utf-8")
+        left = compose.blocking_findings(result, self.cls)
+        if strict and left:
+            # Applied or failed, never forwarded: a finding the audit made and
+            # the repairs did not clear is a known defect in a served paper.
+            # Counts only, never the claims or a heading (a title names the
+            # parties): a reason reaches SMD's alerts. audit-v<n>.md has the rows.
+            raise DraftingFailed(
+                f"audit_unrepaired: {left} audit finding(s) in the {u.label} survived {repairs} repair(s); "
+                f"see audit-v{version}.md"
+            )
         self._done(u.stage("audit"))
         md = (u.data / f"draft-v{version}.md").read_text(encoding="utf-8")
-        audit_md = (u.data / f"audit-v{version}.md").read_text(encoding="utf-8")
         try:
             md, settled = settle_mod.settle(md, audit_md)
         except finalpass.Unlocated as exc:
@@ -164,6 +204,19 @@ class Finish:
     def _join(self, doc: str, notes: str) -> str:
         return doc + ("\n" + render.NOTES_MARK + "\n\n" + notes + "\n" if notes else "")
 
+    def _front(self, u: Unit, doc: str) -> tuple[str, list[str]]:
+        """The firm's authored attorney block, then the first set's front
+        matter (``sets.align``): one wording across the sets of one request."""
+        cp = self.data / "caption.json"
+        chosen = (json.loads(cp.read_text(encoding="utf-8")).get("attorney_block") if cp.is_file() else None) or {}
+        doc, notes = sets.authored_head(doc, list(chosen.get("lines") or []))
+        c = self._canon(u) if u.key else None
+        if c is not None:
+            canon, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
+            doc, more = sets.align(doc, canon, f"{c.label} set")
+            notes += more
+        return doc, notes
+
     def _gate(self, u: Unit, md: str) -> str:
         if self._is_done(u.stage("gate")):
             return (u.data / FINAL).read_text(encoding="utf-8")
@@ -171,7 +224,9 @@ class Finish:
         doc, log = nestquote.repair(doc)
         if self.cls == "discovery_set":
             doc, caps = sets.enforce_caps(doc)
-            self._uwrite(u, "caps.json", caps)
+            doc, fronted = self._front(u, doc)
+            doc, marked = sets.compound_markers(doc)
+            self._uwrite(u, "caps.json", caps + fronted + marked)
         md = self._join(doc, notes)
         self._uatomic(u, FINAL, md)
         if log:
@@ -284,22 +339,71 @@ class Finish:
             fp = json.loads((u.data / "final-pass.json").read_text(encoding="utf-8"))
             open_items += [(f"{u.label}: " if u.key else "") + x for x in fp["drifts"]]
         papers = self._papers()
-        end_tables = review_mod.final_notes(
-            self.doorway,
-            self.firm.model("audit"),
-            digest,
-            papers,
-            "\n\n".join(tables),
-            open_items,
-            self.job.job_id[-6:],
-        )
+        facts = self._request_facts()
+
+        def tables_for(refused: list[str] | None) -> str:
+            return review_mod.final_notes(
+                self.doorway,
+                self.firm.model("audit"),
+                digest,
+                papers,
+                "\n\n".join(tables),
+                open_items,
+                self.job.job_id[-6:],
+                facts=facts,
+                refused=refused,
+            )
+
+        end_tables = tables_for(None)
+        problems = wording.notes_findings(end_tables)
+        if problems:
+            self.log(f"  attorney notes: {len(problems)} wording problem(s); one rewrite")
+            end_tables = tables_for(problems)
+            problems = wording.notes_findings(end_tables)
+            if problems:
+                # Counts and kinds only: a reason reaches SMD's alerts.
+                raise DraftingFailed(
+                    f"notes_unclean: the attorney notes still carry {len(problems)} problem(s) after a rewrite: "
+                    + wording.summary(end_tables)
+                )
         render_notes = []
         for u in self.units():
             render_notes += [(f"{u.label}: " if u.key else "") + n for n in self._rendered(u)["notes"]]
         units = [(u.label, u.data) for u in self.units()] if any(u.key for u in self.units()) else None
+        render_notes = [f"Attorney block: {facts[-1]}", *render_notes]
         md = notes_mod.attorney_notes(self.data, self._title, self._all_markers(), render_notes, end_tables, units)
         self._atomic("notes-final.md", md)
         return md
+
+    def _request_facts(self) -> list[str]:
+        """What the request and the matter record settle about who: the
+        requester, the responsible attorney, and whose authored attorney block
+        the documents carry (the LAST line, which the notes also print). Facts,
+        so the notes never hedge on them (2026-10-13)."""
+        f = self._json("facts.json")
+        cp = self.data / "caption.json"
+        cap = json.loads(cp.read_text(encoding="utf-8")) if cp.is_file() else {}
+        resp = str(f.get("responsible_attorney") or "").strip()
+        req = str(self.job.requester or "").strip().lower()
+        out = [
+            f"the documents were requested by {req}",
+            f"the matter record names {resp} as the responsible attorney"
+            if resp
+            else "the matter record names no responsible attorney",
+        ]
+        chosen = cap.get("attorney_block") or {}
+        who = str(chosen.get("email") or "").lower()
+        if not who:
+            out.append("the firm has no authored attorney block for the requesting or the responsible attorney")
+        elif who == req:
+            out.append(f"the attorney block is the firm's authored block for {who}, who requested the documents")
+        else:
+            # Chosen by the matter record's attorney email (attorneys.pick):
+            # say that, never a name the code did not compare.
+            out.append(
+                f"the attorney block is the firm's authored block for {who}, the attorney the matter record names"
+            )
+        return out
 
     def _fresh_review(self, digest: str, notes_md: str) -> tuple[list[review_mod.Finding], str]:
         papers = self._papers()
