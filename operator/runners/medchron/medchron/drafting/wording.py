@@ -61,7 +61,8 @@ HEDGE = re.compile(
     r"(?i)\b(on either reading|(?:it is )?unclear whether|may or may not|presumably|we assume|it is assumed|"
     r"if (?:\S+\s+){0,6}is the (?:handling|responsible|requesting) attorney|"
     r"whether (?:\S+\s+){0,8}(?:is|was) the (?:handling|responsible|requesting) attorney|"
-    r"(?:may|might) (?:not )?have been served)\b"
+    r"(?:may|might) (?:not )?have been served|"
+    r"confirm (?:\S+\s+){0,6}(?:is|as) the (?:handling|signing|responsible|requesting) attorney)\b"
 )
 _QUOTED = re.compile(r"\"[^\"\n]*\"|“[^”\n]*”")
 _EMPTY = re.compile(r'^\s*[-*]\s+[^:\n]{1,80}:\s*(?:""|“”|\(\s*\)|none\s*\(\s*\))?\s*\.?\s*$', re.I)

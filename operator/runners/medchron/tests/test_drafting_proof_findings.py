@@ -318,8 +318,10 @@ def test_a_model_written_declaration_never_travels_with_the_signature_block():
 
 def test_a_title_above_the_court_line_is_never_taken_for_an_attorney_block():
     doc = "# PLAINTIFF'S REQUESTS FOR ADMISSION\nAttorneys for Plaintiff\n\nSUPERIOR COURT OF THE STATE OF CALIFORNIA\n"
-    assert sets.head_lines(doc) == (-1, [])
-    assert sets.authored_head(doc, ["X"]) == (doc, [])
+    start, at, lines = sets.head_lines(doc)
+    assert lines == ["Attorneys for Plaintiff"] and doc[:start].startswith("# PLAINTIFF'S REQUESTS")
+    out, _ = sets.authored_head(doc, ["Alpha Example (SBN 000001)"])
+    assert out.startswith("# PLAINTIFF'S REQUESTS FOR ADMISSION\nAlpha Example (SBN 000001)\nAttorneys for Plaintiff")
 
 
 def test_a_definition_worded_for_one_kind_of_set_is_not_copied_into_another():
@@ -420,3 +422,72 @@ def test_the_notes_are_told_who_asked_and_whose_block_it_is_and_say_it(tmp_path,
         in notes
     )
     assert wording.vocabulary(notes) == [] and "{{" not in notes
+
+
+# ---- what the replay of the held run showed (2026-10-14) ------------------------------------
+
+
+def test_the_dated_line_carries_the_drafts_date_in_every_set():
+    for raw in ("Dated: {{NOT IN RECORD: date of signing}}", "Dated:", "Dated: `{{FILL: date | today}}`"):
+        out, notes = sets.dated(f"Body.\n\n{raw}\n\nEXAMPLE LAW\n", "October 14, 2026")
+        assert "Dated: October 14, 2026\n" in out and "{{" not in out and notes
+    same = "Dated: October 14, 2026\n"
+    assert sets.dated(same, "October 14, 2026") == (same, [])
+
+
+def test_the_declarant_is_the_authored_blocks_attorney():
+    assert render.declarant_name(["Alpha Q. Example, Esq. (SBN 000001)", "EXAMPLE LAW"]) == "Alpha Q. Example"
+    assert render.declarant_name([]) is None
+    from drafting_testkit import DECL
+
+    class Firm(_Firm):
+        def attachment(self, key):
+            if key == "decl_2030_050":
+                return (
+                    "# DECLARATION FOR ADDITIONAL DISCOVERY\n\nI, `{{ATTORNEY: declarant's full name}}`, declare:\n"
+                    + DECL
+                )
+            return super().attachment(key)
+
+    doc, _ = render.attach(_srogs(40), "discovery_set", Firm(), _digest(), {}, declarant="Alpha Q. Example")
+    assert "declarant's full name" not in doc and "I, Alpha Q. Example, declare" in doc
+    bare, _ = render.attach(_srogs(40), "discovery_set", Firm(), _digest(), {})
+    assert "{{ATTORNEY: declarant's full name}}" in bare
+
+
+def test_fictitious_defendants_are_not_a_spelling_difference():
+    from medchron.drafting import caption
+
+    fields = {"defendants": [{"value": "DELTA EXAMPLE, LLC and DOES 1-25", "verified": True, "quote": "q"}]}
+    record = {"parties": [{"side": "other", "name": "DELTA EXAMPLE, LLC"}]}
+    diffs, compared = caption.compare(fields, record, "Complaint.pdf")
+    assert diffs == [] and "defendant" in compared
+    fields["defendants"][0]["value"] = "DELTA EXAMPEL, LLC and DOES 1-25"
+    assert [d["field"] for d in caption.compare(fields, record, "Complaint.pdf")[0]] == ["defendant"]
+
+
+def test_the_review_reads_a_document_in_body_order(tmp_path):
+    import docx
+
+    from medchron.drafting import format_check
+
+    d = docx.Document()
+    d.add_paragraph("ATTORNEY BLOCK")
+    t = d.add_table(rows=1, cols=2)
+    t.cell(0, 0).text, t.cell(0, 1).text = "GAMMA v. DELTA", "Case No. CV-0001"
+    d.add_paragraph("PROOF OF SERVICE")
+    text = format_check.doc_text(d)
+    assert text.index("Case No.") < text.index("PROOF OF SERVICE")
+
+
+def test_a_line_every_set_carries_is_said_once(tmp_path):
+    for k in ("a", "b"):
+        (tmp_path / k).mkdir()
+        (tmp_path / k / "final-pass.json").write_text(json.dumps({"settled": [], "drifts": []}))
+        (tmp_path / k / "gate.json").write_text(json.dumps({"warnings": ["3 of 9 sources are scans"]}))
+    (tmp_path / "walled.json").write_text(json.dumps([{"reason": "firm internal", "name": "INTAKE"}]))
+    md = notes_mod.attorney_notes(
+        tmp_path, "Discovery Set", [], [], "", [("RFA", tmp_path / "a"), ("RFP", tmp_path / "b")]
+    )
+    assert md.count("3 of 9 sources are scans") == 1
+    assert "privilege wall" not in md and "never read" not in md

@@ -20,6 +20,18 @@ from typing import Any
 KIND_LABEL = {"ATTORNEY": "For your decision", "NOT IN RECORD": "Not in the file", "CLIENT": "From the client"}
 
 
+def _once(lines: list[str], labels: list[str]) -> list[str]:
+    """A line every document carries, said once without its document's name."""
+    out: list[str] = []
+    for ln in lines:
+        bare = next((ln[len(lb) + 2 :] for lb in labels if lb and ln.startswith(f"{lb}: ")), None)
+        if bare is not None and len(labels) > 1 and all(f"{lb}: {bare}" in lines for lb in labels):
+            ln = bare
+        if ln not in out:
+            out.append(ln)
+    return out
+
+
 def _json(data: Path, name: str) -> Any:
     return json.loads((data / name).read_text(encoding="utf-8"))
 
@@ -83,6 +95,7 @@ def attorney_notes(
         review += [f"Howell table: {n}" for n in _json(data, "howell.json")["notes"]]
     review += list(render_notes)
     walled = _json(data, "walled.json") if (data / "walled.json").is_file() else []
-    review += [f"Held out, never read (privilege wall: {w['reason']}): {w['name']}" for w in walled]
+    review += [f"Kept out of drafting as the firm's own papers ({w['reason']}): {w['name']}" for w in walled]
+    review = _once(review, [label for label, _d in units or []])
     tail = ["", "## End tables (from the final document)", "", end_tables] if end_tables else []
     return "\n".join(lines + ["", "## For review", ""] + [f"- {x}" for x in review] + tail) + "\n"

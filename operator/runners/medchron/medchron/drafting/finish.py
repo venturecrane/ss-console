@@ -204,18 +204,31 @@ class Finish:
     def _join(self, doc: str, notes: str) -> str:
         return doc + ("\n" + render.NOTES_MARK + "\n\n" + notes + "\n" if notes else "")
 
-    def _front(self, u: Unit, doc: str) -> tuple[str, list[str]]:
-        """The firm's authored attorney block, then the first set's front
-        matter (``sets.align``): one wording across the sets of one request."""
+    def _block_lines(self) -> list[str]:
+        """The firm's authored attorney block this job carries, or none."""
         cp = self.data / "caption.json"
         chosen = (json.loads(cp.read_text(encoding="utf-8")).get("attorney_block") if cp.is_file() else None) or {}
-        doc, notes = sets.authored_head(doc, list(chosen.get("lines") or []))
+        return list(chosen.get("lines") or [])
+
+    def _front(self, u: Unit, doc: str) -> tuple[str, list[str]]:
+        """The firm's authored attorney block, the draft's date on the Dated
+        line, then the first set's front matter (``sets.align``): one wording
+        across the sets of one request."""
+        doc, notes = sets.authored_head(doc, self._block_lines())
+        doc, dated = sets.dated(doc, self._long_date())
+        notes += dated
         c = self._canon(u) if u.key else None
         if c is not None:
             canon, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
             doc, more = sets.align(doc, canon, f"{c.label} set")
             notes += more
         return doc, notes
+
+    def _long_date(self) -> str:
+        import datetime as dt
+
+        d = dt.datetime.strptime(self.date_stamp, "%m-%d-%y")
+        return f"{d:%B} {d.day}, {d.year}"
 
     def _gate(self, u: Unit, md: str) -> str:
         if self._is_done(u.stage("gate")):
@@ -271,7 +284,9 @@ class Finish:
         if self._is_done(u.stage("rendered")):
             return
         doc, _end = render.split_notes(md)
-        doc, attached = render.attach(doc, self.cls, self.firm, digest, self.corpus())
+        doc, attached = render.attach(
+            doc, self.cls, self.firm, digest, self.corpus(), render.declarant_name(self._block_lines())
+        )
         doc, reserved = render.reserve_judgment(doc, self.cls)
         out, fmt, paper = deliver.out_dir(self.data), self.firm.data["format"], self.paper()
         path, report = render.render(doc, self.cls, out / self._names(u)["draft"], fmt)
@@ -299,7 +314,10 @@ class Finish:
                 "path": str(path),
                 "paper": paper,
                 "markers": markers(doc),
-                "notes": [*attached, *reserved, *report.get("notes", []), *laid],
+                # The renderer's own report stays here, never in the attorney
+                # notes ("named styles defined on the starter base", 2026-10-13).
+                "notes": [*attached, *reserved, *laid],
+                "render_report": report.get("notes", []),
             },
         )
         self._done(u.stage("rendered"))
@@ -386,7 +404,8 @@ class Finish:
         resp = str(f.get("responsible_attorney") or "").strip()
         req = str(self.job.requester or "").strip().lower()
         out = [
-            f"the documents were requested by {req}",
+            f"the documents were requested by {req}; what the request states about the file or about who handles "
+            "or signs it is adopted as stated, never questioned",
             f"the matter record names {resp} as the responsible attorney"
             if resp
             else "the matter record names no responsible attorney",

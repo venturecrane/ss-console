@@ -53,6 +53,9 @@ RANKS = {"pleading": 3, "answer": 2, "notice": 1}
 Report = Callable[..., None]
 
 
+_DOES = re.compile(r"(?i)[,;]?\s*(?:and\s+)?does?\s+\d+\s*(?:-|to|through)\s*\d+(?:,?\s*inclusive)?\.?\s*$")
+
+
 def _norm(s: str) -> str:
     return " ".join(str(s).split()).strip(" ,.").casefold()
 
@@ -232,9 +235,11 @@ def _names(caption: dict[str, Any], record: dict[str, Any], compared: list[str],
             continue
         compared.append(field)
         for c in names:
-            if any(rules.same_name(p["name"], c["value"]) for p in pool):
+            # "X and DOES 1-25" is X: the fictitious defendants are not a spelling.
+            v = _DOES.sub("", c["value"]).strip(" ,;")
+            if any(rules.same_name(p["name"], v) for p in pool):
                 continue
-            near = [p for p in pool if rules.close(p["name"], c["value"])]
+            near = [p for p in pool if rules.close(p["name"], v)]
             if len(near) != 1:  # none: another party; two: ambiguous
                 continue
             p = near[0]

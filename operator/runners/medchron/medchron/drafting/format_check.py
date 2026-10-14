@@ -261,9 +261,18 @@ def check_mediation(doc: Any, fmt: dict[str, Any], res: Result) -> None:
 def doc_text(doc: Any) -> str:
     """The rendered document as text the shared rules read: paragraphs, and
     table rows as ``| a | b |`` (the identification block is a table)."""
-    out = [p.text for p in doc.paragraphs]
-    for t in doc.tables:
-        out += ["| " + " | ".join(c.text for c in row.cells) + " |" for row in t.rows]
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+
+    out: list[str] = []
+    # In body order: a caption table read after every paragraph looked, to the
+    # review, like a caption printed after the proof of service (2026-10-13).
+    for child in doc.element.body.iterchildren():
+        tag = child.tag.rsplit("}", 1)[-1]
+        if tag == "p":
+            out.append(Paragraph(child, doc).text)
+        elif tag == "tbl":
+            out += ["| " + " | ".join(c.text for c in row.cells) + " |" for row in Table(child, doc).rows]
     return "\n".join(out)
 
 
