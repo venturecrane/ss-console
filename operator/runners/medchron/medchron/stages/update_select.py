@@ -56,7 +56,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from io import BytesIO
 from collections.abc import Callable
 from pathlib import Path
@@ -157,6 +157,9 @@ class _Read:
     decisions: dict[int, tuple[str, str]]
     medlegal: bool
     home: str | None  # the new document it re-files whole (``select.new_home``)
+    #: {page: (document, page)}: a page read from a smaller copy's richer
+    #: reading of the same scan (``update/twins``).
+    readings: dict[int, tuple[str, int]] = field(default_factory=dict)
 
 
 def _classify(
@@ -205,7 +208,8 @@ def _settle_twins(got: dict[str, _Read], ident: PG.Loaded) -> None:
                 by_other.setdefault(h.other, {})[pg] = h.page
         for other, pairs in by_other.items():
             o = got[other]
-            TW.settle((c.pages, c.decisions), (o.pages, o.decisions), pairs)
+            for p, q in TW.settle((c.pages, c.decisions), (o.pages, o.decisions), pairs).items():
+                o.readings[p] = (rid, q)
 
 
 def _read_one(
@@ -345,7 +349,7 @@ def run(sr: StageRun) -> int:
         sr.log(HELD + f"page(s) the transcription could not read: {unread[:5]}")
         return 2
     subs = _subset_records(rows, recs, extracts, {int(e["exhibit"]): e["name"] for e in read_by_delivery})
-    _write(sr, ud, recs, units, skipped, subs)
+    _write(sr, ud, recs, units, skipped, subs, _readings(sr, read))
     pages = sum(len(r["read"]) for r in recs)
     if not pages:
         sr.log(HELD + "nothing new to read: every page of the new documents is already in the delivered exhibits")
@@ -418,11 +422,53 @@ def _subset_records(
     return out
 
 
-def _write(sr: StageRun, ud: Path, recs: list[dict], units: list[dict], skipped: dict, subs: list[dict]) -> None:
+def _readings(sr: StageRun, read: dict[str, _Read]) -> list[dict[str, Any]]:
+    """Writes each page read from a copy's richer reading into its own
+    document's transcript (``text/<id>.txt``: compose, the audit and every
+    later check read the cited page from it) and returns one record per page.
+    Only the page's body changes; its ``[p.N]`` line is kept. A redo finds
+    the two readings equal, so the copy's page is a confirmed repeat and
+    nothing is written again."""
+    out: list[dict[str, Any]] = []
+    for rid, c in read.items():
+        if not c.readings:
+            continue
+        tp = sr.slug_dir / "text" / f"{rid}.txt"
+        tp.write_text(
+            _with_pages(tp.read_text(encoding="utf-8", errors="replace"), c.pages, set(c.readings)), encoding="utf-8"
+        )
+        out += [{"doc": rid, "page": p, "from_doc": d, "from_page": q} for p, (d, q) in sorted(c.readings.items())]
+    return out
+
+
+def _with_pages(text: str, pages: dict[int, str], which: set[int]) -> str:
+    """`text` (a page-marked transcript) with the bodies of the pages in
+    `which` replaced by `pages`."""
+    marks = list(S.PAGE_MARK.finditer(text))
+    out, at = [], 0
+    for i, m in enumerate(marks):
+        end = marks[i + 1].start() if i + 1 < len(marks) else len(text)
+        n = int(m.group(1))
+        if n in which:
+            out += [text[at : m.end()], "\n" + pages[n].strip("\n") + "\n"]
+            at = end
+    return "".join([*out, text[at:]])
+
+
+def _write(
+    sr: StageRun,
+    ud: Path,
+    recs: list[dict],
+    units: list[dict],
+    skipped: dict,
+    subs: list[dict],
+    readings: list[dict] | None = None,
+) -> None:
     (sr.slug_dir / "units").mkdir(parents=True, exist_ok=True)
     (sr.slug_dir / "units" / f"{sr.unit.unit}.json").write_text(json.dumps(units, indent=1), encoding="utf-8")
     (ud / "new_exhibits.json").write_text(json.dumps(recs, indent=1), encoding="utf-8")
     sel = {"exhibits": recs, "skipped": skipped, "excluded_named": _excluded_named(sr), "subsets": subs}
+    sel["readings"] = readings or []
     (ud / "selection.json").write_text(json.dumps(sel, indent=1), encoding="utf-8")
 
 

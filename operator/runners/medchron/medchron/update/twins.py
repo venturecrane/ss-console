@@ -16,8 +16,20 @@ paired pages around an unpaired one), AND the two readings share most of
 their words in any order (``pageid_io.WORDS_FRAC``). Of two twins still both
 read:
 
-* one whose dates and clinical values are all in the other's is a repeat of
-  it, and is not read (it says nothing the other does not);
+* the smaller document's twin whose dates and clinical values are all in
+  the larger's is a repeat of it, and is not read;
+* when the LARGER document's reading is the one that adds nothing and its
+  twin is a PICTURE pair (the same scan), the page stays in the larger
+  document and is read from the smaller one's richer reading; the smaller
+  page is a repeat. The record is cited once, in the larger exhibit: a
+  2-page exhibit once remained only because a copy's reading caught four
+  values the larger file's reading of the same scan missed (2026-10-14).
+  ``update_select`` writes that reading into the larger document's
+  transcript, so compose, the audit and every later check read the same
+  words on the cited page;
+* a twin found only by its neighbours' offset (no picture) is never given
+  another page's reading: the larger page is the repeat and the smaller is
+  read;
 * when each states a date or value the other lacks, both are read: what the
   two readings disagree on is never settled by dropping one.
 """
@@ -73,21 +85,24 @@ def settle(
     mine: tuple[dict[int, str], Decisions],
     theirs: tuple[dict[int, str], Decisions],
     pairs: dict[int, int],
-) -> int:
-    """Excludes, in place, the twin that adds nothing, for each pair of
-    twins both still read; returns how many pages it excluded. `mine` is the
-    smaller document (pages, decisions), `theirs` the larger, `pairs` its
+) -> dict[int, int]:
+    """Settles, in place, each pair of twins both still read: the twin that
+    adds nothing is excluded, and a larger picture twin that adds nothing is
+    read from the smaller one's reading instead (its text in `theirs` is
+    replaced). Returns those substitutions, {their page: my page}. `mine` is
+    the smaller document (pages, decisions), `theirs` the larger, `pairs` its
     picture pairs {my page: their page}."""
     (mp, md), (tp, td) = mine, theirs
-    done = 0
+    swapped: dict[int, int] = {}
     for q, p in aligned(pairs, len(md), len(td)).items():
         if md.get(q, ("",))[0] != READ or td.get(p, ("",))[0] != READ:
             continue
         if _within(mp.get(q, ""), tp.get(p, "")):
             md[q] = (EXCLUDED, OVERLAP)
+        elif _within(tp.get(p, ""), mp.get(q, "")) and pairs.get(q) == p:
+            tp[p] = mp[q]  # the same scan, read from the reading that caught more
+            md[q] = (EXCLUDED, OVERLAP)
+            swapped[p] = q
         elif _within(tp.get(p, ""), mp.get(q, "")):
             td[p] = (EXCLUDED, OVERLAP)
-        else:
-            continue
-        done += 1
-    return done
+    return swapped
