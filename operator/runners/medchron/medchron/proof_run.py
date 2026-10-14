@@ -113,6 +113,28 @@ def _items(raw: list[Any]) -> list[dict[str, Any]]:
     return out
 
 
+def read_verdicts(job_dir: Path) -> list[Any]:
+    """Every verdict the proof run's runner wrote, in either shape a lane's
+    runner emits.
+
+    WHY (2026-10-13, the A&P litigation proof). The chronology, demand and
+    drafting runners write a JSON LIST to ``verdict.json``; the litigation and
+    negotiation runners write ONE JSON OBJECT (``__main__._cmd_litigate`` and
+    ``_cmd_negotiate``, read back by their own lanes' ``read_verdict``).
+    ``verdict.read`` keeps only a list, so a litigation run that wrote
+    ``{"verdict": "dry_run", ...}`` read back as ``[]`` and its proof was
+    recorded ``failed``, "the runner wrote no dry_run verdict", stages [] and
+    0 cents. A single object is one verdict, judged exactly as a one-item list."""
+    listed = verdict_mod.read(job_dir, "")
+    if listed:
+        return listed
+    try:
+        parsed = json.loads((Path(job_dir) / verdict_mod.NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [parsed] if isinstance(parsed, dict) else []
+
+
 def judge(raw: list[Any]) -> tuple[bool, list[dict[str, Any]]]:
     """``passed`` when the runner wrote at least one verdict and every one is
     ``dry_run`` (the chronology, demand and drafting runners say ``outcome``;
@@ -227,7 +249,7 @@ def _run(d: Any, marker: Path, root: Path, job_id: str) -> bool:
     if result in RETRY_RESULTS:
         logger.info("%s proof run of %s: %s; the marker stays for the next tick", d.LANE, job_id, result)
         return True
-    passed, items = judge(verdict_mod.read(root / job_id, ""))
+    passed, items = judge(read_verdicts(root / job_id))
     reasons = [str(i.get("reason")) for i in items if i.get("reason")]
     _finish(
         root,
@@ -274,4 +296,14 @@ def results(run_dir: Path) -> list[dict[str, Any]]:
     return sorted(out, key=lambda r: str(r.get("finished_at") or ""))
 
 
-__all__ = ["MARKER_PREFIX", "ProofBroker", "judge", "proofs_root", "request", "results", "run_pending", "twin"]
+__all__ = [
+    "MARKER_PREFIX",
+    "ProofBroker",
+    "judge",
+    "proofs_root",
+    "read_verdicts",
+    "request",
+    "results",
+    "run_pending",
+    "twin",
+]

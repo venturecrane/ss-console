@@ -482,3 +482,67 @@ def test_a_caption_correction_is_not_written_in_a_proof_run(monkeypatch, tmp_pat
     corrections, left, alarms = caption_fix.apply(NoWrites(), "m1", [diff], tmp_path)
     assert corrections and not left and not alarms
     assert '"proof": true' in (tmp_path / "caption-writes.jsonl").read_text()
+
+
+# -- the one-object lanes: litigation and negotiation write a dict, not a list -----------
+
+# The litigation runner's real shape (``__main__._cmd_litigate``): ONE JSON object in
+# verdict.json, the same line on stdout. In a proof run it says dry_run at the file stage.
+LIT_RUNNER = """
+import json, os, sys, pathlib
+jd = pathlib.Path(sys.argv[1])
+proof = os.environ.get('MEDCHRON_PROOF_RUN') == '1'
+v = {"verdict": "dry_run" if proof and %(honest)s else "delivered", "stage": "file", "cents": 2453,
+     "matters_total": 16, "matters_reread": 2, "flags_new": 0, "files": [{"role": "workbook", "name": "w.xlsx", "size": 9}],
+     "folder_id": ""}
+(jd / 'verdict.json').write_text(json.dumps(v))
+print(json.dumps(v))
+"""
+
+
+@pytest.mark.parametrize("honest,status", [(True, "passed"), (False, "failed")])
+def test_a_litigation_proof_reads_the_runners_one_object_verdict(honest, status, tmp_path):
+    """2026-10-13, the A&P seat: the litigation runner wrote
+    ``{"verdict": "dry_run", "stage": "file", "cents": 2453, ...}`` and the proof
+    recorded ``failed``, "the runner wrote no dry_run verdict", stages [], 0 cents,
+    because the harness read verdict.json as a LIST only. The falsifier: a runner
+    whose one object says ``delivered`` in a proof run still fails."""
+    from test_litigation_lane import _lane as lit_lane, _submit as lit_submit
+
+    d, client = lit_lane(tmp_path, script=LIT_RUNNER % {"honest": honest})
+    _authored(d.run_dir, {})
+    job = lit_submit(d, client)
+    d.tick()  # unproven: the job waits
+    before = list(client.records)
+    proof_run.request(d.queue, job)
+    d.tick()
+    res = proof_run.results(d.run_dir)[-1]
+    assert res["status"] == status and res["key"] == "litigation-status" and res["job_id"] == job
+    if honest:
+        assert res["why"] == "" and res["stages"] == ["file"] and res["cents"] == 2453
+    else:
+        assert res["why"] == "the runner wrote no dry_run verdict"
+    assert client.records == before  # the proof moved no ledger row
+    assert (d.queue / f"{job}.json").is_file()  # the firm's job still waits
+
+
+@pytest.mark.parametrize(
+    "written,expect",
+    [
+        ({"verdict": "dry_run", "stage": "file", "cents": 5}, (True, ["file"])),  # litigation
+        ({"verdict": "dry_run", "stage": "write", "cents": 12}, (True, ["write"])),  # negotiation
+        ({"verdict": "failed", "stage": "dry_run"}, (False, ["dry_run"])),
+        ([{"outcome": "dry_run", "stage": "file"}], (True, ["file"])),  # chronology, demand, drafting
+        ([], (False, [])),
+        ("not json", (False, [])),
+    ],
+)
+def test_the_proof_reader_takes_either_verdict_shape(written, expect, tmp_path):
+    p = tmp_path / "verdict.json"
+    p.write_text(written if isinstance(written, str) else json.dumps(written))
+    passed, items = proof_run.judge(proof_run.read_verdicts(tmp_path))
+    assert (passed, sorted({str(i.get("stage") or "") for i in items})) == expect
+
+
+def test_no_verdict_file_is_no_verdict(tmp_path):
+    assert proof_run.read_verdicts(tmp_path) == []
