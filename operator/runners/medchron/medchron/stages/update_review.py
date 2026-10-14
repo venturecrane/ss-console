@@ -90,6 +90,7 @@ class Ctx:
     evidence: RR.Evidence
     npages: Callable[[int], int]
     verify: Verify
+    already: RP.Already = field(default_factory=dict)
     rnd: int = 0
     calls: int = 0
     usage: list[dict[str, Any]] = field(default_factory=list)
@@ -143,6 +144,25 @@ def page_text(sr: StageRun) -> RR.Evidence:
         return cache.get(ex, {}).get(page)
 
     return get
+
+
+def already_pages(sr: StageRun) -> RP.Already:
+    """exhibit -> {page: the delivered page it is a copy of}, from the page
+    identity the update decided before vision (``update/pageid``): a new
+    exhibit's page the delivery already read."""
+    ud = update_dir(sr)
+    ident = (read_json(ud / "page_identity.json", {}) or {}).get("pages") or {}
+    out: RP.Already = {}
+    for r in read_json(ud / "new_exhibits.final.json", []):
+        ex, doc = (r.get("exhibit"), r.get("id")) if isinstance(r, dict) else (None, None)
+        rows = ident.get(doc) if isinstance(doc, str) and isinstance(ident, dict) else None
+        if not isinstance(ex, int) or not isinstance(rows, dict):
+            continue
+        for page, v in rows.items():
+            if isinstance(v, list) and len(v) >= 3 and v[0] == "already" and str(page).isdigit():
+                home = str(v[1]).replace("exhibit:", "Exhibit ")
+                out.setdefault(ex, {})[int(page)] = f"{home} p. {v[2]}"
+    return out
 
 
 def _audit_verify(sr: StageRun) -> Verify:
@@ -237,7 +257,7 @@ def review_round(c: Ctx, md: str, base: list[str], targets: set[int] | None) -> 
     pick = [e for i, e in enumerate(ents) if targets is None or i in targets]
     found: list[RR.Finding] = []
     seen: set[tuple] = set()
-    for i, part in enumerate(RP.plan(pick, _keep(c.sr), c.npages), 1):
+    for i, part in enumerate(RP.plan(pick, _keep(c.sr), c.npages, c.already), 1):
         for f in _review_part(c, part, ents, base, f"p{i}"):
             k = (f.anchor, f.klass, f.exhibit, f.page, f.problem[:80])
             if k not in seen:
@@ -407,7 +427,7 @@ def run(
         return again
     base = FN.delivered_of((ud / "base.md").read_text(encoding="utf-8"))
     c = _ctx(sr, images, evidence, verify)
-    c.npages = npages or c.npages
+    c.npages, c.already = npages or c.npages, already_pages(sr)
     rec: dict[str, Any] = {"model": c.model, "doc_sha_in": _sha(md), "rounds": []}
     return _loop(c, rec, md, base, doc, ud)
 

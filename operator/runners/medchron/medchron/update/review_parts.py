@@ -24,11 +24,19 @@ the page images the findings rely on, then the pages the entries cite.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any, Callable
 
 from . import body as B, review_repair as RR
 
 WINDOW_PAGES = 20
+#: Delivered entries within this many days of a part's entries are shown with
+#: it: a new copy of a delivered visit is often dated a day off.
+NEAR_DAYS = 7
+NEAR_MAX = 12
+#: A new document this share of whose pages are copies of ONE delivered
+#: exhibit is named as such: its remaining pages very likely are too.
+MOSTLY_ALREADY = 0.9
 FINISH_MAX_ENTRIES = 6
 FINISH_MAX_IMAGES = 24
 Images = Callable[[int, int], dict[str, Any] | None]
@@ -40,6 +48,43 @@ class Part:
     entries: list[RR.Entry]
     exhibit: int = 0
     pages: list[int] = field(default_factory=list)
+    note: str = ""
+
+
+#: exhibit -> {page: the delivered page it is a copy of, "Exhibit 1 p. 37"}
+Already = dict[int, dict[int, str]]
+
+
+def already_note(ex: int, n: int, already: Already) -> str:
+    """What the review is told about a new document's pages that are copies
+    of delivered pages: they are not shown (the delivered chronology already
+    carries them), and when nearly all are copies of one delivered exhibit,
+    that the rest very likely are too."""
+    got = already.get(ex) or {}
+    if not got:
+        return ""
+    srcs = [v.split(" p.")[0] for v in got.values()]
+    top = max(set(srcs), key=srcs.count)
+    out = (
+        f"Exhibit {ex}: {len(got)} of {n} pages are copies of delivered pages (not shown; the delivered "
+        f"chronology already carries them): pp. {_ranges(sorted(got))}."
+    )
+    if srcs.count(top) >= MOSTLY_ALREADY * n:
+        out += (
+            f" {srcs.count(top)} of its {n} pages are copies of delivered {top}: its other pages are very "
+            "likely copies too, and an added entry composed from them most likely repeats a delivered visit."
+        )
+    return out
+
+
+def _ranges(ps: list[int]) -> str:
+    out: list[str] = []
+    for p in ps:
+        if out and out[-1].split("-")[-1] == str(p - 1):
+            out[-1] = f"{out[-1].split('-')[0]}-{p}"
+        else:
+            out.append(str(p))
+    return ", ".join(out)
 
 
 def _owner(es: list[RR.Entry], ex: int, lo: int) -> RR.Entry | None:
@@ -52,8 +97,12 @@ def _owner(es: list[RR.Entry], ex: int, lo: int) -> RR.Entry | None:
     return min(last, key=lambda t: t[0])[1] if last else None
 
 
-def plan(ents: list[RR.Entry], keep: set[int], npages: Callable[[int], int]) -> list[Part]:
-    """The review's parts for the entries `ents` (the targets of a round)."""
+def plan(
+    ents: list[RR.Entry], keep: set[int], npages: Callable[[int], int], already: Already | None = None
+) -> list[Part]:
+    """The review's parts for the entries `ents` (the targets of a round).
+    A page that is a copy of a delivered page (`already`) and that no added
+    entry cites is not shown."""
     by_ex: dict[int, list[RR.Entry]] = {}
     plain: list[RR.Entry] = []
     for e in ents:
@@ -65,13 +114,17 @@ def plan(ents: list[RR.Entry], keep: set[int], npages: Callable[[int], int]) -> 
     out: list[Part] = []
     for ex in sorted(by_ex):
         es, n = by_ex[ex], max(npages(ex), 1)
-        windows = [list(range(a, min(a + WINDOW_PAGES, n + 1))) for a in range(1, n + 1, WINDOW_PAGES)]
+        cited = {p for e in es for x, p in e.cites() if x == ex}
+        skip = (already or {}).get(ex) or {}
+        show = [p for p in range(1, n + 1) if p not in skip or p in cited]
+        note = already_note(ex, n, already or {})
+        windows = [show[i : i + WINDOW_PAGES] for i in range(0, len(show), WINDOW_PAGES)]
         for w in windows:
             mine = [e for e in es if any(x == ex and p in w for x, p in e.cites())]
             own = _owner(es, ex, w[0]) if not mine else None
-            out.append(Part("pages", mine or ([own] if own else []), ex, w))
+            out.append(Part("pages", mine or ([own] if own else []), ex, w, note))
         if len(windows) > 1 and len(es) > 1:
-            out.append(Part("duplicates", es, ex))
+            out.append(Part("duplicates", es, ex, note=note))
     if plain:
         out.append(Part("text", plain))
     return [p for p in out if p.entries]
@@ -84,16 +137,30 @@ def _entry_block(e: RR.Entry, tag: str = "ADDED") -> str:
     return f"=== {e.anchor} ({tag}) ===\n{e.text}\n\nCLAIMS:\n{claims}{loose}"
 
 
+def _day(e: str) -> date | None:
+    try:
+        return date.fromisoformat(B.iso(e))
+    except ValueError:
+        return None
+
+
 def context(ents: list[RR.Entry], all_ents: list[RR.Entry], delivered: list[str]) -> str:
-    """The same-date entries not in this part, read only: where a duplicate
-    of an added entry may already be."""
-    want = {B.iso(e.text) for e in ents}
+    """The delivered entries within NEAR_DAYS of this part's entries (nearest
+    first, at most NEAR_MAX) and the other added entries on the same dates,
+    read only: where a duplicate of an added entry may already be."""
+    days = [d for d in (_day(e.text) for e in ents) if d]
     mine = {e.anchor for e in ents}
-    rows = [(f"D{i}", "DELIVERED", t) for i, t in enumerate(delivered, 1) if B.iso(t) in want]
-    rows += [(e.anchor, "ADDED", e.text) for e in all_ents if e.anchor not in mine and B.iso(e.text) in want]
+
+    def gap(t: str) -> int | None:
+        d = _day(t)
+        return min((abs((d - x).days) for x in days), default=None) if d else None
+
+    near = [(g, i, t) for i, t in enumerate(delivered, 1) if (g := gap(t)) is not None and g <= NEAR_DAYS]
+    rows = [(f"D{i}", "DELIVERED", t) for _, i, t in sorted(near)[:NEAR_MAX]]
+    rows += [(e.anchor, "ADDED", e.text) for e in all_ents if e.anchor not in mine and gap(e.text) == 0]
     if not rows:
         return ""
-    return "SAME-DATE ENTRIES, READ ONLY:\n\n" + "\n\n".join(f"=== {a} ({k}) ===\n{t}" for a, k, t in rows)
+    return "NEARBY ENTRIES, READ ONLY:\n\n" + "\n\n".join(f"=== {a} ({k}) ===\n{t}" for a, k, t in rows)
 
 
 def head(client: str) -> dict[str, Any]:
@@ -118,6 +185,8 @@ def review_content(
         )
     else:
         ask = f"PART: added entries that cite no new page: {names}. Check their text."
+    if part.note:
+        ask += f"\n{part.note}"
     out.append({"type": "text", "text": f"{ask}\n\nADDED ENTRIES IN THIS PART: {names}"})
     out += [{"type": "text", "text": _entry_block(e)} for e in part.entries]
     for pg in part.pages:

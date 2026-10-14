@@ -238,3 +238,28 @@ def test_the_loop_stops_when_a_review_finds_no_fewer_must_fix(tmp_path: Path, mo
     assert rc == 2
     assert _review_rounds(sr) == {"r1", "r2"} and UR.ROUNDS > 2  # stopped at no progress, not at the cap
     assert any("no fewer than the last review" in m for m in sr.logged)
+
+
+# the delivered visit a re-filed copy repeats -----------------------------------
+def test_the_review_sees_delivered_visits_near_the_entry_and_is_told_a_document_is_mostly_a_copy() -> None:
+    """A re-filed copy of a delivered hospital record: most of its pages are
+    matched to the delivered exhibit, a few are not, and an entry composed
+    from those repeats a delivered visit dated a day off. The review is shown
+    the delivered entries within a week and told the document is mostly a
+    copy; the copied pages themselves are not shown."""
+    from medchron.update import review_parts as RP, review_repair as RR
+
+    copy = N1.replace("(Exhibit 2 - p. 1)", "(Exhibit 2 - p. 10)")
+    md = (
+        "Alpha Example - Medical Chronology\n\n## Treatment Timeline\n\n## Diagnostic Highlights\n\n"
+        "## Medical Chronology\n\n" + copy + "\n\n## Exhibit List\n"
+    )
+    ents = RR.anchor_entries(md, {2}, K.HEADINGS)
+    already = {2: {p: f"Exhibit 1 p. {p + 30}" for p in range(1, 21) if p != 10}}
+    delivered = [N1.replace("08/27/2026", "08/26/2026"), N1.replace("08/27/2026", "07/01/2026")]
+    parts = RP.plan(ents, {2}, lambda _x: 20, already)
+    assert [p.pages for p in parts] == [[10]]  # only the page an entry cites; the copies are not shown
+    blocks = RP.review_content(parts[0], "CLIENT", lambda _e, _p: None, ents, delivered)
+    text = "\n".join(b.get("text", "") for b in blocks)
+    assert "19 of its 20 pages are copies of delivered Exhibit 1" in text
+    assert "=== D1 (DELIVERED) ===" in text and "=== D2 (DELIVERED) ===" not in text  # a day off is near
