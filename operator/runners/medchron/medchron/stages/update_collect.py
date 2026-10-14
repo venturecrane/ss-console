@@ -33,7 +33,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .. import icd_tables, llm, prompts
+from .. import icd_tables, llm, meta_markers, prompts
 from ..audit import claims as CL
 from ..update import body as B, collect as C, handwritten as H, icd, providers as P, select as S
 from .base import StageRefusal, StageRun, read_json
@@ -141,6 +141,7 @@ def _shape(sr: StageRun, base_ents: list[str], rd: Path, provisional: list[dict]
         entries, rep = C.collect(C.composed(rd), base_ents, sr.job.incident_date, Canon(sr.cfg))
     except C.CollectRefusal as exc:
         raise StageRefusal(str(exc)) from exc
+    entries = [meta_markers.strip(e) for e in entries]  # the pipeline's own notes never reach the firm
     entries, spelled = P.snap(entries, base_ents)
     entries, dated = _settle_dates(sr, entries, provisional)
     return entries, {**rep, "provider_spelling": spelled, "handwritten_dates": dated}

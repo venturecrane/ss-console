@@ -140,3 +140,19 @@ def test_records_reviewed_states_pages_read_never_that_a_file_records_nothing(tm
     assert "record no visit" not in text and "did not already list, so none" not in text
     assert "Big file.pdf (834 pages: 700 pages read, 70 repeating pages already read, 64 pages with no text)" in text
     assert "703 pages were read" in text
+
+
+# ---- fix 20: the pipeline's own note never reaches the document -----------------------
+def test_a_pipeline_note_is_stripped_and_proof_6_fails_if_one_is_added() -> None:
+    from medchron import meta_markers
+    from medchron.update import proofs as P
+    from test_update_text import NEW_POST, NEW_PRE, _assemble, _inputs
+
+    line = "Hepatitis panel reported (text continues beyond the page) (Exhibit 2 - p. 3)"
+    assert meta_markers.strip(line) == "Hepatitis panel reported (Exhibit 2 - p. 3)"
+    assert meta_markers.found("Blood pressure (taken seated) 120/80") == []  # the record's own parentheses stay
+    md, _ = _assemble([NEW_PRE, NEW_POST])
+    leaked = md.replace("fifth and sixth level.", "fifth and sixth level (text continues beyond the page).")
+    assert leaked != md
+    assert "6" in P.run(_inputs(leaked, [NEW_PRE, NEW_POST])).fails
+    assert "6" not in P.run(_inputs(md, [NEW_PRE, NEW_POST])).fails
