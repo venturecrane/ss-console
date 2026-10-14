@@ -242,5 +242,29 @@ def refiled(
     return out
 
 
+#: The words a claim uses for what a handwritten form shows but no reader can
+#: settle (``prompts/update-finish-system.md``). A claim stating them is settled:
+#: the review does not raise the same unreadable mark again (2026-10-14: about
+#: 30 of 40 reverted corrections were column marks and handwritten numbers the
+#: grader could not read either).
+AS_READ = ("marked as shown on the page", "as written on the page")
+#: Findings an as-read claim still answers to: a wrong visit, a copy, words
+#: about the process are not a reading.
+_STILL_RAISED = ("duplicate", "misattribut", "process", "uncited", "out-of-order", "date")
+
+
+def settled_as_read(found: list[RR.Finding], ents: list[RR.Entry]) -> tuple[list[RR.Finding], int]:
+    """(the findings minus those on a claim stated "as shown / as written on
+    the page", how many were settled that way)."""
+    claims = {c.anchor: c.text.lower() for e in ents for c in e.claims + e.uncited}
+    keep: list[RR.Finding] = []
+    for f in found:
+        text = claims.get(f.anchor, "")
+        if any(p in text for p in AS_READ) and not any(w in f.klass.lower() for w in _STILL_RAISED):
+            continue
+        keep.append(f)
+    return keep, len(found) - len(keep)
+
+
 def delivered_of(base_md: str) -> list[str]:
     return B.entries_of(base_md)[1]
