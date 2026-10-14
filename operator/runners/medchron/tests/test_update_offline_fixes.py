@@ -293,3 +293,42 @@ def test_at_the_round_cap_a_claim_with_nothing_supported_left_still_drops_whole(
     rc, doc, log, _ = _cap_run(job_dir, firm_config_path, data_root, S2)
     assert "serology" not in doc and not [ln for ln in doc.splitlines() if ln.strip() == "."]
     assert not any("MISMATCH" in ln for ln in log)
+
+
+def test_a_ledger_entry_keeps_its_nine_values_when_one_clause_is_contested(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    from medchron.update.values import numbers
+
+    kept = (
+        "Ledger visit: blood pressure 128/84, pulse 76, weight 182 lbs. "
+        "Cervical rotation 60 degrees and flexion 40 degrees were measured. "
+        "Pain was rated 5 of 10 with adjustment at 3 levels for 15 minutes."
+    )
+    claim = kept.replace(" Pain was", f" {S2} Pain was")
+    rc, doc, log, _ = _cap_run(job_dir, firm_config_path, data_root, claim)
+    assert rc == 0, log
+    assert len(numbers(kept)) >= 9 and numbers(kept) <= numbers(doc)
+    assert "serology" not in doc
+
+
+def test_a_structured_claim_rewritten_out_of_its_grammar_is_refused_and_never_stops_assemble() -> None:
+    from medchron.audit import repair
+    from medchron.update import assemble as A
+
+    claim = "Diagnosis code M53.3 recorded on 02/10/2026."
+    anchor = claim + " (Exhibit 2 - p. 2)"
+    assert repair._rejection("Diagnosis code M53.3 recorded. (Exhibit 2 - p. 2)", anchor, claim)
+    assert repair._rejection("Diagnosis code M53.2 recorded on 02/10/2026. (Exhibit 2 - p. 2)", anchor, claim) is None
+    new = "02/10/2026\nExample Imaging | Medical Diagnoses\n\nMedical Diagnoses\nMRI reviewed. (Exhibit 2 - p. 2)"
+    nex = [{"exhibit": 2, "title": "Exhibit 2 - Example Imaging (Medical Records)", "pages": 2}]
+    broken = "Diagnosis code M53.3 recorded. (Exhibit 2 - p. 2)"  # a repair that already reached the document
+    md, rep = A.assemble(
+        K.base_md(),
+        C.audit_document(K.base_md(), [new], nex, icd_claims=[broken]),
+        describe=lambda c, o, t: (c, None, "x"),
+        canon=str,
+        headings=K.HEADINGS,
+        new_exhibits=nex,
+    )
+    assert "M53.3" not in md and rep["icd_rows_added_or_moved"] == []

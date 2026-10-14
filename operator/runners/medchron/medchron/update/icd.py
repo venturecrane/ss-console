@@ -101,6 +101,8 @@ def split_claims(pre: str) -> tuple[str, list[tuple[str, str, str]]]:
         m = CLAIM.match(para.strip())
         if m:
             got.append((m.group(1), f"{m.group(4)}-{m.group(2)}-{m.group(3)}", m.group(5)))
+        elif para.strip().startswith("Diagnosis code "):
+            continue  # a diagnosis claim a repair broke is dropped, never stray preamble text
         elif para.strip():
             keep.append(para.strip("\n"))
     return "\n\n".join(keep), got

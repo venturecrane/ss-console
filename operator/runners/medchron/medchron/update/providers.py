@@ -157,6 +157,8 @@ def split_claims(pre: str) -> tuple[str, list[tuple[str, str]]]:
         m = CLAIM.match(para.strip())
         if m:
             got.append((m.group(1).strip(), m.group(2)))
+        elif para.strip().startswith("Provider named on the record"):
+            continue  # a name claim a repair broke is dropped: the composed spelling stands
         elif para.strip():
             keep.append(para.strip("\n"))
     return "\n\n".join(keep), got

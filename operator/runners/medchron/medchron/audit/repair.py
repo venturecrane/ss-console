@@ -188,7 +188,26 @@ def _rejection(new: str, anchor: str, claim: str) -> str | None:
         return "citations changed"
     if len(new.split()) > len(claim.split()) * 1.25 + 10:
         return "expanded"
-    return None
+    return _structured_break(new, anchor, claim)
+
+
+#: Claims written in a fixed grammar that assemble parses back: a repair may
+#: change the code, date or name inside it, never the grammar itself.
+STRUCTURED = (
+    re.compile(r"^Diagnosis code \S+ recorded on \d{2}/\d{2}/\d{4}\.$"),
+    re.compile(r"^Provider named on the record: .+\.$"),
+)
+
+
+def _structured_break(new: str, anchor: str, claim: str) -> str | None:
+    """A rewrite that leaves a structured claim's grammar ("Diagnosis code
+    M53.3 recorded." lost its date and refused the whole update at assemble,
+    2026-10-14). The claim is then failed again and dropped whole at the cap."""
+    grammar = next((g for g in STRUCTURED if g.match(claim.strip())), None)
+    if grammar is None:
+        return None
+    body = CITE.sub("", new).strip()
+    return None if grammar.match(body) else "a structured claim's grammar changed"
 
 
 def _residual_drop_row(r: dict[str, Any], c: dict[str, Any], contested: bool) -> dict[str, Any]:
