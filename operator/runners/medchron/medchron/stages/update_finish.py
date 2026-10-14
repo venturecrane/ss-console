@@ -28,6 +28,7 @@ from .. import icd_tables
 from ..audit import claims as CL, coverage as audit_coverage
 from ..audit.page_text import exhibit_paths
 from ..audit.run import AuditPaths
+from ..update.billing_page import BILLING
 from ..update import assemble as A, body as B, collect as C, docx_md, proofs as P
 from ..update.select import ALREADY, BLANK, OVERLAP
 from .base import StageRefusal, StageRun, read_json
@@ -47,6 +48,7 @@ def page_counts(r: dict[str, Any]) -> dict[str, int]:
         "read": len(r.get("read") or []),
         "repeat": int(ex.get(ALREADY, 0)) + int(ex.get(OVERLAP, 0)),
         "blank": int(ex.get(BLANK, 0)),
+        "billing": int(ex.get(BILLING, 0)),
         "unread": len(r.get("unread") or []),
     }
 
@@ -64,6 +66,8 @@ def uncited_name(r: dict[str, Any]) -> str:
         parts.append(f"{c['repeat']:,} repeating page{'' if c['repeat'] == 1 else 's'} already read")
     if c["blank"]:
         parts.append(f"{_pages(c['blank'])} with no text")
+    if c["billing"]:
+        parts.append(f"{_pages(c['billing'])} of billing")
     if c["unread"]:
         parts.append(f"{_pages(c['unread'])} not transcribed")
     name = str(r.get("source_name") or r.get("title") or "a document")
