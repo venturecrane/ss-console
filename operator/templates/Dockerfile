@@ -1195,7 +1195,7 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # names paralegals ("Irma's files"), alone or with attorneys; pairs with this
 # repo's broker paralegal resolution and the runner's Person Assisting scope.
 # No tracked twin moved.
-ARG OVERLAY_REF="8ed871e9bab964aca55e3e0c749067e4c049a460"
+ARG OVERLAY_REF="8ee9b79aef4876d6b7b5e167f545e97e66f2b190"
 
 ARG CUSTOMER_SLUG=customer-zero
 
