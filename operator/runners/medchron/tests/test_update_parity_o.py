@@ -75,24 +75,57 @@ def test_a_smaller_copy_pulled_first_is_cited_to_the_larger_file(tmp_path: Path)
     assert [u["id"] for u in units] == ["whole"]
 
 
+def _pages_of(path: Path) -> dict[int, str]:
+    from medchron.update import select as S
+
+    return S.pages_of_text(path.read_text())
+
+
+def test_a_copys_richer_reading_is_cited_to_the_larger_exhibit(tmp_path: Path) -> None:
+    """Parity O2. The larger file's reading of one scan missed its pain score;
+    the copy's reading of the same scan caught it. The page stays in the
+    larger exhibit, read from the copy's reading, and the copy folds away:
+    one record, one exhibit, the value kept. Before, the copy stayed a
+    one-page exhibit for that page alone."""
+    whole = [_record(i) for i in WHOLE]
+    whole_read = list(whole)
+    whole_read[4] = _no_pain(whole_read[4])
+    sel = _run(tmp_path, None, whole_read)
+    by_id = {r["id"]: r for r in sel["exhibits"]}
+    assert set(by_id) == {"whole"}
+    assert by_id["whole"]["read"] == [1, 2, 3, 4, 5, 6]
+    subs = {s["id"]: s for s in sel["subsets"]}
+    assert subs["part"]["subset_of"]["id"] == "whole"
+    assert sel["readings"] == [{"doc": "whole", "page": 5, "from_doc": "part", "from_page": 3}]
+    pain = next(x for x in whole[4].split("\n") if x.startswith("Pain rated"))
+    text = _pages_of(tmp_path / "text" / "whole.txt")
+    assert pain in text[5]  # every later stage reads the cited page with its value
+    assert text[4] == whole[3] and text[6] == whole[5]  # no other page touched
+    assert "(machine transcription)" in (tmp_path / "text" / "whole.txt").read_text().split("\n")[0]
+    composed = (tmp_path / "runs" / "alpha" / "update" / "compose" / "whole.txt").read_text()
+    assert pain in composed
+    units = json.loads((tmp_path / "units" / "alpha.json").read_text())
+    assert [u["id"] for u in units] == ["whole"]
+
+
 def test_two_readings_of_one_page_are_never_both_composed(tmp_path: Path) -> None:
     """Where the two transcriptions of one scan disagree, the reading that
-    adds nothing is not read; the one carrying a value the other missed is,
-    in whichever file holds it. No page is composed from both files and no
-    value is lost."""
+    adds nothing is not read and the one carrying a value the other missed
+    is, always cited in the larger file. No page is composed from both files
+    and no value is lost."""
     whole = [_record(i) for i in WHOLE]
     part = list(whole[2:])
     part[1] = _no_pain(part[1])  # the copy's reading missed a value: it adds nothing
     whole_read = list(whole)
-    whole_read[4] = _no_pain(whole_read[4])  # the whole file's reading missed one: the copy keeps it
+    whole_read[4] = _no_pain(whole_read[4])  # the whole file's reading missed one: read from the copy's
     sel = _run(tmp_path, part, whole_read)
     by_id = {r["id"]: r for r in sel["exhibits"]}
-    assert by_id["whole"]["read"] == [1, 2, 3, 4, 6]
-    assert by_id["whole"]["excluded"] == {OVERLAP: 1}
-    assert by_id["part"]["read"] == [3]  # whole page 5, read where its pain score was read
-    assert by_id["part"]["excluded"] == {OVERLAP: 3}
-    twin = {q: q + 2 for q in range(1, 5)}
-    assert not [q for q in by_id["part"]["read"] if twin[q] in by_id["whole"]["read"]]
+    assert set(by_id) == {"whole"}
+    assert by_id["whole"]["read"] == [1, 2, 3, 4, 5, 6]
+    assert {s["id"] for s in sel["subsets"]} == {"part"}
+    assert [(r["page"], r["from_page"]) for r in sel["readings"]] == [(5, 3)]
+    text = _pages_of(tmp_path / "text" / "whole.txt")
+    assert "Pain rated" in text[5] and "Pain rated" in text[4]
 
 
 def test_twins_fill_an_unpaired_page_from_its_neighbours_and_keep_a_true_disagreement() -> None:
@@ -105,8 +138,27 @@ def test_twins_fill_an_unpaired_page_from_its_neighbours_and_keep_a_true_disagre
     theirs[1].update({n: ("text", "new document") for n in (1, 2, 3)})
     theirs[0].update({n: _record(30 + n) for n in (1, 2, 3)})
     assert TW.aligned({1: 4}, 3, 6) == {1: 4, 2: 5, 3: 6}  # the unpaired pages sit at their neighbour's offset
-    assert TW.settle(mine, theirs, {1: 4}) == 2
+    assert TW.settle(mine, theirs, {1: 4}) == {}  # nothing read from another reading
     assert mine[1][1] == ("excluded", OVERLAP)  # the same words: a repeat
     assert mine[1][2] == ("excluded", OVERLAP)  # a reading that missed a value adds nothing
     assert mine[1][3] == ("text", "new document")  # another date and value: read
     assert theirs[1][6] == ("text", "new document")
+
+
+def test_a_neighbour_twin_is_never_given_another_pages_reading() -> None:
+    """Only the same scan (a picture pair) lends its reading. A twin found by
+    its neighbours' offset alone keeps its own words: the larger page that
+    adds nothing is the repeat and the smaller one is read."""
+    from medchron.update import twins as TW
+
+    a, b = _record(5), _record(6)
+    mine = ({1: a, 2: b}, {n: ("text", "new document") for n in (1, 2)})
+    theirs = ({4: a, 5: _no_pain(b)}, {n: ("text", "new document") for n in (4, 5)})
+    theirs[0].update({n: _record(30 + n) for n in (1, 2, 3)})
+    theirs[1].update({n: ("text", "new document") for n in (1, 2, 3)})
+    assert TW.settle(mine, theirs, {1: 4}) == {}
+    assert theirs[1][5] == ("excluded", OVERLAP) and theirs[0][5] == _no_pain(b)
+    assert mine[1][2] == ("text", "new document")
+    assert TW.settle(
+        ({1: b}, {1: ("text", "new document")}), ({5: _no_pain(b)}, {5: ("text", "new document")}), {1: 5}
+    ) == {5: 1}
