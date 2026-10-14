@@ -199,6 +199,14 @@ def _audit_verify(sr: StageRun) -> Verify:
         if not new:
             return []
         paths.doc.write_text(after, encoding="utf-8")
+        # A sentence an earlier run already wrote and got NO verdict for (an
+        # ERROR row: a refused call) is graded again, never resumed: the audit
+        # resumes any key with a row, so a stale refusal from a run before the
+        # verify tier existed failed this one (2026-10-14, every call opus-5).
+        prior = CL.latest_real(CL.read_rows(paths.results), {c["key"] for c in new})
+        for k, r in prior.items():
+            if r.get("verdict") == "ERROR":
+                CL.append_row(paths.results, {"key": k, "kind": CL.REAUDIT, "why": "no verdict on file"})
         Round(sr.doorway, verify_model(sr.cfg), paths, sr.log, mode="image").execute()
         got = CL.latest_real(CL.read_rows(paths.results), {c["key"] for c in new})
         errors = [r for r in got.values() if r.get("verdict") == "ERROR"]
