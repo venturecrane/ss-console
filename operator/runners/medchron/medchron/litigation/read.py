@@ -165,8 +165,11 @@ dates whatever its status now (a dismissed or settled defendant was usually serv
 complaint is "{dropped}". Never list the firm's own client as a defendant unless the firm is defense counsel, in
 which case firm_role is "defense" and the client is "{firm_client}". An uninsured/underinsured motorist arbitration
 respondent is "{uim}", not a court defendant. A defendant whose service was rejected (a registered agent's
-notice that it is not the agent, a returned service) and who was not then served is "{rejected}". Use only the listed statuses. Write plain sentences for flags and
-notes: facts only, no legal advice, no doc numbers, no file ids.
+notice that it is not the agent, a returned service) and who was not then served is "{rejected}". Use only the listed statuses,
+spelled exactly; a corrected status is one of them too.
+Case statuses: {case_statuses}.
+Defendant statuses: {defendant_statuses}.
+Write plain sentences for flags and notes: facts only, no legal advice, no doc numbers, no file ids.
 
 Today is {today}. A next court date must be the next one AFTER today; if none is set in the file, leave its date
 null. Discovery: list each set the firm propounded (what, on whom, the date served) and each set served on the
@@ -180,6 +183,14 @@ def _hints(firm: Any) -> str:
     return "\n".join(f"- {k}: {v}" for k, v in sorted(firm.data["form_hints"].items())) or "- (none authored)"
 
 
+def _quoted(values: tuple[str, ...]) -> str:
+    """The closed list as the prompt names it. The verify and audit passes
+    return a free-form ``corrected`` value, so this text is the only place
+    they learn the list (2026-10-14: an audit could not choose between two
+    statuses it had never been shown and recorded "Unclear")."""
+    return "; ".join(f'"{v}"' for v in values)
+
+
 def system_for(role: str, firm: Any, today: dt.date) -> str:
     base = COMMON.format(
         today=today.isoformat(),
@@ -188,6 +199,8 @@ def system_for(role: str, firm: Any, today: dt.date) -> str:
         firm_client=vocab.FIRM_CLIENT,
         uim=vocab.UIM,
         rejected=vocab.SERVICE_REJECTED,
+        case_statuses=_quoted(vocab.CASE_STATUSES),
+        defendant_statuses=_quoted(vocab.DEFENDANT_STATUSES),
     )
     tail = {
         "read": "\n\nYOUR PASS: determine the field groups you are asked for, then call record_result.",
