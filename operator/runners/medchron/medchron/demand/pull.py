@@ -172,16 +172,31 @@ def _fetch_one(seat: Any, d: dict[str, Any], minted: dict[str, Any], raw: Path, 
     return {**rec, "ok": True, "sha256": sha, "path": str(dest)}
 
 
-def fetch_all(
-    seat: Any, matter_id: str, targets: list[dict[str, Any]], data: Path, log: Callable[[str], None]
-) -> list[dict[str, Any]]:
-    """Resumable: a row already ``ok`` in ``pulled.jsonl`` is not fetched again."""
-    raw = data / "raw"
-    raw.mkdir(parents=True, exist_ok=True)
-    log_path = data / "pulled.jsonl"
-    rows = {r["id"]: r for r in read_jsonl(log_path)}
-    seen = {r["sha256"]: r["id"] for r in rows.values() if r.get("ok") and r.get("path")}
-    todo = [t for t in targets if not (rows.get(t["id"]) or {}).get("ok")]
+#: A file whose fetch failed for a reason time fixes is fetched again, after a
+#: pause, before the run gives up on it. 2026-10-14: the A&P litigation proof
+#: fetched ~400 files and Smokeball answered HTTP 429 on two of them after the
+#: connector's own four attempts (1+2+4+8 s); the run failed `fetch_unfinished`
+#: and would have needed a person to resume it. A rate limit clears in seconds;
+#: a run of two hundred matters must not stop for one. Not retried: a file
+#: Smokeball will not serve (403) or does not hold (404), which a retry does
+#: not change, and which `litigation.fetch` records as findings.
+RETRY_PASSES = 2
+RETRY_PAUSE_SECONDS = 20.0
+_FINAL = re.compile(r"HTTP 40[34]\b")
+
+
+def _retryable(row: dict[str, Any]) -> bool:
+    if row.get("ok"):
+        return False
+    if row.get("http_status") in (HTTP_ABSENT, 403):
+        return False
+    return not _FINAL.search(str(row.get("error") or ""))
+
+
+def _pull(
+    seat: Any, matter_id: str, todo: list[dict[str, Any]], raw: Path, seen: dict[str, str], log_path: Path, log: Any
+) -> dict[str, dict[str, Any]]:
+    rows: dict[str, dict[str, Any]] = {}
     for i in range(0, len(todo), BATCH):
         batch = todo[i : i + BATCH]
         minted = _mint(seat, matter_id, [b["id"] for b in batch], log)
@@ -190,6 +205,31 @@ def fetch_all(
             rows[b["id"]] = row
             append_jsonl(log_path, row)
         log(f"pulled {min(i + BATCH, len(todo))}/{len(todo)}")
+    return rows
+
+
+def fetch_all(
+    seat: Any, matter_id: str, targets: list[dict[str, Any]], data: Path, log: Callable[[str], None]
+) -> list[dict[str, Any]]:
+    """Resumable: a row already ``ok`` in ``pulled.jsonl`` is not fetched again.
+    A row that failed for a reason time fixes is tried again, ``RETRY_PASSES``
+    times after a pause, within this call."""
+    raw = data / "raw"
+    raw.mkdir(parents=True, exist_ok=True)
+    log_path = data / "pulled.jsonl"
+    rows = {r["id"]: r for r in read_jsonl(log_path)}
+    seen = {r["sha256"]: r["id"] for r in rows.values() if r.get("ok") and r.get("path")}
+    todo = [t for t in targets if not (rows.get(t["id"]) or {}).get("ok")]
+    rows.update(_pull(seat, matter_id, todo, raw, seen, log_path, log))
+    for n in range(1, RETRY_PASSES + 1):
+        again = [t for t in todo if _retryable(rows.get(t["id"]) or {})]
+        if not again:
+            break
+        log(
+            f"{len(again)} not pulled for a reason a retry can fix; retry {n} of {RETRY_PASSES} in {RETRY_PAUSE_SECONDS:.0f}s"
+        )
+        time.sleep(RETRY_PAUSE_SECONDS)
+        rows.update(_pull(seat, matter_id, again, raw, seen, log_path, log))
     return [rows[t["id"]] for t in targets]
 
 
