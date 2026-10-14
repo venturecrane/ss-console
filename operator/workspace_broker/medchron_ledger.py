@@ -802,10 +802,12 @@ class MedchronLedger:
         were never covered -- and it would re-read the entire matter, thousands
         of pages against a cycle allowance, on every matter, forever.
 
-        `uncovered` wins the union, the same direction `merge_covered` takes: a
-        document one delivery could not use and another cited is re-read, because
-        re-reading costs pages and a dropped record cannot be recovered from a
-        filed chronology.
+        Per document id, the NEWEST delivered row that names it decides covered
+        or uncovered (`union_coverage`, which orders rows by `created_at` itself):
+        an update replaces the delivered document, so what the newest chronology
+        holds is what the firm holds. An id only older rows name keeps its status
+        from the newest of them. Within one job `merge_covered` still lets
+        `uncovered` win across units, which are parts of one delivery.
 
         Only `delivered` rows are considered. That is what makes a `failed` or
         `held` row harmless without touching it -- those rows cannot transition
