@@ -34,10 +34,17 @@ DOB_LABEL = re.compile(
     r"(?i)\b(?:D\.?O\.?B\.?|Date\s+of\s+Birth|Birth\s*Date)\s*[:#]?\s*(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b"
 )
 # The label is case-blind, the name is not: two capitalised words ("Jane Doe",
-# "DOE, JANE"), so "Patient: denies pain" is not read as a name.
+# "DOE, JANE"), so "Patient: denies pain" is not read as a name. And it is a
+# LABEL only at the start of a line or after a field delimiter (a bar, a
+# semicolon, a tab, two spaces): a form QUESTION ("Does the patient: Yes No",
+# "arranged for the patient:Yes IHSS") held a client's own records twice
+# (2026-10-14).
 PATIENT_LABEL = re.compile(
-    r"(?m)\b(?i:patient(?:\s+name)?)\s*[:#]\s*([A-Z][A-Za-z'\-]+(?:,\s*|\s+)[A-Z][A-Za-z'\-]+(?:\s+[A-Z][A-Za-z'\-.]*){0,2})"
+    r"(?m)(?:^|(?<=[|;\t])|(?<=\s\s))[ \t]*(?i:patient(?:\s+name)?)\s*[:#]\s*"
+    r"([A-Z][A-Za-z'\-]+(?:,\s*|\s+)[A-Z][A-Za-z'\-]+(?:\s+[A-Z][A-Za-z'\-.]*){0,2})"
 )
+#: Form answers and checkbox tokens: a "name" made only of these is a box.
+ANSWER = frozenset("yes no n/a na none unknown unk y n x checked unchecked true false".split())
 #: Capitalised words a form puts after "Patient:" that are not a name.
 NOT_NAME = frozenset(
     "denies reports states presents complains seen here was is has had states noted tolerated returns arrived "
@@ -61,8 +68,8 @@ def full_name(name: str, after: str) -> bool:
     none is a form word ("Denies", "Reports"), and the name ends where a name
     ends (the line, a delimiter, another label, or running lowercase text),
     so "Patient: Denies Neck Pain" is not read as someone else."""
-    words = re.findall(r"[A-Za-z'\-]+", name)
-    if any(w.lower() in NOT_NAME for w in words):
+    words = re.findall(r"[A-Za-z'\-/]+", name)
+    if any(w.lower() in NOT_NAME for w in words) or all(w.lower() in ANSWER for w in words):
         return False
     rest = after.lstrip()
     if not rest or rest[:1].islower():

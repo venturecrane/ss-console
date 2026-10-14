@@ -404,3 +404,22 @@ def test_a_label_with_the_clients_first_name_does_not_hold_and_another_person_st
     assert "a date of birth 05/05/1990 that is not the client's" in got
     units = [SimpleNamespace(client_name="Alpha Example", surname="Example", dob="05/15/1983")]
     assert FI.first_names(units) == {"Alpha"}
+
+
+# ---- fix 13c: a form question is not a patient label -------------------------------
+def test_form_questions_about_the_patient_never_hold_and_another_person_still_does() -> None:
+    from medchron.gates import foreign_identity as FI
+
+    client = ({"Example"}, {"05/15/1983"}, {"Alpha"})
+    for question in (
+        "Does the patient: Yes No have a ride to the appointment",
+        "Is the patient: Yes No able to bear weight",
+        "Transportation was arranged for the patient:Yes IHSS",
+        "Patient: Yes No",
+    ):
+        assert FI.findings(question + "\nAlpha Example seen today.", *client) == [], question
+    for other in ("Patient: Jane Roe\nDOB: 05/05/1990", "Patient Name: Roe, Jane\nDOB: 05/05/1990"):
+        got = FI.findings(other, *client)
+        assert "a patient name without the client's surname" in got, other
+        assert "a date of birth 05/05/1990 that is not the client's" in got, other
+    assert FI.findings("Name: Alpha Example  Patient: Jane Roe", *client)  # a label after a field gap
