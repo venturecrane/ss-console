@@ -22,6 +22,7 @@ THE HOUSE FORMAT for each dated entry (follow it exactly):
 - NO charge amounts, CPT billing amounts, or dollar figures in entries.
 - NO patient demographics: never write the patient's home street address or any telephone number of the patient or the patient's contacts. The chronology is not a demographics sheet.
 - ICD codes: do not put codes in entry prose (diagnoses in prose there); instead report codes in the INDEX block below.
+- Page codes: when a page defines its own codes in a legend or key (a treatment log whose columns hold letter codes, a symbol table), write each code's meaning as the legend states it, never the bare code. An attorney cannot read a bare letter code. A code whose legend meaning is not legible is written as "a code the legend does not legibly define", never guessed.
 - Where a page or portion is handwritten or illegible, insert verbatim, as its own paragraph with citation: `[NTD: A portion of the records were handwritten and illegible. Therefore, we were unable to annotate or decipher a portion of these records and were unable to draft a complete medical summary for this treatment.]`
 
 EXTRACTIVE INVARIANTS (hard rules; each violation is a failure):

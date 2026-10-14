@@ -4,7 +4,8 @@ composed entries to the AUDIT document.
 `update_collect` keeps what the new documents add (``update/collect.py``),
 spells a new entry's provider the delivered way when that is safe
 (``update/providers.py``), settles a date read off a handwritten page against
-the provider's typed statements (``update/handwritten.py``), compacts the new
+the provider's typed statements (``update/handwritten.py``), writes a page
+legend's codes as their meanings (``update/legend.py``), compacts the new
 exhibits' numbers before the audit can key a claim to them, renames their
 files to match, and writes the audit document over
 ``runs/<unit>/final-chronology.md``: the new entries, plus a claim per
@@ -30,12 +31,14 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 from .. import icd_tables, llm, meta_markers, prompts
 from ..audit import claims as CL
-from ..update import body as B, collect as C, handwritten as H, icd, providers as P, records_dates as RD, select as S
+from ..update import body as B, collect as C, handwritten as H, icd, legend as LG, providers as P
+from ..update import records_dates as RD, select as S
 from .base import StageRefusal, StageRun, read_json
 from .group import Canon
 from .summarize import beyond_source
@@ -104,24 +107,44 @@ def _page_texts(sr: StageRun, provisional: list[dict[str, Any]]) -> tuple[dict[i
     return by_ex, pool
 
 
+def _hand_docs(e: str, by_ex: dict[int, dict[int, str]]) -> list[str] | None:
+    """Every page of the documents holding a handwritten page `e` cites, or
+    None when it cites none: their typed statements are the provider's own."""
+    exs = sorted(
+        {
+            int(m.group(1))
+            for m in B.CITE.finditer(e)
+            for p in CL.parse_pages(m.group(2))
+            if H.is_handwritten(by_ex.get(int(m.group(1)), {}).get(p))
+        }
+    )
+    return [t for x in exs for _, t in sorted(by_ex[x].items())] if exs else None
+
+
 def _settle_dates(
     sr: StageRun, entries: list[str], provisional: list[dict[str, Any]]
 ) -> tuple[list[str], list[dict[str, str]]]:
     """Each entry cited to a HANDWRITTEN page takes the one typed date of
     service of its provider near its reading, or shows the reading as an
-    open date (``update/handwritten.py``)."""
+    open date (``update/handwritten.py``); the provider's other readings
+    decide whether a re-date is unambiguous (``handwritten.decide``)."""
     by_ex, pool = _page_texts(sr, provisional)
+    hand: dict[int, set[date]] = {}
+    readings: dict[str, list[date]] = {}
+    for i, e in enumerate(entries):
+        docs = _hand_docs(e, by_ex)
+        if docs is None:
+            continue
+        hand[i] = H.service_dates(pool, B.provider_of(e), docs)
+        r = H.reading_of(e)
+        if r is not None:
+            readings.setdefault(B.provider_of(e), []).append(r)
     out, log = [], []
-    for e in entries:
-        hand = any(
-            H.is_handwritten(by_ex.get(int(m.group(1)), {}).get(p))
-            for m in B.CITE.finditer(e)
-            for p in CL.parse_pages(m.group(2))
-        )
-        if not hand:
+    for i, e in enumerate(entries):
+        if i not in hand:
             out.append(e)
             continue
-        settled, row = H.redate(e, H.service_dates(pool, B.provider_of(e)))
+        settled, row = H.redate(e, hand[i], tuple(readings.get(B.provider_of(e), ())))
         out.append(settled)
         log.append({**row, "provider": B.provider_of(e)})
     return sorted(out, key=B.iso), log
@@ -151,8 +174,16 @@ def _shape(sr: StageRun, base_md: str, rd: Path, provisional: list[dict]) -> tup
     entries = [meta_markers.strip(e) for e in entries]  # the pipeline's own notes never reach the firm
     entries, spelled = P.snap(entries, base_ents, list(B.exhibit_titles(base_md).values()))
     entries, dated = _settle_dates(sr, entries, provisional)
-    entries, records = RD.mark(entries, _new_pages(sr, provisional))
-    return entries, {**rep, "provider_spelling": spelled, "handwritten_dates": dated, "records_dates": records}
+    new_pages = _new_pages(sr, provisional)
+    entries, coded = LG.expand(entries, new_pages)  # a legend's code is written as its meaning
+    entries, records = RD.mark(entries, new_pages)
+    return entries, {
+        **rep,
+        "provider_spelling": spelled,
+        "handwritten_dates": dated,
+        "legend_codes": coded,
+        "records_dates": records,
+    }
 
 
 def run_collect(sr: StageRun) -> int:

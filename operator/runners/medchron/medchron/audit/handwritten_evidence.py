@@ -1,8 +1,8 @@
 """The audit's extra evidence for a claim cited to a HANDWRITTEN page.
 
 The vision pass opens such a page with ``[handwritten]``. Its date is a
-reading; the typed statements and bills of the same provider state the date
-of service. A claim cited to one is verified with those statements beside the
+reading; the typed statements and bills of the same provider, and the typed
+statement pages of the page's own document, state the date of service. A claim cited to one is verified with those statements beside the
 page images (``update/handwritten.statement_block``), so the auditor can tell
 a misread 7 from a real 1 instead of passing or failing the reading blind.
 
@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ..update import body as B, handwritten as H
+from ..update import body as B, handwritten as H, legend as LG
 from .claims import body_of
 from .page_text import PageIndex
 
@@ -50,27 +50,46 @@ class Evidence:
                     self._pool.extend(t for t, _ in self.index.segments(fid).values())
         return self._pool
 
+    def exhibit_pages(self, exhibit: int, cap: int = 2000) -> list[str]:
+        """Every transcribed page of `exhibit`, in order: the handwritten
+        page's own document, whose typed statement is the provider's even
+        when it never prints the provider's name."""
+        out: list[str] = []
+        for p in range(1, cap + 1):
+            t = self.page(exhibit, p)
+            if t is None:
+                break
+            out.append(t)
+        return out
+
     def provider(self, claim: str) -> str:
         i = self.body.find(claim)
         heads = list(_HEAD.finditer(self.body[: max(i, 0)]))
         return B.provider_of("x\n" + heads[-1].group(1)) if heads else ""
 
     def block(self, c: dict[str, Any]) -> str:
-        """The extra evidence for claim `c`, or '' when no cited page is
-        handwritten: an instruction to re-read the image for every date and
+        """The extra evidence for claim `c`: when it still quotes a code a
+        legend on its page does not define unambiguously, the instruction to
+        read the legend off the image (``update/legend.audit_note``); when a
+        cited page is handwritten, an instruction to re-read the image for every date and
         value the claim states (a handwritten 4 reads as a 0: 142/102 was
         transcribed 102/102), plus its provider's typed statements, if any."""
         pages = c.get("pages") or []
-        if not any(H.is_handwritten(self.page(int(c["exhibit"]), int(p))) for p in pages):
-            return ""
+        ex = int(c["exhibit"])
+        texts = [self.page(ex, int(p)) or "" for p in pages]
+        doc = {p: self.page(ex, p) or "" for p in range(1, max((int(x) for x in pages), default=0) + 1)}
+        legend = LG.audit_note(c["claim"], [LG.governing({ex: doc}, ex, int(p)) for p in pages])
+        if not any(H.is_handwritten(t) for t in texts):
+            return legend
         prov = self.provider(c["claim"])
-        statements = H.statement_block(self.pool(), prov) if prov else ""
-        return H.REREAD + ("\n\n" + statements if statements else "")
+        same = self.exhibit_pages(ex)
+        statements = H.statement_block(self.pool(), prov, same_doc=same) if prov or same else ""
+        return "\n\n".join(x for x in (H.REREAD, statements, legend) if x)
 
 
 def statements_for(rnd: Any, c: dict[str, Any]) -> list[dict[str, str]]:
-    """The content block to send beside claim `c`'s page images: the typed
-    statements of its provider when it cites a handwritten page, else none.
+    """The content block to send beside claim `c`'s page images
+    (``Evidence.block``), else none.
     The round's Evidence is built once, from the document it audits."""
     with rnd._lock:
         ev = rnd.__dict__.get("hw_evidence")
