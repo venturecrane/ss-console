@@ -1745,6 +1745,14 @@ COPY operator/templates/entrypoint-negotiation.sh /app/entrypoint-negotiation.sh
 # The lane-proof gate's seed and modes (lane-proofs.yaml from the vault, the
 # holds and proof-run trees), after the lanes' own trees.
 COPY operator/templates/entrypoint-lane-proofs.sh /app/entrypoint-lane-proofs.sh
+# What this image can run, uploaded to R2 at every boot so the CI config publisher
+# refuses a customer.yaml naming a skill or pre_run this image lacks (2026-10-13
+# A&P outage). Generated from /app/skills with the overlay's own pin hash, after
+# both are in place; a failure here fails the build rather than ship no manifest.
+COPY operator/templates/entrypoint-image-manifest.sh /app/entrypoint-image-manifest.sh
+COPY operator/templates/gen-image-manifest.py /app/gen-image-manifest.py
+ARG SS_CONSOLE_SHA=""
+RUN /opt/hermes/.venv/bin/python3 -I /app/gen-image-manifest.py /app/skills /app/image-manifest.json "${SS_CONSOLE_SHA}"
 # REQUIRED_ENV / OPTIONAL_ENV, generated from operator/contracts/env-consumption.yaml
 # (operator/bin/gen-env-arrays.py); bootstrap.sh sources this instead of hardcoding them.
 COPY operator/templates/_env-arrays.generated.sh /app/_env-arrays.generated.sh

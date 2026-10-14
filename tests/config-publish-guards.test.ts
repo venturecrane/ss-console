@@ -341,9 +341,14 @@ describe('ci-publish-customer-configs: one key space', () => {
     expect(res.code).toBe(0)
     for (const call of res.awsCalls) {
       expect(call).not.toContain('output-classes')
-      if (call.includes('s3://')) {
+      // The image guard READS the seat's image-manifest.json; every other
+      // object reference, and every write, is the customer.yaml key.
+      if (call.includes('s3://') && !call.startsWith('s3 cp s3://')) {
         expect(call).toMatch(/s3:\/\/smd-customer-config\/vaults\/[a-z0-9-]+\/customer\.yaml/)
       }
+    }
+    for (const call of uploads(res.awsCalls)) {
+      expect(call).toMatch(/ s3:\/\/smd-customer-config\/vaults\/[a-z0-9-]+\/customer\.yaml/)
     }
   })
 
@@ -414,6 +419,151 @@ describe('ci-publish-customer-configs: validation and template dirs', () => {
     expect(res.code).toBe(0)
     expect(res.awsCalls).toHaveLength(0)
     expect(res.stdout).toContain('nothing to publish')
+  })
+})
+
+describe('ci-publish-customer-configs: image guard (2026-10-13 A&P outage)', () => {
+  // The incident's shape: a config that adds an hourly cron whose pre_run.py
+  // ships only in a newer image than the one the seat runs.
+  const withCron = (slug: string): string =>
+    [
+      `customer_id: ${slug}`,
+      'vertical: law-firm',
+      'personas:',
+      '  - slug: operator',
+      '    skills:',
+      '      - name: inbox-triage',
+      '        version: pending',
+      '        enabled: true',
+      '      - name: connector-auth-check',
+      '        version: pending',
+      '        enabled: true',
+      '    cron:',
+      '      - skill: connector-auth-check',
+      "        schedule: '13 * * * *'",
+      '        pre_run: pre_run.py',
+      '        wake_policy: pre_run_decides',
+      '',
+    ].join('\n')
+  const withoutCron = (slug: string): string =>
+    [
+      `customer_id: ${slug}`,
+      'vertical: law-firm',
+      'personas:',
+      '  - slug: operator',
+      '    skills:',
+      '      - name: inbox-triage',
+      '        version: pending',
+      '        enabled: true',
+      '',
+    ].join('\n')
+  const manifest = (skills: Record<string, string[]>): string =>
+    JSON.stringify({
+      schema_version: 1,
+      built_from: '7c75042c',
+      skills: Object.fromEntries(
+        Object.entries(skills).map(([name, files]) => [name, { pin: 'abc123', files }])
+      ),
+    })
+
+  function fixtureWith(slug: string, body: string): Fixture {
+    const fx = makeFixture([slug])
+    writeFileSync(join(fx.root, 'operator', 'customers', slug, 'customer.yaml'), body)
+    git(fx.root, ['add', '-A'])
+    git(fx.root, ['commit', '-q', '-m', 'config names a new cron'])
+    fx.after = git(fx.root, ['rev-parse', 'HEAD']).trim()
+    return fx
+  }
+
+  it('refuses a config naming a pre_run the running image lacks, leaving the object untouched', () => {
+    const fx = fixtureWith('ashton-price', withCron('ashton-price'))
+    seedObject(fx, 'vaults/ashton-price/customer.yaml', withoutCron('ashton-price'))
+    // The older image: connector-auth-check is not in it at all.
+    seedObject(
+      fx,
+      'vaults/ashton-price/image-manifest.json',
+      manifest({ 'inbox-triage': ['SKILL.md'] })
+    )
+
+    const res = runPublisher(fx)
+
+    expect(res.code).not.toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(0)
+    expect(res.stdout + res.stderr).toContain('pre_run:connector-auth-check/pre_run.py')
+    expect(res.stdout + res.stderr).toContain('built from 7c75042c')
+    expect(readFileSync(join(fx.bucketDir, 'vaults/ashton-price/customer.yaml'), 'utf8')).toBe(
+      withoutCron('ashton-price')
+    )
+  })
+
+  it('refuses when the skill is in the image but its pre_run is not', () => {
+    const fx = fixtureWith('ashton-price', withCron('ashton-price'))
+    seedObject(fx, 'vaults/ashton-price/customer.yaml', withoutCron('ashton-price'))
+    seedObject(
+      fx,
+      'vaults/ashton-price/image-manifest.json',
+      manifest({ 'inbox-triage': ['SKILL.md'], 'connector-auth-check': ['SKILL.md'] })
+    )
+
+    const res = runPublisher(fx)
+
+    expect(res.code).not.toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(0)
+    expect(res.stdout + res.stderr).toContain('pre_run:connector-auth-check/pre_run.py')
+  })
+
+  it('publishes the same config once the running image carries the pre_run', () => {
+    const fx = fixtureWith('ashton-price', withCron('ashton-price'))
+    seedObject(fx, 'vaults/ashton-price/customer.yaml', withoutCron('ashton-price'))
+    seedObject(
+      fx,
+      'vaults/ashton-price/image-manifest.json',
+      manifest({
+        'inbox-triage': ['SKILL.md'],
+        'connector-auth-check': ['SKILL.md', 'pre_run.py'],
+      })
+    )
+
+    const res = runPublisher(fx)
+
+    expect(res.code).toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(1)
+    expect(res.stdout).toContain('ashton-price published')
+  })
+
+  it('cannot determine the image (no manifest) and the config adds a requirement: refuses', () => {
+    const fx = fixtureWith('ashton-price', withCron('ashton-price'))
+    seedObject(fx, 'vaults/ashton-price/customer.yaml', withoutCron('ashton-price'))
+
+    const res = runPublisher(fx)
+
+    expect(res.code).not.toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(0)
+    expect(res.stdout + res.stderr).toContain('cannot determine')
+  })
+
+  it('cannot determine the image (unreadable manifest): refuses, never passes', () => {
+    const fx = fixtureWith('ashton-price', withCron('ashton-price'))
+    seedObject(fx, 'vaults/ashton-price/customer.yaml', withoutCron('ashton-price'))
+    seedObject(fx, 'vaults/ashton-price/image-manifest.json', '{not json')
+
+    const res = runPublisher(fx)
+
+    expect(res.code).not.toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(0)
+    expect(res.stdout + res.stderr).toContain('unreadable')
+  })
+
+  it('no manifest, but the config adds nothing over the object the seat boots from: publishes', () => {
+    // A removal (the fix-forward for a skew) must not wait on a rebuild.
+    const fx = fixtureWith('ashton-price', withoutCron('ashton-price'))
+    seedObject(fx, 'vaults/ashton-price/customer.yaml', withCron('ashton-price'))
+
+    const res = runPublisher(fx)
+
+    expect(res.code).toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(1)
+    expect(res.stdout).toContain('adds no skill or pre_run')
   })
 })
 
