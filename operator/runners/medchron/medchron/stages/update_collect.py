@@ -38,11 +38,11 @@ from typing import Any
 from .. import icd_tables, llm, meta_markers, prompts
 from ..audit import claims as CL
 from ..update import body as B, collect as C, handwritten as H, icd, legend as LG, providers as P
-from ..update import records_dates as RD, select as S
+from ..update import records_dates as RD, select as S, uncited as U
 from .base import StageRefusal, StageRun, read_json
 from .group import Canon
 from .summarize import beyond_source
-from .update_base import HELD, plan, update_dir
+from .update_base import HELD, headings, plan, update_dir
 
 
 def _rename(
@@ -224,6 +224,13 @@ def report_lines(rep: dict[str, Any]) -> list[str]:
                 f"handwritten date moved: {r.get('provider')} visit read as {r.get('reading')} is dated "
                 f"{r.get('date')} ({r.get('by') or 'the provider statement'})"
             )
+    cited = rep.get("uncited_paragraphs") or []
+    if cited:
+        left = sum(r.get("cite") is None for r in cited)
+        out.append(
+            f"{len(cited)} uncited paragraph(s) of added entries cited to the page that closes their run, so the "
+            f"audit grades them; {left} left uncited (the entry cites no page)"
+        )
     for r in rep.get("process_notes") or []:
         out.append(f"note kept out of the chronology: {r.get('entry')} {r.get('provider')}: {str(r.get('note'))[:200]}")
     return out
@@ -243,6 +250,8 @@ def _shape(sr: StageRun, base_md: str, rd: Path, provisional: list[dict]) -> tup
     new_pages = _new_pages(sr, provisional)
     entries, coded = LG.expand(entries, new_pages)  # a legend's code is written as its meaning
     entries, records = RD.mark(entries, new_pages)
+    # No paragraph of an added entry goes unaudited (``update/uncited.py``).
+    entries, cited = U.cite_all(entries, headings(sr.cfg) if sr.cfg is not None else set())
     return entries, {
         **rep,
         "provider_spelling": spelled,
@@ -250,6 +259,7 @@ def _shape(sr: StageRun, base_md: str, rd: Path, provisional: list[dict]) -> tup
         "legend_codes": coded,
         "records_dates": records,
         "process_notes": notes,
+        "uncited_paragraphs": cited,
     }
 
 

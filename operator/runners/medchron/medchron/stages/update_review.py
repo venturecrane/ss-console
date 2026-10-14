@@ -156,7 +156,9 @@ def _content(c: Ctx, ents: list[RR.Entry], delivered: list[tuple[str, str]]) -> 
     shown = 0
     for e in ents:
         claims = "\n".join(f"{x.anchor}: {x.text}" for x in e.claims) or "(no cited claim)"
-        out.append({"type": "text", "text": f"=== {e.anchor} (ADDED) ===\n{e.text}\n\nCLAIMS:\n{claims}"})
+        loose = "".join(f"\n{x.anchor}: {x.head}{x.text}" for x in e.uncited)
+        loose = f"\n\nUNCITED PARAGRAPHS:{loose}" if loose else ""
+        out.append({"type": "text", "text": f"=== {e.anchor} (ADDED) ===\n{e.text}\n\nCLAIMS:\n{claims}{loose}"})
         extra = c.extra.get(e.anchor) or []
         if extra:
             out.append({"type": "text", "text": f"UNCITED PAGES OF THE SAME DOCUMENT follow {e.anchor}'s cited pages."})
