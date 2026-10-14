@@ -37,6 +37,7 @@ import re
 from typing import Any
 
 from ..audit import claims as CL
+from . import body as B
 
 _ALNUM = re.compile(r"[A-Za-z0-9]")
 _LEAD = re.compile(r"^[\s.;,]*")
@@ -48,6 +49,20 @@ def _cited(p: str) -> bool:
 
 def _heading_only(p: str, headings: set[str]) -> bool:
     return all(not ln.strip() or ln.strip() in headings for ln in p.split("\n"))
+
+
+def is_header(p: str) -> bool:
+    """An entry's header read as a body paragraph: a date line (a yearless
+    one rode inside the entry before it until parity P) or a provider line
+    ("Name | Heading"). A header is never a claim: cited, it was graded
+    against a page and repaired into a bare name the audit could not count
+    (2026-10-14)."""
+    lines = [ln.strip() for ln in p.split("\n") if ln.strip()]
+    if not lines or len(lines) > 2:
+        return False
+    if B.HEAD.match(lines[0]):
+        return True
+    return len(lines) == 1 and " | " in lines[0] and not lines[0].startswith("|")
 
 
 def _short(p: str) -> bool:
@@ -86,7 +101,7 @@ def _merge_short(paras: list[str], headings: set[str]) -> list[str]:
     i = 0
     while i < len(out):
         p = out[i]
-        if not p.strip() or _cited(p) or _heading_only(p, headings) or not _short(p) or len(out) == 1:
+        if not p.strip() or _cited(p) or _heading_only(p, headings) or is_header(p) or not _short(p) or len(out) == 1:
             i += 1
             continue
         nxt = i + 1 < len(out)
@@ -124,7 +139,7 @@ def cite_entry(entry: str, headings: set[str]) -> tuple[str, list[dict[str, Any]
     paras = _merge_short([fold_tail(p) if _cited(p) else p for p in rest.lstrip("\n").split("\n\n")], headings)
     rows: list[dict[str, Any]] = []
     for i, p in enumerate(paras):
-        if not p.strip() or _cited(p) or _heading_only(p, headings):
+        if not p.strip() or _cited(p) or _heading_only(p, headings) or is_header(p):
             continue
         cite = _closing_cite(paras, i)
         rows.append({"entry": lines[0], "cite": cite, "chars": len(p.strip())})

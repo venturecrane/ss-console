@@ -255,7 +255,7 @@ def trim(claim: str, problems: list[str]) -> tuple[str, list[str]] | None:
     for g in gone:
         rest = rest.replace(g, "", 1)
     rest = re.sub(r"[ \t]{2,}", " ", re.sub(r"[ \t]+\n", "\n", rest)).strip()
-    if not gone or len(rest) < 30:
+    if not gone or not CL.graded(rest):
         return None
     return rest, gone
 
@@ -363,6 +363,34 @@ def _settle_failing(failing: list[dict[str, Any]], x: _Ctx) -> dict[str, int]:
     return n
 
 
+def _repair_drop(x: _Ctx, r: dict[str, Any], c: dict[str, Any], anchor: str, why: str = "") -> str:
+    """The claim removed at the repair tier's word (DROP, or a rewrite that
+    leaves no gradable claim), unless that loses a value the audit did not
+    name: then it stays, fails again, and only the round-cap drop may remove
+    it, naming what it took."""
+    unnamed = drop_losses(c["claim"], problems_of(r))
+    if unnamed:
+        x.logrow(
+            key=r["key"],
+            action="repair",
+            result="REJECT: drop would lose values the audit did not name",
+            lost_values=unnamed,
+        )
+        return "rejected"
+    x.apply(anchor, "")
+    x.logrow(key=r["key"], action="repair", result="DROP" + why, old=c["claim"][:300])
+    return "dropped"
+
+
+def _claims_in(replacement: str, c: dict[str, Any]) -> int:
+    """How many claims the audit reads in a repaired span. A rewrite under the
+    floor ("Name | Heading" cut to a bare name, 25 characters) read as none:
+    the text stayed in the document, ungraded, and the count failed to
+    reconcile (241 before, 237 after, 238 expected; 2026-10-14)."""
+    del c  # the span's own citation names the exhibit
+    return len(CL.extract_claims(replacement, {int(m.group(1)) for m in CL.CITE.finditer(replacement)}))
+
+
 def _settle_one(x: _Ctx, r: dict[str, Any], c: dict[str, Any], anchor: str, new: str | None, err: str) -> str:
     """Apply (or refuse) one repair answer; returns the tally it counts under."""
     problems = problems_of(r)
@@ -370,20 +398,7 @@ def _settle_one(x: _Ctx, r: dict[str, Any], c: dict[str, Any], anchor: str, new:
         x.logrow(key=r["key"], action="repair", result=f"ERROR: {err}")
         return "skipped"
     if new == "DROP":
-        unnamed = drop_losses(c["claim"], problems)
-        if unnamed:
-            # The claim stays, fails again, and only the round-cap drop may
-            # remove it, naming what it took.
-            x.logrow(
-                key=r["key"],
-                action="repair",
-                result="REJECT: drop would lose values the audit did not name",
-                lost_values=unnamed,
-            )
-            return "rejected"
-        x.apply(anchor, "")
-        x.logrow(key=r["key"], action="repair", result="DROP", old=c["claim"][:300])
-        return "dropped"
+        return _repair_drop(x, r, c, anchor)
     if _unchanged(new, anchor, c["claim"]):
         x.logrow(key=r["key"], action="repair", result="NOOP: unchanged; re-audit")
         _mark_reaudit(x.paths, r["key"])
@@ -398,7 +413,15 @@ def _settle_one(x: _Ctx, r: dict[str, Any], c: dict[str, Any], anchor: str, new:
             **({"lost_values": unnamed, "new": new[:300]} if unnamed else {}),
         )
         return "rejected"
-    x.apply(anchor, new if CITE.findall(new) else new + anchor[len(c["claim"]) :])
+    repl = new if CITE.findall(new) else new + anchor[len(c["claim"]) :]
+    got = _claims_in(repl, c)
+    if got == 0:
+        # What is left is no claim the audit grades: it goes, never ungraded.
+        return _repair_drop(x, r, c, anchor, ": the rewrite leaves no gradable claim")
+    if got > 1:
+        x.logrow(key=r["key"], action="repair", result="REJECT: the rewrite splits the claim", new=new[:300])
+        return "rejected"
+    x.apply(anchor, repl)
     x.logrow(key=r["key"], action="repair", old=c["claim"][:300], new=new[:300])
     return "repaired"
 

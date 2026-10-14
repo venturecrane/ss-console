@@ -42,7 +42,7 @@ from datetime import date
 from typing import Any, Callable
 
 from ..audit import claims as CL
-from . import body as B, handwritten as H, icd
+from . import body as B, handwritten as H, icd, uncited as U
 from .values import lost, numbers
 
 MUST, SHOULD = "MUST", "SHOULD"
@@ -104,7 +104,7 @@ def _uncited(anchor: str, text: str, headings: set[str]) -> list[Claim]:
     out: list[Claim] = []
     for para in (parts[2] if len(parts) == 3 else "").split("\n\n"):
         lines = [ln.strip() for ln in para.split("\n") if ln.strip()]
-        if not lines or CL.CITE.search(para) or all(ln in headings for ln in lines):
+        if not lines or CL.CITE.search(para) or all(ln in headings for ln in lines) or U.is_header(para):
             continue
         head, rest = _split_head(para.strip("\n"), headings)
         out.append(Claim(f"{anchor}.u{len(out) + 1}", head, rest, 0, []))
