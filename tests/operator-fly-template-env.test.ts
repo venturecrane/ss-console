@@ -87,6 +87,6 @@ describe('operator fly.toml template — [[vm]] renders cpus from machine.size (
       resolve(__dirname, '../operator/customers/ashton-price/customer.yaml'),
       'utf8'
     )
-    expect(ap).toMatch(/^machine:\n\s+size: shared-cpu-2x\n\s+memory_mb: 4096/m)
+    expect(ap).toMatch(/^machine:\n\s+size: shared-cpu-4x\n\s+memory_mb: 8192/m)
   })
 })

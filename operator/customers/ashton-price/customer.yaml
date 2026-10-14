@@ -128,11 +128,18 @@ hermes_ref: v2026.9.14@345cd2b057a452236de401d3534b8502a7465e8d
 # ss#2612 / ADR 0087: the chronology-package runner runs on this Machine beside
 # the gateway. Memory is the binding constraint (vision and billing render
 # whole documents to base64; exhibit assembly holds a provider production;
-# the 1 GB seat went health-critical under two 40 MB downloads, ss#2465), so
-# 4 GB with one job at a time; two shared vCPUs set wall clock, not cost.
+# the 1 GB seat went health-critical under two 40 MB downloads, ss#2465).
+# 8 GB because the seat runs a chronology and a litigation list AT THE SAME
+# TIME by design: the lanes never wait on each other. At 4 GB the default caps
+# (chronology 2560 + demand 1024 MiB) plus the 512 MiB gateway reserve summed to
+# exactly 4096 with no swap, leaving no headroom. The authored caps below are
+# 4096 + 2048 (6144 MiB), inside 8192 - 512 = 7680 (boot smoke
+# lane-memory-caps-leave-gateway-reserve). Fly's shared-cpu-2x cannot take
+# 8192 MB, so the size moves to shared-cpu-4x with it.
 machine:
-  size: shared-cpu-2x
-  memory_mb: 4096
+  size: shared-cpu-4x
+  memory_mb: 8192
+  lane_memory_mb: { medchron: 4096, demand: 2048 }
 
 # ---- HUMANS WITH PORTAL ACCESS ----
 # A&P's two principals-of-use plus the SMD operator for the pilot period.
