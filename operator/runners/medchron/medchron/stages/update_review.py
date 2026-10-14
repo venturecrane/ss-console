@@ -22,6 +22,14 @@ loop, in the update lane:
    page's text states the corrected date (``page_text``), and the entry moves
    to its place in date order. The review reads the image; the page's text
    is the second, independent read a date is never changed without.
+   UNCITED PAGES. Each added entry is shown, besides the pages it cites, the
+   pages of the same new exhibit that follow its last cited page, up to the
+   next page any added entry cites (or the exhibit's end), at most
+   EXTRA_PAGES: on a real update a 6-page report reached compose as its first
+   2 pages, the review saw only those, agreed with them, and passed an entry
+   missing its exam, diagnoses, plan, causation opinion and signer. A finding
+   that such a page records what the entry omits is repaired by an ``add``
+   (``update/review_repair.py``) citing that page, then re-audited.
 3. RE-AUDIT. The audit loop (``stages/audit_loop.py``) runs again: every
    corrected sentence is a new claim and is audited against its page.
 4. LOOP. Only the edited entries and their neighbours are reviewed again, at
@@ -39,7 +47,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
@@ -56,6 +64,7 @@ ROUNDS = 4  # reviews: up to three repairs, each verified by the next review
 SPLIT_DEPTH = 4
 PART_MAX_ENTRIES = 6
 PART_MAX_IMAGES = 24
+EXTRA_PAGES = 6  # uncited pages of the same document shown per entry, counted in the part
 MAX_TOKENS = 32_000
 RECORD = "review_repair.json"
 STAGE = "update_review"
@@ -74,6 +83,8 @@ class Ctx:
     system: str
     images: Images
     evidence: RR.Evidence | None = None
+    #: anchor -> the uncited pages of its exhibits shown with it (``_extra``)
+    extra: dict[str, list[tuple[int, int]]] = field(default_factory=dict)
     rnd: int = 0
     calls: int = 0
     tokens: int = 0
@@ -113,6 +124,20 @@ def page_text(sr: StageRun) -> RR.Evidence:
     return get
 
 
+def _extra(c: Ctx, e: RR.Entry, cited: set[tuple[int, int]], keep: set[int]) -> list[tuple[int, int]]:
+    """The pages of each added exhibit `e` cites that follow its last cited
+    page there, up to the next page any added entry cites or the exhibit's
+    end, at most EXTRA_PAGES in all: what the entry's document says that the
+    entry may have left out."""
+    out: list[tuple[int, int]] = []
+    for ex in sorted({x for x, _ in e.cites() if x in keep}):
+        p = max(pg for x, pg in e.cites() if x == ex) + 1
+        while len(out) < EXTRA_PAGES and (ex, p) not in cited and c.images(ex, p) is not None:
+            out.append((ex, p))
+            p += 1
+    return out
+
+
 def _same_date(base_md: str, ents: list[RR.Entry]) -> list[tuple[str, str]]:
     want = {B.iso(e.text) for e in ents}
     _, delivered = B.entries_of(base_md)
@@ -132,13 +157,16 @@ def _content(c: Ctx, ents: list[RR.Entry], delivered: list[tuple[str, str]]) -> 
     for e in ents:
         claims = "\n".join(f"{x.anchor}: {x.text}" for x in e.claims) or "(no cited claim)"
         out.append({"type": "text", "text": f"=== {e.anchor} (ADDED) ===\n{e.text}\n\nCLAIMS:\n{claims}"})
-        for ex, pg in sorted(e.cites()):
+        extra = c.extra.get(e.anchor) or []
+        if extra:
+            out.append({"type": "text", "text": f"UNCITED PAGES OF THE SAME DOCUMENT follow {e.anchor}'s cited pages."})
+        for (ex, pg), label in [(x, "") for x in sorted(e.cites())] + [(x, " (uncited)") for x in extra]:
             if shown >= PART_MAX_IMAGES:
-                out.append({"type": "text", "text": f"Exhibit {ex} p. {pg}: not shown in this part"})
+                out.append({"type": "text", "text": f"Exhibit {ex} p. {pg}{label}: not shown in this part"})
                 continue
             img = c.images(ex, pg)
             if img is not None:
-                out += [{"type": "text", "text": f"Exhibit {ex} p. {pg}:"}, img]
+                out += [{"type": "text", "text": f"Exhibit {ex} p. {pg}{label}:"}, img]
                 shown += 1
     if delivered:
         out.append(
@@ -151,14 +179,14 @@ def _content(c: Ctx, ents: list[RR.Entry], delivered: list[tuple[str, str]]) -> 
     return out
 
 
-def _parts(ents: list[RR.Entry]) -> list[list[RR.Entry]]:
+def _parts(ents: list[RR.Entry], extra: dict[str, list[tuple[int, int]]] | None = None) -> list[list[RR.Entry]]:
     """Added entries in parts of at most PART_MAX_ENTRIES entries and about
-    PART_MAX_IMAGES cited pages: sized to finish."""
+    PART_MAX_IMAGES pages shown (cited and uncited): sized to finish."""
     out: list[list[RR.Entry]] = []
     cur: list[RR.Entry] = []
     pages = 0
     for e in ents:
-        n = len(e.cites())
+        n = len(e.cites()) + len((extra or {}).get(e.anchor) or [])
         if cur and (len(cur) >= PART_MAX_ENTRIES or pages + n > PART_MAX_IMAGES):
             out.append(cur)
             cur, pages = [], 0
@@ -217,10 +245,13 @@ def _keep(sr: StageRun) -> set[int]:
 def review_round(c: Ctx, md: str, base_md: str, targets: set[int] | None) -> tuple[list[RR.Finding], int]:
     """Review the targeted added entries (all when None). Returns the findings
     and the number of entries reviewed."""
-    ents = RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg))
+    keep = _keep(c.sr)
+    ents = RR.anchor_entries(md, keep, headings(c.sr.cfg))
+    cited = {x for e in ents for x in e.cites()}
     pick = [e for i, e in enumerate(ents) if targets is None or i in targets]
+    c.extra = {e.anchor: _extra(c, e, cited, keep) for e in pick}
     found: list[RR.Finding] = []
-    for i, part in enumerate(_parts(pick), 1):
+    for i, part in enumerate(_parts(pick, c.extra), 1):
         found += _review_part(c, part, base_md, f"p{i}")
     return found, len(pick)
 
@@ -267,7 +298,7 @@ def _reuse(sr: StageRun, rec: dict[str, Any], md: str) -> int | None:
 def _repair(c: Ctx, md: str, found: list[RR.Finding], doc: Path) -> tuple[str, set[int], int]:
     """Apply the round's grounded findings and re-audit what changed. Returns
     the document, the edited entries and the audit loop's exit (0 when clean)."""
-    new_md, edited = RR.apply(md, found, _keep(c.sr), headings(c.sr.cfg), c.evidence)
+    new_md, edited = RR.apply(md, found, _keep(c.sr), headings(c.sr.cfg), c.evidence, c.extra)
     for f in found:
         if f.action == "redate":
             c.sr.log(f"  redate {f.anchor} to {f.corrected} (Exhibit {f.exhibit} p. {f.page}): {f.outcome}")
