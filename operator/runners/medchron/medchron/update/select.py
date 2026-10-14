@@ -305,3 +305,35 @@ def delivered_home(
         if n is not None:
             votes[n] += 1
     return votes.most_common(1)[0][0] if votes else None
+
+
+def new_home(
+    row: dict[str, Any], pages: dict[int, str], by_doc: dict[str, set[str]], image_doc: dict[int, str]
+) -> str | None:
+    """The new document a new document RE-FILES WHOLE, or None.
+
+    A document none of whose pages is read, every one a repeat of a page of
+    a new document read before it (or blank), is a re-filed copy of that
+    document: not an exhibit, cited there. The new documents are read
+    largest first (``pageid.reading_order``), so the copy is the smaller one
+    and the larger keeps every page they share: a 124-page file that was
+    pages 281 to 404 of a 404-page file was filed as a second exhibit and a
+    visit was itemized twice (2026-10-14). The home is the document most of
+    its pages repeat: by picture (`image_doc`, {page: document id}) or, for a
+    page with no picture match, the document read before it sharing the most
+    of its shingles (`by_doc`). A document with a page read, unread, billed,
+    already delivered, or excluded for any other reason stays an exhibit,
+    and what it adds is read."""
+    excluded = row["excluded"]
+    if row["read"] or row["unread"] or not excluded.get(OVERLAP) or set(excluded) - {OVERLAP, BLANK}:
+        return None
+    votes: Counter[str] = Counter()
+    for p in range(1, int(row["pages"]) + 1):
+        d = image_doc.get(p)
+        sh = shingles(pages.get(p))
+        if d is None and sh and by_doc:
+            best = max(by_doc, key=lambda o: len(sh & by_doc[o]))
+            d = best if sh & by_doc[best] else None
+        if d is not None:
+            votes[d] += 1
+    return votes.most_common(1)[0][0] if votes else None

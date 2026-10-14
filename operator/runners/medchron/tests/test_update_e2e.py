@@ -455,8 +455,12 @@ def test_a_refiled_copy_of_a_new_record_is_not_read_twice_and_is_named_in_record
     o = _driver(job_dir, firm_config_path, pricing_path, seat, _Model()).run()[0]
     assert o.outcome == "delivered" and o.stage is None, o
     ud = data_root / "example-matter" / "runs" / "alpha" / "update"
-    sel = {r["source_name"]: r for r in json.loads((ud / "selection.json").read_text())["exhibits"]}
-    assert sel["Imaging refax.pdf"]["read"] == []
-    assert sel["Imaging refax.pdf"]["excluded"] == {"repeats an earlier page of the new documents": 2}
+    raw = json.loads((ud / "selection.json").read_text())
+    sel = {r["source_name"]: r for r in raw["exhibits"]}
+    # Parity O: a copy every page of which repeats a new record is not an
+    # exhibit at all; it is cited in the record it copies (selection "subsets").
+    assert "Imaging refax.pdf" not in sel
+    (sub,) = [s for s in raw["subsets"] if s["source_name"] == "Imaging refax.pdf"]
+    assert sub["pages"] == 2 and sub["matched"] == 2 and sub["subset_of"]["id"] == "n1"
     upd = (ud / "updated-chronology.md").read_text()
-    assert "are not cited: Imaging refax.pdf (2 pages: 0 pages read, 2 repeating pages already read)." in upd
+    assert f"Imaging refax.pdf (re-filed pages of Exhibit {sub['subset_of']['exhibit']})" in upd
