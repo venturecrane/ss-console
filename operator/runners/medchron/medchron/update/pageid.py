@@ -24,7 +24,8 @@ exhibit as new exhibits, and composed the same visits two and three times
   template visits inside one record is read whole (review fix 1).
 
 A new page pixel-equal to a delivered page is ALREADY read; one pixel-equal
-to a page of an EARLIER new document is a repeat. A new document whose EVERY
+to a page of a new document READ EARLIER (``reading_order``: the larger
+first) is a repeat. A new document whose EVERY
 inked page is pixel-equal to a page of one other document (a delivered
 exhibit, or a LARGER new document) or of a delivered exhibit, at least
 EXTRACT_FRAC of them to that one document, is a re-filed copy or extract: not
@@ -181,6 +182,17 @@ class Identity:
 _Pairs = dict[str, dict[int, tuple[int, bool]]]
 
 
+def reading_order(docs: list[tuple[str, int]]) -> list[str]:
+    """The order the new documents are READ in: most pages first, pull order
+    among equals. A page two new documents share is read in the one read
+    first and is a repeat in the other, so the LARGER copy keeps it: a
+    124-page file that was pages 281 to 404 of a 404-page file was pulled
+    first, kept every shared page, and the larger file's copies became
+    repeats, so one record was filed as two exhibits and a visit was
+    itemized twice (2026-10-14). Exhibit numbers stay in pull order."""
+    return [d for _, _, d in sorted((-n, i, d) for i, (d, n) in enumerate(docs))]
+
+
 def identify(
     delivered: list[tuple[int, list[Sig]]], new: list[tuple[str, list[Sig]]], firm: set[str] | None = None
 ) -> Identity:
@@ -195,7 +207,7 @@ def identify(
         if ex is not None:
             out.extracts[d] = ex
     _resolve(out.extracts)
-    order = [d for d, _ in new]
+    order = reading_order([(d, len(s)) for d, s in new])
     for d, sigs in new:
         if d not in out.extracts:
             out.pages[d] = _page_hits(d, len(sigs), pairs[d], order, out.extracts)
@@ -245,8 +257,8 @@ def _resolve(found: dict[str, Extract]) -> None:
 
 def _page_hits(d: str, npages: int, pairs: _Pairs, order: list[str], extracts: dict[str, Extract]) -> dict[int, Hit]:
     """Per page, the best hit: pixel-equal before near, a delivered page
-    before an earlier new one. Never a page of this document, of a later
-    one, or of a re-filed copy (it is not read)."""
+    before a new one read earlier (``reading_order``). Never a page of this
+    document, of one read later, or of a re-filed copy (it is not read)."""
     earlier = [o for o in order[: order.index(d)] if o not in extracts]
     sources = [o for o in pairs if o.startswith(DELIVERED)] + [o for o in earlier if o in pairs]
     out: dict[int, Hit] = {}
