@@ -150,3 +150,79 @@ def documents(papers: list[Any]) -> list[tuple[str, list[int]]]:
     from .compose import split_items
 
     return [(p.label, sorted(split_items(p.text)[1])) for p in papers]
+
+
+# ---- a basis row the review says does not support its request ---------------------------
+
+_ABBREV = {
+    "rfa": "Requests for Admission",
+    "rfp": "Requests for Production",
+    "rfpd": "Requests for Production",
+    "srog": "Special Interrogatories",
+    "si": "Special Interrogatories",
+    "requests for admission": "Requests for Admission",
+    "requests for production": "Requests for Production",
+    "special interrogatories": "Special Interrogatories",
+}
+_FLAGGED = re.compile(
+    r"(?i)\b(RFPD?|RFA|SROG|SI|requests for admission|requests for production|special interrogatories)\b"
+    r"[^.;|]{0,40}?\bbasis(?: table)?\b[^.;|]{0,20}?\bNos?\.?\s*(\d+(?:\s*(?:,|and|-|to)\s*\d+)*)"
+)
+
+
+def flagged_rows(findings: list[dict[str, Any]]) -> dict[str, set[int]]:
+    """The basis rows a review finding about the notes names ("RFA basis table
+    No. 25"): a row the review says does not support its request is dropped
+    like a row that failed verification (2026-10-14). Only check-6 findings
+    about the notes count; a finding about a document never drops a row."""
+    out: dict[str, set[int]] = {}
+    for f in findings:
+        if not str(f.get("check") or "").strip().startswith("6"):
+            continue
+        text = f"{f.get('finding') or ''} | {f.get('cite') or ''}"
+        for m in _FLAGGED.finditer(text):
+            label = _ABBREV[m.group(1).lower()]
+            nums = [int(x) for x in re.findall(r"\d+", m.group(2))]
+            if "-" in m.group(2) or " to " in m.group(2):
+                lo, hi = min(nums), max(nums)
+                nums = list(range(lo, hi + 1)) if hi - lo < 100 else nums
+            out.setdefault(label, set()).update(nums)
+    return out
+
+
+def drop_rows(notes_md: str, flagged: dict[str, set[int]]) -> tuple[str, int]:
+    """The notes with each flagged basis row removed from its document's table
+    and its request named under "No verified basis cite; check the file"."""
+    lines = notes_md.split("\n")
+    out: list[str] = []
+    label, dropped, total, start = None, [], 0, 0
+
+    def close() -> None:
+        nonlocal dropped, start
+        if label and dropped:
+            missing = next(
+                (i for i in range(len(out) - 1, start - 1, -1) if out[i].startswith("No verified basis cite")), None
+            )
+            have = [int(x) for x in re.findall(r"\d+", out[missing].split(":", 1)[1])] if missing is not None else []
+            nums = ", ".join(str(n) for n in sorted(set(have) | set(dropped)))
+            line = "No verified basis cite; check the file: Nos. " + nums
+            if missing is not None:
+                out[missing] = line
+            else:
+                out.extend(["", line])
+        dropped = []
+
+    for ln in lines:
+        head = re.match(r"^### (.+?)\s*$", ln)
+        if head or ln.startswith("## "):
+            close()
+            label = head.group(1) if head else None
+            start = len(out)
+        row = re.match(r"^\| No\. (\d+) \|", ln)
+        if row and label and int(row.group(1)) in flagged.get(label, set()):
+            dropped.append(int(row.group(1)))
+            total += 1
+            continue
+        out.append(ln)
+    close()
+    return "\n".join(out), total

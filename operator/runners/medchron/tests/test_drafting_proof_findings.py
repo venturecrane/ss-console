@@ -1160,3 +1160,65 @@ def test_the_caption_carries_the_courts_particulars_only_when_the_record_agrees(
     doc = "| GAMMA v. DELTA | Case No. CV-0001 |\n"
     out, notes = sets.particulars(doc, ["Dept.: 1"])
     assert "| Case No. CV-0001; Dept.: 1 |" in out and notes and sets.particulars(out, ["Dept.: 1"]) == (out, [])
+
+
+def test_a_basis_row_the_review_says_does_not_support_its_request_is_dropped():
+    from medchron.drafting import grounding as gr
+
+    findings = [
+        {
+            "grade": "SHOULD-FIX",
+            "check": "6. Attorney notes",
+            "finding": "The cite does not support it.",
+            "cite": "Attorney notes, RFA basis table No. 25; FILE: FULL DEMAND, p.3",
+        },
+        {
+            "grade": "SHOULD-FIX",
+            "check": "6 Attorney notes",
+            "finding": "The email says nothing of a subpoena.",
+            "cite": "Attorney notes, RFP basis table No. 54",
+        },
+        {
+            "grade": "NOTE",
+            "check": "7 Consistency",
+            "finding": "RFA basis table No. 6 aside",
+            "cite": "Doc 1",
+        },  # not check 6: no drop
+    ]
+    assert gr.flagged_rows(findings) == {"Requests for Admission": {25}, "Requests for Production": {54}}
+    notes = (
+        "## Request basis, record gaps and your decisions\n\n### Requests for Admission\n\n| Request | Basis in the file |\n"
+        '| --- | --- |\n| No. 6 | FILE: A (document): "x" |\n| No. 25 | FILE: FULL DEMAND (document): "y" |\n\n'
+        "No verified basis cite; check the file: Nos. 31\n\n### Requests for Production\n\n| Request | Basis in the file |\n"
+        '| --- | --- |\n| No. 54 | FILE: Email (document): "z" |\n'
+    )
+    out, n = gr.drop_rows(notes, gr.flagged_rows(findings))
+    assert n == 2 and "| No. 25 |" not in out and "| No. 54 |" not in out and "| No. 6 |" in out
+    assert "No verified basis cite; check the file: Nos. 25, 31" in out
+    assert out.rstrip().endswith("No verified basis cite; check the file: Nos. 54")
+
+
+def test_the_review_flag_drops_the_row_in_a_delivered_job(tmp_path, pricing):
+    rows = json.dumps(
+        {
+            "basis": [
+                {
+                    "document": "Requests for Admission",
+                    "request": 1,
+                    "file": "ER record 1-15-26",
+                    "paper": "medical record",
+                    "quote": "Patient seen 01/15/2026 for neck pain",
+                }
+            ]
+        }
+    )
+    review = (
+        "| SHOULD-FIX | 6 Attorney notes | The quote is real but does not support RFA 1. | Attorney notes, RFA basis table No. 1; FILE: ER record 1-15-26 |\n"
+        "VERDICT: 0 MUST-FIX, 1 SHOULD-FIX, 0 NOTE"
+    )
+    client = Client(drafts=_drafts(), notes=rows, review=review)
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    notes = (r.data / "notes-final.md").read_text()
+    assert "Patient seen 01/15/2026" not in notes.split("## Independent review")[0]
+    assert "No verified basis cite; check the file: Nos. 1" in notes
