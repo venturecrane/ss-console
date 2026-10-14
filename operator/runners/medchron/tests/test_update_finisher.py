@@ -356,3 +356,112 @@ def test_one_unsupported_edit_is_reverted_and_the_three_supported_edits_stay(
     assert entries[0] in md and fixed[0] not in md  # the unsupported edit is undone
     assert all(f in md for f in fixed[1:])  # the three supported edits stay
     assert len(ents) == 4 and rc == 0
+
+
+# F4 -----------------------------------------------------------------------------
+def test_a_finding_the_finisher_declines_is_held_with_its_reason_never_an_empty_action(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A real update held with 52 findings marked "unknown action ''": the
+    last review's findings were never sent to the finisher (the round limit),
+    and a finding with no action read as a malformed one. Now a decline says
+    why, and a finding the loop did not finish says that."""
+    found = _review(
+        _finding("N1.c1", "1 wrong value", "size misread"), _finding("N2.c1", "3 truncated", "cut off", exhibit=3)
+    )
+    declines = _edits(
+        {"finding": "F1", "anchor": "N1.c1", "action": "", "reason": "the image is too faint to read the size"},
+        {"finding": "F2", "anchor": "N2.c1", "action": "decline", "reason": "the rest is on no page shown"},
+    )
+    rc, sr, _md = _run(tmp_path, monkeypatch, [N1, LATER], [found], [declines])
+    assert rc == 2
+    outcomes = [f["outcome"] for f in _record(sr)["open"]]
+    assert outcomes == [
+        "declined by the finisher: the image is too faint to read the size",
+        "declined by the finisher: the rest is on no page shown",
+    ]
+    assert not any("unknown action" in m for m in sr.logged)
+    assert any("OPEN" in m and "too faint" in m for m in sr.logged)
+
+
+def test_the_last_reviews_findings_are_held_as_not_finished_with_why(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    good = "Lumbar MRI showed a disc protrusion of 5 mm at the fourth and fifth lumbar level. (Exhibit 2 - p. 1)"
+    r1 = _review(_finding("N1.c1", "1 wrong value", "size misread"))
+    fix = _edits({"finding": "F1", "anchor": "N1.c1", "action": "replace", "exhibit": 2, "page": 1, "corrected": good})
+    rc, sr, _md = _run(tmp_path, monkeypatch, [N1, LATER], [r1, r1], [fix])
+    assert rc == 2
+    assert [f["outcome"] for f in _record(sr)["open"]] == [
+        "not finished: no progress: 1 must-fix, no fewer than the last review"
+    ]
+
+
+def test_a_handwritten_row_takes_its_provider_from_the_statement_page_of_the_same_document(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The row cites p. 2 (handwritten, names no one); p. 1 of the same
+    document is the typed statement that names the chiropractor. Before, the
+    provider edit was refused as grounded on a page the entry does not cite."""
+    row = (
+        "08/27/2026\nSample Chiropractic (provider not stated in the record) | All Other Information\n\n"
+        "All Other Information\nSpinal adjustment of the lumbar spine recorded in the log row. (Exhibit 2 - p. 2)"
+    )
+    page = {(2, 1): "SAMPLE CHIROPRACTIC\nTreating doctor: Alex Example, D.C.\nSTATEMENT OF ACCOUNT"}
+    found = _review(_finding("N1", "1 wrong provider", "the statement names the chiropractor", page=1))
+    fix = _edits(
+        {
+            "finding": "F1",
+            "anchor": "N1",
+            "action": "provider",
+            "exhibit": 2,
+            "page": 1,
+            "corrected": "Alex Example, D.C.",
+        }
+    )
+    rc, sr, md = _run(tmp_path, monkeypatch, [row], [found, K.CLEAN_REVIEW], [fix], pages=page)
+    assert rc == 0, [f["outcome"] for f in _record(sr)["open"]]
+    assert B.entries_of(md)[1][0].split("\n")[1] == "Alex Example, D.C. | All Other Information"
+
+
+def test_a_redate_may_rest_on_an_uncited_page_of_the_entrys_document_that_states_the_date(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    wrong = N1.replace("08/27/2026", "09/27/2026")
+    page = {(2, 3): "MRI LUMBAR SPINE REPORT\nDate of exam: 08/27/2026"}
+    found = _review(_finding("N1", "1 wrong date", "the report page dates the exam", page=3))
+    fix = _edits(
+        {"finding": "F1", "anchor": "N1", "action": "redate", "exhibit": 2, "page": 3, "corrected": "08/27/2026"}
+    )
+    rc, sr, md = _run(tmp_path, monkeypatch, [wrong], [found, K.CLEAN_REVIEW], [fix], pages=page)
+    assert rc == 0, [f["outcome"] for f in _record(sr)["open"]]
+    assert B.entries_of(md)[1] == [N1]
+
+
+def test_a_converging_loop_goes_past_four_reviews_and_finishes_clean(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Five must-fix, one settled per round: the loop is still converging at
+    round 4, so it goes on (to at most MAX_ROUNDS) and ends clean at round 6
+    instead of holding at round 4 with one open."""
+    sent = "Lumbar MRI showed a disc protrusion of {} mm at the fourth and fifth lumbar level. (Exhibit 2 - p. {})"
+    head = "08/{:02d}/2026\nSample Imaging Center | Medical Diagnoses\n\nMedical Diagnoses\n"
+    entries = [head.format(20 + i) + sent.format(9, 1) for i in range(5)]
+    reviews, finishes = [], []
+    for r in range(5):
+        reviews.append(_review(*[_finding(f"N{i + 1}.c1", "1 wrong value", f"misread {i}") for i in range(r, 5)]))
+        fix = {"finding": "F1", "anchor": f"N{r + 1}.c1", "action": "replace", "exhibit": 2, "page": 1}
+        finishes.append(_edits({**fix, "corrected": sent.format(4, 1)}))
+    reviews.append(K.CLEAN_REVIEW)
+    rc, sr, md = _run(tmp_path, monkeypatch, entries, reviews, finishes)
+    assert rc == 0, [f["outcome"] for f in _record(sr)["open"]]
+    assert _review_rounds(sr) == {f"r{i}" for i in range(1, 7)}
+    assert sent.format(9, 1) not in md
+    assert UR.ROUNDS == 4 and UR.MAX_ROUNDS == 6
+
+
+def test_past_four_reviews_a_loop_that_stops_converging_holds() -> None:
+    assert UR._limit(5, 3, 3, 1).startswith("no progress")
+    assert UR._limit(4, 2, 3, 0) == "the review limit was reached at round 4"  # falling, but nothing settled
+    assert UR._limit(4, 2, 3, 1) == ""  # falling and settling: go on
+    assert UR._limit(6, 1, 2, 1) == "the review limit was reached at round 6"
