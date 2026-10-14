@@ -56,7 +56,13 @@ from ..proof import checks, review
 from .base import StageRun
 
 HOLD_CHECKS = (1, 2, 3, 4)
-REVIEW_TEXT_MAX_CHARS = 400_000  # per model call: the text is split into parts, never cut
+# Per model call: the text is split into parts, never cut. A part is sized so
+# its findings table and VERDICT fit the call's output budget: 400,000 (about
+# 138,000 tokens, 422 entries) ran out of output before the verdict, twice,
+# 2026-10-14. A part that still runs out is split again (``_review_part``).
+REVIEW_TEXT_MAX_CHARS = 100_000
+REVIEW_PART_MAX_ENTRIES = 60
+REVIEW_SPLIT_DEPTH = 4
 INPUT_SHA = "review-input.sha"
 REDO_SEEN = "review-redo.seen"
 NOTES_TEMPLATE = "{CLIENT} - Chronology Review Notes {MM-DD-YY}.docx"
@@ -194,9 +200,8 @@ def _model(sr: StageRun) -> str:
     return str(tiers.get("review") or llm.model_for(sr.cfg, "judgment"))
 
 
-def chunks(text: str, limit: int = REVIEW_TEXT_MAX_CHARS) -> list[str]:
-    """`text` in pieces of at most `limit` characters, cut at line breaks,
-    that join back to exactly `text`: nothing is truncated."""
+def _lines(text: str, limit: int) -> list[str]:
+    """`text` in pieces of at most `limit` characters, cut at line breaks."""
     out: list[str] = []
     cur = ""
     for line in text.splitlines(keepends=True):
@@ -210,6 +215,38 @@ def chunks(text: str, limit: int = REVIEW_TEXT_MAX_CHARS) -> list[str]:
             out.append(cur)
             cur = ""
         cur += line
+    return [*out, cur] if cur else out
+
+
+def _blocks(text: str) -> list[str]:
+    """`text` as entry blocks: a new block starts at each dated line, so a part
+    boundary never falls inside a chronology entry."""
+    out: list[str] = []
+    cur = ""
+    for line in text.splitlines(keepends=True):
+        if cur and _DATE_HEAD.match(line):
+            out.append(cur)
+            cur = ""
+        cur += line
+    return [*out, cur] if cur else out
+
+
+def chunks(text: str, limit: int = REVIEW_TEXT_MAX_CHARS) -> list[str]:
+    """`text` in pieces of at most `limit` characters and at most
+    REVIEW_PART_MAX_ENTRIES entries, cut between entries (inside one only when
+    a single entry is over `limit`, then at line breaks), that join back to
+    exactly `text`: nothing is truncated."""
+    out: list[str] = []
+    cur, n = "", 0
+    for b in _blocks(text):
+        if cur and (len(cur) + len(b) > limit or n >= REVIEW_PART_MAX_ENTRIES):
+            out.append(cur)
+            cur, n = "", 0
+        if len(b) > limit:
+            out += _lines(b, limit)
+            continue
+        cur += b
+        n += 1
     return [*out, cur] if cur else out
 
 
@@ -347,8 +384,40 @@ def _model_findings(
     for i, p in enumerate(parts, 1):
         key = f"{sr.slug}-{sr.unit.unit}" + (f"-{i}" if len(parts) > 1 else "")
         part = f"{i} of {len(parts)}" if len(parts) > 1 else ""
-        out += review.run_model(sr.doorway, model, system, _user(sr, p, names, found, head, part), key, HOLD_CHECKS)
+        out += _review_part(sr, model, system, p, (names, found, head), key, part)
     return out
+
+
+def _review_part(
+    sr: StageRun,
+    model: str,
+    system: str,
+    text: str,
+    ctx: tuple[list[str], list[review.Finding], str],
+    key: str,
+    part: str,
+    depth: int = 0,
+) -> list[review.Finding]:
+    """One part's review. A part whose review runs out of output before its
+    verdict at the largest budget is reviewed again as two smaller parts (the
+    same request is never resent); the findings of every part are kept, so
+    one part's MUST-FIX holds the whole review. A part that cannot be split
+    further raises ``ReviewIncomplete``: nothing unread passes."""
+    names, found, head = ctx
+    try:
+        return review.run_model(sr.doorway, model, system, _user(sr, text, names, found, head, part), key, HOLD_CHECKS)
+    except review.ReviewTruncated as exc:
+        halves = chunks(text, len(text) // 2 + 1)
+        if len(halves) < 2 or depth >= REVIEW_SPLIT_DEPTH or "".join(halves) != text:
+            raise review.ReviewIncomplete(
+                f"{exc}; a part of {len(text):,} characters could not be split smaller"
+            ) from exc
+        sr.log(f"review: part {part or '1'} ran out of output before its verdict; reviewing it in 2 smaller parts")
+        out: list[review.Finding] = []
+        for j, h in enumerate(halves, 1):
+            sub = f"{part or '1'}.{j}"
+            out += _review_part(sr, model, system, h, ctx, f"{key}-{j}", sub, depth + 1)
+        return out
 
 
 def run(sr: StageRun, *, today: date | None = None) -> int:
