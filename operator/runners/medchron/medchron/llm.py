@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .config import FirmConfig
+from .deadline import STALL_S, CallDeadlineError, bounded_call, deadline_for
 from .ledger import Ledger, count_pages
 from .limits import LimitHold
 
@@ -207,7 +208,10 @@ class _ZeroUsage:
 
 # ---- retry -------------------------------------------------------------------
 def classify_error(exc: BaseException) -> str:
-    """'retry' for transport/429/5xx, 'raise' for 4xx invalid requests."""
+    """'retry' for transport/429/5xx and a blown deadline, 'raise' for 4xx
+    invalid requests."""
+    if isinstance(exc, CallDeadlineError):
+        return "retry"
     try:
         import anthropic
     except Exception:  # noqa: BLE001 - the anthropic SDK may be absent in the audit venv; classify by message text then
@@ -318,6 +322,11 @@ class Doorway:
     #: cost here rather than a per-call look they will never get. Without this
     #: a firm that opts into batching would silently lose the per-call bound.
     before_batch: Callable[[str, int, int], None] | None = None
+    #: Wall-clock seconds an interactive call asking for N output tokens may
+    #: take, and the no-content window for a stream (deadline.py). Fields so a
+    #: test can shrink them; production uses the stated defaults.
+    deadline: Callable[[int], float] = deadline_for
+    stall_s: float | None = STALL_S
 
     @classmethod
     def from_config(
@@ -368,8 +377,14 @@ class Doorway:
         timeout: float | None = None,
         custom_id: str | None = None,
     ) -> Result:
-        """One interactive call. Retries transport/429/5xx; re-raises 4xx at
-        once. Always writes a ledger row, so a paid call is never invisible."""
+        """One interactive call. Retries transport/429/5xx and a blown deadline;
+        re-raises 4xx at once. Always writes a ledger row, so a paid call is
+        never invisible.
+
+        `timeout` is the SDK's, and bounds only the gap between two bytes (see
+        deadline.py). Every attempt is ALSO held to `self.deadline(max_tokens)`
+        of wall clock, and a stream to `self.stall_s` of no content; past its
+        attempts the stage fails with the reason."""
         if self.before_request is not None:
             self.before_request(stage)
         params, markers = build_params_marked(
@@ -387,18 +402,17 @@ class Doorway:
         )
         e = params.get("output_config", {}).get("effort")
         client = self._client(timeout)
+        limit = self.deadline(max_tokens)
         last: BaseException | None = None
         for n in range(attempts):
             try:
-                if stream:
-                    with client.messages.stream(**params) as st:
-                        msg = st.get_final_message()
-                else:
-                    msg = client.messages.create(**params)
+                msg = bounded_call(client, params, stream=stream, deadline_s=limit, stall_s=self.stall_s)
             except Exception as exc:
                 last = exc
                 if classify_error(exc) == "raise":
                     raise
+                if isinstance(exc, CallDeadlineError):
+                    self.log(f"{stage}: attempt {n + 1}/{attempts}: {exc}")
                 if n + 1 < attempts:
                     time.sleep(backoff * (n + 1))
                 continue
@@ -413,6 +427,8 @@ class Doorway:
                 custom_id=custom_id,
             )
             return make_result(msg, params["messages"])
+        if isinstance(last, CallDeadlineError):
+            raise CallDeadlineError(f"{stage}: {last}, on all {attempts} attempts") from last
         raise last if last else DoorwayError(f"{stage}: exhausted attempts")
 
     # ---- batch -----------------------------------------------------------
