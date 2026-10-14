@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ..stages.chunking import context_block
 from .values import clinical_values
 
 MIN_CHARS = 80
@@ -190,5 +191,17 @@ def row(number: int, title: str, decisions: dict[int, tuple[str, str]], pages: d
 
 def selected_text(pages: dict[int, str], read: list[int]) -> str:
     """The pages compose reads, page-marked with the exhibit's own numbers
-    (a new exhibit is its source document as it is, so they coincide)."""
-    return "\n".join(f"[p.{pg}]\n{pages.get(pg) or ''}" for pg in read)
+    (a new exhibit is its source document as it is, so they coincide).
+
+    A read page whose neighbour is NOT read (the delivery read it, or it
+    repeats an earlier copy) carries that neighbour's foot or head as a
+    delimited context block outside its own segment: a serology's "No" at the
+    foot of an unread page and its result at the head of a read one was
+    composed POSITIVE (``stages/chunking.context_block``)."""
+    want = set(read)
+    out = []
+    for pg in read:
+        pre = context_block(pages.get(pg - 1) or "", pg - 1, before=True) if pg - 1 not in want else ""
+        nxt = context_block(pages.get(pg + 1) or "", pg + 1, before=False) if pg + 1 not in want else ""
+        out.append(pre + f"[p.{pg}]\n{pages.get(pg) or ''}" + ("\n" + nxt.rstrip("\n") if nxt else ""))
+    return "\n".join(out)

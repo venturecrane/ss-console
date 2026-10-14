@@ -35,7 +35,9 @@ def test_a_page_already_in_a_delivered_exhibit_is_not_read_again() -> None:
 def test_page_text_splits_native_and_transcribed_markers() -> None:
     text = "[p.1]\nalpha\n[p.2] (machine transcription)\nbeta\n"
     assert S.pages_of_text(text) == {1: "alpha", 2: "beta"}
-    assert S.selected_text({1: "alpha", 2: "beta"}, [2]) == "[p.2]\nbeta"
+    assert S.selected_text({1: "alpha", 2: "beta"}, [1, 2]) == "[p.1]\nalpha\n[p.2]\nbeta"
+    # an unread neighbour rides along as delimited context (fix 21, test_update_page_context.py)
+    assert S.selected_text({1: "alpha", 2: "beta"}, [2]).endswith("[end context]\n[p.2]\nbeta")
 
 
 # ---- collect: keep what the new documents add ---------------------------------
