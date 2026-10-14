@@ -112,7 +112,10 @@ def _case_rules(m: dict[str, Any], n: str, out: dict[str, list[Any]]) -> None:
         out["case status without source"].append(n)
     if not str(m.get("responsible") or "").strip():
         out["no responsible person"].append(n)
-    if cs != vocab.NOT_FILED and not (m.get("complaint_filed") or {}).get("date") and not _all_uim(m):
+    # "Unclear" is not a claim the case was filed: it reaches the firm as unclear,
+    # with the reader's reason, instead of holding every other matter's list.
+    filed = cs not in (vocab.NOT_FILED, vocab.UNCLEAR)
+    if filed and not (m.get("complaint_filed") or {}).get("date") and not _all_uim(m):
         out["filed case with no complaint date"].append((n, cs))
     if not m.get("defendants") and cs != vocab.NOT_FILED:
         out["no defendants"].append(n)

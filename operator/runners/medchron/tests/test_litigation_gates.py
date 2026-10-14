@@ -124,6 +124,19 @@ def test_a_uim_only_matter_needs_no_complaint_date():
     assert "filed case with no complaint date" not in run([m])["issues"]
 
 
+def test_an_unclear_case_status_is_not_a_filed_case():
+    """2026-10-14 A&P proof: a minor's-compromise matter with no complaint was
+    read "Unclear" and the whole 16-matter list was held for a complaint date.
+    Unclear reaches the firm as unclear; a status that claims filing still
+    needs its date."""
+    m = good()
+    m["complaint_filed"] = {"date": None, "source": None}
+    m["case_status"] = {"value": vocab.UNCLEAR, "detail": "no complaint in the file", "source": None}
+    assert "filed case with no complaint date" not in run([m])["issues"]
+    m["case_status"] = {"value": vocab.SETTLED_OWED, "source": src("f0", "Complaint.pdf")}
+    assert "filed case with no complaint date" in run([m])["issues"]
+
+
 def test_a_save_date_the_document_does_not_carry_is_refused():
     m = good()
     m["defendants"][0]["served"]["date"] = "2026-04-11"  # the day Smokeball saved the POS
