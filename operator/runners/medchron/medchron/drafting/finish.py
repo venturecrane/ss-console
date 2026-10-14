@@ -602,6 +602,14 @@ class Finish:
         notes_md = self._notes(digest)
         rec = self._review(digest, notes_md)
         notes_md = self._notes(digest)  # as reviewed (a notes rewrite replaced it)
+        flagged = grounding.flagged_rows(rec.get("findings") or [])
+        if flagged and not self._is_done("basis_dropped"):
+            # A basis row the review says does not carry its request: dropped
+            # and said, like a row that failed verification. No rewrite: the
+            # review read the rest, and removing a row adds nothing to check.
+            notes_md, n = grounding.drop_rows(notes_md, flagged)
+            self._atomic("notes-final.md", notes_md)
+            self._done("basis_dropped", rows=n)
         if self._is_done("manifest"):
             return
         out, nm = deliver.out_dir(self.data), self._names()
