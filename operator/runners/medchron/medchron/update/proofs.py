@@ -63,6 +63,7 @@ class Inputs:
     new_exhibits: set[int]
     gate_passed: bool = True
     pre_note_itemized: bool = False  # assemble found the new entries itemize what the note left out
+    respelled: dict[str, str] = field(default_factory=dict)  # {composed: audited} provider spellings applied
 
 
 @dataclass
@@ -136,6 +137,18 @@ def _delivered_text(x: Inputs, r: Result) -> None:
     r.check("2", ok, f"pre-incident note: {state}")
 
 
+def _as_audited(c: dict[str, Any], x: Inputs) -> str:
+    """The key of a claim as the audit document carried it, before an audited
+    provider spelling was applied to its text (``providers.respell``): the
+    spelling is itself an audited claim, so the sentence keeps its verdict."""
+    if not x.respelled:
+        return c["key"]
+    from .providers import unspell
+
+    want = (c["exhibit"], c["page_spec"], unspell(c["claim"], x.respelled))
+    return next((a["key"] for a in x.audit_claims if (a["exhibit"], a["page_spec"], a["claim"]) == want), c["key"])
+
+
 def _audit(x: Inputs, r: Result) -> None:
     base_keys = {c["key"] for c in x.base_claims}
     in_audit_doc = {c["key"] for c in x.audit_claims}
@@ -146,7 +159,7 @@ def _audit(x: Inputs, r: Result) -> None:
         if row.get("kind") == "real" and row.get("key"):
             latest[row["key"]] = row.get("verdict")
     new = [c for c in x.updated_claims if c["key"] not in base_keys]
-    unsup = [c for c in new if latest.get(c["key"]) != "SUPPORTED"]
+    unsup = [c for c in new if latest.get(c["key"]) != "SUPPORTED" and latest.get(_as_audited(c, x)) != "SUPPORTED"]
     r.check("4", not unsup and x.gate_passed, f"new claims {len(new)}; not finally SUPPORTED {len(unsup)}")
     ctl = [row for row in x.audit_rows if str(row.get("kind", "")).startswith("control")]
     bad = [row for row in ctl if row.get("verdict") == "SUPPORTED"]

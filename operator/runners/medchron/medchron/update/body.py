@@ -62,6 +62,25 @@ def iso(e: str) -> str:
     return f"{m.group(3)}-{m.group(1)}-{m.group(2)}" if m else ""
 
 
+#: A date line whose date is when the record was printed, released, faxed,
+#: requested or received ("10/09/2026 (record print date)"): not a date of
+#: service. Such an entry is kept, and is never a visit.
+RECORDS_MARK = "(records date, not a date of service)"
+RECORDS_DATE = re.compile(
+    re.escape(RECORDS_MARK)
+    + r"|\([^)]*\b(?:print(?:ed)?|release[ds]?|fax(?:ed)?|received|request(?:ed)?|run)\b[^)]*\bdate\b[^)]*\)"
+    r"|\([^)]*\bdate\b[^)]*\b(?:print(?:ed)?|release[ds]?|fax(?:ed)?|received|request(?:ed)?)\b[^)]*\)",
+    re.I,
+)
+
+
+def is_service(e: str) -> bool:
+    """False when the entry's date line marks its date as a records date
+    (printed, released, faxed, requested, received), never a visit."""
+    head = e.splitlines()[0] if e else ""
+    return bool(DATE.match(head)) and not RECORDS_DATE.search(head[10:])
+
+
 def provider_of(e: str) -> str:
     lines = e.splitlines()
     head = lines[1] if len(lines) > 1 else ""

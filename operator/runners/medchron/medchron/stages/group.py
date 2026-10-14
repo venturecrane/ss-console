@@ -49,7 +49,12 @@ KIND_FOLDERS = {
     "PLEADINGS",
     "DISCOVERY",
 }
-CRED = r"M\.?D|D\.?O|D\.?C|P\.?T|N\.?P|PA-?C|LCSW|Au\.?D|R\.?N|M\.?A|D\.?P\.?M|O\.?D|Ph\.?D"
+# Nurse, therapy and allied credentials are credentials too: "Jane Roe, MSN,
+# RN" once read "MSN" as a name and the lane lost both.
+CRED = (
+    r"M\.?D|D\.?O|D\.?C|P\.?T|N\.?P|PA-?C|LCSW|Au\.?D|R\.?N|M\.?A|D\.?P\.?M|O\.?D|Ph\.?D|"
+    r"MSN|BSN|L\.?V\.?N|L\.?P\.?N|C\.?N\.?A|APRN|FNP(?:-C)?|CRNA|DNP|RD|MSW|LMFT|OTR(?:/L)?|DPT"
+)
 CLINICIAN = re.compile(rf"\s*\([^()]*?\b(?:{CRED})\b[^()]*\)", re.I)
 # The name atom takes a star, not a plus: a middle initial otherwise fails the
 # whole pattern and every clinician-bearing variant survives as its own lane.
@@ -93,20 +98,26 @@ class Canon:
         segs = [s.strip() for s in n.split(",")]
         keep: list[str] = []
         i = 0
+        dropped = False  # the segment before was a clinician this collapse removed
         while i < len(segs):
             s = segs[i]
-            # A credential segment is never a name: "Jane A. Roe, M.D., Ph.D."
-            # once kept "Ph.D." as the lane's whole label.
-            if CRED_SEG.match(s):
+            # A credential trailing a removed clinician goes with them: "Jane A.
+            # Roe, M.D., Ph.D." once kept "Ph.D." as the lane's whole label. A
+            # credential after a kept segment stays: "..., RD and Aaron T.
+            # Young, MD, ..." lost its "MD" when every credential went.
+            if CRED_SEG.match(s) and dropped:
                 i += 1
                 continue
             if NAME_CRED.match(s):
-                i += 1
+                i, dropped = i + 1, True
                 continue
             if BARE_NAME.match(s) and not FACILITY_WORD.search(s) and i + 1 < len(segs) and CRED_SEG.match(segs[i + 1]):
-                i += 2
+                i, dropped = i + 2, True
                 continue
-            if BARE_NAME.match(s) and not FACILITY_WORD.search(s) and len(segs) > 1 and i == len(segs) - 1 and keep:
+            dropped = False
+            # A trailing bare name is a clinician; a trailing credential is not one ("Jane Roe, MSN, RN").
+            trailing = len(segs) > 1 and i == len(segs) - 1 and keep and not CRED_SEG.match(s)
+            if BARE_NAME.match(s) and not FACILITY_WORD.search(s) and trailing:
                 i += 1
                 continue
             keep.append(s)
