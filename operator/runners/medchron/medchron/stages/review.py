@@ -291,7 +291,11 @@ def run(sr: StageRun, *, today: date | None = None) -> int:
     if status == "missing":
         chron_path = Path(rows[0]["local_path"])
         chron = docx_text(chron_path)
-        names = [m["name"] for m in rows]
+        # An update files into the delivered chronology's folder, where the
+        # delivered exhibits it still cites already are: they are part of the
+        # set the attorney holds, so they count as delivered.
+        filed = rd / "update" / "already_filed.json"
+        names = [m["name"] for m in rows] + (json.loads(filed.read_text(encoding="utf-8")) if filed.is_file() else [])
         others = {
             f"file {m['name']}": docx_text(Path(m["local_path"])) for m in rows[1:] if m["name"].endswith(".docx")
         }

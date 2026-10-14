@@ -225,7 +225,26 @@ def delivery_fields(worst: dict[str, Any], outcomes: list[dict[str, Any]]) -> di
         "folder_id": worst.get("folder_id"),
         "delivery": {"files": list(worst.get("files") or [])},
     }
+    if worst.get("replaced"):
+        # An update into the delivered chronology retired the document it
+        # replaced (by id, after the new one was proven): the record names it.
+        fields["delivery"]["replaced"] = dict(worst["replaced"])
     merged = merge_covered(outcomes)
     if merged is not None:
         fields["covered"] = merged
     return fields
+
+
+def documents_pulled(slug_dir: Path) -> int:
+    """Matter files pulled this run (`raw_manifest.jsonl` rows that landed)."""
+    p = slug_dir / "raw_manifest.jsonl"
+    if not p.is_file():
+        return 0
+    n = 0
+    for line in p.read_text(encoding="utf-8").splitlines():
+        try:
+            if json.loads(line).get("ok"):
+                n += 1
+        except ValueError:
+            continue
+    return n

@@ -68,6 +68,7 @@ SKILLS = {
 }
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}(?:\.[a-z0-9_]{1,40})?$")
 _CLASS_RE = re.compile(r"^[a-z_]{1,40}$")
+UPDATE_CLASS = "update_delivered"
 VERIFY_RE = re.compile(r"^vfy_[0-9A-HJKMNP-TV-Z]{26}$")
 
 
@@ -80,6 +81,11 @@ def lane_key(lane: str, envelope: dict[str, Any]) -> str:
     if lane == "drafting":
         cls = str(envelope.get("document_class") or "")
         return f"{skill}.{cls if _CLASS_RE.match(cls) else 'unknown'}"
+    if lane == "medchron" and isinstance(envelope.get("update"), dict):
+        # 2026-10-13: an update INTO the delivered chronology is its own kind of
+        # job (it reads the delivered document and deletes the one it replaces),
+        # so it waits for its own proof run on the seat, never riding the run's.
+        return f"{skill}.{UPDATE_CLASS}"
     return skill
 
 

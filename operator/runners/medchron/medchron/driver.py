@@ -39,7 +39,8 @@ from . import (
     seat as seat_mod,
     unit_proof,
 )
-from .covered import covered_sets
+from .covered import covered_sets, documents_pulled
+from .update.coverage import covered_sets as update_covered
 from .stages.base import StageRefusal, StageRun
 from .state import RunState, state_path
 
@@ -77,6 +78,9 @@ class Outcome:
     # delivery.json's proven rows, and the pre-delivery review's status, model
     # and cost. None on every other outcome.
     proof: dict[str, Any] | None = None
+    # An update into the delivered chronology: the document it retired, by id
+    # (stages/update_upload.py), so the ledger names what was replaced.
+    replaced: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
@@ -219,7 +223,7 @@ class Driver:
         if rehearse and start:
             raise DriverError("rehearse walks from the top; --from would re-run every done stage")
         for name in self.redo:
-            s = dag.BY_NAME.get(name)
+            s = dag.by_name(self.job.update is not None).get(name)
             if s is None:
                 raise DriverError(f"--redo {name!r}: unknown stage")
             # A REHEARSAL is $0 by definition, so it may not reopen a stage that
@@ -376,7 +380,7 @@ class Driver:
         # document built by the old code -- cheaply, and with a green row.
         if self.redo:
             st.invalidate(list(self.redo))
-        for stage in dag.stages_from(self.start):
+        for stage in dag.stages_from(self.start, update=self.job.update is not None):
             if stage.scope == "slug" and stage.name in slug_done:
                 continue
             if st.is_done(stage.name) and self.start is None:
@@ -631,19 +635,22 @@ class Driver:
         slug_done: set[str] = set()
         for unit in self.job.units:
             o = self.run_unit(unit, slug_done)
-            o.documents = _documents_pulled(self.slug_dir)
+            o.documents = documents_pulled(self.slug_dir)
             delivery = self.slug_dir / "runs" / unit.unit / "delivery.json"
             if delivery.is_file():
                 try:
                     d = json.loads(delivery.read_text(encoding="utf-8"))
                     o.folder_id = d.get("folder_id")
                     o.files = list(d.get("files") or [])
+                    o.replaced = d.get("replaced")
                 except (OSError, ValueError):
                     pass
             o.proof = unit_proof.for_outcome(o, self.slug_dir / "runs" / unit.unit, self.pricing)
             if o.outcome in ("delivered", "dry_run"):
                 try:
-                    o.covered = covered_sets(self.slug_dir, unit.unit, self.cfg)
+                    o.covered = (update_covered if self.job.update else covered_sets)(
+                        self.slug_dir, unit.unit, self.cfg
+                    )
                 except (OSError, ValueError, KeyError) as exc:
                     # A coverage record we could not derive is reported absent,
                     # never approximated: an over-inclusive covered set drops
@@ -651,21 +658,6 @@ class Driver:
                     self.log(f"[run] covered: no record derived for {unit.unit}: {exc}")
             outcomes.append(o)
         return outcomes
-
-
-def _documents_pulled(slug_dir: Path) -> int:
-    """Matter files pulled this run (`raw_manifest.jsonl` rows that landed)."""
-    p = slug_dir / "raw_manifest.jsonl"
-    if not p.is_file():
-        return 0
-    n = 0
-    for line in p.read_text(encoding="utf-8").splitlines():
-        try:
-            if json.loads(line).get("ok"):
-                n += 1
-        except ValueError:
-            continue
-    return n
 
 
 def report(outcomes: list[Outcome]) -> str:

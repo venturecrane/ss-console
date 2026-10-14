@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import FirmConfig
+from .gates import foreign_identity as FI
 from .job import Job, Unit
 
 
@@ -230,8 +231,36 @@ def fold(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) -> Decisio
     d = Decision("fold", slug_dir / "msg_fold.json", payload)
     if disclosed:
         d.notes.append(f"{len(disclosed)} encrypted attachment(s) cannot be opened; disclosed")
+    foreign = _foreign_attachments(job, slug_dir, items or [], keep)
+    if foreign:
+        # 2026-10-13: never fold an attachment whose own text names a different
+        # person. An attachment has no folder to say whose it is; its text is
+        # the only evidence, and a co-plaintiff's records inside a client's
+        # chronology is the defect this lane must not repeat (ss#2893).
+        d.holds.append(
+            f"{len(foreign)} emailed attachment(s) name a different person than the client: {foreign[:5]}; "
+            f"a person reads them and releases any that are the client's ({FI.RELEASE_FILE})"
+        )
+        return d
     _write(d.artifact, payload, dry_run=dry_run)
     return d
+
+
+def _foreign_attachments(job: Job, slug_dir: Path, items: list[dict[str, Any]], keep: list[str]) -> list[str]:
+    """sha12 + what was found, for each attachment to fold whose text names
+    someone else. Text that names no one (an image, a scan) passes here and
+    is checked again after vision by the `identity` stage."""
+    surnames, dobs = FI.identities(job.units)
+    free = FI.released(slug_dir)
+    by12 = {str(a.get("sha256") or "")[:12]: a for a in items}
+    out = []
+    for sha in keep:
+        a = by12.get(sha) or {}
+        text = FI.pdf_text(slug_dir / "msg_pdfs" / str(a.get("local") or ""))
+        found = FI.findings(text, surnames, dobs)
+        if found and sha not in free:
+            out.append(f"{sha}: {'; '.join(found)}")
+    return out
 
 
 # ---- orphans -----------------------------------------------------------------

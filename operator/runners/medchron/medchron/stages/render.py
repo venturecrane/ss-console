@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import re
 from datetime import date
-from typing import Any
+from pathlib import Path
+from typing import Any, Callable
 
 from .. import docx_style as S, timeline
 from .base import StageRun
@@ -169,15 +170,68 @@ def section(text: str, name: str, upto: str) -> str:
     return text.split(f"## {name}\n", 1)[1].split(f"## {upto}", 1)[0]
 
 
-def run(sr: StageRun) -> int:
-    from docx import Document
+def _front(doc: Any, limits_block: str, log: Callable[[str], None]) -> int | None:
+    """The review note at the front; None when it emitted nothing from a
+    non-empty block (the renderer refuses rather than drop the section)."""
+    if not limits_block.strip():
+        return 0
+    doc.add_paragraph("Records Reviewed and Limitations", style="Heading 1")
+    emitted = 0
+    for raw_line in limits_block.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("* "):
+            emit_markdown_para(doc, line[2:].strip()).style = doc.styles["List Bullet"]
+        else:
+            emit_markdown_para(doc, line)
+        emitted += 1
+    if not emitted:
+        log("build_doc emitted a limitations section and the renderer produced no paragraphs from it")
+        return None
+    doc.add_paragraph("")
+    return emitted
+
+
+def _preamble(doc: Any, body: str) -> None:
+    preamble = ENTRY_SPLIT.split(body)[0].strip()
+    if not preamble:
+        return
+    for para in [p.strip() for p in preamble.split("\n\n") if p.strip()]:
+        first = para.splitlines()[0].strip()
+        if first and len(first) < 60 and not first.endswith("."):
+            doc.add_paragraph(first, style="Heading 2")
+            rest = "\n".join(para.splitlines()[1:]).strip()
+            if rest:
+                emit_markdown_para(doc, rest)
+        else:
+            emit_markdown_para(doc, para)
+    doc.add_paragraph("")
+
+
+def _timeline(doc: Any, visuals: dict[str, Any], imgdir: Any, font: str) -> None:
     from docx.shared import Inches
 
-    rd = sr.slug_dir / "runs" / sr.unit.unit
-    out_dir = sr.slug_dir / "out" / sr.unit.unit
-    text = (rd / "final-chronology.md").read_text(encoding="utf-8")
-    font = str(sr.cfg.get("format", "font") or "Calibri")
-    headings = {str(h) for h in (sr.cfg.get("format", "subsections") or [])} | {"Discharge / Discontinuation in Care"}
+    if not visuals["lane_order"]:
+        return
+    doc.add_picture(str(imgdir / "timeline.png"), width=Inches(S.CONTENT_W))
+    for y in visuals["years"]:
+        doc.add_picture(str(imgdir / f"cal-{y}.png"), width=Inches(S.CONTENT_W))
+        for a, b, n in visuals["gaps"]:
+            if a.year == y:
+                gap_bar(doc, a, b, n, font)
+    doc.add_picture(str(imgdir / "legend.png"), width=Inches(S.CONTENT_W))
+
+
+def render_text(text: str, dst: Path, *, cfg: Any, incident_date: str, log: Callable[[str], None]) -> int:
+    """The chronology markdown `text` rendered to `dst`. The update renders
+    through here too (its base proof and its updated document), so the seat
+    has one renderer and the proof measures the one the firm received."""
+    from docx import Document
+
+    out_dir = dst.parent
+    font = str(cfg.get("format", "font") or "Calibri")
+    headings = {str(h) for h in (cfg.get("format", "subsections") or [])} | {"Discharge / Discontinuation in Care"}
     title = text.splitlines()[0].strip()
     prov_rows = [
         ln
@@ -193,14 +247,14 @@ def run(sr: StageRun) -> int:
     ex_block = text.split("## Exhibit List", 1)[1].split(LIMITS, 1)[0]
     ex_rows = [ln for ln in ex_block.splitlines() if ln.strip().startswith("|")]
     limits_block = text.split(LIMITS, 1)[1] if LIMITS in text else ""
-    incident = date(*(int(x) for x in sr.job.incident_date.split("-")))
+    incident = date(*(int(x) for x in incident_date.split("-")))
     imgdir = out_dir / "img"
     visuals = timeline.render(
         text,
         imgdir,
         incident,
-        int(sr.cfg.get("chronology", "treatment_gap_days", 45)),
-        Canon(sr.cfg),
+        int(cfg.get("chronology", "treatment_gap_days", 45)),
+        Canon(cfg),
         {h.lower() for h in headings},
     )
 
@@ -208,61 +262,40 @@ def run(sr: StageRun) -> int:
     S.build_styles(doc, font)
     S.page_number_footer(doc, font)
     doc.add_paragraph(title, style="Title")
-    limits_emitted = 0
-    if limits_block.strip():
-        doc.add_paragraph("Records Reviewed and Limitations", style="Heading 1")
-        for raw_line in limits_block.splitlines():
-            line = raw_line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if line.startswith("* "):
-                emit_markdown_para(doc, line[2:].strip()).style = doc.styles["List Bullet"]
-            else:
-                emit_markdown_para(doc, line)
-            limits_emitted += 1
-        if not limits_emitted:
-            sr.log("build_doc emitted a limitations section and the renderer produced no paragraphs from it")
-            return 1
-        doc.add_paragraph("")
+    limits_emitted = _front(doc, limits_block, log)
+    if limits_emitted is None:
+        return 1
     doc.add_paragraph("1.  Treatment Timeline", style="Heading 1")
-    if visuals["lane_order"]:
-        doc.add_picture(str(imgdir / "timeline.png"), width=Inches(S.CONTENT_W))
-        for y in visuals["years"]:
-            doc.add_picture(str(imgdir / f"cal-{y}.png"), width=Inches(S.CONTENT_W))
-            for a, b, n in visuals["gaps"]:
-                if a.year == y:
-                    gap_bar(doc, a, b, n, font)
-        doc.add_picture(str(imgdir / "legend.png"), width=Inches(S.CONTENT_W))
+    _timeline(doc, visuals, imgdir, font)
     doc.add_paragraph("2.  Past Treatment History", style="Heading 1")
     summary_table(doc, prov_rows, [2.54, 1.74, 1.10, 1.12], font)
     doc.add_paragraph("3.  Diagnostic Highlights", style="Heading 1")
     summary_table(doc, icd_rows, [0.81, 3.43, 1.12, 1.12], font)
     doc.add_paragraph("4.  Medical Summary", style="Heading 1")
-    preamble = ENTRY_SPLIT.split(body)[0].strip()
-    if preamble:
-        for para in [p.strip() for p in preamble.split("\n\n") if p.strip()]:
-            first = para.splitlines()[0].strip()
-            if first and len(first) < 60 and not first.endswith("."):
-                doc.add_paragraph(first, style="Heading 2")
-                rest = "\n".join(para.splitlines()[1:]).strip()
-                if rest:
-                    emit_markdown_para(doc, rest)
-            else:
-                emit_markdown_para(doc, para)
-        doc.add_paragraph("")
+    _preamble(doc, body)
     entries = parse_entries(body)
     body_table(doc, entries, headings, font)
     doc.add_paragraph("")
     doc.add_paragraph("5.  Exhibit List", style="Heading 1")
     summary_table(doc, ex_rows, [1.25, 5.25], font, header_fill="f3f6fe", bold_first_col=False)
-    stamp = sr.date_stamp or date.today().strftime("%m-%d-%y")
-    name = str(sr.cfg.get("delivery", "chronology_name_template") or "{CLIENT} - Medical Chronology {MM-DD-YY}.docx")
-    dst = out_dir / name.replace("{CLIENT}", sr.unit.client_name).replace("{MM-DD-YY}", stamp)
     out_dir.mkdir(parents=True, exist_ok=True)
     doc.save(str(dst))
-    sr.log(
+    log(
         f"wrote {dst.name}: {len(entries)} entries, {max(len(prov_rows) - 1, 0)} providers, {max(len(icd_rows) - 1, 0)} ICD rows, "
         f"{max(len(ex_rows) - 1, 0)} exhibits, {len(visuals['years'])} calendar year(s), {len(visuals['gaps'])} gap bar(s), "
         f"{limits_emitted} limitations line(s)"
     )
     return 0
+
+
+def chronology_name(sr: StageRun) -> str:
+    stamp = sr.date_stamp or date.today().strftime("%m-%d-%y")
+    name = str(sr.cfg.get("delivery", "chronology_name_template") or "{CLIENT} - Medical Chronology {MM-DD-YY}.docx")
+    return name.replace("{CLIENT}", sr.unit.client_name).replace("{MM-DD-YY}", stamp)
+
+
+def run(sr: StageRun) -> int:
+    rd = sr.slug_dir / "runs" / sr.unit.unit
+    out_dir = sr.slug_dir / "out" / sr.unit.unit
+    text = (rd / "final-chronology.md").read_text(encoding="utf-8")
+    return render_text(text, out_dir / chronology_name(sr), cfg=sr.cfg, incident_date=sr.job.incident_date, log=sr.log)

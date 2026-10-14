@@ -24,6 +24,12 @@ MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 # sort before every timestamp on its own day.
 CYCLE_BOUND_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
 INCIDENT_SOURCES = {"matter_layout", "intake_document", "administrator_request", "record_citation"}
+#: The one update kind (2026-10-13): the new records go INTO the delivered
+#: chronology, which comes back as one complete document, every delivered entry
+#: carried byte-identical. The older append grain (a standalone package of only
+#: the named documents) is what a job WITHOUT this block still means.
+UPDATE_INTO = "delivered_chronology"
+FILE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
 
 class JobError(ValueError):
@@ -38,6 +44,16 @@ class Unit:
     surname: str
     dob: str  # MM/DD/YYYY, the identity check's anchor
     folder_prefix: str | None = None  # joint matters: this client's folder
+
+
+@dataclass(frozen=True)
+class UpdateSpec:
+    """An update into the delivered chronology. `chronology_file_id` names the
+    delivered document when the requester's skill read it off the matter;
+    absent, the runner finds the newest one by the firm's own file name."""
+
+    into: str
+    chronology_file_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -87,6 +103,7 @@ class Job:
     selection_overrides: dict[str, Any] = field(default_factory=dict)
     requested_by: str | None = None
     request_ref: str | None = None
+    update: UpdateSpec | None = None
 
     @property
     def joint(self) -> bool:
@@ -175,6 +192,26 @@ def stamp_period(doc: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
     return doc
 
 
+def parse_update(data: dict[str, Any], units: list[Unit]) -> UpdateSpec | None:
+    """The `update` block, or None. Refused, never repaired: an update the
+    runner cannot place would either re-read the whole file or file a second
+    chronology beside the first, and both are worse than a refusal."""
+    raw = data.get("update")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict) or raw.get("into") != UPDATE_INTO:
+        raise JobError(f"job.update.into: expected {UPDATE_INTO!r}")
+    fid = raw.get("chronology_file_id")
+    if fid is not None and not (isinstance(fid, str) and FILE_ID_RE.match(fid)):
+        raise JobError("job.update.chronology_file_id: expected a document id")
+    if len(units) != 1:
+        raise JobError("job.update: an update into a delivered chronology names exactly one client")
+    named = (data.get("selection") or {}).get("include_file_ids") if isinstance(data.get("selection"), dict) else None
+    if not isinstance(named, list) or not named:
+        raise JobError("job.update: selection.include_file_ids must name the documents to read")
+    return UpdateSpec(into=UPDATE_INTO, chronology_file_id=fid)
+
+
 def parse(data: Any, *, path: Path) -> Job:
     if not isinstance(data, dict):
         raise JobError(f"{path}: top level must be a map")
@@ -248,6 +285,7 @@ def parse(data: Any, *, path: Path) -> Job:
         selection_overrides=dict(data.get("selection") or {}),
         requested_by=data.get("requested_by"),
         request_ref=data.get("request_ref"),
+        update=parse_update(data, units),
     )
 
 

@@ -244,7 +244,10 @@ firm already has most of (2026-10-13: two "all records, pre and post loss"
 asks were queued as full runs, one of them about to fold another person's
 emailed records into the file). Check first: `medchron_job_status` with the
 `matter_id` you resolved this turn; `covered_document_ids` present means a
-delivered chronology exists, and the request goes to UPDATE below. A RUN is
+delivered chronology exists, and the request goes to UPDATE below. So does a
+matter whose record is absent but whose files hold a delivered chronology
+document (named "<Client> - Medical Chronology MM-DD-YY"): a chronology
+delivered before the record existed is still delivered. A RUN is
 for a matter with no delivered chronology, or for a requester who asks in so
 many words to rebuild it from scratch, and then the reply says it re-reads
 and counts the whole file.
@@ -311,14 +314,36 @@ and counts the whole file.
    the complete chronology, and the request was mailed to SMD as an
    "operations change" with the work undone).
 
-## UPDATE - only the records the delivery did not cover (the router's UPDATE mode)
+## UPDATE - into the delivered chronology (the router's UPDATE mode)
 
-A Named Administrator asks to bring a delivered chronology current ("update the
-chronology on 12345", "add the new records to that chronology"). UPDATE runs RUN's
-steps with one difference: the document set is the matter's current listing MINUS
-what the delivery covered. Submit with `selection.include_file_ids` naming exactly
-those ids; the runner pulls nothing else, and holds if a named id is not on the
-matter. In replies, call it an update, never an "append" or a "re-run".
+A Named Administrator asks for a chronology on a matter that already holds a
+delivered one ("update the chronology on 12345", "add the new records to that
+chronology", "the full chronology, pre-loss to the most recent"). **The update
+goes INTO the delivered chronology**: the runner pulls the delivered chronology
+and its exhibits from the matter, reads only the records it did not cover, and
+files ONE complete, updated chronology into the delivered chronology's own
+folder. Every delivered entry is carried word for word; the visits the new
+records hold are added in date order, before and after the incident; the Prior
+Medical History, the treatment timeline, the treatment gaps and the diagnosis
+table are recomputed; the new records become exhibits numbered after the
+delivered ones and titled the delivered way; and one paragraph under Records
+Reviewed says what the update read. Only the new text is audited. Only after the
+updated chronology is filed and proven on the matter does the runner remove the
+earlier chronology document it replaces, by its id; the runner removes nothing
+else, the delivered exhibits stay (the update still cites them), and every other
+file in that folder is left alone. That removal is the runner's, never yours. In
+replies, call it an update, never an "append" or a "re-run".
+
+**Submit** with `update: {into: "delivered_chronology", chronology_file_id:
+"<id>"}` and `selection.include_file_ids` naming the documents to read (an update
+names exactly one client). `chronology_file_id` is the id of the delivered
+chronology document in `get_files_on_matter`: the newest file named "<Client> -
+Medical Chronology MM-DD-YY". When you cannot tell which one it is, leave
+`chronology_file_id` out: the runner finds the newest by that name, and holds
+when two share the newest date. The runner holds if a named id is not on the
+matter, and applies the firm's authored exclusions to the named ids as well
+(an excluded folder, photos, correspondence), so a named photo is left out and
+reported, never read.
 
 **Where the delta comes from, in order.**
 
@@ -350,18 +375,27 @@ matter. In replies, call it an update, never an "append" or a "re-run".
 3. **A job timestamp is never the source.** Never approximate a delta from dates.
 
 **When there is no coverage record** (the matter lookup returns null, or
-`covered_document_ids` is null: a delivery completed outside this skill, or one
-whose record was never reconstructed, or a matter whose chronology was never
-delivered at all): say so plainly, name the
-delivered folder you can see on the matter, and **do not submit**. Tell the
-requester SMD will confirm what that chronology covered before the update runs, and
-surface it to SMD through the seat's ordinary operations route. Never offer a full
-run as a quiet substitute: a run reads, and counts against the allowance, the whole
-file, so say that in the same sentence if you mention it at all.
+`covered_document_ids` is null) **but the matter holds a delivered chronology
+document** (one delivered outside this skill, or before the record existed): it
+is still an update. Name every medical record and bill on the matter (paged to
+the end, under the "Name medical records only" rule above). What the delivery
+covered is read off the delivered chronology itself: a document identical to a
+delivered exhibit, and a page whose words a delivered exhibit already holds,
+are not read again, so only the pages the delivery did not have are read. Say
+in the reply that the coverage record was missing and that the update was
+measured against the delivered exhibits. A matter whose files hold no delivered
+chronology document is not an update: it is a RUN.
 
 **Nothing left to read:** when the listing minus the covered set is empty, say that
 the delivered chronology already covers every document on the matter, submit
 nothing, and stop.
+
+**The runner holds rather than guess** (DELIVER relays it in plain words): the
+delivered chronology cannot be found, or does not reproduce exactly from the
+document on the matter (a document edited after delivery cannot be carried word
+for word); a named record names a different person than the client; a page of a
+new record could not be read; or the new records hold no visit the delivered
+chronology does not already list, which means the chronology is already current.
 
 The allowance pre-flight, the dual-probe resolution, and the identity-field rules
 apply unchanged.
@@ -427,7 +461,10 @@ nothing, stop.
    sends it in the requester's original thread after the reply checks, copying the firm's people who were on the request;
    never add anyone yourself):
    - **delivered**: the counts (documents read, pages, exclusions as the runner
-     reported them) and where the folder is, and nothing from the job's `reason`:
+     reported them) and where the folder is, and nothing from the job's `reason`.
+     When the wake says `Request: update into the delivered chronology.`, say the
+     chronology was updated in its own folder and the earlier version of the
+     document replaced by the updated one:
      never say an entry is flagged, partial, or needs review unless the delivery
      itself reports it. **Say what the delivery consumed and
      what is left.** Call `medchron_allowance` on this turn and close the reply

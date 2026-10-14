@@ -74,6 +74,16 @@ def image_dims(data: bytes) -> tuple[int, int] | None:
         return None
 
 
+def named_ids(d: Path) -> set[str] | None:
+    """The document ids the selection names, or None when it names none (a
+    run reads by folder, and every container on the matter is in scope)."""
+    ids = (read_json(d / "include.json", {}) or {}).get("include_file_ids")
+    if not ids:
+        return None
+    left_out = {str(x.get("id")) for x in read_json(d / "named_excluded.json", []) or []}
+    return {str(i) for i in ids} - left_out
+
+
 def already_pulled_hashes(d: Path) -> dict[str, str]:
     """sha256 of everything the normal pull brought down. An EMPTY set means
     "not yet answerable", never "all new"; the fold refuses on it."""
@@ -227,6 +237,14 @@ def run_index(sr: StageRun) -> int:
     d = sr.slug_dir
     fpath = sr.folder_paths()
     targets = [x for x in sr.manifest() if not x.get("deleted") and (x.get("ext") or "").lower() in CONTAINER_EXTS]
+    named = named_ids(d)
+    if named is not None:
+        # A selection that names its documents (an update, an append) opens
+        # ONLY the containers it names. Found live 2026-10-13: an update opened
+        # every .msg on the matter and was about to fold another person's
+        # emailed records into the client's file.
+        sr.log(f"selection names its documents: {len(targets)} container(s) on the matter, opening only those named")
+        targets = [x for x in targets if str(x.get("id")) in named]
     have = already_pulled_hashes(d)
     comparable = bool(have)
     if not targets:
