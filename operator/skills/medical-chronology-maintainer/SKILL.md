@@ -547,7 +547,8 @@ nothing, stop.
        going into the chronology already on the matter, so it stays one
        complete document. Nothing is needed from you; the next message you get
        about this chronology will be the updated one." When it is refused, the
-       reply is the `smd_finishing` wording.
+       reply is the `smd_finishing` wording: the runner sees no UPDATE queued
+       for the matter and pages SMD, so that sentence is true.
      - A hold with no `Hold class:` line, or a class not listed here, is
        `smd_finishing`.
        **In every held reply, never:** ask the firm to resubmit, repeat, narrow

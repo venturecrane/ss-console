@@ -231,6 +231,7 @@ def arm_reply_watch(d: Any, job_id: str) -> None:
     st = d._daemon_state(job_id)
     if st.get("state") not in ("delivered", "held"):
         return
+    _arm_reroute(d, job_id, st)
     if not (st.get("notice") or _requester(d, job_id)):
         return  # a rehearsal submission: nobody is owed a reply
     d._write_state(
@@ -269,6 +270,72 @@ def _rows_for(job_id: str, w: dict[str, Any], resp: dict[str, Any]) -> list[dict
     if not expected:
         expected = f"{w.get('kind')}:{job_id}:{w.get('attempt') or 1}:{w.get('state')}"
     return [r for r in replies if str(r.get("key") or "") == expected]
+
+
+def _arm_reroute(d: Any, job_id: str, st: dict[str, Any]) -> None:
+    """A RUN the runner refused on a delivered matter (``rerouted_to_update``)
+    pages nothing at settle: the DELIVER turn resubmits it as the UPDATE. When
+    that resubmission is refused, the firm hears "SMD is finishing it", so SMD
+    MUST be paged (2026-10-13). This watch proves the UPDATE was queued, and
+    pages when it was not."""
+    if d.LANE != "medchron" or st.get("state") != "held":
+        return
+    if holds.classify("medchron", st.get("reason"))[0] != holds.REROUTED_TO_UPDATE:
+        return
+    try:
+        env = json.loads((d.job_dir(job_id) / "envelope.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        env = {}
+    finished = float(st.get("finished_at") or d.clock())
+    d._write_state(
+        job_id,
+        reroute_watch={
+            "matter_number": str((env.get("matter") or {}).get("number") or ""),
+            "since": _iso(finished - 60.0),
+            "due": d.clock() + REPLY_DEADLINE_SECONDS,
+        },
+    )
+
+
+def check_reroutes(d: Any) -> None:
+    """Each tick: close a reroute watch once an UPDATE for the same matter is
+    queued; page ``stage_refused`` when none is by the time the requester's
+    reply has gone (the turn submits before it replies) or by the deadline."""
+    from ..broker_client import BrokerError
+
+    if not d.jobs.is_dir():
+        return
+    for p in sorted(d.jobs.iterdir()):
+        st = d._daemon_state(p.name)
+        w = st.get("reroute_watch")
+        if not isinstance(w, dict) or w.get("done"):
+            continue
+        try:
+            resp = _client(d)._request({"action": "medchron_job_status"})
+        except (BrokerError, OSError, AttributeError, TypeError, ValueError) as exc:
+            logger.warning("medchron job %s: job list unreadable (%s); reroute watch stays open", p.name, exc)
+            continue
+        queued = any(
+            isinstance(j, dict)
+            and str(j.get("id") or "") != p.name
+            and str(j.get("matter_number") or "") == w.get("matter_number")
+            and str(j.get("created_at") or "") >= str(w.get("since") or "")
+            for j in resp.get("jobs") or []
+        )
+        if queued:
+            w.update(done=True, outcome="update_queued")
+        elif (st.get("reply_watch") or {}).get("done") or d.clock() >= float(w.get("due") or 0):
+            alert(
+                d,
+                p.name,
+                "stage_refused",
+                "the runner refused a RUN on a delivered matter and no UPDATE was queued after the DELIVER "
+                "wake; the firm was told SMD is finishing it",
+            )
+            w.update(done=True, outcome="paged")
+        else:
+            continue
+        d._write_state(p.name, reroute_watch=w)
 
 
 def check_reply_watches(d: Any) -> None:
@@ -337,6 +404,7 @@ __all__ = [
     "alert",
     "arm_reply_watch",
     "check_reply_watches",
+    "check_reroutes",
     "in_proof_run",
     "settle",
     "wake_lost",
