@@ -32,6 +32,7 @@ exhibit that is neither delivered nor new.
 
 from __future__ import annotations
 
+import difflib
 import re
 from collections import Counter, defaultdict
 from typing import Any, Callable
@@ -114,10 +115,61 @@ def lane_namer(
     return name_of, log
 
 
+#: How alike a delivered entry's provider must read to a delivered row's
+#: label, among the rows whose period covers its date, to be that row's visit.
+LANE_LIKENESS = 0.6
+
+
+def delivered_lanes(
+    delivered_rows: list[str], base_ents: list[str], canon: Callable[[str], str], name_of: Callable[[str], str]
+) -> Callable[[str], str]:
+    """lane(entry) -> its Treatment Timeline label. Delivered lanes stay as
+    delivered: a row's label is never re-derived, so its credentials stay
+    ("Jane Roe, RN") and it is never absorbed into another lane that the
+    grouping now collapses it into (2026-10-13: an eye clinic's delivered row
+    was absorbed into its health system's, and nurses lost "RN").
+
+    An entry takes the delivered row its provider names exactly; else the one
+    row whose label groups with it (``canon``), the likeliest when several
+    do; else, for a DELIVERED entry, the row covering its date whose label
+    reads most alike (the delivered label came from a grouping of its own
+    day); else its own grouped name, a new lane."""
+    rows = []
+    for r in delivered_rows:
+        c = [x.strip() for x in r.strip().strip("|").split("|")]
+        if len(c) >= 4 and c[0]:
+            rows.append((c[0], c[1]))
+    labels = [lb for lb, _ in rows]
+    delivered = set(base_ents)
+
+    def alike(a: str, b: str) -> float:
+        return difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+    def lane(e: str) -> str:
+        name = name_of(e)
+        if name in labels:
+            return name
+        d = e.splitlines()[0][:10]
+        covering = [lb for lb, per in rows if _period_has(per, d)]
+        same = [lb for lb in labels if canon(lb) == canon(name)]
+        if same:
+            pool = [lb for lb in same if lb in covering] or same
+            return max(pool, key=lambda lb: alike(lb, name))
+        if e in delivered:
+            near = [lb for lb in covering if alike(lb, name) >= LANE_LIKENESS]
+            if near:
+                return max(near, key=lambda lb: alike(lb, name))
+        return canon(name)
+
+    return lane
+
+
 def provider_rows(entries: list[str], canon: Callable[[str], str], name_of: Callable[[str], str]) -> list[str]:
-    """Treatment Timeline rows exactly as build_doc computes them."""
+    """Treatment Timeline rows exactly as build_doc computes them, from dates
+    of service only: an entry dated by a records date (printed, released,
+    faxed, received) is no visit."""
     es = []
-    for e in entries:
+    for e in (x for x in entries if B.is_service(x)):
         c = B.CITE.search(e)
         es.append({"iso": B.iso(e), "provider": name_of(e), "ref": c.group(0)[1:-1] if c else ""})
     es.sort(key=lambda x: x["iso"])
@@ -166,7 +218,9 @@ def exhibit_titles_for(
 ) -> tuple[dict[int, str], list[int]]:
     """({number: final title}, [numbers no added entry cites]). A new exhibit
     is titled the delivered way: the provider most entries citing it name,
-    and the first and last date they carry."""
+    and the first and last date of SERVICE they carry (a records print date
+    once ended a title four weeks after the last visit); with none, the
+    title carries no dates."""
     retitled: dict[int, str] = {}
     uncited: list[int] = []
     for r in sorted(new_exhibits, key=lambda x: x["exhibit"]):
@@ -175,10 +229,11 @@ def exhibit_titles_for(
         if not es:
             uncited.append(n)
             continue
-        prov = Counter(name_of(e) for e in es).most_common(1)[0][0]
-        ds = sorted(B.iso(e) for e in es)
-        span = _mdY(ds[0]) + ("" if ds[-1] == ds[0] else " - " + _mdY(ds[-1]))
-        retitled[n] = re.sub(r"[\\/:*?\"<>|]+", " ", f"{prov} - {span} (Medical Records)").strip()
+        visits = [e for e in es if B.is_service(e)]
+        prov = Counter(name_of(e) for e in visits or es).most_common(1)[0][0]
+        ds = sorted(B.iso(e) for e in visits)
+        span = (" - " + _mdY(ds[0]) + ("" if ds[-1] == ds[0] else " - " + _mdY(ds[-1]))) if ds else ""
+        retitled[n] = re.sub(r"[\\/:*?\"<>|]+", " ", f"{prov}{span} (Medical Records)").strip()
     return retitled, uncited
 
 
@@ -330,7 +385,8 @@ def assemble(
     table, changed, illegible = icd.rows(B.table_rows(b["## Diagnostic Highlights"]), icd_claims, new_ents, describe)
     pre, added, notes_kept, notes_itemized = _preamble(pre, addition, new_ents)
     body = (pre.rstrip("\n") + "\n\n" if pre.strip() else "\n") + "\n\n".join(entries) + "\n\n"
-    final_rows = provider_rows(entries, canon, name_of)
+    lane = delivered_lanes(delivered_rows[1:], base_ents, canon, name_of)
+    final_rows = provider_rows(entries, str, lane)
     retitled, uncited = exhibit_titles_for([r for r in new_exhibits if not r.get("reused")], new_ents, name_of)
     firm = folder_rows(base_md, folder or [], taken)
     firm += [f"| {r['exhibit']} | {r['reused']} |" for r in new_exhibits if r.get("reused")]
@@ -345,7 +401,7 @@ def assemble(
         "delivered_entries": len(base_ents),
         "new_entries": len(new_ents),
         "output_entries": len(out_ents),
-        "delivered_table_vs_its_own_entries": lane_diff(delivered_rows[1:], provider_rows(base_ents, canon, name_of)),
+        "delivered_table_vs_its_own_entries": lane_diff(delivered_rows[1:], provider_rows(base_ents, str, lane)),
         "timeline_changes": lane_diff(delivered_rows[1:], final_rows),
         "lanes_named_for_heading_slots": name_log,
         "icd_rows_added_or_moved": changed,

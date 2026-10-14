@@ -215,7 +215,8 @@ def test_an_update_files_one_complete_document_into_the_delivered_folder(
     assert "(Exhibit 2 - p. 2)" in ents[3] and "Cervical radiographs before the incident" in upd
     assert "| M50.20 | Other cervical disc displacement, unspecified cervical region | 02/10/2026 |" in upd
     assert f"| 2 | {final_ex[len('Exhibit 2 - ') : -4]} |" in upd
-    assert "Update of " in upd and "1 medical record document(s) filed on the matter after the earlier" in upd
+    assert "Update of " in upd and "2 medical record document(s) filed on the matter after the earlier" in upd
+    assert "1 was a copy and was not read again: Example Clinic refiled.pdf (duplicate copy of Exhibit 1)." in upd
     # The delivered Prior Medical History is carried as delivered; what the
     # new records add sits under it in a dated, audited paragraph.
     assert K.PMH.split("\n", 1)[1] in upd

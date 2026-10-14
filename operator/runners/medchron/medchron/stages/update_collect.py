@@ -35,7 +35,7 @@ from typing import Any
 
 from .. import icd_tables, llm, meta_markers, prompts
 from ..audit import claims as CL
-from ..update import body as B, collect as C, handwritten as H, icd, providers as P, select as S
+from ..update import body as B, collect as C, handwritten as H, icd, providers as P, records_dates as RD, select as S
 from .base import StageRefusal, StageRun, read_json
 from .group import Canon
 from .summarize import beyond_source
@@ -81,15 +81,21 @@ def _page_map(out: Path, keep: list[dict[str, Any]], provisional: dict[int, str]
     (out / "page_map.json").write_text(json.dumps(rows, indent=1), encoding="utf-8")
 
 
-def _page_texts(sr: StageRun, provisional: list[dict[str, Any]]) -> tuple[dict[int, dict[int, str]], list[str]]:
-    """({new exhibit: {page: text}}, every page the matter's typed statements
-    could be on: the new documents' and the delivered exhibits')."""
+def _new_pages(sr: StageRun, provisional: list[dict[str, Any]]) -> dict[int, dict[int, str]]:
+    """{new exhibit (as composed): {page: text}}."""
     by_ex: dict[int, dict[int, str]] = {}
     for r in provisional:
         tp = sr.slug_dir / "text" / f"{r['id']}.txt"
         by_ex[int(r["exhibit"])] = (
             S.pages_of_text(tp.read_text(encoding="utf-8", errors="replace")) if tp.is_file() else {}
         )
+    return by_ex
+
+
+def _page_texts(sr: StageRun, provisional: list[dict[str, Any]]) -> tuple[dict[int, dict[int, str]], list[str]]:
+    """({new exhibit: {page: text}}, every page the matter's typed statements
+    could be on: the new documents' and the delivered exhibits')."""
+    by_ex = _new_pages(sr, provisional)
     pool = [t for pages in by_ex.values() for t in pages.values()]
     for e in plan(sr).get("exhibits") or []:
         p = sr.slug_dir / "delivered" / e["name"]
@@ -135,25 +141,26 @@ def _icd_claims(sr: StageRun, ud: Path, rd: Path, base_md: str, entries: list[st
     return claims
 
 
-def _shape(sr: StageRun, base_ents: list[str], rd: Path, provisional: list[dict]) -> tuple[list[str], dict]:
-    """The kept entries, respelled and dated, and the report."""
+def _shape(sr: StageRun, base_md: str, rd: Path, provisional: list[dict]) -> tuple[list[str], dict]:
+    """The kept entries, dated, their near provider names flagged, and the report."""
+    _, base_ents = B.entries_of(base_md)
     try:
         entries, rep = C.collect(C.composed(rd), base_ents, sr.job.incident_date, Canon(sr.cfg))
     except C.CollectRefusal as exc:
         raise StageRefusal(str(exc)) from exc
     entries = [meta_markers.strip(e) for e in entries]  # the pipeline's own notes never reach the firm
-    entries, spelled = P.snap(entries, base_ents)
+    entries, spelled = P.snap(entries, base_ents, list(B.exhibit_titles(base_md).values()))
     entries, dated = _settle_dates(sr, entries, provisional)
-    return entries, {**rep, "provider_spelling": spelled, "handwritten_dates": dated}
+    entries, records = RD.mark(entries, _new_pages(sr, provisional))
+    return entries, {**rep, "provider_spelling": spelled, "handwritten_dates": dated, "records_dates": records}
 
 
 def run_collect(sr: StageRun) -> int:
     ud, rd = update_dir(sr), sr.slug_dir / "runs" / sr.unit.unit
     out = sr.slug_dir / "out" / sr.unit.unit
     base_md = (ud / "base.md").read_text(encoding="utf-8")
-    _, base_ents = B.entries_of(base_md)
     provisional = read_json(ud / "new_exhibits.json", [])
-    entries, rep = _shape(sr, base_ents, rd, provisional)
+    entries, rep = _shape(sr, base_md, rd, provisional)
     entries, keep, uncited, remap = C.compact(entries, provisional)
     if not keep:
         sr.log(
