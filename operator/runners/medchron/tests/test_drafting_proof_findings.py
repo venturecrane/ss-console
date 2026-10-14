@@ -89,7 +89,7 @@ def test_a_memo_that_names_the_set_type_is_a_mention_and_paragraph_4_is_counted(
     assert "{{ATTORNEY" not in doc.split("DECLARATION")[1].split("PROOF OF SERVICE")[0]
     assert "a total of 0 interrogatories" in doc and "contains 60 specially" in doc
     assert any("the file shows none served" in n for n in notes)
-    assert any("read as a mention, not a prior set" in n for n in notes)
+    assert any("is a note about discovery, not a served set, so paragraph 4 does not count it" in n for n in notes)
 
 
 def test_a_set_on_file_without_proof_of_service_is_named_never_a_blank_in_the_oath():
@@ -102,7 +102,11 @@ def test_a_set_on_file_without_proof_of_service_is_named_never_a_blank_in_the_oa
     }
     doc, notes = render.attach(_srogs(60), "discovery_set", _Firm(), _digest(row), corpus)
     assert "a total of 0 interrogatories" in doc and "{{ATTORNEY: the file shows" not in doc
-    assert any("not counted, the file does not show it served" in n and "SROG one draft.pdf" in n for n in notes)
+    assert any(
+        "paragraph 4 counts no earlier set; the file holds this draft but no service of it" in n
+        and "SROG one draft.pdf" in n
+        for n in notes
+    )
 
 
 def test_a_served_set_whose_count_cannot_be_read_still_leaves_paragraph_4_to_the_attorney_and_says_why():
@@ -128,7 +132,7 @@ def test_a_set_of_admissions_that_cites_an_interrogatory_counts_no_interrogatori
     assert render.special_count(rfa) == 0
     _doc, notes = render.attach(rfa.split("=== ATTORNEY NOTES")[0], "discovery_set", _Firm(), _digest())
     assert not any("2030.050" in n for n in notes)
-    assert any(n.startswith("set number: earlier requests for admission") and n.endswith("none") for n in notes)
+    assert any(n == "Set number: no earlier requests for admission were served on DELTA EXAMPLE" for n in notes)
     assert render.special_count(_srogs(60)) == 60
 
 
@@ -424,10 +428,7 @@ def test_the_notes_are_told_who_asked_and_whose_block_it_is_and_say_it(tmp_path,
     user = json.dumps(call["messages"])
     assert "the documents were requested by admin@firm.example" in user
     notes = (r.data / "notes-final.md").read_text()
-    assert (
-        "- Attorney block: the firm has no authored attorney block for the requesting or the responsible attorney"
-        in notes
-    )
+    assert "- Attorney block: taken from the operative pleading (no standard block is on file for you)" in notes
     assert wording.vocabulary(notes) == [] and "{{" not in notes
 
 
@@ -499,8 +500,9 @@ def test_a_line_every_set_carries_is_said_once(tmp_path):
     assert md.count("3 of 9 sources are scans") == 1
     assert "privilege wall" not in md and "never read" not in md
     assert (
-        'own or client correspondence (1 emails; a filed document with the same name is a separate paper): "INTAKE"'
-        in md
+        "Not used in drafting: 1 privileged or internal emails" in md
+        and "with these 1 subjects" in md
+        and '"INTAKE"' in md
     )
 
 
@@ -992,8 +994,16 @@ def test_the_notes_say_it_in_the_attorneys_words(tmp_path):
         "## REQUEST BASIS\n\nNone.",
         [("RFA", tmp_path / "a"), ("RFP", tmp_path / "b")],
     )
-    assert md.count("Kept out of drafting") == 1 and "(5 emails;" in md
-    assert "machine transcription" not in md and "transcriber" not in md and "scans read by machine" in md
+    assert (
+        md.count("Not used in drafting") == 1
+        and "5 privileged or internal emails" in md
+        and "with these 5 subjects" in md
+    )
+    assert (
+        "machine transcription" not in md
+        and "transcriber" not in md
+        and "scanned images whose text was read by software" in md
+    )
     assert "## Request basis, record gaps and your decisions" in md and "End tables" not in md
     assert wording.vocabulary(md) == [] and wording.notes_findings("The flag under RFA 6 is your marker.")
 
@@ -1028,7 +1038,7 @@ def test_the_proof_of_service_carries_what_the_record_knows_and_only_that():
     assert "| DELTA EXAMPLE |" in out
     assert "Delta Counsel, Bar No. 000002; DEFENSE FIRM PC; 1 Court Street; Exampletown, California 90000" in out
     assert "delta@defense.example" in out and "1 Example Way, Exampletown" in out
-    assert "{{FILL: date of service | at service}}" in out and len(notes) == 5  # the server's own facts stay slots
+    assert "{{FILL: date of service | at service}}" in out and len(notes) == 1  # the server's own facts stay slots
     other = ANSWER.replace("Delta Counsel", "Other Counsel")
     ambiguous, _ = render.fill_pos(pos, doc, {"A.pdf": ANSWER, "B.pdf": other}, [])
     assert "{{FILL: counsel of record" in ambiguous  # two different blocks: never a guess
@@ -1038,3 +1048,61 @@ def test_the_declarations_signature_line_prints_the_declarants_name():
     decl = "I, `{{ATTORNEY: declarant's full name}}`, declare:\n\n______________________________\n`{{ATTORNEY: signature}}`\n"
     out = render._fill_decl(decl, render.decl_decision(_srogs(40), _digest()), _srogs(40), "Alpha Q. Example")
     assert out.count("Alpha Q. Example") == 2 and "{{ATTORNEY" not in out
+
+
+def test_a_review_that_holds_on_the_notes_alone_gets_one_notes_rewrite_and_passes(tmp_path, pricing):
+    """Run 8 (2026-10-14): the regenerated notes cited a fact to responses that
+    do not say it. The documents were right; the notes are written once more,
+    told the finding, and reviewed again. Once."""
+    reviews = {"n": 0}
+
+    def review(params):
+        reviews["n"] += 1
+        if "CITED-WRONG" in json.dumps(params["messages"]):
+            return (
+                "| MUST-FIX | 6 the attorney notes | A cite does not carry what the note says. | notes, REQUEST "
+                "BASIS; FILE: Complaint 2-1-26, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+            )
+        return "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+
+    class NotesClient(Client):
+        def _answer(self, params):
+            if "THE ATTORNEY NOTES, FROM THE FINAL DOCUMENT" in json.dumps(params.get("system")):
+                told = "the review found in the notes" in json.dumps(params["messages"])
+                return "## REQUEST BASIS\n\n| RFA 1 | ownership | Complaint 2-1-26, p. 1 |" + (
+                    "" if told else " CITED-WRONG"
+                )
+            return super()._answer(params)
+
+    client = NotesClient(drafts=_drafts(), review=review)
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    assert reviews["n"] == 2 and "CITED-WRONG" not in (r.data / "notes-final.md").read_text()
+
+
+def test_a_review_that_holds_on_a_document_never_gets_the_notes_rewrite(tmp_path, pricing):
+    review = (
+        "| MUST-FIX | 1 statements | The declaration swears the set exceeds 35; it has 35. | Document 3, para 3 |\n"
+        "VERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+    )
+    client = Client(drafts=_drafts(), review=review)
+    _r, v, seat = _run(tmp_path, pricing, client)
+    assert v.outcome == "failed" and v.reason.startswith("review_held: ")
+    assert client.count("INDEPENDENT PRE-DELIVERY REVIEW") == 1 and seat.created == []
+
+
+def test_the_code_written_notes_read_as_the_attorneys_language():
+    """Run 9 (2026-10-14): "the firm's authored block", "kept out unread",
+    "scans read by machine", and five telegraphic proof-of-service lines."""
+    pos = (
+        "described as `{{FILL: the exact title of the document served | at service}}`\n"
+        "| `{{FILL: party, as captioned | at service}}` | `{{FILL: counsel of record, firm, address | at service}}` |"
+    )
+    _out, notes = render.fill_pos(pos, one_set(SROG).split("=== ATTORNEY")[0], {"Answer.pdf": ANSWER}, [])
+    assert notes == [
+        "Proof of service: attached, filled in with this set's title, the party served (DELTA EXAMPLE) and defense "
+        "counsel as the defense's own papers list them; the server completes the date, the method and the server's "
+        "own details"
+    ]
+    for line in notes:
+        assert wording.vocabulary(line) == [] and "authored" not in line

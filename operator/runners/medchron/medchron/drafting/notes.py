@@ -33,7 +33,9 @@ def _once(lines: list[str], labels: list[str]) -> list[str]:
     return out
 
 
-_SCANS = re.compile(r"(?i)(\d+) of (\d+) sources are machine transcriptions of scanned documents[^:]*:\s*(.*)")
+_SCANS = re.compile(
+    r"(?is)(\d+) of (\d+) sources are machine transcriptions of scanned documents[^:]*:\s*(.*?)(?:\.\s*Cite them\b.*)?$"
+)
 
 
 def _plain_warning(w: str) -> str:
@@ -41,8 +43,8 @@ def _plain_warning(w: str) -> str:
     m = _SCANS.match(str(w))
     if m:
         return (
-            f"{m.group(1)} of the file's {m.group(2)} documents are scans read by machine and not yet checked by a "
-            f"person; a figure or quotation from them is worth a glance against the scan: {m.group(3)}"
+            f"{m.group(1)} of the file's {m.group(2)} documents are scanned images whose text was read by software; "
+            f"check any figure or quotation taken from them against the scan: {m.group(3)}"
         )
     return str(w)
 
@@ -126,8 +128,9 @@ def attorney_notes(
         # separate paper and was read like any other.
         names = list(dict.fromkeys(str(w["name"]) for w in walled))
         review.append(
-            f"Kept out of drafting, as the firm's own or client correspondence ({len(walled)} emails; a filed "
-            "document with the same name is a separate paper): " + "; ".join(f'"{n}"' for n in names)
+            f"Not used in drafting: {len(walled)} privileged or internal emails between the firm, its client and "
+            f"its staff, with these {len(names)} subjects: " + "; ".join(f'"{n}"' for n in names) + ". Where a paper "
+            "filed in the matter has the same name as one of these emails, it is a separate document and was read."
         )
     review = _once(review, [label for label, _d in units or []])
     tail = ["", "## Request basis, record gaps and your decisions", "", end_tables] if end_tables else []

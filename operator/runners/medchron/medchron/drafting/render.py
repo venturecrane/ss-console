@@ -204,10 +204,10 @@ def proof(s: PriorSet, corpus: Mapping[str, str]) -> tuple[str, str]:
             f"{s.title}: {blank[0]} has no readable text, so the file cannot show whether it is the set",
         )
     if not docs:
-        return "mention", f"{s.title}: no cited document is the set itself ({s.cite or 'no cite'})"
+        return "mention", f"{s.title} ({s.cite.strip('() ') or 'no cite'})"
     served = [d for d in docs if SERVED.search(corpus[d])]
     if not served:
-        return "doubtful", f"{s.title}: {docs[0]} is the set but carries no proof of service"
+        return "doubtful", f"{s.title} ({docs[0]}), with no proof of service"
     if s.count is None:
         return "unreadable", f"{s.title}: served ({served[0]}) but its count is not readable"
     return "served", served[0]
@@ -390,15 +390,12 @@ def prior_set_notes(doc: str, digest: str, corpus: Mapping[str, str] | None) -> 
         return [
             f"set number: the set does not state its propounding and responding party, so earlier {words} could not be matched"
         ]
-    out = [
-        f"set number: earlier {words} from {prop} to {resp} the file shows served: "
-        + ("; ".join(p.served) if p.served else "none")
-    ]
+    if p.served:
+        out = [f"Set number: earlier {words} served on {resp}, per the file: " + "; ".join(p.served)]
+    else:
+        out = [f"Set number: no earlier {words} were served on {resp}"]
     if p.doubtful:
-        out.append(
-            f"set number: the file also holds {len(p.doubtful)} unserved set(s) of this kind, which are not "
-            "earlier sets: " + "; ".join(p.doubtful)
-        )
+        out[0] += "; the file also holds an unserved draft: " + "; ".join(p.doubtful)
     return out
 
 
@@ -441,47 +438,33 @@ def fill_pos(pos: str, doc: str, corpus: Mapping[str, str], firm_address: list[s
     """The proof of service's slots the record fills: the document's own
     title, the party served (the set's responding party), counsel of record
     as the defense's papers print it, and the firm's business address from its
-    authored block. What only the person serving knows stays a slot."""
-    notes: list[str] = []
+    authored block. What only the person serving knows stays a slot. One
+    sentence for the attorney says what was filled."""
+    filled: list[str] = []
 
-    def put(slot: str, value: str | None, why: str) -> None:
+    def put(slot: str, value: str | None, what: str) -> None:
         nonlocal pos
         if not value:
             return
         new = re.sub(rf"`?\{{\{{FILL: {re.escape(slot)}[^}}]*\}}\}}`?", lambda _m: value, pos)
         if new != pos:
             pos = new
-            notes.append(why)
+            filled.append(what)
 
     title = _TITLE.search(doc)
-    put(
-        "the exact title of the document served",
-        title.group(1).strip() if title else None,
-        "proof of service: the title is the set's own",
-    )
-    put(
-        "party, as captioned",
-        party(doc, "RESPONDING PARTY"),
-        "proof of service: the party served is the set's responding party",
-    )
+    put("the exact title of the document served", title.group(1).strip() if title else None, "this set's title")
+    served = party(doc, "RESPONDING PARTY")
+    put("party, as captioned", served, f"the party served ({served})")
     counsel = opposing_counsel(corpus)
     if counsel:
-        put(
-            "counsel of record, firm, address",
-            counsel[0],
-            "proof of service: counsel as the defense's own papers print them",
-        )
-        put(
-            "email, if served electronically",
-            counsel[1],
-            "proof of service: counsel's email as the defense's own papers print it",
-        )
-    put(
-        "firm business address",
-        ", ".join(firm_address) if firm_address else None,
-        "proof of service: the firm's address from its attorney block",
-    )
-    return pos, notes
+        put("counsel of record, firm, address", counsel[0], "defense counsel as the defense's own papers list them")
+        put("email, if served electronically", counsel[1], "their email")
+    put("firm business address", ", ".join(firm_address) if firm_address else None, "the firm's address")
+    note = "Proof of service: attached"
+    if filled:
+        note += ", filled in with " + ", ".join(filled[:-1]) + (" and " if len(filled) > 1 else "") + filled[-1]
+    note += "; the server completes the date, the method and the server's own details"
+    return pos, [note]
 
 
 def strip_attachments(doc: str) -> tuple[str, bool]:
@@ -536,16 +519,18 @@ def attach(
                 f"{d.prior_special} in served prior sets); no declaration, the count does not exceed {SPECIAL_LIMIT}"
             )
         notes += [
-            f"section 2030.050: not counted, the file does not show it served (if it was, paragraph 4 changes): {x}"
+            f"Section 2030.050: paragraph 4 counts no earlier set; the file holds this draft but no service of it: {x}"
             for x in d.doubtful
         ]
-        notes += [f"section 2030.050: {x}; read as a mention, not a prior set" for x in d.ignored]
+        notes += [
+            f"Section 2030.050: {x} is a note about discovery, not a served set, so paragraph 4 does not count it"
+            for x in d.ignored
+        ]
     if cls == "discovery_set":
         notes += prior_set_notes(doc, digest, corpus)
     pos, filled = fill_pos(COMMENT.sub("", firm.attachment("pos")).strip(), doc, corpus or {}, firm_address or [])
     parts.append(pos)
     notes += filled
-    notes.append("the firm's proof of service is attached; its at-service slots are for the person serving")
     return "\n\n".join(parts) + "\n", notes
 
 

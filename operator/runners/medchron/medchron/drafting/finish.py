@@ -431,8 +431,10 @@ class Finish:
         return out
 
     # ---- the notes from the final documents, then the review, then the files -----------
-    def _notes(self, digest: str) -> str:
-        if (self.data / "notes-final.md").is_file():
+    def _notes(self, digest: str, review_findings: list[str] | None = None) -> str:
+        """``review_findings``: what a held review found wrong in the notes
+        only; the tables are written again, told exactly that (``_review``)."""
+        if (self.data / "notes-final.md").is_file() and not review_findings:
             return (self.data / "notes-final.md").read_text(encoding="utf-8")
         tables, open_items = [], []
         for u in self.units():
@@ -457,11 +459,11 @@ class Finish:
                 refused=refused,
             )
 
-        end_tables = tables_for(None)
+        end_tables = tables_for(review_findings or None)
         problems = wording.notes_findings(end_tables)
         if problems:
             self.log(f"  attorney notes: {len(problems)} wording problem(s); one rewrite")
-            end_tables = tables_for(problems)
+            end_tables = tables_for([*(review_findings or []), *problems])
             problems = wording.notes_findings(end_tables)
             if problems:
                 # Counts and kinds only: a reason reaches SMD's alerts.
@@ -473,10 +475,22 @@ class Finish:
         for u in self.units():
             render_notes += [(f"{u.label}: " if u.key else "") + n for n in self._rendered(u)["notes"]]
         units = [(u.label, u.data) for u in self.units()] if any(u.key for u in self.units()) else None
-        render_notes = [f"Attorney block: {facts[-1]}", *render_notes]
+        render_notes = [self._block_note(), *render_notes]
         md = notes_mod.attorney_notes(self.data, self._title, self._located_markers(), render_notes, end_tables, units)
         self._atomic("notes-final.md", md)
         return md
+
+    def _block_note(self) -> str:
+        """The attorney block, said to the attorney (the facts line is for the
+        notes model: "the firm's authored block" is our word, not his)."""
+        cp = self.data / "caption.json"
+        cap = json.loads(cp.read_text(encoding="utf-8")) if cp.is_file() else {}
+        who = str((cap.get("attorney_block") or {}).get("email") or "").lower()
+        if not who:
+            return "Attorney block: taken from the operative pleading (no standard block is on file for you)"
+        if who == str(self.job.requester or "").strip().lower():
+            return "Attorney block: your standard block, as the firm keeps it"
+        return f"Attorney block: the standard block of {who}, the attorney the matter record names"
 
     def _request_facts(self) -> list[str]:
         """What the request and the matter record settle about who: the
@@ -529,11 +543,38 @@ class Finish:
         model = review_mod.model_for(self.firm)
         return found + review_mod.run_model(self.doorway, model, digest, user, self.job.job_id[-6:]), model
 
+    def _notes_only_hold(self) -> list[str]:
+        """The held review's MUST-FIX findings when every one is about the
+        attorney notes (check 6) and none about a document; else []."""
+        rec = review_mod.load(self.data) or {}
+        must = [f for f in rec.get("findings") or [] if f.get("grade") == review_mod.MUST]
+        if not must or rec.get("released"):
+            return []
+        if not all(str(f.get("check") or "").strip().startswith("6") for f in must):
+            return []
+        return [f"the review found in the notes: {f['finding']} ({f.get('cite') or ''})" for f in must]
+
     def _review(self, digest: str, notes_md: str) -> dict[str, Any]:
         """The independent review (``review.py``): a hold raises ``review_held``
         before anything is filed; SMD's redo and release arrive as markers in
         the job dir and are applied here."""
-        rec = review_mod.decide(self.data, self.job.job_dir, lambda: self._fresh_review(digest, notes_md), self.log)
+        try:
+            rec = review_mod.decide(self.data, self.job.job_dir, lambda: self._fresh_review(digest, notes_md), self.log)
+        except DraftingFailed:
+            notes_only = self._notes_only_hold()
+            if not notes_only or self._is_done("notes_rewrite"):
+                raise
+            # The notes tables are written by a model each run, and a cite in
+            # them can slip (2026-10-14, run 8: a recipient's address cited to
+            # responses that do not say it). When the review holds on the
+            # notes alone, the documents are right: write the tables once more,
+            # told exactly what was wrong, and review again. Once.
+            self.log(f"  review: {len(notes_only)} notes-only must-fix finding(s); one notes rewrite")
+            held = self.data / "review.json"
+            held.replace(self.data / "review-held-notes.json")
+            notes_md = self._notes(digest, notes_only)
+            self._done("notes_rewrite", findings=len(notes_only))
+            rec = review_mod.decide(self.data, self.job.job_dir, lambda: self._fresh_review(digest, notes_md), self.log)
         self._done(
             "review",
             review="released" if rec.get("released") else "passed",
@@ -550,6 +591,7 @@ class Finish:
             self._render_unit(u, self._gate(u, self._draft(u, digest)), digest)
         notes_md = self._notes(digest)
         rec = self._review(digest, notes_md)
+        notes_md = self._notes(digest)  # as reviewed (a notes rewrite replaced it)
         if self._is_done("manifest"):
             return
         out, nm = deliver.out_dir(self.data), self._names()
