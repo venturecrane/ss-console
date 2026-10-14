@@ -64,7 +64,7 @@ def composer_dispositions(run_dir: Path, unit_files: list[dict[str, Any]]) -> di
     The billing-dates account is read wherever it appears in the line, not only
     at its start. The composer writes it BOTH alone (`billing-dates: 29`) and
     combined with the entry count (`entries: 0, billing-dates: 332`), and a
-    prefix test saw only the first form. Live 2026-09-23 on A&P 201666: two
+    prefix test saw only the first form. Live 2026-09-23 on an A&P matter: two
     ledgers carrying 348 dates of service between them -- a records-vendor
     upload and a scanner batch -- were each written as `entries: 0,
     billing-dates: N`, matched no billing name pattern, and held a finished
