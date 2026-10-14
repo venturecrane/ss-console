@@ -12,6 +12,7 @@ from typing import Any
 
 from .establishment_constants import (
     OPS_OUTCOMES,
+    OPS_REQUEST_CLOSED_BY_SMD_ACTION_TYPE,
     OPS_REQUEST_KIND,
     OPS_REQUEST_RECORDED_ACTION_TYPE,
     OPS_REQUEST_RESOLVED_ACTION_TYPE,
@@ -31,7 +32,8 @@ from .establishment_validation import (
 
 
 class OpsRequests(ProposalLifecycle):
-    """ops_propose / ops_resolve / ops_ask_sent (ss-console#2546, the operations half)."""
+    """ops_propose / ops_resolve / ops_ask_sent (ss-console#2546, the operations half),
+    and root's ops_close_by_smd (2026-10-13)."""
 
     # ------------------------------------------------------------------
     # ops_propose / ops_resolve / ops_ask_sent  (ss-console#2546)
@@ -225,6 +227,145 @@ class OpsRequests(ProposalLifecycle):
             )
         if row["lapsed_at"] is not None or row["expires_at"] < time.time():
             raise EstablishmentValidationError(f"operations request {proposal_id} lapsed unanswered; ask for it again")
+
+    def ops_close_by_smd(self, request: dict[str, Any]) -> dict[str, Any]:
+        """End one operations request with NO letter, on root's word, exactly once.
+
+        WHY (2026-10-13). SMD finished a requested change by hand and the
+        Operator had already answered the requester in her own thread. Every
+        agent-side ending then writes to her again: ``done`` and ``declined``
+        are reported by the seat's sweeper, an unanswered request lapses after
+        seven days into a "lapsed unanswered" letter, and the one silent
+        outcome, ``withdrawn``, means the seat could not get the request out of
+        the building -- false here. This is the fourth ending: closed, already
+        answered, nobody owed a note.
+
+        ROOT ONLY (``verbs.py``), because the claim it makes -- "the requester
+        has their answer" -- is SMD's to make and is evidenced by
+        ``source_ref`` (a ``vfy_`` id, an audit row token), never by the
+        Operator. Neither the agent uid nor the gateway can reach it.
+
+        ``dry_run: true`` validates everything, names any refusal, and returns
+        what WOULD change, writing nothing (no row update, no ledger row).
+
+        THE LEDGER ROW carries ids only: the proposal, who closed it, the
+        evidence ref, who asked, the text digest, and WHETHER a reason was
+        given. Never the reason, never the request.
+        """
+        pending = self._require_pending()
+        proposal_id = _require_proposal_id(request.get("proposal_id"))
+        closed_by = require_address(request.get("closed_by"), "closed_by")
+        source_ref = _require_text(request.get("source_ref"), "source_ref", _MAX_SHORT_TEXT)
+        reason = normalize_outcome_reason(request.get("reason"))
+        if reason is None:
+            raise EstablishmentValidationError(
+                "reason is required: say why this request is closed without a letter to the requester"
+            )
+        dry_run = request.get("dry_run", False)
+        if not isinstance(dry_run, bool):
+            raise EstablishmentValidationError("dry_run must be a boolean")
+
+        row = pending.get(proposal_id)
+        if row is None:
+            raise EstablishmentValidationError(
+                f"no operations request was recorded under {proposal_id}; nothing to close"
+            )
+        self._refuse_unclosable(row, proposal_id)
+        before = proposal_state(row)
+        if dry_run:
+            return {
+                "ok": True,
+                "dry_run": True,
+                "proposal_id": proposal_id,
+                "state": before,
+                "would_become": "closed_by_smd",
+                "instructed_by": row["instructed_by"],
+                "text": row["text"],
+                "expires_at": row["expires_at"],
+                "lapsed_at": row["lapsed_at"],
+                "closed_by": closed_by,
+                "source_ref": source_ref,
+                "reason": reason,
+            }
+        if not pending.close_ops_by_smd(proposal_id, closed_by, reason):
+            # Lost the race: another answer, a notify claim, or another close
+            # landed between the read above and the UPDATE. Re-read and name it.
+            self._refuse_unclosable(pending.get(proposal_id) or row, proposal_id)
+            raise EstablishmentValidationError(
+                f"operations request {proposal_id} changed while closing; nothing was changed"
+            )
+
+        self.ledger.append(
+            {
+                "action_type": OPS_REQUEST_CLOSED_BY_SMD_ACTION_TYPE,
+                "actor": "smd",
+                "actor_role": "captain",
+                "metadata": json.dumps(
+                    {
+                        "proposal_id": proposal_id,
+                        "closed_by": closed_by,
+                        "source_ref": source_ref,
+                        "instructed_by": row["instructed_by"],
+                        "text_sha256": row["text_sha256"],
+                        # Open, or already swept to lapsed, when it was closed:
+                        # a state word, not prose.
+                        "state_before": before,
+                        # WHETHER a reason was given (always, here), never it.
+                        "has_reason": True,
+                    },
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+            }
+        )
+        return {
+            "ok": True,
+            "dry_run": False,
+            "proposal_id": proposal_id,
+            "state": proposal_state(pending.get(proposal_id) or row),
+            "state_before": before,
+            "instructed_by": row["instructed_by"],
+            "closed_by": closed_by,
+            "source_ref": source_ref,
+        }
+
+    @staticmethod
+    def _refuse_unclosable(row: dict[str, Any], proposal_id: str) -> None:
+        """Name why a quiet close cannot land, before the UPDATE tries it.
+
+        ``_refuse_unresolvable``'s semantics, with one deliberate difference: an
+        EXPIRED row, including one the sweep has already marked lapsed, is
+        closable while no letter about it has been claimed or sent, because
+        beating that letter is what this verb is for.
+        """
+        if row["kind"] != OPS_REQUEST_KIND:
+            raise EstablishmentValidationError(
+                f"{proposal_id} is not an operations request; a rule is answered by "
+                "an administrator of the firm, not by SMD"
+            )
+        if row.get("smd_closed_at") is not None:
+            raise EstablishmentValidationError(
+                f"operations request {proposal_id} was already closed by SMD; nothing was changed"
+            )
+        if row["consumed_at"] is not None:
+            raise EstablishmentValidationError(
+                f"operations request {proposal_id} was already answered; SMD made that change"
+            )
+        if row["declined_at"] is not None:
+            raise EstablishmentValidationError(
+                f"operations request {proposal_id} was already declined; nothing was changed"
+            )
+        if row["lapse_notified_at"] is not None:
+            raise EstablishmentValidationError(
+                f"operations request {proposal_id} already ended and nobody is owed a note "
+                "(withdrawn, or its lapse letter was sent); nothing was changed"
+            )
+        if row.get("notify_claimed_at") is not None:
+            raise EstablishmentValidationError(
+                f"operations request {proposal_id} has an outcome letter claimed by "
+                f"{row.get('notify_claimed_by') or 'an observer'}; it may already be on its way, "
+                "so it cannot be closed quietly"
+            )
 
     def ops_ask_sent(self, request: dict[str, Any]) -> dict[str, Any]:
         """Record that SMD has been asked, once, to answer in words this parses.

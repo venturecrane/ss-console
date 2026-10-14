@@ -56,7 +56,9 @@ a delivered reply already claimed, and a record missing its folder, files or
 covered set. A refusal writes nothing.
 
 **After:** confirm the reply in the requester's thread (Sent Items) and record a
-`crane_verify` for it.
+`crane_verify` for it. Then close the request's ops card with that `vfy_` id
+([ops-close-by-smd](ops-close-by-smd.md)); left open, it lapses after seven days
+into a "lapsed unanswered" letter to the requester.
 
 Code: `operator/runners/medchron/medchron/deliver_by_smd.py` (tests:
 `operator/runners/medchron/tests/test_deliver_by_smd.py`). The reply binds when

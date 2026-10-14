@@ -168,6 +168,7 @@ export const AUDIT_ACTION_TYPES = [
   'OPS_REQUEST_RECORDED',
   'OPS_REQUEST_RESOLVED',
   'OPS_REQUEST_LAPSED',
+  'OPS_REQUEST_CLOSED_BY_SMD',
   // ADR 0089: staff send-as, written by the workspace broker.
   'SEND_AS_PROPOSED',
   'SEND_AS_REVISED',

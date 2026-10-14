@@ -27,7 +27,7 @@ A rostered sender can ask the agent to add people ("add these agents, here are t
 1. In one PR, change **only** `scope.inbound_allow_from` in `operator/customers/<slug>/customer.yaml`. Any other non-live key in the same diff (`record_stores`, `outbound_roster`, `ops_reply_from`) holds the whole change back.
 2. Merge it, and wait for CI to publish `vaults/<slug>/customer.yaml` to R2.
 3. Restart the Machine (`fly machine restart <id> -a hermes-<slug>`). The agent sees the new sender within seconds of the publish, but the workspace broker replies from a boot-time copy, so a new sender gets no reply until the restart.
-4. Reply "done" to the `[ops <tag>]` email. The seat tells the sender. A request nobody answers lapses after seven days and the sender is told.
+4. Reply "done" to the `[ops <tag>]` email. The seat tells the sender. A request nobody answers lapses after seven days and the sender is told. If the sender was already answered some other way, close the card instead so no second letter goes ([ops-close-by-smd](../operator/ops-close-by-smd.md)).
 
 On the open-house seat, a new agent needs only `inbound_allow_from`: `owner_field: agent` makes them the owner of their own records. `readers` is for the broker.
 
