@@ -144,7 +144,7 @@ def _exhibit(
     sr: StageRun,
     r: dict[str, Any],
     n: int,
-    seen: set[str],
+    seen: S.Delivered,
     cdir: Path,
     earlier: S.Earlier,
     firm: str | None = None,

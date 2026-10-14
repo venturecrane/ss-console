@@ -31,10 +31,13 @@ def test_a_page_repeating_an_earlier_new_page_is_skipped_unless_it_adds_a_clinic
     from medchron.update import select as S
 
     earlier = S.Earlier()
-    first = S.classify_new({1: FAX_A + "\n" + RECORD}, 1, set(), earlier)
+    first = S.classify_new({1: FAX_A + "\n" + RECORD}, 1, S.Delivered(), earlier)
     assert first[1][0] == S.READ
     again = S.classify_new(
-        {1: FAX_B + "\n" + RECORD, 2: FAX_B + "\n" + RECORD + " Hemoglobin 11.2 g/dL was drawn."}, 2, set(), earlier
+        {1: FAX_B + "\n" + RECORD, 2: FAX_B + "\n" + RECORD + " Hemoglobin 11.2 g/dL was drawn."},
+        2,
+        S.Delivered(),
+        earlier,
     )
     assert again[1] == (S.EXCLUDED, S.OVERLAP)
     assert again[2][0] == S.READ  # a new lab value is read even on a repeated page

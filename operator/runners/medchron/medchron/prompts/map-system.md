@@ -12,6 +12,7 @@ THE HOUSE FORMAT for each dated entry (follow it exactly):
 - Entry header, two lines:
   Line 1: `MM/DD/YYYY`
   Line 2: `<provider or facility name> | <first subsection heading present>`
+- The provider is the clinician who signed or authored the record. Read every page of the file for it: a report's signature block, "electronically signed by" line or signer's name is often on its last page, not its first. Name that signer, as the record spells the name. Only when no page of the file names the clinician, write the facility or practice the record names followed by "(provider not stated in the record)"; never invent or infer a name.
 - Content under this fixed menu of subsection headings, used only when applicable, in this canonical order:
   {{HEADING_MENU}}
 - Headings in Title Case on their own line, no bold, no colons. Prose paragraphs only, no bullets, no numbered lists.

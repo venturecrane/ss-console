@@ -150,7 +150,7 @@ def test_a_life_care_plan_is_reviewed_and_not_itemized(tmp_path: Path) -> None:
         (tmp_path / "text" / f"{rid}.txt").write_text(f"[p.1]\n{text}\n[p.2]\n{PROSE}\n")
         r = {"id": rid, "path": str(pdf), "ext": ".pdf", "name": name.rsplit(".", 1)[0], "sha256": rid}
         firm = name if name.startswith("Exhibit") else None
-        rec, unit_row = US._exhibit(sr, r, 7, set(), tmp_path / "c", S.Earlier(), firm)  # type: ignore[arg-type]
+        rec, unit_row = US._exhibit(sr, r, 7, S.Delivered(), tmp_path / "c", S.Earlier(), firm)  # type: ignore[arg-type]
         assert rec["read"] == [] and unit_row["compose"] is False, rid  # the old code composed both pages
         assert rec.get("not_itemized")
         assert "reviewed and not itemized" in UF.uncited_name(rec)
@@ -165,7 +165,7 @@ def test_a_treatment_record_is_still_itemized(tmp_path: Path) -> None:
     pdf.write_bytes(make_pdf([PROSE]))
     (tmp_path / "text" / "t.txt").write_text(f"[p.1]\n{PROSE}\n")
     r = {"id": "t", "path": str(pdf), "ext": ".pdf", "name": "Example Rehab visit notes", "sha256": "t"}
-    rec, unit_row = US._exhibit(sr, r, 7, set(), tmp_path / "c", S.Earlier())  # type: ignore[arg-type]
+    rec, unit_row = US._exhibit(sr, r, 7, S.Delivered(), tmp_path / "c", S.Earlier())  # type: ignore[arg-type]
     assert rec["read"] == [1] and unit_row["compose"] and not rec.get("not_itemized")
 
 
@@ -218,7 +218,7 @@ def test_billing_pages_in_a_medical_and_billing_file_are_not_composed_but_stay_e
     pdf.write_bytes(make_pdf(pages))
     (tmp_path / "text" / "mb.txt").write_text("".join(f"[p.{i}]\n{t}\n" for i, t in enumerate(pages, 1)))
     r = {"id": "mb", "path": str(pdf), "ext": ".pdf", "name": "Example Spine Works Medical and Billing Records"}
-    rec, unit_row = US._exhibit(sr, {**r, "sha256": "mb"}, 2, set(), tmp_path / "c", S.Earlier())  # type: ignore[arg-type]
+    rec, unit_row = US._exhibit(sr, {**r, "sha256": "mb"}, 2, S.Delivered(), tmp_path / "c", S.Earlier())  # type: ignore[arg-type]
     assert rec["read"] == [1, 2]  # the old code composed the claim form and the ledger as visits
     assert rec["excluded"] == {"billing page": 2}
     composed = Path(unit_row["text_path"]).read_text()

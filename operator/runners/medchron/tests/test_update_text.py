@@ -22,7 +22,7 @@ NEW_PAGE = (
 
 # ---- select: what the delivery already read is read off its exhibits --------
 def test_a_page_already_in_a_delivered_exhibit_is_not_read_again() -> None:
-    seen = S.shingles(DELIVERED_PAGE)
+    seen = S.Delivered.of([DELIVERED_PAGE])
     refiled = "Fax 2026-02-03 page 1 of 9\n" + DELIVERED_PAGE  # re-filed copy: a stamp, the same words
     pages = {1: refiled, 2: NEW_PAGE, 3: "", 4: "[page transcription failed]"}
     got = S.classify_new(pages, 4, seen)

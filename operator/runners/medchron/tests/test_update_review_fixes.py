@@ -25,19 +25,19 @@ def test_template_visits_that_differ_only_in_date_are_both_read() -> None:
     from medchron.update import select as S
 
     within = S.classify_new(
-        {1: PT_NOTE.format(d="06/03/2026"), 2: PT_NOTE.format(d="06/04/2026")}, 2, set(), S.Earlier()
+        {1: PT_NOTE.format(d="06/03/2026"), 2: PT_NOTE.format(d="06/04/2026")}, 2, S.Delivered(), S.Earlier()
     )
     assert [v[0] for v in within.values()] == [S.READ, S.READ]
     earlier = S.Earlier()
-    S.classify_new({1: PT_NOTE.format(d="06/03/2026")}, 1, set(), earlier)
-    other_day = S.classify_new({1: PT_NOTE.format(d="06/04/2026")}, 1, set(), earlier)
+    S.classify_new({1: PT_NOTE.format(d="06/03/2026")}, 1, S.Delivered(), earlier)
+    other_day = S.classify_new({1: PT_NOTE.format(d="06/04/2026")}, 1, S.Delivered(), earlier)
     assert other_day[1][0] == S.READ  # another visit on the same template
     worded = S.classify_new(
-        {1: PT_NOTE.format(d="06/03/2026").replace("tolerated", "did not tolerate")}, 1, set(), earlier
+        {1: PT_NOTE.format(d="06/03/2026").replace("tolerated", "did not tolerate")}, 1, S.Delivered(), earlier
     )
     assert worded[1][0] == S.READ  # a qualitative word differs
     refiled = S.classify_new(
-        {1: "FAX 555-0101 07/01/2026 PAGE 2 OF 9\n" + PT_NOTE.format(d="06/03/2026")}, 1, set(), earlier
+        {1: "FAX 555-0101 07/01/2026 PAGE 2 OF 9\n" + PT_NOTE.format(d="06/03/2026")}, 1, S.Delivered(), earlier
     )
     assert refiled[1] == (S.EXCLUDED, S.OVERLAP)  # the same page refiled under another fax header
 
