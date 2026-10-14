@@ -174,7 +174,15 @@ def already_pages(sr: StageRun) -> RP.Already:
 
 def _audit_verify(sr: StageRun) -> Verify:
     """One audit round over the edited document: the new claims (keys the
-    document before did not have) whose verdict is not SUPPORTED."""
+    document before did not have) whose verdict is not SUPPORTED.
+
+    The finisher's sentences are graded on the page IMAGE by the review tier,
+    the model that read the page for the finding (``Round`` is the audit's own
+    grader, controls included). On a real update the audit tier rejected about
+    36 corrections a round, every one on a handwritten ledger page the review
+    had read correctly (its notes: marks "not clearly circled", the page
+    unreadable): the same edit was judged by a weaker reading than the one
+    that found it. Every edit is still audited; only the grader changes."""
 
     def verify(before: str, after: str) -> list[dict[str, Any]]:
         paths = AuditPaths(sr.slug_dir, sr.unit.unit)
@@ -184,8 +192,7 @@ def _audit_verify(sr: StageRun) -> Verify:
         if not new:
             return []
         paths.doc.write_text(after, encoding="utf-8")
-        mode = str(sr.cfg.get("levers", "audit_mode", "image"))
-        Round(sr.doorway, llm.model_for(sr.cfg, "audit"), paths, sr.log, mode=mode).execute()
+        Round(sr.doorway, _model(sr.cfg), paths, sr.log, mode="image").execute()
         got = CL.latest_real(CL.read_rows(paths.results), {c["key"] for c in new})
         return [c for c in new if (got.get(c["key"]) or {}).get("verdict") != "SUPPORTED"]
 
@@ -531,12 +538,16 @@ def _end(ud: Path) -> None:
     (ud / CHECKPOINT).unlink(missing_ok=True)
 
 
-def _limit(rnd: int, must: int, last_must: int | None, last_settled: int) -> str:
-    """Why this round is the last review (its findings are not finished), or ""."""
-    falling = last_must is not None and must < last_must
-    if last_must is not None and not falling:
-        return f"no progress: {must} must-fix, no fewer than the last review"
-    if rnd >= MAX_ROUNDS or (rnd >= ROUNDS and not (falling and last_settled > 0)):
+def _stop(rnd: int, left: int, last_left: int | None, settled: int) -> str:
+    """Why the loop ends after this round's finish, or "". `left` is the
+    must-fix the finisher did not settle this round. A review that finds new
+    must-fix after edits is not a stall: progress is the finisher settling
+    one, or fewer left than after the last round (2026-10-14: the loop stopped
+    on a review count before the finisher had acted, 59 open)."""
+    falling = last_left is not None and left < last_left
+    if settled == 0 and not falling:
+        return f"no progress: the finisher settled nothing and {left} must-fix remain, no fewer than the last round"
+    if rnd >= MAX_ROUNDS or (rnd >= ROUNDS and not (falling and settled > 0)):
         return f"the review limit was reached at round {rnd}"
     return ""
 
@@ -544,8 +555,7 @@ def _limit(rnd: int, must: int, last_must: int | None, last_settled: int) -> str
 def _loop(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: Path, at: At | None = None) -> int:
     targets: set[int] | None = at.targets if at else None
     found: list[RR.Finding] = []
-    last_must: int | None = at.last_must if at else None
-    last_settled = at.last_settled if at else 0
+    last_left: int | None = at.last_must if at else None
     for rnd in range((at.done if at else 0) + 1, MAX_ROUNDS + 1):
         c.rnd, c.calls, c.usage = rnd, 0, []
         try:
@@ -556,15 +566,16 @@ def _loop(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: 
         must = _must(found)
         row: dict[str, Any] = {"round": rnd, "entries": n, "must": len(must)}
         rec["rounds"].append(row)
-        stop = _limit(rnd, len(must), last_must, last_settled) if must else ""
         settled, rc = 0, 0
-        if (must and not stop) or (not must and found):
+        if found:  # the finisher always acts on the latest review
             md, edited, settled, rc = finish(c, md, found, base, doc)
             targets = _targets(md, c.sr, edited, found)
-        row.update(calls=c.calls, usage=c.usage, findings=[f.as_dict() for f in found])
+        left = sum(f.outcome != "applied" for f in must)
+        row.update(calls=c.calls, usage=c.usage, left=left, findings=[f.as_dict() for f in found])
         c.sr.log(
             f"update review round {rnd}: {n} entr(ies) reviewed, {len(must)} must-fix, "
-            f"{len(found) - len(must)} other; {settled} settled by the finisher; {c.calls} call(s), {_dollars(c.usage)}"
+            f"{len(found) - len(must)} other; {settled} settled by the finisher, {left} must-fix left; "
+            f"{c.calls} call(s), {_dollars(c.usage)}"
         )
         if rc != 0:
             _save(ud / RECORD, rec, "audit_failed", doc)
@@ -572,20 +583,21 @@ def _loop(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: 
         if not must:
             _save(ud / RECORD, rec, "clean", doc)
             return 0
-        if stop or settled == 0:
-            why = stop or "no progress: the finisher settled nothing this round"
+        why = _stop(rnd, left, last_left, sum(f.outcome == "applied" for f in must))
+        if why:
             c.sr.log(f"update review: {why}")
-            for f in found:
-                f.outcome = f.outcome or f"not finished: {why}"
-            row["findings"] = [f.as_dict() for f in found]
             break
-        last_must, last_settled = len(must), settled
-        _checkpoint(ud, At(rnd, md, rec, targets, last_must, last_settled))
+        last_left = left
+        _checkpoint(ud, At(rnd, md, rec, targets, last_left, settled))
     return _hold(c, rec, found, doc, ud)
 
 
 def _hold(c: Ctx, rec: dict[str, Any], found: list[RR.Finding], doc: Path, ud: Path) -> int:
-    open_ = [f for f in _must(found) if f.outcome != "applied"] or _must(found)
+    open_ = [f for f in _must(found) if f.outcome != "applied"]
+    if not open_:  # every one settled, yet the loop ended before a review confirmed it
+        open_ = _must(found)
+        for f in open_:
+            f.outcome = "settled by the finisher, but the loop ended before a review read the edit"
     _save(ud / RECORD, rec, "held", doc, open_)
     for f in open_:
         c.sr.log(f"  OPEN [{f.klass}] {_plain(f)}" + (f"; not settled: {f.outcome}" if f.outcome else ""))
