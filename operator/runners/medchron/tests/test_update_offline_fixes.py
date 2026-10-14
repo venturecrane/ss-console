@@ -228,3 +228,68 @@ def test_a_drop_removes_every_copy_with_its_punctuation(job_dir: Path, firm_conf
     assert sentence not in doc
     assert not [ln for ln in doc.splitlines() if ln.strip() == "."]
     assert not any("MISMATCH" in ln for ln in log), log
+
+
+# ---- at the round cap, only the clause the audit named leaves ---------------------------
+S1 = "Hemoglobin 11.2 g/dL was drawn on 02/03/2026 at the visit."
+S2 = "The hepatitis serology was reported positive at 14:10 that day."
+S3 = "Follow up was set for 03/10/2026 with the same clinic."
+_HEAD = "02/03/2026\nExample Clinic | Diagnostic Studies\n\nDiagnostic Studies\n"
+
+
+def _cap_run(job_dir: Path, firm_config_path: Path, data_root: Path, claim: str):
+    from medchron.audit import claims as CL
+    from medchron.stages import audit_loop
+    from test_audit import PROSE, SUPPORTED, UNSUPPORTED, Scripted, _claim_of, _exhibit_set, _is_control, _sr
+    from test_audit import _write_doc, text_msg, tool_msg
+
+    partial = {
+        "verdict": "PARTIAL",
+        "unsupported_assertions": [],
+        "contradictions": ["the hepatitis serology was reported positive"],
+        "note": "the page reads negative",
+    }
+
+    def reply(p, n):
+        if p.get("system") and "correct one sentence-group" in p["system"][0]["text"]:
+            return text_msg(claim + " (Exhibit 1 - p. 2)")  # the repair tier cannot settle it
+        if _is_control(p):
+            return tool_msg(UNSUPPORTED)
+        return tool_msg(partial if "serology" in _claim_of(p) else SUPPORTED)
+
+    log: list[str] = []
+    sr = _sr(job_dir, firm_config_path, data_root, Scripted(reply), log=log)
+    _exhibit_set(sr, [PROSE, PROSE])
+    rd = sr.slug_dir / "runs" / "alpha"
+    entries = _HEAD + claim + " (Exhibit 1 - p. 2)"
+    _write_doc(sr, entries)
+    (rd / "entries_scoped_final.md").write_text(entries)
+    rc = audit_loop.run(sr)
+    rows = CL.read_rows(sr.slug_dir / "out" / "alpha" / "audit-results.jsonl")
+    return rc, (rd / "final-chronology.md").read_text(), log, rows
+
+
+def test_at_the_round_cap_only_the_named_clause_leaves_and_the_values_beside_it_stay(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    from medchron.update import proofs as P
+    from medchron.update.values import numbers
+
+    rc, doc, log, rows = _cap_run(job_dir, firm_config_path, data_root, f"{S1} {S2} {S3}")
+    assert rc == 0, log
+    assert S1 in doc and S3 in doc and "serology" not in doc
+    assert not any("MISMATCH" in ln for ln in log)
+    named: set[str] = set()
+    for row in rows:
+        named |= numbers(" ".join((row.get("unsupported_assertions") or []) + (row.get("contradictions") or [])))
+    _, ents = B.split_body(doc.split("## Medical Chronology", 1)[1].split("## Exhibit List", 1)[0])
+    composed = [_HEAD + f"{S1} {S2} {S3} (Exhibit 1 - p. 2)"]
+    assert P.dropped_values(composed, ents, {1}, named) == []  # proof 10: the removed clause's value was named
+
+
+def test_at_the_round_cap_a_claim_with_nothing_supported_left_still_drops_whole(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    rc, doc, log, _ = _cap_run(job_dir, firm_config_path, data_root, S2)
+    assert "serology" not in doc and not [ln for ln in doc.splitlines() if ln.strip() == "."]
+    assert not any("MISMATCH" in ln for ln in log)

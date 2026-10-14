@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from .. import llm
@@ -211,6 +211,59 @@ def _residual_drop_row(r: dict[str, Any], c: dict[str, Any], contested: bool) ->
     }
 
 
+_SENTENCE = re.compile(r"(?<=[.!?;])\s+(?=[A-Z0-9(])")
+TRIM = "trim"
+
+
+def _carries(sentence: str, problem: str) -> bool:
+    """True when `sentence` states the assertion the audit named: its text,
+    or most of its distinctive words (four letters or more)."""
+    s, p = " ".join(sentence.lower().split()), " ".join(problem.lower().split()).strip(" .\"'")
+    if p and p in s:
+        return True
+    want = set(re.findall(r"[a-z]{4,}", p))
+    return len(want) >= 2 and len(want & set(re.findall(r"[a-z]{4,}", s))) >= 0.6 * len(want)
+
+
+def trim(claim: str, problems: list[str]) -> tuple[str, list[str]] | None:
+    """(the claim without the sentences carrying a named problem, the removed
+    sentences), or None when no sentence carries one or nothing that could
+    be a claim remains. At the round cap a long entry once lost a valid date
+    with the one contradicted clause beside it (2026-10-14)."""
+    parts = [p for p in _SENTENCE.split(claim.strip()) if p.strip()]
+    gone = [p for p in parts if any(_carries(p, q) for q in problems)]
+    rest = claim
+    for g in gone:
+        rest = rest.replace(g, "", 1)
+    rest = re.sub(r"[ \t]{2,}", " ", re.sub(r"[ \t]+\n", "\n", rest)).strip()
+    if not gone or len(rest) < 30:
+        return None
+    return rest, gone
+
+
+def _trim_residual(x: _Ctx, r: dict[str, Any], c: dict[str, Any], anchor: str) -> bool:
+    """At the round cap, before a whole drop: remove only what the audit named
+    and leave the rest to the post-drop audit, once (a claim already trimmed,
+    or the final pass, drops whole). The removed sentences are written to the
+    results ledger as named by the audit, so proof 10 accepts their values."""
+    if x.final or r["key"] in x.trimmed:
+        return False
+    cut = trim(c["claim"], problems_of(r))
+    if cut is None:
+        return False
+    rest, gone = cut
+    x.apply(anchor, rest + anchor[len(c["claim"]) :])
+    new_key = CL.claim_key(c["exhibit"], c["page_spec"] or None, rest)
+    CL.append_row(x.paths.results, {"key": r["key"], "kind": TRIM, "unsupported_assertions": gone, "ts": _ts()})
+    x.logrow(key=r["key"], new_key=new_key, action="drop-residual", result="TRIM", old=c["claim"][:300], removed=gone)
+    return True
+
+
+def _trimmed_keys(rows: list[dict[str, Any]]) -> set[str]:
+    """Keys a round-cap trim made: their next failure drops whole."""
+    return {str(r.get("new_key")) for r in rows if r.get("result") == "TRIM"}
+
+
 def _unchanged(new: str, anchor: str, claim: str) -> bool:
     """The repair returned the claim as written (with or without its citation)."""
     flat = " ".join(new.split())
@@ -242,6 +295,8 @@ class _Ctx:
     stale: set[str]
     contested: set[str]
     pause: float
+    final: bool = False
+    trimmed: set[str] = field(default_factory=set)
 
 
 def _mark_reaudit(paths: AuditPaths, key: str) -> None:
@@ -256,7 +311,7 @@ def _mark_reaudit(paths: AuditPaths, key: str) -> None:
 
 def _settle_failing(failing: list[dict[str, Any]], x: _Ctx) -> dict[str, int]:
     """Repair, or (past the cap) drop, every claim not finally SUPPORTED."""
-    n: dict[str, int] = {k: 0 for k in ("repaired", "dropped", "rejected", "skipped", "noop")}
+    n: dict[str, int] = {k: 0 for k in ("repaired", "dropped", "rejected", "skipped", "noop", "trimmed")}
     for i, r in enumerate(failing, 1):
         c = x.live[r["key"]]
         anchor = x.locate(c)
@@ -267,6 +322,9 @@ def _settle_failing(failing: list[dict[str, Any]], x: _Ctx) -> dict[str, int]:
         if x.drop_residual and r["key"] in x.stale:
             x.logrow(key=r["key"], action="drop-residual", result="DEFER: re-audit pending")
             n["skipped"] += 1
+            continue
+        if x.drop_residual and _trim_residual(x, r, c, anchor):
+            n["trimmed"] += 1
             continue
         if x.drop_residual:
             x.apply(anchor, "")
@@ -365,7 +423,7 @@ def run(
         f"{'DROP' if drop_residual else 'repair'} {len(failing)}"
     )
     edits_log = paths.out / "repair-edits.jsonl"
-    contested = _noop_keys(CL.read_rows(edits_log))
+    contested = _noop_keys(edit_rows := CL.read_rows(edits_log))
     fixed = skipped = 0
 
     def logrow(**kw: Any) -> None:
@@ -400,10 +458,9 @@ def run(
         logrow(key=r["key"], action="cite-fix", old=c["cite"], new=new_cite)
         fixed += 1
 
-    n = _settle_failing(
-        failing,
-        _Ctx(doorway, model, paths, live, locate, apply, logrow, log, drop_residual, stale, contested, pause),
-    )
+    x = _Ctx(doorway, model, paths, live, locate, apply, logrow, log, drop_residual, stale, contested, pause)
+    x.final, x.trimmed = final, _trimmed_keys(edit_rows)
+    n = _settle_failing(failing, x)
     dropped, skipped = n["dropped"], skipped + n["skipped"]
 
     body = re.sub(r"\n{3,}", "\n\n", body)
@@ -413,7 +470,7 @@ def run(
     n_new = len(CL.extract_claims(body, pdfs))
     ok = n_new == n_orig - removed[0]
     log(
-        f"APPLIED: cite-fix {fixed}, repaired {n['repaired']}, unchanged->re-audit {n['noop']}, "
+        f"APPLIED: cite-fix {fixed}, repaired {n['repaired']}, trimmed {n['trimmed']}, unchanged->re-audit {n['noop']}, "
         f"dropped {dropped}, rejected {n['rejected']}, skipped {skipped}"
     )
     log(
