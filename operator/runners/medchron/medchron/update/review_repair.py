@@ -47,7 +47,6 @@ from .values import lost, numbers
 
 MUST, SHOULD = "MUST", "SHOULD"
 ACTIONS = ("replace", "drop", "redate", "drop_entry", "add", "none")
-MIN_CLAIM_CHARS = 30  # shorter claims are never audited (``claims._walk``)
 _MDY = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
 _ANCHOR = re.compile(r"^([ND])(\d+)(?:\.[cu](\d+))?$")
 #: (exhibit, page) -> the page's text, or None when there is none to read.
@@ -229,7 +228,7 @@ def grounded_text(f: Finding, keep: set[int]) -> str:
         return f"the corrected text does not cite the page the finding names (Exhibit {f.exhibit} p. {f.page})"
     if n not in keep:
         return f"Exhibit {n} is not an added exhibit"
-    if "\n\n" in t.strip() or len(CL.NTD.sub("", t[: cites[0].start()]).strip()) < MIN_CLAIM_CHARS:
+    if "\n\n" in t.strip() or not CL.graded(t[: cites[0].start()]):
         return "the corrected text is not one auditable paragraph"
     if icd.CLAIM.match(t.strip()):
         return "a diagnosis claim is never rewritten by the review"
