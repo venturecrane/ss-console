@@ -37,7 +37,7 @@ import re
 from collections import Counter, defaultdict
 from typing import Any, Callable
 
-from . import body as B, icd, providers as P
+from . import body as B, entry_edits as EE, icd, providers as P
 
 TIMELINE_HEAD = "| Medical Provider | Treatment Period | Visits | Reference |"
 
@@ -253,6 +253,9 @@ def _notes(text: str) -> list[str]:
 
 def _check_carried(md: str, base_ents: list[str], want_notes: list[str]) -> list[str]:
     _, out_ents = B.entries_of(md)
+    # A delivered entry with a fold block under it (``entry_edits``) carries the
+    # delivered text verbatim above the block.
+    out_ents = [EE.without_fold(e) for e in out_ents]
     oc = Counter(out_ents)
     lost = [e[:60] for e, n in Counter(base_ents).items() if oc[e] < n]
     if lost:
@@ -391,7 +394,7 @@ def assemble(
     bad = sorted({n for e in new_ents for n in B.cited(e)} - known)
     if bad:
         raise ValueError(f"REFUSED: new entries cite exhibit(s) {bad} that are neither delivered nor new")
-    entries = B.merge_entries(base_ents, new_ents)
+    entries = B.merge_entries(*EE.fold_into_delivered(base_ents, new_ents))  # a fold goes under its delivered visit
     table, changed, illegible = icd.rows(B.table_rows(b["## Diagnostic Highlights"]), icd_claims, new_ents, describe)
     pre, added, notes_kept, notes_itemized = _preamble(pre, addition, new_ents)
     body = (pre.rstrip("\n") + "\n\n" if pre.strip() else "\n") + "\n\n".join(entries) + "\n\n"

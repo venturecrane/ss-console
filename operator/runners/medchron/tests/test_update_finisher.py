@@ -68,6 +68,7 @@ def _run(
     *,
     pages: dict[tuple[int, int], str] | None = None,
     unsupported: list[str] | None = None,
+    grader: Any = None,
 ) -> tuple[int, SimpleNamespace, str]:
     sd = tmp_path / "matter"
     ud = sd / "runs" / "alpha" / "update"
@@ -105,7 +106,7 @@ def _run(
         sr,  # type: ignore[arg-type]
         images=lambda ex, p: {"type": "image", "page": f"{ex}:{p}"} if p <= sizes.get(ex, 0) else None,
         evidence=lambda ex, p: (pages or {}).get((ex, p)),
-        verify=verify,
+        verify=grader or verify,
         npages=lambda ex: sizes.get(ex, 0),
     )
     return rc, sr, doc.read_text()
@@ -483,28 +484,28 @@ def test_a_converging_loop_goes_past_four_reviews_and_finishes_clean(
     assert UR.ROUNDS == 4 and UR.MAX_ROUNDS == 6
 
 
-def test_a_finisher_edit_is_graded_on_the_page_image_by_the_review_tier(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """F5. About 36 corrections a round were reverted on a real update, every
-    one on a handwritten ledger page the review (the review tier, reading the
-    image) had read correctly, because the audit tier graded them. The edit is
-    still audited, by the audit's own Round, now with the review tier and on
-    the image."""
+def _grade(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tiers: dict, verdict: str) -> tuple[dict, Any]:
+    """The verification round over one edited sentence, with a fake Round
+    that records its grader and writes `verdict` for every claim."""
+    from medchron.audit import claims as CL
+
     seen: dict[str, Any] = {}
 
     class _Round:
-        def __init__(self, _door: Any, model: str, _paths: Any, _log: Any, mode: str = "image") -> None:
+        def __init__(self, _door: Any, model: str, paths: Any, _log: Any, mode: str = "image") -> None:
             seen.update(model=model, mode=mode)
+            self.paths = paths
 
         def execute(self) -> int:
+            body = CL.body_of(self.paths.doc.read_text())
+            for c in CL.extract_claims(body, {2}):
+                CL.append_row(self.paths.results, {**c, "kind": "real", "verdict": verdict, "note": "x"})
             return 0
 
     monkeypatch.setattr(UR, "Round", _Round)
     out = tmp_path / "matter" / "out" / "alpha"
     out.mkdir(parents=True)
     (out / "Exhibit 2 - Sample.pdf").write_bytes(b"%PDF")
-    tiers = {"review": "review-tier", "audit": "audit-tier", "judgment": "judgment-tier"}
     sr = SimpleNamespace(
         slug_dir=tmp_path / "matter",
         unit=SimpleNamespace(unit="alpha"),
@@ -513,11 +514,63 @@ def test_a_finisher_edit_is_graded_on_the_page_image_by_the_review_tier(
         log=lambda _m: None,
     )
     doc = "Alpha - Medical Chronology\n\n## Medical Chronology\n\n{}\n\n## Exhibit List\n"
-    before = doc.format(N1)
-    after = doc.format(N1.replace("4 mm", "5 mm"))
     (tmp_path / "matter" / "runs" / "alpha").mkdir(parents=True)
-    UR._audit_verify(sr)(before, after)  # type: ignore[arg-type]
-    assert seen == {"model": "review-tier", "mode": "image"}
+    try:
+        got: Any = UR._audit_verify(sr)(doc.format(N1), doc.format(N1.replace("4 mm", "5 mm")))  # type: ignore[arg-type]
+    except UR.GradeFailed as exc:
+        got = exc
+    return seen, got
+
+
+def test_the_finishers_sentences_are_graded_by_a_verdict_model_never_one_that_refuses_the_tool(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F6. F5 graded with the review tier, claude-opus-5-5, which answers the
+    audit's forced verdict tool with HTTP 400: all 46 edits of a real round
+    were reverted on ERROR verdicts. The grader is the firm's `verify` tier,
+    else the audit tier, on the image."""
+    base = {"audit": "audit-tier", "judgment": "claude-opus-5-5", "review": "claude-opus-5-5"}
+    seen, _ = _grade(tmp_path, monkeypatch, base, "SUPPORTED")
+    assert seen == {"model": "audit-tier", "mode": "image"}
+    seen, _ = _grade(tmp_path / "b", monkeypatch, {**base, "verify": "verify-tier"}, "SUPPORTED")
+    assert seen["model"] == "verify-tier"
+    from medchron import config as config_mod
+
+    data = {
+        **K.cfg().data,
+        "models": {**K.cfg().data["models"], "tiers": {**K.cfg().data["models"]["tiers"], "verify": "claude-opus-5-5"}},
+    }
+    errors = config_mod.validate(data)
+    assert any("models.tiers.verify" in e and "forced tool_choice" in e for e in errors)
+
+
+def test_a_grader_refusal_fails_the_stage_resumably_and_reverts_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The mass revert, by construction impossible: the grader refuses (an
+    HTTP 400 is an ERROR verdict, GradeFailed) and the stage fails resumably
+    with the document as the round found it; no finding is marked reverted
+    and nothing is held."""
+    good = "Lumbar MRI showed a disc protrusion of 5 mm at the fourth and fifth lumbar level. (Exhibit 2 - p. 1)"
+    found = _review(_finding("N1.c1", "1 wrong value", "size misread"))
+    fix = _edits({"finding": "F1", "anchor": "N1.c1", "action": "replace", "exhibit": 2, "page": 1, "corrected": good})
+
+    def refuse(_before: str, _after: str) -> list:
+        raise UR.GradeFailed("1 of the finisher's sentences got no verdict: Error code: 400")
+
+    sd = tmp_path / "matter"
+    rc, sr, md = _run(tmp_path, monkeypatch, [N1, LATER], [found], [fix], grader=refuse)
+    assert rc == 1
+    assert N1 in md and good not in md  # the round's document, untouched
+    assert not (sd / "runs" / "alpha" / "update" / "review_repair.json").exists()  # nothing held, nothing settled
+    assert any("got no verdict" in m and "a rerun grades again" in m for m in sr.logged)
+
+
+def test_a_grade_that_is_no_verdict_fails_the_stage_and_reverts_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seen, got = _grade(tmp_path, monkeypatch, {"audit": "audit-tier"}, "ERROR")
+    assert isinstance(got, UR.GradeFailed) and "got no verdict" in str(got)
 
 
 def test_past_four_reviews_a_loop_that_stops_converging_holds() -> None:
@@ -527,3 +580,116 @@ def test_past_four_reviews_a_loop_that_stops_converging_holds() -> None:
     assert UR._stop(4, 2, 3, 0) == "the review limit was reached at round 4"  # falling, but nothing settled
     assert UR._stop(4, 2, 3, 1) == ""  # falling and settling: go on
     assert UR._stop(6, 1, 2, 1) == "the review limit was reached at round 6"
+
+
+# F6: the two actions that change which entries the update has ---------------------
+PROCEDURE = "Right sacroiliac joint injection was performed under fluoroscopic guidance. (Exhibit 3 - p. 1)"
+
+
+def test_a_procedure_folded_into_an_office_visit_gets_its_own_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A separate facility's procedure, from its own exhibit, sat inside an
+    office visit's entry; the finisher declined with "No available action
+    creates an entry". Now `new_entry` builds the procedure's own entry from
+    its cited page (dated by that page's text) and the moved sentence is
+    dropped from the visit."""
+    visit = N1 + "\n\nAll Other Information\n" + PROCEDURE
+    proc = "08/13/2026\nSample Surgical Center | Medical Diagnoses\n\nMedical Diagnoses\n" + PROCEDURE
+    page = {(3, 1): "SAMPLE SURGICAL CENTER\nPROCEDURE REPORT\nDate of procedure: 08/13/2026"}
+    found = _review(_finding("N1.c2", "5 misattributed", "a separate procedure sits in the visit", exhibit=3))
+    fix = _edits(
+        {"finding": "F1", "anchor": "N1", "action": "new_entry", "exhibit": 3, "page": 1, "corrected": proc},
+        {
+            "finding": "F1",
+            "anchor": "N1.c2",
+            "action": "drop",
+            "exhibit": 3,
+            "page": 1,
+            "reason": "moved to its own entry",
+        },
+    )
+    rc, sr, md = _run(tmp_path, monkeypatch, [visit], [found, K.CLEAN_REVIEW], [fix], pages=page)
+    assert rc == 0, [f["outcome"] for f in _record(sr)["open"]]
+    assert B.entries_of(md)[1] == [proc, N1]  # its own entry, in date order; the visit is the visit again
+    assert sr.audited and proc.split("\n", 2)[2] in sr.audited[0]  # the new entry was audited
+
+
+def test_a_new_entry_the_page_does_not_date_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    visit = N1 + "\n\nAll Other Information\n" + PROCEDURE
+    proc = "08/14/2026\nSample Surgical Center | Medical Diagnoses\n\nMedical Diagnoses\n" + PROCEDURE
+    page = {(3, 1): "SAMPLE SURGICAL CENTER\nPROCEDURE REPORT\nDate of procedure: 08/13/2026"}
+    found = _review(_finding("N1.c2", "5 misattributed", "a separate procedure sits in the visit", exhibit=3))
+    fix = _edits({"finding": "F1", "anchor": "N1", "action": "new_entry", "exhibit": 3, "page": 1, "corrected": proc})
+    rc, sr, md = _run(tmp_path, monkeypatch, [visit], [found], [fix], pages=page)
+    assert rc == 2 and "08/14/2026" not in md
+    assert "does not state the new entry's date" in _record(sr)["open"][0]["outcome"]
+
+
+ORDERS = "Discharge orders listed ice packs to the neck twice daily for 14 days. (Exhibit 3 - p. 1)"
+
+
+def test_a_copy_of_a_delivered_visit_with_new_content_is_folded_under_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The added entry repeats delivered D2 but its new pages carry orders D2
+    lacks; the finisher declined ("delivered entries cannot be edited"). Now
+    `append_to_delivered` keeps only those orders, under D2's own date and
+    provider line, audited, and assemble folds them into D2."""
+    from medchron.update import assemble as A, collect as C, entry_edits as EE
+
+    copy = (
+        "01/20/2026\nExample Clinic | Medical Diagnoses\n\nMedical Diagnoses\n"
+        "Cervical strain after the collision, pain rated 6 of 10 at intake. (Exhibit 3 - p. 1)\n\n"
+        "All Other Information\n" + ORDERS
+    )
+    found = _review(_finding("N1", "4 duplicate", "N1 repeats delivered D2", exhibit=3))
+    fix = _edits(
+        {
+            "finding": "F1",
+            "anchor": "N1",
+            "action": "append_to_delivered",
+            "exhibit": 3,
+            "page": 1,
+            "survivor": "D2",
+            "corrected": ORDERS,
+        }
+    )
+    rc, sr, md = _run(tmp_path, monkeypatch, [copy], [found, K.CLEAN_REVIEW], [fix])
+    assert rc == 0, [f["outcome"] for f in _record(sr)["open"]]
+    (fold,) = B.entries_of(md)[1]
+    assert EE.is_fold(fold) and fold.endswith(ORDERS) and "pain rated 6 of 10" not in fold
+    assert sr.audited and ORDERS.split(" (Exhibit")[0] in sr.audited[0]
+    nex = [{"exhibit": 3, "title": "Exhibit 3 - Example Clinic (Medical Records)", "pages": 1}]
+    out, _rep = A.assemble(
+        K.base_md(),
+        C.audit_document(K.base_md(), [fold], nex),
+        describe=lambda code, on, text: (code, None, "x"),
+        canon=str,
+        headings=K.HEADINGS,
+        new_exhibits=nex,
+    )
+    ents = B.entries_of(out)[1]
+    assert len(ents) == 2 and ents[1].startswith(K.ENTRY_POST)  # D2, byte for byte, then the fold
+    assert ents[1].endswith(ORDERS) and EE.FOLD in ents[1]
+
+
+def test_a_fold_that_would_lose_a_value_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    copy = "01/20/2026\nExample Clinic | Medical Diagnoses\n\nMedical Diagnoses\n" + ORDERS.replace(
+        "14 days", "21 days"
+    )
+    found = _review(_finding("N1", "4 duplicate", "N1 repeats delivered D2", exhibit=3))
+    fix = _edits(
+        {
+            "finding": "F1",
+            "anchor": "N1",
+            "action": "append_to_delivered",
+            "exhibit": 3,
+            "page": 1,
+            "survivor": "D2",
+            "corrected": ORDERS,
+        }
+    )
+    rc, sr, md = _run(tmp_path, monkeypatch, [copy], [found], [fix])
+    assert rc == 2 and "21 days" in md
+    assert "do not carry 21" in _record(sr)["open"][0]["outcome"]

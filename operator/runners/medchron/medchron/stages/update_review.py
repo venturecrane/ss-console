@@ -59,7 +59,7 @@ from ..audit.page_text import exhibit_paths
 from ..audit.render import img_block, render
 from ..audit.run import AuditPaths, Round
 from ..proof import review as PR
-from ..update import body as B, finisher as FN, review_parts as RP, review_repair as RR, select as S
+from ..update import body as B, entry_edits as EE, finisher as FN, review_parts as RP, review_repair as RR, select as S
 from . import audit_loop
 from .base import StageRun, read_json
 from .update_base import headings, update_dir
@@ -172,17 +172,28 @@ def already_pages(sr: StageRun) -> RP.Already:
     return out
 
 
-def _audit_verify(sr: StageRun) -> Verify:
-    """One audit round over the edited document: the new claims (keys the
-    document before did not have) whose verdict is not SUPPORTED.
+class GradeFailed(RuntimeError):
+    """The grader of the finisher's sentences returned no verdict (an API
+    refusal): the stage fails resumably; nothing is reverted on a non-answer."""
 
-    The finisher's sentences are graded on the page IMAGE by the review tier,
-    the model that read the page for the finding (``Round`` is the audit's own
-    grader, controls included). On a real update the audit tier rejected about
-    36 corrections a round, every one on a handwritten ledger page the review
-    had read correctly (its notes: marks "not clearly circled", the page
-    unreadable): the same edit was judged by a weaker reading than the one
-    that found it. Every edit is still audited; only the grader changes."""
+
+def verify_model(cfg: Any) -> str:
+    """The grader of the finisher's sentences: the firm's ``verify`` tier,
+    else the audit tier. It is the audit's own verdict call (a forced tool),
+    so it can never be a model that refuses one (``config.NO_FORCED_TOOL_MODELS``):
+    F5 graded with the review tier, claude-opus-5-5, which answers every forced
+    tool_choice with HTTP 400, and all 46 of a round's edits were reverted on
+    ERROR verdicts (2026-10-14)."""
+    tiers = cfg.get("models", "tiers") or {}
+    return str(tiers.get("verify") or llm.model_for(cfg, "audit"))
+
+
+def _audit_verify(sr: StageRun) -> Verify:
+    """One audit round over the edited document, on the page IMAGE, by the
+    verify tier: the new claims (keys the document before did not have)
+    whose verdict is not SUPPORTED. A verdict that is not a verdict (ERROR:
+    the call failed) raises GradeFailed: a refusal is never read as
+    "unsupported", which would revert every edit of the round."""
 
     def verify(before: str, after: str) -> list[dict[str, Any]]:
         paths = AuditPaths(sr.slug_dir, sr.unit.unit)
@@ -192,8 +203,13 @@ def _audit_verify(sr: StageRun) -> Verify:
         if not new:
             return []
         paths.doc.write_text(after, encoding="utf-8")
-        Round(sr.doorway, _model(sr.cfg), paths, sr.log, mode="image").execute()
+        Round(sr.doorway, verify_model(sr.cfg), paths, sr.log, mode="image").execute()
         got = CL.latest_real(CL.read_rows(paths.results), {c["key"] for c in new})
+        errors = [r for r in got.values() if r.get("verdict") == "ERROR"]
+        if errors:
+            raise GradeFailed(
+                f"{len(errors)} of the finisher's sentences got no verdict: {str(errors[0].get('note'))[:200]}"
+            )
         return [c for c in new if (got.get(c["key"]) or {}).get("verdict") != "SUPPORTED"]
 
     return verify
@@ -320,10 +336,11 @@ def _apply(c: Ctx, md: str, edits: list[RR.Finding], base: list[str]) -> tuple[s
     shown = {
         e.anchor: [(x, p) for x in sorted({x for x, _ in e.cites()}) for p in range(1, c.npages(x) + 1)] for e in ents
     }
-    FN.precheck(edits, ents, base, c.evidence, shown)
-    md1 = FN.set_provider(md, edits, ents)
-    rest = [e for e in edits if e.action != "provider"]
+    FN.precheck(edits, ents, base, c.evidence, shown, keep, heads)
+    md1 = EE.apply_folds(FN.set_provider(md, edits, ents), edits, ents, base, heads)
+    rest = [e for e in edits if e.action not in ("provider", "append_to_delivered", "new_entry")]
     md2, edited = RR.apply(md1, rest, keep, heads, c.evidence, shown)
+    md2 = EE.add_entries(md2, edits)  # after the anchored edits: a new entry moves no anchor
     old = set(B.entries_of(md)[1])
     return md2, edited | {i for i, t in enumerate(B.entries_of(md2)[1]) if t not in old}
 
@@ -568,7 +585,12 @@ def _loop(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: 
         rec["rounds"].append(row)
         settled, rc = 0, 0
         if found:  # the finisher always acts on the latest review
-            md, edited, settled, rc = finish(c, md, found, base, doc)
+            try:
+                md, edited, settled, rc = finish(c, md, found, base, doc)
+            except GradeFailed as exc:
+                doc.write_text(md, encoding="utf-8")  # the round's edits are not kept on a non-answer
+                c.sr.log(f"update review: {exc}; nothing is reverted or kept, a rerun grades again")
+                return 1
             targets = _targets(md, c.sr, edited, found)
         left = sum(f.outcome != "applied" for f in must)
         row.update(calls=c.calls, usage=c.usage, left=left, findings=[f.as_dict() for f in found])
