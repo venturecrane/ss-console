@@ -491,3 +491,49 @@ def test_a_line_every_set_carries_is_said_once(tmp_path):
     )
     assert md.count("3 of 9 sources are scans") == 1
     assert "privilege wall" not in md and "never read" not in md
+    assert 'Email kept out of drafting (firm internal): "INTAKE"' in md
+
+
+def test_a_walled_email_named_like_a_filed_document_stays_out_and_the_document_stays_in(tmp_path, monkeypatch):
+    """The 2026-10-13 review: an internal email titled like the signed lien
+    filed in the liens folder. The email (body and attachment) never reaches
+    the corpus; the filed lien is an ordinary record and does."""
+    from pathlib import Path
+
+    from medchron.demand import pull
+    from medchron.demand.firm import DemandFirm
+
+    firm = DemandFirm(
+        root=tmp_path,
+        data={"privilege": {"firm_domains": ["firm.example"], "consumer_domains": ["mail.example"]}},
+    )
+    data = tmp_path / "data"
+    (data / "raw").mkdir(parents=True)
+    rows = []
+    for rid, ext, folder in (("e1", ".msg", "/EMAILS"), ("f1", ".pdf", "/LIENS")):
+        p = data / "raw" / f"{rid}{ext}"
+        p.write_bytes(b"x")
+        rows.append(
+            {
+                "id": rid,
+                "name": "LIEN - SIGNED",
+                "ext": ext,
+                "folder": folder,
+                "ok": True,
+                "path": str(p),
+                "sha256": rid,
+            }
+        )
+    msg = {
+        "subject": "LIEN - SIGNED",
+        "sender": "staff@firm.example",
+        "recipients": ["atty@firm.example"],
+        "date": "",
+        "body": "Internal strategy words about the lien.",
+        "attachments": [("LIEN - SIGNED.pdf", b"%PDF-internal-copy" * 9000)],
+    }
+    monkeypatch.setattr(pull, "_open_msg", lambda path: msg)
+    out = pull.split_emails(rows, data, firm, set())
+    assert [w["id"] for w in out["walled"]] == ["e1"] and out["kept"] == []
+    assert "Internal strategy words" in Path(out["walled"][0]["text_path"]).read_text()
+    assert not any(r.get("from_email") for r in out["kept"])  # the email's attachment never became a document
