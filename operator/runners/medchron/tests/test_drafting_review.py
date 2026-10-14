@@ -186,7 +186,7 @@ def test_three_sets_become_three_documents_each_with_one_proof_of_service_on_ple
     assert "the PREMISES before the INCIDENT" in text
     notes = (r.data / "notes-final.md").read_text(encoding="utf-8")
     assert "read as a mention, not a prior set" in notes
-    assert "End tables (from the final document)" in notes
+    assert "## Request basis, record gaps and your decisions" in notes
     assert "Left for the attorney by the auditor" not in notes
     assert json.loads((r.data / "review.json").read_text())["must_fix"] == 0
 

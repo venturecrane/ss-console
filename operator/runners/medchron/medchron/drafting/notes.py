@@ -12,6 +12,7 @@ final document still bears them out."""
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,20 @@ def _once(lines: list[str], labels: list[str]) -> list[str]:
         if ln not in out:
             out.append(ln)
     return out
+
+
+_SCANS = re.compile(r"(?i)(\d+) of (\d+) sources are machine transcriptions of scanned documents[^:]*:\s*(.*)")
+
+
+def _plain_warning(w: str) -> str:
+    """The record check's warnings in the attorney's words, not the system's."""
+    m = _SCANS.match(str(w))
+    if m:
+        return (
+            f"{m.group(1)} of the file's {m.group(2)} documents are scans read by machine and not yet checked by a "
+            f"person; a figure or quotation from them is worth a glance against the scan: {m.group(3)}"
+        )
+    return str(w)
 
 
 def _json(data: Path, name: str) -> Any:
@@ -94,7 +109,7 @@ def attorney_notes(
         review += [f"{pre}Removed or marked, not borne out by the file: {x}" for x in fp["settled"]]
         g = _json(d, "gate.json")
         review += [f"{pre}Corrected to match the record: {x}" for x in g.get("repairs") or []]
-        review += [f"{pre}Check against the record: {w}" for w in g.get("warnings") or []]
+        review += [f"{pre}Check against the record: {_plain_warning(w)}" for w in g.get("warnings") or []]
         if (d / "caps.json").is_file():
             review += [f"{pre}Consistency: {x}" for x in _json(d, "caps.json")]
     if (data / "howell.json").is_file():
@@ -105,11 +120,15 @@ def attorney_notes(
     # an email's subject can equal a filed document's name ("LIEN - SIGNED" in
     # the mail and the signed lien in the liens folder), and on 2026-10-13 the
     # review read the line as the filed document excluded and then used.
-    review += [
-        f'Email kept out of drafting ({w["reason"]}): "{w["name"]}"; a filed document '
-        "with the same name is a separate paper"
-        for w in walled
-    ]
+    if walled:
+        # One line, the emails named once each (the review: forty lines read
+        # as the system talking). A filed document of the same name is a
+        # separate paper and was read like any other.
+        names = list(dict.fromkeys(str(w["name"]) for w in walled))
+        review.append(
+            f"Kept out of drafting, as the firm's own or client correspondence ({len(walled)} emails; a filed "
+            "document with the same name is a separate paper): " + "; ".join(f'"{n}"' for n in names)
+        )
     review = _once(review, [label for label, _d in units or []])
-    tail = ["", "## End tables (from the final document)", "", end_tables] if end_tables else []
+    tail = ["", "## Request basis, record gaps and your decisions", "", end_tables] if end_tables else []
     return "\n".join(lines + ["", "## For review", ""] + [f"- {x}" for x in review] + tail) + "\n"

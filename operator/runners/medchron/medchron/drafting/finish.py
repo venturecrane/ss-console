@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, NoReturn
 
@@ -267,11 +268,12 @@ class Finish:
         """The firm's authored attorney block, the draft's date on the Dated
         line, then the first set's front matter (``sets.align``): one wording
         across the sets of one request."""
-        doc, notes = sets.strip_system_lines(doc)
-        doc, headed = sets.authored_head(doc, self._block_lines())
+        doc, _system = sets.strip_system_lines(doc)  # the pipeline's own mess: not the attorney's news
+        doc, notes = sets.authored_head(doc, self._block_lines())
         doc, dated = sets.dated(doc, self._long_date())
         doc, numbered = sets.set_number(doc, self.job.request_text)
-        notes += headed + dated + numbered
+        doc, counsel_for = sets.attorneys_for(doc)
+        notes += dated + numbered + counsel_for
         c = self._canon(u) if u.key else None
         if c is not None:
             canon, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
@@ -339,8 +341,12 @@ class Finish:
         if self._is_done(u.stage("rendered")):
             return
         doc, _end = render.split_notes(md)
+        lines = self._block_lines()
+        address = [
+            x for x in lines[1:] if not re.search(r"(?i)@|\(\d{3}\)|telephone|facsimile|fax|\bLLP\b|\bLLC\b|\bPC\b", x)
+        ]
         doc, attached = render.attach(
-            doc, self.cls, self.firm, digest, self.corpus(), render.declarant_name(self._block_lines())
+            doc, self.cls, self.firm, digest, self.corpus(), render.declarant_name(lines), address
         )
         doc, reserved = render.reserve_judgment(doc, self.cls)
         out, fmt, paper = deliver.out_dir(self.data), self.firm.data["format"], self.paper()

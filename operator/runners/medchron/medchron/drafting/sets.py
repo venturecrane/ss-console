@@ -484,3 +484,24 @@ def set_number(doc: str, request: str) -> tuple[str, list[str]]:
         doc = titled
         notes.append(f"the title's set number written as {want}, as the request states it")
     return doc, notes
+
+
+def attorneys_for(doc: str) -> tuple[str, list[str]]:
+    """The signature block's "Attorney(s) for ..." line reads as the attorney
+    block's does (2026-10-14: the caption said "Attorney for Plaintiff", the
+    signature "Attorneys for"; the attorney is the firm's only one on it)."""
+    _start, _at, lines = head_lines(doc)
+    head = next((x for x in lines if _ATTORNEYS_FOR.match(_plain(x))), None)
+    s, e = signature(doc)
+    if head is None or s < 0:
+        return doc, []
+    want = _plain(head)
+    block = doc[s:e]
+    new = re.sub(
+        r"(?im)^([ \t>*_`]*)attorneys?\s+for\b[^\n]*$",
+        lambda m: m.group(1) + want,
+        block,
+    )
+    if new == block:
+        return doc, []
+    return doc[:s] + new + doc[e:], [f'the signature block reads "{want}", as the attorney block does']

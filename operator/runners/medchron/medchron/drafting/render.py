@@ -341,6 +341,8 @@ def _fill_decl(text: str, d: DeclDecision, doc: str = "", declarant: str | None 
     text = COMMENT.sub("", text).strip()
     if declarant:
         text = re.sub(r"`?\{\{ATTORNEY: declarant's full name\}\}`?", lambda _m: declarant, text)
+        # The printed name under the signature line (the line above is for the pen).
+        text = re.sub(r"`?\{\{ATTORNEY: signature\}\}`?", lambda _m: declarant, text)
     for role, slot in (("PROPOUNDING PARTY", "propounding"), ("RESPONDING PARTY", "responding")):
         who = party(doc, role)
         if who:
@@ -400,6 +402,88 @@ def prior_set_notes(doc: str, digest: str, corpus: Mapping[str, str] | None) -> 
     return out
 
 
+# ---- the proof of service: what the record already knows -----------------------------------
+
+_BAR = re.compile(r"(?i)\b(?:bar\s+no\.?|sbn|state\s+bar)\b")
+_FOR_DEFENSE = re.compile(r"(?i)^\W*attorneys?\s+for\s+defendants?\b")
+_CONTACT = re.compile(r"(?i)@|\(\d{3}\)|\bfax\b|\btel(?:ephone)?\b")
+_TITLE = re.compile(r"\*\*([^*\n]*\bSET\b[^*\n]*)\*\*")
+
+
+def opposing_counsel(corpus: Mapping[str, str]) -> tuple[str, str] | None:
+    """(counsel and address, email addresses) as the defense's own papers
+    print their attorney block, when every such paper in the file agrees;
+    None when none does or two disagree (never a guess)."""
+    found: set[tuple[str, str]] = set()
+    for text in corpus.values():
+        lines = text[:FACE_CHARS].splitlines()
+        at = next((i for i, ln in enumerate(lines) if _FOR_DEFENSE.match(ln)), None)
+        if at is None:
+            continue
+        block = []
+        for ln in reversed(lines[:at]):
+            if not ln.strip():
+                if block:
+                    break
+                continue
+            block.insert(0, " ".join(ln.split()))
+        first = next((i for i, ln in enumerate(block) if _BAR.search(ln)), None)
+        if first is None:
+            continue
+        block = block[first:]
+        who = "; ".join(ln.rstrip(" ,") for ln in block if not _CONTACT.search(ln))
+        mail = "; ".join(ln for ln in block if "@" in ln)
+        found.add((who, mail))
+    return found.pop() if len(found) == 1 else None
+
+
+def fill_pos(pos: str, doc: str, corpus: Mapping[str, str], firm_address: list[str]) -> tuple[str, list[str]]:
+    """The proof of service's slots the record fills: the document's own
+    title, the party served (the set's responding party), counsel of record
+    as the defense's papers print it, and the firm's business address from its
+    authored block. What only the person serving knows stays a slot."""
+    notes: list[str] = []
+
+    def put(slot: str, value: str | None, why: str) -> None:
+        nonlocal pos
+        if not value:
+            return
+        new = re.sub(rf"`?\{{\{{FILL: {re.escape(slot)}[^}}]*\}}\}}`?", lambda _m: value, pos)
+        if new != pos:
+            pos = new
+            notes.append(why)
+
+    title = _TITLE.search(doc)
+    put(
+        "the exact title of the document served",
+        title.group(1).strip() if title else None,
+        "proof of service: the title is the set's own",
+    )
+    put(
+        "party, as captioned",
+        party(doc, "RESPONDING PARTY"),
+        "proof of service: the party served is the set's responding party",
+    )
+    counsel = opposing_counsel(corpus)
+    if counsel:
+        put(
+            "counsel of record, firm, address",
+            counsel[0],
+            "proof of service: counsel as the defense's own papers print them",
+        )
+        put(
+            "email, if served electronically",
+            counsel[1],
+            "proof of service: counsel's email as the defense's own papers print it",
+        )
+    put(
+        "firm business address",
+        ", ".join(firm_address) if firm_address else None,
+        "proof of service: the firm's address from its attorney block",
+    )
+    return pos, notes
+
+
 def strip_attachments(doc: str) -> tuple[str, bool]:
     """Remove a model-written declaration or proof of service: from the first
     title line of either (a heading or a bold-only line) to the end of the
@@ -420,6 +504,7 @@ def attach(
     digest: str,
     corpus: Mapping[str, str] | None = None,
     declarant: str | None = None,
+    firm_address: list[str] | None = None,
 ) -> tuple[str, list[str]]:
     """The served attachments, appended by the job in the order the firm serves
     them: the document, then the section 2030.050 declaration (a special
@@ -457,7 +542,9 @@ def attach(
         notes += [f"section 2030.050: {x}; read as a mention, not a prior set" for x in d.ignored]
     if cls == "discovery_set":
         notes += prior_set_notes(doc, digest, corpus)
-    parts.append(COMMENT.sub("", firm.attachment("pos")).strip())
+    pos, filled = fill_pos(COMMENT.sub("", firm.attachment("pos")).strip(), doc, corpus or {}, firm_address or [])
+    parts.append(pos)
+    notes += filled
     notes.append("the firm's proof of service is attached; its at-service slots are for the person serving")
     return "\n\n".join(parts) + "\n", notes
 

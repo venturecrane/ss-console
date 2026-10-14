@@ -498,7 +498,10 @@ def test_a_line_every_set_carries_is_said_once(tmp_path):
     )
     assert md.count("3 of 9 sources are scans") == 1
     assert "privilege wall" not in md and "never read" not in md
-    assert 'Email kept out of drafting (firm internal): "INTAKE"' in md
+    assert (
+        'own or client correspondence (1 emails; a filed document with the same name is a separate paper): "INTAKE"'
+        in md
+    )
 
 
 def test_a_walled_email_named_like_a_filed_document_stays_out_and_the_document_stays_in(tmp_path, monkeypatch):
@@ -949,3 +952,89 @@ def test_each_item_for_the_attorney_names_its_document_and_place(tmp_path, prici
     assert v.outcome == "delivered", (v.stage, v.reason)
     notes = (r.data / "notes-final.md").read_text()
     assert "- For your decision (Requests for Production, REQUEST FOR PRODUCTION NO. 1): one category, or two" in notes
+
+
+# ---- run 7's review (2026-10-14): the SHOULD-FIX and NOTE items, settled in code ------------
+
+
+def test_any_your_singular_is_a_grammar_finding_that_holds_a_served_paper(tmp_path, pricing):
+    assert wording.grammar("IDENTIFY any YOUR employee who mopped.") and not wording.grammar("any of YOUR employees")
+    bad = one_set(RFP).replace("All DOCUMENTS showing the PREMISES.", "All DOCUMENTS any YOUR employee wrote.")
+    client = AuditClient(drafts=_drafts(**{RFP: bad}))
+    _r, v, seat = _run(tmp_path, pricing, client)
+    assert v.outcome == "failed" and v.reason.startswith("format_check: ") and "any YOUR employee" in v.reason
+    assert seat.created == []
+
+
+def test_the_notes_say_it_in_the_attorneys_words(tmp_path):
+    from medchron.drafting import notes as n
+
+    for k in ("a", "b"):
+        (tmp_path / k).mkdir()
+        (tmp_path / k / "final-pass.json").write_text(json.dumps({"settled": [], "drifts": []}))
+        (tmp_path / k / "gate.json").write_text(
+            json.dumps(
+                {
+                    "warnings": [
+                        "3 of 9 sources are machine transcriptions of scanned documents and have not been read by a human: ER scan"
+                    ]
+                }
+            )
+        )
+    (tmp_path / "walled.json").write_text(
+        json.dumps([{"reason": "firm internal", "name": f"FW: note {i}"} for i in range(5)])
+    )
+    md = n.attorney_notes(
+        tmp_path,
+        "Discovery Set",
+        [],
+        [],
+        "## REQUEST BASIS\n\nNone.",
+        [("RFA", tmp_path / "a"), ("RFP", tmp_path / "b")],
+    )
+    assert md.count("Kept out of drafting") == 1 and "(5 emails;" in md
+    assert "machine transcription" not in md and "transcriber" not in md and "scans read by machine" in md
+    assert "## Request basis, record gaps and your decisions" in md and "End tables" not in md
+    assert wording.vocabulary(md) == [] and wording.notes_findings("The flag under RFA 6 is your marker.")
+
+
+def test_the_signature_block_reads_attorney_for_as_the_attorney_block_does():
+    doc = (
+        "Alpha Example (SBN 1)\nAttorney for GAMMA EXAMPLE\n\nSUPERIOR COURT OF THE STATE OF CALIFORNIA\n\n"
+        '# DEFINITIONS\n\n1. "X" means x.\n\nDated: today\n\nEXAMPLE LAW\nBy: Alpha Example\nAttorneys for Plaintiff\n'
+    )
+    out, notes = sets.attorneys_for(doc)
+    assert out.endswith("By: Alpha Example\nAttorney for GAMMA EXAMPLE\n") and notes
+    assert sets.attorneys_for(out) == (out, [])
+
+
+ANSWER = (
+    "SACRAMENTO, CALIFORNIA 95814\nDelta Counsel, Bar No. 000002\nDEFENSE FIRM PC\n1 Court Street\n"
+    "Exampletown, California 90000\n(555) 555-0102\ndelta@defense.example\nAttorneys for Defendant, DELTA EXAMPLE\n"
+    "SUPERIOR COURT\nANSWER TO COMPLAINT\n"
+)
+
+
+def test_the_proof_of_service_carries_what_the_record_knows_and_only_that():
+    pos = (
+        "described as `{{FILL: the exact title of the document served | at service}}`\n"
+        "| `{{FILL: party, as captioned | at service}}` | `{{FILL: counsel of record, firm, address | at service}}` "
+        "| `{{FILL: email, if served electronically | at service}}` |\n"
+        "My business address is `{{FILL: firm business address | at service}}`. On `{{FILL: date of service | at service}}`"
+    )
+    doc = one_set(SROG).split("=== ATTORNEY")[0]
+    out, notes = render.fill_pos(pos, doc, {"Answer.pdf": ANSWER}, ["1 Example Way", "Exampletown, California 90000"])
+    assert "PLAINTIFF GAMMA EXAMPLE'S SPECIAL INTERROGATORIES TO DEFENDANT DELTA EXAMPLE, SET ONE" in out
+    assert "| DELTA EXAMPLE |" in out
+    assert "Delta Counsel, Bar No. 000002; DEFENSE FIRM PC; 1 Court Street; Exampletown, California 90000" in out
+    assert "delta@defense.example" in out and "1 Example Way, Exampletown" in out
+    assert "{{FILL: date of service | at service}}" in out and len(notes) == 5  # the server's own facts stay slots
+    other = ANSWER.replace("Delta Counsel", "Other Counsel")
+    ambiguous, _ = render.fill_pos(pos, doc, {"A.pdf": ANSWER, "B.pdf": other}, [])
+    assert "{{FILL: counsel of record" in ambiguous  # two different blocks: never a guess
+
+
+def test_the_declarations_signature_line_prints_the_declarants_name():
+    decl = "I, `{{ATTORNEY: declarant's full name}}`, declare:\n\n______________________________\n`{{ATTORNEY: signature}}`\n"
+    out = render._fill_decl(decl, render.decl_decision(_srogs(40), _digest()), _srogs(40), "Alpha Q. Example")
+    assert out.count("Alpha Q. Example") == 2 and "{{ATTORNEY" not in out

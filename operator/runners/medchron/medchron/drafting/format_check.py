@@ -391,5 +391,7 @@ def check_wording(doc: Any, cls: str, res: Result) -> None:
     text = doc_text(doc)
     for f in wording.slots(cls, text):
         res.model(f)
+    for g in wording.grammar(text):
+        res.model(g)
     for w in wording.document_vocabulary(text):
         res.model(f"wording: the system's own word {w!r} in the document")
