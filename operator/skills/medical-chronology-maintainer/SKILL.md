@@ -539,6 +539,15 @@ nothing, stop.
        into? Its file name in this thread is all that is needed." When the
        answer comes, it is an UPDATE naming that chronology, submitted on that
        turn.
+     - `rerouted_to_update` (the runner refused a RUN because the matter
+       already holds a delivered chronology; nothing was read or charged):
+       first resubmit it on this turn as the UPDATE, exactly as the UPDATE
+       section says, with the wake's `Requester:` and `Request ref:`. When
+       the submission is accepted: "The new records for matter <number> are
+       going into the chronology already on the matter, so it stays one
+       complete document. Nothing is needed from you; the next message you get
+       about this chronology will be the updated one." When it is refused, the
+       reply is the `smd_finishing` wording.
      - A hold with no `Hold class:` line, or a class not listed here, is
        `smd_finishing`.
        **In every held reply, never:** ask the firm to resubmit, repeat, narrow

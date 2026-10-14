@@ -57,6 +57,7 @@ const SKILLS = {
       'already_current',
       'another_person',
       'which_chronology',
+      'rerouted_to_update',
     ],
   },
 } as const
@@ -89,6 +90,7 @@ describe('hold classes: the closed set', () => {
         'smd_finishing',
         'smd_finishing_filed',
         'which_chronology',
+        'rerouted_to_update',
       ].sort()
     )
   })

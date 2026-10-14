@@ -33,6 +33,13 @@ technical record, and every hold our side caused already paged SMD with it.
   matter <number> carry the same date. Which one should the new records go
   into? Its file name in this thread is all that is needed."
 
+- **`rerouted_to_update`** (a RUN on a matter that already holds a delivered
+  chronology; resubmitted on the same turn as the UPDATE): "The new records
+  for matter <number> are going into the chronology already on the matter, so
+  it stays one complete document. Nothing is needed from you; the next message
+  you get about this chronology will be the updated one." If the resubmission
+  is refused, the `smd_finishing` wording instead.
+
 ## REQUEST mode, the firm's questions
 
 - **No matter named.** "Which matter is this chronology for? Its number is

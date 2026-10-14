@@ -126,6 +126,13 @@ CASES = [
         "identity_held",
     ),
     ("medchron", "decision: 2 unplaced files", "smd_finishing", "gate_held"),
+    (
+        "medchron",
+        "refused: list_matter: this matter already holds a delivered chronology, so the request is an update "
+        "into it, not a run; nothing was read or charged. Resubmit with update: {...}",
+        "rerouted_to_update",
+        None,
+    ),
     ("medchron", "review_held: 1 MUST-FIX", "smd_finishing", None),  # paged by settle under review_held
     ("medchron", "", "smd_finishing", "gate_held"),
 ]
@@ -263,6 +270,17 @@ def test_a_refused_chronology_stage_pages_stage_refused(tmp_path):
     assert state == "held"
     assert pd._codes(broker) == ["stage_refused"]
     assert "Hold class: smd_finishing." in d._daemon_state("01A")["wake"]["task"]
+
+
+def test_a_run_refused_on_a_delivered_matter_is_rerouted_and_pages_nothing(tmp_path):
+    """ss-console#3177: the agent resubmits it as the UPDATE; nothing of ours broke."""
+    from medchron import dag
+
+    stage = next(s for s in dag.STAGES if s.name == "list_matter")
+    reason = stage.exit_map[3][1]
+    d, broker, state = pd._run(tmp_path, pd._unit(outcome="refused", reason=reason, stage="list_matter"))
+    assert state == "held" and pd._codes(broker) == []
+    assert "Hold class: rerouted_to_update." in d._daemon_state("01A")["wake"]["task"].splitlines()
 
 
 # ---- no document text in an update's job reason ----------------------------------

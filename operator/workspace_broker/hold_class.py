@@ -31,9 +31,18 @@ ALREADY_CURRENT = "already_current"  # nothing to add: the delivered chronology 
 NOTHING_IN_SCOPE = "nothing_in_scope"  # no open litigation matter fits what was asked
 ANOTHER_PERSON = "another_person"  # a record in the file names someone other than the client (ask)
 WHICH_CHRONOLOGY = "which_chronology"  # two chronologies could each be the current one (ask)
+REROUTED_TO_UPDATE = "rerouted_to_update"  # a RUN on a delivered matter; the agent resubmits it as the UPDATE
 
 CLASSES = frozenset(
-    {SMD_FINISHING, SMD_FINISHING_FILED, ALREADY_CURRENT, NOTHING_IN_SCOPE, ANOTHER_PERSON, WHICH_CHRONOLOGY}
+    {
+        SMD_FINISHING,
+        SMD_FINISHING_FILED,
+        ALREADY_CURRENT,
+        NOTHING_IN_SCOPE,
+        ANOTHER_PERSON,
+        WHICH_CHRONOLOGY,
+        REROUTED_TO_UPDATE,
+    }
 )
 
 #: Classes whose answer is the firm's. Every other class is ours or an answer.
@@ -69,6 +78,12 @@ def _code(reason: str) -> str:
 
 
 def _medchron(reason: str) -> tuple[str, str | None]:
+    if reason.startswith("refused: list_matter:") and "already holds a delivered chronology" in reason:
+        # ss-console#3177: the runner refused a RUN on a matter whose files hold
+        # the delivered chronology, before anything was read or charged, and
+        # named the update shape. The DELIVER turn resubmits it as the UPDATE;
+        # nothing of ours is broken, so nothing pages.
+        return REROUTED_TO_UPDATE, None
     if reason.startswith("refused: "):
         return SMD_FINISHING, "stage_refused"
     if reason.startswith(_LIMIT_SETTINGS):
@@ -115,6 +130,7 @@ __all__ = [
     "CLASSES",
     "FIRM_QUESTION",
     "NOTHING_IN_SCOPE",
+    "REROUTED_TO_UPDATE",
     "SMD_FINISHING",
     "SMD_FINISHING_FILED",
     "WHICH_CHRONOLOGY",
