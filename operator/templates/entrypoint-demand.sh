@@ -24,25 +24,16 @@ export SMD_DEMAND_QUEUE_DIR="${MEDCHRON_RUN_DIR}/demand-queue"
 # deferred demand jobs when there is none. Root-owned, group medchron
 # read-only: the demand child reads its firm's voice and can never rewrite it.
 export MEDCHRON_DEMAND_INPUTS="${CONFIG_DIR}/demand"
-rm -rf "${MEDCHRON_DEMAND_INPUTS}.r2.tmp"
-if AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" \
-     AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}" \
-       aws s3 cp \
-         --endpoint-url "${_seed_endpoint}" \
-         --only-show-errors \
-         --recursive \
-         "s3://${R2_BUCKET_CONFIG}/vaults/${CUSTOMER_SLUG}/demand/" \
-         "${MEDCHRON_DEMAND_INPUTS}.r2.tmp/" 2>/dev/null \
-   && [ -f "${MEDCHRON_DEMAND_INPUTS}.r2.tmp/demand-firm.yaml" ]; then
+if _fetch_lane_inputs demand "${MEDCHRON_DEMAND_INPUTS}" demand-firm.yaml; then
   rm -rf "${MEDCHRON_DEMAND_INPUTS}"
   mv "${MEDCHRON_DEMAND_INPUTS}.r2.tmp" "${MEDCHRON_DEMAND_INPUTS}"
   log "demand firm inputs refreshed from R2 into ${MEDCHRON_DEMAND_INPUTS}"
 elif [ -f "${MEDCHRON_DEMAND_INPUTS}/demand-firm.yaml" ]; then
-  rm -rf "${MEDCHRON_DEMAND_INPUTS}.r2.tmp"
-  log "WARN: R2 fetch of the demand firm inputs failed; keeping the existing root-owned copy"
-else
-  rm -rf "${MEDCHRON_DEMAND_INPUTS}.r2.tmp"
+  log "WARN: R2 fetch of the demand firm inputs failed (${_FETCH_INPUTS_STATE}); keeping the existing root-owned copy"
+elif [ "${_FETCH_INPUTS_STATE}" = absent ]; then
   log "No demand firm inputs in the vault for ${CUSTOMER_SLUG}; the demand lane will defer demand jobs"
+else
+  log "ERROR: the demand firm inputs could not be fetched from the vault for ${CUSTOMER_SLUG} and this seat has no copy; the demand lane will defer demand jobs until a restart fetches them"
 fi
 if [ -d "${MEDCHRON_DEMAND_INPUTS}" ]; then
   chown -R root:medchron "${MEDCHRON_DEMAND_INPUTS}"
