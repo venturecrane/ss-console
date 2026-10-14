@@ -70,9 +70,34 @@ def full_name(name: str, after: str) -> bool:
     return bool(re.match(r"(?:[|,;:(]|(?i:dob|d\.o\.b|date|mrn|acct|account|sex|age|id)\b)", rest))
 
 
-def findings(text: str, surnames: set[str], dobs: set[str]) -> list[str]:
-    """What in `text` names someone other than the client (surnames and
-    MM/DD/YYYY dobs of every unit on the job); [] when nothing does."""
+def _has(word: str, text: str) -> bool:
+    return bool(re.search(rf"(?i)(?<![A-Za-z]){re.escape(word)}(?![A-Za-z])", text))
+
+
+def _conflicts(name: str, sur: set[str], firsts: set[str], text: str) -> bool:
+    """True when a "Patient:" name is someone else's. A name without the
+    client's surname that carries the client's FIRST name, in a document that
+    names the client's surname elsewhere, is the client written short (a
+    billing summary's "Patient: Alpha" held a real update, 2026-10-13); it
+    does not conflict. Any other name without the surname does."""
+    if not sur or any(_has(s, name) for s in sur):
+        return False
+    first_only = any(_has(f, name) for f in firsts)
+    return not (first_only and any(_has(s, text) for s in sur))
+
+
+def first_names(units: list[Any]) -> set[str]:
+    """The first word of each unit's client name."""
+    return {str(u.client_name).split()[0] for u in units if str(getattr(u, "client_name", "") or "").split()}
+
+
+def findings(
+    text: str, surnames: set[str], dobs: set[str], firsts: set[str] | None = None, context: str | None = None
+) -> list[str]:
+    """What in `text` names someone other than the client (surnames, first
+    names and MM/DD/YYYY dobs of every unit on the job); [] when nothing
+    does. `context`: the whole document `text` is a page of, where the
+    client's surname is looked for (default `text`)."""
     out: list[str] = []
     sur = {s.lower() for s in surnames if s}
     for line in (text or "").splitlines():
@@ -83,10 +108,9 @@ def findings(text: str, surnames: set[str], dobs: set[str]) -> list[str]:
             if d and dobs and d not in dobs:
                 out.append(f"a date of birth {d} that is not the client's")
         for m in PATIENT_LABEL.finditer(line):
-            name = m.group(1)
-            if not full_name(name, line[m.end() :]):
-                continue
-            if sur and not any(re.search(rf"(?i)(?<![A-Za-z]){re.escape(s)}(?![A-Za-z])", name) for s in sur):
+            if full_name(m.group(1), line[m.end() :]) and _conflicts(
+                m.group(1), sur, firsts or set(), text if context is None else context
+            ):
                 out.append("a patient name without the client's surname")
     return sorted(set(out))
 

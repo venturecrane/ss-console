@@ -357,3 +357,20 @@ def test_the_audit_of_a_handwritten_page_rereads_its_values_even_with_no_stateme
     ev.page = lambda ex, p: "[handwritten]\nBP 142/102"  # type: ignore[method-assign]
     got = ev.block({"exhibit": 2, "pages": [1], "claim": "Blood pressure 142/102 recorded."})
     assert got.startswith(H.REREAD) and "vital sign" in got
+
+
+# ---- fix 13b: the client's own first name on a billing label is the client --------
+def test_a_label_with_the_clients_first_name_does_not_hold_and_another_person_still_does() -> None:
+    from medchron.gates import foreign_identity as FI
+
+    billing = (
+        "Example Billing Summary\nPatient: Alpha Self Pay\nAccount for Alpha Example\n"
+        "Guarantor statement for Alpha Example, DOB: 05/15/1983\n"
+    )
+    assert FI.findings(billing, {"Example"}, {"05/15/1983"}, {"Alpha"}) == []
+    other = "Patient: Gamma Other\nDOB: 05/05/1990\nAccount for Alpha Example\n"
+    got = FI.findings(other, {"Example"}, {"05/15/1983"}, {"Alpha"})
+    assert "a patient name without the client's surname" in got
+    assert "a date of birth 05/05/1990 that is not the client's" in got
+    units = [SimpleNamespace(client_name="Alpha Example", surname="Example", dob="05/15/1983")]
+    assert FI.first_names(units) == {"Alpha"}

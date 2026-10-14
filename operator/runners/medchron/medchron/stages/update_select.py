@@ -104,16 +104,17 @@ def _page_findings(sr: StageRun, rid: str, surnames: set[str], dobs: set[str]) -
     client's own date of birth as another person's. A page vision never
     read keeps its text-layer finding."""
     tp = sr.slug_dir / "text" / f"{rid}.txt"
-    pages = split_pages(tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else "")
+    doc = tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else ""
+    pages, firsts = split_pages(doc), FI.first_names(sr.job.units)
     seen = load_partial(sr.slug_dir / "partial" / f"{rid}.jsonl")
     out: set[str] = set()
     for n, (suffix, text) in pages.items():
-        found = FI.findings(text, surnames, dobs)
+        found = FI.findings(text, surnames, dobs, firsts, doc)
         if found and "machine transcription" not in suffix and n in seen:
-            found = FI.findings(seen[n], surnames, dobs)
+            found = FI.findings(seen[n], surnames, dobs, firsts, doc)
         out |= set(found)
-    if not pages and tp.is_file():
-        out |= set(FI.findings(tp.read_text(encoding="utf-8", errors="replace"), surnames, dobs))
+    if not pages and doc:
+        out |= set(FI.findings(doc, surnames, dobs, firsts))
     return sorted(out)
 
 
