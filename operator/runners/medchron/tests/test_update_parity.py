@@ -188,9 +188,9 @@ def test_a_handwritten_date_is_settled_only_by_exactly_one_nearby_typed_date_of_
     entry = "02/18/2026\nExample Chiropractic | Medical Diagnoses\n\nMedical Diagnoses\nAdjustment. (Exhibit 2 - p. 1)"
     one = H.service_dates([STATEMENT.format("02/13/2026")], "Example Chiropractic")
     assert H.redate(entry, one)[0].startswith("02/13/2026\n")
-    assert H.redate(entry, set())[0].startswith("02/18/2026 (handwritten date, unconfirmed)\n")
+    assert H.redate(entry, set())[0].startswith("02/18/2026 (handwritten date)\n")
     two = H.service_dates([STATEMENT.format("02/13/2026"), STATEMENT.format("02/20/2026")], "Example Chiropractic")
-    assert H.redate(entry, two)[0].startswith("02/18/2026 (handwritten date, unconfirmed)\n")
+    assert H.redate(entry, two)[0].startswith("02/18/2026 (handwritten date)\n")
     other = H.service_dates([STATEMENT.replace("Example", "Another").format("02/17/2026")], "Example Chiropractic")
     assert other == set()  # another provider's statement never settles the date
     _, ents = B.split_body("\n\n" + H.redate(entry, set())[0])

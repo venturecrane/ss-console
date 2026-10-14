@@ -165,7 +165,8 @@ def test_a_finding_on_a_delivered_entry_is_never_applied() -> None:
 
 def test_a_redate_carries_the_diagnosis_claim_in_its_grammar_and_names_the_moved_values() -> None:
     f = _f(anchor="N1", action="redate", corrected="02/11/2026")
-    md, edited = RR.apply(AUDIT_DOC, [f], KEEP, HEADS)
+    page = {(2, 2): "MRI cervical spine. Date of service: 02/11/2026"}
+    md, edited = RR.apply(AUDIT_DOC, [f], KEEP, HEADS, lambda ex, p: page.get((ex, p)))
     assert f.outcome == "applied" and edited == {0}
     _, ents = B.entries_of(md)
     assert ents[0].startswith("02/11/2026\nExample Imaging")

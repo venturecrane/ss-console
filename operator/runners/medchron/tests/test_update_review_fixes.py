@@ -55,7 +55,7 @@ def test_a_statements_print_and_due_dates_never_settle_a_handwritten_date() -> N
     entry = "03/01/2026\nExample Chiropractic | Treatments\n\nTreatments\nAdjustment. (Exhibit 2 - p. 1)"
     dos = H.service_dates([STATEMENT], "Example Chiropractic")
     assert dos == set()
-    assert H.redate(entry, dos)[0].startswith("03/01/2026 (handwritten date, unconfirmed)\n")
+    assert H.redate(entry, dos)[0].startswith("03/01/2026 (handwritten date)\n")
     item = STATEMENT + "\n03/02/2026 98940 Spinal manipulation 65.00"
     assert H.service_dates([item], "Example Chiropractic") == {date(2026, 3, 2)}
 
@@ -65,7 +65,7 @@ def test_redate_keeps_what_the_date_line_carried() -> None:
 
     entry = "03/01/2026 (late entry)\nExample Chiropractic | Treatments\n\nTreatments\nAdjustment. (Exhibit 2 - p. 1)"
     assert H.redate(entry, {date(2026, 3, 2)})[0].startswith("03/02/2026 (late entry)\n")
-    assert H.redate(entry, set())[0].startswith("03/01/2026 (handwritten date, unconfirmed) (late entry)\n")
+    assert H.redate(entry, set())[0].startswith("03/01/2026 (handwritten date) (late entry)\n")
 
 
 # ---- fixes 4 and 5: additional findings and plain entries ---------------------------
