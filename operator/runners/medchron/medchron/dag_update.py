@@ -61,14 +61,17 @@ UPDATE_STAGES: tuple[Stage, ...] = (
     BY_NAME["repair_truncated"],
     BY_NAME["assemble"],
     BY_NAME["merge"],
+    # Before collect: the diagnosis claims the audit reads carry the code the
+    # tables read for the record's date (``update/icd.py``).
+    _reuse("icd_tables", requires=("merge",)),
     Stage(
         "update_collect",
         "",
         _slug_unit,
-        requires=("merge",),
+        requires=("icd_tables",),
         invalidates=("update_summary", "audit"),
         runner=_ucollect.run_collect,
-        exit_map={2: _HELD_UPDATE},
+        exit_map={1: (FAILED, "update_collect: the ICD tables are missing"), 2: _HELD_UPDATE},
     ),
     Stage(
         "update_summary",
@@ -78,15 +81,14 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         requires=("update_collect",),
         invalidates=("audit",),
         runner=_ucollect.run_summary,
-        exit_map={1: (REFUSED, "update_summary: the rewritten Prior Medical History reached beyond its source")},
+        exit_map={1: (REFUSED, "update_summary: the added prior history reached beyond its source")},
     ),
     _reuse("audit", requires=("update_summary",)),
-    _reuse("icd_tables", requires=("audit",)),
     Stage(
         "update_assemble",
         "",
         _slug_unit,
-        requires=("icd_tables",),
+        requires=("audit",),
         runner=_ufinish.run_assemble,
         exit_map={1: (FAILED, "update_assemble: the ICD tables are missing")},
     ),

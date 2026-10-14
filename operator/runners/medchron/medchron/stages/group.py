@@ -95,6 +95,11 @@ class Canon:
         i = 0
         while i < len(segs):
             s = segs[i]
+            # A credential segment is never a name: "Jane A. Roe, M.D., Ph.D."
+            # once kept "Ph.D." as the lane's whole label.
+            if CRED_SEG.match(s):
+                i += 1
+                continue
             if NAME_CRED.match(s):
                 i += 1
                 continue

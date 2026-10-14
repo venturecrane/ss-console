@@ -60,9 +60,15 @@ SAME_VISIT_NEW_VALUE = (
 def test_collect_keeps_new_visits_before_and_after_the_incident_and_drops_a_repeat() -> None:
     _, base = B.entries_of(K.base_md())
     kept, rep = C.collect([NEW_POST, SAME_VISIT, NEW_PRE, SAME_VISIT_NEW_VALUE], base, K.INCIDENT, str)
-    assert kept == [NEW_PRE, SAME_VISIT_NEW_VALUE, NEW_POST]  # date order
+    # A delivered visit restated with a new value keeps only what it adds,
+    # as an "Additional findings" row (change 4).
+    added = (
+        "01/20/2026\nExample Clinic | Additional findings\n\nAdditional findings\n"
+        "Cyclobenzaprine 7.5 mg was prescribed at the visit for spasm. (Exhibit 2 - p. 3)"
+    )
+    assert kept == [NEW_PRE, added, NEW_POST]  # date order
     assert rep["kept: before the incident"] == 1 and rep["kept: after the incident"] == 2
-    assert rep["dropped: same visit as a delivered entry, no value it lacks"] == 1
+    assert rep["dropped: same visit as a delivered entry, no value or finding it lacks"] == 1
 
 
 def test_collect_refuses_an_unresolved_citation() -> None:
@@ -99,15 +105,20 @@ def test_the_audit_document_holds_only_the_new_entries() -> None:
 
 
 # ---- assemble: ONE complete document ------------------------------------------
-def _assemble(new_ents: list[str], pmh: str | None = None):
+ICD_CLAIM = "Diagnosis code M50.20 recorded on 02/10/2026. (Exhibit 2 - p. 2)"
+
+
+def _describe(code: str, on: str, text: str) -> tuple[str, str | None, str]:
+    return code, ("Other cervical disc displacement" if code == "M50.20" else None), "table"
+
+
+def _assemble(new_ents: list[str], pmh: str | None = None, claims: tuple[str, ...] = (ICD_CLAIM,)):
     nex = [{"exhibit": 2, "title": "Exhibit 2 - Example Imaging (Medical Records)", "pages": 2}]
-    audit = C.audit_document(K.base_md(), new_ents, nex, pmh)
-    index = ["2026-02-10 | Example Imaging | M50.20 | Exhibit 2"]
+    audit = C.audit_document(K.base_md(), new_ents, nex, pmh, icd_claims=list(claims))
     return A.assemble(
         K.base_md(),
         audit,
-        index,
-        describe=lambda c: "Other cervical disc displacement" if c == "M50.20" else "",
+        describe=_describe,
         canon=str,
         headings=K.HEADINGS,
         new_exhibits=nex,
@@ -133,12 +144,29 @@ def test_the_updated_document_carries_every_delivered_entry_byte_identical_in_or
     assert "This chronology was prepared from 1 document on the matter." in md
 
 
-def test_the_rewritten_prior_medical_history_replaces_the_delivered_block() -> None:
-    pmh = "Prior Medical History\nRadiographs before the incident showed straightening of the lordosis. (Exhibit 2 - p. 1)"
-    md, rep = _assemble([NEW_PRE, NEW_POST], pmh)
-    assert rep["prior_medical_history_replaced"] is True
-    assert "straightening of the lordosis. (Exhibit 2 - p. 1)" in md
-    assert "A routine visit recorded blood pressure 120/80 before the incident." not in md
+ADDED = (
+    "Additional prior history from records received 10-13-26\n"
+    "Radiographs before the incident showed straightening of the lordosis. (Exhibit 2 - p. 1)"
+)
+
+
+def test_the_delivered_prior_medical_history_is_carried_and_the_new_history_is_added_under_it() -> None:
+    """Change 6. Before: the delivered block was REPLACED by a model rewrite
+    and proof 1 exempted it, so a delivered fact could vanish unseen. Now it
+    is carried verbatim and the addition sits under it, dated."""
+    md, rep = _assemble([NEW_PRE, NEW_POST], ADDED)
+    assert rep["prior_history_added"] is True
+    pre, _ = B.entries_of(md)
+    assert pre.index(K.PMH) < pre.index(ADDED)
+    r = P.run(_inputs(md, [NEW_PRE, NEW_POST]))
+    assert r.fails == [], r.lines
+    # Proof 1 now holds the delivered block like any delivered line.
+    assert (
+        "1"
+        in P.run(
+            _inputs(md.replace("blood pressure 120/80 before", "blood pressure before"), [NEW_PRE, NEW_POST])
+        ).fails
+    )
 
 
 def test_assemble_refuses_a_citation_to_an_exhibit_neither_delivered_nor_new() -> None:
@@ -179,7 +207,7 @@ def _inputs(updated_md: str, composed: list[str], rows: list[dict] | None = None
 
 def test_the_proofs_pass_on_a_clean_update() -> None:
     md, rep = _assemble([NEW_PRE, NEW_POST])
-    r = P.run(_inputs(md, [NEW_PRE, NEW_POST], pmh_replaced=rep["prior_medical_history_replaced"]))
+    r = P.run(_inputs(md, [NEW_PRE, NEW_POST]))
     assert r.fails == [], r.lines
 
 
@@ -225,8 +253,7 @@ def _assemble_noted(new_ents: list[str], pmh: str | None = None):
     return base, A.assemble(
         base,
         C.audit_document(base, new_ents, nex, pmh),
-        [],
-        describe=lambda c: "",
+        describe=_describe,
         canon=str,
         headings=K.HEADINGS,
         new_exhibits=nex,
@@ -244,17 +271,17 @@ def _noted_inputs(base: str, md: str, composed: list[str], **kw) -> P.Inputs:
     return x
 
 
-@pytest.mark.parametrize("pmh", [None, "Prior Medical History\nRadiographs before the incident. (Exhibit 2 - p. 1)"])
+@pytest.mark.parametrize("pmh", [None, ADDED])
 def test_the_delivered_scope_note_is_carried_verbatim_and_the_proofs_accept_it(pmh: str | None) -> None:
     """Before: the update deleted the note and proof 2 refused it, so the
     filed document went silent on encounters it never listed. Now it is
-    carried verbatim after the Prior Medical History (rewritten or not)."""
+    carried verbatim after the Prior Medical History (and any added history)."""
     base, (md, rep) = _assemble_noted([NEW_PRE, NEW_POST], pmh)
     pre, _ = B.entries_of(md)
     assert K.NOTE in pre and md.count("[NTD:") == 1
     assert pre.index(K.NOTE) > pre.index("Prior Medical History")
     assert rep["pre_note_carried"] == 1 and rep["pre_note_itemized"] is False
-    r = P.run(_noted_inputs(base, md, [NEW_PRE, NEW_POST], pmh_replaced=rep["prior_medical_history_replaced"]))
+    r = P.run(_noted_inputs(base, md, [NEW_PRE, NEW_POST]))
     assert r.fails == [], r.lines
     assert "2. pre-incident note: carried verbatim (1)" in r.lines
 

@@ -2,23 +2,26 @@
 
 Inputs: the delivered chronology's markdown (proven by `docx_md.prove` to
 render to the delivered document), the AUDIT document (the new entries only,
-audited and repaired, its gate passed), and the compose pass's INDEX rows.
+audited and repaired, its gate passed, with the audited diagnosis claims and
+the dated paragraph of added prior history ahead of its entries).
 
 Output, in build_doc's shape:
 
 * every delivered entry byte-identical, in its delivered order, each new entry
   placed after the last delivered entry dated on or before it;
-* the delivered preamble, its note that pre-incident encounters were not
-  itemized carried verbatim (unless the new entries itemize them), its Prior Medical History
-  block replaced by the audited rewrite when the update made one;
+* the delivered preamble verbatim: its Prior Medical History as delivered,
+  then the audited "Additional prior history from records received MM-DD-YY"
+  paragraph when the update adds one, then its note that pre-incident
+  encounters were not itemized (unless the new entries itemize them);
 * the Treatment Timeline computed from the whole entry set (build_doc's
   arithmetic; a delivered row that disagreed with its own entries is reported
   lane by lane, never kept);
-* Diagnostic Highlights: the delivered rows, plus a row for each code the new
-  entries record first (build_doc's first-date rule; descriptors from the
-  vendored CMS tables, never a model);
+* Diagnostic Highlights: the delivered rows, plus a row for each diagnosis
+  claim the audit kept (``update/icd.py``; descriptors from the vendored CMS
+  tables, never a model, and never blank);
 * the delivered Exhibit List plus a row per new exhibit an added entry cites,
-  titled the delivered way;
+  titled the delivered way, and a row naming each firm-numbered file in the
+  folder the list never named;
 * the delivered Records Reviewed section plus the update's own paragraph.
 
 Refuses (ValueError) when a delivered entry is not carried verbatim or in its
@@ -32,9 +35,8 @@ import re
 from collections import Counter, defaultdict
 from typing import Any, Callable
 
-from . import body as B
+from . import body as B, icd
 
-ICD_SHAPE = re.compile(r"[A-Z]\d{2}(\.[0-9A-Z]{1,4}|[0-9A-Z]{0,4})|\d{3}(\.\d{1,2})?|[VE]\d{2,3}(\.\d)?")
 TIMELINE_HEAD = "| Medical Provider | Treatment Period | Visits | Reference |"
 
 
@@ -154,56 +156,6 @@ def lane_diff(before: list[str], after: list[str]) -> list[dict[str, Any]]:
     ]
 
 
-def index_codes(index_rows: list[str], kept_dates: set[str]) -> dict[str, tuple[str, str, str]]:
-    """{dotless: (first iso, code, provider)} from INDEX rows, build_doc's cleaning rules."""
-    icd: dict[str, tuple[str, str, str]] = {}
-    for line in index_rows:
-        p = [x.strip() for x in line.split("|")]
-        if len(p) < 3 or not re.match(r"^\d{4}-\d{2}-\d{2}$", p[0]) or p[0] not in kept_dates:
-            continue
-        for code in re.split(r"[,/;]\s*", p[2]):
-            code = re.sub(r"\s*\(.*?\)", "", code).strip()
-            code = re.sub(r"(?i)\s+(?:as recorded|history).*$", "", code).strip()
-            if not code or code == "--" or not ICD_SHAPE.fullmatch(code):
-                continue
-            key = code.replace(".", "")
-            prior = icd.get(key)
-            if prior is None or p[0] < prior[0]:
-                icd[key] = (p[0], code, p[1])
-            elif p[0] == prior[0] and "." in code and "." not in prior[1]:
-                icd[key] = (prior[0], code, prior[2])
-    return icd
-
-
-def _toks(s: str) -> set[str]:
-    return set(re.findall(r"[a-z]{4,}", (s or "").lower()))
-
-
-def icd_rows(
-    base_rows: list[str], new_icd: dict[str, tuple[str, str, str]], entries: list[str], describe: Callable[[str], str]
-) -> tuple[list[str], list[dict[str, Any]]]:
-    """Delivered rows kept as delivered; a code first recorded by a new entry
-    gets build_doc's row. Sorted by (first date, code), as build_doc sorts."""
-    rows: dict[str, tuple[str, str, str]] = {}
-    for line in base_rows[1:]:
-        c = [x.strip() for x in line.strip().strip("|").split("|")]
-        m = re.match(r"(\d{2})/(\d{2})/(\d{4})", c[2] if len(c) > 2 else "")
-        first = f"{m.group(3)}-{m.group(1)}-{m.group(2)}" if m else "9999-12-31"
-        rows[c[0].replace(".", "")] = (first, c[0], line.strip())
-    es = [{"iso": B.iso(e), "provider": B.provider_of(e), "ref": (B.CITE.search(e) or [""])[0][1:-1]} for e in entries]
-    changed = []
-    for key, (first, code, prov) in new_icd.items():
-        if key in rows and rows[key][0] <= first:
-            continue
-        same = [e for e in es if e["iso"] == first]
-        best = max(same, key=lambda e: len(_toks(e["provider"]) & _toks(prov)), default=None)
-        line = f"| {code} | {describe(code)} | {first[5:7]}/{first[8:10]}/{first[:4]} | {best['ref'] if best else ''} |"
-        changed.append({"code": code, "was": rows[key][2] if key in rows else None, "now": line})
-        rows[key] = (first, code, line)
-    head = base_rows[:1] or ["| ICD Code | Description | First Diagnosed | Reference |"]
-    return head + [r[2] for r in sorted(rows.values(), key=lambda r: (r[0], r[1]))], changed
-
-
 def _mdY(isod: str) -> str:
     return f"{isod[5:7]}-{isod[8:10]}-{isod[:4]}"
 
@@ -280,77 +232,44 @@ def itemizes(note: str, new_ents: list[str]) -> bool:
     return sum(1 for e in new_ents if a <= B.iso(e) <= b) >= n
 
 
-def _preamble(pre: str, audit_pre: str, new_ents: list[str]) -> tuple[str, bool, list[str], list[str]]:
-    """(preamble, PMH replaced, notes carried, notes the update itemized).
+#: The dated paragraph of prior history an update adds under the delivered one.
+ADDED_HISTORY = re.compile(r"(?m)^Additional prior history from records received \d{2}-\d{2}-\d{2}\s*$")
 
-    The delivered note that pre-incident encounters were reviewed and not
-    itemized is CARRIED verbatim, after the Prior Medical History block where
-    build_doc puts it, unless the update's own entries itemize those
-    encounters. Deleting it would leave the firm's document silent on
-    encounters it no longer lists."""
+
+def _preamble(pre: str, addition: str, new_ents: list[str]) -> tuple[str, bool, list[str], list[str]]:
+    """(preamble, prior history added, notes carried, notes the update itemized).
+
+    The delivered Prior Medical History is CARRIED verbatim; the audited
+    paragraph of prior history the update adds goes after it, under its own
+    dated line. The delivered note that pre-incident encounters were reviewed
+    and not itemized is CARRIED verbatim after both, where build_doc puts it,
+    unless the update's own entries itemize those encounters. Deleting it
+    would leave the firm's document silent on encounters it no longer lists."""
     notes = _notes(pre)
     gone = [n for n in notes if itemizes(n, new_ents)]
     keep = [n for n in notes if n not in gone]
     pre = B.PRE_NOTE.sub("", pre)
-    audit_pre = B.PRE_NOTE.sub("", audit_pre or "")
-    replaced = bool(B.PMH_HEAD.search(audit_pre))
-    if replaced:
-        m = B.PMH_HEAD.search(pre)
-        pre = (pre[: m.start()] if m else pre) + audit_pre.strip("\n") + "\n"
+    addition = B.PRE_NOTE.sub("", addition or "").strip("\n")
+    added = bool(ADDED_HISTORY.search(addition))
+    if added:
+        pre = pre.rstrip("\n") + ("\n\n" if pre.strip() else "") + addition + "\n"
     if keep:
         pre = pre.rstrip("\n") + ("\n\n" if pre.strip() else "") + "\n\n".join(keep) + "\n"
-    return pre, replaced, keep, gone
+    return pre, added, keep, gone
 
 
-def assemble(
-    base_md: str,
-    audit_md: str,
-    index_rows: list[str],
-    *,
-    describe: Callable[[str], str],
-    canon: Callable[[str], str],
-    headings: set[str],
-    new_exhibits: list[dict[str, Any]],
-    update_note: Callable[[dict[int, str]], str] | None = None,
-) -> tuple[str, dict[str, Any]]:
-    """(updated markdown, report). Raises ValueError on any refusal."""
-    b = B.sections(base_md)
-    pre, base_ents = B.split_body(b["## Medical Chronology"])
-    audit_pre, new_ents = B.entries_of(audit_md)
-    delivered_rows = B.table_rows(b["## Treatment Timeline"])
-    name_of, name_log = lane_namer(headings, delivered_rows[1:], exhibit_providers(b["## Exhibit List"]))
-    known = B.delivered_numbers(base_md) | {r["exhibit"] for r in new_exhibits}
-    bad = sorted({n for e in new_ents for n in B.cited(e)} - known)
-    if bad:
-        raise ValueError(f"REFUSED: new entries cite exhibit(s) {bad} that are neither delivered nor new")
-    entries = B.merge_entries(base_ents, new_ents)
-    icd, changed = icd_rows(
-        B.table_rows(b["## Diagnostic Highlights"]),
-        index_codes(index_rows, {B.iso(e) for e in new_ents}),
-        entries,
-        describe,
-    )
-    pre, pmh_replaced, notes_kept, notes_itemized = _preamble(pre, audit_pre, new_ents)
-    body = (pre.rstrip("\n") + "\n\n" if pre.strip() else "\n") + "\n\n".join(entries) + "\n\n"
-    final_rows = provider_rows(entries, canon, name_of)
-    retitled, uncited = exhibit_titles_for(new_exhibits, new_ents, name_of)
-    ex_sec = b["## Exhibit List"]
-    from .collect import with_rows
-
-    ex_sec = with_rows(ex_sec, [f"| {n} | {t} |" for n, t in sorted(retitled.items())])
-    rr = b.get(B.SECTIONS[4])
-    if rr is not None and update_note and retitled:
-        rr = rr.rstrip("\n") + "\n\n" + update_note(retitled) + "\n"
-    head = delivered_rows[0] if delivered_rows else TIMELINE_HEAD
-    md = (
+def _sections_md(
+    b: dict[str, str], timeline: list[str], table: list[str], body: str, ex_sec: str, rr: str | None
+) -> str:
+    return (
         b["title"]
         + B.SECTIONS[0]
         + "\n\n"
-        + "\n".join([head, *final_rows])
+        + "\n".join(timeline)
         + "\n\n"
         + B.SECTIONS[1]
         + "\n\n"
-        + "\n".join(icd)
+        + "\n".join(table)
         + "\n\n"
         + B.SECTIONS[2]
         + "\n"
@@ -359,6 +278,60 @@ def assemble(
         + ex_sec
         + (B.SECTIONS[4] + rr if rr is not None else "")
     )
+
+
+def _split_audit_pre(audit_pre: str) -> tuple[str, list[tuple[str, str, str]]]:
+    """(the dated prior-history paragraph or '', the audited diagnosis
+    claims). Anything else ahead of the first new entry refuses: the audit
+    document holds nothing else, and text this cannot place must not vanish."""
+    rest, claims = icd.split_claims(B.PRE_NOTE.sub("", audit_pre or ""))
+    if rest.strip() and not ADDED_HISTORY.search(rest):
+        raise ValueError("REFUSED: the audit document carries text ahead of its entries that is not the added history")
+    return rest, claims
+
+
+def assemble(
+    base_md: str,
+    audit_md: str,
+    *,
+    describe: icd.Resolve,
+    canon: Callable[[str], str],
+    headings: set[str],
+    new_exhibits: list[dict[str, Any]],
+    update_note: Callable[[dict[int, str]], str] | None = None,
+    folder: list[dict[str, Any]] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """(updated markdown, report). Raises ValueError on any refusal.
+    `folder`: the chronology folder's numbered files (the update plan's
+    exhibits), so a firm-numbered file the delivered list never named gets a
+    row and may be cited."""
+    from .collect import folder_rows, with_rows
+
+    b = B.sections(base_md)
+    pre, base_ents = B.split_body(b["## Medical Chronology"])
+    audit_pre, new_ents = B.entries_of(audit_md)
+    addition, icd_claims = _split_audit_pre(audit_pre)
+    delivered_rows = B.table_rows(b["## Treatment Timeline"])
+    name_of, name_log = lane_namer(headings, delivered_rows[1:], exhibit_providers(b["## Exhibit List"]))
+    taken = {r["exhibit"] for r in new_exhibits}
+    known = B.delivered_numbers(base_md) | taken | {int(r["exhibit"]) for r in folder or []}
+    bad = sorted({n for e in new_ents for n in B.cited(e)} - known)
+    if bad:
+        raise ValueError(f"REFUSED: new entries cite exhibit(s) {bad} that are neither delivered nor new")
+    entries = B.merge_entries(base_ents, new_ents)
+    table, changed, illegible = icd.rows(B.table_rows(b["## Diagnostic Highlights"]), icd_claims, new_ents, describe)
+    pre, added, notes_kept, notes_itemized = _preamble(pre, addition, new_ents)
+    body = (pre.rstrip("\n") + "\n\n" if pre.strip() else "\n") + "\n\n".join(entries) + "\n\n"
+    final_rows = provider_rows(entries, canon, name_of)
+    retitled, uncited = exhibit_titles_for([r for r in new_exhibits if not r.get("reused")], new_ents, name_of)
+    firm = folder_rows(base_md, folder or [], taken)
+    firm += [f"| {r['exhibit']} | {r['reused']} |" for r in new_exhibits if r.get("reused")]
+    ex_sec = with_rows(b["## Exhibit List"], [f"| {n} | {t} |" for n, t in sorted(retitled.items())] + firm)
+    rr = b.get(B.SECTIONS[4])
+    if rr is not None and update_note and retitled:
+        rr = rr.rstrip("\n") + "\n\n" + update_note(retitled) + "\n"
+    head = delivered_rows[0] if delivered_rows else TIMELINE_HEAD
+    md = _sections_md(b, [head, *final_rows], table, body, ex_sec, rr)
     out_ents = _check_carried(md, base_ents, notes_kept)
     return md, {
         "delivered_entries": len(base_ents),
@@ -368,9 +341,11 @@ def assemble(
         "timeline_changes": lane_diff(delivered_rows[1:], final_rows),
         "lanes_named_for_heading_slots": name_log,
         "icd_rows_added_or_moved": changed,
+        "icd_codes_not_legible": illegible,
         "pre_note_carried": len(notes_kept),
         "pre_note_itemized": bool(notes_itemized),
-        "prior_medical_history_replaced": pmh_replaced,
+        "prior_history_added": added,
+        "firm_exhibits_listed": firm,
         "new_exhibits_titled": {str(k): v for k, v in retitled.items()},
         "new_exhibits_uncited": uncited,
     }

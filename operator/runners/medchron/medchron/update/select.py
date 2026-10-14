@@ -10,6 +10,13 @@ delivered exhibit PDFs are what the firm holds, and they are the page truth.
   COVERED_FRAC of its 8-word shingles (digits stripped: a re-filed copy
   differs in its fax stamp and print date, not in its words) are already in a
   delivered exhibit: a re-filed copy of a record the delivery read.
+* A TEXT page at least COVERED_FRAC covered by the delivered exhibits AND the
+  pages of the new documents read before it (in exhibit order) is EXCLUDED as
+  a repeat of an earlier new page, unless it states a CLINICAL value (a lab,
+  vital or dose: ``values.clinical_values``) no earlier page stated: two
+  re-filed copies of one record differ in their fax headers, not in their
+  words, and the second costs a compose read and yields a duplicate entry.
+  No image hash: the vision pass runs before this, so a hash saves nothing.
 * A page with no text after the vision pass is excluded as blank and counted.
 * Every other page is read (no date window: a new record may hold visits
   before or after the incident).
@@ -19,8 +26,11 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from .values import clinical_values
 
 MIN_CHARS = 80
 COVERED_FRAC = 0.8
@@ -30,6 +40,7 @@ FAILED_MARKS = ("[page transcription failed]", "[page transcription refused]")
 
 READ, EXCLUDED, UNREAD = "text", "excluded", "unread"
 ALREADY = "already read in a delivered exhibit"
+OVERLAP = "repeats an earlier page of the new documents"
 BLANK = "no text on the page"
 
 
@@ -65,24 +76,47 @@ def seen_shingles(delivered_pdfs: list[Path]) -> set[str]:
     return seen
 
 
-def classify_new(pages: dict[int, str], npages: int, seen: set[str]) -> dict[int, tuple[str, str]]:
+@dataclass
+class Earlier:
+    """What the new documents' pages read so far state: their shingles and
+    clinical values, built cumulatively in exhibit order."""
+
+    shingles: set[str] = field(default_factory=set)
+    values: set[str] = field(default_factory=set)
+
+    def add(self, text: str) -> None:
+        self.shingles |= shingles(text)
+        self.values |= clinical_values(text)
+
+
+def _decide(t: str, seen: set[str], earlier: Earlier | None) -> tuple[str, str]:
+    if t in FAILED_MARKS:
+        return UNREAD, "the page could not be transcribed"
+    if len(t) < MIN_CHARS:
+        return EXCLUDED, BLANK
+    sh = shingles(t)
+    if sh and len(sh & seen) >= COVERED_FRAC * len(sh):
+        return EXCLUDED, ALREADY
+    if earlier is not None and sh and len(sh & (seen | earlier.shingles)) >= COVERED_FRAC * len(sh):
+        if not clinical_values(t) - earlier.values:
+            return EXCLUDED, OVERLAP
+    return READ, "new document"
+
+
+def classify_new(
+    pages: dict[int, str], npages: int, seen: set[str], earlier: Earlier | None = None
+) -> dict[int, tuple[str, str]]:
     """Per page of one new document: (text | excluded | unread, reason).
     `unread` is a page the transcription could not read: it is never skipped
-    silently, the stage holds on it."""
+    silently, the stage holds on it. `earlier`, when given, is what the new
+    documents before this one (and this one's earlier pages) state; every
+    page with text is added to it."""
     out: dict[int, tuple[str, str]] = {}
     for i in range(1, npages + 1):
         t = (pages.get(i) or "").strip()
-        if t in FAILED_MARKS:
-            out[i] = (UNREAD, "the page could not be transcribed")
-            continue
-        if len(t) < MIN_CHARS:
-            out[i] = (EXCLUDED, BLANK)
-            continue
-        sh = shingles(t)
-        if sh and len(sh & seen) >= COVERED_FRAC * len(sh):
-            out[i] = (EXCLUDED, ALREADY)
-            continue
-        out[i] = (READ, "new document")
+        out[i] = _decide(t, seen, earlier)
+        if earlier is not None and out[i][0] != UNREAD and len(t) >= MIN_CHARS:
+            earlier.add(t)
     return out
 
 

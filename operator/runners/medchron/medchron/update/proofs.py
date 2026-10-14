@@ -1,17 +1,17 @@
 """The proofs an update must pass before anything is filed. $0.
 
  1. every Medical Summary line of the delivered document is in the updated
-    one at least as often as it was delivered (the rewritten Prior Medical
-    History block is the one delivered text not required: it is new text,
-    audited under proof 4), and no delivered sentence is carried MORE often
-    (a visit already itemized, added again as new);
+    one at least as often as it was delivered, the Prior Medical History
+    included (an update adds a dated paragraph under it and never rewrites
+    it), and no delivered sentence is carried MORE often (a visit already
+    itemized, added again as new);
  2. the delivered note that pre-incident encounters were reviewed and not
     itemized is in the updated document verbatim, as often as delivered;
     absent only when the update's own entries itemize those encounters;
  3. ZERO delivered claims were audited: no audit row is on a delivered
-    claim the audit document does not itself carry (a rewritten Prior
-    Medical History sentence may repeat a delivered one word for word, and
-    then the audit read it in the audit document, as new text);
+    claim the audit document does not itself carry (an added prior-history
+    sentence may repeat a delivered one word for word, and then the audit
+    read it in the audit document, as new text);
  4. every claim the update adds is finally audited and SUPPORTED;
  5. no planted control came back SUPPORTED, and a control was planted when
     the audit had enough claims to plant one;
@@ -58,7 +58,6 @@ class Inputs:
     composed: list[str]  # every entry compose produced, in the final exhibit numbers
     audit_claims: list[dict[str, Any]]  # the claims of the AUDIT document (the new text)
     new_exhibits: set[int]
-    pmh_replaced: bool = False
     gate_passed: bool = True
     pre_note_itemized: bool = False  # assemble found the new entries itemize what the note left out
 
@@ -98,15 +97,6 @@ def cited_sentences(lines: list[str]) -> list[str]:
     return out
 
 
-def pmh_lines(base_md: str) -> set[str]:
-    """The delivered Prior Medical History block's lines, as the document reads them."""
-    pre, _ = B.entries_of(base_md)
-    m = B.PMH_HEAD.search(pre)
-    if not m:
-        return set()
-    return {re.sub(r"\s+", " ", ln.replace("**", "")).strip() for ln in pre[m.start() :].splitlines() if ln.strip()}
-
-
 def dropped_values(composed: list[str], updated_entries: list[str], new_ex: set[int], named: set[str]) -> list[tuple]:
     """[(entry head, [values])] for entries composed from a NEW exhibit whose
     values the updated document does not carry on that date and the audit did
@@ -126,9 +116,6 @@ def dropped_values(composed: list[str], updated_entries: list[str], new_ex: set[
 
 def _delivered_text(x: Inputs, r: Result) -> None:
     a = x.delivered_lines
-    if x.pmh_replaced:
-        old = pmh_lines(x.base_md)
-        a = [ln for ln in a if ln not in old]
     want = Counter(ln for ln in a if not NOTE_LINE.search(ln))
     have = Counter(x.updated_lines)
     missing = [ln for ln, n in want.items() if have[ln] < n]

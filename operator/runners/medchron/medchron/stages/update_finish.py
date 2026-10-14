@@ -29,10 +29,24 @@ from ..audit import claims as CL, coverage as audit_coverage
 from ..audit.page_text import exhibit_paths
 from ..audit.run import AuditPaths
 from ..update import assemble as A, body as B, collect as C, docx_md, proofs as P
+from ..update.select import BLANK
 from .base import StageRefusal, StageRun, read_json
 from .group import Canon
 from .render import chronology_name, render_text
 from .update_base import headings, plan, update_dir
+
+
+def uncited_name(r: dict[str, Any]) -> str:
+    """An uncited new document as the Records Reviewed note names it: its
+    file name and page count, and "cover sheet only" when no page of it was
+    read and at most one page carried text."""
+    n = int(r.get("pages") or 0)
+    blank = int((r.get("excluded") or {}).get(BLANK, 0))
+    name = str(r.get("source_name") or r.get("title") or "a document")
+    what = f"{n} page" + ("" if n == 1 else "s")
+    if not r.get("read") and blank >= n - 1:
+        what += ", cover sheet only"
+    return f"{name} ({what})"
 
 
 def update_note(sr: StageRun, ud: Path) -> Any:
@@ -57,7 +71,10 @@ def update_note(sr: StageRun, ud: Path) -> Any:
         if repeat:
             out += f" {repeat:,} of their pages repeat a record already cited here and were not read again."
         if uncited:
-            out += f" {len(uncited)} of those documents record no visit this chronology did not already list, so none is cited."
+            out += (
+                f" {len(uncited)} of those documents record no visit this chronology did not already list, so none "
+                f"is cited: {'; '.join(uncited_name(r) for r in uncited)}."
+            )
         same = len((sel.get("skipped") or {}).get("byte-identical to a delivered exhibit") or [])
         if same:
             out += f" {same} document(s) were identical to an exhibit already delivered."
@@ -80,12 +97,12 @@ def run_assemble(sr: StageRun) -> int:
         md, rep = A.assemble(
             base_md,
             (rd / "final-chronology.md").read_text(encoding="utf-8"),
-            read_json(ud / "new_index.json", []),
-            describe=lambda c: icd_tables.describe(c, tables) or "",
+            describe=lambda code, on, text: icd_tables.resolve(code, tables, on, text),
             canon=Canon(sr.cfg),
             headings=headings(sr.cfg),
             new_exhibits=keep,
             update_note=update_note(sr, ud),
+            folder=plan(sr).get("exhibits") or [],
         )
     except ValueError as exc:
         raise StageRefusal(str(exc)) from exc
@@ -94,7 +111,7 @@ def run_assemble(sr: StageRun) -> int:
             f"new exhibit(s) {rep['new_exhibits_uncited']} are cited by no added entry after the audit; "
             "their numbers are fixed by the audit, so the update stops rather than leave a gap"
         )
-    for r in keep:
+    for r in (x for x in keep if not x.get("reused")):  # a reused exhibit is the firm's file
         final = f"Exhibit {r['exhibit']} - {rep['new_exhibits_titled'][str(r['exhibit'])]}"
         if final != r["title"] and (out / f"{r['title']}.pdf").is_file():
             os.replace(out / f"{r['title']}.pdf", out / f"{final}.pdf")
@@ -163,7 +180,6 @@ def run_proofs(sr: StageRun) -> int:
         composed=composed,
         audit_claims=CL.extract_claims(CL.body_of(paths.doc.read_text(encoding="utf-8")), keep_ex),
         new_exhibits=new_ex,
-        pmh_replaced=bool(rep.get("prior_medical_history_replaced")),
         gate_passed=gate,
         pre_note_itemized=bool(rep.get("pre_note_itemized")),
     )
@@ -182,7 +198,9 @@ def run_manifest(sr: StageRun) -> int:
     ud = update_dir(sr)
     out = sr.slug_dir / "out" / sr.unit.unit
     p = plan(sr)
-    names = [chronology_name(sr)] + [f"{r['title']}.pdf" for r in read_json(ud / "new_exhibits.final.json", [])]
+    # A new exhibit that reuses a firm-numbered file is already on the matter.
+    filed = [r for r in read_json(ud / "new_exhibits.final.json", []) if not r.get("reused")]
+    names = [chronology_name(sr)] + [f"{r['title']}.pdf" for r in filed]
     manifest = []
     for n in names:
         f = out / n

@@ -88,3 +88,48 @@ def describe(code: str, tables: dict[str, Any]) -> str | None:
     if nine:
         return f"{nine} (ICD-9-CM)"
     return ten[0] if ten else None
+
+
+#: The day ICD-10-CM replaced ICD-9-CM for US records.
+ICD10_FROM = "2015-10-01"
+#: What a scan or a transcription reads for an ICD-10 chapter letter.
+OCR_SWAP = {"2": "Z", "0": "O", "5": "S", "1": "I"}
+#: Description words too general to show that a record states the diagnosis.
+_GENERIC = {
+    "other", "unspecified", "specified", "initial", "encounter", "subsequent", "sequela", "without", "with",
+    "site", "region", "part", "type", "history", "personal", "family", "status", "disease", "disorder",
+    "disorders", "condition", "conditions", "left", "right", "bilateral", "acute", "chronic", "involving",
+    "classified", "elsewhere", "current", "unknown", "level", "long", "term",
+}  # fmt: skip
+
+
+def _named_in(description: str, text: str) -> bool:
+    """True when `text` carries a word of `description` (four letters or
+    more, not a generic one): the record states this diagnosis."""
+    want = {w for w in re.findall(r"[a-z]{4,}", description.lower()) if w not in _GENERIC}
+    have = set(re.findall(r"[a-z]{4,}", (text or "").lower()))
+    return bool(want & have)
+
+
+def resolve(code: str, tables: dict[str, Any], on: str, text: str) -> tuple[str, str | None, str]:
+    """(code to show, description or None, how it was decided) for a code a
+    record dated `on` (ISO) carries, `text` being that record's entry text.
+
+    A purely numeric code on a record dated on or after 2015-10-01 is read as
+    an ICD-10 code whose chapter letter the scan lost (2->Z, 0->O, 5->S,
+    1->I), accepted only when the record names a word of that code's
+    description. Failing that, an ICD-9 code is kept only when the record
+    names a word of ITS description (a real historical code). Anything else
+    has no description: it is never given an ICD-9 label it does not carry."""
+    k = strip_dots(code)
+    if not (re.fullmatch(r"\d+", k) and on >= ICD10_FROM):
+        return code, describe(code, tables), "table"
+    swapped = OCR_SWAP[k[0]] + k[1:] if k[0] in OCR_SWAP else ""
+    ten = tables["icd10"].get(swapped) if swapped else None
+    if ten and _named_in(ten[0], text):
+        shown = swapped[:3] + ("." + swapped[3:] if len(swapped) > 3 else "")
+        return shown, ten[0], f"read as ICD-10 {shown} (scanned as {code})"
+    nine = tables["icd9"].get(k)
+    if nine and _named_in(nine, text):
+        return code, f"{nine} (ICD-9-CM)", "an ICD-9 code the record names"
+    return code, None, "not legible as recorded"

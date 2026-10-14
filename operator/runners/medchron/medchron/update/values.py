@@ -42,6 +42,60 @@ def lost(before: str, after: str) -> list[str]:
     return sorted(numbers(before) - numbers(after))
 
 
+#: A CLINICAL value is a lab, vital or dose: a number carrying a unit, a
+#: blood pressure, or a number after a vital or lab name. Page, fax, print
+#: date, record-number and time digits carry none of these, so two copies of
+#: one record that differ only in their fax stamp state the same values.
+_UNIT = r"mg/dl|mmol/l|g/dl|meq/l|u/l|mg|mcg|ug|meq|ml|cc|units?|iu|mmhg|bpm|kg|lbs?|cm|mm|%|°\s?[fc]"
+_WITH_UNIT = re.compile(rf"(?<![\d.])(\d+(?:\.\d+)?)\s*({_UNIT})(?![a-z])", re.I)
+_BP = re.compile(r"(?<![\d/])(\d{3})\s*/\s*(\d{2,3})(?![\d/])")
+_BP_NAMED = re.compile(r"\b(?:bp|blood pressure)\b\D{0,12}?(\d{2,3})\s*/\s*(\d{2,3})(?![\d/])", re.I)
+_NAMED = re.compile(
+    r"\b(pulse|heart rate|hr|temp(?:erature)?|resp(?:iratory rate|irations)?|rr|spo2|o2 sat(?:uration)?|"
+    r"weight|wt|height|bmi|glucose|a1c|hgb|hemoglobin|wbc|platelets?|creatinine|inr|pain)\b"
+    r"[^\d\n]{0,15}?(\d+(?:\.\d+)?)",
+    re.I,
+)
+
+
+def clinical_values(text: str | None) -> set[str]:
+    """The labs, vitals and doses `text` states, one spelling each."""
+    t = CITE.sub("", text or "")
+    out = {f"{norm_number(n)} {u.lower().replace(' ', '')}" for n, u in _WITH_UNIT.findall(t)}
+    out |= {f"bp {a}/{b}" for a, b in _BP.findall(t) + _BP_NAMED.findall(t)}
+    out |= {f"{k.lower()[:4]} {norm_number(n)}" for k, n in _NAMED.findall(t)}
+    return out
+
+
+#: A diagnosis or impression TERM: a content word in a clause a finding cue
+#: opens ("impression", "diagnosed", "showed", "revealed", "positive for").
+_CUE = re.compile(
+    r"\b(?:diagnos\w*|impression|assessment|dx|findings?|show(?:s|ed|n)?|reveal(?:s|ed)?|demonstrat\w*|"
+    r"consistent with|positive for|suspicious for|noted|exam(?:ination)?)\b([^.;\n]*)",
+    re.I,
+)
+_STOP = {
+    "about", "after", "again", "along", "also", "among", "being", "before", "below", "there", "their", "these",
+    "those", "which", "while", "would", "could", "should", "other", "under", "until", "with", "without", "within",
+    "visit", "patient", "noted", "shows", "showed", "revealed", "reveals", "findings", "finding", "since",
+    "today", "level", "right", "left", "times", "place", "where", "further", "recorded",
+}  # fmt: skip
+
+
+def terms(text: str | None) -> set[str]:
+    """The diagnosis and impression terms `text` states (lowercase words)."""
+    t = CITE.sub("", text or "")
+    out: set[str] = set()
+    for m in _CUE.finditer(t):
+        out |= {w for w in re.findall(r"[a-z]{5,}", m.group(1).lower()) if w not in _STOP}
+    return out
+
+
+def words(text: str | None) -> set[str]:
+    """Every lowercase word of five letters or more: what a term is looked up in."""
+    return set(re.findall(r"[a-z]{5,}", CITE.sub("", text or "").lower()))
+
+
 def named_by(problems: list[str] | None) -> set[str]:
     """The values an audit finding names (its unsupported assertions and
     contradictions): the only values an edit may remove."""

@@ -71,7 +71,11 @@ def _walk(body: str, keep: set[int]) -> list[tuple[dict[str, Any], str]]:
         seg = last.strip()
         cursor = m.end()
         n = int(m.group(1))
-        if n not in keep or len(seg) < 30 or seg.lstrip().startswith("[NTD:"):
+        # The note's own line is tested, not the segment's first: a note that
+        # opens its section ("All Other Information\n[NTD: ...]") carries the
+        # heading in its segment and was audited as a claim (the laptop's
+        # 2026-10-13 review: the one claim left PARTIAL was such a note).
+        if n not in keep or len(seg) < 30 or seg.split("\n")[-1].lstrip().startswith("[NTD:"):
             continue
         spec = m.group(2)
         claim = {
