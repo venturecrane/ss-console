@@ -160,6 +160,8 @@ const EXPECTED_VERBS = [
   'negotiation_job_status',
   'negotiation_job_submit',
   'ops_ask_sent',
+  // Root only: SMD closes an ops card whose requester was already answered.
+  'ops_close_by_smd',
   'ops_propose',
   'ops_resolve',
   // ADR 0089 staff send-as on the staff member's emailed approval.

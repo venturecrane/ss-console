@@ -302,6 +302,14 @@ def proposal_state(row: dict[str, Any]) -> str:
         return "committed"
     if row.get("declined_at") is not None:
         return "declined"
+    if row.get("smd_closed_at") is not None:
+        # ``ops_close_by_smd``: SMD finished the work by hand and the requester
+        # was already answered elsewhere. The row also carries lapsed_at (so
+        # every "is it still open" clause in the store reads it as ended without
+        # learning a new column), which is why this arm sits ABOVE the lapse
+        # one: read as "lapsed" it would say nobody answered, which is false.
+        # The seat's sweeper has no letter for this word and returns "" for it.
+        return "closed_by_smd"
     if row.get("lapsed_at") is not None:
         return "lapsed"
     return "open"
