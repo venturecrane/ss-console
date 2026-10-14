@@ -34,6 +34,7 @@ from . import (
     icd_tables,
     job as job_mod,
     limits as limits_mod,
+    projection,
     proof_mode,
     rehearsal,
     seat as seat_mod,
@@ -307,41 +308,12 @@ class Driver:
             return budget_mod.scanned_pages(extracted) * self.limits.usd_per_scanned_page + self.budget.projection(
                 budget_mod.extracted_chars(extracted)
             )
-        if stage.name == "audit":
-            n = self._claims(ctx)
+        if stage.name == "audit":  # the claims still to verify (``projection``)
+            n = projection.claims_to_verify(self.slug_dir, ctx.unit.unit)
             return None if n is None else n * self.limits.usd_per_audit_claim
         if stage.name == "update_review":
-            from .stages import update_review
-
-            return update_review.projected_usd(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing)
+            return projection.update_review_usd(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing)
         return None
-
-    def _claims(self, ctx: dag.Ctx) -> int | None:
-        """Claims in the built chronology STILL TO VERIFY, counted with the
-        audit gate's OWN extractor, so the projection counts what the audit
-        will actually call on rather than a remembered ratio from some other
-        matter. The audit resumes by key, so a claim with a real verdict on
-        disk for this very body costs nothing again: live 2026-09-16 a resume
-        with 1,998 verdicts already paid for was held at the cap on a
-        projection that re-counted all 1,998. None before the chronology
-        exists: no document is "no count yet", not zero claims (a rehearsal
-        that stops before build_doc would otherwise print the costliest late
-        stage as $0)."""
-        from .audit import claims as claims_mod
-        from .audit.page_text import exhibit_paths
-
-        doc = self.slug_dir / "runs" / ctx.unit.unit / "final-chronology.md"
-        if not doc.is_file():
-            return None
-        out = self.slug_dir / "out" / ctx.unit.unit
-        body = claims_mod.body_of(doc.read_text(encoding="utf-8"))
-        claims = claims_mod.extract_claims(body, set(exhibit_paths(out)))
-        sha = claims_mod.doc_sha_of(body)
-        results = out / "audit-results.jsonl"
-        rows = claims_mod.read_rows(results) if results.is_file() else []
-        verified = {r["key"] for r in rows if r.get("kind") == "real" and r.get("doc_sha") == sha}
-        verified -= claims_mod.pending_reaudit(rows)  # a stale verdict the next round pays for again
-        return sum(1 for c in claims if c["key"] not in verified)
 
     def _check_limits(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> None:
         """Before a paid stage. The first paid stage of the process also asks
