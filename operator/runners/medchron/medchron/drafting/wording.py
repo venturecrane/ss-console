@@ -61,7 +61,7 @@ HEDGE = re.compile(
     r"(?i)\b(on either reading|(?:it is )?unclear whether|may or may not|presumably|we assume|it is assumed|"
     r"if (?:\S+\s+){0,6}is the (?:handling|responsible|requesting) attorney|"
     r"whether (?:\S+\s+){0,8}(?:is|was) the (?:handling|responsible|requesting) attorney|"
-    r"(?:may|might) (?:not )?have been served|"
+    r"(?:may|might) (?:not )?have been served|if (?:the|that|an?|any) (?:\w+ ){0,2}(?:set|paper)s? (?:was|were|is|had been) served|"
     r"confirm (?:\S+\s+){0,6}(?:is|as) the (?:handling|signing|responsible|requesting) attorney)\b"
 )
 _QUOTED = re.compile(r"\"[^\"\n]*\"|“[^”\n]*”")
@@ -102,6 +102,21 @@ def _unquoted(text: str) -> str:
     return _QUOTED.sub(" ", text)
 
 
+#: "any YOUR employee": a defined possessive after "any" needs "of" and a plural.
+_ANY_YOUR = re.compile(r"\b[Aa]ny\s+(YOUR|PLAINTIFF'S|DEFENDANT'S)\s+([A-Za-z]+)\b")
+
+
+def grammar(text: str) -> list[str]:
+    """Errors a served paper must not carry, found in code: "any YOUR
+    employee" (2026-10-14, three requests for production)."""
+    out = []
+    for m in _ANY_YOUR.finditer(text):
+        word = m.group(2)
+        if not word.lower().endswith("s"):
+            out.append(f'grammar: "{m.group(0)}" should read "any of {m.group(1)} ..." with a plural')
+    return list(dict.fromkeys(out))
+
+
 def vocabulary(text: str, rx: re.Pattern[str] = VOCABULARY) -> list[str]:
     return list(dict.fromkeys(m.group(0) for m in rx.finditer(_unquoted(text))))
 
@@ -137,6 +152,8 @@ def notes_findings(text: str) -> list[str]:
     out += [f"a line that says nothing: {ln[:80]!r}" for ln in empty_lines(text)]
     if "{{" in text or "}}" in text:
         out.append("a raw {{marker}}")
+    if re.search(r"(?i)\byour (?:markers?|flags?)\b", text):
+        out.append('a flag the drafting wrote called "your marker"')
     return out
 
 

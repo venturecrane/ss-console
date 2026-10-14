@@ -12,6 +12,7 @@ final document still bears them out."""
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,22 @@ def _once(lines: list[str], labels: list[str]) -> list[str]:
     return out
 
 
+_SCANS = re.compile(
+    r"(?is)(\d+) of (\d+) sources are machine transcriptions of scanned documents[^:]*:\s*(.*?)(?:\.\s*Cite them\b.*)?$"
+)
+
+
+def _plain_warning(w: str) -> str:
+    """The record check's warnings in the attorney's words, not the system's."""
+    m = _SCANS.match(str(w))
+    if m:
+        return (
+            f"{m.group(1)} of the file's {m.group(2)} documents are scanned images whose text was read by software; "
+            f"check any figure or quotation taken from them against the scan: {m.group(3)}"
+        )
+    return str(w)
+
+
 def _json(data: Path, name: str) -> Any:
     return json.loads((data / name).read_text(encoding="utf-8"))
 
@@ -47,7 +64,13 @@ def attorney_notes(
     """``units`` are (label, unit data dir) for a job that drafted several
     documents; a one-document job reads its records from ``data``."""
     lines = [f"# Attorney notes: {title}", "", "## Items for the attorney", ""]
-    lines += [f"- {KIND_LABEL.get(m['kind'], m['kind'].title())}: {m['text']}" for m in found if m["text"].strip()]
+    lines += [
+        f"- {KIND_LABEL.get(m['kind'], m['kind'].title())}"
+        + (f" ({m['where']})" if m.get("where") else "")
+        + f": {m['text']}"
+        for m in found
+        if m["text"].strip()
+    ]
     if lines[-1] == "":
         lines.append("- None.")
     cap = _json(data, "caption.json") if (data / "caption.json").is_file() else None
@@ -88,7 +111,7 @@ def attorney_notes(
         review += [f"{pre}Removed or marked, not borne out by the file: {x}" for x in fp["settled"]]
         g = _json(d, "gate.json")
         review += [f"{pre}Corrected to match the record: {x}" for x in g.get("repairs") or []]
-        review += [f"{pre}Check against the record: {w}" for w in g.get("warnings") or []]
+        review += [f"{pre}Check against the record: {_plain_warning(w)}" for w in g.get("warnings") or []]
         if (d / "caps.json").is_file():
             review += [f"{pre}Consistency: {x}" for x in _json(d, "caps.json")]
     if (data / "howell.json").is_file():
@@ -99,11 +122,16 @@ def attorney_notes(
     # an email's subject can equal a filed document's name ("LIEN - SIGNED" in
     # the mail and the signed lien in the liens folder), and on 2026-10-13 the
     # review read the line as the filed document excluded and then used.
-    review += [
-        f'Email kept out of drafting ({w["reason"]}): "{w["name"]}"; a filed document '
-        "with the same name is a separate paper"
-        for w in walled
-    ]
+    if walled:
+        # One line, the emails named once each (the review: forty lines read
+        # as the system talking). A filed document of the same name is a
+        # separate paper and was read like any other.
+        names = list(dict.fromkeys(str(w["name"]) for w in walled))
+        review.append(
+            f"Not used in drafting: {len(walled)} privileged or internal emails between the firm, its client and "
+            f"its staff, with these {len(names)} subjects: " + "; ".join(f'"{n}"' for n in names) + ". Where a paper "
+            "filed in the matter has the same name as one of these emails, it is a separate document and was read."
+        )
     review = _once(review, [label for label, _d in units or []])
-    tail = ["", "## End tables (from the final document)", "", end_tables] if end_tables else []
+    tail = ["", "## Request basis, record gaps and your decisions", "", end_tables] if end_tables else []
     return "\n".join(lines + ["", "## For review", ""] + [f"- {x}" for x in review] + tail) + "\n"
