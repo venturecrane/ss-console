@@ -126,7 +126,9 @@ const EXPECTED_VERBS = [
   // The litigation status job's request edge (litigation_verbs.py): submit's
   // table gate admits gateway, agent and root because it has two forms (the
   // handler pins a request to gateway-or-root and a scheduled run to the cron
-  // pre_run's agent uid or root); record and resume root only; no allowance.
+  // pre_run's agent uid or root); record, resume and close root only; no
+  // allowance. Close is SMD ending a held job it finished by hand.
+  'litigation_job_close',
   'litigation_job_record',
   'litigation_job_resume',
   'litigation_job_status',

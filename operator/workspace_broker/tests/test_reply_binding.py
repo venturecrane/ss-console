@@ -896,6 +896,25 @@ def test_a_failed_litigation_job_is_never_told(tmp_path: Path, trigger: str) -> 
     assert box.replies() == [] and _sendmails(box) == []
 
 
+def test_a_held_litigation_job_smd_closed_is_never_told(tmp_path: Path) -> None:
+    """2026-10-14. FALSIFIER: a held job is replyable, so before
+    litigation_job_close a job SMD finished by hand could still be answered by
+    a late completion turn. Closed, it binds nothing and sends nothing."""
+    from workspace_broker.litigation_ledger import LitigationLedger
+
+    job = _litigation_job(tmp_path, ["running", "held"])
+    LitigationLedger(str(tmp_path / "audit.db"), tmp_path / "lq").close(
+        job, "SMD filed the list by hand and told the requester", "vfy_" + "0" * 26
+    )
+    box = FakeMailbox()
+    _ack_in_thread(box)
+    out = _call(_broker(tmp_path, box, LIT_YAML), "msgraph_reply_bind", {"kind": "litigation_job", "job_id": job})
+    assert out["bound"] is False and "Send nothing to anyone" in out["reason"]
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box, LIT_YAML), {"kind": "litigation_job", "job_id": job})
+    assert box.replies() == [] and _sendmails(box) == []
+
+
 # -- negotiation notices (2026-10-09). The negotiation watch emails the firm once
 # per new offer: each notice binds as ONE new email to the authored scheduled
 # recipient under the broker's subject; the job itself never binds.

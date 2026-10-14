@@ -197,4 +197,5 @@ def test_the_litigation_lane_gates() -> None:
     assert gates["litigation_job_status"] == gates["drafting_job_status"]
     assert gates["litigation_job_record"] == frozenset({verbs.ROOT})
     assert gates["litigation_job_resume"] == frozenset({verbs.ROOT})
+    assert gates["litigation_job_close"] == frozenset({verbs.ROOT})
     assert "litigation_allowance" not in gates
