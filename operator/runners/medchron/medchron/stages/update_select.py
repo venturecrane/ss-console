@@ -23,6 +23,12 @@ attachment folded from a named email) is a candidate, in pull order:
   not an exhibit; the whole document is, and the extract is recorded in
   ``selection.json`` "subsets" (its id, name and the whole one's exhibit) so
   Records Reviewed names it as a re-filed extract;
+* a document NONE of whose pages is read because every one is already in a
+  delivered exhibit (by picture confirmed by words, or by words alone; blank
+  pages aside): a re-filed copy of delivered pages, recorded in "subsets"
+  against the delivered exhibit most of its pages are in, never a new
+  exhibit (``select.delivered_home``; a re-printed hospital record was once
+  filed again as a new exhibit, 2026-10-14);
 * otherwise it becomes ``Exhibit N - <name> (Medical Records)``, numbered after
   the highest exhibit the delivered folder holds, its PDF built in
   ``out/<unit>/`` from the source as it is (so its page numbers are the
@@ -49,7 +55,7 @@ from pathlib import Path
 from typing import Any
 
 from ..gates import foreign_identity as FI
-from ..update import body as B, medlegal as ML, pageid_io as PG, select as S, subsets as SUB
+from ..update import body as B, medlegal as ML, pageid as PI, pageid_io as PG, select as S, subsets as SUB
 from ..update.locate import vendor_name
 from .base import StageRun, read_json, read_jsonl
 from .transcript import split_pages
@@ -222,16 +228,22 @@ def run(sr: StageRun) -> int:
         ident.extracts,
     )
     text_of = _text_of(sr, {int(e["exhibit"]): e["name"] for e in read_by_delivery})
-    recs, units, earlier, k = [], [], S.Earlier(), 0
+    by_ex = S.shingles_by_exhibit({int(e["exhibit"]): sr.slug_dir / "delivered" / e["name"] for e in read_by_delivery})
+    recs, units, earlier, k, whole = [], [], S.Earlier(), 0, {}
     for r in (x for x in rows if str(x["id"]) not in extracts):
         f = firm.get(r.get("sha256") or "")
-        if f is None:
-            k += 1
-        n = int(f["exhibit"]) if f else int(p["top_exhibit"]) + k
-        image = PG.reasons(ident.pages.get(str(r["id"])) or {}, _texts(sr, str(r["id"])), text_of)
+        n = int(f["exhibit"]) if f else int(p["top_exhibit"]) + k + 1
+        found = ident.pages.get(str(r["id"])) or {}
+        image = PG.reasons(found, _texts(sr, str(r["id"])), text_of)
         rec, urow = _exhibit(sr, r, n, seen, cdir, earlier, f["name"] if f else None, image)
+        sub = None if f else _refiled_whole(sr, rec, found, by_ex)
+        if sub is not None:  # every page already delivered: cited there, never a new exhibit
+            whole[sub.doc] = sub
+            continue
+        k += 0 if f else 1
         recs.append(rec)
         units.append(urow)
+    extracts = {**extracts, **whole}
     unread = [f"Exhibit {r['exhibit']} p. {r['unread'][:6]}" for r in recs if r["unread"]]
     if unread:
         sr.log(HELD + f"page(s) the transcription could not read: {unread[:5]}")
@@ -247,6 +259,24 @@ def run(sr: StageRun) -> int:
         f"{len(subs)} re-filed extract(s) cited in the whole document; skipped {skipped}"
     )
     return 0
+
+
+def _refiled_whole(
+    sr: StageRun, rec: dict[str, Any], found: dict[int, PG.Page], by_ex: dict[int, set[str]]
+) -> SUB.Subset | None:
+    """The re-filed-copy record for a new document every page of which the
+    delivery already read (``select.delivered_home``), or None. Its exhibit
+    PDF is removed: it is cited in the delivered exhibit, never filed again,
+    and it takes no exhibit number."""
+    if rec.get("not_itemized"):
+        return None
+    image_ex = {pg: n for pg, h in found.items() if (n := PG.delivered_exhibit(h.other)) is not None}
+    home = S.delivered_home(rec, _texts(sr, rec["id"]), by_ex, image_ex)
+    if home is None:
+        return None
+    (sr.slug_dir / "out" / sr.unit.unit / f"{rec['title']}.pdf").unlink(missing_ok=True)
+    (update_dir(sr) / "compose" / f"{rec['id']}.txt").unlink(missing_ok=True)
+    return SUB.Subset(rec["id"], f"{PI.DELIVERED}{home}", int(rec["pages"]), int(rec["excluded"].get(S.ALREADY, 0)))
 
 
 def _text_of(sr: StageRun, delivered: dict[int, str]) -> Callable[[str, int], str]:
