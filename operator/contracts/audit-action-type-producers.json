@@ -510,7 +510,7 @@
     "LITIGATION_JOB_FAILED": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/litigation_verbs.py",
-      "reason": "A litigation job failed on SMD's own machinery or stopped at a spend cap; resumable by a person, never reported to the client."
+      "reason": "A litigation job failed on SMD's own machinery or stopped at a spend cap; resumable by a person, never reported to the client. Also SMD's root-only litigation_job_close of a held job it finished by hand (ids and tokens only; never resumed)."
     },
     "LITIGATION_JOB_RESUME_REQUESTED": {
       "side": "ss-console",

@@ -26,6 +26,12 @@ Peer gating, per verb:
                             meters against the firm's budget.
     litigation_job_record   uid 0 only (the runner daemon)
     litigation_job_resume   uid 0 only, with NO agent tool.
+    litigation_job_close    uid 0 only, with NO agent tool: SMD ends a HELD
+                            job it finished by hand (``held -> failed``,
+                            once), so nothing on the seat answers it again.
+                            Writes no queue file, no resume marker and no
+                            wake; ``failed`` is the ending the reply binding
+                            refuses. ``dry_run`` checks and writes nothing.
 
 THE SUBMIT CHECKS, in order, none of which spends anything:
 1. the envelope is one of the two input shapes;
@@ -83,6 +89,8 @@ from .litigation_ledger import (
     MAX_REQUEST_TEXT,
     SKILL_NAME,
     STATES,
+    CLOSE_REF,
+    CLOSED_REASON,
     EnvelopeError,
     LitigationLedger,
     SubmitRefused,
@@ -124,6 +132,7 @@ VERBS = (
     "litigation_job_status",
     "litigation_job_record",
     "litigation_job_resume",
+    "litigation_job_close",
 )
 
 _REQUEST_KEYS = {"trigger", "requester", "message_ref", "request_text", "scope"}
@@ -219,6 +228,8 @@ class LitigationVerbs:
             return self._record(request)
         if action == "litigation_job_resume":
             return self._resume(request)
+        if action == "litigation_job_close":
+            return self._close(request)
         raise ValueError(f"unsupported litigation action: {action}")
 
     # -- status ---------------------------------------------------------------
@@ -465,6 +476,8 @@ class LitigationVerbs:
             raise ValueError(f"no such job {job_id}")
         if row["state"] != "failed":
             raise ValueError(f"job {job_id} is {row['state']}, not failed; only a failed job resumes")
+        if row.get("close_ref"):
+            raise ValueError(f"job {job_id} was closed by SMD ({row['close_ref']}); a closed job never runs again")
         twin = self._db.unfinished_for_scope(row["scope_key"])
         if twin is not None and twin != job_id:
             raise ValueError(f"job {twin} is already underway for this scope; resuming {job_id} would run it twice")
@@ -483,6 +496,44 @@ class LitigationVerbs:
         )
         self._audit(RESUME_AUDIT_TYPE, {"job_id": job_id, "reason": reason[:500]})
         return {"ok": True, "job_id": job_id, "queued": True}
+
+    def _close(self, request: dict[str, Any]) -> dict[str, Any]:
+        """SMD's close of a held job it finished by hand: the row moves
+        ``held -> failed`` once and one LITIGATION_JOB_FAILED audit row records
+        it in ids and tokens only (SMD's sentence stays on the job row's
+        ``close_reason``). Nothing else is written: no queue file, no resume
+        marker, no wake, so no completion turn exists to answer the requester,
+        and the reply binding refuses a failed job if anything asks."""
+        job_id = str(request.get("job_id") or "")
+        reason = str(request.get("reason") or "").strip()
+        source_ref = str(request.get("source_ref") or "").strip()
+        if not job_id:
+            raise ValueError("litigation_job_close requires job_id")
+        if not reason:
+            raise ValueError("litigation_job_close requires a reason: what SMD did, and how the requester was told")
+        if not CLOSE_REF.match(source_ref):
+            raise ValueError(
+                "litigation_job_close requires source_ref: a crane_verify id (vfy_<ULID>) or an audit row id (ULID)"
+            )
+        row = self._db.read(job_id)
+        if row is None:
+            raise ValueError(f"no such job {job_id}")
+        if row["state"] != "held":
+            raise ValueError(f"job {job_id} is {row['state']}; only a held job is closed by SMD")
+        meta = {
+            "job_id": job_id,
+            "state": "failed",
+            "prev_state": "held",
+            "trigger": row["trigger"],
+            "reason": CLOSED_REASON,
+            "closed_by": "smd",
+            "source_ref": source_ref,
+        }
+        if request.get("dry_run") is True:
+            return {"ok": True, "dry_run": True, "job_id": job_id, "from_state": "held", "audit": meta}
+        after = self._db.close(job_id, reason, source_ref)
+        self._audit(AUDIT_TYPES["failed"], meta)
+        return {"ok": True, "dry_run": False, "job": LitigationLedger.project(after), "audit": meta}
 
 
 def litigation_dispatch(

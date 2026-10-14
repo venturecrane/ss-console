@@ -181,11 +181,13 @@ VERBS: tuple[Verb, ...] = (
     # pins each form to its peers (a request from the gateway or root, a
     # scheduled run from the cron pre_run's agent uid or root, never the
     # gateway). No allowance verb: the lane is metered by the firm's monthly
-    # budget, read on root's status. Resume has no agent tool.
+    # budget, read on root's status. Resume and close have no agent tool.
     Verb("litigation_job_submit", GATEWAY_ROOT_OR_AGENT, litigation_verbs.litigation_dispatch),
     Verb("litigation_job_status", GATEWAY_ROOT_OR_AGENT, litigation_verbs.litigation_dispatch),
     Verb("litigation_job_record", _only(ROOT), litigation_verbs.litigation_dispatch),
     Verb("litigation_job_resume", _only(ROOT), litigation_verbs.litigation_dispatch),
+    # SMD's close of a held job it finished by hand: root only, no agent tool.
+    Verb("litigation_job_close", _only(ROOT), litigation_verbs.litigation_dispatch),
     # The negotiation watch's request edge (negotiation_verbs.py): scheduled
     # only, so submit is the cron pre_run's agent uid or root, never a turn.
     # Status serves the completion turn a notice's message. Resume has no tool.
