@@ -156,7 +156,11 @@ def precheck(
     delivered: list[str],
     ev: RR.Evidence | None,
     shown: dict[str, list[tuple[int, int]]] | None = None,
+    keep: set[int] | None = None,
+    headings: set[str] | None = None,
 ) -> None:
+    from . import entry_edits as EE
+
     for e in edits:
         if e.outcome:
             continue
@@ -164,6 +168,10 @@ def precheck(
             e.outcome = check_drop(e, ents, delivered)
         elif e.action == "provider":
             e.outcome = check_provider(e, ents, ev, shown or {})
+        elif e.action == "new_entry":
+            e.outcome = EE.check_new_entry(e, keep or set(), headings or set(), ev)
+        elif e.action == "append_to_delivered":
+            e.outcome = EE.check_fold(e, ents, delivered, keep or set(), headings or set())
 
 
 # ---- the audit's verdict on what changed ----------------------------------------
@@ -178,7 +186,11 @@ def failed(edits: list[RR.Finding], unsupported: list[dict[str, Any]]) -> tuple[
     a redate moved, a sentence beside a dropped one) is left to the audit
     loop, which repairs or drops it before its gate: reverting every edit
     for it undid 58 corrections in one real round (2026-10-14)."""
-    text_edits = [e for e in edits if e.outcome == "applied" and e.action in ("replace", "add")]
+    text_edits = [
+        e
+        for e in edits
+        if e.outcome == "applied" and e.action in ("replace", "add", "new_entry", "append_to_delivered")
+    ]
     bad: list[RR.Finding] = []
     untraced = 0
     for c in unsupported:

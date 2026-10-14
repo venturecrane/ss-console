@@ -267,12 +267,16 @@ def _model_tier_checks(data: dict[str, Any]) -> list[str]:
     # The audit forces its verdict tool (audit/verify.py TOOL_CHOICE); these
     # models answer a forced tool_choice with HTTP 400, so the audit - the gate
     # every chronology passes - would fail on every claim.
-    audit_model = str(tiers.get("audit") or "")
-    if any(audit_model.startswith(m) for m in NO_FORCED_TOOL_MODELS):
-        out.append(
-            f"models.tiers.audit: {audit_model} rejects a forced tool_choice, which the audit's "
-            "verdict call requires; keep the audit tier on a model that accepts it"
-        )
+    # `verify` is OPTIONAL: the grader of the update finisher's own sentences
+    # (stages/update_review.py); absent, the audit tier. It is an audit verdict
+    # call, so it carries the audit tier's forced-tool rule.
+    for tier in ("audit", "verify"):
+        model = str(tiers.get(tier) or "")
+        if any(model.startswith(m) for m in NO_FORCED_TOOL_MODELS):
+            out.append(
+                f"models.tiers.{tier}: {model} rejects a forced tool_choice, which the audit's "
+                f"verdict call requires; keep the {tier} tier on a model that accepts it"
+            )
     return out
 
 

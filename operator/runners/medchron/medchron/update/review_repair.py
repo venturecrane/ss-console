@@ -46,7 +46,7 @@ from . import body as B, handwritten as H, icd, uncited as U
 from .values import lost, numbers
 
 MUST, SHOULD = "MUST", "SHOULD"
-ACTIONS = ("replace", "drop", "redate", "drop_entry", "add", "provider", "none")
+ACTIONS = ("replace", "drop", "redate", "drop_entry", "add", "provider", "new_entry", "append_to_delivered", "none")
 _MDY = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
 _ANCHOR = re.compile(r"^([ND])(\d+)(?:\.[cu](\d+))?$")
 #: (exhibit, page) -> the page's text, or None when there is none to read.
