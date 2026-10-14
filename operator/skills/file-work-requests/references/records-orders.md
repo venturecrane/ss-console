@@ -67,17 +67,38 @@ it>"}`, plus `zip` only if she gave one. When she gives a facility its own
 
 Read the result by `status`:
 
-| status                 | what to do                                                                                                                                                                                                                                                                                                                                |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ready`                | call `place_records_order(order=<order>)` with the order unchanged. The seat withholds it and hands back the `[act ...]` line; put that line in the reply character for character.                                                                                                                                                        |
-| `needs_choice`         | ask, one line per item. A facility: `Needs a word from you: which <facility>? The records vendor lists <name, address> (directory id <id>); <name, address> (directory id <id>). Or is it a new custodian? Then send its address.` The authorization: `Which file is the signed HIPAA authorization: <name> (<date>) or <name> (<date>)?` |
-| `missing_client_facts` | `Not ordered: the client's contact in Smokeball is missing <the names listed>. Once it is filled in, send the request again.`                                                                                                                                                                                                             |
-| `not_connected`        | `Not ordered: the records vendor is not connected on this seat yet.`                                                                                                                                                                                                                                                                      |
-| `refused`              | `Not ordered: <reason in plain words>.`                                                                                                                                                                                                                                                                                                   |
+| status                 | what to do                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ready`                | call `place_records_order(order=<order>)` with the order unchanged. The seat withholds it and hands back the `[act ...]` line; put that line in the reply character for character.                                                                                                                                                                     |
+| `needs_choice`         | ask, one line per item. A facility: `Needs a word from you: which <facility>? The records vendor lists <name, address>; <name, address>. Or is it a new custodian? Then send its address.` Never write a directory id: the reply gate holds it. The authorization: `Which file is the signed HIPAA authorization: <name> (<date>) or <name> (<date>)?` |
+| `missing_client_facts` | `Not ordered: the client's contact in Smokeball is missing <the names listed>. Once it is filled in, send the request again.`                                                                                                                                                                                                                          |
+| `not_connected`        | `Not ordered: the records vendor is not connected on this seat yet.`                                                                                                                                                                                                                                                                                   |
+| `refused`              | `Not ordered: <reason in plain words>.`                                                                                                                                                                                                                                                                                                                |
 
 When she answers a `needs_choice` question, prepare again with what she chose:
 the facility's `custodian_id` from the candidates she picked, or
 `new_custodian: true` with the `address` she gave, or `hipaa_file_id`.
+
+- **Her words are a pick.** A number, a name, a city or an address that fits
+  exactly ONE candidate is her choice ("the hospital in Springfield" picks the
+  Springfield hospital when only one candidate is a hospital in Springfield).
+  Ask again only when her words fit more than one candidate or none, and then
+  say which words fit which candidates. Never answer a pick with "your reply
+  did not choose" (2026-10-14: she named the hospital and its city and was
+  asked again).
+- **Match a number through the list she answered,** quoted under her reply, by
+  name and address. A fresh directory search can return the candidates in a
+  different order or count.
+
+## Different dates for different record types
+
+When she gives one range for medical records and another for billing ("medical
+5 years to present, billing from 10/10/2026"), that is ONE order with two
+entries for the same facility: the same `name` (and `custodian_id` once
+picked), one with `record_types: ["Medical"]` and its range, one with
+`record_types: ["Billing"]` and its own `service_start`. Never tell her an order
+takes one range per facility, and never ask her to choose between her range and
+a merged one: she already chose.
 
 ## Turn 1, from the gap audit: "yes" to the missing-records question
 

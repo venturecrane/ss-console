@@ -555,6 +555,12 @@ def render_firm_form_letter(
     client = _client()
     resolved = _resolve_form(client, spec)
     if not isinstance(resolved, ResolvedTemplate):
+        if getattr(resolved, "transient", False):
+            return _refused(
+                f"the firm's {spec.label} form could not be reached just now ({resolved.reason}); "
+                "nothing was filed. The form is not known to be missing: this was a failed read, "
+                "so ask again and it will be made from the same form."
+            )
         return _refused(
             f"the firm's {spec.label} form did not resolve ({resolved.reason}); nothing was filed. "
             "No other letter is made in its place: the firm's form has to be in its Document Library."
