@@ -164,7 +164,7 @@ def row_item(line: str) -> int | None:
     return int(got.group(1)) if got else None
 
 
-def delta(head: str, body: str, prev_body: str, prev_audit: str) -> tuple[str, list[str]] | None:
+def delta(head: str, body: str, prev_body: str, prev_audit: str) -> tuple[list[str], list[str]] | None:
     """For a requests section that changed: (the rows of the prior audit to
     keep, the requests to audit again), or None when only a full audit will
     do (the text around the requests changed, or a prior finding names no
