@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any
 
 from ..stages.chunking import context_block
+from . import noteheading as NH
 from .billing_page import BILLING, is_billing
 from .pageid import SKIPPED
 from .values import clinical_values
@@ -259,7 +260,9 @@ def selected_text(pages: dict[int, str], read: list[int]) -> str:
     repeats an earlier copy) carries that neighbour's foot or head as a
     delimited context block outside its own segment: a serology's "No" at the
     foot of an unread page and its result at the head of a read one was
-    composed POSITIVE (``stages/chunking.context_block``)."""
+    composed POSITIVE (``stages/chunking.context_block``). A read page that
+    continues a note whose heading page is not read also carries that note's
+    heading, or says none was found (``update/noteheading``)."""
     want = set(read)
 
     def ctx(p: int) -> str:  # a billing page is never context: it is not composed at all
@@ -268,7 +271,7 @@ def selected_text(pages: dict[int, str], read: list[int]) -> str:
 
     out = []
     for pg in read:
-        pre = context_block(ctx(pg - 1), pg - 1, before=True)
+        pre = NH.heading_block(pages, pg, want.__contains__) + context_block(ctx(pg - 1), pg - 1, before=True)
         nxt = context_block(ctx(pg + 1), pg + 1, before=False)
         out.append(pre + f"[p.{pg}]\n{pages.get(pg) or ''}" + ("\n" + nxt.rstrip("\n") if nxt else ""))
     return "\n".join(out)
