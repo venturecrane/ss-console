@@ -325,6 +325,11 @@ def review_round(c: Ctx, md: str, base: list[str], targets: set[int] | None) -> 
             if k not in seen:
                 seen.add(k)
                 found.append(f)
+    found, settled = FN.settled_as_read(found, ents)
+    if settled:
+        c.sr.log(
+            f"  {settled} finding(s) on rows stated as marked or as written on the page: settled, not raised again"
+        )
     return found, len(pick)
 
 
