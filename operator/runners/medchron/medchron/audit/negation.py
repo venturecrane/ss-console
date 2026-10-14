@@ -96,12 +96,30 @@ def note(f: dict[str, Any]) -> str:
     )
 
 
-def evidence(rnd: Any, c: dict[str, Any], pdfs: dict[int, Any], render_page: Callable[[int, int], Any]) -> list:
-    """The content blocks to add to claim `c`'s image audit: the note and the
-    neighbouring page images when the claim is flagged, else none."""
-    from .handwritten_evidence import Evidence
-    from .claims import body_of
+def window(c: dict[str, Any], index: Any, npages: int, choose: Callable[..., Any], cap: int) -> Any:
+    """The text-mode window for claim `c` (``anchors.choose_window``), or
+    None, so it is read on the images, when a positive result has a negation
+    beside it on its page or the next."""
+    if flag(c, index_page_text(index)):
+        return None
+    return choose(c["pages"], npages, index, c["exhibit"], c["anchors"], cap=cap)
 
+
+def evidence(
+    rnd: Any, c: dict[str, Any], pdfs: dict[int, Any], render_page: Callable[[int, int], Any] | None = None
+) -> list:
+    """The content blocks to add to claim `c`'s image audit: the note and the
+    neighbouring page images when the claim is flagged, else none. Pages are
+    rendered the way the round renders its own unless `render_page` is given."""
+    from .claims import body_of
+    from .handwritten_evidence import Evidence
+    from .render import img_block, render
+
+    def own(ex: int, p: int) -> Any:
+        got = render(pdfs[ex], p, rnd.paths.pages, f"ex{ex}")
+        return img_block(got) if got else None
+
+    draw = render_page or own
     with rnd._lock:
         ev = rnd.__dict__.get("neg_evidence")
         if ev is None:
@@ -110,7 +128,7 @@ def evidence(rnd: Any, c: dict[str, Any], pdfs: dict[int, Any], render_page: Cal
     f = flag(c, ev.page)
     if f is None or int(c["exhibit"]) not in pdfs:
         return []
-    imgs = [b for b in (render_page(int(c["exhibit"]), p) for p in f["adjacent"]) if b]
+    imgs = [b for b in (draw(int(c["exhibit"]), p) for p in f["adjacent"]) if b]
     return [{"type": "text", "text": note(f)}, *imgs]
 
 

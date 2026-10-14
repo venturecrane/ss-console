@@ -124,11 +124,6 @@ class Round:
     counter: dict[str, int] = field(default_factory=lambda: {"n": 0, "text_ok": 0, "reverse_bad": 0})
 
     # ---- one claim, image path -------------------------------------------
-    def page_block(self, pdfs: dict[int, Path], ex: int, page: int) -> dict[str, Any] | None:
-        """One exhibit page as an image block, or None when it does not render."""
-        p = render(pdfs[ex], page, self.paths.pages, f"ex{ex}")
-        return img_block(p) if p else None
-
     def image_verdict(self, c: dict[str, Any], pdfs: dict[int, Path]) -> tuple[dict[str, Any], list[int] | None]:
         """Cited pages, then widen once: 74% of one matter's flags were
         citation-window artifacts, content one page outside the cited span. A
@@ -137,7 +132,7 @@ class Round:
         downstream cannot be skipped silently. A claim cited to a handwritten
         page also gets its provider's typed statements (``handwritten_evidence``)."""
         ex = c["exhibit"]
-        extra = statements_for(self, c) + NG.evidence(self, c, pdfs, lambda e, p: self.page_block(pdfs, e, p))
+        extra = statements_for(self, c) + NG.evidence(self, c, pdfs)
         try:
             imgs = [img_block(p) for p in (render(pdfs[ex], pg, self.paths.pages, f"ex{ex}") for pg in c["pages"]) if p]
             if not imgs:
@@ -414,17 +409,12 @@ class Round:
         per_ex: dict[int, list[dict]] = {}
         image: list[dict] = []
         elig: dict[str, int] = {}
-        page_text = NG.index_page_text(index)
         for c in live:
             c["anchors"] = AN.find_anchors(c["claim"])
             np_ = index.npages(c["exhibit"]) or c["npages"]
             # A positive result with a negation beside it, on its page or the
             # next one, is read on the images (``negation.py``).
-            win = (
-                None
-                if NG.flag(c, page_text)
-                else AN.choose_window(c["pages"], np_, index, c["exhibit"], c["anchors"], cap=WINDOW_CAP)
-            )
+            win = NG.window(c, index, np_, AN.choose_window, WINDOW_CAP)
             if win is None:
                 cls = next(
                     (
