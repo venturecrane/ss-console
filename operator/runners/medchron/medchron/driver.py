@@ -40,6 +40,7 @@ from . import (
     unit_proof,
 )
 from .covered import covered_sets, documents_pulled
+from .deadline import is_transient
 from .update.coverage import covered_sets as update_covered
 from .stages.base import StageRefusal, StageRun
 from .state import RunState, state_path
@@ -81,6 +82,10 @@ class Outcome:
     # An update into the delivered chronology: the document it retired, by id
     # (stages/update_upload.py), so the ledger names what was replaced.
     replaced: dict[str, Any] | None = None
+    # 2026-10-14: the stage failed on a network error that outlived the
+    # doorway's retry budget (deadline.is_transient). The daemon requeues such
+    # a job once instead of recording it failed (requeue.py).
+    transient: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
@@ -591,6 +596,7 @@ class Driver:
         st.start(stage.name, input_sha=_authored_inputs_sha(self.slug_dir))
         self.log(f"[run] {stage.name}: in-process")
         refusal: str | None = None
+        crash: Exception | None = None
         runner = getattr(self, "_runner_override", {}).get(stage.name, stage.runner)
         try:
             code = int(runner(sr))
@@ -606,8 +612,8 @@ class Driver:
         except StageRefusal as exc:
             code, refusal = -1, str(exc)
             lines.append(f"REFUSED: {exc}")
-        except Exception:  # noqa: BLE001 - a crash is a failed stage with its trace on file
-            code = 1
+        except Exception as exc:  # noqa: BLE001 - a crash is a failed stage with its trace on file
+            code, crash = 1, exc
             lines.append(traceback.format_exc())
         (self.slug_dir / "runs" / unit.unit).mkdir(parents=True, exist_ok=True)
         (self.slug_dir / "runs" / unit.unit / f"log-{stage.name}.txt").write_text(
@@ -627,7 +633,9 @@ class Driver:
             reason = unit_proof.paged_line(lines) or f"{reason}; last output: {' | '.join(lines)[-400:]}"
         st.finish(stage.name, status=outcome, exit_code=code, dollars=dollars, pages=pages, note=reason)
         st.end(outcome, reason)
-        return Outcome(unit.unit, outcome, reason, stage.name, dollars, pages, notes)
+        out = Outcome(unit.unit, outcome, reason, stage.name, dollars, pages, notes)
+        out.transient = outcome == "failed" and _transient(crash, sr)
+        return out
 
     # ---- the job ----------------------------------------------------------
     def run(self) -> list[Outcome]:
@@ -658,6 +666,13 @@ class Driver:
                     self.log(f"[run] covered: no record derived for {unit.unit}: {exc}")
             outcomes.append(o)
         return outcomes
+
+
+def _transient(crash: Exception | None, sr: StageRun) -> bool:
+    """A failed stage is a network failure when it raised one, or when its
+    doorway gave up on one and the stage turned that into its exit code (the
+    update review does: a part that did not finish exits 1)."""
+    return (crash is not None and is_transient(crash)) or bool(sr.network_failures())
 
 
 def report(outcomes: list[Outcome]) -> str:

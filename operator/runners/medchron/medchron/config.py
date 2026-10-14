@@ -22,6 +22,8 @@ from typing import Any
 
 import yaml
 
+from .deadline import NETWORK_RETRY_S
+
 ENV_PATH = "MEDCHRON_FIRM_CONFIG"
 DEFAULT_PATH = "/var/lib/smd-config/medchron-firm.yaml"
 
@@ -99,6 +101,10 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
         # logs every run; `hold` also refuses to ship when a billed visit has a
         # record page and no chronology entry. Absent means report.
         "dos_check": ("str", False),
+        # Seconds the doorway keeps retrying a model call through connection
+        # errors, 429s and 5xx (llm.Doorway.retry_budget_s). Absent means
+        # deadline.NETWORK_RETRY_S; never less than that floor.
+        "network_retry_s": ("float", False),
     },
     "chronology": {
         "treatment_gap_days": ("int", True),
@@ -282,6 +288,9 @@ def _semantic_checks(data: dict[str, Any]) -> list[str]:
         out.append(f"levers.audit_mode: expected one of {sorted(AUDIT_MODES)}")
     if levers.get("dos_check") not in (None, *DOS_CHECK_MODES):
         out.append(f"levers.dos_check: expected one of {sorted(DOS_CHECK_MODES)}")
+    retry = levers.get("network_retry_s")
+    if isinstance(retry, (int, float)) and not isinstance(retry, bool) and retry < NETWORK_RETRY_S:
+        out.append(f"levers.network_retry_s: at least {NETWORK_RETRY_S:.0f} (a network blip must not end a job)")
     chron = data.get("chronology") or {}
     if chron.get("pre_incident_history") not in (None, *PRE_INCIDENT_POLICIES):
         out.append(f"chronology.pre_incident_history: expected one of {sorted(PRE_INCIDENT_POLICIES)}")

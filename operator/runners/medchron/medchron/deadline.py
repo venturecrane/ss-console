@@ -19,9 +19,16 @@ thread; this thread waits on a clock it owns. Two limits:
   means nothing is coming.
 
 On either, the stream is closed (best effort, so the worker unblocks at its
-next byte) and `CallDeadlineError` is raised. The doorway retries it like any
-transport failure and, past its attempts, raises it out of the stage, which is
-the ordinary failure path: the job ends failed and pages instead of hanging.
+next byte) and `CallDeadlineError` is raised. The doorway retries it up to its
+attempt count and, past that, raises it out of the stage, which is the
+ordinary failure path: the job ends failed and pages instead of hanging.
+
+The deadline and the doorway's network-retry budget are two separate clocks
+(2026-10-14). A hung call can take the whole deadline, so a blown deadline is
+counted against the ATTEMPTS. A connection error, a 429 or a 5xx fails in
+seconds and says nothing about the call, so it is retried against a wall-clock
+budget instead (`Doorway.retry_budget_s`), and never spends an attempt meant
+for a hung stream.
 A worker stuck in a read that never returns is a daemon thread and is
 abandoned; it cannot hold the run open.
 
@@ -31,8 +38,10 @@ error it has to know is retryable; the doorway's attempt loop uses it.
 
 from __future__ import annotations
 
+import random
 import threading
 import time
+from dataclasses import dataclass
 from typing import Any, Callable
 
 #: The floor covers the fixed cost of any call: connection, queueing, prompt
@@ -49,6 +58,16 @@ DEADLINE_CEILING_S = 2700.0
 STALL_S = 600.0
 #: How often the waiting thread looks at the clock.
 _TICK_S = 0.25
+#: Wall-clock seconds one call keeps retrying through connection errors, 429s
+#: and 5xx before it gives up. On 2026-10-14 one APIConnectionError, three
+#: attempts and sixty seconds after the first, ended an update after $29.69 of
+#: work with its audit already passed; the API answered again minutes later.
+NETWORK_RETRY_S = 600.0
+#: The longest single wait between two network retries.
+NETWORK_BACKOFF_CAP_S = 120.0
+#: A runaway guard on the count, for a caller that passes no backoff (a test):
+#: with zero waits the budget is never spent and the loop would spin.
+NETWORK_MAX_TRIES = 200
 
 
 class CallDeadlineError(RuntimeError):
@@ -76,6 +95,75 @@ def classify_error(exc: BaseException) -> str:
         code = getattr(exc, "status_code", 0) or 0
         return "retry" if (code == 429 or code >= 500 or code in (408, 409)) else "raise"
     return "retry"
+
+
+#: The SDK's transient classes by name, for the audit venv where the SDK is
+#: absent and the classes cannot be imported to test against.
+_TRANSIENT_NAMES = frozenset(
+    {"APIConnectionError", "APITimeoutError", "RateLimitError", "InternalServerError", "OverloadedError"}
+)
+
+
+def is_transient(exc: BaseException) -> bool:
+    """True for the failures that say nothing about the request and clear on
+    their own: a dropped connection, a timeout, 408/409/429, any 5xx
+    (overloaded is 529), and a blown deadline. Narrower than `classify_error`,
+    which also retries what it does not recognise: an unknown error (a bug in
+    a stage, a malformed fake) is never given a ten-minute retry budget, and a
+    400, an auth failure or a refusal is never retried at all."""
+    if isinstance(exc, CallDeadlineError):
+        return True
+    try:
+        import anthropic
+    except Exception:  # noqa: BLE001 - the anthropic SDK may be absent in the audit venv; classify by class name then
+        return type(exc).__name__ in _TRANSIENT_NAMES
+    if isinstance(exc, (anthropic.APIConnectionError, anthropic.RateLimitError)):
+        return True
+    if isinstance(exc, anthropic.APIStatusError):
+        code = getattr(exc, "status_code", 0) or 0
+        return code >= 500 or code in (408, 409, 429)
+    return False
+
+
+@dataclass
+class RetryClock:
+    """One call's retry state across its attempts. Two budgets that never
+    spend each other: `attempts` for a blown deadline or an unrecognised
+    error (each may have taken the whole deadline), and `budget_s` of wall
+    clock for a transient network failure, which fails fast. A 400, an auth
+    failure or a refusal never reaches here: the doorway raises those."""
+
+    attempts: int
+    backoff: float
+    budget_s: float = NETWORK_RETRY_S
+    cap_s: float = NETWORK_BACKOFF_CAP_S
+    rand: Callable[[], float] = random.random
+    spent: float = 0.0
+    network: int = 0
+    other: int = 0
+
+    def wait_after(self, exc: BaseException, took: float) -> float | None:
+        """Seconds to wait before the next attempt, or None to give up. `took`
+        is how long the failed attempt ran."""
+        if is_transient(exc) and not isinstance(exc, CallDeadlineError):
+            self.network += 1
+            self.spent += max(0.0, took)
+            left = self.budget_s - self.spent
+            if left <= 0 or self.network >= NETWORK_MAX_TRIES:
+                return None
+            # Exponential with jitter: half the step fixed, half random, so a
+            # fleet of calls that failed together does not retry together.
+            step = min(self.cap_s, self.backoff * 2 ** (self.network - 1))
+            wait = min(left, step * (0.5 + 0.5 * self.rand()))
+            self.spent += wait
+            return wait
+        self.other += 1
+        if self.other >= self.attempts:
+            return None
+        return self.backoff * self.other
+
+    def summary(self) -> str:
+        return f"{self.network} network error(s) over {self.spent:.0f}s, {self.other} other failure(s)"
 
 
 class _Run:
@@ -158,3 +246,40 @@ def bounded_call(
     if run.error is not None:
         raise run.error
     return run.result
+
+
+def retrying_call(
+    attempt: Callable[[], Any],
+    clock: RetryClock,
+    *,
+    stage: str,
+    log: Callable[[str], None],
+    now: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+    gave_up: list[str] | None = None,
+) -> Any:
+    """Run `attempt` until it answers, under `clock`'s two budgets. A 400, an
+    auth failure or a refusal is raised at once. Past the budgets the last
+    error is raised; a network one is first noted on `gave_up`, so a stage
+    that catches it and exits non-zero still leaves the driver able to tell a
+    network blip (requeued once) from a defect (terminal)."""
+    while True:
+        t0 = now()
+        try:
+            msg = attempt()
+        except Exception as exc:
+            if classify_error(exc) == "raise":
+                raise
+            wait = clock.wait_after(exc, now() - t0)
+            log(f"{stage}: attempt failed ({type(exc).__name__}: {str(exc)[:200]}); {clock.summary()}")
+            if wait is None:
+                if is_transient(exc) and gave_up is not None:
+                    gave_up.append(f"{stage}: {type(exc).__name__} after {clock.summary()}")
+                if isinstance(exc, CallDeadlineError):
+                    raise CallDeadlineError(f"{stage}: {exc}, on all {clock.other} attempts") from exc
+                raise
+            sleep(wait)
+            continue
+        if clock.network:
+            log(f"{stage}: answered after {clock.summary()}")
+        return msg
