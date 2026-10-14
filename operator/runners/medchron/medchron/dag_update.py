@@ -23,6 +23,7 @@ from .stages import (
     update_collect as _ucollect,
     update_finish as _ufinish,
     update_select as _uselect,
+    update_review as _ureview,
     update_upload as _uupload,
 )
 
@@ -69,7 +70,7 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         "",
         _slug_unit,
         requires=("icd_tables",),
-        invalidates=("update_summary", "audit"),
+        invalidates=("update_summary", "audit", "update_review"),
         runner=_ucollect.run_collect,
         exit_map={1: (FAILED, "update_collect: the ICD tables are missing"), 2: _HELD_UPDATE},
     ),
@@ -79,7 +80,7 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         _slug_unit,
         paid=True,
         requires=("update_collect",),
-        invalidates=("audit",),
+        invalidates=("audit", "update_review"),
         runner=_ucollect.run_summary,
         exit_map={
             1: (
@@ -88,12 +89,34 @@ UPDATE_STAGES: tuple[Stage, ...] = (
             )
         },
     ),
-    _reuse("audit", requires=("update_summary",)),
+    _reuse("audit", requires=("update_summary",), invalidates=("update_review",)),
+    # Review the added entries against their pages and REPAIR what it finds,
+    # re-auditing every corrected sentence, until a review finds no MUST-FIX
+    # (``stages/update_review.py``). The proofs then run on the corrected text,
+    # and the pre-delivery ``review`` below is the final read.
+    Stage(
+        "update_review",
+        "",
+        _slug_unit,
+        paid=True,
+        requires=("audit",),
+        runner=_ureview.run,
+        exit_map={
+            1: (FAILED, "update_review: a part of the update's review did not finish; a rerun reviews again"),
+            2: (
+                HELD,
+                "update_held: the review of the update left must-fix findings its repair rounds could not "
+                "correct against the pages; SMD finishes it",
+            ),
+            3: (HELD, "audit coverage: a claim the update review corrected is not finally SUPPORTED"),
+            4: (FAILED, "audit INVALID after the update review's corrections: a control failed or no exhibit bytes"),
+        },
+    ),
     Stage(
         "update_assemble",
         "",
         _slug_unit,
-        requires=("audit",),
+        requires=("update_review",),
         runner=_ufinish.run_assemble,
         exit_map={1: (FAILED, "update_assemble: the ICD tables are missing")},
     ),

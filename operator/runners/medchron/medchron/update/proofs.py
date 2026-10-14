@@ -25,7 +25,8 @@
  9. no ADDED line carries pipeline language (chunk / excerpt / provided text);
 10. NO VALUE WAS DROPPED: every value an entry composed from a new exhibit
     states is in the updated document on that entry's date, or was named by
-    the audit as unsupported. A dedupe, a merge or a repair that loses one
+    the audit as unsupported (or corrected by the update review, which names
+    what each correction removed). A dedupe, a merge or a repair that loses one
     fails the update; the audit verifies only what remains, so a value that
     silently disappears is never seen again.
 """
@@ -64,6 +65,8 @@ class Inputs:
     gate_passed: bool = True
     pre_note_itemized: bool = False  # assemble found the new entries itemize what the note left out
     respelled: dict[str, str] = field(default_factory=dict)  # {composed: audited} provider spellings applied
+    #: values the update review's applied corrections removed (``review_repair.named_values``)
+    review_named: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -186,7 +189,7 @@ def _added(x: Inputs, r: Result) -> None:
     r.check("8", not stale, f"added entries citing no new exhibit: {len(stale)} {stale[:3]}")
     win = [ln for ln in added_lines(base_lines, md_lines) if WINDOW.search(ln)]
     r.check("9", not win, f"added lines carrying pipeline language: {len(win)}")
-    named: set[str] = set()
+    named: set[str] = set(x.review_named)
     for row in x.audit_rows:
         named |= numbers(" ".join((row.get("unsupported_assertions") or []) + (row.get("contradictions") or [])))
     lost = dropped_values(x.composed, ue, x.new_exhibits, named)
