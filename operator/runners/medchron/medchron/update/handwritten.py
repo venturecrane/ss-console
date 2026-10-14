@@ -31,6 +31,15 @@ street address, never the trade name the chronology uses; 2026-10-14 parity
 run, where no statement was found and every visit stayed unconfirmed). Dates
 read as MM/DD/YY or MM-DD-YY, and a line item may sit in a table cell.
 
+A ledger row may show a month and day only, and compose then writes a
+heading with no year ("07/18 (year not stated)"). That heading is an entry of
+its own (``body.HEAD``); ``with_years`` gives it the year of the entries around
+it so it can be placed, marked ``NO_YEAR``, and the ROW ORDER settles its date
+like any row's (row order reads month and day, never the year). A yearless
+row the row order cannot settle stays open: shown with that year, marked, and
+listed for SMD; never ``decide``'s guess (2026-10-14 parity run, where two
+such rows rode inside an unrelated entry with the wrong month).
+
 The audit of a claim cited to a handwritten page is given the same typed
 statements as evidence (``statement_block``).
 """
@@ -40,10 +49,14 @@ from __future__ import annotations
 import re
 from datetime import date
 
+from . import body as B
+
 MARK = "[handwritten]"
 MARK_OPEN = "(handwritten date)"
 #: The marker an earlier version wrote; words about our process, never kept.
 LEGACY_OPEN = "(handwritten date, unconfirmed)"
+#: A date line whose year the record does not state (``with_years``).
+NO_YEAR = "(year not stated in the record)"
 WINDOW_DAYS = 7
 #: What the audit is told about a claim cited to a handwritten page.
 REREAD = (
@@ -267,6 +280,62 @@ def reading_of(entry: str) -> date | None:
         return None
 
 
+_YEARLESS = re.compile(r"(\d{1,2})/(\d{1,2})(?![/\d])(.*)")
+_FULL = re.compile(r"(\d{2})/(\d{2})/(\d{4})")
+#: A yearless heading's own note about its date ("(log date as written; year
+#: not stated)"): replaced by ``NO_YEAR``; any other parenthetical is kept.
+_DATE_NOTE = re.compile(r"(?i)\b(?:year|date|as written)\b")
+
+
+def _exhibits(e: str) -> set[str]:
+    return set(re.findall(r"\(Exhibit (\d+)", e))
+
+
+def _year_for(i: int, entries: list[str], md: tuple[int, int], fallback: int) -> int:
+    """The year of entry `i`'s month and day `md`: that of the nearest EARLIER
+    dated entry citing one of its exhibits (a ledger runs in order, so the next
+    year when `md` falls before it), else of the nearest later one, else
+    `fallback`."""
+    mine = _exhibits(entries[i])
+    near = [
+        j
+        for j in range(len(entries))
+        if j != i and _FULL.match(entries[j]) and B.is_service(entries[j]) and mine & _exhibits(entries[j])
+    ]  # a printout's as-of date is no visit's neighbour
+    before = [j for j in near if j < i]
+    j = before[-1] if before else (near[0] if near else None)
+    m = _FULL.match(entries[j]) if j is not None else None
+    if j is None or m is None:
+        return fallback
+    y, prev = int(m.group(3)), (int(m.group(1)), int(m.group(2)))
+    return y + 1 if j < i and md < prev else y
+
+
+def with_years(entries: list[str], fallback: int) -> tuple[list[str], int]:
+    """(entries, how many were yearless). Each entry whose date line has a
+    month and day only takes the year of the entries around it
+    (``_year_for``) and the mark ``NO_YEAR`` in place of compose's own note on
+    the date; the re-date then settles it from the ledger's row order."""
+    out, n = [], 0
+    for i, e in enumerate(entries):
+        head, nl, rest = e.partition("\n")
+        m = _YEARLESS.match(head)
+        if not m:
+            out.append(e)
+            continue
+        md = (int(m.group(1)), int(m.group(2)))
+        y = _year_for(i, entries, md, fallback)
+        try:
+            date(y, *md)
+        except ValueError:
+            out.append(e)  # no such day: left as composed, never moved onto another
+            continue
+        keep = "".join(" " + p for p in re.findall(r"\([^)]*\)", m.group(3)) if not _DATE_NOTE.search(p))
+        out.append(f"{md[0]:02d}/{md[1]:02d}/{y} {NO_YEAR}{keep}{nl}{rest}")
+        n += 1
+    return out, n
+
+
 def redate(
     entry: str,
     dos: set[date],
@@ -282,11 +351,18 @@ def redate(
     if not m:
         return entry, {"entry": head, "verdict": "no date"}
     reading = date(int(m.group(3)), int(m.group(1)), int(m.group(2)))
-    tail = head[m.end() :].replace(" " + LEGACY_OPEN, "").replace(" " + MARK_OPEN, "")  # the rest is kept
+    yearless = NO_YEAR in head
+    tail = head[m.end() :]
+    for mark in (LEGACY_OPEN, MARK_OPEN, NO_YEAR):
+        tail = tail.replace(" " + mark, "")  # the rest is kept
+    if settled is None and yearless:
+        settled = ("open", None)  # its year is the neighbours': only the row order settles it
     verdict, got = settled if settled is not None else decide(reading, dos, readings)
     if got is not None:
         return _mdy(got) + tail + "\n" + rest, {"reading": _mdy(reading), "verdict": verdict, "date": _mdy(got)}
-    return f"{_mdy(reading)} {MARK_OPEN}{tail}\n" + rest, {"reading": _mdy(reading), "verdict": "open"}
+    shown = f"{MARK_OPEN} {NO_YEAR}" if yearless else MARK_OPEN
+    log = {"reading": _mdy(reading), "verdict": "open", **({"year": "not stated"} if yearless else {})}
+    return f"{_mdy(reading)} {shown}{tail}\n" + rest, log
 
 
 def statement_block(

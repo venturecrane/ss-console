@@ -157,15 +157,17 @@ def _settle_dates(
     its provider, or shows its reading as written (``update/handwritten.py``).
     A reading that is a row of a handwritten ledger page is settled by the
     ledger's ROW ORDER (``handwritten.row_verdict``); otherwise the provider's
-    other readings decide whether a re-date is unambiguous (``decide``).
+    other readings decide whether a re-date is unambiguous (``decide``). A
+    yearless reading (``handwritten.NO_YEAR``) only row order settles. An
+    entry dated by a printout's as-of or print date is typed, never a reading.
     Entries are returned in date order: a re-date moves its entry."""
     by_ex, pool = _page_texts(sr, provisional)
     hand: dict[int, set[date]] = {}
     readings: dict[str, list[date]] = {}
     for i, e in enumerate(entries):
         docs = _hand_docs(e, by_ex)
-        if docs is None:
-            continue
+        if docs is None or not B.is_service(e):
+            continue  # a printout's as-of or print date is typed and never a visit: no handwritten reading
         hand[i] = H.service_dates(pool, B.provider_of(e), docs)
         r = H.reading_of(e)
         if r is not None:
@@ -174,6 +176,8 @@ def _settle_dates(
     for i, e in enumerate(entries):
         if i not in hand:
             out.append(e)
+            if H.NO_YEAR in e.partition("\n")[0]:  # a yearless date no handwritten page settles: SMD reads it
+                log.append({"reading": e[:10], "verdict": "open", "year": "not stated", "provider": B.provider_of(e)})
             continue
         by_rows = _by_rows(e, by_ex, hand[i])
         settled, row = H.redate(e, hand[i], tuple(readings.get(B.provider_of(e), ())), by_rows)
@@ -214,7 +218,12 @@ def report_lines(rep: dict[str, Any]) -> list[str]:
     process note taken out."""
     out = []
     for r in rep.get("handwritten_dates") or []:
-        if r.get("verdict") == "open":
+        if r.get("verdict") == "open" and r.get("year"):
+            out.append(
+                f"date NOT SETTLED: {r.get('provider')} visit read as {r.get('reading')}; the record states no year, "
+                f"the year shown is its neighbouring entries', marked {H.NO_YEAR}; SMD checks the page"
+            )
+        elif r.get("verdict") == "open":
             out.append(
                 f"handwritten date NOT SETTLED: {r.get('provider')} visit read as {r.get('reading')}; no typed date "
                 f"of service settles it, so it is shown as written, marked {H.MARK_OPEN}; SMD checks the page"
@@ -239,8 +248,11 @@ def report_lines(rep: dict[str, Any]) -> list[str]:
 def _shape(sr: StageRun, base_md: str, rd: Path, provisional: list[dict]) -> tuple[list[str], dict]:
     """The kept entries, dated, their near provider names flagged, and the report."""
     _, base_ents = B.entries_of(base_md)
+    # A yearless heading is an entry of its own; it takes its neighbours' year until row order settles it.
+    y = re.match(r"\d{4}", str(sr.job.incident_date or ""))
+    comp, _ = H.with_years(C.composed(rd), int(y.group()) if y else date.today().year)
     try:
-        entries, rep = C.collect(C.composed(rd), base_ents, sr.job.incident_date, Canon(sr.cfg))
+        entries, rep = C.collect(comp, base_ents, sr.job.incident_date, Canon(sr.cfg))
     except C.CollectRefusal as exc:
         raise StageRefusal(str(exc)) from exc
     entries = [meta_markers.strip(e) for e in entries]  # the pipeline's own notes never reach the firm
