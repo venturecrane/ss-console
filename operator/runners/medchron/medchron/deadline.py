@@ -24,6 +24,9 @@ transport failure and, past its attempts, raises it out of the stage, which is
 the ordinary failure path: the job ends failed and pages instead of hanging.
 A worker stuck in a read that never returns is a daemon thread and is
 abandoned; it cannot hold the run open.
+
+The retry classification (`classify_error`) lives here too, beside the one
+error it has to know is retryable; the doorway's attempt loop uses it.
 """
 
 from __future__ import annotations
@@ -56,6 +59,23 @@ def deadline_for(max_tokens: int) -> float:
     """Seconds a call asking for `max_tokens` output tokens may take in total."""
     scaled = DEADLINE_FLOOR_S + max(0, int(max_tokens)) / DEADLINE_TOKENS_PER_S
     return min(DEADLINE_CEILING_S, scaled)
+
+
+def classify_error(exc: BaseException) -> str:
+    """'retry' for transport/429/5xx and a blown deadline, 'raise' for 4xx
+    invalid requests."""
+    if isinstance(exc, CallDeadlineError):
+        return "retry"
+    try:
+        import anthropic
+    except Exception:  # noqa: BLE001 - the anthropic SDK may be absent in the audit venv; classify by message text then
+        return "raise" if "invalid_request" in str(exc) else "retry"
+    if isinstance(exc, (anthropic.APIConnectionError, anthropic.RateLimitError)):
+        return "retry"
+    if isinstance(exc, anthropic.APIStatusError):
+        code = getattr(exc, "status_code", 0) or 0
+        return "retry" if (code == 429 or code >= 500 or code in (408, 409)) else "raise"
+    return "retry"
 
 
 class _Run:

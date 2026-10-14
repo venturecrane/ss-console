@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .config import FirmConfig
-from .deadline import STALL_S, CallDeadlineError, bounded_call, deadline_for
+from .deadline import STALL_S, CallDeadlineError, bounded_call, classify_error, deadline_for
 from .ledger import Ledger, count_pages
 from .limits import LimitHold
 
@@ -204,24 +204,6 @@ class _ZeroUsage:
     output_tokens = 0
     cache_read_input_tokens = 0
     cache_creation_input_tokens = 0
-
-
-# ---- retry -------------------------------------------------------------------
-def classify_error(exc: BaseException) -> str:
-    """'retry' for transport/429/5xx and a blown deadline, 'raise' for 4xx
-    invalid requests."""
-    if isinstance(exc, CallDeadlineError):
-        return "retry"
-    try:
-        import anthropic
-    except Exception:  # noqa: BLE001 - the anthropic SDK may be absent in the audit venv; classify by message text then
-        return "raise" if "invalid_request" in str(exc) else "retry"
-    if isinstance(exc, (anthropic.APIConnectionError, anthropic.RateLimitError)):
-        return "retry"
-    if isinstance(exc, anthropic.APIStatusError):
-        code = getattr(exc, "status_code", 0) or 0
-        return "retry" if (code == 429 or code >= 500 or code in (408, 409)) else "raise"
-    return "retry"
 
 
 # ---- batch items -------------------------------------------------------------
