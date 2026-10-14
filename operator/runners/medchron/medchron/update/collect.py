@@ -34,7 +34,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Callable
 
-from . import body as B, repeats as R, within as W
+from . import body as B, demographics as D, repeats as R, within as W
 
 CITED_EX = re.compile(r"\(Exhibit (\d+)(?: - p\. [0-9,\s\-]+)?\)")
 ASSEMBLED = re.compile(r"\(Exhibit (\d+)((?: - p\. [0-9,\s\-]+)?)\)")
@@ -66,7 +66,8 @@ def renumber(text: str, exhibit_map: dict[str, int]) -> str:
 
 def composed(run_dir: Path) -> list[str]:
     """Every entry compose produced (standalone and merged), renumbered to
-    the update's exhibits: the source proof 10 measures against."""
+    the update's exhibits, with no street address or phone number in a
+    body (``demographics.py``): the source proof 10 measures against."""
     em = json.loads((run_dir / "exhibit_map.json").read_text(encoding="utf-8"))
     src = ""
     for f in ("entries.md", "merged.md"):
@@ -74,7 +75,7 @@ def composed(run_dir: Path) -> list[str]:
         if p.is_file():
             src += p.read_text(encoding="utf-8") + "\n\n"
     _, ents = B.split_body(renumber(src, em))
-    return ents
+    return [D.scrub(e) for e in ents]
 
 
 def keep_decision(e: str, base_ents: list[str], canon: Callable[[str], str]) -> str:
