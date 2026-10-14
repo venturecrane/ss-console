@@ -158,11 +158,17 @@ def _types(values: list[str]) -> str:
 
 def _location_line(n: int, loc: dict[str, Any]) -> str:
     name = _shown(loc["custodian_name"], 120)
-    where = f", {_shown(loc['custodian_address'], 120)}" if loc["custodian_address"] else ""
-    known = f"directory id {loc['custodian_id']}" if loc["custodian_id"] else "not in the vendor's directory yet"
-    return (
-        f"{n}) {name} ({known}{where}): {_types(loc['record_types'])}, {loc['service_start']} to {loc['service_end']}"
-    )
+    # The vendor's directory id is NOT in the line. The order_ref binds the
+    # order to the custodian, the firm picks by name and address, and the
+    # seat's reply gate holds an email carrying an identifier the Operator read
+    # from a tool result: on 2026-10-14 the line was held
+    # for its directory id and the Operator rewrote it to get it out.
+    where = _shown(loc["custodian_address"], 120) if loc["custodian_address"] else ""
+    if loc["custodian_id"]:
+        place = f" ({where})" if where else ""
+    else:
+        place = f" (not in the vendor's directory yet, {where})" if where else " (not in the vendor's directory yet)"
+    return f"{n}) {name}{place}: {_types(loc['record_types'])}, {loc['service_start']} to {loc['service_end']}"
 
 
 def _authorization_line(order: dict[str, Any]) -> str:
