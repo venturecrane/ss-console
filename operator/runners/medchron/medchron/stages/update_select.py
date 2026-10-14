@@ -9,6 +9,10 @@ attachment folded from a named email) is a candidate, in pull order:
 * byte-identical to a FIRM-numbered file in the chronology folder the list
   never named ("Exhibit 6- ..."): read, and it takes that file's number; it
   is never filed again, and the Exhibit List names the firm's file;
+* a medical-legal expert report (``update/medlegal``: a life care plan, an
+  IME, a record review, by name or first-page text): an exhibit whose every
+  page is excluded, never composed, named in Records Reviewed as reviewed and
+  not itemized;
 * not a PDF or an image: skipped and counted (it cannot be filed as an
   exhibit page the citation would point at);
 * its text names a different person (``gates/foreign_identity``): HOLD, exit 2,
@@ -42,7 +46,7 @@ from pathlib import Path
 from typing import Any
 
 from ..gates import foreign_identity as FI
-from ..update import body as B, select as S, subsets as SUB
+from ..update import body as B, medlegal as ML, select as S, subsets as SUB
 from ..update.locate import vendor_name
 from .base import StageRun, read_json, read_jsonl
 from .transcript import split_pages
@@ -139,12 +143,18 @@ def _exhibit(
     npages = _write_pdf(Path(r["path"]), str(r.get("ext") or "").lower(), out / f"{title}.pdf")
     tp = sr.slug_dir / "text" / f"{r['id']}.txt"
     pages = S.pages_of_text(tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else "")
-    row = S.row(n, title, S.classify_new(pages, npages, seen, earlier), pages)
+    medlegal = ML.is_medlegal([vendor_name(r), firm or ""], pages.get(1) or "")
+    if medlegal:  # an expert's report is reviewed, never itemized as treatment
+        row = S.row(n, title, {i: (S.EXCLUDED, ML.REASON) for i in range(1, npages + 1)}, pages)
+    else:
+        row = S.row(n, title, S.classify_new(pages, npages, seen, earlier), pages)
     text_path = cdir / f"{r['id']}.txt"
     text_path.write_text(S.selected_text(pages, row["read"]), encoding="utf-8")
     rec = {**row, "id": str(r["id"]), "source_name": vendor_name(r), "sha256": r.get("sha256")}
     if firm:
         rec["reused"] = firm
+    if medlegal:
+        rec["not_itemized"] = ML.REASON
     unit_row = {
         "id": str(r["id"]),
         "name": title,

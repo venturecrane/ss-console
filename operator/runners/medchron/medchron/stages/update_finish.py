@@ -56,6 +56,8 @@ def uncited_name(r: dict[str, Any]) -> str:
     file name and what was done with its pages. Only what was read is
     stated: an 834-page file was once said to "record no visit" while 64 of
     its image pages had never been read (2026-10-13)."""
+    if r.get("not_itemized"):
+        return f"{r.get('source_name') or r.get('title') or 'a document'} ({_pages(int(r.get('pages') or 0))}: {r['not_itemized']})"
     c = page_counts(r)
     parts = [f"{_pages(c['read'])} read"]
     if c["repeat"]:

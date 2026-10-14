@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -166,12 +167,44 @@ CONTAINER_EXTS = {".msg", ".rpmsg"}
 
 
 def _name_rules(sr: StageRun) -> list[tuple[Any, str]]:
-    import re
-
     rules = [(rx, why) for rx, why in sr.cfg.compiled("coverage", "exclusions")]
     for pat in sr.cfg.get("units", "exclude_name_patterns") or []:
         rules.append((re.compile(str(pat), re.I), "excluded by the firm's file-name rule"))
     return rules
+
+
+# A name rule that excludes billing or lien paper, and the words that say a
+# file is a medical record all the same. "Medical and Billing Records" is a
+# visit record with its bill attached: dropping it by `\bbill` dropped the
+# visits (2026-10-13). "Billing Records" alone stays billing.
+_BILLING_RULE = re.compile(r"(?i)bill|lien|ledger|invoice|statement")
+_BILLING_PHRASE = re.compile(r"(?i)\b(?:billing|bills?|itemi[sz]ed|lien)\s+(?:records?|statements?|notes?)\b")
+_MEDICAL_NAME = re.compile(r"(?i)\b(?:medical|chart|clinical|notes?|visits?|treatment|records?)\b")
+
+
+def medical_overrides(rx: Any, why: str, name: str) -> bool:
+    """True when a billing or lien name rule matched a name that also says
+    it holds medical records: the file is read, not excluded."""
+    if not (_BILLING_RULE.search(why) or _BILLING_RULE.search(str(getattr(rx, "pattern", "")))):
+        return False
+    return bool(_MEDICAL_NAME.search(_BILLING_PHRASE.sub(" ", name)))
+
+
+def _uncited_firm_exhibits(sr: StageRun) -> set[str]:
+    """Ids of the firm's numbered files in the chronology folder ("Exhibit 6-
+    ...") that the delivered Exhibit List does not name: the firm filed a
+    record there the delivery never read, so it is a new source. It keeps the
+    firm's number and is never filed again (``update_select``)."""
+    from ..update.body import delivered_numbers
+
+    out: set[str] = set()
+    for p in sr.slug_dir.glob("runs/*/update/update_plan.json"):
+        base = p.parent / "base.md"
+        if not base.is_file():
+            continue
+        listed = delivered_numbers(base.read_text(encoding="utf-8"))
+        out |= {str(e["id"]) for e in (read_json(p, {}) or {}).get("exhibits") or [] if e["exhibit"] not in listed}
+    return out
 
 
 def _update_folders(sr: StageRun) -> set[str]:
@@ -185,21 +218,33 @@ def _update_folders(sr: StageRun) -> set[str]:
     return out
 
 
-def _why_not(d: dict[str, Any], folder: str, rule: dict[str, Any], names: list, chron: set[str]) -> str | None:
+def _why_not(
+    d: dict[str, Any],
+    folder: str,
+    rule: dict[str, Any],
+    names: list,
+    chron: set[str],
+    firm: frozenset[str] = frozenset(),
+) -> str | None:
     """Why a NAMED document is not pulled, or None. The firm's authored rules
     apply to a named id exactly as to a listed one (2026-10-13: an agent that
     names everything must not make the runner read photos and background
-    reports); an Outlook container is the email stage's to open."""
+    reports); an Outlook container is the email stage's to open. `firm`: the
+    uncited firm-numbered files in the chronology folder, read whatever
+    folder rule covers that folder (``_uncited_firm_exhibits``)."""
     ext = (d.get("ext") or "").lower()
-    if str(d.get("folderId") or "") in chron:
+    is_firm = str(d.get("id")) in firm
+    if str(d.get("folderId") or "") in chron and not is_firm:
         return "in the delivered chronology's own folder"
     if ext in CONTAINER_EXTS:  # the email stage opens it; only the folder rules apply
         ok = wanted({**d, "ext": ".pdf"}, folder_path=folder, **{**rule, "doc_exts": {".pdf"}})
         return None if ok else "outside the firm's folder rules (an excluded folder)"
-    if not wanted(d, folder_path=folder, **rule):
-        return "deleted" if d.get("deleted") else "outside the firm's folder rules (an excluded folder or kind)"
+    if d.get("deleted"):
+        return "deleted"
+    if not (ext in rule["doc_exts"] if is_firm else wanted(d, folder_path=folder, **rule)):
+        return "outside the firm's folder rules (an excluded folder or kind)"
     full = f"{d.get('name') or ''}{d.get('ext') or ''}"
-    return next((why for rx, why in names if rx.search(full)), None)
+    return next((why for rx, why in names if rx.search(full) and not medical_overrides(rx, why, full)), None)
 
 
 def _named_targets(sr: StageRun, sel: dict[str, Any], fpath: dict[str, str], rule: dict[str, Any]) -> list | None:
@@ -214,11 +259,11 @@ def _named_targets(sr: StageRun, sel: dict[str, Any], fpath: dict[str, str], rul
     if missing:
         sr.log(f"append: {len(missing)} named document id(s) not on the matter: {', '.join(missing[:5])}")
         return None
-    names, chron = _name_rules(sr), _update_folders(sr)
+    names, chron, firm = _name_rules(sr), _update_folders(sr), frozenset(_uncited_firm_exhibits(sr))
     targets, excluded = [], []
     for i in sorted(ids):
         d = by_id[i]
-        why = _why_not(d, fpath.get(str(d.get("folderId") or ""), "/(root)"), rule, names, chron)
+        why = _why_not(d, fpath.get(str(d.get("folderId") or ""), "/(root)"), rule, names, chron, firm)
         if why:
             excluded.append({"id": i, "name": f"{d.get('name') or ''}{d.get('ext') or ''}", "why": why})
         elif (d.get("ext") or "").lower() not in CONTAINER_EXTS:
