@@ -40,6 +40,14 @@ CODES = frozenset(
         "wake_lost",  # the DELIVER turn could not be started
         "reply_unproven",  # the requester's reply was not seen in Sent Items
         "reply_not_in_sent_items",  # the broker sent it and could not find it
+        # A HELD job whose hold is ours (proof/holds.py), 2026-10-13: the firm is
+        # told SMD is finishing it, so SMD must actually hear.
+        "gate_held",  # a gate, a seed value or an unclassified hold stopped it
+        "update_held",  # an update into the delivered chronology could not go on
+        "upload_held",  # filing or retiring on the matter did not finish
+        "stage_refused",  # a stage refused its own input
+        "limit_held",  # a cost cap, budget or page allowance held it
+        "identity_held",  # a record names another person; the firm is asked
     }
 )
 

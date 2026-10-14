@@ -485,6 +485,12 @@ _PROOF_WORDS = {
     "wake_lost": "the delivery wake was lost",
     "reply_unproven": "the requester's reply is not in Sent Items",
     "reply_not_in_sent_items": "the requester's reply is not in Sent Items",
+    "gate_held": "a gate or our own seed data held it; the firm was told SMD is finishing it",
+    "update_held": "the update into the delivered chronology could not go on",
+    "upload_held": "filing or retiring the document on the matter did not finish",
+    "stage_refused": "a stage refused its own input",
+    "limit_held": "a cost cap, budget or page allowance held it",
+    "identity_held": "a record in the file names another person; the firm was asked",
 }
 
 

@@ -131,7 +131,7 @@ The runner wakes this skill with a task whose first line is "Run the litigation-
 skill's DELIVER mode for litigation job <id>." followed by `Kind:`, `Trigger:`
 (`request` or `scheduled`), `Outcome:`, `Matters:` (the total, the count re-read this
 run, the count of new flags), `Folder id:`, `Files:` (the workbook's size, never a file
-name) and `Requested by:`. The wake is a pointer; the job's own record is the fact.
+name), `Requested by:` and, on a hold, `Hold class:`. The wake is a pointer; the job's own record is the fact.
 
 **First, the outcome decides who hears.** When the outcome is `failed` (and the job row
 agrees), the failure is SMD's, not the firm's: our own machinery stopped, and the job is
@@ -168,16 +168,26 @@ any case.
      files changed since the last list, and it carries `<flags_new>` new flags for
      review. An empty count is left out, never announced as "none". Say that nothing
      has been sent to anyone outside the firm.
-   - **held**: say plainly that the list is not filed yet and what the FILES or the
-     REQUEST need for it to go forward, in the firm's own terms (an attorney with no
-     open litigation matters, files the job could not read). Never describe it as done,
-     and never promise a time. The job's `reason` reads `<code>: <sentence>`. Relay only
-     the sentence AFTER the first `: `, in your own words; never the code, which is
-     SMD's label, not the firm's. If the sentence names a matter or a party, leave that
-     out and say the workbook's notes hold the detail.
-   - In every message, never ask the firm to narrow, split or change its request, and
-     never mention a token, a limit, a cap, a cost, a dollar figure or a job id. A limit
-     of ours is ours to solve.
+   - **held**: worded by the wake's `Hold class:` line, never by the job's
+     `reason`. The reason is SMD's technical record (gates, seed values, matter
+     numbers, codes), and SMD already has it: every hold our side caused pages
+     SMD with that reason. **Never quote, paraphrase or summarize the reason, a
+     gate, a stage or a code.** Each class has fixed wording; use it and add
+     nothing:
+     - `smd_finishing` (our side: the gates, a value from an earlier list, a
+       change with no document behind it, a filing that did not finish): "The
+       litigation status list is not filed yet, and nothing new has been put in
+       the firm's Operator Library. Nothing is needed from you; SMD is finishing
+       it, and the next message you get about this list will be the filed
+       list." This is SMD's failure, never the firm's decision.
+     - `nothing_in_scope`: "No list was filed: none of the firm's open
+       litigation matters fit this request. Nothing is needed from you."
+     - A hold with no `Hold class:` line, or a class not listed here, is
+       `smd_finishing`.
+   - In every message, never ask the firm to resubmit, repeat, narrow, split or change
+     its request, never tell it to send anything to SMD or offer SMD as a route, and
+     never mention a gate, a token, a limit, a cap, a cost, a dollar figure or a job id.
+     A hold of ours is ours to solve.
 4. **Stop.** The one message is the whole of this mode. No second message, no follow-up,
    no task, no memo. The seat refuses every send tool in a litigation job's wake except
    that one message.
@@ -205,10 +215,11 @@ is the person the broker binds.
 
 ## Escalation
 
-Bring it to the requester, per the case-alert routing rule
-(`deadline-miss-escalator/references/case-alert-routing.md`), when the job holds. A
-failed job is SMD's and reaches SMD through the shortfall alert, never the firm. Fail
-closed in every case: surface and ask.
+A held job is answered with its hold class's fixed wording (DELIVER mode), never with
+a question the firm cannot act on. A hold our side caused reaches SMD through the page
+the runner raises with its technical reason, never through the firm. A failed job is
+SMD's and reaches SMD through the shortfall alert, never the firm. Fail closed in every
+case: when in doubt, the firm hears the `smd_finishing` wording and nothing else.
 
 ## Delivery channels + refusal fallback (law seat rule)
 

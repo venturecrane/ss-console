@@ -163,8 +163,16 @@ def test_a_review_hold_pages_smd_under_review_held(tmp_path):
     assert _codes(broker) == ["review_held"]
 
 
-def test_an_ordinary_hold_pages_nothing(tmp_path):
+def test_a_hold_our_side_caused_pages_smd(tmp_path):
+    # 2026-10-13 (proof/holds.py): the firm is told SMD is finishing a hold our
+    # side caused, so SMD must hear it. A runner that could not place a file is ours.
     d, broker, state = _run(tmp_path, _unit(outcome="held", reason="decision: 2 unplaced files", stage="decide"))
+    assert state == "held" and _codes(broker) == ["gate_held"]
+
+
+def test_a_hold_that_is_an_answer_pages_nothing(tmp_path):
+    reason = "update_held: nothing new to add: the 2 new document(s) record no visit the delivered chronology lists"
+    d, broker, state = _run(tmp_path, _unit(outcome="held", reason=reason, stage="update_collect"))
     assert state == "held" and _codes(broker) == []
 
 

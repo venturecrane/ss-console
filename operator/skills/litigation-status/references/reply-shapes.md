@@ -32,10 +32,14 @@ The counts and the workbook's file name are the whole of the facts.
   `new_message` with the recipient and the subject set by the broker; one
   `create_draft` to that person with the same counts-only body. The subject
   is the broker's, never written by the skill.
-- **held.** That the list is not filed yet, and what the files or the request
-  need, in the firm's terms, from the job's reason. The reason reads
-  `<code>: <sentence>`; relay the sentence after the code, never the code
-  itself, and leave out any matter or party it names.
+- **held**, by the wake's `Hold class:` line, never by the job's reason (SMD
+  already has the reason, paged with it):
+  - `smd_finishing` (our side, the default for any class not listed): "The
+    litigation status list is not filed yet, and nothing new has been put in
+    the firm's Operator Library. Nothing is needed from you; SMD is finishing
+    it, and the next message you get about this list will be the filed list."
+  - `nothing_in_scope`: "No list was filed: none of the firm's open litigation
+    matters fit this request. Nothing is needed from you."
 - **failed.** NO message. One `litigation_job_status` call (which raises SMD's
   shortfall alert) and the turn ends. The firm hears nothing about our own
   machinery.
@@ -45,6 +49,9 @@ The counts and the workbook's file name are the whole of the facts.
 ## Never
 
 - A list of cases, a matter number, a name or a date in the body.
+- On a hold: a request to resubmit, repeat, narrow, split or change the
+  request; SMD offered as a route; a gate, a code, a stage or anything from the
+  job's reason; a time.
 - A second message, a follow-up, a task or a memo.
 - A message to anyone but the person the broker binds.
 - Any send tool other than `create_draft` after a bind.

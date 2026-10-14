@@ -44,7 +44,7 @@ from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
 from . import config as config_mod, job as job_mod, lane_proof, proof_run, resume as resume_mod, retention
 from . import verdict as verdict_mod
-from .proof import watch as proof_watch
+from .proof import holds as proof_holds, watch as proof_watch
 
 logger = logging.getLogger("medchron.daemon")
 
@@ -442,6 +442,8 @@ class Daemon:
             lines.append(f"Delivered folder id: {fields['folder_id']}.")
         if state != "delivered":
             lines.append(f"Held at: {stage or 'runner (no verdict)'}.")
+        if state == "held":  # the firm-safe token the skill words; the reason stays SMD's
+            lines.append(proof_holds.wake_line("medchron", fields.get("reason")))
         requester = env.get("requested_by") or ""
         ref = env.get("request_ref") or ""
         none_note = "(none - a rehearsal submission; report in the memo, create no task, send nothing)"

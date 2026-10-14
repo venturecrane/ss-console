@@ -275,7 +275,8 @@ describe('setup-turn reply rules are pinned in skill prose', () => {
       const text = flat('litigation-status')
       expect(text).toContain('Send the client NOTHING')
       expect(text).toContain('**If the bind is refused, send NOTHING to anyone.**')
-      expect(text).toContain('Relay only the sentence AFTER the first `: `')
+      expect(text).toContain("worded by the wake's `Hold class:` line, never by the job's")
+      expect(text).not.toContain('Relay only the sentence AFTER the first `: `')
     })
   })
 

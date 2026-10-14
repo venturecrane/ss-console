@@ -18,8 +18,10 @@ from .proof import review as review_mod
 #: The reasons the daemon pages SMD on (proof/watch.py). A stage that ends on
 #: one says so in its own log line, and the driver carries that line as the
 #: reason verbatim: the exit_map's fixed text would bury the prefix the page
-#: keys on, and the findings with it.
-PAGED_PREFIXES = ("review_held:", "readback_mismatch:")
+#: keys on, and the findings with it. ``update_held:`` (2026-10-13): the
+#: stage's own line is what ``proof/holds.classify`` reads to tell a filed
+#: update whose earlier version is still beside it from one that filed nothing.
+PAGED_PREFIXES = ("review_held:", "readback_mismatch:", "update_held:")
 
 
 def paged_line(lines: list[str]) -> str | None:

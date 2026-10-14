@@ -37,7 +37,7 @@ from typing import Any, Callable
 from . import resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, Daemon
-from .proof import watch as proof_watch
+from .proof import holds as proof_holds, watch as proof_watch
 from .drafting_lane import DraftingLane
 
 logger = logging.getLogger("medchron.litigation")
@@ -284,6 +284,8 @@ class LitigationLane(DraftingLane):
             lines.append(
                 f"Reason: stopped at {where if re.fullmatch(r'[a-z0-9_]{1,24}', where) else 'the runner (no verdict)'}."
             )
+        if state == "held":  # the firm-safe token the skill words; the reason stays SMD's
+            lines.append(proof_holds.wake_line("litigation", fields.get("reason")))
         return "\n".join(lines)
 
 
