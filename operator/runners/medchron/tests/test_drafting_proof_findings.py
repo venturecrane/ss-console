@@ -630,3 +630,17 @@ def test_a_contradicted_rfa_matter_the_repairs_never_clear_fails_and_keeps_every
     r, v, _ = _run(tmp_path, pricing, client)
     assert v.outcome == "failed" and v.reason.startswith("audit_unrepaired: "), (v.stage, v.reason)
     assert not (r.data / "set-1" / "draft-final.md").exists()
+
+
+def test_the_audit_reads_the_front_matter_code_sets(tmp_path, pricing):
+    """The attorney block and the Dated line are set before the audit, so the
+    audit never spends a repair on them."""
+    drafts = {
+        label: one_set(label).replace("Dated: {{ATTORNEY: date}}", "Dated: {{NOT IN RECORD: date of signing}}")
+        for label in KINDS
+    }
+    client = Client(drafts=drafts)
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    audited = [json.dumps(c["messages"]) for c in client.calls if "AUDIT-PROMPT" in json.dumps(c.get("system"))]
+    assert audited and not any("date of signing" in a for a in audited)

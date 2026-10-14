@@ -161,6 +161,16 @@ class Finish:
         if refused:
             raise DraftingHold(f"request_incomplete: the request is missing what the draft needs: {refused}")
         self._done(u.stage("compose"))
+        if self.cls == "discovery_set":
+            # The attorney block, the Dated line and the first set's front
+            # matter set by code BEFORE the audit, so it never spends repairs
+            # on what code fixes anyway (2026-10-14: an "Attorneys for" line
+            # the audit flagged and the gate later rewrote). Idempotent.
+            first = u.data / "draft-v1.md"
+            doc, end = render.split_notes(first.read_text(encoding="utf-8"))
+            fronted, _ = self._front(u, doc)
+            if fronted != doc:
+                self._uatomic(u, "draft-v1.md", self._join(fronted, end))
         corpus, version = self._corpus_text(), 1
         strict = self.cls in compose.STRICT_CLASSES
         repairs = MAX_REPAIRS_STRICT if strict else MAX_REPAIRS
