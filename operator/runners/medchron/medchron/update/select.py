@@ -206,9 +206,14 @@ def selected_text(pages: dict[int, str], read: list[int]) -> str:
     foot of an unread page and its result at the head of a read one was
     composed POSITIVE (``stages/chunking.context_block``)."""
     want = set(read)
+
+    def ctx(p: int) -> str:  # a billing page is never context: it is not composed at all
+        t = pages.get(p) or ""
+        return "" if p in want or is_billing(t) else t
+
     out = []
     for pg in read:
-        pre = context_block(pages.get(pg - 1) or "", pg - 1, before=True) if pg - 1 not in want else ""
-        nxt = context_block(pages.get(pg + 1) or "", pg + 1, before=False) if pg + 1 not in want else ""
+        pre = context_block(ctx(pg - 1), pg - 1, before=True)
+        nxt = context_block(ctx(pg + 1), pg + 1, before=False)
         out.append(pre + f"[p.{pg}]\n{pages.get(pg) or ''}" + ("\n" + nxt.rstrip("\n") if nxt else ""))
     return "\n".join(out)
