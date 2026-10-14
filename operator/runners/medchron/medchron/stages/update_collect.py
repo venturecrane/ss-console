@@ -303,6 +303,7 @@ def run_collect(sr: StageRun) -> int:
     (ud / "remap.json").write_text(json.dumps({str(k): v for k, v in remap.items()}, indent=1), encoding="utf-8")
     (ud / "new_entries.md").write_text("\n\n".join(entries) + "\n", encoding="utf-8")
     (ud / "compose_report.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
+    (ud / "review_checkpoint.json").unlink(missing_ok=True)  # a new collect is a new update review
     doc = C.audit_document(base_md, entries, keep, icd_claims=claims, folder=plan(sr).get("exhibits") or [])
     (rd / "final-chronology.md").write_text(doc, encoding="utf-8")
     counts = {k: v for k, v in rep.items() if isinstance(v, int)}
