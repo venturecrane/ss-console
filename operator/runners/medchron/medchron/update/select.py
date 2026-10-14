@@ -6,10 +6,12 @@ delivered exhibit PDFs are what the firm holds, and they are the page truth.
 
 * A new document byte-identical to a delivered exhibit (or to another new
   document) is not an exhibit: it is skipped by sha256 before this module.
-* A TEXT page (at least MIN_CHARS of text) is EXCLUDED when at least
-  COVERED_FRAC of its 8-word shingles (digits stripped: a re-filed copy
-  differs in its fax stamp and print date, not in its words) are already in a
-  delivered exhibit: a re-filed copy of a record the delivery read.
+* A TEXT page (at least MIN_CHARS of text) is EXCLUDED when ONE delivered
+  page covers COVERED_FRAC of its 8-word shingles (digits stripped: a
+  re-filed copy differs in its fax stamp and print date, not in its words)
+  and states every word and clinical value it states (``Delivered``): a
+  re-filed copy of a record the delivery read. A later report on the same
+  template is read.
 * A TEXT page that is a REFILED COPY of a page of an EARLIER new document
   (``Earlier.copy_of``: COVERED_FRAC of its shingles, and every date, word and
   clinical value it states, fax and print lines aside) is EXCLUDED: the second
@@ -34,10 +36,12 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 from ..stages.chunking import context_block
+from . import noteheading as NH
 from .billing_page import BILLING, is_billing
 from .pageid import SKIPPED
 from .values import clinical_values
@@ -79,13 +83,10 @@ def pdf_pages(path: Path) -> list[str]:
         return [pg.get_text() for pg in doc]
 
 
-def seen_shingles(delivered_pdfs: list[Path]) -> set[str]:
-    """Every delivered exhibit page's shingles: what the delivery read."""
-    seen: set[str] = set()
-    for p in delivered_pdfs:
-        for t in pdf_pages(p):
-            seen |= shingles(t)
-    return seen
+def seen_shingles(delivered_pdfs: list[Path]) -> Delivered:
+    """Every delivered exhibit page, one record per page: what the delivery
+    read (``Delivered``)."""
+    return Delivered.of(t for p in delivered_pdfs for t in pdf_pages(p))
 
 
 def shingles_by_exhibit(delivered_pdfs: dict[int, Path]) -> dict[int, set[str]]:
@@ -131,6 +132,38 @@ def _page(doc: int, text: str) -> _Page:
 
 
 @dataclass
+class Delivered:
+    """The delivered exhibits' pages, each kept whole.
+
+    A new page is ALREADY READ only when ONE delivered page covers
+    COVERED_FRAC of its shingles AND states every word and clinical value it
+    states. Coverage pooled across all delivered pages is not enough: a
+    practice's later follow-up shares its template with the earlier ones the
+    delivery read, so its exam, diagnoses, plan, causation opinion and
+    signature page were dropped before compose (2026-10-14: a four-page report
+    and a signature lost). Dates are left out: a re-printed copy carries a new
+    print date and is still the record the delivery read."""
+
+    pages: list[_Page] = field(default_factory=list)
+
+    @classmethod
+    def of(cls, texts: Iterable[str]) -> Delivered:
+        return cls([_page(-1, t) for t in texts])
+
+    def __or__(self, other: Delivered) -> Delivered:
+        return Delivered(self.pages + other.pages)
+
+    def covers(self, text: str) -> bool:
+        me = _page(-1, text)
+        if not me.shingles:
+            return False
+        need = COVERED_FRAC * len(me.shingles)
+        return any(
+            len(me.shingles & e.shingles) >= need and me.words <= e.words and me.values <= e.values for e in self.pages
+        )
+
+
+@dataclass
 class Earlier:
     """The pages of the new documents read so far, in exhibit order.
 
@@ -164,15 +197,14 @@ class Earlier:
         return False
 
 
-def _decide(t: str, seen: set[str], earlier: Earlier | None) -> tuple[str, str]:
+def _decide(t: str, seen: Delivered, earlier: Earlier | None) -> tuple[str, str]:
     if t in FAILED_MARKS:
         return UNREAD, "the page could not be transcribed"
     if len(t) < MIN_CHARS:
         return EXCLUDED, BLANK
     if is_billing(t):
         return EXCLUDED, BILLING
-    sh = shingles(t)
-    if sh and len(sh & seen) >= COVERED_FRAC * len(sh):
+    if seen.covers(t):
         return EXCLUDED, ALREADY
     if earlier is not None and earlier.copy_of(t):
         return EXCLUDED, OVERLAP
@@ -182,7 +214,7 @@ def _decide(t: str, seen: set[str], earlier: Earlier | None) -> tuple[str, str]:
 def classify_new(
     pages: dict[int, str],
     npages: int,
-    seen: set[str],
+    seen: Delivered,
     earlier: Earlier | None = None,
     image: dict[int, str] | None = None,
 ) -> dict[int, tuple[str, str]]:
@@ -228,7 +260,9 @@ def selected_text(pages: dict[int, str], read: list[int]) -> str:
     repeats an earlier copy) carries that neighbour's foot or head as a
     delimited context block outside its own segment: a serology's "No" at the
     foot of an unread page and its result at the head of a read one was
-    composed POSITIVE (``stages/chunking.context_block``)."""
+    composed POSITIVE (``stages/chunking.context_block``). A read page that
+    continues a note whose heading page is not read also carries that note's
+    heading, or says none was found (``update/noteheading``)."""
     want = set(read)
 
     def ctx(p: int) -> str:  # a billing page is never context: it is not composed at all
@@ -237,7 +271,7 @@ def selected_text(pages: dict[int, str], read: list[int]) -> str:
 
     out = []
     for pg in read:
-        pre = context_block(ctx(pg - 1), pg - 1, before=True)
+        pre = NH.heading_block(pages, pg, want.__contains__) + context_block(ctx(pg - 1), pg - 1, before=True)
         nxt = context_block(ctx(pg + 1), pg + 1, before=False)
         out.append(pre + f"[p.{pg}]\n{pages.get(pg) or ''}" + ("\n" + nxt.rstrip("\n") if nxt else ""))
     return "\n".join(out)

@@ -7,11 +7,14 @@ PDF text carries [p.N] page markers.
 
 PAGE CONTEXT: a block opening `[context, the foot of the page before, p.N: ...]` or `[context, the head of the page after, p.N: ...]` and closing `[end context]` is text from a neighbouring page that is not otherwise in this chunk. Read it so a result, a negation or a heading split across the page break is understood as the record states it (a "No" or "Negative" at the foot of one page can govern the result at the head of the next). Never cite a context block, never compose an entry from it alone, and keep every citation on the page where the fact itself is printed.
 
+NOTE HEADING: a block opening `[note heading, p.N: the note p.M continues ...]` and closing `[end note heading]` is the heading (title, author, date of service) of the note that page p.M continues; the heading's own page is not in this chunk. The entry for what p.M records is keyed to that heading's date of service and names its author as the provider, never the date or physician of a page banner or encounter header printed on p.M (an admission banner names the stay, not the note). A block `[note heading: none found ...]` means the heading could not be found: if the page continues an earlier note, follow that block's instruction for the provider, and never take the name from a banner. Never cite a note heading block.
+
 THE HOUSE FORMAT for each dated entry (follow it exactly):
 - Entries are keyed to DATE OF SERVICE (the date care was rendered), never the dictation, signing, printing, or letter date. One entry per provider per date of service.
 - Entry header, two lines:
   Line 1: `MM/DD/YYYY`
   Line 2: `<provider or facility name> | <first subsection heading present>`
+- The provider is the clinician who signed or authored the record. Read every page of the file for it: a report's signature block, "electronically signed by" line or signer's name is often on its last page, not its first. Name that signer, as the record spells the name. Only when no page of the file names the clinician, write the facility or practice the record names followed by "(provider not stated in the record)"; never invent or infer a name.
 - Content under this fixed menu of subsection headings, used only when applicable, in this canonical order:
   {{HEADING_MENU}}
 - Headings in Title Case on their own line, no bold, no colons. Prose paragraphs only, no bullets, no numbered lists.
