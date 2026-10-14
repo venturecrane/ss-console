@@ -10,8 +10,9 @@ file, the same broker writer, monotonic states:
 
     queued    -> running | held | failed
     running   -> held | delivered | failed
-    held      -> failed
-    failed    -> running        (a resume, root only, with a reason)
+    held      -> failed         (also SMD's close: ``close`` below)
+    failed    -> running        (a resume, root only, with a reason; never
+                                 a job SMD closed)
 
 WHAT EACH ENDING MEANS (the drafting lane's rule, unchanged): ``failed`` is OUR
 machinery; it is resumable and the requester is told NOTHING (the reply
@@ -19,6 +20,14 @@ binding refuses it; SMD's shortfall alert carries it). ``held`` is a cause in
 the firm's files or the request (an attorney with no open matters, a gate that
 will not pass on what the files say); it is final and the requester is told.
 ``delivered`` is the filed workbook.
+
+SMD'S CLOSE (2026-10-14). A held job SMD finished by hand (the deliverable
+filed by us, the requester told by us) would otherwise sit ``held`` forever,
+and a held job is replyable, so a late completion turn could still answer it.
+``close`` moves it ``held -> failed`` once, with ``reason = "closed"`` (the
+token work-health reads as decided work), SMD's own sentence in
+``close_reason`` and the evidence id in ``close_ref``. ``failed`` is the
+ending the reply binding refuses, and a closed job never moves again.
 
 TWO TRIGGERS. ``request``: an administrator's email (the overlay sets the
 requester and message ref from the verified inbound). ``scheduled``: the
@@ -104,9 +113,18 @@ CREATE_SQL = (
     "delivery_json TEXT, "
     "reply_sent_at TEXT, "
     "attempt INTEGER NOT NULL DEFAULT 1, "
-    "reply_key TEXT"
+    "reply_key TEXT, "
+    "close_reason TEXT, "
+    "close_ref TEXT"
     ")"
 )
+#: Columns added after the table first shipped: (name, type), added on upgrade.
+ADDED_COLUMNS = (("close_reason", "TEXT"), ("close_ref", "TEXT"))
+#: What SMD's close writes as the row's (and the audit row's) reason: a token,
+#: never a sentence. ``work_health._CLOSED_REASONS`` reads it as decided work.
+CLOSED_REASON = "closed"
+#: The evidence a close cites: a crane_verify id or an audit row id (a ULID).
+CLOSE_REF = re.compile(r"^(vfy_)?[0-9A-HJKMNP-TV-Z]{26}$")
 CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_litigation_jobs_created ON litigation_jobs(created_at)"
 #: One live job per request email, and (``scheduled:<date>``) one scheduled job
 #: per Pacific date. A FAILED job of a requested run does not hold the email
@@ -304,6 +322,10 @@ class LitigationLedger:
                 CREATE_SPEND_INDEX_SQL,
             ):
                 conn.execute(sql)
+            have = {r["name"] for r in conn.execute("PRAGMA table_info(litigation_jobs)")}
+            for name, kind in ADDED_COLUMNS:
+                if name not in have:
+                    conn.execute(f"ALTER TABLE litigation_jobs ADD COLUMN {name} {kind}")
             conn.commit()
         finally:
             conn.close()
@@ -452,13 +474,16 @@ class LitigationLedger:
         conn = self._connect()
         try:
             conn.execute("BEGIN IMMEDIATE")
-            cur = conn.execute("SELECT state, cents FROM litigation_jobs WHERE id=?", (job_id,)).fetchone()
+            cur = conn.execute("SELECT state, cents, close_ref FROM litigation_jobs WHERE id=?", (job_id,)).fetchone()
             if cur is None:
                 conn.rollback()
                 raise ValueError(f"no such job {job_id}")
             if state != cur["state"] and state not in _ALLOWED_NEXT[cur["state"]]:
                 conn.rollback()
                 raise ValueError(f"illegal transition {cur['state']} -> {state}")
+            if cur["close_ref"] and state != cur["state"]:
+                conn.rollback()
+                raise ValueError(f"job {job_id} was closed by SMD ({cur['close_ref']}); it never moves again")
             now = _iso_utc()
             cents = fields.get("cents")
             if isinstance(cents, int) and cents > int(cur["cents"] or 0):
@@ -512,6 +537,37 @@ class LitigationLedger:
         finally:
             conn.close()
 
+    def close(self, job_id: str, reason: str, source_ref: str) -> dict[str, Any]:
+        """SMD's close: ``held -> failed`` exactly once, in one write
+        transaction (a second close, or a close of any other state, raises).
+        Returns the row after, with ``prev_state``."""
+        reason = str(reason or "").strip()
+        if not reason:
+            raise ValueError("a close requires a reason: what SMD did, and how the requester was told")
+        if not CLOSE_REF.match(str(source_ref or "")):
+            raise ValueError("a close requires source_ref: a crane_verify id (vfy_<ULID>) or an audit row id (ULID)")
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            cur = conn.execute("SELECT state FROM litigation_jobs WHERE id=?", (job_id,)).fetchone()
+            if cur is None:
+                conn.rollback()
+                raise ValueError(f"no such job {job_id}")
+            if cur["state"] != "held":
+                conn.rollback()
+                raise ValueError(f"job {job_id} is {cur['state']}; only a held job is closed by SMD")
+            conn.execute(
+                "UPDATE litigation_jobs SET state='failed', updated_at=?, reason=?, close_reason=?, close_ref=? "
+                "WHERE id=? AND state='held'",
+                (_iso_utc(), CLOSED_REASON, reason[:500], source_ref, job_id),
+            )
+            conn.commit()
+            row = dict(conn.execute("SELECT * FROM litigation_jobs WHERE id=?", (job_id,)).fetchone())
+            row["prev_state"] = cur["state"]
+            return row
+        finally:
+            conn.close()
+
     def mark_replied(self, job_id: str, key: str = "reply") -> bool:
         """True exactly once per (job, key); the reply binding's key is
         ``<attempt>:<state>``."""
@@ -541,6 +597,8 @@ class LitigationLedger:
 
 __all__ = [
     "AUDIT_TYPE",
+    "CLOSED_REASON",
+    "CLOSE_REF",
     "COUNT_FIELDS",
     "KIND",
     "PROJECTION",

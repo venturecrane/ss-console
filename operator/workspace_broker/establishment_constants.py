@@ -43,6 +43,14 @@ ACT_COMMITTED_ACTION_TYPE = "ACT_COMMITTED"
 OPS_REQUEST_RECORDED_ACTION_TYPE = "OPS_REQUEST_RECORDED"
 OPS_REQUEST_RESOLVED_ACTION_TYPE = "OPS_REQUEST_RESOLVED"
 OPS_REQUEST_LAPSED_ACTION_TYPE = "OPS_REQUEST_LAPSED"
+# 2026-10-13. A fourth way an operations request ends, and the only one root
+# writes: SMD finished the work by hand and the requester was ALREADY answered
+# somewhere else (the Operator's own reply in her thread), so any letter now
+# would repeat or contradict that answer. ``ops_close_by_smd`` appends only
+# this type. Its own name rather than OPS_REQUEST_RESOLVED with a fifth outcome,
+# because that type means "SMD answered and the requester is told by the seat",
+# and this row means the opposite half of that sentence.
+OPS_REQUEST_CLOSED_BY_SMD_ACTION_TYPE = "OPS_REQUEST_CLOSED_BY_SMD"
 
 # The two spec properties an output class carries (ADR 0083 §2-3). Mirrors
 # SPEC_PROPERTIES in corrections.py and src/lib/operator/output-class-specs.ts.
@@ -329,6 +337,11 @@ PENDING_RULES_COLUMN_ALTERS: tuple[str, ...] = (
     # the broker's own record. Absent on an older row, whose letter is then
     # refused as unverifiable rather than sent to an unanchored person.
     "ALTER TABLE pending_rules ADD COLUMN origin_json TEXT",
+    # 2026-10-13, same additive idiom. The moment SMD closed an operations
+    # request quietly (``ops_close_by_smd``) because the requester had already
+    # been answered elsewhere. NULL on every other row, which is "not closed
+    # that way" -- exactly right for every row that existed before it did.
+    "ALTER TABLE pending_rules ADD COLUMN smd_closed_at REAL",
 )
 CREATE_PENDING_RULES_INDEX_SQL = (
     "CREATE INDEX IF NOT EXISTS idx_pending_rules_open "

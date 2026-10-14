@@ -23,6 +23,7 @@ import secrets
 import shutil
 import sqlite3
 import time
+from contextlib import suppress
 from pathlib import Path
 from hashlib import sha256
 from typing import Any
@@ -151,20 +152,16 @@ class EstablishmentStore:
             for entry in self.results_dir.iterdir():
                 if not entry.is_file():
                     continue
-                try:
+                with suppress(OSError):
                     if now - entry.stat().st_mtime > RESULT_TTL_SECONDS:
                         entry.unlink(missing_ok=True)
-                except OSError:
-                    continue
         if self.pending is not None:
-            try:
+            # Best-effort, same as the rest of this sweep: a table that cannot
+            # be swept must not refuse the verb that triggered it. Expiry is
+            # still ENFORCED at read and at submit, so a lingering row grants
+            # nothing.
+            with suppress(sqlite3.Error):
                 self.pending.sweep(now)
-            except sqlite3.Error:
-                # Best-effort, same as the rest of this sweep: a table that
-                # cannot be swept must not refuse the verb that triggered it.
-                # Expiry is still ENFORCED at read and at submit, so a lingering
-                # row grants nothing.
-                pass
 
     def _staging_created_at(self, staging_path: Path) -> float:
         meta_path = staging_path / "meta.json"
@@ -327,6 +324,9 @@ class EstablishmentStore:
 
     def ops_ask_sent(self, request: dict[str, Any]) -> dict[str, Any]:
         return self._ops.ops_ask_sent(request)
+
+    def ops_close_by_smd(self, request: dict[str, Any]) -> dict[str, Any]:
+        return self._ops.ops_close_by_smd(request)
 
     def act_propose(self, request: dict[str, Any]) -> dict[str, Any]:
         return self._acts.act_propose(request)

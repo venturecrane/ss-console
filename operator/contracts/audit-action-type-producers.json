@@ -510,7 +510,7 @@
     "LITIGATION_JOB_FAILED": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/litigation_verbs.py",
-      "reason": "A litigation job failed on SMD's own machinery or stopped at a spend cap; resumable by a person, never reported to the client."
+      "reason": "A litigation job failed on SMD's own machinery or stopped at a spend cap; resumable by a person, never reported to the client. Also SMD's root-only litigation_job_close of a held job it finished by hand (ids and tokens only; never resumed)."
     },
     "LITIGATION_JOB_RESUME_REQUESTED": {
       "side": "ss-console",
@@ -576,6 +576,11 @@
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/establishment_constants.py",
       "reason": "ss#2546 (the operations half). Appended when the person who asked has been TOLD their request to SMD lapsed unanswered, not when the sweep marks it - the mark is bookkeeping, the row is the moment the firm learned something. Its own type rather than RULE_LAPSED because nobody at the firm failed to answer it: SMD did, and a ledger filing the two under one name would misattribute the silence. A resolved request writes nothing here; OPS_REQUEST_RESOLVED already recorded that answer."
+    },
+    "OPS_REQUEST_CLOSED_BY_SMD": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/establishment_constants.py",
+      "reason": "2026-10-13. Appended when SMD closes an operations request through the root-only ops_close_by_smd because the requester was already answered elsewhere, so the seat must send no done, declined or lapse letter. Its own type rather than an OPS_REQUEST_RESOLVED outcome, because that type means the requester is told by the seat and this one means the opposite. Ids only: proposal id, closed_by, source_ref (the evidence of the earlier answer), instructed_by, text digest and has_reason; never the reason text (ADR 0083)."
     },
     "SEND_AS_PROPOSED": {
       "side": "ss-console",

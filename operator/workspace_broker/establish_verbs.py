@@ -1,10 +1,11 @@
-"""The fourteen establishment verbs (ADR 0085, ss#2161/#2162, ss-console#2529).
+"""The fifteen establishment verbs (ADR 0085, ss#2161/#2162, ss-console#2529).
 
 Conversational establishment: the narrow verbs by which an instructed
 voice/shape submission, a rule, an act, or an operations ask crosses the
 agent -> broker trust boundary into the root intake's spool. The peer gate
-(agent uid, non-gateway PID: an execute_code turn) is declared on the verb
-table in ``verbs.py`` and enforced there before anything below runs.
+(agent uid, non-gateway PID: an execute_code turn; root for
+``ops_close_by_smd``) is declared on the verb table in ``verbs.py`` and
+enforced there before anything below runs.
 
 EVERYTHING STORED IS REBUILT. ``establishment_store.py`` reads a bounded field
 set off each request, computes every hash server-side, and refuses (never
@@ -20,7 +21,10 @@ when the outcome reported is a decline, because RULE_DECLINED already recorded
 it), OPS_REQUEST_RECORDED / OPS_REQUEST_RESOLVED / OPS_REQUEST_LAPSED on the
 three operations verbs (ss-console#2546, ADR 0085 as amended 2026-08-22: a
 routine, a schedule, a channel, a memory setting, an autonomy level or an
-on/off is SMD's to change, so the firm cannot confirm one). ``establish_pending``,
+on/off is SMD's to change, so the firm cannot confirm one), and
+OPS_REQUEST_CLOSED_BY_SMD on ``ops_close_by_smd`` -- the one ROOT verb here
+(2026-10-13): SMD ends a request whose requester was already answered
+elsewhere, and no outcome letter may follow. ``establish_pending``,
 ``establish_notify_claim``, ``establish_notify_release`` and ``ops_ask_sent``
 write no row: which of our processes is speaking, or being asked again, is not
 a decision about the firm's work.
@@ -62,6 +66,9 @@ _METHODS: dict[str, str] = {
     "ops_propose": "ops_propose",
     "ops_resolve": "ops_resolve",
     "ops_ask_sent": "ops_ask_sent",
+    # Root only (verbs.py): SMD closes an operations request whose requester
+    # was already answered elsewhere, so no sweeper path ever writes to them.
+    "ops_close_by_smd": "ops_close_by_smd",
 }
 
 VERBS: tuple[str, ...] = tuple(_METHODS)

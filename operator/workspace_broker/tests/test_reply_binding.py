@@ -736,6 +736,25 @@ def test_a_chronology_job_recorded_by_graph_id_replies_in_the_requesters_thread(
     assert len(box.replies()) == 1 and f"/messages/{GRAPH_ID}/reply" in box.replies()[0]
 
 
+def test_a_failed_chronology_wake_claims_nothing_so_its_delivery_still_replies(tmp_path: Path) -> None:
+    """A failed job's DELIVER turn is refused before any claim, and the key is
+    per outcome anyway, so recording the job delivered later (deliver_by_smd)
+    still gets its one reply."""
+    from workspace_broker.medchron_ledger import MedchronLedger
+
+    job = _chronology_job(tmp_path, ["failed"])
+    box = FakeMailbox()
+    _ack_in_thread(box)
+    refused = _call(_broker(tmp_path, box), "msgraph_reply_bind", {"kind": "medchron_job", "job_id": job})
+    assert refused["bound"] is False
+    assert bound_replies.claimed(str(tmp_path / "audit.db"), f"medchron_job:{job}:1:failed") is False
+    ledger = MedchronLedger(str(tmp_path / "audit.db"), tmp_path / "mq")
+    ledger.record(job, "running", {})
+    ledger.record(job, "delivered", {})
+    assert _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})["recipients"] == [ADMIN]
+    assert len(box.replies()) == 1
+
+
 def test_a_graph_id_request_from_someone_else_is_refused(tmp_path: Path) -> None:
     job = _chronology_job(tmp_path, ["running", "delivered"], requester="attorney@firm.example", request_ref=GRAPH_ID)
     out = _call(_broker(tmp_path, FakeMailbox()), "msgraph_reply_bind", {"kind": "medchron_job", "job_id": job})
@@ -870,6 +889,25 @@ def test_the_new_message_path_belongs_to_scheduled_litigation_jobs_only(tmp_path
 def test_a_failed_litigation_job_is_never_told(tmp_path: Path, trigger: str) -> None:
     job = _litigation_job(tmp_path, ["failed"], trigger=trigger)
     box = FakeMailbox()
+    out = _call(_broker(tmp_path, box, LIT_YAML), "msgraph_reply_bind", {"kind": "litigation_job", "job_id": job})
+    assert out["bound"] is False and "Send nothing to anyone" in out["reason"]
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box, LIT_YAML), {"kind": "litigation_job", "job_id": job})
+    assert box.replies() == [] and _sendmails(box) == []
+
+
+def test_a_held_litigation_job_smd_closed_is_never_told(tmp_path: Path) -> None:
+    """2026-10-14. FALSIFIER: a held job is replyable, so before
+    litigation_job_close a job SMD finished by hand could still be answered by
+    a late completion turn. Closed, it binds nothing and sends nothing."""
+    from workspace_broker.litigation_ledger import LitigationLedger
+
+    job = _litigation_job(tmp_path, ["running", "held"])
+    LitigationLedger(str(tmp_path / "audit.db"), tmp_path / "lq").close(
+        job, "SMD filed the list by hand and told the requester", "vfy_" + "0" * 26
+    )
+    box = FakeMailbox()
+    _ack_in_thread(box)
     out = _call(_broker(tmp_path, box, LIT_YAML), "msgraph_reply_bind", {"kind": "litigation_job", "job_id": job})
     assert out["bound"] is False and "Send nothing to anyone" in out["reason"]
     with pytest.raises(BindingRefused):

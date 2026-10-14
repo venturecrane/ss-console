@@ -111,6 +111,7 @@ export const CLIENT_ACTIVITY_CATEGORIES: readonly ClientActivityCategory[] = [
       'OPS_REQUEST_RECORDED',
       'OPS_REQUEST_RESOLVED',
       'OPS_REQUEST_LAPSED',
+      'OPS_REQUEST_CLOSED_BY_SMD',
       'MEDCHRON_JOB_SUBMITTED',
       'MEDCHRON_JOB_RUNNING',
       'MEDCHRON_JOB_HELD',
@@ -394,6 +395,9 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   OPS_REQUEST_RECORDED: () => 'Passed a setup request to SMD',
   OPS_REQUEST_RESOLVED: () => 'SMD answered a setup request',
   OPS_REQUEST_LAPSED: () => 'A setup request to SMD lapsed unanswered',
+  // SMD finished the request by hand and the requester was already answered
+  // in their own thread, so the seat sends no letter. Same vagueness rule.
+  OPS_REQUEST_CLOSED_BY_SMD: () => 'SMD closed a setup request',
   ESCALATION_FIRED: (e) => e.reason ?? 'Flagged something for your attention',
   ESCALATION_ACKNOWLEDGED: () => 'An escalation was acknowledged',
   AGENT_STOPPED: () => 'Your operator was paused',

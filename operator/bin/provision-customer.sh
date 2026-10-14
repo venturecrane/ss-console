@@ -1254,7 +1254,7 @@ log "Deploying ${APP_NAME} (new image + staged secrets roll together)..."
   --build-arg HERMES_REF="${HERMES_REF}" \
   --build-arg HERMES_UPSTREAM_TAG="${HERMES_UPSTREAM_TAG}" \
   --build-arg HERMES_UPSTREAM_SHA="${HERMES_UPSTREAM_SHA}" \
-  --build-arg CUSTOMER_SLUG="${SLUG}")
+  --build-arg CUSTOMER_SLUG="${SLUG}" --build-arg SS_CONSOLE_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)")
 
 # Post-deploy guard: `fly deploy` must have applied EVERY staged secret as part
 # of the new release. If any remain STAGED (the STATUS column in

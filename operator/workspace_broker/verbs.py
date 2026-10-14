@@ -133,7 +133,7 @@ VERBS: tuple[Verb, ...] = (
     Verb("escalation_event_append", _only(AGENT), _escalation),
     # Case-manager casework ledger (proposals, verdicts, task writes).
     Verb("casework_event_append", _only(AGENT), casework_verbs.append_casework_event),
-    # ADR 0085 establishment (fourteen verbs, one handler, one lock).
+    # ADR 0085 establishment (fifteen verbs, one handler, one lock).
     Verb("establish_stage_document", _only(AGENT), establish_verbs.establish),
     Verb("establish_propose", _only(AGENT), establish_verbs.establish),
     Verb("establish_pending", _only(AGENT), establish_verbs.establish),
@@ -148,6 +148,9 @@ VERBS: tuple[Verb, ...] = (
     Verb("ops_propose", _only(AGENT), establish_verbs.establish),
     Verb("ops_resolve", _only(AGENT), establish_verbs.establish),
     Verb("ops_ask_sent", _only(AGENT), establish_verbs.establish),
+    # SMD closes an ops request quietly: the requester was already answered
+    # elsewhere, so no letter may follow. Root only (a person on the seat).
+    Verb("ops_close_by_smd", _only(ROOT), establish_verbs.establish),
     # ss#2614 routine 11; compound gates per medchron_verbs.py.
     Verb("medchron_job_submit", GATEWAY_OR_ROOT, _medchron),
     Verb("medchron_job_status", GATEWAY_ROOT_OR_AGENT, _medchron),
@@ -178,11 +181,13 @@ VERBS: tuple[Verb, ...] = (
     # pins each form to its peers (a request from the gateway or root, a
     # scheduled run from the cron pre_run's agent uid or root, never the
     # gateway). No allowance verb: the lane is metered by the firm's monthly
-    # budget, read on root's status. Resume has no agent tool.
+    # budget, read on root's status. Resume and close have no agent tool.
     Verb("litigation_job_submit", GATEWAY_ROOT_OR_AGENT, litigation_verbs.litigation_dispatch),
     Verb("litigation_job_status", GATEWAY_ROOT_OR_AGENT, litigation_verbs.litigation_dispatch),
     Verb("litigation_job_record", _only(ROOT), litigation_verbs.litigation_dispatch),
     Verb("litigation_job_resume", _only(ROOT), litigation_verbs.litigation_dispatch),
+    # SMD's close of a held job it finished by hand: root only, no agent tool.
+    Verb("litigation_job_close", _only(ROOT), litigation_verbs.litigation_dispatch),
     # The negotiation watch's request edge (negotiation_verbs.py): scheduled
     # only, so submit is the cron pre_run's agent uid or root, never a turn.
     # Status serves the completion turn a notice's message. Resume has no tool.

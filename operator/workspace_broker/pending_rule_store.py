@@ -607,6 +607,54 @@ class PendingRuleStore:
         finally:
             conn.close()
 
+    def close_ops_by_smd(
+        self,
+        proposal_id: str,
+        closed_by: str,
+        reason: str | None,
+        now: float | None = None,
+    ) -> bool:
+        """End one operations request QUIETLY on root's word. True iff THIS call
+        ended it.
+
+        The case it exists for: SMD finished the work by hand and the requester
+        was already answered somewhere else, so ``done`` (a letter), ``declined``
+        (a letter) and an unanswered lapse (a letter) would all repeat or
+        contradict that answer, and ``withdrawn`` says something false.
+
+        WHAT IT WRITES. ``lapsed_at`` and ``lapse_notified_at`` -- the store's
+        existing "ended, and nobody is owed a note" pair, which every observer
+        already honours: ``unreported_outcomes_for`` (both shapes),
+        ``claim_notify`` and ``mark_outcome_reported`` all require
+        ``lapse_notified_at IS NULL``, so no sweeper path can ever reach the row
+        again. ``smd_closed_at`` says WHY, so ``proposal_state`` reads
+        ``closed_by_smd`` rather than "lapsed" (nobody failed to answer).
+        ``lapsed_at`` keeps the sweep's own stamp when it already lapsed the row.
+
+        WHAT IT ACCEPTS, every condition in the WHERE clause (the race safety
+        ``resolve_ops`` has): the kind; never answered (consumed / declined
+        NULL); never reported or withdrawn (``lapse_notified_at`` NULL); and NO
+        notify claim, stale or live. A claimed row is a letter some observer may
+        already be sending, and closing it "quietly" then would be a lie about
+        the requester's inbox. A row the sweep has LAPSED but nobody has claimed
+        or reported is still closable: beating the lapse letter is the point.
+        """
+        now = time.time() if now is None else now
+        conn = self._connect()
+        try:
+            cursor = conn.execute(
+                "UPDATE pending_rules SET lapsed_at=COALESCE(lapsed_at, ?), lapse_notified_at=?, "
+                "smd_closed_at=?, resolved_by=?, outcome_reason=? "
+                "WHERE proposal_id=? AND kind='ops_request' AND consumed_at IS NULL "
+                "AND declined_at IS NULL AND lapse_notified_at IS NULL "
+                "AND notify_claimed_at IS NULL AND smd_closed_at IS NULL",
+                (now, now, now, closed_by, reason, proposal_id),
+            )
+            conn.commit()
+            return bool(cursor.rowcount)
+        finally:
+            conn.close()
+
     def mark_ask_sent(self, proposal_id: str, now: float | None = None) -> bool:
         """Record that SMD has been asked, once, for an answer this parser reads.
 
@@ -648,7 +696,8 @@ class PendingRuleStore:
         gives the reader a sentence; this is the structural half, so a future
         caller that reaches ``consume`` by some other route still cannot turn a
         routine change into something the firm committed. ``ops_resolve`` is the
-        only writer that ends one of those rows.
+        only agent-side writer that ends one of those rows (root's is
+        ``close_ops_by_smd``).
         """
         now = time.time()
         conn = self._connect()
@@ -708,6 +757,8 @@ class PendingRuleStore:
             # ss-console#2546 (the duplicate-letter fix); same tolerance again.
             "notify_claimed_at": _column(row, "notify_claimed_at"),
             "notify_claimed_by": _column(row, "notify_claimed_by"),
+            # ops_close_by_smd (2026-10-13); same tolerance again.
+            "smd_closed_at": _column(row, "smd_closed_at"),
             # The participant fence; NULL on a row written before it existed.
             "origin": _decoded_origin(_column(row, "origin_json")),
         }

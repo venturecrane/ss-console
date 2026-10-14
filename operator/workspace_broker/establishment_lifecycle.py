@@ -10,7 +10,7 @@ holds the store and reads its state through it, so a test that swaps
 
 * :mod:`.establishment_rules`   propose / decline / lapse_notified / pending_rules
 * :mod:`.establishment_notify`  notify_claim / notify_release
-* :mod:`.establishment_ops`     ops_propose / ops_resolve / ops_ask_sent
+* :mod:`.establishment_ops`     ops_propose / ops_resolve / ops_ask_sent / ops_close_by_smd
 * :mod:`.establishment_acts`    act_propose / act_commit
 
 :meth:`ProposalLifecycle.claim_proposal` and :func:`refuse_restated` are here

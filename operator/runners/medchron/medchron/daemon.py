@@ -469,6 +469,7 @@ class Daemon:
         failures write a same-state ledger note (an audit row) and page."""
         self._dispatch_wakes()
         proof_watch.check_reply_watches(self)
+        proof_watch.check_reroutes(self)
 
     def _dispatch_wakes(self) -> None:
         import http.client

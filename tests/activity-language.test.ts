@@ -68,6 +68,8 @@ describe('activity-language exhaustiveness (writer parity)', () => {
         'OPS_REQUEST_RECORDED',
         'OPS_REQUEST_RESOLVED',
         'OPS_REQUEST_LAPSED',
+        // SMD closed a request the requester was already answered on.
+        'OPS_REQUEST_CLOSED_BY_SMD',
         // ADR 0089. A draft sent as a staff member on their approval: every
         // step renders, because the firm must be able to see that a message
         // went out under a person's name and that the person said send.
