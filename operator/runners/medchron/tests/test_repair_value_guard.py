@@ -45,7 +45,10 @@ def test_a_repair_that_removes_only_what_the_audit_named_is_applied(
     job_dir: Path, firm_config_path: Path, data_root: Path
 ) -> None:
     sr, paths = _scene(
-        job_dir, firm_config_path, data_root, "Lisinopril 10 mg daily and metoprolol 25 mg were continued at this visit."
+        job_dir,
+        firm_config_path,
+        data_root,
+        "Lisinopril 10 mg daily and metoprolol 25 mg were continued at this visit.",
     )
     assert repair.run(sr.doorway, "m", paths, lambda *_: None, pause=0)
     assert "twice daily" not in paths.doc.read_text() and "metoprolol 25 mg" in paths.doc.read_text()
