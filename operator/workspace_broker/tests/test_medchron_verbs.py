@@ -820,7 +820,7 @@ def _set_updated_at(v, job_id: str, when: str) -> None:
 
 
 def test_a_hold_superseded_by_a_later_delivery_does_not_refuse_a_fresh_request(verbs):
-    """A&P 201666, 2026-10-13: a 09-23 upload hold whose package was delivered
+    """An A&P matter, 2026-10-13: a 09-23 upload hold whose package was delivered
     09-24 (a backfill row) and re-delivered 10-09 refused Christa's request for
     the complete chronology as a 'duplicate', and the request left the
     chronology lane for the operations route. A later delivery on the matter

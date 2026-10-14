@@ -134,7 +134,7 @@ _TERMINAL_ORDERED = tuple(sorted(TERMINAL))
 if len(_TERMINAL_ORDERED) != 2:  # pragma: no cover - a wiring error, not a runtime path
     raise RuntimeError(f"_ACTIVE_TWIN_SQL is written for 2 terminal states, TERMINAL has {len(_TERMINAL_ORDERED)}")
 #
-# A HELD row stops blocking in two cases (2026-10-13, A&P 201666): when a later
+# A HELD row stops blocking in two cases (2026-10-13, an A&P matter): when a later
 # delivery on the same matter exists (the held work was delivered or replaced,
 # so a resubmission is a new ask, not a twin), and when the hold is older than
 # the runner's held-job retention window (its workdir and queue file are wiped,
@@ -726,7 +726,7 @@ class MedchronLedger:
         the hold is SUPERSEDED (a later delivery on the matter) or STALE (past the
         runner's held-job retention, so it cannot resume). Either kind is not work
         in flight, and refusing a fresh request against it strands the request
-        (A&P 201666, 2026-10-13; see `_ACTIVE_TWIN_SQL`).
+        (an A&P matter, 2026-10-13; see `_ACTIVE_TWIN_SQL`).
 
         The state rides along so the refusal can say what is true of THIS job.
         "Already running" reads as reassurance, and saying it about a job that

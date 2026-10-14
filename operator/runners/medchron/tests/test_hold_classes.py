@@ -151,7 +151,7 @@ def test_every_class_and_page_code_is_in_its_closed_set():
 
 
 def test_the_wake_line_is_a_bare_token_never_the_reason():
-    line = holds.wake_line("litigation", "parity_hold: 1 values changed for Gamma Example 201666 next_court_date")
+    line = holds.wake_line("litigation", "parity_hold: 1 values changed for Gamma Example 900666 next_court_date")
     assert line == "Hold class: smd_finishing."
     assert re.fullmatch(r"Hold class: [a-z_]+\.", line)
 
@@ -283,6 +283,81 @@ def test_a_run_refused_on_a_delivered_matter_is_rerouted_and_pages_nothing(tmp_p
     assert "Hold class: rerouted_to_update." in d._daemon_state("01A")["wake"]["task"].splitlines()
 
 
+class _RerouteBroker(pd.ReplyBroker):
+    """Answers the daemon's job list (``medchron_job_status``) from ``self.jobs``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.jobs: list[dict] = []
+
+    def _request(self, req):
+        if req["action"] == "medchron_job_status":
+            return {"ok": True, "jobs": list(self.jobs)}
+        return super()._request(req)
+
+
+def _rerouted(tmp_path: Path):
+    from medchron import dag
+
+    reason = "refused: " + next(s for s in dag.STAGES if s.name == "list_matter").exit_map[3][1]
+    d, _ = pd.ud._daemon(tmp_path)
+    broker = _RerouteBroker()
+    d.broker = broker
+    d.job_dir("01A").mkdir(parents=True)
+    (d.job_dir("01A") / "envelope.json").write_text(json.dumps({"matter": {"number": "900277"}, "requested_by": "a@x"}))
+    d._write_state("01A", state="held", reason=reason, finished_at=d.clock(), attempts=1)
+    pd.watch.arm_reply_watch(d, "01A")
+    return d, broker
+
+
+def test_a_rerouted_hold_arms_a_watch_for_the_update(tmp_path):
+    d, _broker = _rerouted(tmp_path)
+    w = d._daemon_state("01A")["reroute_watch"]
+    assert w["matter_number"] == "900277" and not w.get("done")
+
+
+def test_a_refused_resubmit_pages_smd_once_the_reply_has_gone(tmp_path):
+    """The DELIVER turn submits before it replies; a reply with no UPDATE queued
+    means the resubmission was refused and the firm was told SMD is finishing it."""
+    d, broker = _rerouted(tmp_path)
+    broker.replies = [pd._row("medchron_job:01A:1:held")]
+    d.dispatch_wakes()
+    assert pd._codes(broker) == ["stage_refused"]
+    assert d._daemon_state("01A")["reroute_watch"]["outcome"] == "paged"
+    d.dispatch_wakes()
+    assert pd._codes(broker) == ["stage_refused"]  # once
+
+
+def test_a_refused_resubmit_pages_by_the_deadline_even_with_no_reply(tmp_path):
+    d, broker = _rerouted(tmp_path)
+    d.dispatch_wakes()
+    assert "stage_refused" not in pd._codes(broker)
+    d.clock = lambda: 10_000_000.0
+    d.dispatch_wakes()
+    assert "stage_refused" in pd._codes(broker)
+
+
+def test_a_queued_update_closes_the_watch_with_no_page(tmp_path):
+    d, broker = _rerouted(tmp_path)
+    since = d._daemon_state("01A")["reroute_watch"]["since"]
+    broker.jobs = [
+        {"id": "01A", "matter_number": "900277", "created_at": since},
+        {"id": "01B", "matter_number": "900277", "created_at": "2999-01-01T00:00:00.000Z"},
+    ]
+    broker.replies = [pd._row("medchron_job:01A:1:held")]
+    d.dispatch_wakes()
+    assert pd._codes(broker) == []
+    assert d._daemon_state("01A")["reroute_watch"]["outcome"] == "update_queued"
+
+
+def test_an_update_for_another_matter_does_not_count(tmp_path):
+    d, broker = _rerouted(tmp_path)
+    broker.jobs = [{"id": "01B", "matter_number": "999999", "created_at": "2999-01-01T00:00:00.000Z"}]
+    broker.replies = [pd._row("medchron_job:01A:1:held")]
+    d.dispatch_wakes()
+    assert pd._codes(broker) == ["stage_refused"]
+
+
 # ---- no document text in an update's job reason ----------------------------------
 
 
@@ -339,11 +414,11 @@ def test_an_identity_hold_names_document_ids_never_the_other_person(tmp_path, mo
     monkeypatch.setattr(
         us,
         "_identity_holds",
-        lambda sr, rows: ["d9: a date of birth 03/01/1973 that is not the client's; a patient named Mounsa"],
+        lambda sr, rows: ["d9: a date of birth 01/02/1950 that is not the client's; a patient named Zedward"],
     )
     assert us.run(SR()) == 2
     joined = " | ".join(lines)
-    assert "1973" not in joined and "Mounsa" not in joined
+    assert "1950" not in joined and "Zedward" not in joined
     assert "d9" in joined and "name a different person than the client" in joined
     assert holds.classify("medchron", lines[-1]) == ("another_person", "identity_held")
-    assert "Mounsa" in (ud / "identity_holds.json").read_text()  # SMD's detail, on the seat
+    assert "Zedward" in (ud / "identity_holds.json").read_text()  # SMD's detail, on the seat

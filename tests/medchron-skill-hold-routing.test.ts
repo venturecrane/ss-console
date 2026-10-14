@@ -111,7 +111,7 @@ describe('medical-chronology-maintainer: a review hold is SMD work (2026-10-13)'
 })
 
 describe('medical-chronology-maintainer: a refused submission never leaves the lane', () => {
-  // A&P 201666, 2026-10-13: a duplicate refusal naming a stale hold sent an
+  // An A&P matter, 2026-10-13: a duplicate refusal naming a stale hold sent an
   // administrator's chronology request to SMD as an "operations change".
   const run = body.slice(body.indexOf('## RUN'), body.indexOf('## UPDATE')).replace(/\s+/g, ' ')
 

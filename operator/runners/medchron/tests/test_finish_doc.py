@@ -448,7 +448,7 @@ def test_coverage_gate_takes_the_composers_own_account_of_an_uncited_file(
     assert any("EXHIBIT B.pdf" in line and "billing dates only" in line for line in log), log
     # the COMBINED form the composer actually writes: `entries: 0, billing-dates: N`.
     # A prefix test saw only the bare form and held a finished chronology on a
-    # live matter (A&P 201666, two ledgers, 348 dates of service).
+    # live matter (an A&P matter, two ledgers, 348 dates of service).
     assert any("ledger scan.pdf" in line and "billing dates only (332)" in line for line in log), log
     assert any("image001 (2).jpg" in line and "composer: photo" in line for line in log), "found by id after the rename"
     # the rehearsal answers from the same source
