@@ -115,7 +115,7 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         requires=("audit",),
         runner=_ureview.run,
         exit_map={
-            1: (FAILED, "update_review: a part of the update's review did not finish; a rerun reviews again"),
+            1: (FAILED, "update_review: the grader of the finisher's sentences gave no verdict; a rerun grades again"),
             2: (
                 HELD,
                 "update_held: the independent review of the update left must-fix findings the finisher could "
