@@ -101,6 +101,8 @@ class _Model:
 
     def stream(self, **kw):
         self.calls.append(kw)
+        if "UPDATE REVIEW AND REPAIR" in self._system(kw):
+            return _Stream(_text('{"findings": [], "complete": true}'))
         if "INDEPENDENT PRE-DELIVERY REVIEW" in self._system(kw):
             return _Stream(_text("VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"))
         return _Stream(_text(MAP))

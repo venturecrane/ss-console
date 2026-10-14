@@ -28,7 +28,7 @@ from .. import icd_tables
 from ..audit import claims as CL, coverage as audit_coverage
 from ..audit.page_text import exhibit_paths
 from ..audit.run import AuditPaths
-from ..update import assemble as A, body as B, collect as C, docx_md, proofs as P, reviewed as RV
+from ..update import assemble as A, body as B, collect as C, docx_md, proofs as P, review_repair as RR, reviewed as RV
 from ..update.billing_page import BILLING
 from ..update.select import ALREADY, BLANK, OVERLAP
 from .base import StageRefusal, StageRun, read_json, read_jsonl
@@ -246,6 +246,7 @@ def run_proofs(sr: StageRun) -> int:
         gate_passed=gate,
         pre_note_itemized=bool(rep.get("pre_note_itemized")),
         respelled=dict(rep.get("provider_spelling_from_audit") or {}),
+        review_named=RR.named_values(read_json(ud / "review_repair.json", {})),
     )
     r = P.run(x)
     for ln in r.lines:
