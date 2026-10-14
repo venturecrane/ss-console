@@ -1381,3 +1381,26 @@ def test_a_delivery_read_failure_refuses_with_its_own_reason(verbs, monkeypatch)
     assert "could not be read" in r["reason"] and "OperationalError" in r["reason"]
     assert "already holds" not in r["reason"]
     assert not list(queue.glob("*.json"))
+
+
+def test_a_held_job_carries_its_firm_safe_hold_class_beside_the_reason(verbs):
+    """2026-10-13: the agent words a hold by its class, never by the reason."""
+    v, _ledger, _queue = verbs
+    j = _held_job(v, "update_held: the delivered chronology does not re-render to itself (3 differing paragraph(s))")
+    job = call(v, "medchron_job_status", job_id=j)["job"]
+    assert job["hold_class"] == "smd_finishing" and job["reason"].startswith("update_held: ")
+    j2 = _held_job(v, "update_held: nothing new to add: the 2 new document(s) record no visit")
+    assert call(v, "medchron_job_status", job_id=j2)["job"]["hold_class"] == "already_current"
+
+
+def test_a_job_that_is_not_held_carries_no_hold_class(verbs):
+    v, _ledger, _queue = verbs
+    assert "hold_class" not in call(v, "medchron_job_status", job_id=_failed_job(v))["job"]
+
+
+def test_the_broker_hold_classifier_is_the_runners_byte_for_byte():
+    """The runner package is not importable here; the broker carries a copy of
+    ``medchron/proof/holds.py``. Two copies of one classifier must not drift."""
+    here = Path(__file__).resolve().parents[1]
+    runner = here.parent / "runners/medchron/medchron/proof/holds.py"
+    assert (here / "hold_class.py").read_bytes() == runner.read_bytes()

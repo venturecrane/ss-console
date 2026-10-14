@@ -172,7 +172,8 @@ any case.
      `reason`. The reason is SMD's technical record (gates, seed values, matter
      numbers, codes), and SMD already has it: every hold our side caused pages
      SMD with that reason. **Never quote, paraphrase or summarize the reason, a
-     gate, a stage or a code.** Each class has fixed wording; use it and add
+     gate, a stage or a code.** The same token comes back as `hold_class` on the job from `litigation_job_status`;
+     when the two differ, the job's `hold_class` wins. Each class has fixed wording; use it and add
      nothing:
      - `smd_finishing` (our side: the gates, a value from an earlier list, a
        change with no document behind it, a filing that did not finish): "The

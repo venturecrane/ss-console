@@ -502,7 +502,8 @@ nothing, stop.
      stages and sometimes what a record says, and SMD already has it, because
      every hold our side caused pages SMD with that reason. **Never quote,
      paraphrase or summarize the reason, a gate, a stage, a setting, a code or a
-     figure from it.** Each class has fixed wording; use it, with the matter
+     figure from it.** The same token comes back as `hold_class` on the job from `medchron_job_status`;
+     when the two differ, the job's `hold_class` wins. Each class has fixed wording; use it, with the matter
      number from the wake, and add nothing:
      - `smd_finishing` (our side: a gate or check, the final citation check
        `audit coverage:`, the independent review `review_held:`, a refused

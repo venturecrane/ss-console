@@ -108,6 +108,9 @@ for (const [name, cfg] of Object.entries(SKILLS)) {
     it("words a hold by the wake's Hold class line, never by the reason", () => {
       expect(held).toContain("worded by the wake's `Hold class:` line, never by the job's")
       expect(held).toMatch(/Never quote, paraphrase or summarize the reason/)
+      expect(held).toMatch(
+        /The same token comes back as `hold_class` on the job from `(medchron|litigation)_job_status`/
+      )
       expect(held).toMatch(/a class not listed here, is `smd_finishing`/)
     })
 
