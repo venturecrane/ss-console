@@ -52,6 +52,12 @@ CODES = frozenset(
         "wake_lost",
         "reply_unproven",
         "reply_not_in_sent_items",
+        "gate_held",
+        "update_held",
+        "upload_held",
+        "stage_refused",
+        "limit_held",
+        "identity_held",
     }
 )
 REPLY_KINDS = frozenset({"demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job"})

@@ -41,7 +41,7 @@ import json
 import re
 from typing import Any
 
-from . import delivery_proof
+from . import delivery_proof, hold_class
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
 from .medchron_ledger import (
@@ -102,6 +102,16 @@ def _audit_gate_hold(row: dict[str, Any]) -> bool:
     # so is a dry run that reached the ledger (nothing was filed).
     reason = str(row.get("reason") or "")
     return row.get("state") == "held" and reason.startswith((AUDIT_GATE_HOLD_PREFIX, "review_held", "dry_run_reported"))
+
+
+def _with_hold_class(job: dict[str, Any], lane: str) -> dict[str, Any]:
+    """A held job carries its firm-safe ``hold_class`` beside the reason
+    (2026-10-13): the token is what the DELIVER turn may word for the firm; the
+    reason is SMD's technical record and is never relayed. Additive: a caller
+    that does not read the key is unchanged."""
+    if job.get("state") == "held":
+        job["hold_class"] = hold_class.classify(lane, job.get("reason"))[0]
+    return job
 
 
 _COVERAGE_KEYS = ("covered_json", "covered_document_ids", "uncovered_document_ids")
@@ -271,7 +281,7 @@ class MedchronVerbs:
                 raise ValueError("medchron_job_status takes job_id or matter_id, not both")
             if job_id:
                 row = self._db.read(job_id)
-                return {"ok": True, "job": self._db.project(row) if row else None}
+                return {"ok": True, "job": _with_hold_class(self._db.project(row), "medchron") if row else None}
             if matter_id:
                 return {"ok": True, "matter": self._db.delivered_coverage(matter_id)}
             return {"ok": True, "jobs": [_counted(self._db.project(r)) for r in self._db.list_recent(20)]}

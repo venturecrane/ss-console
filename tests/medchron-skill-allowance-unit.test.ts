@@ -20,9 +20,10 @@
  *      skill that models one in its own prose teaches the model to write a
  *      reply that cannot be sent.
  *
- *   3. The limits are named by setting, so a hold reply can say which one held
- *      it. A reply that says only "it was held" sends the firm to us to find
- *      out what changed.
+ *   3. The limits are named by setting, so the skill can tell a limit hold
+ *      from any other. Since 2026-10-13 a limit hold is SMD's (proof/holds.py
+ *      pages it as limit_held) and the firm hears the fixed smd_finishing
+ *      wording, never the setting (tests/hold-class-wording.test.ts).
  */
 
 import { describe, it, expect } from 'vitest'

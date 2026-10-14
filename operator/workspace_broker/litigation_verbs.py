@@ -59,7 +59,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import delivery_proof
+from . import delivery_proof, hold_class
 from .broker_context import BrokerContext
 from .litigation_intake import (
     FILE_TO_KEY,
@@ -233,6 +233,8 @@ class LitigationVerbs:
             if row is None:
                 return {"ok": True, "job": None}
             job = {**LitigationLedger.project(row), **({"row": row} if full else {})}
+            if job.get("state") == "held":  # the firm-safe token; the reason stays SMD's (2026-10-13)
+                job["hold_class"] = hold_class.classify("litigation", job.get("reason"))[0]
             return {"ok": True, "job": job}
         out: dict[str, Any] = {"ok": True, "jobs": [LitigationLedger.project(r) for r in self._db.recent(20)]}
         if full:

@@ -121,7 +121,12 @@ def run(sr: StageRun) -> int:
     rows, skipped = _candidates(sr, delivered_sha)
     holds = _identity_holds(sr, rows)
     if holds:
-        sr.log(HELD + f"{len(holds)} document(s) name a different person than the client: {holds[:5]}")
+        # Document ids and a count only: what each record says about the other
+        # person (a name, a date of birth) stays in identity_holds.json for SMD,
+        # never in the job's reason (2026-10-13).
+        (ud / "identity_holds.json").write_text(json.dumps(holds, indent=1), encoding="utf-8")
+        ids = [h.split(":", 1)[0] for h in holds]
+        sr.log(HELD + f"{len(holds)} document(s) name a different person than the client (document ids: {ids[:5]})")
         return 2
     seen = S.seen_shingles([sr.slug_dir / "delivered" / e["name"] for e in p["exhibits"]])
     recs, units = [], []

@@ -3,7 +3,9 @@ its module size ceiling) and shared by every lane:
 
 * ``settle``: before a lane records its verdict. A dry run never becomes
   ``delivered``; a ``delivered`` without proof becomes ``failed`` (resumable);
-  a review hold or a read-back failure pages SMD; a proven delivery writes its
+  a review hold, a read-back failure, and every hold our side caused
+  (``holds.classify``: gates, seed, update, upload, refusal, limit) page SMD;
+  a proven delivery writes its
   evidence row (``DELIVERY_PROVEN``: ids, sizes, hashes, the review's status
   and spend).
 * ``arm_reply_watch`` / ``check_reply_watches``: after the DELIVER wake. The
@@ -30,7 +32,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .. import proof_mode
-from . import PROOF_KEY, gate
+from . import PROOF_KEY, gate, holds
 
 logger = logging.getLogger("medchron.daemon")
 
@@ -198,7 +200,14 @@ def settle(d: Any, job_id: str, outcomes: list[Any], state: str, fields: dict[st
     for code in _REASON_CODES:
         if reason.startswith(code) or reason.startswith(f"refused: {code}"):
             alert(d, job_id, code, reason)
-            break
+            return state, fields
+    if state == "held":
+        # A hold our side caused is our failure: the firm is told SMD is
+        # finishing it (proof/holds.py), so SMD hears it here, with the
+        # technical reason, under the hold's own code.
+        code = holds.classify(d.LANE, reason)[1]
+        if code is not None:
+            alert(d, job_id, code, reason)
     return state, fields
 
 

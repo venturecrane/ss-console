@@ -476,3 +476,15 @@ def test_the_month_window_is_pacific() -> None:
     month, start, end = month_window(datetime(2026, 11, 1, 5, 0, tzinfo=timezone.utc))
     assert month == "2026-10"
     assert start == "2026-10-01T07:00:00.000Z" and end == "2026-11-01T07:00:00.000Z"
+
+
+def test_a_held_job_carries_its_firm_safe_hold_class(seat) -> None:
+    """2026-10-13: a gate hold is ours; the agent reads smd_finishing, never the gate."""
+    broker, _, _, _, _ = seat
+    job = submit(broker)["job_id"]
+    root = {"pid": 1, "uid": 0}
+    call(broker, "litigation_job_record", **root, job_id=job, state="running", fields={})
+    reason = "gate_refused: the gates refused the list: save date (1526)"
+    call(broker, "litigation_job_record", **root, job_id=job, state="held", fields={"stage": "gates", "reason": reason})
+    got = call(broker, "litigation_job_status", job_id=job)["job"]
+    assert got["state"] == "held" and got["hold_class"] == "smd_finishing"

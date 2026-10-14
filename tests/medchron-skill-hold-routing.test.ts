@@ -51,9 +51,13 @@ describe('medical-chronology-maintainer: DELIVER replies through the bound reply
 
 describe('medical-chronology-maintainer: a PARTIAL is never the attorney', () => {
   it('names the audit-gate hold as SMD work, never an attorney determination', () => {
-    expect(flat).toContain('`audit coverage:`')
-    expect(flat).toMatch(/never the firm's to decide/)
-    expect(flat).toMatch(/never framed as one/)
+    const ours = flat.slice(
+      flat.indexOf('`smd_finishing` (our side'),
+      flat.indexOf('`smd_finishing_filed`')
+    )
+    expect(ours).toContain('`audit coverage:`')
+    expect(ours).toContain("This is SMD's failure, never the firm's decision.")
+    expect(ours).toMatch(/do not ask anyone to review, confirm or determine anything/)
   })
 
   it('never asks anyone to determine, review or confirm a PARTIAL, nor emails the attorney', () => {
@@ -96,10 +100,13 @@ describe('medical-chronology-maintainer: a review hold is SMD work (2026-10-13)'
   // a must-fix before anything is filed. Like the audit gate, the hold is SMD's
   // to clear; the firm is told nothing is needed and never shown the findings.
   it('names review_held as SMD work, with nothing asked of the firm', () => {
-    const held = flat.slice(flat.indexOf('`review_held:`'), flat.indexOf('`dry_run_reported:`'))
-    expect(held).toContain("SMD's to clear")
-    expect(held).toContain('nothing is needed from the firm')
-    expect(held).toMatch(/do not ask anyone at the firm to review anything/i)
+    const ours = flat.slice(
+      flat.indexOf('`smd_finishing` (our side'),
+      flat.indexOf('`smd_finishing_filed`')
+    )
+    expect(ours).toContain('`review_held:`')
+    expect(ours).toContain('Nothing is needed from you; SMD is finishing it')
+    expect(ours).toMatch(/do not ask anyone to review, confirm or determine anything/i)
   })
 })
 
