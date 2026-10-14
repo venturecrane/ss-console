@@ -123,7 +123,7 @@ def _text(el: Any) -> str:
 
 
 class HouseWriter:
-    def __init__(self, reference: Path) -> None:
+    def __init__(self, reference: Path, kinds: tuple[str, ...] = KINDS) -> None:
         import docx
 
         self.doc = docx.Document(str(reference))
@@ -136,7 +136,7 @@ class HouseWriter:
             m = re.match(r"PROTO:(\w+)", _text(k).strip())
             if m:
                 self.proto[m.group(1)] = copy.deepcopy(k)
-        missing = [k for k in KINDS if k not in self.proto]
+        missing = [k for k in kinds if k not in self.proto]
         if missing:
             raise RenderError(f"the house reference lacks prototypes: {missing}")
         self.body_rpr = _first_rpr(self.proto["body"])
@@ -213,7 +213,7 @@ def strip_custom_properties(doc: Any) -> None:
 
 
 # ---- markdown in ------------------------------------------------------------------
-def parse(md: str) -> tuple[dict[str, str], str, str]:
+def parse(md: str, keys: tuple[str, ...] = FRONT_KEYS) -> tuple[dict[str, str], str, str]:
     notes = ""
     if NOTES_MARK in md:
         md, notes = md.split(NOTES_MARK, 1)
@@ -225,7 +225,7 @@ def parse(md: str) -> tuple[dict[str, str], str, str]:
         if ":" in line:
             k, v = line.split(":", 1)
             front[k.strip()] = v.strip()
-    missing = [k for k in FRONT_KEYS if not front.get(k)]
+    missing = [k for k in keys if not front.get(k)]
     if missing:
         raise RenderError(f"front matter missing: {missing}")
     return front, md[m.end() :], notes.strip()
