@@ -156,3 +156,75 @@ def test_a_pipeline_note_is_stripped_and_proof_6_fails_if_one_is_added() -> None
     assert leaked != md
     assert "6" in P.run(_inputs(leaked, [NEW_PRE, NEW_POST])).fails
     assert "6" not in P.run(_inputs(md, [NEW_PRE, NEW_POST])).fails
+
+
+# ---- repeated claims: a repair or a drop reaches every copy, and the count reconciles ----
+def _ledger(sentence: str) -> str:
+    """Three ledger visits citing one sentence to one page, plus one other claim."""
+    visits = [
+        f"0{d}/02/2026\nExample Clinic | Treatments\n\nTreatments\n{sentence} (Exhibit 1 - p. 2)" for d in (1, 2, 3)
+    ]
+    return "\n\n".join(
+        [
+            "01/01/2026\nExample Clinic | Medical Diagnoses\n\n"
+            "The patient reports neck pain rated 6 of 10 since the incident. (Exhibit 1 - p. 1)",
+            *visits,
+        ]
+    )
+
+
+def _repeat_run(job_dir: Path, firm_config_path: Path, data_root: Path, sentence: str, repair_text: str):
+    from medchron.stages import audit_loop
+    from test_audit import (
+        PROSE,
+        SUPPORTED,
+        UNSUPPORTED,
+        Scripted,
+        _claim_of,
+        _exhibit_set,
+        _is_control,
+        _sr,
+        _write_doc,
+        text_msg,
+        tool_msg,
+    )
+
+    state = {"repaired": False}
+
+    def reply(p, n):
+        if p.get("system") and "correct one sentence-group" in p["system"][0]["text"]:
+            state["repaired"] = True
+            return text_msg(repair_text)
+        if _is_control(p):
+            return tool_msg(UNSUPPORTED)
+        if sentence[:20] in _claim_of(p) and not state["repaired"]:
+            return tool_msg(UNSUPPORTED)
+        return tool_msg(SUPPORTED)
+
+    log: list[str] = []
+    sr = _sr(job_dir, firm_config_path, data_root, Scripted(reply), log=log)
+    _exhibit_set(sr, [PROSE, PROSE])
+    rd = sr.slug_dir / "runs" / "alpha"
+    _write_doc(sr, _ledger(sentence))
+    (rd / "entries_scoped_final.md").write_text(_ledger(sentence))
+    rc = audit_loop.run(sr)
+    return rc, (rd / "final-chronology.md").read_text(), log
+
+
+def test_a_repair_reaches_every_copy_of_a_repeated_claim_and_the_count_reconciles(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    sentence = "Cervical adjustment with traction recorded at 120/80 for the visit."
+    fixed = "Cervical adjustment with traction recorded for the visit. (Exhibit 1 - p. 2)"
+    rc, doc, log = _repeat_run(job_dir, firm_config_path, data_root, sentence, fixed)
+    assert rc == 0, log
+    assert sentence not in doc and doc.count("Cervical adjustment with traction recorded for the visit.") == 3
+    assert not any("MISMATCH" in ln for ln in log) and any("RECONCILES" in ln for ln in log)
+
+
+def test_a_drop_removes_every_copy_with_its_punctuation(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+    sentence = "Ledger entry for an adjustment at the cervical level today."
+    rc, doc, log = _repeat_run(job_dir, firm_config_path, data_root, sentence, "DROP")
+    assert sentence not in doc
+    assert not [ln for ln in doc.splitlines() if ln.strip() == "."]
+    assert not any("MISMATCH" in ln for ln in log), log

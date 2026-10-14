@@ -86,11 +86,29 @@ def widen_cite(old_cite: str, widened: list[int]) -> str:
 
 
 def replace_in(text: str, anchor: str, replacement: str) -> tuple[str, bool]:
+    """`text` with EVERY copy of the claim span `anchor` repaired (or, with an
+    empty replacement, removed). One claim key can stand in several entries:
+    a chiropractic ledger cites the same sentence to the same page for many
+    visits, and editing only the first copy left the others unaudited and
+    broke the claim count (2026-10-14)."""
     if anchor not in text:
         return text, False
     if replacement == "":
-        return remove_claim(text, anchor), True
-    return text.replace(anchor, replacement, 1), True
+        while anchor in text:
+            text = remove_claim(text, anchor)
+        return text, True
+    return text.replace(anchor, replacement), True
+
+
+def _edit(body: str, anchor: str, replacement: str, pdfs: set[int], removed: list[int]) -> str:
+    """`replace_in` on the document body; a removal adds to `removed[0]` the
+    claim OCCURRENCES it took, so the reconciliation counts every copy on
+    both sides. Counting unique keys before and every copy after reported a
+    mismatch on a sound document (151 vs 168, 2026-10-14)."""
+    out, _ = replace_in(body, anchor, replacement)
+    if replacement == "":
+        removed[0] += len(CL.extract_claims(body, pdfs)) - len(CL.extract_claims(out, pdfs))
+    return out
 
 
 def remove_claim(text: str, anchor: str) -> str:
@@ -326,9 +344,10 @@ def run(
     body, tail = rest.split(CL.BODY_END, 1)
     entries = entries_path.read_text(encoding="utf-8") if entries_path.is_file() else None
     pdfs = set(exhibit_paths(paths.out))
-    live = {c["key"]: c for c in CL.extract_claims(body, pdfs)}
+    # Every OCCURRENCE is counted, here and after the edits (``_edit``).
+    n_orig, removed = len(every := CL.extract_claims(body, pdfs)), [0]
+    live = {c["key"]: c for c in every}
     spans = CL.claim_spans(body, pdfs)
-    n_orig = len(live)
     rows = CL.read_rows(paths.results)
     latest = CL.latest_real(rows, set(live))
     # A stale verdict is not a reason to delete a claim: one the last repair
@@ -354,7 +373,7 @@ def run(
 
     def apply(anchor: str, replacement: str) -> None:
         nonlocal body, entries
-        body, _ = replace_in(body, anchor, replacement)
+        body = _edit(body, anchor, replacement, pdfs, removed)
         if entries is not None:
             entries, _ = replace_in(entries, anchor, replacement)
 
@@ -392,12 +411,12 @@ def run(
     if entries is not None:
         entries_path.write_text(re.sub(r"\n{3,}", "\n\n", entries), encoding="utf-8")
     n_new = len(CL.extract_claims(body, pdfs))
-    ok = n_new == n_orig - dropped
+    ok = n_new == n_orig - removed[0]
     log(
         f"APPLIED: cite-fix {fixed}, repaired {n['repaired']}, unchanged->re-audit {n['noop']}, "
         f"dropped {dropped}, rejected {n['rejected']}, skipped {skipped}"
     )
     log(
-        f"claims before {n_orig}, after {n_new} (expected {n_orig - dropped}) -> {'RECONCILES' if ok else '!! MISMATCH'}"
+        f"claims before {n_orig}, after {n_new} (expected {n_orig - removed[0]}) -> {'RECONCILES' if ok else '!! MISMATCH'}"
     )
     return ok
