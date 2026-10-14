@@ -505,3 +505,37 @@ def attorneys_for(doc: str) -> tuple[str, list[str]]:
     if new == block:
         return doc, []
     return doc[:s] + new + doc[e:], [f'the signature block reads "{want}", as the attorney block does']
+
+
+# ---- the court's particulars the record carries -----------------------------------------
+
+_PARTICULAR = re.compile(r"(?im)^\W*(Judge|Dept\.?|Department|Trial Date)\s*:\s*(.+?)\s*$")
+_LABELS_OUT = {"judge": "Judge", "dept": "Dept.", "dept.": "Dept.", "department": "Dept.", "trial date": "Trial Date"}
+
+
+def court_particulars(digest: str) -> list[str]:
+    """The judge, department and trial date as the papers in the digest
+    print them, each only when every mention agrees and it is a value (never
+    "N/A", never two different values): the record's, or nothing."""
+    seen: dict[str, set[str]] = {}
+    segments = "\n".join(seg for ln in digest.splitlines() for seg in ln.split("|"))
+    for m in _PARTICULAR.finditer(segments):
+        key = _LABELS_OUT[m.group(1).lower()]
+        value = " ".join(m.group(2).split()).strip(" .")
+        if not value or re.fullmatch(r"(?i)n/?a|none|tbd|not set|_+", value):
+            continue
+        seen.setdefault(key, set()).add(value)
+    return [f"{k}: {next(iter(v))}" for k, v in seen.items() if len(v) == 1]
+
+
+def particulars(doc: str, lines: list[str]) -> tuple[str, list[str]]:
+    """The particulars added to the caption's case-number cell, once."""
+    if not lines:
+        return doc, []
+    m = re.search(r"(?m)^(\|[^\n]*\|\s*)(Case No\.[^|\n]*?)(\s*\|)\s*$", doc)
+    if not m or all(x in m.group(2) for x in lines):
+        return doc, []
+    cell = m.group(2).rstrip() + "; " + "; ".join(x for x in lines if x not in m.group(2))
+    return doc[: m.start(2)] + cell + doc[m.end(2) :], [
+        "the caption carries " + "; ".join(lines) + ", as the papers in the file print them"
+    ]

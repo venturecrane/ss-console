@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Callable, NoReturn
 
 from ..demand import deliver, finalpass, quotefix, summarize
 from . import citefix, compose, format_check, gate, nestquote, pleading, render, review as review_mod, sets
-from . import notes as notes_mod, wording
+from . import grounding, notes as notes_mod, wording
 from . import settle as settle_mod
 from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, markers, markers_located
 
@@ -273,13 +273,18 @@ class Finish:
         doc, dated = sets.dated(doc, self._long_date())
         doc, numbered = sets.set_number(doc, self.job.request_text)
         doc, counsel_for = sets.attorneys_for(doc)
-        notes += dated + numbered + counsel_for
+        doc, court = sets.particulars(doc, sets.court_particulars(self._digest_text()))
+        notes += dated + numbered + counsel_for + court
         c = self._canon(u) if u.key else None
         if c is not None:
             canon, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
             doc, more = sets.align(doc, canon, f"{c.label} set")
             notes += more
         return doc, notes
+
+    def _digest_text(self) -> str:
+        p = self.data / "digest.md"
+        return p.read_text(encoding="utf-8") if p.is_file() else ""
 
     def _long_date(self) -> str:
         import datetime as dt
@@ -447,7 +452,7 @@ class Finish:
         facts = self._request_facts()
 
         def tables_for(refused: list[str] | None) -> str:
-            return review_mod.final_notes(
+            raw = review_mod.final_notes(
                 self.doorway,
                 self.firm.model("audit"),
                 digest,
@@ -458,6 +463,11 @@ class Finish:
                 facts=facts,
                 refused=refused,
             )
+            # Rows, checked word for word against the file; only what verifies
+            # is rendered (grounding.py).
+            g = grounding.verify(grounding.parse(raw), self.corpus())
+            self._atomic("notes-basis.json", json.dumps({"kept": len(g.rows), "dropped": g.dropped}, indent=1))
+            return grounding.render_table(g, grounding.documents(papers))
 
         end_tables = tables_for(review_findings or None)
         problems = wording.notes_findings(end_tables)

@@ -412,14 +412,6 @@ def test_a_served_paper_with_a_not_in_record_slot_gets_one_repair_then_fails(tmp
     assert "the owner" not in v.reason and seat.created == []
 
 
-def test_notes_that_hedge_are_rewritten_once_then_fail(tmp_path, pricing):
-    client = Client(drafts=_drafts(), notes="## Open items\n\n- It is unclear whether Alpha is the handling attorney.")
-    _r, v, seat = _run(tmp_path, pricing, client)
-    assert v.outcome == "failed" and v.reason.startswith("notes_unclean: ") and "Alpha" not in v.reason
-    assert client.count("THE ATTORNEY NOTES, FROM THE FINAL DOCUMENT") == 2
-    assert seat.created == []
-
-
 def test_the_notes_are_told_who_asked_and_whose_block_it_is_and_say_it(tmp_path, pricing):
     client = Client(drafts=_drafts())
     r, v, _ = _run(tmp_path, pricing, client)
@@ -839,32 +831,6 @@ def test_a_served_sets_audit_never_reads_the_drafters_notes(tmp_path, pricing):
     )
 
 
-def test_the_review_reads_the_final_notes_and_holds_on_a_wrong_cite(tmp_path, pricing):
-    """The served set's audit does not read the drafter's notes; the final
-    notes are checked by the independent review, which holds on a cite that
-    does not carry what the note says (2026-10-14)."""
-    from medchron.drafting import review as review_mod
-
-    assert "a note whose cite does not carry what the note says it does" in review_mod.REVIEW_PROMPT
-
-    def review(params):
-        user = json.dumps(params["messages"])
-        if "Complaint 2-1-26, para. 99" in user:
-            return (
-                "| MUST-FIX | 6 the attorney notes | The note cites para. 99 of the complaint for ownership; the "
-                "complaint has no such paragraph. | attorney notes, REQUEST BASIS; FILE: Complaint 2-1-26, p. 1 |\n"
-                "VERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
-            )
-        return "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
-
-    planted = "## REQUEST BASIS\n\n| RFA 1 | ownership | Complaint 2-1-26, para. 99 |\n\n## Open items\n\nNone."
-    client = Client(drafts=_drafts(), notes=planted, review=review)
-    r, v, seat = _run(tmp_path, pricing, client)
-    assert v.outcome == "failed" and v.reason.startswith("review_held: "), (v.stage, v.reason)
-    assert seat.created == []
-    assert "para. 99" in (r.data / "notes-final.md").read_text()  # the review read the notes as delivered
-
-
 def test_a_chunk_is_read_against_the_sets_own_definitions_and_its_place_in_the_set(tmp_path, pricing):
     """2026-10-14, run 5: a chunk read without the set's Definitions or its
     place called defined terms undefined and "No. 13" a misnumbered first set.
@@ -1050,36 +1016,6 @@ def test_the_declarations_signature_line_prints_the_declarants_name():
     assert out.count("Alpha Q. Example") == 2 and "{{ATTORNEY" not in out
 
 
-def test_a_review_that_holds_on_the_notes_alone_gets_one_notes_rewrite_and_passes(tmp_path, pricing):
-    """Run 8 (2026-10-14): the regenerated notes cited a fact to responses that
-    do not say it. The documents were right; the notes are written once more,
-    told the finding, and reviewed again. Once."""
-    reviews = {"n": 0}
-
-    def review(params):
-        reviews["n"] += 1
-        if "CITED-WRONG" in json.dumps(params["messages"]):
-            return (
-                "| MUST-FIX | 6 the attorney notes | A cite does not carry what the note says. | notes, REQUEST "
-                "BASIS; FILE: Complaint 2-1-26, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
-            )
-        return "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
-
-    class NotesClient(Client):
-        def _answer(self, params):
-            if "THE ATTORNEY NOTES, FROM THE FINAL DOCUMENT" in json.dumps(params.get("system")):
-                told = "the review found in the notes" in json.dumps(params["messages"])
-                return "## REQUEST BASIS\n\n| RFA 1 | ownership | Complaint 2-1-26, p. 1 |" + (
-                    "" if told else " CITED-WRONG"
-                )
-            return super()._answer(params)
-
-    client = NotesClient(drafts=_drafts(), review=review)
-    r, v, _ = _run(tmp_path, pricing, client)
-    assert v.outcome == "delivered", (v.stage, v.reason)
-    assert reviews["n"] == 2 and "CITED-WRONG" not in (r.data / "notes-final.md").read_text()
-
-
 def test_a_review_that_holds_on_a_document_never_gets_the_notes_rewrite(tmp_path, pricing):
     review = (
         "| MUST-FIX | 1 statements | The declaration swears the set exceeds 35; it has 35. | Document 3, para 3 |\n"
@@ -1106,3 +1042,121 @@ def test_the_code_written_notes_read_as_the_attorneys_language():
     ]
     for line in notes:
         assert wording.vocabulary(line) == [] and "authored" not in line
+
+
+# ---- grounded notes (2026-10-14, the lead's C): rows the code checks word for word ----------
+
+
+def _corpus():
+    return {
+        "Pltf RES to SROG": "PLAINTIFF'S RESPONSES TO SPECIAL INTERROGATORIES, SET ONE\nRESPONDING PARTY: Plaintiff\n"
+        "RESPONSE TO SPECIAL INTERROGATORY NO. 2: She slipped on an unmarked puddle of water.\nVERIFICATION",
+        "Phillips_Resp_FROG_DRAFT": "DRAFT RESPONSES TO FORM INTERROGATORIES\nRESPONDING PARTY: Plaintiff\n12.3 No statement was obtained.",
+    }
+
+
+def test_a_quote_that_is_not_in_the_cited_file_is_dropped():
+    from medchron.drafting import grounding as gr
+
+    rows = [
+        gr.Row(
+            "Special Interrogatories",
+            1,
+            "Pltf RES to SROG",
+            "served responses",
+            "slipped on an unmarked puddle of water",
+        ),
+        gr.Row(
+            "Special Interrogatories",
+            2,
+            "Pltf RES to SROG",
+            "served responses",
+            "the store manager Shannon received the report",
+        ),
+    ]
+    g = gr.verify(rows, _corpus())
+    assert [r.request for r, _n, _w in g.rows] == [1] and g.dropped == {"Special Interrogatories": [2]}
+    table = gr.render_table(g, [("Special Interrogatories", [1, 2])])
+    assert "No verified basis cite; check the file: Nos. 2" in table and "Shannon" not in table
+
+
+def test_an_unserved_draft_cited_as_served_responses_is_dropped():
+    from medchron.drafting import grounding as gr
+
+    row = gr.Row(
+        "Special Interrogatories",
+        3,
+        "Phillips_Resp_FROG_DRAFT",
+        "plaintiff's served FROG responses",
+        "No statement was obtained",
+    )
+    assert gr.kind("Phillips_Resp_FROG_DRAFT", _corpus()["Phillips_Resp_FROG_DRAFT"]) == "unserved draft"
+    assert gr.verify([row], _corpus()).rows == []
+    honest = gr.Row(
+        "Special Interrogatories", 3, "Phillips_Resp_FROG_DRAFT", "unserved draft", "No statement was obtained"
+    )
+    assert [w for _r, _n, w in gr.verify([honest], _corpus()).rows] == ["unserved draft"]
+
+
+def test_model_prose_never_reaches_the_notes(tmp_path, pricing):
+    client = Client(
+        drafts=_drafts(), notes="It is unclear whether Alpha is the handling attorney. Open items from the audit."
+    )
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    notes = (r.data / "notes-final.md").read_text()
+    assert "unclear whether" not in notes and "Open items from the audit" not in notes
+    assert "No verified basis cite; check the file" in notes
+
+
+def test_a_review_with_the_grounding_removed_holds_on_an_unverified_cite(tmp_path, pricing):
+    """The review holds on a cite the file does not carry; grounding keeps
+    such a row from ever reaching the notes, so the job delivers."""
+    planted = json.dumps(
+        {
+            "basis": [
+                {
+                    "document": "Requests for Admission",
+                    "request": 1,
+                    "file": "Complaint 2-1-26",
+                    "paper": "pleading",
+                    "quote": "paragraph 99 says the store owned the lot",
+                }
+            ]
+        }
+    )
+
+    def review(params):
+        if "paragraph 99" in json.dumps(params["messages"]):
+            return "| MUST-FIX | 6 the attorney notes | The cite does not carry this. | notes; FILE: Complaint 2-1-26, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+        return "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+
+    client = Client(drafts=_drafts(), notes=planted, review=review)
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    assert "paragraph 99" not in (r.data / "notes-final.md").read_text()
+
+
+def test_a_review_that_holds_on_the_notes_alone_gets_one_notes_rewrite_and_passes(tmp_path, pricing):
+    calls = {"n": 0}
+
+    def review(params):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return "| MUST-FIX | 6 the attorney notes | A basis row misdescribes its file. | notes; FILE: Complaint 2-1-26, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+        return "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+
+    client = Client(drafts=_drafts(), review=review)
+    _r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason) and calls["n"] == 2
+    told = [c for c in client.calls if "the review found in the notes" in json.dumps(c.get("messages"))]
+    assert told  # the rewrite was told the finding
+
+
+def test_the_caption_carries_the_courts_particulars_only_when_the_record_agrees():
+    digest = "Judge: Commissioner A. Example\nDept.: 1\nTrial Date: N/A\n| x | Judge: Commissioner A. Example | Trial Date: 01/22/2029 |\n"
+    assert sets.court_particulars(digest) == ["Judge: Commissioner A. Example", "Dept.: 1", "Trial Date: 01/22/2029"]
+    assert sets.court_particulars("Dept.: 1\nDept.: 2\n") == []  # the record disagrees: nothing printed
+    doc = "| GAMMA v. DELTA | Case No. CV-0001 |\n"
+    out, notes = sets.particulars(doc, ["Dept.: 1"])
+    assert "| Case No. CV-0001; Dept.: 1 |" in out and notes and sets.particulars(out, ["Dept.: 1"]) == (out, [])
