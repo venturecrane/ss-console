@@ -858,6 +858,24 @@ else
   pass "medchron-firm-config-absent (not authored for this seat at ${MEDCHRON_FIRM_YAML_AUTHORED}; runner refuses jobs by design — skipping config-perm, token, controls, and gate-refusal checks)"
 fi
 
+# The demand, drafting and litigation lanes' firm inputs: present on the seat
+# exactly when the engagements checkout authors them (the same expectation
+# source as the medchron firm config above; provision-customer.sh stages each
+# from that path). 2026-10-14, A&P v141: the litigation inputs were in the
+# vault and the boot's fetch failed silently; this smoke ran 75 PASS and the
+# next litigation job stopped at config_missing. A fetch that fails leaves the
+# lane "defer every job", which no earlier check could see: every lane check
+# above holds on an inputs-less seat BY DESIGN. FALSIFIER: empty the vault
+# prefix (or break the fetch) and reboot a seat that authors the lane.
+for _lane in demand drafting litigation; do
+  if [ -f "${ENGAGEMENTS_DIR}/operator/customers/${SLUG}/${_lane}/${_lane}-firm.yaml" ]; then
+    ssh_exec "${_lane}-firm-inputs-present" "[ \"\$(stat -c %U:%G:%a /var/lib/smd-config/${_lane}/${_lane}-firm.yaml)\" = root:medchron:640 ]"
+  else
+    pass "${_lane}-firm-inputs-absent (not authored for this seat; the ${_lane} lane defers jobs by design)"
+  fi
+done
+unset _lane
+
 # ---------- Step 14b: the four registered runner gates refuse their planted violations (ss#2614, ADR 0087) ----------
 # `medchron probe <gate>` builds a throwaway synthetic matter, plants exactly
 # the violation the registry names, runs the gate module the registry points

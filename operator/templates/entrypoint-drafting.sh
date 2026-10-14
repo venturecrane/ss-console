@@ -24,25 +24,16 @@ export SMD_DRAFTING_QUEUE_DIR="${MEDCHRON_RUN_DIR}/drafting-queue"
 # failed fetch, deferred drafting jobs when there is none. Root-owned, group
 # medchron read-only.
 export MEDCHRON_DRAFTING_INPUTS="${CONFIG_DIR}/drafting"
-rm -rf "${MEDCHRON_DRAFTING_INPUTS}.r2.tmp"
-if AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" \
-     AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}" \
-       aws s3 cp \
-         --endpoint-url "${_seed_endpoint}" \
-         --only-show-errors \
-         --recursive \
-         "s3://${R2_BUCKET_CONFIG}/vaults/${CUSTOMER_SLUG}/drafting/" \
-         "${MEDCHRON_DRAFTING_INPUTS}.r2.tmp/" 2>/dev/null \
-   && [ -f "${MEDCHRON_DRAFTING_INPUTS}.r2.tmp/drafting-firm.yaml" ]; then
+if _fetch_lane_inputs drafting "${MEDCHRON_DRAFTING_INPUTS}" drafting-firm.yaml; then
   rm -rf "${MEDCHRON_DRAFTING_INPUTS}"
   mv "${MEDCHRON_DRAFTING_INPUTS}.r2.tmp" "${MEDCHRON_DRAFTING_INPUTS}"
   log "drafting firm inputs refreshed from R2 into ${MEDCHRON_DRAFTING_INPUTS}"
 elif [ -f "${MEDCHRON_DRAFTING_INPUTS}/drafting-firm.yaml" ]; then
-  rm -rf "${MEDCHRON_DRAFTING_INPUTS}.r2.tmp"
-  log "WARN: R2 fetch of the drafting firm inputs failed; keeping the existing root-owned copy"
-else
-  rm -rf "${MEDCHRON_DRAFTING_INPUTS}.r2.tmp"
+  log "WARN: R2 fetch of the drafting firm inputs failed (${_FETCH_INPUTS_STATE}); keeping the existing root-owned copy"
+elif [ "${_FETCH_INPUTS_STATE}" = absent ]; then
   log "No drafting firm inputs in the vault for ${CUSTOMER_SLUG}; the drafting lane will defer drafting jobs"
+else
+  log "ERROR: the drafting firm inputs could not be fetched from the vault for ${CUSTOMER_SLUG} and this seat has no copy; the drafting lane will defer drafting jobs until a restart fetches them"
 fi
 if [ -d "${MEDCHRON_DRAFTING_INPUTS}" ]; then
   chown -R root:medchron "${MEDCHRON_DRAFTING_INPUTS}"

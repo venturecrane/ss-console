@@ -35,25 +35,16 @@ export MEDCHRON_LITIGATION_STATE_DIR="${MEDCHRON_RUN_DIR}/litigation/state"
 # like the drafting inputs: refreshed from the vault every boot, the existing
 # copy kept on a failed fetch, deferred litigation jobs when there is none.
 export MEDCHRON_LITIGATION_INPUTS="${CONFIG_DIR}/litigation"
-rm -rf "${MEDCHRON_LITIGATION_INPUTS}.r2.tmp"
-if AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" \
-     AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}" \
-       aws s3 cp \
-         --endpoint-url "${_seed_endpoint}" \
-         --only-show-errors \
-         --recursive \
-         "s3://${R2_BUCKET_CONFIG}/vaults/${CUSTOMER_SLUG}/litigation/" \
-         "${MEDCHRON_LITIGATION_INPUTS}.r2.tmp/" 2>/dev/null \
-   && [ -f "${MEDCHRON_LITIGATION_INPUTS}.r2.tmp/litigation-firm.yaml" ]; then
+if _fetch_lane_inputs litigation "${MEDCHRON_LITIGATION_INPUTS}" litigation-firm.yaml; then
   rm -rf "${MEDCHRON_LITIGATION_INPUTS}"
   mv "${MEDCHRON_LITIGATION_INPUTS}.r2.tmp" "${MEDCHRON_LITIGATION_INPUTS}"
   log "litigation firm inputs refreshed from R2 into ${MEDCHRON_LITIGATION_INPUTS}"
 elif [ -f "${MEDCHRON_LITIGATION_INPUTS}/litigation-firm.yaml" ]; then
-  rm -rf "${MEDCHRON_LITIGATION_INPUTS}.r2.tmp"
-  log "WARN: R2 fetch of the litigation firm inputs failed; keeping the existing root-owned copy"
-else
-  rm -rf "${MEDCHRON_LITIGATION_INPUTS}.r2.tmp"
+  log "WARN: R2 fetch of the litigation firm inputs failed (${_FETCH_INPUTS_STATE}); keeping the existing root-owned copy"
+elif [ "${_FETCH_INPUTS_STATE}" = absent ]; then
   log "No litigation firm inputs in the vault for ${CUSTOMER_SLUG}; the litigation lane will defer litigation jobs"
+else
+  log "ERROR: the litigation firm inputs could not be fetched from the vault for ${CUSTOMER_SLUG} and this seat has no copy; the litigation lane will defer litigation jobs until a restart fetches them"
 fi
 if [ -d "${MEDCHRON_LITIGATION_INPUTS}" ]; then
   chown -R root:medchron "${MEDCHRON_LITIGATION_INPUTS}"
