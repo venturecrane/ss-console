@@ -104,9 +104,18 @@ def parse_record(rec: Any) -> dict[str, Any]:
     covered = rec.get("covered")
     if not isinstance(covered, dict) or not isinstance(covered.get("covered"), list):
         raise Refused("record.covered is required ({covered, uncovered, pulled}): the next update reads it")
+    # THIS delivery's sets only, never the matter's union: the ledger unions
+    # every delivered row on the matter at read time (medchron_coverage
+    # .union_coverage), and `uncovered` wins that union, so an earlier
+    # delivery's documents listed here as uncovered would be read again.
     delivery: dict[str, Any] = {"files": clean}
     if isinstance(rec.get("replaced"), dict):
         delivery["replaced"] = dict(rec["replaced"])
+    exhibits = rec.get("exhibits")
+    if exhibits is not None:
+        if not isinstance(exhibits, list) or not all(isinstance(x, str) and x.strip() for x in exhibits):
+            raise Refused("record.exhibits must list the exhibit file ids filed beside the chronology")
+        delivery["exhibits"] = [x.strip() for x in exhibits]
     return {
         "documents": _int(rec, "documents"),
         "pages": _int(rec, "pages"),
@@ -140,12 +149,13 @@ def plan(d: Any, job_id: str, rec: dict[str, Any], *, update: bool) -> dict[str,
     if not env.get("requested_by") or not env.get("request_ref"):
         raise Refused(f"job {job_id}'s envelope names no requester or request email; there is no thread to answer")
     wake = st.get("wake") or {}
-    if st.get("state") == "delivered" or (wake.get("pending") and st.get("state") != "failed"):
-        # A failed job's wake tells the firm nothing (DELIVER sends nothing on
-        # `failed`), and a dispatched hold wake has had its own one reply under
-        # its own key. A delivered state, or a hold reply still to go, does
-        # stand in the way.
-        raise Refused(f"job {job_id} is already delivered or has a reply still to go; one delivery wake per job")
+    # A CONSUMED wake for a failed job is replaced: DELIVER sends nothing on
+    # `failed` (both 2026-10-13 jobs carry one). A consumed hold wake had its
+    # one reply under its own key. A wake still pending is the daemon's to send
+    # and is never overwritten, whatever its outcome; a delivered state or a
+    # consumed delivered wake means the delivery was already announced.
+    if st.get("state") == "delivered" or wake.get("pending") or "Outcome: delivered." in str(wake.get("task") or ""):
+        raise Refused(f"job {job_id} is already delivered or has a wake still to go; one delivery wake per job")
     replies = d.broker._request({"action": "delivery_reply_status", "kind": REPLY_KIND, "job_id": job_id})
     if any(str(r.get("key") or "").endswith(":delivered") for r in replies.get("replies") or []):
         raise Refused(f"job {job_id} already has its delivered reply; a second would be a second send")
@@ -193,7 +203,7 @@ def apply(d: Any, p: dict[str, Any]) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="medchron.deliver_by_smd", description=(__doc__ or "").split("\n\n")[0])
     ap.add_argument("job_id")
-    ap.add_argument("record", help="JSON: documents, pages, cents, folder_id, files, covered[, replaced]")
+    ap.add_argument("record", help="JSON: documents, pages, cents, folder_id, files, covered[, replaced, exhibits]")
     ap.add_argument("--update", action="store_true", help="the delivery is an update into the delivered chronology")
     ap.add_argument("--dry-run", action="store_true", help="print what would be written; write nothing")
     a = ap.parse_args(argv)
