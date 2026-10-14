@@ -104,9 +104,18 @@ def parse_record(rec: Any) -> dict[str, Any]:
     covered = rec.get("covered")
     if not isinstance(covered, dict) or not isinstance(covered.get("covered"), list):
         raise Refused("record.covered is required ({covered, uncovered, pulled}): the next update reads it")
+    # THIS delivery's sets only, never the matter's union: the ledger unions
+    # every delivered row on the matter at read time (medchron_coverage
+    # .union_coverage), and `uncovered` wins that union, so an earlier
+    # delivery's documents listed here as uncovered would be read again.
     delivery: dict[str, Any] = {"files": clean}
     if isinstance(rec.get("replaced"), dict):
         delivery["replaced"] = dict(rec["replaced"])
+    exhibits = rec.get("exhibits")
+    if exhibits is not None:
+        if not isinstance(exhibits, list) or not all(isinstance(x, str) and x.strip() for x in exhibits):
+            raise Refused("record.exhibits must list the exhibit file ids filed beside the chronology")
+        delivery["exhibits"] = [x.strip() for x in exhibits]
     return {
         "documents": _int(rec, "documents"),
         "pages": _int(rec, "pages"),
@@ -193,7 +202,7 @@ def apply(d: Any, p: dict[str, Any]) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="medchron.deliver_by_smd", description=(__doc__ or "").split("\n\n")[0])
     ap.add_argument("job_id")
-    ap.add_argument("record", help="JSON: documents, pages, cents, folder_id, files, covered[, replaced]")
+    ap.add_argument("record", help="JSON: documents, pages, cents, folder_id, files, covered[, replaced, exhibits]")
     ap.add_argument("--update", action="store_true", help="the delivery is an update into the delivered chronology")
     ap.add_argument("--dry-run", action="store_true", help="print what would be written; write nothing")
     a = ap.parse_args(argv)

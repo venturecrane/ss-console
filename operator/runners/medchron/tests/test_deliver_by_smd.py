@@ -32,6 +32,7 @@ RECORD = {
     "folder_id": "folder-7",
     "files": [{"file_id": "file-new", "name": "Chronology.docx", "bytes": 737000, "sha256": "a" * 64}],
     "replaced": {"file_id": "file-old"},
+    "exhibits": ["ex-1", "ex-2"],
     "covered": {"covered": ["d1", "d2"], "uncovered": ["d3"], "pulled": 3},
 }
 
@@ -96,6 +97,7 @@ def test_a_failed_job_becomes_delivered_with_the_record_the_next_update_reads(tm
     assert fields["folder_id"] == "folder-7" and fields["covered"] == RECORD["covered"]
     assert fields["delivery"]["files"][0]["file_id"] == "file-new"
     assert fields["delivery"]["replaced"] == {"file_id": "file-old"}
+    assert fields["delivery"]["exhibits"] == ["ex-1", "ex-2"]
     assert "reason" not in fields  # the stopped job's reason is cleared, never relayed
     proven = [r for r in broker.proof_requests if r["action"] == "delivery_proof_record"]
     assert proven and proven[0]["files"] == [{"file_id": "file-new", "size": 737000, "sha256": "a" * 64}]
