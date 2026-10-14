@@ -11,8 +11,18 @@ statements and bills of the same provider state the dates of service, so:
   readings take those dates in chronological order, within 7 days when the
   interval is open at either end (``decide``);
 * anything else: the date is unsupported, and the entry shows the
-  reading as an OPEN date, "MM/DD/YYYY (handwritten date, unconfirmed)",
-  never a guess between candidates.
+  reading as written, marked ``MARK_OPEN`` "(handwritten date)": a fact
+  about the record, like ``body.RECORDS_MARK``, never a guess between
+  candidates and never words about our process. That the date is unsettled
+  is SMD's to know: the stage logs it and ``compose_report.json`` keeps it.
+
+A handwritten LEDGER page lists its visits as rows in the order they were
+seen, so the ROW ORDER is evidence too (``by_row_order``): a row sits between
+its neighbours' dates. A misread row ("1/4" between "1/14" and "1/28") takes
+the one unread statement date between its confirmed neighbour rows, never a
+date chosen by sorting the misreadings (2026-10-14 parity run: "1/3", "1/4",
+"7/18", "7/25" were 12/3, 1/21, 2/18, 2/25, and the chronology came out of
+order).
 
 A statement is the provider's when it names the provider, or when it is a
 typed page of the SAME document as the handwritten page (a chiropractor's
@@ -31,7 +41,9 @@ import re
 from datetime import date
 
 MARK = "[handwritten]"
-OPEN = "(handwritten date, unconfirmed)"
+MARK_OPEN = "(handwritten date)"
+#: The marker an earlier version wrote; words about our process, never kept.
+LEGACY_OPEN = "(handwritten date, unconfirmed)"
 WINDOW_DAYS = 7
 #: What the audit is told about a claim cited to a handwritten page.
 REREAD = (
@@ -145,6 +157,104 @@ def decide(reading: date, dos: set[date], readings: tuple[date, ...] = ()) -> tu
     return "redated", dict(pairs)[reading]
 
 
+_ROW = re.compile(r"^[\s|\u2502\u2503]*(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?(?![\d/-])", re.M)
+
+
+def rows(page_text: str | None) -> list[tuple[int, int]]:
+    """(month, day) of each row of a HANDWRITTEN ledger page, in page order:
+    every line that opens with a date. Empty for a typed page."""
+    if not is_handwritten(page_text):
+        return []
+    found = ((int(m.group(1)), int(m.group(2))) for m in _ROW.finditer(page_text or ""))
+    return [(mo, dd) for mo, dd in found if 1 <= mo <= 12 and 1 <= dd <= 31]
+
+
+def _near(md: tuple[int, int], d: date) -> bool:
+    """A misreading `md` could be `d`: the same month, the same day, or
+    within the window (a 7 read as a 2 keeps the day; a 21 read as a 4 keeps
+    the month)."""
+    if md[0] == d.month or md[1] == d.day:
+        return True
+    try:
+        r = date(d.year, md[0], md[1])
+    except ValueError:
+        return False
+    return abs((r - d).days) <= WINDOW_DAYS
+
+
+def _confirmed(page_rows: list[tuple[int, int]], dos: set[date]) -> dict[int, date]:
+    """{row: its statement date} for the rows whose reading is exactly one
+    statement date, kept only as the LONGEST run in date order: a row that
+    matches a statement date out of order is a misreading that happens to
+    hit another visit's date, never an anchor."""
+    cand = [(i, c[0]) for i, md in enumerate(page_rows) if len(c := [d for d in dos if (d.month, d.day) == md]) == 1]
+    best: list[list[tuple[int, date]]] = []
+    for k, (i, d) in enumerate(cand):
+        prev = [best[j] for j in range(k) if cand[j][1] < d]
+        best.append(max(prev, key=len, default=[]) + [(i, d)])
+    return dict(max(best, key=len, default=[]))
+
+
+def by_row_order(page_rows: list[tuple[int, int]], dos: set[date]) -> dict[int, date]:
+    """{row index: date of service} the ledger's ROW ORDER settles.
+
+    Rows whose readings are statement dates in order are confirmed
+    (``_confirmed``). The rows between two confirmed rows take the unread
+    statement dates between those two dates, in order, when the counts are
+    equal: a row sits between its neighbours. Above the first or below the
+    last confirmed row only one side bounds the interval, so each row must
+    also plausibly be a misreading of its date (``_near``). Unequal counts
+    leave the interval's rows unsettled."""
+    conf = _confirmed(page_rows, dos)
+    out = dict(conf)
+    used = set(conf.values())
+    bounds = [(-1, date.min), *sorted(conf.items()), (len(page_rows), date.max)]
+    for (a, lo), (b, hi) in zip(bounds, bounds[1:]):
+        mine = list(range(a + 1, b))
+        free = sorted(d for d in dos if lo < d < hi and d not in used)
+        if not mine or len(mine) != len(free):
+            continue
+        if (lo == date.min or hi == date.max) and not all(_near(page_rows[i], d) for i, d in zip(mine, free)):
+            continue
+        out.update(zip(mine, free))
+    return out
+
+
+def row_verdict(
+    reading: date, ledger: list[tuple[int, int]], dos: set[date], on: set[int] | None = None
+) -> tuple[str, date | None] | None:
+    """The ledger's verdict on a reading taken off one of its rows (`on`: the
+    row indexes on the entry's cited pages; every row when None). None when
+    the reading is no such row, or more than one (``decide`` stands)."""
+    at = [i for i, md in enumerate(ledger) if md == (reading.month, reading.day) and (on is None or i in on)]
+    if len(at) != 1:
+        return None
+    got = by_row_order(ledger, dos).get(at[0])
+    if got is None:
+        return "open", None
+    return ("confirmed" if got == reading else "redated"), got
+
+
+_MONTH = re.compile(r"(?i)\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b")
+_MD = re.compile(r"(?<![\d/.-])(\d{1,2})[/-](\d{1,2})(?![\d/.-])")
+_MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+
+
+def on_page(d: date, text: str | None, year: int | None = None) -> bool:
+    """True when the page's text states `d`: as a full date, or, on a
+    HANDWRITTEN page whose rows carry no year, as its month and day when
+    `year` (the entry's own) is `d`'s year."""
+    t = text or ""
+    if d in _dates(t):
+        return True
+    for mon, dd, yy in _MONTH.findall(t):
+        if (int(yy), _MONTHS.index(mon.lower()[:3]) + 1, int(dd)) == (d.year, d.month, d.day):
+            return True
+    if not is_handwritten(t) or year != d.year:
+        return False
+    return any((int(mo), int(dd)) == (d.month, d.day) for mo, dd in _MD.findall(t))
+
+
 def _mdy(d: date) -> str:
     return f"{d.month:02d}/{d.day:02d}/{d.year}"
 
@@ -157,19 +267,26 @@ def reading_of(entry: str) -> date | None:
         return None
 
 
-def redate(entry: str, dos: set[date], readings: tuple[date, ...] = ()) -> tuple[str, dict[str, str]]:
+def redate(
+    entry: str,
+    dos: set[date],
+    readings: tuple[date, ...] = (),
+    settled: tuple[str, date | None] | None = None,
+) -> tuple[str, dict[str, str]]:
     """(the entry with its date settled, a log row). The entry's own date is
-    the handwritten reading; `readings` are the provider's others (``decide``)."""
+    the handwritten reading; `readings` are the provider's others (``decide``).
+    `settled` is a verdict already reached from the ledger's row order
+    (``row_verdict``), which then stands instead of ``decide``."""
     head, _, rest = entry.partition("\n")
     m = re.match(r"(\d{2})/(\d{2})/(\d{4})", head)
     if not m:
         return entry, {"entry": head, "verdict": "no date"}
     reading = date(int(m.group(3)), int(m.group(1)), int(m.group(2)))
-    tail = head[m.end() :].replace(" " + OPEN, "")  # whatever else the date line carried is kept
-    verdict, got = decide(reading, dos, readings)
+    tail = head[m.end() :].replace(" " + LEGACY_OPEN, "").replace(" " + MARK_OPEN, "")  # the rest is kept
+    verdict, got = settled if settled is not None else decide(reading, dos, readings)
     if got is not None:
         return _mdy(got) + tail + "\n" + rest, {"reading": _mdy(reading), "verdict": verdict, "date": _mdy(got)}
-    return f"{_mdy(reading)} {OPEN}{tail}\n" + rest, {"reading": _mdy(reading), "verdict": "open"}
+    return f"{_mdy(reading)} {MARK_OPEN}{tail}\n" + rest, {"reading": _mdy(reading), "verdict": "open"}
 
 
 def statement_block(

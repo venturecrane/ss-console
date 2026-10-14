@@ -121,13 +121,44 @@ def _hand_docs(e: str, by_ex: dict[int, dict[int, str]]) -> list[str] | None:
     return [t for x in exs for _, t in sorted(by_ex[x].items())] if exs else None
 
 
+def _ledger(ex: int, pages: dict[int, str], cited: set[int]) -> tuple[list[tuple[int, int]], set[int]]:
+    """(every row of the document's handwritten pages, in page order: a
+    ledger runs on from page to page; the indexes of the rows on `cited`)."""
+    rows: list[tuple[int, int]] = []
+    on: set[int] = set()
+    for p, t in sorted(pages.items()):
+        got = H.rows(t)
+        if p in cited:
+            on |= set(range(len(rows), len(rows) + len(got)))
+        rows += got
+    return rows, on
+
+
+def _by_rows(e: str, by_ex: dict[int, dict[int, str]], dos: set[date]) -> tuple[str, date | None] | None:
+    """The ledger's row order on the entry's reading (``handwritten.row_verdict``),
+    from the first cited document whose ledger has the reading as a row on a
+    page the entry cites."""
+    r = H.reading_of(e)
+    cited: dict[int, set[int]] = {}
+    for m in B.CITE.finditer(e):
+        cited.setdefault(int(m.group(1)), set()).update(CL.parse_pages(m.group(2)))
+    for ex, pages in sorted(cited.items()):
+        rows, on = _ledger(ex, by_ex.get(ex, {}), pages)
+        got = H.row_verdict(r, rows, dos, on) if r is not None and on else None
+        if got is not None:
+            return got
+    return None
+
+
 def _settle_dates(
     sr: StageRun, entries: list[str], provisional: list[dict[str, Any]]
 ) -> tuple[list[str], list[dict[str, str]]]:
-    """Each entry cited to a HANDWRITTEN page takes the one typed date of
-    service of its provider near its reading, or shows the reading as an
-    open date (``update/handwritten.py``); the provider's other readings
-    decide whether a re-date is unambiguous (``handwritten.decide``)."""
+    """Each entry cited to a HANDWRITTEN page takes a typed date of service of
+    its provider, or shows its reading as written (``update/handwritten.py``).
+    A reading that is a row of a handwritten ledger page is settled by the
+    ledger's ROW ORDER (``handwritten.row_verdict``); otherwise the provider's
+    other readings decide whether a re-date is unambiguous (``decide``).
+    Entries are returned in date order: a re-date moves its entry."""
     by_ex, pool = _page_texts(sr, provisional)
     hand: dict[int, set[date]] = {}
     readings: dict[str, list[date]] = {}
@@ -144,9 +175,10 @@ def _settle_dates(
         if i not in hand:
             out.append(e)
             continue
-        settled, row = H.redate(e, hand[i], tuple(readings.get(B.provider_of(e), ())))
+        by_rows = _by_rows(e, by_ex, hand[i])
+        settled, row = H.redate(e, hand[i], tuple(readings.get(B.provider_of(e), ())), by_rows)
         out.append(settled)
-        log.append({**row, "provider": B.provider_of(e)})
+        log.append({**row, "provider": B.provider_of(e), **({"by": "ledger row order"} if by_rows else {})})
     return sorted(out, key=B.iso), log
 
 
@@ -164,6 +196,39 @@ def _icd_claims(sr: StageRun, ud: Path, rd: Path, base_md: str, entries: list[st
     return claims
 
 
+def _process_notes(entries: list[str]) -> tuple[list[str], list[dict[str, str]]]:
+    """The entries without the pipeline's notes about its own reading
+    (``meta_markers.process_notes``); each note is a report row for SMD."""
+    out, rows = [], []
+    for e in entries:
+        clean, notes = meta_markers.process_notes(e)
+        out.append(clean)
+        head = clean.partition("\n")[0]
+        rows += [{"entry": head, "provider": B.provider_of(clean), "note": n} for n in notes]
+    return out, rows
+
+
+def report_lines(rep: dict[str, Any]) -> list[str]:
+    """What SMD reads in the job log about what was kept out of the firm's
+    text: every handwritten date left unsettled, every re-date, and every
+    process note taken out."""
+    out = []
+    for r in rep.get("handwritten_dates") or []:
+        if r.get("verdict") == "open":
+            out.append(
+                f"handwritten date NOT SETTLED: {r.get('provider')} visit read as {r.get('reading')}; no typed date "
+                f"of service settles it, so it is shown as written, marked {H.MARK_OPEN}; SMD checks the page"
+            )
+        elif r.get("verdict") == "redated":
+            out.append(
+                f"handwritten date moved: {r.get('provider')} visit read as {r.get('reading')} is dated "
+                f"{r.get('date')} ({r.get('by') or 'the provider statement'})"
+            )
+    for r in rep.get("process_notes") or []:
+        out.append(f"note kept out of the chronology: {r.get('entry')} {r.get('provider')}: {str(r.get('note'))[:200]}")
+    return out
+
+
 def _shape(sr: StageRun, base_md: str, rd: Path, provisional: list[dict]) -> tuple[list[str], dict]:
     """The kept entries, dated, their near provider names flagged, and the report."""
     _, base_ents = B.entries_of(base_md)
@@ -172,6 +237,7 @@ def _shape(sr: StageRun, base_md: str, rd: Path, provisional: list[dict]) -> tup
     except C.CollectRefusal as exc:
         raise StageRefusal(str(exc)) from exc
     entries = [meta_markers.strip(e) for e in entries]  # the pipeline's own notes never reach the firm
+    entries, notes = _process_notes(entries)
     entries, spelled = P.snap(entries, base_ents, list(B.exhibit_titles(base_md).values()))
     entries, dated = _settle_dates(sr, entries, provisional)
     new_pages = _new_pages(sr, provisional)
@@ -183,6 +249,7 @@ def _shape(sr: StageRun, base_md: str, rd: Path, provisional: list[dict]) -> tup
         "handwritten_dates": dated,
         "legend_codes": coded,
         "records_dates": records,
+        "process_notes": notes,
     }
 
 
@@ -217,6 +284,8 @@ def run_collect(sr: StageRun) -> int:
     doc = C.audit_document(base_md, entries, keep, icd_claims=claims, folder=plan(sr).get("exhibits") or [])
     (rd / "final-chronology.md").write_text(doc, encoding="utf-8")
     counts = {k: v for k, v in rep.items() if isinstance(v, int)}
+    for ln in report_lines(rep):
+        sr.log("  " + ln)
     sr.log(
         f"audit document: {len(entries)} new entries, {len(claims)} diagnosis claim(s), {len(keep)} new exhibit(s) "
         f"cited, {len(uncited)} uncited; {counts}"

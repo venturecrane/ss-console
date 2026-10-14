@@ -71,11 +71,12 @@ def test_a_logs_own_unnamed_itemized_statement_settles_its_handwritten_dates(tmp
     assert verdict["02/04/2026"] == ("confirmed", "02/04/2026")
     # One free statement date (02/11) and one unconfirmed reading in the gap after 02/04: re-dated.
     assert verdict["02/10/2026"] == ("redated", "02/11/2026")
-    # 1/21 read as 01/04 and 1/28 read as 01/18: the gap 01/14..02/04 holds TWO free dates, so neither
-    # is guessed (01/18 is never moved onto 01/21, which is the other misread visit's date).
-    assert verdict["01/04/2026"] == ("open", None) and verdict["01/18/2026"] == ("open", None)
-    assert sum(e.startswith("01/18/2026 (handwritten date, unconfirmed)\n") for e in got) == 1
-    assert not any(e.startswith("01/21/2026") for e in got)
+    # 1/21 read as 01/04 and 1/28 read as 01/18: on the log the "1/4" row sits between the 1/14 and
+    # 1/18 rows, so the LEDGER'S ROW ORDER settles both (parity K): the two rows between the confirmed
+    # 1/14 and 2/4 rows take the two unread dates in order. Sorting the readings would have put 01/04
+    # before 01/07 and moved 01/18 onto 01/21, the other visit's date.
+    assert verdict["01/04/2026"] == ("redated", "01/21/2026") and verdict["01/18/2026"] == ("redated", "01/28/2026")
+    assert [e[:10] for e in got] == ["01/07/2026", "01/14/2026", "01/21/2026", "01/28/2026", "02/04/2026", "02/11/2026"]
     # A statement's print and balance dates are never dates of service.
     from medchron.update import handwritten as H
 

@@ -15,7 +15,10 @@ of the loop that fixes (``stages/update_review.py`` is the paid half):
 * a correction applies only when it is GROUNDED: a replaced claim ends with a
   citation to the very exhibit and page the finding names, is long enough for
   the audit to audit it, and stays one paragraph; a redate names a page the
-  entry already cites; an entry drop never leaves a new exhibit uncited;
+  entry already cites AND that page's text states the corrected date
+  (``Evidence``: a model never rewrites a date on its reading alone), and the
+  redated entry moves to its place in date order; an entry drop never leaves
+  a new exhibit uncited;
 * a finding about a DELIVERED entry (``D<k>``) is reported, never applied: the
   update never edits the firm's delivered text;
 * diagnosis and provider claims (the preamble grammars of ``update/icd.py``
@@ -32,10 +35,10 @@ import json
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import date
-from typing import Any
+from typing import Any, Callable
 
 from ..audit import claims as CL
-from . import body as B, icd
+from . import body as B, handwritten as H, icd
 from .values import lost, numbers
 
 MUST, SHOULD = "MUST", "SHOULD"
@@ -43,6 +46,8 @@ ACTIONS = ("replace", "drop", "redate", "drop_entry", "none")
 MIN_CLAIM_CHARS = 30  # shorter claims are never audited (``claims._walk``)
 _MDY = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
 _ANCHOR = re.compile(r"^([ND])(\d+)(?:\.c(\d+))?$")
+#: (exhibit, page) -> the page's text, or None when there is none to read.
+Evidence = Callable[[int, int], str | None]
 
 
 @dataclass
@@ -212,7 +217,24 @@ def _by_anchor(ents: list[Entry]) -> tuple[dict[str, Entry], dict[str, tuple[Ent
     return {e.anchor: e for e in ents}, {c.anchor: (e, c) for e in ents for c in e.claims}
 
 
-def check(f: Finding, ents: list[Entry], keep: set[int]) -> str:
+def _date_on_page(f: Finding, entry: Entry, evidence: Evidence | None) -> str:
+    """'' when the cited page's text states the corrected date, else why not.
+    A handwritten ledger row carries no year: its month and day count when
+    the year is the entry's own (``handwritten.on_page``)."""
+    m = _MDY.match(f.corrected)
+    text = evidence(f.exhibit, f.page) if evidence and m and f.exhibit and f.page else None
+    if m is None or text is None:
+        return f"no page text to check the corrected date against (Exhibit {f.exhibit} p. {f.page})"
+    d = date(int(m.group(3)), int(m.group(1)), int(m.group(2)))
+    cur = H.reading_of(entry.text)
+    if not H.on_page(d, text, cur.year if cur else None):
+        return (
+            f"Exhibit {f.exhibit} p. {f.page} does not state {f.corrected}; the date is not changed on a reading alone"
+        )
+    return ""
+
+
+def check(f: Finding, ents: list[Entry], keep: set[int], evidence: Evidence | None = None) -> str:
     """'' when the finding may be applied, else why it may not."""
     m = _ANCHOR.match(f.anchor)
     if f.outcome:
@@ -238,7 +260,7 @@ def check(f: Finding, ents: list[Entry], keep: set[int]) -> str:
             return "the corrected date is not MM/DD/YYYY"
         if (f.exhibit, f.page) not in by_e[f.anchor].cites():
             return "the redate is grounded on a page the entry does not cite"
-        return ""
+        return _date_on_page(f, by_e[f.anchor], evidence)
     if not f.reason:
         return "a drop gives no reason"
     return ""
@@ -275,19 +297,23 @@ def _redate_diag(pre: str, old: str, new: str, cites: set[tuple[int, int]]) -> s
     return "".join(out)
 
 
-def apply(md: str, findings: list[Finding], keep: set[int], headings: set[str]) -> tuple[str, set[int]]:
+def apply(
+    md: str, findings: list[Finding], keep: set[int], headings: set[str], evidence: Evidence | None = None
+) -> tuple[str, set[int]]:
     """Apply every grounded finding to the audit document. MUST findings are
     applied; SHOULD findings only as a ``replace`` or ``redate`` (confined to
-    one entry). Returns the new document and the 0-based indexes of the
-    entries it edited (a dropped entry names its neighbours). Each finding's
-    ``outcome`` is set: "applied" or why not."""
+    one entry). A redate applies only when the cited page's text states the
+    date (`evidence`); without page text it is not applied. Returns the new
+    document and the 0-based indexes, in the new order, of the entries it
+    edited (a dropped entry names its neighbours). Each finding's ``outcome``
+    is set: "applied" or why not."""
     ents = anchor_entries(md, keep, headings)
     by_e, by_c = _by_anchor(ents)
     texts = {e.anchor: e.text for e in ents}
     dropped: set[str] = set()
     redates: list[tuple[str, str, set[tuple[int, int]]]] = []
     for f in findings:
-        why = check(f, ents, keep)
+        why = check(f, ents, keep, evidence)
         if not why and f.severity == SHOULD and f.action not in ("replace", "redate"):
             why = "a SHOULD finding is applied only as a replace or redate; recorded"
         if why:
@@ -340,20 +366,23 @@ def _rebuild(
     pre = parts[0]
     for old, new, cites in redates:
         pre = _redate_diag(pre, old, new, cites)
-    new_parts, edited, gone = [pre], set(), set()
-    for k, (e, p) in enumerate(zip(ents, parts[1:])):
+    edited, gone, live = set(), set(), []
+    for k, e in enumerate(ents):
         if e.anchor in dropped:
             gone.add(k)
             continue
         t = _tidy(texts[e.anchor])
         if t != e.text:
             edited.add(k)
-        new_parts.append(t + p[len(p.rstrip("\n")) :])
+        live.append((k, t))
     for k in sorted(gone):
         edited |= {k - 1, k + 1}
-    out = md[:at] + "".join(new_parts) + md[at + len(body) :]
-    after = {i - sum(1 for g in gone if g < i) for i in edited - gone}
-    return out, {i for i in after if 0 <= i < len(ents) - len(gone)}
+    # A redate moves its entry: the entries stay in date order (stable).
+    order = sorted(live, key=lambda kt: B.iso(kt[1]))
+    seps = [p[len(p.rstrip("\n")) :] for k, p in enumerate(parts[1:]) if k not in gone]
+    out = md[:at] + pre + "".join(t + sep for (_, t), sep in zip(order, seps)) + md[at + len(body) :]
+    pos = {k: i for i, (k, _) in enumerate(order)}
+    return out, {pos[k] for k in edited if k in pos}
 
 
 def named_values(record: dict[str, Any]) -> set[str]:

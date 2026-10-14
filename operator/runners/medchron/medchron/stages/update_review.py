@@ -17,7 +17,11 @@ loop, in the update lane:
 2. REPAIR. MUST findings are applied to the audit document as targeted edits
    to the anchored entries (``update/review_repair.py``: grounded or not
    applied; delivered entries never edited). SHOULD findings apply only as a
-   grounded edit confined to one entry; otherwise they are recorded.
+   grounded edit confined to one entry; otherwise they are recorded. A
+   REDATE is the one edit to a date line: it applies only when the cited
+   page's text states the corrected date (``page_text``), and the entry moves
+   to its place in date order. The review reads the image; the page's text
+   is the second, independent read a date is never changed without.
 3. RE-AUDIT. The audit loop (``stages/audit_loop.py``) runs again: every
    corrected sentence is a new claim and is audited against its page.
 4. LOOP. Only the edited entries and their neighbours are reviewed again, at
@@ -43,7 +47,7 @@ from .. import llm, prompts
 from ..audit.page_text import exhibit_paths
 from ..audit.render import img_block, render
 from ..proof import review as PR
-from ..update import body as B, review_repair as RR
+from ..update import body as B, review_repair as RR, select as S
 from . import audit_loop
 from .base import StageRun, read_json
 from .update_base import headings, update_dir
@@ -69,6 +73,7 @@ class Ctx:
     model: str
     system: str
     images: Images
+    evidence: RR.Evidence | None = None
     rnd: int = 0
     calls: int = 0
     tokens: int = 0
@@ -88,6 +93,22 @@ def _image_source(sr: StageRun) -> Images:
             return None
         p = render(pdfs[ex], page, out / "auditpages", f"ex{ex}")
         return img_block(p) if p else None
+
+    return get
+
+
+def page_text(sr: StageRun) -> RR.Evidence:
+    """(exhibit, page) -> the text the update read off that page of an added
+    exhibit (``text/<id>.txt``, in the exhibit's final number), or None."""
+    cache: dict[int, dict[int, str]] = {}
+    for r in read_json(update_dir(sr) / "new_exhibits.final.json", []):
+        ex, doc = (r.get("exhibit"), r.get("id")) if isinstance(r, dict) else (None, None)
+        tp = sr.slug_dir / "text" / f"{doc}.txt"
+        if isinstance(ex, int) and isinstance(doc, str) and tp.is_file():
+            cache[ex] = S.pages_of_text(tp.read_text(encoding="utf-8", errors="replace"))
+
+    def get(ex: int, page: int) -> str | None:
+        return cache.get(ex, {}).get(page)
 
     return get
 
@@ -246,7 +267,10 @@ def _reuse(sr: StageRun, rec: dict[str, Any], md: str) -> int | None:
 def _repair(c: Ctx, md: str, found: list[RR.Finding], doc: Path) -> tuple[str, set[int], int]:
     """Apply the round's grounded findings and re-audit what changed. Returns
     the document, the edited entries and the audit loop's exit (0 when clean)."""
-    new_md, edited = RR.apply(md, found, _keep(c.sr), headings(c.sr.cfg))
+    new_md, edited = RR.apply(md, found, _keep(c.sr), headings(c.sr.cfg), c.evidence)
+    for f in found:
+        if f.action == "redate":
+            c.sr.log(f"  redate {f.anchor} to {f.corrected} (Exhibit {f.exhibit} p. {f.page}): {f.outcome}")
     if new_md == md:
         return md, edited, 0
     doc.write_text(new_md, encoding="utf-8")
@@ -254,7 +278,7 @@ def _repair(c: Ctx, md: str, found: list[RR.Finding], doc: Path) -> tuple[str, s
     return doc.read_text(encoding="utf-8"), edited, rc
 
 
-def run(sr: StageRun, *, images: Images | None = None) -> int:
+def run(sr: StageRun, *, images: Images | None = None, evidence: RR.Evidence | None = None) -> int:
     ud, doc = update_dir(sr), sr.slug_dir / "runs" / sr.unit.unit / "final-chronology.md"
     md = doc.read_text(encoding="utf-8")
     again = _reuse(sr, read_json(ud / RECORD, {}), md)
@@ -262,6 +286,7 @@ def run(sr: StageRun, *, images: Images | None = None) -> int:
         return again
     base_md = (ud / "base.md").read_text(encoding="utf-8")
     c = Ctx(sr, _model(sr), prompts.load("update-review-system", sr.cfg), images or _image_source(sr))
+    c.evidence = evidence or page_text(sr)
     rec: dict[str, Any] = {"model": c.model, "doc_sha_in": _sha(md), "rounds": []}
     targets: set[int] | None = None
     found: list[RR.Finding] = []
