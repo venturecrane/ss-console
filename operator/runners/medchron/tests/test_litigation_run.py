@@ -209,7 +209,8 @@ PARALEGAL = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
 
 
 def test_a_paralegal_scope_lists_only_the_matters_she_assists(tmp_path):
-    seat = LitSeat({M1: matter_docs(), M2: matter_docs()})
+    docs2 = [("m2" + fid[1:], n, b, d) for fid, n, b, d in matter_docs()]
+    seat = LitSeat({M1: matter_docs(), M2: docs2})
     seat.matters[0]["personAssistingStaffs"] = [{"id": PARALEGAL}]
     seat.matters[1]["personAssistingStaffId"] = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
     r, _ = _run(tmp_path, ScriptedLit(), seat=seat, scope={"paralegal_staff_ids": [PARALEGAL]})
@@ -217,6 +218,13 @@ def test_a_paralegal_scope_lists_only_the_matters_she_assists(tmp_path):
     assert v.verdict == "delivered", v.reason
     inv = json.loads((r.data / "inventory.json").read_text())
     assert inv["listed"] == 1 and [m["id"] for m in inv["matters"]] == [M1]
+
+
+def test_the_fake_seat_refuses_one_file_id_on_two_matters():
+    # It serves bytes by file id alone: a shared id let one matter's bytes
+    # answer for the other's listed size, a failure only some runs drew.
+    with pytest.raises(ValueError, match="'f-c1' is on matters"):
+        LitSeat({M1: matter_docs(), M2: matter_docs()})
 
 
 def test_a_paralegal_and_attorney_scope_that_matches_nothing_holds(tmp_path):

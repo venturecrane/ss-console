@@ -29,7 +29,7 @@ import copy
 import re
 from typing import Any
 
-from . import gates, manifest, parity, vocab
+from . import gates, identity, manifest, parity, vocab
 from .tools import dump
 
 MODE = "update"
@@ -237,43 +237,20 @@ def _guard_defendants(
     out["defendants"] = kept
 
 
-_SET_KINDS = (
-    ("form_interrogatories", re.compile(r"(?i)form interrogator|\bfrogs?\b")),
-    ("special_interrogatories", re.compile(r"(?i)special interrogator|\bsprogs?\b|\bsrogs?\b")),
-    ("production", re.compile(r"(?i)production|inspection|\brfps?\b|\brpds?\b")),
-    ("admission", re.compile(r"(?i)admission|\brfas?\b")),
-    ("deposition", re.compile(r"(?i)deposition|\bdepo\b")),
-    ("subpoena", re.compile(r"(?i)subpoena")),
-)
-_NUMBERS = {"one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6"}
-
-
-def set_identity(name: str) -> str:
-    """One discovery set however a read words it: its kind and set number.
-    "Form Interrogatories - General, Set One" and "Form Interrogatories, Set 1"
-    are one set; a re-worded name must never become a second row beside the
-    first (2026-10-09 replay)."""
-    kind = next((k for k, rx in _SET_KINDS if rx.search(name or "")), re.sub(r"\W+", " ", (name or "").lower()).strip())
-    m = re.search(r"(?i)\bset\s+(\w+)", name or "")
-    num = _NUMBERS.get(m.group(1).lower(), m.group(1)) if m else ""
-    return f"{kind}#{num}"
-
-
-_ROLE_WORDS = re.compile(r"(?i)\b(defendants?|plaintiffs?|cross-?(?:defendants?|complainants?)|respondents?)\b")
+set_identity = identity.set_identity  # one set however a read words it (identity.py)
 
 
 def _row_key(kind: str, r: dict[str, Any]) -> str:
-    party = parity.party_key(_ROLE_WORDS.sub(" ", str(r.get("served_on") or r.get("served_by") or "")))
-    return f"{kind}[{set_identity(str(r.get('set') or ''))}|{party}]"
+    return f"{kind}[{identity.row_key(r)}]"
 
 
 def _guard_discovery(
     prior: dict[str, Any], out: dict[str, Any], trigger: set[str], texts: dict[str, str], log: dict
 ) -> None:
     for kind in ("discovery_propounded", "discovery_served_on_client"):
-        before = {_row_key(kind, r): r for r in prior.get(kind) or []}
+        before = {_row_key(kind, r): r for r in identity.split_rows(prior.get(kind))}
         kept, seen = [], set()
-        for r in out.get(kind) or []:
+        for r in identity.split_rows(out.get(kind)):
             key = _row_key(kind, r)
             old = before.get(key)
             if old is None:

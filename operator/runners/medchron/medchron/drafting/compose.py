@@ -58,10 +58,32 @@ def tally(body: str) -> dict[str, int]:
 STRICT_CLASSES = ("discovery_set",)
 
 
-def blocking_findings(result: dict[str, Any], cls: str | None = None) -> int:
+def blocking_findings(result: dict[str, Any], cls: str | None = None, audit_md: str | None = None) -> int:
     t = result.get("tallies") or {}
+    if cls in STRICT_CLASSES and audit_md is not None:
+        return len(strict_rows(audit_md)) + int(result.get("quotes_not_found") or 0)
     drifts = int(t.get("DRIFTS") or 0) if cls in STRICT_CLASSES else 0
     return d.blocking_findings(result) + sum(int(t.get(k) or 0) for k in EXTRA_VERDICTS) + drifts
+
+
+#: A form finding about a defined term's case: code owns capitals
+#: (``sets.enforce_caps``) and the review grades them SHOULD-FIX, so in a
+#: strict class they drive a repair but never fail the job (2026-10-14: a
+#: proof run failed on "person" in lower case inside PERSON's own definition).
+_CASE_ONLY = re.compile(r"\|\s*DRIFTS\s*\|\s*`?undefined:", re.I)
+
+
+def strict_rows(audit_md: str) -> list[tuple[str, str, str]]:
+    """(section, claim, detail) for every finding row a strict class must
+    clear: every verdict but SUPPORTED, less the defined-term case rows."""
+    out = []
+    for head, body in d.audit_sections(audit_md).items():
+        for ln in body.splitlines():
+            m = FINDING.search(ln)
+            if not m or _CASE_ONLY.search(ln):
+                continue
+            out.append((head, ln[: m.start()].strip().lstrip("-*").strip(), ln[m.end() :].strip()))
+    return out
 
 
 def finding_lines(audit_md: str, kinds: tuple[str, ...]) -> list[str]:
@@ -240,7 +262,10 @@ class Drafter:
     # ---- audit -----------------------------------------------------------------------
     def audit(self, version: int, digest: str, corpus_text: str) -> dict[str, Any]:
         draft = self._read(f"draft-v{version}.md")
-        mech = d.mechanical_checks(corpus_text, draft)
+        # The quotation check reads the document, never the drafter's notes
+        # under it: on 2026-10-14 three "quotations not found" were the notes
+        # quoting the draft's own earlier wording.
+        mech = d.mechanical_checks(corpus_text, draft.partition("=== ATTORNEY NOTES ===")[0])
         system = (
             self.firm.prompt(self.cls, "audit")
             + "\n\n---\n\n## THE SKELETON (its standing boilerplate is not a claim)\n\n"

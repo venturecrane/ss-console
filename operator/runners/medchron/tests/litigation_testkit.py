@@ -113,6 +113,19 @@ class LitSeat(FakeSeat):
     """Per-matter listings (FakeSeat lists one set for every matter)."""
 
     def __init__(self, per_matter: dict[str, list[tuple[str, str, bytes, str]]]) -> None:
+        # Smokeball file ids are unique across the tenant, and this fake serves
+        # bytes by file id alone. A file id on two matters used to be accepted:
+        # the later matter's bytes won while each matter's row kept its own
+        # size, and since make_pdf's bytes vary in length (pymupdf writes a
+        # random trailer /ID), the fetch of the earlier matter failed its size
+        # check on some runs and not others. Refuse the shape instead.
+        owner: dict[str, str] = {}
+        for mid, docs in per_matter.items():
+            for fid, *_rest in docs:
+                if owner.setdefault(fid, mid) != mid:
+                    raise ValueError(
+                        f"file id {fid!r} is on matters {owner[fid]} and {mid}; give each matter its own ids"
+                    )
         blobs = {fid: blob for docs in per_matter.values() for fid, _n, blob, _d in docs}
         super().__init__([], [], blobs)
         self.per = {}
