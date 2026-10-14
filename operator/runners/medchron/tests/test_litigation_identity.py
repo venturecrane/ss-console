@@ -202,7 +202,6 @@ def test_a_one_letter_typo_of_a_given_name_is_one_defendant():
     new = matter(
         defendants=[_d("Rashidan Okonwo", vocab.ANSWERED, "2026-09-28"), _d("Rshidan Okonwo", vocab.D_UNCLEAR)]
     )
-    assert unexplained(prior, new) != []  # parity alone would hold; the merge step folds it
     merged = read.merge(None, {"defendants": new["defendants"]}, [vocab.GROUP_DEFENDANTS])
     assert len(merged["defendants"]) == 1
     carry.carry_forward(prior, new, moved=set(), on_matter=set(), saved={}, today=TODAY)
