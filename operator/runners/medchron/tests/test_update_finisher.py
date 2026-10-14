@@ -304,7 +304,8 @@ def test_the_review_sees_delivered_visits_near_the_entry_and_is_told_a_document_
     )
     ents = RR.anchor_entries(md, {2}, K.HEADINGS)
     already = {2: {p: f"Exhibit 1 p. {p + 30}" for p in range(1, 21) if p != 10}}
-    delivered = [N1.replace("08/27/2026", "08/26/2026"), N1.replace("08/27/2026", "07/01/2026")]
+    far = N1.replace("08/27/2026", "07/01/2026").replace("Sample Imaging Center", "Other Clinic")
+    delivered = [N1.replace("08/27/2026", "08/26/2026"), far]  # weeks off and another provider: not shown
     parts = RP.plan(ents, {2}, lambda _x: 20, already)
     assert [p.pages for p in parts] == [[10]]  # only the page an entry cites; the copies are not shown
     blocks = RP.review_content(parts[0], "CLIENT", lambda _e, _p: None, ents, delivered)

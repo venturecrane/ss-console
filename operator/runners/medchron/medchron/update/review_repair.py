@@ -195,10 +195,12 @@ class ReplyUnparsed(ValueError):
     """The reply is not one complete JSON object: the part is reviewed again."""
 
 
-def parse_reply(text: str) -> list[Finding]:
+def parse_reply(text: str, *, lenient: bool = False) -> list[Finding]:
     """The reviewer's reply: ONE JSON object ``{"findings": [...], "complete":
     true}``. Anything else raises ReplyUnparsed (an incomplete review is never
-    read as a clean one)."""
+    read as a clean one). `lenient` (the last split of a part): a reply with
+    findings but no ``complete`` is read as reviewed with those findings; one
+    with NO findings still raises, since that would read as clean."""
     a, b = text.find("{"), text.rfind("}")
     if a < 0 or b < a:
         raise ReplyUnparsed("no JSON object in the reply")
@@ -206,9 +208,10 @@ def parse_reply(text: str) -> list[Finding]:
         obj = json.loads(text[a : b + 1])
     except json.JSONDecodeError as exc:
         raise ReplyUnparsed(f"the reply is not JSON: {exc.msg}") from exc
-    if not isinstance(obj, dict) or obj.get("complete") is not True:
+    items = obj.get("findings") if isinstance(obj, dict) else None
+    found = lenient and isinstance(items, list) and bool(items)
+    if not isinstance(obj, dict) or (obj.get("complete") is not True and not found):
         raise ReplyUnparsed("the reply does not say the part was reviewed completely")
-    items = obj.get("findings")
     if not isinstance(items, list):
         raise ReplyUnparsed("the reply has no findings list")
     return [_one(x) for x in items]

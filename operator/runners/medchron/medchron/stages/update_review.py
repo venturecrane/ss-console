@@ -83,10 +83,6 @@ Images = Callable[[int, int], dict[str, Any] | None]
 Verify = Callable[[str, str], list[dict[str, Any]]]
 
 
-class ReviewIncomplete(RuntimeError):
-    """A single page's review did not finish: the stage fails resumably."""
-
-
 @dataclass
 class Ctx:
     sr: StageRun
@@ -260,24 +256,52 @@ def _halves(p: RP.Part) -> list[RP.Part] | None:
     return None
 
 
+NOT_REVIEWED = "not reviewed"
+
+
+def _not_reviewed(p: RP.Part) -> RR.Finding:
+    """A part whose review never finished, as an open MUST finding on its
+    first entry: held for SMD with its pages named, reviewed again next round
+    (its entries are targets), never sent to the finisher, and never a failure
+    of the whole stage (a real update died on one part's seven tries)."""
+    where = f"Exhibit {p.exhibit} pp. {p.pages[0]}-{p.pages[-1]}" if p.pages else "its text"
+    why = f"the review of entries {', '.join(e.anchor for e in p.entries)} ({where}) did not finish"
+    f = RR.Finding(
+        RR.MUST,
+        NOT_REVIEWED,
+        p.entries[0].anchor,
+        p.exhibit or None,
+        p.pages[0] if p.pages else None,
+        why,
+        "none",
+        "",
+        "",
+    )
+    f.outcome = f"{NOT_REVIEWED}: {why}"
+    return f
+
+
 def _review_part(c: Ctx, p: RP.Part, ents: list[RR.Entry], base: list[str], key: str, depth: int = 0) -> list:
     """One part's findings. A reply that runs out or does not parse is split
-    in half (by pages, then entries) and reviewed again; one that cannot be
-    split raises ReviewIncomplete."""
-    content = RP.review_content(p, _client(c.sr), c.images, ents, base)
+    in half (by pages, then entries) and reviewed again. At the last split a
+    reply with findings but no completeness line is read as reviewed with
+    them; one that still does not parse is a NOT_REVIEWED finding."""
+    leaf = depth >= SPLIT_DEPTH or _halves(p) is None
+    content = RP.review_content(p, _client(c.sr), c.images, ents, base, c.already)
     for attempt in (1, 2):
         r = _call(c, c.system, content, f"{key}-{attempt}")
         if r.stop_reason != "max_tokens":
             try:
-                return RR.parse_reply(r.text)
+                return RR.parse_reply(r.text, lenient=leaf)
             except RR.ReplyUnparsed as exc:
                 c.sr.log(f"  {key}: {exc}")
-        halves = _halves(p) if depth < SPLIT_DEPTH else None
+        halves = None if leaf else _halves(p)
         if halves:
             return [
                 f for i, h in enumerate(halves) for f in _review_part(c, h, ents, base, f"{key}{'ab'[i]}", depth + 1)
             ]
-    raise ReviewIncomplete(f"the review of {p.entries[0].anchor} (Exhibit {p.exhibit}) did not finish")
+    c.sr.log(f"  {key}: not reviewed; held for SMD and reviewed again next round")
+    return [_not_reviewed(p)]
 
 
 def review_round(c: Ctx, md: str, base: list[str], targets: set[int] | None) -> tuple[list[RR.Finding], int]:
@@ -352,7 +376,11 @@ def finish(c: Ctx, md: str, found: list[RR.Finding], base: list[str], doc: Path)
     for f in found:
         if f.anchor.startswith("D"):
             f.outcome = "carried: a delivered entry is never edited by an update"
-    todo = [f for f in found if not f.anchor.startswith("D") and f.severity in (RR.MUST, RR.SHOULD)]
+    todo = [
+        f
+        for f in found
+        if not f.anchor.startswith("D") and f.severity in (RR.MUST, RR.SHOULD) and f.klass != NOT_REVIEWED
+    ]
     for i, f in enumerate(todo, 1):
         f.fid = f"F{i}"
     ents = RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg))
@@ -575,11 +603,7 @@ def _loop(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: 
     last_left: int | None = at.last_must if at else None
     for rnd in range((at.done if at else 0) + 1, MAX_ROUNDS + 1):
         c.rnd, c.calls, c.usage = rnd, 0, []
-        try:
-            found, n = review_round(c, md, base, targets)
-        except ReviewIncomplete as exc:
-            c.sr.log(f"update review: {exc}; nothing goes on, a rerun reviews again")
-            return 1
+        found, n = review_round(c, md, base, targets)
         must = _must(found)
         row: dict[str, Any] = {"round": rnd, "entries": n, "must": len(must)}
         rec["rounds"].append(row)

@@ -23,17 +23,20 @@ the page images the findings rely on, then the pages the entries cite.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Callable
 
+from ..audit import claims as CL
 from . import body as B, review_repair as RR
 
 WINDOW_PAGES = 20
 #: Delivered entries within this many days of a part's entries are shown with
 #: it: a new copy of a delivered visit is often dated a day off.
 NEAR_DAYS = 7
-NEAR_MAX = 12
+#: All the delivered entries one part is shown (copies, near dates, same provider).
+CONTEXT_MAX = 24
 #: A new document this share of whose pages are copies of ONE delivered
 #: exhibit is named as such: its remaining pages very likely are too.
 MOSTLY_ALREADY = 0.9
@@ -144,19 +147,59 @@ def _day(e: str) -> date | None:
         return None
 
 
-def context(ents: list[RR.Entry], all_ents: list[RR.Entry], delivered: list[str]) -> str:
-    """The delivered entries within NEAR_DAYS of this part's entries (nearest
-    first, at most NEAR_MAX) and the other added entries on the same dates,
-    read only: where a duplicate of an added entry may already be."""
+_WORD = re.compile(r"[a-z]{4,}")
+_GENERIC = {"medical", "center", "clinic", "health", "group", "care", "services", "hospital", "records", "provider",
+            "stated", "record", "name", "diagnoses", "information", "other", "imaging", "therapy", "physical"}  # fmt: skip
+
+
+def _provider_words(e: str) -> set[str]:
+    return set(_WORD.findall(B.provider_of(e).lower())) - _GENERIC
+
+
+def _delivered_cites(e: str) -> set[tuple[int, int]]:
+    return {(int(m.group(1)), p) for m in CL.CITE.finditer(e) for p in CL.parse_pages(m.group(2)) or [1]}
+
+
+def _copied(ents: list[RR.Entry], already: Already) -> set[tuple[int, int]]:
+    """The delivered pages that pages of these entries' new documents copy."""
+    out: set[tuple[int, int]] = set()
+    for ex in {x for e in ents for x, _ in e.cites()}:
+        for ref in (already.get(ex) or {}).values():
+            m = re.match(r"Exhibit (\d+) p\. (\d+)", ref)
+            if m:
+                out.add((int(m.group(1)), int(m.group(2))))
+    return out
+
+
+def context(
+    ents: list[RR.Entry], all_ents: list[RR.Entry], delivered: list[str], already: Already | None = None
+) -> str:
+    """Read only, where a duplicate of an added entry may already be: the
+    delivered entries that cite a delivered page a page of these entries'
+    documents copies (page identity, whatever their date: a pre-operative
+    history delivered weeks before the surgery was twice reported "missing"),
+    the delivered entries within NEAR_DAYS, the delivered entries of the same
+    provider (nearest first), at most CONTEXT_MAX in all, and the other added
+    entries on the same dates."""
     days = [d for d in (_day(e.text) for e in ents) if d]
     mine = {e.anchor for e in ents}
+    copied = _copied(ents, already or {})
+    words = set().union(*(_provider_words(e.text) for e in ents)) if ents else set()
 
-    def gap(t: str) -> int | None:
+    def gap(t: str) -> int:
         d = _day(t)
-        return min((abs((d - x).days) for x in days), default=None) if d else None
+        return min((abs((d - x).days) for x in days), default=10**6) if d else 10**6
 
-    near = [(g, i, t) for i, t in enumerate(delivered, 1) if (g := gap(t)) is not None and g <= NEAR_DAYS]
-    rows = [(f"D{i}", "DELIVERED", t) for _, i, t in sorted(near)[:NEAR_MAX]]
+    picks: list[tuple[int, int, int]] = []  # (priority, gap, index)
+    for i, t in enumerate(delivered, 1):
+        g = gap(t)
+        if _delivered_cites(t) & copied:
+            picks.append((0, g, i))
+        elif g <= NEAR_DAYS:
+            picks.append((1, g, i))
+        elif words & _provider_words(t):
+            picks.append((2, g, i))
+    rows = [(f"D{i}", "DELIVERED", delivered[i - 1]) for _, _, i in sorted(picks)[:CONTEXT_MAX]]
     rows += [(e.anchor, "ADDED", e.text) for e in all_ents if e.anchor not in mine and gap(e.text) == 0]
     if not rows:
         return ""
@@ -168,7 +211,12 @@ def head(client: str) -> dict[str, Any]:
 
 
 def review_content(
-    part: Part, client: str, images: Images, all_ents: list[RR.Entry], delivered: list[str]
+    part: Part,
+    client: str,
+    images: Images,
+    all_ents: list[RR.Entry],
+    delivered: list[str],
+    already: Already | None = None,
 ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = [head(client)]
     names = ", ".join(e.anchor for e in part.entries)
@@ -196,7 +244,7 @@ def review_content(
         by = [e.anchor for e in part.entries if (part.exhibit, pg) in e.cites()]
         label = f"cited by {', '.join(by)}" if by else "cited by no added entry"
         out += [{"type": "text", "text": f"Exhibit {part.exhibit} p. {pg} ({label}):"}, img]
-    ctx = context(part.entries, all_ents, delivered)
+    ctx = context(part.entries, all_ents, delivered, already)
     return out + ([{"type": "text", "text": ctx}] if ctx else [])
 
 
