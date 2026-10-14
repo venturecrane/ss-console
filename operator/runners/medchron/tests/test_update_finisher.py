@@ -567,6 +567,57 @@ def test_a_grader_refusal_fails_the_stage_resumably_and_reverts_nothing(
     assert any("got no verdict" in m and "a rerun grades again" in m for m in sr.logged)
 
 
+def test_a_stale_no_verdict_row_is_graded_again_by_the_verify_tier_never_a_refusing_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F8. A run cloned from one graded by claude-opus-5-5 (every call
+    refused) carried an ERROR row for a sentence the finisher wrote again; the
+    audit resumes any key with a row, so the verify round never graded it and
+    the stage failed on the stale refusal although every call went to the
+    verify tier. The stale ERROR is now graded again; no verdict call goes to
+    a model that refuses the forced tool."""
+    from medchron import config as config_mod
+    from medchron.audit import claims as CL
+
+    calls: list[str] = []
+
+    class _Round:
+        """Grades, like the audit's Round, only the keys it has no verdict for."""
+
+        def __init__(self, _door: Any, model: str, paths: Any, _log: Any, mode: str = "image") -> None:
+            self.model, self.paths = model, paths
+
+        def execute(self) -> int:
+            rows = CL.read_rows(self.paths.results)
+            for c in CL.extract_claims(CL.body_of(self.paths.doc.read_text()), {2}):
+                if c["key"] not in CL.done_keys(rows):
+                    calls.append(self.model)
+                    CL.append_row(self.paths.results, {**c, "kind": "real", "verdict": "SUPPORTED", "note": "x"})
+            return 0
+
+    monkeypatch.setattr(UR, "Round", _Round)
+    out = tmp_path / "matter" / "out" / "alpha"
+    out.mkdir(parents=True)
+    (out / "Exhibit 2 - Sample.pdf").write_bytes(b"%PDF")
+    doc = "Alpha - Medical Chronology\n\n## Medical Chronology\n\n{}\n\n## Exhibit List\n"
+    after = doc.format(N1.replace("4 mm", "5 mm"))
+    (claim,) = CL.extract_claims(CL.body_of(after), {2})
+    stale = {**claim, "kind": "real", "verdict": "ERROR", "note": "Error code: 400 - tool_choice not supported"}
+    CL.append_row(out / "audit-results.jsonl", stale)
+    tiers = {"audit": "claude-sonnet-5", "verify": "claude-opus-5", "review": "claude-opus-5-5"}
+    sr = SimpleNamespace(
+        slug_dir=tmp_path / "matter",
+        unit=SimpleNamespace(unit="alpha"),
+        cfg=SimpleNamespace(get=lambda *a: tiers if a[-1] == "tiers" else "text"),
+        doorway=None,
+        log=lambda _m: None,
+    )
+    (tmp_path / "matter" / "runs" / "alpha").mkdir(parents=True)
+    assert UR._audit_verify(sr)(doc.format(N1), after) == []  # type: ignore[arg-type]
+    assert calls == ["claude-opus-5"]
+    assert not any(m.startswith(config_mod.NO_FORCED_TOOL_MODELS) for m in calls)
+
+
 def test_a_grade_that_is_no_verdict_fails_the_stage_and_reverts_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
