@@ -13,6 +13,10 @@ attachment folded from a named email) is a candidate, in pull order:
   exhibit page the citation would point at);
 * its text names a different person (``gates/foreign_identity``): HOLD, exit 2,
   until a person releases it;
+* a page-for-page extract of a LARGER new document (``update/subsets.py``):
+  not an exhibit; the whole document is, and the extract is recorded in
+  ``selection.json`` "subsets" (its id, name and the whole one's exhibit) so
+  Records Reviewed names it as a re-filed extract;
 * otherwise it becomes ``Exhibit N - <name> (Medical Records)``, numbered after
   the highest exhibit the delivered folder holds, its PDF built in
   ``out/<unit>/`` from the source as it is (so its page numbers are the
@@ -38,7 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from ..gates import foreign_identity as FI
-from ..update import body as B, select as S
+from ..update import body as B, select as S, subsets as SUB
 from ..update.locate import vendor_name
 from .base import StageRun, read_json, read_jsonl
 from .transcript import split_pages
@@ -181,8 +185,12 @@ def run(sr: StageRun) -> int:
     # Only what the delivery READ is "already read": a firm-numbered file the
     # delivered list never named was never read, so its words exclude nothing.
     seen = S.seen_shingles([sr.slug_dir / "delivered" / e["name"] for e in read_by_delivery])
+    extracts = SUB.refiled_subsets(
+        [(str(r["id"]), _texts(sr, str(r["id"]))) for r in rows],
+        {str(r["id"]) for r in rows if (r.get("sha256") or "") in firm},
+    )
     recs, units, earlier, k = [], [], S.Earlier(), 0
-    for r in rows:
+    for r in (x for x in rows if str(x["id"]) not in extracts):
         f = firm.get(r.get("sha256") or "")
         if f is None:
             k += 1
@@ -194,23 +202,47 @@ def run(sr: StageRun) -> int:
     if unread:
         sr.log(HELD + f"page(s) the transcription could not read: {unread[:5]}")
         return 2
-    _write(sr, ud, recs, units, skipped)
+    subs = _subset_records(rows, recs, extracts)
+    _write(sr, ud, recs, units, skipped, subs)
     pages = sum(len(r["read"]) for r in recs)
     if not pages:
         sr.log(HELD + "nothing new to read: every page of the new documents is already in the delivered exhibits")
         return 2
-    sr.log(f"{len(recs)} new exhibit(s) from {len(rows)} document(s); {pages} page(s) to compose; skipped {skipped}")
+    sr.log(
+        f"{len(recs)} new exhibit(s) from {len(rows)} document(s); {pages} page(s) to compose; "
+        f"{len(subs)} re-filed extract(s) cited in the whole document; skipped {skipped}"
+    )
     return 0
 
 
-def _write(sr: StageRun, ud: Path, recs: list[dict], units: list[dict], skipped: dict) -> None:
+def _texts(sr: StageRun, rid: str) -> dict[int, str]:
+    tp = sr.slug_dir / "text" / f"{rid}.txt"
+    return S.pages_of_text(tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else "")
+
+
+def _subset_records(rows: list[dict], recs: list[dict], extracts: dict[str, SUB.Subset]) -> list[dict[str, Any]]:
+    """One record per re-filed extract: what it is and the exhibit it is
+    cited in (the whole document's)."""
+    by_id = {r["id"]: r for r in recs}
+    src = {str(r["id"]): r for r in rows}
+    return [
+        {
+            "id": d,
+            "source_name": vendor_name(src[d]),
+            "pages": s.pages,
+            "matched": s.matched,
+            "subset_of": {"id": s.parent, "exhibit": by_id[s.parent]["exhibit"], "title": by_id[s.parent]["title"]},
+        }
+        for d, s in extracts.items()
+    ]
+
+
+def _write(sr: StageRun, ud: Path, recs: list[dict], units: list[dict], skipped: dict, subs: list[dict]) -> None:
     (sr.slug_dir / "units").mkdir(parents=True, exist_ok=True)
     (sr.slug_dir / "units" / f"{sr.unit.unit}.json").write_text(json.dumps(units, indent=1), encoding="utf-8")
     (ud / "new_exhibits.json").write_text(json.dumps(recs, indent=1), encoding="utf-8")
-    (ud / "selection.json").write_text(
-        json.dumps({"exhibits": recs, "skipped": skipped, "excluded_named": _excluded_named(sr)}, indent=1),
-        encoding="utf-8",
-    )
+    sel = {"exhibits": recs, "skipped": skipped, "excluded_named": _excluded_named(sr), "subsets": subs}
+    (ud / "selection.json").write_text(json.dumps(sel, indent=1), encoding="utf-8")
 
 
 def _excluded_named(sr: StageRun) -> list[dict[str, Any]]:

@@ -12,6 +12,7 @@ by name and assemble numbered them by first citation. Here:
    that adds one would lose it, and the audit cannot see a dropped value. A
    kept restatement of a delivered visit is cut to its "Additional findings";
    a new entry another new entry of its date and provider covers is dropped;
+   a sentence a kept entry states twice is said once (``update/within.py``);
 3. an entry carrying an unresolved "(FILE: ...)" citation refuses: the audit
    extracts only "(Exhibit N ...)" claims, so it would ship unaudited;
 4. a new exhibit no kept entry cites is not an exhibit (every visit it holds
@@ -33,7 +34,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Callable
 
-from . import body as B, repeats as R
+from . import body as B, repeats as R, within as W
 
 CITED_EX = re.compile(r"\(Exhibit (\d+)(?: - p\. [0-9,\s\-]+)?\)")
 ASSEMBLED = re.compile(r"\(Exhibit (\d+)((?: - p\. [0-9,\s\-]+)?)\)")
@@ -103,6 +104,10 @@ def collect(
     keep, twins = R.dedupe_new(keep, canon)
     if twins:
         rep[R.REPEAT_NEW] += twins
+    said = [W.dedupe(e) for e in keep]
+    keep = [e for e, _ in said]
+    if sum(n for _, n in said):
+        rep[W.SAID_TWICE] += sum(n for _, n in said)
     for e in keep:
         rep["kept: " + ("after" if B.iso(e) >= incident else "before") + " the incident"] += 1
     raw = [e.splitlines()[0] for e in keep if "(FILE:" in e]
