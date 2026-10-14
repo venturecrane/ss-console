@@ -68,6 +68,7 @@ def _run(
     *,
     pages: dict[tuple[int, int], str] | None = None,
     unsupported: list[str] | None = None,
+    grader: Any = None,
 ) -> tuple[int, SimpleNamespace, str]:
     sd = tmp_path / "matter"
     ud = sd / "runs" / "alpha" / "update"
@@ -105,7 +106,7 @@ def _run(
         sr,  # type: ignore[arg-type]
         images=lambda ex, p: {"type": "image", "page": f"{ex}:{p}"} if p <= sizes.get(ex, 0) else None,
         evidence=lambda ex, p: (pages or {}).get((ex, p)),
-        verify=verify,
+        verify=grader or verify,
         npages=lambda ex: sizes.get(ex, 0),
     )
     return rc, sr, doc.read_text()
@@ -541,6 +542,28 @@ def test_the_finishers_sentences_are_graded_by_a_verdict_model_never_one_that_re
     }
     errors = config_mod.validate(data)
     assert any("models.tiers.verify" in e and "forced tool_choice" in e for e in errors)
+
+
+def test_a_grader_refusal_fails_the_stage_resumably_and_reverts_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The mass revert, by construction impossible: the grader refuses (an
+    HTTP 400 is an ERROR verdict, GradeFailed) and the stage fails resumably
+    with the document as the round found it; no finding is marked reverted
+    and nothing is held."""
+    good = "Lumbar MRI showed a disc protrusion of 5 mm at the fourth and fifth lumbar level. (Exhibit 2 - p. 1)"
+    found = _review(_finding("N1.c1", "1 wrong value", "size misread"))
+    fix = _edits({"finding": "F1", "anchor": "N1.c1", "action": "replace", "exhibit": 2, "page": 1, "corrected": good})
+
+    def refuse(_before: str, _after: str) -> list:
+        raise UR.GradeFailed("1 of the finisher's sentences got no verdict: Error code: 400")
+
+    sd = tmp_path / "matter"
+    rc, sr, md = _run(tmp_path, monkeypatch, [N1, LATER], [found], [fix], grader=refuse)
+    assert rc == 1
+    assert N1 in md and good not in md  # the round's document, untouched
+    assert not (sd / "runs" / "alpha" / "update" / "review_repair.json").exists()  # nothing held, nothing settled
+    assert any("got no verdict" in m and "a rerun grades again" in m for m in sr.logged)
 
 
 def test_a_grade_that_is_no_verdict_fails_the_stage_and_reverts_nothing(
