@@ -119,6 +119,7 @@ def run_assemble(sr: StageRun) -> int:
         r["title"] = final
     (ud / "new_exhibits.final.json").write_text(json.dumps(keep, indent=1), encoding="utf-8")
     (ud / "updated-chronology.md").write_text(md, encoding="utf-8")
+    rep["provider_spelling_flags"] = read_json(ud / "compose_report.json", {}).get("provider_spelling") or []
     (ud / "assemble_report.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
     sr.log(
         f"updated chronology: {rep['delivered_entries']} delivered + {rep['new_entries']} new = {rep['output_entries']} entries"

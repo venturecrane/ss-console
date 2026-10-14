@@ -38,6 +38,11 @@ DOB_LABEL = re.compile(
 PATIENT_LABEL = re.compile(
     r"(?m)\b(?i:patient(?:\s+name)?)\s*[:#]\s*([A-Z][A-Za-z'\-]+(?:,\s*|\s+)[A-Z][A-Za-z'\-]+(?:\s+[A-Z][A-Za-z'\-.]*){0,2})"
 )
+#: Capitalised words a form puts after "Patient:" that are not a name.
+NOT_NAME = frozenset(
+    "denies reports states presents complains seen here was is has had states noted tolerated returns arrived "
+    "advised instructed declined education name information history status signature consent".split()
+)
 RELATIVE = re.compile(r"(?i)\b(?:guarantor|insured|subscriber|policy ?holder|parent|mother|father|spouse|emergency)\b")
 RELEASE_FILE = "identity_release.json"
 
@@ -49,6 +54,20 @@ def _norm_dob(mo: str, dy: str, yr: str) -> str | None:
         return f"{int(mo):02d}/{int(dy):02d}/{y:04d}"
     except ValueError:
         return None
+
+
+def full_name(name: str, after: str) -> bool:
+    """True when the capitalised words after "Patient:" are a person's name:
+    none is a form word ("Denies", "Reports"), and the name ends where a name
+    ends (the line, a delimiter, another label, or running lowercase text),
+    so "Patient: Denies Neck Pain" is not read as someone else."""
+    words = re.findall(r"[A-Za-z'\-]+", name)
+    if any(w.lower() in NOT_NAME for w in words):
+        return False
+    rest = after.lstrip()
+    if not rest or rest[:1].islower():
+        return True
+    return bool(re.match(r"(?:[|,;:(]|(?i:dob|d\.o\.b|date|mrn|acct|account|sex|age|id)\b)", rest))
 
 
 def findings(text: str, surnames: set[str], dobs: set[str]) -> list[str]:
@@ -65,6 +84,8 @@ def findings(text: str, surnames: set[str], dobs: set[str]) -> list[str]:
                 out.append(f"a date of birth {d} that is not the client's")
         for m in PATIENT_LABEL.finditer(line):
             name = m.group(1)
+            if not full_name(name, line[m.end() :]):
+                continue
             if sur and not any(re.search(rf"(?i)(?<![A-Za-z]){re.escape(s)}(?![A-Za-z])", name) for s in sur):
                 out.append("a patient name without the client's surname")
     return sorted(set(out))

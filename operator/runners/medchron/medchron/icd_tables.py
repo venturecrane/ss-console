@@ -99,16 +99,20 @@ _GENERIC = {
     "other", "unspecified", "specified", "initial", "encounter", "subsequent", "sequela", "without", "with",
     "site", "region", "part", "type", "history", "personal", "family", "status", "disease", "disorder",
     "disorders", "condition", "conditions", "left", "right", "bilateral", "acute", "chronic", "involving",
-    "classified", "elsewhere", "current", "unknown", "level", "long", "term",
+    "classified", "elsewhere", "current", "unknown", "level", "long", "term", "care", "pain", "injury",
+    "injuries", "joint", "joints", "fracture", "fractures", "diseases", "routine", "medical", "procedure",
+    "procedures", "involving", "follow", "examination", "general", "abnormal", "multiple", "region",
 }  # fmt: skip
 
 
 def _named_in(description: str, text: str) -> bool:
-    """True when `text` carries a word of `description` (four letters or
-    more, not a generic one): the record states this diagnosis."""
+    """True when `text` (the ONE entry that carries the code) names this
+    diagnosis: two distinct description words of four letters or more, or
+    one of seven or more, none of them generic. One short shared word read
+    "routine medical care" as a rehabilitation code (2026-10-13)."""
     want = {w for w in re.findall(r"[a-z]{4,}", description.lower()) if w not in _GENERIC}
-    have = set(re.findall(r"[a-z]{4,}", (text or "").lower()))
-    return bool(want & have)
+    hits = want & set(re.findall(r"[a-z]{4,}", (text or "").lower()))
+    return len(hits) >= 2 or any(len(w) >= 7 for w in hits)
 
 
 def resolve(code: str, tables: dict[str, Any], on: str, text: str) -> tuple[str, str | None, str]:

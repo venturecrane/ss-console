@@ -17,16 +17,19 @@ documents record), naming how many documents were read.
 delivered Prior Medical History is NEVER rewritten: the added pre-incident
 entries alone are summarised with the summarize stage's own prompt, model
 tier and containment rule (a sentence may cite only pages its source entries
-cited), under the line "Additional prior history from records received
-MM-DD-YY", and that paragraph goes at the head of the audit document, so each
-of its sentences is audited like any new claim.
+cited), under the line "Additional prior history from records filed through
+MM-DD-YY" (the newest added document's filing date on the matter; "since the
+prior chronology" when none is on record, never the run date), and that
+paragraph goes at the head of the audit document, so each of its sentences is
+audited like any new claim. A reply with no heading, no text, or a citation
+beyond its source is refused.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import time
+import re
 from pathlib import Path
 from typing import Any
 
@@ -179,6 +182,23 @@ def run_collect(sr: StageRun) -> int:
     return 0
 
 
+def added_history_line(sr: StageRun, keep: list[dict[str, Any]]) -> str:
+    """The line the added prior history sits under. Its date is the newest
+    filing date ("created" on the matter's listing) of the documents the
+    update adds: authored data, never the day the update ran. With no such
+    date it carries none."""
+    ids = {str(r.get("id")) for r in keep}
+    days = sorted(
+        str(d.get("created"))[:10]
+        for d in sr.manifest()
+        if str(d.get("id")) in ids and re.match(r"\d{4}-\d{2}-\d{2}", str(d.get("created") or ""))
+    )
+    if not days:
+        return "Additional prior history from records filed since the prior chronology"
+    y, m, d = days[-1].split("-")
+    return f"Additional prior history from records filed through {m}-{d}-{y[2:]}"
+
+
 def run_summary(sr: StageRun) -> int:
     """The prior history the added pre-incident entries hold, as a dated
     paragraph under the delivered Prior Medical History, which is never
@@ -202,15 +222,22 @@ def run_summary(sr: StageRun) -> int:
     )
     block = r.text.strip()
     bad = beyond_source("\n".join(added_pre), block)
-    if bad or not B.PMH_HEAD.match(block.splitlines()[0] if block else ""):
-        why = "reaches beyond its source: " + str(bad[:5]) if bad else "does not open with its heading"
+    head, _, text = block.partition("\n")
+    why = (
+        "reaches beyond its source: " + str(bad[:5])
+        if bad
+        else "does not open with its heading"
+        if not B.PMH_HEAD.match(head)
+        else "carries a heading and no text"
+        if not text.strip()
+        else ""
+    )
+    if why:
         sr.log(f"REJECTED: the added prior history {why}")
         return 1
-    stamp = read_json(ud / "received.json", {}).get("mmddyy") or time.strftime("%m-%d-%y")
-    (ud / "received.json").write_text(json.dumps({"mmddyy": stamp}), encoding="utf-8")
-    added = f"Additional prior history from records received {stamp}\n" + block.split("\n", 1)[1].strip("\n")
-    (ud / "pmh.md").write_text(added + "\n", encoding="utf-8")
     keep = read_json(ud / "new_exhibits.final.json", [])
+    added = added_history_line(sr, keep) + "\n" + text.strip("\n")
+    (ud / "pmh.md").write_text(added + "\n", encoding="utf-8")
     claims = read_json(ud / "icd_claims.json", {}).get("claims") or []
     doc = C.audit_document(base_md, new_ents, keep, added, icd_claims=claims, folder=plan(sr).get("exhibits") or [])
     (rd / "final-chronology.md").write_text(doc, encoding="utf-8")

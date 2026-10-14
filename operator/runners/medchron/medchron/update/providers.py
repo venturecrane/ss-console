@@ -1,17 +1,14 @@
-"""A new entry's provider, spelled the way the delivered chronology spells it. $0.
+"""A new entry's provider spelled near, but not as, the delivered chronology
+spells a provider: FLAGGED, never rewritten. $0.
 
-A scan reads "Angell" for "Angeli"; the update then draws the same clinician
-as a second lane and the firm reads two names for one person. A new entry's
-provider takes the delivered spelling ONLY when that is safe:
-
-* both names are at least MIN_LEN characters (the person or facility part,
-  before the credential): a short name one letter from another ("Kim",
-  "Lim") is a different person as often as a misreading;
-* the edit distance is at most MAX_EDITS;
-* the first name or initial agrees, and so does the credential.
-
-Exactly one delivered name must qualify. A near name that does not qualify
-is left as composed and FLAGGED in the report, never changed.
+A scan reads "Angell" for "Angeli", and the firm then reads two names for
+one person. But two real clinicians can be one letter apart ("Peterson" and
+"Pederson", both M.D.), and respelling one into the other merges two people
+in a filed chronology, which no reader can see was done. So the composed
+spelling (the record's own) always stands; each near name is listed in the
+collect and assemble reports, marked "likely the same person" when the
+names are long enough, one or two edits apart, and agree in first name or
+initial and credential, so the pre-delivery review can settle it.
 """
 
 from __future__ import annotations
@@ -47,24 +44,17 @@ def _qualifies(new: str, old: str) -> bool:
 
 
 def snap(entries: list[str], base_ents: list[str]) -> tuple[list[str], list[dict[str, Any]]]:
-    """(entries with qualifying providers respelled, a log row per near name)."""
+    """(entries, unchanged; a log row per provider spelled near a delivered one)."""
     delivered = sorted({B.provider_of(b) for b in base_ents if B.provider_of(b)})
-    out: list[str] = []
     log: list[dict[str, Any]] = []
     for e in entries:
         p = B.provider_of(e)
         if not p or p in delivered:
-            out.append(e)
             continue
         near = [d for d in delivered if edits(_parts(p)[0], _parts(d)[0]) <= MAX_EDITS]
-        ok = [d for d in near if _qualifies(p, d)]
-        if len(ok) == 1:
-            lines = e.splitlines()
-            lines[1] = ok[0] + lines[1][len(lines[1].split("|")[0].rstrip()) :]
-            out.append("\n".join(lines))
-            log.append({"date": B.iso(e), "composed": p, "delivered": ok[0], "action": "respelled"})
-            continue
         if near:
-            log.append({"date": B.iso(e), "composed": p, "near": near, "action": "flagged, left as composed"})
-        out.append(e)
-    return out, log
+            likely = [d for d in near if _qualifies(p, d)]
+            log.append(
+                {"date": B.iso(e), "composed": p, "near": near, "likely_same_person": likely, "action": "flagged"}
+            )
+    return list(entries), log

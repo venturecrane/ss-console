@@ -145,7 +145,7 @@ def test_the_updated_document_carries_every_delivered_entry_byte_identical_in_or
 
 
 ADDED = (
-    "Additional prior history from records received 10-13-26\n"
+    "Additional prior history from records filed through 10-13-26\n"
     "Radiographs before the incident showed straightening of the lordosis. (Exhibit 2 - p. 1)"
 )
 

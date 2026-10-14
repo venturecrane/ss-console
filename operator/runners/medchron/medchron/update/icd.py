@@ -79,11 +79,11 @@ def claims(
     new = index_codes(index_rows, {B.iso(e) for e in entries})
     for _key, (first, code, prov) in sorted(new.items(), key=lambda kv: (kv[1][0], kv[1][1])):
         same = [e for e in entries if B.iso(e) == first]
-        shown, desc, how = resolve(code, first, "\n".join(same))
+        best = max(same, key=lambda e: len(_toks(B.provider_of(e)) & _toks(prov)), default="")
+        shown, desc, how = resolve(code, first, best)  # the entry carrying the code, never the whole day
         k = shown.replace(".", "")
         if k in have and have[k][0] <= first:
             continue
-        best = max(same, key=lambda e: len(_toks(B.provider_of(e)) & _toks(prov)), default="")
         cite = B.CITE.search(best)
         if not cite:
             log.append({"code": code, "first": first, "skipped": "no entry of that date carries a citation"})
@@ -116,7 +116,8 @@ def rows(
     changed: list[dict[str, Any]] = []
     illegible: list[str] = []
     for code, first, ref in audited:
-        text = "\n".join(e for e in entries if B.iso(e) == first)
+        # The entry the claim's citation points into: the one carrying the code.
+        text = next((e for e in entries if B.iso(e) == first and f"({ref})" in e), "")
         shown, desc, _how = resolve(code, first, text)
         key = shown.replace(".", "")
         if key in table and table[key][0] <= first:

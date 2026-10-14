@@ -7,12 +7,16 @@ second, partial package beside it. So the update produces ONE document:
 * every delivered entry carried byte-identical, in its delivered order;
 * the visits recorded by documents the delivery did not cover, added in date
   order before AND after the incident;
-* the Prior Medical History block rewritten from every pre-incident entry
-  (delivered and added) and audited as a new claim;
-* the Treatment Timeline, the gaps and the ICD table recomputed from the whole
-  entry set;
-* the new records as exhibits numbered after the delivered ones and titled
-  the delivered way ("<Provider> - MM-DD-YYYY - MM-DD-YYYY (Medical Records)");
+* the delivered Prior Medical History carried verbatim, with the prior
+  history the added pre-incident entries hold in a dated paragraph under it,
+  audited as new claims;
+* the Treatment Timeline and the gaps recomputed from the whole entry set,
+  and a Diagnostic Highlights row for each new code whose audited claim the
+  audit kept;
+* the new records as exhibits numbered after every exhibit the folder holds
+  (the firm's own numbered files included) and titled the delivered way
+  ("<Provider> - MM-DD-YYYY - MM-DD-YYYY (Medical Records)"); a new record
+  identical to a firm-numbered file takes that file's number;
 * one factual Records Reviewed paragraph about the update.
 
 Only the NEW claims are audited (a delivered claim was audited when it was

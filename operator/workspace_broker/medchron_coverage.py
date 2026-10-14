@@ -9,10 +9,12 @@ the allowance. Neither half reaches into the other's concerns.
 
 Why the record exists at all: routine 11's UPDATE reads only the records the
 delivered chronology did not cover (agreement Exhibit A). That sentence needs a
-record, and an update SKIPS whatever the record says was covered -- so every
-rule in this module breaks toward re-reading a document and away from marking
-one covered. A re-read costs pages. A record dropped from a filed litigation
-chronology cannot be recovered.
+record, and an update SKIPS whatever the record says was covered -- so the
+rules here break toward re-reading a document and away from marking one
+covered (a re-read costs pages; a record dropped from a filed litigation
+chronology cannot be recovered), with one exception that follows from what an
+update does: across deliveries, the NEWEST row that names a document decides
+it, because the newest chronology replaced the ones before it.
 """
 
 from __future__ import annotations

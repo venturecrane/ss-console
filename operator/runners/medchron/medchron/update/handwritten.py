@@ -23,6 +23,12 @@ from datetime import date
 MARK = "[handwritten]"
 OPEN = "(handwritten date, unconfirmed)"
 WINDOW_DAYS = 7
+#: What the audit is told about a claim cited to a handwritten page.
+REREAD = (
+    "The cited page is handwritten. Read every date, vital sign (blood pressure, pulse, temperature, weight), "
+    "dose and other number the claim states directly off the page image, digit by digit; a transcription of "
+    "handwriting misreads digits. A value the image does not clearly show as the claim states it is unsupported."
+)
 STATEMENT = re.compile(
     r"(?i)\b(?:statement|date of service|dates of service|dos|charges?|balance due|ledger|invoice|itemi[sz]ed)\b"
 )
@@ -63,10 +69,25 @@ def statements(pages: list[str], provider: str) -> list[str]:
     return [t for t in pages if not is_handwritten(t) and STATEMENT.search(t or "") and _names(provider, t)]
 
 
+_DOS_LABEL = re.compile(r"(?i)\b(?:dos|dates? of service|service date)\b")
+_LINE_ITEM = re.compile(r"^\s*\d{1,2}/\d{1,2}/\d{2,4}\b.*(?:\b\d{5}\b|\b[A-Z]\d{4}\b|\$?\d+\.\d{2}\b)")
+#: A statement's other dates: when it was printed, due, paid or posted.
+_NOT_SERVICE = re.compile(r"(?i)\b(?:statement date|due|payment|paid|print|billing date|posted|balance|deposit)\b")
+
+
 def service_dates(pages: list[str], provider: str) -> set[date]:
+    """Dates of SERVICE on the provider's typed statements: a date on a line
+    labelled DOS / Date of Service / Service Date, or the date leading a
+    line-item row that carries a procedure code or a charge. A statement's
+    print, due and payment dates never count; anything unclear counts as no
+    date, and the visit then shows its reading as unconfirmed."""
     out: set[date] = set()
     for t in statements(pages, provider):
-        out |= _dates(t)
+        for ln in t.splitlines():
+            if _NOT_SERVICE.search(ln):
+                continue
+            if _DOS_LABEL.search(ln) or _LINE_ITEM.match(ln):
+                out |= _dates(ln)
     return out
 
 
@@ -90,10 +111,11 @@ def redate(entry: str, dos: set[date]) -> tuple[str, dict[str, str]]:
     if not m:
         return entry, {"entry": head, "verdict": "no date"}
     reading = date(int(m.group(3)), int(m.group(1)), int(m.group(2)))
+    tail = head[m.end() :].replace(" " + OPEN, "")  # whatever else the date line carried is kept
     verdict, got = decide(reading, dos)
     if got is not None:
-        return _mdy(got) + "\n" + rest, {"reading": _mdy(reading), "verdict": verdict, "date": _mdy(got)}
-    return f"{_mdy(reading)} {OPEN}\n" + rest, {"reading": _mdy(reading), "verdict": "open"}
+        return _mdy(got) + tail + "\n" + rest, {"reading": _mdy(reading), "verdict": verdict, "date": _mdy(got)}
+    return f"{_mdy(reading)} {OPEN}{tail}\n" + rest, {"reading": _mdy(reading), "verdict": "open"}
 
 
 def statement_block(pages: list[str], provider: str, limit: int = 12_000) -> str:
@@ -103,6 +125,6 @@ def statement_block(pages: list[str], provider: str, limit: int = 12_000) -> str
         return ""
     body = "\n\n".join(t.strip() for t in got)[:limit]
     return (
-        "The cited page is handwritten. Typed statements and bills of the same provider follow, for the date "
-        "of service only; the claim's other facts are judged on the cited page.\n\n" + body
+        "Typed statements and bills of the same provider follow, for the date of service only; the claim's "
+        "other facts are judged on the cited page.\n\n" + body
     )

@@ -81,7 +81,12 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         requires=("update_collect",),
         invalidates=("audit",),
         runner=_ucollect.run_summary,
-        exit_map={1: (REFUSED, "update_summary: the added prior history reached beyond its source")},
+        exit_map={
+            1: (
+                REFUSED,
+                "update_summary: the added prior history was refused (beyond its source, no heading, or no text)",
+            )
+        },
     ),
     _reuse("audit", requires=("update_summary",)),
     Stage(

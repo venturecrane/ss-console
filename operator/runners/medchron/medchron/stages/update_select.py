@@ -41,7 +41,9 @@ from ..gates import foreign_identity as FI
 from ..update import body as B, select as S
 from ..update.locate import vendor_name
 from .base import StageRun, read_json, read_jsonl
+from .transcript import split_pages
 from .update_base import HELD, plan, update_dir
+from .vision import load_partial
 
 PAGE_SOURCES = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
 
@@ -87,12 +89,32 @@ def _identity_holds(sr: StageRun, rows: list[dict[str, Any]]) -> list[str]:
     free = FI.released(sr.slug_dir)
     holds = []
     for r in rows:
-        tp = sr.slug_dir / "text" / f"{r['id']}.txt"
-        text = tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else ""
-        found = FI.findings(text, surnames, dobs)
-        if found and str(r["id"]) not in free:
+        if str(r["id"]) in free:
+            continue
+        found = _page_findings(sr, str(r["id"]), surnames, dobs)
+        if found:
             holds.append(f"{r['id']}: {'; '.join(found)}")
     return holds
+
+
+def _page_findings(sr: StageRun, rid: str, surnames: set[str], dobs: set[str]) -> list[str]:
+    """What names another person, page by page. A hit on a TEXT-LAYER page
+    is re-read on that page's vision transcript when the vision pass made
+    one, and holds only if it survives: a garbled OCR layer once read the
+    client's own date of birth as another person's. A page vision never
+    read keeps its text-layer finding."""
+    tp = sr.slug_dir / "text" / f"{rid}.txt"
+    pages = split_pages(tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else "")
+    seen = load_partial(sr.slug_dir / "partial" / f"{rid}.jsonl")
+    out: set[str] = set()
+    for n, (suffix, text) in pages.items():
+        found = FI.findings(text, surnames, dobs)
+        if found and "machine transcription" not in suffix and n in seen:
+            found = FI.findings(seen[n], surnames, dobs)
+        out |= set(found)
+    if not pages and tp.is_file():
+        out |= set(FI.findings(tp.read_text(encoding="utf-8", errors="replace"), surnames, dobs))
+    return sorted(out)
 
 
 def _firm_stem(name: str) -> str:

@@ -200,7 +200,8 @@ def test_a_handwritten_date_is_settled_only_by_exactly_one_nearby_typed_date_of_
 def test_the_vision_pass_marks_handwritten_pages() -> None:
     from medchron.stages import vision
 
-    assert "[handwritten]" in vision.SYSTEM
+    assert "HANDWRITING: yes" in vision.SYSTEM and "REQUIRED" in vision.SYSTEM
+    assert vision.handwriting_field("HANDWRITING: yes\nBP 142/102").startswith("[handwritten]\n")
 
 
 def test_update_collect_settles_an_entry_cited_to_a_handwritten_page(tmp_path: Path) -> None:
@@ -261,15 +262,17 @@ def _entry(provider: str) -> str:
     return f"02/10/2026\n{provider} | Medical Diagnoses\n\nMedical Diagnoses\nSeen in follow up. (Exhibit 2 - p. 1)"
 
 
-def test_a_misread_provider_takes_the_delivered_spelling_only_when_safe() -> None:
+def test_a_near_provider_spelling_is_flagged_and_marked_likely_only_when_safe() -> None:
+    """Review fix 6: never rewritten (two real clinicians can be one letter
+    apart); flagged, with "likely the same person" only under the safe rule."""
     from medchron.update import providers as P
 
     base = [_entry("Rosa Bertelli, DC"), _entry("J. Moe, MD")]
-    got, log = P.snap([_entry("Rosa Bertell, DC"), _entry("J. Poe, MD"), _entry("Rosa Bertell, MD")], base)
-    assert B.provider_of(got[0]) == "Rosa Bertelli, DC"  # long, one edit, same first name and credential
-    assert B.provider_of(got[1]) == "J. Poe, MD"  # short: flagged, never changed
-    assert B.provider_of(got[2]) == "Rosa Bertell, MD"  # another credential: flagged
-    assert [r["action"] for r in log] == ["respelled", "flagged, left as composed", "flagged, left as composed"]
+    news = [_entry("Rosa Bertell, DC"), _entry("J. Poe, MD"), _entry("Rosa Bertell, MD")]
+    got, log = P.snap(news, base)
+    assert got == news  # the record's own spelling always stands
+    assert [r["likely_same_person"] for r in log] == [["Rosa Bertelli, DC"], [], []]
+    assert {r["action"] for r in log} == {"flagged"}
 
 
 def test_a_second_credential_is_never_a_timeline_label() -> None:

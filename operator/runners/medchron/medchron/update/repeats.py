@@ -20,6 +20,7 @@ values and terms it does not exceed is dropped (two copies of one record).
 
 from __future__ import annotations
 
+import difflib
 import re
 from typing import Callable
 
@@ -29,6 +30,7 @@ from .values import numbers, terms, words
 ADDITIONAL = "Additional findings"
 SAME_VISIT = "dropped: same visit as a delivered entry, no value or finding it lacks"
 REPEAT_NEW = "dropped: repeats another new entry of that date and provider"
+NEAR = 0.95  # how alike two texts read to count as one restated
 SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9])")
 Canon = Callable[[str], str]
 
@@ -51,11 +53,14 @@ def _sentences(e: str) -> list[tuple[str, str]]:
     sentence takes the citation that closes its span."""
     out: list[tuple[str, str]] = []
     for ln in e.splitlines()[2:]:
-        prev = 0
+        prev, last = 0, None
         for m in B.CITE.finditer(ln):
             seg = ln[prev : m.start()].strip()
-            prev = m.end()
-            out.extend((s.strip(), m.group(0)) for s in SENTENCE.split(seg) if len(s.strip()) > 3)
+            prev, last = m.end(), m.group(0)
+            out.extend((s.strip(), last) for s in SENTENCE.split(seg) if len(s.strip()) > 3)
+        rest = ln[prev:].strip().lstrip(".;, ")
+        if rest and last:  # text after the line's last citation travels with it, never dropped
+            out.extend((s.strip(), last) for s in SENTENCE.split(rest) if len(s.strip()) > 3)
     return out
 
 
@@ -66,16 +71,45 @@ def additional(e: str, same_day: list[str]) -> str | None:
     have_v = set().union(*(numbers(b) for b in same_day)) if same_day else set()
     have_w = set().union(*(words(b) for b in same_day)) if same_day else set()
     keep = [f"{s} {c}" for s, c in _sentences(e) if _new_in(s, have_v, have_w)]
-    if not keep or numbers(e) - have_v - set().union(*(numbers(k) for k in keep)):
-        return None  # a value outside every cited sentence would be lost: keep the entry whole
+    if not keep:
+        return None
+    lost_v = numbers(e) - have_v - set().union(*(numbers(k) for k in keep))
+    lost_t = terms(e) - have_w - set().union(*(terms(k) for k in keep))
+    if lost_v or lost_t:
+        return None  # a value or finding outside every kept sentence would be lost: keep the entry whole
     lines = e.splitlines()
     return "\n".join([lines[0], f"{B.provider_of(e)} | {ADDITIONAL}", "", ADDITIONAL, *keep])
 
 
+def _body(e: str) -> str:
+    """The entry's body, normalised: lowercase words, citations and headings
+    furniture removed, so two copies of one text compare equal."""
+    t = B.CITE.sub(" ", "\n".join(e.splitlines()[2:])).lower()
+    return " ".join(re.findall(r"[a-z0-9]+", t))
+
+
+def _restates(e: str, by: str) -> bool:
+    """True when `e`'s body is `by`'s, or inside it, near-exactly."""
+    a, b = _body(e), _body(by)
+    return bool(a) and (a in b or difflib.SequenceMatcher(None, a, b).ratio() >= NEAR)
+
+
+def _plain(e: str) -> bool:
+    """No value and no finding term: nothing the value-and-term test can see."""
+    body = "\n".join(e.splitlines()[2:])  # the date line's own digits are not a value
+    return not numbers(body) and not terms(body)
+
+
 def keep_decision(e: str, base_ents: list[str], canon: Canon) -> tuple[str, str | None]:
-    """('keep', entry) | ('keep: additional findings', row) | (reason, None)."""
-    if not _same(e, base_ents, canon):
+    """('keep', entry) | ('keep: additional findings', row) | (reason, None).
+    An entry with no value and no finding term is dropped only when its text
+    restates a same-visit delivered entry: the value-and-term test cannot see
+    what it says, and a visit dropped here is never read again."""
+    same = _same(e, base_ents, canon)
+    if not same:
         return "keep", e
+    if _plain(e):
+        return (SAME_VISIT, None) if any(_restates(e, b) for b in same) else ("keep", e)
     same_day = [b for b in base_ents if B.iso(b) == B.iso(e)]
     have_v = set().union(*(numbers(b) for b in same_day))
     have_w = set().union(*(words(b) for b in same_day))
@@ -86,6 +120,8 @@ def keep_decision(e: str, base_ents: list[str], canon: Canon) -> tuple[str, str 
 
 
 def _covered(e: str, by: str) -> bool:
+    if _plain(e):
+        return _restates(e, by)
     return numbers(e) <= numbers(by) and terms(e) <= words(by)
 
 

@@ -21,6 +21,8 @@ from typing import Any
 
 CITE = re.compile(r"\(Exhibit (\d+)\s*(?:-\s*p\.\s*([0-9,\s\-]+?))?\s*(?:,\s*machine transcription)?\)")
 BODY_START, BODY_END = "## Medical Chronology", "## Exhibit List"
+#: An [NTD: ...] span; unclosed when the citation sits inside the note.
+NTD = re.compile(r"\[NTD:[^\]]*(?:\]|$)")
 _lock = threading.Lock()
 
 
@@ -71,11 +73,12 @@ def _walk(body: str, keep: set[int]) -> list[tuple[dict[str, Any], str]]:
         seg = last.strip()
         cursor = m.end()
         n = int(m.group(1))
-        # The note's own line is tested, not the segment's first: a note that
-        # opens its section ("All Other Information\n[NTD: ...]") carries the
-        # heading in its segment and was audited as a claim (the laptop's
-        # 2026-10-13 review: the one claim left PARTIAL was such a note).
-        if n not in keep or len(seg) < 30 or seg.split("\n")[-1].lstrip().startswith("[NTD:"):
+        # A note is skipped by what is left once its [NTD: ...] spans are
+        # removed, not by where it sits: a note opening its section under a
+        # heading ("All Other Information\n[NTD: ...]") was audited as a claim
+        # (the laptop's 2026-10-13 review), while a real sentence followed by
+        # a note in one paragraph must still be audited.
+        if n not in keep or len(seg) < 30 or len(NTD.sub("", seg).strip()) < 30:
             continue
         spec = m.group(2)
         claim = {

@@ -56,13 +56,16 @@ class Evidence:
         return B.provider_of("x\n" + heads[-1].group(1)) if heads else ""
 
     def block(self, c: dict[str, Any]) -> str:
-        """The statements block for claim `c`, or '' when no cited page is
-        handwritten or no typed statement of its provider is on file."""
+        """The extra evidence for claim `c`, or '' when no cited page is
+        handwritten: an instruction to re-read the image for every date and
+        value the claim states (a handwritten 4 reads as a 0: 142/102 was
+        transcribed 102/102), plus its provider's typed statements, if any."""
         pages = c.get("pages") or []
         if not any(H.is_handwritten(self.page(int(c["exhibit"]), int(p))) for p in pages):
             return ""
         prov = self.provider(c["claim"])
-        return H.statement_block(self.pool(), prov) if prov else ""
+        statements = H.statement_block(self.pool(), prov) if prov else ""
+        return H.REREAD + ("\n\n" + statements if statements else "")
 
 
 def statements_for(rnd: Any, c: dict[str, Any]) -> list[dict[str, str]]:

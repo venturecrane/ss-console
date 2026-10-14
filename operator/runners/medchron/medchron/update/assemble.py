@@ -10,8 +10,9 @@ Output, in build_doc's shape:
 * every delivered entry byte-identical, in its delivered order, each new entry
   placed after the last delivered entry dated on or before it;
 * the delivered preamble verbatim: its Prior Medical History as delivered,
-  then the audited "Additional prior history from records received MM-DD-YY"
-  paragraph when the update adds one, then its note that pre-incident
+  then the audited "Additional prior history from records filed through
+  MM-DD-YY" paragraph (the newest added document's filing date, or "since
+  the prior chronology" when none is on record) when the update adds one, then its note that pre-incident
   encounters were not itemized (unless the new entries itemize them);
 * the Treatment Timeline computed from the whole entry set (build_doc's
   arithmetic; a delivered row that disagreed with its own entries is reported
@@ -233,7 +234,9 @@ def itemizes(note: str, new_ents: list[str]) -> bool:
 
 
 #: The dated paragraph of prior history an update adds under the delivered one.
-ADDED_HISTORY = re.compile(r"(?m)^Additional prior history from records received \d{2}-\d{2}-\d{2}\s*$")
+ADDED_HISTORY = re.compile(
+    r"(?m)^Additional prior history from records filed (?:through \d{2}-\d{2}-\d{2}|since the prior chronology)\s*$"
+)
 
 
 def _preamble(pre: str, addition: str, new_ents: list[str]) -> tuple[str, bool, list[str], list[str]]:

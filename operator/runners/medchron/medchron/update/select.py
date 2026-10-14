@@ -10,13 +10,13 @@ delivered exhibit PDFs are what the firm holds, and they are the page truth.
   COVERED_FRAC of its 8-word shingles (digits stripped: a re-filed copy
   differs in its fax stamp and print date, not in its words) are already in a
   delivered exhibit: a re-filed copy of a record the delivery read.
-* A TEXT page at least COVERED_FRAC covered by the delivered exhibits AND the
-  pages of the new documents read before it (in exhibit order) is EXCLUDED as
-  a repeat of an earlier new page, unless it states a CLINICAL value (a lab,
-  vital or dose: ``values.clinical_values``) no earlier page stated: two
-  re-filed copies of one record differ in their fax headers, not in their
-  words, and the second costs a compose read and yields a duplicate entry.
-  No image hash: the vision pass runs before this, so a hash saves nothing.
+* A TEXT page that is a REFILED COPY of a page of an EARLIER new document
+  (``Earlier.copy_of``: COVERED_FRAC of its shingles, and every date, word and
+  clinical value it states, fax and print lines aside) is EXCLUDED: the second
+  copy costs a compose read and yields a duplicate entry. Template visits
+  differ in a date or a word and are both read; pages within one document are
+  never compared. No image hash: the vision pass runs before this, so a hash
+  saves nothing.
 * A page with no text after the vision pass is excluded as blank and counted.
 * Every other page is read (no date window: a new record may hold visits
   before or after the incident).
@@ -76,17 +76,71 @@ def seen_shingles(delivered_pdfs: list[Path]) -> set[str]:
     return seen
 
 
+#: A fax, print or page-count line: the furniture two copies of one record
+#: differ in. Its dates and words never tell two visits apart.
+_FURNITURE = re.compile(r"(?im)^.*\b(?:fax|printed|print date|page \d+ of \d+|sent|received)\b.*$")
+_DATE = re.compile(r"(?<![\d/])(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})(?![\d/])")
+
+
+def _dates(text: str) -> set[str]:
+    out = set()
+    for m, d, y in _DATE.findall(text):
+        out.add(f"{int(m)}/{int(d)}/{(2000 + int(y)) if len(y) == 2 else int(y)}")
+    return out
+
+
+@dataclass(frozen=True)
+class _Page:
+    doc: int
+    shingles: frozenset[str]
+    dates: frozenset[str]
+    words: frozenset[str]
+    values: frozenset[str]
+
+
+def _page(doc: int, text: str) -> _Page:
+    body = _FURNITURE.sub("", text)
+    return _Page(
+        doc,
+        frozenset(shingles(body)),
+        frozenset(_dates(body)),
+        frozenset(re.findall(r"[a-z]{4,}", body.lower())),
+        frozenset(clinical_values(body)),
+    )
+
+
 @dataclass
 class Earlier:
-    """What the new documents' pages read so far state: their shingles and
-    clinical values, built cumulatively in exhibit order."""
+    """The pages of the new documents read so far, in exhibit order.
 
-    shingles: set[str] = field(default_factory=set)
-    values: set[str] = field(default_factory=set)
+    A page is a REFILED COPY of an earlier one only when that one page, from
+    an EARLIER DOCUMENT, covers COVERED_FRAC of its shingles and states every
+    date, every word and every clinical value it states (fax and print lines
+    aside). Two visits written on one template differ in a date or a word, so
+    both are read; pages of the same document are never compared, so a run of
+    template notes inside one record is read whole. When in doubt a page is
+    read: collect drops a true repeat after compose, while a page skipped here
+    is never seen again."""
+
+    pages: list[_Page] = field(default_factory=list)
+    doc: int = 0
+
+    def next_document(self) -> None:
+        self.doc += 1
 
     def add(self, text: str) -> None:
-        self.shingles |= shingles(text)
-        self.values |= clinical_values(text)
+        self.pages.append(_page(self.doc, text))
+
+    def copy_of(self, text: str) -> bool:
+        me = _page(self.doc, text)
+        if not me.shingles:
+            return False
+        for e in self.pages:
+            if e.doc == self.doc or len(me.shingles & e.shingles) < COVERED_FRAC * len(me.shingles):
+                continue
+            if me.dates <= e.dates and me.words <= e.words and me.values <= e.values:
+                return True
+        return False
 
 
 def _decide(t: str, seen: set[str], earlier: Earlier | None) -> tuple[str, str]:
@@ -97,9 +151,8 @@ def _decide(t: str, seen: set[str], earlier: Earlier | None) -> tuple[str, str]:
     sh = shingles(t)
     if sh and len(sh & seen) >= COVERED_FRAC * len(sh):
         return EXCLUDED, ALREADY
-    if earlier is not None and sh and len(sh & (seen | earlier.shingles)) >= COVERED_FRAC * len(sh):
-        if not clinical_values(t) - earlier.values:
-            return EXCLUDED, OVERLAP
+    if earlier is not None and earlier.copy_of(t):
+        return EXCLUDED, OVERLAP
     return READ, "new document"
 
 
@@ -108,9 +161,10 @@ def classify_new(
 ) -> dict[int, tuple[str, str]]:
     """Per page of one new document: (text | excluded | unread, reason).
     `unread` is a page the transcription could not read: it is never skipped
-    silently, the stage holds on it. `earlier`, when given, is what the new
-    documents before this one (and this one's earlier pages) state; every
-    page with text is added to it."""
+    silently, the stage holds on it. `earlier`, when given, holds the pages of
+    the new documents before this one; this document's pages join it."""
+    if earlier is not None:
+        earlier.next_document()
     out: dict[int, tuple[str, str]] = {}
     for i in range(1, npages + 1):
         t = (pages.get(i) or "").strip()

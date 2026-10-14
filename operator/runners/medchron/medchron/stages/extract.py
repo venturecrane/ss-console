@@ -2,7 +2,9 @@
 
 Per file: pypdf text with `[p.N]` page markers, docx via python-docx. A PDF
 whose text layer is absent, is glyph indices, or is a constant-offset cipher
-goes to the scan queue for the vision pass; the two detectors and their
+goes to the scan queue for the vision pass, and so does a text-layer PDF
+holding image pages its text layer does not carry (``vision_pages``: those
+pages only, decided per page); the two detectors and their
 thresholds are calibrated on delivered runs (see the docstrings), and both
 failure shapes produced a chronology that looked complete while omitting or
 understating a record, which is worse than omitting the file.
@@ -86,6 +88,66 @@ def _text_layer_absent(total: int, pages: int) -> bool:
     return total < 40 * max(1, pages) * 0.05 and total < 400
 
 
+#: A page's own text layer is THIN below this many non-space characters (fax
+#: and print header lines removed) or without a run of three words.
+THIN_CHARS = 200
+_HEADER_LINE = re.compile(r"(?im)^.*\b(?:fax|printed|print date|page \d+ of \d+|sent|received)\b.*$")
+_WORD_RUN = re.compile(r"[A-Za-z]{2,}(?:\s+[A-Za-z]{2,}){2,}")
+
+
+def thin(text: str) -> bool:
+    body = _HEADER_LINE.sub("", text or "")
+    return len(re.sub(r"\s", "", body)) < THIN_CHARS or not _WORD_RUN.search(body)
+
+
+#: A date whose digits a bad OCR layer read as letters: "0l/2S/198O".
+_MISREAD_DATE = re.compile(r"(?<![\w/])[\dOolIS]{1,2}/[\dOolIS]{1,2}/[\dOolIS]{2,4}(?![\w/])")
+#: Letters and digits interleaved inside one word ("pat1ent", "l0mg"), the
+#: OCR confusion that also turns Z94.0 into 294.0. Codes ("M54.2", "99213",
+#: "S13.4XXA") and units ("10mg") have their own shapes and are not counted.
+_MIXED = re.compile(r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]+$")
+_CODE = re.compile(r"^(?:[A-Z]\d{2}[A-Z\d]{0,5}|\d+(?:mg|mcg|ml|cc|kg|lbs?|cm|mm)|\d+(?:st|nd|rd|th))$", re.I)
+_NONWORD = re.compile(r"[^aeiouy]{5,}", re.I)
+GARBLE_MIXED, GARBLE_NONWORD = 0.06, 0.2
+
+
+def garbled(text: str) -> bool:
+    """A text layer too damaged to trust, though long enough: an OCR layer
+    that confuses digits and letters. Three measurable signals, any one:
+    a date carrying letters in its digit places; 6% or more of word tokens
+    with letters and digits interleaved (codes and units aside); 20% or more
+    of alphabetic words of four letters or more with five consonants in a
+    row or no vowel at all. A clean typed page scores near zero on each."""
+    body = _HEADER_LINE.sub("", text or "")
+    if any(re.search(r"[OolIS]", d) for d in _MISREAD_DATE.findall(body)):
+        return True
+    toks = [t.strip(".,;:()[]") for t in body.split()]
+    toks = [t for t in toks if len(t) >= 3]
+    if not toks:
+        return False
+    mixed = sum(1 for t in toks if _MIXED.match(t) and not _CODE.match(t))
+    alpha = [t for t in toks if t.isalpha() and len(t) >= 4]
+    odd = sum(1 for t in alpha if _NONWORD.search(t) or not re.search(r"[aeiouy]", t, re.I))
+    return mixed / len(toks) >= GARBLE_MIXED or (len(alpha) >= 10 and odd / len(alpha) >= GARBLE_NONWORD)
+
+
+def vision_pages(path: Path, pages: list[tuple[int, str]]) -> list[int]:
+    """Pages of a text-layer PDF that are IMAGES the text layer does not
+    carry, or carries garbled: a thin or garbled (``garbled``) text layer over
+    an embedded image. Decided per page, because one scanned page inside a
+    typed record (an 834-page file held 64) is never read when the document as
+    a whole has text, and a garbled OCR layer turned Z94.0 into 294.0 and a
+    client's own date of birth into "another person". A thin page with no
+    image is a short typed page or a blank one: vision would read nothing more."""
+    cand = [n for n, t in pages if thin(t) or garbled(t)]
+    if not cand:
+        return []
+    import pymupdf
+
+    with pymupdf.open(str(path)) as doc:
+        return [n for n in cand if 1 <= n <= len(doc) and doc[n - 1].get_images()]
+
+
 def live_rows(rows: list[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], int]:
     """Last write wins (retries append); a byte-duplicate row retires its id."""
     ok: dict[str, dict[str, Any]] = {}
@@ -125,9 +187,15 @@ def _extract_one(d: Path, r: dict[str, Any], scans: list[dict[str, Any]]) -> dic
                 text_path.write_text(txt, encoding="utf-8")
                 rec["chars"] = len(txt)
                 rec["text_path"] = str(text_path)
-                empty = [n for n, t in pages if not t.strip()]
+                imaged = vision_pages(path, pages)
+                empty = [n for n, t in pages if not t.strip() and n not in imaged]
                 if empty:
                     rec["empty_pages"] = empty
+                if imaged:
+                    # The vision pass transcribes these pages only and merges
+                    # them into this text file (``stages/vision.py``).
+                    rec["vision_pages"] = imaged
+                    scans.append(rec)
         elif ext in WORD_EXTS:
             try:
                 txt = docx_text(path)

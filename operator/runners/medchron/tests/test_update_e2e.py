@@ -78,7 +78,7 @@ class _Stream:
 
 class _Model:
     """The compose (a stream), the review (a stream with its own system), the
-    Prior Medical History rewrite, and audit verdicts (a forced tool): all
+    added prior history summary, and audit verdicts (a forced tool): all
     SUPPORTED. Anything else fails loudly."""
 
     def __init__(self) -> None:
@@ -219,7 +219,8 @@ def test_an_update_files_one_complete_document_into_the_delivered_folder(
     # The delivered Prior Medical History is carried as delivered; what the
     # new records add sits under it in a dated, audited paragraph.
     assert K.PMH.split("\n", 1)[1] in upd
-    assert re.search(r"Additional prior history from records received \d{2}-\d{2}-\d{2}\n", upd)
+    # The listing carries no filing date here, so the line carries none (never the run date).
+    assert re.search(r"Additional prior history from records filed since the prior chronology\n", upd)
     # The new Diagnostic Highlights row was audited as a claim on its page.
     new_id = next(f["file_id"] for f in o.proof["files"] if f["name"] == sent[0])
     got = tmp_path / "got.docx"

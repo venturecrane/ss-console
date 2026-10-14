@@ -17,10 +17,12 @@ by name and assemble numbered them by first citation. Here:
 4. a new exhibit no kept entry cites is not an exhibit (every visit it holds
    is already in the chronology); the cited ones are renumbered without gaps
    (`compact`), BEFORE the audit, because a claim's audit key hashes its
-   exhibit number;
-5. the audit document is the new entries alone, under the delivered Exhibit
-   List plus the new exhibits' rows, so every new citation resolves and no
-   delivered claim is in it to be audited or edited.
+   exhibit number; one that reuses a firm-numbered file keeps that number;
+5. the audit document is the new entries, the dated added prior history and
+   one claim per new diagnosis code, under the delivered Exhibit List plus
+   the new exhibits' rows and a row per firm-numbered file the list never
+   named, so every new citation resolves and no delivered claim is in it to
+   be audited or edited.
 """
 
 from __future__ import annotations
