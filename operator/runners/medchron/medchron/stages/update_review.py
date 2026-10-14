@@ -325,7 +325,7 @@ def finish(c: Ctx, md: str, found: list[RR.Finding], base: list[str], doc: Path)
     ents = RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg))
     edits, left = _finish_calls(c, todo, ents, base)
     new_md, edited = _apply(c, md, edits, base)
-    bad = FN.failed(edits, c.verify(md, new_md)) if new_md != md else []
+    bad, untraced = FN.failed(edits, c.verify(md, new_md)) if new_md != md else ([], 0)
     if bad:
         ids = {id(e) for e in bad}
         for e in edits:
@@ -337,7 +337,8 @@ def finish(c: Ctx, md: str, found: list[RR.Finding], base: list[str], doc: Path)
     settled = FN.settle(todo, edits, left)
     _mark_refiled(c.sr, FN.refiled(edits, ents, base, new_md, {int(r["exhibit"]) for r in _new_records(c.sr)}))
     c.sr.log(
-        f"  finisher: {len(edits)} edit(s), {sum(e.outcome == 'applied' for e in edits)} applied, {len(bad)} reverted"
+        f"  finisher: {len(edits)} edit(s), {sum(e.outcome == 'applied' for e in edits)} applied, {len(bad)} reverted; "
+        f"{untraced} unsupported sentence(s) no edit wrote, left to the audit loop"
     )
     if new_md == md:
         doc.write_text(md, encoding="utf-8")
@@ -412,12 +413,17 @@ def _reuse(sr: StageRun, rec: dict[str, Any], md: str) -> int | None:
 
 
 def _dollars(usage: list[dict[str, Any]]) -> str:
-    path = Path(os.environ.get(budget.PRICING_ENV, budget.PRICING_DEFAULT))
-    try:
-        p = budget.Pricing.load(path)
-        return f"{sum(p.price_row(u) for u in usage):.2f} USD"
-    except (OSError, ValueError, KeyError, budget.BudgetError):
-        return "not priced here"
+    """The round's dollars from the pricing table the driver reads: the env
+    override, the image's path, else the source tree's own copy."""
+    tree = Path(__file__).resolve().parents[4] / "adapter" / "cost_telemetry" / "anthropic_pricing.json"
+    for path in (os.environ.get(budget.PRICING_ENV), budget.PRICING_DEFAULT, str(tree)):
+        try:
+            p = budget.Pricing.load(Path(path)) if path else None
+            if p is not None:
+                return f"{sum(p.price_row(u) for u in usage):.2f} USD"
+        except (OSError, ValueError, KeyError, budget.BudgetError):
+            continue
+    return "not priced here"
 
 
 def _ctx(sr: StageRun, images: Images | None, evidence: RR.Evidence | None, verify: Verify | None) -> Ctx:
@@ -449,15 +455,73 @@ def run(
     base = FN.delivered_of((ud / "base.md").read_text(encoding="utf-8"))
     c = _ctx(sr, images, evidence, verify)
     c.npages, c.already = npages or c.npages, already_pages(sr)
+    at = _resume(sr, ud)
+    if at is not None:
+        doc.write_text(at.md, encoding="utf-8")
+        return _loop(c, at.rec, at.md, base, doc, ud, at)
     rec: dict[str, Any] = {"model": c.model, "doc_sha_in": _sha(md), "rounds": []}
     return _loop(c, rec, md, base, doc, ud)
 
 
-def _loop(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: Path) -> int:
-    targets: set[int] | None = None
+# ---- the checkpoint: a completed round is never paid for twice ---------------------
+CHECKPOINT = "review_checkpoint.json"
+
+
+@dataclass
+class At:
+    """Where a resumed loop starts: after round `done`, with that round's
+    document, record, next review targets and must-fix count."""
+
+    done: int
+    md: str
+    rec: dict[str, Any]
+    targets: set[int] | None
+    last_must: int | None
+
+
+def compose_sha(ud: Path) -> str:
+    """The identity of what the loop reviews: the composed new entries and
+    the delivered document (``update_collect``, which also clears the
+    checkpoint: a new collect is a new review)."""
+    parts = [(ud / n).read_text(encoding="utf-8") if (ud / n).is_file() else "" for n in ("new_entries.md", "base.md")]
+    return _sha("\0".join(parts))
+
+
+def _checkpoint(ud: Path, at: At) -> None:
+    row = {
+        "compose_sha": compose_sha(ud),
+        "done": at.done,
+        "md": at.md,
+        "rec": at.rec,
+        "targets": None if at.targets is None else sorted(at.targets),
+        "last_must": at.last_must,
+    }
+    (ud / CHECKPOINT).write_text(json.dumps(row), encoding="utf-8")
+
+
+def _resume(sr: StageRun, ud: Path) -> At | None:
+    """The last completed round of an interrupted loop over the same composed
+    entries (a connection failure, a requeue), or None."""
+    row = read_json(ud / CHECKPOINT, {})
+    if not isinstance(row, dict) or not row.get("md") or row.get("compose_sha") != compose_sha(ud):
+        return None
+    done, t, lm = row.get("done"), row.get("targets"), row.get("last_must")
+    if not isinstance(done, int) or not isinstance(row.get("rec"), dict):
+        return None
+    sr.log(f"update review: resuming after round {done}; rounds 1 to {done} are not paid again")
+    targets = {int(x) for x in t if isinstance(x, int)} if isinstance(t, list) else None
+    return At(done, str(row["md"]), row["rec"], targets, lm if isinstance(lm, int) else None)
+
+
+def _end(ud: Path) -> None:
+    (ud / CHECKPOINT).unlink(missing_ok=True)
+
+
+def _loop(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: Path, at: At | None = None) -> int:
+    targets: set[int] | None = at.targets if at else None
     found: list[RR.Finding] = []
-    last_must: int | None = None
-    for rnd in range(1, ROUNDS + 1):
+    last_must: int | None = at.last_must if at else None
+    for rnd in range((at.done if at else 0) + 1, ROUNDS + 1):
         c.rnd, c.calls, c.usage = rnd, 0, []
         try:
             found, n = review_round(c, md, base, targets)
@@ -490,6 +554,7 @@ def _loop(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: 
                 c.sr.log(f"update review: {len(must)} must-fix, no fewer than the last review; no progress")
             break
         last_must = len(must)
+        _checkpoint(ud, At(rnd, md, rec, targets, last_must))
     return _hold(c, rec, found, doc, ud)
 
 
@@ -508,6 +573,7 @@ def _save(path: Path, rec: dict[str, Any], status: str, doc: Path, open_: list[R
     rec["open"] = [f.as_dict() for f in open_ or []]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(rec, indent=1), encoding="utf-8")
+    _end(path.parent)  # a settled loop is never resumed
 
 
 def projected_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing) -> float | None:

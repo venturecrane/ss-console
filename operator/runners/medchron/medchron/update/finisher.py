@@ -22,7 +22,8 @@ edit reaches the document only when it is checked here and then audited.
   states the name in its text: the header is not a claim the audit reads, so
   the page's text is the independent read (as for a redate).
 * Every applied edit whose new sentence the audit does not grade SUPPORTED
-  is reverted (``failed``), and its finding stays open.
+  is reverted (``failed``), and its finding stays open; an unsupported claim
+  no edit wrote is left to the audit loop, which settles it before its gate.
 """
 
 from __future__ import annotations
@@ -155,18 +156,23 @@ def _flat(t: str) -> str:
     return re.sub(r"\s+", " ", CL.CITE.sub("", t)).strip()
 
 
-def failed(edits: list[RR.Finding], unsupported: list[dict[str, Any]]) -> list[RR.Finding]:
-    """The applied text edits the audit did not support: an edit whose text
-    holds an unsupported claim, or every text edit when a claim cannot be
-    traced to one edit (nothing unsupported stays on a guess)."""
+def failed(edits: list[RR.Finding], unsupported: list[dict[str, Any]]) -> tuple[list[RR.Finding], int]:
+    """(the applied text edits the audit did not support, how many
+    unsupported claims no edit wrote). An edit is reverted only when its own
+    text holds an unsupported claim. A claim no edit wrote (a diagnosis claim
+    a redate moved, a sentence beside a dropped one) is left to the audit
+    loop, which repairs or drops it before its gate: reverting every edit
+    for it undid 58 corrections in one real round (2026-10-14)."""
     text_edits = [e for e in edits if e.outcome == "applied" and e.action in ("replace", "add")]
     bad: list[RR.Finding] = []
+    untraced = 0
     for c in unsupported:
         claim = _flat(str(c.get("claim") or ""))
         own = [e for e in text_edits if claim and (claim in _flat(e.corrected) or _flat(e.corrected) in claim)]
-        bad += own or text_edits
+        bad += own
+        untraced += 0 if own else 1
     seen: set[int] = set()
-    return [e for e in bad if not (id(e) in seen or seen.add(id(e)))]
+    return [e for e in bad if not (id(e) in seen or seen.add(id(e)))], untraced
 
 
 def settle(findings: list[RR.Finding], edits: list[RR.Finding], left: dict[str, str]) -> int:

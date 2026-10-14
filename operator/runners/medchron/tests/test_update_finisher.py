@@ -309,3 +309,50 @@ def test_the_review_sees_delivered_visits_near_the_entry_and_is_told_a_document_
     text = "\n".join(b.get("text", "") for b in blocks)
     assert "19 of its 20 pages are copies of delivered Exhibit 1" in text
     assert "=== D1 (DELIVERED) ===" in text and "=== D2 (DELIVERED) ===" not in text  # a day off is near
+
+
+# F3: only the edit the audit did not support is reverted ------------------------
+def test_one_unsupported_edit_is_reverted_and_the_three_supported_edits_stay(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A round with four corrections: the audit does not support one, and it
+    also grades unsupported a sentence no edit wrote. Before, an untraced
+    sentence reverted every edit of the round (58 on a real round); now only
+    the traced edit is undone and the untraced sentence is the audit loop's."""
+    sent = "Lumbar MRI showed a disc protrusion of {} mm at the fourth and fifth lumbar level. (Exhibit {} - p. {})"
+    entry = "08/{:02d}/2026\nSample Imaging Center | Medical Diagnoses\n\nMedical Diagnoses\n" + sent
+    where = [(2, 1), (2, 2), (2, 3), (3, 1)]
+    entries = [entry.format(20 + i, 9, ex, p) for i, (ex, p) in enumerate(where)]
+    fixed = [sent.format(4 + i, ex, p) for i, (ex, p) in enumerate(where)]
+    found = _review(
+        *[
+            _finding(f"N{i + 1}.c1", "1 wrong value", "size misread", page=p, exhibit=ex)
+            for i, (ex, p) in enumerate(where)
+        ]
+    )
+    fixes = _edits(
+        *[
+            {
+                "finding": f"F{i + 1}",
+                "anchor": f"N{i + 1}.c1",
+                "action": "replace",
+                "exhibit": ex,
+                "page": p,
+                "corrected": fixed[i],
+            }
+            for i, (ex, p) in enumerate(where)
+        ]
+    )
+    untraced = "Sample Imaging Center"  # in the document, written by no edit
+    rc, sr, md = _run(
+        tmp_path,
+        monkeypatch,
+        entries,
+        [found, K.CLEAN_REVIEW],
+        [fixes],
+        unsupported=[fixed[0].split(" (Exhibit")[0], untraced],
+    )
+    ents = B.entries_of(md)[1]
+    assert entries[0] in md and fixed[0] not in md  # the unsupported edit is undone
+    assert all(f in md for f in fixed[1:])  # the three supported edits stay
+    assert len(ents) == 4 and rc == 0
