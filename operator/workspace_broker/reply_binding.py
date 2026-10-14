@@ -122,6 +122,12 @@ _MESSAGE_ID = re.compile(r"^<?[^\s<>]{3,500}@[^\s<>]{1,250}>?$")
 _GRAPH_ID = re.compile(r"^[A-Za-z0-9=_-]{16,512}$")
 
 
+def _is_graph_ref(ref: str) -> bool:
+    """A job's ``request_ref`` that is the mailbox's Graph id, not an RFC
+    Message-ID: no '@', and only the characters a Graph id is made of."""
+    return "@" not in ref and bool(_GRAPH_ID.match(ref))
+
+
 class BindingRefused(MsGraphRefused):
     """The broker will not let a reply bind. The message is the sentence to relay."""
 
@@ -363,11 +369,23 @@ def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> V
         row, key = _verify_job(broker, kind, ident, db_path)
         if kind in SCHEDULED_LANES and row.get("trigger") == "scheduled":
             return _verify_scheduled(broker, kind, ident, key, row)
-        job_id, imid, expected_sender = ident, f"<{str(row['request_ref']).strip('<>')}>", row["requester"]
-    if kind == "message_graph":
+        job_id, expected_sender = ident, row["requester"]
+        ref = str(row["request_ref"] or "").strip()
+        if _is_graph_ref(ref):
+            # 2026-10-14: the Operator recorded a chronology request by the
+            # mailbox's own Graph id (job 01M4VJK2, and the 09-22 jobs), and an
+            # RFC lookup of that id can never match, so the requester could
+            # never be answered in her thread. A Graph id resolves the same
+            # email through the same Inbox, sender and replyTo checks.
+            found = msgraph_lookup.received_by_graph_id(ops, ref)
+        else:
+            found = msgraph_lookup.find_received(ops, f"<{ref.strip('<>')}>")
+        if found is not None:
+            imid = found["internet_message_id"]
+    elif kind == "message_graph":
         found = msgraph_lookup.received_by_graph_id(ops, ident)
     else:
-        found = msgraph_lookup.find_received(ops, imid or ident)
+        found = msgraph_lookup.find_received(ops, ident)
     if found is None or not found["graph_message_id"]:
         raise BindingRefused("that email is not in this seat's Inbox as a received message")
     sender = found["sender"]
