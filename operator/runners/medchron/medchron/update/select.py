@@ -88,9 +88,18 @@ def seen_shingles(delivered_pdfs: list[Path]) -> set[str]:
     return seen
 
 
+def shingles_by_exhibit(delivered_pdfs: dict[int, Path]) -> dict[int, set[str]]:
+    """{delivered exhibit: its pages' shingles}: where the delivery read a
+    page (a re-filed copy of delivered pages is cited to the exhibit that
+    holds them, ``delivered_home``)."""
+    return {n: set().union(*(shingles(t) for t in pdf_pages(p))) for n, p in delivered_pdfs.items()}
+
+
 #: A fax, print or page-count line: the furniture two copies of one record
-#: differ in. Its dates and words never tell two visits apart.
-_FURNITURE = re.compile(r"(?im)^.*\b(?:fax|printed|print date|page \d+ of \d+|sent|received)\b.*$")
+#: differ in. Its dates and words never tell two visits apart. "Generated on"
+#: is an EMR print stamp: a record re-printed for a second request carries
+#: the new print date on every page (2026-10-14).
+_FURNITURE = re.compile(r"(?im)^.*\b(?:fax|printed|print date|generated on|page \d+ of \d+|sent|received)\b.*$")
 _DATE = re.compile(r"(?<![\d/])(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})(?![\d/])")
 
 
@@ -232,3 +241,33 @@ def selected_text(pages: dict[int, str], read: list[int]) -> str:
         nxt = context_block(ctx(pg + 1), pg + 1, before=False)
         out.append(pre + f"[p.{pg}]\n{pages.get(pg) or ''}" + ("\n" + nxt.rstrip("\n") if nxt else ""))
     return "\n".join(out)
+
+
+def delivered_home(
+    row: dict[str, Any], pages: dict[int, str], by_ex: dict[int, set[str]], image_ex: dict[int, int]
+) -> int | None:
+    """The delivered exhibit a new document RE-FILES WHOLE, or None.
+
+    A document none of whose pages is read, every one already read in a
+    delivered exhibit (or blank), is not a new exhibit: it is a re-filed copy
+    of delivered pages, cited where the delivery read them. A re-printed
+    hospital record whose every page was delivered once became a new exhibit
+    and an Exhibit List line (2026-10-14). The exhibit is the one most of its
+    pages are in: by picture (`image_ex`, {page: delivered exhibit}) or, for a
+    page with no picture match, the delivered exhibit sharing the most of its
+    shingles. A document with a page read, unread, billed, or excluded for
+    any other reason is never re-filed whole: it stays an exhibit, and what
+    it adds is read."""
+    excluded = row["excluded"]
+    if row["read"] or row["unread"] or not excluded.get(ALREADY) or set(excluded) - {ALREADY, BLANK}:
+        return None
+    votes: Counter[int] = Counter()
+    for p in range(1, int(row["pages"]) + 1):
+        n = image_ex.get(p)
+        sh = shingles(pages.get(p))
+        if n is None and sh and by_ex:
+            best = max(by_ex, key=lambda e: len(sh & by_ex[e]))
+            n = best if sh & by_ex[best] else None
+        if n is not None:
+            votes[n] += 1
+    return votes.most_common(1)[0][0] if votes else None
