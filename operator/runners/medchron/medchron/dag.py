@@ -189,7 +189,15 @@ STAGES: tuple[Stage, ...] = (
         runner=_units.run,
         exit_map={2: (REFUSED, "build_units refused: a scanned file is untranscribed or billing_extract is missing")},
     ),
-    Stage("identity", "", _slug, scope="slug", requires=("build_units",), runner=_identity.run),
+    Stage(
+        "identity",
+        "",
+        _slug,
+        scope="slug",
+        requires=("build_units",),
+        runner=_identity.run,
+        exit_map={2: (HELD, "identity: an emailed attachment names a different person than the client")},
+    ),
     # ---- paid: composition ------------------------------------------------
     Stage(
         "map",
@@ -466,12 +474,30 @@ BY_NAME = {s.name: s for s in STAGES}
 ORDER = [s.name for s in STAGES]
 
 
+def stages(update: bool = False) -> tuple[Stage, ...]:
+    """The run's order, or an update's (``dag_update.UPDATE_STAGES``)."""
+    if not update:
+        return STAGES
+    from .dag_update import UPDATE_STAGES
+
+    return UPDATE_STAGES
+
+
+def by_name(update: bool = False) -> dict[str, Stage]:
+    return {s.name: s for s in stages(update)}
+
+
 def validate_dag() -> list[str]:
+    return _validate(STAGES) + [f"update: {p}" for p in _validate(stages(update=True))]
+
+
+def _validate(seq: tuple[Stage, ...]) -> list[str]:
     """Every `requires` and `invalidates` names a real stage that comes,
     respectively, before and after it."""
     problems: list[str] = []
-    pos = {n: i for i, n in enumerate(ORDER)}
-    for s in STAGES:
+    order = [s.name for s in seq]
+    pos = {n: i for i, n in enumerate(order)}
+    for s in seq:
         for r in s.requires:
             if r not in pos:
                 problems.append(f"{s.name}: requires unknown stage {r!r}")
@@ -482,17 +508,19 @@ def validate_dag() -> list[str]:
                 problems.append(f"{s.name}: invalidates unknown stage {inv!r}")
             elif pos[inv] <= pos[s.name]:
                 problems.append(f"{s.name}: invalidates {inv!r} which comes earlier")
-    for s in STAGES:
+    for s in seq:
         if s.paid and s.external:
             problems.append(f"{s.name}: paid and external (a rehearsal must know which it is)")
-    if len(set(ORDER)) != len(ORDER):
+    if len(set(order)) != len(order):
         problems.append("duplicate stage names")
     return problems
 
 
-def stages_from(start: str | None) -> list[Stage]:
+def stages_from(start: str | None, update: bool = False) -> list[Stage]:
+    seq = stages(update)
+    order = [s.name for s in seq]
     if start is None:
-        return list(STAGES)
-    if start not in BY_NAME:
-        raise KeyError(f"unknown stage {start!r}; known: {ORDER}")
-    return list(STAGES[ORDER.index(start) :])
+        return list(seq)
+    if start not in order:
+        raise KeyError(f"unknown stage {start!r}; known: {order}")
+    return list(seq[order.index(start) :])

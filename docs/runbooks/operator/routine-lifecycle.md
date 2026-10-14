@@ -92,8 +92,17 @@ An update reads only what the delivered chronology did not cover, and the covere
 the matter's ledger rows (`medchron_job_status(matter_id=...)`, which unions every delivered
 chronology on the matter so a second update does not re-read the first).
 
-A chronology delivered before that record existed has no row to read. The skill refuses to
-guess, names the delivered folder, and stops. **Reconstructing it is
+Since 2026-10-13 an update goes INTO the delivered chronology (`update: {into:
+"delivered_chronology"}`, `operator/runners/medchron/medchron/update/`): the runner pulls the
+delivered document and its exhibits, proves the document re-renders to itself, reads only the new
+documents' pages the delivered exhibits do not already hold, and files one complete document into
+the delivered folder, retiring the old document by id after the new one is proven. What was
+covered is read off the delivered exhibits, so a chronology delivered before the ledger record
+existed is still updatable: the skill names every medical record on the matter and the runner
+skips what the exhibits already carry. The record below still matters for the skill's routing
+and for naming a smaller set; it is no longer the only source.
+
+A chronology delivered before that record existed has no row to read. **Reconstructing it is
 `operator/bin/medchron-backfill-covered.py`**, not a hand procedure:
 
     # laptop: compute from the delivery's own artifacts, $0

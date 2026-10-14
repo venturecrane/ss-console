@@ -141,6 +141,7 @@ class FakeSeat:
         self.post_then_fail: dict[str, int] = {}
         self._pending: list[tuple[int, dict]] = []
         self._lists = 0
+        self.deleted: list[str] = []
 
     def create_folder(self, matter_id: str, name: str) -> dict:
         fid = f"folder-{len(self.created) + 1}"
@@ -182,6 +183,14 @@ class FakeSeat:
         if landed is not None:
             raise RuntimeError("the response was lost after the POST")
         return {"fileId": None}
+
+    def delete_file(self, matter_id: str, file_id: str) -> dict:
+        """The update's one delete. Recorded; the row reads deleted next list."""
+        self.deleted.append(file_id)
+        for d in self.docs:
+            if str(d.get("id")) == str(file_id):
+                d["deleted"] = True
+        return {"href": f"https://fake.invalid/status/{file_id}"}
 
     def _materialize(self) -> None:
         self._lists += 1

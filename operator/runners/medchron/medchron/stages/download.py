@@ -29,6 +29,7 @@ keeps the hard exit.
 from __future__ import annotations
 
 import hashlib
+import json
 import time
 from pathlib import Path
 from typing import Any
@@ -102,20 +103,12 @@ def run(sr: StageRun) -> int:
             doc_exts=doc_exts,
         )
     ]
-    file_ids = sel.get("include_file_ids")
-    if file_ids:
-        # ss#2616 append runs: only the named documents, from the full matter
-        # listing (the id set overrides the folder grain). A named id the
-        # matter does not carry is a HOLD naming it — a silent skip would let
-        # an append claim coverage it never pulled.
-        ids = {str(f) for f in file_ids}
-        by_id = {d["id"]: d for d in sr.manifest()}
-        missing = sorted(ids - set(by_id))
-        if missing:
-            sr.log(f"append: {len(missing)} named document id(s) not on the matter: {', '.join(missing[:5])}")
+    if sel.get("include_file_ids"):
+        rule = {"prefixes": prefixes, "excludes": excludes, "root_pdfs": root_pdfs, "doc_exts": doc_exts}
+        named = _named_targets(sr, sel, fpath, rule)
+        if named is None:
             return 2
-        targets = [by_id[i] for i in sorted(ids)]
-        sr.log(f"append: pull restricted to {len(targets)} named document(s)")
+        targets = named
     done, seen_sha = _already(read_jsonl(log_path))
     todo = [t for t in targets if t["id"] not in done]
     sr.log(f"{sr.slug}: {len(targets)} targets, {len(done)} already done, {len(todo)} to pull")
@@ -167,6 +160,78 @@ def run(sr: StageRun) -> int:
             time.sleep(BATCH_PAUSE_SECONDS)
     sr.log(f"DONE {pulled} pulled, {dupes} byte-duplicates skipped, {len(failed)} failed")
     return _settle(sr, failed, n_targets=len(targets), landed=len(done) + pulled)
+
+
+CONTAINER_EXTS = {".msg", ".rpmsg"}
+
+
+def _name_rules(sr: StageRun) -> list[tuple[Any, str]]:
+    import re
+
+    rules = [(rx, why) for rx, why in sr.cfg.compiled("coverage", "exclusions")]
+    for pat in sr.cfg.get("units", "exclude_name_patterns") or []:
+        rules.append((re.compile(str(pat), re.I), "excluded by the firm's file-name rule"))
+    return rules
+
+
+def _update_folders(sr: StageRun) -> set[str]:
+    """The delivered chronology's folder on an update: its files are the
+    delivered package, never a new record to read."""
+    out = set()
+    for p in sr.slug_dir.glob("runs/*/update/update_plan.json"):
+        fid = (read_json(p, {}) or {}).get("folder_id")
+        if fid:
+            out.add(str(fid))
+    return out
+
+
+def _why_not(d: dict[str, Any], folder: str, rule: dict[str, Any], names: list, chron: set[str]) -> str | None:
+    """Why a NAMED document is not pulled, or None. The firm's authored rules
+    apply to a named id exactly as to a listed one (2026-10-13: an agent that
+    names everything must not make the runner read photos and background
+    reports); an Outlook container is the email stage's to open."""
+    ext = (d.get("ext") or "").lower()
+    if str(d.get("folderId") or "") in chron:
+        return "in the delivered chronology's own folder"
+    if ext in CONTAINER_EXTS:  # the email stage opens it; only the folder rules apply
+        ok = wanted({**d, "ext": ".pdf"}, folder_path=folder, **{**rule, "doc_exts": {".pdf"}})
+        return None if ok else "outside the firm's folder rules (an excluded folder)"
+    if not wanted(d, folder_path=folder, **rule):
+        return "deleted" if d.get("deleted") else "outside the firm's folder rules (an excluded folder or kind)"
+    full = f"{d.get('name') or ''}{d.get('ext') or ''}"
+    return next((why for rx, why in names if rx.search(full)), None)
+
+
+def _named_targets(sr: StageRun, sel: dict[str, Any], fpath: dict[str, str], rule: dict[str, Any]) -> list | None:
+    """ss#2616: only the named documents, from the full matter listing. A
+    named id the matter does not carry is a HOLD naming it (a silent skip
+    would let an update claim coverage it never pulled); a named id the
+    firm's rules exclude is left out and recorded in `named_excluded.json`,
+    which the update's coverage record and the limitations read."""
+    ids = {str(f) for f in sel["include_file_ids"]}
+    by_id = {d["id"]: d for d in sr.manifest()}
+    missing = sorted(ids - set(by_id))
+    if missing:
+        sr.log(f"append: {len(missing)} named document id(s) not on the matter: {', '.join(missing[:5])}")
+        return None
+    names, chron = _name_rules(sr), _update_folders(sr)
+    targets, excluded = [], []
+    for i in sorted(ids):
+        d = by_id[i]
+        why = _why_not(d, fpath.get(str(d.get("folderId") or ""), "/(root)"), rule, names, chron)
+        if why:
+            excluded.append({"id": i, "name": f"{d.get('name') or ''}{d.get('ext') or ''}", "why": why})
+        elif (d.get("ext") or "").lower() not in CONTAINER_EXTS:
+            targets.append(d)
+    (sr.slug_dir / "named_excluded.json").write_text(json.dumps(excluded, indent=1), encoding="utf-8")
+    for x in excluded:
+        sr.log(f"  named but not read: {x['name']} ({x['why']})")
+    containers = len(ids) - len(targets) - len(excluded)
+    if not targets and not containers:
+        sr.log(f"append: every one of the {len(ids)} named document(s) is excluded by the firm's rules")
+        return None
+    sr.log(f"append: pull restricted to {len(targets)} named document(s); {len(excluded)} left out by the firm's rules")
+    return targets
 
 
 def _mint_with_retry(sr: StageRun, ids: list[str]) -> list[dict[str, Any]]:

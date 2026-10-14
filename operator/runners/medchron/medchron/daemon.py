@@ -254,6 +254,7 @@ class Daemon:
             "selection",
             "requested_by",
             "request_ref",
+            "update",
         ):
             if env.get(key) is not None:
                 doc[key] = env[key]
@@ -433,6 +434,10 @@ class Daemon:
             f"Documents: {fields.get('documents', 0)}; pages: {fields.get('pages', 0)}; "
             f"spend cents: {fields.get('cents', 0)}.",
         ]
+        if isinstance(env.get("update"), dict):
+            # Code-authored: the request was an update INTO the delivered
+            # chronology, so the reply says the chronology was updated.
+            lines.append("Request: update into the delivered chronology.")
         if fields.get("folder_id"):
             lines.append(f"Delivered folder id: {fields['folder_id']}.")
         if state != "delivered":

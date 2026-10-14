@@ -48,6 +48,7 @@ from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
 from .cycle_window import Window, cycle_window, resolve_anchor, resolve_effective_from
+from .medchron_update import update_block
 from .medchron_coverage import parse_covered, union_coverage, validate_covered
 
 # Re-exported: `validate_covered` moved to medchron_coverage at ss#2834 when this
@@ -261,7 +262,7 @@ def digest(obj: Any) -> str:
 #: second bill. The work digest excludes provenance so the duplicate is visible,
 #: and excludes ``cap_usd`` so lowering the cap on a retry still reads as the
 #: same job rather than a new one.
-_WORK_KEYS = ("matter", "units", "incident", "injuries", "selection")
+_WORK_KEYS = ("matter", "units", "incident", "injuries", "selection", "update")
 
 
 def work_digest(envelope: dict[str, Any]) -> str:
@@ -353,6 +354,7 @@ def validate_envelope(req: dict[str, Any]) -> dict[str, Any]:
     for key in ("requested_by", "request_ref"):
         if req.get(key):
             env[key] = str(req[key])[:200]
+    env.update(update_block(req, env))
     return env
 
 

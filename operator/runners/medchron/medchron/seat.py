@@ -54,9 +54,14 @@ class Seat(Protocol):
     def mint(self, matter_id: str, file_ids: list[str]) -> list[dict[str, Any]]: ...
     def fetch(self, url: str, dest: Path, expected_size: int | None) -> int: ...
     # ss#2614: the two writes the upload stage makes. Both are INTERNAL_WRITE
-    # at the overlay; the runner never deletes.
+    # at the overlay.
     def create_folder(self, matter_id: str, name: str) -> dict[str, Any]: ...
     def add_file(self, matter_id: str, folder_id: str, name: str, data: bytes) -> dict[str, Any]: ...
+    # 2026-10-13, the update into the delivered chronology: the ONE delete the
+    # runner makes, of the superseded chronology document, by id, and only
+    # after the updated one is proven on the matter by hash
+    # (stages/update_upload.py). Nothing else is ever deleted.
+    def delete_file(self, matter_id: str, file_id: str) -> Any: ...
 
 
 # ---- shapes shared by both backends -----------------------------------------
@@ -184,6 +189,10 @@ class ClientSeat:
         r = self.client.add_file(matter_id, name, data, folder_id=folder_id)
         return r if isinstance(r, dict) else {}
 
+    def delete_file(self, matter_id: str, file_id: str) -> Any:
+        client: Any = self.client
+        return client.delete_file(matter_id, file_id)
+
 
 # ---- backend 2: the seat over ssh (the laptop, during the port) ---------------
 # The script that runs on the seat. It is the frozen pipeline's seat_list_mint
@@ -282,6 +291,9 @@ class SshSeat:
         raise SeatError("the ssh seat is read-only; the upload stage runs on the Machine (ss#2614)")
 
     def add_file(self, matter_id: str, folder_id: str, name: str, data: bytes) -> dict[str, Any]:
+        raise SeatError("the ssh seat is read-only; the upload stage runs on the Machine (ss#2614)")
+
+    def delete_file(self, matter_id: str, file_id: str) -> Any:
         raise SeatError("the ssh seat is read-only; the upload stage runs on the Machine (ss#2614)")
 
 

@@ -7,7 +7,8 @@ Idempotent by construction (ss#2614). The folder id is recorded in
 create_folder and the last add_file resumes by reconciling: list the folder,
 add only the names that are missing or the wrong size. A folder of the target
 name that this run did not create is somebody else's and the stage refuses
-(exit 1); the runner never deletes anything on the matter.
+(exit 1); this stage never deletes anything on the matter (an update's one
+delete, of the chronology it replaces, is `update_upload`'s).
 
 `add_file` returning a null file id is normal and is not confirmation. The
 only confirmation is the folder read back with every name at its byte count,

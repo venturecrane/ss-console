@@ -15,6 +15,17 @@ and logged for review. `final` is the last drop pass, after which nothing is
 re-audited: a SUPPORTED_WIDENED claim is dropped there too, because a citation
 rewritten on that pass would ship unverified.
 
+NO EDIT LOSES A VALUE THE AUDIT DID NOT NAME (2026-10-13, ported from the
+laptop pipeline's repair after a home-medication list lost every dosage to a
+repair, 2026-10-09). The audit verifies only what remains, so a value that
+vanishes in an edit is never seen again. A rewrite may remove a value only
+when the audit's finding names it (it occurs in the unsupported assertions or
+contradictions); a rewrite that loses any other value is REJECTED and the
+original kept, and so is a repair-round DROP that would take such a value.
+Only the round-cap drop may still remove such a claim (the gate admits no
+unsupported claim), and its row records the values it took (`lost_values`),
+so every one is named, never silent.
+
 A claim is located by its EXACT span in the body (`claims.claim_spans`), not
 by re-gluing `claim + " " + cite`: a citation on the next line made the glued
 form unfindable, and the claim was skipped by repair and drop alike until it
@@ -30,6 +41,7 @@ from typing import Any, Callable
 
 from .. import llm
 from ..limits import LimitHold
+from ..update.values import lost as lost_values, named_by, numbers
 from . import claims as CL
 from .page_text import exhibit_paths
 from .run import AuditPaths
@@ -81,15 +93,32 @@ def replace_in(text: str, anchor: str, replacement: str) -> tuple[str, bool]:
     return text.replace(anchor, replacement, 1), True
 
 
+def problems_of(r: dict[str, Any]) -> list[str]:
+    """What the audit faulted, as the repair is told it."""
+    problems = (r.get("unsupported_assertions") or []) + (r.get("contradictions") or [])
+    if r["verdict"] == "PAGE_OUT_OF_RANGE":
+        problems = problems or [f"cited pages {r.get('bad_pages')} do not exist in that exhibit"]
+    return problems or [r.get("note") or "assertion not found on cited pages"]
+
+
+def value_check(claim: str, new: str, problems: list[str]) -> list[str]:
+    """Values a rewrite of `claim` into `new` would lose that the audit did
+    not name: non-empty means the rewrite is refused."""
+    named = named_by(problems)
+    return [v for v in lost_values(claim, new) if v not in named]
+
+
+def drop_losses(claim: str, problems: list[str]) -> list[str]:
+    """Values a DROPPED claim takes with it that the audit did not name."""
+    named = named_by(problems)
+    return sorted(v for v in numbers(claim) if v not in named)
+
+
 def ask_repair(doorway: llm.Doorway, model: str, r: dict[str, Any], c: dict[str, Any]) -> tuple[str | None, str]:
     """(corrected text, "") or (None, why) for one failing claim. A limit hold
     is not one claim's failure: it leaves, so the stage holds and nothing the
     hold stopped is later dropped as residual (review 2026-10-06, N10)."""
-    problems = (r.get("unsupported_assertions") or []) + (r.get("contradictions") or [])
-    if r["verdict"] == "PAGE_OUT_OF_RANGE":
-        problems = problems or [f"cited pages {r.get('bad_pages')} do not exist in that exhibit"]
-    if not problems:
-        problems = [r.get("note") or "assertion not found on cited pages"]
+    problems = problems_of(r)
     payload = (
         "CLAIM:\n"
         + c["claim"]
@@ -202,32 +231,60 @@ def _settle_failing(failing: list[dict[str, Any]], x: _Ctx) -> dict[str, int]:
             continue
         if x.drop_residual:
             x.apply(anchor, "")
-            x.logrow(**_residual_drop_row(r, c, r["key"] in x.contested))
+            x.logrow(
+                **_residual_drop_row(r, c, r["key"] in x.contested),
+                lost_values=drop_losses(c["claim"], problems_of(r)),
+            )
             n["dropped"] += 1
             continue
         new, err = ask_repair(x.doorway, x.model, r, c)
-        if new is None:
-            x.logrow(key=r["key"], action="repair", result=f"ERROR: {err}")
-            n["skipped"] += 1
-        elif new == "DROP":
-            x.apply(anchor, "")
-            x.logrow(key=r["key"], action="repair", result="DROP", old=c["claim"][:300])
-            n["dropped"] += 1
-        elif _unchanged(new, anchor, c["claim"]):
-            x.logrow(key=r["key"], action="repair", result="NOOP: unchanged; re-audit")
-            _mark_reaudit(x.paths, r["key"])
-            n["noop"] += 1
-        elif why := _rejection(new, anchor, c["claim"]):
-            x.logrow(key=r["key"], action="repair", result=f"REJECT: {why}")
-            n["rejected"] += 1
-        else:
-            x.apply(anchor, new if CITE.findall(new) else new + anchor[len(c["claim"]) :])
-            x.logrow(key=r["key"], action="repair", old=c["claim"][:300], new=new[:300])
-            n["repaired"] += 1
+        outcome = _settle_one(x, r, c, anchor, new, err)
+        n[outcome] += 1
+        if outcome == "repaired":
             x.log(f"  [{i}/{len(failing)}] repaired Ex{r['exhibit']} p.{r.get('page_spec')}")
             if x.pause:
                 time.sleep(x.pause)
     return n
+
+
+def _settle_one(x: _Ctx, r: dict[str, Any], c: dict[str, Any], anchor: str, new: str | None, err: str) -> str:
+    """Apply (or refuse) one repair answer; returns the tally it counts under."""
+    problems = problems_of(r)
+    if new is None:
+        x.logrow(key=r["key"], action="repair", result=f"ERROR: {err}")
+        return "skipped"
+    if new == "DROP":
+        unnamed = drop_losses(c["claim"], problems)
+        if unnamed:
+            # The claim stays, fails again, and only the round-cap drop may
+            # remove it, naming what it took.
+            x.logrow(
+                key=r["key"],
+                action="repair",
+                result="REJECT: drop would lose values the audit did not name",
+                lost_values=unnamed,
+            )
+            return "rejected"
+        x.apply(anchor, "")
+        x.logrow(key=r["key"], action="repair", result="DROP", old=c["claim"][:300])
+        return "dropped"
+    if _unchanged(new, anchor, c["claim"]):
+        x.logrow(key=r["key"], action="repair", result="NOOP: unchanged; re-audit")
+        _mark_reaudit(x.paths, r["key"])
+        return "noop"
+    why = _rejection(new, anchor, c["claim"])
+    unnamed = [] if why else value_check(c["claim"], new, problems)
+    if why or unnamed:
+        x.logrow(
+            key=r["key"],
+            action="repair",
+            result=f"REJECT: {why or 'dropped values the audit did not name'}",
+            **({"lost_values": unnamed, "new": new[:300]} if unnamed else {}),
+        )
+        return "rejected"
+    x.apply(anchor, new if CITE.findall(new) else new + anchor[len(c["claim"]) :])
+    x.logrow(key=r["key"], action="repair", old=c["claim"][:300], new=new[:300])
+    return "repaired"
 
 
 def run(
