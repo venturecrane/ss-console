@@ -149,17 +149,17 @@ def _apply(
     unit = body[a:b]
     if verdict == "INVENTED" and other:
         mark = (
-            "{{ATTORNEY: the final audit disagrees with itself about the next statement "
-            f"(not supported in {_clean(head, 60)}, supported in {_clean(other, 60)}); confirm it against the file}}}} "
+            "{{ATTORNEY: two readings of the file disagree on the next statement "
+            f"(not borne out in {_clean(head, 60)}, borne out in {_clean(other, 60)}); confirm it against the file}}}} "
         )
         return (
             body[:a] + mark + unit + body[b:],
             mark,
-            f"{head}: kept and marked, the audit contradicts itself: {_clean(claim, 160)}",
+            f"{head}: kept and marked, two readings of the file disagree on it: {_clean(claim, 160)}",
         )
     if verdict == "INVENTED":
         mark = (
-            "{{NOT IN RECORD: a statement here was removed by the final audit ("
+            "{{NOT IN RECORD: a statement here was removed, the file does not bear it out ("
             + _clean(detail, 160)
             + "); not found in the file}}"
         )
@@ -192,7 +192,7 @@ def _mark_unplaced(heads: list[str], bodies: list[str], unplaced: dict[str, list
         body = bodies[target]
         first, _, rest = body.partition("\n")
         mark = (
-            "{{ATTORNEY: the final audit flags a statement or figure in this section that it could not place ("
+            "{{ATTORNEY: a statement or figure in this section is not borne out by the file and could not be placed ("
             + "; ".join(_clean(r, 120) for r in reasons)
             + "); find and confirm or remove it before use}}"
         )
@@ -219,11 +219,13 @@ def settle(draft_md: str, audit_md: str) -> tuple[str, list[str]]:
             notes.append(f"{head}: already settled by an earlier finding; {_clean(claim, 160)}")
             continue
         if head not in heads:
-            notes.append(f"{head}: the final audit names a section the draft does not have; {_clean(claim, 160)}")
+            notes.append(
+                f"{head}: a statement the file does not bear out, in a section the draft does not have; {_clean(claim, 160)}"
+            )
             unplaced.setdefault(head, []).append(reason)
             continue
         if verdict == "ARITHMETIC" and self_cleared(detail):
-            notes.append(f"{head}: the final audit checked {_clean(claim, 120)} and states it correct; left as written")
+            notes.append(f"{head}: {_clean(claim, 120)} checked against the file and correct; left as written")
             continue
         idx, span = _place(heads, bodies, head, claim)
         body = bodies[idx]
@@ -246,7 +248,7 @@ def settle(draft_md: str, audit_md: str) -> tuple[str, list[str]]:
         if span is None:
             unplaced.setdefault(head, []).append(reason)
             notes.append(
-                f"{head}: the final audit flagged {_clean(claim, 160)} ({_clean(detail, 160)}); not located, marked at the section top"
+                f"{head}: not borne out by the file, {_clean(claim, 160)} ({_clean(detail, 160)}); not located, marked at the section top"
             )
             continue
         other = _contradicted(claim, head, supported) if verdict == "INVENTED" else None

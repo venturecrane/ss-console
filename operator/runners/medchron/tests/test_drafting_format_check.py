@@ -135,7 +135,7 @@ def test_the_declaration_check_uses_the_cumulative_rule(tmp_path):
         "## DISCOVERY-SETS\nSpecial Interrogatories, Set One | One | Gamma Example -> Delta Example | "
         "special interrogatories | 20 | 03/01/2026 | FILE: SROG one.pdf\n"
     )
-    corpus = {"SROG one.pdf": "SPECIAL INTERROGATORIES, SET ONE. PROOF OF SERVICE."}
+    corpus = {"SROG one.pdf": "SPECIAL INTERROGATORIES, SET ONE. PROPOUNDING PARTY: GAMMA EXAMPLE. PROOF OF SERVICE."}
     md = _set(20)
     assert any("declaration required" in f for f in _check(tmp_path, md, "discovery_set", prior, corpus=corpus).fails)
     from drafting_testkit import DECL, POS

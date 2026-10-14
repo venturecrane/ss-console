@@ -425,7 +425,10 @@ PRIOR10 = PRIOR20.replace("| 20 |", "| 10 |")
 UNREADABLE = PRIOR20.replace("| 20 |", "| not readable |")
 #: The served copy: the set's own title and its proof of service.
 SERVED = {
-    "SROG set one.pdf": "PLAINTIFF GAMMA EXAMPLE'S SPECIAL INTERROGATORIES, SET ONE\n...\nPROOF OF SERVICE\nServed by mail."
+    "SROG set one.pdf": (
+        "PLAINTIFF GAMMA EXAMPLE'S SPECIAL INTERROGATORIES, SET ONE\nPROPOUNDING PARTY: GAMMA EXAMPLE\n"
+        "RESPONDING PARTY: DELTA EXAMPLE\nSET NO.: ONE\n...\nPROOF OF SERVICE\nServed by mail."
+    )
 }
 #: The 2026-10-12 incident's shape: a matter memo ABOUT discovery, indexed as a set.
 MEMO_ROW = (
@@ -433,7 +436,12 @@ MEMO_ROW = (
     "undated | FILE: Note re discovery.pdf, p. 1"
 )
 MEMO = {"Note re discovery.pdf": "DRAFTED FORM ROGS, RFAS AND SPROGS UPLOADED TO THE RESPONSE TOOL."}
-UNSERVED = {"SROG set one.pdf": "PLAINTIFF GAMMA EXAMPLE'S SPECIAL INTERROGATORIES, SET ONE\nDraft, not served."}
+UNSERVED = {
+    "SROG set one.pdf": (
+        "PLAINTIFF GAMMA EXAMPLE'S SPECIAL INTERROGATORIES, SET ONE\nPROPOUNDING PARTY: GAMMA EXAMPLE\n"
+        "RESPONDING PARTY: DELTA EXAMPLE\nDraft, not served."
+    )
+}
 
 
 @pytest.mark.parametrize(
@@ -486,7 +494,10 @@ def test_the_declaration_is_attached_before_the_proof_of_service_with_its_counts
 
 def test_an_unreadable_prior_count_leaves_paragraph_4_to_the_attorney():
     doc, notes = render.attach(_set(36), "discovery_set", _Firm(), _digest(UNREADABLE), SERVED)
-    assert "{{ATTORNEY: a prior set's count is not readable" in doc and "{{FILL: number of interrogatories" not in doc
+    assert (
+        "{{ATTORNEY: the file shows a prior set served, but its count is not readable" in doc
+        and "{{FILL: number of interrogatories" not in doc
+    )
     assert any("paragraph 4 is left to the attorney" in n for n in notes)
 
 

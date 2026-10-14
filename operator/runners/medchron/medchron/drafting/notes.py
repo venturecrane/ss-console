@@ -16,6 +16,10 @@ from pathlib import Path
 from typing import Any
 
 
+#: How each marker kind reads in the notes: in words, never as a {{slot}}.
+KIND_LABEL = {"ATTORNEY": "For your decision", "NOT IN RECORD": "Not in the file", "CLIENT": "From the client"}
+
+
 def _json(data: Path, name: str) -> Any:
     return json.loads((data / name).read_text(encoding="utf-8"))
 
@@ -31,7 +35,9 @@ def attorney_notes(
     """``units`` are (label, unit data dir) for a job that drafted several
     documents; a one-document job reads its records from ``data``."""
     lines = [f"# Attorney notes: {title}", "", "## Items for the attorney", ""]
-    lines += [f"- {{{{{m['kind']}}}}} {m['text']}".rstrip() for m in found] or ["- None."]
+    lines += [f"- {KIND_LABEL.get(m['kind'], m['kind'].title())}: {m['text']}" for m in found if m["text"].strip()]
+    if lines[-1] == "":
+        lines.append("- None.")
     cap = _json(data, "caption.json") if (data / "caption.json").is_file() else None
     if cap is not None:
         lines += ["", f"## Caption: source {cap['source'] or 'none (no court document in the file)'}", ""]
@@ -49,15 +55,17 @@ def attorney_notes(
             lines.append(
                 "- The caption is read from an answer; its attorney block is opposing counsel's and was not used."
             )
+        said = [x for x in cap["discrepancies"] if str(x.get("document_value") or "").strip()]
         lines += [
             f'- {x["field"].replace("_", " ")}: the court\'s paper reads "{x["document_value"]}"; the matter record '
-            f'reads "{x["record_value"] or "nothing"}" ({x["why"]}). Line: "{x["quote"]}" ({x["source"]})'
-            for x in cap["discrepancies"]
+            f'reads "{x["record_value"] or "nothing"}" ({x["why"]})'
+            + (f'. Line: "{x["quote"]}" ({x["source"]})' if str(x.get("quote") or "").strip() else f" ({x['source']})")
+            for x in said
         ]
         compared = ", ".join(c.replace("_", " ") for c in cap.get("compared") or [])
         if not compared:
             lines.append(f"- Fields compared: none ({cap.get('none_because') or 'nothing comparable'}).")
-        elif not cap["discrepancies"]:
+        elif not said:
             lines.append(f"- Fields compared: {compared}. No discrepancy on those fields.")
         else:
             lines.append(f"- Fields compared: {compared}.")
@@ -65,15 +73,15 @@ def attorney_notes(
     for label, d in units or [("", data)]:
         pre = f"{label}: " if label else ""
         fp = _json(d, "final-pass.json")
-        review += [f"{pre}Removed or flagged by the final audit: {x}" for x in fp["settled"]]
+        review += [f"{pre}Removed or marked, not borne out by the file: {x}" for x in fp["settled"]]
         g = _json(d, "gate.json")
         review += [f"{pre}Corrected to match the record: {x}" for x in g.get("repairs") or []]
         review += [f"{pre}Check against the record: {w}" for w in g.get("warnings") or []]
         if (d / "caps.json").is_file():
-            review += [f"{pre}Defined terms: {x}" for x in _json(d, "caps.json")]
+            review += [f"{pre}Consistency: {x}" for x in _json(d, "caps.json")]
     if (data / "howell.json").is_file():
         review += [f"Howell table: {n}" for n in _json(data, "howell.json")["notes"]]
-    review += [f"Format: {n}" for n in render_notes]
+    review += list(render_notes)
     walled = _json(data, "walled.json") if (data / "walled.json").is_file() else []
     review += [f"Held out, never read (privilege wall: {w['reason']}): {w['name']}" for w in walled]
     tail = ["", "## End tables (from the final document)", "", end_tables] if end_tables else []

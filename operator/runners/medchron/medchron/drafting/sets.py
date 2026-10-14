@@ -230,3 +230,176 @@ def undefined_caps(doc: str) -> list[str]:
 
     _outside(body, scan)
     return out
+
+
+# ---- one front matter across the sets of one request ---------------------------------------
+#
+# The sets one request asks for are served together on the same party: the
+# attorney block, the signature block and every term they share mean the same
+# thing in each. On 2026-10-13 three sets drafted by three composes defined
+# LOCATION three ways and printed the attorney block in two wordings. The
+# first set finished is the canon; each later set is aligned to it by code
+# before its gate (``finish._gate``), and told it before its compose.
+
+_COURT = re.compile(r"(?i)superior\s+court|court\s+of\s+the\s+state")
+#: Where a set's own words end and the attachments begin (render.DECL_LINE / POS_LINE).
+_ATTACHMENT = re.compile(
+    r"(?im)^\W*(?:declaration for additional discovery|declaration\b.*2030\.050|proof of service\b)"
+)
+#: Words that make a definition belong to one kind of set ("in responding to
+#: these interrogatories"): never copied into another kind.
+_SET_NOUN = re.compile(
+    r"(?i)\binterrogator(?:y|ies)\b|\brequests?\s+for\s+(?:admission|production)|\bthese\s+requests\b"
+)
+_ANY_LABEL = re.compile(r"(?im)^\W*(?:SPECIAL INTERROGATORY|REQUEST FOR (?:ADMISSION|PRODUCTION))\b")
+_DEF_PARA = re.compile(r"(?ms)^(\s*\d+\.\s+)([\"“]([A-Z][A-Z0-9&'./ -]*[A-Z0-9])[\"”].*?)(?=\n\s*\n|\Z)")
+_ATTORNEYS_FOR = re.compile(r"(?i)^\W*attorneys?\s+for\b")
+
+
+def _plain(line: str) -> str:
+    return " ".join(re.sub(r"[`*_]", "", line).split())
+
+
+def _defs_section(doc: str) -> tuple[int, str] | None:
+    """The Definitions section's body and its offset, ending at the first
+    request label when no heading separates them."""
+    m = _DEFS.search(doc)
+    if not m:
+        return None
+    body = m.group(1)
+    lab = _ANY_LABEL.search(body)
+    return m.start(1), body[: lab.start()] if lab else body
+
+
+def definition_texts(doc: str) -> dict[str, tuple[int, int, str]]:
+    """Each defined term's definition paragraph (after its number): term ->
+    (start, end, text), offsets into ``doc``."""
+    got = _defs_section(doc)
+    if got is None:
+        return {}
+    base, body = got
+    out: dict[str, tuple[int, int, str]] = {}
+    for p in _DEF_PARA.finditer(body):
+        term = " ".join(p.group(3).split())
+        out.setdefault(term, (base + p.start(2), base + p.end(2), p.group(2).strip()))
+    return out
+
+
+def head_lines(doc: str) -> tuple[int, list[str]]:
+    """The attorney block: the lines above the court's name, as (offset where
+    the court line starts, the block's non-empty lines). (-1, []) when the
+    document names no court, or when a heading or a set's title sits above it
+    (that is not an attorney block, and it is never rewritten)."""
+    pos = 0
+    lines: list[str] = []
+    for ln in doc.splitlines(keepends=True):
+        if _COURT.search(ln):
+            if any(x.lstrip().startswith("#") or _SET_NOUN.search(x) or "|" in x for x in lines):
+                return -1, []
+            return pos, lines
+        if ln.strip():
+            lines.append(ln.rstrip("\n"))
+        pos += len(ln)
+    return -1, []
+
+
+def signature(doc: str) -> tuple[int, int]:
+    """The signature block: from its ``Dated:`` line to the end of the set,
+    stopping before any declaration or proof of service a model wrote (the
+    job's own are attached later; one must never travel to another set)."""
+    m = _SIGNATURE.search(doc)
+    if not m:
+        return -1, -1
+    att = _ATTACHMENT.search(doc, m.end())
+    return m.start(), len(doc[: att.start() if att else len(doc)].rstrip())
+
+
+def authored_head(doc: str, authored: list[str]) -> tuple[str, list[str]]:
+    """The attorney block printed exactly as the firm authored it: the lines
+    above the "Attorneys for" line replaced by the authored lines when they
+    differ (in words, ignoring markup)."""
+    at, lines = head_lines(doc)
+    if at < 0 or not authored:
+        return doc, []
+    cut = next((i for i, ln in enumerate(lines) if _ATTORNEYS_FOR.match(_plain(ln))), None)
+    if cut is None:
+        return doc, []  # no "Attorneys for" line: not a shape this rewrites
+    if [_plain(x) for x in lines[:cut]] == [_plain(x) for x in authored]:
+        return doc, []
+    rest = lines[cut:]
+    head = "\n".join([*authored, *rest]) + "\n\n"
+    return head + doc[at:], ["the attorney block was printed as the firm authors it"]
+
+
+def align(doc: str, canon: str, canon_label: str) -> tuple[str, list[str]]:
+    """``doc`` with the attorney block, the signature block and every shared
+    definition worded as ``canon`` words them. Returns the document and one
+    line per change."""
+    notes: list[str] = []
+    at, lines = head_lines(doc)
+    cat, clines = head_lines(canon)
+    if at >= 0 and cat >= 0 and [_plain(x) for x in lines] != [_plain(x) for x in clines]:
+        doc = canon[:cat] + doc[at:]
+        notes.append(f"attorney block worded as in the {canon_label}")
+    mine, theirs = definition_texts(doc), definition_texts(canon)
+    for term in sorted(set(mine) & set(theirs), key=lambda t: -mine[t][0]):
+        a, b, text = mine[term]
+        if _SET_NOUN.search(theirs[term][2]) or _SET_NOUN.search(text):
+            continue  # worded for its own kind of set; the review reads it
+        if _plain(text) != _plain(theirs[term][2]):
+            doc = doc[:a] + theirs[term][2] + doc[b:]
+            notes.append(f'"{term}" defined in the same words as in the {canon_label}')
+    s, e = signature(doc)
+    cs, ce = signature(canon)
+    if s >= 0 and cs >= 0 and _plain(doc[s:e]) != _plain(canon[cs:ce]):
+        doc = doc[:s] + canon[cs:ce] + doc[e:]
+        notes.append(f"signature block worded as in the {canon_label}")
+    return doc, notes
+
+
+def front_matter(canon: str) -> str:
+    """What a later set's compose is told of the first: its attorney block,
+    Definitions and signature block, verbatim."""
+    at, lines = head_lines(canon)
+    got = _defs_section(canon)
+    s, e = signature(canon)
+    parts = []
+    if lines:
+        parts.append("ATTORNEY BLOCK:\n" + "\n".join(lines))
+    if got:
+        parts.append("DEFINITIONS:\n" + got[1].strip())
+    if s >= 0:
+        parts.append("SIGNATURE BLOCK:\n" + canon[s:e].strip())
+    return "\n\n".join(parts)
+
+
+# ---- the compound marker names the variant's own section -------------------------------
+
+_COMPOUND = re.compile(r"\{\{ATTORNEY:\s*compound under (?:section\s+)?\d{4}\.\d{3}\([a-z]\)\??\s*\}\}", re.I)
+#: The section that bars a compound request in each variant. A request for
+#: production has none: its rule is the category's reasonable particularity.
+COMPOUND_MARKER = {
+    "special_interrogatories": "{{ATTORNEY: compound under section 2030.060(f)?}}",
+    "requests_for_admission": "{{ATTORNEY: compound under section 2033.060(f)?}}",
+    "requests_for_production": "{{ATTORNEY: one category, or two under section 2031.030(c)(1)?}}",
+}
+
+
+def compound_markers(doc: str) -> tuple[str, list[str]]:
+    """Each "compound under section ..." marker naming the section of the set's
+    own variant (the compose prompt names the interrogatory section for all
+    three; on 2026-10-13 a set of requests for production carried it)."""
+    kinds = kinds_in(doc)
+    if len(kinds) != 1:
+        return doc, []
+    want = COMPOUND_MARKER[kinds[0]]
+    n = 0
+
+    def sub(m: re.Match[str]) -> str:
+        nonlocal n
+        if m.group(0) != want:
+            n += 1
+        return want
+
+    doc = _COMPOUND.sub(sub, doc)
+    return doc, [f"compound-request marker names this set's own rule ({n} marker(s))"] if n else []

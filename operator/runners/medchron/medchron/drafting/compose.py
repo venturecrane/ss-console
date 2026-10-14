@@ -47,9 +47,21 @@ def tally(body: str) -> dict[str, int]:
     return out
 
 
-def blocking_findings(result: dict[str, Any]) -> int:
+#: Classes whose audit DRIFTS are defects to repair, never notes to forward: a
+#: served paper's definition that misstates a served response, a term the set
+#: defines one way and uses another, an unfilled slot, a compound request (the
+#: discovery audits report form findings as DRIFTS rows). In these classes
+#: every finding the repairs do not clear fails the job (``finish._draft``):
+#: on 2026-10-13 a proof run carried three findings its own audit had flagged
+#: into the documents, and forwarded them to the attorney as "open items".
+#: Responses are not here yet: no proof run has measured the rule on them.
+STRICT_CLASSES = ("discovery_set",)
+
+
+def blocking_findings(result: dict[str, Any], cls: str | None = None) -> int:
     t = result.get("tallies") or {}
-    return d.blocking_findings(result) + sum(int(t.get(k) or 0) for k in EXTRA_VERDICTS)
+    drifts = int(t.get("DRIFTS") or 0) if cls in STRICT_CLASSES else 0
+    return d.blocking_findings(result) + sum(int(t.get(k) or 0) for k in EXTRA_VERDICTS) + drifts
 
 
 def finding_lines(audit_md: str, kinds: tuple[str, ...]) -> list[str]:
