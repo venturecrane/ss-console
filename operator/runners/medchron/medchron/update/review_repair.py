@@ -49,7 +49,7 @@ MUST, SHOULD = "MUST", "SHOULD"
 ACTIONS = ("replace", "drop", "redate", "drop_entry", "add", "none")
 MIN_CLAIM_CHARS = 30  # shorter claims are never audited (``claims._walk``)
 _MDY = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
-_ANCHOR = re.compile(r"^([ND])(\d+)(?:\.c(\d+))?$")
+_ANCHOR = re.compile(r"^([ND])(\d+)(?:\.[cu](\d+))?$")
 #: (exhibit, page) -> the page's text, or None when there is none to read.
 Evidence = Callable[[int, int], str | None]
 
@@ -89,9 +89,27 @@ class Entry:
     anchor: str
     text: str
     claims: list[Claim] = field(default_factory=list)
+    #: paragraphs no citation closes (``N<k>.u<j>``): no audit grades them, so
+    #: a review finding on one may drop it, or replace it with a cited claim
+    uncited: list[Claim] = field(default_factory=list)
 
     def cites(self) -> set[tuple[int, int]]:
         return {(c.exhibit, p) for c in self.claims for p in c.pages}
+
+
+def _uncited(anchor: str, text: str, headings: set[str]) -> list[Claim]:
+    """The entry's paragraphs, past its date and provider lines, that carry
+    no citation and are more than a heading (``update/uncited.py`` cites them
+    at collect; one a later edit leaves is still addressable)."""
+    parts = text.split("\n", 2)
+    out: list[Claim] = []
+    for para in (parts[2] if len(parts) == 3 else "").split("\n\n"):
+        lines = [ln.strip() for ln in para.split("\n") if ln.strip()]
+        if not lines or CL.CITE.search(para) or all(ln in headings for ln in lines):
+            continue
+        head, rest = _split_head(para.strip("\n"), headings)
+        out.append(Claim(f"{anchor}.u{len(out) + 1}", head, rest, 0, []))
+    return out
 
 
 def _split_head(span: str, headings: set[str]) -> tuple[str, str]:
@@ -110,6 +128,7 @@ def anchor_entries(md: str, keep: set[int], headings: set[str]) -> list[Entry]:
         for j, (c, span) in enumerate(_walk(e, keep), 1):
             head, text = _split_head(span, headings)
             ent.claims.append(Claim(f"N{i}.c{j}", head, text, c["exhibit"], CL.parse_pages(c["page_spec"]) or [1]))
+        ent.uncited = _uncited(ent.anchor, e, headings)
         out.append(ent)
     return out
 
@@ -218,7 +237,7 @@ def grounded_text(f: Finding, keep: set[int]) -> str:
 
 
 def _by_anchor(ents: list[Entry]) -> tuple[dict[str, Entry], dict[str, tuple[Entry, Claim]]]:
-    return {e.anchor: e for e in ents}, {c.anchor: (e, c) for e in ents for c in e.claims}
+    return {e.anchor: e for e in ents}, {c.anchor: (e, c) for e in ents for c in e.claims + e.uncited}
 
 
 def _date_on_page(f: Finding, entry: Entry, evidence: Evidence | None) -> str:
