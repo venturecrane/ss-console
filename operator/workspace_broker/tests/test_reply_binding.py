@@ -126,7 +126,11 @@ class FakeMailbox:
                 return _Response(json.dumps({"value": hits}))
             return _Response(json.dumps({"value": []}))
         if request.method == "GET" and "internetMessageId eq" in decoded:
-            return _Response(json.dumps({"value": [self.message] if self.present else []}))
+            # Graph filters on the id asked for; a fake that answered any id
+            # would let a Graph id pass an RFC lookup it can never match.
+            asked = decoded.split("internetMessageId eq '", 1)[1].split("'", 1)[0]
+            hit = self.present and asked == self.message["internetMessageId"]
+            return _Response(json.dumps({"value": [self.message] if hit else []}))
         if request.method == "GET" and f"/messages/{GRAPH_ID}" in url:
             if self.fail_reply_source_get and "parentFolderId" not in decoded:
                 raise urllib.error.HTTPError(url, 503, "busy", {}, None)  # type: ignore[arg-type]
@@ -658,7 +662,7 @@ def test_a_drafting_job_id_is_not_read_from_the_demand_ledger(tmp_path: Path) ->
 # Operator wrote a new email to the requester AND the matter's attorney)
 
 
-def _chronology_job(tmp_path: Path, path: list[str], requester: str = ADMIN) -> str:
+def _chronology_job(tmp_path: Path, path: list[str], requester: str = ADMIN, request_ref: str = IMID) -> str:
     from workspace_broker.medchron_ledger import MedchronLedger
 
     ledger = MedchronLedger(str(tmp_path / "audit.db"), tmp_path / "mq")
@@ -668,7 +672,7 @@ def _chronology_job(tmp_path: Path, path: list[str], requester: str = ADMIN) -> 
             "units": [{"client_name": "Jane Doe", "surname": "Doe", "dob": "01/01/1980"}],
             "incident": {"date": "2025-01-01", "source": "matter_layout"},
             "requested_by": requester,
-            "request_ref": IMID,
+            "request_ref": request_ref,
         },
         remaining=1000,
     )
@@ -716,6 +720,42 @@ def test_a_chronology_reply_only_reaches_the_requester(tmp_path: Path) -> None:
     job = _chronology_job(tmp_path, ["running", "held"], requester="attorney@firm.example")
     out = _call(_broker(tmp_path, FakeMailbox()), "msgraph_reply_bind", {"kind": "medchron_job", "job_id": job})
     assert out["bound"] is False and "requested the job" in out["reason"]
+
+
+def test_a_chronology_job_recorded_by_graph_id_replies_in_the_requesters_thread(tmp_path: Path) -> None:
+    """FALSIFIER (job 01M4VJK2, 2026-10-13): the Operator recorded the request by
+    the mailbox's Graph id. On the old code the RFC lookup of that id matched
+    nothing and the bind refused, so the requester could never be answered."""
+    job = _chronology_job(tmp_path, ["running", "delivered"], request_ref=GRAPH_ID)
+    box = FakeMailbox()
+    _ack_in_thread(box)
+    bind = _call(_broker(tmp_path, box), "msgraph_reply_bind", {"kind": "medchron_job", "job_id": job})
+    assert bind["bound"] is True and bind["internet_message_id"] == IMID
+    out = _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
+    assert out["recipients"] == [ADMIN]
+    assert len(box.replies()) == 1 and f"/messages/{GRAPH_ID}/reply" in box.replies()[0]
+
+
+def test_a_graph_id_request_from_someone_else_is_refused(tmp_path: Path) -> None:
+    job = _chronology_job(tmp_path, ["running", "delivered"], requester="attorney@firm.example", request_ref=GRAPH_ID)
+    out = _call(_broker(tmp_path, FakeMailbox()), "msgraph_reply_bind", {"kind": "medchron_job", "job_id": job})
+    assert out["bound"] is False and "requested the job" in out["reason"]
+
+
+def test_a_graph_id_request_outside_the_inbox_is_refused(tmp_path: Path) -> None:
+    job = _chronology_job(tmp_path, ["running", "delivered"], request_ref=GRAPH_ID)
+    out = _call(
+        _broker(tmp_path, FakeMailbox(parentFolderId="ARCHIVE")),
+        "msgraph_reply_bind",
+        {"kind": "medchron_job", "job_id": job},
+    )
+    assert out["bound"] is False and "Inbox" in out["reason"]
+
+
+def test_an_rfc_request_ref_that_matches_nothing_is_refused(tmp_path: Path) -> None:
+    job = _chronology_job(tmp_path, ["running", "delivered"], request_ref="<other@mail.firm.example>")
+    out = _call(_broker(tmp_path, FakeMailbox()), "msgraph_reply_bind", {"kind": "medchron_job", "job_id": job})
+    assert out["bound"] is False and "Inbox" in out["reason"]
 
 
 def test_a_chronology_job_id_is_not_read_from_another_ledger(tmp_path: Path) -> None:
