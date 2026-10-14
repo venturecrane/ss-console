@@ -1538,7 +1538,7 @@ describe('Operator customer Machine Dockerfile', () => {
     // under its lane (pairs with the broker's roster lane in participant_fence.py).
     // 8ed871e9 -> 8ee9b79a (overlay#455, #456), 2026-10-13: medchron_job_submit carries an update
     // into the delivered chronology; the heartbeat names the six hold proof codes (ss #3176).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="8ee9b79aef4876d6b7b5e167f545e97e66f2b190"')
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="aef6183d3b4bf0f2ec239e2c78778d50a4267487"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
