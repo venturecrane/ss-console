@@ -548,3 +548,39 @@ def test_the_proof_reader_takes_either_verdict_shape(written, expect, tmp_path):
 
 def test_no_verdict_file_is_no_verdict(tmp_path):
     assert proof_run.read_verdicts(tmp_path) == []
+
+
+def test_a_kept_envelope_proves_again_after_the_job_dir_is_wiped(lane):
+    """2026-10-14: the only composed discovery request on a seat was due to be
+    wiped at 72 h while its lane was still being fixed. ``keep`` copies its
+    envelope, and a proof run still finds it once the job dir is gone."""
+    import shutil
+
+    d, client = lane
+    _authored(d.run_dir, {"demand-letter-drafter": {"evidence": "x"}})
+    _submit(d, client, B)
+    assert d.tick() == "delivered"
+    assert _cli(d.run_dir, "keep", B) == 0
+    kept = proof_run.kept_dir(d.run_dir, "demand") / f"{B}.json"
+    assert kept.is_file() and oct(kept.stat().st_mode & 0o777) == "0o600"
+    shutil.rmtree(d.jobs / B)  # the 72 h wipe
+    assert _cli(d.run_dir, "dry-run", B) == 0
+    d.tick()
+    assert proof_run.results(d.run_dir)[-1]["status"] == "passed"
+    assert not (d.jobs / B).exists()  # the real lane's dir stays gone
+
+
+def test_keep_refuses_without_a_job_dir_and_kept_envelopes_age_out(lane):
+    d, _client = lane
+    assert _cli(d.run_dir, "keep", A) == 2
+    kd = proof_run.kept_dir(d.run_dir, "demand")
+    kd.mkdir(parents=True)
+    old = kd / f"{A}.json"
+    old.write_text("{}")
+    young = kd / f"{B}.json"
+    young.write_text("{}")
+    t = d.clock()
+    os.utime(old, (t - 15 * 86400, t - 15 * 86400))
+    os.utime(young, (t - 13 * 86400, t - 13 * 86400))
+    proof_run._wipe_old(d, t)
+    assert not old.exists() and young.exists()

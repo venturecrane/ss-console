@@ -55,6 +55,13 @@ MARKER_PREFIX = ".prove-"
 PROOFS_DIR = "lane-proofs"
 RESULT = "proof.json"
 KEEP_HOURS = 72.0
+#: Envelopes SMD keeps for a lane still being proven (``keep``), under the run
+#: dir, root-only: a job dir is wiped 72 h after it ends, and on 2026-10-14 the
+#: only composed discovery request on the seat was due to go while its lane was
+#: still being fixed. The envelope is all a proof run reads (it pulls the
+#: matter afresh), so that is all that is kept: the request, never the records.
+KEPT_DIR = "proof-envelopes"
+KEPT_DAYS = 14.0
 _ULID = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 #: A lane result that leaves the marker for the next tick (the job did not run).
 RETRY_RESULTS = frozenset({"deferred", "waiting", "interrupted"})
@@ -188,11 +195,40 @@ def _spend_cents(items: list[dict[str, Any]]) -> int:
 
 def _wipe_old(d: Any, now: float) -> None:
     root = proofs_root(d.run_dir, d.LANE)
-    if not root.is_dir():
-        return
-    for attempt in root.iterdir():
-        if attempt.is_dir() and now - attempt.stat().st_mtime > KEEP_HOURS * 3600:
-            shutil.rmtree(attempt, ignore_errors=True)
+    if root.is_dir():
+        for attempt in root.iterdir():
+            if attempt.is_dir() and now - attempt.stat().st_mtime > KEEP_HOURS * 3600:
+                shutil.rmtree(attempt, ignore_errors=True)
+    kept = kept_dir(d.run_dir, d.LANE)
+    if kept.is_dir():
+        for env in kept.glob("*.json"):
+            if now - env.stat().st_mtime > KEPT_DAYS * 86400:
+                env.unlink(missing_ok=True)
+
+
+def kept_dir(run_dir: Path, lane: str) -> Path:
+    return Path(run_dir) / KEPT_DIR / lane
+
+
+def keep(run_dir: Path, lane: str, job_dir: Path, job_id: str) -> Path:
+    """Copy a finished job's envelope where a proof run still finds it after
+    the job dir is wiped (``source_envelope``), for ``KEPT_DAYS``. Root-only,
+    like the queue it stands in for. Refuses a job with no envelope."""
+    if not _ULID.match(job_id):
+        raise ValueError(f"{job_id!r} is not a job id")
+    src = Path(job_dir) / job_id / "envelope.json"
+    if not src.is_file():
+        raise FileNotFoundError(f"no envelope in {src.parent}")
+    dest_dir = kept_dir(run_dir, lane)
+    dest_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(dest_dir.parent, 0o700)
+    os.chmod(dest_dir, 0o700)
+    dest = dest_dir / f"{job_id}.json"
+    tmp = dest_dir / f".{job_id}.json.tmp"
+    shutil.copyfile(src, tmp)
+    os.chmod(tmp, 0o600)
+    tmp.replace(dest)
+    return dest
 
 
 def run_pending(d: Any) -> bool:
@@ -234,7 +270,8 @@ def source_envelope(d: Any, job_id: str) -> Path | None:
     The second is how SMD proves a lane before the firm next asks for it: a
     real request's own envelope, run again without filing, no ledger row and
     no allowance used (2026-10-13, the lead's proactive-proof ask)."""
-    for candidate in (d.queue / f"{job_id}.json", d.job_dir(job_id) / "envelope.json"):
+    kept = kept_dir(d.run_dir, d.LANE) / f"{job_id}.json"
+    for candidate in (d.queue / f"{job_id}.json", d.job_dir(job_id) / "envelope.json", kept):
         if candidate.is_file():
             return candidate
     return None

@@ -10,6 +10,9 @@ on the seat (``operator/bin/lane-proof.sh`` wraps it from a laptop).
                  record the lane proven, from that job's latest PASSED proof
                  run, naming the verify id of SMD reading its artifacts. The
                  daemon releases every job waiting on the lane on its next tick.
+* ``keep ID``     keep a finished job's envelope past its job dir's 72 h, for
+                 14 days, so a lane still being fixed can be proved on it
+                 again (``proof_run.keep``); the request only, never records.
 * ``revoke KEY --why ... --by NAME``
                  un-prove a lane (new jobs of that kind wait again).
 
@@ -64,6 +67,9 @@ def _lane_of(run_dir: Path, job_id: str, *, finished: bool = False) -> str | Non
         for lane, j in JOBS.items():
             if (run_dir / j / job_id / "envelope.json").is_file():
                 return lane
+        for lane in JOBS:
+            if (proof_run.kept_dir(run_dir, lane) / f"{job_id}.json").is_file():
+                return lane
     return None
 
 
@@ -95,7 +101,7 @@ def _status(run_dir: Path) -> int:
 def _dry_run(run_dir: Path, job_id: str, wait: float) -> int:
     lane = _lane_of(run_dir, job_id, finished=True)
     if lane is None:
-        print(f"no envelope for {job_id}: neither waiting in a queue nor kept in a job dir (wiped at 72 h)")
+        print(f"no envelope for {job_id}: not queued, not in a job dir (wiped at 72 h), not kept (lane-proof keep)")
         return 2
     marker = proof_run.request(run_dir / QUEUES[lane], job_id)
     print(f"proof run requested: {lane} job {job_id} ({marker.name}); the lane runs it when it is idle")
@@ -108,6 +114,16 @@ def _dry_run(run_dir: Path, job_id: str, wait: float) -> int:
                 return 0 if mine[-1].get("status") == "passed" else 1
         time.sleep(15)
     return 0
+
+
+def _keep(run_dir: Path, job_id: str) -> int:
+    for lane, j in JOBS.items():
+        if (run_dir / j / job_id / "envelope.json").is_file():
+            dest = proof_run.keep(run_dir, lane, run_dir / j, job_id)
+            print(f"{job_id}'s envelope kept for {proof_run.KEPT_DAYS:.0f} days at {dest} ({lane} lane)")
+            return 0
+    print(f"no job dir with an envelope for {job_id} (wiped at 72 h, or never finished on this seat)")
+    return 2
 
 
 def _accept(run_dir: Path, job_id: str, evidence: str, by: str) -> int:
@@ -156,6 +172,8 @@ def run(args: argparse.Namespace) -> int:
         return _status(run_dir)
     if args.action == "dry-run":
         return _dry_run(run_dir, args.target, args.wait)
+    if args.action == "keep":
+        return _keep(run_dir, args.target)
     if not args.by.strip():
         print("--by is required: who is recording this")
         return 2
@@ -166,7 +184,7 @@ def run(args: argparse.Namespace) -> int:
 
 def add(sub: Any) -> None:
     lp = sub.add_parser("lane-proof", help="the lane-proof gate: status, dry-run a held job, accept, revoke")
-    lp.add_argument("action", choices=["status", "dry-run", "accept", "revoke"])
+    lp.add_argument("action", choices=["status", "dry-run", "keep", "accept", "revoke"])
     lp.add_argument("target", nargs="?", default="", help="a job id (dry-run, accept) or a lane key (revoke)")
     lp.add_argument("--run-dir", default=DEFAULT_RUN_DIR)
     lp.add_argument("--wait", type=float, default=0.0, help="dry-run: seconds to wait for the result")
