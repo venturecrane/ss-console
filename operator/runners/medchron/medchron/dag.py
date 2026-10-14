@@ -115,7 +115,23 @@ def _slug_unit_date(ctx: Ctx) -> list[str]:
 
 STAGES: tuple[Stage, ...] = (
     # ---- $0: selection, pull, extract ------------------------------------
-    Stage("list_matter", "", lambda c: [c.job.matter_id], scope="slug", runner=_listing.run, external=True),
+    Stage(
+        "list_matter",
+        "",
+        lambda c: [c.job.matter_id],
+        scope="slug",
+        runner=_listing.run,
+        external=True,
+        exit_map={
+            _listing.DELIVERED_EXIT: (
+                REFUSED,
+                "list_matter: this matter already holds a delivered chronology, so the request is an update "
+                'into it, not a run; nothing was read or charged. Resubmit with update: {"into": '
+                '"delivered_chronology", "chronology_file_id": "<the delivered document id>"} and '
+                "selection.include_file_ids naming only the documents the delivery did not cover",
+            )
+        },
+    ),
     Stage("decide_selection", "", _slug, scope="slug", requires=("list_matter",), decision="selection"),
     Stage(
         "download",

@@ -47,3 +47,64 @@ def _error(msg: str) -> Exception:
     from .medchron_ledger import EnvelopeError
 
     return EnvelopeError(msg)
+
+
+#: The shape the agent submits instead, in the words a refusal relays. Shared by
+#: the broker's refusal below and the runner's own guard (``stages/listing.py``
+#: carries the same sentence), so the agent reads one instruction either way.
+UPDATE_SHAPE = (
+    'resubmit as an UPDATE: update: {"into": "delivered_chronology", "chronology_file_id": '
+    '"<the delivered chronology document id, when read off the matter>"}, with '
+    "selection.include_file_ids naming only the documents the delivery did not cover "
+    "(medchron_job_status with this matter_id lists covered_document_ids)"
+)
+
+
+def delivered_refusal(env: dict[str, Any], delivered_count: Any) -> str | None:
+    """A prose refusal when a RUN or a plain append (named ids, no ``update``
+    block) is asked on a matter that already holds a delivered chronology;
+    None when the envelope may queue (2026-10-13: a "full chronology" ask on
+    a client matter that already held one, queued as a full run).
+
+    Only the ledger's own delivery record is read here; the broker holds no
+    practice-management session, so a chronology delivered before the ledger
+    existed (and never backfilled) is caught by the runner's ``list_matter``
+    guard, before any paid stage, from the matter's own file listing.
+
+    ``delivered_count`` is the ledger's reader. If it raises, this refuses with
+    its own reason: whether the matter holds a delivery could not be read, and
+    "could not look" must never queue as "none"."""
+    if "update" in env:
+        return None
+    matter_id = env["matter"]["id"]
+    try:
+        count = int(delivered_count(matter_id))
+    except Exception as exc:  # noqa: BLE001 - any read failure refuses, named
+        return (
+            f"whether matter {env['matter']['number']} holds a delivered chronology could not be "
+            f"read ({type(exc).__name__}), so nothing was queued: a run on a matter that already has one "
+            "re-reads and bills the whole file. Ask again once the record reads; nothing is needed from the firm"
+        )
+    if count <= 0:
+        return None
+    kind = "an append of named documents" if (env.get("selection") or {}).get("include_file_ids") else "a full run"
+    return (
+        f"matter {env['matter']['number']} already holds a delivered chronology, so this request is an "
+        f"update into it, not {kind}; nothing was queued and nothing was charged. To bring it current, " + UPDATE_SHAPE
+    )
+
+
+def delivered_count(ledger: Any, matter_id: str) -> int:
+    """How many chronologies the ledger records as delivered on the matter,
+    record or not (``delivered_coverage`` needs a coverage record; this asks
+    only whether a delivery happened). Here rather than on ``MedchronLedger``
+    so that module stays under the size ceiling. A read failure RAISES: the
+    caller refuses on it, because "could not look" must never read as "none"."""
+    conn = ledger._connect()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM medchron_jobs WHERE matter_id=? AND state='delivered'", (str(matter_id),)
+        ).fetchone()
+    finally:
+        conn.close()
+    return int(row[0])

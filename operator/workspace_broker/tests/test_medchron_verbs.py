@@ -803,8 +803,8 @@ def test_the_refusal_says_what_is_true_of_THAT_job(verbs, state, phrase):
     assert again["accepted"] is False and phrase in again["reason"]
 
 
-def _held(v) -> str:
-    j = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+def _held(v, env=None) -> str:
+    j = call(v, "medchron_job_submit", envelope=env or envelope())["job_id"]
     call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state="running", fields={})
     call(v, "medchron_job_record", peer_uid=ROOT, job_id=j, state="held", fields={"reason": "upload: short"})
     return j
@@ -836,8 +836,15 @@ def test_a_hold_superseded_by_a_later_delivery_does_not_refuse_a_fresh_request(v
         delivered_at="2099-01-01",
         source="test backfill",
     )
+    # The hold no longer refuses as a duplicate. Since 2026-10-13 the same RUN
+    # is refused for a different reason (the matter holds a delivery, so the
+    # ask is an update), and the update it names queues.
     again = call(v, "medchron_job_submit", envelope=envelope())
-    assert again["accepted"] is True and again["job_id"] != held
+    assert again["accepted"] is False and "waiting on a decision" not in again["reason"]
+    assert '"into": "delivered_chronology"' in again["reason"]
+    upd = envelope(update={"into": "delivered_chronology"}, selection={"include_file_ids": ["d2"]})
+    queued = call(v, "medchron_job_submit", envelope=upd)
+    assert queued["accepted"] is True and queued["job_id"] != held
     assert len(list(queue.glob("*.json"))) == 2
 
 
@@ -852,8 +859,11 @@ def test_an_earlier_delivery_does_not_supersede_a_later_hold(verbs):
         delivered_at="2000-01-01",
         source="test backfill",
     )
-    _held(v)
-    r = call(v, "medchron_job_submit", envelope=envelope())
+    # On a delivered matter the ask is an update (2026-10-13), so the held
+    # attempt and the second ask are both updates.
+    upd = envelope(update={"into": "delivered_chronology"}, selection={"include_file_ids": ["d2"]})
+    _held(v, upd)
+    r = call(v, "medchron_job_submit", envelope=upd)
     assert r["accepted"] is False and "waiting on a decision" in r["reason"]
 
 
@@ -893,16 +903,24 @@ def test_provenance_does_not_make_it_a_different_job(verbs):
     assert again["accepted"] is False and again["job_id"] == first
 
 
-def test_a_finished_package_may_be_rebuilt(verbs):
-    """Terminal jobs are not duplicates: a delivered package the firm wants
-    rebuilt, or a failed one worth retrying, is a legitimate second ask. And
-    since 2026-09-16 the second row is the same WORK, so the cycle's pages
-    count it once (cents still sum: both launches spent money)."""
+def _queue_direct(v, env) -> str:
+    """A row the ledger holds without the submit verb's routing rule: a second
+    delivered RUN of the same work, which the ledger carries from before
+    2026-10-13 and which the arithmetic below must still count once."""
+    return v._db.submit(validate_envelope(env), remaining=1000)
+
+
+def test_a_finished_package_relaunched_counts_its_pages_once(verbs):
+    """Since 2026-09-16 a second delivered row of the same WORK counts its
+    pages once (cents still sum: both launches spent money). Since 2026-10-13
+    the submit verb refuses that second RUN (the matter holds a delivery), so
+    the second row is written straight to the ledger, as older rows were."""
     v, _, _ = verbs
     first = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
     _deliver(v, first, pages=10, cents=100)
-    again = call(v, "medchron_job_submit", envelope=envelope())
-    assert again["accepted"] is True and again["job_id"] != first
+    assert call(v, "medchron_job_submit", envelope=envelope())["accepted"] is False
+    again = {"job_id": _queue_direct(v, envelope())}
+    assert again["job_id"] != first
     _deliver(v, again["job_id"], pages=10, cents=100)
     a = call(v, "medchron_allowance")
     assert a["used"] == 10, "the rule before 2026-09-16 read 20 here"
@@ -952,7 +970,9 @@ def test_an_update_with_a_different_selection_is_its_own_debit(verbs):
     update = call(
         v,
         "medchron_job_submit",
-        envelope=envelope(selection={"include_file_ids": ["doc-new-1", "doc-new-2"]}),
+        envelope=envelope(
+            update={"into": "delivered_chronology"}, selection={"include_file_ids": ["doc-new-1", "doc-new-2"]}
+        ),
     )
     assert update["accepted"] is True
     _deliver(v, update["job_id"], pages=40, cents=20)
@@ -966,7 +986,7 @@ def test_a_row_without_a_work_digest_is_its_own_group(verbs):
     v, _, _ = verbs
     first = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
     _deliver(v, first, pages=100, cents=50)
-    second = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    second = _queue_direct(v, envelope())
     _deliver(v, second, pages=100, cents=50)
     assert call(v, "medchron_allowance")["used"] == 100
     import sqlite3
@@ -1263,3 +1283,101 @@ def test_a_backfill_is_root_only_and_writes_its_own_audit_type(verbs):
 
     _backfill(v, "m-gate", "900088", ["a"], ["b"], "2026-08-27")
     assert "MEDCHRON_COVERAGE_BACKFILLED" in audit_types(v._db._db_path)
+
+
+# -- routing: a matter with a delivered chronology takes an UPDATE (2026-10-13) --
+#
+# A&P, 2026-10-13: a "full chronology" ask on a client matter that already held
+# a delivered chronology, queued as a full RUN (about $150 and the whole file
+# against the allowance). The skill prose said "update"; nothing enforced it.
+
+_SHAPE = '"into": "delivered_chronology"'
+
+
+def _delivered_matter(v) -> str:
+    first = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    _deliver(v, first, pages=10, cents=100)
+    return first
+
+
+def test_a_run_on_a_matter_with_a_delivered_chronology_is_refused_with_the_update_shape(verbs):
+    v, _, queue = verbs
+    _delivered_matter(v)
+    r = call(v, "medchron_job_submit", envelope=envelope(injuries="full chronology, pre and post loss"))
+    assert r["accepted"] is False
+    assert "already holds a delivered chronology" in r["reason"] and "a full run" in r["reason"]
+    assert _SHAPE in r["reason"] and "include_file_ids" in r["reason"] and "covered_document_ids" in r["reason"]
+    assert len(list(queue.glob("*.json"))) == 1, "nothing new was queued"
+
+
+def test_a_plain_append_on_a_delivered_matter_is_refused_with_the_update_shape(verbs):
+    v, _, queue = verbs
+    _delivered_matter(v)
+    r = call(v, "medchron_job_submit", envelope=envelope(selection={"include_file_ids": ["doc-new-1"]}))
+    assert r["accepted"] is False
+    assert "an append of named documents" in r["reason"] and _SHAPE in r["reason"]
+    assert len(list(queue.glob("*.json"))) == 1
+
+
+def test_a_backfilled_laptop_delivery_also_routes_to_an_update(verbs):
+    """A chronology delivered before the ledger, registered by backfill, is a
+    delivery: a RUN on it refuses the same way."""
+    v, _, _ = verbs
+    v._db.backfill_delivered(
+        matter_id="m-1",
+        matter_number="2026-PI-102",
+        covered={"covered": ["d1"], "uncovered": [], "pulled": 1},
+        delivered_at="2026-08-01",
+        source="test backfill",
+    )
+    r = call(v, "medchron_job_submit", envelope=envelope())
+    assert r["accepted"] is False and _SHAPE in r["reason"]
+
+
+def test_the_update_it_names_is_accepted_on_the_delivered_matter(verbs):
+    v, _, _ = verbs
+    _delivered_matter(v)
+    r = call(
+        v,
+        "medchron_job_submit",
+        envelope=envelope(
+            update={"into": "delivered_chronology", "chronology_file_id": "doc-9"},
+            selection={"include_file_ids": ["doc-new-1"]},
+        ),
+    )
+    assert r["accepted"] is True
+
+
+def test_a_run_on_a_matter_without_a_delivery_is_accepted(verbs):
+    """Falsifier for over-reach: a failed or held job is not a delivery, and
+    another matter's delivery is not this one's."""
+    v, _, _ = verbs
+    other = call(
+        v, "medchron_job_submit", envelope=envelope(matter={"id": "m-9", "number": "2026-PI-9", "title": "x"})
+    )["job_id"]
+    _deliver(v, other, pages=1, cents=1)
+    failed = call(v, "medchron_job_submit", envelope=envelope())["job_id"]
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=failed, state="running", fields={})
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=failed, state="failed", fields={"reason": "x"})
+    r = call(v, "medchron_job_submit", envelope=envelope())
+    assert r["accepted"] is True
+
+
+def test_a_delivery_read_failure_refuses_with_its_own_reason(verbs, monkeypatch):
+    """A failed read must never queue as "none": a ledger that cannot say
+    whether the matter holds a delivery refuses, and says that is why."""
+    v, _, queue = verbs
+
+    import workspace_broker.medchron_verbs as verbs_mod
+
+    def broken(_ledger, _matter_id):
+        import sqlite3
+
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(verbs_mod, "delivered_count", broken)
+    r = call(v, "medchron_job_submit", envelope=envelope())
+    assert r["accepted"] is False
+    assert "could not be read" in r["reason"] and "OperationalError" in r["reason"]
+    assert "already holds" not in r["reason"]
+    assert not list(queue.glob("*.json"))
