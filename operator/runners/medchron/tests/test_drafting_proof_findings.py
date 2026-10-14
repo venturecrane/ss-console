@@ -537,3 +537,96 @@ def test_a_walled_email_named_like_a_filed_document_stays_out_and_the_document_s
     assert [w["id"] for w in out["walled"]] == ["e1"] and out["kept"] == []
     assert "Internal strategy words" in Path(out["walled"][0]["text_path"]).read_text()
     assert not any(r.get("from_email") for r in out["kept"])  # the email's attachment never became a document
+
+
+# ---- the re-proof (2026-10-14): requests the file does not bear out are removed, not looped on ----
+
+
+def test_a_case_only_finding_never_blocks_and_notes_quotes_are_not_the_document():
+    audit = (
+        "## AUDIT: DEFINITIONS\n\n"
+        '- `Def. 3, "PERSON" means "a natural person"` | DRIFTS | undefined: lower case inside its own definition\n'
+        "## AUDIT: REQUESTS FOR ADMISSION\n\n- `RFA 2: X` | DRIFTS | not stated\n"
+    )
+    rows = compose.strict_rows(audit)
+    assert len(rows) == 1 and rows[0][1].startswith("`RFA 2")
+    assert compose.blocking_findings({"quotes_not_found": 1}, "discovery_set", audit) == 2
+
+
+def test_the_quotation_check_reads_the_document_not_the_notes_under_it(tmp_path, monkeypatch):
+    from medchron.demand import draft as demand_draft
+
+    seen = []
+
+    def spy(corpus, text):
+        seen.append(text)
+        return {"quotes": [], "quotes_not_found": 0}
+
+    monkeypatch.setattr(demand_draft, "mechanical_checks", spy)
+    (tmp_path / "draft-v1.md").write_text(
+        '# A\n\nBody.\n\n=== ATTORNEY NOTES ===\n\n"an old wording the notes quote"\n'
+    )
+
+    class Firm:
+        def model(self, _s):
+            return "claude-sonnet-5"
+
+        def prompt(self, *_a):
+            return "AUDIT-PROMPT"
+
+        def skeleton(self, _c):
+            return ""
+
+    class Door:
+        def call(self, *_a, **_k):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(
+                text="- x | SUPPORTED | c\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0", stop_reason="end_turn"
+            )
+
+    compose.Drafter(tmp_path, Door(), Firm(), "discovery_set", "req", [], 1, lambda _m: None).audit(1, "", "")
+    assert seen and "old wording" not in seen[0] and "Body." in seen[0]
+
+
+# ---- requests for admission: a finding only when the record contradicts the matter (2026-10-14) ----
+
+
+def test_an_unproven_but_uncontradicted_rfa_matter_passes_without_a_repair(tmp_path, pricing):
+    """An RFA asks the other side to admit what the record does not yet prove:
+    the audit writes UNPROVEN for it, which is never a finding."""
+
+    def unproven(params):
+        if "Admit that YOU owned the PREMISES." in params["messages"][-1]["content"]:
+            return (
+                "- `RFA 1: YOU owned the PREMISES` | UNPROVEN | the digest neither states nor contradicts it\n"
+                "SUPPORTED=0 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+            )
+        return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+
+    client = AuditClient(drafts=_drafts(), audit_fn=unproven)
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    assert client.count("REPAIR-PROMPT") == 0
+    assert (r.data / "set-1" / "draft-final.md").read_text().count("Admit that YOU owned the PREMISES.") == 3
+
+
+def test_a_contradicted_rfa_matter_is_repaired_to_the_source_and_never_dropped(tmp_path, pricing):
+    bad = one_set(RFA).replace("Admit that YOU owned the PREMISES.", "Admit that Charlie Exampel cleaned the PREMISES.")
+    client = AuditClient(
+        drafts=_drafts(**{RFA: bad}),
+        audit_fn=_audit_flagging("Exampel"),
+        repair_fix=("Charlie Exampel", "Charley Example"),
+    )
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    final = (r.data / "set-1" / "draft-final.md").read_text()
+    assert final.count("Admit that Charley Example cleaned the PREMISES.") == 3  # every request kept, corrected
+
+
+def test_a_contradicted_rfa_matter_the_repairs_never_clear_fails_and_keeps_every_request(tmp_path, pricing):
+    bad = one_set(RFA).replace("Admit that YOU owned the PREMISES.", "Admit that Charlie Exampel cleaned the PREMISES.")
+    client = AuditClient(drafts=_drafts(**{RFA: bad}), audit_fn=_audit_flagging("Exampel"))
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "failed" and v.reason.startswith("audit_unrepaired: "), (v.stage, v.reason)
+    assert not (r.data / "set-1" / "draft-final.md").exists()

@@ -165,36 +165,40 @@ class Finish:
         strict = self.cls in compose.STRICT_CLASSES
         repairs = MAX_REPAIRS_STRICT if strict else MAX_REPAIRS
         result = d.audit(version, digest, corpus)
-        while compose.blocking_findings(result, self.cls) and version <= repairs:
+
+        def left() -> int:
+            return compose.blocking_findings(result, self.cls, d._read(f"audit-v{version}.md"))
+
+        unplaced = False
+        while left() and version <= repairs:
             before = (u.data / f"draft-v{version}.md").read_text(encoding="utf-8")
             after = d.repair(digest, version)
             if strict and after == before:
-                # A repair that changed nothing will not converge (a finding no
-                # section carries): never pay to audit the same text again.
-                raise DraftingFailed(
-                    f"audit_unrepaired: {compose.blocking_findings(result, self.cls)} audit finding(s) in the "
-                    f"{u.label} that a repair could not place; see audit-v{version}.md"
-                )
+                unplaced = True  # a repair that changed nothing will not converge: stop paying
+                break
             version += 1
             result = d.audit(version, digest, corpus)
         audit_md = (u.data / f"audit-v{version}.md").read_text(encoding="utf-8")
-        left = compose.blocking_findings(result, self.cls)
-        if strict and left:
-            # Applied or failed, never forwarded: a finding the audit made and
-            # the repairs did not clear is a known defect in a served paper.
-            # Counts only, never the claims or a heading (a title names the
-            # parties): a reason reaches SMD's alerts. audit-v<n>.md has the rows.
+        md = (u.data / f"draft-v{version}.md").read_text(encoding="utf-8")
+        n = left()
+        if strict and n:
+            # Applied or failed, never forwarded, and never a request dropped
+            # from the attorney's set: a finding the repairs did not clear is a
+            # known defect in a served paper. Counts only, never the claims or
+            # a heading (a title names the parties): a reason reaches SMD's
+            # alerts. audit-v<n>.md has the rows.
+            how = "that a repair could not place" if unplaced else f"that survived {repairs} repair(s)"
             raise DraftingFailed(
-                f"audit_unrepaired: {left} audit finding(s) in the {u.label} survived {repairs} repair(s); "
-                f"see audit-v{version}.md"
+                f"audit_unrepaired: {n} audit finding(s) in the {u.label} {how}; see audit-v{version}.md"
             )
         self._done(u.stage("audit"))
-        md = (u.data / f"draft-v{version}.md").read_text(encoding="utf-8")
         try:
             md, settled = settle_mod.settle(md, audit_md)
         except finalpass.Unlocated as exc:
             raise DraftingFailed(f"audit_unsettled: the final audit pass could not settle a finding: {exc}") from None
-        drifts = compose.finding_lines(audit_md, ("DRIFTS", *compose.EXTRA_VERDICTS))
+        # A strict class forwards nothing: its findings were repaired, removed with
+        # their request, or failed the job (the case-only rows code settles).
+        drifts = [] if strict else compose.finding_lines(audit_md, ("DRIFTS", *compose.EXTRA_VERDICTS))
         self._uwrite(u, "final-pass.json", {"version": version, "settled": settled, "drifts": drifts})
         self._uatomic(u, FINAL, md)
         self._done(u.stage("finalpass"))
