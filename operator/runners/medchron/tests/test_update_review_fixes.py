@@ -292,6 +292,36 @@ def test_a_garbled_text_layer_page_goes_to_vision_and_a_clean_one_does_not(tmp_p
     assert extract.vision_pages(pdf, extract.pdf_text(pdf)) == [2]
 
 
+def _ocr_page(dob: str, code_line: str, visit: str) -> str:
+    """A page in the measured profile of a real garbled OCR layer: a header
+    with a date of birth, a dated visit, a lab line with decimals, and a
+    problem list whose lines open with a code."""
+    return (
+        f"Example Medical Group\nPatient: Alpha Example DOB: {dob}, Age 45\nVisit date {visit}\n"
+        "Hemoglobin 13.1 range 12.0 - 15.5 g/dL drawn at the visit.\n"
+        "Problem list reviewed with the patient at today's visit and updated in the record.\n"
+        f"{code_line}\n"
+        "Continue the current plan and return for the next scheduled visit in three months for review.\n"
+    )
+
+
+def test_a_real_garble_profile_goes_to_vision_and_clean_pages_do_not() -> None:
+    """Calibrated on a real 111-page OCR layer (2026-10-14) that every word-shape
+    test scored clean: a DOB whose separators were lost, a date with an
+    impossible year, or an ICD-9-shaped code opening a problem line on a page
+    dated after ICD-10 began."""
+    from medchron.stages import extract
+
+    clean = _ocr_page("12/01/1980", "Z94.0 Kidney transplant status", "03/02/2026")
+    assert not extract.garbled(clean)
+    assert extract.garbled(_ocr_page("1201/1980", "Z94.0 Kidney transplant status", "03/02/2026"))
+    assert extract.garbled(_ocr_page("12/01!1980", "Z94.0 Kidney transplant status", "03/02/2026"))
+    assert extract.garbled(_ocr_page("12/01/1980", "(294.0) Kidney transplant status", "03/02/2026"))
+    assert extract.garbled(_ocr_page("12/01/1980", "Z94.0 Kidney transplant status", "03/02/2074"))
+    # An ICD-9 code on a record from the ICD-9 years is the record, not a misread.
+    assert not extract.garbled(_ocr_page("12/01/1980", "724.2 Lumbago", "05/01/2014"))
+
+
 # ---- fix 13: an identity hold survives the vision read, and a name is a name ---------
 def _identity_sr(tmp: Path, native: str, vision_text: str) -> SimpleNamespace:
     (tmp / "text").mkdir(parents=True)

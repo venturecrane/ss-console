@@ -112,6 +112,30 @@ _NONWORD = re.compile(r"[^aeiouy]{5,}", re.I)
 GARBLE_MIXED, GARBLE_NONWORD = 0.06, 0.2
 
 
+_DOB_TOKEN = re.compile(r"(?i)\b(?:D\.?O\.?B\.?|Date\s+of\s+Birth|Birth\s*Date)\s*[:#]?\s*(\d[\d/!'|\-.]{4,})")
+_CLEAN_DATE = re.compile(r"^\d{1,2}[/-]\d{1,2}[/-](?:\d{2}|\d{4})[,.;]?$")
+_LEAD_ICD9 = re.compile(r"(?m)^\s*\(?\d{3}\.\d{1,2}\)?\s+[A-Za-z]{3,}")
+_ANY_DATE = re.compile(r"(?<![\d/])(\d{1,2})/(\d{1,2})/(\d{4})(?![\d/])")
+ICD10_FROM_YEAR, FAR_YEAR = 2016, 2028
+
+
+def _ocr_tells(body: str) -> bool:
+    """Signs measured on a real garbled OCR layer (2026-10-14, 111 pages) that
+    the length and word-shape tests all scored clean:
+    * a date of birth whose separators the OCR lost or misread ("1201/1980",
+      "5/15!1983"): the client's own DOB then reads as another person's;
+    * a diagnosis line that opens with an ICD-9-shaped numeric code ("(294.0)
+      ...") on a page dated 2016 or later, when ICD-10 had replaced ICD-9: an
+      ICD-10 code whose letter the OCR read as a digit (Z94.0 as 294.0);
+    * a date whose year is impossible (later than FAR_YEAR or three digits)."""
+    if any(not _CLEAN_DATE.match(t) for t in _DOB_TOKEN.findall(body)):
+        return True
+    years = [int(y) for _, _, y in _ANY_DATE.findall(body)]
+    if any(y > FAR_YEAR for y in years) or re.search(r"(?<![\d/])\d{1,2}/\d{1,2}/\d{3}(?![\d/])", body):
+        return True
+    return bool(_LEAD_ICD9.search(body)) and any(y >= ICD10_FROM_YEAR for y in years)
+
+
 def garbled(text: str) -> bool:
     """A text layer too damaged to trust, though long enough: an OCR layer
     that confuses digits and letters. Three measurable signals, any one:
@@ -121,6 +145,8 @@ def garbled(text: str) -> bool:
     row or no vowel at all. A clean typed page scores near zero on each."""
     body = _HEADER_LINE.sub("", text or "")
     if any(re.search(r"[OolIS]", d) for d in _MISREAD_DATE.findall(body)):
+        return True
+    if _ocr_tells(body):
         return True
     toks = [t.strip(".,;:()[]") for t in body.split()]
     toks = [t for t in toks if len(t) >= 3]
