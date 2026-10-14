@@ -23,6 +23,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from ..update import medlegal as ML
 from .base import StageRun, read_jsonl
 
 GLYPH_RUN = re.compile(r"(?:/\d+ ?){4,}")
@@ -219,6 +220,21 @@ def _extract_one(d: Path, r: dict[str, Any], scans: list[dict[str, Any]]) -> dic
     return rec
 
 
+def first_page_only(rec: dict[str, Any]) -> bool:
+    """On an update, a medical-legal report named as one (``update/
+    medlegal``) is reviewed and never itemized, so vision reads its first page
+    only: enough to classify it, and no spend on pages nothing will compose.
+    False when nothing of it is left for vision (a text-layer file whose
+    first page already has text)."""
+    if rec.get("image") or not ML.by_name(str(rec.get("name") or "")):
+        return True
+    if rec.get("scan"):
+        rec["vision_pages"] = [1]
+        return True
+    rec["vision_pages"] = [p for p in rec.get("vision_pages") or [] if p == 1]
+    return bool(rec["vision_pages"])
+
+
 def run(sr: StageRun) -> int:
     d = sr.slug_dir
     (d / "text").mkdir(parents=True, exist_ok=True)
@@ -229,6 +245,8 @@ def run(sr: StageRun) -> int:
             out.write(json.dumps(_extract_one(d, r, scans)) + "\n")
             if i % 40 == 0:
                 sr.log(f"{i}/{len(ok)}")
+    if sr.job.update is not None:
+        scans = [rec for rec in scans if first_page_only(rec)]
     (d / "scan_queue.json").write_text(json.dumps(scans, indent=1), encoding="utf-8")
     sr.log(f"DONE {len(ok)} files, {len(scans)} to scan queue, {dupes} byte-duplicates skipped")
     return 0
