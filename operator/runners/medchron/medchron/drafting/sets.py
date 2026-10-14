@@ -285,22 +285,24 @@ def definition_texts(doc: str) -> dict[str, tuple[int, int, str]]:
     return out
 
 
-def head_lines(doc: str) -> tuple[int, list[str]]:
-    """The attorney block: the lines above the court's name, as (offset where
-    the court line starts, the block's non-empty lines). (-1, []) when the
-    document names no court, or when a heading or a set's title sits above it
-    (that is not an attorney block, and it is never rewritten)."""
-    pos = 0
+def head_lines(doc: str) -> tuple[int, int, list[str]]:
+    """The attorney block: the lines just above the court's name, as (offset
+    of the block's first line, offset of the court line, the block's
+    non-empty lines). A heading, a table row or a set's title above the court
+    line is not part of it and is never rewritten (a compose on 2026-10-13
+    put the set's title above the attorney block). (-1, -1, []) when the
+    document names no court."""
+    pos, start = 0, 0
     lines: list[str] = []
     for ln in doc.splitlines(keepends=True):
         if _COURT.search(ln):
-            if any(x.lstrip().startswith("#") or _SET_NOUN.search(x) or "|" in x for x in lines):
-                return -1, []
-            return pos, lines
-        if ln.strip():
-            lines.append(ln.rstrip("\n"))
+            return start, pos, lines
         pos += len(ln)
-    return -1, []
+        if ln.lstrip().startswith("#") or _SET_NOUN.search(ln) or "|" in ln:
+            start, lines = pos, []  # the block starts after this line
+        elif ln.strip():
+            lines.append(ln.rstrip("\n"))
+    return -1, -1, []
 
 
 def signature(doc: str) -> tuple[int, int]:
@@ -318,7 +320,7 @@ def authored_head(doc: str, authored: list[str]) -> tuple[str, list[str]]:
     """The attorney block printed exactly as the firm authored it: the lines
     above the "Attorneys for" line replaced by the authored lines when they
     differ (in words, ignoring markup)."""
-    at, lines = head_lines(doc)
+    start, at, lines = head_lines(doc)
     if at < 0 or not authored:
         return doc, []
     cut = next((i for i, ln in enumerate(lines) if _ATTORNEYS_FOR.match(_plain(ln))), None)
@@ -328,7 +330,7 @@ def authored_head(doc: str, authored: list[str]) -> tuple[str, list[str]]:
         return doc, []
     rest = lines[cut:]
     head = "\n".join([*authored, *rest]) + "\n\n"
-    return head + doc[at:], ["the attorney block was printed as the firm authors it"]
+    return doc[:start] + head + doc[at:], ["the attorney block was printed as the firm authors it"]
 
 
 def align(doc: str, canon: str, canon_label: str) -> tuple[str, list[str]]:
@@ -336,10 +338,10 @@ def align(doc: str, canon: str, canon_label: str) -> tuple[str, list[str]]:
     definition worded as ``canon`` words them. Returns the document and one
     line per change."""
     notes: list[str] = []
-    at, lines = head_lines(doc)
-    cat, clines = head_lines(canon)
-    if at >= 0 and cat >= 0 and [_plain(x) for x in lines] != [_plain(x) for x in clines]:
-        doc = canon[:cat] + doc[at:]
+    start, at, lines = head_lines(doc)
+    cstart, cat, clines = head_lines(canon)
+    if at >= 0 and cat >= 0 and clines and [_plain(x) for x in lines] != [_plain(x) for x in clines]:
+        doc = doc[:start] + canon[cstart:cat] + doc[at:]
         notes.append(f"attorney block worded as in the {canon_label}")
     mine, theirs = definition_texts(doc), definition_texts(canon)
     for term in sorted(set(mine) & set(theirs), key=lambda t: -mine[t][0]):
@@ -360,7 +362,7 @@ def align(doc: str, canon: str, canon_label: str) -> tuple[str, list[str]]:
 def front_matter(canon: str) -> str:
     """What a later set's compose is told of the first: its attorney block,
     Definitions and signature block, verbatim."""
-    at, lines = head_lines(canon)
+    _start, _at, lines = head_lines(canon)
     got = _defs_section(canon)
     s, e = signature(canon)
     parts = []
@@ -403,3 +405,18 @@ def compound_markers(doc: str) -> tuple[str, list[str]]:
 
     doc = _COMPOUND.sub(sub, doc)
     return doc, [f"compound-request marker names this set's own rule ({n} marker(s))"] if n else []
+
+
+# ---- the Dated line --------------------------------------------------------------------
+
+_DATED = re.compile(r"(?m)^(\W*Dated:)[ \t]*([^\n]*)$")
+
+
+def dated(doc: str, when: str) -> tuple[str, list[str]]:
+    """The signature block's Dated line carries the draft's date, the same in
+    every set of one request (the skeleton's ``{{FILL: date | today}}``). On
+    2026-10-13 two sets carried a NOT IN RECORD marker there and one a blank."""
+    m = _DATED.search(doc)
+    if not m or m.group(2).strip().strip("`*") == when:
+        return doc, []
+    return doc[: m.end(1)] + " " + when + doc[m.end(2) :], [f"the Dated line carries the draft's date ({when})"]

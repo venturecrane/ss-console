@@ -322,11 +322,25 @@ def prior_of_kind(md: str, kind: str, digest: str, corpus: Mapping[str, str] | N
     return out
 
 
-def _fill_decl(text: str, d: DeclDecision, doc: str = "") -> str:
-    """The declaration's code-filled slots: the counts, and the two parties as
-    the set's own identification block names them (the set took them from the
-    operative pleading). A party the block does not name stays a FILL."""
+def declarant_name(block_lines: list[str] | None) -> str | None:
+    """The attorney's name from the firm's authored attorney block: its first
+    line without the State Bar number or the "Esq." (the declaration is the
+    attorney's, and the firm authored whose block this set carries)."""
+    if not block_lines:
+        return None
+    name = re.sub(r"\(\s*SBN[^)]*\)", "", block_lines[0])
+    name = re.sub(r",?\s*Esq\.?", "", name).strip(" ,`*")
+    return name or None
+
+
+def _fill_decl(text: str, d: DeclDecision, doc: str = "", declarant: str | None = None) -> str:
+    """The declaration's code-filled slots: the counts, the two parties as the
+    set's own identification block names them (the set took them from the
+    operative pleading), and the declarant when the firm authored the
+    attorney block. A party the block does not name stays a FILL."""
     text = COMMENT.sub("", text).strip()
+    if declarant:
+        text = re.sub(r"`?\{\{ATTORNEY: declarant's full name\}\}`?", lambda _m: declarant, text)
     for role, slot in (("PROPOUNDING PARTY", "propounding"), ("RESPONDING PARTY", "responding")):
         who = party(doc, role)
         if who:
@@ -396,7 +410,12 @@ def strip_attachments(doc: str) -> tuple[str, bool]:
 
 
 def attach(
-    doc: str, cls: str, firm: Any, digest: str, corpus: Mapping[str, str] | None = None
+    doc: str,
+    cls: str,
+    firm: Any,
+    digest: str,
+    corpus: Mapping[str, str] | None = None,
+    declarant: str | None = None,
 ) -> tuple[str, list[str]]:
     """The served attachments, appended by the job in the order the firm serves
     them: the document, then the section 2030.050 declaration (a special
@@ -414,7 +433,7 @@ def attach(
     if cls == "discovery_set" and special_count(doc) > 0:
         d = decl_decision(doc, digest, corpus)
         if d.attach:
-            parts.append(_fill_decl(firm.attachment("decl_2030_050"), d, doc))
+            parts.append(_fill_decl(firm.attachment("decl_2030_050"), d, doc, declarant))
             why = (
                 f"{d.total} special interrogatories to this party ({d.this_set} in this set, {d.prior_special} "
                 f"before in served sets: {'; '.join(d.served) or 'the file shows none served'})"
