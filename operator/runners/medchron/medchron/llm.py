@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .config import FirmConfig
-from .deadline import STALL_S, CallDeadlineError, bounded_call, classify_error, deadline_for
+from .deadline import NETWORK_RETRY_S, STALL_S, RetryClock, bounded_call, deadline_for, retrying_call
 from .ledger import Ledger, count_pages
 from .limits import LimitHold
 
@@ -309,6 +309,16 @@ class Doorway:
     #: test can shrink them; production uses the stated defaults.
     deadline: Callable[[int], float] = deadline_for
     stall_s: float | None = STALL_S
+    #: Wall-clock seconds one call keeps retrying through connection errors,
+    #: 429s and 5xx (deadline.RetryClock); the firm's `levers.network_retry_s`.
+    retry_budget_s: float = NETWORK_RETRY_S
+    #: The clock and the wait, injectable so a test can run a ten-minute retry
+    #: budget in no time.
+    clock: Callable[[], float] = time.monotonic
+    sleep: Callable[[float], None] = time.sleep
+    #: One line per call that ran out of network retries: what the driver
+    #: reads to call a failed stage a network failure (driver._transient).
+    gave_up: list[str] = field(default_factory=list)
 
     @classmethod
     def from_config(
@@ -325,6 +335,7 @@ class Doorway:
             ledger=ledger,
             caching=bool(cfg.get("levers", "cache", True)),
             batch_stages=frozenset(cfg.batch_stages) - NEVER_BATCHED,
+            retry_budget_s=max(NETWORK_RETRY_S, float(cfg.get("levers", "network_retry_s", NETWORK_RETRY_S))),
             client=client,
             log=log,
             before_request=before_request,
@@ -359,9 +370,11 @@ class Doorway:
         timeout: float | None = None,
         custom_id: str | None = None,
     ) -> Result:
-        """One interactive call. Retries transport/429/5xx and a blown deadline;
-        re-raises 4xx at once. Always writes a ledger row, so a paid call is
-        never invisible.
+        """One interactive call. Retries a connection error, 429 or 5xx with
+        exponential backoff and jitter for `retry_budget_s` of wall clock, a
+        blown deadline (or an unrecognised error) up to `attempts` times, and
+        re-raises a 400, an auth failure or a refusal at once. Always writes a
+        ledger row, so a paid call is never invisible.
 
         `timeout` is the SDK's, and bounds only the gap between two bytes (see
         deadline.py). Every attempt is ALSO held to `self.deadline(max_tokens)`
@@ -385,33 +398,27 @@ class Doorway:
         e = params.get("output_config", {}).get("effort")
         client = self._client(timeout)
         limit = self.deadline(max_tokens)
-        last: BaseException | None = None
-        for n in range(attempts):
-            try:
-                msg = bounded_call(client, params, stream=stream, deadline_s=limit, stall_s=self.stall_s)
-            except Exception as exc:
-                last = exc
-                if classify_error(exc) == "raise":
-                    raise
-                if isinstance(exc, CallDeadlineError):
-                    self.log(f"{stage}: attempt {n + 1}/{attempts}: {exc}")
-                if n + 1 < attempts:
-                    time.sleep(backoff * (n + 1))
-                continue
-            self.ledger.record(
-                stage,
-                model,
-                msg.usage,
-                effort=e,
-                cache=bool(markers),
-                batch=False,
-                pages=count_pages(messages),
-                custom_id=custom_id,
-            )
-            return make_result(msg, params["messages"])
-        if isinstance(last, CallDeadlineError):
-            raise CallDeadlineError(f"{stage}: {last}, on all {attempts} attempts") from last
-        raise last if last else DoorwayError(f"{stage}: exhausted attempts")
+        clock = RetryClock(attempts=attempts, backoff=backoff, budget_s=self.retry_budget_s)
+        msg = retrying_call(
+            lambda: bounded_call(client, params, stream=stream, deadline_s=limit, stall_s=self.stall_s),
+            clock,
+            stage=stage,
+            log=self.log,
+            now=self.clock,
+            sleep=self.sleep,
+            gave_up=self.gave_up,
+        )
+        self.ledger.record(
+            stage,
+            model,
+            msg.usage,
+            effort=e,
+            cache=bool(markers),
+            batch=False,
+            pages=count_pages(messages),
+            custom_id=custom_id,
+        )
+        return make_result(msg, params["messages"])
 
     # ---- batch -----------------------------------------------------------
     def batch_call(
