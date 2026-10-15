@@ -14,6 +14,15 @@ is derived from it rather than guessed:
 YIELD_CEILING is the largest output/input byte ratio a healthy part has
 produced (0.85, measured on a repair tail), YIELD_MARGIN keeps 20% of the
 window in hand, and 4 chars per token is the conservative English rate.
+
+Page context. A record does not stop at a page break: a negative serology
+was composed POSITIVE because its "No" sat at the foot of one page and the
+result at the head of the next, and the next page was all compose saw. Where
+a page's neighbour is NOT beside it in the compose input (a file split into
+parts here, a page the update lane does not read), the neighbour's last or
+first CONTEXT_LINES lines ride along as a delimited ``context_block``,
+outside every page's own segment, so a citation still names the page the
+fact is printed on (prompts/map-system.md "PAGE CONTEXT").
 """
 
 from __future__ import annotations
@@ -33,6 +42,61 @@ PAGE_MARK = re.compile(r"\[p\.\d+\]")
 # healthy parts yield 0.28-0.85 of their source bytes; an emptied part yielded
 # 0.0009. 0.02 sits an order of magnitude below every real part.
 MIN_YIELD = 0.02
+
+
+#: Lines of a neighbouring page carried as context, and their character cap
+#: (a page with no line breaks is one line).
+CONTEXT_LINES = 15
+CONTEXT_CHARS = 2000
+
+
+def context_block(text: str, page: int | None, before: bool) -> str:
+    """The last (``before``) or first CONTEXT_LINES lines of a neighbouring
+    page, delimited and labelled with that page, or '' when it has none."""
+    lines = [ln for ln in (text or "").splitlines() if ln.strip()]
+    if not lines:
+        return ""
+    body = "\n".join(lines[-CONTEXT_LINES:] if before else lines[:CONTEXT_LINES])
+    body = body[-CONTEXT_CHARS:] if before else body[:CONTEXT_CHARS]
+    where = "the foot of the page before" if before else "the head of the page after"
+    if page is not None:
+        where += f", p.{page}"
+    return f"[context, {where}: for reading only; never cite it or compose from it]\n{body}\n[end context]\n"
+
+
+def _first_page(text: str) -> tuple[int | None, str]:
+    """(number, text) of the first page-marked page in `text`."""
+    marks = list(PAGE_MARK.finditer(text))
+    if not marks:
+        return None, text
+    end = marks[1].start() if len(marks) > 1 else len(text)
+    return int(marks[0].group()[3:-1]), text[marks[0].end() : end]
+
+
+def _last_page(text: str) -> tuple[int | None, str]:
+    """(number, text) of the last page-marked page in `text`."""
+    marks = list(PAGE_MARK.finditer(text))
+    if not marks:
+        return None, text
+    return int(marks[-1].group()[3:-1]), text[marks[-1].end() :]
+
+
+def _with_part_context(parts: list[str]) -> list[str]:
+    """Each part of a file split at page marks, with the foot of the page
+    before it and the head of the page after it as context."""
+    out = []
+    for k, p in enumerate(parts):
+        pre = post = ""
+        if k > 0:
+            n, text = _last_page(parts[k - 1])
+            pre = context_block(text, n, before=True)
+        if k + 1 < len(parts):
+            n, text = _first_page(parts[k + 1])
+            post = context_block(text, n, before=False)
+        if post and not p.endswith("\n"):
+            p += "\n"
+        out.append(pre + p + post)
+    return out
 
 
 def chunk_size(max_tokens: int) -> int:
@@ -64,7 +128,7 @@ def build_chunks(files: list[dict[str, Any]], chunk: int) -> list[str]:
                 cut = min(end, len(txt))
             parts.append(txt[start:cut])
             start = cut
-        for k, p in enumerate(parts, 1):
+        for k, p in enumerate(_with_part_context(parts), 1):
             pieces.append((f"=== FILE: {name} [part {k}/{len(parts)}] ===", p))
     chunks: list[str] = []
     cur: list[str] = []

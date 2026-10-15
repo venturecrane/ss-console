@@ -353,6 +353,9 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "NEGOTIATION_JOB_DELIVERED",
         "NEGOTIATION_JOB_FAILED",
         "NEGOTIATION_JOB_RESUME_REQUESTED",
+        # An SMD note: root recorded approved words for the Operator to send a
+        # firm colleague in her own thread (operator/workspace_broker/note_verbs.py).
+        "NOTE_JOB_RECORDED",
         # Case-manager casework (docs/specs/operator/case-manager-deadline-work.md):
         # a verified person approved or held a numbered line about the firm's
         # task list, or the Operator closed its own task on the record's evidence.

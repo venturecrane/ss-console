@@ -250,6 +250,8 @@ class LitigationLane(DraftingLane):
         fields["files"] = [f for f in v.get("files") or [] if isinstance(f, dict)]
         if isinstance(v.get("counts"), dict):  # the deadlines report's named counts (integers only)
             fields["counts"] = {str(k): int(n) for k, n in v["counts"].items() if isinstance(n, int)}
+        if isinstance(v.get("writes"), list):  # a reassignment's writes, onto the job's audit row
+            fields["writes"] = [w for w in v["writes"] if isinstance(w, dict)]
         if v.get("reason"):
             fields["reason"] = str(v["reason"])[:500]
         state, fields = proof_watch.settle(self, job_id, [v], state, fields)
@@ -278,6 +280,15 @@ class LitigationLane(DraftingLane):
         )
         if env.get("report") == "deadlines":
             return self._deadlines_wake(job_id, state, fields, env, trig, stage)
+        if env.get("report") == "reassign":
+            from .litigation.reassign import wake as reassign_wake
+
+            verdict = read_verdict(self.job_dir(job_id), "") or {}
+            return reassign_wake.compose(
+                job_id=job_id, skill=SKILL, state=state, fields=fields, env=env, trig=trig, stage=stage,
+                detail=verdict.get("reassign") or {},
+                hold_line=proof_holds.wake_line("litigation", fields.get("reason")) if state == "held" else None,
+            )  # fmt: skip
         lines = [
             f"Run the {SKILL} skill's DELIVER mode for litigation job {job_id}.",
             "Kind: litigation.",

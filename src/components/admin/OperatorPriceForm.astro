@@ -1,21 +1,26 @@
 ---
 import { formatMoney } from '../../lib/admin/client-hub'
 import { cardProcessingFeeCents } from '../../lib/pricing/card-fee'
-import type { OperatorPaymentMethod } from '../../lib/db/services'
+import { OPERATOR_LABEL_MAX, type OperatorPaymentMethod } from '../../lib/db/services'
 
 /**
- * The Operator's commercial record on the client hub: the authored monthly
- * price (ADR 0046) and the rail it is collected by (migration 0113). Card
- * adds the 3% processing fee line (agreement §3.8) to checkout and to every
- * monthly invoice; ACH carries no fee. Both post to the operator-price route.
+ * One Operator seat's commercial record on the client hub: the authored
+ * monthly price (ADR 0046), the rail it is collected by (migration 0113) and
+ * the client-visible line name (migration 0126). Card adds the 3% processing
+ * fee line (agreement §3.8) to checkout and to every monthly invoice; ACH
+ * carries no fee. Posts to the operator-price route WITH the seat's instance,
+ * so pricing one seat never touches another seat of the same client.
  */
 interface Props {
   entityId: string
+  /** The seat's instance slug (its customer_slug). */
+  instance: string
   operatorPrice: number | null
   operatorPaymentRail: OperatorPaymentMethod
+  operatorLabel: string | null
 }
 
-const { entityId, operatorPrice, operatorPaymentRail } = Astro.props
+const { entityId, instance, operatorPrice, operatorPaymentRail, operatorLabel } = Astro.props
 ---
 
 <div
@@ -38,8 +43,9 @@ const { entityId, operatorPrice, operatorPaymentRail } = Astro.props
 <form
   method="POST"
   action={`/api/admin/clients/${entityId}/operator-price`}
-  class="mt-2.5 flex items-center gap-2"
+  class="mt-2.5 flex flex-wrap items-center gap-2"
 >
+  <input type="hidden" name="instance" value={instance} />
   <span class="font-mono text-sm text-[color:var(--ss-color-text-secondary)]">$</span>
   <input
     type="number"
@@ -48,6 +54,7 @@ const { entityId, operatorPrice, operatorPaymentRail } = Astro.props
     step="1"
     value={operatorPrice ?? ''}
     placeholder="0"
+    aria-label="Monthly price"
     class="w-28 border border-[color:var(--ss-color-border)] px-2 py-1 font-mono text-sm"
   />
   <span class="font-mono text-[11px] text-[color:var(--ss-color-text-muted)]"> / mo </span>
@@ -64,6 +71,19 @@ const { entityId, operatorPrice, operatorPaymentRail } = Astro.props
     <option value="ach" selected={operatorPaymentRail === 'ach'}> ACH, no fee </option>
     <option value="card" selected={operatorPaymentRail === 'card'}> Card, +3% fee </option>
   </select>
+  {
+    /* The line name the client reads on Billing and Stripe prints on every
+      invoice (migration 0126). Empty means the plain "Operator". */
+  }
+  <input
+    type="text"
+    name="label"
+    maxlength={OPERATOR_LABEL_MAX}
+    value={operatorLabel ?? ''}
+    placeholder="Line name (optional)"
+    aria-label="Line name the client sees"
+    class="w-48 border border-[color:var(--ss-color-border)] px-2 py-1 font-mono text-sm"
+  />
   <button
     type="submit"
     class="border border-[color:var(--ss-color-primary)] px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-primary)]"

@@ -79,6 +79,18 @@ describe('medical-chronology-maintainer: an update goes into the delivered chron
     expect(update).toContain('**Name medical records only.**')
   })
 
+  it("names the firm's uncited Exhibit N- files and medical-legal reports (2026-10-13)", () => {
+    const flat = update.replace(/\s+/g, ' ')
+    expect(flat).toContain(
+      'a file named "Exhibit N- ..." in the delivered chronology\'s folder that the delivered Exhibit List does not name is a record the firm added there, so name it'
+    )
+    expect(flat).toContain(
+      'life care plans, future care assessments, IMEs, record reviews and expert reports are named like any record'
+    )
+    expect(flat).toMatch(/lists them in Records Reviewed as reviewed and not itemized/)
+    expect(flat).not.toMatch(/leave out[^.]*(expert|life-care) reports/)
+  })
+
   it('says the routing is enforced and how to self-correct on the refusal (2026-10-13)', () => {
     expect(run).toContain('**The broker and the runner enforce this, not only this text.**')
     expect(run).toContain('resubmit as the UPDATE below in the same turn')

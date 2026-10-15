@@ -22,6 +22,8 @@ from typing import Any
 
 import yaml
 
+from .deadline import NETWORK_RETRY_S
+
 ENV_PATH = "MEDCHRON_FIRM_CONFIG"
 DEFAULT_PATH = "/var/lib/smd-config/medchron-firm.yaml"
 
@@ -99,6 +101,10 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
         # logs every run; `hold` also refuses to ship when a billed visit has a
         # record page and no chronology entry. Absent means report.
         "dos_check": ("str", False),
+        # Seconds the doorway keeps retrying a model call through connection
+        # errors, 429s and 5xx (llm.Doorway.retry_budget_s). Absent means
+        # deadline.NETWORK_RETRY_S; never less than that floor.
+        "network_retry_s": ("float", False),
     },
     "chronology": {
         "treatment_gap_days": ("int", True),
@@ -261,12 +267,16 @@ def _model_tier_checks(data: dict[str, Any]) -> list[str]:
     # The audit forces its verdict tool (audit/verify.py TOOL_CHOICE); these
     # models answer a forced tool_choice with HTTP 400, so the audit - the gate
     # every chronology passes - would fail on every claim.
-    audit_model = str(tiers.get("audit") or "")
-    if any(audit_model.startswith(m) for m in NO_FORCED_TOOL_MODELS):
-        out.append(
-            f"models.tiers.audit: {audit_model} rejects a forced tool_choice, which the audit's "
-            "verdict call requires; keep the audit tier on a model that accepts it"
-        )
+    # `verify` is OPTIONAL: the grader of the update finisher's own sentences
+    # (stages/update_review.py); absent, the audit tier. It is an audit verdict
+    # call, so it carries the audit tier's forced-tool rule.
+    for tier in ("audit", "verify"):
+        model = str(tiers.get(tier) or "")
+        if any(model.startswith(m) for m in NO_FORCED_TOOL_MODELS):
+            out.append(
+                f"models.tiers.{tier}: {model} rejects a forced tool_choice, which the audit's "
+                f"verdict call requires; keep the {tier} tier on a model that accepts it"
+            )
     return out
 
 
@@ -282,6 +292,9 @@ def _semantic_checks(data: dict[str, Any]) -> list[str]:
         out.append(f"levers.audit_mode: expected one of {sorted(AUDIT_MODES)}")
     if levers.get("dos_check") not in (None, *DOS_CHECK_MODES):
         out.append(f"levers.dos_check: expected one of {sorted(DOS_CHECK_MODES)}")
+    retry = levers.get("network_retry_s")
+    if isinstance(retry, (int, float)) and not isinstance(retry, bool) and retry < NETWORK_RETRY_S:
+        out.append(f"levers.network_retry_s: at least {NETWORK_RETRY_S:.0f} (a network blip must not end a job)")
     chron = data.get("chronology") or {}
     if chron.get("pre_incident_history") not in (None, *PRE_INCIDENT_POLICIES):
         out.append(f"chronology.pre_incident_history: expected one of {sorted(PRE_INCIDENT_POLICIES)}")

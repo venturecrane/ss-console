@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import docx_style as S, timeline
+from ..update.repeats import ADDITIONAL
 from .base import StageRun
 from .group import Canon
 
@@ -232,6 +233,7 @@ def render_text(text: str, dst: Path, *, cfg: Any, incident_date: str, log: Call
     out_dir = dst.parent
     font = str(cfg.get("format", "font") or "Calibri")
     headings = {str(h) for h in (cfg.get("format", "subsections") or [])} | {"Discharge / Discontinuation in Care"}
+    headings.add(ADDITIONAL)  # an update's "Additional findings" row (``update/repeats.py``)
     title = text.splitlines()[0].strip()
     prov_rows = [
         ln

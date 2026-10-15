@@ -40,6 +40,11 @@ const ERROR_NOTICES: Record<string, string> = {
   bad_billing_action: 'Unknown billing action.',
   billing_server: 'Billing request failed. Check the logs.',
   bad_price: 'Enter a whole-dollar monthly price.',
+  bad_payment_method: 'Pick ACH or card as the payment method.',
+  bad_label: 'Keep the line name to 60 characters or fewer.',
+  no_seat: "That Operator seat is not one of this client's live seats.",
+  seat_required:
+    "This client has more than one Operator seat. Use the controls on the seat's own card.",
   invalid_type: 'Unknown invoice type.',
   invalid_amount: 'Enter an invoice amount greater than zero.',
   missing: 'The invoice form was incomplete.',

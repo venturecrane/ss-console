@@ -20,7 +20,10 @@ would before it was filed. This stage does, in two halves:
   work is the defect class this review must not become.
 * **A model** reads the chronology with its own adversarial prompt
   (``prompts/review-system.md``), on the firm's ``review`` tier when the
-  config names one, else the ``audit`` tier, never the composer's. Its
+  config names one, else its strongest (``judgment``) tier. It reads every
+  character, in parts when the text is long, never a truncated head; an
+  update's review reads what the update added in full plus a sample of the
+  delivered entries. Its
   findings hold only on checks 1 to 4 (``HOLD_CHECKS``, the closed list in
   ``proof/review.py``).
 
@@ -53,7 +56,13 @@ from ..proof import checks, review
 from .base import StageRun
 
 HOLD_CHECKS = (1, 2, 3, 4)
-REVIEW_TEXT_MAX_CHARS = 400_000
+# Per model call: the text is split into parts, never cut. A part is sized so
+# its findings table and VERDICT fit the call's output budget: 400,000 (about
+# 138,000 tokens, 422 entries) ran out of output before the verdict, twice,
+# 2026-10-14. A part that still runs out is split again (``_review_part``).
+REVIEW_TEXT_MAX_CHARS = 100_000
+REVIEW_PART_MAX_ENTRIES = 60
+REVIEW_SPLIT_DEPTH = 4
 INPUT_SHA = "review-input.sha"
 REDO_SEEN = "review-redo.seen"
 NOTES_TEMPLATE = "{CLIENT} - Chronology Review Notes {MM-DD-YY}.docx"
@@ -184,20 +193,102 @@ def code_findings(
 
 
 def _model(sr: StageRun) -> str:
+    """The firm's ``review`` tier, else its strongest (``judgment``): the
+    review is the last reader before the attorney (it once ran on the audit
+    tier, 2026-10-13)."""
     tiers = sr.cfg.get("models", "tiers") or {}
-    return str(tiers.get("review") or llm.model_for(sr.cfg, "audit"))
+    return str(tiers.get("review") or llm.model_for(sr.cfg, "judgment"))
 
 
-def _user(sr: StageRun, chron: str, names: list[str], found: list[review.Finding]) -> str:
+def _lines(text: str, limit: int) -> list[str]:
+    """`text` in pieces of at most `limit` characters, cut at line breaks."""
+    out: list[str] = []
+    cur = ""
+    for line in text.splitlines(keepends=True):
+        while len(line) > limit:
+            if cur:
+                out.append(cur)
+                cur = ""
+            out.append(line[:limit])
+            line = line[limit:]
+        if len(cur) + len(line) > limit:
+            out.append(cur)
+            cur = ""
+        cur += line
+    return [*out, cur] if cur else out
+
+
+def _blocks(text: str) -> list[str]:
+    """`text` as entry blocks: a new block starts at each dated line, so a part
+    boundary never falls inside a chronology entry."""
+    out: list[str] = []
+    cur = ""
+    for line in text.splitlines(keepends=True):
+        if cur and _DATE_HEAD.match(line):
+            out.append(cur)
+            cur = ""
+        cur += line
+    return [*out, cur] if cur else out
+
+
+def chunks(text: str, limit: int = REVIEW_TEXT_MAX_CHARS) -> list[str]:
+    """`text` in pieces of at most `limit` characters and at most
+    REVIEW_PART_MAX_ENTRIES entries, cut between entries (inside one only when
+    a single entry is over `limit`, then at line breaks), that join back to
+    exactly `text`: nothing is truncated."""
+    out: list[str] = []
+    cur, n = "", 0
+    for b in _blocks(text):
+        if cur and (len(cur) + len(b) > limit or n >= REVIEW_PART_MAX_ENTRIES):
+            out.append(cur)
+            cur, n = "", 0
+        if len(b) > limit:
+            out += _lines(b, limit)
+            continue
+        cur += b
+        n += 1
+    return [*out, cur] if cur else out
+
+
+def update_material(rd: Path, sample: int = 8) -> str | None:
+    """For an update, what the update ADDED, in full: the added entries, the
+    added prior history, and every added Diagnostic Highlights, Exhibit List
+    and Records Reviewed line; then a spot sample of delivered entries (the
+    delivered text is proven carried by the update's proofs). None for a run
+    that is not an update."""
+    from ..update import body as B
+    from ..update.proofs import added_lines
+
+    ud = rd / "update"
+    if not ((ud / "base.md").is_file() and (ud / "updated-chronology.md").is_file()):
+        return None
+    base, upd = (ud / "base.md").read_text(encoding="utf-8"), (ud / "updated-chronology.md").read_text(encoding="utf-8")
+    bpre, bents = B.entries_of(base)
+    upre, uents = B.entries_of(upd)
+    added = added_lines(bents, uents)
+    rest = [ln for ln in added_lines(base.splitlines(), upd.splitlines()) if ln.strip() and not B.DATED.match(ln)]
+    step = max(1, len(bents) // sample)
+    parts = [
+        "ADDED ENTRIES:",
+        *added,
+        "",
+        "OTHER ADDED LINES (prior history, Diagnostic Highlights, Exhibit List, Records Reviewed):",
+        *[ln for ln in rest if not any(ln in e for e in added)],
+        "",
+        "DELIVERED ENTRIES, A SPOT SAMPLE:",
+        *bents[::step][:sample],
+    ]
+    return "\n".join(parts)
+
+
+def _user(
+    sr: StageRun, chron: str, names: list[str], found: list[review.Finding], head: str = "", part: str = ""
+) -> str:
     others = [u.client_name for u in sr.job.units if u.unit != sr.unit.unit]
     text = chron
-    head = "CHRONOLOGY, as the attorney will read it"
-    if len(chron) > REVIEW_TEXT_MAX_CHARS:
-        text = chron[:REVIEW_TEXT_MAX_CHARS]
-        head += (
-            f" (TRUNCATED: the first {REVIEW_TEXT_MAX_CHARS:,} of {len(chron):,} characters; review what is here "
-            "and add a NOTE that the rest was not reviewed)"
-        )
+    head = (head or "CHRONOLOGY, as the attorney will read it") + (
+        f" (part {part}; every part is reviewed)" if part else ""
+    )
     code_lines = [f"- {f.grade} | {f.check} | {f.finding} | {f.cite}" for f in found] or ["(none)"]
     return "\n".join(
         [
@@ -274,6 +365,61 @@ def _notes(sr: StageRun, out: Path, rec: dict[str, Any] | None, rows: list[dict[
     return [rows[0], row, *rows[1:]]
 
 
+def _model_findings(
+    sr: StageRun, rd: Path, model: str, chron: str, names: list[str], found: list[review.Finding]
+) -> list[review.Finding]:
+    """The model's findings over every character it is given, in parts of at
+    most REVIEW_TEXT_MAX_CHARS: never a truncated read (the first 400,000 of
+    1,345,475 characters once passed as reviewed, 2026-10-13). For an update
+    it reads the added material in full plus a delivered sample. A part that
+    does not complete raises ``ReviewIncomplete``: nothing unread passes."""
+    material = update_material(rd)
+    text = material if material is not None else chron
+    head = "AN UPDATE TO A DELIVERED CHRONOLOGY: what the update added, in full" if material is not None else ""
+    parts = chunks(text)
+    if "".join(parts) != text:
+        raise review.ReviewIncomplete("the review input could not be split without loss")
+    system = prompts.load("review-system", sr.cfg)
+    out: list[review.Finding] = []
+    for i, p in enumerate(parts, 1):
+        key = f"{sr.slug}-{sr.unit.unit}" + (f"-{i}" if len(parts) > 1 else "")
+        part = f"{i} of {len(parts)}" if len(parts) > 1 else ""
+        out += _review_part(sr, model, system, p, (names, found, head), key, part)
+    return out
+
+
+def _review_part(
+    sr: StageRun,
+    model: str,
+    system: str,
+    text: str,
+    ctx: tuple[list[str], list[review.Finding], str],
+    key: str,
+    part: str,
+    depth: int = 0,
+) -> list[review.Finding]:
+    """One part's review. A part whose review runs out of output before its
+    verdict at the largest budget is reviewed again as two smaller parts (the
+    same request is never resent); the findings of every part are kept, so
+    one part's MUST-FIX holds the whole review. A part that cannot be split
+    further raises ``ReviewIncomplete``: nothing unread passes."""
+    names, found, head = ctx
+    try:
+        return review.run_model(sr.doorway, model, system, _user(sr, text, names, found, head, part), key, HOLD_CHECKS)
+    except review.ReviewTruncated as exc:
+        halves = chunks(text, len(text) // 2 + 1)
+        if len(halves) < 2 or depth >= REVIEW_SPLIT_DEPTH or "".join(halves) != text:
+            raise review.ReviewIncomplete(
+                f"{exc}; a part of {len(text):,} characters could not be split smaller"
+            ) from exc
+        sr.log(f"review: part {part or '1'} ran out of output before its verdict; reviewing it in 2 smaller parts")
+        out: list[review.Finding] = []
+        for j, h in enumerate(halves, 1):
+            sub = f"{part or '1'}.{j}"
+            out += _review_part(sr, model, system, h, ctx, f"{key}-{j}", sub, depth + 1)
+        return out
+
+
 def run(sr: StageRun, *, today: date | None = None) -> int:
     out = sr.slug_dir / "out" / sr.unit.unit
     rd = sr.slug_dir / "runs" / sr.unit.unit
@@ -302,11 +448,8 @@ def run(sr: StageRun, *, today: date | None = None) -> int:
         dob = _as_date(sr.unit.dob or "")
         found = code_findings(chron, entries(chron_path), names, others, today=today or date.today(), dob=dob)
         model = _model(sr)
-        system = prompts.load("review-system", sr.cfg)
         try:
-            found += review.run_model(
-                sr.doorway, model, system, _user(sr, chron, names, found), f"{sr.slug}-{sr.unit.unit}", HOLD_CHECKS
-            )
+            found += _model_findings(sr, rd, model, chron, names, found)
         except review.ReviewIncomplete as exc:
             sr.log(f"review: {exc}; nothing was filed, a rerun reviews again")
             return 1

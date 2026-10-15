@@ -71,17 +71,29 @@ describe('oneTimeTotals', () => {
 })
 
 describe('operatorRecurring', () => {
-  it('sums priced operators and counts the unpriced (null and missing), never dropping any', () => {
-    const price = new Map<string, number | null>([
-      ['a', 1000],
-      ['b', 2000],
-      ['c', null], // priced row exists but no price authored
+  it('sums priced seats and counts the unpriced (null and missing), never dropping any', () => {
+    const lines = new Map([
+      ['a', { serviceId: 'svc_a', price: 1000 }],
+      ['b', { serviceId: 'svc_b', price: 2000 }],
+      ['c', { serviceId: 'svc_c', price: null }], // service exists but no price authored
     ])
     // 'd' is in the authoritative roster but has no spine entry at all.
-    const r = operatorRecurring(['a', 'b', 'c', 'd'], price)
+    const r = operatorRecurring(['a', 'b', 'c', 'd'], lines)
     expect(r.mrr).toBe(3000) // only real authored prices
-    expect(r.activeCount).toBe(4) // every roster operator counted
+    expect(r.activeCount).toBe(4) // every roster seat counted
     expect(r.unpricedCount).toBe(2) // c (null) + d (missing)
+  })
+
+  it('counts a line shared by two seats once (migration 0126)', () => {
+    const lines = new Map([
+      ['a', { serviceId: 'svc_shared', price: 1000 }],
+      ['b', { serviceId: 'svc_shared', price: 1000 }],
+    ])
+    expect(operatorRecurring(['a', 'b'], lines)).toEqual({
+      mrr: 1000,
+      activeCount: 2,
+      unpricedCount: 0,
+    })
   })
 
   it('an empty roster yields zeros', () => {

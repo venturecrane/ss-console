@@ -55,6 +55,7 @@ from . import (
     facts as facts_mod,
     finalpass,
     firm as firm_mod,
+    format_check,
     gate,
     job as job_mod,
     preflight,
@@ -342,12 +343,9 @@ class DemandRun:
         g, md = self._gate("gate.json", md, self.data / FINAL)
         audit_md = (self.data / f"audit-v{version}.md").read_text(encoding="utf-8")
         # Firm-facing words only: the review holds on the system's own
-        # vocabulary ("the auditor", "drafting gate") in anything the firm reads.
-        notes = [
-            f"Left for the attorney (the record bears it out only in part): {x}"
-            for x in draft.finding_lines(audit_md, ("DRIFTS",))
-        ]
-        notes += [f"Removed or flagged by the final audit: {x}" for x in settled]
+        # vocabulary (a stage, a check's label) in anything the firm reads.
+        notes = [f"The file supports this only in part: {x}" for x in draft.finding_text(audit_md, ("DRIFTS",))]
+        notes += [f"Taken out or flagged before filing: {x}" for x in settled]
         notes += [f"Not checked against the matter record: {x}" for x in cc["unchecked"]]
         notes += [f"Held out, never read (privilege wall: {w['reason']}): {w['name']}" for w in self._walled()]
         notes += [f"Quotation repaired before filing (the letter): {x}" for x in g.get("repairs") or []]
@@ -362,7 +360,7 @@ class DemandRun:
         md = (self.data / f"draft-v{version}.md").read_text(encoding="utf-8")
         audit_md = (self.data / f"audit-v{version}.md").read_text(encoding="utf-8")
         try:
-            md, notes = finalpass.settle(md, audit_md)
+            md, notes = finalpass.settle(md, audit_md, format_check.dialect(self.job.request_text))
         except finalpass.Unlocated as exc:
             raise DemandFailed(f"the final audit pass could not settle a finding: {exc}") from None
         tmp = self.data / f".{FINAL}.tmp"

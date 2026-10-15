@@ -22,7 +22,9 @@ from .stages import (
     update_base as _ubase,
     update_collect as _ucollect,
     update_finish as _ufinish,
+    update_pages as _upages,
     update_select as _uselect,
+    update_review as _ureview,
     update_upload as _uupload,
 )
 
@@ -54,21 +56,34 @@ UPDATE_STAGES: tuple[Stage, ...] = (
     BY_NAME["decide_fold"],
     BY_NAME["fold_msg"],
     BY_NAME["extract_after_fold"],
-    BY_NAME["vision"],
+    # Page identity by picture before any page is transcribed: a re-filed
+    # scan is never paid for (``update/pageid``).
+    Stage(
+        "update_pages",
+        "",
+        _slug_unit,
+        requires=("extract_after_fold",),
+        runner=_upages.run,
+        exit_map={1: (FAILED, "update_pages: no update plan; update_base has not run")},
+    ),
+    _reuse("vision", requires=("update_pages",)),
     _reuse("identity", requires=("vision",)),
     Stage("update_select", "", _slug_unit, requires=("identity",), runner=_uselect.run, exit_map={2: _HELD_UPDATE}),
     _reuse("map", requires=("update_select",)),
     BY_NAME["repair_truncated"],
     BY_NAME["assemble"],
     BY_NAME["merge"],
+    # Before collect: the diagnosis claims the audit reads carry the code the
+    # tables read for the record's date (``update/icd.py``).
+    _reuse("icd_tables", requires=("merge",)),
     Stage(
         "update_collect",
         "",
         _slug_unit,
-        requires=("merge",),
-        invalidates=("update_summary", "audit"),
+        requires=("icd_tables",),
+        invalidates=("update_summary", "audit", "update_review"),
         runner=_ucollect.run_collect,
-        exit_map={2: _HELD_UPDATE},
+        exit_map={1: (FAILED, "update_collect: the ICD tables are missing"), 2: _HELD_UPDATE},
     ),
     Stage(
         "update_summary",
@@ -76,17 +91,46 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         _slug_unit,
         paid=True,
         requires=("update_collect",),
-        invalidates=("audit",),
+        invalidates=("audit", "update_review"),
         runner=_ucollect.run_summary,
-        exit_map={1: (REFUSED, "update_summary: the rewritten Prior Medical History reached beyond its source")},
+        exit_map={
+            1: (
+                REFUSED,
+                "update_summary: the added prior history was refused (beyond its source, no heading, or no text)",
+            )
+        },
     ),
-    _reuse("audit", requires=("update_summary",)),
-    _reuse("icd_tables", requires=("audit",)),
+    _reuse("audit", requires=("update_summary",), invalidates=("update_review",)),
+    # The gate before assemble: an INDEPENDENT review of the added entries
+    # against every page of the documents they cite, then a FINISHER that
+    # corrects each must-fix finding (every new sentence audited, an
+    # unsupported edit undone); round 1's must-fix list is frozen, one narrow
+    # re-check confirms or settles what is still open, and the confirmed get
+    # one more finish (``stages/update_review.py``). The proofs then run on the corrected text,
+    # and the pre-delivery ``review`` below is the final read.
+    Stage(
+        "update_review",
+        "",
+        _slug_unit,
+        paid=True,
+        requires=("audit",),
+        runner=_ureview.run,
+        exit_map={
+            1: (FAILED, "update_review: the grader of the finisher's sentences gave no verdict; a rerun grades again"),
+            2: (
+                HELD,
+                "update_held: the independent review of the update left must-fix findings the finisher could "
+                "not correct against the pages; SMD finishes it",
+            ),
+            3: (HELD, "audit coverage: a sentence the update finisher wrote is not finally SUPPORTED"),
+            4: (FAILED, "audit INVALID after the update finisher's corrections: a control failed or no exhibit bytes"),
+        },
+    ),
     Stage(
         "update_assemble",
         "",
         _slug_unit,
-        requires=("icd_tables",),
+        requires=("update_review",),
         runner=_ufinish.run_assemble,
         exit_map={1: (FAILED, "update_assemble: the ICD tables are missing")},
     ),

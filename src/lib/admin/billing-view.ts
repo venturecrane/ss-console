@@ -37,33 +37,68 @@ export interface OneTimeTotals {
 }
 
 export interface OperatorRecurring {
-  /** Real MRR: sum of authored recurring prices across the active operator roster. */
+  /** Real MRR: each priced commercial line reached from the roster, counted once. */
   mrr: number
-  /** Authoritative count of active operators (from the roster, never the spine). */
+  /** Authoritative count of active operator seats (from the roster, never the spine). */
   activeCount: number
-  /** Active operators with no price authored yet — surfaced, never summed as 0. */
+  /** Roster seats with no price authored yet — surfaced, never summed as 0. */
   unpricedCount: number
 }
 
+/** The commercial line one seat is priced by: its service id and price. */
+export interface SeatLine {
+  serviceId: string
+  price: number | null
+}
+
 /**
- * Recurring revenue, computed the safe way (ADR 0046): iterate the AUTHORITATIVE
- * operator roster (every live operator), and price each from the spine via
- * `priceByEntity` (entity_id → `services.recurring_price` for active operator
- * services). A roster operator with no priced service is counted `unpriced` —
- * never dropped, never silently summed as 0. MRR sums only real authored prices.
+ * Seat (customer_slug) → the ACTIVE operator service it is priced by
+ * (migration 0126). Seats with no service, or a non-active one, are absent,
+ * so they read as unpriced. Keyed by seat, never by entity: a client's two
+ * seats can carry two prices.
+ */
+export function seatLines(
+  seats: ReadonlyArray<{
+    instance_slug: string | null
+    service_id: string | null
+    recurring_price: number | null
+    service_status: string | null
+  }>
+): Map<string, SeatLine> {
+  const map = new Map<string, SeatLine>()
+  for (const s of seats) {
+    if (!s.instance_slug || !s.service_id || s.service_status !== 'active') continue
+    map.set(s.instance_slug, { serviceId: s.service_id, price: s.recurring_price })
+  }
+  return map
+}
+
+/**
+ * Recurring revenue, computed the safe way (ADR 0046; migration 0126): iterate
+ * the AUTHORITATIVE operator roster (every live seat), and price each seat from
+ * the spine via `lineBySeat`. A roster seat with no priced line is counted
+ * `unpriced` — never dropped, never silently summed as 0. MRR sums each
+ * DISTINCT service once: seats sharing a line (SMD's own seats) do not
+ * multiply its price.
  */
 export function operatorRecurring(
-  rosterEntityIds: string[],
-  priceByEntity: Map<string, number | null>
+  rosterSeatSlugs: string[],
+  lineBySeat: Map<string, SeatLine>
 ): OperatorRecurring {
+  const counted = new Set<string>()
   let mrr = 0
   let unpricedCount = 0
-  for (const id of rosterEntityIds) {
-    const price = priceByEntity.get(id) ?? null
-    if (price == null) unpricedCount += 1
-    else mrr += price
+  for (const slug of rosterSeatSlugs) {
+    const line = lineBySeat.get(slug)
+    if (!line || line.price == null) {
+      unpricedCount += 1
+      continue
+    }
+    if (counted.has(line.serviceId)) continue
+    counted.add(line.serviceId)
+    mrr += line.price
   }
-  return { mrr, activeCount: rosterEntityIds.length, unpricedCount }
+  return { mrr, activeCount: rosterSeatSlugs.length, unpricedCount }
 }
 
 export function oneTimeTotals(invoices: Invoice[]): OneTimeTotals {

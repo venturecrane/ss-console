@@ -17,6 +17,8 @@ near-neighbors?
 | "How can I have it only do Dana's case files for Pat/Sam?"                                                         | `paralegals: ["Dana"]`, `attorneys: ["Pat", "Sam"]`                |
 | "Pat's paralegal is out, send me the deadlines report and statute report for Pat's and Sam's cases in litigation." | `attorneys: ["Pat", "Sam"]` (the deadlines report, both workbooks) |
 | "The statute report for Sam, please."                                                                              | `attorneys: ["Sam"]` (the statute report only)                     |
+| "Update all cases assigned to Pat Doe or Sam to Dana Roe, Lee's new paralegal, tasks too (litigation cases only)." | none passed (the staff reassignment; the broker reads the names)   |
+| "Please move Pat's cases to Dana."                                                                                 | none passed (the staff reassignment)                               |
 
 ## Boundary (should NOT select this skill)
 
@@ -24,6 +26,8 @@ near-neighbors?
   client's own matter is never this list).
 - A staff member: "Has the defendant on 900201 been served yet?" → a general
   request about ONE matter.
+- "Change the paralegal on 900201 to Dana." → ONE matter's change is a
+  general request (the in-turn tools), never the staff reassignment.
 - "Draft our responses to their RFAs on 900201." → the document drafting
   class; the list is never a drafted document.
 - "Put the litigation list on a schedule every morning." → this skill's REQUEST
