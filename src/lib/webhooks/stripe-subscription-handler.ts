@@ -35,11 +35,29 @@ import {
   type SubscriptionBillingRow,
 } from '../db/subscriptions'
 
+import { retainerInvoiceDescription } from '../stripe/subscriptions'
 import { failedResponse } from '../api/failures'
 import { captureError } from '../observability/sentry'
 import { ALERT_EMAIL, alertTeam, entityName, ok, unixToIso } from './stripe-subscription-shared'
 
 const AREA = 'webhook/stripe/subscription'
+
+/**
+ * The local invoice description for a seat's cycle invoice: the plain line
+ * name plus the seat's authored label (migration 0126), read from the
+ * service the seat is priced by. A failed or empty read is the plain line.
+ */
+async function retainerDescriptionForSeat(
+  db: D1Database,
+  sub: Pick<SubscriptionBillingRow, 'service_id'>
+): Promise<string> {
+  if (!sub.service_id) return retainerInvoiceDescription(null)
+  const row = await db
+    .prepare(`SELECT label FROM services WHERE id = ?`)
+    .bind(sub.service_id)
+    .first<{ label: string | null }>()
+  return retainerInvoiceDescription(row?.label ?? null)
+}
 
 /**
  * Whether an invoice belongs to a subscription, and — when it does not read
@@ -277,7 +295,7 @@ export async function handleRetainerInvoiceFinalized(
         sub.org_id,
         sub.entity_id,
         amount,
-        'Operator retainer — monthly',
+        await retainerDescriptionForSeat(db, sub),
         invoice.id,
         invoice.hosted_invoice_url,
         dueDate,
@@ -372,7 +390,7 @@ async function mirrorPaidInvoice(
       sub.org_id,
       sub.entity_id,
       amount,
-      'Operator retainer — monthly',
+      await retainerDescriptionForSeat(db, sub),
       invoice.id,
       invoice.hosted_invoice_url,
       unixToIso(invoice.due_date),

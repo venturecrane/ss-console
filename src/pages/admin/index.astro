@@ -18,13 +18,13 @@ import { listQuotes } from '../../lib/db/quotes'
 import type { Quote } from '../../lib/db/quotes'
 import { listFleetRoster } from '../../lib/admin/fleet-roster'
 import { listRuntimeSummary } from '../../lib/admin/runtime-summary'
-import { listServices } from '../../lib/db/services'
+import { listOperatorSeatCommercials } from '../../lib/db/services'
 import {
   buildServiceList,
   serviceListStats,
   type OperatorInput,
 } from '../../lib/admin/services-list'
-import { oneTimeTotals, operatorRecurring } from '../../lib/admin/billing-view'
+import { oneTimeTotals, operatorRecurring, seatLines } from '../../lib/admin/billing-view'
 import { buildActionQueue } from '../../lib/admin/home-actions'
 import { formatMoney } from '../../lib/admin/client-hub'
 import { env } from 'cloudflare:workers'
@@ -32,37 +32,28 @@ import { env } from 'cloudflare:workers'
 const session = Astro.locals.session!
 const now = new Date()
 
-const [
-  overdueFollowUps,
-  invoices,
-  engagements,
-  quotes,
-  entities,
-  roster,
-  runtime,
-  operatorServices,
-] = await Promise.all([
-  listFollowUps(env.DB, session.orgId, { overdue: true }),
-  listInvoices(env.DB, session.orgId),
-  listEngagements(env.DB, session.orgId),
-  listQuotes(env.DB, session.orgId),
-  listEntities(env.DB, session.orgId),
-  listFleetRoster(env.DB),
-  listRuntimeSummary(env.DB),
-  listServices(env.DB, session.orgId, { type: 'operator', status: 'active' }),
-])
+const [overdueFollowUps, invoices, engagements, quotes, entities, roster, runtime, operatorSeats] =
+  await Promise.all([
+    listFollowUps(env.DB, session.orgId, { overdue: true }),
+    listInvoices(env.DB, session.orgId),
+    listEngagements(env.DB, session.orgId),
+    listQuotes(env.DB, session.orgId),
+    listEntities(env.DB, session.orgId),
+    listFleetRoster(env.DB),
+    listRuntimeSummary(env.DB),
+    listOperatorSeatCommercials(env.DB, session.orgId),
+  ])
 
 const nameById = new Map(entities.map((e) => [e.id, e.name]))
 const quotesById = new Map<string, Quote>(quotes.map((q) => [q.id, q]))
 const runtimeByEntity = new Map(runtime.map((r) => [r.entity_id, r]))
 
-// Real MRR: authoritative roster priced from the spine (ADR 0046 operator arc).
-const operatorPriceByEntity = new Map<string, number | null>(
-  operatorServices.map((s) => [s.entity_id, s.recurring_price])
-)
+// Real MRR: authoritative roster, each SEAT priced from the service it points
+// at (ADR 0046 operator arc; migration 0126), each service counted once.
+const lineBySeat = seatLines(operatorSeats)
 const recurring = operatorRecurring(
-  roster.map((r) => r.entity_id),
-  operatorPriceByEntity
+  roster.map((r) => r.customer_slug),
+  lineBySeat
 )
 
 const operators: OperatorInput[] = roster.map((r) => ({
@@ -71,7 +62,7 @@ const operators: OperatorInput[] = roster.map((r) => ({
   configError: r.config_error,
   openAlerts: runtimeByEntity.get(r.entity_id)?.open_alerts ?? null,
   hasRuntime: runtimeByEntity.has(r.entity_id),
-  recurringPrice: operatorPriceByEntity.get(r.entity_id) ?? null,
+  recurringPrice: lineBySeat.get(r.customer_slug)?.price ?? null,
 }))
 
 const services = buildServiceList({

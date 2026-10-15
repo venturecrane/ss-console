@@ -39,7 +39,7 @@ import { buildConnectionRows } from '../../../../../lib/portal/operator/connecti
 import { parseBusinessHours } from '../../../../../lib/portal/operator/configure'
 import { loadTeamRoster, type TeamMember } from '../../../../../lib/portal/operator/team-read'
 import { readChangeRequestFlash } from '../../../../../lib/portal/operator/change-request-flash'
-import { getOperatorServiceForEntity } from '../../../../../lib/db/services'
+import { getOperatorServiceForSeat } from '../../../../../lib/db/services'
 import {
   canStartOperatorSubscription,
   operatorMonthlyCharge,
@@ -123,7 +123,7 @@ const isProvisioning = subscription?.status === 'provisioning'
 // client lands, not only on the Billing ledger. The route re-checks the facts.
 let startDoor: OperatorStartDoor | null = null
 if (subscription && isProvisioning) {
-  const service = await getOperatorServiceForEntity(env.DB, user.org_id, client.id)
+  const service = await getOperatorServiceForSeat(env.DB, user.org_id, subscription)
   const charge = operatorMonthlyCharge(service)
   if (charge && canStartOperatorSubscription(subscription, charge.priceCents)) {
     // The hero states what is charged each month on the authored rail.

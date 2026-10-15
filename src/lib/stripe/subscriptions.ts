@@ -55,6 +55,27 @@ const RETAINER_PRODUCT_NAME = 'SMD Operator Retainer'
 const CARD_FEE_PRODUCT_MARKER = { key: 'smd_product', value: 'operator-card-fee' } as const
 const CARD_FEE_PRODUCT_NAME = CARD_FEE_LINE_DESCRIPTION
 
+/**
+ * The Stripe subscription's description, which Stripe prints on every
+ * invoice: the Captain-authored seat label when there is one (migration
+ * 0126), else the plain line name. Never derived from a slug.
+ */
+export function operatorSubscriptionDescription(label: string | null | undefined): string {
+  const trimmed = typeof label === 'string' ? label.trim() : ''
+  return trimmed === '' ? 'Operator retainer' : trimmed
+}
+
+/**
+ * The description of a local monthly retainer invoice row (the portal's
+ * invoice list and the admin hub). Plain words, no em dash (CLAUDE.md
+ * style rule): "Operator retainer, monthly", with the seat label appended
+ * when one is authored so a client with two seats can tell the lines apart.
+ */
+export function retainerInvoiceDescription(label: string | null | undefined): string {
+  const trimmed = typeof label === 'string' ? label.trim() : ''
+  return trimmed === '' ? 'Operator retainer, monthly' : `Operator retainer, monthly (${trimmed})`
+}
+
 /** The checkout-session metadata key + value the webhook routes on. */
 export const OPERATOR_CHECKOUT_PRODUCT_SLUG = 'operator'
 
@@ -98,8 +119,27 @@ async function resolveProductId(
 }
 
 export interface CreateOperatorCheckoutParams {
-  /** The signed-in principal's email; Stripe pre-fills it and keys the customer on it. */
+  /**
+   * The signed-in principal's email; Stripe pre-fills it and keys a NEW
+   * customer on it. Sent only when `stripe_customer_id` is absent: Stripe
+   * refuses a session that names both.
+   */
   customer_email: string
+  /**
+   * The Stripe customer the firm already pays from (another seat's
+   * subscription's `customer`). When set the session is created ON that
+   * customer (`customer=`), so a second seat is a second subscription on one
+   * customer, never a second customer.
+   */
+  stripe_customer_id?: string | null
+  /**
+   * The Captain-authored line name (services.label, migration 0126). When set
+   * it is the subscription's description, which Stripe prints on every
+   * invoice; absent, the description is the plain "Operator retainer".
+   */
+  label?: string | null
+  /** Local services.id the seat is priced by, stamped into metadata. */
+  service_id?: string | null
   /** Monthly retainer in cents (services.recurring_price × 100). */
   monthly_amount_cents: number
   /**
@@ -179,17 +219,26 @@ export async function createOperatorCheckoutSession(
     body.append('payment_method_types[]', 'us_bank_account')
     body.append('payment_method_options[us_bank_account][verification_method]', 'automatic')
   }
-  body.append('customer_email', params.customer_email)
+  if (params.stripe_customer_id) {
+    // A second seat of a firm that already pays: same customer, new subscription.
+    body.append('customer', params.stripe_customer_id)
+  } else {
+    body.append('customer_email', params.customer_email)
+  }
   body.append('client_reference_id', params.user_id)
   body.append('success_url', params.success_url)
   body.append('cancel_url', params.cancel_url)
   body.append('metadata[product_slug]', OPERATOR_CHECKOUT_PRODUCT_SLUG)
   body.append('metadata[smd_entity_id]', params.entity_id)
   body.append('metadata[smd_subscription_id]', params.subscription_row_id)
-  body.append('subscription_data[description]', 'Operator retainer')
+  if (params.service_id) body.append('metadata[smd_service_id]', params.service_id)
+  body.append('subscription_data[description]', operatorSubscriptionDescription(params.label))
   body.append('subscription_data[metadata][product_slug]', OPERATOR_CHECKOUT_PRODUCT_SLUG)
   body.append('subscription_data[metadata][smd_entity_id]', params.entity_id)
   body.append('subscription_data[metadata][smd_subscription_id]', params.subscription_row_id)
+  if (params.service_id) {
+    body.append('subscription_data[metadata][smd_service_id]', params.service_id)
+  }
 
   const res = await fetch(`${STRIPE_API_BASE}/checkout/sessions`, {
     method: 'POST',
@@ -338,4 +387,42 @@ export async function getOperatorCheckoutSession(
     payment_status: obj.payment_status,
     smd_subscription_id: typeof rowId === 'string' && rowId.length > 0 ? rowId : null,
   }
+}
+
+/**
+ * The Stripe customer a Stripe subscription bills, read from Stripe itself.
+ *
+ * Used when a client starts a SECOND Operator seat: its checkout is created
+ * on the customer the firm already pays from, so one firm stays one Stripe
+ * customer (one payment method on file, one billing portal). Stripe is the
+ * authority here, not the local `settings_json.stripe_customer_id` mirror.
+ * `customer` may come back expanded or as an id; both parse. Anything else
+ * is an error, never a guess.
+ */
+export async function getStripeSubscriptionCustomerId(
+  apiKey: string | undefined,
+  subscriptionId: string
+): Promise<string | null> {
+  if (!apiKey) {
+    console.log(`[DEV] Stripe: would read the customer of ${subscriptionId}`)
+    return null
+  }
+  const res = await fetch(
+    `${STRIPE_API_BASE}/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    { method: 'GET', headers: { Authorization: `Bearer ${apiKey}` } }
+  )
+  if (!res.ok) {
+    throw new Error(`Stripe subscription get failed ${res.status}: ${await res.text()}`)
+  }
+  const data: unknown = await res.json()
+  if (!data || typeof data !== 'object') {
+    throw new Error('Stripe subscription get: response is not an object')
+  }
+  const customer = (data as Record<string, unknown>).customer
+  if (typeof customer === 'string' && customer.startsWith('cus_')) return customer
+  if (customer && typeof customer === 'object') {
+    const id = (customer as Record<string, unknown>).id
+    if (typeof id === 'string' && id.startsWith('cus_')) return id
+  }
+  throw new Error('Stripe subscription get: no customer on the subscription')
 }
