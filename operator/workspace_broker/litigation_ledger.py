@@ -299,6 +299,21 @@ def _files(raw: Any) -> list[dict[str, Any]]:
     return out
 
 
+def _checked(state: str, fields: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, dict[str, int] | None]:
+    """A record's fields checked: (files, counts), each None when absent."""
+    if state not in STATES:
+        raise ValueError(f"unknown state {state!r}")
+    unknown = set(fields) - set(REPORT_FIELDS)
+    if unknown:
+        raise ValueError(f"litigation_job_record carries only {list(REPORT_FIELDS)}; got {sorted(unknown)}")
+    for key in ("cents", *COUNT_FIELDS):
+        value = fields.get(key)
+        if key in fields and (not isinstance(value, int) or isinstance(value, bool) or value < 0):
+            raise ValueError(f"{key} must be a non-negative int")
+    files = _files(fields["files"]) if "files" in fields else None
+    return files, (_counts(fields["counts"]) if "counts" in fields else None)
+
+
 class LitigationLedger:
     """Per-operation sqlite connections, ``journal_mode=DELETE``: the broker
     and the runner reach this file as different uids."""
@@ -473,17 +488,7 @@ class LitigationLedger:
     def record(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any]:
         """Apply one transition; returns the row after (with ``prev_state``). A
         same-state record is a note (merges fields)."""
-        if state not in STATES:
-            raise ValueError(f"unknown state {state!r}")
-        unknown = set(fields) - set(REPORT_FIELDS)
-        if unknown:
-            raise ValueError(f"litigation_job_record carries only {list(REPORT_FIELDS)}; got {sorted(unknown)}")
-        for key in ("cents", *COUNT_FIELDS):
-            value = fields.get(key)
-            if key in fields and (not isinstance(value, int) or isinstance(value, bool) or value < 0):
-                raise ValueError(f"{key} must be a non-negative int")
-        files = _files(fields["files"]) if "files" in fields else None
-        counts = _counts(fields["counts"]) if "counts" in fields else None
+        files, counts = _checked(state, fields)
         conn = self._connect()
         try:
             conn.execute("BEGIN IMMEDIATE")
