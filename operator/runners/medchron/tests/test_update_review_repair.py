@@ -1,8 +1,8 @@
 """The update's review-and-repair loop (``stages/update_review.py``,
 ``update/review_repair.py``): a MUST-FIX the reviewer grounds on a page is
-applied to the added entry, re-audited, re-reviewed, and the proofs run on the
-corrected text; a MUST-FIX that never settles holds for SMD; a finding about a
-delivered entry is never applied. Every value is invented."""
+applied to the added entry, re-audited, and the proofs run on the corrected
+text; a MUST-FIX that never settles is re-checked once and holds for SMD; a
+finding about a delivered entry is never applied. Every value is invented."""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ def _reviewed_anchors(kw: dict) -> list[str]:
     return K.part_anchors(kw["messages"][0]["content"])
 
 
-def test_a_grounded_must_fix_is_applied_reaudited_rereviewed_and_proven(
+def test_a_grounded_must_fix_is_applied_reaudited_and_proven(
     scene, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     job_dir, seat = scene
@@ -87,10 +87,11 @@ def test_a_grounded_must_fix_is_applied_reaudited_rereviewed_and_proven(
     rows = [json.loads(x) for x in (sd / "out" / "alpha" / "audit-results.jsonl").read_text().splitlines()]
     fixed_claim = FIXED_N1.replace(" (Exhibit 2 - p. 1)", "")
     assert any(str(r.get("claim")).endswith(fixed_claim) and r.get("verdict") == "SUPPORTED" for r in rows)
-    # Two reviews: the second read only the edited entry and its neighbour.
-    assert len(model.reviews) == 2 and _reviewed_anchors(model.reviews[1]) == ["N1", "N2"]
+    # One review: the round-1 list was settled by the applied, audited fix,
+    # so nothing is left for a re-check (2026-10-15, freeze then shrink).
+    assert len(model.reviews) == 1
     rec = json.loads((ud / "review_repair.json").read_text())
-    assert rec["status"] == "clean" and [r["round"] for r in rec["rounds"]] == [1, 2]
+    assert rec["status"] == "clean" and [r["round"] for r in rec["rounds"]] == [1]
     by_anchor = {f["anchor"]: f for f in rec["rounds"][0]["findings"]}
     assert by_anchor["N1.c1"]["outcome"] == "applied" and by_anchor["N1.c1"]["removed"]
     assert by_anchor["D1"]["outcome"].startswith("carried")
@@ -111,8 +112,9 @@ def test_a_must_fix_that_never_settles_holds_for_smd_and_nothing_is_filed(
     assert o.reason.startswith("update_held:")
     assert holds.classify("medchron", o.reason)[0] == holds.SMD_FINISHING
     assert seat.sent == [] and seat.deleted == []
-    # The finisher settled nothing: no progress, held after the first review.
-    assert len(model.reviews) == 1
+    # The finisher settled nothing; the one re-check read only the entry the
+    # finding sits on, raised it again, and the one more finish failed too.
+    assert len(model.reviews) == 2 and _reviewed_anchors(model.reviews[1]) == ["N2"]
     ud = data_root / "example-matter" / "runs" / "alpha" / "update"
     rec = json.loads((ud / "review_repair.json").read_text())
     assert rec["status"] == "held" and [f["anchor"] for f in rec["open"]] == ["N2.c1"]

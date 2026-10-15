@@ -16,8 +16,8 @@ a new case. This stage is the laptop's step, in the lane, as one loop:
    documents it cites, in windows sized to finish, plus a text-only duplicate
    part per long document. It returns findings only: severity, class, where
    (anchor), the page it relies on and what that page says. A part whose
-   reply runs out is split in half; a single page that cannot finish fails
-   the stage resumably (nothing unreviewed goes on).
+   reply runs out is split in half; a single page that still cannot finish
+   is held "not reviewed" (nothing unreviewed goes on).
 2. FINISH (``update/finisher.py``). A second pass, shown the findings, the
    entries and the pages they rely on, returns edits: any text of an added
    entry (date, provider, body, an omitted paragraph, a duplicate deleted in
@@ -26,16 +26,27 @@ a new case. This stage is the laptop's step, in the lane, as one loop:
    entries re-sorted, and every new sentence AUDITED against its page; an
    edit the audit does not support is reverted and its finding stays open.
    The audit loop then runs to its gate on what remains.
-3. LOOP. The edited entries, the entries still carrying a MUST, and their
-   neighbours are reviewed again: ROUNDS reviews, up to MAX_ROUNDS while the
-   loop converges. A round that settles nothing, or a review that finds no
-   fewer MUST-FIX than the last, ends it; the last review's findings are then
-   marked "not finished" with why, and a finding the finisher will not edit is
-   "declined by the finisher" with its reason, so the hold names each one.
-   0 MUST -> assemble, proofs and the existing delivery path. Otherwise HOLD
-   (``update_held:``, ``smd_finishing``) with the open findings listed in
-   plain language in the job log and the reason. SHOULD findings are finished
-   when the finisher can; they never hold the job.
+3. FREEZE, THEN SHRINK (2026-10-15). The loop did not converge on two real
+   matters: each fresh review raised mostly NEW objections (one round 2 had 77
+   of 85 must-fix new, not unfixed), and duplicates were structurally
+   unresolvable (``finisher.check_drop``). So round 1's MUST findings on added
+   entries are the FROZEN list, each keyed by what survives anchor
+   renumbering (``_key``: the class, the exhibit and page it relies on, and the
+   entry's date line). No later review adds a must-fix: a later finding no
+   frozen key matches is recorded as advisory and never blocks or reaches
+   the finisher. Duplicates are decided in code before the finisher
+   (``update/duplicates.py``), never a hold. After the one finish, ONE narrow
+   re-check reviews only the entries still-open frozen findings sit on: a
+   frozen finding it raises again (same key) is CONFIRMED and gets one more
+   finisher attempt; one it does not raise is settled ("not raised again on
+   re-check"). No further review. No confirmed finding left open -> clean:
+   assemble, proofs and the existing delivery path. Otherwise HOLD
+   (``update_held:``, ``smd_finishing``) with only the frozen findings still
+   open, listed in plain language in the job log. The list only shrinks, so
+   the stage always ends. SHOULD findings are finished when the finisher can;
+   they never hold the job. A part the review could not finish is held "not
+   reviewed" and its entries are re-read by the re-check, whose must-fix on
+   them is their first review (frozen, not advisory).
 
 The delivered entries are never edited. Every call is a ledger row under this
 stage with its round in the custom id; the driver's cap binds each call, and
@@ -49,6 +60,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import copy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -60,23 +72,25 @@ from ..audit.render import img_block, render
 from ..audit.run import AuditPaths, Round
 from ..proof import review as PR
 from ..audit import handwritten_evidence as HE
-from ..update import body as B, entry_edits as EE, finisher as FN, handwritten as H, illegible as IL
+from ..update import body as B, duplicates as DU, entry_edits as EE, finisher as FN, handwritten as H
+from ..update import frozen as FZ, illegible as IL
 from ..update import review_parts as RP, review_repair as RR, select as S
 from . import audit_loop
 from .base import StageRun, read_json
 from .update_base import headings, update_dir
 
-ROUNDS = 4  # reviews: up to three finishes, each verified by the next review
-#: Past ROUNDS a loop goes on only while it is converging: the last finish
-#: settled a finding and the must-fix count is still falling (a real update
-#: was cut off at round 4 with 52 open after 123, 98, 54).
-MAX_ROUNDS = 6
+#: Rounds of the loop: 1 is the full review and its finish; 2 is the narrow
+#: re-check of the frozen findings still open and the one more finish of the
+#: ones it confirms. There is no round 3 (``_loop``).
+REVIEW, RECHECK = 1, 2
 SPLIT_DEPTH = 5
 MAX_TOKENS = 32_000
 RECORD = "review_repair.json"
 STAGE = "update_review"
 #: The projection's input per page shown (an image plus its label) and the
-#: share of round one the later rounds and the finisher add.
+#: share of round one the rest adds: the finish, the narrow re-check (a subset
+#: of round one's pages) and its one finish; kept at a full round, an upper
+#: bound now that there is no third review.
 PAGE_TOKENS = 1_800
 LATER_SHARE = 1.0
 
@@ -266,7 +280,7 @@ def _halves(p: RP.Part) -> list[RP.Part] | None:
     return None
 
 
-NOT_REVIEWED = "not reviewed"
+NOT_REVIEWED = FZ.NOT_REVIEWED
 
 
 def _not_reviewed(p: RP.Part) -> RR.Finding:
@@ -384,10 +398,50 @@ def _apply(c: Ctx, md: str, edits: list[RR.Finding], base: list[str]) -> tuple[s
     return md2, edited | {i for i, t in enumerate(B.entries_of(md2)[1]) if t not in old}
 
 
+def _closed(f: RR.Finding) -> bool:
+    """A finding an applied edit settled, or one the stage settled itself (a
+    duplicate pair folded once, a frozen finding the re-check did not raise)."""
+    return f.outcome == "applied" or f.outcome.startswith("settled")
+
+
+def _dedupe(c: Ctx, md: str, todo: list[RR.Finding], base: list[str]) -> tuple[str, list, list]:
+    """The document with every decidable duplicate folded or dropped in code
+    (``update/duplicates.py``), the edits that made, and the findings left
+    for the finisher, as copies on the new document's anchors (a finding on
+    an entry that was folded away is not sent: it is re-checked where its
+    content went)."""
+    keep, heads = _keep(c.sr), headings(c.sr.cfg)
+    md_d, dups, moved = DU.resolve(md, todo, keep, heads, base)
+    amap = DU.remap(md, md_d, moved, keep, heads) if md_d != md else None
+    decided = {e.fid for e in dups if _closed(e)}
+    send: list[RR.Finding] = []
+    for f in todo:
+        a = f.anchor.split(".")[0]
+        if f.fid in decided:
+            continue
+        if a in moved:
+            e = copy.copy(f)
+            e.outcome = f"its entry {a} was folded into {moved[a]} as a duplicate; checked again there"
+            dups.append(e)
+            continue
+        g = copy.copy(f)
+        if amap is not None and a in amap:
+            g.anchor = amap[a] + f.anchor[len(a) :]
+        send.append(g)
+    if dups:
+        c.sr.log(
+            f"  duplicates decided in code: {sum(e.outcome == 'applied' for e in dups)} folded or dropped, "
+            f"{sum(e.outcome.startswith('settled') for e in dups)} settled with their pair, "
+            f"{sum(not _closed(e) for e in dups)} left open"
+        )
+    return md_d, dups, send
+
+
 def finish(c: Ctx, md: str, found: list[RR.Finding], base: list[str], doc: Path) -> tuple[str, set[int], int, int]:
-    """Edit, check, apply, audit, revert what the audit does not support, and
-    run the audit loop to its gate. Returns (document, edited entries,
-    findings settled, the audit loop's exit)."""
+    """Decide the duplicates in code, then edit, check, apply, audit, revert
+    what the audit does not support, and run the audit loop to its gate.
+    Returns (document, edited entries, findings settled, the audit loop's
+    exit)."""
     for f in found:
         if f.anchor.startswith("D"):
             f.outcome = "carried: a delivered entry is never edited by an update"
@@ -398,11 +452,17 @@ def finish(c: Ctx, md: str, found: list[RR.Finding], base: list[str], doc: Path)
     ]
     for i, f in enumerate(todo, 1):
         f.fid = f"F{i}"
-    ents = RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg))
-    auto, ask = IL.drop_on_noted(todo, ents)  # no model: a drop on a noted handwritten entry
+    keep, heads = _keep(c.sr), headings(c.sr.cfg)
+    ents0 = RR.anchor_entries(md, keep, heads)
+    md_d, dups, send = _dedupe(c, md, todo, base)
+    ents = RR.anchor_entries(md_d, keep, heads)
+    auto, ask = IL.drop_on_noted(send, ents)  # no model: a drop on a noted handwritten entry
     edits, left = _finish_calls(c, ask, ents, base) if ask else ([], {})
     edits += auto
-    new_md, edited = _apply(c, md, edits, base)
+    new_md, edited = _apply(c, md_d, edits, base)
+    # The moved duplicate paragraphs keep their citations and are graded with
+    # the finisher's sentences; one the audit does not support is the audit
+    # loop's to repair (it is no finisher edit to revert).
     bad, untraced = FN.failed(edits, c.verify(md, new_md)) if new_md != md else ([], 0)
     if bad:
         ids = {id(e) for e in bad}
@@ -411,9 +471,10 @@ def finish(c: Ctx, md: str, found: list[RR.Finding], base: list[str], doc: Path)
                 e.outcome = "reverted: the audit did not find the edited sentence on its page"
             elif e.outcome == "applied":
                 e.outcome = ""
-        new_md, edited = _apply(c, md, edits, base)
-    settled = FN.settle(todo, edits, left)
-    _mark_refiled(c.sr, FN.refiled(edits, ents, base, new_md, {int(r["exhibit"]) for r in _new_records(c.sr)}))
+        new_md, edited = _apply(c, md_d, edits, base)
+    settled = FN.settle(todo, edits + dups, left)
+    new = {int(r["exhibit"]) for r in _new_records(c.sr)}
+    _mark_refiled(c.sr, FN.refiled(dups, ents0, base, new_md, new) | FN.refiled(edits, ents, base, new_md, new))
     c.sr.log(
         f"  finisher: {len(edits)} edit(s), {sum(e.outcome == 'applied' for e in edits)} applied, {len(bad)} reverted; "
         f"{untraced} unsupported sentence(s) no edit wrote, left to the audit loop"
@@ -479,15 +540,6 @@ def _hold_line(open_: list[RR.Finding]) -> str:
         f"update_held: the independent review of the update left {len(open_)} must-fix finding(s) the finisher "
         f"could not correct against the pages; SMD finishes it: {first}"
     )[:480]
-
-
-def _targets(md: str, sr: StageRun, edited: set[int], found: list[RR.Finding]) -> set[int]:
-    """The edited entries, every entry a MUST finding was left open on, and
-    their neighbours: what the next review reads."""
-    ents = RR.anchor_entries(md, _keep(sr), headings(sr.cfg))
-    left = {f.anchor.split(".")[0] for f in _must(found) if f.outcome != "applied"}
-    hit = edited | {i for i, e in enumerate(ents) if e.anchor in left}
-    return {j for i in hit for j in (i - 1, i, i + 1) if 0 <= j < len(ents)}
 
 
 def _reuse(sr: StageRun, rec: dict[str, Any], md: str) -> int | None:
@@ -571,15 +623,13 @@ CHECKPOINT = "review_checkpoint.json"
 
 @dataclass
 class At:
-    """Where a resumed loop starts: after round `done`, with that round's
-    document, record, next review targets and must-fix count."""
+    """Where a resumed loop starts: after round `done` (0: none finished),
+    with that round's document and record. ``rec["pending"]`` holds a review
+    already paid for in the round that did not finish."""
 
     done: int
     md: str
     rec: dict[str, Any]
-    targets: set[int] | None
-    last_must: int | None
-    last_settled: int = 0
 
 
 def compose_sha(ud: Path) -> str:
@@ -591,100 +641,154 @@ def compose_sha(ud: Path) -> str:
 
 
 def _checkpoint(ud: Path, at: At) -> None:
-    row = {
-        "compose_sha": compose_sha(ud),
-        "done": at.done,
-        "md": at.md,
-        "rec": at.rec,
-        "targets": None if at.targets is None else sorted(at.targets),
-        "last_must": at.last_must,
-        "last_settled": at.last_settled,
-    }
+    row = {"compose_sha": compose_sha(ud), "done": at.done, "md": at.md, "rec": at.rec}
     (ud / CHECKPOINT).write_text(json.dumps(row), encoding="utf-8")
 
 
 def _resume(sr: StageRun, ud: Path) -> At | None:
-    """The last completed round of an interrupted loop over the same composed
+    """The last completed step of an interrupted loop over the same composed
     entries (a connection failure, a requeue), or None."""
     row = read_json(ud / CHECKPOINT, {})
     if not isinstance(row, dict) or not row.get("md") or row.get("compose_sha") != compose_sha(ud):
         return None
-    done, t, lm = row.get("done"), row.get("targets"), row.get("last_must")
+    done = row.get("done")
     if not isinstance(done, int) or not isinstance(row.get("rec"), dict):
         return None
-    sr.log(f"update review: resuming after round {done}; rounds 1 to {done} are not paid again")
-    targets = {int(x) for x in t if isinstance(x, int)} if isinstance(t, list) else None
-    ls = row.get("last_settled")
-    return At(
-        done, str(row["md"]), row["rec"], targets, lm if isinstance(lm, int) else None, ls if isinstance(ls, int) else 0
-    )
+    sr.log(f"update review: resuming after round {done}; what was paid for is not paid again")
+    return At(done, str(row["md"]), row["rec"])
 
 
 def _end(ud: Path) -> None:
     (ud / CHECKPOINT).unlink(missing_ok=True)
 
 
-def _stop(rnd: int, left: int, last_left: int | None, settled: int) -> str:
-    """Why the loop ends after this round's finish, or "". `left` is the
-    must-fix the finisher did not settle this round. A review that finds new
-    must-fix after edits is not a stall: progress is the finisher settling
-    one, or fewer left than after the last round (2026-10-14: the loop stopped
-    on a review count before the finisher had acted, 59 open)."""
-    falling = last_left is not None and left < last_left
-    if settled == 0 and not falling:
-        return f"no progress: the finisher settled nothing and {left} must-fix remain, no fewer than the last round"
-    if rnd >= MAX_ROUNDS or (rnd >= ROUNDS and not (falling and settled > 0)):
-        return f"the review limit was reached at round {rnd}"
-    return ""
+def _review_once(
+    c: Ctx, rec: dict[str, Any], ud: Path, md: str, base: list[str], targets: set[int] | None, done: int
+) -> tuple[list[RR.Finding], int]:
+    """This round's review, paid once: a review a killed run already paid for
+    (``rec["pending"]``, same round, same document) is read back; a new one is
+    checkpointed before anything acts on it."""
+    pend = rec.get("pending")
+    if isinstance(pend, dict) and pend.get("round") == c.rnd and pend.get("md_sha") == _sha(md):
+        c.sr.log(f"update review round {c.rnd}: the review was paid for before the interruption; not paid again")
+        return [RR.Finding(**f) for f in pend.get("findings") or []], int(pend.get("entries") or 0)
+    found, n = review_round(c, md, base, targets)
+    rec["pending"] = {"round": c.rnd, "md_sha": _sha(md), "entries": n, "findings": [f.as_dict() for f in found]}
+    _checkpoint(ud, At(done, md, rec))
+    return found, n
+
+
+def _legacy(c: Ctx, rec: dict[str, Any], md: str) -> None:
+    """A checkpoint from the loop before the frozen list (2026-10-15): its
+    last review's open must-fix become the frozen list, keyed on the
+    checkpoint's document; the next step is the re-check."""
+    last = (rec.get("rounds") or [{}])[-1]
+    must = [RR.Finding(**f) for f in last.get("findings") or [] if isinstance(f, dict)]
+    must = [f for f in _must(must) if not _closed(f)]
+    rec["frozen"] = FZ.freeze(must, RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg)))
+    rec.pop("pending", None)
+    c.sr.log(f"update review: a checkpoint from the earlier loop; its {len(must)} open must-fix are the frozen list")
 
 
 def _loop(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: Path, at: At | None = None) -> int:
-    targets: set[int] | None = at.targets if at else None
-    found: list[RR.Finding] = []
-    last_left: int | None = at.last_must if at else None
-    for rnd in range((at.done if at else 0) + 1, MAX_ROUNDS + 1):
-        c.rnd, c.calls, c.usage = rnd, 0, []
-        found, n = review_round(c, md, base, targets)
+    """Round 1: the full review, its MUST findings frozen, one finish. Round 2:
+    the narrow re-check of the frozen findings still open, one more finish of
+    those it confirms. Then clean or held; never a third review."""
+    done = at.done if at else 0
+    if done >= REVIEW and "frozen" not in rec:
+        _legacy(c, rec, md)
+    if done < REVIEW:
+        c.rnd, c.calls, c.usage = REVIEW, 0, []
+        found, n = _review_once(c, rec, ud, md, base, None, 0)
         must = _must(found)
-        row: dict[str, Any] = {"round": rnd, "entries": n, "must": len(must)}
-        rec["rounds"].append(row)
+        rec["frozen"] = FZ.freeze(must, RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg)))
         settled, rc = 0, 0
-        if found:  # the finisher always acts on the latest review
+        if found:
             try:
-                md, edited, settled, rc = finish(c, md, found, base, doc)
+                md, _edited, settled, rc = finish(c, md, found, base, doc)
             except GradeFailed as exc:
                 doc.write_text(md, encoding="utf-8")  # the round's edits are not kept on a non-answer
                 c.sr.log(f"update review: {exc}; nothing is reverted or kept, a rerun grades again")
                 return 1
-            targets = _targets(md, c.sr, edited, found)
-        left = sum(f.outcome != "applied" for f in must)
-        row.update(calls=c.calls, usage=c.usage, left=left, findings=[f.as_dict() for f in found])
+        rec.pop("pending", None)
+        for row, f in zip(rec["frozen"], must):
+            row["finding"] = f.as_dict()
+        left = sum(not _closed(f) for f in must)
+        rec["rounds"].append(
+            {"round": REVIEW, "kind": "review", "entries": n, "must": len(must), "calls": c.calls, "usage": c.usage}
+            | {"left": left, "findings": [f.as_dict() for f in found]}
+        )
         c.sr.log(
-            f"update review round {rnd}: {n} entr(ies) reviewed, {len(must)} must-fix, "
+            f"update review round {REVIEW} (full review): {n} entr(ies) reviewed, {len(must)} must-fix frozen, "
             f"{len(found) - len(must)} other; {settled} settled by the finisher, {left} must-fix left; "
             f"{c.calls} call(s), {_dollars(c.usage)}"
         )
         if rc != 0:
             _save(ud / RECORD, rec, "audit_failed", doc)
             return 3 if rc == 1 else 4
-        if not must:
+        if not left:
             _save(ud / RECORD, rec, "clean", doc)
             return 0
-        why = _stop(rnd, left, last_left, sum(f.outcome == "applied" for f in must))
-        if why:
-            c.sr.log(f"update review: {why}")
-            break
-        last_left = left
-        _checkpoint(ud, At(rnd, md, rec, targets, last_left, settled))
-    return _hold(c, rec, found, doc, ud)
+        _checkpoint(ud, At(REVIEW, md, rec))
+    return _recheck(c, rec, md, base, doc, ud)
 
 
-def _hold(c: Ctx, rec: dict[str, Any], found: list[RR.Finding], doc: Path, ud: Path) -> int:
-    open_ = [f for f in _must(found) if f.outcome != "applied"]
-    if not open_:  # every one settled, yet the loop ended before a review confirmed it
-        open_ = _must(found)
-        for f in open_:
-            f.outcome = "settled by the finisher, but the loop ended before a review read the edit"
+def _recheck(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: Path) -> int:
+    """The narrow re-check and the one more finish (``update/frozen.py``)."""
+    rows = rec["frozen"]
+    frozen = [FZ.finding(r) for r in rows]
+    open_ = [i for i, f in enumerate(frozen) if not _closed(f)]
+    if not open_:
+        _save(ud / RECORD, rec, "clean", doc)
+        return 0
+    c.rnd, c.calls, c.usage = RECHECK, 0, []
+    ents = RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg))
+    targets = FZ.locate([rows[i] for i in open_], ents)
+    found, n = _review_once(c, rec, ud, md, base, targets, REVIEW)
+    todo, unreviewed, confirms = FZ.triage(rows, open_, found, ents)
+    keys = [FZ.key(f, ents) for f in found]  # before the finish moves any anchor
+    settled, rc = 0, 0
+    if todo:
+        try:
+            md, _edited, settled, rc = finish(c, md, todo, base, doc)
+        except GradeFailed as exc:
+            doc.write_text(md, encoding="utf-8")
+            c.sr.log(f"update review: {exc}; nothing is reverted or kept, a rerun grades again")
+            return 1
+    rec.pop("pending", None)
+    for i in open_:
+        f = frozen[i]
+        if f.klass == FZ.NOT_REVIEWED:
+            f.outcome = f.outcome if unreviewed else "settled: its entries were reviewed on the re-check"
+        elif i not in confirms:
+            f.outcome = FZ.SETTLED
+        elif all(_closed(g) for g in confirms[i]):
+            f.outcome = "applied"
+        else:
+            f.outcome = "confirmed on re-check; " + "; ".join(dict.fromkeys(g.outcome for g in confirms[i]))[:400]
+        rows[i]["finding"] = f.as_dict()
+    still = [f for f in todo if not _closed(f)] + unreviewed
+    advisory = sum(f.outcome == FZ.ADVISORY for f in found)
+    rec["rounds"].append(
+        {"round": RECHECK, "kind": "re-check", "entries": n, "must": len(_must(found)), "calls": c.calls}
+        | {"usage": c.usage, "confirmed": len(confirms), "advisory": advisory, "left": len(still)}
+        | {"keys": keys, "findings": [f.as_dict() for f in found]}
+    )
+    c.sr.log(
+        f"update review round {RECHECK} (re-check of {len(open_)} open frozen finding(s)): {n} entr(ies) reviewed, "
+        f"{len(confirms)} confirmed, {len(open_) - len(confirms)} settled as not raised again, {advisory} advisory; "
+        f"{settled} settled by the finisher, {len(still)} must-fix left; {c.calls} call(s), {_dollars(c.usage)}"
+    )
+    if rc != 0:
+        _save(ud / RECORD, rec, "audit_failed", doc)
+        return 3 if rc == 1 else 4
+    if not still:
+        _save(ud / RECORD, rec, "clean", doc)
+        return 0
+    return _hold(c, rec, still, doc, ud)
+
+
+def _hold(c: Ctx, rec: dict[str, Any], open_: list[RR.Finding], doc: Path, ud: Path) -> int:
     _save(ud / RECORD, rec, "held", doc, open_)
     for f in open_:
         c.sr.log(f"  OPEN [{f.klass}] {_plain(f)}" + (f"; not settled: {f.outcome}" if f.outcome else ""))
@@ -693,6 +797,7 @@ def _hold(c: Ctx, rec: dict[str, Any], found: list[RR.Finding], doc: Path, ud: P
 
 
 def _save(path: Path, rec: dict[str, Any], status: str, doc: Path, open_: list[RR.Finding] | None = None) -> None:
+    rec.pop("pending", None)
     rec["status"] = status
     rec["doc_sha_out"] = _sha(doc.read_text(encoding="utf-8"))
     rec["open"] = [f.as_dict() for f in open_ or []]
@@ -704,7 +809,7 @@ def _save(path: Path, rec: dict[str, Any], status: str, doc: Path, open_: list[R
 def projected_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing) -> float | None:
     """What this stage is projected to cost, from this matter's own pages:
     every page of the new exhibits shown once to the review, the same again
-    for the later rounds and the finisher, priced at the review model's input
+    for the rest (two finishes and the narrow re-check, at most), priced at the review model's input
     rate (output is bounded by the parts and small beside the pages)."""
     out = slug_dir / "out" / unit
     new = [r.get("exhibit") for r in read_json(slug_dir / "runs" / unit / "update" / "new_exhibits.final.json", [])]

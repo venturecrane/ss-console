@@ -17,7 +17,9 @@ edit reaches the document only when it is checked here and then audited.
   entry's provider line.
 * ``drop_entry`` names its ``survivor``: an added (``N<k>``) or delivered
   (``D<k>``) entry that already holds every value of the dropped one. Content
-  that exists nowhere else is never dropped.
+  that exists nowhere else is never dropped. A must-fix duplicate whose review
+  names the one entry it repeats never reaches the finisher: it is folded in
+  code first (``update/duplicates.py``, 2026-10-15).
 * ``provider`` applies only when the page it cites, a page the entry cites,
   states the name in its text: the header is not a claim the audit reads, so
   the page's text is the independent read (as for a redate).

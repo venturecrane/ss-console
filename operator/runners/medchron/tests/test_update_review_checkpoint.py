@@ -2,10 +2,10 @@
 
 A resumed real update (2026-10-14) restarted ``update_review`` from round 1
 after a connection error and paid again for every round it had finished,
-then failed again. Each completed round now leaves its document, record,
-next targets and must-fix count; a rerun (or the requeue of a job whose
-network failed) over the same composed entries continues from the next
-round. Every value is invented; the test fails on the code before F3.
+then failed again. Each completed round now leaves its document and record
+(with the frozen must-fix list, 2026-10-15), and each review is checkpointed
+as soon as it is paid for; a rerun (or the requeue of a job whose network
+failed) over the same composed entries continues where it stopped. Every value is invented; the test fails on the code before F3.
 """
 
 from __future__ import annotations
@@ -106,38 +106,61 @@ def _go(sr: SimpleNamespace) -> int:
     )
 
 
-def test_a_review_killed_after_round_two_resumes_at_round_three_without_paying_rounds_one_and_two(
+def test_a_review_killed_in_the_recheck_resumes_there_without_paying_round_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     entries = [_entry(1, 9, 1), _entry(2, 8, 2), _entry(3, 7, 3)]
-    reviews = [
-        _reply("findings", [_finding("N1.c1", "a", 1), _finding("N2.c1", "b", 2), _finding("N3.c1", "c", 3)]),
-        _reply("findings", [_finding("N2.c1", "b", 2), _finding("N3.c1", "c", 3)]),
-        _reply("findings", [_finding("N3.c1", "c", 3)]),
-        _reply("findings", []),
-    ]
-    finishes = [
-        _reply("edits", [_fix("N1.c1", 4, 1)]),
-        _reply("edits", [_fix("N2.c1", 5, 2)]),
-        _reply("edits", [_fix("N3.c1", 6, 3)]),
-    ]
+    r1 = _reply("findings", [_finding("N1.c1", "a", 1), _finding("N2.c1", "b", 2), _finding("N3.c1", "c", 3)])
+    r2 = _reply("findings", [_finding("N2.c1", "b", 2), _finding("N3.c1", "c", 3)])
+    first = _reply("edits", [_fix("N1.c1", 4, 1)])  # N2 and N3 are left open
+    last = _reply("edits", [_fix("N2.c1", 5, 2), {**_fix("N3.c1", 6, 3), "finding": "F2"}])
     sr, doc = _scene(tmp_path, monkeypatch, entries)
-    sr.doorway = _Dies(reviews, finishes, at=3)
+    sr.doorway = _Dies([r1, r2], [first], at=2)
     with pytest.raises(ConnectionError):
         _go(sr)
-    first = {kw["custom_id"].split("-")[1] for kw in sr.doorway.seen}
-    assert first == {"r1", "r2"}  # rounds 1 and 2 completed; round 3's first review call died
+    assert {kw["custom_id"].split("-")[1] for kw in sr.doorway.seen} == {"r1"}  # round 2's first call died
     # The requeue: a fresh process, a fresh doorway, the same composed entries.
-    sr.doorway = K.ScriptedDoor(reviews, finishes[2:])
+    sr.doorway = K.ScriptedDoor([r1, r2], [last])
     assert _go(sr) == 0, sr.logged
     again = [kw["custom_id"] for kw in sr.doorway.seen]
-    assert again and not any(c.split("-")[1] in ("r1", "r2") for c in again)  # rounds 1-2 are not re-called
-    assert any("resuming after round 2" in m for m in sr.logged)
+    assert again and not any(c.split("-")[1] == "r1" for c in again)  # round 1 is not re-called
+    assert any("resuming after round 1" in m for m in sr.logged)
     ents = B.entries_of(doc.read_text())[1]
     assert [V.format(m, p) in e for e, m, p in zip(ents, (4, 5, 6), (1, 2, 3))] == [True, True, True]
     rec = json.loads((sr.slug_dir / "runs" / "alpha" / "update" / "review_repair.json").read_text())
-    assert rec["status"] == "clean" and [r["round"] for r in rec["rounds"]] == [1, 2, 3, 4]
+    assert rec["status"] == "clean" and [r["round"] for r in rec["rounds"]] == [1, 2]
+    assert "pending" not in rec
     assert not (sr.slug_dir / "runs" / "alpha" / "update" / UR.CHECKPOINT).exists()
+
+
+class _FinishDies(K.ScriptedDoor):
+    """The scripted doorway, whose connection fails at round `at`'s finisher."""
+
+    def __init__(self, reviews: list[str], finishes: list[str], at: int) -> None:
+        super().__init__(reviews, finishes)
+        self.at = at
+
+    def call(self, stage: str, **kw: Any):
+        if f"-r{self.at}-" in str(kw.get("custom_id")) and kw.get("system") == "update-finish-system":
+            raise ConnectionError("the connection to the model API dropped")
+        return super().call(stage, **kw)
+
+
+def test_a_review_already_paid_for_is_not_paid_again_when_its_finish_dies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entries = [_entry(1, 9, 1), _entry(2, 8, 2)]
+    r1 = _reply("findings", [_finding("N1.c1", "a", 1), _finding("N2.c1", "b", 2)])
+    sr, doc = _scene(tmp_path, monkeypatch, entries)
+    sr.doorway = _FinishDies([r1], [], at=1)
+    with pytest.raises(ConnectionError):
+        _go(sr)
+    sr.doorway = K.ScriptedDoor(
+        [r1], [_reply("edits", [_fix("N1.c1", 4, 1), {**_fix("N2.c1", 5, 2), "finding": "F2"}])]
+    )
+    assert _go(sr) == 0, sr.logged
+    assert not sr.doorway.review_calls  # round 1's review was read back, not paid again
+    assert any("not paid again" in m for m in sr.logged)
 
 
 def test_a_new_collect_is_a_new_review_never_a_resumed_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

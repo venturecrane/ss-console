@@ -104,8 +104,9 @@ UPDATE_STAGES: tuple[Stage, ...] = (
     # The gate before assemble: an INDEPENDENT review of the added entries
     # against every page of the documents they cite, then a FINISHER that
     # corrects each must-fix finding (every new sentence audited, an
-    # unsupported edit undone), looped until a review finds no must-fix
-    # (``stages/update_review.py``). The proofs then run on the corrected text,
+    # unsupported edit undone); round 1's must-fix list is frozen, one narrow
+    # re-check confirms or settles what is still open, and the confirmed get
+    # one more finish (``stages/update_review.py``). The proofs then run on the corrected text,
     # and the pre-delivery ``review`` below is the final read.
     Stage(
         "update_review",

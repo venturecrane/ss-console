@@ -134,17 +134,6 @@ def test_a_duplicate_entry_is_removed_and_its_content_survives_in_the_entry_name
     assert rec["status"] == "clean" and rec["rounds"][0]["findings"][0]["outcome"] == "applied"
 
 
-def test_a_duplicate_whose_content_exists_nowhere_else_is_kept_and_the_job_holds(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    other = N2_COPY.replace("4 mm", "6 mm")
-    dup = _review(_finding("N2", "4 duplicate", "N2 repeats N1"))
-    drop = _edits({"finding": "F1", "anchor": "N2", "action": "drop_entry", "exhibit": 2, "page": 1, "survivor": "N1"})
-    rc, sr, md = _run(tmp_path, monkeypatch, [N1, other, LATER], [dup], [drop])
-    assert rc == 2 and other in md
-    assert "does not carry 6" in _record(sr)["open"][0]["outcome"]
-
-
 # (b) ----------------------------------------------------------------------------
 def test_a_wrong_header_date_and_provider_are_corrected_from_the_page(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -220,26 +209,6 @@ def test_a_finisher_edit_the_audit_does_not_support_is_reverted_and_the_job_hold
     assert rec["status"] == "held" and rec["open"][0]["outcome"].startswith("reverted")
     hold = sr.logged[-1]
     assert hold.startswith("update_held:") and "the protrusion size is misread" in hold
-
-
-# (e) ----------------------------------------------------------------------------
-def test_the_loop_stops_when_a_review_finds_no_fewer_must_fix(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    good = "Lumbar MRI showed a disc protrusion of 5 mm at the fourth and fifth lumbar level. (Exhibit 2 - p. 1)"
-    r1 = _review(
-        _finding("N1.c1", "1 wrong value", "size misread"), _finding("N2.c1", "3 truncated", "cut off", exhibit=3)
-    )
-    r2 = _review(
-        _finding("N1.c1", "1 wrong value", "size still misread"), _finding("N2.c1", "3 truncated", "cut off", exhibit=3)
-    )
-    fix = _edits(
-        {"finding": "F1", "anchor": "N1.c1", "action": "replace", "exhibit": 2, "page": 1, "corrected": good},
-        unresolved=[{"finding": "F2", "why": "the page does not show the rest"}],
-    )
-    decline = _edits(unresolved=[{"finding": "F1", "why": "x"}, {"finding": "F2", "why": "y"}])
-    rc, sr, md = _run(tmp_path, monkeypatch, [N1, LATER], [r1, r2], [fix, decline])
-    assert rc == 2
-    assert _review_rounds(sr) == {"r1", "r2"} and UR.ROUNDS > 2  # stopped at no progress, not at the cap
-    assert any("no fewer than the last round" in m for m in sr.logged)
 
 
 # a copy of a delivered visit whose exhibit nothing else cites -------------------
@@ -387,41 +356,6 @@ def test_a_finding_the_finisher_declines_is_held_with_its_reason_never_an_empty_
     assert any("OPEN" in m and "too faint" in m for m in sr.logged)
 
 
-def test_a_review_that_finds_new_must_fix_after_edits_is_finished_not_called_a_stall(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """F5. Round 1 finds one must-fix and the finisher settles it; round 2,
-    reading the edited entries, finds two NEW ones. Before, the loop stopped
-    on the review count (2, no fewer than 1) WITHOUT running the finisher on
-    round 2 (a real update held with 59 open that way). Now the finisher acts
-    on every review, and the loop ends clean at round 3."""
-    sent = "Lumbar MRI showed a disc protrusion of {} mm at the fourth and fifth lumbar level. (Exhibit 2 - p. 1)"
-    other = "Therapy evaluation recorded lumbar flexion limited to {} degrees. (Exhibit 3 - p. 1)"
-    later = LATER.split("\n\nAll Other Information\n")[0] + "\n\nAll Other Information\n" + other.format("forty")
-    r1 = _review(_finding("N1.c1", "1 wrong value", "size misread"))
-    r2 = _review(
-        _finding("N1.c1", "1 wrong value", "level misread"), _finding("N2.c1", "1 wrong value", "x", exhibit=3)
-    )
-    f1 = _edits(
-        {"finding": "F1", "anchor": "N1.c1", "action": "replace", "exhibit": 2, "page": 1, "corrected": sent.format(5)}
-    )
-    f2 = _edits(
-        {"finding": "F1", "anchor": "N1.c1", "action": "replace", "exhibit": 2, "page": 1, "corrected": sent.format(6)},
-        {
-            "finding": "F2",
-            "anchor": "N2.c1",
-            "action": "replace",
-            "exhibit": 3,
-            "page": 1,
-            "corrected": other.format("thirty"),
-        },
-    )
-    rc, sr, md = _run(tmp_path, monkeypatch, [N1, later], [r1, r2, K.CLEAN_REVIEW], [f1, f2])
-    assert rc == 0, [f["outcome"] for f in _record(sr)["open"]]
-    assert _review_rounds(sr) == {"r1", "r2", "r3"}
-    assert sent.format(6) in md and other.format("thirty") in md
-
-
 def test_a_handwritten_row_takes_its_provider_from_the_statement_page_of_the_same_document(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -461,28 +395,6 @@ def test_a_redate_may_rest_on_an_uncited_page_of_the_entrys_document_that_states
     rc, sr, md = _run(tmp_path, monkeypatch, [wrong], [found, K.CLEAN_REVIEW], [fix], pages=page)
     assert rc == 0, [f["outcome"] for f in _record(sr)["open"]]
     assert B.entries_of(md)[1] == [N1]
-
-
-def test_a_converging_loop_goes_past_four_reviews_and_finishes_clean(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Five must-fix, one settled per round: the loop is still converging at
-    round 4, so it goes on (to at most MAX_ROUNDS) and ends clean at round 6
-    instead of holding at round 4 with one open."""
-    sent = "Lumbar MRI showed a disc protrusion of {} mm at the fourth and fifth lumbar level. (Exhibit 2 - p. {})"
-    head = "08/{:02d}/2026\nSample Imaging Center | Medical Diagnoses\n\nMedical Diagnoses\n"
-    entries = [head.format(20 + i) + sent.format(9, 1) for i in range(5)]
-    reviews, finishes = [], []
-    for r in range(5):
-        reviews.append(_review(*[_finding(f"N{i + 1}.c1", "1 wrong value", f"misread {i}") for i in range(r, 5)]))
-        fix = {"finding": "F1", "anchor": f"N{r + 1}.c1", "action": "replace", "exhibit": 2, "page": 1}
-        finishes.append(_edits({**fix, "corrected": sent.format(4, 1)}))
-    reviews.append(K.CLEAN_REVIEW)
-    rc, sr, md = _run(tmp_path, monkeypatch, entries, reviews, finishes)
-    assert rc == 0, [f["outcome"] for f in _record(sr)["open"]]
-    assert _review_rounds(sr) == {f"r{i}" for i in range(1, 7)}
-    assert sent.format(9, 1) not in md
-    assert UR.ROUNDS == 4 and UR.MAX_ROUNDS == 6
 
 
 def _grade(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tiers: dict, verdict: str) -> tuple[dict, Any]:
@@ -625,15 +537,6 @@ def test_a_grade_that_is_no_verdict_fails_the_stage_and_reverts_nothing(
     assert isinstance(got, UR.GradeFailed) and "got no verdict" in str(got)
 
 
-def test_past_four_reviews_a_loop_that_stops_converging_holds() -> None:
-    assert UR._stop(2, 3, 3, 0).startswith("no progress")  # settled nothing, no fewer left
-    assert UR._stop(1, 3, None, 0).startswith("no progress")  # the first finish settled nothing
-    assert UR._stop(2, 4, 3, 2) == ""  # more found, but the finisher settled some: go on
-    assert UR._stop(4, 2, 3, 0) == "the review limit was reached at round 4"  # falling, but nothing settled
-    assert UR._stop(4, 2, 3, 1) == ""  # falling and settling: go on
-    assert UR._stop(6, 1, 2, 1) == "the review limit was reached at round 6"
-
-
 # F6: the two actions that change which entries the update has ---------------------
 PROCEDURE = "Right sacroiliac joint injection was performed under fluoroscopic guidance. (Exhibit 3 - p. 1)"
 
@@ -727,10 +630,13 @@ def test_a_copy_of_a_delivered_visit_with_new_content_is_folded_under_it(
 
 
 def test_a_fold_that_would_lose_a_value_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The problem names no entry, so the code cannot decide the duplicate
+    (``update/duplicates.py``) and the finisher's fold is checked: it would
+    lose 21, so it is refused, re-raised on the re-check, refused again."""
     copy = "01/20/2026\nExample Clinic | Medical Diagnoses\n\nMedical Diagnoses\n" + ORDERS.replace(
         "14 days", "21 days"
     )
-    found = _review(_finding("N1", "4 duplicate", "N1 repeats delivered D2", exhibit=3))
+    found = _review(_finding("N1", "4 duplicate", "N1 repeats a delivered visit", exhibit=3))
     fix = _edits(
         {
             "finding": "F1",
