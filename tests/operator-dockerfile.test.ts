@@ -1869,6 +1869,14 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
     }
   })
 
+  it('imports the SMD note lane and command at build', () => {
+    // FALSIFIER: drop either module from the build-time import smoke and an
+    // image whose note lane cannot import boots, and no note wake is ever sent.
+    expect(DOCKERFILE_CODE).toContain(
+      'medchron.negotiation.run, medchron.note_lane, medchron.note_by_smd, medchron.litigation_lane'
+    )
+  })
+
   it('ships what the litigation status job reads court papers with, and asserts it at build', () => {
     // FALSIFIER: drop antiword from the apt line, striprtf from the import
     // line, or the entrypoint COPY, and a seat boots a lane that cannot read

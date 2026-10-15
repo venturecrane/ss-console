@@ -55,9 +55,6 @@ CREATE_SQL = (
     ")"
 )
 CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_note_jobs_created ON note_jobs(created_at)"
-#: What a status read returns to the DELIVER turn: the words and the state,
-#: never the request ref or who approved them.
-PROJECTION = ("id", "created_at", "state", "text", "reply_sent_at")
 
 
 def text_digest(text: str) -> str:
@@ -135,10 +132,6 @@ class NoteLedger:
         finally:
             conn.close()
 
-    @staticmethod
-    def project(row: dict[str, Any]) -> dict[str, Any]:
-        return {k: row.get(k) for k in PROJECTION}
-
     def mark_replied(self, job_id: str, key: str = "reply") -> bool:
         """True exactly once per (job, key); the reply binding's key is
         ``<attempt>:<state>`` (``drafting_ledger.mark_replied``)."""
@@ -167,4 +160,4 @@ class NoteLedger:
             conn.close()
 
 
-__all__ = ["AUDIT_TYPE", "PROJECTION", "SKILL_NAME", "STATES", "NoteExists", "NoteLedger", "text_digest"]
+__all__ = ["AUDIT_TYPE", "SKILL_NAME", "STATES", "NoteExists", "NoteLedger", "text_digest"]

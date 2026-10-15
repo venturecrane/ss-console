@@ -149,6 +149,15 @@ def test_a_copy_list_that_changed_since_the_dry_run_is_refused(tmp_path: Path) -
     assert _notes(broker) == []
 
 
+def test_another_approver_needs_a_new_dry_run(tmp_path: Path) -> None:
+    """The digest binds who approved the words, so --confirm cannot carry one
+    person's approval onto another name. FALSIFIER: drop approved_by from it."""
+    broker, _ = _seat(tmp_path)
+    digest = _preview(broker)["digest"]
+    out = _record(broker, confirm=digest, approved_by="someone.else@smd.services")
+    assert out["accepted"] is False and _notes(broker) == []
+
+
 def test_changed_words_need_a_new_dry_run(tmp_path: Path) -> None:
     broker, _ = _seat(tmp_path)
     digest = _preview(broker)["digest"]
@@ -289,9 +298,11 @@ def test_ordinal_dates_fold_like_the_overlay_does() -> None:
     assert {h.canonical for h in hits} == {"2026-08-05"}
 
 
-def test_the_ledger_projection_never_carries_the_request_or_approver(tmp_path: Path) -> None:
+def test_status_never_carries_the_request_or_approver(tmp_path: Path) -> None:
+    """The DELIVER turn gets the words and the state, nothing about who asked
+    for them or who approved them."""
     ledger = NoteLedger(str(tmp_path / "audit.db"))
     job = ledger.create(requester=COLLEAGUE, request_ref=rb.GRAPH_ID, text=TEXT, approved_by="a", recorded_by="root")
-    row = ledger.read(job)
-    assert row is not None
-    assert set(NoteLedger.project(row)) == {"id", "created_at", "state", "text", "reply_sent_at"}
+    broker, _ = _seat(tmp_path)
+    out = _call(broker, "note_job_status", job_id=job)
+    assert set(out["job"]) == {"job_id", "state", "text"}

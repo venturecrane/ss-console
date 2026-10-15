@@ -141,7 +141,9 @@ def preview(broker: BrokerContext, request: dict[str, Any], *, now: datetime | N
         )
     cc = ops._request_participants(source, sender, policy)
     digest = hashlib.sha256(
-        json.dumps({"graph_message_id": gid, "text": text, "cc": cc}, sort_keys=True, separators=(",", ":")).encode()
+        json.dumps(
+            {"graph_message_id": gid, "text": text, "cc": cc, "approved_by": who}, sort_keys=True, separators=(",", ":")
+        ).encode()
     ).hexdigest()
     return {
         "graph_message_id": gid,

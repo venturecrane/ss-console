@@ -44,29 +44,35 @@ In the runner daemon's environment (`SMD_WORKSPACE_BROKER_SOCKET`,
 /opt/medchron/.venv/bin/python -m medchron.note_by_smd <graph_id> --text-file note.txt --approved-by <who> --confirm <digest>
 ```
 
-The live run must repeat the dry run's digest, which covers the email, the words
-and the copy list: if any of them changed since the dry run, it is refused and
-you dry-run again. It then records the note (`NOTE_JOB_RECORDED`, ids and a
-digest only, never the words), sends the smd-note skill's wake, arms the
-daemon's reply watch, and waits up to `--wait-min` (default 20) minutes, then
+The live run must repeat the dry run's digest, which covers the email, the words,
+the copy list and the approver: if any of them changed since the dry run, it is
+refused and you dry-run again. It then records the note (`NOTE_JOB_RECORDED`,
+ids and a digest only, never the words) and queues the smd-note skill's wake in
+the note's job dir. It never sends the wake itself: the daemon's note lane, the
+one process holding the wake secret, sends it on its next tick and arms the
+reply watch then, so there is exactly one DELIVER turn per note. The command
+waits up to `--wait-min` (default 20) minutes from the note's creation and
 prints one of:
 
 - `reply: sent+located`: the reply went and was found in Sent Items (exit 0);
+- `reply: sent (no Sent Items lookup reported)`: the reply went and the send
+  reported no lookup; the reply watch counts this proven too (exit 0), so
+  confirm it in Sent Items yourself;
 - `reply: sent-not-located`: it went, but the send's own Sent Items lookup did
   not find it (SMD is paged `reply_not_in_sent_items`);
 - `reply: unknown`: the send failed in transport and may or may not have gone
   (SMD is paged `reply_unproven`); do not resend, check Sent Items;
-- `reply: not sent`: nothing went in the wait. The reply watch stays armed and
-  pages `reply_unproven` at its deadline. A content gate on the turn (a citation
-  or tier-1 marker) refuses a note rather than rewording it, so check the
-  `bind:` lines and the turn, then rewrite the note and record it again.
+- `reply: wake still pending`: the note lane has not sent the wake yet (it
+  retries, and pages `wake_lost` if it never can);
+- `reply: wake failed: ...`: the lane gave up on the wake; SMD is paged
+  `wake_lost`;
+- `reply: not sent`: the wake went and no reply settled in the window. The
+  reply watch pages `reply_unproven` at its deadline. A content gate on the turn
+  (a citation or tier-1 marker) refuses a note rather than rewording it, so check
+  the `bind:` lines and the turn, then rewrite the note and record it again.
 
-`bind:` lines show each `REPLY_BINDING` verdict on the note.
-
-**The wake secret** (`WEBHOOK_SECRET_MCP`) is read in-process from the
-environment, the runner daemon's, or the gateway's. It is never printed. When it
-cannot be read, or the gate cannot be reached, the wake is left pending and the
-daemon's note lane sends it on its next tick.
+Every ending but the first two exits 1. `bind:` lines show each `REPLY_BINDING`
+verdict on the note.
 
 **It refuses** (exit 2, nothing recorded): an email that is not a received
 Inbox message, a sender the seat may not answer, an email older than 14 days,
@@ -90,7 +96,8 @@ same words already recorded on the same email.
 - A note is one reply. A conversation is not a note: if she answers, her reply
   is an ordinary inbound turn.
 
-Code: `operator/runners/medchron/medchron/note_by_smd.py` and `note_lane.py`;
+Code: `operator/runners/medchron/medchron/note_by_smd.py` and `note_lane.py`
+(job dir `/run/smd-medchron/note-jobs`, root-only; boot smoke `note-lane-ticking`);
 broker `operator/workspace_broker/note_verbs.py`, `note_ledger.py`,
 `note_identifiers.py`; skill `operator/skills/smd-note/SKILL.md`. Tests:
 `operator/workspace_broker/tests/test_note_verbs.py`,

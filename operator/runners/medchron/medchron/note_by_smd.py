@@ -22,26 +22,28 @@ completion wake. This is that wake for words SMD approved:
    words with an em dash, and any identifier the email does not itself carry.
 3. The live run repeats the digest (``--confirm``), so what is recorded is what
    SMD read. ``note_record`` writes the note (once per email and words); this
-   command then wakes the smd-note skill's DELIVER mode with a code-only task
-   (``note_lane.wake_task``), arms the daemon's reply watch (which pages SMD if
-   the reply never reaches Sent Items, after this command has exited), and
-   polls the note's reply up to ``--wait-min`` minutes.
+   command then writes the note's job dir with a PENDING code-only wake
+   (``note_lane.wake_task``) and does nothing else to it. The daemon's note
+   lane, which holds the wake secret, sends the wake on its next tick and arms
+   the reply watch then (which pages SMD if the reply never reaches Sent Items,
+   whether or not this command is still running). The command only polls the
+   note's reply, up to ``--wait-min`` minutes from the job's creation.
 
-THE WAKE SECRET (``WEBHOOK_SECRET_MCP``) is read in-process from this process's
-environment, the runner daemon's, or the gateway's ``/proc/<pid>/environ``. It
-is never printed, logged or written. When it cannot be found, or the gate cannot
-be reached before sending, the wake is left PENDING in the note's job dir: the
-note lane holds the secret and dispatches it on its next tick (paging
-``wake_lost`` if it never can).
+WHY THE COMMAND NEVER SENDS THE WAKE (review of #3240). The lane scans the same
+job dirs every tick; a command that also POSTed would race it to a second
+DELIVER turn and to an unlocked read-modify-write of ``daemon.json``. This is
+``deliver_by_smd``'s shape: one writer of the wake, the daemon. The command
+writes ``daemon.json`` once, atomically, before the lane can see the job, and
+only reads it after.
 
-Exit codes: 0 the reply was sent and found in Sent Items (or a dry run / list
-succeeded); 1 any other ending (printed); 2 refused (nothing was recorded).
+Exit codes: 0 the reply was sent and the reply watch would count it proven
+(or a dry run / list succeeded); 1 any other ending (printed); 2 refused
+(nothing was recorded).
 """
 
 from __future__ import annotations
 
 import argparse
-import http.client
 import json
 import os
 import sqlite3
@@ -50,12 +52,10 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import urlparse
 
 from . import note_lane
 from .broker_client import BrokerClient, BrokerError
-from .daemon import DEFAULT_GATE_URL, DEFAULT_RUN_DIR, GATE_URL_ENV, RUN_DIR_ENV, SOCKET_ENV, WAKE_SECRET_ENV
-from .proof import watch as proof_watch
+from .daemon import DEFAULT_RUN_DIR, RUN_DIR_ENV, SOCKET_ENV
 
 REQUEST_INDEX_ENV = "SMD_REQUEST_INDEX_DB_PATH"
 DEFAULT_REQUEST_INDEX = "/opt/data/requests.db"
@@ -67,51 +67,6 @@ POLL_SECONDS = 15.0
 
 class Refused(RuntimeError):
     """The broker refused the note; nothing was recorded."""
-
-
-# -- the secret ------------------------------------------------------------------
-
-
-def _environ_of(path: Path) -> dict[str, str]:
-    try:
-        raw = path.read_bytes()
-    except OSError:
-        return {}
-    out: dict[str, str] = {}
-    for item in raw.split(b"\0"):
-        key, sep, value = item.partition(b"=")
-        if sep:
-            out[key.decode("utf-8", "replace")] = value.decode("utf-8", "replace")
-    return out
-
-
-def wake_secret(env: dict[str, str] | None = None, proc: Path = Path("/proc")) -> str:
-    """The handoff bearer, from (in order) this process, the runner daemon, the
-    gateway. "" when none holds it. NEVER print or log the value."""
-    env = dict(os.environ) if env is None else env
-    if env.get(WAKE_SECRET_ENV):
-        return env[WAKE_SECRET_ENV]
-    gateway = env.get("SMD_GATEWAY_PID", "")
-    try:
-        pids = sorted(p for p in proc.iterdir() if p.name.isdigit())
-    except OSError:
-        pids = []
-    for pid in pids:
-        try:
-            cmdline = (pid / "cmdline").read_bytes()
-        except OSError:
-            continue
-        if b"medchron.daemon" in cmdline:
-            daemon_env = _environ_of(pid / "environ")
-            gateway = gateway or daemon_env.get("SMD_GATEWAY_PID", "")
-            if daemon_env.get(WAKE_SECRET_ENV):
-                return daemon_env[WAKE_SECRET_ENV]
-    for pid in [gateway, "1"]:
-        if pid.isdigit():
-            value = _environ_of(proc / pid / "environ").get(WAKE_SECRET_ENV, "")
-            if value:
-                return value
-    return ""
 
 
 # -- the request index --------------------------------------------------------------
@@ -142,74 +97,52 @@ def recent(db_path: str, *, match: str = "", now: float | None = None) -> list[d
 # -- the wake -----------------------------------------------------------------------
 
 
-def post_wake(gate_url: str, secret: str, handoff_id: str, task: str) -> str:
-    """The daemon's own POST (``Daemon._dispatch_wakes``): ``delivered``,
-    ``timeout after send``, ``paused``, ``status N`` or ``unreachable (...)``."""
-    url = urlparse(gate_url)
-    body = json.dumps({"handoff_id": handoff_id, "task": task})
-    sent = False
-    try:
-        conn = http.client.HTTPConnection(url.hostname or "127.0.0.1", url.port or 8643, timeout=15)
-        try:
-            conn.connect()
-            sent = True
-            conn.request(
-                "POST",
-                "/webhooks/handoff",
-                body=body,
-                headers={"Content-Type": "application/json", "Authorization": f"Bearer {secret}"},
-            )
-            resp = conn.getresponse()
-            raw = resp.read()
-        finally:
-            conn.close()
-    except Exception as exc:  # noqa: BLE001 - each shape maps to a wake decision, as in the daemon
-        return "timeout after send" if sent else f"unreachable ({type(exc).__name__})"
-    if 200 <= resp.status < 300:
-        return "delivered"
-    if resp.status == 503 and b"paused" in raw:
-        return "paused"
-    return f"status {resp.status}"
-
-
-def _write_job(lane: Any, note_id: str, requester: str, ref: str, task: str) -> None:
+def _write_job(lane: Any, note_id: str, requester: str, ref: str, task: str, created: float) -> None:
+    """The note's job dir, for the note lane: the envelope first, then
+    ``daemon.json`` by an atomic rename, so the lane never reads it half-written
+    and never sees a job without its requester. Written once; never again."""
     jd = lane.job_dir(note_id)
     jd.mkdir(parents=True, exist_ok=True)
     (jd / "envelope.json").write_text(json.dumps({"requested_by": requester, "request_ref": ref}), encoding="utf-8")
-    lane._write_state(
-        note_id,
-        state="delivered",
-        delivered_by="smd",
-        finished_at=lane.clock(),
-        wake={"pending": True, "attempts": 0, "task": task},
-    )
+    state = {
+        "state": "delivered",
+        "delivered_by": "smd",
+        "finished_at": created,
+        "wake": {"pending": True, "attempts": 0, "task": task},
+    }
+    tmp = jd / ".daemon.json.tmp"
+    tmp.write_text(json.dumps(state, indent=1), encoding="utf-8")
+    tmp.replace(jd / "daemon.json")
 
 
-def wake(lane: Any, note_id: str, secret: str, post: Callable[..., str] = post_wake) -> str:
-    """Send the note's wake once; consume it and arm the reply watch exactly as
-    the daemon does. A wake that never left stays pending for the note lane."""
-    task = str((lane._daemon_state(note_id).get("wake") or {}).get("task") or "")
-    if not secret:
-        return "left pending: no wake secret readable here; the note lane sends it on its next tick"
-    outcome = post(lane.gate_url, secret, f"{lane.LANE}-{note_id}", task)
-    if outcome == "delivered" or outcome.startswith("timeout"):
-        st = lane._daemon_state(note_id)
-        w = dict(st.get("wake") or {})
-        w.update(pending=False, sent_at=lane.clock(), outcome=outcome)
-        lane._write_state(note_id, wake=w)
-        proof_watch.arm_reply_watch(lane, note_id)
-        return outcome
-    return f"left pending ({outcome}); the note lane retries it"
+def wake_state(lane: Any, note_id: str) -> str:
+    """Where the note's wake is, read from the lane's state: ``pending``,
+    ``sent``, or ``failed: <why>``."""
+    w = lane._daemon_state(note_id).get("wake") or {}
+    if w.get("pending"):
+        return "pending"
+    outcome = str(w.get("outcome") or "")
+    return outcome if outcome.startswith("failed") else "sent"
 
 
 # -- the outcome ---------------------------------------------------------------------
 
 
+#: The endings the reply watch counts proven (``proof/watch.check_reply_watches``
+#: closes a watch on ``outcome == "sent" and located is not False``).
+PROVEN = frozenset({"sent+located", "sent (no Sent Items lookup reported)"})
+
+
 def reply_outcome(rows: list[dict[str, Any]]) -> str | None:
-    """``sent+located`` / ``sent-not-located`` / ``unknown``, or None while
-    nothing is settled (the watch's own reading, ``proof/watch.py``)."""
-    if any(r.get("outcome") == "sent" and r.get("located") is not False for r in rows):
+    """The watch's own reading, mirrored exactly (``proof/watch.py``), with the
+    one case it folds together named apart: a ``sent`` row whose ``located`` is
+    None (the send reported no Sent Items lookup) is proven to the watch, so it
+    is proven here, but it is not called "located". None while nothing settled."""
+    sent = [r for r in rows if r.get("outcome") == "sent"]
+    if any(r.get("located") is True for r in sent):
         return "sent+located"
+    if any(r.get("located") is None for r in sent):
+        return "sent (no Sent Items lookup reported)"
     if any(r.get("outcome") == "unknown" for r in rows):
         return "unknown"
     if any(r.get("outcome") == "sent" and r.get("located") is False for r in rows):
@@ -241,9 +174,17 @@ def bind_verdicts(audit_db: str, note_id: str) -> list[str]:
 
 
 def poll(
-    client: Any, note_id: str, *, wait_min: float, sleep: Callable[[float], None], clock: Callable[[], float]
+    client: Any,
+    note_id: str,
+    *,
+    created: float,
+    wait_min: float,
+    sleep: Callable[[float], None],
+    clock: Callable[[], float],
 ) -> str:
-    deadline = clock() + wait_min * 60.0
+    """Poll the note's reply until it settles or ``wait_min`` after the job was
+    created. "not sent" when the window closes with nothing settled."""
+    deadline = created + wait_min * 60.0
     while True:
         resp = client._request({"action": "delivery_reply_status", "kind": note_lane.REPLY_KIND, "job_id": note_id})
         expected = str(resp.get("expected_key") or "")
@@ -266,12 +207,13 @@ def _text(a: argparse.Namespace) -> str:
 
 
 def _lane(client: BrokerClient) -> note_lane.NoteLane:
+    """The lane's paths only: this process never dispatches a wake, so it holds
+    no wake secret."""
     return note_lane.NoteLane(
         run_dir=Path(os.environ.get(RUN_DIR_ENV) or DEFAULT_RUN_DIR),
         broker=note_lane.NoteBroker(client),
         runner_cmd=[],
         customer_slug=os.environ.get("CUSTOMER_SLUG", ""),
-        gate_url=os.environ.get(GATE_URL_ENV) or DEFAULT_GATE_URL,
         wake_secret="",
     )
 
@@ -291,8 +233,6 @@ def run(
     *,
     client: Any,
     lane: Any,
-    secret: Callable[[], str] = wake_secret,
-    post: Callable[..., str] = post_wake,
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.time,
     audit_db: str | None = None,
@@ -316,15 +256,22 @@ def run(
     rec = _request(client, {"action": "note_record", **base, "confirm": a.confirm, "recorded_by": a.recorded_by})
     note_id = str(rec["job_id"])
     print(f"recorded note job {note_id}")
-    _write_job(lane, note_id, str(rec.get("requester") or ""), a.graph_id, note_lane.wake_task(note_id))
-    print(f"wake: {wake(lane, note_id, secret(), post)}")
-    outcome = poll(client, note_id, wait_min=a.wait_min, sleep=sleep, clock=clock)
+    created = clock()
+    _write_job(lane, note_id, str(rec.get("requester") or ""), a.graph_id, note_lane.wake_task(note_id), created)
+    print("wake: queued; the note lane sends it on its next tick and arms the reply watch then")
+    outcome = poll(client, note_id, created=created, wait_min=a.wait_min, sleep=sleep, clock=clock)
+    if outcome == "not sent":
+        where = wake_state(lane, note_id)
+        if where == "pending":
+            outcome = "wake still pending: the note lane has not sent it yet; it pages wake_lost if it never can"
+        elif where.startswith("failed"):
+            outcome = f"wake {where}; SMD is paged wake_lost"
+        else:
+            outcome = "not sent: the wake went and no reply settled in the window; the reply watch pages SMD"
     print(f"reply: {outcome}")
     for verdict in bind_verdicts(audit_db or os.environ.get(AUDIT_DB_ENV) or DEFAULT_AUDIT_DB, note_id):
         print(f"bind: {verdict}")
-    if outcome != "sent+located":
-        print("The daemon's reply watch stays armed and pages SMD if the reply is not proven.")
-    return 0 if outcome == "sent+located" else 1
+    return 0 if outcome in PROVEN else 1
 
 
 def parser() -> argparse.ArgumentParser:

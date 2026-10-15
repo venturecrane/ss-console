@@ -3,7 +3,8 @@ colleague in her own thread, through the smd-note skill's DELIVER wake.
 
 WHY (2026-10-15). The Operator filed a document on SMD's request and could not
 tell the colleague who asked. Each test below names the failure it stands
-against; the wake secret is never printed, whichever path finds it.
+against. The command records the note and polls; only the note lane sends
+the wake, and the command holds no wake secret.
 """
 
 from __future__ import annotations
@@ -100,28 +101,74 @@ def _sent(key_outcome: str = "sent", located: bool | None = True) -> list[dict]:
     return [{"key": f"note_job:{NOTE}:1:delivered", "outcome": key_outcome, "located": located}]
 
 
-def _run(tmp_path: Path, client: FakeClient, lane=None, posts: list | None = None, **over) -> int:
-    posts = posts if posts is not None else []
+class NoNetwork:
+    """Any attempt to open a connection is recorded and refused: the command
+    must never POST the wake (the lane alone does)."""
 
-    def post(url, secret, handoff_id, task):
-        posts.append((url, secret, handoff_id, task))
-        return "delivered"
+    def __init__(self, monkeypatch) -> None:
+        self.attempts: list = []
+        import http.client
+        import socket
 
+        def refuse(*a, **k):
+            self.attempts.append((a, k))
+            raise OSError("network refused in this test")
+
+        monkeypatch.setattr(http.client, "HTTPConnection", refuse)
+        monkeypatch.setattr(socket, "create_connection", refuse)
+
+
+def _run(tmp_path: Path, client: FakeClient, lane=None, *, on_sleep=None, **over) -> int:
     clock = {"t": 0.0}
 
     def sleep(s):
         clock["t"] += s
+        if on_sleep:
+            on_sleep()
 
     return nbs.run(
         _args(**over),
         client=client,
         lane=lane or _lane(tmp_path, client),
-        secret=lambda: SECRET,
-        post=post,
         sleep=sleep,
         clock=lambda: clock["t"],
         audit_db=str(tmp_path / "none.db"),
     )
+
+
+class FakeGate:
+    """The gateway's handoff route, for the note lane's own dispatch."""
+
+    def __init__(self, monkeypatch, status: int = 202) -> None:
+        self.posts: list[dict] = []
+        gate = self
+
+        class Conn:
+            def __init__(self, host, port, timeout=None):
+                pass
+
+            def connect(self):
+                pass
+
+            def request(self, method, path, body=None, headers=None):
+                gate.posts.append({"path": path, "body": json.loads(body), "auth": headers["Authorization"]})
+
+            def getresponse(self):
+                class R:
+                    status = gate.status
+
+                    def read(self):
+                        return b""
+
+                return R()
+
+            def close(self):
+                pass
+
+        self.status = status
+        import http.client
+
+        monkeypatch.setattr(http.client, "HTTPConnection", Conn)
 
 
 # -- the dry run ------------------------------------------------------------------
@@ -160,14 +207,17 @@ def test_a_live_run_needs_the_dry_runs_digest(tmp_path: Path) -> None:
     assert client.calls == []
 
 
-# -- the live run -----------------------------------------------------------------
+# -- the live run: the command records and polls; it never sends the wake -----------
 
 
-def test_the_live_run_records_wakes_and_arms_the_watch(tmp_path: Path, capsys) -> None:
+def test_the_live_run_records_and_queues_the_wake_and_never_posts(tmp_path: Path, monkeypatch, capsys) -> None:
+    """FALSIFIER: have the command POST the wake itself and the note lane, which
+    scans the same dir every tick, sends a second one (two DELIVER turns)."""
+    net = NoNetwork(monkeypatch)
     client = FakeClient(replies=[[], _sent()])
     lane = _lane(tmp_path, client)
-    posts: list = []
-    assert _run(tmp_path, client, lane, posts, confirm=DIGEST) == 0
+    assert _run(tmp_path, client, lane, confirm=DIGEST) == 0
+    assert net.attempts == []
     assert client.calls[0] == {
         "action": "note_record",
         "graph_message_id": GID,
@@ -176,25 +226,41 @@ def test_the_live_run_records_wakes_and_arms_the_watch(tmp_path: Path, capsys) -
         "confirm": DIGEST,
         "recorded_by": "root",
     }
-    # Exactly the code-only wake, to the gate, under the daemon's own handoff id.
-    [(url, secret, handoff, task)] = posts
-    assert (url, secret, handoff) == ("http://127.0.0.1:8643", SECRET, f"note-{NOTE}")
+    st = lane._daemon_state(NOTE)
+    task = st["wake"]["task"]
+    assert st["state"] == "delivered" and st["wake"]["pending"] is True and st["finished_at"] == 0.0
     assert task == f"Run the smd-note skill's DELIVER mode for note job {NOTE}.\nKind: note."
     assert WAKE_JOB.search(task).groups() == ("note", NOTE)
-    st = lane._daemon_state(NOTE)
-    assert st["state"] == "delivered" and st["wake"]["pending"] is False
-    assert st["reply_watch"]["kind"] == "note_job" and not st["reply_watch"].get("done")
+    assert lane._wakes_pending() == [NOTE] and "reply_watch" not in st
     assert json.loads((lane.job_dir(NOTE) / "envelope.json").read_text())["requested_by"] == REQUESTER
-    assert "reply: sent+located" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "the note lane sends it on its next tick and arms the reply watch then" in out
+    assert "reply: sent+located" in out
+
+
+def test_the_lane_sends_the_wake_once_and_arms_the_watch(tmp_path: Path, monkeypatch) -> None:
+    gate = FakeGate(monkeypatch)
+    client = FakeClient()
+    lane = _lane(tmp_path, client)
+    nbs._write_job(lane, NOTE, REQUESTER, GID, note_lane.wake_task(NOTE), created=lane.clock())
+    lane.tick()
+    lane.tick()
+    assert [(p["path"], p["body"]["handoff_id"]) for p in gate.posts] == [("/webhooks/handoff", f"note-{NOTE}")]
+    assert gate.posts[0]["body"]["task"] == note_lane.wake_task(NOTE)
+    assert gate.posts[0]["auth"] == f"Bearer {SECRET}"
+    st = lane._daemon_state(NOTE)
+    assert st["wake"]["pending"] is False and st["reply_watch"]["kind"] == "note_job"
 
 
 @pytest.mark.parametrize(
     ("rows", "printed", "rc"),
     [
         (_sent("sent", True), "reply: sent+located", 0),
+        # proof/watch.py closes a watch proven on a sent row whose located is not
+        # False, None included; mirrored, but never called "located".
+        (_sent("sent", None), "reply: sent (no Sent Items lookup reported)", 0),
         (_sent("sent", False), "reply: sent-not-located", 1),
         (_sent("unknown", None), "reply: unknown", 1),
-        ([], "reply: not sent", 1),
     ],
 )
 def test_each_reply_outcome_is_named(tmp_path: Path, capsys, rows, printed, rc) -> None:
@@ -202,67 +268,68 @@ def test_each_reply_outcome_is_named(tmp_path: Path, capsys, rows, printed, rc) 
     assert printed in capsys.readouterr().out
 
 
+def test_located_none_is_judged_as_the_watch_judges_it() -> None:
+    """The command and the reply watch must never disagree on what is proven."""
+    for located in (True, None, False):
+        rows = _sent("sent", located)
+        watch_proven = any(r.get("outcome") == "sent" and r.get("located") is not False for r in rows)
+        assert (nbs.reply_outcome(rows) in nbs.PROVEN) is watch_proven
+
+
+def test_a_wake_still_pending_at_the_end_is_named(tmp_path: Path, capsys) -> None:
+    assert _run(tmp_path, FakeClient(replies=[[]]), confirm=DIGEST, wait_min=1.0) == 1
+    assert "reply: wake still pending" in capsys.readouterr().out
+
+
+def test_a_wake_that_went_with_no_reply_is_not_sent(tmp_path: Path, capsys) -> None:
+    client = FakeClient(replies=[[]])
+    lane = _lane(tmp_path, client)
+
+    def lane_sent_it():
+        if lane.job_dir(NOTE).is_dir():
+            lane._write_state(NOTE, wake={"pending": False, "outcome": "delivered", "task": "t"})
+
+    assert _run(tmp_path, client, lane, on_sleep=lane_sent_it, confirm=DIGEST, wait_min=1.0) == 1
+    assert "reply: not sent: the wake went" in capsys.readouterr().out
+
+
+def test_the_window_starts_at_the_jobs_creation(tmp_path: Path) -> None:
+    client = FakeClient(replies=[[]])
+    clock = {"t": 0.0}
+    calls: list[float] = []
+
+    def sleep(s):
+        calls.append(s)
+        clock["t"] += s
+
+    assert nbs.poll(client, NOTE, created=0.0, wait_min=1.0, sleep=sleep, clock=lambda: clock["t"]) == "not sent"
+    assert sum(calls) == 60.0
+    calls.clear()
+    clock["t"] = 600.0
+    assert nbs.poll(client, NOTE, created=0.0, wait_min=1.0, sleep=sleep, clock=lambda: clock["t"]) == "not sent"
+    assert calls == []
+
+
 def test_a_reply_under_another_key_is_not_this_notes(tmp_path: Path, capsys) -> None:
     other = [{"key": f"note_job:{NOTE}:2:delivered", "outcome": "sent", "located": True}]
     assert _run(tmp_path, FakeClient(replies=[other]), confirm=DIGEST, wait_min=0.5) == 1
-    assert "reply: not sent" in capsys.readouterr().out
+    assert "reply: sent+located" not in capsys.readouterr().out
 
 
-def test_a_wake_that_never_left_stays_pending_for_the_lane(tmp_path: Path) -> None:
-    client = FakeClient()
-    lane = _lane(tmp_path, client)
-    nbs._write_job(lane, NOTE, REQUESTER, GID, note_lane.wake_task(NOTE))
-    out = nbs.wake(lane, NOTE, SECRET, post=lambda *a: "unreachable (ConnectionRefusedError)")
-    assert out.startswith("left pending")
-    assert lane._daemon_state(NOTE)["wake"]["pending"] is True
-    assert "reply_watch" not in lane._daemon_state(NOTE)
-    assert lane._wakes_pending() == [NOTE]
-
-
-def test_no_secret_leaves_the_wake_for_the_lane(tmp_path: Path) -> None:
-    client = FakeClient()
-    lane = _lane(tmp_path, client)
-    nbs._write_job(lane, NOTE, REQUESTER, GID, note_lane.wake_task(NOTE))
-    called: list = []
-    assert nbs.wake(lane, NOTE, "", post=lambda *a: called.append(a) or "delivered").startswith("left pending")
-    assert called == [] and lane._daemon_state(NOTE)["wake"]["pending"] is True
-
-
-# -- the secret --------------------------------------------------------------------
-
-
-def _proc(tmp_path: Path, pid: str, cmdline: bytes, environ: dict[str, str]) -> None:
-    d = tmp_path / "proc" / pid
-    d.mkdir(parents=True)
-    (d / "cmdline").write_bytes(cmdline)
-    (d / "environ").write_bytes(b"\0".join(f"{k}={v}".encode() for k, v in environ.items()) + b"\0")
-
-
-def test_the_secret_is_read_from_the_daemons_environ(tmp_path: Path) -> None:
-    _proc(tmp_path, "1", b"bash\0/app/bootstrap.sh", {})
-    _proc(tmp_path, "77", b"/opt/medchron/.venv/bin/python\0-m\0medchron.daemon", {"WEBHOOK_SECRET_MCP": SECRET})
-    assert nbs.wake_secret(env={}, proc=tmp_path / "proc") == SECRET
-
-
-def test_the_secret_falls_back_to_the_gateway(tmp_path: Path) -> None:
-    _proc(tmp_path, "9", b"hermes\0gateway", {"WEBHOOK_SECRET_MCP": SECRET})
-    assert nbs.wake_secret(env={"SMD_GATEWAY_PID": "9"}, proc=tmp_path / "proc") == SECRET
-    assert nbs.wake_secret(env={}, proc=tmp_path / "nothing") == ""
-
-
-def test_the_secret_never_reaches_stdout_or_stderr(tmp_path: Path, capsys, monkeypatch) -> None:
-    """FALSIFIER: print the bearer anywhere (a debug line, the wake's outcome)
-    and this goes red, on every path: dry run, live run, a failed wake."""
+def test_the_command_reads_no_secret_and_prints_none(tmp_path: Path, capsys, monkeypatch) -> None:
+    """The command holds no wake secret at all; with one in its environment it
+    still never appears in its output or in any file it writes."""
+    monkeypatch.setenv("WEBHOOK_SECRET_MCP", SECRET)
+    NoNetwork(monkeypatch)
     _run(tmp_path, FakeClient(), dry_run=True)
     _run(tmp_path, FakeClient(replies=[_sent()]), confirm=DIGEST)
-    lane = _lane(tmp_path, FakeClient())
-    nbs._write_job(lane, "01M4NOTEBBBBBBBBBBBBBBBBBB", REQUESTER, GID, "t")
-    nbs.wake(lane, "01M4NOTEBBBBBBBBBBBBBBBBBB", SECRET, post=lambda *a: "status 401")
     captured = capsys.readouterr()
     assert SECRET not in captured.out and SECRET not in captured.err
     for p in (tmp_path / "run").rglob("*"):
         if p.is_file():
             assert SECRET not in p.read_text(encoding="utf-8", errors="replace")
+    src = Path(nbs.__file__).read_text(encoding="utf-8")
+    assert "WEBHOOK_SECRET_MCP" not in src and "/proc" not in src
 
 
 # -- the lane: the daemon keeps watching after the command exits --------------------
@@ -271,7 +338,7 @@ def test_the_secret_never_reaches_stdout_or_stderr(tmp_path: Path, capsys, monke
 def test_the_note_lane_pages_when_no_reply_is_proven(tmp_path: Path) -> None:
     client = FakeClient(replies=[[]])
     lane = _lane(tmp_path, client)
-    nbs._write_job(lane, NOTE, REQUESTER, GID, note_lane.wake_task(NOTE))
+    nbs._write_job(lane, NOTE, REQUESTER, GID, note_lane.wake_task(NOTE), created=lane.clock())
     lane._write_state(NOTE, wake={"pending": False, "task": "t"})
     proof_watch.arm_reply_watch(lane, NOTE)
     lane._now["t"] += proof_watch.REPLY_DEADLINE_SECONDS + 1  # type: ignore[attr-defined]
@@ -283,12 +350,19 @@ def test_the_note_lane_pages_when_no_reply_is_proven(tmp_path: Path) -> None:
 def test_the_note_lane_closes_a_proven_watch_quietly(tmp_path: Path) -> None:
     client = FakeClient(replies=[_sent()])
     lane = _lane(tmp_path, client)
-    nbs._write_job(lane, NOTE, REQUESTER, GID, note_lane.wake_task(NOTE))
+    nbs._write_job(lane, NOTE, REQUESTER, GID, note_lane.wake_task(NOTE), created=lane.clock())
     lane._write_state(NOTE, wake={"pending": False, "task": "t"})
     proof_watch.arm_reply_watch(lane, NOTE)
     lane.tick()
     assert lane._daemon_state(NOTE)["reply_watch"]["done"] is True
     assert "delivery_proof_alert" not in client.actions()
+
+
+def test_a_tick_touches_the_note_tick_the_boot_smoke_reads(tmp_path: Path) -> None:
+    lane = _lane(tmp_path, FakeClient())
+    lane.jobs.mkdir(parents=True)
+    lane.tick()
+    assert (tmp_path / "run" / "note-tick").is_file()
 
 
 def test_the_lane_is_started_with_the_others() -> None:

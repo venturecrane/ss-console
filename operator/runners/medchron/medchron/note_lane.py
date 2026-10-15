@@ -1,18 +1,19 @@
-"""The note lane: the daemon's watch over SMD notes (``note_by_smd.py``).
+"""The note lane: the daemon's wake-and-watch half for SMD notes (``note_by_smd.py``).
 
 A note has no runner and no queue: SMD records it through the broker's root-only
-``note_record`` and wakes the smd-note skill's DELIVER mode itself. What a note
-still needs from the daemon is what every lane's reply gets: a watch that pages
-SMD when the reply never reaches Sent Items (``proof/watch.py``), and that keeps
-paging after the command that sent the wake has exited. So the lane is the
-daemon's wake-and-watch half and nothing else:
+``note_record``, and ``note_by_smd`` writes its job dir with a PENDING wake. This
+lane is the ONLY sender of that wake (it holds the wake secret; the command
+holds none), so there is exactly one DELIVER turn per note and one writer of
+``daemon.json`` after the command's single atomic write:
 
-* job dirs ``<run_dir>/note-jobs/<note id>``, written by ``note_by_smd`` (an
-  ``envelope.json`` naming the requester, a terminal ``daemon.json``);
-* each tick: wipe expired dirs, dispatch any wake still pending (one the command
-  could not deliver before sending: the daemon holds the wake secret and retries,
-  paging ``wake_lost`` after the last attempt), and settle every open reply
-  watch from ``delivery_reply_status`` (kind ``note_job``);
+* job dirs ``<run_dir>/note-jobs/<note id>`` (root-only, made by the
+  entrypoint): an ``envelope.json`` naming the requester and a terminal
+  ``daemon.json`` carrying the pending wake;
+* each tick: wipe expired dirs, dispatch every pending wake (the daemon's own
+  at-most-once dispatch: consumed on a 2xx or a timeout after send, retried
+  otherwise, ``wake_lost`` paged after the last attempt), which arms the reply
+  watch; then settle every open reply watch from ``delivery_reply_status``
+  (kind ``note_job``), paging SMD when the reply is not proven in time;
 * the wake's handoff id is ``note-<id>``, the daemon's own ``<LANE>-<id>``.
 
 It claims nothing and runs no child, so it costs the Machine no memory slot.
