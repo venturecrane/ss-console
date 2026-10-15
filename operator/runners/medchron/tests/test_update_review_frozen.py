@@ -192,3 +192,37 @@ def test_a_duplicate_dated_otherwise_is_never_folded_in_code_and_a_same_date_one
     day_before = "08/26/2026\nSample Imaging Center | Medical Diagnoses\n\nMedical Diagnoses\n" + MRI
     md, edits, moved = DU.resolve(doc.format(A), [dup("N1", "N1 repeats delivered D1")], keep, heads, [day_before])
     assert moved == {} and A in md and "dated 08/27/2026" in edits[0].outcome
+
+
+def test_an_entry_folded_under_one_delivered_visit_is_rehomed_under_the_same_date_visit_named_next() -> None:
+    """A real re-check named delivered D133 for an entry round 1 had folded
+    under D132 (same date); both findings were skipped and the update held.
+    The fold now moves under the visit named, carrying only what it lacks, or
+    goes when that visit carries it all; another date is still refused."""
+    from medchron.update import entry_edits as EE
+
+    keep, heads = {2, 3}, {"Medical Diagnoses", "All Other Information"}
+    doc = (
+        "X - Medical Chronology\n\n## Treatment Timeline\n\n## Diagnostic Highlights\n\n"
+        "## Medical Chronology\n\n{}\n\n## Exhibit List\n"
+    )
+    d1 = "08/27/2026\nSample Imaging Center | Medical Diagnoses\n\nMedical Diagnoses\n" + MRI
+    d2 = "08/27/2026\nSample Imaging Annex | Medical Diagnoses\n\nMedical Diagnoses\n" + MRI.replace("showed", "noted")
+    d2_all = d2 + "\n\nAll Other Information\n" + DOSE.replace("(Exhibit 2", "(Exhibit 1")
+    d3 = d2.replace("08/27/2026", "08/28/2026", 1)
+
+    def dup(problem: str) -> RR.Finding:
+        return RR.Finding("MUST", "4 duplicate", "N1", 2, 1, problem, "none", "", "")
+
+    # in one pass: folded under D1, then named a duplicate of D2
+    md, edits, moved = DU.resolve(doc.format(A), [dup("repeats D1"), dup("repeats D2")], keep, heads, [d1, d2])
+    (ent,) = B.entries_of(md)[1]
+    assert moved == {"N1": "D2"} and [e.outcome for e in edits] == ["applied", "applied"]
+    assert EE.is_fold(ent) and ent.startswith(d2.split("\n\n")[0]) and ent.endswith(DOSE)  # 600 kept, under D2
+    # across passes: a fold under D1 (round 1) named a duplicate of D2, which carries all of it
+    fold = EE.fold_text(d1, DOSE, heads)
+    md, edits, moved = DU.resolve(doc.format(fold), [dup("repeats D2")], keep, heads, [d1, d2_all])
+    assert moved == {"N1": "D2"} and edits[0].outcome == "applied" and B.entries_of(md)[1] == []
+    # another date: refused, the fold stays
+    md, edits, moved = DU.resolve(doc.format(fold), [dup("repeats D2")], keep, heads, [d1, d3])
+    assert moved == {} and fold in md and "dated 08/27/2026" in edits[0].outcome

@@ -15,7 +15,8 @@ refused round after round. The review's own text names the entry repeated
   under ``D<j>`` of only the paragraphs carrying values ``D<j>`` lacks
   (``entry_edits.fold_text``, as ``finisher.redirect_drop`` does), or is
   dropped when it carries nothing new (its exhibit, if left uncited, is a
-  re-filed copy: ``finisher.refiled``);
+  re-filed copy: ``finisher.refiled``); an entry already folded under another
+  delivered visit of the same date is re-homed under ``D<j>`` the same way;
 * survivor ``N<j>`` (another added entry): the paragraphs carrying values
   ``N<j>`` lacks, and any that keep a new exhibit cited, are appended to
   ``N<j>`` as they stand (citations kept), then the duplicate is dropped; a
@@ -60,6 +61,12 @@ def _body(text: str) -> str:
     return text.split("\n", 2)[2] if text.count("\n") >= 2 else ""
 
 
+def _fold_body(text: str) -> str:
+    """The paragraphs of a fold entry below its "Additional findings" line."""
+    parts = text.split("\n\n", 2)
+    return parts[2] if len(parts) == 3 else ""
+
+
 def _edit(f: RR.Finding, anchor: str, survivor: str, outcome: str) -> RR.Finding:
     e = copy.copy(f)
     e.anchor, e.survivor, e.action, e.outcome = anchor, survivor, "drop_entry", outcome
@@ -94,7 +101,7 @@ def resolve(
             edits.append(_edit(f, a, s, f"settled: the pair was folded once this pass ({s} into {a})"))
         elif s in gone:
             edits.append(_edit(f, a, s, f"skipped: the survivor {s} was already folded into {gone[s]} this pass"))
-        elif a in folded:
+        elif a in folded and (folded[a] == s or not s.startswith("D")):
             word = "settled" if folded[a] == s else "skipped"
             edits.append(_edit(f, a, s, f"{word}: {a} already folds under {folded[a]} this pass"))
         elif s.startswith("D"):
@@ -123,13 +130,18 @@ def _onto_delivered(
         return _edit(f, a, s, f"the survivor {s} is not a delivered entry")
     if why := B.other_date(texts[a], delivered[k]):
         return _edit(f, a, s, f"{a} is not folded under {s}: {why}")
-    body = _body(texts[a])
+    # An entry already folded under another delivered visit of this date (this
+    # pass, or round 1's finish) is RE-HOMED under the one named: its fold
+    # block is what it carries (a real re-check named D133 for a fold under
+    # D132 and both findings were skipped, holding the update).
+    body = _fold_body(texts[a]) if EE.is_fold(texts[a]) else _body(texts[a])
     lacks = content_numbers(body) - content_numbers(delivered[k])
     paras = [p for p in EE._paras(body, headings) if content_numbers(p) & lacks]
     if not paras:  # a copy of the delivered visit: dropped (a re-filed exhibit, if any)
         e = _edit(f, a, s, "applied")
         e.removed = sorted(numbers(texts[a]))
         gone[a] = s
+        folded.pop(a, None)
         return e
     why = EE._cited(paras, keep)
     if why:
