@@ -16,11 +16,6 @@
 # client, a matter or a file name: this repo is public.
 #
 # Deliberately NOT here:
-#   document-drafter.discovery_set  three sets delivered 10-12/10-13, but the
-#       10-12 set carried a false declaration and was withdrawn; the lane was
-#       rebuilt by ss#3137 (pre-delivery review, one document per set,
-#       pleading paper). The rebuilt lane is proved by a proof run of a real
-#       past request (`lane-proof dry-run <finished job>`), then accepted.
 #   document-drafter.(discovery_response|memo|depo_outline)  no delivery here
 #       at the census.
 #
@@ -70,6 +65,17 @@ lanes:
       The webhook router itself: every request emailed to this seat since
       09-13 was answered (12 requests, 0 NO REPLY alarms;
       .claude/bin/requests --client ashton-price --since 30d).
+  document-drafter.discovery_set:
+    proven_at: '2026-10-15'
+    evidence: >-
+      Rebuilt after the 10-12 set was withdrawn (ss#3137, ss#3216, ss#3231,
+      ss#3233; engagements#260). Proof run of held job
+      01M4RXQVA826C9NX3ZHQWFQATD (attempt 20261014T234525Z, three sets):
+      every audit converged and its final full read was clean, the
+      pre-delivery review found 0 MUST-FIX, nothing was written or emailed.
+      SMD read the twin (vfy_01M4YH0FN8RMSW1SQASM4QAMD6); the three defects
+      that review left were fixed at $0 before acceptance. Accepted on the
+      seat 2026-10-15T01:40Z on v145 (ss db0446be).
   file-work-requests:
     proven_at: '2026-10-08'
     evidence: >-
