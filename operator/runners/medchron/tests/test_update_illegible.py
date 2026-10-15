@@ -10,6 +10,8 @@ from medchron.update import finisher as FN, illegible as IL, review_repair as RR
 
 HEAD = "03/18/2026\nExample Chiropractic (provider not stated in the record) | Patient Complaints & Limitations"
 COMPOSED = HEAD + "\nLow back pain 6/10 with stiffness. (Exhibit 6 - p. 14)"
+
+
 def HW(ex: int, p: int) -> bool:
     return (ex, p) == (6, 14)
 
