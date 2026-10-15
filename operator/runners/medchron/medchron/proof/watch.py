@@ -45,6 +45,8 @@ REPLY_KIND = {
     "drafting": "drafting_job",
     "litigation": "litigation_job",
     "negotiation": "negotiation_job",
+    # An SMD note (medchron/note_by_smd.py), watched by the note lane.
+    "note": "note_job",
 }
 #: A reason that begins with one of these is already a proof failure the
 #: runner named; the daemon pages it under the same code.

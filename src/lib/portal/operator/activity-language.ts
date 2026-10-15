@@ -141,6 +141,7 @@ export const CLIENT_ACTIVITY_CATEGORIES: readonly ClientActivityCategory[] = [
       'NEGOTIATION_JOB_DELIVERED',
       'NEGOTIATION_JOB_FAILED',
       'NEGOTIATION_JOB_RESUME_REQUESTED',
+      'NOTE_JOB_RECORDED',
       'CASEWORK_APPROVED',
       'CASEWORK_HELD',
       'CASEWORK_CLOSED_BY_RECORD',
@@ -381,6 +382,7 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   NEGOTIATION_JOB_DELIVERED: () => 'Checked for new offers and kept Negotiation Details current',
   NEGOTIATION_JOB_FAILED: () => 'Could not finish a check for new offers',
   NEGOTIATION_JOB_RESUME_REQUESTED: () => 'Was asked to resume a check for new offers',
+  NOTE_JOB_RECORDED: () => 'Was given a note from SMD to send to your team',
   // Case-manager casework. Each line is a fact about the firm's own task list:
   // what a person answered, and what the Operator closed because the record
   // already showed it done.

@@ -730,6 +730,21 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+      # SMD note, bound HERE first (2026-10-15): SMD has the Operator tell a
+      # firm colleague something in her own thread, in words SMD approved
+      # (operator/skills/smd-note, medchron/note_by_smd.py). Every initiation
+      # flag is false on purpose: no firm person, schedule or webhook starts
+      # it. The only start is the note's handoff wake, which SMD sends from the
+      # Machine as root after the broker recorded the note. Activated on the
+      # pilot to prove the path end to end before any client seat; activation
+      # on a client seat is a separate change after that proof.
+      - name: smd-note
+        version: pending
+        initiation:
+          manual: false
+          scheduled: false
+          webhook: false
+        enabled: true
     # Every entry is pre_run-gated (ADR 0021 Stream B, #1748). The escalator's
     # bespoke pre_run decides whether a deadline needs the ladder; the other
     # skills carry the shared empty-seat gate (operator/templates/pre_run_gate.py):
