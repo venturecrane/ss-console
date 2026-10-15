@@ -246,17 +246,21 @@ any case.
      are filed in the firm's Operator Library, folder `<Folder>`, naming each file
      exactly as the wake's `Files:` line names it (the job row's `file` is the first
      of them), and give these counts from the wake's `Counts:` line, each only when
-     it is above zero: the Open and Pending matters read (`matters_read`), how many
-     are in litigation (`litigation`), dates in the next 14 days (`dates_next_14`)
-     and in the last 14 days (`dates_last_14`), open tasks due or overdue
-     (`tasks_due`, of them overdue `tasks_overdue`), litigation cases with no date
-     ahead on the calendar (`cases_without_date`), and, for the statute report,
-     cases with a statute date ahead and no filing recorded (`statute_upcoming`) and
-     Open cases whose statute date has passed with no filing recorded
-     (`statute_passed_open`). Add one sentence: a case can hold filed papers that
-     were never entered as filed, so the statute report shows each case's count of
-     court-named documents to check before treating it as unfiled. Say that nothing
-     has been sent to anyone outside the firm. Never a case, a number or a date.
+     it is above zero, with EXACTLY these labels (a shortened label reads as a
+     different measure: on 2026-10-15 "Cases without a date: 110" sat beside a
+     letter's "66 files with no LawToolBox dates", two true counts of different
+     things): "Open and Pending matters read" (`matters_read`), "In litigation"
+     (`litigation`), "Dates in the next 14 days" (`dates_next_14`), "Dates in the
+     last 14 days" (`dates_last_14`), "Open tasks due or overdue" (`tasks_due`),
+     "Of them overdue" (`tasks_overdue`), "Litigation cases with no date ahead on
+     the calendar" (`cases_without_date`), and, for the statute report, "Statute
+     date ahead, no filing recorded" (`statute_upcoming`) and "Open, statute date
+     passed, no filing recorded" (`statute_passed_open`). No other count. Then BOTH
+     of these sentences, every time: a case can hold filed papers that were never
+     entered as filed, so the statute report shows each case's count of
+     court-named documents to check before treating it as unfiled; and nothing has
+     been sent to anyone outside the firm. Never a case name or matter number, and
+     no date other than the report's own.
    - **delivered, a staff reassignment** (`Report: reassign.`): say how many cases
      moved (`cases_moved`) from the `Moved from:` names to the `Moved to:` name, which
      cases they were in words (the `Scope:` line, and the `Attorneys:` names when not
