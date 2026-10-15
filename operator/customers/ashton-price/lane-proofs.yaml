@@ -81,4 +81,13 @@ lanes:
     evidence: >-
       Rehearsed on this seat before live use (ss#3050, ss#3053, ss#3072,
       ss#3084); 9 live sessions 10-05..10-08.
+  litigation-status.deadlines:
+    proven_at: '2026-10-15'
+    evidence: >-
+      ss#3235 on v146. Proof run of held job 01M50H77431E6JZA9FCRSN3557 (an
+      emailed request from scott@smd.services, 2026-10-15T19:39Z): passed at
+      $0, both workbooks filed by the twin; SMD compared them with the 10-15
+      hand-built reports (letter 382): identical sheets and columns, row sets
+      within six hours of data drift (vfy_01M50KVRD39D2TW5TMDBG0X930).
+      Accepted on the seat 2026-10-15T20:25Z.
 revoked: []
