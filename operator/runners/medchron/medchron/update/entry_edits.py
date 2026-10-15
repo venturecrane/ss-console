@@ -28,7 +28,7 @@ from datetime import date
 
 from ..audit import claims as CL
 from . import body as B, handwritten as H, review_repair as RR
-from .values import numbers
+from .values import content_numbers, numbers
 
 FOLD = "Additional findings from records received"
 _FOLD_LINE = re.compile(rf"^{re.escape(FOLD)} \d{{2}}/\d{{2}}/\d{{4}}$")
@@ -100,7 +100,7 @@ def check_fold(e: RR.Finding, ents: list[RR.Entry], delivered: list[str], keep: 
     if why:
         return why
     body = ent.text.split("\n", 2)[2] if ent.text.count("\n") >= 2 else ""
-    missing = sorted(numbers(body) - numbers(delivered[k]) - numbers(e.corrected))
+    missing = sorted(content_numbers(body) - content_numbers(delivered[k]) - content_numbers(e.corrected))
     if missing:
         return (
             f"the fold and {e.survivor} do not carry {', '.join(missing[:5])}; content that exists nowhere else is kept"

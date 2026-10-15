@@ -40,6 +40,18 @@ def test_a_drop_whose_survivor_has_its_own_content_is_still_refused():
     assert e.action == "drop_entry" and e.anchor == "N1" and "does not carry" in e.outcome
 
 
+def test_a_time_stamp_or_a_bare_year_does_not_block_a_duplicate_drop_but_a_date_or_dose_does():
+    kept = "12/08/2025\nExample Hospital | Portal message\nPatient reports BP 127/81 at home. (Exhibit 11 - p. 70)"
+    stamped = kept.replace("at home.", "at home, sent 10:32 in 2026.")
+    e = _drop("N1", "N2")
+    FN.precheck([e], [RR.Entry("N1", stamped), RR.Entry("N2", kept)], [], None, keep={11}, headings=set())
+    assert e.outcome == "" and e.anchor == "N1"
+    dosed = kept.replace("at home.", "at home; lisinopril 10 mg on 12/09/2025.")
+    e = _drop("N1", "N2")
+    FN.precheck([e], [RR.Entry("N1", dosed), RR.Entry("N2", kept)], [], None, keep={11}, headings=set())
+    assert (e.anchor, e.survivor, e.outcome) == ("N2", "N1", "")  # the dose keeps N1; the poorer copy goes
+
+
 def test_the_finisher_is_told_to_write_an_omitted_separate_encounter_as_its_own_entry():
     text = prompts.load("update-finish-system", K.cfg())
     assert "NO entry records" in text and "Never `decline` an omitted separate encounter" in text

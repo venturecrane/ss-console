@@ -37,6 +37,19 @@ def numbers(text: str | None) -> set[str]:
     return {norm_number(t) for t in NUM.findall(CITE.sub("", text or ""))}
 
 
+_CLOCK = re.compile(r"\d{1,2}:\d{2}(?::\d{2})?")
+_YEAR = re.compile(r"(?:19|20)\d{2}")
+
+
+def content_numbers(text: str | None) -> set[str]:
+    """``numbers`` less a time of day and a bare year: what a duplicate's
+    survivor must carry before the duplicate goes. A repeated portal message
+    differs from its kept copy by its time stamp, never by its care
+    (2026-10-14 parity, round 4: three drops refused for "10:32"-style
+    stamps and a bare "2026"). Dates, doses, vitals and labs still count."""
+    return {n for n in numbers(text) if not (_CLOCK.fullmatch(n) or _YEAR.fullmatch(n))}
+
+
 def lost(before: str, after: str) -> list[str]:
     """Values `before` states that `after` no longer carries, sorted."""
     return sorted(numbers(before) - numbers(after))

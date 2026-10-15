@@ -34,7 +34,7 @@ from typing import Any
 
 from ..audit import claims as CL
 from . import body as B, illegible as IL, review_repair as RR
-from .values import numbers
+from .values import content_numbers, numbers
 
 _DROP_SURVIVOR = re.compile(r"\b([ND]\d+)\b")
 _NAME_WORD = re.compile(r"[A-Za-z][A-Za-z'-]{2,}")
@@ -94,7 +94,7 @@ def check_drop(e: RR.Finding, ents: list[RR.Entry], delivered: list[str]) -> str
     if e.anchor not in by:
         return f"{e.anchor} is not an added entry"
     body = by[e.anchor].split("\n", 2)[2] if by[e.anchor].count("\n") >= 2 else ""
-    missing = sorted(numbers(body) - numbers(by[s]))
+    missing = sorted(content_numbers(body) - content_numbers(by[s]))
     if missing:
         return f"the survivor {s} does not carry {', '.join(missing[:5])}; content that exists nowhere else is kept"
     e.survivor, e.reason = s, e.reason or f"duplicates {s}"
@@ -124,14 +124,14 @@ def redirect_drop(
     mine = by.get(e.anchor, "")
     body = mine.split("\n", 2)[2] if mine.count("\n") >= 2 else ""
     if re.fullmatch(r"D\d+", s) and 0 < int(s[1:]) <= len(delivered):
-        lacks = numbers(body) - numbers(delivered[int(s[1:]) - 1])
-        paras = [p for p in EE._paras(body, headings) if numbers(p) & lacks]
+        lacks = content_numbers(body) - content_numbers(delivered[int(s[1:]) - 1])
+        paras = [p for p in EE._paras(body, headings) if content_numbers(p) & lacks]
         if paras:
             e.action, e.survivor, e.corrected = "append_to_delivered", s, "\n\n".join(paras)
             e.reason = e.reason or f"repeats {s}; its content {s} lacks goes under it"
     elif (
         s in by
-        and numbers(by[s]) <= numbers(mine)
+        and content_numbers(by[s]) <= content_numbers(mine)
         and not any(x.anchor.split(".")[0] == s for x in edits if x is not e)
     ):
         e.anchor, e.survivor = s, e.anchor
