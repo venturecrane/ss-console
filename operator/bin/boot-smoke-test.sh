@@ -834,8 +834,25 @@ ssh_exec "negotiation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a /run/smd-me
 ENGAGEMENTS_DIR="${SS_ENGAGEMENTS_DIR:-${HOME}/dev/engagements}"
 [ -d "${ENGAGEMENTS_DIR}" ] \
   || fail "medchron-firm-config-expected — engagements checkout missing at ${ENGAGEMENTS_DIR} (clone venturecrane/engagements or set SS_ENGAGEMENTS_DIR); cannot evaluate whether ${SLUG} authors a medchron firm config, and cannot-evaluate must not read as not-expected"
+# authored <path relative to the engagements root>: true when the working
+# tree OR engagements origin/main carries the file. The default checkout
+# (~/dev/engagements) is shared and routinely stale; on 2026-10-15 it predated
+# the A&P demand/drafting/litigation dirs, so this smoke reported all three
+# lanes "absent, by design" and skipped the presence checks on a seat that
+# authors them. origin/main is what provision-customer.sh checks the firm
+# config against, so it is the expectation source a stale tree cannot hide.
+# The union errs toward running a check (a failure is loud; a skip is silent).
+# FALSIFIER: point SS_ENGAGEMENTS_DIR at a checkout whose tree lacks a lane
+# dir that origin/main has; the presence check must run, not pass-skip.
+git -C "${ENGAGEMENTS_DIR}" fetch -q origin main 2>/dev/null || true
+authored() {
+  [ -f "${ENGAGEMENTS_DIR}/$1" ] \
+    || git -C "${ENGAGEMENTS_DIR}" cat-file -e "origin/main:$1" 2>/dev/null
+}
 MEDCHRON_FIRM_YAML_AUTHORED="${ENGAGEMENTS_DIR}/operator/customers/${SLUG}/medchron/firm.yaml"
-if [ -f "${MEDCHRON_FIRM_YAML_AUTHORED}" ]; then
+MEDCHRON_AUTHORED=0
+authored "operator/customers/${SLUG}/medchron/firm.yaml" && MEDCHRON_AUTHORED=1
+if [ "${MEDCHRON_AUTHORED}" = 1 ]; then
   ssh_exec "medchron-firm-config-present" "[ \"\$(stat -c %U:%G:%a /var/lib/smd-config/medchron-firm.yaml)\" = root:medchron:640 ]"
   ssh_exec "medchron-uid-cannot-write-config" "setpriv --reuid=medchron --regid=medchron --init-groups sh -c \"! test -w /var/lib/smd-config/medchron-firm.yaml\""
   ssh_exec "medchron-token-shared" "[ \"\$(stat -c %G:%a /run/smd-smokeball-token/refresh_token)\" = smokeball-token:660 ]"
@@ -868,7 +885,7 @@ fi
 # above holds on an inputs-less seat BY DESIGN. FALSIFIER: empty the vault
 # prefix (or break the fetch) and reboot a seat that authors the lane.
 for _lane in demand drafting litigation; do
-  if [ -f "${ENGAGEMENTS_DIR}/operator/customers/${SLUG}/${_lane}/${_lane}-firm.yaml" ]; then
+  if authored "operator/customers/${SLUG}/${_lane}/${_lane}-firm.yaml"; then
     ssh_exec "${_lane}-firm-inputs-present" "[ \"\$(stat -c %U:%G:%a /var/lib/smd-config/${_lane}/${_lane}-firm.yaml)\" = root:medchron:640 ]"
   else
     pass "${_lane}-firm-inputs-absent (not authored for this seat; the ${_lane} lane defers jobs by design)"
@@ -887,7 +904,7 @@ unset _lane
 # Gated on the same authored expectation as the firm-config checks above:
 # on a seat with no medchron authored the runner refuses every job, and the
 # pass-annotated skip is emitted by the firm-config branch.
-if [ -f "${MEDCHRON_FIRM_YAML_AUTHORED}" ]; then
+if [ "${MEDCHRON_AUTHORED}" = 1 ]; then
   ssh_exec "medchron-gate-claim-audit-refuses" "/opt/medchron/.venv/bin/medchron probe claim_audit | grep -q REFUSED"
   ssh_exec "medchron-gate-extractive-refuses" "/opt/medchron/.venv/bin/medchron probe extractive | grep -q REFUSED"
   ssh_exec "medchron-gate-cross-client-refuses" "/opt/medchron/.venv/bin/medchron probe cross_client | grep -q REFUSED"
