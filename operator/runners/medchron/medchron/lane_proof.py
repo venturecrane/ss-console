@@ -70,6 +70,7 @@ KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}(?:\.[a-z0-9_]{1,40})?$")
 _CLASS_RE = re.compile(r"^[a-z_]{1,40}$")
 UPDATE_CLASS = "update_delivered"
 DEADLINES_CLASS = "deadlines"
+REASSIGN_CLASS = "reassign"
 VERIFY_RE = re.compile(r"^vfy_[0-9A-HJKMNP-TV-Z]{26}$")
 
 
@@ -87,6 +88,11 @@ def lane_key(lane: str, envelope: dict[str, Any]) -> str:
         # list (no model, two workbooks, another folder), so it waits for its
         # own proof run on the seat, never riding the status list's.
         return f"{skill}.{DEADLINES_CLASS}"
+    if lane == "litigation" and envelope.get("report") == "reassign":
+        # 2026-10-15: the staff reassignment WRITES to the firm's matters and
+        # tasks, so its first live request waits for its own proof run (which
+        # stops before the first write and reports what it would move).
+        return f"{skill}.{REASSIGN_CLASS}"
     if lane == "medchron" and isinstance(envelope.get("update"), dict):
         # 2026-10-13: an update INTO the delivered chronology is its own kind of
         # job (it reads the delivered document and deletes the one it replaces),

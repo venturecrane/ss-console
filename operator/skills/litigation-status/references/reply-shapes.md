@@ -3,7 +3,9 @@
 Each message the skill may send, and the ones it never sends. All are plain
 email, no em dashes, no timing, no figure, no job id, and **no matter fact**:
 no matter number, no client or party name, no court date, no flag's content.
-The counts and the workbook's file name are the whole of the facts.
+The counts and the workbook's file name are the whole of the facts. The one
+exception is a staff reassignment, which names the matter numbers of what did
+not move (never a name or a date with them).
 
 ## REQUEST mode (a reply in the requester's thread)
 
@@ -12,6 +14,9 @@ The counts and the workbook's file name are the whole of the facts.
 - **Accepted, the deadlines report.** "Received. The deadlines report and the
   statute report are being prepared; I'll reply in this thread when they're
   filed." Only the reports the email named.
+- **Accepted, a staff reassignment.** "Received. I'm moving the cases from Pat
+  Doe and Sam to Dana Roe, tasks included; I'll reply in this thread when it's
+  done." The names as the email gives them.
 - **Refused by the broker.** The broker's sentence in plain words, then
   "Nothing was queued." Example: "A list for the same cases is already being
   prepared, so nothing new was queued."
@@ -42,6 +47,14 @@ The counts and the workbook's file name are the whole of the facts.
   report shows each case's court-named documents to check first. Nothing has
   been sent to anyone outside the firm." Only the counts the wake carries,
   each left out at zero.
+- **delivered, a staff reassignment.** A reply in the requester's thread:
+  "Done. 41 cases moved from Pat Doe and Sam Roe to Dana Roe (Lee Example's
+  litigation cases, Open and Pending), with 109 of their open tasks. One task
+  on 100123 still names the earlier person; SMD has been told and is finishing
+  it. 12 cases outside this request were left as they were (Chris Example 8,
+  Lee Example 4, not in litigation), in case you want those moved too. Nothing
+  has been sent to anyone outside the firm." Each part only when its line
+  applies; matter numbers only for what did not move.
 - **delivered, scheduled.** `reply_bind` with the job id answers mode
   `new_message` with the recipient and the subject set by the broker; one
   `create_draft` to that person with the same counts-only body. The subject
@@ -54,6 +67,14 @@ The counts and the workbook's file name are the whole of the facts.
     it, and the next message you get about this list will be the filed list."
   - `nothing_in_scope`: "No list was filed: none of the firm's open litigation
     matters fit this request. Nothing is needed from you."
+  - `staff_unresolved` (a staff reassignment): "Nothing was changed: <name>
+    <why>, so I did not guess. Which person did you mean? Send the request again
+    with their full name as Smokeball shows it; that is all that is needed."
+    `<why>` by the `Unresolved:` kind, as the skill words it. The one hold whose
+    answer is the firm's.
+  - `smd_finishing` on a staff reassignment: "The cases have not all been moved
+    yet. Nothing is needed from you; SMD is finishing it, and the next message
+    you get about this will say what was moved."
 - **failed.** NO message. One `litigation_job_status` call (which raises SMD's
   shortfall alert) and the turn ends. The firm hears nothing about our own
   machinery.
@@ -62,8 +83,9 @@ The counts and the workbook's file name are the whole of the facts.
 
 ## Never
 
-- A list of cases, a matter number, a name or a date in the body.
-- On a hold: a request to resubmit, repeat, narrow, split or change the
+- A list of cases, a matter number, a name or a date in the body (a staff
+  reassignment's not-moved matter numbers excepted).
+- On a hold other than `staff_unresolved`: a request to resubmit, repeat, narrow, split or change the
   request; SMD offered as a route; a gate, a code, a stage or anything from the
   job's reason; a time.
 - A second message, a follow-up, a task or a memo.

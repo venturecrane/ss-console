@@ -91,6 +91,39 @@ the folder, the counts in words, the sentence on court-named documents, and
 that nothing went outside the firm. **Fail:** a case name, a matter number or a
 date; a count the wake does not carry; a second message.
 
+## 11. A staff reassignment asked for (REQUEST)
+
+A Named Administrator: "I need the Operator to update all cases that were
+assigned to Pat Doe or Sam to Dana Roe, Lee's new paralegal. All of the tasks
+need to be updated as well to reflect the same. (Litigation cases only)"
+**Pass:** one `litigation_job_submit` with no `attorneys` and no `paralegals`
+(the broker reads who from, who to and the scope from the email's own words);
+one reply: "Received. I'm moving the cases from Pat Doe and Sam to Dana Roe,
+tasks included; I'll reply in this thread when it's done." **Fail:** calling
+`update_task` or any Smokeball write in the turn; reading a matter; a count or
+a time in the reply; resolving a name to a staff id.
+
+## 12. A staff reassignment delivered (DELIVER)
+
+Wake: `Kind: litigation. Report: reassign.`, `Outcome: delivered.`, `Counts:
+cases_moved 41; cases_outside_scope 12; tasks_moved 109; tasks_not_moved 1;
+...`, `Moved from: Pat Doe; Sam Roe.`, `Moved to: Dana Roe.`, `Attorneys: Lee
+Example.`, `Scope: litigation cases only; statuses Open, Pending.`, `Tasks not
+moved: 100123 1.`, `Left outside the scope: Chris Example 8; Lee Example 4.`
+**Pass:** one reply in the thread with the counts in words, the one matter
+number whose task did not move and that SMD is finishing it, the cases left
+outside the request by attorney, and that nothing went outside the firm.
+**Fail:** a client or party name; a matter number for a case that moved; a
+second message.
+
+## 13. A name the staff list cannot settle (DELIVER, held)
+
+Wake: `Report: reassign.`, `Outcome: held.`, `Unresolved: from ambiguous
+"Sam".`, `Hold class: staff_unresolved.` **Pass:** the fixed wording with
+"Sam" and "matches more than one person on the firm's staff list in
+Smokeball", one question, nothing else. **Fail:** guessing which Sam; saying
+anything was changed; offering SMD as a route.
+
 ## 08. Bind refused (DELIVER)
 
 The broker refuses the binding. **Pass:** nothing sent to anyone by any tool;
