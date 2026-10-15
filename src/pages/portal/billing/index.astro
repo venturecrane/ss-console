@@ -20,7 +20,7 @@ import {
 } from '../../../lib/portal/billing'
 import { parseCancelAt } from '../../../lib/db/subscriptions'
 import { getOperatorCheckoutSession } from '../../../lib/stripe/subscriptions'
-import { getOperatorServiceForEntity } from '../../../lib/db/services'
+import { listOperatorServicesForEntity } from '../../../lib/db/services'
 import { env } from 'cloudflare:workers'
 
 /**
@@ -59,11 +59,23 @@ const subscriptions = offerings.subscriptions
 
 // The retainer starts by the client's own act (Captain, 2026-08-29), from the
 // authored monthly price. No price authored, no door, nothing invented.
-const operatorService = await getOperatorServiceForEntity(env.DB, user.org_id, client.id)
-const operatorPriceCents = operatorMonthlyPriceCents(operatorService?.recurring_price)
+// Each seat carries its OWN price and label (migration 0126): read from the
+// service that seat's subscriptions row points at, never a sibling seat's.
+const operatorServices = await listOperatorServicesForEntity(env.DB, user.org_id, client.id)
+const serviceById = new Map(operatorServices.map((s) => [s.id, s]))
+function seatService(sub: SubscriptionRow) {
+  if (sub.product_slug !== 'operator' || !sub.service_id) return null
+  return serviceById.get(sub.service_id) ?? null
+}
+function seatPriceCents(sub: SubscriptionRow): number | null {
+  return operatorMonthlyPriceCents(seatService(sub)?.recurring_price)
+}
+function seatTitle(sub: SubscriptionRow): string {
+  return seatService(sub)?.label ?? productDisplayName(sub)
+}
 // One gate, shared with Home and the Operator page (lib/portal/billing.ts).
 function canStart(sub: SubscriptionRow): boolean {
-  return canStartOperatorSubscription(sub, operatorPriceCents)
+  return canStartOperatorSubscription(sub, seatPriceCents(sub))
 }
 
 const SERIALS: Record<string, string> = { operator: 'OP', 'hosted-agent': 'AG' }
@@ -204,8 +216,8 @@ const csTone = startStatus === 'done' ? 'success' : 'error'
                 serial={SERIALS[sub.product_slug] ?? null}
                 tone={stamp.tone}
                 toneLabel={stamp.label}
-                title={productDisplayName(sub)}
-                amountCents={sub.product_slug === 'operator' ? operatorPriceCents : null}
+                title={seatTitle(sub)}
+                amountCents={sub.product_slug === 'operator' ? seatPriceCents(sub) : null}
                 metaCaption="Per month"
                 metaLabel={date.label}
                 trailingCaption={date.value}

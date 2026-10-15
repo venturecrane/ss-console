@@ -161,6 +161,12 @@ const EXPECTED_VERBS = [
   'negotiation_job_resume',
   'negotiation_job_status',
   'negotiation_job_submit',
+  // SMD notes (note_verbs.py): SMD has the Operator tell a firm colleague
+  // something in her own thread. Preview and record root only; the DELIVER
+  // turn reads the recorded words through the status verb (gateway or root).
+  'note_job_status',
+  'note_preview',
+  'note_record',
   'ops_ask_sent',
   // Root only: SMD closes an ops card whose requester was already answered.
   'ops_close_by_smd',

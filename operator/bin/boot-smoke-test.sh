@@ -819,6 +819,10 @@ ssh_exec "negotiation-lane-ticking" "t=/run/smd-medchron/negotiation-tick; [ -f 
 ssh_exec "negotiation-queue-root-owned" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/negotiation-queue)\" = root:workspace-broker:770 ]"
 ssh_exec "negotiation-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/negotiation-jobs)\" = root:medchron:710 ]"
 ssh_exec "negotiation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/negotiation/state)\" = medchron:medchron:700 ]"
+# The SMD note lane (2026-10-15): its own daemon thread (wakes and reply
+# watches only, no child) and its root-only job dir.
+ssh_exec "note-lane-ticking" "t=/run/smd-medchron/note-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
+ssh_exec "note-jobs-dir-root-only" "[ \"\$(stat -c %U:%G:%a /run/smd-medchron/note-jobs)\" = root:root:700 ]"
 
 # The firm config is authored per-seat in the PRIVATE engagements repo, and
 # provision-customer.sh step 2b reads the SAME path and continues without it

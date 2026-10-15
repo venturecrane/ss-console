@@ -39,6 +39,17 @@ from typing import Any
 HEADINGS = ("summary of injuries", "liability", "damages", "demand")
 OPEN_ITEM = re.compile(r"\[(TO BE SUPPLIED|ATTORNEY|CONFIRM)[^\]]*\]|\{\{(NOT IN RECORD|FILL|ATTORNEY)\b[^}]*\}\}")
 CURLY_ALLOWED = re.compile(r"\{\{(NOT IN RECORD|FILL|ATTORNEY)\b[^}]*\}\}")
+#: The two marker dialects a draft is written in. The compose instruction (a
+#: firm input) says: the requester's curly-brace dialect when her brief names
+#: one, else the firm's square brackets. Code that writes a marker into the
+#: letter after the model (finalpass.py) asks ``dialect`` which one this is.
+CURLY, SQUARE = "curly", "square"
+
+
+def dialect(brief: str) -> str:
+    """``curly`` when the requester's brief names one of the curly open-item
+    markers, else ``square`` (the firm's own)."""
+    return CURLY if CURLY_ALLOWED.search(brief or "") else SQUARE
 
 
 @dataclass

@@ -13,7 +13,7 @@ import { resolveAlivenessSignal } from './operator/aliveness'
 import { readDraftQueueDepth } from './operator/home'
 import { resolveHostedAgentState } from './hosted-agent-state'
 import { listInvoicesForEntity } from '../db/invoices'
-import { getOperatorServiceForEntity } from '../db/services'
+import { getOperatorServiceForSeat } from '../db/services'
 import { formatShortDate } from './formatters'
 import {
   canStartOperatorSubscription,
@@ -116,7 +116,8 @@ async function operatorSummaryCard(
   // says so where they land (2026-09-09: the door lived only on Billing,
   // under the ledger, and the client did not find it).
   try {
-    const service = await getOperatorServiceForEntity(db, orgId, entityId)
+    // The seat's own line (migration 0126), not the client's other seat.
+    const service = await getOperatorServiceForSeat(db, orgId, op.subscription)
     const charge = operatorMonthlyCharge(service)
     if (charge && canStartOperatorSubscription(op.subscription, charge.priceCents)) {
       return {

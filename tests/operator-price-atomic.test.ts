@@ -6,12 +6,15 @@
  * read-modify-writes, a failure between them left the row with the new price
  * and the old rail, and the rail is what decides whether the 3% card fee line
  * is added to checkout and to every monthly invoice. The route now calls one
- * function that issues ONE statement.
+ * function that issues ONE statement per seat (migration 0126 keyed the
+ * writer by seat: a seat with no service gets its INSERT and its link in one
+ * batch).
  *
  * What would make these red: the write going back to two statements (the
  * statement count assertion), a rail write landing without its price or the
- * reverse (the injected-failure case), or `method = null` clobbering an
- * authored rail (the COALESCE case).
+ * reverse (the injected-failure case), a new service landing without the
+ * seat's link to it, or `method = null` clobbering an authored rail (the
+ * COALESCE case).
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
@@ -24,8 +27,9 @@ import {
 import type { D1Database } from '@cloudflare/workers-types'
 import path from 'node:path'
 import {
-  getOperatorServiceForEntity,
-  setOperatorPriceAndPaymentMethod,
+  getOperatorServiceForSeat,
+  setOperatorSeatCommercials,
+  type OperatorPaymentMethod,
 } from '../src/lib/db/services'
 
 installWorkerdPolyfills()
@@ -33,6 +37,7 @@ installWorkerdPolyfills()
 const migrationsDir = path.resolve(__dirname, '../migrations')
 const ORG = 'org-atomic'
 const ENTITY = 'ent-atomic'
+const SEAT = 'seat-atomic'
 
 async function seed(db: D1Database): Promise<void> {
   await db
@@ -47,6 +52,27 @@ async function seed(db: D1Database): Promise<void> {
     )
     .bind(ENTITY, ORG, ENTITY, ENTITY)
     .run()
+  await db
+    .prepare(
+      `INSERT INTO subscriptions (id, org_id, entity_id, product_slug, instance_slug, status) VALUES ('sub-atomic', ?, ?, 'operator', ?, 'provisioning')`
+    )
+    .bind(ORG, ENTITY, SEAT)
+    .run()
+}
+
+function setPrice(
+  db: D1Database,
+  price: number | null,
+  method: OperatorPaymentMethod | null
+): ReturnType<typeof setOperatorSeatCommercials> {
+  return setOperatorSeatCommercials(db, ORG, ENTITY, SEAT, { price, method })
+}
+
+async function seatService(db: D1Database) {
+  const seat = await db
+    .prepare(`SELECT service_id FROM subscriptions WHERE id = 'sub-atomic'`)
+    .first<{ service_id: string | null }>()
+  return getOperatorServiceForSeat(db, ORG, { service_id: seat?.service_id ?? null })
 }
 
 /**
@@ -84,7 +110,7 @@ function instrument(db: D1Database): {
   }
 }
 
-describe('setOperatorPriceAndPaymentMethod', () => {
+describe('setOperatorSeatCommercials', () => {
   let db: D1Database
 
   beforeEach(async () => {
@@ -93,58 +119,67 @@ describe('setOperatorPriceAndPaymentMethod', () => {
     await seed(db)
   })
 
-  it('creates the operator service with both fields in one INSERT', async () => {
+  it('creates the operator service with both fields in one INSERT, linked to the seat', async () => {
     const probe = instrument(db)
-    const row = await setOperatorPriceAndPaymentMethod(probe.db, ORG, ENTITY, 5000, 'card')
+    const row = await setPrice(probe.db, 5000, 'card')
     expect(row.recurring_price).toBe(5000)
     expect(row.payment_method).toBe('card')
     expect(probe.writes()).toEqual(['INSERT INTO'])
+    expect((await seatService(db))?.id).toBe(row.id)
+  })
+
+  it('a failed first write leaves neither a service nor a link', async () => {
+    const probe = instrument(db)
+    probe.failNextServicesWrite()
+    await expect(setPrice(probe.db, 5000, 'card')).rejects.toThrow('injected')
+    expect(await seatService(db)).toBeNull()
+    const n = await db.prepare('SELECT COUNT(*) AS n FROM services').first<{ n: number }>()
+    expect(n?.n).toBe(0)
   })
 
   it('updates both fields in ONE statement, never two', async () => {
-    await setOperatorPriceAndPaymentMethod(db, ORG, ENTITY, 5000, 'ach')
+    await setPrice(db, 5000, 'ach')
     const probe = instrument(db)
-    const row = await setOperatorPriceAndPaymentMethod(probe.db, ORG, ENTITY, 6000, 'card')
+    const row = await setPrice(probe.db, 6000, 'card')
     expect(row.recurring_price).toBe(6000)
     expect(row.payment_method).toBe('card')
     expect(probe.writes()).toEqual(['UPDATE services'])
   })
 
   it('a failed write leaves BOTH fields exactly as they were', async () => {
-    await setOperatorPriceAndPaymentMethod(db, ORG, ENTITY, 5000, 'ach')
+    await setPrice(db, 5000, 'ach')
     const probe = instrument(db)
     probe.failNextServicesWrite()
-    await expect(
-      setOperatorPriceAndPaymentMethod(probe.db, ORG, ENTITY, 6000, 'card')
-    ).rejects.toThrow('injected')
-    const row = await getOperatorServiceForEntity(db, ORG, ENTITY)
+    await expect(setPrice(probe.db, 6000, 'card')).rejects.toThrow('injected')
+    const row = await seatService(db)
     expect(row?.recurring_price).toBe(5000)
     expect(row?.payment_method).toBe('ach')
   })
 
   it('a form without a rail rewrites the price and keeps the authored rail', async () => {
-    await setOperatorPriceAndPaymentMethod(db, ORG, ENTITY, 5000, 'card')
-    const row = await setOperatorPriceAndPaymentMethod(db, ORG, ENTITY, 4500, null)
+    await setPrice(db, 5000, 'card')
+    const row = await setPrice(db, 4500, null)
     expect(row.recurring_price).toBe(4500)
     expect(row.payment_method).toBe('card')
   })
 
   it('clearing the price (null) keeps the rail', async () => {
-    await setOperatorPriceAndPaymentMethod(db, ORG, ENTITY, 5000, 'card')
-    const row = await setOperatorPriceAndPaymentMethod(db, ORG, ENTITY, null, null)
+    await setPrice(db, 5000, 'card')
+    const row = await setPrice(db, null, null)
     expect(row.recurring_price).toBeNull()
     expect(row.payment_method).toBe('card')
   })
 })
 
 describe('the admin route uses the single-statement writer', () => {
-  it('calls setOperatorPriceAndPaymentMethod and neither of the two old writers', async () => {
+  it('calls setOperatorSeatCommercials and none of the old entity-keyed writers', async () => {
     const { readFileSync } = await import('node:fs')
     const source = readFileSync(
       path.resolve(__dirname, '../src/pages/api/admin/clients/[id]/operator-price.ts'),
       'utf8'
     )
-    expect(source).toContain('setOperatorPriceAndPaymentMethod(')
+    expect(source).toContain('setOperatorSeatCommercials(')
+    expect(source).not.toMatch(/\bsetOperatorPriceAndPaymentMethod\(/)
     expect(source).not.toMatch(/\bsetOperatorPrice\(/)
     expect(source).not.toMatch(/\bsetOperatorPaymentMethod\(/)
   })

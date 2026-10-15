@@ -207,6 +207,9 @@ export const AUDIT_ACTION_TYPES = [
   'NEGOTIATION_JOB_DELIVERED',
   'NEGOTIATION_JOB_FAILED',
   'NEGOTIATION_JOB_RESUME_REQUESTED',
+  // An SMD note: SMD recorded approved words for the Operator to send a firm
+  // colleague in her own thread. Written by the workspace broker (note_verbs.py).
+  'NOTE_JOB_RECORDED',
   'REPLY_BINDING',
   // Proven delivery: a job whose delivery could not be proven (SMD is paged),
   // and the evidence a delivered job rests on. Written by the workspace broker
