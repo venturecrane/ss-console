@@ -52,6 +52,11 @@ BUSY_PIDS = ("demand-child.pid", "drafting-child.pid")
 CHILD_PID = "litigation-child.pid"
 BUSY_RETRY_SECONDS = 30.0
 HEARTBEAT_SECONDS = 30.0
+#: The deadlines report's file names (``litigation/deadlines/book.py``), the
+#: only names a wake ever carries: a fixed template, a date, a job suffix.
+DEADLINES_FILE = re.compile(
+    r"(Litigation deadlines|Statute report) \d{1,2}-\d{1,2}-\d{2} \(Operator [0-9A-Z]{6}\)\.xlsx"
+)
 
 
 class LitigationBroker:
@@ -243,6 +248,8 @@ class LitigationLane(DraftingLane):
         for k in ("cents", "matters_total", "matters_reread", "flags_new"):
             fields[k] = int(v.get(k) or 0)
         fields["files"] = [f for f in v.get("files") or [] if isinstance(f, dict)]
+        if isinstance(v.get("counts"), dict):  # the deadlines report's named counts (integers only)
+            fields["counts"] = {str(k): int(n) for k, n in v["counts"].items() if isinstance(n, int)}
         if v.get("reason"):
             fields["reason"] = str(v["reason"])[:500]
         state, fields = proof_watch.settle(self, job_id, [v], state, fields)
@@ -269,6 +276,8 @@ class LitigationLane(DraftingLane):
             "; ".join(f"{f.get('role') or 'file'} ({int(f.get('size') or 0)} bytes)" for f in fields.get("files") or [])
             or "none"
         )
+        if env.get("report") == "deadlines":
+            return self._deadlines_wake(job_id, state, fields, env, trig, stage)
         lines = [
             f"Run the {SKILL} skill's DELIVER mode for litigation job {job_id}.",
             "Kind: litigation.",
@@ -285,6 +294,39 @@ class LitigationLane(DraftingLane):
                 f"Reason: stopped at {where if re.fullmatch(r'[a-z0-9_]{1,24}', where) else 'the runner (no verdict)'}."
             )
         if state == "held":  # the firm-safe token the skill words; the reason stays SMD's
+            lines.append(proof_holds.wake_line("litigation", fields.get("reason")))
+        return "\n".join(lines)
+
+    def _deadlines_wake(
+        self, job_id: str, state: str, fields: dict[str, Any], env: dict[str, Any], trig: str, stage: str | None
+    ) -> str:
+        """The deadlines report's wake. Code-authored text only: integers, the
+        file names this code composed (a fixed template, the date and the job
+        suffix, never a matter fact), and tokens."""
+        raw = fields.get("counts")
+        counts: dict[str, Any] = raw if isinstance(raw, dict) else {}
+        folder = str(env.get("folder_name") or "")  # authored config, the broker's copy (ledger _FOLDER)
+        names = [
+            str(f.get("name") or "")
+            for f in fields.get("files") or []
+            if DEADLINES_FILE.fullmatch(str(f.get("name") or ""))
+        ]
+        lines = [
+            f"Run the {SKILL} skill's DELIVER mode for litigation job {job_id}.",
+            "Kind: litigation. Report: deadlines.",
+            f"Trigger: {trig if trig in ('request', 'scheduled') else 'unknown'}.",
+            f"Outcome: {state}.",
+            "Counts: " + ("; ".join(f"{k} {int(v)}" for k, v in sorted(counts.items())) or "none") + ".",
+            f"Folder: {folder if re.fullmatch(r'[A-Za-z0-9 ._()-]{1,80}', folder) else 'none'}.",
+            f"Files: {'; '.join(names) or 'none'}.",
+            f"Requested by: {env.get('requester') or ''}.",
+        ]
+        if state != "delivered":
+            where = str(fields.get("stage") or stage or "")
+            lines.append(
+                f"Reason: stopped at {where if re.fullmatch(r'[a-z0-9_]{1,24}', where) else 'the runner (no verdict)'}."
+            )
+        if state == "held":
             lines.append(proof_holds.wake_line("litigation", fields.get("reason")))
         return "\n".join(lines)
 

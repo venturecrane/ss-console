@@ -60,6 +60,7 @@ from pathlib import Path
 from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
+from .litigation_report import EnvelopeError, counts as _counts, report_keys as _report_keys
 
 STATES = ("queued", "running", "held", "delivered", "failed")
 TERMINAL = frozenset({"delivered", "failed"})
@@ -80,7 +81,8 @@ MAX_REQUEST_TEXT = 20_000
 #: The integer counts the runner reports. Counts only: never a matter fact.
 COUNT_FIELDS = ("matters_total", "matters_reread", "flags_new")
 #: Everything a record may carry besides the state.
-REPORT_FIELDS = ("cents", "reason", "stage", "folder_id", "files", *COUNT_FIELDS)
+REPORT_FIELDS = ("cents", "reason", "stage", "folder_id", "files", "counts", *COUNT_FIELDS)
+
 
 _UUID = re.compile(r"^[0-9a-fA-F-]{32,40}$")
 _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,}$")
@@ -115,11 +117,13 @@ CREATE_SQL = (
     "attempt INTEGER NOT NULL DEFAULT 1, "
     "reply_key TEXT, "
     "close_reason TEXT, "
-    "close_ref TEXT"
+    "close_ref TEXT, "
+    "report TEXT, "
+    "counts_json TEXT"
     ")"
 )
 #: Columns added after the table first shipped: (name, type), added on upgrade.
-ADDED_COLUMNS = (("close_reason", "TEXT"), ("close_ref", "TEXT"))
+ADDED_COLUMNS = (("close_reason", "TEXT"), ("close_ref", "TEXT"), ("report", "TEXT"), ("counts_json", "TEXT"))
 #: What SMD's close writes as the row's (and the audit row's) reason: a token,
 #: never a sentence. ``work_health._CLOSED_REASONS`` reads it as decided work.
 CLOSED_REASON = "closed"
@@ -161,10 +165,6 @@ PROJECTION = (
 )
 
 
-class EnvelopeError(ValueError):
-    """A request the ledger will not queue. The message names the field."""
-
-
 class SubmitRefused(ValueError):
     """A valid request the ledger will not queue NOW."""
 
@@ -203,6 +203,8 @@ def scope_key(scope: dict[str, Any]) -> str:
     """One string per distinct scope, so a job underway for one scope never
     blocks a different one: ``all``; ``staff:<ids>`` (attorneys, the key every
     earlier row carries); ``paralegal:<ids>``; ``staff:<ids>|paralegal:<ids>``."""
+    if scope.get("report") == "deadlines":  # never blocks (or is blocked by) a status list for the same people
+        return "deadlines:" + scope_key({k: v for k, v in scope.items() if k != "report"})
     if scope.get("all") is True:
         return "all"
     parts = []
@@ -226,8 +228,10 @@ def validate_envelope(req: Any) -> dict[str, Any]:
         "file_to_matter_number",
         "folder_name",
     }
-    if not isinstance(req, dict) or set(req) != keys:
-        raise EnvelopeError(f"a litigation envelope carries exactly {sorted(keys)}")
+    report_keys = {"report", "workbooks"}
+    if not isinstance(req, dict) or set(req) - report_keys != keys or len(set(req) & report_keys) == 1:
+        raise EnvelopeError(f"a litigation envelope carries exactly {sorted(keys)}, plus report and workbooks together")
+    extra = _report_keys(req)
     trigger = req["trigger"]
     if trigger not in TRIGGERS:
         raise EnvelopeError(f"trigger must be one of {list(TRIGGERS)}")
@@ -262,6 +266,7 @@ def validate_envelope(req: Any) -> dict[str, Any]:
         "file_to_matter_id": mid.strip().lower(),
         "file_to_matter_number": number,
         "folder_name": folder.strip(),
+        **extra,
     }
 
 
@@ -373,7 +378,7 @@ class LitigationLedger:
         """Row, then queue file, so a job file on disk always has its row. The
         duplicate-ref and same-scope checks run inside one write transaction."""
         env = validate_envelope(envelope)
-        key = scope_key(env["scope"])
+        key = scope_key({**env["scope"], **({"report": "deadlines"} if env.get("report") else {})})
         job_id = _ulid()
         now = _iso_utc()
         conn = self._connect()
@@ -395,12 +400,11 @@ class LitigationLedger:
             ).fetchone()
             if twin is not None:
                 conn.rollback()
-                raise SubmitRefused(
-                    f"a status list for the same scope is already underway as job {twin['id']}", twin["id"]
-                )
+                what = "a deadlines report" if env.get("report") else "a status list"
+                raise SubmitRefused(f"{what} for the same scope is already underway as job {twin['id']}", twin["id"])
             conn.execute(
                 "INSERT INTO litigation_jobs (id, created_at, updated_at, state, trigger, requester, request_ref, "
-                "scope_key, scope_json, file_to_matter_id, envelope_digest) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "scope_key, scope_json, file_to_matter_id, envelope_digest, report) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     job_id,
                     now,
@@ -413,6 +417,7 @@ class LitigationLedger:
                     json.dumps(env["scope"], sort_keys=True),
                     env["file_to_matter_id"],
                     digest(env),
+                    env.get("report") or "status",
                 ),
             )
             conn.commit()
@@ -448,6 +453,8 @@ class LitigationLedger:
         """The row as the agent sees it: counts and the workbook's metadata, no
         request text, no message ref, no scope."""
         out: dict[str, Any] = {"job_id": row.get("id"), **{k: row.get(k) for k in PROJECTION}}
+        out["report"] = row.get("report") or "status"
+        out["counts"] = json.loads(row["counts_json"]) if row.get("counts_json") else {}
         delivery = json.loads(row["delivery_json"]) if row.get("delivery_json") else {}
         files = delivery.get("files") if isinstance(delivery, dict) else None
         workbook = next((f for f in files or [] if isinstance(f, dict) and f.get("role") == "workbook"), None)
@@ -456,6 +463,11 @@ class LitigationLedger:
             if workbook
             else None
         )
+        out["files"] = [
+            {"role": f.get("role"), "name": f.get("name"), "size": f.get("size")}
+            for f in files or []
+            if isinstance(f, dict)
+        ]
         return out
 
     def record(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any]:
@@ -471,6 +483,7 @@ class LitigationLedger:
             if key in fields and (not isinstance(value, int) or isinstance(value, bool) or value < 0):
                 raise ValueError(f"{key} must be a non-negative int")
         files = _files(fields["files"]) if "files" in fields else None
+        counts = _counts(fields["counts"]) if "counts" in fields else None
         conn = self._connect()
         try:
             conn.execute("BEGIN IMMEDIATE")
@@ -505,7 +518,8 @@ class LitigationLedger:
                 "reason=CASE WHEN ? THEN ? ELSE reason END, "
                 "stage=CASE WHEN ? THEN ? ELSE stage END, "
                 "folder_id=CASE WHEN ? THEN ? ELSE folder_id END, "
-                "delivery_json=CASE WHEN ? THEN ? ELSE delivery_json END "
+                "delivery_json=CASE WHEN ? THEN ? ELSE delivery_json END, "
+                "counts_json=CASE WHEN ? THEN ? ELSE counts_json END "
                 "WHERE id=?",
                 (
                     state,
@@ -527,6 +541,8 @@ class LitigationLedger:
                     text("folder_id", 120),
                     files is not None,
                     json.dumps({"files": files}, sort_keys=True) if files is not None else None,
+                    counts is not None,
+                    json.dumps(counts, sort_keys=True) if counts is not None else None,
                     job_id,
                 ),
             )

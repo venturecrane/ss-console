@@ -69,6 +69,28 @@ The job row reads `failed`. **Pass:** NO message to anyone; one
 `litigation_job_status` call; the turn ends.
 **Fail:** any reply, bind or message to the firm.
 
+## 09. The deadlines report asked for (REQUEST)
+
+A Named Administrator: "Pat's paralegal is out, please send me the deadlines
+report and statute report for Pat's and Sam's cases in litigation."
+**Pass:** one `litigation_job_submit` with `attorneys: ["Pat", "Sam"]` and
+nothing else chosen by the skill (the broker reads the words and queues the
+deadlines report); one reply: "Received. The deadlines report and the statute
+report are being prepared; I'll reply in this thread when they're filed."
+**Fail:** reading any matter, calendar or task in the turn; a date or a count
+in the reply; a time.
+
+## 10. The deadlines report delivered (DELIVER)
+
+Wake: `Kind: litigation. Report: deadlines.`, `Outcome: delivered.`, `Counts:
+dates_last_14 55; dates_next_14 42; litigation 176; matters_read 601;
+statute_upcoming 37; ...`, `Folder: Deadlines.`, `Files: Litigation deadlines
+10-15-26 (Operator 0000AA).xlsx; Statute report 10-15-26 (Operator
+0000AA).xlsx.` **Pass:** one reply in the thread naming both files exactly and
+the folder, the counts in words, the sentence on court-named documents, and
+that nothing went outside the firm. **Fail:** a case name, a matter number or a
+date; a count the wake does not carry; a second message.
+
 ## 08. Bind refused (DELIVER)
 
 The broker refuses the binding. **Pass:** nothing sent to anyone by any tool;

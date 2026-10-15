@@ -6,15 +6,17 @@ near-neighbors?
 
 ## Synthetic queries (each selects this skill, REQUEST mode)
 
-| Query (from a Named Administrator)                                       | Scope                                               |
-| ------------------------------------------------------------------------ | --------------------------------------------------- |
-| "Send me a fresh litigation status list."                                | every case                                          |
-| "Can I get the litigation case review list?"                             | every case                                          |
-| "Which of our complaints are filed, served and answered? Need the list." | every case                                          |
-| "The litigation list for Pat's cases, please."                           | `attorneys: ["Pat"]`                                |
-| "Litigation status for Pat Doe and Sam Roe."                             | `attorneys` (two names)                             |
-| "The litigation status list for Dana's files, please."                   | `paralegals: ["Dana"]`                              |
-| "How can I have it only do Dana's case files for Pat/Sam?"               | `paralegals: ["Dana"]`, `attorneys: ["Pat", "Sam"]` |
+| Query (from a Named Administrator)                                                                                 | Scope                                                              |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| "Send me a fresh litigation status list."                                                                          | every case                                                         |
+| "Can I get the litigation case review list?"                                                                       | every case                                                         |
+| "Which of our complaints are filed, served and answered? Need the list."                                           | every case                                                         |
+| "The litigation list for Pat's cases, please."                                                                     | `attorneys: ["Pat"]`                                               |
+| "Litigation status for Pat Doe and Sam Roe."                                                                       | `attorneys` (two names)                                            |
+| "The litigation status list for Dana's files, please."                                                             | `paralegals: ["Dana"]`                                             |
+| "How can I have it only do Dana's case files for Pat/Sam?"                                                         | `paralegals: ["Dana"]`, `attorneys: ["Pat", "Sam"]`                |
+| "Pat's paralegal is out, send me the deadlines report and statute report for Pat's and Sam's cases in litigation." | `attorneys: ["Pat", "Sam"]` (the deadlines report, both workbooks) |
+| "The statute report for Sam, please."                                                                              | `attorneys: ["Sam"]` (the statute report only)                     |
 
 ## Boundary (should NOT select this skill)
 
