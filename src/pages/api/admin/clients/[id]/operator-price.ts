@@ -66,8 +66,9 @@ async function handlePost({ request, locals, params, redirect }: APIContext): Pr
     if (label !== null && !label.ok) {
       return redirect(`/admin/clients/${entityId}?error=bad_label`, 302)
     }
-    // One statement for the seat's price, rail and label: they land together
-    // or not at all (code review 2026-09-10, Architecture 8).
+    // One statement (or, for a seat's first service, one batch) for the seat's
+    // price, rail and label: they land together or not at all (code review
+    // 2026-09-10, Architecture 8).
     await setOperatorSeatCommercials(env.DB, session.orgId, entityId, instance.trim(), {
       price: parsed.value,
       method: rawMethod,

@@ -52,11 +52,18 @@ async function retainerDescriptionForSeat(
   sub: Pick<SubscriptionBillingRow, 'service_id'>
 ): Promise<string> {
   if (!sub.service_id) return retainerInvoiceDescription(null)
-  const row = await db
-    .prepare(`SELECT label FROM services WHERE id = ?`)
-    .bind(sub.service_id)
-    .first<{ label: string | null }>()
-  return retainerInvoiceDescription(row?.label ?? null)
+  try {
+    const row = await db
+      .prepare(`SELECT label FROM services WHERE id = ?`)
+      .bind(sub.service_id)
+      .first<{ label: string | null }>()
+    return retainerInvoiceDescription(row?.label ?? null)
+  } catch (err) {
+    // The label is cosmetic: a failed read must not fail the money-path mirror.
+    console.error('[stripe-webhook] seat label read failed', err)
+    captureError(err, AREA)
+    return retainerInvoiceDescription(null)
+  }
 }
 
 /**
