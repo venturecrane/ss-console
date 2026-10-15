@@ -157,6 +157,20 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+      # SMD note (2026-10-15, operator/skills/smd-note, medchron/note_by_smd.py):
+      # SMD has the Operator tell a colleague something in her own thread, in
+      # words SMD approved. Proven HERE because a note's reply rides Microsoft
+      # 365 mail (reply_binding -> MsGraphOps.reply) and staging is the SMD seat
+      # with it; the pilot's mailbox is AgentMail. Every initiation flag is
+      # false: the only start is the note's handoff wake, sent by the note lane
+      # after root recorded the note.
+      - name: smd-note
+        version: pending
+        initiation:
+          manual: false
+          scheduled: false
+          webhook: false
+        enabled: true
     skills_disabled:
       - google-workspace
       - himalaya
