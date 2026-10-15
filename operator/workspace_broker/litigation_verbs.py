@@ -47,6 +47,11 @@ THE SUBMIT CHECKS, in order, none of which spends anything:
 7. any attorneys named resolve, one each, against the firm's authored roster,
    and any paralegals named against its ``paralegals`` list (both named: a
    matter must match each);
+   (A staff reassignment, told apart by the email's own words in
+   ``litigation_reassign``, skips 7: its people are read from those words,
+   never the turn's scope, and resolved by the runner against the practice
+   system's staff list. It needs the skill setting ``staff_reassignment:
+   enabled`` and a shape the code can read, or nothing is queued.)
 8. no unfinished job for the same scope, and this email (or this Pacific
    date's scheduled run) has not already queued one (re-checked in the
    ledger's write transaction). A FAILED requested run does not count: it
@@ -99,6 +104,9 @@ from .litigation_ledger import (
     scope_key,
     validate_envelope,
 )
+from .litigation_reassign import REASSIGN_KEY, REASSIGN_ON, ReassignUnreadable, is_reassignment
+from .litigation_reassign import parse as parse_reassignment
+from .litigation_report import writes as report_writes
 from .medchron_ledger import admins_from_customer_yaml
 
 #: The audit types, spelled as literals here so a reader (and the producer
@@ -292,7 +300,7 @@ class LitigationVerbs:
             given = self._input(request.get("envelope"), peer_uid=peer_uid, from_gateway=from_gateway)
             settings, admins = self._seat_gates(given["trigger"], peer_uid)
             requester, message_ref, request_text, scope_in = self._who(given, settings, admins)
-            report, books = requested_report(request_text) if given["trigger"] == "request" else ("status", ())
+            report, extra = self._kind(given["trigger"], request_text, settings)
             library, file_to, folder = self._filing_target(settings, report)
             firm, cents = self._budget(spends=report == "status")
             envelope = {
@@ -300,11 +308,13 @@ class LitigationVerbs:
                 "requester": requester,
                 "message_ref": message_ref,
                 "request_text": request_text,
-                "scope": self._resolve_scope(scope_in, firm),
+                # A reassignment's people come from the email's words (``extra``),
+                # never the turn's scope; one runs at a time on the seat.
+                "scope": {"all": True} if report == "reassign" else self._resolve_scope(scope_in, firm),
                 "file_to_matter_id": file_to,
                 "file_to_matter_number": library,
                 "folder_name": folder,
-                **({"report": report, "workbooks": list(books)} if report == "deadlines" else {}),
+                **extra,
             }
             valid = validate_envelope(envelope)
             job_id = self._db.submit(valid)
@@ -323,6 +333,7 @@ class LitigationVerbs:
             "trigger": valid["trigger"],
             "report": valid.get("report") or "status",
             **({"workbooks": valid["workbooks"]} if valid.get("workbooks") else {}),
+            **({"reassign": valid["reassign"]} if valid.get("reassign") else {}),
         }
 
     def _seat_gates(self, trigger: str, peer_uid: int | None) -> tuple[dict[str, Any], tuple[str, ...]]:
@@ -368,6 +379,24 @@ class LitigationVerbs:
                 "requester on this submission is not one of them; nothing was queued"
             )
         return requester, given["message_ref"], given["request_text"], given["scope"]
+
+    @staticmethod
+    def _kind(trigger: str, text: str, settings: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+        """(report, the envelope's extra keys) from the request's OWN words, in
+        code. A reassignment is checked first: it is the only kind that writes
+        to the firm's matters, so it must be switched on for the seat and its
+        shape read exactly, or nothing is queued."""
+        if trigger != "request":
+            return "status", {}
+        if is_reassignment(text):
+            if str(settings.get(REASSIGN_KEY) or "").strip() != REASSIGN_ON:
+                raise _Refused("moving cases between staff is not switched on for this seat; nothing was queued")
+            try:
+                return "reassign", {"report": "reassign", "reassign": parse_reassignment(text)}
+            except ReassignUnreadable as exc:
+                raise _Refused(str(exc)) from exc
+        report, books = requested_report(text)
+        return report, ({"report": report, "workbooks": list(books)} if report == "deadlines" else {})
 
     def _filing_target(self, settings: dict[str, Any], report: str = "status") -> tuple[str, str, str]:
         """The library matter and the folder: ``folder_name`` for the status
@@ -444,6 +473,7 @@ class LitigationVerbs:
                     if scope.get(k)
                 ),
                 "report": valid.get("report") or "status",
+                **({"reassign": valid["reassign"]} if valid.get("reassign") else {}),
                 "attorney_count": len(scope.get("attorney_staff_ids") or []),
                 "paralegal_count": len(scope.get("paralegal_staff_ids") or []),
                 "requested_by": valid["requester"],
@@ -475,6 +505,10 @@ class LitigationVerbs:
         }
         if projected["file"]:
             meta["file"] = {"name": projected["file"]["name"], "size": projected["file"]["size"]}
+        if projected.get("counts"):
+            meta["counts"] = projected["counts"]
+        if "writes" in fields:  # a reassignment names every write it made to the firm's records, here
+            meta["writes"] = report_writes(fields["writes"])
         self._audit(AUDIT_TYPES[state], meta)
         return {"ok": True, "job": projected}
 

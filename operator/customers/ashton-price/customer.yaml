@@ -819,6 +819,14 @@ personas:
           # request edge and the same admins; the broker tells the report from
           # the list by the email's own words. Unauthored, it is refused.
           deadlines_folder_name: 'Deadlines'
+          # The staff reassignment (2026-10-15: the office manager's ask to move
+          # every litigation case two paralegals were assigned to over to the new
+          # paralegal, tasks included, done by SMD by hand that day; the Captain
+          # asked for the firm to be able to email it). On a Named Administrator's
+          # own email the job moves each matching matter's Person Assisting and
+          # its open tasks in Smokeball, reading every change back. A setting,
+          # not a new skill: unauthored or any other value, it is refused.
+          staff_reassignment: 'enabled'
           # The Operator Library matter's id (the same matter the demand and
           # drafting lanes author); the broker pairs it with the library number.
           file_to_matter_id: '1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23'
