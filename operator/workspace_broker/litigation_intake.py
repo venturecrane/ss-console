@@ -37,6 +37,35 @@ DEFAULT_FIRM_CONFIG = "/var/lib/smd-config/litigation-broker-firm.yaml"
 FOLDER_KEY = "folder_name"
 FILE_TO_KEY = "file_to_matter_id"
 RECIPIENTS_KEY = "scheduled_recipients"
+#: Where the deadlines report is filed (the same library matter, its own folder).
+DEADLINES_FOLDER_KEY = "deadlines_folder_name"
+
+#: THE DEADLINES REPORT, told from the status list by the request's OWN words
+#: (2026-10-15). Code decides, never the model, and the overlay's tool needs
+#: no new field: the broker already holds the email's words verbatim. A
+#: request naming deadlines, a calendar of dates, or a statute report asks
+#: for the deadlines report, unless it names the status list (or a case
+#: review list) and no deadline or statute REPORT, which stays the list.
+_STATUS_WORDS = re.compile(r"(?i)\bstatus (list|report)\b|\bcase review\b|\blitigation (case )?list\b")
+_DEADLINE_WORDS = re.compile(r"(?i)\bdeadlines?\b|\bcalendar(ed)? dates\b|\bupcoming (court )?dates\b")
+_STATUTE_WORDS = re.compile(r"(?i)\bstatutes?\b|\bSOLs?\b")
+_NAMED_REPORT = re.compile(
+    r"(?i)\b(deadlines?|statutes?( of limitations?)?|SOLs?)( and \w+)? (report|list|spreadsheet|workbook|sheet)s?\b"
+)
+
+
+def requested_report(text: str) -> tuple[str, tuple[str, ...]]:
+    """``("status", ())`` or ``("deadlines", workbooks)`` from the request's own
+    words. Workbooks: ``deadlines`` when the words name deadlines or dates,
+    ``statute`` when they name a statute report; a request naming only the
+    one gets only it."""
+    text = str(text or "")
+    deadlines, statute = bool(_DEADLINE_WORDS.search(text)), bool(_STATUTE_WORDS.search(text))
+    if not (deadlines or statute):
+        return "status", ()
+    if _STATUS_WORDS.search(text) and not _NAMED_REPORT.search(text):
+        return "status", ()
+    return "deadlines", tuple(w for w, on in (("deadlines", deadlines), ("statute", statute)) if on)
 
 
 def _load(path: str | Path) -> dict[str, Any]:
@@ -181,6 +210,7 @@ def resolve_paralegals(names: list[str], roster: dict[str, str]) -> tuple[list[s
 
 
 __all__ = [
+    "DEADLINES_FOLDER_KEY",
     "FIRM_CONFIG_ENV",
     "FIRM_FILE",
     "SKILL_NAME",
@@ -191,6 +221,7 @@ __all__ = [
     "monthly_budget_cents",
     "operator_library_number",
     "paralegal_roster",
+    "requested_report",
     "resolve_attorneys",
     "resolve_paralegals",
     "scheduled_recipients",

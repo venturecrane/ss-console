@@ -99,7 +99,7 @@ Check, at minimum, each of these, against the sources given (the attorney's requ
 3. THE CAPTION against the court's own filings in the digest (court, county, case number, parties exactly as captioned, attorney block). A disagreement is MUST-FIX unless the record itself disagrees, then NOTE.
 4. DEFINED TERMS. Every capitalized defined term used consistently; a term defined and then used in lower case or in an undefined variant, or a capitalized term never defined. SHOULD-FIX.
 5. ONE PROOF OF SERVICE PER SEPARATE DOCUMENT, after that document's own signature (and declaration, if any). Two papers in one file, or one proof of service for several papers, is MUST-FIX.
-6. THE ATTORNEY NOTES against the documents. A note that contradicts a document (says a term is undefined when it is defined, says no declaration when one is attached, lines that contradict each other, a line that says nothing) is MUST-FIX; a note that omits something the attorney must know (a held statement, a reserved call) is SHOULD-FIX.
+6. THE ATTORNEY NOTES against the documents and the record. A note that contradicts a document (says a term is undefined when it is defined, says no declaration when one is attached, lines that contradict each other, a line that says nothing) is MUST-FIX; so is a note whose cite does not carry what the note says it does (the wrong document, page, paragraph or pleading form section; the attorney relies on these cites). A note that omits something the attorney must know (a held statement, a reserved call) is SHOULD-FIX.
 7. CONSISTENCY ACROSS THE DOCUMENTS. Requests in different sets (or the same set) that contradict each other (who sent what to whom, a date, a party, a direction of communication), or that leave an inconsistency the attorney notes say the audit flagged. MUST-FIX.
 8. THE REQUEST'S OWN STATEMENTS OF FACT. Where the attorney's request states a fact about the file (for example which side served a document), the notes and the documents adopt it; a note that hedges on it ("on either reading") or contradicts it is MUST-FIX. A note that describes a request in the opposite direction from the attorney's words (who produces what to whom) is MUST-FIX.
 9. ARTIFACTS. A request that is only a marker ({{NOT IN RECORD}} standing as the request), stray markup (backticks, brackets) around a slot, a heading or sentinel the system wrote ("=== ... ==="), or the system's own vocabulary in the notes (the job, code, a rule of the system, the auditor, the drafter). MUST-FIX for a marker standing as a request or a sentinel; SHOULD-FIX otherwise.
@@ -135,21 +135,20 @@ OUTPUT, and nothing else: one line per finding, exactly
 then a final line exactly `VERDICT: <n> MUST-FIX, <n> SHOULD-FIX, <n> NOTE`. No preamble, no em dashes."""
 
 
-NOTES_PROMPT = """## THE ATTORNEY NOTES, FROM THE FINAL DOCUMENT
+NOTES_PROMPT = """## THE ATTORNEY NOTES, FROM THE FINAL DOCUMENT: THE BASIS ROWS
 
-The drafting system has finished the documents below. Its drafter wrote end tables (request basis, items not in the record, the attorney's reserved decisions, items held out) while drafting, and its auditor left open items; both were written about EARLIER versions. Write the end tables again so that every row is true of the FINAL documents:
+The drafting system has finished the documents below. For the attorney's notes, give the basis in the file for each request, as ROWS that code will check word for word against the file. Write no prose, no tables, no other notes: code writes the rest.
 
-- keep a row only if the final document still bears it out; correct a row the final document contradicts; drop a row about text the final document no longer has;
-- never claim a term is undefined, a section missing, or an item absent without checking the final document;
-- keep each auditor item only if the final document still has the problem, stated plainly;
-- write to the attorney, about his documents: never mention the job, code, a rule of the system, the drafter, the auditor, a gate or a pipeline;
-- where the attorney's request states a fact about the file (for example which side served a document), adopt it as stated; never hedge on it ("on either reading") and never contradict it;
-- describe each request in the direction its words run (who produces what to whom, who sent what to whom), never the reverse;
-- add nothing that the final documents and the digest do not support; a row cites its source as the drafter's did;
-- state every fact as the record or THE FACTS block below states it, or write "not in the record"; never hedge ("unclear whether", "appears", "possibly", "presumably", "if ... is the handling attorney"): who requested the documents, who the responsible attorney is and whose attorney block the documents carry are given below as facts;
-- write every slot in words ("not in the file: ...", "for your decision: ..."), never as a {{marker}}; a line that names a thing must say something about it.
+For each request in each document whose subject rests on something in the file, one row:
+- "document": the document's label exactly as given ("Requests for Admission", ...);
+- "request": the request's number (an integer);
+- "file": the exact FILE name the digest cites for it;
+- "paper": what that file is, in plain words: "served responses", "served set", "unserved draft", "pleading", "court paper", "medical record", "correspondence" or "other". Never call a draft, or the firm's own working copy, served; never call requests responses;
+- "quote": the words in that file the request rests on, copied exactly (12 to 300 characters). A quote code cannot find in that file drops the row.
 
-OUTPUT: markdown only, the same tables under the same headings the drafter used (one set of tables per document when there are several, under a heading naming the document), then `## Open items` (a bulleted list of what the attorney must still decide or supply, or the single line `None.`). No preamble, no em dashes."""
+Where the attorney's request states a fact about the file (who handles the matter, which set this is), it is adopted as stated and needs no row.
+
+OUTPUT: JSON only, exactly {"basis": [{"document": ..., "request": ..., "file": ..., "paper": ..., "quote": ...}, ...]}. No preamble."""
 
 
 def _rows(text: str, hold_checks: tuple[int, ...] = HOLD_CHECKS) -> list[Finding]:

@@ -133,6 +133,10 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]] | None] = {
         "vendor_lookup_cap": ("int", True),
     },
     "inputs": None,  # {key: {path, sha256}}: INPUT_KEYS plus each variant's files
+    # Optional. {format name: {pre_suit: {...}, litigation: {...}}}: an
+    # attorney's own demand format, chosen by the attorney row's ``format``
+    # key. Each variant has the ``variants`` shape.
+    "formats": None,
 }
 VARIANT_KEYS = {
     "skeleton": "str",
@@ -145,8 +149,26 @@ VARIANT_KEYS = {
     "forbidden": "list[str]",
     "re_vs": "bool",
 }
+#: Optional variant keys (absent = the firm's house layout, Doug's format). A
+#: ``numbered`` layout is an attorney's own format (Craig Ashton's, 2026-10-14):
+#: a RE table, centered banner lines, a lead heading, roman-numbered sections,
+#: its own footer. ``footer_markers`` overrides ``format.footer_markers`` for
+#: the variant; ``required_leads`` are the bold-lead terms the letter must carry.
+OPTIONAL_VARIANT_KEYS = {
+    "layout": "str",
+    "banner_lines": "list[str]",
+    "lead_heading": "str",
+    "footer_markers": "list[str]",
+    "required_leads": "list[str]",
+}
+LAYOUTS = ("house", "numbered")
 VARIANTS = ("pre_suit", "litigation")
 ATTORNEY_KEYS = ("signer", "title", "initials")
+#: ``format``: the name of an entry in the optional ``formats`` section. Absent,
+#: the attorney's demands take the firm's default format (``variants``).
+OPTIONAL_ATTORNEY_KEYS = ("format",)
+#: Optional top-level sections: present or absent, never misspelled.
+OPTIONAL_SECTIONS = ("formats",)
 
 
 class DemandConfigError(ValueError):
@@ -177,6 +199,8 @@ def _shape(data: Any) -> list[str]:
     out = [f"{s}: unknown section (closed key set)" for s in data if s not in SCHEMA]
     for section, keys in SCHEMA.items():
         body = data.get(section)
+        if section in OPTIONAL_SECTIONS and section not in data:
+            continue
         if not isinstance(body, dict):
             out.append(f"{section}: required section missing or not a map")
             continue
@@ -234,30 +258,69 @@ def _semantics(data: dict[str, Any]) -> list[str]:
     return out
 
 
-def _variants(data: dict[str, Any]) -> list[str]:
-    out = []
-    if "pre_suit" not in data["variants"]:
-        out.append("variants.pre_suit: required")
-    for name, v in data["variants"].items():
-        if name not in VARIANTS:
-            out.append(f"variants.{name}: unknown variant (expected {list(VARIANTS)})")
-            continue
-        if not isinstance(v, dict) or set(v) != set(VARIANT_KEYS):
-            out.append(f"variants.{name}: expected exactly {sorted(VARIANT_KEYS)}")
-            continue
-        out += [f"variants.{name}.{k}: expected {t}" for k, t in VARIANT_KEYS.items() if not _type_ok(v[k], t)]
+def _variant_problems(where: str, v: Any, inputs: dict[str, Any]) -> list[str]:
+    if not isinstance(v, dict):
+        return [f"{where}: expected a map"]
+    out = [f"{where}.{k}: required" for k in VARIANT_KEYS if k not in v]
+    out += [
+        f"{where}.{k}: unknown key (closed key set)"
+        for k in v
+        if k not in VARIANT_KEYS and k not in OPTIONAL_VARIANT_KEYS
+    ]
+    if out:
+        return out
+    kinds = {**VARIANT_KEYS, **OPTIONAL_VARIANT_KEYS}
+    out += [f"{where}.{k}: expected {kinds[k]}" for k in v if not _type_ok(v[k], kinds[k])]
+    out += [f"{where}.{k}: names no entry in inputs" for k in ("skeleton", "house_reference") if v[k] not in inputs]
+    layout = v.get("layout", "house")
+    if layout not in LAYOUTS:
+        out.append(f"{where}.layout: expected one of {list(LAYOUTS)}")
+    elif layout == "numbered":
         out += [
-            f"variants.{name}.{k}: names no entry in inputs"
-            for k in ("skeleton", "house_reference")
-            if v[k] not in data["inputs"]
+            f"{where}.{k}: required for the numbered layout" for k in ("lead_heading", "footer_markers") if k not in v
         ]
+    return out
+
+
+def _variant_set(where: str, body: Any, inputs: dict[str, Any]) -> list[str]:
+    if not isinstance(body, dict):
+        return [f"{where}: expected a map of variants"]
+    out = [] if "pre_suit" in body else [f"{where}.pre_suit: required"]
+    for name, v in body.items():
+        if name not in VARIANTS:
+            out.append(f"{where}.{name}: unknown variant (expected {list(VARIANTS)})")
+        else:
+            out += _variant_problems(f"{where}.{name}", v, inputs)
+    return out
+
+
+def _attorney_problems(who: str, a: Any, formats: dict[str, Any]) -> list[str]:
+    keys = set(ATTORNEY_KEYS) | set(OPTIONAL_ATTORNEY_KEYS)
+    if not isinstance(a, dict) or not set(ATTORNEY_KEYS) <= set(a) <= keys:
+        return [f"attorneys.{who}: expected {{signer, title, initials}} and optionally format, each a string"]
+    out = [
+        f"attorneys.{who}.{k}: expected a non-empty string" for k in ("signer", "title") if not _type_ok(a[k], "str")
+    ]
+    # Initials may be empty: an attorney whose demands carry no typist line.
+    if not isinstance(a["initials"], str):
+        out.append(f"attorneys.{who}.initials: expected a string (empty for no initials line)")
+    if isinstance(a["title"], str) and re.sub(r"\{client\}", "", a["title"]).count("{"):
+        out.append(f"attorneys.{who}.title: the only placeholder a title may carry is {{client}}")
+    if "format" in a and a["format"] not in formats:
+        out.append(f"attorneys.{who}.format: {a['format']!r} names no entry in formats")
+    return out
+
+
+def _variants(data: dict[str, Any]) -> list[str]:
+    inputs = data["inputs"]
+    out = _variant_set("variants", data["variants"], inputs)
+    formats = data.get("formats") or {}
+    for name, body in formats.items():
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", str(name)):
+            out.append(f"formats.{name}: a format name is lowercase letters, digits and underscores")
+        out += _variant_set(f"formats.{name}", body, inputs)
     for who, a in data["attorneys"].items():
-        if (
-            not isinstance(a, dict)
-            or set(a) != set(ATTORNEY_KEYS)
-            or not all(_type_ok(a[k], "str") for k in ATTORNEY_KEYS)
-        ):
-            out.append(f"attorneys.{who}: expected {{signer, title, initials}}, each a string")
+        out += _attorney_problems(who, a, formats)
     return out
 
 
@@ -295,7 +358,13 @@ class DemandFirm:
 
     @property
     def variant(self) -> dict[str, Any]:
-        return self.data["variants"][self.variant_name]
+        return self.variants_for(self.attorney)[self.variant_name]
+
+    def variants_for(self, attorney: dict[str, str] | None) -> dict[str, Any]:
+        """The variants an attorney's demands are written in: their own format
+        when the attorney row names one, else the firm's default."""
+        fmt = (attorney or {}).get("format")
+        return self.data["formats"][fmt] if fmt else self.data["variants"]
 
     @property
     def attorney(self) -> dict[str, str]:
@@ -366,7 +435,7 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 1
     print(
-        f"{firm.root / CONFIG_NAME}: OK ({firm.get('firm', 'slug')}, {len(firm.data['inputs'])} inputs pinned, {len(firm.data['variants'])} variant(s), {len(firm.data['attorneys'])} attorney(s) mapped)"
+        f"{firm.root / CONFIG_NAME}: OK ({firm.get('firm', 'slug')}, {len(firm.data['inputs'])} inputs pinned, {len(firm.data['variants'])} variant(s), {len(firm.data.get('formats') or {})} attorney format(s), {len(firm.data['attorneys'])} attorney(s) mapped)"
     )
     return 0
 

@@ -11,6 +11,7 @@
 # Usage:
 #   operator/bin/lane-proof.sh <slug> status
 #   operator/bin/lane-proof.sh <slug> dry-run <job_id> [--wait SECONDS]
+#   operator/bin/lane-proof.sh <slug> keep <job_id>
 #   operator/bin/lane-proof.sh <slug> pull <job_id> [DEST]
 #   operator/bin/lane-proof.sh <slug> accept <job_id> --evidence vfy_... --by <name>
 #   operator/bin/lane-proof.sh <slug> revoke <lane-key> --why "..." --by <name>
@@ -30,7 +31,7 @@ set -euo pipefail
 SLUG="${1:-}"
 ACTION="${2:-}"
 [ -n "${SLUG}" ] && [ -n "${ACTION}" ] || {
-  echo "usage: $0 <slug> status | dry-run <job> [--wait S] | pull <job> [DEST] | accept <job> --evidence vfy_... --by NAME | revoke <key> --why ... --by NAME" >&2
+  echo "usage: $0 <slug> status | dry-run <job> [--wait S] | keep <job> | pull <job> [DEST] | accept <job> --evidence vfy_... --by NAME | revoke <key> --why ... --by NAME" >&2
   exit 2
 }
 shift 2
@@ -49,7 +50,7 @@ on_seat() {
 }
 
 case "${ACTION}" in
-  status | dry-run | accept | revoke)
+  status | dry-run | keep | accept | revoke)
     on_seat "${MEDCHRON}" lane-proof "${ACTION}" "$@"
     ;;
   pull)
@@ -71,7 +72,7 @@ case "${ACTION}" in
     find "${DEST}" -type f \( -name '*.docx' -o -name '*.xlsx' -o -name 'proof.json' -o -name 'dry-run-report.txt' \) | sort
     ;;
   *)
-    echo "unknown action '${ACTION}' (status, dry-run, pull, accept, revoke)" >&2
+    echo "unknown action '${ACTION}' (status, dry-run, keep, pull, accept, revoke)" >&2
     exit 2
     ;;
 esac

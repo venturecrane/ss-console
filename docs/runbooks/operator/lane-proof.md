@@ -77,6 +77,13 @@ no allowance is used. Pick the most recent real request of that kind, read the
 artifacts, and `accept` on a pass. The next request of that kind then runs
 straight through.
 
+**When the only request of a kind is about to be wiped.** A finished job's
+dir goes 72 h after it ends. While its lane is still being fixed, keep its
+envelope: `operator/bin/lane-proof.sh <slug> keep <job_id>` copies the request
+(never the records: a proof run pulls the matter afresh) to
+`/run/smd-medchron/proof-envelopes/<lane>/`, root-only, for 14 days, and
+`dry-run` finds it there after the job dir is gone.
+
 ## Undoing a proof
 
 `operator/bin/lane-proof.sh <slug> revoke <key> --why "..." --by <you>`: new

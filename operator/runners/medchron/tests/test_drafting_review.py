@@ -185,8 +185,8 @@ def test_three_sets_become_three_documents_each_with_one_proof_of_service_on_ple
     text = format_check.doc_text(_docx(deliver.out_dir(r.data) / sr["name"]))
     assert "the PREMISES before the INCIDENT" in text
     notes = (r.data / "notes-final.md").read_text(encoding="utf-8")
-    assert "read as a mention, not a prior set" in notes
-    assert "End tables (from the final document)" in notes
+    assert "is a note about discovery, not a served set, so paragraph 4 does not count it" in notes
+    assert "## Request basis, record gaps and your decisions" in notes
     assert "Left for the attorney by the auditor" not in notes
     assert json.loads((r.data / "review.json").read_text())["must_fix"] == 0
 
@@ -280,7 +280,8 @@ def test_the_notes_prompt_and_the_review_prompt_carry_the_three_wording_rules():
     """(b), (c), (e): the model-written notes never use the system's
     vocabulary, adopt a fact the request states, and run each request in the
     direction its words run; the review grades each of those MUST-FIX."""
-    for phrase in ("never mention the job", "adopt it as stated", "direction its words run"):
+    # The notes model writes rows only, checked by code (grounding.py); no prose reaches the notes.
+    for phrase in ("Write no prose", "adopted as stated", "Never call a draft"):
         assert phrase in review.NOTES_PROMPT
     for phrase in ("on either reading", "opposite direction", "CONSISTENCY ACROSS THE DOCUMENTS"):
         assert phrase in review.REVIEW_PROMPT

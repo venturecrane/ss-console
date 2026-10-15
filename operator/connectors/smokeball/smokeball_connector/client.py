@@ -83,6 +83,27 @@ _HOSTS: dict[tuple[str, str], tuple[str, str]] = {
 
 _TOKEN_SKEW_SECONDS = 60
 _MAX_ATTEMPTS = 4
+#: A 429 is a rate limit, and a rate limit clears with time, not with haste.
+#: 2026-10-14: the A&P litigation proof listed 26,000 files, Smokeball
+#: answered 429, and four attempts over 15 s (1+2+4+8) were not enough; the
+#: run failed. The server's Retry-After is honored when it sends one (capped),
+#: else the backoff grows to the cap; the attempts are bounded so a gateway
+#: turn never hangs on a limit that will not clear.
+_RATE_LIMIT_ATTEMPTS = 6
+_RATE_LIMIT_MAX_SLEEP = 30.0
+
+
+def _rate_limit_sleep(resp: Any, attempt: int) -> float:
+    """Seconds to wait after a 429: the server's Retry-After when it is a
+    number of seconds, else exponential from 1 s; never above the cap."""
+    raw = (getattr(resp, "headers", None) or {}).get("retry-after")
+    try:
+        wanted = float(raw) if raw is not None else float(2**attempt)
+    except ValueError:
+        wanted = float(2**attempt)
+    return max(0.0, min(wanted, _RATE_LIMIT_MAX_SLEEP))
+
+
 _AUTH_MODES = ("client_credentials", "authorization_code")
 
 
@@ -349,7 +370,7 @@ class SmokeballClient:
         record.begin()
         refreshed = False
         last: httpx.Response | None = None
-        for attempt in range(_MAX_ATTEMPTS):
+        for attempt in range(max(_MAX_ATTEMPTS, _RATE_LIMIT_ATTEMPTS)):
             headers = {
                 "x-api-key": self._api_key,
                 "Authorization": f"Bearer {self._bearer()}",
@@ -361,7 +382,9 @@ class SmokeballClient:
                 record.finish(None, error=f"{type(exc).__name__}: {exc}")
                 raise
             if last.status_code == 429:
-                time.sleep(min(2**attempt, 8))
+                if attempt + 1 >= _RATE_LIMIT_ATTEMPTS:
+                    break
+                time.sleep(_rate_limit_sleep(last, attempt))
                 continue
             if last.status_code == 401 and not refreshed:
                 self._token = None  # force a fresh mint, then retry once

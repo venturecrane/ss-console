@@ -141,6 +141,11 @@ class Variant:
     banner: bool = True
     forbidden: tuple[str, ...] = ()
     re_vs: bool = False
+    # The numbered layout: an attorney's own format (house_numbered.py).
+    layout: str = "house"
+    banner_lines: tuple[str, ...] = ()
+    lead_heading: str = ""
+    required_leads: tuple[str, ...] = ()
 
     @classmethod
     def from_config(cls, v: dict[str, Any]) -> "Variant":
@@ -152,7 +157,87 @@ class Variant:
             banner=bool(v["banner"]),
             forbidden=tuple(v["forbidden"]),
             re_vs=bool(v["re_vs"]),
+            layout=str(v.get("layout") or "house"),
+            banner_lines=tuple(v.get("banner_lines") or ()),
+            lead_heading=str(v.get("lead_heading") or ""),
+            required_leads=tuple(v.get("required_leads") or ()),
         )
+
+
+ROMAN_HEAD = re.compile(r"([IVXLC]+)\.\s+(.+)")
+
+
+def _bold(el: Any) -> bool:
+    runs = [r for r in el.iter(_qn("w:r")) if "".join(t.text or "" for t in r.iter(_qn("w:t"))).strip()]
+    return bool(runs) and all(r.find(_qn("w:rPr") + "/" + _qn("w:b")) is not None for r in runs)
+
+
+def _from_roman(s: str) -> int:
+    vals = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100}
+    total = 0
+    for a, b in zip(s, s[1:] + " "):
+        total += -vals[a] if vals.get(b, 0) > vals[a] else vals[a]
+    return total
+
+
+def _numbered_head(lines: list[tuple[str, str | None, Any]], doc: Any, v: Variant, fails: list[str]) -> int:
+    """The numbered layout's opening: mail line, RE table, banner lines. Returns
+    the index of the salutation in ``lines`` (len(lines) when there is none)."""
+    dear = next((i for i, (k, t, _) in enumerate(lines) if k == "p" and str(t).startswith("Dear ")), len(lines))
+    head = [(str(t), el) for k, t, el in lines[:dear] if k == "p" and t]
+    if v.mail_line and not any(v.mail_line.upper() in t.upper() for t, _ in head):
+        fails.append(f"no {v.mail_line!r} line above the salutation")
+    re_tbl = next((t for t in doc.tables if t.rows and t.cell(0, 0).text.strip() == "Re:"), None)
+    labels = [r.cells[0].text.strip() for r in re_tbl.rows] if re_tbl is not None else []
+    if re_tbl is None:
+        fails.append("no RE table (a first row reading 'Re:') above the salutation")
+    else:
+        fails += [f"RE table lacks {label!r}" for label in v.re_required if label not in labels]
+        if v.re_one_of and not any(label in labels for label in v.re_one_of):
+            fails.append(f"RE table names none of {list(v.re_one_of)}")
+    for bad in v.forbidden:
+        if any(bad.upper() in t.upper() for t, _ in head):
+            fails.append(f"{bad!r} belongs to another demand format")
+    centered = [t for t, el in head if _centered(el)]
+    if v.banner and not any(re.search(r"time[- ]limited.*demand", t, re.I) for t in centered):
+        fails.append("no centered time-limited demand title above the salutation")
+    for line in v.banner_lines:
+        if line not in centered:
+            fails.append(f"banner line {line!r} missing (or not centered) above the salutation")
+    return dear
+
+
+def _numbered(lines: list[tuple[str, str | None, Any]], doc: Any, v: Variant, fails: list[str]) -> None:
+    """An attorney's numbered format (house_numbered.py): its opening, the
+    centered lead heading, sections numbered I, II, III ... in order with the
+    format's required ones present and ordered, and the demand terms."""
+    dear = _numbered_head(lines, doc, v, fails)
+    after = [(str(t), el) for k, t, el in lines[dear + 1 :] if k == "p" and t]
+    if v.lead_heading and not (after and after[0][0] == v.lead_heading and _centered(after[0][1])):
+        fails.append(f"the centered {v.lead_heading!r} heading does not follow the salutation")
+    heads = []
+    for t, el in after:
+        m = ROMAN_HEAD.fullmatch(t)
+        if m and _bold(el):
+            heads.append(m.groups())
+    nums = [_from_roman(n) for n, _ in heads]
+    if nums != list(range(1, len(nums) + 1)):
+        fails.append("the section numbers do not run I, II, III ... in order")
+    titles = [h.upper() for _, h in heads]
+    pos = []
+    for want in v.headings:
+        w = want.upper()
+        idx = [i for i, h in enumerate(titles) if h == w or h.startswith(w + ":")]
+        if not idx:
+            fails.append(f"numbered section {want!r} missing")
+        else:
+            pos.append(idx[0])
+    if pos != sorted(pos):
+        fails.append("numbered sections are out of the format's order (" + ", ".join(v.headings) + ")")
+    texts = [t for t, _ in after]
+    fails += [
+        f"the demand terms lack {lead!r}" for lead in v.required_leads if not any(t.startswith(lead) for t in texts)
+    ]
 
 
 def _address_block(texts: list[str], variant: Variant, fails: list[str]) -> None:
@@ -237,17 +322,24 @@ def check(
     lines = _lines(doc)
     texts = [str(t) for k, t, _ in lines if k == "p" and t]
     tables = doc.tables
-    _address_block(texts, v, res.fails)
-    if v.banner:
-        _banner(tables, res.fails)
-    elif not any(t.cell(0, 0).text.strip().lower().startswith("icd") for t in tables):
-        res.fails.append("no ICD-10 Code table under Summary of Injuries")
+    numbered = v.layout == "numbered"
+    if numbered:
+        _numbered(lines, doc, v, res.fails)
+    else:
+        _address_block(texts, v, res.fails)
+        if v.banner:
+            _banner(tables, res.fails)
+        elif not any(t.cell(0, 0).text.strip().lower().startswith("icd") for t in tables):
+            res.fails.append("no ICD-10 Code table under Summary of Injuries")
     if not any(t.startswith("Dear ") for t in texts):
         res.fails.append("no salutation")
-    _headings(lines, res.fails, tuple(h.lower() for h in v.headings))
+    if not numbered:
+        _headings(lines, res.fails, tuple(h.lower() for h in v.headings))
     foot = " ".join(p.text for s in doc.sections for f in (s.footer, s.first_page_footer) for p in f.paragraphs)
     if not all(m in foot for m in footer_markers):
         res.fails.append("footer lacks the firm's settlement-communication line")
+    if numbered and re.search(r"\{\w+\}", foot):
+        res.fails.append("the footer carries an unfilled {slot}")
     _signature(texts, res.fails, signature, signer, signer_title, initials)
     table_text = " ".join(c.text for t in tables for r in t.rows for c in r.cells)
     _machinery("\n".join(texts) + "\n" + table_text, res.fails, res.notes)

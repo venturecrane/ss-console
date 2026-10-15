@@ -9,6 +9,9 @@ The counts and the workbook's file name are the whole of the facts.
 
 - **Accepted.** "Received. A fresh litigation status list is being prepared;
   I'll reply in this thread when it's filed."
+- **Accepted, the deadlines report.** "Received. The deadlines report and the
+  statute report are being prepared; I'll reply in this thread when they're
+  filed." Only the reports the email named.
 - **Refused by the broker.** The broker's sentence in plain words, then
   "Nothing was queued." Example: "A list for the same cases is already being
   prepared, so nothing new was queued."
@@ -28,6 +31,17 @@ The counts and the workbook's file name are the whole of the facts.
   Status, as <file name>. It covers 64 matters; 7 were re-read because their
   files changed since the last list, and it carries 3 new flags for review.
   Nothing has been sent to anyone outside the firm."
+- **delivered, the deadlines report.** A reply in the requester's thread:
+  "The deadlines report and the statute report are filed in the firm's
+  Operator Library, folder Deadlines, as Litigation deadlines 10-15-26
+  (Operator 0000AA).xlsx and Statute report 10-15-26 (Operator 0000AA).xlsx.
+  They cover 601 Open and Pending matters, 176 of them in litigation: 42 dates
+  in the next 14 days and 55 in the last 14, 88 open tasks due or overdue (74
+  overdue), and 37 cases with a statute date ahead and no filing recorded. A
+  case can hold filed papers that were never entered as filed, so the statute
+  report shows each case's court-named documents to check first. Nothing has
+  been sent to anyone outside the firm." Only the counts the wake carries,
+  each left out at zero.
 - **delivered, scheduled.** `reply_bind` with the job id answers mode
   `new_message` with the recipient and the subject set by the broker; one
   `create_draft` to that person with the same counts-only body. The subject

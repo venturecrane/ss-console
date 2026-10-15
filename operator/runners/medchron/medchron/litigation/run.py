@@ -14,6 +14,7 @@ it was built from before anything is filed (``review.py``).
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import json
 import os
@@ -34,7 +35,7 @@ from . import (
     inventory,
     job as job_mod,
 )
-from . import manifest, parity, passes, read, review as review_mod, seedcheck, update
+from . import carry, manifest, parity, passes, read, review as review_mod, seedcheck, update
 from .progress import Progress
 from .runbase import RunBase
 from .outcome import REASON, LitigationFailed, LitigationHold, Verdict
@@ -281,6 +282,8 @@ class LitigationRun(RunBase):
         result, log = (r3["result"], r3["overturns"]) if r3 else passes.after_read2(self, mid)
         if result is None:
             return None
+        result = copy.deepcopy(result)
+        self._carry(mid, result)
         out = {
             **result,
             "matter_id": mid,
@@ -295,6 +298,21 @@ class LitigationRun(RunBase):
         out["settlement_reviewed"] = (r3 or {}).get("settlement_reviewed") or []
         out["overturns"] = log
         return out
+
+    def _carry(self, mid: str, result: dict[str, Any]) -> list[str]:
+        """The last list's values this read left empty, kept (``carry.py``)."""
+        p = self._plan().get(mid) or {}
+        fs = inventory.files_of(self.data, mid)
+        return carry.carry_forward(
+            manifest.load_prior(self.state, mid),
+            result,
+            moved=set(p.get("moved") or []),
+            on_matter={str(f["id"]) for f in fs},
+            saved={str(f["id"]): {str(f.get(k) or "")[:10] for k in ("created", "modified")} for f in fs},
+            unsupported=self._unsupported(p),
+            text_of=lambda fid: self._text_of(mid, fid),
+            today=self.today,
+        )
 
     def _finals(self) -> list[dict[str, Any]]:
         return [f for f in (self.final(m) for m in self._matters()) if f is not None]

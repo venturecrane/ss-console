@@ -1195,7 +1195,7 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # names paralegals ("Irma's files"), alone or with attorneys; pairs with this
 # repo's broker paralegal resolution and the runner's Person Assisting scope.
 # No tracked twin moved.
-ARG OVERLAY_REF="8ee9b79aef4876d6b7b5e167f545e97e66f2b190"
+ARG OVERLAY_REF="aef6183d3b4bf0f2ec239e2c78778d50a4267487"
 
 ARG CUSTOMER_SLUG=customer-zero
 
@@ -1732,6 +1732,10 @@ COPY operator/contracts/ /app/contracts/
 # Bootstrap entrypoint
 COPY operator/templates/bootstrap.sh /app/bootstrap.sh
 COPY operator/templates/entrypoint.sh /app/entrypoint.sh
+# The retrying vault fetch the demand, drafting and litigation lanes' firm
+# inputs share (2026-10-14: a single silent failed fetch at boot left a lane
+# without inputs for a whole release). Sourced before the lane files.
+COPY operator/templates/entrypoint-fetch-inputs.sh /app/entrypoint-fetch-inputs.sh
 # Sourced by entrypoint.sh (the demand lane's queue, job dirs and firm inputs);
 # its own file because entrypoint.sh sits at its shell size ratchet.
 COPY operator/templates/entrypoint-demand.sh /app/entrypoint-demand.sh

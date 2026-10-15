@@ -813,6 +813,12 @@ personas:
         enabled: true
         settings:
           folder_name: 'Litigation Status'
+          # The deadlines report (2026-10-15, letters 319 and 381: the firm's ask
+          # when a litigation paralegal is out) files its deadlines and statute
+          # workbooks to this folder of the same library matter. The same
+          # request edge and the same admins; the broker tells the report from
+          # the list by the email's own words. Unauthored, it is refused.
+          deadlines_folder_name: 'Deadlines'
           # The Operator Library matter's id (the same matter the demand and
           # drafting lanes author); the broker pairs it with the library number.
           file_to_matter_id: '1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23'

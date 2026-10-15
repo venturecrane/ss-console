@@ -232,6 +232,29 @@ def test_missing_matter_folder_and_file_each_name_their_reason() -> None:
     assert "folder 'Document Library' not found" in resolve_template(no_folder, _CFG, "memo").reason
 
 
+class _RateLimitedClient(_FakeClient):
+    """Every matter listing raises, the way a Smokeball 429 that outlasts the
+    client's own waits does (2026-10-14)."""
+
+    def get(self, path, **params):  # type: ignore[override]
+        if path == "/matters":
+            raise RuntimeError("Smokeball GET /matters -> HTTP 429: Too Many Requests")
+        return super().get(path, **params)
+
+
+def test_a_library_that_could_not_be_read_is_never_reported_as_missing() -> None:
+    out = resolve_template(_RateLimitedClient(matters=[], folders=[], files=[]), _CFG, "memo")
+    assert isinstance(out, NotResolved)
+    assert out.transient is True
+    assert "could not be looked up just now" in out.reason
+    assert "not found" not in out.reason
+
+
+def test_a_library_that_was_read_and_lacks_the_matter_is_not_transient() -> None:
+    out = resolve_template(_FakeClient(matters=[{"id": "m", "number": "OTHER"}], folders=[], files=[]), _CFG, "memo")
+    assert isinstance(out, NotResolved) and out.transient is False and "not found" in out.reason
+
+
 _LIVE_ENTRY_IN_FOLDER = {
     # Pinned to the wire shape observed on the pilot tenant 2026-08-19
     # (vfy_01M0DTM2EGQZP9FZTM53S17CJ7). Not a guess.

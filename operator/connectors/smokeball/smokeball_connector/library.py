@@ -155,6 +155,11 @@ class NotResolved:
     reason: str
     matter_id: str | None = None
     folder_id: str | None = None
+    #: True when the library could not be READ (a rate limit, a timeout), as
+    #: opposed to read and found wanting. The two lead to different sentences:
+    #: "the form is missing, restore it" is false when nobody could look
+    #: (2026-10-14: a 429 told the firm its form was gone).
+    transient: bool = False
 
 
 def _listing(resp: Any) -> list[dict[str, Any]]:
@@ -480,7 +485,13 @@ def resolve_template(client: Any, cfg: LibraryConfig, document_class: str) -> Re
         return NotResolved(
             f"document library location not authored ({cfg.source or 'self_initiation.document_library'})"
         )
-    matter_id = find_matter_id(client, cfg.matter_number or "")
+    lookup = lookup_matter(client, number=cfg.matter_number or "")
+    if lookup.failed:
+        return NotResolved(
+            f"library matter {cfg.matter_number!r} could not be looked up just now ({lookup.reason})",
+            transient=True,
+        )
+    matter_id = lookup.matter_id if lookup.found else None
     if not matter_id:
         return NotResolved(f"library matter {cfg.matter_number!r} not found")
     folder_id = find_folder_id(client, matter_id, cfg.folder_name or "")

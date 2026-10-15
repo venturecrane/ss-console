@@ -181,7 +181,10 @@ def demand_code(
     facts: dict[str, Any],
     letter_md: str | None,
     drafted: date | None,
+    front_keys: tuple[str, ...] | None = None,
 ) -> list[R.Finding]:
+    """``front_keys``: the selected format's front matter (deliver.front_keys);
+    absent, the firm's house format's."""
     out = wording(texts)
     for want in wanted:
         for role in ROLES_FOR.get(want, ()):
@@ -204,7 +207,8 @@ def demand_code(
                     R.code(R.NOTE, "1 dates", f"{d:%B} {d.day}, {d.year} is not a date the record states", "the demand")
                 )
     if letter_md is not None:
-        for m in crosscheck.check(letter_md, facts)["mismatches"]:
+        keys = front_keys or crosscheck.FRONT_KEYS
+        for m in crosscheck.check(letter_md, facts, keys)["mismatches"]:
             out.append(R.code(R.MUST, "4 parties", f"the RE block disagrees with the matter record: {m}", "RE block"))
     return out
 

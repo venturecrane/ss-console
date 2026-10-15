@@ -22,7 +22,7 @@ from types import SimpleNamespace
 from typing import Any, Callable
 
 from ..stages import upload as upload_stage
-from . import format_check, house, plain_docx
+from . import format_check, house, house_numbered, plain_docx
 
 UNIT = "demand"
 
@@ -43,28 +43,55 @@ def names(firm: Any, job: Any, date_stamp: str) -> dict[str, str]:
     }
 
 
+def front_keys(firm: Any) -> tuple[str, ...]:
+    """The selected format's front-matter keys (the firm's house format when
+    no variant is selected)."""
+    if "_variant" not in firm.data:
+        return house.FRONT_KEYS
+    return house_numbered.FRONT_KEYS if firm.variant.get("layout") == "numbered" else house.FRONT_KEYS
+
+
 def render_demand(firm: Any, draft_md: str, out_dir: Path, client_label: str) -> tuple[Path, str, list[str]]:
     """The house file, its attorney notes, and the format check's notes.
-    Raises FormatRefused when the file is off-format: nothing is filed."""
+    Raises FormatRefused when the file is off-format: nothing is filed.
+
+    The layout is the responsible attorney's format (``firm.variant``). The
+    title may name the client (``Attorney for {client}``): it is filled from
+    ``client_label``, the matter record's own client name, never the model's."""
     fmt, v, who = firm.data["format"], firm.variant, firm.attorney
     author = firm.get("firm", "display_name")
-    path, notes = house.render(
-        draft_md,
-        firm.input_path("house_reference"),
-        out_dir,
-        signature=fmt["firm_signature"],
-        signer_title=who["title"],
-        author=author,
-        client_label=client_label,
-        signer=who["signer"],
-        initials=who["initials"],
-        mail_line=v["mail_line"],
-    )
+    title = who["title"].replace("{client}", client_label)
+    if v.get("layout") == "numbered":
+        path, notes = house_numbered.render(
+            draft_md,
+            firm.input_path("house_reference"),
+            out_dir,
+            variant=v,
+            signature=fmt["firm_signature"],
+            signer=who["signer"],
+            signer_title=title,
+            author=author,
+            client_label=client_label,
+            initials=who["initials"],
+        )
+    else:
+        path, notes = house.render(
+            draft_md,
+            firm.input_path("house_reference"),
+            out_dir,
+            signature=fmt["firm_signature"],
+            signer_title=title,
+            author=author,
+            client_label=client_label,
+            signer=who["signer"],
+            initials=who["initials"],
+            mail_line=v["mail_line"],
+        )
     res = format_check.check(
         path,
         signature=fmt["firm_signature"],
-        signer_title=who["title"],
-        footer_markers=list(fmt["footer_markers"]),
+        signer_title=title,
+        footer_markers=list(v.get("footer_markers") or fmt["footer_markers"]),
         variant=format_check.Variant.from_config(v),
         signer=who["signer"],
         initials=who["initials"],

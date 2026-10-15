@@ -278,8 +278,11 @@ export SMD_MEDCHRON_QUEUE_DIR="${MEDCHRON_RUN_DIR}/queue"
 # and inputs: sourced, same shell, so their exports reach the broker launch and
 # the daemon below. One loop line: the ratchet holds this file. image-manifest
 # is not a lane: it publishes what this image can run (2026-10-13 A&P outage).
-# shellcheck disable=SC1090 # /app/entrypoint-{demand,drafting,litigation,negotiation,lane-proofs,image-manifest}.sh
-for _lane in demand drafting litigation negotiation lane-proofs image-manifest; do . "/app/entrypoint-${_lane}.sh"; done
+# fetch-inputs is not a lane either: it is the retrying vault fetch the three
+# lanes with firm inputs share (2026-10-14: one silent failed fetch left A&P's
+# litigation lane with no inputs for a whole release), so it is sourced first.
+# shellcheck disable=SC1090 # /app/entrypoint-{fetch-inputs,demand,drafting,litigation,negotiation,lane-proofs,image-manifest}.sh
+for _lane in fetch-inputs demand drafting litigation negotiation lane-proofs image-manifest; do . "/app/entrypoint-${_lane}.sh"; done
 
 # 2026-09-04: the chronology runner's INSTALL-level artifacts — the scanned-page
 # classifier's authored control pages (`controls.json` + the PDFs it names) and

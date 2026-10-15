@@ -473,7 +473,7 @@ def test_a_set_whose_parties_are_not_stated_never_gets_a_declaration_from_a_prio
 def test_the_incident_memo_is_read_as_a_mention_and_said_so():
     doc, notes = render.attach(_set(35), "discovery_set", _Firm(), _digest(MEMO_ROW), MEMO)
     assert "DECLARATION" not in doc
-    assert any("read as a mention, not a prior set" in n for n in notes)
+    assert any("is a note about discovery, not a served set, so paragraph 4 does not count it" in n for n in notes)
     assert any("35 special interrogatories to this party" in n and "no declaration" in n for n in notes)
 
 

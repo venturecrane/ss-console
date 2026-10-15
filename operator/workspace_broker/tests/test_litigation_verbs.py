@@ -609,8 +609,9 @@ def test_an_older_ledger_gains_the_close_columns(tmp_path) -> None:
     from workspace_broker.litigation_ledger import CREATE_SQL
 
     db = str(tmp_path / "old.db")
-    old = CREATE_SQL.replace(', "close_reason TEXT, close_ref TEXT', "")
-    old = old.replace("reply_key TEXT, close_reason TEXT, close_ref TEXT)", "reply_key TEXT)")
+    old = CREATE_SQL.replace(
+        "reply_key TEXT, close_reason TEXT, close_ref TEXT, report TEXT, counts_json TEXT)", "reply_key TEXT)"
+    )
     conn = sqlite3.connect(db)
     conn.execute(old)
     conn.commit()
@@ -618,5 +619,6 @@ def test_an_older_ledger_gains_the_close_columns(tmp_path) -> None:
     conn.close()
     LitigationLedger(db, tmp_path / "q")
     conn = sqlite3.connect(db)
-    assert {"close_reason", "close_ref"} <= {r[1] for r in conn.execute("PRAGMA table_info(litigation_jobs)")}
+    have = {r[1] for r in conn.execute("PRAGMA table_info(litigation_jobs)")}
+    assert {"close_reason", "close_ref", "report", "counts_json"} <= have
     conn.close()

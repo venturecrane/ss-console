@@ -89,7 +89,7 @@ def test_a_memo_that_names_the_set_type_is_a_mention_and_paragraph_4_is_counted(
     assert "{{ATTORNEY" not in doc.split("DECLARATION")[1].split("PROOF OF SERVICE")[0]
     assert "a total of 0 interrogatories" in doc and "contains 60 specially" in doc
     assert any("the file shows none served" in n for n in notes)
-    assert any("read as a mention, not a prior set" in n for n in notes)
+    assert any("is a note about discovery, not a served set, so paragraph 4 does not count it" in n for n in notes)
 
 
 def test_a_set_on_file_without_proof_of_service_is_named_never_a_blank_in_the_oath():
@@ -102,7 +102,11 @@ def test_a_set_on_file_without_proof_of_service_is_named_never_a_blank_in_the_oa
     }
     doc, notes = render.attach(_srogs(60), "discovery_set", _Firm(), _digest(row), corpus)
     assert "a total of 0 interrogatories" in doc and "{{ATTORNEY: the file shows" not in doc
-    assert any("not counted, the file does not show it served" in n and "SROG one draft.pdf" in n for n in notes)
+    assert any(
+        "paragraph 4 counts no earlier set; the file holds this draft but no service of it" in n
+        and "SROG one draft.pdf" in n
+        for n in notes
+    )
 
 
 def test_a_served_set_whose_count_cannot_be_read_still_leaves_paragraph_4_to_the_attorney_and_says_why():
@@ -128,7 +132,7 @@ def test_a_set_of_admissions_that_cites_an_interrogatory_counts_no_interrogatori
     assert render.special_count(rfa) == 0
     _doc, notes = render.attach(rfa.split("=== ATTORNEY NOTES")[0], "discovery_set", _Firm(), _digest())
     assert not any("2030.050" in n for n in notes)
-    assert any(n.startswith("set number: earlier requests for admission") and n.endswith("none") for n in notes)
+    assert any(n == "Set number: no earlier requests for admission were served on DELTA EXAMPLE" for n in notes)
     assert render.special_count(_srogs(60)) == 60
 
 
@@ -172,17 +176,24 @@ def _audit_flagging(word: str):
 
 
 class AuditClient(Client):
-    def __init__(self, *a, audit_fn=None, repair_fix: tuple[str, str] | None = None, **kw):
+    def __init__(self, *a, audit_fn=None, repair_fix: tuple[str, str] | None = None, fixes=None, **kw):
         super().__init__(*a, **kw)
         self.audit_fn, self.repair_fix = audit_fn, repair_fix
+        #: Successive repairs' replacements, one pair per repair call, after repair_fix.
+        self.fixes = list(fixes or [])
 
     def _answer(self, params):
         system = json.dumps(params.get("system"))
         if "AUDIT-PROMPT" in system and self.audit_fn is not None:
             return self.audit_fn(params)
+        user = params["messages"][-1]["content"]
+        if "REPAIR-PROMPT" in system and user.startswith("FORMAT REPAIR"):
+            return user.split("=== DOCUMENT ===\n", 1)[1]  # a repair that changes nothing
         text = super()._answer(params)
         if "REPAIR-PROMPT" in system and self.repair_fix:
             text = text.replace(*self.repair_fix)
+        if "REPAIR-PROMPT" in system and "SCOPED REPAIR" in json.dumps(params.get("messages")) and self.fixes:
+            text = text.replace(*self.fixes.pop(0))
         return text
 
 
@@ -216,7 +227,7 @@ def test_a_drift_the_repairs_never_clear_fails_and_is_never_forwarded_as_an_open
     assert client.count("INDEPENDENT PRE-DELIVERY REVIEW") == 0  # nothing paid past the failure
 
 
-def test_repairs_that_change_the_text_but_never_clear_the_drift_stop_at_three(tmp_path, pricing):
+def test_repairs_that_change_the_text_but_never_clear_the_drift_stop_on_non_convergence(tmp_path, pricing):
     bad = one_set(RFA).replace('"PREMISES" means the store.', '"PREMISES" means the WRONGSTORE.')
     client = AuditClient(
         drafts=_drafts(**{RFA: bad}),
@@ -225,7 +236,7 @@ def test_repairs_that_change_the_text_but_never_clear_the_drift_stop_at_three(tm
     )
     _r, v, _ = _run(tmp_path, pricing, client)
     assert v.outcome == "failed" and v.reason.startswith("audit_unrepaired: "), (v.stage, v.reason)
-    assert client.count("REPAIR-PROMPT") == 3
+    assert client.count("REPAIR-PROMPT") == 2  # two repairs that did not reduce the findings
 
 
 def test_an_unsupported_premise_in_a_served_paper_is_never_marked_in_place(tmp_path, pricing):
@@ -401,14 +412,6 @@ def test_a_served_paper_with_a_not_in_record_slot_gets_one_repair_then_fails(tmp
     assert "the owner" not in v.reason and seat.created == []
 
 
-def test_notes_that_hedge_are_rewritten_once_then_fail(tmp_path, pricing):
-    client = Client(drafts=_drafts(), notes="## Open items\n\n- It is unclear whether Alpha is the handling attorney.")
-    _r, v, seat = _run(tmp_path, pricing, client)
-    assert v.outcome == "failed" and v.reason.startswith("notes_unclean: ") and "Alpha" not in v.reason
-    assert client.count("THE ATTORNEY NOTES, FROM THE FINAL DOCUMENT") == 2
-    assert seat.created == []
-
-
 def test_the_notes_are_told_who_asked_and_whose_block_it_is_and_say_it(tmp_path, pricing):
     client = Client(drafts=_drafts())
     r, v, _ = _run(tmp_path, pricing, client)
@@ -417,10 +420,7 @@ def test_the_notes_are_told_who_asked_and_whose_block_it_is_and_say_it(tmp_path,
     user = json.dumps(call["messages"])
     assert "the documents were requested by admin@firm.example" in user
     notes = (r.data / "notes-final.md").read_text()
-    assert (
-        "- Attorney block: the firm has no authored attorney block for the requesting or the responsible attorney"
-        in notes
-    )
+    assert "- Attorney block: taken from the operative pleading (no standard block is on file for you)" in notes
     assert wording.vocabulary(notes) == [] and "{{" not in notes
 
 
@@ -491,7 +491,11 @@ def test_a_line_every_set_carries_is_said_once(tmp_path):
     )
     assert md.count("3 of 9 sources are scans") == 1
     assert "privilege wall" not in md and "never read" not in md
-    assert 'Email kept out of drafting (firm internal): "INTAKE"' in md
+    assert (
+        "Not used in drafting: 1 privileged or internal emails" in md
+        and "with these 1 subjects" in md
+        and '"INTAKE"' in md
+    )
 
 
 def test_a_walled_email_named_like_a_filed_document_stays_out_and_the_document_stays_in(tmp_path, monkeypatch):
@@ -545,7 +549,7 @@ def test_a_walled_email_named_like_a_filed_document_stays_out_and_the_document_s
 def test_a_case_only_finding_never_blocks_and_notes_quotes_are_not_the_document():
     audit = (
         "## AUDIT: DEFINITIONS\n\n"
-        '- `Def. 3, "PERSON" means "a natural person"` | DRIFTS | undefined: lower case inside its own definition\n'
+        '- `Def. 3, "PERSON" means "a natural person"` | TERM | lower case inside its own definition\n'
         "## AUDIT: REQUESTS FOR ADMISSION\n\n- `RFA 2: X` | DRIFTS | not stated\n"
     )
     rows = compose.strict_rows(audit)
@@ -644,3 +648,629 @@ def test_the_audit_reads_the_front_matter_code_sets(tmp_path, pricing):
     assert v.outcome == "delivered", (v.stage, v.reason)
     audited = [json.dumps(c["messages"]) for c in client.calls if "AUDIT-PROMPT" in json.dumps(c.get("system"))]
     assert audited and not any("date of signing" in a for a in audited)
+
+
+# ---- a later round re-audits only what changed (2026-10-14, the second re-proof) ----
+
+
+def _late_reader():
+    """RFA No. 1 is flagged whenever it is read with WRONGSTORE in it; No. 3
+    is flagged for WRONGLOT only from the SECOND time it is ever read: the
+    2026-10-14 interrogatory first found on a late read, in a request no
+    repair had touched."""
+    reads = {"n3": 0}
+
+    def answer(params):
+        body = params["messages"][-1]["content"]
+        rows = []
+        if "REQUEST FOR ADMISSION NO. 1\n" in body and "WRONGSTORE" in body:
+            rows.append("- `RFA 1: WRONGSTORE` | DRIFTS | the file says otherwise")
+        if "REQUEST FOR ADMISSION NO. 3\n" in body:
+            reads["n3"] += 1
+            if reads["n3"] >= 2 and "WRONGLOT" in body:
+                rows.append("- `RFA 3: WRONGLOT` | DRIFTS | states the other side's allegation as fact")
+        if not rows:
+            return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+        return "\n".join(rows) + f"\nSUPPORTED=0 DRIFTS={len(rows)} INVENTED=0 ARITHMETIC=0"
+
+    return answer, reads
+
+
+def _two_defects() -> str:
+    return (
+        one_set(RFA, 3)
+        .replace(
+            "REQUEST FOR ADMISSION NO. 1\n\nAdmit that YOU owned the PREMISES.",
+            "REQUEST FOR ADMISSION NO. 1\n\nAdmit that YOU owned the WRONGSTORE.",
+        )
+        .replace(
+            "REQUEST FOR ADMISSION NO. 3\n\nAdmit that YOU owned the PREMISES.",
+            "REQUEST FOR ADMISSION NO. 3\n\nAdmit that YOU owned the WRONGLOT.",
+        )
+    )
+
+
+def test_a_defect_in_a_request_no_repair_touched_is_found_on_the_full_read_and_repaired(tmp_path, pricing):
+    answer, reads = _late_reader()
+    client = AuditClient(
+        drafts=_drafts(**{RFA: _two_defects()}),
+        audit_fn=answer,
+        fixes=[("WRONGSTORE", "PREMISES"), ("WRONGLOT", "PREMISES")],
+    )
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    final = (r.data / "set-1" / "draft-final.md").read_text()
+    assert "WRONGLOT" not in final and "WRONGSTORE" not in final
+    assert reads["n3"] >= 2  # the full read reached the untouched request
+
+
+def test_a_defect_in_a_request_no_repair_touched_that_cannot_be_repaired_blocks_delivery(tmp_path, pricing):
+    answer, _reads = _late_reader()
+    client = AuditClient(drafts=_drafts(**{RFA: _two_defects()}), audit_fn=answer, fixes=[("WRONGSTORE", "PREMISES")])
+    r, v, seat = _run(tmp_path, pricing, client)
+    assert v.outcome == "failed" and v.reason.startswith("audit_unrepaired: "), (v.stage, v.reason)
+    assert seat.created == [] and not (r.data / "set-1" / "draft-final.md").exists()
+
+
+def test_a_later_round_reaudits_only_the_requests_a_repair_changed(tmp_path, pricing):
+    """Between repairs, an untouched request is not read again (its later read
+    is the full one before the set passes)."""
+    answer, reads = _late_reader()
+    one = one_set(RFA, 3).replace(
+        "REQUEST FOR ADMISSION NO. 1\n\nAdmit that YOU owned the PREMISES.",
+        "REQUEST FOR ADMISSION NO. 1\n\nAdmit that YOU owned the WRONGSTORE.",
+    )
+    client = AuditClient(drafts=_drafts(**{RFA: one}), audit_fn=answer, fixes=[("WRONGSTORE", "PREMISES")])
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    assert reads["n3"] == 2  # the first full read, the delta round skipped it, the final full read
+
+
+def test_a_finding_the_delta_cannot_place_falls_back_to_a_full_audit():
+    from medchron.drafting import compose as c
+
+    body = "intro\n\nREQUEST FOR ADMISSION NO. 1\n\nA.\n\nREQUEST FOR ADMISSION NO. 2\n\nB.\n"
+    after = body.replace("B.", "B2.")
+    # an unchanged request keeps its finding; a changed one is read again
+    assert c.delta("R", after, body, "- `RFA 1: x` | DRIFTS | y") == (
+        ["- `RFA 1: x` | DRIFTS | y"],
+        ["REQUEST FOR ADMISSION NO. 2\n\nB2."],
+    )
+    assert c.delta("R", after, body, "- `RFA 2: x` | DRIFTS | y") == ([], ["REQUEST FOR ADMISSION NO. 2\n\nB2."])
+    assert c.delta("R", after, body, "- `the set as a whole` | DRIFTS | y") is None  # unplaceable: full audit
+    assert c.delta("R", after.replace("intro", "changed intro"), body, "") is None
+
+
+def test_a_long_set_is_read_a_dozen_requests_at_a_time_so_a_defect_one_read_misses_is_found(tmp_path, pricing):
+    """An auditor that, like the real one, notices request No. 20's defect only
+    when it is reading a dozen requests or fewer, never in one read of thirty."""
+    import re as _re
+
+    def answer(params):
+        body = params["messages"][-1]["content"]
+        labels = _re.findall(r"(?m)^REQUEST FOR ADMISSION NO\. (\d+)$", body)
+        if "20" in labels and len(labels) <= 12 and "WRONGLOT" in body:
+            return "- `RFA 20: WRONGLOT` | DRIFTS | assumes a fact\nSUPPORTED=0 DRIFTS=1 INVENTED=0 ARITHMETIC=0"
+        return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+
+    long = one_set(RFA, 30).replace(
+        "REQUEST FOR ADMISSION NO. 20\n\nAdmit that YOU owned the PREMISES.",
+        "REQUEST FOR ADMISSION NO. 20\n\nAdmit that YOU owned the WRONGLOT.",
+    )
+    client = AuditClient(drafts=_drafts(**{RFA: long}), audit_fn=answer, fixes=[("WRONGLOT", "PREMISES")])
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    assert "WRONGLOT" not in (r.data / "set-1" / "draft-final.md").read_text()
+    reads = [
+        len(_re.findall(r"REQUEST FOR ADMISSION NO\. \d+\\n", json.dumps(c["messages"])))
+        for c in client.calls
+        if "AUDIT-PROMPT" in json.dumps(c.get("system"))
+    ]
+    assert max(reads) <= 12
+
+
+def test_one_full_read_finds_assumed_facts_planted_across_several_chunks_of_sixty(tmp_path, pricing):
+    """Three requests in three different chunks of a sixty-request set each
+    assume a fact. The auditor notices one only with a dozen or fewer requests
+    in view. One full read finds all three, and one repair clears them."""
+    import re as _re
+
+    seen: set[str] = set()
+
+    def answer(params):
+        body = params["messages"][-1]["content"]
+        labels = _re.findall(r"(?m)^REQUEST FOR ADMISSION NO\. (\d+)$", body)
+        if len(labels) > 12:
+            return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+        rows = []
+        for n in ("5", "30", "55"):
+            if n in labels and _re.search(rf"NO\. {n}\n\nAdmit that YOU owned the WRONGLOT", body):
+                rows.append(f"- `RFA {n}: WRONGLOT` | DRIFTS | assumes a fact")
+                seen.add(n)
+        if not rows:
+            return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+        return "\n".join(rows) + f"\nSUPPORTED=0 DRIFTS={len(rows)} INVENTED=0 ARITHMETIC=0"
+
+    sixty = one_set(RFA, 60)
+    for n in (5, 30, 55):
+        sixty = sixty.replace(
+            f"REQUEST FOR ADMISSION NO. {n}\n\nAdmit that YOU owned the PREMISES.",
+            f"REQUEST FOR ADMISSION NO. {n}\n\nAdmit that YOU owned the WRONGLOT.",
+        )
+    client = AuditClient(drafts=_drafts(**{RFA: sixty}), audit_fn=answer, repair_fix=("WRONGLOT", "PREMISES"))
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    assert seen == {"5", "30", "55"}
+    repairs = [c for c in client.calls if "SCOPED REPAIR" in json.dumps(c.get("messages"))]
+    assert len(repairs) == 1  # found together on one full read, cleared by one repair
+    assert "WRONGLOT" not in (r.data / "set-1" / "draft-final.md").read_text()
+
+
+def test_a_served_sets_audit_never_reads_the_drafters_notes(tmp_path, pricing):
+    """A finding on the drafter's end tables (rewritten from the final
+    documents anyway) never holds a served set (2026-10-14)."""
+
+    def answer(params):
+        body = params["messages"][-1]["content"]
+        if "REQUEST BASIS" in body:
+            return "- `Notes RFA 1: cite` | DRIFTS | the cite names the wrong paragraph\nSUPPORTED=0 DRIFTS=1 INVENTED=0 ARITHMETIC=0"
+        return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+
+    table = "## REQUEST BASIS\n\n| Request | Basis | Cite |\n| --- | --- | --- |\n" + "".join(
+        f"| RFA {n} | the store's ownership as the complaint pleads it on 01/15/2026 | Complaint 2-1-26, p. {n} |\n"
+        for n in range(1, 8)
+    )
+    drafts = {label: one_set(label).replace("## REQUEST BASIS\n\nNone.\n", table) for label in KINDS}
+    client = AuditClient(drafts=drafts, audit_fn=answer)
+    _r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    assert not any(
+        "REQUEST BASIS" in json.dumps(c["messages"])
+        for c in client.calls
+        if "AUDIT-PROMPT" in json.dumps(c.get("system"))
+    )
+
+
+def test_a_chunk_is_read_against_the_sets_own_definitions_and_its_place_in_the_set(tmp_path, pricing):
+    """2026-10-14, run 5: a chunk read without the set's Definitions or its
+    place called defined terms undefined and "No. 13" a misnumbered first set.
+    The auditor here, like that one, objects when the frame is missing."""
+
+    def answer(params):
+        body = params["messages"][-1]["content"]
+        if "REQUEST FOR ADMISSION NO. 13\n" in body and "numbered from 1" not in body:
+            return "- `Label REQUEST FOR ADMISSION NO. 13 in a first set` | DRIFTS | a first set is numbered from 1\nSUPPORTED=0 DRIFTS=1 INVENTED=0 ARITHMETIC=0"
+        if "REQUEST FOR ADMISSION NO." in body and "THIS SET'S OWN DEFINITIONS" in body:
+            assert '"PREMISES" means the store.' in body  # the set's own Definitions travel with the chunk
+        return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+
+    client = AuditClient(drafts=_drafts(**{RFA: one_set(RFA, 30)}), audit_fn=answer)
+    _r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+
+
+def test_a_term_verdict_never_blocks_and_a_drifts_row_always_does():
+    """Classified on the verdict column, never on where "undefined:" sits."""
+    audit = (
+        "## AUDIT: SPECIAL INTERROGATORIES\n\n"
+        '- `"ANSWER" in SPECIAL INTERROGATORY NO. 60` | TERM | not among the definitions\n'
+        "- `IDENTIFY (SROG 62)` | DRIFTS | undefined: capitalized as a defined term\n"
+        "- `SI 4: the INCIDENT was witnessed` | DRIFTS | the record conflicts\n"
+    )
+    assert [c for _h, c, _d in compose.strict_rows(audit)] == [
+        "`IDENTIFY (SROG 62)`",
+        "`SI 4: the INCIDENT was witnessed`",
+    ]
+
+
+def test_a_term_the_set_never_defines_is_held_by_code_not_by_the_model(tmp_path, pricing):
+    """The audit reports defined terms as TERM, which never blocks; the code
+    check does: strip PERSON's definition from the interrogatories and the
+    format check holds delivery after its one repair (2026-10-14)."""
+    stripped = one_set(SROG).replace('4. "PERSON" means a natural person.\n\n', "")
+    assert "PERSON" in stripped and '"PERSON"' not in stripped
+
+    def answer(params):
+        body = params["messages"][-1]["content"]
+        if "PERSON" in body:
+            return "- `PERSON` | TERM | not defined\nSUPPORTED=0 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+        return "- claim | SUPPORTED | cite\nSUPPORTED=1 DRIFTS=0 INVENTED=0 ARITHMETIC=0"
+
+    client = AuditClient(drafts=_drafts(**{SROG: stripped}), audit_fn=answer)
+    _r, v, seat = _run(tmp_path, pricing, client)
+    assert v.outcome == "failed" and v.reason.startswith("format_check: "), (v.stage, v.reason)
+    assert "not defined in this set's DEFINITIONS: PERSON" in v.reason
+    assert seat.created == []
+
+
+# ---- run 6's review (2026-10-14): five MUST-FIX, each settled in code ---------------------
+
+
+def test_the_set_number_the_request_states_is_written_where_a_marker_stood():
+    doc = (
+        "| | **PLAINTIFF'S REQUESTS FOR ADMISSION, SET `{{ATTORNEY: confirm the set number}}`** |\n\n"
+        "| PROPOUNDING PARTY: | GAMMA |\n| SET NO.: | {{ATTORNEY: confirm the set number}} |\n"
+    )
+    out, notes = sets.set_number(doc, "Please draft plaintiff's first set of RFAs, RFPs and SROGs.")
+    assert "{{" not in out and "SET ONE**" in out and "| SET NO.: | ONE |" in out and len(notes) == 2
+    assert sets.set_number(doc, "RFAs set one and SROGs set two") == (doc, [])  # two numbers: never guessed
+    assert sets.stated_set_number("draft the RFAs") is None
+
+
+def test_a_system_heading_never_reaches_a_served_paper():
+    out, notes = sets.strip_system_lines("PREAMBLE\nAlpha Example (SBN 1)\n\n## SECTION TO REPAIR: PREAMBLE\nBody.\n")
+    assert "PREAMBLE" not in out and "Alpha Example" in out and notes
+
+
+def test_a_hedge_on_an_unserved_set_is_caught_and_the_caps_note_says_what_code_did():
+    assert wording.hedges("If the earlier set was served, this paper is Set Two.")
+    out, lines = sets.enforce_caps(
+        '# DEFINITIONS\n\n1. "DOCUMENT" means a writing.\n\n# X\n\nAll documents.\n\nDated: x\n'
+    )
+    assert lines == ['1 lower-case use(s) of the defined term "DOCUMENT" were capitalized to match its definition']
+
+
+def test_each_item_for_the_attorney_names_its_document_and_place(tmp_path, pricing):
+    rfp = one_set(RFP).replace(
+        "All DOCUMENTS showing the PREMISES.",
+        "All DOCUMENTS showing the PREMISES. {{ATTORNEY: compound under section 2030.060(f)?}}",
+    )
+    client = Client(drafts=_drafts(**{RFP: rfp}))
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    notes = (r.data / "notes-final.md").read_text()
+    assert "- For your decision (Requests for Production, REQUEST FOR PRODUCTION NO. 1): one category, or two" in notes
+
+
+# ---- run 7's review (2026-10-14): the SHOULD-FIX and NOTE items, settled in code ------------
+
+
+def test_any_your_singular_is_a_grammar_finding_that_holds_a_served_paper(tmp_path, pricing):
+    assert wording.grammar("IDENTIFY any YOUR employee who mopped.") and not wording.grammar("any of YOUR employees")
+    bad = one_set(RFP).replace("All DOCUMENTS showing the PREMISES.", "All DOCUMENTS any YOUR employee wrote.")
+    client = AuditClient(drafts=_drafts(**{RFP: bad}))
+    _r, v, seat = _run(tmp_path, pricing, client)
+    assert v.outcome == "failed" and v.reason.startswith("format_check: ") and "any YOUR employee" in v.reason
+    assert seat.created == []
+
+
+def test_the_notes_say_it_in_the_attorneys_words(tmp_path):
+    from medchron.drafting import notes as n
+
+    for k in ("a", "b"):
+        (tmp_path / k).mkdir()
+        (tmp_path / k / "final-pass.json").write_text(json.dumps({"settled": [], "drifts": []}))
+        (tmp_path / k / "gate.json").write_text(
+            json.dumps(
+                {
+                    "warnings": [
+                        "3 of 9 sources are machine transcriptions of scanned documents and have not been read by a human: ER scan"
+                    ]
+                }
+            )
+        )
+    (tmp_path / "walled.json").write_text(
+        json.dumps([{"reason": "firm internal", "name": f"FW: note {i}"} for i in range(5)])
+    )
+    md = n.attorney_notes(
+        tmp_path,
+        "Discovery Set",
+        [],
+        [],
+        "## REQUEST BASIS\n\nNone.",
+        [("RFA", tmp_path / "a"), ("RFP", tmp_path / "b")],
+    )
+    assert (
+        md.count("Not used in drafting") == 1
+        and "5 privileged or internal emails" in md
+        and "with these 5 subjects" in md
+    )
+    assert (
+        "machine transcription" not in md
+        and "transcriber" not in md
+        and "scanned images whose text was read by software" in md
+    )
+    assert "## Request basis, record gaps and your decisions" in md and "End tables" not in md
+    assert wording.vocabulary(md) == [] and wording.notes_findings("The flag under RFA 6 is your marker.")
+
+
+def test_the_signature_block_reads_attorney_for_as_the_attorney_block_does():
+    doc = (
+        "Alpha Example (SBN 1)\nAttorney for GAMMA EXAMPLE\n\nSUPERIOR COURT OF THE STATE OF CALIFORNIA\n\n"
+        '# DEFINITIONS\n\n1. "X" means x.\n\nDated: today\n\nEXAMPLE LAW\nBy: Alpha Example\nAttorneys for Plaintiff\n'
+    )
+    out, notes = sets.attorneys_for(doc)
+    assert out.endswith("By: Alpha Example\nAttorney for GAMMA EXAMPLE\n") and notes
+    assert sets.attorneys_for(out) == (out, [])
+
+
+ANSWER = (
+    "SACRAMENTO, CALIFORNIA 95814\nDelta Counsel, Bar No. 000002\nDEFENSE FIRM PC\n1 Court Street\n"
+    "Exampletown, California 90000\n(555) 555-0102\ndelta@defense.example\nAttorneys for Defendant, DELTA EXAMPLE\n"
+    "SUPERIOR COURT\nANSWER TO COMPLAINT\n"
+)
+
+
+def test_the_proof_of_service_carries_what_the_record_knows_and_only_that():
+    pos = (
+        "described as `{{FILL: the exact title of the document served | at service}}`\n"
+        "| `{{FILL: party, as captioned | at service}}` | `{{FILL: counsel of record, firm, address | at service}}` "
+        "| `{{FILL: email, if served electronically | at service}}` |\n"
+        "My business address is `{{FILL: firm business address | at service}}`. On `{{FILL: date of service | at service}}`"
+    )
+    doc = one_set(SROG).split("=== ATTORNEY")[0]
+    out, notes = render.fill_pos(pos, doc, {"Answer.pdf": ANSWER}, ["1 Example Way", "Exampletown, California 90000"])
+    assert "PLAINTIFF GAMMA EXAMPLE'S SPECIAL INTERROGATORIES TO DEFENDANT DELTA EXAMPLE, SET ONE" in out
+    assert "| DELTA EXAMPLE |" in out
+    assert "Delta Counsel, Bar No. 000002; DEFENSE FIRM PC; 1 Court Street; Exampletown, California 90000" in out
+    assert "delta@defense.example" in out and "1 Example Way, Exampletown" in out
+    assert "{{FILL: date of service | at service}}" in out and len(notes) == 1  # the server's own facts stay slots
+    other = ANSWER.replace("Delta Counsel", "Other Counsel")
+    ambiguous, _ = render.fill_pos(pos, doc, {"A.pdf": ANSWER, "B.pdf": other}, [])
+    assert "{{FILL: counsel of record" in ambiguous  # two different blocks: never a guess
+
+
+def test_the_declarations_signature_line_prints_the_declarants_name():
+    decl = "I, `{{ATTORNEY: declarant's full name}}`, declare:\n\n______________________________\n`{{ATTORNEY: signature}}`\n"
+    out = render._fill_decl(decl, render.decl_decision(_srogs(40), _digest()), _srogs(40), "Alpha Q. Example")
+    assert out.count("Alpha Q. Example") == 2 and "{{ATTORNEY" not in out
+
+
+def test_a_review_that_holds_on_a_document_never_gets_the_notes_rewrite(tmp_path, pricing):
+    review = (
+        "| MUST-FIX | 1 statements | The declaration swears the set exceeds 35; it has 35. | Document 3, para 3 |\n"
+        "VERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+    )
+    client = Client(drafts=_drafts(), review=review)
+    _r, v, seat = _run(tmp_path, pricing, client)
+    assert v.outcome == "failed" and v.reason.startswith("review_held: ")
+    assert client.count("INDEPENDENT PRE-DELIVERY REVIEW") == 1 and seat.created == []
+
+
+def test_the_code_written_notes_read_as_the_attorneys_language():
+    """Run 9 (2026-10-14): "the firm's authored block", "kept out unread",
+    "scans read by machine", and five telegraphic proof-of-service lines."""
+    pos = (
+        "described as `{{FILL: the exact title of the document served | at service}}`\n"
+        "| `{{FILL: party, as captioned | at service}}` | `{{FILL: counsel of record, firm, address | at service}}` |"
+    )
+    _out, notes = render.fill_pos(pos, one_set(SROG).split("=== ATTORNEY")[0], {"Answer.pdf": ANSWER}, [])
+    assert notes == [
+        "Proof of service: attached, filled in with this set's title, the party served (DELTA EXAMPLE) and defense "
+        "counsel as the defense's own papers list them; the server completes the date, the method and the server's "
+        "own details"
+    ]
+    for line in notes:
+        assert wording.vocabulary(line) == [] and "authored" not in line
+
+
+# ---- grounded notes (2026-10-14, the lead's C): rows the code checks word for word ----------
+
+
+def _corpus():
+    return {
+        "Pltf RES to SROG": "PLAINTIFF'S RESPONSES TO SPECIAL INTERROGATORIES, SET ONE\nRESPONDING PARTY: Plaintiff\n"
+        "RESPONSE TO SPECIAL INTERROGATORY NO. 2: She slipped on an unmarked puddle of water.\nVERIFICATION",
+        "Phillips_Resp_FROG_DRAFT": "DRAFT RESPONSES TO FORM INTERROGATORIES\nRESPONDING PARTY: Plaintiff\n12.3 No statement was obtained.",
+    }
+
+
+def test_a_quote_that_is_not_in_the_cited_file_is_dropped():
+    from medchron.drafting import grounding as gr
+
+    rows = [
+        gr.Row(
+            "Special Interrogatories",
+            1,
+            "Pltf RES to SROG",
+            "served responses",
+            "slipped on an unmarked puddle of water",
+        ),
+        gr.Row(
+            "Special Interrogatories",
+            2,
+            "Pltf RES to SROG",
+            "served responses",
+            "the store manager Shannon received the report",
+        ),
+    ]
+    g = gr.verify(rows, _corpus())
+    assert [r.request for r, _n, _w in g.rows] == [1] and g.dropped == {"Special Interrogatories": [2]}
+    table = gr.render_table(g, [("Special Interrogatories", [1, 2])])
+    assert "No verified basis cite; check the file: Nos. 2" in table and "Shannon" not in table
+
+
+def test_an_unserved_draft_cited_as_served_responses_is_dropped():
+    from medchron.drafting import grounding as gr
+
+    row = gr.Row(
+        "Special Interrogatories",
+        3,
+        "Phillips_Resp_FROG_DRAFT",
+        "plaintiff's served FROG responses",
+        "No statement was obtained",
+    )
+    assert gr.kind("Phillips_Resp_FROG_DRAFT", _corpus()["Phillips_Resp_FROG_DRAFT"]) == "unserved draft"
+    assert gr.verify([row], _corpus()).rows == []
+    honest = gr.Row(
+        "Special Interrogatories", 3, "Phillips_Resp_FROG_DRAFT", "unserved draft", "No statement was obtained"
+    )
+    assert [w for _r, _n, w in gr.verify([honest], _corpus()).rows] == ["unserved draft"]
+
+
+def test_model_prose_never_reaches_the_notes(tmp_path, pricing):
+    client = Client(
+        drafts=_drafts(), notes="It is unclear whether Alpha is the handling attorney. Open items from the audit."
+    )
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    notes = (r.data / "notes-final.md").read_text()
+    assert "unclear whether" not in notes and "Open items from the audit" not in notes
+    assert "No verified basis cite; check the file" in notes
+
+
+def test_a_review_with_the_grounding_removed_holds_on_an_unverified_cite(tmp_path, pricing):
+    """The review holds on a cite the file does not carry; grounding keeps
+    such a row from ever reaching the notes, so the job delivers."""
+    planted = json.dumps(
+        {
+            "basis": [
+                {
+                    "document": "Requests for Admission",
+                    "request": 1,
+                    "file": "Complaint 2-1-26",
+                    "paper": "pleading",
+                    "quote": "paragraph 99 says the store owned the lot",
+                }
+            ]
+        }
+    )
+
+    def review(params):
+        if "paragraph 99" in json.dumps(params["messages"]):
+            return "| MUST-FIX | 6 the attorney notes | The cite does not carry this. | notes; FILE: Complaint 2-1-26, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+        return "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+
+    client = Client(drafts=_drafts(), notes=planted, review=review)
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    assert "paragraph 99" not in (r.data / "notes-final.md").read_text()
+
+
+def test_a_review_that_holds_on_the_notes_alone_gets_one_notes_rewrite_and_passes(tmp_path, pricing):
+    calls = {"n": 0}
+
+    def review(params):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return "| MUST-FIX | 6 the attorney notes | A basis row misdescribes its file. | notes; FILE: Complaint 2-1-26, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+        return "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+
+    client = Client(drafts=_drafts(), review=review)
+    _r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason) and calls["n"] == 2
+    told = [c for c in client.calls if "the review found in the notes" in json.dumps(c.get("messages"))]
+    assert told  # the rewrite was told the finding
+
+
+def test_the_caption_carries_the_courts_particulars_only_when_the_record_agrees():
+    digest = "Judge: Commissioner A. Example\nDept.: 1\nTrial Date: N/A\n| x | Judge: Commissioner A. Example | Trial Date: 01/22/2029 |\n"
+    assert sets.court_particulars(digest) == ["Judge: Commissioner A. Example", "Dept.: 1", "Trial Date: 01/22/2029"]
+    assert sets.court_particulars("Dept.: 1\nDept.: 2\n") == []  # the record disagrees: nothing printed
+    doc = "| GAMMA v. DELTA | Case No. CV-0001 |\n"
+    out, notes = sets.particulars(doc, ["Dept.: 1"])
+    assert "| Case No. CV-0001; Dept.: 1 |" in out and notes and sets.particulars(out, ["Dept.: 1"]) == (out, [])
+
+
+def test_a_basis_row_the_review_says_does_not_support_its_request_is_dropped():
+    from medchron.drafting import grounding as gr
+
+    findings = [
+        {
+            "grade": "SHOULD-FIX",
+            "check": "6. Attorney notes",
+            "finding": "The cite does not support it.",
+            "cite": "Attorney notes, RFA basis table No. 25; FILE: FULL DEMAND, p.3",
+        },
+        {
+            "grade": "SHOULD-FIX",
+            "check": "6 Attorney notes",
+            "finding": "The email says nothing of a subpoena.",
+            "cite": "Attorney notes, RFP basis table No. 54",
+        },
+        {
+            "grade": "NOTE",
+            "check": "7 Consistency",
+            "finding": "RFA basis table No. 6 aside",
+            "cite": "Doc 1",
+        },  # not check 6: no drop
+    ]
+    assert gr.flagged_rows(findings) == {"Requests for Admission": {25}, "Requests for Production": {54}}
+    notes = (
+        "## Request basis, record gaps and your decisions\n\n### Requests for Admission\n\n| Request | Basis in the file |\n"
+        '| --- | --- |\n| No. 6 | FILE: A (document): "x" |\n| No. 25 | FILE: FULL DEMAND (document): "y" |\n\n'
+        "No verified basis cite; check the file: Nos. 31\n\n### Requests for Production\n\n| Request | Basis in the file |\n"
+        '| --- | --- |\n| No. 54 | FILE: Email (document): "z" |\n'
+    )
+    out, n = gr.drop_rows(notes, gr.flagged_rows(findings))
+    assert n == 2 and "| No. 25 |" not in out and "| No. 54 |" not in out and "| No. 6 |" in out
+    assert "No verified basis cite; check the file: Nos. 25, 31" in out
+    assert out.rstrip().endswith("No verified basis cite; check the file: Nos. 54")
+
+
+def test_the_review_flag_drops_the_row_in_a_delivered_job(tmp_path, pricing):
+    rows = json.dumps(
+        {
+            "basis": [
+                {
+                    "document": "Requests for Admission",
+                    "request": 1,
+                    "file": "ER record 1-15-26",
+                    "paper": "medical record",
+                    "quote": "Patient seen 01/15/2026 for neck pain",
+                }
+            ]
+        }
+    )
+    review = (
+        "| SHOULD-FIX | 6 Attorney notes | The quote is real but does not support RFA 1. | Attorney notes, RFA basis table No. 1; FILE: ER record 1-15-26 |\n"
+        "VERDICT: 0 MUST-FIX, 1 SHOULD-FIX, 0 NOTE"
+    )
+    client = Client(drafts=_drafts(), notes=rows, review=review)
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    notes = (r.data / "notes-final.md").read_text()
+    assert "Patient seen 01/15/2026" not in notes.split("## Independent review")[0]
+    assert "No verified basis cite; check the file: Nos. 1" in notes
+
+
+# ---- the seat re-proof's review (2026-10-15): three defects fixed before accept --------------
+
+
+def test_a_defined_term_inside_a_different_phrase_is_not_capitalized():
+    doc = (
+        '# DEFINITIONS\n\n1. "INCIDENT" means the fall.\n\n# REQUESTS FOR PRODUCTION\n\n'
+        "REQUEST FOR PRODUCTION NO. 1\n\nEach incident report, if any, concerning the incident.\n\nDated: x\n"
+    )
+    out, lines = sets.enforce_caps(doc)
+    assert "Each incident report, if any, concerning the INCIDENT." in out and "INCIDENT report" not in out
+    assert lines == ['1 lower-case use(s) of the defined term "INCIDENT" were capitalized to match its definition']
+    assert sets.lowercase_uses(out) == []
+
+
+def test_a_definition_alias_says_also_spelled():
+    out, notes = sets.alias_wording(
+        '9. "YOUNG" means Charley Young, whose name also appears in the record as Charlie Young.'
+    )
+    assert "appears in the record" not in out and "also spelled Charlie Young" in out and notes
+    assert wording.document_vocabulary("his name appears in the record as Charlie Young")
+
+
+def test_a_slot_that_blocks_service_is_listed_for_the_attorney(tmp_path, pricing):
+    rfp = one_set(RFP).replace(
+        "Dated: {{ATTORNEY: date}}",
+        "Production shall be made on `{{FILL: date and time of production, at least 30 days after service | at service}}`."
+        "\n\nDated: {{ATTORNEY: date}}",
+    )
+    client = Client(drafts=_drafts(**{RFP: rfp}))
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    notes = (r.data / "notes-final.md").read_text()
+    assert (
+        "- To complete before or at service (Requests for Production, REQUEST FOR PRODUCTION NO. 3): date and time of production"
+        in notes
+    )
+    assert "date of service" not in notes  # the proof of service's own slots are the server's, not listed
+
+
+def test_a_served_papers_alias_reads_also_spelled(tmp_path, pricing):
+    # In a request (a shared definition is aligned to the first set's wording).
+    srog = one_set(SROG).replace(
+        "IDENTIFY each PERSON who inspected the premises before the incident.",
+        "IDENTIFY each PERSON who inspected the premises before the incident; the store also appears in the record as Exampel Store.",
+    )
+    client = Client(drafts=_drafts(**{SROG: srog}))
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    final = (r.data / "set-3" / "draft-final.md").read_text()
+    assert "the store also spelled Exampel Store" in final and "in the record" not in final.split("=== ATTORNEY")[0]

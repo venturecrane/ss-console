@@ -108,7 +108,7 @@ def test_the_act_line_states_the_whole_order(tmp_path):
     assert result["readback"] == (
         f"[act {pid}] Place a medical-records order with Example Records on matter 900101 for Pat Example "
         "(SSN ending 6789), ordered by paralegal@firm.example, 2 facilities: "
-        "1) Example Community Health Center (directory id 552211, 1 Main St, Springfield, CA 95811): "
+        "1) Example Community Health Center (1 Main St, Springfield, CA 95811): "
         "Medical and Billing, 2021-10-05 to 2026-10-05; "
         "2) Example Chiropractic (not in the vendor's directory yet): Medical, 2024-01-01 to 2026-10-05. "
         "Authorization, with the HIPAA form uploaded from the matter ('HIPAA Authorization - signed.pdf'); "
@@ -223,7 +223,9 @@ def test_the_vendors_directory_id_shapes_render(cid) -> None:
     order["locations"] = [{**order["locations"][0], "custodian_id": cid}]
     order["order_ref"] = act_records_order.order_ref(order)
     line = act_records_order.order_readback(act_records_order.require_order({"order": order}))
-    assert f"directory id {cid}" in line
+    # The id is validated and bound into order_ref, never shown: the reply gate
+    # holds an email carrying it (A&P 2026-10-14).
+    assert cid not in line and "directory id" not in line
 
 
 @pytest.mark.parametrize("cid", ["../x", "neo 1", "[act x]", "a" * 80, "neo_1\n"])

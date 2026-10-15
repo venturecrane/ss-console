@@ -23,18 +23,21 @@ from __future__ import annotations
 
 import io
 import json
+import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, NoReturn
 
 from ..demand import deliver, finalpass, quotefix, summarize
 from . import citefix, compose, format_check, gate, nestquote, pleading, render, review as review_mod, sets
-from . import notes as notes_mod, wording
+from . import grounding, notes as notes_mod, wording
 from . import settle as settle_mod
-from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, markers
+from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, fills_located, markers, markers_located
 
 MAX_REPAIRS = 2
 #: A served paper's audit findings are repaired or the job fails (compose.STRICT_CLASSES).
-MAX_REPAIRS_STRICT = 3
+#: The runaway guard on a served set's repairs; ``Finish._converge`` stops on
+#: non-convergence well before it in practice.
+REPAIR_CEILING = 8
 FINAL = "draft-final.md"
 CONCURRENCY = 4
 WALL_GATE = "[1]"
@@ -128,6 +131,67 @@ class Finish:
         tmp.replace(u.data / name)
 
     # ---- compose, audit, repair, final pass, per unit ---------------------------------
+    def _repair_rounds(self, d: compose.Drafter, digest: str, corpus: str) -> int:
+        """Every other class: audit, repair while findings block, up to
+        ``MAX_REPAIRS``; what survives is settled and noted (``settle``)."""
+        version = 1
+        result = d.audit(version, digest, corpus)
+        while compose.blocking_findings(result, self.cls) and version <= MAX_REPAIRS:
+            d.repair(digest, version)
+            version += 1
+            result = d.audit(version, digest, corpus)
+        return version
+
+    def _converge(self, u: Unit, d: compose.Drafter, digest: str, corpus: str) -> int:
+        """A served set (``compose.STRICT_CLASSES``) is clean or the job fails.
+
+        Repair rounds re-audit only the requests a repair changed (the delta
+        audit, ``compose.delta``), so a round's findings are the repair's. A set
+        clean on a delta read then gets a FULL read before it passes: a defect
+        in a request no repair touched (2026-10-14: an interrogatory stating the
+        other side's information-and-belief allegation as fact, first seen on
+        the fourth read) is found there, repaired, and checked again. The
+        budget stops on non-convergence, not on a round count: a repair that
+        changes nothing, two delta rounds without fewer findings, or a full
+        read that finds no fewer than the last full read did. ``REPAIR_CEILING``
+        is the runaway guard behind those."""
+        version, full, stalled, last_full = 1, True, 0, None
+        result = d.audit(version, digest, corpus)
+
+        def left() -> int:
+            return compose.blocking_findings(result, self.cls, d._read(f"audit-v{version}.md"))
+
+        def fail(why: str) -> NoReturn:
+            # Counts only, never the claims or a heading (a title names the
+            # parties): a reason reaches SMD's alerts. audit-v<n>.md has the rows.
+            raise DraftingFailed(
+                f"audit_unrepaired: {left()} audit finding(s) in the {u.label} {why}; see audit-v{version}.md"
+            )
+
+        n = left()
+        while True:
+            if n == 0 and full:
+                return version
+            if n == 0:
+                result, full = d.audit(version, digest, corpus, full=True), True
+                n = left()
+                if n and last_full is not None and n >= last_full:
+                    fail(f"on a full read after {version - 1} repair(s), no fewer than the last full read found")
+                last_full = n if n else last_full
+                continue
+            if version > REPAIR_CEILING:
+                fail(f"after {REPAIR_CEILING} repairs")
+            before = d._read(f"draft-v{version}.md")
+            if d.repair(digest, version) == before:
+                fail("that a repair could not place")
+            version += 1
+            result, full = d.audit(version, digest, corpus), False
+            m = left()
+            stalled = stalled + 1 if m >= n else 0
+            n = m
+            if stalled >= 2:
+                fail("after two repairs that did not reduce them")
+
     def _canon(self, u: Unit) -> Unit | None:
         """The set the others align to: the first one gated, never ``u``."""
         for o in self.units():
@@ -141,9 +205,10 @@ class Finish:
             return []
         doc, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
         return [
-            f"THE {c.label.upper()} SET ALREADY DRAFTED FOR THIS REQUEST (binding on this set: print its attorney "
-            "block and signature block exactly; every term this set defines that it defines is defined in the same "
-            "words; define a new term only when this set's requests need it):\n\n" + sets.front_matter(doc)
+            f"THE {c.label.upper()} SET ALREADY DRAFTED FOR THIS REQUEST (it binds how SHARED words read: print its "
+            "attorney block and signature block exactly, and define every term both sets define in the same words. "
+            "It is not this set's whole list of terms: this set's own DEFINITIONS define every further term its "
+            "requests use):\n\n" + sets.front_matter(doc)
         ]
 
     def _drafter(self, u: Unit) -> compose.Drafter:
@@ -171,36 +236,11 @@ class Finish:
             fronted, _ = self._front(u, doc)
             if fronted != doc:
                 self._uatomic(u, "draft-v1.md", self._join(fronted, end))
-        corpus, version = self._corpus_text(), 1
+        corpus = self._corpus_text()
         strict = self.cls in compose.STRICT_CLASSES
-        repairs = MAX_REPAIRS_STRICT if strict else MAX_REPAIRS
-        result = d.audit(version, digest, corpus)
-
-        def left() -> int:
-            return compose.blocking_findings(result, self.cls, d._read(f"audit-v{version}.md"))
-
-        unplaced = False
-        while left() and version <= repairs:
-            before = (u.data / f"draft-v{version}.md").read_text(encoding="utf-8")
-            after = d.repair(digest, version)
-            if strict and after == before:
-                unplaced = True  # a repair that changed nothing will not converge: stop paying
-                break
-            version += 1
-            result = d.audit(version, digest, corpus)
+        version = self._converge(u, d, digest, corpus) if strict else self._repair_rounds(d, digest, corpus)
         audit_md = (u.data / f"audit-v{version}.md").read_text(encoding="utf-8")
         md = (u.data / f"draft-v{version}.md").read_text(encoding="utf-8")
-        n = left()
-        if strict and n:
-            # Applied or failed, never forwarded, and never a request dropped
-            # from the attorney's set: a finding the repairs did not clear is a
-            # known defect in a served paper. Counts only, never the claims or
-            # a heading (a title names the parties): a reason reaches SMD's
-            # alerts. audit-v<n>.md has the rows.
-            how = "that a repair could not place" if unplaced else f"that survived {repairs} repair(s)"
-            raise DraftingFailed(
-                f"audit_unrepaired: {n} audit finding(s) in the {u.label} {how}; see audit-v{version}.md"
-            )
         self._done(u.stage("audit"))
         try:
             md, settled = settle_mod.settle(md, audit_md)
@@ -228,15 +268,24 @@ class Finish:
         """The firm's authored attorney block, the draft's date on the Dated
         line, then the first set's front matter (``sets.align``): one wording
         across the sets of one request."""
+        doc, _system = sets.strip_system_lines(doc)  # the pipeline's own mess: not the attorney's news
         doc, notes = sets.authored_head(doc, self._block_lines())
         doc, dated = sets.dated(doc, self._long_date())
-        notes += dated
+        doc, numbered = sets.set_number(doc, self.job.request_text)
+        doc, counsel_for = sets.attorneys_for(doc)
+        doc, court = sets.particulars(doc, sets.court_particulars(self._digest_text()))
+        doc, _alias = sets.alias_wording(doc)
+        notes += dated + numbered + counsel_for + court
         c = self._canon(u) if u.key else None
         if c is not None:
             canon, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
             doc, more = sets.align(doc, canon, f"{c.label} set")
             notes += more
         return doc, notes
+
+    def _digest_text(self) -> str:
+        p = self.data / "digest.md"
+        return p.read_text(encoding="utf-8") if p.is_file() else ""
 
     def _long_date(self) -> str:
         import datetime as dt
@@ -298,14 +347,29 @@ class Finish:
         if self._is_done(u.stage("rendered")):
             return
         doc, _end = render.split_notes(md)
+        lines = self._block_lines()
+        address = [
+            x for x in lines[1:] if not re.search(r"(?i)@|\(\d{3}\)|telephone|facsimile|fax|\bLLP\b|\bLLC\b|\bPC\b", x)
+        ]
+        body_fills = fills_located(doc)  # the set's own body, before the job's attachments
         doc, attached = render.attach(
-            doc, self.cls, self.firm, digest, self.corpus(), render.declarant_name(self._block_lines())
+            doc, self.cls, self.firm, digest, self.corpus(), render.declarant_name(lines), address
         )
         doc, reserved = render.reserve_judgment(doc, self.cls)
         out, fmt, paper = deliver.out_dir(self.data), self.firm.data["format"], self.paper()
         path, report = render.render(doc, self.cls, out / self._names(u)["draft"], fmt)
         laid = pleading.apply(path, pleading.spec_for(fmt)) if paper == "pleading" else []  # type: ignore[arg-type]
         res = format_check.check(path, self.cls, fmt, digest, self.corpus(), paper)
+        if self.cls == "discovery_set":
+            # A capitalized term the set uses and never defines: the code check
+            # that blocks, behind the audit's TERM verdict (compose.py).
+            undefined = sets.undefined_caps(render.split_notes(md)[0])
+            if undefined:
+                res.model(
+                    "defined terms: capitalized as defined terms but not defined in this set's DEFINITIONS: "
+                    + ", ".join(undefined[:12])
+                    + " (define each, or write it in lower case)"
+                )
         if res.content and not res.ours and not self._is_done(u.stage("format_repair")):
             self.log(f"  format check: {len(res.content)} content finding(s); one repair pass")
             model_doc, end = render.split_notes(md)
@@ -328,6 +392,7 @@ class Finish:
                 "path": str(path),
                 "paper": paper,
                 "markers": markers(doc),
+                "located": markers_located(doc) + body_fills,
                 # The renderer's own report stays here, never in the attorney
                 # notes ("named styles defined on the starter base", 2026-10-13).
                 "notes": [*attached, *reserved, *laid],
@@ -359,9 +424,24 @@ class Finish:
                     out.append(m)
         return out
 
+    def _located_markers(self) -> list[dict[str, str]]:
+        """Every marker once per document and place, named by both (notes)."""
+        seen, out = set(), []
+        for u in self.units():
+            r = self._rendered(u)
+            for m in r.get("located") or [{**x, "where": ""} for x in r["markers"]]:
+                where = ", ".join(x for x in ((u.label if u.key else ""), m.get("where") or "") if x)
+                k = (m["kind"], m["text"], where)
+                if k not in seen:
+                    seen.add(k)
+                    out.append({"kind": m["kind"], "text": m["text"], "where": where})
+        return out
+
     # ---- the notes from the final documents, then the review, then the files -----------
-    def _notes(self, digest: str) -> str:
-        if (self.data / "notes-final.md").is_file():
+    def _notes(self, digest: str, review_findings: list[str] | None = None) -> str:
+        """``review_findings``: what a held review found wrong in the notes
+        only; the tables are written again, told exactly that (``_review``)."""
+        if (self.data / "notes-final.md").is_file() and not review_findings:
             return (self.data / "notes-final.md").read_text(encoding="utf-8")
         tables, open_items = [], []
         for u in self.units():
@@ -374,7 +454,7 @@ class Finish:
         facts = self._request_facts()
 
         def tables_for(refused: list[str] | None) -> str:
-            return review_mod.final_notes(
+            raw = review_mod.final_notes(
                 self.doorway,
                 self.firm.model("audit"),
                 digest,
@@ -385,12 +465,17 @@ class Finish:
                 facts=facts,
                 refused=refused,
             )
+            # Rows, checked word for word against the file; only what verifies
+            # is rendered (grounding.py).
+            g = grounding.verify(grounding.parse(raw), self.corpus())
+            self._atomic("notes-basis.json", json.dumps({"kept": len(g.rows), "dropped": g.dropped}, indent=1))
+            return grounding.render_table(g, grounding.documents(papers))
 
-        end_tables = tables_for(None)
+        end_tables = tables_for(review_findings or None)
         problems = wording.notes_findings(end_tables)
         if problems:
             self.log(f"  attorney notes: {len(problems)} wording problem(s); one rewrite")
-            end_tables = tables_for(problems)
+            end_tables = tables_for([*(review_findings or []), *problems])
             problems = wording.notes_findings(end_tables)
             if problems:
                 # Counts and kinds only: a reason reaches SMD's alerts.
@@ -402,10 +487,22 @@ class Finish:
         for u in self.units():
             render_notes += [(f"{u.label}: " if u.key else "") + n for n in self._rendered(u)["notes"]]
         units = [(u.label, u.data) for u in self.units()] if any(u.key for u in self.units()) else None
-        render_notes = [f"Attorney block: {facts[-1]}", *render_notes]
-        md = notes_mod.attorney_notes(self.data, self._title, self._all_markers(), render_notes, end_tables, units)
+        render_notes = [self._block_note(), *render_notes]
+        md = notes_mod.attorney_notes(self.data, self._title, self._located_markers(), render_notes, end_tables, units)
         self._atomic("notes-final.md", md)
         return md
+
+    def _block_note(self) -> str:
+        """The attorney block, said to the attorney (the facts line is for the
+        notes model: "the firm's authored block" is our word, not his)."""
+        cp = self.data / "caption.json"
+        cap = json.loads(cp.read_text(encoding="utf-8")) if cp.is_file() else {}
+        who = str((cap.get("attorney_block") or {}).get("email") or "").lower()
+        if not who:
+            return "Attorney block: taken from the operative pleading (no standard block is on file for you)"
+        if who == str(self.job.requester or "").strip().lower():
+            return "Attorney block: your standard block, as the firm keeps it"
+        return f"Attorney block: the standard block of {who}, the attorney the matter record names"
 
     def _request_facts(self) -> list[str]:
         """What the request and the matter record settle about who: the
@@ -458,11 +555,38 @@ class Finish:
         model = review_mod.model_for(self.firm)
         return found + review_mod.run_model(self.doorway, model, digest, user, self.job.job_id[-6:]), model
 
+    def _notes_only_hold(self) -> list[str]:
+        """The held review's MUST-FIX findings when every one is about the
+        attorney notes (check 6) and none about a document; else []."""
+        rec = review_mod.load(self.data) or {}
+        must = [f for f in rec.get("findings") or [] if f.get("grade") == review_mod.MUST]
+        if not must or rec.get("released"):
+            return []
+        if not all(str(f.get("check") or "").strip().startswith("6") for f in must):
+            return []
+        return [f"the review found in the notes: {f['finding']} ({f.get('cite') or ''})" for f in must]
+
     def _review(self, digest: str, notes_md: str) -> dict[str, Any]:
         """The independent review (``review.py``): a hold raises ``review_held``
         before anything is filed; SMD's redo and release arrive as markers in
         the job dir and are applied here."""
-        rec = review_mod.decide(self.data, self.job.job_dir, lambda: self._fresh_review(digest, notes_md), self.log)
+        try:
+            rec = review_mod.decide(self.data, self.job.job_dir, lambda: self._fresh_review(digest, notes_md), self.log)
+        except DraftingFailed:
+            notes_only = self._notes_only_hold()
+            if not notes_only or self._is_done("notes_rewrite"):
+                raise
+            # The notes tables are written by a model each run, and a cite in
+            # them can slip (2026-10-14, run 8: a recipient's address cited to
+            # responses that do not say it). When the review holds on the
+            # notes alone, the documents are right: write the tables once more,
+            # told exactly what was wrong, and review again. Once.
+            self.log(f"  review: {len(notes_only)} notes-only must-fix finding(s); one notes rewrite")
+            held = self.data / "review.json"
+            held.replace(self.data / "review-held-notes.json")
+            notes_md = self._notes(digest, notes_only)
+            self._done("notes_rewrite", findings=len(notes_only))
+            rec = review_mod.decide(self.data, self.job.job_dir, lambda: self._fresh_review(digest, notes_md), self.log)
         self._done(
             "review",
             review="released" if rec.get("released") else "passed",
@@ -479,6 +603,15 @@ class Finish:
             self._render_unit(u, self._gate(u, self._draft(u, digest)), digest)
         notes_md = self._notes(digest)
         rec = self._review(digest, notes_md)
+        notes_md = self._notes(digest)  # as reviewed (a notes rewrite replaced it)
+        flagged = grounding.flagged_rows(rec.get("findings") or [])
+        if flagged and not self._is_done("basis_dropped"):
+            # A basis row the review says does not carry its request: dropped
+            # and said, like a row that failed verification. No rewrite: the
+            # review read the rest, and removing a row adds nothing to check.
+            notes_md, n = grounding.drop_rows(notes_md, flagged)
+            self._atomic("notes-final.md", notes_md)
+            self._done("basis_dropped", rows=n)
         if self._is_done("manifest"):
             return
         out, nm = deliver.out_dir(self.data), self._names()

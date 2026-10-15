@@ -183,11 +183,38 @@ esac
   return dir
 }
 
+// The process env with every GIT_* stripped: under a pre-push hook GIT_DIR and
+// friends point at ss-console and beat `git -C`, so a fixture repo (and the
+// script's own `git -C "$ENGAGEMENTS_DIR"`) would read the wrong repository.
+function cleanEnv(): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')))
+}
+
+/**
+ * Make `dir` an engagements checkout whose working tree is STALE: `rel` exists
+ * on origin/main but not in the tree (the shared ~/dev/engagements, 2026-10-15).
+ */
+function staleCheckout(dir: string, rel: string): void {
+  const git = (...args: string[]) =>
+    execFileSync('git', ['-C', dir, ...args], { env: cleanEnv(), stdio: 'ignore' })
+  git('init', '-q')
+  mkdirSync(join(dir, rel, '..'), { recursive: true })
+  writeFileSync(join(dir, rel), '')
+  git('add', rel)
+  git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'lane')
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+  rmSync(join(dir, rel))
+}
+
 function run(
   failOn: string[],
-  opts: { medchronAuthored?: boolean } = {}
+  opts: { medchronAuthored?: boolean; staleLane?: string } = {}
 ): { out: string; code: number } {
   const dir = stubDir(failOn)
+  if (opts.staleLane) {
+    const l = opts.staleLane
+    staleCheckout(dir, `operator/customers/pilot-smokeball/${l}/${l}-firm.yaml`)
+  }
   if (opts.medchronAuthored) {
     // The other branch of step 14: the seat authors a medchron firm config, so
     // the config-perm, token, controls, and gate-refusal checks are EXPECTED
@@ -199,7 +226,7 @@ function run(
   try {
     const out = execFileSync('bash', [SCRIPT, 'pilot-smokeball'], {
       encoding: 'utf8',
-      env: { ...process.env, PATH: hermeticPath(dir), SS_ENGAGEMENTS_DIR: dir },
+      env: { ...cleanEnv(), PATH: hermeticPath(dir), SS_ENGAGEMENTS_DIR: dir },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     return { out, code: 0 }
@@ -258,6 +285,19 @@ describe('boot smoke reports every check, not just the first red (ss#2487)', () 
     expect(clean.code).toBe(0)
     expect(clean.out).toContain('PASS: medchron-controls-present')
     expect(clean.out).toContain('PASS: medchron-icd-tables-present')
+  }, 90_000)
+
+  // 2026-10-15: the shared ~/dev/engagements tree predated A&P's lane dirs, and
+  // this smoke reported demand/drafting/litigation "absent, by design" on a seat
+  // that authors all three, skipping the presence checks. A lane that
+  // origin/main authors must be checked even when the working tree lacks it.
+  it('a lane authored on engagements origin/main is checked even when the tree is stale', () => {
+    const { out, code } = run(['/var/lib/smd-config/litigation/'], { staleLane: 'litigation' })
+    expect(out).toContain('FAIL: litigation-firm-inputs-present')
+    expect(out).not.toContain('litigation-firm-inputs-absent')
+    expect(code).not.toBe(0)
+    // The control: the other lanes are authored nowhere, so they still skip.
+    expect(out).toContain('demand-firm-inputs-absent')
   }, 90_000)
 
   it('a clean run still exits zero', () => {
