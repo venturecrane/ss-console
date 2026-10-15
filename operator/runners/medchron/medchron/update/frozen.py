@@ -67,6 +67,28 @@ def freeze(must: list[RR.Finding], ents: list[RR.Entry]) -> list[dict[str, Any]]
     return [{"key": key(f, ents), "dates": dates(f, ents), "finding": f.as_dict()} for f in must]
 
 
+def reanchor(must: list[RR.Finding], ents: list[RR.Entry]) -> list[dict[str, Any]]:
+    """The record rows of findings whose anchors name ANOTHER document (an
+    old checkpoint's last review, made before its finish renumbered the
+    entries: on a real resume 34 of 34 keys took the wrong date line). Each
+    is moved to the entry of ``ents`` citing its exhibit and page (of
+    several, the one stating a date the finding's page_says or problem
+    names, else the first); one no entry cites keeps its page and no date,
+    and ``locate`` finds it by the page."""
+    rows = []
+    for f in must:
+        cites = [e for e in ents if f.exhibit and f.page and (f.exhibit, f.page) in e.cites()]
+        said = set(re.findall(r"\d{2}/\d{2}/\d{4}", f"{f.page_says} {f.problem}"))
+        pick = next((e for e in cites if any(d in e.text for d in said)), cites[0] if cites else None)
+        if pick is not None:
+            f.anchor = pick.anchor
+            rows.append({"key": key(f, ents), "dates": dates(f, ents), "finding": f.as_dict()})
+        else:
+            k = "|".join((_klass(f.klass), str(f.exhibit or ""), str(f.page or ""), ""))
+            rows.append({"key": k, "dates": [], "finding": f.as_dict()})
+    return rows
+
+
 def finding(row: dict[str, Any]) -> RR.Finding:
     return RR.Finding(**row["finding"])
 

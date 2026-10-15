@@ -95,6 +95,8 @@ def check_drop(e: RR.Finding, ents: list[RR.Entry], delivered: list[str]) -> str
         return "a duplicate is dropped only when the edit names the entry that holds its content"
     if e.anchor not in by:
         return f"{e.anchor} is not an added entry"
+    if why := B.other_date(by[e.anchor], by[s]):
+        return f"{e.anchor} is not dropped into {s}: {why}"
     body = by[e.anchor].split("\n", 2)[2] if by[e.anchor].count("\n") >= 2 else ""
     missing = sorted(content_numbers(body) - content_numbers(by[s]))
     if missing:
@@ -124,6 +126,9 @@ def redirect_drop(
     by = {x.anchor: x.text for x in ents}
     s = _survivor(e)
     mine = by.get(e.anchor, "")
+    them = delivered[int(s[1:]) - 1] if re.fullmatch(r"D\d+", s) and 0 < int(s[1:]) <= len(delivered) else by.get(s, "")
+    if B.other_date(mine, them):  # a visit on another date is never folded away (``check_drop`` says so)
+        return
     body = mine.split("\n", 2)[2] if mine.count("\n") >= 2 else ""
     if re.fullmatch(r"D\d+", s) and 0 < int(s[1:]) <= len(delivered):
         lacks = content_numbers(body) - content_numbers(delivered[int(s[1:]) - 1])

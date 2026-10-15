@@ -95,6 +95,8 @@ def check_fold(e: RR.Finding, ents: list[RR.Entry], delivered: list[str], keep: 
     k = int(e.survivor[1:]) - 1 if re.fullmatch(r"D\d+", e.survivor) else -1
     if ent is None or not 0 <= k < len(delivered):
         return "a fold names an added entry and the delivered entry (D<k>) it goes under"
+    if why := B.other_date(ent.text, delivered[k]):
+        return f"{e.anchor} is not folded under {e.survivor}: {why}"
     paras = _paras(e.corrected, headings)
     why = "the fold carries no paragraph" if not paras else _cited(paras, keep)
     if why:

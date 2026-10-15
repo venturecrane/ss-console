@@ -55,3 +55,16 @@ def test_a_time_stamp_or_a_bare_year_does_not_block_a_duplicate_drop_but_a_date_
 def test_the_finisher_is_told_to_write_an_omitted_separate_encounter_as_its_own_entry():
     text = prompts.load("update-finish-system", K.cfg())
     assert "NO entry records" in text and "Never `decline` an omitted separate encounter" in text
+
+
+def test_a_drop_into_an_entry_of_another_date_is_refused_and_never_redirected():
+    """A heading dated by a pathology order's signature date was dropped into
+    another visit; the body comparison passed and the date was lost (proof 10
+    failed on a real run). The survivor's date line must state the same date."""
+    signed = "12/09/2025 (order signature date)\nExample Hospital | Surgery\nPost-op BP 132/84. (Exhibit 11 - p. 10)"
+    e = _drop("N1", "N2")
+    FN.precheck([e], [RR.Entry("N1", signed), RR.Entry("N2", RICH)], [], None, keep={11}, headings=set())
+    assert (e.anchor, e.survivor) == ("N1", "N2") and "dated 12/09/2025" in e.outcome
+    e = _drop("N1", "D1")
+    FN.precheck([e], [RR.Entry("N1", signed)], [D1], None, keep={11}, headings=set())
+    assert e.action == "drop_entry" and "dated 12/09/2025" in e.outcome  # never turned into a fold

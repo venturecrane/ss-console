@@ -68,6 +68,18 @@ def iso(e: str) -> str:
     return f"{m.group(3)}-{m.group(1)}-{m.group(2)}" if m else ""
 
 
+def other_date(dropped: str, survivor: str) -> str:
+    """'' when `survivor`'s date line states the date `dropped`'s does, else
+    why not. An entry dropped or folded into another loses its own date line,
+    and the body comparison never sees it (2026-10-15: a heading dated by a
+    pathology order's signature date was dropped into another visit and proof
+    10 found the date gone)."""
+    a, b = iso(dropped), iso(survivor)
+    if a and a == b:
+        return ""
+    return f"it is dated {dropped[:10]}, the survivor {survivor[:10]}; a visit's date is never folded away"
+
+
 #: A date line whose date is when the record was printed, released, faxed,
 #: requested or received ("10/09/2026 (record print date)"), or the as-of or
 #: generated date of a printout ("09/11/2026 (problem list as-of date)"): not

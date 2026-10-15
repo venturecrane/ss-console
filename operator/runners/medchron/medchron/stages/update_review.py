@@ -567,12 +567,14 @@ def _review_once(
 
 def _legacy(c: Ctx, rec: dict[str, Any], md: str) -> None:
     """A checkpoint from the loop before the frozen list (2026-10-15): its
-    last review's open must-fix become the frozen list, keyed on the
-    checkpoint's document; the next step is the re-check."""
+    last review's open must-fix become the frozen list, re-anchored onto the
+    checkpoint's document by the page each cites (their anchors name the
+    document that round reviewed, before its finish, which an old checkpoint
+    does not keep); the next step is the re-check."""
     last = (rec.get("rounds") or [{}])[-1]
     must = [RR.Finding(**f) for f in last.get("findings") or [] if isinstance(f, dict)]
     must = [f for f in _must(must) if not _closed(f)]
-    rec["frozen"] = FZ.freeze(must, RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg)))
+    rec["frozen"] = FZ.reanchor(must, RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg)))
     rec.pop("pending", None)
     c.sr.log(f"update review: a checkpoint from the earlier loop; its {len(must)} open must-fix are the frozen list")
 

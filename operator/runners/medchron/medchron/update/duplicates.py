@@ -22,7 +22,9 @@ refused round after round. The review's own text names the entry repeated
   duplicate that carries nothing new is a plain drop. No value is lost: the
   survivor afterwards carries every content number of both.
 
-A pair naming each other folds once; a survivor already dropped this pass is
+An entry is never dropped or folded into a survivor dated otherwise (its
+own date line would be lost: ``body.other_date``); that finding goes to the
+finisher and the re-check with why. A pair naming each other folds once; a survivor already dropped this pass is
 skipped and recorded (the finding stays open for the re-check). The moved
 paragraphs keep their citations and are audited with the finisher's edits
 (``stages/update_review.finish``).
@@ -119,6 +121,8 @@ def _onto_delivered(
     k = int(s[1:]) - 1
     if not 0 <= k < len(delivered):
         return _edit(f, a, s, f"the survivor {s} is not a delivered entry")
+    if why := B.other_date(texts[a], delivered[k]):
+        return _edit(f, a, s, f"{a} is not folded under {s}: {why}")
     body = _body(texts[a])
     lacks = content_numbers(body) - content_numbers(delivered[k])
     paras = [p for p in EE._paras(body, headings) if content_numbers(p) & lacks]
@@ -152,6 +156,8 @@ def _onto_added(
         return _edit(f, a, s, f"the survivor {s} is not an added entry")
     if s in folded:
         return _edit(f, a, s, f"skipped: the survivor {s} now folds under {folded[s]} this pass")
+    if why := B.other_date(texts[a], texts[s]):
+        return _edit(f, a, s, f"{a} is not folded into {s}: {why}")
     body = _body(texts[a])
     lacks = content_numbers(body) - content_numbers(texts[s])
     rest = {n for x, t in texts.items() if x not in gone and x != a for n in B.cited(t)}

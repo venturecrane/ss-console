@@ -175,3 +175,30 @@ def test_a_new_collect_is_a_new_review_never_a_resumed_one(tmp_path: Path, monke
     sr.doorway = K.ScriptedDoor([_reply("findings", [])])
     assert _go(sr) == 0
     assert {kw["custom_id"].split("-")[1] for kw in sr.doorway.seen} == {"r1"}
+
+
+def test_a_checkpoint_from_the_earlier_loop_freezes_its_findings_on_the_entries_their_pages_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An old checkpoint's last review named N3 on the document it reviewed;
+    its finish then dropped N2, so in the checkpoint's document that visit is
+    N2 and N3 is another date. Keyed by the anchor, the frozen key took the
+    wrong date and the re-check's same finding could never confirm it (a real
+    resume: 34 of 34 keys wrong). Re-anchored by its page, it is confirmed."""
+    from medchron.update import review_repair as RR
+
+    e1, e2, e3, e4 = _entry(1, 9, 1), _entry(2, 8, 2), _entry(3, 7, 3), _entry(4, 6, 2)
+    sr, doc = _scene(tmp_path, monkeypatch, [e1, e2, e3, e4])
+    md = doc.read_text().replace(e2 + "\n\n", "")  # what the old finish left
+    doc.write_text(md)
+    old = RR.Finding("MUST", "1 wrong value", "N3.c1", 2, 3, "size misread", "none", "", "")
+    old.outcome = "declined by the finisher: x"
+    rec = {"model": "m", "doc_sha_in": "x", "rounds": [{"round": 2, "findings": [old.as_dict()]}]}
+    UR._checkpoint(sr.slug_dir / "runs" / "alpha" / "update", UR.At(2, md, rec))
+    again = _reply("findings", [_finding("N2.c1", "size still misread", 3)])
+    sr.doorway = K.ScriptedDoor([again, again], [_reply("edits", [])])  # declines
+    assert _go(sr) == 2, sr.logged
+    saved = json.loads((sr.slug_dir / "runs" / "alpha" / "update" / "review_repair.json").read_text())
+    assert saved["frozen"][0]["dates"] == ["08/03/2026"]
+    assert saved["frozen"][0]["finding"]["outcome"].startswith("confirmed on re-check")
+    assert [f["anchor"] for f in saved["open"]] == ["N2.c1"]

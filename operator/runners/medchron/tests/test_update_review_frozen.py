@@ -170,3 +170,25 @@ def test_a_round_one_fix_that_applies_is_delivered_without_a_second_review(
     rc, sr, md = _run(tmp_path, monkeypatch, [N1, LATER], [r1, json.dumps({"findings": [], "complete": True})], [fix])
     assert rc == 0 and good in md
     assert _review_rounds(sr) == {"r1"}
+
+
+def test_a_duplicate_dated_otherwise_is_never_folded_in_code_and_a_same_date_one_is() -> None:
+    """The code fold had the drop's blind spot: it compared bodies only, so an
+    entry dated 08/28 folded into an 08/27 visit would lose its date."""
+    keep, heads = {2, 3}, {"Medical Diagnoses", "All Other Information"}
+    doc = (
+        "X - Medical Chronology\n\n## Treatment Timeline\n\n## Diagnostic Highlights\n\n"
+        "## Medical Chronology\n\n{}\n\n## Exhibit List\n"
+    )
+
+    def dup(anchor: str, problem: str) -> RR.Finding:
+        return RR.Finding("MUST", "4 duplicate", anchor, 2, 1, problem, "none", "", "")
+
+    later = B_.replace("08/27/2026", "08/28/2026", 1)
+    md, edits, moved = DU.resolve(doc.format(A + "\n\n" + later), [dup("N2", "N2 repeats N1")], keep, heads, [])
+    assert moved == {} and later in md and "dated 08/28/2026" in edits[0].outcome
+    md, edits, moved = DU.resolve(doc.format(A + "\n\n" + B_), [dup("N2", "N2 repeats N1")], keep, heads, [])
+    assert moved == {"N2": "N1"} and edits[0].outcome == "applied" and BP in md
+    day_before = "08/26/2026\nSample Imaging Center | Medical Diagnoses\n\nMedical Diagnoses\n" + MRI
+    md, edits, moved = DU.resolve(doc.format(A), [dup("N1", "N1 repeats delivered D1")], keep, heads, [day_before])
+    assert moved == {} and A in md and "dated 08/27/2026" in edits[0].outcome
