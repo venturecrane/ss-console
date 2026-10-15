@@ -12,6 +12,11 @@ The envelope (the broker's ``litigation_job_submit`` writes exactly this)::
             | {"attorney_staff_ids": [...], "paralegal_staff_ids": [...]},
      "file_to_matter_id": uuid, "file_to_matter_number": str, "folder_name": str}
 
+plus, for the deadlines report only (a $0 kind with its own runner,
+``deadlines/``), ``"report": "deadlines"`` and ``"workbooks"``: a non-empty
+subset of ``["deadlines", "statute"]``. An envelope without ``report`` is the
+status list, exactly as before.
+
 Re-validated here (the broker's package is not on the runner's venv): the
 runner refuses an envelope it cannot read the same way the broker refused to
 queue one. A scheduled job carries the requester the broker filled in and a
@@ -34,6 +39,8 @@ _NUMBER = re.compile(r"^[A-Za-z0-9 ._-]{1,64}$")
 _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,253}$")
 _SCHEDULED_REF = re.compile(r"^scheduled:\d{4}-\d{2}-\d{2}$")
 _FOLDER = re.compile(r"^[^/\\\x00-\x1f]{1,120}$")
+REPORTS = ("status", "deadlines")
+WORKBOOKS = ("deadlines", "statute")
 
 
 class LitigationJobError(ValueError):
@@ -61,6 +68,10 @@ class LitigationJob:
     #: Person Assisting staff ids (a paralegal's files). With attorney ids
     #: too, a matter must match both; empty when no paralegal was named.
     paralegal_staff_ids: tuple[str, ...] = ()
+    #: ``status`` (the list) or ``deadlines`` (the $0 deadlines report).
+    report: str = "status"
+    #: The deadlines report's workbooks, in ``WORKBOOKS`` order; empty for status.
+    workbooks: tuple[str, ...] = ()
 
     @property
     def data(self) -> Path:
@@ -106,6 +117,20 @@ def _cap(data: dict[str, Any], key: str) -> float | None:
     return float(v)
 
 
+def _report(data: dict[str, Any]) -> tuple[str, tuple[str, ...]]:
+    report = data.get("report", "status")
+    if report not in REPORTS:
+        raise LitigationJobError(f"report must be one of {list(REPORTS)}")
+    raw = data.get("workbooks")
+    if report == "status":
+        if raw is not None:
+            raise LitigationJobError("workbooks belongs to the deadlines report only")
+        return "status", ()
+    if not (isinstance(raw, list) and raw and set(raw) <= set(WORKBOOKS)):
+        raise LitigationJobError(f"workbooks must be a non-empty subset of {list(WORKBOOKS)}")
+    return "deadlines", tuple(w for w in WORKBOOKS if w in raw)
+
+
 def parse(data: Any, job_dir: Path) -> LitigationJob:
     if not isinstance(data, dict) or data.get("kind") != "litigation":
         raise LitigationJobError("not a litigation job (kind must be 'litigation')")
@@ -129,6 +154,7 @@ def parse(data: Any, job_dir: Path) -> LitigationJob:
     folder = _str(data, "folder_name")
     if not _FOLDER.match(folder):
         raise LitigationJobError("folder_name must be one folder name (no slashes)")
+    report, workbooks = _report(data)
     cents = data.get("month_cents_used")
     if not isinstance(cents, int) or isinstance(cents, bool) or cents < 0:
         raise LitigationJobError(
@@ -151,6 +177,8 @@ def parse(data: Any, job_dir: Path) -> LitigationJob:
         per_job_cap_usd=_cap(data, "per_job_cap_usd"),
         monthly_budget_usd=_cap(data, "monthly_budget_usd"),
         paralegal_staff_ids=paralegals,
+        report=report,
+        workbooks=workbooks,
     )
 
 

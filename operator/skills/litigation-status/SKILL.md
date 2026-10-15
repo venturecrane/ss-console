@@ -6,7 +6,10 @@ description: >-
   paralegal's files on named attorneys' cases) goes to the litigation job
   on the Machine, which reads each matter's court papers and discovery, cites the
   document behind every value, flags what is missing, and files one status workbook in
-  the firm's own library matter. REQUEST mode passes any attorney or paralegal the email names,
+  the firm's own library matter. The same request may instead ask for the deadlines
+  report and/or the statute report (no model call; the broker tells the two apart
+  from the email's own words), filed as up to two workbooks in the library's
+  Deadlines folder. REQUEST mode passes any attorney or paralegal the email names,
   submits the job and acknowledges, and NEVER reads a matter in the turn. DELIVER mode
   runs on the job's completion wake and sends one message, counts only, through the
   verified reply binding: a reply in the requester's thread, or for the weekday
@@ -101,6 +104,28 @@ resolve a name to a staff id yourself.
 
 The list is never one matter's status. "Where are we on 12345" is not this skill.
 
+## The deadlines report (the same request, the same tool)
+
+A Named Administrator may instead ask for the **deadlines report** and/or the
+**statute report**, usually when a paralegal is out: "please send me the
+deadlines report and statute report for Pat's and Sam's cases in litigation",
+"the statute report for Sam", "what are the upcoming court dates on Pat's
+cases". The job reads every calendar date, open task and statute field on the
+named attorneys' (or paralegals') Open and Pending files and files up to two
+workbooks in the firm's Operator Library, folder "Deadlines": a deadlines
+workbook (the next and last 14 days, then each kind of date, open tasks, every
+case) and a statute report (cases with a statute date and no filing recorded).
+
+You submit it exactly as above, with `litigation_job_submit` and the names the
+email gives. **You do not choose the report.** The broker reads the email's own
+words: a request naming deadlines, upcoming dates or a statute report is the
+deadlines report (only the statute report when it names only that, only the
+deadlines workbook when it names only deadlines); a request for the status list
+or the case review list that names no deadline or statute report stays the
+status list. Word your one reply by that same rule: the job queued is the one
+the email's words name. (When the tool's answer carries `report` and
+`workbooks`, those are the broker's own decision; follow them.)
+
 ## REQUEST mode (the turn the asking email opened)
 
 1. **Read the scope** from the sender's own words: every case, the attorneys named, the
@@ -116,6 +141,12 @@ The list is never one matter's status. "Where are we on 12345" is not this skill
 3. **Reply once in the thread**, in one or two sentences, with only true statements:
    - accepted: "Received. A fresh litigation status list is being prepared; I'll reply
      in this thread when it's filed." No timing of any kind, no estimate, no "shortly".
+   - accepted, the deadlines report (the email's words name deadlines, upcoming
+     dates or a statute report, and not only the status list): "Received. The deadlines report and the statute report are being
+     prepared; I'll reply in this thread when they're filed." Name only the
+     reports the email asked for ("The statute report is being
+     prepared; I'll reply in this thread when it's filed."). The same rules: no
+     timing, nothing else promised.
    - refused: relay the broker's sentence in plain words (the lane is not enabled on
      this seat, a list for the same cases is already underway, an attorney or paralegal
      name it could not place, the requester is not a Named Administrator). Nothing was
@@ -132,6 +163,11 @@ skill's DELIVER mode for litigation job <id>." followed by `Kind:`, `Trigger:`
 (`request` or `scheduled`), `Outcome:`, `Matters:` (the total, the count re-read this
 run, the count of new flags), `Folder id:`, `Files:` (the workbook's size, never a file
 name), `Requested by:` and, on a hold, `Hold class:`. The wake is a pointer; the job's own record is the fact.
+
+A deadlines report's wake says `Kind: litigation. Report: deadlines.` and carries
+`Counts:` (named integers), `Folder:` and `Files:` (the file names, composed by code
+from a date and the job's suffix) in place of the `Matters:` line. Everything below
+holds for it, with the message worded as in **Delivered: the deadlines report**.
 
 **First, the outcome decides who hears.** When the outcome is `failed` (and the job row
 agrees), the failure is SMD's, not the firm's: our own machinery stopped, and the job is
@@ -168,6 +204,21 @@ any case.
      files changed since the last list, and it carries `<flags_new>` new flags for
      review. An empty count is left out, never announced as "none". Say that nothing
      has been sent to anyone outside the firm.
+   - **delivered, the deadlines report** (`Report: deadlines.`): say the reports
+     are filed in the firm's Operator Library, folder `<Folder>`, naming each file
+     exactly as the wake's `Files:` line names it (the job row's `file` is the first
+     of them), and give these counts from the wake's `Counts:` line, each only when
+     it is above zero: the Open and Pending matters read (`matters_read`), how many
+     are in litigation (`litigation`), dates in the next 14 days (`dates_next_14`)
+     and in the last 14 days (`dates_last_14`), open tasks due or overdue
+     (`tasks_due`, of them overdue `tasks_overdue`), litigation cases with no date
+     ahead on the calendar (`cases_without_date`), and, for the statute report,
+     cases with a statute date ahead and no filing recorded (`statute_upcoming`) and
+     Open cases whose statute date has passed with no filing recorded
+     (`statute_passed_open`). Add one sentence: a case can hold filed papers that
+     were never entered as filed, so the statute report shows each case's count of
+     court-named documents to check before treating it as unfiled. Say that nothing
+     has been sent to anyone outside the firm. Never a case, a number or a date.
    - **held**: worded by the wake's `Hold class:` line, never by the job's
      `reason`. The reason is SMD's technical record (gates, seed values, matter
      numbers, codes), and SMD already has it: every hold our side caused pages
@@ -185,6 +236,10 @@ any case.
        litigation matters fit this request. Nothing is needed from you."
      - A hold with no `Hold class:` line, or a class not listed here, is
        `smd_finishing`.
+     - For the deadlines report (`Report: deadlines.`) the same fixed wording with
+       "the deadlines report" in place of "the litigation status list" and "No
+       report was filed: none of the firm's Open or Pending matters fit this
+       request." for `nothing_in_scope`.
    - In every message, never ask the firm to resubmit, repeat, narrow, split or change
      its request, never tell it to send anything to SMD or offer SMD as a route, and
      never mention a gate, a token, a limit, a cap, a cost, a dollar figure or a job id.

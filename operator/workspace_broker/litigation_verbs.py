@@ -68,6 +68,7 @@ from zoneinfo import ZoneInfo
 from . import delivery_proof, hold_class
 from .broker_context import BrokerContext
 from .litigation_intake import (
+    DEADLINES_FOLDER_KEY,
     FILE_TO_KEY,
     FOLDER_KEY,
     attorney_roster,
@@ -77,6 +78,7 @@ from .litigation_intake import (
     monthly_budget_cents,
     operator_library_number,
     paralegal_roster,
+    requested_report,
     resolve_attorneys,
     resolve_paralegals,
     scheduled_recipients,
@@ -290,8 +292,9 @@ class LitigationVerbs:
             given = self._input(request.get("envelope"), peer_uid=peer_uid, from_gateway=from_gateway)
             settings, admins = self._seat_gates(given["trigger"], peer_uid)
             requester, message_ref, request_text, scope_in = self._who(given, settings, admins)
-            library, file_to, folder = self._filing_target(settings)
-            firm, cents = self._budget()
+            report, books = requested_report(request_text) if given["trigger"] == "request" else ("status", ())
+            library, file_to, folder = self._filing_target(settings, report)
+            firm, cents = self._budget(spends=report == "status")
             envelope = {
                 "trigger": given["trigger"],
                 "requester": requester,
@@ -301,6 +304,7 @@ class LitigationVerbs:
                 "file_to_matter_id": file_to,
                 "file_to_matter_number": library,
                 "folder_name": folder,
+                **({"report": report, "workbooks": list(books)} if report == "deadlines" else {}),
             }
             valid = validate_envelope(envelope)
             job_id = self._db.submit(valid)
@@ -311,7 +315,15 @@ class LitigationVerbs:
         except SubmitRefused as exc:
             return _refusal(f"{exc}; nothing new was queued", **({"job_id": exc.job_id} if exc.job_id else {}))
         self._audit_submitted(job_id, valid, cents)
-        return {"ok": True, "accepted": True, "job_id": job_id, "state": "queued", "trigger": valid["trigger"]}
+        return {
+            "ok": True,
+            "accepted": True,
+            "job_id": job_id,
+            "state": "queued",
+            "trigger": valid["trigger"],
+            "report": valid.get("report") or "status",
+            **({"workbooks": valid["workbooks"]} if valid.get("workbooks") else {}),
+        }
 
     def _seat_gates(self, trigger: str, peer_uid: int | None) -> tuple[dict[str, Any], tuple[str, ...]]:
         """Checks 2 to 4's seat half: the skill listed and enabled for this
@@ -357,10 +369,13 @@ class LitigationVerbs:
             )
         return requester, given["message_ref"], given["request_text"], given["scope"]
 
-    def _filing_target(self, settings: dict[str, Any]) -> tuple[str, str, str]:
+    def _filing_target(self, settings: dict[str, Any], report: str = "status") -> tuple[str, str, str]:
+        """The library matter and the folder: ``folder_name`` for the status
+        list, ``deadlines_folder_name`` for the deadlines report (each
+        authored, neither defaulted)."""
         library = operator_library_number(self.customer_yaml)
         file_to = str(settings.get(FILE_TO_KEY) or "").strip()
-        folder = str(settings.get(FOLDER_KEY) or "").strip()
+        folder = str(settings.get(DEADLINES_FOLDER_KEY if report == "deadlines" else FOLDER_KEY) or "").strip()
         if not (library and _UUID.match(file_to) and folder):
             raise _Refused(
                 "where the status list is filed is not authored on this seat (the library matter and its "
@@ -368,14 +383,16 @@ class LitigationVerbs:
             )
         return library, file_to, folder
 
-    def _budget(self) -> tuple[dict[str, Any] | None, int]:
-        """(the firm config, cents spent this Pacific month), or refused."""
+    def _budget(self, *, spends: bool = True) -> tuple[dict[str, Any] | None, int]:
+        """(the firm config, cents spent this Pacific month), or refused. The
+        deadlines report spends nothing (no model call), so a spent month
+        never refuses it; the authored config is still required (its rosters)."""
         firm = firm_config(self.firm_config_path)
         budget = monthly_budget_cents(firm)
         if budget is None:
             raise _Refused("the firm's litigation status budget is not authored on this seat; nothing was queued")
         month, cents = self.month_cents()
-        if cents >= budget:
+        if spends and cents >= budget:
             raise _Refused(f"this month's litigation status budget is spent ({month}); nothing was queued")
         return firm, cents
 
@@ -426,6 +443,7 @@ class LitigationVerbs:
                     for n, k in (("attorneys", "attorney_staff_ids"), ("paralegals", "paralegal_staff_ids"))
                     if scope.get(k)
                 ),
+                "report": valid.get("report") or "status",
                 "attorney_count": len(scope.get("attorney_staff_ids") or []),
                 "paralegal_count": len(scope.get("paralegal_staff_ids") or []),
                 "requested_by": valid["requester"],

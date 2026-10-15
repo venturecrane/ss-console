@@ -69,6 +69,8 @@ class Verdict:
     folder_id: str = ""
     reason: str | None = None
     proof: dict[str, Any] | None = None
+    #: A deadlines report's named counts (``deadlines/book.py``); integers only.
+    counts: dict[str, int] = field(default_factory=dict)
 
     def to_json(self) -> str:
         """The interface's verdict. ``reason`` rides only when the run did not
@@ -83,6 +85,8 @@ class Verdict:
             "files": list(self.files),
             "folder_id": self.folder_id,
         }
+        if self.counts:
+            d["counts"] = {str(k): int(v) for k, v in self.counts.items()}
         if self.reason and self.verdict != "delivered":
             d["reason"] = self.reason[:500]
         if self.proof is not None and self.verdict == "delivered":

@@ -132,6 +132,18 @@ def _cmd_draft(args: argparse.Namespace) -> int:
     return {"delivered": 0, "held": 3, "failed": 1}.get(v.outcome, 1)
 
 
+def _report_of(job_dir: Path) -> str:
+    """The litigation job's ``report`` as its job file names it (``status``
+    when absent or unreadable: the status run then refuses the file itself)."""
+    import json
+
+    try:
+        data = json.loads((job_dir / "job.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "status"
+    return str(data.get("report") or "status") if isinstance(data, dict) else "status"
+
+
 def _litigation_run(args: argparse.Namespace, run_cls, lit_rehearse, lit_firm):
     """The run ``medchron litigate`` asked for: the real job, or a rehearsal
     (read-only seat, its own state dir, an optional read limit, a report)."""
@@ -140,6 +152,10 @@ def _litigation_run(args: argparse.Namespace, run_cls, lit_rehearse, lit_firm):
     if not args.rehearse:
         if args.read_limit is not None or args.read_matters or args.offline:
             raise lit_rehearse.RehearsalError("rehearsal: --read-limit, --read-matters and --offline need --rehearse")
+        if _report_of(jd) == "deadlines":  # the $0 deadlines report (litigation/deadlines/)
+            from .litigation.deadlines.run import DeadlinesRun
+
+            return DeadlinesRun(jd, inputs_dir=args.inputs, log=kw["log"])
         return run_cls(jd, state_dir=args.state_dir, **kw)
     lit_rehearse.ensure_job(jd, lit_firm.load(args.inputs).data["firm"]["slug"], [])
     return lit_rehearse.RehearsalRun(
