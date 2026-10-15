@@ -42,6 +42,7 @@ GUIDANCE = re.compile(r"(?i)<!--|\bGUIDANCE\s*(?:\(|:)")
 #: a wage claim says "this job", a product case names "the pipeline".
 DOCUMENT_VOCABULARY = re.compile(
     r"(?i)\b(job id|record digest|drafting system|drafting gate|language model|audit finding|final audit|"
+    r"appears in the record as|"
     r"compose stage|repair pass|final pass|=== attorney notes ===)"
 )
 #: The notes add the words that are the system's in a note about the papers.

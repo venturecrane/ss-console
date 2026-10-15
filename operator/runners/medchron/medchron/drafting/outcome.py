@@ -76,6 +76,25 @@ def markers_located(md: str) -> list[dict[str, str]]:
     return out
 
 
+_FILL = re.compile(r"\{\{\s*FILL\s*:\s*([^{}]*?)\s*\}\}")
+
+
+def fills_located(md: str) -> list[dict[str, str]]:
+    """The FILL slots a served paper's own body still carries (an at-service
+    slot the person serving completes, the production date), with where each
+    sits: listed for the attorney, since the paper cannot be served without
+    them (2026-10-14: a production date was missing from the list)."""
+    out, seen = [], set()
+    for m in _FILL.finditer(md):
+        what = re.sub(r"\s*\|\s*at service\s*$", "", m.group(1)).strip()
+        prev = list(_WHERE.finditer(md, 0, m.start()))
+        where = " ".join(prev[-1].group(1).lstrip("#").split()).strip("*`: ") if prev else ""
+        if (what, where) not in seen:
+            seen.add((what, where))
+            out.append({"kind": "FILL", "text": what, "where": where})
+    return out
+
+
 def markers(md: str) -> list[dict[str, str]]:
     seen, out = set(), []
     for m in MARKERS.finditer(md):

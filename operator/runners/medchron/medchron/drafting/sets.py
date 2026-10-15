@@ -142,6 +142,22 @@ def _term_pattern(term: str) -> re.Pattern[str]:
     return re.compile(r"(?<![A-Za-z0-9])" + r"\s+".join(words) + r"(s|es)?(?![A-Za-z0-9])", re.I)
 
 
+#: Nouns that make a lower-case defined term part of a DIFFERENT phrase ("the
+#: incident report" is a report, not the INCIDENT; 2026-10-14: the caps pass
+#: wrote "INCIDENT report" into two requests for production).
+COMPOUND_HEADS = frozenset(
+    "report reports date dates scene number numbers history log logs file files form forms photo photos "
+    "photograph photographs video videos investigation investigations review reviews notice notices "
+    "summary summaries statement statements record records".split()
+)
+
+
+def _in_compound(seg: str, end: int) -> bool:
+    """The match ending at ``end`` is followed by a compound head noun."""
+    m = re.match(r"[ \t]+([A-Za-z]+)", seg[end:])
+    return bool(m and m.group(1) == m.group(1).lower() and m.group(1) in COMPOUND_HEADS)
+
+
 def enforce_caps(doc: str) -> tuple[str, list[str]]:
     """Every use of a defined term after the Definitions heading in capitals,
     outside quotations and markers. Returns the document and one line per
@@ -157,8 +173,8 @@ def enforce_caps(doc: str) -> tuple[str, list[str]]:
         for t in terms:
             pat = _term_pattern(t)
 
-            def up(m: re.Match[str], t: str = t) -> str:
-                if m.group(0) == m.group(0).upper():
+            def up(m: re.Match[str], t: str = t, seg: str = seg) -> str:
+                if m.group(0) == m.group(0).upper() or _in_compound(seg, m.end()):
                     return m.group(0)
                 counts[t] = counts.get(t, 0) + 1
                 return m.group(0).upper()
@@ -185,7 +201,7 @@ def lowercase_uses(doc: str) -> list[str]:
     def scan(seg: str) -> str:
         for t in defined_terms(doc):
             for m in _term_pattern(t).finditer(seg):
-                if m.group(0) != m.group(0).upper() and t not in found:
+                if m.group(0) != m.group(0).upper() and not _in_compound(seg, m.end()) and t not in found:
                     found.append(t)
         return seg
 
@@ -539,3 +555,15 @@ def particulars(doc: str, lines: list[str]) -> tuple[str, list[str]]:
     return doc[: m.start(2)] + cell + doc[m.end(2) :], [
         "the caption carries " + "; ".join(lines) + ", as the papers in the file print them"
     ]
+
+
+_RECORD_ALIAS = re.compile(r"(?i)\b(?:also\s+)?appears\s+in\s+the\s+record\s+as\b")
+
+
+def alias_wording(doc: str) -> tuple[str, list[str]]:
+    """A definition's alias says "also spelled", never the drafting's own
+    "appears in the record as" (2026-10-14, a served paper's Definition 9)."""
+    out, n = _RECORD_ALIAS.subn("also spelled", doc)
+    return out, (
+        [f'"also spelled" written for {n} alias(es) worded as the drafting\'s own "in the record"'] if n else []
+    )

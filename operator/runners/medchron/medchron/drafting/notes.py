@@ -18,7 +18,12 @@ from typing import Any
 
 
 #: How each marker kind reads in the notes: in words, never as a {{slot}}.
-KIND_LABEL = {"ATTORNEY": "For your decision", "NOT IN RECORD": "Not in the file", "CLIENT": "From the client"}
+KIND_LABEL = {
+    "ATTORNEY": "For your decision",
+    "NOT IN RECORD": "Not in the file",
+    "CLIENT": "From the client",
+    "FILL": "To complete before or at service",
+}
 
 
 def _once(lines: list[str], labels: list[str]) -> list[str]:
