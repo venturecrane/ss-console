@@ -87,9 +87,13 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
 
   it('boot smoke asserts each authored lane has its inputs on the seat, gated on the engagements checkout', () => {
     expect(SMOKE).toMatch(/for _lane in demand drafting litigation; do/)
+    // Expectation is the working tree OR engagements origin/main (a stale shared
+    // checkout must not turn a lane "absent"); behavior is pinned in
+    // boot-smoke-collects-failures.test.ts.
     expect(SMOKE).toMatch(
-      /\[ -f "\$\{ENGAGEMENTS_DIR\}\/operator\/customers\/\$\{SLUG\}\/\$\{_lane\}\/\$\{_lane\}-firm\.yaml" \]/
+      /if authored "operator\/customers\/\$\{SLUG\}\/\$\{_lane\}\/\$\{_lane\}-firm\.yaml"; then/
     )
+    expect(SMOKE).toMatch(/cat-file -e "origin\/main:\$1"/)
     expect(SMOKE).toMatch(
       /ssh_exec "\$\{_lane\}-firm-inputs-present" "\[ \\"\\\$\(stat -c %U:%G:%a \/var\/lib\/smd-config\/\$\{_lane\}\/\$\{_lane\}-firm\.yaml\)\\" = root:medchron:640 \]"/
     )
