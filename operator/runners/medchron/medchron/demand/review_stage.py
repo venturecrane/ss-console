@@ -95,7 +95,15 @@ def _demand(run: Any, texts: dict[str, str], model: str, key: str) -> list[R.Fin
         front_keys=deliver.front_keys(run.firm),
     )
     system = rv.DEMAND_PROMPT + "\n\n---\n\n## THE RECORD DIGEST (every cite in it is the record)\n\n" + digest
-    user = rv.demand_user(run.job.request_text, run._matter_fields(), premise_facts, computed, texts, code)
+    user = rv.demand_user(
+        run.job.request_text,
+        run._matter_fields(),
+        premise_facts,
+        computed,
+        texts,
+        code,
+        signature=rv.signature_block(run.firm),
+    )
     return code + rv.model_review(run.doorway, model, system, user, key, rv.HOLD_DEMAND)
 
 

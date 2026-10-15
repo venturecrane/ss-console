@@ -312,15 +312,22 @@ def decide(
     for r, t in texts:
         m = _CONDITIONAL.search(t)
         if m:
-            facts_out.append(
-                f"conditional limits language (G3, a constraint on figures): {r.get('name')}: {_quote(t, m)}"
-            )
+            facts_out.append(f"conditional limits language (a constraint on figures): {r.get('name')}: {_quote(t, m)}")
     return {
         "passed": all(g["passed"] for g in gates),
         "gates": gates,
         "premise_facts": facts_out,
         "variant": variant(texts, preflight, facts, prem),
     }
+
+
+#: The gates in the firm's words: the report is the firm's to read, and a
+#: gate's own label ("G1 identified carrier") is this system's vocabulary.
+FIRM_WORDS = {
+    "G1 identified carrier": "A liability carrier identified on this loss",
+    "G2 coverage not denied": "Coverage not denied in writing",
+    "G4 the right instrument (pre-suit, unresolved)": "A claim still open for a pre-suit demand",
+}
 
 
 def coverage_report(job: Any, decision: dict[str, Any], today: str) -> str:
@@ -333,16 +340,19 @@ def coverage_report(job: Any, decision: dict[str, Any], today: str) -> str:
         "file does not yet establish the premise a time-limited demand to the liability carrier rests on. "
         "Each line below names the document in the matter file it comes from.",
         "",
-        "## The premise gates",
+        "## What a demand needs, and what the file shows",
         "",
-        "| Gate | Result | What the file shows |",
+        "| What a demand needs | Shown by the file? | What the file shows |",
         "|---|---|---|",
     ]
     for g in decision["gates"]:
         ev = "; ".join(g["evidence"]) or "nothing in the file"
-        lines.append(f"| {g['gate']} | {'Passes' if g['passed'] else 'Fails'} | {ev.replace('|', '/')} |")
+        need = FIRM_WORDS.get(str(g["gate"]), str(g["gate"]))
+        lines.append(f"| {need} | {'Yes' if g['passed'] else 'No'} | {ev.replace('|', '/')} |")
     if decision["premise_facts"]:
-        lines += ["", "## Other premise facts in the file", ""] + [f"- {f}" for f in decision["premise_facts"]]
+        lines += ["", "## Other facts in the file bearing on the claim", ""] + [
+            f"- {f}" for f in decision["premise_facts"]
+        ]
     failed = [str(g["gate"]) for g in decision["gates"] if not g["passed"]]
     questions: dict[str, str] = {
         "G1 identified carrier": "which liability carrier, and under what claim number, is on this loss?",

@@ -6,17 +6,25 @@ for them threw away a letter that was otherwise finished; filing them was
 never an option. So each one is settled here, in code, and listed for the
 attorney:
 
-* an INVENTED statement is REMOVED and replaced with
-  ``{{NOT IN RECORD: a statement here was removed by the final audit (<why>); not found in the file}}``.
-  The marker carries the auditor's reason, never the claim: restating the
+* an INVENTED statement is REMOVED and replaced with an open-item marker in
+  the draft's own dialect (``format_check.dialect``): the firm's
+  ``[TO BE SUPPLIED: a statement here is not supported by the file (<why>)]``,
+  or ``{{NOT IN RECORD: ...}}`` when the requester's brief named the curly
+  markers. The marker carries the reason, never the claim: restating the
   claim would put it back in the letter. The claim itself goes to the
   attorney notes;
 * an ARITHMETIC finding's figure is removed and replaced with
-  ``{{ATTORNEY: verify arithmetic: <the auditor's stated discrepancy>}}``;
-  a row whose own detail says the arithmetic is correct is not a discrepancy
-  (the auditor sometimes files a check it passed under ARITHMETIC) and is left
-  as written, noted for the attorney;
+  ``[CONFIRM the arithmetic (<the stated discrepancy>) BEFORE TRANSMITTAL]``
+  (curly: ``{{ATTORNEY: verify arithmetic: ...}}``); a row whose own detail
+  says the arithmetic is correct is not a discrepancy (the check sometimes
+  files one it passed under ARITHMETIC) and is left as written, noted for the
+  attorney;
 * every change is returned for the attorney notes.
+
+Every word code writes here is read by the firm: a marker or a note names no
+stage of this system ("final audit", "auditor", a gate, a pass). The 2026-10-15
+proof run's review held on exactly that. The format check counts either
+dialect's marker as an open item.
 
 A quotation the free check could not find is the drafting gate's to settle
 (quotefix converts it to a paraphrase with its cite). A finding that cannot be
@@ -30,6 +38,7 @@ import re
 from typing import Any
 
 from .draft import FINDING, audit_sections, sections
+from .format_check import CURLY, SQUARE
 
 _TOK = re.compile(r"[a-z0-9]+")
 _FIG = re.compile(r"\$?\d[\d,]*(?:\.\d+)?")
@@ -47,7 +56,7 @@ def _toks(s: str) -> set[str]:
 
 
 def _clean(s: str, n: int = 220) -> str:
-    s = re.sub(r"[{}|]", "", s).replace('"', "'").replace("“", "'").replace("”", "'")
+    s = re.sub(r"[{}\[\]|]", "", s).replace('"', "'").replace("“", "'").replace("”", "'")
     s = " ".join(s.split())
     return s if len(s) <= n else s[: n - 3].rstrip() + "..."
 
@@ -187,9 +196,24 @@ def locate(body: str, claim: str) -> tuple[int, int] | None:
     return best if score >= MIN_OVERLAP else None
 
 
-def settle(draft_md: str, audit_md: str) -> tuple[str, list[str]]:
+#: The words code writes, one place: the markers by dialect and the notes.
+MARK = {
+    (SQUARE, "INVENTED"): "[TO BE SUPPLIED: a statement here is not supported by the file ({why})]",
+    (CURLY, "INVENTED"): "{{{{NOT IN RECORD: a statement here is not supported by the file ({why})}}}}",
+    (SQUARE, "ARITHMETIC"): "[CONFIRM the arithmetic ({why}) BEFORE TRANSMITTAL]",
+    (CURLY, "ARITHMETIC"): "{{{{ATTORNEY: verify arithmetic: {why}}}}}",
+}
+NOTE_REMOVED = "{head}: taken out, the file does not support it: {claim} ({why})"
+NOTE_FLAGGED = "{head}: figure marked for the attorney to confirm: {claim} ({why})"
+NOTE_CLEARED = "{head}: rechecked {claim}; the arithmetic is correct and it is left as written"
+
+
+def settle(draft_md: str, audit_md: str, dialect: str = SQUARE) -> tuple[str, list[str]]:
     """The letter with every INVENTED statement removed and every ARITHMETIC
-    figure flagged, and the attorney-notes lines saying what was done."""
+    figure flagged, in ``dialect``'s markers, and the attorney-notes lines
+    saying what was done."""
+    if dialect not in (SQUARE, CURLY):
+        raise ValueError(f"unknown marker dialect {dialect!r}")
     secs = sections(draft_md)
     bodies = {h: b for h, b in secs}
     notes: list[str] = []
@@ -198,7 +222,7 @@ def settle(draft_md: str, audit_md: str) -> tuple[str, list[str]]:
             raise Unlocated(f"the final audit names section {head[:60]!r}, which the letter does not have")
         body = bodies[head]
         if verdict == "ARITHMETIC" and self_cleared(detail):
-            notes.append(f"{head}: the final audit checked {_clean(claim, 120)} and states it correct; left as written")
+            notes.append(NOTE_CLEARED.format(head=head, claim=_clean(claim, 120)))
             continue
         span = locate(body, claim)
         if span is None:
@@ -213,15 +237,10 @@ def settle(draft_md: str, audit_md: str) -> tuple[str, list[str]]:
         if verdict == "INVENTED":
             # The marker says WHY, never what was claimed: restating the claim
             # would put the invented statement back in the letter.
-            mark = (
-                "{{NOT IN RECORD: a statement here was removed by the final audit ("
-                + _clean(detail, 160)
-                + "); not found in the file}}"
-            )
-            body = body[:a] + mark + body[b:]
-            notes.append(f"{head}: removed {_clean(claim, 160)} ({_clean(detail, 160)})")
+            body = body[:a] + MARK[(dialect, verdict)].format(why=_clean(detail, 160)) + body[b:]
+            notes.append(NOTE_REMOVED.format(head=head, claim=_clean(claim, 160), why=_clean(detail, 160)))
         else:
-            mark = "{{ATTORNEY: verify arithmetic: " + _clean(detail or claim) + "}}"
+            mark = MARK[(dialect, verdict)].format(why=_clean(detail or claim))
             figs = [f for f in _FIG.findall(claim) if f in unit and re.search(r"\d", f)]
             if figs:
                 fig = figs[-1]
@@ -230,7 +249,7 @@ def settle(draft_md: str, audit_md: str) -> tuple[str, list[str]]:
             else:
                 unit = mark
             body = body[:a] + unit + body[b:]
-            notes.append(f"{head}: figure flagged for the attorney, {_clean(claim, 160)} ({_clean(detail, 160)})")
+            notes.append(NOTE_FLAGGED.format(head=head, claim=_clean(claim, 160), why=_clean(detail, 160)))
         bodies[head] = body
     out = "\n".join(bodies[h] for h, _ in secs)
     return out + ("\n" if draft_md.endswith("\n") else ""), notes
@@ -238,7 +257,7 @@ def settle(draft_md: str, audit_md: str) -> tuple[str, list[str]]:
 
 def summary(notes: list[str]) -> dict[str, Any]:
     return {
-        "removed": sum(1 for n in notes if ": removed " in n),
-        "flagged": sum(1 for n in notes if "figure flagged" in n),
-        "cleared": sum(1 for n in notes if "states it correct" in n),
+        "removed": sum(1 for n in notes if ": taken out, " in n),
+        "flagged": sum(1 for n in notes if ": figure marked for the attorney" in n),
+        "cleared": sum(1 for n in notes if "the arithmetic is correct and it is left as written" in n),
     }

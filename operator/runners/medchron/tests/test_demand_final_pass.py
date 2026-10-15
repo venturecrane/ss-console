@@ -91,9 +91,12 @@ def test_an_invented_sentence_never_survives_into_the_render(tmp_path, pricing):
     out = tmp_path / "job" / "data" / "out" / "demand"
     letter = _docx_text(out / "Demand.Alpha Example.docx")
     assert "is named in the carrier's letter" not in letter
-    assert "NOT IN RECORD" in letter and "not found in the file" in letter
+    # the firm's own marker (the brief named no curly dialect), naming no stage of the system
+    assert "[TO BE SUPPLIED: a statement here is not supported by the file" in letter
+    assert "final audit" not in letter
     notes = _docx_text(out / "Demand.Alpha Example - attorney notes.docx")
-    assert "Removed or flagged by the final audit" in notes and "removed" in notes
+    assert "Taken out or flagged before filing" in notes and "taken out, the file does not support it" in notes
+    assert "final audit" not in notes
 
 
 def test_an_arithmetic_figure_never_survives_unflagged(tmp_path, pricing):
@@ -102,8 +105,8 @@ def test_an_arithmetic_figure_never_survives_unflagged(tmp_path, pricing):
     final = (tmp_path / "job" / "data" / "draft-final.md").read_text()
     assert FIGURE_SENTENCE not in final  # its figure is gone from that sentence
     assert (
-        "The itemized statement lists total charges of {{ATTORNEY: verify arithmetic: the bill's lines sum to $1,100.00}}"
-        in final
+        "The itemized statement lists total charges of "
+        "[CONFIRM the arithmetic (the bill's lines sum to $1,100.00) BEFORE TRANSMITTAL]" in final
     )
     rec = json.loads((tmp_path / "job" / "data" / "final-pass.json").read_text())
     assert (rec["removed"], rec["flagged"], rec["cleared"]) == (1, 1, 1)  # the passed check is left as written
@@ -115,23 +118,24 @@ def test_settle_unit():
         "## AUDIT: Damages\n\n- The bill totals $500.00 | ARITHMETIC | lines sum to $450.00\n",
     )
     assert "A sentence that stays." in md and "Another stays." in md
-    assert "$500.00" not in md and "{{ATTORNEY: verify arithmetic: lines sum to $450.00}}" in md
+    assert "$500.00" not in md and "[CONFIRM the arithmetic (lines sum to $450.00) BEFORE TRANSMITTAL]" in md
     md2, _ = finalpass.settle(
         "## Liability\n\nTrue thing (cite). The defendant admitted fault at the scene (cite). More.\n",
         '## AUDIT: Liability\n\n- "The defendant admitted fault at the scene" | INVENTED | no cite in digest\n',
     )
-    assert "admitted fault" not in md2.split("NOT IN RECORD")[0] and "True thing (cite)." in md2 and "More." in md2
+    assert "admitted fault" not in md2.split("TO BE SUPPLIED")[0] and "True thing (cite)." in md2 and "More." in md2
     with pytest.raises(finalpass.Unlocated):
         finalpass.settle("## Liability\n\nNothing here.\n", "## AUDIT: Liability\n\n- zebra quartz | INVENTED | x\n")
 
 
-def test_a_marker_never_carries_braces_or_pipes():
-    md, _ = finalpass.settle(
-        "## Damages\n\nThe bill totals $500.00 (bill).\n",
-        "## AUDIT: Damages\n\n- The bill totals $500.00 | ARITHMETIC | sum {is} $450.00\n",
-    )
+def test_a_marker_never_carries_braces_brackets_or_pipes():
+    audit = "## AUDIT: Damages\n\n- The bill totals $500.00 | ARITHMETIC | sum {is} [x] $450.00\n"
+    md, _ = finalpass.settle("## Damages\n\nThe bill totals $500.00 (bill).\n", audit, "curly")
     marker = md[md.index("{{") : md.index("}}") + 2]
-    assert marker.count("{") == 2 and marker.count("}") == 2
+    assert marker.count("{") == 2 and marker.count("}") == 2 and "[" not in marker
+    md, _ = finalpass.settle("## Damages\n\nThe bill totals $500.00 (bill).\n", audit)
+    marker = md[md.index("[CONFIRM") : md.index("TRANSMITTAL]") + 12]
+    assert marker.count("[") == 1 and marker.count("]") == 1 and "{" not in marker
 
 
 _ = DRAFT
