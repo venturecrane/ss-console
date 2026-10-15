@@ -55,7 +55,9 @@ function row(over: Partial<SubscriptionRow> = {}): SubscriptionRow {
     started_at: '2026-07-15 00:00:00',
     ended_at: null,
     settings_json: null,
-    service_id: null,
+    // The seat points at its own commercial line (migration 0126); the fake
+    // DB below answers for it (or not, for an unpriced seat).
+    service_id: 'svc-1',
     stripe_subscription_id: null,
     created_at: '2026-07-15 00:00:00',
     updated_at: '2026-07-15 00:00:00',
@@ -299,7 +301,8 @@ describe('the surfaces read the one gate and act in one place', () => {
 
   it('Billing is a ledger: stamped rows through PortalListItem, no inline start, no KPI pair', () => {
     const billing = read('src/pages/portal/billing/index.astro')
-    expect(billing).toContain('canStartOperatorSubscription(sub, operatorPriceCents)')
+    // Each row is gated on its OWN seat's price (migration 0126).
+    expect(billing).toContain('canStartOperatorSubscription(sub, seatPriceCents(sub))')
     expect(billing).toContain('subscriptionStamp(sub, canStart(sub))')
     expect(billing).toContain('operatorSubscriptionHref(sub.instance_slug)')
     expect(billing).toContain('id="subscriptions"')
@@ -331,7 +334,9 @@ describe('the surfaces read the one gate and act in one place', () => {
   it('the server route still re-checks the same facts (provisioning, no Stripe id, authored price)', () => {
     const route = read('src/pages/api/portal/products/operator/[instance]/start-subscription.ts')
     expect(route).toContain("sub.status !== 'provisioning' || sub.stripe_subscription_id")
-    expect(route).toContain('getOperatorServiceForEntity')
+    // The price is the SEAT's (migration 0126), never the client's other seat's.
+    expect(route).toContain('getOperatorServiceForSeat(')
+    expect(route).not.toContain('getOperatorServiceForEntity')
   })
 })
 

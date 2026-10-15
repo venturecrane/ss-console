@@ -3,6 +3,7 @@ import { captureError } from '../../../../../lib/observability/sentry'
 import { env } from 'cloudflare:workers'
 import { requireAdminSession } from '../../../../../lib/auth/admin-session'
 import {
+  AmbiguousSubscriptionError,
   getSubscriptionForBilling,
   setSubscriptionBillingStatus,
 } from '../../../../../lib/db/subscriptions'
@@ -16,7 +17,10 @@ import {
  * POST /api/admin/clients/[id]/subscription-billing
  *
  * Drives an ALREADY-STARTED Operator retainer's Stripe billing from the
- * client hub. Form field `action` ∈ pause | resume | cancel.
+ * client hub. Form field `action` ∈ pause | resume | cancel; form field
+ * `instance` names the seat (its customer_slug). Unnamed on a client with
+ * more than one seat, the route refuses rather than act on whichever row
+ * came back first.
  *
  *   pause  — pause_collection[behavior]=void at Stripe + local row `paused`.
  *   resume — clears pause_collection + local row `active`.
@@ -73,20 +77,28 @@ async function handlePost({ request, locals, params, redirect }: APIContext): Pr
   const back = (q: string) => redirect(`/admin/clients/${entityId}?${q}`, 302)
 
   let action: BillingAction | null
+  let instance: string | null = null
   try {
-    action = parseAction((await request.formData()).get('action'))
+    const form = await request.formData()
+    action = parseAction(form.get('action'))
+    const rawInstance = form.get('instance')
+    instance =
+      typeof rawInstance === 'string' && rawInstance.trim() !== '' ? rawInstance.trim() : null
   } catch {
     action = null
   }
   if (!action) return back('error=bad_billing_action')
 
   try {
-    const sub = await getSubscriptionForBilling(env.DB, entityId, 'operator')
+    // The seat is named (migration 0126): a client with two seats has two
+    // Stripe subscriptions, and an unnamed pause must not pick one.
+    const sub = await getSubscriptionForBilling(env.DB, entityId, 'operator', instance)
     if (!sub) return back('error=no_subscription_row')
 
     if (!sub.stripe_subscription_id) return back('error=no_billing_attached')
     return back(await handleAttachedAction(action, sub.id, sub.stripe_subscription_id))
   } catch (err) {
+    if (err instanceof AmbiguousSubscriptionError) return back('error=seat_required')
     console.error('[api/admin/clients/subscription-billing] error:', err)
     captureError(err, 'admin.subscription-billing')
     return back('error=billing_server')

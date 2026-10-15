@@ -1,0 +1,143 @@
+---
+import OperatorPriceForm from './OperatorPriceForm.astro'
+import { personaSummary, posturePill, type RosterCustomer } from '../../lib/admin/fleet-roster'
+import { operatorPaymentMethod, type OperatorSeatCommercial } from '../../lib/db/services'
+import { parseCancelAt } from '../../lib/db/subscriptions'
+
+/**
+ * One Operator SEAT on the client hub (migration 0126): its identity, its own
+ * commercial record (price, rail, line name), and the billing controls for
+ * its own Stripe subscription. Every form posts the seat's instance, so a
+ * client with two seats has two independent cards and nothing acts on "the"
+ * subscription of the client.
+ */
+interface Props {
+  entityId: string
+  seat: OperatorSeatCommercial
+  /** The seat's projected config, when one is synced; null renders identity only. */
+  config: RosterCustomer | null
+}
+
+const { entityId, seat, config } = Astro.props
+const cancelAt = parseCancelAt(seat.settings_json)
+const cancelNotice = cancelAt
+  ? `Client cancelled from the portal. Service and billing run through ${cancelAt.slice(0, 10)}. Offboarding (Section 9.3) is a Captain act.`
+  : null
+const billingAction = `/api/admin/clients/${entityId}/subscription-billing`
+---
+
+<div
+  class="mb-3.5 border border-[color:var(--ss-color-border)] border-l-[3px] border-l-[color:var(--ss-color-primary)] px-[18px] py-4"
+>
+  <div class="mb-3 flex items-center justify-between">
+    <span
+      class="font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--ss-color-primary)]"
+    >
+      Operator
+    </span>
+    {
+      config && (
+        <span class="inline-flex items-center gap-1.5 border border-[color:var(--ss-color-border)] px-2 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]">
+          {posturePill(config.authority).label}
+        </span>
+      )
+    }
+  </div>
+  <div class="text-base font-bold text-[color:var(--ss-color-text-primary)]">
+    {seat.label ?? 'Operator'}
+  </div>
+  <div class="mt-1 font-mono text-xs text-[color:var(--ss-color-text-muted)]">
+    {seat.instance_slug}
+  </div>
+  {
+    config && (
+      <div class="mt-2 text-sm text-[color:var(--ss-color-text-secondary)]">
+        {personaSummary(config.personas)}
+        {config.config_error && ' · config needs attention'}
+      </div>
+    )
+  }
+  {
+    seat.instance_slug && (
+      <OperatorPriceForm
+        entityId={entityId}
+        instance={seat.instance_slug}
+        operatorPrice={seat.recurring_price}
+        operatorPaymentRail={operatorPaymentMethod(seat)}
+        operatorLabel={seat.label}
+      />
+    )
+  }
+  <div class="mt-3 border-t border-[color:var(--ss-color-border-subtle)] pt-3">
+    <div class="flex items-baseline justify-between">
+      <span
+        class="font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]"
+      >
+        Retainer billing
+      </span>
+      <span class="font-mono text-sm">
+        {seat.stripe_subscription_id ? `Stripe · ${seat.subscription_status}` : 'Not attached'}
+      </span>
+    </div>
+    {
+      cancelAt && (
+        <p class="mt-2 text-sm font-bold text-[color:var(--ss-color-error)]">{cancelNotice}</p>
+      )
+    }
+    {
+      !seat.stripe_subscription_id && seat.recurring_price != null && (
+        <p class="mt-2 text-sm text-[color:var(--ss-color-text-muted)]">
+          The client starts this seat's subscription from their portal (Billing → Start
+          subscription) and pays the first month on Stripe. Nothing is billed or sent until they do.
+        </p>
+      )
+    }
+    {
+      !seat.stripe_subscription_id && seat.recurring_price == null && (
+        <p class="mt-2 text-sm text-[color:var(--ss-color-text-muted)]">
+          Author the monthly price above; the client cannot start without one.
+        </p>
+      )
+    }
+    {
+      seat.stripe_subscription_id && seat.instance_slug && (
+        <div class="mt-2.5 flex items-center gap-2">
+          {seat.subscription_status === 'active' && (
+            <form method="POST" action={billingAction}>
+              <input type="hidden" name="instance" value={seat.instance_slug} />
+              <input type="hidden" name="action" value="pause" />
+              <button
+                type="submit"
+                class="border border-[color:var(--ss-color-border)] px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-text-secondary)]"
+              >
+                Pause billing
+              </button>
+            </form>
+          )}
+          {seat.subscription_status === 'paused' && (
+            <form method="POST" action={billingAction}>
+              <input type="hidden" name="instance" value={seat.instance_slug} />
+              <input type="hidden" name="action" value="resume" />
+              <button
+                type="submit"
+                class="border border-[color:var(--ss-color-primary)] px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-primary)]"
+              >
+                Resume billing
+              </button>
+            </form>
+          )}
+          <form method="POST" action={billingAction}>
+            <input type="hidden" name="instance" value={seat.instance_slug} />
+            <input type="hidden" name="action" value="cancel" />
+            <button
+              type="submit"
+              class="border border-[color:var(--ss-color-error)] px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--ss-color-error)]"
+            >
+              Cancel
+            </button>
+          </form>
+        </div>
+      )
+    }
+  </div>
+</div>

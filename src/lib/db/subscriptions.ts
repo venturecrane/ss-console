@@ -19,24 +19,89 @@ export interface SubscriptionBillingRow {
   status: string
   stripe_subscription_id: string | null
   settings_json: string | null
+  /** The seat's instance (= customer_slug) for multi-instance products; null otherwise. */
+  instance_slug: string | null
+  /** The commercial line this seat is priced by (migration 0126); null when unlinked. */
+  service_id: string | null
 }
 
 const BILLING_COLUMNS =
-  'id, org_id, entity_id, product_slug, status, stripe_subscription_id, settings_json'
+  'id, org_id, entity_id, product_slug, status, stripe_subscription_id, settings_json, instance_slug, service_id'
 
-/** The (entity, product) subscription row, or null. */
+/**
+ * Billing was asked about a client with several seats of a product and no
+ * seat was named. The caller must name one: acting on "the" subscription of
+ * a client that has two would pause or cancel whichever row came back first.
+ */
+export class AmbiguousSubscriptionError extends Error {
+  constructor(entityId: string, productSlug: string, count: number) {
+    super(`${count} ${productSlug} subscriptions on entity ${entityId}; name the instance`)
+    this.name = 'AmbiguousSubscriptionError'
+  }
+}
+
+/**
+ * The subscription row billing acts on, or null.
+ *
+ * With `instanceSlug`, exactly that seat of (entity, product). Without it, the
+ * entity's only row for the product; when the entity holds more than one
+ * (an Operator client with two seats, migration 0089), this REFUSES with
+ * {@link AmbiguousSubscriptionError} rather than guess.
+ */
 export async function getSubscriptionForBilling(
   db: D1Database,
   entityId: string,
-  productSlug: string
+  productSlug: string,
+  instanceSlug?: string | null
 ): Promise<SubscriptionBillingRow | null> {
-  const row = await db
+  if (instanceSlug) {
+    const row = await db
+      .prepare(
+        `SELECT ${BILLING_COLUMNS} FROM subscriptions
+          WHERE entity_id = ? AND product_slug = ? AND instance_slug = ?`
+      )
+      .bind(entityId, productSlug, instanceSlug)
+      .first<SubscriptionBillingRow>()
+    return row ?? null
+  }
+  const rows = await db
     .prepare(
-      `SELECT ${BILLING_COLUMNS} FROM subscriptions WHERE entity_id = ? AND product_slug = ?`
+      `SELECT ${BILLING_COLUMNS} FROM subscriptions WHERE entity_id = ? AND product_slug = ? LIMIT 2`
     )
     .bind(entityId, productSlug)
-    .first<SubscriptionBillingRow>()
-  return row ?? null
+    .all<SubscriptionBillingRow>()
+  const found = rows.results ?? []
+  if (found.length > 1) throw new AmbiguousSubscriptionError(entityId, productSlug, found.length)
+  return found[0] ?? null
+}
+
+/**
+ * The Stripe customer of another seat of the same client that already has a
+ * Stripe subscription, or null.
+ *
+ * A client's second Operator seat must be charged on the Stripe customer the
+ * firm already pays from, not a new one. The local
+ * `settings_json.stripe_customer_id` is a mirror; the caller asks Stripe for
+ * the subscription's `customer`, which is the authority. Returns the Stripe
+ * subscription id of the oldest live other seat with one (a cancelled seat
+ * only when no live one has), so the answer is stable.
+ */
+export async function findSiblingStripeSubscriptionId(
+  db: D1Database,
+  entityId: string,
+  excludeRowId: string
+): Promise<string | null> {
+  const row = await db
+    .prepare(
+      `SELECT stripe_subscription_id FROM subscriptions
+        WHERE entity_id = ? AND product_slug = 'operator' AND id != ?
+          AND stripe_subscription_id IS NOT NULL
+        ORDER BY (status = 'cancelled') ASC, created_at ASC, id ASC
+        LIMIT 1`
+    )
+    .bind(entityId, excludeRowId)
+    .first<{ stripe_subscription_id: string }>()
+  return row?.stripe_subscription_id ?? null
 }
 
 /** Resolve the local row a Stripe subscription event belongs to. Webhooks
@@ -98,9 +163,11 @@ export async function attachStripeSubscription(
  * start-subscription route) require `stripe_subscription_id IS NULL`, so
  * clearing it is what re-opens the door. `settings_json.stripe_customer_id`
  * is left alone: the Stripe customer exists and the record of it is true.
- * The next checkout does not reuse it (createOperatorCheckoutSession passes
- * `customer_email`, so Stripe resolves or creates a customer on its own) and
- * the attach that follows overwrites the key with whatever Stripe returns.
+ * The next checkout reuses a customer only through ANOTHER seat's live Stripe
+ * subscription (start-subscription asks Stripe for that subscription's
+ * customer); otherwise it passes `customer_email` and Stripe resolves or
+ * creates one. The attach that follows overwrites the key with whatever
+ * Stripe returns.
  *
  * Guarded on the id being detached: a webhook retry that lands after the
  * client has already attached a NEW subscription must not clear that one.
