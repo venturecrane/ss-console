@@ -57,7 +57,6 @@ document this stage already settled does not pay again.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import copy
@@ -68,16 +67,18 @@ from typing import Any, Callable
 from .. import budget, llm, prompts
 from ..audit import claims as CL
 from ..audit.page_text import exhibit_paths
-from ..audit.render import img_block, render
 from ..audit.run import AuditPaths, Round
 from ..proof import review as PR
 from ..audit import handwritten_evidence as HE
 from ..update import body as B, duplicates as DU, entry_edits as EE, finisher as FN, handwritten as H
 from ..update import frozen as FZ, illegible as IL
-from ..update import review_parts as RP, review_repair as RR, select as S
+from ..update import review_parts as RP, review_repair as RR
 from . import audit_loop
 from .base import StageRun, read_json
 from .update_base import headings, update_dir
+from .update_review_io import At, Images, _checkpoint, _resume, _sha, already_pages, page_counts
+from .update_review_io import _end, _image_source, page_text
+from .update_review_io import CHECKPOINT as CHECKPOINT  # the stage's checkpoint file name, read by tests
 
 #: Rounds of the loop: 1 is the full review and its finish; 2 is the narrow
 #: re-check of the frozen findings still open and the one more finish of the
@@ -94,7 +95,6 @@ STAGE = "update_review"
 PAGE_TOKENS = 1_800
 LATER_SHARE = 1.0
 
-Images = Callable[[int, int], dict[str, Any] | None]
 #: (document before, document after) -> the new claims the audit did not support
 Verify = Callable[[str, str], list[dict[str, Any]]]
 
@@ -118,70 +118,6 @@ class Ctx:
 def _model(cfg: Any) -> str:
     tiers = cfg.get("models", "tiers") or {}
     return str(tiers.get("review") or llm.model_for(cfg, "judgment"))
-
-
-def _image_source(sr: StageRun) -> Images:
-    out = sr.slug_dir / "out" / sr.unit.unit
-    pdfs = exhibit_paths(out)
-
-    def get(ex: int, page: int) -> dict[str, Any] | None:
-        if ex not in pdfs:
-            return None
-        p = render(pdfs[ex], page, out / "auditpages", f"ex{ex}")
-        return img_block(p) if p else None
-
-    return get
-
-
-def page_counts(out: Path) -> Callable[[int], int]:
-    from pypdf import PdfReader
-
-    pdfs, cache = exhibit_paths(out), {}
-
-    def n(ex: int) -> int:
-        if ex not in cache:
-            try:
-                cache[ex] = len(PdfReader(str(pdfs[ex])).pages) if ex in pdfs else 0
-            except Exception:  # noqa: BLE001 - an unreadable exhibit shows no pages; its claims still audit
-                cache[ex] = 0
-        return cache[ex]
-
-    return n
-
-
-def page_text(sr: StageRun) -> RR.Evidence:
-    """(exhibit, page) -> the text the update read off that page of an added
-    exhibit (``text/<id>.txt``, in the exhibit's final number), or None."""
-    cache: dict[int, dict[int, str]] = {}
-    for r in read_json(update_dir(sr) / "new_exhibits.final.json", []):
-        ex, doc = (r.get("exhibit"), r.get("id")) if isinstance(r, dict) else (None, None)
-        tp = sr.slug_dir / "text" / f"{doc}.txt"
-        if isinstance(ex, int) and isinstance(doc, str) and tp.is_file():
-            cache[ex] = S.pages_of_text(tp.read_text(encoding="utf-8", errors="replace"))
-
-    def get(ex: int, page: int) -> str | None:
-        return cache.get(ex, {}).get(page)
-
-    return get
-
-
-def already_pages(sr: StageRun) -> RP.Already:
-    """exhibit -> {page: the delivered page it is a copy of}, from the page
-    identity the update decided before vision (``update/pageid``): a new
-    exhibit's page the delivery already read."""
-    ud = update_dir(sr)
-    ident = (read_json(ud / "page_identity.json", {}) or {}).get("pages") or {}
-    out: RP.Already = {}
-    for r in read_json(ud / "new_exhibits.final.json", []):
-        ex, doc = (r.get("exhibit"), r.get("id")) if isinstance(r, dict) else (None, None)
-        rows = ident.get(doc) if isinstance(doc, str) and isinstance(ident, dict) else None
-        if not isinstance(ex, int) or not isinstance(rows, dict):
-            continue
-        for page, v in rows.items():
-            if isinstance(v, list) and len(v) >= 3 and v[0] == "already" and str(page).isdigit():
-                home = str(v[1]).replace("exhibit:", "Exhibit ")
-                out.setdefault(ex, {})[int(page)] = f"{home} p. {v[2]}"
-    return out
 
 
 class GradeFailed(RuntimeError):
@@ -525,10 +461,6 @@ def _mark_refiled(sr: StageRun, homes: dict[int, str]) -> None:
 
 
 # ---- the loop ---------------------------------------------------------------------
-def _sha(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
-
-
 def _plain(f: RR.Finding) -> str:
     where = f" (Exhibit {f.exhibit}, page {f.page})" if f.exhibit and f.page else ""
     return f"entry {f.anchor or 'unnamed'}{where}: {f.problem or f.klass}"
@@ -615,51 +547,6 @@ def run(
     md = doc.read_text(encoding="utf-8")
     rec: dict[str, Any] = {"model": c.model, "doc_sha_in": _sha(md), "rounds": []}
     return _loop(c, rec, md, base, doc, ud)
-
-
-# ---- the checkpoint: a completed round is never paid for twice ---------------------
-CHECKPOINT = "review_checkpoint.json"
-
-
-@dataclass
-class At:
-    """Where a resumed loop starts: after round `done` (0: none finished),
-    with that round's document and record. ``rec["pending"]`` holds a review
-    already paid for in the round that did not finish."""
-
-    done: int
-    md: str
-    rec: dict[str, Any]
-
-
-def compose_sha(ud: Path) -> str:
-    """The identity of what the loop reviews: the composed new entries and
-    the delivered document (``update_collect``, which also clears the
-    checkpoint: a new collect is a new review)."""
-    parts = [(ud / n).read_text(encoding="utf-8") if (ud / n).is_file() else "" for n in ("new_entries.md", "base.md")]
-    return _sha("\0".join(parts))
-
-
-def _checkpoint(ud: Path, at: At) -> None:
-    row = {"compose_sha": compose_sha(ud), "done": at.done, "md": at.md, "rec": at.rec}
-    (ud / CHECKPOINT).write_text(json.dumps(row), encoding="utf-8")
-
-
-def _resume(sr: StageRun, ud: Path) -> At | None:
-    """The last completed step of an interrupted loop over the same composed
-    entries (a connection failure, a requeue), or None."""
-    row = read_json(ud / CHECKPOINT, {})
-    if not isinstance(row, dict) or not row.get("md") or row.get("compose_sha") != compose_sha(ud):
-        return None
-    done = row.get("done")
-    if not isinstance(done, int) or not isinstance(row.get("rec"), dict):
-        return None
-    sr.log(f"update review: resuming after round {done}; what was paid for is not paid again")
-    return At(done, str(row["md"]), row["rec"])
-
-
-def _end(ud: Path) -> None:
-    (ud / CHECKPOINT).unlink(missing_ok=True)
 
 
 def _review_once(
