@@ -59,7 +59,9 @@ from ..audit.page_text import exhibit_paths
 from ..audit.render import img_block, render
 from ..audit.run import AuditPaths, Round
 from ..proof import review as PR
-from ..update import body as B, entry_edits as EE, finisher as FN, review_parts as RP, review_repair as RR, select as S
+from ..audit import handwritten_evidence as HE
+from ..update import body as B, entry_edits as EE, finisher as FN, handwritten as H, illegible as IL
+from ..update import review_parts as RP, review_repair as RR, select as S
 from . import audit_loop
 from .base import StageRun, read_json
 from .update_base import headings, update_dir
@@ -419,7 +421,24 @@ def finish(c: Ctx, md: str, found: list[RR.Finding], base: list[str], doc: Path)
         return md, set(), 0, 0
     doc.write_text(new_md, encoding="utf-8")
     rc = audit_loop.run(c.sr)  # every remaining new sentence is audited on its page, to the gate
+    keep_illegible(c.sr, B.entries_of(new_md)[1], base, doc)
     return doc.read_text(encoding="utf-8"), edited, settled, rc
+
+
+def keep_illegible(sr: StageRun, before: list[str], base: list[str], doc: Path) -> None:
+    """Each new entry the audit emptied or trimmed on a handwritten page
+    carries the firm's illegible note (``update/illegible.py``). The note is
+    an [NTD: ...] span, which the audit never grades, so nothing is re-audited."""
+    trimmed = IL.trimmed_pages(CL.read_rows(AuditPaths(sr.slug_dir, sr.unit.unit).out / "repair-edits.jsonl"))
+    md, done = IL.restore(before, doc.read_text(encoding="utf-8"), base, _handwritten(sr), trimmed)
+    if done:
+        doc.write_text(md, encoding="utf-8")
+        sr.log(f"  {len(done)} entr(ies) the audit emptied or trimmed on a handwritten page carry the illegible note")
+
+
+def _handwritten(sr: StageRun) -> Callable[[int, int], bool]:
+    ev = HE.Evidence(sr.slug_dir, sr.unit.unit, "")
+    return lambda ex, p: H.is_handwritten(ev.page(ex, p))
 
 
 def _new_records(sr: StageRun) -> list[dict[str, Any]]:
@@ -533,6 +552,13 @@ def run(
     if at is not None:
         doc.write_text(at.md, encoding="utf-8")
         return _loop(c, at.rec, at.md, base, doc, ud, at)
+    composed = (
+        B.split_body((ud / "new_entries.md").read_text(encoding="utf-8"))[1]
+        if (ud / "new_entries.md").is_file()
+        else []
+    )
+    keep_illegible(sr, composed, base, doc)
+    md = doc.read_text(encoding="utf-8")
     rec: dict[str, Any] = {"model": c.model, "doc_sha_in": _sha(md), "rounds": []}
     return _loop(c, rec, md, base, doc, ud)
 

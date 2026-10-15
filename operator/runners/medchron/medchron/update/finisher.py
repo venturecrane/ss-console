@@ -33,7 +33,7 @@ import re
 from typing import Any
 
 from ..audit import claims as CL
-from . import body as B, review_repair as RR
+from . import body as B, illegible as IL, review_repair as RR
 from .values import numbers
 
 _DROP_SURVIVOR = re.compile(r"\b([ND]\d+)\b")
@@ -101,6 +101,43 @@ def check_drop(e: RR.Finding, ents: list[RR.Entry], delivered: list[str]) -> str
     return ""
 
 
+def redirect_drop(
+    e: RR.Finding, edits: list[RR.Finding], ents: list[RR.Entry], delivered: list[str], headings: set[str]
+) -> None:
+    """A duplicate the finisher named a survivor for that lacks some of its
+    content, turned into the edit that loses nothing (2026-10-14: 8 of
+    one matter's and 5 of another's must-fix sat on "the survivor does not carry"
+    refusals, round after round):
+
+    * survivor ``D<j>`` (a delivered visit): ``append_to_delivered`` with the
+      added entry's paragraphs that carry what ``D<j>`` lacks, the action the
+      prompt names for exactly this case;
+    * survivor ``N<j>`` holding nothing the dropped entry lacks: the richer
+      entry is kept and ``N<j>`` is dropped instead, unless another edit of
+      this round already touches ``N<j>``.
+
+    Anything else is left as it was: ``check_drop`` refuses it."""
+    from . import entry_edits as EE
+
+    by = {x.anchor: x.text for x in ents}
+    s = _survivor(e)
+    mine = by.get(e.anchor, "")
+    body = mine.split("\n", 2)[2] if mine.count("\n") >= 2 else ""
+    if re.fullmatch(r"D\d+", s) and 0 < int(s[1:]) <= len(delivered):
+        lacks = numbers(body) - numbers(delivered[int(s[1:]) - 1])
+        paras = [p for p in EE._paras(body, headings) if numbers(p) & lacks]
+        if paras:
+            e.action, e.survivor, e.corrected = "append_to_delivered", s, "\n\n".join(paras)
+            e.reason = e.reason or f"repeats {s}; its content {s} lacks goes under it"
+    elif (
+        s in by
+        and numbers(by[s]) <= numbers(mine)
+        and not any(x.anchor.split(".")[0] == s for x in edits if x is not e)
+    ):
+        e.anchor, e.survivor = s, e.anchor
+        e.reason = f"duplicates {e.survivor}, which carries all of its content"
+
+
 def _words(name: str) -> list[str]:
     return [w.lower() for w in _NAME_WORD.findall(name) if w.lower().strip(".") not in _CRED]
 
@@ -161,6 +198,9 @@ def precheck(
 ) -> None:
     from . import entry_edits as EE
 
+    for e in edits:
+        if not e.outcome and e.action == "drop_entry" and check_drop(e, ents, delivered):
+            redirect_drop(e, edits, ents, delivered, headings or set())
     for e in edits:
         if e.outcome:
             continue
@@ -257,10 +297,16 @@ def settled_as_read(found: list[RR.Finding], ents: list[RR.Entry]) -> tuple[list
     """(the findings minus those on a claim stated "as shown / as written on
     the page", how many were settled that way)."""
     claims = {c.anchor: c.text.lower() for e in ents for c in e.claims + e.uncited}
+    noted = {e.anchor for e in ents if IL.has_note(e.text)}
     keep: list[RR.Finding] = []
     for f in found:
         text = claims.get(f.anchor, "")
         if any(p in text for p in AS_READ) and not any(w in f.klass.lower() for w in _STILL_RAISED):
+            continue
+        # An entry carrying the firm's illegible note (``update/illegible.py``):
+        # what it does not say is what the audit could not confirm on the
+        # handwriting, and its page is cited for the reader.
+        if f.anchor.split(".")[0] in noted and any(w in f.klass.lower() for w in IL.SETTLES):
             continue
         keep.append(f)
     return keep, len(found) - len(keep)
