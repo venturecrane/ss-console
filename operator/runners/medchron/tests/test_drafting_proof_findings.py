@@ -1222,3 +1222,55 @@ def test_the_review_flag_drops_the_row_in_a_delivered_job(tmp_path, pricing):
     notes = (r.data / "notes-final.md").read_text()
     assert "Patient seen 01/15/2026" not in notes.split("## Independent review")[0]
     assert "No verified basis cite; check the file: Nos. 1" in notes
+
+
+# ---- the seat re-proof's review (2026-10-15): three defects fixed before accept --------------
+
+
+def test_a_defined_term_inside_a_different_phrase_is_not_capitalized():
+    doc = (
+        '# DEFINITIONS\n\n1. "INCIDENT" means the fall.\n\n# REQUESTS FOR PRODUCTION\n\n'
+        "REQUEST FOR PRODUCTION NO. 1\n\nEach incident report, if any, concerning the incident.\n\nDated: x\n"
+    )
+    out, lines = sets.enforce_caps(doc)
+    assert "Each incident report, if any, concerning the INCIDENT." in out and "INCIDENT report" not in out
+    assert lines == ['1 lower-case use(s) of the defined term "INCIDENT" were capitalized to match its definition']
+    assert sets.lowercase_uses(out) == []
+
+
+def test_a_definition_alias_says_also_spelled():
+    out, notes = sets.alias_wording(
+        '9. "YOUNG" means Charley Young, whose name also appears in the record as Charlie Young.'
+    )
+    assert "appears in the record" not in out and "also spelled Charlie Young" in out and notes
+    assert wording.document_vocabulary("his name appears in the record as Charlie Young")
+
+
+def test_a_slot_that_blocks_service_is_listed_for_the_attorney(tmp_path, pricing):
+    rfp = one_set(RFP).replace(
+        "Dated: {{ATTORNEY: date}}",
+        "Production shall be made on `{{FILL: date and time of production, at least 30 days after service | at service}}`."
+        "\n\nDated: {{ATTORNEY: date}}",
+    )
+    client = Client(drafts=_drafts(**{RFP: rfp}))
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    notes = (r.data / "notes-final.md").read_text()
+    assert (
+        "- To complete before or at service (Requests for Production, REQUEST FOR PRODUCTION NO. 3): date and time of production"
+        in notes
+    )
+    assert "date of service" not in notes  # the proof of service's own slots are the server's, not listed
+
+
+def test_a_served_papers_alias_reads_also_spelled(tmp_path, pricing):
+    # In a request (a shared definition is aligned to the first set's wording).
+    srog = one_set(SROG).replace(
+        "IDENTIFY each PERSON who inspected the premises before the incident.",
+        "IDENTIFY each PERSON who inspected the premises before the incident; the store also appears in the record as Exampel Store.",
+    )
+    client = Client(drafts=_drafts(**{SROG: srog}))
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    final = (r.data / "set-3" / "draft-final.md").read_text()
+    assert "the store also spelled Exampel Store" in final and "in the record" not in final.split("=== ATTORNEY")[0]

@@ -31,7 +31,7 @@ from ..demand import deliver, finalpass, quotefix, summarize
 from . import citefix, compose, format_check, gate, nestquote, pleading, render, review as review_mod, sets
 from . import grounding, notes as notes_mod, wording
 from . import settle as settle_mod
-from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, markers, markers_located
+from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, fills_located, markers, markers_located
 
 MAX_REPAIRS = 2
 #: A served paper's audit findings are repaired or the job fails (compose.STRICT_CLASSES).
@@ -274,6 +274,7 @@ class Finish:
         doc, numbered = sets.set_number(doc, self.job.request_text)
         doc, counsel_for = sets.attorneys_for(doc)
         doc, court = sets.particulars(doc, sets.court_particulars(self._digest_text()))
+        doc, _alias = sets.alias_wording(doc)
         notes += dated + numbered + counsel_for + court
         c = self._canon(u) if u.key else None
         if c is not None:
@@ -350,6 +351,7 @@ class Finish:
         address = [
             x for x in lines[1:] if not re.search(r"(?i)@|\(\d{3}\)|telephone|facsimile|fax|\bLLP\b|\bLLC\b|\bPC\b", x)
         ]
+        body_fills = fills_located(doc)  # the set's own body, before the job's attachments
         doc, attached = render.attach(
             doc, self.cls, self.firm, digest, self.corpus(), render.declarant_name(lines), address
         )
@@ -390,7 +392,7 @@ class Finish:
                 "path": str(path),
                 "paper": paper,
                 "markers": markers(doc),
-                "located": markers_located(doc),
+                "located": markers_located(doc) + body_fills,
                 # The renderer's own report stays here, never in the attorney
                 # notes ("named styles defined on the starter base", 2026-10-13).
                 "notes": [*attached, *reserved, *laid],
