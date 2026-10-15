@@ -308,6 +308,9 @@ def settled_as_read(found: list[RR.Finding], ents: list[RR.Entry]) -> tuple[list
         # handwriting, and its page is cited for the reader.
         if f.anchor.split(".")[0] in noted and any(w in f.klass.lower() for w in IL.SETTLES):
             continue
+        # The note itself is the firm's required wording, never process wording.
+        if f.anchor in noted and "process" in f.klass.lower():
+            continue
         keep.append(f)
     return keep, len(found) - len(keep)
 
