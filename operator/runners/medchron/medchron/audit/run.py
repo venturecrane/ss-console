@@ -34,7 +34,8 @@ from typing import Any, Callable
 
 from .. import llm
 from ..limits import LimitHold
-from . import anchors as AN, claims as CL, verify as VF
+from . import anchors as AN, claims as CL, negation as NG, verify as VF
+from .handwritten_evidence import statements_for
 from .page_text import PageIndex, exhibit_paths
 from .render import img_block, render
 
@@ -128,8 +129,10 @@ class Round:
         citation-window artifacts, content one page outside the cited span. A
         claim that passes widened is a CITATION defect, recorded as
         SUPPORTED_WIDENED and never plain SUPPORTED, so the citation rewrite
-        downstream cannot be skipped silently."""
+        downstream cannot be skipped silently. A claim cited to a handwritten
+        page also gets its provider's typed statements (``handwritten_evidence``)."""
         ex = c["exhibit"]
+        extra = statements_for(self, c) + NG.evidence(self, c, pdfs)
         try:
             imgs = [img_block(p) for p in (render(pdfs[ex], pg, self.paths.pages, f"ex{ex}") for pg in c["pages"]) if p]
             if not imgs:
@@ -138,7 +141,7 @@ class Round:
                 self.doorway,
                 self.model,
                 c["claim"],
-                imgs,
+                imgs + extra,
                 f"Exhibit {ex} p.{c['page_spec'] or '1'}",
                 custom_id=c["key"],
             )
@@ -154,7 +157,7 @@ class Round:
                 try:
                     wimgs = [
                         img_block(p) for p in (render(pdfs[ex], pg, self.paths.pages, f"ex{ex}") for pg in wide) if p
-                    ]
+                    ] + extra
                     wv = VF.verify_image(
                         self.doorway,
                         self.model,
@@ -409,7 +412,9 @@ class Round:
         for c in live:
             c["anchors"] = AN.find_anchors(c["claim"])
             np_ = index.npages(c["exhibit"]) or c["npages"]
-            win = AN.choose_window(c["pages"], np_, index, c["exhibit"], c["anchors"], cap=WINDOW_CAP)
+            # A positive result with a negation beside it, on its page or the
+            # next one, is read on the images (``negation.py``).
+            win = NG.window(c, index, np_, AN.choose_window, WINDOW_CAP)
             if win is None:
                 cls = next(
                     (

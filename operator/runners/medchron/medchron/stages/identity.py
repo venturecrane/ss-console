@@ -27,7 +27,7 @@ def _foreign_folded(sr: StageRun) -> list[str]:
         rid = str(r.get("id") or "")
         tp = sr.slug_dir / "text" / f"{rid}.txt"
         text = tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else ""
-        found = FI.findings(text, surnames, dobs)
+        found = FI.findings(text, surnames, dobs, FI.first_names(sr.job.units))
         if found and rid not in free and rid.removeprefix("msgatt-") not in free:
             out.append(f"{rid}: {'; '.join(found)}")
     return out

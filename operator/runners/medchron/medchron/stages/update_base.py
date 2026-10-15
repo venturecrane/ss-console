@@ -23,8 +23,8 @@ to carry it. The hold line gives counts and paragraph indexes, never the
 chronology's words. A pull that fails for a retryable reason is exit 1.
 
 The delivered exhibits are copied to ``out/<unit>/`` as well: the audit of the
-new claims renders cited pages from there (the rewritten Prior Medical History
-cites delivered exhibits), and the pre-delivery review checks every citation
+new claims renders cited pages from there (a new claim may cite a delivered
+exhibit), and the pre-delivery review checks every citation
 against the exhibits the firm will hold.
 """
 

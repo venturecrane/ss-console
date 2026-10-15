@@ -40,6 +40,14 @@ CASES = [
     ("litigation", "something_new: never seen", "smd_finishing", "gate_held"),
     (
         "medchron",
+        "update_held: the independent review of the update left must-fix findings the finisher could not correct "
+        "against the pages; SMD finishes it; last output: update_held: ... entry N2 (Exhibit 4, page 9): the "
+        "report is no longer in its folder",
+        "smd_finishing",
+        "update_held",
+    ),
+    (
+        "medchron",
         "update_held: the delivered chronology does not re-render to itself (4 differing paragraph(s))",
         "smd_finishing",
         "update_held",

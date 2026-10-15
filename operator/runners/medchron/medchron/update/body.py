@@ -19,7 +19,13 @@ SECTIONS = (
     "## Exhibit List",
     "## Records Reviewed and Limitations",
 )
-ENTRY = re.compile(r"(?m)^(?=\d{2}/\d{2}/\d{4}\s*(?:\(|$))")
+#: An entry's date line: MM/DD/YYYY, or a month and day with no year
+#: ("07/18 (year not stated)"), which compose writes for a handwritten log row
+#: that shows none. Both start an entry: a yearless one read as body text
+#: rode inside the entry before it, unseen by the handwritten re-date
+#: (2026-10-14 parity run). collect gives it a year (``handwritten.with_years``).
+HEAD = re.compile(r"\d{2}/\d{2}/\d{4}\s*(?:\(|$)|\d{1,2}/\d{1,2}(?![/\d])\s*(?:\(|$)", re.M)
+ENTRY = re.compile(r"(?m)^(?=" + HEAD.pattern + ")")
 DATED = re.compile(r"\d{2}/\d{2}/\d{4}")
 DATE = re.compile(r"^(\d{2})/(\d{2})/(\d{4})")
 CITE = re.compile(r"\(Exhibit (\d+)(?: - p\. ([0-9,\s\-]+))?\)")
@@ -48,8 +54,8 @@ def sections(md: str) -> dict[str, str]:
 def split_body(body: str) -> tuple[str, list[str]]:
     """(preamble, [entries]); an entry runs from its date line to the next."""
     parts = ENTRY.split(body)
-    pre = "" if DATED.match(parts[0].lstrip()[:10]) else parts[0]
-    return pre, [p.strip("\n") for p in parts if DATED.match(p[:10])]
+    pre = "" if HEAD.match(parts[0].lstrip()) else parts[0]
+    return pre, [p.strip("\n") for p in parts if HEAD.match(p)]
 
 
 def entries_of(md: str) -> tuple[str, list[str]]:
@@ -60,6 +66,39 @@ def entries_of(md: str) -> tuple[str, list[str]]:
 def iso(e: str) -> str:
     m = DATE.match(e)
     return f"{m.group(3)}-{m.group(1)}-{m.group(2)}" if m else ""
+
+
+def other_date(dropped: str, survivor: str) -> str:
+    """'' when `survivor`'s date line states the date `dropped`'s does, else
+    why not. An entry dropped or folded into another loses its own date line,
+    and the body comparison never sees it (2026-10-15: a heading dated by a
+    pathology order's signature date was dropped into another visit and proof
+    10 found the date gone)."""
+    a, b = iso(dropped), iso(survivor)
+    if a and a == b:
+        return ""
+    return f"it is dated {dropped[:10]}, the survivor {survivor[:10]}; a visit's date is never folded away"
+
+
+#: A date line whose date is when the record was printed, released, faxed,
+#: requested or received ("10/09/2026 (record print date)"), or the as-of or
+#: generated date of a printout ("09/11/2026 (problem list as-of date)"): not
+#: a date of service. Such an entry is kept, and is never a visit.
+RECORDS_MARK = "(records date, not a date of service)"
+RECORDS_DATE = re.compile(
+    re.escape(RECORDS_MARK)
+    + r"|\([^)]*\b(?:print(?:ed)?|release[ds]?|fax(?:ed)?|received|request(?:ed)?|run)\b[^)]*\bdate\b[^)]*\)"
+    r"|\([^)]*\bdate\b[^)]*\b(?:print(?:ed)?|release[ds]?|fax(?:ed)?|received|request(?:ed)?)\b[^)]*\)"
+    r"|\([^)]*\b(?:as[- ]of|generated|printout)\b[^)]*\)",
+    re.I,
+)
+
+
+def is_service(e: str) -> bool:
+    """False when the entry's date line marks its date as a records date
+    (printed, released, faxed, requested, received), never a visit."""
+    head = e.splitlines()[0] if e else ""
+    return bool(DATE.match(head)) and not RECORDS_DATE.search(head[10:])
 
 
 def provider_of(e: str) -> str:

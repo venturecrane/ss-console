@@ -146,7 +146,7 @@ def _entries_md(t: Any, subsections: set[str]) -> list[str]:
         left, right = row.cells[0], row.cells[1]
         lp = [p.text for p in left.paragraphs]
         body = [p.text.strip() for p in right.paragraphs]
-        head = next((b for b in body if b in subsections), "")
+        head = next((b for b in body if b in subsections or b == "Additional findings"), "")
         who = lp[1].strip() if len(lp) > 1 else ""
         lines = [lp[0].strip(), f"{who} | {head}" if head else who, "", *body]
         while lines and lines[-1] == "":

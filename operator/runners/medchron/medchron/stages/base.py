@@ -74,6 +74,11 @@ class StageRun:
             )
         return self._doorway
 
+    def network_failures(self) -> list[str]:
+        """The calls this stage's doorway gave up on after its network-retry
+        budget; empty when it never built one."""
+        return list(self._doorway.gave_up) if self._doorway is not None else []
+
     @property
     def slug(self) -> str:
         return self.job.slug

@@ -80,13 +80,13 @@ def _manifest_names(sr: StageRun) -> list[str]:
 # ---- the review ------------------------------------------------------------------
 
 
-def test_a_clean_chronology_passes_on_the_audit_tier_with_no_notes_file(job_dir, firm_config_path, data_root):
+def test_a_clean_chronology_passes_on_the_strongest_tier_with_no_notes_file(job_dir, firm_config_path, data_root):
     sr, log = _package(job_dir, firm_config_path, data_root)
     d = FakeDoorway(CLEAN)
     assert _review(sr, d) == 0
     rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
     assert proof_review.status(rec) == "passed" and rec["findings"] == []
-    assert d.calls[0]["stage"] == "review" and d.calls[0]["model"] == sr.cfg.get("models", "tiers")["audit"]
+    assert d.calls[0]["stage"] == "review" and d.calls[0]["model"] == sr.cfg.get("models", "tiers")["judgment"]
     assert not any("Review Notes" in n for n in _manifest_names(sr))
     assert (
         "Alpha Example" in d.calls[0]["messages"][0]["content"]

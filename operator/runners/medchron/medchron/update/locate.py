@@ -8,8 +8,12 @@ is trusted for it. When the requester's skill named the document by id, that
 id must be a live document of that name, or the update holds.
 
 The chronology folder is the folder that document sits in. Its exhibits are
-the files named "Exhibit N - <title>.pdf" there; every other file in it is the
-firm's or an earlier package's, and the update never touches it.
+the files named "Exhibit N - <title>.pdf" there, and also the firm's own
+numbered files ("Exhibit 6- <title>.pdf", "Exhibit 6: ...", an en dash): a
+number the folder already holds is taken, so the update's new exhibits start
+above the highest of them and never file a second "Exhibit 6". Every other
+file in it is the firm's or an earlier package's, and the update never
+touches it.
 """
 
 from __future__ import annotations
@@ -17,7 +21,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-EXHIBIT_FILE = re.compile(r"^Exhibit (\d+) - .+\.pdf$", re.I)
+EXHIBIT_FILE = re.compile(r"^Exhibit\s*(\d+)\s*[-\u2013:]\s*.+\.pdf$", re.I)
 
 
 class LocateHold(ValueError):
