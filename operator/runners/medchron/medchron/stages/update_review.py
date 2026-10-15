@@ -399,7 +399,9 @@ def finish(c: Ctx, md: str, found: list[RR.Finding], base: list[str], doc: Path)
     for i, f in enumerate(todo, 1):
         f.fid = f"F{i}"
     ents = RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg))
-    edits, left = _finish_calls(c, todo, ents, base)
+    auto, ask = IL.drop_on_noted(todo, ents)  # no model: a drop on a noted handwritten entry
+    edits, left = _finish_calls(c, ask, ents, base) if ask else ([], {})
+    edits += auto
     new_md, edited = _apply(c, md, edits, base)
     bad, untraced = FN.failed(edits, c.verify(md, new_md)) if new_md != md else ([], 0)
     if bad:

@@ -66,6 +66,27 @@ def _finding(klass: str, anchor: str) -> RR.Finding:
     return RR.Finding("MUST", klass, anchor, 6, 14, "x", "replace", "", "")
 
 
+def test_a_mark_or_process_finding_on_a_noted_entry_is_dropped_without_the_model():
+    md, _ = IL.restore(
+        [COMPOSED],
+        doc(COMPOSED.replace("Low back pain 6/10", "Cervical circled; pain 6/10")),
+        [],
+        HW,
+        trimmed={(6, 14)},
+    )
+    ents = RR.anchor_entries(md, {6}, set())
+    found = [_finding("9 marks on a form", "N1.c1"), _finding("1 wrong value", "N1.c1")]
+    for i, f in enumerate(found, 1):
+        f.fid = f"F{i}"
+    auto, rest = IL.drop_on_noted(found, ents)
+    assert [(e.action, e.anchor, e.fid) for e in auto] == [("drop", "N1.c1", "F1")]
+    assert [f.klass for f in rest] == ["1 wrong value"]
+    assert found[0].action == "replace"  # the finding itself is not changed
+    # the same finding on an entry without the note goes to the finisher
+    plain = RR.anchor_entries(doc(COMPOSED), {6}, set())
+    assert IL.drop_on_noted(found[:1], plain) == ([], found[:1])
+
+
 def test_the_review_settles_omissions_on_a_noted_entry_but_never_a_stated_value():
     md, _ = IL.restore([COMPOSED], doc(HEAD), [], HW)
     ents = RR.anchor_entries(md, {6}, set())

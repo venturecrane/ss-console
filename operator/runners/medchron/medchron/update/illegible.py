@@ -26,10 +26,11 @@ written. A value the entry states is still answerable to the review.
 
 from __future__ import annotations
 
+import copy
 import re
 from typing import Callable
 
-from . import body as B
+from . import body as B, review_repair as RR
 
 #: Verbatim from ``prompts/map-system.md`` (the map prompt's handwritten rule).
 HOUSE_NOTE = (
@@ -38,6 +39,12 @@ HOUSE_NOTE = (
 )
 #: Finding classes the note answers: what the entry does not say.
 SETTLES = ("omitted", "truncated")
+#: Finding classes on a noted entry answered by dropping the sentence: a mark
+#: the page does not settle, or words about the process. The d09d63c9 pass
+#: (2026-10-14) raised 11-21 "marks on a form" a round on noted ledger rows;
+#: every rewrite was reverted by the grader, which cannot read the marks
+#: either. A drop writes nothing new, so nothing is graded or reverted.
+DROPS = ("marks on a form", "process wording")
 _HEADING = re.compile(r"^\s*(#|\*\*[^*]+\*\*:?\s*$|[A-Z][A-Za-z &/()-]+:\s*$)")
 
 
@@ -88,6 +95,25 @@ def trimmed_pages(edit_rows: list[dict]) -> set[tuple[int, int]]:
         for p in re.findall(r"\d+", str(r.get("page_spec") or "")):
             out.add((int(r["exhibit"]), int(p)))
     return out
+
+
+def drop_on_noted(findings: list[RR.Finding], ents: list[RR.Entry]) -> tuple[list[RR.Finding], list[RR.Finding]]:
+    """(the drop edits for ``DROPS`` findings on a claim of a noted entry, the
+    findings left for the finisher). A delivered entry is never edited."""
+    noted = {e.anchor for e in ents if has_note(e.text)}
+    claims = {c.anchor for e in ents for c in e.claims + e.uncited}
+    auto: list[RR.Finding] = []
+    rest: list[RR.Finding] = []
+    for f in findings:
+        k = f.klass.lower()
+        if f.anchor in claims and f.anchor.split(".")[0] in noted and any(w in k for w in DROPS):
+            e = copy.copy(f)
+            e.action, e.corrected = "drop", ""
+            e.reason = "the entry carries the handwritten-records note; what the page does not settle is not stated"
+            auto.append(e)
+        else:
+            rest.append(f)
+    return auto, rest
 
 
 def restore(
