@@ -44,6 +44,9 @@ REASON_CODES = (
     "no_verdict",
     "unexpected",
     "rehearsal",
+    # 2026-10-15, the staff reassignment: a name the staff list cannot settle
+    # (unknown, more than one person, or the person to move to is inactive).
+    "staff_unresolved",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 EXIT = {"delivered": 0, "held": 1, "failed": 2}
@@ -71,6 +74,11 @@ class Verdict:
     proof: dict[str, Any] | None = None
     #: A deadlines report's named counts (``deadlines/book.py``); integers only.
     counts: dict[str, int] = field(default_factory=dict)
+    #: A staff reassignment's wake detail (``reassign/run.py``): staff names,
+    #: matter numbers and counts, never a client's name. Rides as ``reassign``.
+    detail: dict[str, Any] = field(default_factory=dict)
+    #: A staff reassignment's writes (``reassign/write.py``): method, path, status.
+    writes: list[dict[str, Any]] = field(default_factory=list)
 
     def to_json(self) -> str:
         """The interface's verdict. ``reason`` rides only when the run did not
@@ -87,6 +95,10 @@ class Verdict:
         }
         if self.counts:
             d["counts"] = {str(k): int(v) for k, v in self.counts.items()}
+        if self.detail:
+            d["reassign"] = dict(self.detail)
+        if self.writes:
+            d["writes"] = list(self.writes)
         if self.reason and self.verdict != "delivered":
             d["reason"] = self.reason[:500]
         if self.proof is not None and self.verdict == "delivered":
