@@ -84,6 +84,36 @@ PRESENT = "present"
 UNREAD = frozenset({ABSENT, EMPTY, UNRECORDED})
 
 
+_MARK = re.compile(r"^\[p\.(\d+)\]([^\n]*)$", re.M)
+
+
+def split_pages(text: str) -> dict[int, tuple[str, str]]:
+    """{page: (marker suffix, text)} of a [p.N]-marked text file."""
+    marks = list(_MARK.finditer(text or ""))
+    return {
+        int(m.group(1)): (m.group(2), text[m.end() + 1 : marks[i + 1].start() if i + 1 < len(marks) else len(text)])
+        for i, m in enumerate(marks)
+    }
+
+
+def merged(text_path: Path, pages: list[int]) -> bool:
+    """True when every one of `pages` is already a machine transcription in
+    the document's text file: the image pages of a text-layer PDF
+    (``extract.vision_pages``) have been read."""
+    if not text_path.is_file():
+        return False
+    got = split_pages(text_path.read_text(encoding="utf-8", errors="replace"))
+    return all("machine transcription" in got.get(p, ("", ""))[0] for p in pages)
+
+
+def merge_pages(native: str, done: dict[int, str], pages: list[int]) -> str:
+    """The document's text with `pages` replaced by their transcriptions."""
+    got = split_pages(native)
+    for p in pages:
+        got[p] = (" (machine transcription)", done.get(p, "") + "\n")
+    return "".join(f"[p.{n}]{suffix}\n{t}" for n, (suffix, t) in sorted(got.items())).rstrip("\n") + "\n"
+
+
 def recorded_ids(slug_dir: Path) -> set[str]:
     """Document ids the vision stage recorded a completed read for.
 

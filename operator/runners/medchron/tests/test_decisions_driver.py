@@ -596,6 +596,44 @@ def test_resume_skips_done_stages_after_a_kill(
     assert st.stage("build_units").attempts == 1 and st.stage("render").attempts == 2
 
 
+def test_a_network_failure_marks_the_outcome_transient_and_the_resume_repays_nothing(
+    job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, fake_pipeline: Path
+) -> None:
+    """2026-10-14: what the daemon requeues on (requeue.py). A stage that
+    raises a network error, or whose doorway gave up on one before the stage
+    exited non-zero, is `transient`; a defect is not. The requeued run resumes
+    in place and repeats no stage that finished."""
+    import anthropic
+    import httpx
+
+    seed_folders(data_root, ["MEDICAL"])
+
+    def dropped(sr):
+        raise anthropic.APIConnectionError(request=httpx.Request("POST", "https://api.example.test"))
+
+    d = _driver(job_dir, firm_config_path, pricing_path)
+    d._runner_override = {"render": dropped}
+    o = d.run()[0]
+    assert o.outcome == "failed" and o.stage == "render" and o.transient is True
+    assert json.loads(driver_mod.to_json([o]))[0]["transient"] is True
+    before = len(calls(data_root))
+
+    def swallowed(sr):  # the update review's shape: the doorway gave up, the stage exits 1
+        sr.doorway.gave_up.append("render: APIConnectionError after 9 network error(s) over 600s")
+        return 1
+
+    d = _driver(job_dir, firm_config_path, pricing_path)
+    d._runner_override = {"render": swallowed}
+    assert d.run()[0].transient is True
+    d = _driver(job_dir, firm_config_path, pricing_path, break_at="render")  # a RuntimeError: a defect
+    assert d.run()[0].transient is False
+    _driver(job_dir, firm_config_path, pricing_path).run()
+    assert calls(data_root)[before:] == []
+    st = RunState.load_or_new(state_path(data_root, "example-matter", "alpha"), slug="x", unit="y")
+    assert st.outcome == "delivered"
+    assert st.stage("download").attempts == 1 and st.stage("build_units").attempts == 1
+
+
 def test_cap_refuses_before_the_first_paid_stage(
     job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, fake_pipeline: Path
 ) -> None:

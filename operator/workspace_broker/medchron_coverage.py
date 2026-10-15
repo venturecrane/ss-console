@@ -9,10 +9,12 @@ the allowance. Neither half reaches into the other's concerns.
 
 Why the record exists at all: routine 11's UPDATE reads only the records the
 delivered chronology did not cover (agreement Exhibit A). That sentence needs a
-record, and an update SKIPS whatever the record says was covered -- so every
-rule in this module breaks toward re-reading a document and away from marking
-one covered. A re-read costs pages. A record dropped from a filed litigation
-chronology cannot be recovered.
+record, and an update SKIPS whatever the record says was covered -- so the
+rules here break toward re-reading a document and away from marking one
+covered (a re-read costs pages; a record dropped from a filed litigation
+chronology cannot be recovered), with one exception that follows from what an
+update does: across deliveries, the NEWEST row that names a document decides
+it, because the newest chronology replaced the ones before it.
 """
 
 from __future__ import annotations
@@ -95,20 +97,29 @@ def union_coverage(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     documents were never covered -- so it re-reads the entire matter, thousands
     of pages against a cycle allowance, on every matter, forever.
 
-    `uncovered` wins the union, the same direction the runner's own
-    `merge_covered` takes: a document one delivery cited and another could not
-    use is read again.
+    Per document id, the NEWEST delivered row that names it decides covered or
+    uncovered, because an update REPLACES the delivered document: what the
+    newest chronology holds is what the firm holds. An id only older rows name
+    keeps its status from the newest of them, which is what keeps the union
+    cumulative. Before (2026-10-13), `uncovered` won across every row, so an id
+    an early delivery could not use stayed uncovered after a later update cited
+    it, and the next update read it again (70 ids on one matter). Within ONE
+    job the runner's `merge_covered` still lets `uncovered` win across units:
+    those are concurrent parts of one delivery, not a replacement.
+
+    Rows are ordered here by `created_at` (then `updated_at`), never by the
+    caller's order; a row without either sorts first, in the order given.
 
     A row whose JSON will not parse is skipped rather than failing the matter.
     One corrupt record must not make a matter's whole history unreadable, and
     the conservative outcome of skipping it is that its documents read as
     uncovered.
     """
-    covered: set[str] = set()
-    uncovered: set[str] = set()
+    status: dict[str, bool] = {}
     seen = False
     number = None
-    for row in rows:
+    ordered = sorted(rows, key=lambda r: (str(r.get("created_at") or ""), str(r.get("updated_at") or "")))
+    for row in ordered:
         number = row.get("matter_number") or number
         raw = row.get("covered_json")
         if not raw:
@@ -118,11 +129,14 @@ def union_coverage(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
         except ValueError:
             continue
         seen = True
-        covered |= {str(x) for x in (parsed.get("covered") or [])}
-        uncovered |= {str(x) for x in (parsed.get("uncovered") or [])}
+        for x in parsed.get("covered") or []:
+            status[str(x)] = True
+        for x in parsed.get("uncovered") or []:
+            status[str(x)] = False
     if not seen:
         return None
-    covered -= uncovered
+    covered = {k for k, v in status.items() if v}
+    uncovered = {k for k, v in status.items() if not v}
     return {
         "matter_number": number,
         "deliveries": len(rows),

@@ -22,7 +22,7 @@ import re
 from collections import defaultdict
 from typing import Any
 
-from .. import icd_tables
+from .. import icd_tables, meta_markers
 from .base import StageRun, read_json
 from .group import Canon, index_rows
 from .limitations import section as limitations_section
@@ -139,7 +139,7 @@ def run(sr: StageRun) -> int:
     body_src = rd / "entries_scoped_final.md"
     if not body_src.is_file():
         body_src = rd / "entries_final.md"
-    text = body_src.read_text(encoding="utf-8")
+    text = meta_markers.strip(body_src.read_text(encoding="utf-8"))  # the pipeline's own notes, before the audit
     prior_block = ""
     if body_src.name == "entries_scoped_final.md":
         try:

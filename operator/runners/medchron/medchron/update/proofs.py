@@ -1,21 +1,23 @@
 """The proofs an update must pass before anything is filed. $0.
 
  1. every Medical Summary line of the delivered document is in the updated
-    one at least as often as it was delivered (the rewritten Prior Medical
-    History block is the one delivered text not required: it is new text,
-    audited under proof 4), and no delivered sentence is carried MORE often
-    (a visit already itemized, added again as new);
+    one at least as often as it was delivered, the Prior Medical History
+    included (an update adds a dated paragraph under it and never rewrites
+    it), and no delivered sentence is carried MORE often (a visit already
+    itemized, added again as new);
  2. the delivered note that pre-incident encounters were reviewed and not
     itemized is in the updated document verbatim, as often as delivered;
     absent only when the update's own entries itemize those encounters;
  3. ZERO delivered claims were audited: no audit row is on a delivered
-    claim the audit document does not itself carry (a rewritten Prior
-    Medical History sentence may repeat a delivered one word for word, and
-    then the audit read it in the audit document, as new text);
+    claim the audit document does not itself carry (an added prior-history
+    sentence may repeat a delivered one word for word, and then the audit
+    read it in the audit document, as new text);
  4. every claim the update adds is finally audited and SUPPORTED;
  5. no planted control came back SUPPORTED, and a control was planted when
     the audit had enough claims to plant one;
- 6. no ADDED line starts with a bare '.' (what a dropped sentence leaves);
+ 6. no ADDED line starts with a bare '.' (what a dropped sentence leaves),
+    and none carries the pipeline's own note about its reading
+    ("(text continues beyond the page)", ``meta_markers``);
  7. no cited sentence appears more often than in the delivery (or more than
     once, when the delivery never had it);
  8. no ADDED entry cites only delivered exhibits (an update reads new
@@ -23,7 +25,8 @@
  9. no ADDED line carries pipeline language (chunk / excerpt / provided text);
 10. NO VALUE WAS DROPPED: every value an entry composed from a new exhibit
     states is in the updated document on that entry's date, or was named by
-    the audit as unsupported. A dedupe, a merge or a repair that loses one
+    the audit as unsupported (or corrected by the update review, which names
+    what each correction removed). A dedupe, a merge or a repair that loses one
     fails the update; the audit verifies only what remains, so a value that
     silently disappears is never seen again.
 """
@@ -35,6 +38,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
+from .. import meta_markers
 from . import body as B
 from .values import numbers
 
@@ -58,9 +62,11 @@ class Inputs:
     composed: list[str]  # every entry compose produced, in the final exhibit numbers
     audit_claims: list[dict[str, Any]]  # the claims of the AUDIT document (the new text)
     new_exhibits: set[int]
-    pmh_replaced: bool = False
     gate_passed: bool = True
     pre_note_itemized: bool = False  # assemble found the new entries itemize what the note left out
+    respelled: dict[str, str] = field(default_factory=dict)  # {composed: audited} provider spellings applied
+    #: values the update review's applied corrections removed (``review_repair.named_values``)
+    review_named: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -98,15 +104,6 @@ def cited_sentences(lines: list[str]) -> list[str]:
     return out
 
 
-def pmh_lines(base_md: str) -> set[str]:
-    """The delivered Prior Medical History block's lines, as the document reads them."""
-    pre, _ = B.entries_of(base_md)
-    m = B.PMH_HEAD.search(pre)
-    if not m:
-        return set()
-    return {re.sub(r"\s+", " ", ln.replace("**", "")).strip() for ln in pre[m.start() :].splitlines() if ln.strip()}
-
-
 def dropped_values(composed: list[str], updated_entries: list[str], new_ex: set[int], named: set[str]) -> list[tuple]:
     """[(entry head, [values])] for entries composed from a NEW exhibit whose
     values the updated document does not carry on that date and the audit did
@@ -126,9 +123,6 @@ def dropped_values(composed: list[str], updated_entries: list[str], new_ex: set[
 
 def _delivered_text(x: Inputs, r: Result) -> None:
     a = x.delivered_lines
-    if x.pmh_replaced:
-        old = pmh_lines(x.base_md)
-        a = [ln for ln in a if ln not in old]
     want = Counter(ln for ln in a if not NOTE_LINE.search(ln))
     have = Counter(x.updated_lines)
     missing = [ln for ln, n in want.items() if have[ln] < n]
@@ -146,6 +140,18 @@ def _delivered_text(x: Inputs, r: Result) -> None:
     r.check("2", ok, f"pre-incident note: {state}")
 
 
+def _as_audited(c: dict[str, Any], x: Inputs) -> str:
+    """The key of a claim as the audit document carried it, before an audited
+    provider spelling was applied to its text (``providers.respell``): the
+    spelling is itself an audited claim, so the sentence keeps its verdict."""
+    if not x.respelled:
+        return c["key"]
+    from .providers import unspell
+
+    want = (c["exhibit"], c["page_spec"], unspell(c["claim"], x.respelled))
+    return next((a["key"] for a in x.audit_claims if (a["exhibit"], a["page_spec"], a["claim"]) == want), c["key"])
+
+
 def _audit(x: Inputs, r: Result) -> None:
     base_keys = {c["key"] for c in x.base_claims}
     in_audit_doc = {c["key"] for c in x.audit_claims}
@@ -156,7 +162,7 @@ def _audit(x: Inputs, r: Result) -> None:
         if row.get("kind") == "real" and row.get("key"):
             latest[row["key"]] = row.get("verdict")
     new = [c for c in x.updated_claims if c["key"] not in base_keys]
-    unsup = [c for c in new if latest.get(c["key"]) != "SUPPORTED"]
+    unsup = [c for c in new if latest.get(c["key"]) != "SUPPORTED" and latest.get(_as_audited(c, x)) != "SUPPORTED"]
     r.check("4", not unsup and x.gate_passed, f"new claims {len(new)}; not finally SUPPORTED {len(unsup)}")
     ctl = [row for row in x.audit_rows if str(row.get("kind", "")).startswith("control")]
     bad = [row for row in ctl if row.get("verdict") == "SUPPORTED"]
@@ -168,7 +174,12 @@ def _added(x: Inputs, r: Result) -> None:
     md_lines, base_lines = B.chronology_lines(x.updated_md), B.chronology_lines(x.base_md)
     bare = [ln for ln in added_lines(x.delivered_lines, x.updated_lines) if ln.lstrip().startswith(".")]
     bare += [ln for ln in added_lines(base_lines, md_lines) if ln.lstrip().startswith(".")]
-    r.check("6", not bare, f"added lines starting with a bare '.': {len(bare)}")
+    notes = [ln for ln in added_lines(x.delivered_lines, x.updated_lines) if meta_markers.found(ln)]
+    r.check(
+        "6",
+        not bare and not notes,
+        f"added lines starting with a bare '.': {len(bare)}; carrying the pipeline's own notes: {len(notes)}",
+    )
     cd, cu = Counter(cited_sentences(x.delivered_lines)), Counter(cited_sentences(x.updated_lines))
     rep = [s for s, n in cu.items() if n > max(cd[s], 1)]
     r.check("7", not rep, f"cited sentences carried more often than delivered: {len(rep)}")
@@ -178,7 +189,7 @@ def _added(x: Inputs, r: Result) -> None:
     r.check("8", not stale, f"added entries citing no new exhibit: {len(stale)} {stale[:3]}")
     win = [ln for ln in added_lines(base_lines, md_lines) if WINDOW.search(ln)]
     r.check("9", not win, f"added lines carrying pipeline language: {len(win)}")
-    named: set[str] = set()
+    named: set[str] = set(x.review_named)
     for row in x.audit_rows:
         named |= numbers(" ".join((row.get("unsupported_assertions") or []) + (row.get("contradictions") or [])))
     lost = dropped_values(x.composed, ue, x.new_exhibits, named)

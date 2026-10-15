@@ -186,3 +186,71 @@ def foreign_docx(dst: Path, *, note: str | None = None, typed: str | None = None
     dst.parent.mkdir(parents=True, exist_ok=True)
     d.save(str(dst))
     return dst
+
+
+CLEAN_REVIEW = '{"findings": [], "complete": true}'
+
+
+def part_anchors(content: list[dict]) -> list[str]:
+    """The added entries a review part shows (its ``ADDED ENTRIES`` line)."""
+    for b in content:
+        t = b.get("text", "") if isinstance(b, dict) else ""
+        if "ADDED ENTRIES IN THIS PART: " in t:
+            return t.split("ADDED ENTRIES IN THIS PART: ", 1)[1].split("\n", 1)[0].split(", ")
+    return []
+
+
+def review_for_part(reply: str, content: list[dict]) -> str:
+    """A scripted review reply cut to the findings on this part's entries (a
+    delivered entry's finding is in every part; the stage deduplicates)."""
+    import json
+
+    names = set(part_anchors(content))
+    found = [
+        f
+        for f in json.loads(reply)["findings"]
+        if str(f.get("anchor", "")).split(".")[0] in names or str(f.get("anchor", "")).startswith("D")
+    ]
+    return json.dumps({"findings": found, "complete": True})
+
+
+class ScriptedDoor:
+    """A doorway for the update review stage: the review answers from
+    `reviews` by round (the last repeated), cut to each part's entries; the
+    finisher answers from `finishes` in order (the last repeated). The
+    stage's prompts must load as their names (``prompts.load`` patched)."""
+
+    def __init__(self, reviews: list[str], finishes: list[str] | None = None) -> None:
+        self.reviews, self.finishes = reviews, list(finishes or ['{"edits": [], "complete": true}'])
+        self.seen: list[dict] = []
+        self.review_calls: list[dict] = []
+
+    def call(self, _stage: str, **kw):
+        self.seen.append(kw)
+        content = kw["messages"][0]["content"]
+        if kw.get("system") == "update-finish-system":
+            text = self.finishes.pop(0) if len(self.finishes) > 1 else self.finishes[0]
+        else:
+            self.review_calls.append(kw)
+            rnd = int(str(kw.get("custom_id", "x-r1-")).split("-r", 1)[1].split("-", 1)[0])
+            text = review_for_part(self.reviews[min(rnd, len(self.reviews)) - 1], content)
+
+        class _R:
+            stop_reason, usage = "end_turn", None
+
+        r = _R()
+        r.text = text  # type: ignore[attr-defined]
+        return r
+
+
+def finish_reply(review_reply: str) -> str:
+    """The finisher's reply making, for each finding of a review reply written
+    in the review-repair form (action + corrected), that same edit. Findings
+    are numbered F1... as the stage numbers them (a delivered entry's finding
+    is never sent to the finisher)."""
+    import json
+
+    found = json.loads(review_reply)["findings"]
+    todo = [f for f in found if not str(f.get("anchor", "")).startswith("D")]
+    edits = [{**f, "finding": f"F{i}"} for i, f in enumerate(todo, 1)]
+    return json.dumps({"edits": edits, "unresolved": [], "complete": True})

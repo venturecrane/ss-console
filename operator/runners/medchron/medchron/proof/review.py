@@ -38,7 +38,13 @@ from typing import Any, Callable, Iterable
 MUST, SHOULD, NOTE = "MUST-FIX", "SHOULD-FIX", "NOTE"
 GRADES = (MUST, SHOULD, NOTE)
 RECORD = "review.json"
-REVIEW_MAX_TOKENS = 16_000
+# The output budget of one review call: thinking at effort "high" plus the
+# findings table plus the VERDICT line all come out of it. 16,000 ran out on a
+# 422-entry update (138,138 in / 16,000 out, twice, no verdict, 2026-10-14).
+REVIEW_MAX_TOKENS = 64_000
+# The largest budget a review escalates to: the documented streamed output
+# maximum of every model a firm tiers for review (``demand.gapaudit.OUTPUT_MAX``).
+REVIEW_MAX_TOKENS_CEILING = 128_000
 _ROW = re.compile(r"^\s*\|\s*(MUST-FIX|SHOULD-FIX|NOTE)\s*\|(.*)\|\s*$", re.I)
 _VERDICT = re.compile(r"(?im)^\s*VERDICT:\s*(\d+)\s*MUST-FIX\b")
 _CHECK_NO = re.compile(r"^\s*(\d{1,2})\b")
@@ -47,6 +53,12 @@ _CHECK_NO = re.compile(r"^\s*(\d{1,2})\b")
 class ReviewIncomplete(RuntimeError):
     """The model review did not finish (twice). The job fails resumable: an
     unreviewed document is never filed."""
+
+
+class ReviewTruncated(ReviewIncomplete):
+    """The review ran out of output at the largest budget before its VERDICT.
+    The same request would stop the same way, so it is never sent again: a
+    caller that can split its material reviews it in smaller parts."""
 
 
 @dataclass
@@ -87,6 +99,16 @@ def complete(text: str) -> bool:
     return bool(_VERDICT.search(text))
 
 
+def _next_budget(max_tokens: int, stop: str) -> int | None:
+    """The budget for the retry, or None when there is to be none. A stop at
+    ``max_tokens`` retries only with MORE output (an identical request would
+    stop identically); any other unfinished stop retries once as it was."""
+    if stop != "max_tokens":
+        return max_tokens
+    bigger = min(max_tokens * 2, REVIEW_MAX_TOKENS_CEILING)
+    return bigger if bigger > max_tokens else None
+
+
 def run_model(
     doorway: Any,
     model: str,
@@ -98,22 +120,35 @@ def run_model(
     max_tokens: int = REVIEW_MAX_TOKENS,
     stage: str = "review",
 ) -> list[Finding]:
-    """One adversarial review call, retried once when it does not finish. The
+    """One adversarial review call, retried once when it does not finish:
+    with a larger output budget when it stopped at ``max_tokens``, never the
+    identical request. Raises ``ReviewTruncated`` when the output ran out at
+    the ceiling (the caller may split), ``ReviewIncomplete`` otherwise. The
     stage name is ``review`` so the job's ledger prices it apart."""
     holds = tuple(hold_checks)
+    budget: int | None = max_tokens
+    stop = ""
     for attempt in (1, 2):
+        if budget is None:
+            break
         r = doorway.call(
             stage,
             model=model,
             system=system,
             messages=[{"role": "user", "content": user}],
-            max_tokens=max_tokens,
+            max_tokens=budget,
             stream=True,
             effort="high",
             custom_id=f"{stage}-{key}-{attempt}",
         )
-        if r.stop_reason != "max_tokens" and complete(r.text):
+        stop = str(r.stop_reason or "")
+        if stop != "max_tokens" and complete(r.text):
             return parse(r.text, holds)
+        budget = _next_budget(budget, stop)
+    if stop == "max_tokens":
+        raise ReviewTruncated(
+            "the pre-delivery review ran out of output before its verdict at the largest output budget"
+        )
     raise ReviewIncomplete("the pre-delivery review did not complete")
 
 
@@ -255,6 +290,7 @@ __all__ = [
     "release_requested",
     "Finding",
     "ReviewIncomplete",
+    "ReviewTruncated",
     "code",
     "complete",
     "forget",

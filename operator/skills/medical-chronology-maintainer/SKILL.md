@@ -380,8 +380,16 @@ reported, never read.
    rules, so this list IS the selection: keep medical records and medical
    bills (files in the matter's medical folders, or plainly records by their
    name), and leave out photos, correspondence and emails, demands, pleadings,
-   investigation and background reports, and expert or life-care reports. Say
-   in the reply which kinds were left out. A record that names another person
+   and investigation and background reports. Say in the reply which kinds were
+   left out. **Name the firm's own exhibits the delivery never read:** a file
+   named "Exhibit N- ..." in the delivered chronology's folder that the
+   delivered Exhibit List does not name is a record the firm added there, so
+   name it; the runner reads it and keeps the firm's number for it. **Name
+   medical-legal reports too:** life care plans, future care assessments,
+   IMEs, record reviews and expert reports are named like any record. The
+   runner recognizes them, reads only what it needs to classify them, and
+   lists them in Records Reviewed as reviewed and not itemized, so leaving one
+   out would leave Records Reviewed incomplete. A record that names another person
    (a different name or date of birth than the client's) is never named; say
    that you left it out and why.
 2. **The ledger memo as cross-check.** The covered-set header this skill writes at
