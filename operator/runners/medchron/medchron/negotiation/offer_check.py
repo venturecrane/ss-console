@@ -211,6 +211,17 @@ def remember(state: Path, items: list[dict[str, Any]]) -> None:
     tmp.replace(p)
 
 
+def pages_smd(rec: dict[str, Any]) -> bool:
+    """Whether a FINAL hold pages SMD: an offer the other side made (a notice
+    kind). WHY (2026-10-15): every hold paged on every run, so one document paged
+    up to three times while its retries ran, and every page that week was the
+    firm's OWN demand held correctly (quoted second-hand, a coverage limit read as
+    a demand, an illegible letterhead date). Those are kept in ``held.json`` and
+    the verdict; an offer TO the client that never reached the firm's tabs is
+    the miss SMD must hear about."""
+    return str(rec.get("kind")) in rows_mod.NOTICE_KINDS
+
+
 def proof(counts: dict[str, int], by_stage: dict[str, float]) -> dict[str, Any]:
     """The delivered verdict's proof block (``medchron.proof.gate``). ``rows``:
     rows written AND read back. A run that confirmed none delivered nothing to
@@ -220,7 +231,7 @@ def proof(counts: dict[str, int], by_stage: dict[str, float]) -> dict[str, Any]:
     rows = int(counts.get("rows_read_back") or 0)
     ran = int(counts.get("offers_reviewed") or 0) > 0
     alerts = []
-    if counts.get("offers_held_review"):
+    if counts.get("offers_held_final"):
         alerts.append("review_held")
     if counts.get("rows_readback_mismatch"):
         alerts.append("readback_mismatch")
