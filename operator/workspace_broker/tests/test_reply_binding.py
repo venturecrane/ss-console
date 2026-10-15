@@ -1000,3 +1000,91 @@ def test_a_notice_whose_recipient_is_no_longer_authored_sends_nothing(tmp_path: 
     out = _call(_broker(tmp_path, box, other), "msgraph_reply_bind", {"kind": "negotiation_job", "job_id": notice})
     assert out["bound"] is False and "nothing was sent" in out["reason"]
     assert _sendmails(box) == []
+
+
+# -- SMD notes (2026-10-15). SMD records words against a colleague's request
+# email (note_verbs.py, root only); the smd-note skill's DELIVER turn binds the
+# note and sends them as a reply in her thread, copying that email's vetted
+# participants. A note is born delivered, so it is owed exactly one reply.
+
+OFFICE = "office@firm.example"
+
+
+def _note(tmp_path: Path, requester: str = ADMIN, ref: str = GRAPH_ID) -> str:
+    from workspace_broker.note_ledger import NoteLedger
+
+    return NoteLedger(str(tmp_path / "audit.db")).create(
+        requester=requester, request_ref=ref, text="Filed.", approved_by="smd", recorded_by="root"
+    )
+
+
+def _note_box(**over) -> FakeMailbox:
+    return FakeMailbox(
+        toRecipients=[{"emailAddress": {"address": MAILBOX}}, {"emailAddress": {"address": OFFICE}}],
+        ccRecipients=[{"emailAddress": {"address": STRANGER}}],
+        **over,
+    )
+
+
+def test_a_note_replies_in_the_requesters_thread_copying_her_participants(tmp_path: Path) -> None:
+    from workspace_broker.note_ledger import NoteLedger
+
+    note = _note(tmp_path)
+    box = _note_box()
+    _ack_in_thread(box)  # an answered thread does not stop a note: the note is SMD's own
+    broker = _broker(tmp_path, box)
+    bound = _call(broker, "msgraph_reply_bind", {"kind": "note_job", "job_id": note})
+    assert bound["bound"] is True and bound["sender"] == ADMIN and bound["mode"] == "reply"
+    out = _send(broker, {"kind": "note_job", "job_id": note})
+    assert out["recipients"] == [ADMIN, OFFICE]
+    assert len(box.replies()) == 1 and f"/messages/{GRAPH_ID}/reply" in box.replies()[0]
+    assert NoteLedger(broker.audit_db_path).read(note)["reply_key"] == "1:delivered"
+    assert bound_replies.claimed(broker.audit_db_path, f"note_job:{note}:1:delivered")
+
+
+def test_a_note_is_sent_once(tmp_path: Path) -> None:
+    note = _note(tmp_path)
+    box = _note_box()
+    _send(_broker(tmp_path, box), {"kind": "note_job", "job_id": note})
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box), {"kind": "note_job", "job_id": note})
+    assert len(box.replies()) == 1
+
+
+def test_a_note_whose_email_someone_else_sent_is_refused(tmp_path: Path) -> None:
+    note = _note(tmp_path, requester="other@firm.example")
+    out = _call(_broker(tmp_path, _note_box()), "msgraph_reply_bind", {"kind": "note_job", "job_id": note})
+    assert out["bound"] is False and "not the person who requested" in out["reason"]
+
+
+def test_a_note_graph_4xx_gives_the_reply_back(tmp_path: Path) -> None:
+    from workspace_broker.note_ledger import NoteLedger
+
+    note = _note(tmp_path)
+    box = _note_box()
+    box.post_status = 403
+    broker = _broker(tmp_path, box)
+    with pytest.raises(Exception):
+        _send(broker, {"kind": "note_job", "job_id": note})
+    assert NoteLedger(broker.audit_db_path).read(note)["reply_key"] is None
+    assert not bound_replies.claimed(broker.audit_db_path, f"note_job:{note}:1:delivered")
+    box.post_status = None
+    assert _send(_broker(tmp_path, box), {"kind": "note_job", "job_id": note})["recipients"] == [ADMIN, OFFICE]
+
+
+def test_a_note_id_resolves_to_the_note_ledger(tmp_path: Path) -> None:
+    """FALSIFIER: drop the note_job branch in _marking_ledger and the id is
+    looked up on another lane's ledger, where it does not exist."""
+    from workspace_broker import reply_binding
+    from workspace_broker.note_ledger import NoteLedger
+
+    note = _note(tmp_path)
+    broker = _broker(tmp_path, _note_box())
+    assert isinstance(reply_binding.job_ledger(broker, "note_job"), NoteLedger)
+    assert reply_binding.job_ledger(broker, "note_job").read(note)["id"] == note
+
+
+def test_a_demand_id_is_not_a_note(tmp_path: Path) -> None:
+    job = _job(tmp_path, ["running", "delivered"])
+    out = _call(_broker(tmp_path, _note_box()), "msgraph_reply_bind", {"kind": "note_job", "job_id": job})
+    assert out["bound"] is False and "no SMD note job" in out["reason"]

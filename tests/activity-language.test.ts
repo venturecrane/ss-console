@@ -113,6 +113,7 @@ describe('activity-language exhaustiveness (writer parity)', () => {
         'NEGOTIATION_JOB_DELIVERED',
         'NEGOTIATION_JOB_FAILED',
         'NEGOTIATION_JOB_RESUME_REQUESTED',
+        'NOTE_JOB_RECORDED',
         'AGENT_STOPPED',
         'COMPLIANCE_PACKET_EXPORTED',
         // ss#2122: a Named Administrator pulled the per-matter audit record
@@ -243,6 +244,7 @@ describe('failure outcomes are visible to the client (ss#2320)', () => {
     ['NEGOTIATION_JOB_DELIVERED', 'Checked for new offers and kept Negotiation Details current'],
     ['NEGOTIATION_JOB_FAILED', 'Could not finish a check for new offers'],
     ['NEGOTIATION_JOB_RESUME_REQUESTED', 'Was asked to resume a check for new offers'],
+    ['NOTE_JOB_RECORDED', 'Was given a note from SMD to send to your team'],
   ]
 
   for (const [action, copy] of outcomes) {

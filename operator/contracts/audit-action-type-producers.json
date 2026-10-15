@@ -542,6 +542,11 @@
       "producerFile": "operator/workspace_broker/negotiation_verbs.py",
       "reason": "A person asked the runner to resume a failed negotiation job (negotiation_job_resume, root only), with a reason."
     },
+    "NOTE_JOB_RECORDED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/note_ledger.py",
+      "reason": "An SMD note (the type is note_ledger.AUDIT_TYPE; note_verbs.py appends the row). The workspace broker appends one row when root records approved words against a colleague's recent request email (note_record): note id, the text's digest, the requester's hashed key, who approved it and how many are copied; never the words."
+    },
     "ACT_PROPOSED": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/establishment_constants.py",

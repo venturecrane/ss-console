@@ -11,7 +11,7 @@ from typing import Any, Callable
 logger = logging.getLogger("medchron.daemon")
 
 #: The lanes, in start order. A name not in ``_module`` is refused.
-LANES = ("drafting_lane", "litigation_lane", "negotiation_lane")
+LANES = ("drafting_lane", "litigation_lane", "negotiation_lane", "note_lane")
 
 
 def _module(name: str) -> Any:
@@ -28,6 +28,10 @@ def _module(name: str) -> Any:
         from . import negotiation_lane
 
         return negotiation_lane
+    if name == "note_lane":
+        from . import note_lane
+
+        return note_lane
     raise ValueError(f"no lane module {name!r}")
 
 
