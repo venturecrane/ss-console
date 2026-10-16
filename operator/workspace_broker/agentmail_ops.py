@@ -257,6 +257,7 @@ class AgentMailOps:
             "to": _as_addresses(found.get("to")),
             "cc": _as_addresses(found.get("cc")),
             "conversation_id": _thread_id(found),
+            "subject": str(found.get("subject") or ""),
         }
 
     def send(self, payload: dict[str, Any]) -> dict[str, Any]:

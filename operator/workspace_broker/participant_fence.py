@@ -137,6 +137,8 @@ class Participants:
     cc: tuple[str, ...] = ()
     conversation_id: str = ""
     message_id: str = ""
+    #: Read by the rehearsal fence only (rehearsal_fence.py).
+    subject: str = ""
 
     def everyone(self) -> frozenset[str]:
         return frozenset(a for a in (self.sender, *self.to, *self.cc) if a)

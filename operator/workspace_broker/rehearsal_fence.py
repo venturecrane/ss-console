@@ -12,7 +12,8 @@ THE RULE. A transmit whose subject carries a rehearsal or test marker is
 refused unless every recipient is SMD-owned: an SMD domain, or one of SMD's
 own probe inboxes (``ss-probe-*@agentmail.to``, the stand-ins rehearsals
 address as a firm person). A marked reply is refused unless the email it
-answers came from an SMD-owned address. The recipient is the model's choice
+answers came from an SMD-owned address, or the marker is inherited (see
+:func:`check`). The recipient is the model's choice
 on every turn; whether a message announces itself as a rehearsal is the
 message's own text, so this holds no matter which prompt, lane or approval
 produced the send.
@@ -32,7 +33,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable
 
-from .participant_fence import FENCE_REHEARSAL, SMD_DOMAINS, FenceRefused
+from .participant_fence import FENCE_REHEARSAL, SMD_DOMAINS, FenceRefused, Participants
 from .recipient_policy import domain_of, normalize_address
 
 _BRACKETED = re.compile(r"\[\s*(?:rehearsal|test|smd-probe|probe|dry[\s-]?run)\b[^\]]*\]", re.IGNORECASE)
@@ -52,32 +53,53 @@ def is_smd_owned(address: str) -> bool:
     return domain_of(value) in SMD_DOMAINS or bool(_PROBE_INBOX.match(value))
 
 
-def check_send(subject: object, recipients: Iterable[str]) -> None:
-    """Refuse a marked send that would reach anyone outside SMD."""
+def check(
+    subject: object,
+    recipients: Iterable[str],
+    answered: Callable[[], Participants] | None,
+    *,
+    reply: bool = False,
+) -> None:
+    """Refuse a marked transmit that would reach anyone outside SMD, unless the
+    marker is INHERITED from a conversation the outsider is already in.
+
+    ``answered`` reads the email this transmit answers (the reply's target, or a
+    send's anchor); ``None`` when it answers nothing. A reply reaches that
+    email's sender, so for a reply the recipient set is that sender.
+
+    INHERITED (2026-10-16, the same day): the client answered the leaked
+    rehearsal in its own thread, so every reply to him now carries
+    "Re: [Rehearsal 2]". Refusing those would cut off a live client because of
+    SMD's mistake. A marker passes only when the email being answered already
+    carries it, was written by the outsider (not by SMD), and every outside
+    recipient was already on it. A NEW marked email to a client has no such
+    email to answer, and is refused.
+    """
     if not is_marked(subject):
         return
+    if reply:
+        if answered is None:
+            raise FenceRefused(FENCE_REHEARSAL, "a marked reply must name the email it answers.")
+        home = answered()
+        recipients = [home.sender]
     outside = sorted({normalize_address(r) for r in recipients if r and not is_smd_owned(r)})
-    if outside:
-        raise FenceRefused(
-            FENCE_REHEARSAL,
-            f"this email is marked as a rehearsal or test and would reach {len(outside)} recipient(s) "
-            "outside SMD: " + ", ".join(outside) + ". A rehearsal goes to SMD only.",
-            outside,
-        )
-
-
-def check_reply(subject: object, original_sender: Callable[[], str]) -> None:
-    """Refuse a marked reply unless the email it answers came from SMD."""
-    if not is_marked(subject):
+    if not outside:
         return
-    sender = original_sender()
-    if not sender or not is_smd_owned(sender):
-        raise FenceRefused(
-            FENCE_REHEARSAL,
-            "this reply is marked as a rehearsal or test and answers an email from outside SMD. "
-            "A rehearsal goes to SMD only.",
-            [sender] if sender else [],
-        )
+    if answered is not None:
+        home = answered()
+        if (
+            is_marked(home.subject)
+            and home.sender
+            and not is_smd_owned(home.sender)
+            and set(outside) <= {normalize_address(a) for a in home.everyone()}
+        ):
+            return
+    raise FenceRefused(
+        FENCE_REHEARSAL,
+        f"this email is marked as a rehearsal or test and would reach {len(outside)} recipient(s) "
+        "outside SMD: " + ", ".join(outside) + ". A rehearsal goes to SMD only.",
+        outside,
+    )
 
 
-__all__ = ["FENCE_REHEARSAL", "check_reply", "check_send", "is_marked", "is_smd_owned"]
+__all__ = ["FENCE_REHEARSAL", "check", "is_marked", "is_smd_owned"]

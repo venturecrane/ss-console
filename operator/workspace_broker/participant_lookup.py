@@ -76,6 +76,7 @@ def _as_participants(found: dict[str, Any], message_id: str) -> Participants:
         cc=tuple(str(a) for a in found.get("cc") or []),
         conversation_id=str(found.get("conversation_id") or ""),
         message_id=message_id,
+        subject=str(found.get("subject") or ""),
     )
 
 
@@ -198,10 +199,10 @@ def enforce(
         target = str(payload.get("message_id") or "").strip()
         if not target:
             raise FenceRefused(FENCE_PARTICIPANTS, "a reply must name the email it answers.")
-        rehearsal_fence.check_reply(subject, lambda: resolve(Anchor(CHANNEL_KIND[channel], target)).sender)
+        rehearsal_fence.check(subject, [], lambda: resolve(Anchor(CHANNEL_KIND[channel], target)), reply=True)
         check_reply(facts, target, anchor=anchor, resolve=resolve, target_kind=CHANNEL_KIND[channel])
     else:
-        rehearsal_fence.check_send(subject, recipients)
+        rehearsal_fence.check(subject, recipients, (lambda: resolve(anchor)) if anchor else None)
         check_send(facts, recipients, lane=lane, anchor=anchor, resolve=resolve)
     return {
         **({"anchor_kind": anchor.kind} if anchor else {}),

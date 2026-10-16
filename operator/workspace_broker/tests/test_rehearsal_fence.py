@@ -86,6 +86,20 @@ class FakeAgentMail:
 MESSAGES = {
     "from-tim": {"from": f"Tim <{TIM}>", "to": ["seat@agentmail.to"], "thread_id": "t1", "message_id": "from-tim"},
     "from-smd": {"from": f"Scott <{SMD}>", "to": ["seat@agentmail.to"], "thread_id": "t2", "message_id": "from-smd"},
+    # The client's own answer in the leaked thread (2026-10-16, 15:39Z).
+    "tim-in-thread": {
+        "from": f"Tim <{TIM}>",
+        "to": ["seat@agentmail.to"],
+        "thread_id": "t3",
+        "subject": "Re: [Rehearsal 2] Getting your pilot set up",
+    },
+    # SMD's own rehearsal instruction: answering it vouches for nobody outside SMD.
+    "smd-rehearsal": {
+        "from": f"Scott <{SMD}>",
+        "to": ["seat@agentmail.to"],
+        "thread_id": "t4",
+        "subject": "[Rehearsal] Program change",
+    },
 }
 
 
@@ -106,7 +120,9 @@ def _broker(tmp_path: Path) -> tuple[Broker, FakeAgentMail]:
     return broker, http
 
 
-def _send(broker: Broker, to: list[str], subject: str, *, cc=(), bcc=(), lane: str | None = LANE) -> dict:
+def _send(
+    broker: Broker, to: list[str], subject: str, *, cc=(), bcc=(), lane: str | None = LANE, anchor: str | None = None
+) -> dict:
     payload: dict = {"to": to, "subject": subject, "text": "x"}
     if cc:
         payload["cc"] = list(cc)
@@ -115,6 +131,8 @@ def _send(broker: Broker, to: list[str], subject: str, *, cc=(), bcc=(), lane: s
     request: dict = {"action": "agentmail_send", "payload": payload}
     if lane:
         request["lane"] = lane
+    if anchor:
+        request["anchor"] = {"kind": "agentmail_message", "message_id": anchor}
     return broker.handle(request, peer_pid=GATEWAY_PID, peer_uid=AGENT_UID)
 
 
@@ -198,6 +216,32 @@ def test_a_marked_reply_to_the_client_is_refused(tmp_path: Path) -> None:
     broker, http = _broker(tmp_path)
     with pytest.raises(AgentMailRefused, match="rehearsal"):
         _reply(broker, "from-tim", "Re: [Rehearsal] your question")
+    assert not http.posts
+
+
+# -- an inherited marker: the client already answered in the marked thread ----------
+
+
+def test_a_reply_in_the_thread_the_client_answered_goes(tmp_path: Path) -> None:
+    """Refusing this would cut off a live client because of SMD's own mistake."""
+    broker, http = _broker(tmp_path)
+    assert _reply(broker, "tim-in-thread", "Re: [Rehearsal 2] Getting your pilot set up")["ok"] is True
+    assert _send(broker, [TIM], "Re: [Rehearsal 2] Getting your pilot set up", anchor="tim-in-thread")["ok"] is True
+    assert len(http.posts) == 2
+
+
+def test_an_inherited_marker_reaches_nobody_who_was_not_on_the_thread(tmp_path: Path) -> None:
+    broker, http = _broker(tmp_path)
+    with pytest.raises(AgentMailRefused, match="rehearsal"):
+        _send(broker, [TIM, "agent@brokerage.example"], "Re: [Rehearsal 2] x", anchor="tim-in-thread", lane=None)
+    assert not http.posts
+
+
+def test_smd_rehearsal_mail_vouches_for_no_client(tmp_path: Path) -> None:
+    """An instruction from SMD marked as a rehearsal cannot carry the marker to a client."""
+    broker, http = _broker(tmp_path)
+    with pytest.raises(AgentMailRefused, match="rehearsal"):
+        _send(broker, [TIM], "[Rehearsal] Program change", anchor="smd-rehearsal")
     assert not http.posts
 
 
