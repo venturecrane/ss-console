@@ -4,7 +4,6 @@
 # path, /home/ops/dev/ss-console -> -home-ops-dev-ss-console), and the session
 # coordination files (board, obligation journal, read log). Verified by sha256.
 set -euo pipefail
-here="$(cd "$(dirname "$0")" && pwd)"
 mem_src="$HOME/.claude/projects/-Users-scottdurgan-dev-ss-console"
 mem_dst="/home/ops/.claude/projects/-home-ops-dev-ss-console"
 manifest=$(mktemp)
