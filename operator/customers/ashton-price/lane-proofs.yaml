@@ -81,4 +81,12 @@ lanes:
     evidence: >-
       Rehearsed on this seat before live use (ss#3050, ss#3053, ss#3072,
       ss#3084); 9 live sessions 10-05..10-08.
+  smd-note:
+    proven_at: '2026-10-16'
+    evidence: >-
+      Proven on smd-staging (ss#3240, ss#3244, overlay#458; main 42648517):
+      note 01M5136G75K1MTEHVZC726KEB9 answered in the requester's own thread
+      from the Operator mailbox, words verbatim, located in Sent Items; an
+      identical rerun and an identifier the request did not carry were both
+      refused (vfy_01M5137PJ2AHY35BXQ2SGBW6R9).
 revoked: []
