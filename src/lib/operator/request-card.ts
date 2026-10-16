@@ -334,7 +334,9 @@ export function cardText(slug: string, card: RequestCard): string {
     `Received: ${card.receivedAt}`,
     ...outcomeLines(card),
     ...laneLines(slug, card),
-    `Matter: ${card.matter ?? 'none named'}`,
+    // Only when the seat named one. "Matter: none named" is law-firm vocabulary
+    // and read as noise on every non-legal seat (Brokery, 2026-10-16).
+    ...(card.matter ? [`Matter: ${card.matter}`] : []),
   ]
   if (card.replyOpening) lines.push('', 'Reply opening:', `  ${card.replyOpening}`)
   lines.push(

@@ -28,7 +28,7 @@ _SELECT = "id,from,sender,replyTo,conversationId,receivedDateTime,isDraft,intern
 #: The participant fence's own projection (participant_fence.py). Kept apart
 #: from ``_SELECT`` on purpose: widening the binding's projection would hand
 #: every caller of it two address lists it never asked for.
-_PARTICIPANT_SELECT = "id,from,sender,toRecipients,ccRecipients,conversationId,isDraft,internetMessageId"
+_PARTICIPANT_SELECT = "id,from,sender,toRecipients,ccRecipients,conversationId,isDraft,internetMessageId,subject"
 _MAX_SENT_PAGES = 5
 
 
@@ -163,6 +163,7 @@ def participants_of(ops: MsGraphOps, graph_message_id: str) -> dict[str, object]
         "to": _address_list(m.get("toRecipients")),
         "cc": _address_list(m.get("ccRecipients")),
         "conversation_id": str(m.get("conversationId") or ""),
+        "subject": str(m.get("subject") or ""),
     }
 
 
