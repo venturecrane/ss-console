@@ -1205,7 +1205,7 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # (turn_sources SCHEDULED_KINDS); pairs with this repo's note_verbs.py
 # new-message branch, reply_binding SCHEDULED_LANES note_job and note_lane's
 # trigger line. No tracked twin moved.
-ARG OVERLAY_REF="c6226013c96f51bdb8891af51f35ac1e1793d54a"
+ARG OVERLAY_REF="c569f1b438dfef9fd5865969af684568a6635ecf"
 
 ARG CUSTOMER_SLUG=customer-zero
 
