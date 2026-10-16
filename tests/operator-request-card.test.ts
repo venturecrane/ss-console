@@ -256,6 +256,11 @@ describe('the email', () => {
     }
     expect(text).not.toMatch(new RegExp(String.fromCharCode(0x2014)))
   })
+
+  it('names a matter only when the seat named one (no law-firm line on other seats)', () => {
+    expect(cardText(SLUG, parsed())).toContain(`Matter: ${MATTER}`)
+    expect(cardText(SLUG, parsed({ matter: null }))).not.toContain('Matter:')
+  })
 })
 
 describe('POST /api/internal/operator-request-card', () => {
