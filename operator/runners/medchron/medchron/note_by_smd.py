@@ -70,7 +70,7 @@ from typing import Any, Callable
 
 from . import note_lane
 from .broker_client import BrokerClient, BrokerError
-from .daemon import DEFAULT_RUN_DIR, RUN_DIR_ENV, SOCKET_ENV
+from .daemon import CHILD_ENV_PASS, DEFAULT_RUN_DIR, RUN_DIR_ENV, SOCKET_ENV
 
 REQUEST_INDEX_ENV = "SMD_REQUEST_INDEX_DB_PATH"
 DEFAULT_REQUEST_INDEX = "/opt/data/requests.db"
@@ -95,9 +95,43 @@ def numbers_in(client: Any, text: str, approved_by: str) -> list[str]:
     return [str(n) for n in resp.get("numbers") or []]
 
 
-def _default_matter_client() -> Any:
+#: The Smokeball settings the runner daemon hands its jobs (``daemon.CHILD_ENV_PASS``).
+SMOKEBALL_ENV = tuple(k for k in CHILD_ENV_PASS if k.startswith("SMOKEBALL_"))
+PROC = Path("/proc")
+
+
+def _daemon_environ(proc: Path = PROC) -> dict[str, str]:
+    """The runner daemon's own environment, read from ``/proc`` (root only).
+    A shell SMD opens on the seat does not carry the daemon's Smokeball
+    settings (2026-10-16: the first lookup on smd-staging raised KeyError), so
+    the command takes them from the process that already runs every Smokeball
+    job. Read in-process and never printed."""
+    for entry in proc.iterdir() if proc.is_dir() else []:
+        if not entry.name.isdigit():
+            continue
+        try:
+            argv = (entry / "cmdline").read_bytes().split(b"\0")
+        except OSError:
+            continue
+        if not any(a.endswith(b"medchron.daemon") or a.endswith(b"medchron/daemon.py") for a in argv):
+            continue
+        try:
+            raw = (entry / "environ").read_bytes()
+        except OSError:
+            continue
+        pairs = (item.split(b"=", 1) for item in raw.split(b"\0") if b"=" in item)
+        return {k.decode(errors="replace"): v.decode(errors="replace") for k, v in pairs}
+    return {}
+
+
+def _default_matter_client(proc: Path = PROC) -> Any:
     from .seat import ClientSeat
 
+    if not os.environ.get("SMOKEBALL_CLIENT_ID"):
+        daemon = _daemon_environ(proc)
+        for key in SMOKEBALL_ENV:
+            if daemon.get(key) and not os.environ.get(key):
+                os.environ[key] = daemon[key]
     return ClientSeat().client
 
 
