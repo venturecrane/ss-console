@@ -11,4 +11,8 @@ INFISICAL_TOKEN=$(infisical login --method=universal-auth \
   --plain --silent)
 export INFISICAL_TOKEN
 export PATH="$HOME/.venvs/ops/bin:$HOME/bin:$PATH"
+# Per-seat Fly deploy tokens (FLY_API_TOKEN), so fly reaches the client seats
+# and nothing else.
+# shellcheck disable=SC1090
+[ -f "$HOME/.fly-tokens" ] && . "$HOME/.fly-tokens"
 exec infisical run --projectId "$INFISICAL_PROJECT_ID" --env=prod --path=/ss --silent -- "$@"
