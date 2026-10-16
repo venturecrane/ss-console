@@ -1542,7 +1542,7 @@ describe('Operator customer Machine Dockerfile', () => {
     // completion wake binds note_job and reads the recorded words (pairs with note_verbs.py).
     // d4957208 -> fda15046 (overlay#459), 2026-10-16: a new-message SMD note's scheduled wake
     // binds the broker's one new email (pairs with note_verbs.py's new-message branch).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="fda15046577a7e80e85ffbfa88cf5b1b7826d26c"')
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="c6226013c96f51bdb8891af51f35ac1e1793d54a"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
