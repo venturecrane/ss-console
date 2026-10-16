@@ -1,0 +1,24 @@
+#!/bin/bash
+# ops-bootstrap: after the Captain's `gh auth login`, clone SMD's repos into the
+# same layout the laptop used (~/dev/<repo>) so every script that assumes it
+# (the Law 2 guard, boot smoke, input staging) works unchanged, and install the
+# ss-console Node deps. Idempotent: an existing clone is fetched, not recloned.
+set -euo pipefail
+cd "$HOME/dev"
+gh auth setup-git >/dev/null
+for repo in ss-console engagements hermes-smd-overlay crane-console; do
+  if [ -d "$repo/.git" ]; then
+    git -C "$repo" fetch -q origin && echo "fetched $repo"
+  else
+    gh repo clone "venturecrane/$repo" "$repo" -- -q && echo "cloned $repo"
+  fi
+done
+git config --global user.name "SMD Ops"
+git config --global user.email "team@smd.services"
+(cd ss-console && npm ci --silent && echo "ss-console deps installed")
+# .infisical.json is gitignored on the laptop; the ops identity supplies the
+# project id instead (see ss-env), but scripts that read the file find it here.
+# shellcheck disable=SC1090
+. "$HOME/.infisical-ua"
+printf '{"workspaceId":"%s","defaultEnvironment":"prod"}\n' "$INFISICAL_PROJECT_ID" > ss-console/.infisical.json
+echo "bootstrap done"

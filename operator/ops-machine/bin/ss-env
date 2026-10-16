@@ -1,0 +1,13 @@
+#!/bin/bash
+# ss-env <command...>: run a command on smd-ops with SMD's production secrets
+# (/ss, prod) injected, via the Machine's own read-only Infisical identity
+# (~/.infisical-ua). The laptop equivalent was `infisical run --env=prod
+# --path=/ss`; this one needs no interactive login.
+set -euo pipefail
+# shellcheck disable=SC1090
+. "$HOME/.infisical-ua"
+INFISICAL_TOKEN=$(infisical login --method=universal-auth \
+  --client-id="$INFISICAL_UA_CLIENT_ID" --client-secret="$INFISICAL_UA_CLIENT_SECRET" \
+  --plain --silent)
+export INFISICAL_TOKEN
+exec infisical run --projectId "$INFISICAL_PROJECT_ID" --env=prod --path=/ss --silent -- "$@"
