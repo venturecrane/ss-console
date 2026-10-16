@@ -704,9 +704,13 @@ if [ -x /opt/medchron/.venv/bin/python ] \
       SMOKEBALL_REFRESH_TOKEN_FILE="${SMOKEBALL_TOKEN_RUN_DIR}/refresh_token" \
       MEDCHRON_FIRM_CONFIG="${MEDCHRON_FIRM_CONFIG}" \
       MEDCHRON_PRICING_JSON="/opt/medchron/anthropic_pricing.json" \
-      /opt/medchron/.venv/bin/python -m medchron.daemon || true
-      log "medchron daemon exited; restarting in 5s"
-      sleep 5
+      /opt/medchron/.venv/bin/python -m medchron.daemon && rc=0 || rc=$?
+      # 130 (medchron.daemon.STOPPED_EXIT): the Machine is stopping. A daemon
+      # respawned now has no stop flag and works inside a dying Machine
+      # (2026-10-15: a lost wake paged SMD for a deploy). Any other exit is a
+      # crash, and the loop restarts it as before.
+      [ "${rc}" = 130 ] && { log "medchron daemon stopped by the Machine stop; not restarting"; break; }
+      log "medchron daemon exited (${rc}); restarting in 5s"; sleep 5
     done ) &
   log "Root medchron daemon launched (uid 0; runs chronology jobs as the medchron uid from ${MEDCHRON_RUN_DIR}/queue)"
 else

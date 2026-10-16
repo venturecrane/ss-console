@@ -17,8 +17,10 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
-import { resolve } from 'path'
+import { spawnSync } from 'child_process'
+import { mkdtempSync, readFileSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join, resolve } from 'path'
 
 const ENTRYPOINT = readFileSync(resolve('operator/templates/entrypoint.sh'), 'utf8')
 
@@ -250,6 +252,43 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
   // SMD_*_MEMORY_MAX_BYTES on the SAME command line that starts it, re-read
   // from the live root-owned customer.yaml on every respawn. medchron.lane_memory
   // prints nothing when unauthored, so the code defaults stand.
+  // 2026-10-15: a daemon the loop respawned INSIDE a stopping Machine had no
+  // stop flag, so it re-ran claimed work and spent a DELIVER wake's attempts on
+  // a gateway that was already gone (proof:wake_lost, a page for our own
+  // deploy). medchron.daemon exits 130 (STOPPED_EXIT) on the Machine's stop;
+  // the loop must not respawn on it, and must still respawn a crash.
+  it('does not respawn the daemon after the Machine stop, and does after a crash', () => {
+    // The loop that encloses the daemon start: the last loop opener before it.
+    const launch = ENTRYPOINT_CODE.indexOf('-m medchron.daemon')
+    const open = ENTRYPOINT_CODE.lastIndexOf('( while true; do', launch)
+    const close = ENTRYPOINT_CODE.indexOf('done ) &', launch)
+    expect(launch > -1 && open > -1 && close > launch, 'the medchron respawn loop').toBe(true)
+    const body = ENTRYPOINT_CODE.slice(open, close + 'done ) &'.length)
+      .replace(/\/usr\/bin\/env \$\([\s\S]*?-m medchron\.daemon/, '"$STUB"')
+      .replace(/sleep 5/, 'sleep 0')
+      .replace(/\) &$/, ')')
+    const run = (codes: number[]) => {
+      const dir = mkdtempSync(join(tmpdir(), 'medchron-loop-'))
+      const stub = join(dir, 'stub.sh')
+      // Exit with the next code in the list; after the list, 130 (a stop) so a
+      // loop that kept respawning still ends.
+      writeFileSync(
+        stub,
+        `#!/bin/bash\nn=$(cat "${dir}/n" 2>/dev/null || echo 0)\necho $((n+1)) > "${dir}/n"\ncodes=(${codes.join(' ')})\nexit \${codes[$n]:-130}\n`,
+        { mode: 0o755 }
+      )
+      const r = spawnSync('bash', ['-c', `set -e\nlog() { :; }\nSTUB="${stub}"\n${body}`], {
+        encoding: 'utf8',
+        timeout: 10000,
+      })
+      expect(r.status, r.stderr).toBe(0)
+      return Number(readFileSync(join(dir, 'n'), 'utf8').trim())
+    }
+    expect(run([130]), 'a stop is final').toBe(1)
+    expect(run([1, 130]), 'a crash is respawned').toBe(2)
+    expect(run([0, 1, 130]), 'a clean exit is respawned').toBe(3)
+  })
+
   it('passes the authored lane memory caps to every daemon start', () => {
     // Inside the respawn loop, so each start re-reads the config; an unscrubbed
     // env (never env -i), since the daemon copies its child allow-list from it.

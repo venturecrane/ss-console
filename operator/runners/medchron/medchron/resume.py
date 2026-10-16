@@ -154,6 +154,23 @@ def start_run(d: Any, job_id: str, base: list[str]) -> list[str]:
     return [*base, "--redo", ",".join(redo)]
 
 
+def finished_verdict(v: Any) -> bool:
+    """For a lane whose runner writes ONE verdict object (negotiation,
+    litigation): True when it is a real ending that must be recorded even
+    mid-stop, never re-run. ``cut_short_by_stop`` reads list-shaped outcomes and
+    cannot see this shape, so these lanes ask here first. A ``failed`` that
+    carries a paged reason (``review_held:``, ``readback_mismatch:``,
+    ``update_held:``) is the work's own ending and pages SMD; any other
+    ``failed`` written as the stop landed is the stop."""
+    from .unit_proof import PAGED_PREFIXES
+
+    if not isinstance(v, dict):
+        return False
+    if v.get("verdict") in FINISHED_OUTCOMES:
+        return True
+    return v.get("verdict") == "failed" and str(v.get("reason") or "").startswith(PAGED_PREFIXES)
+
+
 def cut_short_by_stop(d: Any, job_id: str, code: int, out: str) -> bool:
     """True when the Machine's stop ended this attempt, so the job must be
     left claimed for the next boot to resume rather than recorded failed.
