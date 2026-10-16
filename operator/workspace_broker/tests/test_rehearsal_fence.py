@@ -208,7 +208,7 @@ def test_no_lane_and_no_approval_can_carry_a_rehearsal_out(tmp_path: Path) -> No
     broker, http = _broker(tmp_path)
     for lane in (LANE, None):
         with pytest.raises(AgentMailRefused, match="rehearsal"):
-            _send(broker, [TIM], "[Test] welcome", lane=lane)
+            _send(broker, [TIM], "[Rehearsal] welcome", lane=lane)
     assert not http.posts
 
 
@@ -257,10 +257,7 @@ def test_smd_rehearsal_mail_vouches_for_no_client(tmp_path: Path) -> None:
         "Re: [Rehearsal 2] Getting your pilot set up",
         "Rehearsal 4: Welcome to your Brokery assistant",
         "Re: Fwd: Rehearsal: welcome",
-        "[Test] welcome",
-        "[TEST 3] digest",
         "[SMD-PROBE 2026-10-16T15:00Z] drafting prove-out",
-        "[Probe] send path",
         "[Dry run] weekly report",
         "[dry-run] weekly report",
     ],
@@ -277,6 +274,10 @@ def test_marked_subjects(subject: str) -> None:
         "Getting your pilot set up",
         "Notes from the dress rehearsal for the deposition",  # not leading, not bracketed
         "[Testimony] exhibit list",
+        "[Test] welcome",  # "test" and "probe" are client words, not markers
+        "[TEST 3] digest",
+        "[Probe] send path",
+        "[Test results] Smith matter",
         "",
         None,
     ],

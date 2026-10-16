@@ -1,4 +1,4 @@
-"""The rehearsal fence: an email marked as a rehearsal or a test reaches SMD only.
+"""The rehearsal fence: an email marked as a rehearsal reaches SMD only.
 
 WHY (2026-10-16). A rehearsal of a client check-in on the Brokery seat was
 scheduled as "send exactly one email to smdurgan@smdurgan.com ... write it to
@@ -8,7 +8,7 @@ existed passed it, correctly by its own rule: the recipient was authored for
 the roster lane. What no fence asked is whether the message itself said it was
 not meant for a client.
 
-THE RULE. A transmit whose subject carries a rehearsal or test marker is
+THE RULE. A transmit whose subject carries a rehearsal marker is
 refused unless every recipient is SMD-owned: an SMD domain, or one of SMD's
 own probe inboxes (``ss-probe-*@agentmail.to``, the stand-ins rehearsals
 address as a firm person). A marked reply is refused unless the email it
@@ -18,11 +18,13 @@ on every turn; whether a message announces itself as a rehearsal is the
 message's own text, so this holds no matter which prompt, lane or approval
 produced the send.
 
-THE MARKER. Bracketed ``[Rehearsal ...]``, ``[Test ...]``, ``[SMD-PROBE ...]``,
-``[Probe ...]`` or ``[Dry run ...]`` anywhere in the subject, or a subject
-that BEGINS (after any Re:/Fwd: prefixes) with the word "Rehearsal". An
-unbracketed leading "Test" is deliberately not a marker: a law firm's real
-subject "Test results from Dr. Lee" must still reach its attorney.
+THE MARKER. Bracketed ``[Rehearsal ...]``, ``[SMD-PROBE ...]`` or
+``[Dry run ...]`` anywhere in the subject, or a subject that BEGINS (after any
+Re:/Fwd: prefixes) with the word "Rehearsal". "Test" and "Probe" are
+deliberately not markers, bracketed or not (narrowed 2026-10-16 on the
+Captain's call): a client's own subjects use those words for real work, e.g.
+"[Test results] Smith matter" or "Test results from Dr. Lee", and those must
+still reach the attorney.
 
 PURE, like participant_fence: it reads the payload and decides. Looking up a
 reply's original sender is handed in as a callable.
@@ -36,13 +38,13 @@ from collections.abc import Callable, Iterable
 from .participant_fence import FENCE_REHEARSAL, SMD_DOMAINS, FenceRefused, Participants
 from .recipient_policy import domain_of, normalize_address
 
-_BRACKETED = re.compile(r"\[\s*(?:rehearsal|test|smd-probe|probe|dry[\s-]?run)\b[^\]]*\]", re.IGNORECASE)
+_BRACKETED = re.compile(r"\[\s*(?:rehearsal|smd-probe|dry[\s-]?run)\b[^\]]*\]", re.IGNORECASE)
 _LEADING = re.compile(r"^\s*(?:(?:re|fwd?)\s*:\s*)*rehearsal\b", re.IGNORECASE)
 _PROBE_INBOX = re.compile(r"^ss-probe-[a-z0-9-]+@agentmail\.to$")
 
 
 def is_marked(subject: object) -> bool:
-    """True when the subject announces the email as a rehearsal or a test."""
+    """True when the subject announces the email as a rehearsal."""
     if not isinstance(subject, str) or not subject.strip():
         return False
     return bool(_BRACKETED.search(subject) or _LEADING.search(subject))
@@ -96,7 +98,7 @@ def check(
             return
     raise FenceRefused(
         FENCE_REHEARSAL,
-        f"this email is marked as a rehearsal or test and would reach {len(outside)} recipient(s) "
+        f"this email is marked as a rehearsal and would reach {len(outside)} recipient(s) "
         "outside SMD: " + ", ".join(outside) + ". A rehearsal goes to SMD only.",
         outside,
     )
