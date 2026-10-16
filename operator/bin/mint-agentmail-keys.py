@@ -82,6 +82,16 @@ SEND_PERMISSIONS = {
     "message_send": True,
 }
 
+# The CI suppression-list check's key (--lists): reads the inbox's allow/block
+# list entries and nothing else. Neither seat key carries `list_entry_read`, so
+# a seat key vaulted for the check 403'd on its own lists every day (brokery,
+# 2026-10-14 on), holding unaudited-send-reconcile red. This key never goes to
+# a seat; it lives only as the GitHub secret AGENTMAIL_API_KEY__<CID>.
+LISTS_PERMISSIONS = {
+    "inbox_read": True,
+    "list_entry_read": True,
+}
+
 
 def _post(path: str, body: dict, api_key: str) -> dict:
     request = urllib.request.Request(  # noqa: S310 - API_BASE is an https constant; the path is a module literal
@@ -156,17 +166,25 @@ def main() -> int:
     )
     parser.add_argument("--out-dir", default="/tmp/amkeys", help="where the 0600 key files land")
     parser.add_argument("--dry-run", action="store_true", help="print the requests, create nothing")
+    parser.add_argument(
+        "--lists",
+        action="store_true",
+        help="mint ONLY the read-only <slug>-lists key for the CI suppression-list check",
+    )
     args = parser.parse_args()
 
     inbox_id = args.inbox or f"{args.slug}@agentmail.to"
     out_dir = Path(args.out_dir)
-    plan = [
-        (f"{args.slug}-nosend", NOSEND_PERMISSIONS, out_dir / f"{args.slug}-nosend.key"),
-        (f"{args.slug}-send", SEND_PERMISSIONS, out_dir / f"{args.slug}-send.key"),
-    ]
+    if args.lists:
+        plan = [(f"{args.slug}-lists", LISTS_PERMISSIONS, out_dir / f"{args.slug}-lists.key")]
+    else:
+        plan = [
+            (f"{args.slug}-nosend", NOSEND_PERMISSIONS, out_dir / f"{args.slug}-nosend.key"),
+            (f"{args.slug}-send", SEND_PERMISSIONS, out_dir / f"{args.slug}-send.key"),
+        ]
 
     if args.dry_run:
-        print(f"DRY RUN — would create 2 keys scoped to inbox {inbox_id!r}\n")
+        print(f"DRY RUN — would create {len(plan)} key(s) scoped to inbox {inbox_id!r}\n")
         for name, permissions, out in plan:
             print(f"  POST {API_BASE}/inboxes/{urllib.parse.quote(inbox_id, safe='')}/api-keys")
             print(f"    body: {json.dumps({'name': name, 'permissions': permissions})}")
@@ -186,7 +204,7 @@ def main() -> int:
             "keys scoped to a non-existent inbox are useless."
         )
 
-    print(f"Minting 2 inbox-scoped keys for {inbox_id}\n")
+    print(f"Minting {len(plan)} inbox-scoped key(s) for {inbox_id}\n")
     for name, permissions, out in plan:
         mint(inbox_id, name, permissions, out, api_key)
     print(

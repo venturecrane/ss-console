@@ -40,6 +40,16 @@ workflow secrets. Question 4 below is narrowed accordingly: it now asks which
 key classes may read inbox-scope lists, and only becomes a SEND if the
 per-seat key test fails (a seat's own key 403ing on its own inbox lists).
 
+Resolved (2026-10-16): it was a PERMISSION, not a vendor gap. Reading list
+entries needs `list_entry_read`, which neither seat key (`-nosend`, `-send`)
+carries, so brokery's vaulted seat key 403'd on its own inbox lists every day
+from 2026-10-14. An inbox-scoped key with `inbox_read` + `list_entry_read`
+reads its own inbox's block and allow lists clean (probed for brokery,
+pilot-smokeball and scott the same day). Mint it with
+`operator/bin/mint-agentmail-keys.py <slug> --lists` and store it only as the
+GitHub secret `AGENTMAIL_API_KEY__<CID>`; it never goes to a seat. Question 4
+below no longer needs sending.
+
 ## Draft email (Captain to send)
 
 Subject: List-Unsubscribe headers and suppression visibility for transactional inboxes
