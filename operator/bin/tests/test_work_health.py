@@ -850,6 +850,24 @@ def test_a_repeating_refused_send_is_one_line_not_one_per_half_hour():
     assert [i.key for i in later] == [items[0].key]
 
 
+def test_a_refused_letter_whose_request_was_closed_is_not_open_work():
+    """FALSIFIER: on 2026-10-16 the A&P lapse letter was refused 5,246 times,
+    then SMD closed its request by hand (RULE_LAPSED 13 s after the last
+    refusal), yet the email still said "Whoever it was for has not been told".
+    A closing row long after the last refusal, or refusals that keep coming
+    after it, stay open."""
+    start = NOW - timedelta(hours=3)
+    rows = _refused_stream(start, 170)
+    last = start + timedelta(seconds=30 * (len(rows) - 1))
+    told = _row("RULE_LAPSED", last + timedelta(seconds=13), proposal_id="7fbf43bb")
+    items, resolved = src.silent_run_items(SEAT, rows + [told], CFG, NOW)
+    assert items == [] and resolved == 1
+    stale = _row("RULE_LAPSED", last + timedelta(minutes=10), proposal_id="7fbf43bb")
+    assert _kinds(src.silent_run_items(SEAT, rows + [stale], CFG, NOW)[0]) == ["silent_run"]
+    more = _refused_stream(last + timedelta(seconds=30), 5)
+    assert _kinds(src.silent_run_items(SEAT, rows + [told] + more, CFG, NOW)[0]) == ["silent_run"]
+
+
 def test_a_delivered_job_with_a_lane_alert_is_not_called_undelivered():
     """Six of the 33 lines on 2026-10-16: negotiation runs that delivered, whose
     lane carried a held offer as an alert in the same second."""

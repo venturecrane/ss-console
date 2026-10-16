@@ -89,6 +89,33 @@ def _held_then_sent(rows: list[dict], row_id: Optional[str]) -> bool:
     return any(r.get("action_type") == "REPLY_SENT" and meta(r).get("in_reply_to") == message_id for r in rows)
 
 
+#: Broker rows that close an outcome letter's request: written by the overlay
+#: once the person who asked has been told (the contract: "written when the note
+#: is away"), or by SMD through ``establish_lapse_notified`` when SMD closes it
+#: by hand because she was answered elsewhere. Either way the sweeper stops
+#: retrying and nothing is left owed. The out-of-turn sends the outbound scan
+#: refuses carry no message id, so this row is the only join available.
+_CLOSING_ROWS = frozenset({"RULE_LAPSED", "OPS_REQUEST_LAPSED"})
+#: The sweeper retries every tick, so the row that ends the run lands within
+#: seconds of the last refusal (2026-10-16: 13 s after the 5,246th).
+_CLOSED_WITHIN = timedelta(seconds=60)
+
+
+def _refusals_then_closed(usable: list[dict], attempts: list[datetime]) -> bool:
+    """A run of refused out-of-turn sends that stopped because its request was
+    closed: a closing row within a minute of the last refusal (so none came
+    after it). On 2026-10-16 SMD closed the A&P lapse letter's request by hand
+    (Christa had been answered on 10-14) and the email kept reading "whoever it
+    was for has not been told"."""
+    if not attempts:
+        return False
+    last = attempts[-1]
+    for ts, r in stamped(usable):
+        if str(r.get("action_type") or "") in _CLOSING_ROWS and last <= ts <= last + _CLOSED_WITHIN:
+            return True
+    return False
+
+
 def silent_run_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> tuple[list[Item], int]:
     """Scheduled and held runs that ended with no observable outcome
     (reconcile-outcomes' finding), opened inside the reconcile window. Inbound
@@ -122,6 +149,9 @@ def silent_run_items(seat: str, rows: list[dict], cfg: Config, now: datetime) ->
             for ts, r in stamped(usable)
             if ts >= first and str(r.get("action_type") or "") == held_by and (r.get("skill_name") or "") == skill
         ]
+        if held_by == "FABRICATION_FILTER_TRIGGERED" and not skill and _refusals_then_closed(usable, attempts):
+            resolved += 1
+            continue
         last = attempts[-1] if attempts else max(o.opened_at for o in obs)
         count = max(len(attempts), len(obs))
         routine = f"The {skill} run" if skill else "A run with no routine named"
