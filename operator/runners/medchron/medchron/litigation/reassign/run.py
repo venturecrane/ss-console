@@ -22,7 +22,7 @@ from .. import firm as firm_mod, job as job_mod
 from ..deadlines.book import Rules
 from ..outcome import REASON, LitigationFailed, LitigationHold, Verdict
 from ..tools import dump
-from . import select as select_mod, spec as spec_mod
+from . import assisting, select as select_mod, spec as spec_mod
 from .write import ATTEMPTS, POLL_SECONDS, POLLS, Journal, Writer, converge
 
 STAGES = ("staff", "select", "matters", "settle", "tasks", "report")
@@ -137,29 +137,34 @@ class ReassignRun:
             select_mod.run(self.seat, self.data, self._load("resolve.json"), self.spec, rules, self.log),
         )
 
-    def _assisting(self, mid: str) -> str:
-        return str(self.get(f"/matters/{mid}").get("personAssistingStaffId") or "").lower()
+    def _matter(self, mid: str) -> dict[str, Any]:
+        row = self.get(f"/matters/{mid}")
+        return row if isinstance(row, dict) else {}
 
     def _matters(self) -> None:
+        """Main and additional list both (``assisting.py``): each write is built
+        from a fresh read and sends the full desired state of both; a matter is
+        moved only when the read-back shows no FROM id in either and TO on it."""
         res, plan = self._load("resolve.json"), self._load("plan.json")
         to, from_ids = res["to_id"], set(res["from_ids"])
         keys, skipped = [], []
         for m in plan["move"]:
             try:
-                cur = self._assisting(m["id"])
+                row = self._matter(m["id"])
             except Exception:  # noqa: BLE001 - unreadable now is still ours to move; converge reads it again
                 keys.append(m["id"])
                 continue
-            if cur == to or cur in from_ids:
+            if assisting.names_from(row, from_ids) or assisting.moved(row, from_ids, to):
                 keys.append(m["id"])
-            else:  # someone else changed it since select, or a FROM person only in the plural list
+            else:  # someone else changed it since select: no FROM person is on it now
                 skipped.append(m["number"])
         writer = self._writer()
-        not_moved, reads = self._converge(
-            keys,
-            lambda mid: writer.send("PATCH", f"/matters/{mid}", {"personAssistingStaffId": to}),
-            lambda mid: self._assisting(mid) == to,
-        )
+
+        def write(mid: str) -> None:
+            main, extra = assisting.state(self._matter(mid))
+            writer.send("PATCH", f"/matters/{mid}", assisting.body(main, extra, from_ids, to))
+
+        not_moved, reads = self._converge(keys, write, lambda mid: assisting.moved(self._matter(mid), from_ids, to))
         number = {m["id"]: m["number"] for m in plan["move"]}
         dump(self.data / "matters.json", {"moved": [k for k in keys if k not in not_moved],
                                           "not_moved": [number[k] for k in not_moved], "skipped": skipped,

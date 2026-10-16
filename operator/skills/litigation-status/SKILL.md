@@ -138,7 +138,7 @@ starts: "update all cases that were assigned to Pat Doe or Sam to Dana Roe, Lee'
 new paralegal. All of the tasks need to be updated as well (litigation cases
 only)", "please move Pat's cases to Dana", "reassign the files from Pat to Dana for
 Lee's cases". The job moves each matching matter's paralegal (the person assisting
-in Smokeball), lets Smokeball move that person's open tasks on those matters, moves
+in Smokeball, and anyone listed as additional assisting staff), lets Smokeball move that person's open tasks on those matters, moves
 the ones it did not, and reads every change back. Open and Pending matters unless
 the email says otherwise ("including closed", "open cases only"); litigation cases
 only when the email says litigation; only one attorney's cases when the email names
@@ -328,8 +328,8 @@ to move for:` had no cases that fit; and `cases_skipped` cases already had
   only.
 - **Never writes to a client matter in a turn.** The workbooks file in the firm's own
   library matter. The one job that changes client matters is a staff reassignment, on a
-  Named Administrator's own email: it changes only each matter's paralegal and the
-  assignees of that matter's open tasks, reads every change back, and this skill
+  Named Administrator's own email: it changes only each matter's assisting staff (the
+  main paralegal and any additional ones) and the assignees of that matter's open tasks, reads every change back, and this skill
   writes nothing itself.
 - **Never computes, confirms or calendars a deadline** from the list. A court date in
   the workbook is read from a document and cited; a person decides what it means.
