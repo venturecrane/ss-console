@@ -15,19 +15,25 @@
 #   4. the local encrypted cache of the production secrets (~/.infisical/secrets-backup).
 # It never touches ~/dev (product repos), ~/.claude memory, or anything unverified.
 set -uo pipefail
-EXEC=0; [ "${1:-}" = "--execute" ] && EXEC=1
+HOST=$(hostname -s); EXEC=0; [ "${1:-}" = "--execute" ] && EXEC=1
 del=(); skipped=()
 
 add_verified() { # <base> <ledger-file>
   local base="$1" ledger="$2"
   [ -f "$ledger" ] || return 0
   while IFS= read -r rel; do
-    [ -n "$rel" ] && [ -e "$base/$rel" ] && del+=("$base/${rel#./}")
+    [ -n "$rel" ] && [ -e "$base/$rel" ] || continue
+    # Anything written in the last hour belongs to work still running (a live
+    # Claude session's transcript, an in-flight job): never delete it here.
+    if [ -n "$(find "$base/$rel" -newermt '-60 minutes' -print -quit 2>/dev/null)" ]; then
+      skipped+=("$base/${rel#./} (written in the last hour)"); continue
+    fi
+    del+=("$base/${rel#./}")
   done < "$ledger"
 }
-add_verified "$HOME/smd-medchron-data" "$HOME/.smd-ops-moved-mac23_smd-medchron-data.txt"
-add_verified /private/tmp/claude-501 "$HOME/.smd-ops-moved-mac23_tmp.txt"
-add_verified "$HOME/.claude/projects" "$HOME/.smd-ops-moved-mac23_transcripts.txt"
+add_verified "$HOME/smd-medchron-data" "$HOME/.smd-ops-moved-${HOST}_smd-medchron-data.txt"
+add_verified /private/tmp/claude-501 "$HOME/.smd-ops-moved-${HOST}_tmp.txt"
+add_verified "$HOME/.claude/projects" "$HOME/.smd-ops-moved-${HOST}_transcripts.txt"
 [ -f "$HOME/.smd-ops-verified.txt" ] && while IFS= read -r p; do [ -e "$p" ] && del+=("$p"); done < "$HOME/.smd-ops-verified.txt"
 
 # Stale engagements clones in Claude temp folders.
