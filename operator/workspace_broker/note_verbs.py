@@ -15,17 +15,22 @@ Peer gating, per verb (``verbs.py`` declares and checks it first):
     note_preview      uid 0 only. Every record check, writes NOTHING: returns the
                       anchor's subject, sender and received time, the exact CC
                       list the reply will carry, and a digest over (Graph id,
-                      text, CC list) that the live record must repeat.
+                      text, CC list) that the live record must repeat. For a
+                      new-message note (``to`` + ``subject``): the recipient,
+                      subject, matters, plain numbers and other identifiers,
+                      and a digest over them. With ``scan_numbers`` it returns
+                      only the words' digit runs, for the runner to look up.
     note_record       uid 0 only. The same checks, fresh; refuses unless the
                       caller's ``confirm`` equals a fresh preview digest (what
                       SMD read is what is recorded: a CC list that changed since
                       the dry run changes the digest). One NOTE_JOB_RECORDED
-                      audit row: ids, the text's digest, the requester's key and
-                      who approved it. Never the text.
+                      audit row: ids, the text's digest, the requester's key,
+                      who approved it, the mode and (a new message) the matter
+                      numbers. Never the text, the subject or a matter's name.
     note_job_status   gateway PID or uid 0: the job id, its state and its text,
                       which the DELIVER turn sends word for word.
 
-THE CHECKS (each a refusal, none spends anything): the Graph id is a received
+THE CHECKS for a reply (each a refusal, none spends anything): the Graph id is a received
 email in this mailbox's Inbox (``msgraph_lookup.received_by_graph_id``: not a
 draft, not this mailbox's own, no foreign replyTo); its sender is someone this
 seat may answer (``authored_policy().allows_reply_to``); it arrived within
@@ -150,8 +155,8 @@ def note_recipients(customer_path: Any) -> list[str] | None:
         for skill in (persona or {}).get("skills") or []:
             if not isinstance(skill, dict) or skill.get("name") != SKILL_NAME or skill.get("enabled") is not True:
                 continue
-            settings = skill.get("settings") if isinstance(skill.get("settings"), dict) else {}
-            value = settings.get(RECIPIENTS_KEY)
+            settings = skill.get("settings")
+            value = settings.get(RECIPIENTS_KEY) if isinstance(settings, dict) else None
             if isinstance(value, str):
                 value = value.split(",")
             if not isinstance(value, list):
@@ -212,8 +217,7 @@ def preview_new_message(
         raise NoteRefused(f"{to} is not a Named Administrator on this seat (scope.admins)")
     if to not in authored:
         raise NoteRefused(
-            f"{to} is not authored for a new-message note on this seat "
-            f"(the smd-note skill's settings.{RECIPIENTS_KEY})"
+            f"{to} is not authored for a new-message note on this seat (the smd-note skill's settings.{RECIPIENTS_KEY})"
         )
     subject = _subject_check(request.get("subject"))
     text, who = _text_checks(request.get("text"), request.get("approved_by"))
@@ -422,7 +426,8 @@ def record_verb(
         "state": "delivered",
         "mode": p["mode"],
         "digest": p["digest"],
-        # The person the reply will reach: the runner's reply watch keys on it.
+        # The person the note will reach (her thread's sender, or the admin a
+        # new email goes to): the runner's reply watch keys on it.
         "requester": p["sender"],
     }
 

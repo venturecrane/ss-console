@@ -24,15 +24,15 @@ the recipient. So the broker, which the agent cannot steer, decides:
     - a drafting job: exactly the demand job's rules, on the drafting ledger;
     - a litigation status job (2026-10-07): a REQUESTED job takes the drafting
       rules on the litigation ledger (a reply in the requester's thread, never
-      a new message). A SCHEDULED job has no request email, so it is the one
-      job binding that sends ONE NEW email: to the job's requester, who must
+      a new message). A SCHEDULED job has no request email, so it sends ONE NEW
+      email: to the job's requester, who must
       still be a Named Administrator and the first authored
       ``scheduled_recipients`` entry (re-read at bind time and at send time),
       under the fixed subject ``scheduled_subject`` composes. Nobody names the
       recipient or the subject, the model least of all;
     - a negotiation notice (2026-10-09): the negotiation watch's one email per
-      new offer. A scheduled run has no request email, so this is the one
-      binding that sends ONE NEW email: to the notice's requester, who must
+      new offer. A scheduled run has no request email, so it sends ONE NEW
+      email: to the notice's requester, who must
       still be a Named Administrator and the first authored
       ``scheduled_recipients`` of ``negotiation-watch`` (re-read at bind time
       and at send time), under the subject ``negotiation_ledger.subject``
@@ -44,7 +44,12 @@ the recipient. So the broker, which the agent cannot steer, decides:
       words appears in it). It binds exactly as a delivered job does: the email
       is the note's ``request_ref`` (a Graph id) and its sender the note's
       ``requester``; one reply per note. Nothing about an email's earlier
-      answers matters here: the note is SMD's own, recorded once;
+      answers matters here: the note is SMD's own, recorded once. A
+      NEW-MESSAGE note (2026-10-16, ``trigger='scheduled'``, ``request_ref``
+      ``new:<key>``) has no request email: it sends ONE NEW email to its
+      requester, who must still be a Named Administrator and ANY authored
+      ``scheduled_recipients`` entry of ``smd-note`` (re-read at bind and at
+      send time), under the subject the note recorded;
     - a chronology job (2026-10-07): the same rules on the medchron ledger, one
       reply per (job, outcome). That ledger has no attempt counter, so a job
       held, resumed and held AGAIN gets no second hold reply: the requester
@@ -523,7 +528,8 @@ def bind_verb(
         # and runs its floors against it; it cannot change it.
         "sender": v.sender,
         "conversation_id": v.conversation_id,
-        # "new_message" only for a scheduled litigation job or a negotiation notice: the broker sets
+        # "new_message" only for a scheduled litigation job, a negotiation notice or a new-message
+        # SMD note: the broker sets
         # the recipient (``sender``) and this subject; the caller sends a body.
         "mode": v.mode,
         **({"subject": v.subject} if v.subject else {}),
@@ -532,7 +538,8 @@ def bind_verb(
 
 def _bound_body(v: Verified, payload: dict[str, Any], bound_ops: MsGraphOps) -> tuple[dict[str, Any], Any]:
     """The wire body and the ops call for a verified binding: a reply on the
-    verified email, or (a scheduled litigation job or a negotiation notice) one new message whose
+    verified email, or (a scheduled litigation job, a negotiation notice or a new-message SMD
+    note) one new message whose
     recipient and subject are the broker's; a caller's to/cc/bcc/subject and
     attachments are never read."""
     html = {"html": payload["html"]} if isinstance(payload.get("html"), str) and payload["html"].strip() else {}
@@ -597,7 +604,8 @@ def reply_verb(
             action,
             # The participant fence's anchor is the email the broker just
             # verified, never one the caller named: a bound reply answers it.
-            # A scheduled litigation job or a negotiation notice has no such email: its one new
+            # A scheduled litigation job, a negotiation notice or a new-message SMD note has no
+            # such email: its one new
             # message is fenced as a send on the skill's authored lane
             # (settings.scheduled_recipients), and names no anchor.
             {

@@ -9,7 +9,8 @@ the broker itself and never taken off the wire:
   rest of ``participant_fence.JOB_KINDS``, an SMD ``note_job`` included) is the
   job's ledger row: its request email (``request_ref``) is found in the Inbox
   and its From must be the job's ``requester``. A job with no request email
-  is no anchor at all;
+  is no anchor at all, and neither is a new-message note
+  (``trigger='scheduled'``, 2026-10-16): it answers no email;
 * a RULE anchor is the pending-rules row: the origin the broker recorded when
   the row was created, whose From must be the row's ``instructed_by``.
 

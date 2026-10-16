@@ -66,7 +66,8 @@ recorded once.
 ## DELIVER mode (the note's wake)
 
 The command wakes this skill with a task whose first line is "Run the smd-note
-skill's DELIVER mode for note job <id>." followed by `Kind: note.` The wake is a
+skill's DELIVER mode for note job <id>." followed by `Kind: note.` (and, for a
+new email, `Trigger: scheduled.`). The wake is a
 pointer; the recorded note is the fact.
 
 1. **Bind.** Call `reply_bind` with ONLY `job_id` = the id in the wake's first

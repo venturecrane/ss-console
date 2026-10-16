@@ -20,15 +20,16 @@ completion wake. This is that wake for words SMD approved:
    overlay's request index, read only), so SMD can pick the request to answer.
 2. ``--dry-run`` asks the broker's root-only ``note_preview``: the email's
    subject, sender and time, the exact CC list the reply will carry, the words,
-   and a digest over all of it. It writes nothing. The broker refuses an email
+   and a digest over all of it (a new email: see THE NEW-MESSAGE FORM). It writes nothing. The broker refuses an email
    that is not a recent received request from someone the seat may answer,
    words with an em dash, and any identifier the email does not itself carry.
 3. The live run repeats the digest (``--confirm``), so what is recorded is what
-   SMD read. ``note_record`` writes the note (once per email and words); this
+   SMD read. ``note_record`` writes the note (once per email and words, or per
+   recipient, subject and words); this
    command then writes the note's job dir with a PENDING code-only wake
    (``note_lane.wake_task``) and does nothing else to it. The daemon's note
    lane, which holds the wake secret, sends the wake on its next tick and arms
-   the reply watch then (which pages SMD if the reply never reaches Sent Items,
+   the reply watch then (which pages SMD if the note never reaches Sent Items,
    whether or not this command is still running). The command only polls the
    note's reply, up to ``--wait-min`` minutes from the job's creation.
 
@@ -123,7 +124,7 @@ def resolve_matters(
         from smokeball_connector.library import lookup_matter
 
         client = client_factory()
-    except Exception as exc:  # noqa: BLE001 - "could not look" is a refusal, never "none found"
+    except Exception as exc:  # "could not look" is a refusal, never "none found"
         raise Refused(
             f"could not look up matter numbers {', '.join(numbers)}: Smokeball is not reachable here "
             f"({exc.__class__.__name__}); nothing was recorded"
@@ -132,8 +133,10 @@ def resolve_matters(
     for number in numbers:
         try:
             found = lookup_matter(client, number=number)
-        except Exception as exc:  # noqa: BLE001
-            raise Refused(f"could not look up matter {number} ({exc.__class__.__name__}); nothing was recorded") from exc
+        except Exception as exc:
+            raise Refused(
+                f"could not look up matter {number} ({exc.__class__.__name__}); nothing was recorded"
+            ) from exc
         if found.failed:
             raise Refused(f"could not look up matter {number} ({found.reason}); nothing was recorded")
         if not found.found or not found.matter_id:

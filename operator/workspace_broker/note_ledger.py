@@ -1,5 +1,6 @@
 """Broker-owned ledger for SMD notes: words SMD has the Operator say to a firm
-colleague, in her own thread, on a request she sent.
+colleague, in her own thread on a request she sent, or (2026-10-16, a
+new-message note) in one new email to an authored admin.
 
 WHY IT EXISTS (2026-10-15). The Operator filed a document on SMD's request and
 could not tell the person who asked: a turn opened by an inbound email may
@@ -10,7 +11,9 @@ the colleague's request email (``note_verbs.note_record``, root only), and the
 smd-note skill's DELIVER mode sends them through the verified reply binding,
 which is job-generic (``reply_binding.py``, kind ``note_job``).
 
-ONE ROW PER (request email, words). There is no queue and no runner: a note is
+ONE ROW PER (request email, words), or for a new-message note per (recipient,
+subject and words): its ``request_ref`` is ``new:<key>`` and its digest covers
+the subject. There is no queue and no runner: a note is
 born ``delivered`` (its content is final the moment SMD approved it), attempt 1,
 so its reply key is ``note_job:<id>:1:delivered`` and it is answered once.
 Recording the same words on the same email again is refused by the UNIQUE
@@ -18,7 +21,8 @@ index, so a re-run of the root command can never become a second send.
 
 The text is kept here (the DELIVER turn reads it word for word through
 ``note_job_status``) and NEVER in an audit row: ``NOTE_JOB_RECORDED`` carries
-the id, the text's digest, the requester's key and who approved it.
+the id, the text's digest, the requester's key, who approved it, the mode and
+(a new message) the matter numbers, never a matter's name or the subject.
 
 The connection discipline is ``drafting_ledger``'s: per-operation sqlite
 connections, ``journal_mode=DELETE``, because the broker and the runner reach
