@@ -814,3 +814,34 @@ def test_a_note_anchors_on_its_request_email_by_graph_id(tmp_path: Path) -> None
     assert _send(broker, [ALICE, DANA], anchor=anchor)["ok"] is True
     box.posts.clear()
     _refused(broker, box, lambda: _send(broker, [BRUNO], anchor=anchor))
+
+
+# -- the smd-note lane (2026-10-16): a new-message note reaches only the admins
+# the skill authors, with no anchor.
+
+
+def test_the_smd_note_lane_admits_its_authored_admin_and_no_one_else(tmp_path: Path) -> None:
+    from workspace_broker import participant_fence as pf
+
+    path = tmp_path / "customer.yaml"
+    path.write_text(
+        "scope:\n"
+        "  inbound_allow_from: ['@firm.example']\n"
+        "  admins: [admin@firm.example, attorney@firm.example]\n"
+        "personas:\n"
+        "  - slug: operator\n"
+        "    skills:\n"
+        "      - name: smd-note\n"
+        "        enabled: true\n"
+        "        settings: {scheduled_recipients: 'admin@firm.example'}\n",
+        encoding="utf-8",
+    )
+    facts = pf.seat_facts(path)
+
+    def resolve(_anchor):
+        raise AssertionError("no anchor is looked up")
+
+    pf.check_send(facts, ["admin@firm.example"], lane="skill:smd-note", anchor=None, resolve=resolve)
+    for other in ("attorney@firm.example", "paralegal@firm.example"):
+        with pytest.raises(pf.FenceRefused):
+            pf.check_send(facts, [other], lane="skill:smd-note", anchor=None, resolve=resolve)

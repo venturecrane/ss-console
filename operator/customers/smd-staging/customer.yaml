@@ -164,6 +164,12 @@ personas:
       # with it; the pilot's mailbox is AgentMail. Every initiation flag is
       # false: the only start is the note's handoff wake, sent by the note lane
       # after root recorded the note.
+      # settings.scheduled_recipients (2026-10-16): who a NEW-MESSAGE note may
+      # reach (a note with no thread of hers here; reply_binding
+      # _verify_scheduled, participant fence lane skill:smd-note). Staging's only
+      # admin is the Captain, so this proves the send path; an SMD address always
+      # passes the participant fence, so the fence's firm-address decision is
+      # proven by a read-only probe on the client seat, not here.
       - name: smd-note
         version: pending
         initiation:
@@ -171,6 +177,8 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+        settings:
+          scheduled_recipients: 'scott@smd.services'
     skills_disabled:
       - google-workspace
       - himalaya

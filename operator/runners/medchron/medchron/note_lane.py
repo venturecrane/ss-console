@@ -36,9 +36,13 @@ SKILL = "smd-note"
 REPLY_KIND = "note_job"
 
 
-def wake_task(note_id: str) -> str:
-    """Code-authored only: the id and the kind. The words are the ledger's."""
-    return f"Run the {SKILL} skill's DELIVER mode for note job {note_id}.\nKind: note."
+def wake_task(note_id: str, *, new_message: bool = False) -> str:
+    """Code-authored only: the id and the kind. The words are the ledger's. A
+    new-message note (no request email) carries ``Trigger: scheduled.``, the
+    overlay's only mark that a wake may bind one new email
+    (``shared/turn_sources.WAKE_TRIGGER``; the negotiation lane's line)."""
+    task = f"Run the {SKILL} skill's DELIVER mode for note job {note_id}.\nKind: note."
+    return task + "\nTrigger: scheduled." if new_message else task
 
 
 class NoteBroker:

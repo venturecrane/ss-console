@@ -108,6 +108,8 @@ class FakeMailbox:
         self.fail_reply_source_get = False
         self.post_lands_anyway = False
         self.inbox_status: int | None = None
+        #: Every POST body, parsed: what a send actually carried.
+        self.bodies: list[dict] = []
 
     def __call__(self, request, timeout=None):
         url = request.full_url
@@ -138,6 +140,8 @@ class FakeMailbox:
                 raise urllib.error.HTTPError(url, 404, "nf", {}, None)  # type: ignore[arg-type]
             return _Response(json.dumps(self.message))
         if request.method == "POST":
+            if url.endswith("/sendMail") or url.endswith("/reply"):
+                self.bodies.append(json.loads(request.data or b"{}"))
             if self.post_status is not None:
                 if self.post_lands_anyway:
                     self.sent.append(
@@ -1088,3 +1092,151 @@ def test_a_demand_id_is_not_a_note(tmp_path: Path) -> None:
     job = _job(tmp_path, ["running", "delivered"])
     out = _call(_broker(tmp_path, _note_box()), "msgraph_reply_bind", {"kind": "note_job", "job_id": job})
     assert out["bound"] is False and "no SMD note job" in out["reason"]
+
+
+# -- new-message SMD notes (2026-10-16). A note with no request email of hers
+# (trigger='scheduled') goes as ONE new email to a Named Administrator the
+# smd-note skill authors, under the subject SMD recorded.
+
+NOTE_YAML = YAML + (
+    "personas:\n"
+    "  - slug: operator\n"
+    "    skills:\n"
+    "      - name: smd-note\n"
+    "        enabled: true\n"
+    "        initiation: {manual: false, scheduled: false, webhook: false}\n"
+    "        settings:\n"
+    f"          scheduled_recipients: '{ADMIN}'\n"
+)
+NOTE_SUBJECT = "The demand format you asked for is live"
+
+
+def _new_note(tmp_path: Path, requester: str = ADMIN) -> str:
+    from workspace_broker.note_ledger import NoteLedger
+
+    return NoteLedger(str(tmp_path / "audit.db")).create(
+        requester=requester,
+        request_ref="new:abc",
+        text="It is live.",
+        approved_by="smd",
+        recorded_by="root",
+        subject=NOTE_SUBJECT,
+    )
+
+
+def test_a_new_message_note_sends_one_new_email_under_its_recorded_subject(tmp_path: Path) -> None:
+    from workspace_broker.note_ledger import NoteLedger
+
+    note = _new_note(tmp_path)
+    box = FakeMailbox()
+    broker = _broker(tmp_path, box, NOTE_YAML)
+    bound = _call(broker, "msgraph_reply_bind", {"kind": "note_job", "job_id": note})
+    assert bound["bound"] is True and bound["mode"] == "new_message"
+    assert bound["sender"] == ADMIN and bound["subject"] == NOTE_SUBJECT
+    _call(
+        broker,
+        "msgraph_reply_bound",
+        {"kind": "note_job", "job_id": note},
+        # A caller's recipient and subject are never read.
+        payload={"comment": "It is live.", "to": [STRANGER], "subject": "x"},
+        session_id="sess-1",
+    )
+    assert len(_sendmails(box)) == 1 and box.replies() == []
+    sent = box.bodies[-1]["message"]
+    assert sent["subject"] == NOTE_SUBJECT
+    assert [r["emailAddress"]["address"] for r in sent["toRecipients"]] == [ADMIN]
+    assert not sent.get("ccRecipients") and not sent.get("bccRecipients")
+    assert NoteLedger(broker.audit_db_path).read(note)["reply_key"] == "1:delivered"
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box, NOTE_YAML), {"kind": "note_job", "job_id": note})
+    assert len(_sendmails(box)) == 1
+
+
+def test_a_new_message_note_whose_recipient_is_no_longer_authored_sends_nothing(tmp_path: Path) -> None:
+    note = _new_note(tmp_path)
+    box = FakeMailbox()
+    other = NOTE_YAML.replace(f"scheduled_recipients: '{ADMIN}'", "scheduled_recipients: 'other@firm.example'")
+    out = _call(_broker(tmp_path, box, other), "msgraph_reply_bind", {"kind": "note_job", "job_id": note})
+    assert out["bound"] is False and "nothing was sent" in out["reason"]
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box, other), {"kind": "note_job", "job_id": note})
+    assert _sendmails(box) == []
+
+
+def test_a_new_message_note_to_an_authored_non_admin_sends_nothing(tmp_path: Path) -> None:
+    note = _new_note(tmp_path, requester="other@firm.example")
+    box = FakeMailbox()
+    yaml_text = NOTE_YAML.replace(
+        f"scheduled_recipients: '{ADMIN}'", f"scheduled_recipients: '{ADMIN},other@firm.example'"
+    )
+    out = _call(_broker(tmp_path, box, yaml_text), "msgraph_reply_bind", {"kind": "note_job", "job_id": note})
+    assert out["bound"] is False and _sendmails(box) == []
+
+
+def test_a_note_never_inherits_the_negotiation_watchs_recipients(tmp_path: Path) -> None:
+    """FALSIFIER: the old ``else`` read negotiation-watch's list for any kind
+    that was not litigation. Here the negotiation watch authors the admin and
+    smd-note authors someone else: the note must not reach the admin."""
+    note = _new_note(tmp_path)
+    box = FakeMailbox()
+    yaml_text = NEG_YAML + (
+        "      - name: smd-note\n"
+        "        enabled: true\n"
+        "        initiation: {manual: false, scheduled: false, webhook: false}\n"
+        "        settings:\n"
+        "          scheduled_recipients: 'other@firm.example'\n"
+    )
+    out = _call(_broker(tmp_path, box, yaml_text), "msgraph_reply_bind", {"kind": "note_job", "job_id": note})
+    assert out["bound"] is False and _sendmails(box) == []
+
+
+def test_any_authored_admin_may_receive_a_note_not_only_the_first(tmp_path: Path) -> None:
+    second = "second@firm.example"
+    note = _new_note(tmp_path, requester=second)
+    box = FakeMailbox()
+    yaml_text = NOTE_YAML.replace(f"    - {ADMIN}\n", f"    - {ADMIN}\n    - {second}\n").replace(
+        f"scheduled_recipients: '{ADMIN}'", f"scheduled_recipients: '{ADMIN},{second}'"
+    )
+    bound = _call(_broker(tmp_path, box, yaml_text), "msgraph_reply_bind", {"kind": "note_job", "job_id": note})
+    assert bound["bound"] is True and bound["sender"] == second
+
+
+def test_the_authored_recipients_table_refuses_an_unknown_kind() -> None:
+    from workspace_broker import reply_binding
+
+    with pytest.raises(ValueError):
+        reply_binding._authored_recipients("drafting_job", "/nonexistent.yaml")
+
+
+def test_a_reply_note_still_answers_in_her_thread_when_smd_note_authors_recipients(tmp_path: Path) -> None:
+    note = _note(tmp_path)
+    box = _note_box()
+    bound = _call(_broker(tmp_path, box, NOTE_YAML), "msgraph_reply_bind", {"kind": "note_job", "job_id": note})
+    assert bound["bound"] is True and bound["mode"] == "reply"
+
+
+def test_a_new_message_note_graph_4xx_is_left_unknown_never_resent(tmp_path: Path) -> None:
+    """A new email has no conversation to search, so a 4xx cannot be proven
+    unsent: like a scheduled litigation list, it stays ``unknown`` for a person
+    rather than risk a second email."""
+    note = _new_note(tmp_path)
+    box = FakeMailbox()
+    box.post_status = 403
+    broker = _broker(tmp_path, box, NOTE_YAML)
+    with pytest.raises(Exception):
+        _send(broker, {"kind": "note_job", "job_id": note})
+    assert bound_replies.claimed(broker.audit_db_path, f"note_job:{note}:1:delivered")
+
+
+def test_a_new_message_note_anchors_nothing_for_the_participant_fence(tmp_path: Path) -> None:
+    """Its ref is ``new:<key>``: never looked up as a Message-ID."""
+    from workspace_broker import participant_lookup
+    from workspace_broker.participant_fence import Anchor, FenceRefused
+
+    note = _new_note(tmp_path)
+    box = FakeMailbox()
+    broker = _broker(tmp_path, box, NOTE_YAML)
+    with pytest.raises(FenceRefused) as err:
+        participant_lookup._job(broker, "msgraph", Anchor("note_job", note))
+    assert "no request email" in str(err.value)
+    assert not [u for m, u in box.calls if m == "GET" and "internetMessageId" in urllib.parse.unquote(u)]

@@ -9,7 +9,8 @@ the broker itself and never taken off the wire:
   rest of ``participant_fence.JOB_KINDS``, an SMD ``note_job`` included) is the
   job's ledger row: its request email (``request_ref``) is found in the Inbox
   and its From must be the job's ``requester``. A job with no request email
-  is no anchor at all;
+  is no anchor at all, and neither is a new-message note
+  (``trigger='scheduled'``, 2026-10-16): it answers no email;
 * a RULE anchor is the pending-rules row: the origin the broker recorded when
   the row was created, whose From must be the row's ``instructed_by``.
 
@@ -101,6 +102,10 @@ def _job(broker: BrokerContext, channel: str, anchor: Anchor) -> Participants:
     row = job_ledger(broker, anchor.kind).read(anchor.ident)
     if row is None:
         raise _unverifiable("there is no such job")
+    if anchor.kind == "note_job" and row.get("trigger") == "scheduled":
+        # A new-message note answers no email (2026-10-16): its ref is
+        # ``new:<key>``, never a Message-ID or a Graph id to look up.
+        raise _unverifiable("a new-message note has no request email")
     ref = str(row.get("request_ref") or "").strip()
     requester = normalize_address(row.get("requester"))
     if not ref or not requester:
