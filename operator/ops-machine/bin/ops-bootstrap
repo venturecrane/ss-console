@@ -4,6 +4,8 @@
 # (the Law 2 guard, boot smoke, input staging) works unchanged, and install the
 # ss-console Node deps. Idempotent: an existing clone is fetched, not recloned.
 set -euo pipefail
+exec > >(tee "$HOME/logs/bootstrap.log") 2>&1
+trap 'echo "bootstrap FAILED at line $LINENO: $BASH_COMMAND"' ERR
 cd "$HOME/dev"
 gh auth setup-git >/dev/null
 for repo in ss-console engagements hermes-smd-overlay crane-console; do
@@ -15,7 +17,15 @@ for repo in ss-console engagements hermes-smd-overlay crane-console; do
 done
 git config --global user.name "SMD Ops"
 git config --global user.email "team@smd.services"
-(cd ss-console && npm ci --silent && echo "ss-console deps installed")
+# @venturecrane packages come from GitHub Packages (.npmrc reads NODE_AUTH_TOKEN);
+# the ops gh login needs read:packages (gh auth refresh -s read:packages).
+NODE_AUTH_TOKEN=$(gh auth token)
+export NODE_AUTH_TOKEN
+(cd ss-console && npm ci --no-audit --no-fund 2>&1 | tail -15 && echo "ss-console deps installed")
+# The operator Python tooling (work-health, reconcilers, seat scripts) runs from
+# one venv, first on PATH via ss-env and .bashrc.
+uv venv -q --allow-existing "$HOME/.venvs/ops"
+VIRTUAL_ENV="$HOME/.venvs/ops" uv pip install -q pyyaml pytest -e ss-console/operator && echo "python env ready"
 # .infisical.json is gitignored on the laptop; the ops identity supplies the
 # project id instead (see ss-env), but scripts that read the file find it here.
 # shellcheck disable=SC1090

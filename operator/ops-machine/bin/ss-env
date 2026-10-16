@@ -10,4 +10,5 @@ INFISICAL_TOKEN=$(infisical login --method=universal-auth \
   --client-id="$INFISICAL_UA_CLIENT_ID" --client-secret="$INFISICAL_UA_CLIENT_SECRET" \
   --plain --silent)
 export INFISICAL_TOKEN
+export PATH="$HOME/.venvs/ops/bin:$HOME/bin:$PATH"
 exec infisical run --projectId "$INFISICAL_PROJECT_ID" --env=prod --path=/ss --silent -- "$@"
