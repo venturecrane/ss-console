@@ -20,6 +20,8 @@ Machine health has always paged within minutes: a seat that stops reporting, a c
 
 ## What arrives, and when
 
+**Since 2026-10-16 the list is worked before anyone reads it.** The triage agent on the ops machine ([The Ops Machine](/admin/playbook/ops-machine)) runs this evaluation hourly at :47 and emails team@ one report: handled, needs you, fixes to approve. The GitHub Actions run below no longer sends the list; it still sends the ACTION pages (a dead sign-in), so those arrive even if the ops machine is down. If the triage job stops running, the healthchecks.io check `smd-ops-triage` emails after 90 minutes of silence. What follows describes the evaluation both runs share.
+
 - **Hourly, only when something on a client seat needs attention.** Subject: `[SMD Ops] Work health: N need attention (M new)`. The first line says the same in a sentence; then each client seat (A&P first) with its items.
 - **NEW** lines carry a "To do". Items already reported in an earlier email are one line each with their age, "(open 2d)", so an unchanged problem never re-sends at full volume. Times are Phoenix time, marked MST.
 - **One line per problem, never per occurrence.** A send refused every few seconds for a day is one line with the attempt count, first and last time. Repeats of one routine or one tool are one line with a count. A job that failed is one line, not one per signal about it.

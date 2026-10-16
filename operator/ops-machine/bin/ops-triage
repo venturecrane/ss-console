@@ -17,6 +17,15 @@ body="$STATE/wh-body-$now.txt"
 log="$HOME/logs/triage-$now.log"
 exec >>"$log" 2>&1
 
+# Heartbeat (healthchecks.io check smd-ops-triage, hourly, 30 min grace). A run
+# that finishes pings success; one that fails pings /fail; a Machine or cron
+# that stops running pings nothing, and Healthchecks emails after the grace.
+# This is the backstop that replaced the GitHub Actions work-health digest.
+HC=$(cat "$HOME/.ops-hc-url" 2>/dev/null || true)
+ping_hc() { [ -n "$HC" ] && curl -fsS -m 10 --retry 3 "$HC$1" >/dev/null 2>&1 || true; }
+trap 'rc=$?; if [ $rc -eq 0 ]; then ping_hc ""; else ping_hc "/fail"; fi' EXIT
+ping_hc "/start"
+
 git -C "$REPO" fetch -q origin && git -C "$REPO" checkout -q --detach origin/main
 since=$(cat "$STATE/triage-since" 2>/dev/null || true)
 args=(--dry-run --print-body --state-out "$STATE/triage-state.next.json")
