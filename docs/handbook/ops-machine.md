@@ -27,7 +27,9 @@ Until 2026-10-16 every client operation (seat rebuilds, seat probes, chronology 
 
 ## How to connect
 
-From either laptop: `fly ssh console -a smd-ops -u ops`, then `tmux new -A -s main`, then `cd ~/dev/ss-console && crane ss` (or `claude`). A tmux session survives a dropped connection; reattach with the same command.
+From either laptop, type `crane ss`. It opens the client-ops session on the ops machine, or rejoins it if it is already running (a tmux session named `main` that survives closing the laptop). `crane ss brokery` opens a second, separately named session. `crane ss --local` runs on the laptop as before, for product work. Every other venture is untouched.
+
+How it works: `operator/ops-machine/laptop/install.sh` gives each laptop a Fly token that reaches smd-ops only (refused at every client seat), installs `~/.smd-ops/ops-connect`, and adds a `crane` shell function to `~/.zshrc`. On the Machine, `bin/ops-session` starts `crane ss` with the Machine's own Infisical identity. A `claude` shim first on its PATH removes the generic `ANTHROPIC_API_KEY` that rides in with the `/ss` secrets, so every Claude there, interactive or unattended, uses the Captain's Max login.
 
 ## How its keys work
 

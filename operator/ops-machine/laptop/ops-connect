@@ -1,0 +1,11 @@
+#!/bin/bash
+# ops-connect [session-name] [crane args...]: open (or rejoin) a client-ops
+# session on smd-ops. Installed on each laptop as ~/.smd-ops/ops-connect and
+# reached by typing `crane ss` (see crane-ss.zsh). Uses this laptop's own Fly
+# token, which reaches smd-ops and nothing else.
+set -euo pipefail
+FLY_API_TOKEN="$(cat "$HOME/.smd-ops/fly-token")"
+export FLY_API_TOKEN
+name="${1:-main}"; shift || true
+fly=$(command -v fly || echo /opt/homebrew/bin/fly)
+exec "$fly" ssh console -a smd-ops -u ops --pty -C "tmux new -A -s $name /home/ops/bin/ops-session $*"

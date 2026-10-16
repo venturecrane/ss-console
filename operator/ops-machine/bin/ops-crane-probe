@@ -1,0 +1,5 @@
+#!/bin/bash
+# ops-crane-probe: prove `crane ss` launches on smd-ops through ops-session
+# (secrets via the Machine's identity, Claude under the Captain's login) by
+# running one non-interactive turn.
+timeout 300 "$HOME/bin/ops-session" -p "Reply with exactly: CRANE OK" --max-budget-usd 1 < /dev/null 2>&1 | tail -4
