@@ -1,0 +1,8 @@
+# smd-ops ops user's schedule. Installed to /home/ops/.crontab (on the volume)
+# and loaded at every boot by the entrypoint.
+PATH=/home/ops/.venvs/ops/bin:/home/ops/bin:/home/ops/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+HOME=/home/ops
+TZ=America/Phoenix
+# Work-health triage, hourly at :47 (the GitHub Actions work-health run lands
+# around :30; this follows it).
+47 * * * * /home/ops/bin/ops-triage
