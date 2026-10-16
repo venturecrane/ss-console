@@ -1,14 +1,16 @@
 ---
 name: smd-note
 description: >-
-  Sends a colleague SMD's note in her own email thread. The words are exactly
-  the ones SMD approved. SMD records the note on the Machine against a
-  recent request email she sent (every matter number, date and id in the words
-  must already appear in that email), then wakes this skill. DELIVER mode binds
-  the note, reads its words, and sends them word for word as one reply in her
-  thread, copying the firm people on her request. Any refusal sends nothing and
+  Sends a colleague SMD's note, word for word. It goes in the exact words SMD
+  approved: as a reply in her own email thread, or, when she has no thread in
+  this mailbox, as one new email to a Named Administrator the firm authored
+  for it. SMD records the note
+  on the Machine (a reply's matter numbers, dates and ids must appear in her
+  request email; a new email's numbers must each be a Smokeball matter or one
+  SMD declared plain), then wakes this skill. DELIVER mode binds the note, reads
+  its words, and sends them word for word, once. Any refusal sends nothing and
   never rewords the note. The skill never reads a matter.
-version: 0.1.0
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -22,9 +24,11 @@ metadata:
     vertical: law-firm
     weight: light # the turn binds, reads one recorded note and sends it; it reads no matter
     action_class: read # the turn reads the recorded note and replies in a colleague's own thread; it writes nothing anywhere
-    content_ceiling: staff # every note goes to a firm colleague who wrote to the Operator, never outside the firm
+    content_ceiling: staff # every note goes to a firm colleague (her own thread's sender, or an authored admin), never outside the firm
     connectors: []
-    # Email: one bound reply per note, on its wake. This skill never addresses anyone else.
+    # Email: one bound send per note, on its wake (a reply in her thread, or one
+    # new email whose recipient and subject the broker sets). This skill never
+    # addresses anyone else.
 ---
 
 # SMD Note
@@ -41,24 +45,37 @@ before the wake. The Operator sends them exactly as recorded.
 
 ## How a note is recorded (no turn involved)
 
-SMD runs one command on the Machine, as root. It names a recent email the
-colleague sent to the Operator (within 14 days) and the exact words. The broker
-refuses the note unless that email is a received request from someone this seat
-may answer, the words carry no em dash, a person at SMD approved them, and every
-matter number, date and id in the words also appears in that email. SMD reads a
-dry run first (who the reply goes to, who is copied, the words), and the live
-run must match it. The same words on the same email are recorded once.
+SMD runs one command on the Machine, as root, with the exact words. Either:
+
+- **A reply.** It names a recent email the colleague sent to the Operator
+  (within 14 days). The broker refuses the note unless that email is a received
+  request from someone this seat may answer, and every matter number, date and
+  id in the words also appears in that email.
+- **A new email** (she has no thread in this mailbox: she asked SMD directly,
+  or nobody asked). It names the recipient and the subject. The broker refuses
+  unless the recipient is a Named Administrator AND listed in this skill's
+  `settings.scheduled_recipients`, and every number in the words is a Smokeball
+  matter (looked up on the Machine) or one SMD declared plain (a count, a year,
+  an amount).
+
+Either way the words carry no em dash and a person at SMD approved them. SMD
+reads a dry run first (who it reaches, the subject or who is copied, each
+matter's name, the words), and the live run must match it. The same note is
+recorded once.
 
 ## DELIVER mode (the note's wake)
 
 The command wakes this skill with a task whose first line is "Run the smd-note
-skill's DELIVER mode for note job <id>." followed by `Kind: note.` The wake is a
+skill's DELIVER mode for note job <id>." followed by `Kind: note.` (and, for a
+new email, `Trigger: scheduled.`). The wake is a
 pointer; the recorded note is the fact.
 
 1. **Bind.** Call `reply_bind` with ONLY `job_id` = the id in the wake's first
-   line. The broker answers with the person the reply will reach (the colleague
-   who sent the request). **If the bind is refused, send NOTHING to anyone** and
-   end the turn stating the refusal sentence in your own output.
+   line. The broker answers with the person the note will reach (the colleague
+   who sent the request, or the administrator a new email goes to) and the
+   mode: `reply` (her thread) or `new_message` (one new email; the broker sets
+   its recipient and subject). **If the bind is refused, send NOTHING to
+   anyone** and end the turn stating the refusal sentence in your own output.
 2. **Read the note** with `note_job_status` (`job_id`). Its `text` is the note,
    already written in the Operator's voice. **If the tool answers
    `"status": "refused"` (for example `note_job_unavailable`: the broker holds no
@@ -68,8 +85,9 @@ pointer; the recorded note is the fact.
 3. **Send once** with `create_draft` addressed to the bound person only. The body
    is the note's `text`, word for word, followed by a blank line and "Thanks," on
    its own line. Do not reword it, add to it, shorten it, summarize a matter, or
-   answer anything else in the thread. The broker copies the firm people who
-   were on her request; add no one.
+   answer anything else in the thread. For a reply, the broker copies the firm
+   people who were on her request; for a new email, it copies no one and sets
+   the subject. Add no one and set no subject yourself.
 4. **Stop.** One message per note. No follow-up, no task, no memo.
 
 ## Boundaries (never)

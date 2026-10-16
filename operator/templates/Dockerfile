@@ -1200,7 +1200,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # note_job, and its note_job_status tool reads the recorded words; pairs with
 # this repo's note_verbs.py, note_ledger.py, reply_binding note_job and
 # medchron/note_by_smd.py. Also carries #457 (aef6183d). No tracked twin moved.
-ARG OVERLAY_REF="d495720898a793628a80a6f1d087a3e03f00b3fb"
+# 2026-10-16 (fda15046, the overlay #459 merge commit). A new-message SMD note:
+# a note wake carrying "Trigger: scheduled." binds the broker's one new email
+# (turn_sources SCHEDULED_KINDS); pairs with this repo's note_verbs.py
+# new-message branch, reply_binding SCHEDULED_LANES note_job and note_lane's
+# trigger line. No tracked twin moved.
+ARG OVERLAY_REF="fda15046577a7e80e85ffbfa88cf5b1b7826d26c"
 
 ARG CUSTOMER_SLUG=customer-zero
 
