@@ -32,6 +32,7 @@ NOTHING_IN_SCOPE = "nothing_in_scope"  # no open litigation matter fits what was
 ANOTHER_PERSON = "another_person"  # a record in the file names someone other than the client (ask)
 WHICH_CHRONOLOGY = "which_chronology"  # two chronologies could each be the current one (ask)
 REROUTED_TO_UPDATE = "rerouted_to_update"  # a RUN on a delivered matter; the agent resubmits it as the UPDATE
+STAFF_UNRESOLVED = "staff_unresolved"  # a staff reassignment names someone the staff list cannot settle (ask)
 
 CLASSES = frozenset(
     {
@@ -42,11 +43,12 @@ CLASSES = frozenset(
         ANOTHER_PERSON,
         WHICH_CHRONOLOGY,
         REROUTED_TO_UPDATE,
+        STAFF_UNRESOLVED,
     }
 )
 
 #: Classes whose answer is the firm's. Every other class is ours or an answer.
-FIRM_QUESTION = frozenset({ANOTHER_PERSON, WHICH_CHRONOLOGY})
+FIRM_QUESTION = frozenset({ANOTHER_PERSON, WHICH_CHRONOLOGY, STAFF_UNRESOLVED})
 
 #: Reasons already paged under their own code by ``watch.settle``.
 PROOF_PREFIXES = ("review_held", "readback_mismatch", "readback_unproven", "dry_run_reported")
@@ -66,6 +68,7 @@ _UPDATE_HELD = (
 
 _LITIGATION = {
     "scope_empty": (NOTHING_IN_SCOPE, None),
+    "staff_unresolved": (STAFF_UNRESOLVED, None),
     "gate_refused": (SMD_FINISHING, "gate_held"),
     "parity_hold": (SMD_FINISHING, "gate_held"),
     "leak_found": (SMD_FINISHING, "gate_held"),
@@ -133,6 +136,7 @@ __all__ = [
     "REROUTED_TO_UPDATE",
     "SMD_FINISHING",
     "SMD_FINISHING_FILED",
+    "STAFF_UNRESOLVED",
     "WHICH_CHRONOLOGY",
     "classify",
     "wake_line",

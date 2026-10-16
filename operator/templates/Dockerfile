@@ -1195,7 +1195,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # names paralegals ("Irma's files"), alone or with attorneys; pairs with this
 # repo's broker paralegal resolution and the runner's Person Assisting scope.
 # No tracked twin moved.
-ARG OVERLAY_REF="aef6183d3b4bf0f2ec239e2c78778d50a4267487"
+# 2026-10-15 (d4957208, the overlay #458 merge commit). An SMD note's
+# completion wake ("... for note job <ULID>", turn_sources WAKE_JOB) binds
+# note_job, and its note_job_status tool reads the recorded words; pairs with
+# this repo's note_verbs.py, note_ledger.py, reply_binding note_job and
+# medchron/note_by_smd.py. Also carries #457 (aef6183d). No tracked twin moved.
+ARG OVERLAY_REF="d495720898a793628a80a6f1d087a3e03f00b3fb"
 
 ARG CUSTOMER_SLUG=customer-zero
 
@@ -1716,7 +1721,7 @@ RUN set -eu; \
     uv pip install --python /opt/medchron/.venv/bin/python --no-cache --no-deps \
       /app/connectors/_sdk /app/connectors/smokeball /app/runners/medchron; \
     [ -x /opt/medchron/.venv/bin/medchron ] || { echo "FATAL: the medchron runner produced no console-script"; exit 1; }; \
-    /opt/medchron/.venv/bin/python -c "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, medchron.drafting_lane, medchron.drafting.run, medchron.negotiation_lane, medchron.negotiation.run, medchron.litigation_lane, medchron.litigation.run, striprtf.striprtf, smokeball_connector.docx_format, docx"; \
+    /opt/medchron/.venv/bin/python -c "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, medchron.drafting_lane, medchron.drafting.run, medchron.negotiation_lane, medchron.negotiation.run, medchron.note_lane, medchron.note_by_smd, medchron.litigation_lane, medchron.litigation.run, striprtf.striprtf, smokeball_connector.docx_format, docx"; \
     command -v antiword >/dev/null || { echo "FATAL: antiword is missing (the litigation job and the negotiation watch read .doc with it)"; exit 1; }; \
     chown -R root:root /opt/medchron; \
     chmod -R a+rX /opt/medchron

@@ -34,9 +34,21 @@ DOB_LABEL = re.compile(
     r"(?i)\b(?:D\.?O\.?B\.?|Date\s+of\s+Birth|Birth\s*Date)\s*[:#]?\s*(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b"
 )
 # The label is case-blind, the name is not: two capitalised words ("Jane Doe",
-# "DOE, JANE"), so "Patient: denies pain" is not read as a name.
+# "DOE, JANE"), so "Patient: denies pain" is not read as a name. And it is a
+# LABEL only at the start of a line or after a field delimiter (a bar, a
+# semicolon, a tab, two spaces): a form QUESTION ("Does the patient: Yes No",
+# "arranged for the patient:Yes IHSS") held a client's own records twice
+# (2026-10-14).
 PATIENT_LABEL = re.compile(
-    r"(?m)\b(?i:patient(?:\s+name)?)\s*[:#]\s*([A-Z][A-Za-z'\-]+(?:,\s*|\s+)[A-Z][A-Za-z'\-]+(?:\s+[A-Z][A-Za-z'\-.]*){0,2})"
+    r"(?m)(?:^|(?<=[|;\t])|(?<=\s\s))[ \t]*(?i:patient(?:\s+name)?)\s*[:#]\s*"
+    r"([A-Z][A-Za-z'\-]+(?:,\s*|\s+)[A-Z][A-Za-z'\-]+(?:\s+[A-Z][A-Za-z'\-.]*){0,2})"
+)
+#: Form answers and checkbox tokens: a "name" made only of these is a box.
+ANSWER = frozenset("yes no n/a na none unknown unk y n x checked unchecked true false".split())
+#: Capitalised words a form puts after "Patient:" that are not a name.
+NOT_NAME = frozenset(
+    "denies reports states presents complains seen here was is has had states noted tolerated returns arrived "
+    "advised instructed declined education name information history status signature consent".split()
 )
 RELATIVE = re.compile(r"(?i)\b(?:guarantor|insured|subscriber|policy ?holder|parent|mother|father|spouse|emergency)\b")
 RELEASE_FILE = "identity_release.json"
@@ -51,9 +63,48 @@ def _norm_dob(mo: str, dy: str, yr: str) -> str | None:
         return None
 
 
-def findings(text: str, surnames: set[str], dobs: set[str]) -> list[str]:
-    """What in `text` names someone other than the client (surnames and
-    MM/DD/YYYY dobs of every unit on the job); [] when nothing does."""
+def full_name(name: str, after: str) -> bool:
+    """True when the capitalised words after "Patient:" are a person's name:
+    none is a form word ("Denies", "Reports"), and the name ends where a name
+    ends (the line, a delimiter, another label, or running lowercase text),
+    so "Patient: Denies Neck Pain" is not read as someone else."""
+    words = re.findall(r"[A-Za-z'\-/]+", name)
+    if any(w.lower() in NOT_NAME for w in words) or all(w.lower() in ANSWER for w in words):
+        return False
+    rest = after.lstrip()
+    if not rest or rest[:1].islower():
+        return True
+    return bool(re.match(r"(?:[|,;:(]|(?i:dob|d\.o\.b|date|mrn|acct|account|sex|age|id)\b)", rest))
+
+
+def _has(word: str, text: str) -> bool:
+    return bool(re.search(rf"(?i)(?<![A-Za-z]){re.escape(word)}(?![A-Za-z])", text))
+
+
+def _conflicts(name: str, sur: set[str], firsts: set[str], text: str) -> bool:
+    """True when a "Patient:" name is someone else's. A name without the
+    client's surname that carries the client's FIRST name, in a document that
+    names the client's surname elsewhere, is the client written short (a
+    billing summary's "Patient: Alpha" held a real update, 2026-10-13); it
+    does not conflict. Any other name without the surname does."""
+    if not sur or any(_has(s, name) for s in sur):
+        return False
+    first_only = any(_has(f, name) for f in firsts)
+    return not (first_only and any(_has(s, text) for s in sur))
+
+
+def first_names(units: list[Any]) -> set[str]:
+    """The first word of each unit's client name."""
+    return {str(u.client_name).split()[0] for u in units if str(getattr(u, "client_name", "") or "").split()}
+
+
+def findings(
+    text: str, surnames: set[str], dobs: set[str], firsts: set[str] | None = None, context: str | None = None
+) -> list[str]:
+    """What in `text` names someone other than the client (surnames, first
+    names and MM/DD/YYYY dobs of every unit on the job); [] when nothing
+    does. `context`: the whole document `text` is a page of, where the
+    client's surname is looked for (default `text`)."""
     out: list[str] = []
     sur = {s.lower() for s in surnames if s}
     for line in (text or "").splitlines():
@@ -64,8 +115,9 @@ def findings(text: str, surnames: set[str], dobs: set[str]) -> list[str]:
             if d and dobs and d not in dobs:
                 out.append(f"a date of birth {d} that is not the client's")
         for m in PATIENT_LABEL.finditer(line):
-            name = m.group(1)
-            if sur and not any(re.search(rf"(?i)(?<![A-Za-z]){re.escape(s)}(?![A-Za-z])", name) for s in sur):
+            if full_name(m.group(1), line[m.end() :]) and _conflicts(
+                m.group(1), sur, firsts or set(), text if context is None else context
+            ):
                 out.append("a patient name without the client's surname")
     return sorted(set(out))
 

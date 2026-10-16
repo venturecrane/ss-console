@@ -257,7 +257,7 @@ def _foreign_attachments(job: Job, slug_dir: Path, items: list[dict[str, Any]], 
     for sha in keep:
         a = by12.get(sha) or {}
         text = FI.pdf_text(slug_dir / "msg_pdfs" / str(a.get("local") or ""))
-        found = FI.findings(text, surnames, dobs)
+        found = FI.findings(text, surnames, dobs, FI.first_names(job.units))
         if found and sha not in free:
             out.append(f"{sha}: {'; '.join(found)}")
     return out

@@ -34,12 +34,14 @@ from . import (
     icd_tables,
     job as job_mod,
     limits as limits_mod,
+    projection,
     proof_mode,
     rehearsal,
     seat as seat_mod,
     unit_proof,
 )
 from .covered import covered_sets, documents_pulled
+from .deadline import is_transient
 from .update.coverage import covered_sets as update_covered
 from .stages.base import StageRefusal, StageRun
 from .state import RunState, state_path
@@ -81,6 +83,10 @@ class Outcome:
     # An update into the delivered chronology: the document it retired, by id
     # (stages/update_upload.py), so the ledger names what was replaced.
     replaced: dict[str, Any] | None = None
+    # 2026-10-14: the stage failed on a network error that outlived the
+    # doorway's retry budget (deadline.is_transient). The daemon requeues such
+    # a job once instead of recording it failed (requeue.py).
+    transient: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
@@ -302,37 +308,12 @@ class Driver:
             return budget_mod.scanned_pages(extracted) * self.limits.usd_per_scanned_page + self.budget.projection(
                 budget_mod.extracted_chars(extracted)
             )
-        if stage.name == "audit":
-            n = self._claims(ctx)
+        if stage.name == "audit":  # the claims still to verify (``projection``)
+            n = projection.claims_to_verify(self.slug_dir, ctx.unit.unit)
             return None if n is None else n * self.limits.usd_per_audit_claim
+        if stage.name == "update_review":
+            return projection.update_review_usd(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing)
         return None
-
-    def _claims(self, ctx: dag.Ctx) -> int | None:
-        """Claims in the built chronology STILL TO VERIFY, counted with the
-        audit gate's OWN extractor, so the projection counts what the audit
-        will actually call on rather than a remembered ratio from some other
-        matter. The audit resumes by key, so a claim with a real verdict on
-        disk for this very body costs nothing again: live 2026-09-16 a resume
-        with 1,998 verdicts already paid for was held at the cap on a
-        projection that re-counted all 1,998. None before the chronology
-        exists: no document is "no count yet", not zero claims (a rehearsal
-        that stops before build_doc would otherwise print the costliest late
-        stage as $0)."""
-        from .audit import claims as claims_mod
-        from .audit.page_text import exhibit_paths
-
-        doc = self.slug_dir / "runs" / ctx.unit.unit / "final-chronology.md"
-        if not doc.is_file():
-            return None
-        out = self.slug_dir / "out" / ctx.unit.unit
-        body = claims_mod.body_of(doc.read_text(encoding="utf-8"))
-        claims = claims_mod.extract_claims(body, set(exhibit_paths(out)))
-        sha = claims_mod.doc_sha_of(body)
-        results = out / "audit-results.jsonl"
-        rows = claims_mod.read_rows(results) if results.is_file() else []
-        verified = {r["key"] for r in rows if r.get("kind") == "real" and r.get("doc_sha") == sha}
-        verified -= claims_mod.pending_reaudit(rows)  # a stale verdict the next round pays for again
-        return sum(1 for c in claims if c["key"] not in verified)
 
     def _check_limits(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> None:
         """Before a paid stage. The first paid stage of the process also asks
@@ -591,6 +572,7 @@ class Driver:
         st.start(stage.name, input_sha=_authored_inputs_sha(self.slug_dir))
         self.log(f"[run] {stage.name}: in-process")
         refusal: str | None = None
+        crash: Exception | None = None
         runner = getattr(self, "_runner_override", {}).get(stage.name, stage.runner)
         try:
             code = int(runner(sr))
@@ -606,8 +588,8 @@ class Driver:
         except StageRefusal as exc:
             code, refusal = -1, str(exc)
             lines.append(f"REFUSED: {exc}")
-        except Exception:  # noqa: BLE001 - a crash is a failed stage with its trace on file
-            code = 1
+        except Exception as exc:  # noqa: BLE001 - a crash is a failed stage with its trace on file
+            code, crash = 1, exc
             lines.append(traceback.format_exc())
         (self.slug_dir / "runs" / unit.unit).mkdir(parents=True, exist_ok=True)
         (self.slug_dir / "runs" / unit.unit / f"log-{stage.name}.txt").write_text(
@@ -627,7 +609,9 @@ class Driver:
             reason = unit_proof.paged_line(lines) or f"{reason}; last output: {' | '.join(lines)[-400:]}"
         st.finish(stage.name, status=outcome, exit_code=code, dollars=dollars, pages=pages, note=reason)
         st.end(outcome, reason)
-        return Outcome(unit.unit, outcome, reason, stage.name, dollars, pages, notes)
+        out = Outcome(unit.unit, outcome, reason, stage.name, dollars, pages, notes)
+        out.transient = outcome == "failed" and _transient(crash, sr)
+        return out
 
     # ---- the job ----------------------------------------------------------
     def run(self) -> list[Outcome]:
@@ -658,6 +642,13 @@ class Driver:
                     self.log(f"[run] covered: no record derived for {unit.unit}: {exc}")
             outcomes.append(o)
         return outcomes
+
+
+def _transient(crash: Exception | None, sr: StageRun) -> bool:
+    """A failed stage is a network failure when it raised one, or when its
+    doorway gave up on one and the stage turned that into its exit code (the
+    update review does: a part that did not finish exits 1)."""
+    return (crash is not None and is_transient(crash)) or bool(sr.network_failures())
 
 
 def report(outcomes: list[Outcome]) -> str:

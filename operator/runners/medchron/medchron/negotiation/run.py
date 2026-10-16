@@ -133,6 +133,7 @@ class NegotiationRun:
             "seed_offers_entered": 0,
             "offers_reviewed": 0,
             "offers_held_review": 0,
+            "offers_held_final": 0,
             "rows_read_back": 0,
             "rows_readback_mismatch": 0,
         }
@@ -512,6 +513,7 @@ class NegotiationRun:
         if not retry:
             attempts.pop(key, None)
             offer_check.remember(self.state, reviewed)
+            self.counts["offers_held_final"] += sum(offer_check.pages_smd(rec) for rec in reviewed)
         return retry
 
     # Observation hooks: no-ops here; the dry run (dryrun.py) records through them.

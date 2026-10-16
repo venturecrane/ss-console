@@ -37,9 +37,76 @@ def numbers(text: str | None) -> set[str]:
     return {norm_number(t) for t in NUM.findall(CITE.sub("", text or ""))}
 
 
+_CLOCK = re.compile(r"\d{1,2}:\d{2}(?::\d{2})?")
+_YEAR = re.compile(r"(?:19|20)\d{2}")
+
+
+def content_numbers(text: str | None) -> set[str]:
+    """``numbers`` less a time of day and a bare year: what a duplicate's
+    survivor must carry before the duplicate goes. A repeated portal message
+    differs from its kept copy by its time stamp, never by its care
+    (2026-10-14 parity, round 4: three drops refused for "10:32"-style
+    stamps and a bare "2026"). Dates, doses, vitals and labs still count."""
+    return {n for n in numbers(text) if not (_CLOCK.fullmatch(n) or _YEAR.fullmatch(n))}
+
+
 def lost(before: str, after: str) -> list[str]:
     """Values `before` states that `after` no longer carries, sorted."""
     return sorted(numbers(before) - numbers(after))
+
+
+#: A CLINICAL value is a lab, vital or dose: a number carrying a unit, a
+#: blood pressure, or a number after a vital or lab name. Page, fax, print
+#: date, record-number and time digits carry none of these, so two copies of
+#: one record that differ only in their fax stamp state the same values.
+_UNIT = r"mg/dl|mmol/l|g/dl|meq/l|u/l|mg|mcg|ug|meq|ml|cc|units?|iu|mmhg|bpm|kg|lbs?|cm|mm|%|°\s?[fc]"
+_WITH_UNIT = re.compile(rf"(?<![\d.])(\d+(?:\.\d+)?)\s*({_UNIT})(?![a-z])", re.I)
+_BP = re.compile(r"(?<![\d/])(\d{3})\s*/\s*(\d{2,3})(?![\d/])")
+_BP_NAMED = re.compile(r"\b(?:bp|blood pressure)\b\D{0,12}?(\d{2,3})\s*/\s*(\d{2,3})(?![\d/])", re.I)
+_NAMED = re.compile(
+    r"\b(pulse|heart rate|hr|temp(?:erature)?|resp(?:iratory rate|irations)?|rr|spo2|o2 sat(?:uration)?|"
+    r"weight|wt|height|bmi|glucose|a1c|hgb|hemoglobin|wbc|platelets?|creatinine|inr|pain)\b"
+    r"[^\d\n]{0,15}?(\d+(?:\.\d+)?)",
+    re.I,
+)
+
+
+def clinical_values(text: str | None) -> set[str]:
+    """The labs, vitals and doses `text` states, one spelling each."""
+    t = CITE.sub("", text or "")
+    out = {f"{norm_number(n)} {u.lower().replace(' ', '')}" for n, u in _WITH_UNIT.findall(t)}
+    out |= {f"bp {a}/{b}" for a, b in _BP.findall(t) + _BP_NAMED.findall(t)}
+    out |= {f"{k.lower()[:4]} {norm_number(n)}" for k, n in _NAMED.findall(t)}
+    return out
+
+
+#: A diagnosis or impression TERM: a content word in a clause a finding cue
+#: opens ("impression", "diagnosed", "showed", "revealed", "positive for").
+_CUE = re.compile(
+    r"\b(?:diagnos\w*|impression|assessment|dx|findings?|show(?:s|ed|n)?|reveal(?:s|ed)?|demonstrat\w*|"
+    r"consistent with|positive for|suspicious for|noted|exam(?:ination)?)\b([^.;\n]*)",
+    re.I,
+)
+_STOP = {
+    "about", "after", "again", "along", "also", "among", "being", "before", "below", "there", "their", "these",
+    "those", "which", "while", "would", "could", "should", "other", "under", "until", "with", "without", "within",
+    "visit", "patient", "noted", "shows", "showed", "revealed", "reveals", "findings", "finding", "since",
+    "today", "level", "right", "left", "times", "place", "where", "further", "recorded",
+}  # fmt: skip
+
+
+def terms(text: str | None) -> set[str]:
+    """The diagnosis and impression terms `text` states (lowercase words)."""
+    t = CITE.sub("", text or "")
+    out: set[str] = set()
+    for m in _CUE.finditer(t):
+        out |= {w for w in re.findall(r"[a-z]{5,}", m.group(1).lower()) if w not in _STOP}
+    return out
+
+
+def words(text: str | None) -> set[str]:
+    """Every lowercase word of five letters or more: what a term is looked up in."""
+    return set(re.findall(r"[a-z]{5,}", CITE.sub("", text or "").lower()))
 
 
 def named_by(problems: list[str] | None) -> set[str]:

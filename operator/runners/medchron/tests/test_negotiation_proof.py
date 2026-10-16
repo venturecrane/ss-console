@@ -121,7 +121,8 @@ def test_an_amount_not_in_the_document_is_held_not_written(tmp_path, monkeypatch
     assert layout.calls == [] and v["notices"] == [] and client.calls == []
     assert v["offers_held_review"] == 1 and v["held"][0]["held_by"] == "code"
     assert "$25,000.00 is not printed" in v["held"][0]["reason"]
-    assert v["proof"]["alerts"] == ["review_held"] and v["proof"]["nothing_to_file"] is True
+    # A first hold retries next run; it pages only when final (the three-attempt test).
+    assert v["proof"]["alerts"] == [] and v["proof"]["nothing_to_file"] is True
 
 
 def test_a_date_not_in_the_document_nor_its_header_is_held(tmp_path, monkeypatch):
@@ -152,7 +153,7 @@ def test_the_firms_own_letter_to_a_lienholder_is_held_by_the_review(tmp_path, mo
     v = r.run()
     assert layout.calls == [] and v["notices"] == []
     assert v["held"][0]["held_by"] == "review" and "check 1" in v["held"][0]["reason"]
-    assert v["proof"]["alerts"] == ["review_held"] and v["proof"]["review"] == "passed"
+    assert v["proof"]["alerts"] == [] and v["proof"]["review"] == "passed"
 
 
 def test_a_998_offer_labeled_demand_is_held(tmp_path, monkeypatch):
@@ -199,12 +200,42 @@ def test_a_held_offers_document_stays_new_then_is_kept_for_smd_after_three(tmp_p
         v = r.run()
         cur = arrivals.cursor("negotiation", M1, data=tmp_path / "state")
         assert v["held"][0]["retry"] is (attempt < 3)
+        # FALSIFIER (2026-10-15): paging every attempt paged one document three times.
+        assert v["proof"]["alerts"] == ([] if attempt < 3 else ["review_held"])
         if attempt < 3:
             assert cur == {"f1": "1"} and not (tmp_path / "state" / offer_check.HELD_FILE).exists()
         else:
             assert cur == {"f1": "1", "f2": "1"}
             kept = json.loads((tmp_path / "state" / offer_check.HELD_FILE).read_text())
             assert kept[0]["file_id"] == "f2" and kept[0]["amount"] == 25000
+
+
+def test_a_final_hold_of_the_firms_own_demand_does_not_page(tmp_path, monkeypatch):
+    """FALSIFIER (2026-10-15): every page that week was the firm's own demand
+    held correctly. It is kept for SMD in held.json and never pages."""
+    demand = _offer(kind="demand", by="Ashton for the client", amount=90000, author_side="our_firm")
+    for attempt in range(1, 4):
+        run_dir = tmp_path / f"d{attempt}"
+        run_dir.mkdir()
+        r, _, _ = _run(run_dir, monkeypatch, [demand])
+        r.state = tmp_path / "state"
+        if attempt == 1:
+            arrivals.commit("negotiation", M1, FILES, data=r.state)
+        v = r.run()
+        assert v["held"][0]["kind"] == "demand" and v["held"][0]["retry"] is (attempt < 3)
+        assert v["proof"]["alerts"] == []
+    kept = json.loads((tmp_path / "state" / offer_check.HELD_FILE).read_text())
+    assert kept[0]["kind"] == "demand" and kept[0]["amount"] == 90000
+
+
+@pytest.mark.parametrize("kind", sorted(offer_check.rows_mod.NOTICE_KINDS))
+def test_every_offer_kind_pages_when_final(kind):
+    assert offer_check.pages_smd({"kind": kind}) is True
+
+
+@pytest.mark.parametrize("kind", ["demand", "998_offer_by_us", "acceptance", "other", ""])
+def test_the_firms_own_and_non_offer_kinds_do_not_page(kind):
+    assert offer_check.pages_smd({"kind": kind}) is False
 
 
 # ---- the read-back and the proof block ----------------------------------------------------------

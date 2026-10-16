@@ -48,7 +48,7 @@ from typing import Any, Callable
 from .broker_context import BrokerContext
 from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
 from . import demand_verbs, drafting_verbs, litigation_verbs, medchron_verbs, negotiation_verbs, reply_binding
-from . import delivery_proof, msgraph_drafts
+from . import delivery_proof, msgraph_drafts, note_verbs
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
 
@@ -195,6 +195,13 @@ VERBS: tuple[Verb, ...] = (
     Verb("negotiation_job_status", GATEWAY_ROOT_OR_AGENT, negotiation_verbs.negotiation_dispatch),
     Verb("negotiation_job_record", _only(ROOT), negotiation_verbs.negotiation_dispatch),
     Verb("negotiation_job_resume", _only(ROOT), negotiation_verbs.negotiation_dispatch),
+    # SMD notes (note_verbs.py, 2026-10-15): SMD has the Operator tell a firm
+    # colleague something in her own thread. Preview and record are root only
+    # (a person on the seat, medchron/note_by_smd.py); the DELIVER turn reads
+    # the recorded words through the status verb, gateway or root.
+    Verb("note_preview", _only(ROOT), note_verbs.preview_verb),
+    Verb("note_record", _only(ROOT), note_verbs.record_verb),
+    Verb("note_job_status", GATEWAY_OR_ROOT, note_verbs.status_verb),
     # Proven delivery (2026-10-13): the runner daemon's alert row and its read
     # of a job's bound replies. Root only: no turn raises or reads them.
     Verb("delivery_proof_alert", _only(ROOT), delivery_proof.alert_verb),
@@ -263,6 +270,8 @@ if set(litigation_verbs.VERBS) != {v.name for v in VERBS if v.handler is litigat
     raise RuntimeError("the litigation rows above and litigation_verbs.VERBS disagree")
 if set(negotiation_verbs.VERBS) != {v.name for v in VERBS if v.handler is negotiation_verbs.negotiation_dispatch}:
     raise RuntimeError("the negotiation rows above and negotiation_verbs.VERBS disagree")
+if set(note_verbs.VERBS) != {v.name for v in VERBS if v.name.startswith("note_")}:
+    raise RuntimeError("the note rows above and note_verbs.VERBS disagree")
 
 
 def peer_classes(broker: BrokerContext, peer_pid: int, peer_uid: int | None) -> frozenset[str]:

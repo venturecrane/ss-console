@@ -23,19 +23,24 @@ import {
   type OperatorInput,
 } from '../../../lib/admin/services-list'
 import { serviceToneDotClass } from '../../../lib/admin/client-hub'
-import { findSpineDrift, hasSpineDrift, listServices } from '../../../lib/db/services'
+import {
+  findSpineDrift,
+  hasSpineDrift,
+  listOperatorSeatCommercials,
+} from '../../../lib/db/services'
+import { seatLines } from '../../../lib/admin/billing-view'
 import { env } from 'cloudflare:workers'
 
 const session = Astro.locals.session!
 
-const [engagements, entities, quotes, roster, runtime, operatorServices, spineDrift] =
+const [engagements, entities, quotes, roster, runtime, operatorSeats, spineDrift] =
   await Promise.all([
     listEngagements(env.DB, session.orgId),
     listEntities(env.DB, session.orgId),
     listQuotes(env.DB, session.orgId),
     listFleetRoster(env.DB),
     listRuntimeSummary(env.DB),
-    listServices(env.DB, session.orgId, { type: 'operator', status: 'active' }),
+    listOperatorSeatCommercials(env.DB, session.orgId),
     // ADR 0046: the read that keeps the spine self-validating across both types.
     // Renders nothing when clean (the normal case); flags drift loudly otherwise.
     findSpineDrift(env.DB, session.orgId),
@@ -45,9 +50,9 @@ const showSpineDrift = hasSpineDrift(spineDrift)
 const nameById = new Map(entities.map((e) => [e.id, e.name]))
 const quotesById = new Map<string, Quote>(quotes.map((q) => [q.id, q]))
 const runtimeByEntity = new Map(runtime.map((r) => [r.entity_id, r]))
-const priceByEntity = new Map<string, number | null>(
-  operatorServices.map((s) => [s.entity_id, s.recurring_price])
-)
+// Each roster seat priced from the service its own subscriptions row points
+// at (migration 0126), never from another seat of the same client.
+const lineBySeat = seatLines(operatorSeats)
 
 const operators: OperatorInput[] = roster.map((r) => ({
   entityId: r.entity_id,
@@ -55,7 +60,7 @@ const operators: OperatorInput[] = roster.map((r) => ({
   configError: r.config_error,
   openAlerts: runtimeByEntity.get(r.entity_id)?.open_alerts ?? null,
   hasRuntime: runtimeByEntity.has(r.entity_id),
-  recurringPrice: priceByEntity.get(r.entity_id) ?? null,
+  recurringPrice: lineBySeat.get(r.customer_slug)?.price ?? null,
 }))
 
 const rows = buildServiceList({
@@ -104,13 +109,18 @@ const COL = 'grid grid-cols-[1.4fr_1.9fr_0.9fr_1.1fr_0.9fr_1.6fr] gap-4 items-ce
               service {s.id} ({s.status}) → no engagement
             </li>
           ))}
-          {spineDrift.operatorServicesWithoutConfig.map((s) => (
+          {spineDrift.seatsWithoutService.map((s) => (
             <li>
-              operator service {s.id} ({s.status}) → no customer config
+              operator seat {s.instance_slug ?? s.id} →{' '}
+              {s.service_id
+                ? `dangling service ${s.service_id}`
+                : 'no commercial service (unpriced)'}
             </li>
           ))}
-          {spineDrift.configsWithoutService.map((c) => (
-            <li>operator {c.customer_slug} → no commercial service (unpriced/uncommercialized)</li>
+          {spineDrift.operatorServicesWithoutSeat.map((s) => (
+            <li>
+              operator service {s.id} ({s.status}) → no live seat
+            </li>
           ))}
         </ul>
       </div>

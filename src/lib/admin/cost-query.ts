@@ -38,12 +38,13 @@ interface CustomerConfigRow {
 }
 
 interface SubscriptionRow {
-  entity_id: string
+  instance_slug: string | null
   status: string
+  service_id: string | null
 }
 
 interface OperatorServiceRow {
-  entity_id: string
+  id: string
   recurring_price: number | null
 }
 
@@ -74,18 +75,28 @@ export async function listCostCustomers(db: D1Database): Promise<CustomerListRow
   const entityIds = configs.map((c) => c.entity_id)
   const placeholders = entityIds.map(() => '?').join(',')
 
+  // Per SEAT (migration 0126): each customer_config's own operator
+  // subscriptions row (instance_slug = customer_slug), and the service that
+  // row points at. Keyed by entity, a client's two seats would share one
+  // status and one price.
   const subsResult = await db
     .prepare(
-      `SELECT entity_id, status
+      `SELECT instance_slug, status, service_id
          FROM subscriptions
          WHERE product_slug = 'operator'
            AND entity_id IN (${placeholders})`
     )
     .bind(...entityIds)
     .all<SubscriptionRow>()
-  const subStatusByEntity = new Map<string, string>()
+  const seatBySlug = new Map<string, SubscriptionRow>()
+  // How many live seats share each service: the per-seat revenue for the
+  // COGS ratio is the line's price split evenly across them.
+  const liveSeatsPerService = new Map<string, number>()
   for (const row of subsResult.results ?? []) {
-    subStatusByEntity.set(row.entity_id, row.status)
+    if (row.instance_slug) seatBySlug.set(row.instance_slug, row)
+    if (row.service_id && row.status !== 'cancelled') {
+      liveSeatsPerService.set(row.service_id, (liveSeatsPerService.get(row.service_id) ?? 0) + 1)
+    }
   }
 
   // ADR 0046: recurring revenue is the spine's authoritative figure
@@ -93,16 +104,25 @@ export async function listCostCustomers(db: D1Database): Promise<CustomerListRow
   // One source of truth — the same number that feeds the Billing MRR band.
   const svcResult = await db
     .prepare(
-      `SELECT entity_id, recurring_price
+      `SELECT id, recurring_price
          FROM services
          WHERE type = 'operator' AND status = 'active'
            AND entity_id IN (${placeholders})`
     )
     .bind(...entityIds)
     .all<OperatorServiceRow>()
-  const priceByEntity = new Map<string, number | null>()
+  const priceByService = new Map<string, number | null>()
   for (const row of svcResult.results ?? []) {
-    priceByEntity.set(row.entity_id, row.recurring_price)
+    priceByService.set(row.id, row.recurring_price)
+  }
+
+  function seatRevenueCents(slug: string): number | null {
+    const seat = seatBySlug.get(slug)
+    if (!seat?.service_id) return null
+    const price = priceByService.get(seat.service_id) ?? null
+    if (price == null) return null
+    const sharing = Math.max(1, liveSeatsPerService.get(seat.service_id) ?? 1)
+    return Math.round((price * 100) / sharing)
   }
 
   const entitiesResult = await db
@@ -115,14 +135,14 @@ export async function listCostCustomers(db: D1Database): Promise<CustomerListRow
   }
 
   return configs.map((c) => {
-    const price = priceByEntity.get(c.entity_id) ?? null
     return {
       customer_slug: c.customer_slug,
       entity_id: c.entity_id,
       entity_name: namesByEntity.get(c.entity_id) ?? null,
-      subscription_status: subStatusByEntity.get(c.entity_id) ?? null,
-      // Authoritative recurring revenue from the spine, in cents for the ratio math.
-      monthly_revenue_cents: price == null ? null : Math.round(price * 100),
+      subscription_status: seatBySlug.get(c.customer_slug)?.status ?? null,
+      // Authoritative recurring revenue from the spine, in cents for the ratio
+      // math: this seat's share of the line it is priced by.
+      monthly_revenue_cents: seatRevenueCents(c.customer_slug),
     }
   })
 }

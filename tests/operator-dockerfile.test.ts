@@ -1538,7 +1538,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // under its lane (pairs with the broker's roster lane in participant_fence.py).
     // 8ed871e9 -> 8ee9b79a (overlay#455, #456), 2026-10-13: medchron_job_submit carries an update
     // into the delivered chronology; the heartbeat names the six hold proof codes (ss #3176).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="aef6183d3b4bf0f2ec239e2c78778d50a4267487"')
+    // 8ee9b79a -> aef6183d (overlay#457) -> d4957208 (overlay#458), 2026-10-15: an SMD note's
+    // completion wake binds note_job and reads the recorded words (pairs with note_verbs.py).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="d495720898a793628a80a6f1d087a3e03f00b3fb"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
@@ -1865,6 +1867,14 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
         false
       )
     }
+  })
+
+  it('imports the SMD note lane and command at build', () => {
+    // FALSIFIER: drop either module from the build-time import smoke and an
+    // image whose note lane cannot import boots, and no note wake is ever sent.
+    expect(DOCKERFILE_CODE).toContain(
+      'medchron.negotiation.run, medchron.note_lane, medchron.note_by_smd, medchron.litigation_lane'
+    )
   })
 
   it('ships what the litigation status job reads court papers with, and asserts it at build', () => {

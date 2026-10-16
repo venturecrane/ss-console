@@ -59,6 +59,17 @@ lanes:
       cites its source (vfy_01M4VS38QASVGM7V8J89JRVQHM). The harness scored it
       "no dry_run verdict" although verdict.json carries one; that harness
       defect is fixed separately, so this run is recorded here by hand.
+  litigation-status.reassign:
+    proven_at: '2026-10-16'
+    evidence: >-
+      Staff reassignment (ss#3237, fixed by ss#3247). The first proof run of
+      held job 01M5131A03YE5TPFG6GVM7J02W found 4 matters whose FROM person
+      sat only in the additional assisting list, which the writer did not
+      touch; that defect was fixed by ss#3247 and the 4 matters by hand
+      (vfy_01M517DWSNQTGVWR4M8Y532F6M). Second proof run on v150 (ss
+      99531242, smoke 80/0): dry_run, 0 to move, 7 outside the request,
+      matching the hand-verified seat state (vfy_01M51AN8M9MET1PZGQM6ZHD9YQ).
+      Accepted on the seat 2026-10-16T03:04Z.
   matter-inbox-router:
     proven_at: '2026-10-13'
     evidence: >-
@@ -90,4 +101,12 @@ lanes:
       hand-built reports (letter 382): identical sheets and columns, row sets
       within six hours of data drift (vfy_01M50KVRD39D2TW5TMDBG0X930).
       Accepted on the seat 2026-10-15T20:25Z.
+  smd-note:
+    proven_at: '2026-10-16'
+    evidence: >-
+      Proven on smd-staging (ss#3240, ss#3244, overlay#458; main 42648517):
+      note 01M5136G75K1MTEHVZC726KEB9 answered in the requester's own thread
+      from the Operator mailbox, words verbatim, located in Sent Items; an
+      identical rerun and an identifier the request did not carry were both
+      refused (vfy_01M5137PJ2AHY35BXQ2SGBW6R9).
 revoked: []

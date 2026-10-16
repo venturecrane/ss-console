@@ -1131,12 +1131,10 @@ def test_a_matters_coverage_is_cumulative_so_a_second_update_does_not_reread_the
     assert matter["deliveries"] == 2
 
 
-def test_uncovered_wins_the_union_across_deliveries(verbs):
-    """A document one delivery cited and another could not use is re-read.
-
-    Re-reading costs pages. A record dropped from a filed litigation chronology
-    cannot be recovered, so the union breaks toward reading again.
-    """
+def test_the_newest_delivery_decides_a_document_across_deliveries(verbs):
+    """An update replaces the delivered chronology, so the NEWEST delivery
+    that names a document decides it: covered then uncovered reads uncovered
+    (it is read again)."""
     v, _ledger, _queue = verbs
     mid = "m-conflict"
     _backfill(v, mid, "900022", ["shared"], [], "2026-08-27")
@@ -1145,6 +1143,20 @@ def test_uncovered_wins_the_union_across_deliveries(verbs):
     matter = call(v, "medchron_job_status", matter_id=mid)["matter"]
     assert matter["covered_document_ids"] == []
     assert matter["uncovered_document_ids"] == ["shared"]
+
+
+def test_a_later_delivery_that_covers_a_document_clears_an_earlier_uncovered_one(verbs):
+    """The reverse order. Before 2026-10-13 `uncovered` won across every row,
+    so a document an early delivery could not use stayed uncovered after a
+    later update cited it, and every later update read it again."""
+    v, _ledger, _queue = verbs
+    mid = "m-cleared"
+    _backfill(v, mid, "900023", [], ["shared"], "2026-08-27")
+    _backfill(v, mid, "900023", ["shared"], [], "2026-09-01", source="update-1")
+
+    matter = call(v, "medchron_job_status", matter_id=mid)["matter"]
+    assert matter["covered_document_ids"] == ["shared"]
+    assert matter["uncovered_document_ids"] == []
 
 
 def test_failed_rows_contribute_nothing_to_a_matters_coverage(verbs):

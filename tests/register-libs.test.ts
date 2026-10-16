@@ -99,7 +99,23 @@ describe('clientOf', () => {
   })
 
   it('seatsOf leaves an ordinary client as its own single seat', () => {
-    expect(seatsOf('ashton-price')).toEqual(['ashton-price'])
+    expect(seatsOf('some-firm-we-sign-next-week')).toEqual(['some-firm-we-sign-next-week'])
+  })
+
+  it("rolls a client's second seat up under the client, both ways", () => {
+    // The first Operator client's marketing seat is the same client's work,
+    // not a new client's. Without the map entry the register reports it as
+    // its own client and `--client ashton-price` hides its rows.
+    expect(clientOf('ashton-price-marketing')).toBe('ashton-price')
+    expect(seatsOf('ashton-price').sort()).toEqual(['ashton-price', 'ashton-price-marketing'])
+    for (const seat of seatsOf('ashton-price')) expect(clientOf(seat)).toBe('ashton-price')
+  })
+
+  it('a seat on SMD entity that is its own client stays its own client', () => {
+    // brokery's config sits on SMD's entity; an entity-derived rollup would
+    // file its work under SMD. The map is keyed by seat precisely to avoid that.
+    expect(clientOf('brokery')).toBe('brokery')
+    expect(seatsOf(SMD_CLIENT)).not.toContain('brokery')
   })
 
   it('passes every other seat through as its own client', () => {

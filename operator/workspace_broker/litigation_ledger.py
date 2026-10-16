@@ -60,7 +60,7 @@ from pathlib import Path
 from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
-from .litigation_report import EnvelopeError, counts as _counts, report_keys as _report_keys
+from .litigation_report import EnvelopeError, counts as _counts, report_keys as _report_keys, writes as _writes
 
 STATES = ("queued", "running", "held", "delivered", "failed")
 TERMINAL = frozenset({"delivered", "failed"})
@@ -81,7 +81,7 @@ MAX_REQUEST_TEXT = 20_000
 #: The integer counts the runner reports. Counts only: never a matter fact.
 COUNT_FIELDS = ("matters_total", "matters_reread", "flags_new")
 #: Everything a record may carry besides the state.
-REPORT_FIELDS = ("cents", "reason", "stage", "folder_id", "files", "counts", *COUNT_FIELDS)
+REPORT_FIELDS = ("cents", "reason", "stage", "folder_id", "files", "counts", "writes", *COUNT_FIELDS)
 
 
 _UUID = re.compile(r"^[0-9a-fA-F-]{32,40}$")
@@ -203,8 +203,9 @@ def scope_key(scope: dict[str, Any]) -> str:
     """One string per distinct scope, so a job underway for one scope never
     blocks a different one: ``all``; ``staff:<ids>`` (attorneys, the key every
     earlier row carries); ``paralegal:<ids>``; ``staff:<ids>|paralegal:<ids>``."""
-    if scope.get("report") == "deadlines":  # never blocks (or is blocked by) a status list for the same people
-        return "deadlines:" + scope_key({k: v for k, v in scope.items() if k != "report"})
+    report = scope.get("report")
+    if report in ("deadlines", "reassign"):  # never blocks (or is blocked by) a status list for the same people
+        return f"{report}:" + scope_key({k: v for k, v in scope.items() if k != "report"})
     if scope.get("all") is True:
         return "all"
     parts = []
@@ -228,9 +229,9 @@ def validate_envelope(req: Any) -> dict[str, Any]:
         "file_to_matter_number",
         "folder_name",
     }
-    report_keys = {"report", "workbooks"}
-    if not isinstance(req, dict) or set(req) - report_keys != keys or len(set(req) & report_keys) == 1:
-        raise EnvelopeError(f"a litigation envelope carries exactly {sorted(keys)}, plus report and workbooks together")
+    report_keys = {"report", "workbooks", "reassign"}
+    if not isinstance(req, dict) or set(req) - report_keys != keys:
+        raise EnvelopeError(f"a litigation envelope carries exactly {sorted(keys)}, plus a report's own keys")
     extra = _report_keys(req)
     trigger = req["trigger"]
     if trigger not in TRIGGERS:
@@ -310,6 +311,8 @@ def _checked(state: str, fields: dict[str, Any]) -> tuple[list[dict[str, Any]] |
         value = fields.get(key)
         if key in fields and (not isinstance(value, int) or isinstance(value, bool) or value < 0):
             raise ValueError(f"{key} must be a non-negative int")
+    if "writes" in fields:  # a reassignment's writes: checked here, carried by the audit row only
+        _writes(fields["writes"])
     files = _files(fields["files"]) if "files" in fields else None
     return files, (_counts(fields["counts"]) if "counts" in fields else None)
 
@@ -393,7 +396,7 @@ class LitigationLedger:
         """Row, then queue file, so a job file on disk always has its row. The
         duplicate-ref and same-scope checks run inside one write transaction."""
         env = validate_envelope(envelope)
-        key = scope_key({**env["scope"], **({"report": "deadlines"} if env.get("report") else {})})
+        key = scope_key({**env["scope"], **({"report": env["report"]} if env.get("report") else {})})
         job_id = _ulid()
         now = _iso_utc()
         conn = self._connect()
@@ -415,7 +418,9 @@ class LitigationLedger:
             ).fetchone()
             if twin is not None:
                 conn.rollback()
-                what = "a deadlines report" if env.get("report") else "a status list"
+                what = {"deadlines": "a deadlines report", "reassign": "a staff reassignment"}.get(
+                    str(env.get("report")), "a status list"
+                )
                 raise SubmitRefused(f"{what} for the same scope is already underway as job {twin['id']}", twin["id"])
             conn.execute(
                 "INSERT INTO litigation_jobs (id, created_at, updated_at, state, trigger, requester, request_ref, "

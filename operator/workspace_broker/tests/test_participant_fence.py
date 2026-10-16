@@ -792,3 +792,25 @@ def test_no_roster_lane_without_an_enabled_opt_in(tmp_path: Path, lane) -> None:
     facts = _roster_facts(tmp_path)
     with pytest.raises(pf.FenceRefused):
         pf.check_send(facts, ["tim@brokery.example"], lane=lane, anchor=None, resolve=_no_lookup)
+
+
+# -- an SMD note's anchor (2026-10-15) ----------------------------------------------------
+
+
+def test_a_note_anchors_on_its_request_email_by_graph_id(tmp_path: Path) -> None:
+    """An SMD note (note_verbs.py) is recorded against the colleague's request
+    by its Graph id. Her participants are reachable; nobody else at the firm.
+    FALSIFIER: drop note_job from the fence's JOB_KINDS / _ANCHOR_FIELD (the
+    anchor is refused as malformed) or from reply_binding.job_ledger (the note
+    is looked up on another lane's ledger and is unverifiable)."""
+    from workspace_broker.note_ledger import NoteLedger
+
+    box = FakeMailbox()
+    broker = _broker(tmp_path, box)
+    note = NoteLedger(str(tmp_path / "audit.db")).create(
+        requester=ALICE, request_ref="REQ", text="Filed.", approved_by="smd", recorded_by="root"
+    )
+    anchor = {"kind": "note_job", "job_id": note}
+    assert _send(broker, [ALICE, DANA], anchor=anchor)["ok"] is True
+    box.posts.clear()
+    _refused(broker, box, lambda: _send(broker, [BRUNO], anchor=anchor))

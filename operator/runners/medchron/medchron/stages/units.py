@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from .base import StageRun, read_json, read_jsonl
-from .transcript import CONTENTLESS, UNREAD, contentless_reason, recorded_ids, transcript_state
+from .transcript import ABSENT, CONTENTLESS, UNREAD, contentless_reason, merged, recorded_ids, transcript_state
 
 BILLING_ONLY_TYPES = {"MEDICAL_BILL", "LEDGER", "LIEN_SUBROGATION", "VENDOR_INVOICE"}
 
@@ -198,6 +198,10 @@ def _attach_transcripts(d: Path, recs: list[dict[str, Any]]) -> list[tuple[dict[
     recorded = recorded_ids(d)
     awaiting: list[tuple[dict[str, Any], str, int]] = []
     for r in recs:
+        if r.get("vision_pages") and not merged(d / "text" / f"{r['id']}.txt", [int(p) for p in r["vision_pages"]]):
+            # A text-layer document whose image pages vision has not read yet.
+            awaiting.append((r, ABSENT, 0))
+            continue
         if r.get("text_path"):
             continue
         state, measure = transcript_state(d, r["id"], recorded)

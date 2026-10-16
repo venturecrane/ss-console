@@ -42,18 +42,50 @@ class DraftError(RuntimeError):
     pass
 
 
+#: A rule in the firm's discipline about the SEAT's delivery tool and its
+#: spec pointer (rule 8, "Deliver through smd_deliver_draft ... the root
+#: manifest"). This lane has neither: its voice rides in below and code files
+#: the result. Left in, the model obeyed it by writing a "delivery note" naming
+#: the tool and the manifest into the attorney notes (2026-10-15 proof run).
+_SEAT_RULE = re.compile(r"smd_\w+|pointer block|root[- ]owned manifest|root manifest", re.I)
+
+
 def discipline_part_one(text: str) -> str:
+    """Part I of the firm's discipline, without the seat-delivery paragraph and
+    without any rule about the seat's delivery tool (``_SEAT_RULE``)."""
     a, b = text.find("## Part I"), text.find("## Part II")
     if a < 0 or b < 0:
         return text
     body = text[a:b]
     cut = body.find("Your output is the draft document only")
-    return body[:cut].rstrip() if cut > 0 else body.rstrip()
+    body = body[:cut] if cut > 0 else body
+    rules = re.split(r"(?m)^(?=\d+\. )", body)
+    return "".join(r for r in rules if not _SEAT_RULE.search(r)).rstrip()
+
+
+#: Code-authored, after the firm's instruction, in the compose and repair
+#: system: the letter AND the attorney notes are the firm's to read. The firm's
+#: compose instruction asks for the premise questions by their labels (G1 to
+#: G4) and its discipline names the template "the skeleton"; on 2026-10-15 both
+#: came back in the attorney notes, and the review held on them.
+FIRM_READS = (
+    "## WHAT THE FIRM READS\n\n"
+    "Everything you write, the letter and every line after `=== ATTORNEY NOTES ===`, goes to the firm. Write it in "
+    "the firm's words, never in the words of the system that produced it:\n"
+    "- The premise questions (G1 to G4) are for you to answer before drafting; they are checked again in code. "
+    "Never report them, their labels, or that they passed. Where the record bears on the carrier or the addressee, "
+    "say what the record shows, in plain words, under the attorney decisions.\n"
+    "- Never name a tool, a spec, a manifest, a delivery note, an audit or auditor, a gate, a check, a stage, a "
+    "pipeline or a model, and never describe how this draft was produced.\n"
+    "- The skeleton is the firm's own form: call it the firm's form, or name its section; never the skeleton.\n"
+    "- The record digest is your reading aid, not a source the firm knows: call the source the record or the file, "
+    "or name the document; never the digest."
+)
 
 
 def voice_block(profile: str, adjustments: str) -> str:
     return (
-        "## FIRM VOICE PROFILE (rule 8: read it and write from it; never overrides rules 1 to 6)\n\n"
+        "## FIRM VOICE PROFILE (read it and write from it; never overrides rules 1 to 6)\n\n"
         'The `{{profile.*}}` tokens are figures the establishment run did not retain; read them as "medium" '
         'and "a substantial share".\n\n'
         + profile
@@ -280,6 +312,7 @@ class Drafter:
             "## FIRM FIXED STRINGS (use verbatim where the skeleton calls for them)\n\n"
             + f.text("voice_fixed_strings"),
             f.text("prompt_compose"),
+            FIRM_READS,
             self.brief,
         ]
         return "\n\n---\n\n".join(blocks)
@@ -428,6 +461,38 @@ def finding_lines(audit_md: str, kinds: tuple[str, ...]) -> list[str]:
             m = FINDING.search(ln)
             if m and m.group(1).upper() in kinds:
                 out.append(f"{head}: {ln.strip()}")
+    return out
+
+
+#: A check's own label never reaches the firm (the 2026-10-15 proof run's
+#: attorney notes carried "| DRIFTS |" rows verbatim).
+_LABEL = re.compile(r"\b(SUPPORTED|DRIFTS|INVENTED|ARITHMETIC)\b")
+
+
+#: The check's reasons say "digest" for the record (its own word: the record
+#: digest it reads). Carried into a marker, that word reached the LETTER on the
+#: 2026-10-15 re-run ("no cite in digest"); the firm calls it the record.
+_DIGEST = re.compile(r"\b(?:record )?digest(?:'s)?\b", re.I)
+
+
+def firm_reason(s: str) -> str:
+    """A check's stated reason in the firm's words: the record, not the digest,
+    and no em dash."""
+    return _DIGEST.sub("record", s).replace("\u2014", ",").replace("\u2013", "-")
+
+
+def finding_text(audit_md: str, kinds: tuple[str, ...]) -> list[str]:
+    """``finding_lines`` in the firm's words: ``<section>: <statement> (<why>)``,
+    with no table pipes and no verdict label."""
+    out = []
+    for head, body in audit_sections(audit_md).items():
+        for ln in body.splitlines():
+            m = FINDING.search(ln)
+            if not m or m.group(1).upper() not in kinds:
+                continue
+            claim = ln[: m.start()].strip().lstrip("-*").strip().strip("|").strip()
+            why = " ".join(firm_reason(_LABEL.sub("", ln[m.end() :].replace("|", " "))).split())
+            out.append(f"{head}: {claim}" + (f" ({why})" if why else ""))
     return out
 
 

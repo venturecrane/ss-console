@@ -14,10 +14,10 @@ import {
   projectOperatorStatus,
   findSpineDrift,
   hasSpineDrift,
-  setOperatorPriceAndPaymentMethod,
+  setOperatorSeatCommercials,
   operatorPaymentMethod,
   isOperatorPaymentMethod,
-  getOperatorServiceForEntity,
+  getOperatorServiceForSeat,
 } from '../src/lib/db/services'
 import { createEngagement } from '../src/lib/db/engagements'
 import type { Service } from '../src/lib/db/services'
@@ -109,22 +109,24 @@ describe('services DAL', () => {
     expect(svc.recurring_price).toBe(1200)
   })
 
-  it('the operator partial-unique index allows one operator + many consulting per entity', async () => {
+  it('an entity may hold several operator services (one per priced seat, migration 0126) and many consulting', async () => {
     await createService(db, ORG, {
       entity_id: 'ent-1',
       type: 'operator',
       cadence: 'recurring',
       status: 'active',
     })
-    // a second operator for the same entity must fail
-    await expect(
-      createService(db, ORG, {
-        entity_id: 'ent-1',
-        type: 'operator',
-        cadence: 'recurring',
-        status: 'active',
-      })
-    ).rejects.toThrow()
+    // A second operator line for the same entity is a client's second seat.
+    // Migration 0068's one-per-entity index made this throw; 0126 dropped it.
+    await createService(db, ORG, {
+      entity_id: 'ent-1',
+      type: 'operator',
+      cadence: 'recurring',
+      status: 'active',
+    })
+    expect(
+      (await servicesForEntity(db, 'ent-1')).filter((s) => s.type === 'operator')
+    ).toHaveLength(2)
     // multiple consulting services for the same entity are fine
     await createService(db, ORG, {
       entity_id: 'ent-1',
@@ -140,7 +142,7 @@ describe('services DAL', () => {
     })
     const all = await servicesForEntity(db, 'ent-1')
     expect(all.filter((s) => s.type === 'consulting')).toHaveLength(2)
-    expect(all.filter((s) => s.type === 'operator')).toHaveLength(1)
+    expect(all.filter((s) => s.type === 'operator')).toHaveLength(2)
   })
 
   it('listServices filters by type and status', async () => {
@@ -278,7 +280,29 @@ async function seedConfig(db: D1Database, entityId: string, slug: string) {
     .run()
 }
 
-describe('setOperatorPriceAndPaymentMethod: the price (ADR 0046 operator arc)', () => {
+/** Seed a live operator SEAT (subscriptions row) for an entity; idempotent. */
+async function seedSeat(db: D1Database, entityId: string, slug = entityId) {
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO subscriptions (id, org_id, entity_id, product_slug, instance_slug, status)
+       VALUES (?, ?, ?, 'operator', ?, 'provisioning')`
+    )
+    .bind(`sub-${slug}`, ORG, entityId, slug)
+    .run()
+}
+
+/** Author the price/rail on an entity's (default-named) seat, creating the seat first. */
+async function priceSeat(
+  db: D1Database,
+  entityId: string,
+  price: number | null,
+  method: 'ach' | 'card' | null
+): Promise<Service> {
+  await seedSeat(db, entityId)
+  return setOperatorSeatCommercials(db, ORG, entityId, entityId, { price, method })
+}
+
+describe('setOperatorSeatCommercials: the price (ADR 0046 operator arc)', () => {
   let db: D1Database
   beforeEach(async () => {
     db = createTestD1()
@@ -287,20 +311,26 @@ describe('setOperatorPriceAndPaymentMethod: the price (ADR 0046 operator arc)', 
   })
 
   it('creates an active operator service when none exists', async () => {
-    const svc = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 1200, null)
+    const svc = await priceSeat(db, 'ent-1', 1200, null)
     expect(svc.type).toBe('operator')
     expect(svc.cadence).toBe('recurring')
     expect(svc.status).toBe('active')
     expect(svc.recurring_price).toBe(1200)
     expect(svc.id.startsWith('svc_')).toBe(true)
 
-    const fetched = await getOperatorServiceForEntity(db, ORG, 'ent-1')
+    const seat = await db
+      .prepare(`SELECT service_id FROM subscriptions WHERE id = 'sub-ent-1'`)
+      .first<{ service_id: string | null }>()
+    expect(seat?.service_id).toBe(svc.id) // the seat is linked to the line it created
+    const fetched = await getOperatorServiceForSeat(db, ORG, {
+      service_id: seat?.service_id ?? null,
+    })
     expect(fetched?.id).toBe(svc.id)
   })
 
   it('updates the price on an existing operator service (no second row)', async () => {
-    const first = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 1000, null)
-    const second = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 1500, null)
+    const first = await priceSeat(db, 'ent-1', 1000, null)
+    const second = await priceSeat(db, 'ent-1', 1500, null)
     expect(second.id).toBe(first.id) // same row, no duplicate
     expect(second.recurring_price).toBe(1500)
     const all = await servicesForEntity(db, 'ent-1')
@@ -308,14 +338,14 @@ describe('setOperatorPriceAndPaymentMethod: the price (ADR 0046 operator arc)', 
   })
 
   it('clears the price to null (unpriced) without deleting the service', async () => {
-    await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 900, null)
-    const cleared = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', null, null)
+    await priceSeat(db, 'ent-1', 900, null)
+    const cleared = await priceSeat(db, 'ent-1', null, null)
     expect(cleared.recurring_price).toBeNull()
     expect(cleared.status).toBe('active')
   })
 })
 
-describe('setOperatorPriceAndPaymentMethod: the rail (migration 0113, agreement §3.8)', () => {
+describe('setOperatorSeatCommercials: the rail (migration 0113, agreement §3.8)', () => {
   let db: D1Database
   beforeEach(async () => {
     db = createTestD1()
@@ -324,20 +354,20 @@ describe('setOperatorPriceAndPaymentMethod: the rail (migration 0113, agreement 
   })
 
   it('a priced service is born on ACH (no fee) and reads as such', async () => {
-    const svc = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 5000, null)
+    const svc = await priceSeat(db, 'ent-1', 5000, null)
     expect(svc.payment_method).toBe('ach')
     expect(operatorPaymentMethod(svc)).toBe('ach')
     expect(operatorPaymentMethod(null)).toBe('ach')
   })
 
   it('authors card on the same row the price lives on, and back to ach', async () => {
-    const priced = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 5000, null)
-    const card = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 5000, 'card')
+    const priced = await priceSeat(db, 'ent-1', 5000, null)
+    const card = await priceSeat(db, 'ent-1', 5000, 'card')
     expect(card.id).toBe(priced.id)
     expect(card.payment_method).toBe('card')
     expect(card.recurring_price).toBe(5000)
     expect(operatorPaymentMethod(card)).toBe('card')
-    const ach = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 5000, 'ach')
+    const ach = await priceSeat(db, 'ent-1', 5000, 'ach')
     expect(ach.payment_method).toBe('ach')
     expect(
       (await servicesForEntity(db, 'ent-1')).filter((s) => s.type === 'operator')
@@ -345,11 +375,11 @@ describe('setOperatorPriceAndPaymentMethod: the rail (migration 0113, agreement 
   })
 
   it('a rail authored before any price creates the (unpriced) operator service', async () => {
-    const svc = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-2', null, 'card')
+    const svc = await priceSeat(db, 'ent-2', null, 'card')
     expect(svc.type).toBe('operator')
     expect(svc.recurring_price).toBeNull()
     expect(svc.payment_method).toBe('card')
-    const priced = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-2', 4000, null)
+    const priced = await priceSeat(db, 'ent-2', 4000, null)
     expect(priced.id).toBe(svc.id)
     expect(priced.payment_method).toBe('card')
   })
@@ -369,24 +399,47 @@ describe('findSpineDrift — operator classes (ADR 0046)', () => {
     await seed(db)
   })
 
-  it('is clean when a live operator has a commercial service', async () => {
+  it('is clean when every live seat has a commercial service', async () => {
     await seedConfig(db, 'ent-1', 'ent-1')
-    await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 1200, null)
+    await priceSeat(db, 'ent-1', 1200, null)
     const drift = await findSpineDrift(db, ORG)
     expect(hasSpineDrift(drift)).toBe(false)
   })
 
-  it('flags a live operator (config) with no commercial service', async () => {
+  it('flags a live seat with no commercial service', async () => {
     await seedConfig(db, 'ent-1', 'acme')
+    await seedSeat(db, 'ent-1', 'acme')
     const drift = await findSpineDrift(db, ORG)
     expect(hasSpineDrift(drift)).toBe(true)
-    expect(drift.configsWithoutService.map((c) => c.customer_slug)).toContain('acme')
+    expect(drift.seatsWithoutService.map((s) => s.instance_slug)).toEqual(['acme'])
   })
 
-  it('flags an active operator service whose entity has no config', async () => {
-    const svc = await setOperatorPriceAndPaymentMethod(db, ORG, 'ent-1', 1200, null) // creates service, no config seeded
+  it("flags a client's SECOND seat with no service even though its first seat is priced", async () => {
+    // Keyed by entity (the shape before migration 0126), seat 2 read as priced
+    // because seat 1 was; keyed by seat, it is named.
+    await priceSeat(db, 'ent-1', 5000, 'card')
+    await seedSeat(db, 'ent-1', 'ent-1-marketing')
+    const drift = await findSpineDrift(db, ORG)
+    expect(drift.seatsWithoutService.map((s) => s.instance_slug)).toEqual(['ent-1-marketing'])
+    expect(drift.operatorServicesWithoutSeat).toEqual([])
+  })
+
+  it('flags a seat whose link dangles', async () => {
+    await seedSeat(db, 'ent-1', 'acme')
+    await db.prepare(`UPDATE subscriptions SET service_id = 'svc_gone' WHERE id = 'sub-acme'`).run()
+    const drift = await findSpineDrift(db, ORG)
+    expect(drift.seatsWithoutService).toEqual([
+      expect.objectContaining({ instance_slug: 'acme', service_id: 'svc_gone' }),
+    ])
+  })
+
+  it('flags an active operator service that no live seat points at', async () => {
+    const svc = await priceSeat(db, 'ent-1', 1200, null)
+    await db.prepare(`UPDATE subscriptions SET status = 'cancelled' WHERE id = 'sub-ent-1'`).run()
     const drift = await findSpineDrift(db, ORG)
     expect(hasSpineDrift(drift)).toBe(true)
-    expect(drift.operatorServicesWithoutConfig.map((s) => s.id)).toContain(svc.id)
+    expect(drift.operatorServicesWithoutSeat.map((s) => s.id)).toEqual([svc.id])
+    // A cancelled seat is not a live seat with no service.
+    expect(drift.seatsWithoutService).toEqual([])
   })
 })

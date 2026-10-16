@@ -14,11 +14,12 @@ import { listQuotes } from '../../../lib/db/quotes'
 import { listEntities } from '../../../lib/db/entities'
 import { listFleetRoster } from '../../../lib/admin/fleet-roster'
 import { listRuntimeSummary } from '../../../lib/admin/runtime-summary'
-import { listServices } from '../../../lib/db/services'
+import { listOperatorSeatCommercials } from '../../../lib/db/services'
 import {
   oneTimeTotals,
   sortInvoicesForBilling,
   operatorRecurring,
+  seatLines,
 } from '../../../lib/admin/billing-view'
 import { formatMoney } from '../../../lib/admin/client-hub'
 import { formatDate } from '../../../lib/admin/entity-detail-page'
@@ -27,13 +28,13 @@ import { env } from 'cloudflare:workers'
 
 const session = Astro.locals.session!
 
-const [invoices, quotes, entities, roster, runtime, operatorServices] = await Promise.all([
+const [invoices, quotes, entities, roster, runtime, operatorSeats] = await Promise.all([
   listInvoices(env.DB, session.orgId),
   listQuotes(env.DB, session.orgId),
   listEntities(env.DB, session.orgId),
   listFleetRoster(env.DB),
   listRuntimeSummary(env.DB),
-  listServices(env.DB, session.orgId, { type: 'operator', status: 'active' }),
+  listOperatorSeatCommercials(env.DB, session.orgId),
 ])
 
 const nameById = new Map(entities.map((e) => [e.id, e.name]))
@@ -41,16 +42,15 @@ const runtimeEntities = new Set(runtime.map((r) => r.entity_id))
 const totals = oneTimeTotals(invoices)
 const sortedInvoices = sortInvoicesForBilling(invoices)
 
-// Recurring revenue: iterate the authoritative roster, price each from the spine.
-const priceByEntity = new Map<string, number | null>(
-  operatorServices.map((s) => [s.entity_id, s.recurring_price])
-)
+// Recurring revenue: iterate the authoritative roster, price each SEAT from
+// the service it points at (migration 0126), each service counted once.
+const lineBySeat = seatLines(operatorSeats)
 const recurring = operatorRecurring(
-  roster.map((r) => r.entity_id),
-  priceByEntity
+  roster.map((r) => r.customer_slug),
+  lineBySeat
 )
-function operatorPrice(entityId: string): number | null {
-  return priceByEntity.get(entityId) ?? null
+function operatorPrice(customerSlug: string): number | null {
+  return lineBySeat.get(customerSlug)?.price ?? null
 }
 
 function clientName(entityId: string): string {
@@ -263,13 +263,13 @@ const REC_COLS = 'grid-cols-[1.6fr_1.6fr_0.9fr_1fr]'
               <span class="font-mono text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--ss-color-text-secondary)]">
                 {runtimeEntities.has(r.entity_id) ? 'Active' : 'Provisioning'}
               </span>
-              {operatorPrice(r.entity_id) == null ? (
+              {operatorPrice(r.customer_slug) == null ? (
                 <span class="text-right font-mono text-[13px] text-[color:var(--ss-color-primary)]">
                   unpriced
                 </span>
               ) : (
                 <span class="text-right font-mono text-[13px] font-medium">
-                  {formatMoney(operatorPrice(r.entity_id) ?? 0)}/mo
+                  {formatMoney(operatorPrice(r.customer_slug) ?? 0)}/mo
                 </span>
               )}
             </a>

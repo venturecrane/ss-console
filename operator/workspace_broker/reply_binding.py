@@ -38,6 +38,13 @@ the recipient. So the broker, which the agent cannot steer, decides:
       and at send time), under the subject ``negotiation_ledger.subject``
       composes. Nobody names the recipient or the subject, the model least of
       all. A negotiation JOB never binds: only its notices are announced;
+    - an SMD note (2026-10-15): words SMD approved, recorded by root against a
+      colleague's recent request email (``note_verbs.note_record``, which
+      checked the email, its sender, its age and that every identifier in the
+      words appears in it). It binds exactly as a delivered job does: the email
+      is the note's ``request_ref`` (a Graph id) and its sender the note's
+      ``requester``; one reply per note. Nothing about an email's earlier
+      answers matters here: the note is SMD's own, recorded once;
     - a chronology job (2026-10-07): the same rules on the medchron ledger, one
       reply per (job, outcome). That ledger has no attempt counter, so a job
       held, resumed and held AGAIN gets no second hold reply: the requester
@@ -80,22 +87,24 @@ from .litigation_ledger import LitigationLedger
 from .medchron_ledger import MedchronLedger
 from .negotiation_ledger import NegotiationLedger
 from .negotiation_ledger import subject as negotiation_subject
+from .note_ledger import NoteLedger
 from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError
 from .recipient_policy import authored_policy, normalize_address, sender_key
 from .transmit_verbs import dispatch_transmit
 
-KINDS = ("demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "message")
+KINDS = ("demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job", "message")
 #: The job kinds: each binds on its own ledger with the same rules.
-JOB_KINDS = frozenset({"demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job"})
+JOB_KINDS = frozenset({"demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job"})
 #: The kinds whose ledger carries its own reply mark (``mark_replied``). The
 #: medchron ledger predates it; its once-only rests on the bound_replies claim.
-_LEDGER_MARKED_KINDS = frozenset({"demand_job", "drafting_job", "litigation_job", "negotiation_job"})
+_LEDGER_MARKED_KINDS = frozenset({"demand_job", "drafting_job", "litigation_job", "negotiation_job", "note_job"})
 _NOUN = {
     "demand_job": "demand",
     "drafting_job": "drafting",
     "litigation_job": "litigation status",
     "medchron_job": "chronology",
     "negotiation_job": "negotiation",
+    "note_job": "SMD note",
 }
 #: How a binding reaches its person: a reply in their thread, or (a scheduled
 #: litigation job or a negotiation notice) one new email to them, whose
@@ -223,14 +232,23 @@ def _marking_ledger(broker: BrokerContext, kind: str) -> Any:
         return _litigation_ledger(broker)
     if kind == "negotiation_job":
         return _negotiation_ledger(broker)
-    return _drafting_ledger(broker) if kind == "drafting_job" else _demand_ledger(broker)
+    if kind == "note_job":
+        # 2026-10-15: without this branch a note_job fell through to the demand
+        # ledger, which has no such id, so every note bind read "no job".
+        return NoteLedger(str(broker.audit_db_path))
+    if kind == "drafting_job":
+        return _drafting_ledger(broker)
+    if kind == "demand_job":
+        return _demand_ledger(broker)
+    raise ValueError(f"{kind} has no ledger that marks its reply")
 
 
 def _parse(raw: Any) -> tuple[str, str]:
     """(kind, identifier), where kind is a job kind, message or message_graph."""
     if not isinstance(raw, dict):
         raise BindingRefused(
-            "a reply binding names a demand, drafting, litigation status, negotiation or chronology job, or an email"
+            "a reply binding names a demand, drafting, litigation status, negotiation, chronology or SMD note job, "
+            "or an email"
         )
     kind = raw.get("kind")
     if kind in JOB_KINDS:

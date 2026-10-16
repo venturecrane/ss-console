@@ -5,7 +5,8 @@ the broker itself and never taken off the wire:
 
 * a MESSAGE anchor (``graph_message`` / ``agentmail_message``) is read from the
   seat's own mailbox: who sent it, and who was on To and Cc;
-* a JOB anchor (``medchron_job`` / ``demand_job`` / ``drafting_job``) is the
+* a JOB anchor (``medchron_job`` / ``demand_job`` / ``drafting_job`` and the
+  rest of ``participant_fence.JOB_KINDS``, an SMD ``note_job`` included) is the
   job's ledger row: its request email (``request_ref``) is found in the Inbox
   and its From must be the job's ``requester``. A job with no request email
   is no anchor at all;

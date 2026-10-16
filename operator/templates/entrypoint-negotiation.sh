@@ -23,3 +23,9 @@ export SMD_NEGOTIATION_QUEUE_DIR="${MEDCHRON_RUN_DIR}/negotiation-queue"
 install -d -o root -g medchron -m 0750 "${MEDCHRON_DATA_DIR}/negotiation"
 install -d -o medchron -g medchron -m 0700 "${MEDCHRON_DATA_DIR}/negotiation/state"
 export MEDCHRON_NEGOTIATION_STATE_DIR="${MEDCHRON_RUN_DIR}/negotiation/state"
+
+# The SMD note lane (2026-10-15, medchron/note_lane.py): no queue and no child.
+# note-jobs/ is written by root's note_by_smd command and read by the root
+# daemon's note lane, which sends each note's wake and watches its reply; no
+# other uid touches it, so it is root-only.
+install -d -o root -g root -m 0700 "${MEDCHRON_DATA_DIR}/note-jobs"

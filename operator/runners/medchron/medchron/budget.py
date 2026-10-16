@@ -212,6 +212,8 @@ def scanned_pages(extracted_jsonl: Path) -> int:
             continue
         if row.get("scan") and isinstance(row.get("pages"), int):
             total += row["pages"]
+        elif isinstance(row.get("vision_pages"), list):
+            total += len(row["vision_pages"])  # image pages inside a text-layer PDF
     return total
 
 

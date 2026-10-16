@@ -21,6 +21,8 @@ from typing import Any
 
 CITE = re.compile(r"\(Exhibit (\d+)\s*(?:-\s*p\.\s*([0-9,\s\-]+?))?\s*(?:,\s*machine transcription)?\)")
 BODY_START, BODY_END = "## Medical Chronology", "## Exhibit List"
+#: An [NTD: ...] span; unclosed when the citation sits inside the note.
+NTD = re.compile(r"\[NTD:[^\]]*(?:\]|$)")
 _lock = threading.Lock()
 
 
@@ -53,6 +55,29 @@ def parse_pages(spec: str | None) -> list[int]:
     return list(dict.fromkeys(got))
 
 
+#: Below this many characters a claim with no value in it is a fragment (a
+#: label, a heading, "Unchanged."), never graded.
+MIN_CHARS = 30
+#: A list enumerator ("1.", "(2)") opening a line is not a value.
+_ENUM = re.compile(r"(?m)^\s*\(?\d{1,2}[.)]\s+")
+
+
+def graded(seg: str) -> bool:
+    """Whether the audit grades a claim span: one of at least MIN_CHARS
+    characters once its [NTD: ...] notes are removed, or ANY shorter one that
+    carries a value, whatever its length.
+
+    WHY (2026-10-14). The floor was length alone, so a cited paragraph such
+    as "Magnesium was 1.7 mg/dL." (24 characters) was never graded: on a real
+    update 14 such lines, each a lab value, a duration or a date, would have
+    reached the firm unchecked, a wrong one as easily as a right one. A digit
+    is the test, not a unit list: a lab value, a vital, a dose, a count and a
+    date all carry one, and a unit list would miss a bare value ("Hemoglobin
+    4.7"). A value-free fragment keeps the floor."""
+    text = NTD.sub("", seg).strip()
+    return len(text) >= MIN_CHARS or any(ch.isdigit() for ch in _ENUM.sub("", text))
+
+
 def _walk(body: str, keep: set[int]) -> list[tuple[dict[str, Any], str]]:
     """Each claim with its EXACT span in the body (text through citation).
 
@@ -71,7 +96,12 @@ def _walk(body: str, keep: set[int]) -> list[tuple[dict[str, Any], str]]:
         seg = last.strip()
         cursor = m.end()
         n = int(m.group(1))
-        if n not in keep or len(seg) < 30 or seg.lstrip().startswith("[NTD:"):
+        # A note is skipped by what is left once its [NTD: ...] spans are
+        # removed, not by where it sits: a note opening its section under a
+        # heading ("All Other Information\n[NTD: ...]") was audited as a claim
+        # (the laptop's 2026-10-13 review), while a real sentence followed by
+        # a note in one paragraph must still be audited.
+        if n not in keep or not graded(seg):
             continue
         spec = m.group(2)
         claim = {

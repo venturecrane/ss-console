@@ -156,6 +156,10 @@ def _litigation_run(args: argparse.Namespace, run_cls, lit_rehearse, lit_firm):
             from .litigation.deadlines.run import DeadlinesRun
 
             return DeadlinesRun(jd, inputs_dir=args.inputs, log=kw["log"])
+        if _report_of(jd) == "reassign":  # the $0 staff reassignment (litigation/reassign/)
+            from .litigation.reassign.run import ReassignRun
+
+            return ReassignRun(jd, inputs_dir=args.inputs, log=kw["log"])
         return run_cls(jd, state_dir=args.state_dir, **kw)
     lit_rehearse.ensure_job(jd, lit_firm.load(args.inputs).data["firm"]["slug"], [])
     return lit_rehearse.RehearsalRun(

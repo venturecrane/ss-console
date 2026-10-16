@@ -42,7 +42,7 @@ from .broker_client import BrokerClient, BrokerError
 from .covered import delivery_fields
 from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
-from . import config as config_mod, job as job_mod, lane_proof, proof_run, resume as resume_mod, retention
+from . import config as config_mod, job as job_mod, lane_proof, proof_run, requeue, resume as resume_mod, retention
 from . import verdict as verdict_mod
 from .proof import holds as proof_holds, watch as proof_watch
 
@@ -397,6 +397,8 @@ class Daemon:
         # Proven delivery: a dry run is never a delivery, a delivered claim
         # without its proof is a failure, and a hold or read-back failure pages.
         state, fields = proof_watch.settle(self, job_id, outcomes, state, fields)
+        if not proof_watch.in_proof_run(self) and requeue.maybe_requeue(self, job_id, outcomes, state, fields, stage):
+            return "requeued"
         try:
             self.broker.record(job_id, state, fields)
         except BrokerError as exc:
@@ -553,7 +555,7 @@ class Daemon:
         resume_mod.take_requests(self)
         self.wipe_expired()
         self.dispatch_wakes()
-        current = self._in_progress()
+        current = requeue.due(self, self._in_progress())
         job_id = current[0] if current else self.claim_next()
         self.heartbeat(running=job_id)
         if job_id is None:

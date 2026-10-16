@@ -17,7 +17,7 @@ Hosts: admin routes are served on admin.smd.services, portal routes on portal.sm
 | `/api/admin/assessments/:id/transcript` | GET | admin session | Streams the transcript file from R2. | `src/pages/api/admin/assessments/[id]/transcript.ts` |
 | `/api/admin/clients` | POST | admin session | Minimal add-a-client: create a record at stage `prospect` (the honest entry point, a business we have started working, not yet signed), with an optional prim... | `src/pages/api/admin/clients/index.ts` |
 | `/api/admin/clients/:id/operator-agreements` | POST | admin session | The human-reviewed admin flow behind the portal's Executed agreements card (ss#2641). | `src/pages/api/admin/clients/[id]/operator-agreements.ts` |
-| `/api/admin/clients/:id/operator-price` | POST | admin session | Authors the operator's monthly recurring price on the commercial spine (ADR 0046). | `src/pages/api/admin/clients/[id]/operator-price.ts` |
+| `/api/admin/clients/:id/operator-price` | POST | admin session | Authors ONE Operator seat's commercial record on the spine (ADR 0046; migrations 0113, 0126). | `src/pages/api/admin/clients/[id]/operator-price.ts` |
 | `/api/admin/clients/:id/subscription-billing` | POST | admin session | Drives an ALREADY-STARTED Operator retainer's Stripe billing from the client hub. | `src/pages/api/admin/clients/[id]/subscription-billing.ts` |
 | `/api/admin/contacts/:id` | POST | admin session | Edit (default) or delete (with `_method=DELETE`) a contact. | `src/pages/api/admin/contacts/[id].ts` |
 | `/api/admin/engagements` | POST | admin session | Creates a new engagement from form data and redirects to the engagement detail page. | `src/pages/api/admin/engagements/index.ts` |

@@ -28,11 +28,72 @@ from .. import icd_tables
 from ..audit import claims as CL, coverage as audit_coverage
 from ..audit.page_text import exhibit_paths
 from ..audit.run import AuditPaths
-from ..update import assemble as A, body as B, collect as C, docx_md, proofs as P
-from .base import StageRefusal, StageRun, read_json
+from ..update import assemble as A, body as B, collect as C, docx_md, proofs as P, review_repair as RR, reviewed as RV
+from ..update.billing_page import BILLING
+from ..update.select import ALREADY, BLANK, OVERLAP
+from .base import StageRefusal, StageRun, read_json, read_jsonl
 from .group import Canon
 from .render import chronology_name, render_text
 from .update_base import headings, plan, update_dir
+
+
+def _pages(n: int) -> str:
+    return f"{n:,} page" + ("" if n == 1 else "s")
+
+
+def page_counts(r: dict[str, Any]) -> dict[str, int]:
+    """What happened to a new document's pages, counted, never concluded."""
+    ex = r.get("excluded") or {}
+    return {
+        "read": len(r.get("read") or []),
+        "repeat": int(ex.get(ALREADY, 0)) + int(ex.get(OVERLAP, 0)),
+        "blank": int(ex.get(BLANK, 0)),
+        "billing": int(ex.get(BILLING, 0)),
+        "unread": len(r.get("unread") or []),
+    }
+
+
+def uncited_name(r: dict[str, Any]) -> str:
+    """An uncited new document as the Records Reviewed note names it: its
+    file name and what was done with its pages. Only what was read is
+    stated: an 834-page file was once said to "record no visit" while 64 of
+    its image pages had never been read (2026-10-13)."""
+    if r.get("not_itemized"):
+        return f"{r.get('source_name') or r.get('title') or 'a document'} ({_pages(int(r.get('pages') or 0))}: {r['not_itemized']})"
+    c = page_counts(r)
+    parts = [f"{_pages(c['read'])} read"]
+    if c["repeat"]:
+        parts.append(f"{c['repeat']:,} repeating page{'' if c['repeat'] == 1 else 's'} already read")
+    if c["blank"]:
+        parts.append(f"{_pages(c['blank'])} with no text")
+    if c["billing"]:
+        parts.append(f"{_pages(c['billing'])} of billing")
+    if c["unread"]:
+        parts.append(f"{_pages(c['unread'])} not transcribed")
+    name = str(r.get("source_name") or r.get("title") or "a document")
+    return f"{name} ({_pages(int(r.get('pages') or 0))}: {', '.join(parts)})"
+
+
+def added_when(ud: Path, incident: str | None) -> str:
+    """ ", before the incident", ", after the incident", both, or nothing:
+    what the audited added entries (``runs/<unit>/final-chronology.md``)
+    actually are, never a fixed phrase."""
+    doc = ud.parent / "final-chronology.md"
+    if not incident or not doc.is_file():
+        return ""
+    try:
+        _, ents = B.entries_of(doc.read_text(encoding="utf-8"))
+    except ValueError:
+        return ""
+    sides = [
+        s
+        for s, hit in (
+            ("before", any(B.iso(e) < incident for e in ents)),
+            ("after", any(B.iso(e) >= incident for e in ents)),
+        )
+        if hit
+    ]
+    return f", {' and '.join(sides)} the incident" if sides else ""
 
 
 def update_note(sr: StageRun, ud: Path) -> Any:
@@ -40,27 +101,49 @@ def update_note(sr: StageRun, ud: Path) -> Any:
     sel = read_json(ud / "selection.json", {})
     uncited = read_json(ud / "new_exhibits.uncited.json", [])
     keep = read_json(ud / "new_exhibits.final.json", [])
+    # Every document the pull holds, the copies it set aside included (``update/reviewed.py``).
+    filed = RV.accounted(
+        read_jsonl(ud.parents[2] / "raw_manifest.jsonl"),
+        sel,
+        read_json(ud / "update_plan.json", {}).get("exhibits") or [],
+        keep,
+        uncited,
+    )
+
+    when = added_when(ud, getattr(getattr(sr, "job", None), "incident_date", None))
 
     def note(retitled: dict[int, str]) -> str:
         today = time.strftime("%m/%d/%Y")
-        docs = len(keep) + len(uncited)
         pages = sum(int(r["pages"]) for r in keep + uncited)
-        repeat = sum(
-            int((r.get("excluded") or {}).get("already read in a delivered exhibit", 0)) for r in keep + uncited
-        )
+        c = {k: sum(page_counts(r)[k] for r in keep + uncited) for k in ("read", "repeat", "blank")}
         names = "; ".join(f"Exhibit {n} - {t}" for n, t in sorted(retitled.items()))
         out = (
-            f"Update of {today}: {docs} medical record document(s) filed on the matter after the earlier delivery "
-            f"were reviewed ({pages:,} pages). Visits they record that this chronology did not already list were "
-            f"added, before and after the incident, and they are cited as {names}."
+            f"Update of {today}: {filed['docs']} medical record document(s) filed on the matter after the earlier "
+            f"delivery were reviewed. Of the {_pages(pages)} of new records, {_pages(c['read'])} were read. Visits "
+            f"they record that this chronology did not already list were added{when}, and they are cited as {names}."
         )
-        if repeat:
-            out += f" {repeat:,} of their pages repeat a record already cited here and were not read again."
+        if c["repeat"]:
+            out += f" {_pages(c['repeat'])} repeat pages already read and were not read again."
+        if c["blank"]:
+            out += f" {_pages(c['blank'])} carry no text."
         if uncited:
-            out += f" {len(uncited)} of those documents record no visit this chronology did not already list, so none is cited."
-        same = len((sel.get("skipped") or {}).get("byte-identical to a delivered exhibit") or [])
-        if same:
-            out += f" {same} document(s) were identical to an exhibit already delivered."
+            out += f" {len(uncited)} of those documents are not cited: {'; '.join(uncited_name(r) for r in uncited)}."
+        if filed["copies"]:
+            n = len(filed["copies"])
+            what = "was a copy and was" if n == 1 else "were copies and were"
+            out += f" {n} {what} not read again: {'; '.join(filed['copies'])}."
+        refiled = [A.refiled_row(r) for r in keep if r.get("refiled")]
+        if refiled:
+            out += (
+                f" {len(refiled)} of those documents repeat visits the chronology already listed: {'; '.join(refiled)}."
+            )
+        if filed["unreadable"]:
+            out += (
+                f" {len(filed['unreadable'])} could not be read as record pages (not a PDF or an image): "
+                f"{'; '.join(filed['unreadable'])}."
+            )
+        if filed["unread"]:
+            out += f" {len(filed['unread'])} were not read: {'; '.join(filed['unread'])}."
         return out
 
     return note
@@ -80,12 +163,13 @@ def run_assemble(sr: StageRun) -> int:
         md, rep = A.assemble(
             base_md,
             (rd / "final-chronology.md").read_text(encoding="utf-8"),
-            read_json(ud / "new_index.json", []),
-            describe=lambda c: icd_tables.describe(c, tables) or "",
+            describe=lambda code, on, text: icd_tables.resolve(code, tables, on, text),
             canon=Canon(sr.cfg),
             headings=headings(sr.cfg),
             new_exhibits=keep,
             update_note=update_note(sr, ud),
+            folder=plan(sr).get("exhibits") or [],
+            provider_names=read_json(ud / "provider_claims.json", {}).get("composed") or {},
         )
     except ValueError as exc:
         raise StageRefusal(str(exc)) from exc
@@ -94,7 +178,7 @@ def run_assemble(sr: StageRun) -> int:
             f"new exhibit(s) {rep['new_exhibits_uncited']} are cited by no added entry after the audit; "
             "their numbers are fixed by the audit, so the update stops rather than leave a gap"
         )
-    for r in keep:
+    for r in (x for x in keep if not x.get("reused") and not x.get("refiled")):  # the firm's file, or a re-filed copy
         final = f"Exhibit {r['exhibit']} - {rep['new_exhibits_titled'][str(r['exhibit'])]}"
         if final != r["title"] and (out / f"{r['title']}.pdf").is_file():
             os.replace(out / f"{r['title']}.pdf", out / f"{final}.pdf")
@@ -102,6 +186,7 @@ def run_assemble(sr: StageRun) -> int:
         r["title"] = final
     (ud / "new_exhibits.final.json").write_text(json.dumps(keep, indent=1), encoding="utf-8")
     (ud / "updated-chronology.md").write_text(md, encoding="utf-8")
+    rep["provider_spelling_flags"] = read_json(ud / "compose_report.json", {}).get("provider_spelling") or []
     (ud / "assemble_report.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
     sr.log(
         f"updated chronology: {rep['delivered_entries']} delivered + {rep['new_entries']} new = {rep['output_entries']} entries"
@@ -163,9 +248,10 @@ def run_proofs(sr: StageRun) -> int:
         composed=composed,
         audit_claims=CL.extract_claims(CL.body_of(paths.doc.read_text(encoding="utf-8")), keep_ex),
         new_exhibits=new_ex,
-        pmh_replaced=bool(rep.get("prior_medical_history_replaced")),
         gate_passed=gate,
         pre_note_itemized=bool(rep.get("pre_note_itemized")),
+        respelled=dict(rep.get("provider_spelling_from_audit") or {}),
+        review_named=RR.named_values(read_json(ud / "review_repair.json", {})),
     )
     r = P.run(x)
     for ln in r.lines:
@@ -182,7 +268,10 @@ def run_manifest(sr: StageRun) -> int:
     ud = update_dir(sr)
     out = sr.slug_dir / "out" / sr.unit.unit
     p = plan(sr)
-    names = [chronology_name(sr)] + [f"{r['title']}.pdf" for r in read_json(ud / "new_exhibits.final.json", [])]
+    # A new exhibit that reuses a firm-numbered file is already on the matter;
+    # a re-filed copy of a delivered exhibit (the update review) is not filed again.
+    filed = [r for r in read_json(ud / "new_exhibits.final.json", []) if not r.get("reused") and not r.get("refiled")]
+    names = [chronology_name(sr)] + [f"{r['title']}.pdf" for r in filed]
     manifest = []
     for n in names:
         f = out / n

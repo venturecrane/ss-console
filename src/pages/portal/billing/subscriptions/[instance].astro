@@ -11,7 +11,7 @@ import {
   getOperatorSubscriptionByInstance,
   listProductRoles,
 } from '../../../../lib/portal/product-access'
-import { getOperatorServiceForEntity } from '../../../../lib/db/services'
+import { getOperatorServiceForSeat } from '../../../../lib/db/services'
 import { parseCancelAt } from '../../../../lib/db/subscriptions'
 import {
   canStartOperatorSubscription,
@@ -64,7 +64,9 @@ if (!subscription) return Astro.redirect('/portal/billing')
 
 const operatorName = offerings.operators.find((o) => o.slug === instance)?.displayName ?? 'Operator'
 
-const service = await getOperatorServiceForEntity(env.DB, user.org_id, client.id)
+// This seat's own commercial line (migration 0126), never a sibling seat's.
+const service = await getOperatorServiceForSeat(env.DB, user.org_id, subscription)
+const lineLabel = service?.label ?? null
 const charge = operatorMonthlyCharge(service)
 const priceCents = charge?.priceCents ?? null
 const byCard = charge?.paymentMethod === 'card'
@@ -104,6 +106,7 @@ const statusLine = startable
   />
 
   <PortalDetailTable eyebrow={startable ? 'What you are starting' : 'Terms'} label="Terms">
+    {lineLabel && <PortalDetailRow label="Service">{lineLabel}</PortalDetailRow>}
     <PortalDetailRow label="Monthly fee">
       {
         priceCents !== null ? (
