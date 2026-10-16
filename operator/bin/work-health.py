@@ -102,6 +102,21 @@ def seat_product(config: dict) -> Optional[str]:
     return str(product) if product else None
 
 
+def seat_kind(config: dict) -> Optional[str]:
+    """``seat.kind`` from the seat's customer.yaml (customer, proving, preprod,
+    internal, sandbox)."""
+    seat = config.get("seat") if isinstance(config, dict) else None
+    kind = seat.get("kind") if isinstance(seat, dict) else None
+    return str(kind) if kind else None
+
+
+def footnoted_seats(seats: list[str]) -> frozenset[str]:
+    """Seats SMD runs for itself, whose problems are a footnote in the email.
+    An unknown kind is NOT a test seat: a seat is hidden only when its own
+    customer.yaml says it is not a client."""
+    return frozenset(s for s in seats if seat_kind(customer_yaml(s)) not in (None, "customer"))
+
+
 def seat_shape(config: dict) -> tuple[bool, Optional[str]]:
     """(has_smokeball, the hourly check's authored schedule or None) from git."""
     connectors = config.get("connectors") or {}
@@ -281,8 +296,7 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
         # A hosted agent (seat.product: hosted-agent; scott, brokery) has no
         # request cards, job lanes or Smokeball: grading it against Operator
         # expectations would invent findings. Machine checks only, said so.
-        gap = f"{product or 'unknown product'}: machine checks only (gateway, connections, alerts, Sentry); "
-        return items, [gap + "no Operator request, job or schedule checks apply."], 0
+        return items, [f"{product or 'unknown product'}, machine checks only"], 0
     if console.error:
         items.append(
             wh.item(
@@ -435,6 +449,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         now=now,
         all_clear_hour_utc=cfg.all_clear_hour_utc,
         resolved=resolved,
+        test_seats=footnoted_seats(seats),
     )
     if args.state_out:
         Path(args.state_out).write_text(json.dumps(plan.state, indent=1, sort_keys=True), encoding="utf-8")
