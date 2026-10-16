@@ -1,0 +1,65 @@
+#!/bin/bash
+# ops-triage: the work-health triage agent (hourly, cron on smd-ops).
+#
+# WHY (Captain, 2026-10-16): the work-health email told him what was wrong and
+# the only thing he could do with a line was hand it to an agent. This is that
+# agent, on a schedule: it reads the same evaluation, investigates every NEW
+# listed item, does what is safe and reversible, and emails him only a report of
+# what it found and the decisions that are his. Quiet hours send nothing.
+#
+# Runs as ops under the Captain's Claude login, capped per run. The email body
+# never leaves SMD (Resend to team@), the same path work-health uses.
+set -uo pipefail
+STATE="$HOME/state"; mkdir -p "$STATE" "$HOME/logs"
+REPO="$HOME/dev/ss-console"
+now=$(date -u +%Y%m%dT%H%M)
+body="$STATE/wh-body-$now.txt"
+log="$HOME/logs/triage-$now.log"
+exec >>"$log" 2>&1
+
+git -C "$REPO" fetch -q origin && git -C "$REPO" checkout -q --detach origin/main
+since=$(cat "$STATE/triage-since" 2>/dev/null || true)
+args=(--dry-run --print-body --state-out "$STATE/triage-state.next.json")
+[ -f "$STATE/triage-state.json" ] && args+=(--state-in "$STATE/triage-state.json")
+[ -n "$since" ] && args+=(--since "$since")
+start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+(cd "$REPO/operator" && "$HOME/bin/ss-env" python3 bin/work-health.py "${args[@]}") > "$body" 2>&1
+status=$?
+echo "work-health exit=$status"
+mv -f "$STATE/triage-state.next.json" "$STATE/triage-state.json" 2>/dev/null || true
+echo "$start" > "$STATE/triage-since"
+
+# Only a NEW listed item wakes the agent ("N need attention (M new)", M > 0).
+new=$(grep -o -E 'need attention \(([0-9]+) new\)' "$body" | grep -o -E '[0-9]+' | tail -1)
+if [ "${new:-0}" = "0" ]; then echo "nothing new; no agent run"; exit 0; fi
+
+prompt="You are SMD's ops triage agent on the smd-ops machine (read docs/handbook/work-health.md and operator/ops-machine/TRIAGE.md first; follow TRIAGE.md exactly). The work-health evaluation just reported the items below. Investigate each NEW item to ground, take only the actions TRIAGE.md allows, and end with the report in the exact format TRIAGE.md gives.
+
+$(sed -n '/^Subject:/,$p' "$body")"
+
+report="$STATE/triage-report-$now.txt"
+(cd "$REPO" && "$HOME/bin/ss-env" claude -p "$prompt" \
+   --max-budget-usd 5 \
+   --permission-mode default \
+   --allowedTools "Read" "Grep" "Glob" "Bash(fly status:*)" "Bash(fly logs:*)" \
+     "Bash(operator/bin/seat-probe.sh:*)" "Bash(python3 operator/bin/work-health.py:*)" \
+     "Bash(.claude/bin/requests:*)" "Bash(.claude/bin/register list:*)" "Bash(gh pr list:*)" "Bash(gh issue list:*)" \
+   --output-format text) > "$report" 2>&1
+echo "agent exit=$?"
+
+subject=$(head -1 "$report" | sed 's/^Subject: //' | cut -c1-150)
+case "$subject" in "[SMD Ops] Triage"*) ;; *) subject="[SMD Ops] Triage: report (format not followed)";; esac
+"$HOME/bin/ss-env" python3 - "$subject" "$report" <<'PY'
+import json, os, sys, urllib.request
+subject, path = sys.argv[1], sys.argv[2]
+text = open(path, encoding="utf-8", errors="replace").read()
+req = urllib.request.Request(
+    "https://api.resend.com/emails",
+    data=json.dumps({"from": "SMD Services Ops <team@smd.services>", "to": ["team@smd.services"],
+                     "subject": subject, "text": text}).encode(),
+    headers={"Authorization": "Bearer " + os.environ["RESEND_API_KEY"], "Content-Type": "application/json",
+             "User-Agent": "smd-ops-triage/1"},
+)
+print("resend", urllib.request.urlopen(req, timeout=30).status)
+PY

@@ -1,0 +1,21 @@
+#!/bin/bash
+# ops-selftest: prove the smd-ops Machine can do the work, printing names and
+# counts only (never a secret value).
+set -uo pipefail
+ok() { printf 'PASS %s\n' "$1"; }
+bad() { printf 'FAIL %s\n' "$1"; }
+
+n=$("$HOME/bin/ss-env" bash -c 'env | cut -d= -f1 | grep -c -E "KEY|SECRET|TOKEN"' 2>/dev/null || echo 0)
+[ "${n:-0}" -gt 10 ] && ok "infisical /ss prod readable ($n credential names)" || bad "infisical /ss prod ($n)"
+
+claude --version >/dev/null 2>&1 && ok "claude installed" || bad "claude"
+[ -f "$HOME/.claude/.credentials.json" ] || [ -f "$HOME/.claude.json" ] && ok "claude login present" || bad "claude login missing"
+gh auth status >/dev/null 2>&1 && ok "github login" || bad "github login missing"
+[ -f "$HOME/.fly-tokens" ] && ok "fly tokens present" || bad "fly tokens missing"
+if [ -f "$HOME/.fly-tokens" ]; then
+  # shellcheck disable=SC1090
+  . "$HOME/.fly-tokens"
+  for app in $FLY_OPS_APPS; do
+    FLY_API_TOKEN="$FLY_API_TOKEN" fly status -a "$app" >/dev/null 2>&1 && ok "fly status $app" || bad "fly status $app"
+  done
+fi

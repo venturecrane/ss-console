@@ -1,0 +1,19 @@
+#!/bin/bash
+# ops-crane-install: build and link the crane CLI + MCP server on smd-ops, the
+# same way crane-console's bootstrap-machine.sh does on a fleet box (npm install,
+# build, npm link into the ops user's prefix). crane reads ~/.infisical-ua on
+# Linux SSH sessions, which this Machine already has.
+set -uo pipefail
+L="$HOME/logs/crane-install.log"; : > "$L"
+step() { echo "== $*"; if ! "$@" >> "$L" 2>&1; then echo "FAILED: $*"; grep -v '^\s*$' "$L" | tail -25; exit 1; fi; }
+npm config set prefix "$HOME/.npm-global"
+NODE_AUTH_TOKEN=$(gh auth token); export NODE_AUTH_TOKEN
+cd "$HOME/dev/crane-console" || exit 1
+step git pull -q --ff-only
+step npm install --no-audit --no-fund
+cd packages/crane-mcp || exit 1
+step npm install --no-audit --no-fund
+step npm run build
+step npm link
+grep -q npm-global "$HOME/.bashrc" || echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> "$HOME/.bashrc"
+ls -l "$HOME/.npm-global/bin/crane" && echo "crane install done"
