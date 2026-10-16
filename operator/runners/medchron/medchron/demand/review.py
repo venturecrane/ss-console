@@ -65,7 +65,7 @@ You review a policy-limits demand package before it is filed on a personal-injur
 Read the documents as delivered (the demand letter, the gap audit, the attorney notes) against the sources given (the attorney's request, the matter record, the record digest, the figures code computed). Check each of these:
 
 1. A STATEMENT THAT CONTRADICTS THE RECORD: an amount, a date, an injury, a diagnosis, a course of treatment, a provider, a party, as the digest or the matter record states it. MUST-FIX.
-2. THE REQUEST NOT CARRIED OUT: a deliverable or an instruction in the attorney's words with nothing answering it. MUST-FIX.
+2. THE REQUEST NOT CARRIED OUT: a deliverable or an instruction in the attorney's words with nothing answering it. MUST-FIX. The firm's OPEN-ITEM MARKERS are not this: `[TO BE SUPPLIED: ...]`, `[ATTORNEY: ...]`, `[CONFIRM ... BEFORE TRANSMITTAL]`, and, when the request names them, `{{NOT IN RECORD: ...}}`, `{{FILL: ...}}`, `{{ATTORNEY: ...}}`. The firm asked for demands that go out with what the file supports, the markers say what it does not, and the attorney resolves each one before the letter is sent. A letter carrying markers IS the deliverable; their presence, their number or where they stand is never a finding. A marker may still be wrong in what it SAYS (it asks for something the record states: check 1).
 3. WRONG ARITHMETIC: a total that is not the sum of its rows, a figure carried between sections that changes, a demand figure that disagrees with the specials it rests on. MUST-FIX.
 4. THE WRONG PARTY OR CLIENT: a client, an insured, a carrier, a claim number or a provider attributed to the wrong person or matter. MUST-FIX.
 5. THE SYSTEM'S OWN VOCABULARY in anything the firm reads: a job, a pipeline, a model, an auditor or drafter, a gate, a rule of the system, a chunk, a sentinel line ("=== ... ==="). MUST-FIX.
@@ -182,6 +182,12 @@ FIRM_BANNED = (
         re.I,
     ),
     re.compile(r"\bauthored[- ]spec\b|\bpointer block\b|\bdelivery note\b", re.I),
+    # the system's name for the record (2026-10-15 re-run: "no cite in digest"
+    # in the letter); never "digestive", never a record's own "digest" heading
+    re.compile(
+        r"\b(?:the|per|in|from|no cite in) (?:record )?digest\b|\bdigest(?:'s)? (?:states|says|shows|entry|entries|line|lines|cites?)\b",
+        re.I,
+    ),
 )
 
 
@@ -238,6 +244,43 @@ def computed_figures(facts: dict[str, Any], letter_md: str) -> set[int]:
     return out
 
 
+#: An open-item marker opened and never closed on its line, a curly one the
+#: same, an empty one, or the firm form's own fill-in instruction left in.
+_MARK_OPEN = re.compile(r"\[(TO BE SUPPLIED|ATTORNEY|CONFIRM)\b[^\]\n]*(?=\n|$)")
+_MARK_EMPTY = re.compile(
+    r"\[(TO BE SUPPLIED|ATTORNEY|CONFIRM)\s*:?\s*\]|\{\{\s*(NOT IN RECORD|FILL|ATTORNEY)\s*:?\s*\}\}"
+)
+_CURLY_OPEN = re.compile(r"\{\{(?![^}\n]*\}\})[^\n]*")
+_ABOUT_MARKERS = re.compile(
+    r"\[(TO BE SUPPLIED|ATTORNEY|CONFIRM)|\{\{|placeholder|open[- ]item|\bmarkers?\b|bracket", re.I
+)
+
+
+def malformed_markers(letter: str) -> list[str]:
+    """Open-item markers that are not well formed. A well-formed marker is the
+    firm's by design and never a finding (``markers_by_design``)."""
+    out = [m.group(0)[:60] for m in _MARK_OPEN.finditer(letter or "")]
+    out += [m.group(0) for m in _MARK_EMPTY.finditer(letter or "")]
+    out += [m.group(0)[:60] for m in _CURLY_OPEN.finditer(letter or "")]
+    if "[INSERT" in (letter or ""):
+        out.append("[INSERT")
+    return out
+
+
+def markers_by_design(found: list[R.Finding]) -> list[R.Finding]:
+    """A model finding under check 2 that rests on the letter carrying open-item
+    markers is graded NOTE: the markers are the deliverable working as the firm
+    asked (2026-10-15 re-run: a MUST-FIX "unresolved placeholders ... no
+    complete, sendable letter" held a correct demand). Code grades a malformed
+    marker itself."""
+    out = []
+    for f in found:
+        if f.by == "model" and f.check.strip().startswith("2") and _ABOUT_MARKERS.search(f.finding):
+            f = R.Finding(R.NOTE, f.check, f.finding, f.cite, f.by)
+        out.append(f)
+    return out
+
+
 def demand_code(
     texts: dict[str, str],
     *,
@@ -258,6 +301,8 @@ def demand_code(
                 out.append(R.code(R.MUST, "2 deliverables", f"the request asks for the {_what(role)}; no file", role))
     letter = texts.get("demand")
     if letter is not None:
+        for m in malformed_markers(letter):
+            out.append(R.code(R.MUST, "2 open items", f'an open-item marker is not well formed: "{m}"', "the demand"))
         for c in checks.money_not_in(letter, sources, also=computed):
             out.append(
                 R.code(
@@ -436,6 +481,8 @@ __all__ = [
     "demand_user",
     "docx_text",
     "firm_banned",
+    "malformed_markers",
+    "markers_by_design",
     "signature_block",
     "model_for",
     "model_review",

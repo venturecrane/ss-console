@@ -37,7 +37,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .draft import FINDING, audit_sections, sections
+from .draft import FINDING, audit_sections, firm_reason, sections
 from .format_check import CURLY, SQUARE
 
 _TOK = re.compile(r"[a-z0-9]+")
@@ -57,6 +57,7 @@ def _toks(s: str) -> set[str]:
 
 def _clean(s: str, n: int = 220) -> str:
     s = re.sub(r"[{}\[\]|]", "", s).replace('"', "'").replace("“", "'").replace("”", "'")
+    s = firm_reason(s)
     s = " ".join(s.split())
     return s if len(s) <= n else s[: n - 3].rstrip() + "..."
 
@@ -205,7 +206,32 @@ MARK = {
 }
 NOTE_REMOVED = "{head}: taken out, the file does not support it: {claim} ({why})"
 NOTE_FLAGGED = "{head}: figure marked for the attorney to confirm: {claim} ({why})"
+NOTE_KEPT = (
+    "{head}: the file may not support this and it is still in the letter, for the attorney to decide: {claim} ({why})"
+)
 NOTE_CLEARED = "{head}: rechecked {claim}; the arithmetic is correct and it is left as written"
+
+
+_QUOTED = re.compile(r"[\"“]([^\"“”]{3,})[\"”]")
+
+
+def _flat(s: str) -> str:
+    return " ".join(s.split()).strip(" ,;.").lower()
+
+
+def remaining(claim: str, body: str) -> list[str] | None:
+    """What of ``claim`` is still in ``body`` after its removal: the quoted
+    items a list-shaped claim names (two or more) that are still there, ``[]``
+    when nothing is, and ``None`` when a single statement found verbatim before
+    the edit is still verbatim after it (the edit hit the wrong unit). A note
+    saying "taken out" is written only on ``[]``."""
+    flat = _flat(body)
+    items = [_flat(q) for q in _QUOTED.findall(claim)]
+    items = [q for q in items if len(q) >= 3]
+    if len(items) >= 2:
+        return [q for q in items if q in flat]
+    bare = _flat(claim.strip().strip('"“”'))
+    return None if len(bare) >= 12 and bare in flat else []
 
 
 def settle(draft_md: str, audit_md: str, dialect: str = SQUARE) -> tuple[str, list[str]]:
@@ -237,7 +263,19 @@ def settle(draft_md: str, audit_md: str, dialect: str = SQUARE) -> tuple[str, li
         if verdict == "INVENTED":
             # The marker says WHY, never what was claimed: restating the claim
             # would put the invented statement back in the letter.
-            body = body[:a] + MARK[(dialect, verdict)].format(why=_clean(detail, 160)) + body[b:]
+            edited = body[:a] + MARK[(dialect, verdict)].format(why=_clean(detail, 160)) + body[b:]
+            left = remaining(claim, edited)
+            if left is None:
+                raise Unlocated(
+                    f"a final-audit INVENTED finding in {head[:60]!r} is still in the section after removal"
+                )
+            if left:
+                # A list of items spread through the section (2026-10-15: six
+                # exhibit cites, one cell replaced, the note said all six went).
+                # Removing every one rewrites the letter; the attorney decides.
+                notes.append(NOTE_KEPT.format(head=head, claim=_clean(claim, 160), why=_clean(detail, 160)))
+                continue
+            body = edited
             notes.append(NOTE_REMOVED.format(head=head, claim=_clean(claim, 160), why=_clean(detail, 160)))
         else:
             mark = MARK[(dialect, verdict)].format(why=_clean(detail or claim))
@@ -248,7 +286,10 @@ def settle(draft_md: str, audit_md: str, dialect: str = SQUARE) -> tuple[str, li
                 unit = unit[:i] + mark + unit[i + len(fig) :]
             else:
                 unit = mark
-            body = body[:a] + unit + body[b:]
+            edited = body[:a] + unit + body[b:]
+            if mark not in edited or edited.count(mark) != body.count(mark) + 1:
+                raise Unlocated(f"a final-audit ARITHMETIC finding in {head[:60]!r} could not be marked")
+            body = edited
             notes.append(NOTE_FLAGGED.format(head=head, claim=_clean(claim, 160), why=_clean(detail, 160)))
         bodies[head] = body
     out = "\n".join(bodies[h] for h, _ in secs)
@@ -260,4 +301,5 @@ def summary(notes: list[str]) -> dict[str, Any]:
         "removed": sum(1 for n in notes if ": taken out, " in n),
         "flagged": sum(1 for n in notes if ": figure marked for the attorney" in n),
         "cleared": sum(1 for n in notes if "the arithmetic is correct and it is left as written" in n),
+        "kept": sum(1 for n in notes if "it is still in the letter, for the attorney to decide" in n),
     }

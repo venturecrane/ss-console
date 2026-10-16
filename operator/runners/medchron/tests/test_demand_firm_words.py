@@ -73,7 +73,7 @@ def test_a_settled_marker_is_in_the_drafts_dialect_counted_and_names_no_stage(di
     # FALSIFIER: the marker said "removed by the final audit" and the notes "the final audit checked"
     assert rv.firm_banned(md) == [] and "audit" not in md.lower()
     assert all(rv.firm_banned(n) == [] and "audit" not in n.lower() for n in notes)
-    assert finalpass.summary(notes) == {"removed": 1, "flagged": 1, "cleared": 0}
+    assert finalpass.summary(notes) == {"removed": 1, "flagged": 1, "cleared": 0, "kept": 0}
 
 
 def test_a_check_that_states_its_own_figure_correct_is_noted_in_firm_words():
@@ -81,7 +81,7 @@ def test_a_check_that_states_its_own_figure_correct_is_noted_in_firm_words():
         "## Damages\n\nOne visit at $1,200.00 (bill).\n",
         "## AUDIT: Damages\n\n- one visit at $1,200.00 | ARITHMETIC | 1 x 1200.00 = 1200.00; correct\n",
     )
-    assert finalpass.summary(notes) == {"removed": 0, "flagged": 0, "cleared": 1}
+    assert finalpass.summary(notes) == {"removed": 0, "flagged": 0, "cleared": 1, "kept": 0}
     assert "final audit" not in notes[0] and "left as written" in notes[0]
 
 
