@@ -494,7 +494,6 @@ class Daemon:
             body = json.dumps({"handoff_id": f"{self.LANE}-{job_id}", "task": wake["task"]})
             url = urlparse(self.gate_url)
             sent = False
-            requested = False
             outcome = "error"
             try:
                 conn = http.client.HTTPConnection(url.hostname or "127.0.0.1", url.port or 8643, timeout=15)
@@ -507,7 +506,6 @@ class Daemon:
                         body=body,
                         headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.wake_secret}"},
                     )
-                    requested = True
                     resp = conn.getresponse()
                     raw = resp.read()
                     if 200 <= resp.status < 300:
@@ -519,7 +517,11 @@ class Daemon:
                 finally:
                     conn.close()
             except Exception as exc:  # noqa: BLE001 - each shape maps to a wake decision
-                outcome = wake_grace.failed_outcome(exc, sent=sent, requested=requested)
+                outcome = wake_grace.failed_outcome(exc, sent=sent)
+            # Before every other branch, so any answer (delivered, paused, a
+            # timeout) ends this wake's grace and a later outage starts afresh.
+            if wake_grace.waiting(self, job_id, outcome):
+                continue
             if outcome == "delivered" or (sent and outcome.startswith("timeout")):
                 wake.update(pending=False, sent_at=self.clock(), outcome=outcome)
                 self._write_state(job_id, wake=wake)
@@ -527,8 +529,6 @@ class Daemon:
                 continue
             if outcome == "paused":
                 logger.info("seat paused; wake for %s stays pending without consuming an attempt", job_id)
-                continue
-            if wake_grace.waiting(self, job_id, outcome):
                 continue
             wake["attempts"] = int(wake.get("attempts", 0)) + 1
             logger.warning(

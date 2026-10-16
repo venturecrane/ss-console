@@ -1027,6 +1027,25 @@ def test_a_gateway_that_answers_clears_the_grace(tmp_path):
     assert "01A" not in d._unreachable_since and int(d._daemon_state("01A")["wake"]["attempts"]) == 1
 
 
+def test_a_pause_between_two_outages_starts_a_fresh_grace(tmp_path):
+    """FALSIFIER (review of #3256): only a failure reset the grace, so an answer
+    in between (a pause here) left the first outage's clock running."""
+    gate = _FakeGate(status=503, body=b'{"error": "operator paused"}')
+    d, broker = _wake_daemon(tmp_path, "http://127.0.0.1:1")
+    now = _clocked(d)
+    _submit(d, broker, "01A")
+    d.tick()
+    d.tick()  # outage one starts the grace
+    d.gate_url = gate.url
+    now[0] += wake_grace.WAKE_UNREACHABLE_GRACE_SECONDS - 60
+    d.tick()  # paused: an answer
+    gate.close()
+    d.gate_url = "http://127.0.0.1:1"
+    now[0] += 120  # past the FIRST outage's grace, inside a fresh one
+    d.tick()
+    assert int(d._daemon_state("01A")["wake"].get("attempts", 0)) == 0
+
+
 # A decision hold's reason quotes the matter: the files it could not place.
 HELD_RUNNER = """
 import json, sys

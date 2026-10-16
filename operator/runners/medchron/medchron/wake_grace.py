@@ -25,14 +25,14 @@ logger = logging.getLogger(__name__)
 WAKE_UNREACHABLE_GRACE_SECONDS = 900
 
 
-def failed_outcome(exc: BaseException, *, sent: bool, requested: bool) -> str:
+def failed_outcome(exc: BaseException, *, sent: bool) -> str:
     """The wake decision for a dispatch that raised.
 
-    Never connected, or refused or reset before the request went out: the
-    gateway did not get it (``unreachable``). Anything after the request was
-    written stays ``timeout after send``, consumed: the gateway may have
-    started the turn, and a duplicate DELIVER is worse than a lost one."""
-    if not sent or (not requested and isinstance(exc, ConnectionError)):
+    Never connected: the gateway did not get it (``unreachable``). Once
+    connected, any error stays ``timeout after send``, consumed, because bytes
+    may already be with the gateway and a duplicate DELIVER is worse than a
+    lost one (the at-most-once rule of ``Daemon.dispatch_wakes``)."""
+    if not sent:
         return f"unreachable ({type(exc).__name__})"
     return "timeout after send"
 

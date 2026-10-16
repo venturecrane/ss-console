@@ -49,6 +49,9 @@ if mode == 'caught_dict':
 if mode == 'held_dict':
     print(json.dumps({"verdict": "held", "stage": "review", "reason": "review_held: one finding", "cents": 10}))
     sys.exit(1)
+if mode == 'paged_dict':
+    print(json.dumps({"verdict": "failed", "stage": "review", "reason": "review_held: 1 finding; nothing was filed", "cents": 10}))
+    sys.exit(2)
 if mode == 'delivered_dict':
     print(json.dumps({"verdict": "delivered", "stage": "report", "cents": 10, "notices": [],
                       "proof": {"readback": "confirmed", "rows": 0, "review": "code_only", "review_cents": 0, "nothing_to_file": True}}))
@@ -176,6 +179,19 @@ def test_a_real_ending_reached_before_the_stop_is_recorded(tmp_path, make):
     lane.stopping = lambda: True
     assert lane.tick() == ending
     assert _states(client)[-1] == ending
+
+
+@pytest.mark.parametrize("make", [_negotiation, _litigation], ids=["negotiation", "litigation"])
+def test_a_paged_failure_reached_before_the_stop_is_recorded_not_rerun(tmp_path, make):
+    """FALSIFIER (review of #3256): a ``failed`` carrying review_held: is the
+    work's own ending and pages SMD; re-running it on the next boot would spend
+    again to reach the same hold, and page late."""
+    lane, client, submit, _skill = make(tmp_path)
+    submit()
+    _with_child(lane, tmp_path, "paged_dict")
+    lane.stopping = lambda: True
+    assert lane.tick() == "failed"
+    assert _states(client)[-1] == "failed"
 
 
 @LANES
