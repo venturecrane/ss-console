@@ -112,6 +112,13 @@ jobs:
           if [ -n "${SINCE:-}" ]; then ARGS+=(--since "$SINCE"); fi
           if [ -n "${STATE_IN:-}" ]; then ARGS+=(--state-in "$STATE_IN"); fi
           if [ "${DRY_RUN:-false}" = "true" ]; then ARGS+=(--dry-run); fi
+          # Pages only (Captain, 2026-10-16). The hourly digest is now worked by
+          # the triage agent on smd-ops, which emails one report per problem
+          # (operator/ops-machine/TRIAGE.md); its silence is caught by the
+          # healthchecks.io check smd-ops-triage. This run stays as the
+          # independent backstop for the urgent pages: a dead Smokeball or
+          # mailbox sign-in still emails ACTION from here even if smd-ops is down.
+          ARGS+=(--pages-only)
           # `|| STATUS=$?` keeps the report printed before a non-zero exit (ss#2309).
           STATUS=0
           python3 operator/bin/work-health.py "${ARGS[@]}" > report.txt 2>&1 || STATUS=$?
