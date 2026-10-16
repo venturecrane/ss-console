@@ -194,8 +194,16 @@ def span(delta: timedelta) -> str:
     return f"{hours // 24}d"
 
 
+#: Phoenix keeps no daylight saving, so a fixed offset is exact all year.
+PHOENIX = timezone(timedelta(hours=-7), "MST")
+
+
 def hhmm(ts: datetime) -> str:
-    return ts.astimezone(timezone.utc).strftime("%m-%d %H:%MZ")
+    """A time a person reads without converting (Captain, 2026-10-16): Phoenix,
+    labelled, e.g. ``Oct 16 7:51am MST``."""
+    local = ts.astimezone(PHOENIX)
+    clock = local.strftime("%I:%M%p").lstrip("0").lower()
+    return f"{local.strftime('%b')} {local.day} {clock} MST"
 
 
 def stamped(rows: list[dict]) -> list[tuple[datetime, dict]]:
@@ -259,7 +267,7 @@ def _job_name(job: Job, cfg: Config) -> str:
     label = cfg.lanes[job.lane].label
     where = f" on matter {job.matter}" if job.matter else ""
     origin = "scheduled " if job.scheduled else ""
-    return f"{origin}{label} job{where} (started {hhmm(job.submitted_at)}, job {job.job_id[-8:]})"
+    return f"{origin}{label} job{where} (started {hhmm(job.submitted_at)}, ref {job.job_id[-8:]})"
 
 
 def _superseded(job: Job, jobs: list[Job]) -> bool:

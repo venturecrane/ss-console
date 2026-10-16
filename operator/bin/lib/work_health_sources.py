@@ -97,7 +97,8 @@ def silent_run_items(seat: str, rows: list[dict], cfg: Config, now: datetime) ->
     contract = outcomes.load_contract()
     usable = [r for r in rows if r.get("ts")]
     since = now - timedelta(hours=cfg.reconcile_window_hours)
-    out: list[Item] = []
+    by_id = {str(r.get("id")): r for r in usable if r.get("id")}
+    groups: dict[tuple[str, str, str], list] = {}
     resolved = 0
     for ob in outcomes.analyze(contract, seat, usable, now=now):
         if not ob.is_finding or ob.trigger_kind == "inbound" or ob.opened_at < since:
@@ -105,21 +106,38 @@ def silent_run_items(seat: str, rows: list[dict], cfg: Config, now: datetime) ->
         if _held_then_sent(usable, ob.row_id):
             resolved += 1
             continue
-        routine = f"{ob.skill_name} run" if ob.skill_name else "unnamed run (no skill recorded)"
-        if ob.shape == outcomes.SHAPE_HELD_WITHOUT_NOTICE:
-            what = f"The {routine} at {hhmm(ob.opened_at)} had its output held and nobody was told."
-        else:
-            what = f"The {routine} at {hhmm(ob.opened_at)} ended with no outcome: nothing delivered, refused, or escalated."
-        out.append(
-            item(
-                seat,
-                "silent_run",
-                outcomes.finding_key(seat, ob),
-                ob.opened_at,
-                what,
-                "Check whether the work it owed was done; a silent run looks the same as success from the firm's side.",
+        held_by = str((by_id.get(str(ob.row_id)) or {}).get("action_type") or "")
+        groups.setdefault((ob.shape, ob.skill_name or "", held_by), []).append(ob)
+    # ONE ITEM PER PROBLEM, not per occurrence (Captain, 2026-10-16). The
+    # reconciler opens a new finding for each half-hour of a repeating hold, so
+    # one send refused every thirty seconds for a day read as 25 problems. The
+    # group key carries no time, so the item stays "still open" for as long as
+    # the problem repeats, and its age comes from the state file.
+    out: list[Item] = []
+    for (shape, skill, held_by), obs in groups.items():
+        first = min(o.opened_at for o in obs)
+        # The count a person means is attempts, not the reconciler's slices.
+        attempts = [
+            ts
+            for ts, r in stamped(usable)
+            if ts >= first and str(r.get("action_type") or "") == held_by and (r.get("skill_name") or "") == skill
+        ]
+        last = attempts[-1] if attempts else max(o.opened_at for o in obs)
+        count = max(len(attempts), len(obs))
+        routine = f"The {skill} run" if skill else "A run with no routine named"
+        times = f"{count:,} times since {hhmm(first)}, last {hhmm(last)}" if count > 1 else f"at {hhmm(first)}"
+        todo = "Check whether the work it owed was done; a silent run looks the same as success from the firm's side."
+        if held_by == "FABRICATION_FILTER_TRIGGERED" and not skill:
+            what = (
+                f"A message the Operator tried to send on its own was blocked by the safety check, {times}. "
+                "Whoever it was for has not been told."
             )
-        )
+            todo = "Find what it was trying to send (the seat's agent.log names it) and tell that person by hand."
+        elif shape == outcomes.SHAPE_HELD_WITHOUT_NOTICE:
+            what = f"{routine} had its output held and nobody was told ({times})."
+        else:
+            what = f"{routine} ended with nothing delivered, refused, or escalated ({times})."
+        out.append(item(seat, "silent_run", f"{shape}:{skill}:{held_by}", first, what, todo))
     return out, resolved
 
 
@@ -500,6 +518,7 @@ def delivery_proof_items(seat: str, rows: list[dict], cfg: Config, now: datetime
     DELIVERY_PROVEN row for the same job lands after it."""
     proven: dict[str, datetime] = {}
     failures: dict[str, tuple[datetime, dict]] = {}
+    ended_bad: set[str] = set()
     for ts, row in stamped(rows):
         md = meta(row)
         job_id = str(md.get("job_id") or "")
@@ -509,9 +528,21 @@ def delivery_proof_items(seat: str, rows: list[dict], cfg: Config, now: datetime
             proven[job_id] = ts
         elif row.get("action_type") == "DELIVERY_PROOF_FAILED":
             failures[job_id] = (ts, md)
+        elif str(row.get("action_type") or "").endswith(("_JOB_FAILED", "_JOB_HELD")):
+            ended_bad.add(job_id)
     out: list[Item] = []
     for job_id, (ts, md) in failures.items():
-        if (job_id in proven and proven[job_id] > ts) or now - ts > timedelta(hours=cfg.ended_job_hours):
+        if (job_id in proven and proven[job_id] >= ts) or now - ts > timedelta(hours=cfg.ended_job_hours):
+            continue
+        if job_id in ended_bad:
+            # The job's own FAILED/HELD line already says it did not deliver
+            # (job_items); a second line about the same job is noise.
+            continue
+        if "delivered, and its lane raised" in str(md.get("detail") or ""):
+            # The job DELIVERED; the lane carried an alert of its own (on
+            # negotiation, a held offer). That alert has its own mail. Saying
+            # "NOT proven delivered" here was false, and it was six of the 33
+            # lines in the 2026-10-16 email.
             continue
         code = reason_token(md.get("code")) or "unknown"
         lane = cfg.lanes[md["lane"]].label if md.get("lane") in cfg.lanes else str(md.get("lane") or "a")
@@ -521,7 +552,7 @@ def delivery_proof_items(seat: str, rows: list[dict], cfg: Config, now: datetime
                 "job_failed",
                 f"proof:{job_id}:{code}",
                 ts,
-                f"The {lane} job {job_id[-8:]} is NOT proven delivered: {_PROOF_WORDS.get(code, code)} ({code}, {hhmm(ts)}).",
+                f"The {lane} job is NOT proven delivered: {_PROOF_WORDS.get(code, code)} ({hhmm(ts)}, ref {job_id[-8:]}).",
                 "Check what the requester actually received before anyone says it was delivered.",
             )
         )
