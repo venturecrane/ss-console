@@ -77,7 +77,9 @@ FIRM_READS = (
     "say what the record shows, in plain words, under the attorney decisions.\n"
     "- Never name a tool, a spec, a manifest, a delivery note, an audit or auditor, a gate, a check, a stage, a "
     "pipeline or a model, and never describe how this draft was produced.\n"
-    "- The skeleton is the firm's own form: call it the firm's form, or name its section; never the skeleton."
+    "- The skeleton is the firm's own form: call it the firm's form, or name its section; never the skeleton.\n"
+    "- The record digest is your reading aid, not a source the firm knows: call the source the record or the file, "
+    "or name the document; never the digest."
 )
 
 
@@ -467,6 +469,18 @@ def finding_lines(audit_md: str, kinds: tuple[str, ...]) -> list[str]:
 _LABEL = re.compile(r"\b(SUPPORTED|DRIFTS|INVENTED|ARITHMETIC)\b")
 
 
+#: The check's reasons say "digest" for the record (its own word: the record
+#: digest it reads). Carried into a marker, that word reached the LETTER on the
+#: 2026-10-15 re-run ("no cite in digest"); the firm calls it the record.
+_DIGEST = re.compile(r"\b(?:record )?digest(?:'s)?\b", re.I)
+
+
+def firm_reason(s: str) -> str:
+    """A check's stated reason in the firm's words: the record, not the digest,
+    and no em dash."""
+    return _DIGEST.sub("record", s).replace("\u2014", ",").replace("\u2013", "-")
+
+
 def finding_text(audit_md: str, kinds: tuple[str, ...]) -> list[str]:
     """``finding_lines`` in the firm's words: ``<section>: <statement> (<why>)``,
     with no table pipes and no verdict label."""
@@ -477,7 +491,7 @@ def finding_text(audit_md: str, kinds: tuple[str, ...]) -> list[str]:
             if not m or m.group(1).upper() not in kinds:
                 continue
             claim = ln[: m.start()].strip().lstrip("-*").strip().strip("|").strip()
-            why = " ".join(_LABEL.sub("", ln[m.end() :].replace("|", " ")).split())
+            why = " ".join(firm_reason(_LABEL.sub("", ln[m.end() :].replace("|", " "))).split())
             out.append(f"{head}: {claim}" + (f" ({why})" if why else ""))
     return out
 

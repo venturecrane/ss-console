@@ -104,7 +104,7 @@ def _demand(run: Any, texts: dict[str, str], model: str, key: str) -> list[R.Fin
         code,
         signature=rv.signature_block(run.firm),
     )
-    return code + rv.model_review(run.doorway, model, system, user, key, rv.HOLD_DEMAND)
+    return code + rv.markers_by_design(rv.model_review(run.doorway, model, system, user, key, rv.HOLD_DEMAND))
 
 
 def _fresh(run: Any, coverage: bool) -> tuple[list[R.Finding], str]:
