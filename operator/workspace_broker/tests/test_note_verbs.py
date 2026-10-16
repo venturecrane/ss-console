@@ -306,3 +306,180 @@ def test_status_never_carries_the_request_or_approver(tmp_path: Path) -> None:
     broker, _ = _seat(tmp_path)
     out = _call(broker, "note_job_status", job_id=job)
     assert set(out["job"]) == {"job_id", "state", "text"}
+
+
+# -- the new-message note (2026-10-16): no request email of hers, so the
+# recipient is an authored admin and every number is a matter or declared plain.
+
+NEW_TEXT = "Hi,\n\nThe demand format for matter 900417 is live. 140 cases moved in 2026.\n"
+MATTERS = [{"number": "900417", "name": "Vasic v. Doe"}]
+PLAIN = ["140", "2026"]
+
+
+def _new_seat(tmp_path: Path, yaml_text: str | None = None) -> tuple[rb.Broker, rb.FakeMailbox]:
+    box = rb.FakeMailbox()
+    return rb._broker(tmp_path, box, yaml_text or rb.NOTE_YAML), box
+
+
+def _new_req(**over) -> dict:
+    return {
+        "to": rb.ADMIN,
+        "subject": "The demand format is live",
+        "text": NEW_TEXT,
+        "approved_by": "scott@smd.services",
+        "matters": MATTERS,
+        "plain_numbers": PLAIN,
+        **over,
+    }
+
+
+def _new_preview(broker, **over) -> dict:
+    return _call(broker, "note_preview", **_new_req(**over))
+
+
+def _new_record(broker, confirm: str | None = None, **over) -> dict:
+    if confirm is None:
+        confirm = _new_preview(broker, **over)["digest"]
+    return _call(broker, "note_record", **_new_req(**over), confirm=confirm)
+
+
+def test_a_new_message_preview_shows_recipient_subject_matters_and_writes_nothing(tmp_path: Path) -> None:
+    broker, box = _new_seat(tmp_path)
+    out = _new_preview(broker)
+    assert out["accepted"] is True and out["mode"] == "new_message"
+    assert (out["sender"], out["subject"], out["cc"]) == (rb.ADMIN, "The demand format is live", [])
+    assert out["matters"] == MATTERS and out["plain_numbers"] == PLAIN
+    assert len(out["digest"]) == 64
+    assert _notes(broker) == [] and rb._rows(broker, "NOTE_JOB_RECORDED") == []
+    assert box.calls == []  # no mailbox read: there is no request email
+
+
+def test_a_new_message_record_writes_a_scheduled_row_with_its_subject(tmp_path: Path) -> None:
+    broker, _ = _new_seat(tmp_path)
+    out = _new_record(broker)
+    assert out["accepted"] is True and out["mode"] == "new_message"
+    [n] = _notes(broker)
+    assert (n["trigger"], n["subject"], n["requester"]) == ("scheduled", "The demand format is live", rb.ADMIN)
+    assert n["request_ref"].startswith("new:") and "@" not in n["request_ref"]
+    [row] = rb._rows(broker, "NOTE_JOB_RECORDED")
+    assert row["mode"] == "new_message" and row["matter_numbers"] == ["900417"]
+    assert "Vasic" not in json.dumps(row) and rb.ADMIN not in json.dumps(row)
+
+
+def test_a_new_message_note_binds_as_one_new_email(tmp_path: Path) -> None:
+    broker, _ = _new_seat(tmp_path)
+    job = _new_record(broker)["job_id"]
+    bound = rb._call(broker, "msgraph_reply_bind", {"kind": "note_job", "job_id": job})
+    assert bound["bound"] is True and bound["mode"] == "new_message"
+    assert bound["subject"] == "The demand format is live"
+
+
+def test_the_same_subject_and_words_to_the_same_person_are_recorded_once(tmp_path: Path) -> None:
+    broker, _ = _new_seat(tmp_path)
+    first = _new_record(broker)
+    again = _new_preview(broker)
+    assert again["accepted"] is False and first["job_id"] in again["reason"]
+    assert len(_notes(broker)) == 1
+    # A different subject is a different note.
+    assert _new_record(broker, subject="Another subject")["accepted"] is True
+
+
+def test_a_recipient_who_is_not_an_admin_is_refused(tmp_path: Path) -> None:
+    yaml_text = rb.NOTE_YAML.replace(
+        f"scheduled_recipients: '{rb.ADMIN}'", f"scheduled_recipients: '{rb.ADMIN},paralegal@firm.example'"
+    )
+    broker, _ = _new_seat(tmp_path, yaml_text)
+    out = _new_preview(broker, to="paralegal@firm.example")
+    assert out["accepted"] is False and "Named Administrator" in out["reason"]
+
+
+def test_an_admin_the_skill_does_not_author_is_refused(tmp_path: Path) -> None:
+    yaml_text = rb.NOTE_YAML.replace(f"scheduled_recipients: '{rb.ADMIN}'", "scheduled_recipients: ''")
+    broker, _ = _new_seat(tmp_path, yaml_text)
+    out = _new_preview(broker)
+    assert out["accepted"] is False and "scheduled_recipients" in out["reason"]
+
+
+def test_a_seat_without_the_skill_authors_no_one(tmp_path: Path) -> None:
+    broker, _ = _new_seat(tmp_path, rb.YAML)
+    out = _new_preview(broker)
+    assert out["accepted"] is False and "scheduled_recipients" in out["reason"]
+
+
+@pytest.mark.parametrize("subject", ["", "  ", "two\nlines", "a" * 201, "Live — now"])
+def test_a_bad_subject_is_refused(tmp_path: Path, subject: str) -> None:
+    broker, _ = _new_seat(tmp_path)
+    out = _new_preview(broker, subject=subject)
+    assert out["accepted"] is False and "subject" in out["reason"]
+
+
+def test_a_number_that_is_neither_a_matter_nor_plain_is_refused(tmp_path: Path) -> None:
+    """FALSIFIER: drop the run check and a mistyped matter number goes out."""
+    broker, _ = _new_seat(tmp_path)
+    out = _new_preview(broker, plain_numbers=["2026"])
+    assert out["accepted"] is False and "140" in out["reason"]
+    out = _new_preview(broker, matters=[])
+    assert out["accepted"] is False and "900417" in out["reason"]
+
+
+def test_a_number_passed_but_not_in_the_words_is_refused(tmp_path: Path) -> None:
+    broker, _ = _new_seat(tmp_path)
+    out = _new_preview(broker, plain_numbers=PLAIN + ["555"])
+    assert out["accepted"] is False and "555" in out["reason"]
+
+
+def test_a_note_with_no_numbers_needs_no_matters(tmp_path: Path) -> None:
+    broker, _ = _new_seat(tmp_path)
+    out = _new_preview(broker, text="Hi,\n\nThe new demand format is live.\n", matters=[], plain_numbers=[])
+    assert out["accepted"] is True and out["matters"] == []
+
+
+def test_dates_and_case_numbers_are_listed_and_bound_into_the_digest(tmp_path: Path) -> None:
+    broker, _ = _new_seat(tmp_path)
+    text = "Hi,\n\nThe hearing on 3/4/27 in No. 24-1234 is calendared.\n"
+    out = _new_preview(broker, text=text, matters=[], plain_numbers=[])
+    assert out["accepted"] is True
+    assert "date: 2027-03-04" in out["identifiers"] and any(i.startswith("case_number") for i in out["identifiers"])
+    other = _new_preview(broker, text=text.replace("3/4/27", "3/5/27"), matters=[], plain_numbers=[])
+    assert other["digest"] != out["digest"]
+
+
+def test_a_matter_whose_name_changed_since_the_dry_run_is_refused(tmp_path: Path) -> None:
+    broker, _ = _new_seat(tmp_path)
+    confirm = _new_preview(broker)["digest"]
+    out = _new_record(broker, confirm=confirm, matters=[{"number": "900417", "name": "Somebody Else"}])
+    assert out["accepted"] is False and "confirm" in out["reason"]
+    assert _notes(broker) == []
+
+
+def test_a_note_cannot_both_answer_an_email_and_be_new(tmp_path: Path) -> None:
+    broker, _ = _new_seat(tmp_path)
+    out = _new_preview(broker, graph_message_id=rb.GRAPH_ID)
+    assert out["accepted"] is False and "not both" in out["reason"]
+
+
+def test_scan_numbers_returns_the_runs_the_broker_refuses_on(tmp_path: Path) -> None:
+    broker, _ = _new_seat(tmp_path)
+    out = _call(broker, "note_preview", scan_numbers=True, text=NEW_TEXT, approved_by="scott@smd.services")
+    assert out["accepted"] is True and out["numbers"] == ["900417", "140", "2026"]
+
+
+def test_a_v1_table_gains_the_new_columns_and_keeps_its_rows(tmp_path: Path) -> None:
+    db = tmp_path / "old.db"
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE note_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, requester TEXT NOT NULL, "
+        "request_ref TEXT NOT NULL, text TEXT NOT NULL, text_digest TEXT NOT NULL, approved_by TEXT NOT NULL, "
+        "recorded_by TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'delivered', attempt INTEGER NOT NULL DEFAULT 1, "
+        "reply_sent_at TEXT, reply_key TEXT, UNIQUE(request_ref, text_digest))"
+    )
+    conn.execute(
+        "INSERT INTO note_jobs (id, created_at, requester, request_ref, text, text_digest, approved_by, recorded_by)"
+        " VALUES ('OLD', 't', 'a@b', 'ref', 'x', 'd', 's', 'root')"
+    )
+    conn.commit()
+    conn.close()
+    led = NoteLedger(str(db))
+    NoteLedger(str(db))  # a second construction finds the columns present
+    row = led.read("OLD")
+    assert row["trigger"] == "request" and row["subject"] is None and row["text"] == "x"

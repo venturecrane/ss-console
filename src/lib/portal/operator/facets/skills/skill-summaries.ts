@@ -127,7 +127,7 @@ export const SKILL_SUMMARIES: Record<string, string> = {
   'shape-establishment':
     'Establishes how a kind of output is shaped, from examples you point it at. Admin only. Installs only rules it can show you in plain words.',
   'smd-note':
-    'Sends a colleague a short note from SMD, in her own email thread, in the exact words SMD approved. Never rewords it.',
+    'Sends a colleague a short note from SMD, in her own email thread or one new email to an administrator you name, in the exact words SMD approved. Never rewords it.',
   'stalled-matter-nudge':
     'Surfaces matters with no recent activity and drafts a neutral follow-up. Flags inactivity, never decides what a matter needs.',
   'status-report-assembler':
