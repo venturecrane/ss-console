@@ -247,7 +247,7 @@ def test_an_unlocatable_final_finding_fails_and_drifts_reach_the_attorney_notes(
     notes = docx.Document(str(tmp2 / "job" / "data" / "out" / "demand" / "Demand.Alpha Example - attorney notes.docx"))
     text = "\n".join(p.text for p in notes.paragraphs)
     # the finding reaches the attorney in the firm's words, never the check's label (2026-10-15)
-    assert "The file supports this only in part: " in text and "digest says 1/16" in text
+    assert "The file supports this only in part: " in text and "record says 1/16" in text
     assert "DRIFTS" not in text
 
 
