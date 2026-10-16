@@ -68,7 +68,9 @@ SMD_DOMAINS = frozenset({"smd.services", "smdurgan.com"})
 
 FENCE_PARTICIPANTS = "participants"
 FENCE_UNVERIFIABLE = "participants_unverifiable"
-FENCES = (FENCE_PARTICIPANTS, FENCE_UNVERIFIABLE)
+#: ``rehearsal`` is rehearsal_fence.FENCE_REHEARSAL, raised through this same exception.
+FENCE_REHEARSAL = "rehearsal"
+FENCES = (FENCE_PARTICIPANTS, FENCE_UNVERIFIABLE, FENCE_REHEARSAL)
 
 LANE_RULE_DISPATCH = "rule_dispatch"
 LANE_ESCALATION = "escalation"
@@ -372,6 +374,7 @@ __all__ = [
     "DECISION",
     "FENCES",
     "FENCE_PARTICIPANTS",
+    "FENCE_REHEARSAL",
     "FENCE_UNVERIFIABLE",
     "JOB_KINDS",
     "LANE_ESCALATION",

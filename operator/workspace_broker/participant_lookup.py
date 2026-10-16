@@ -48,6 +48,7 @@ from .participant_fence import (
     parse_lane,
     seat_facts,
 )
+from . import rehearsal_fence
 from .recipient_policy import normalize_address
 
 #: The message anchor kind each channel's replies and lookups use.
@@ -190,12 +191,17 @@ def enforce(
     # A bound send is a reply, except a scheduled job's one new message (the
     # scheduled litigation list or a negotiation notice), which the broker
     # marks with its own authored lane.
+    # The rehearsal fence (rehearsal_fence.py) runs first and on every lane: a
+    # message marked as a rehearsal or test reaches SMD only, whoever composed it.
+    subject = payload.get("subject")
     if action.endswith("_reply") or (action == "msgraph_reply_bound" and not internal_lane):
         target = str(payload.get("message_id") or "").strip()
         if not target:
             raise FenceRefused(FENCE_PARTICIPANTS, "a reply must name the email it answers.")
+        rehearsal_fence.check_reply(subject, lambda: resolve(Anchor(CHANNEL_KIND[channel], target)).sender)
         check_reply(facts, target, anchor=anchor, resolve=resolve, target_kind=CHANNEL_KIND[channel])
     else:
+        rehearsal_fence.check_send(subject, recipients)
         check_send(facts, recipients, lane=lane, anchor=anchor, resolve=resolve)
     return {
         **({"anchor_kind": anchor.kind} if anchor else {}),
