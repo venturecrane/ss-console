@@ -329,7 +329,10 @@ def test_the_command_reads_no_secret_and_prints_none(tmp_path: Path, capsys, mon
         if p.is_file():
             assert SECRET not in p.read_text(encoding="utf-8", errors="replace")
     src = Path(nbs.__file__).read_text(encoding="utf-8")
-    assert "WEBHOOK_SECRET_MCP" not in src and "/proc" not in src
+    # The command reads the daemon's /proc environ for its Smokeball settings
+    # only (2026-10-16, SMOKEBALL_ENV); it never names the wake secret.
+    assert "WEBHOOK_SECRET_MCP" not in src
+    assert all(k.startswith("SMOKEBALL_") for k in nbs.SMOKEBALL_ENV) and nbs.SMOKEBALL_ENV
 
 
 # -- the lane: the daemon keeps watching after the command exits --------------------
@@ -563,3 +566,59 @@ def test_a_reply_note_wake_carries_no_trigger_line() -> None:
 def test_main_refuses_both_a_graph_id_and_to(capsys) -> None:
     assert nbs.main([GID, "--to", ADMIN, "--text", "x", "--approved-by", "smd", "--dry-run"]) == 2
     assert "not both" in capsys.readouterr().err
+
+
+# -- the Smokeball settings come from the runner daemon (2026-10-16): a shell SMD
+# opens on the seat does not carry them, and the first lookup on smd-staging
+# raised KeyError.
+
+
+def _proc(tmp_path: Path, pid: str, argv: list[str], env: dict[str, str]) -> Path:
+    proc = tmp_path / "proc"
+    d = proc / pid
+    d.mkdir(parents=True)
+    (d / "cmdline").write_bytes(b"\0".join(a.encode() for a in argv) + b"\0")
+    (d / "environ").write_bytes(b"\0".join(f"{k}={v}".encode() for k, v in env.items()) + b"\0")
+    return proc
+
+
+def test_the_daemons_smokeball_settings_are_read_from_its_process(tmp_path: Path) -> None:
+    proc = _proc(
+        tmp_path,
+        "41",
+        ["/opt/medchron/.venv/bin/python", "-m", "medchron.daemon"],
+        {"SMOKEBALL_CLIENT_ID": "cid", "WEBHOOK_SECRET_MCP": "x"},
+    )
+    (proc / "self").mkdir()
+    _proc(tmp_path, "7", ["/bin/sh", "-c", "medchron daemon-ish"], {"SMOKEBALL_CLIENT_ID": "wrong"})
+    assert nbs._daemon_environ(proc)["SMOKEBALL_CLIENT_ID"] == "cid"
+
+
+def test_only_smokeball_settings_are_taken_and_none_is_printed(tmp_path: Path, monkeypatch, capsys) -> None:
+    """FALSIFIER: without the daemon's settings the client cannot be built and
+    every matter lookup on a real seat refuses as 'could not look'."""
+    for key in nbs.SMOKEBALL_ENV + ("WEBHOOK_SECRET_MCP",):
+        monkeypatch.delenv(key, raising=False)
+    proc = _proc(
+        tmp_path,
+        "41",
+        ["/opt/medchron/.venv/bin/python", "-m", "medchron.daemon"],
+        {"SMOKEBALL_CLIENT_ID": "cid", "SMOKEBALL_API_KEY": "key", "WEBHOOK_SECRET_MCP": SECRET},
+    )
+    built = {}
+
+    class Seat:
+        def __init__(self) -> None:
+            built["id"] = __import__("os").environ.get("SMOKEBALL_CLIENT_ID")
+            self.client = "client"
+
+    import medchron.seat as seat_mod
+
+    monkeypatch.setattr(seat_mod, "ClientSeat", Seat)
+    assert nbs._default_matter_client(proc) == "client"
+    assert built["id"] == "cid"
+    import os
+
+    assert "WEBHOOK_SECRET_MCP" not in os.environ
+    out = capsys.readouterr()
+    assert "cid" not in out.out + out.err and "key" not in out.out + out.err
