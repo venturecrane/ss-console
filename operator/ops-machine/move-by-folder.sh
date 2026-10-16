@@ -12,7 +12,7 @@ ledger="$HOME/.smd-ops-moved-$(echo "$sub" | tr '/' '_').txt"
 touch "$ledger"
 if [ -n "$list" ]; then entries=$(cat "$list"); else entries=$(cd "$base" && ls -A | sed 's|^|./|'); fi
 ok=0; failed=0
-while IFS= read -r e; do
+while IFS= read -r -u 3 e; do
   [ -z "$e" ] && continue
   if grep -Fxq -- "$e" "$ledger"; then ok=$((ok+1)); continue; fi
   for try in 1 2 3; do
@@ -21,5 +21,5 @@ while IFS= read -r e; do
     fi
     [ "$try" = 3 ] && { failed=$((failed+1)); echo "FAIL $e: $(echo "$out" | tail -1)"; }
   done
-done <<< "$entries"
+done 3<<< "$entries"
 echo "SUMMARY $sub: verified=$ok failed=$failed"
