@@ -485,7 +485,7 @@ def test_an_item_seen_last_run_is_still_open_one_line():
         all_clear_hour_utc=15,
     )
     assert plan.new == [] and plan.still_open == [it]
-    assert "OPEN 5h" in plan.text and "To do" not in plan.text
+    assert "(open 5h)" in plan.text and "To do" not in plan.text
 
 
 def test_an_item_not_seen_last_run_is_new_full_text():
@@ -779,7 +779,7 @@ def test_a_failed_delivery_proof_is_open_until_proven():
         detail="x",
     )
     items = src.delivery_proof_items(SEAT, [fail], CFG, NOW)
-    assert _kinds(items) == ["job_failed"] and "readback_mismatch" in items[0].what
+    assert _kinds(items) == ["job_failed"] and "the files on the matter differ" in items[0].what
     proven = _row("DELIVERY_PROVEN", NOW - timedelta(minutes=30), job_id="J7", lane="drafting")
     assert src.delivery_proof_items(SEAT, [fail, proven], CFG, NOW) == []
 
@@ -792,7 +792,7 @@ def test_a_missed_hourly_run_is_an_item_and_breaks_the_all_clear():
     plan = mail.decide(
         items=gap, seats=[SEAT], gaps={}, previous=None, since=NOW - timedelta(hours=3), now=NOW, all_clear_hour_utc=15
     )
-    assert plan.send and "all clear" not in plan.subject and "== work-health" in plan.text
+    assert plan.send and "all clear" not in plan.subject and "\nwork-health\n" in plan.text
 
 
 def test_slots_before_the_machine_adopted_the_schedule_are_not_owed():
@@ -817,3 +817,103 @@ def test_a_job_a_person_ended_as_superseded_is_not_open_work():
         _job("MEDCHRON", "FAILED", NOW - timedelta(minutes=9), reason="superseded: relaunched"),
     ]
     assert wh.job_items(SEAT, rows, CFG, NOW) == []
+
+
+# ---------------------------------------------------------------------------
+# the 2026-10-16 redesign: one line per problem, plain words, clients first
+# ---------------------------------------------------------------------------
+
+
+def _refused_stream(start: datetime, minutes: int) -> list[dict]:
+    """An out-of-turn send refused by the outbound scan every 30 seconds: the
+    A&P lapse-letter loop of 2026-10-15/16."""
+    return [
+        _row(
+            "FABRICATION_FILTER_TRIGGERED",
+            start + timedelta(seconds=30 * i),
+            tool="smd_send_message",
+            marker_hits="['specific-dollar-amount']",
+        )
+        for i in range(minutes * 2)
+    ]
+
+
+def test_a_repeating_refused_send_is_one_line_not_one_per_half_hour():
+    """FALSIFIER: before the redesign the reconciler's half-hour slices each
+    became an item; three hours of refusals was six lines."""
+    rows = _refused_stream(NOW - timedelta(hours=3), 170)
+    items, _ = src.silent_run_items(SEAT, rows, CFG, NOW)
+    assert _kinds(items) == ["silent_run"]
+    assert "blocked by the safety check" in items[0].what
+    assert "times since" in items[0].what
+    later, _ = src.silent_run_items(SEAT, rows + _refused_stream(NOW, 30), CFG, NOW + timedelta(hours=1))
+    assert [i.key for i in later] == [items[0].key]
+
+
+def test_a_delivered_job_with_a_lane_alert_is_not_called_undelivered():
+    """Six of the 33 lines on 2026-10-16: negotiation runs that delivered, whose
+    lane carried a held offer as an alert in the same second."""
+    at = NOW - timedelta(hours=2)
+    proven = _row("DELIVERY_PROVEN", at, job_id="N1", lane="negotiation")
+    alert = _row(
+        "DELIVERY_PROOF_FAILED",
+        at,
+        job_id="N1",
+        lane="negotiation",
+        code="review_held",
+        detail="job: delivered, and its lane raised review_held",
+    )
+    assert src.delivery_proof_items(SEAT, [proven, alert], CFG, NOW) == []
+    held = _row("DELIVERY_PROOF_FAILED", at, job_id="N2", lane="negotiation", code="review_held", detail="held")
+    assert _kinds(src.delivery_proof_items(SEAT, [held], CFG, NOW)) == ["job_failed"]
+
+
+def test_test_seats_are_a_footnote_but_a_failed_read_is_always_listed():
+    client = wh.item(SEAT, "no_reply", "a", NOW - timedelta(hours=1), "A request has had NO reply", "answer it")
+    pilot = wh.item("pilot-smokeball", "connector_alert", "b", NOW - timedelta(days=60), "Open alert x", "work it")
+    broken = wh.item("smd-staging", "unreadable", "c", NOW, "Could not read this seat's work ledger", "fix it")
+    plan = mail.decide(
+        items=[client, pilot, broken],
+        seats=[SEAT, "pilot-smokeball", "smd-staging"],
+        gaps={},
+        previous=None,
+        since=NOW - timedelta(hours=1),
+        now=NOW,
+        all_clear_hour_utc=15,
+        test_seats=frozenset({"pilot-smokeball", "smd-staging"}),
+    )
+    assert plan.subject == "[SMD Ops] Work health: 2 need attention (2 new)"
+    assert plan.text.startswith("2 things need attention, 2 new since the last email.")
+    assert "Open alert x" not in plan.text
+    assert "Test seats, not listed: pilot-smokeball 1." in plan.text
+    assert "Could not read this seat's work ledger" in plan.text
+    assert plan.text.index(SEAT) < plan.text.index("smd-staging")
+
+
+def test_only_test_seat_items_send_nothing_until_the_daily_all_clear():
+    pilot = wh.item("pilot-smokeball", "connector_alert", "b", NOW - timedelta(days=60), "Open alert x", "work it")
+    kwargs = dict(
+        items=[pilot],
+        seats=[SEAT, "pilot-smokeball"],
+        gaps={},
+        previous=None,
+        now=NOW,
+        all_clear_hour_utc=15,
+        test_seats=frozenset({"pilot-smokeball"}),
+    )
+    assert not mail.decide(since=NOW - timedelta(minutes=30), **kwargs).send
+    daily = mail.decide(since=NOW - timedelta(hours=2), **kwargs)
+    assert daily.subject.endswith("all clear")
+    assert "Test seats, not listed: pilot-smokeball 1." in daily.text
+
+
+def test_times_read_in_phoenix():
+    assert wh.hhmm(datetime(2026, 10, 16, 14, 51, tzinfo=UTC)) == "Oct 16 7:51am MST"
+    assert wh.hhmm(datetime(2026, 1, 5, 23, 5, tzinfo=UTC)) == "Jan 5 4:05pm MST"
+
+
+def test_a_seat_is_hidden_only_when_its_own_yaml_says_it_is_not_a_client():
+    assert cli.footnoted_seats(["ashton-price", "brokery", "pilot-smokeball", "smd-staging", "no-such-seat"]) == {
+        "pilot-smokeball",
+        "smd-staging",
+    }

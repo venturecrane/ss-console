@@ -20,13 +20,15 @@ Machine health has always paged within minutes: a seat that stops reporting, a c
 
 ## What arrives, and when
 
-- **Hourly, only when there is something to act on.** Subject: `[SMD Ops] Work health: N new, M still open (ashton-price 3, ...)`. A&P first, then every other live seat.
-- **NEW** lines carry the full text and a "To do". **OPEN Nh** lines are items already reported in an earlier email, one line each with their age, so an unchanged problem never re-sends at full volume.
-- **Once a day**, on the first run at or after 15:00Z (08:00 Phoenix), a run with nothing to report still sends `[SMD Ops] Work health: all clear`. If neither email arrives in a day, the check itself is broken: look at the `work-health` workflow runs.
-- **Open work only, one line per problem.** A refusal or failure followed by delivered work is history: it is counted on one trailing "Resolved in the window" line, never listed. Repeats of one routine or one tool are one line with a count.
+- **Hourly, only when something on a client seat needs attention.** Subject: `[SMD Ops] Work health: N need attention (M new)`. The first line says the same in a sentence; then each client seat (A&P first) with its items.
+- **NEW** lines carry a "To do". Items already reported in an earlier email are one line each with their age, "(open 2d)", so an unchanged problem never re-sends at full volume. Times are Phoenix time, marked MST.
+- **One line per problem, never per occurrence.** A send refused every few seconds for a day is one line with the attempt count, first and last time. Repeats of one routine or one tool are one line with a count. A job that failed is one line, not one per signal about it.
+- **Test seats are a count, not a list.** Seats whose `customer.yaml` says `seat.kind` is not `customer` (pilot-smokeball, smd-staging, scott) are counted on one "Test seats, not listed" line. A seat that could not be read, or a missed work-health run, is listed wherever it happens, because it usually means a pipeline every seat shares is broken. An hour with only test-seat items sends nothing; they ride on the daily all-clear.
+- **Once a day**, on the first run at or after 15:00Z (08:00 Phoenix), a run with nothing listed still sends `[SMD Ops] Work health: all clear`. If neither email arrives in a day, the check itself is broken: look at the `work-health` workflow runs.
+- **Open work only.** A refusal or failure followed by delivered work is history: it is counted on one "Answered by later work" line, never listed. A job that delivered while its lane flagged something of its own (a held offer on negotiation) is not "undelivered"; the lane's own alert covers the flag.
 - **A seat that could not be read is an item**, never silence. "Could not read this seat's work ledger" means nothing about that seat is known.
 - **ACTION pages.** A dead sign-in (Smokeball's token endpoint explicitly REFUSING the seat's token, SMD's mailbox sign-in check failing, a connection failing repeatedly) also gets its OWN email, subject `ACTION: <seat> Smokeball sign-in is dead` (or `mailbox sign-in is dead`), on every run while it stays dead. The hourly Smokeball check is the only detector of a dead Smokeball token: the connector-health ledger never sees the scheduled jobs' Smokeball calls (PR #3144). A Smokeball seat whose hourly check is not scheduled, or a check that could not run (its own fault, never "dead"), is an ACTION line in the digest, not a page.
-- **Not checked this run** lists what the run could not vouch for (today: a seat that has never reported a heartbeat, which is being built rather than broken).
+- **Not checked** is one line naming what the run could not vouch for (a seat that has never reported a heartbeat, which is being built rather than broken; a hosted agent, which gets machine checks only).
 
 ## What each line means
 
@@ -41,7 +43,8 @@ Machine health has always paged within minutes: a seat that stops reporting, a c
 | Open alert | A pager condition opened earlier and has not closed. | Work the alert email's runbook. |
 | Scheduled run has not run since T: N missed | Slots of a schedule the seat was PROVISIONED with (D1 `customer_configs`, not git) passed with no run and no recorded skip. | Check the seat's scheduler. |
 | Schedule drift | git authors a different schedule than the seat runs; that routine is not graded until a rebuild makes them agree. | Rebuild the seat, or revert the authoring. |
-| Run ended with no outcome / held and nobody told | A scheduled or held run ended silently (the terminal-state reconciler's finding). | Check whether the work it owed was done. |
+| Run ended with nothing delivered / held and nobody told | A scheduled or held run ended silently (the terminal-state reconciler's finding), with a count when it repeats. | Check whether the work it owed was done. |
+| A message the Operator tried to send on its own was blocked by the safety check | An out-of-turn send (an outcome letter, an alert) was refused by the outbound scan, N times. Nobody it was for has heard. | Find what it was sending (the seat's `agent.log` names it) and tell that person by hand. |
 | A call was refused / failed / hit a limit | Refused, limit, failed or partial tool results in the last 24 hours, one line per tool and reason with a count. | If a person was waiting, check they got an answer. |
 | New Operator error | A Sentry error reported in the last 24 hours. | Triage it in Sentry. |
 
