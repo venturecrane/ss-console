@@ -219,11 +219,16 @@ jobs:
           # key above reads only the inboxes it was minted for: the second
           # live-fire run (2026-08-31) read scott@ clean and 403'd on
           # pilot-smokeball's own inbox. The checker prefers a per-seat
-          # AGENTMAIL_API_KEY__<CID> env var when set; until the Captain vaults
-          # this GH secret it is harmlessly empty and the checker reports the
-          # seat as a noted skip naming exactly this variable.
+          # AGENTMAIL_API_KEY__<CID> env var when set; an unset one is
+          # harmlessly empty and the checker reports the seat as a noted skip
+          # naming exactly this variable. Each is the seat's read-only LISTS key
+          # (`mint-agentmail-keys.py <slug> --lists`: inbox_read +
+          # list_entry_read), never a seat key: neither seat key carries
+          # list_entry_read, which is why brokery's held this step red
+          # 2026-10-14..16 with HTTP 403 on its own inbox lists.
           AGENTMAIL_API_KEY__PILOT_SMOKEBALL: ${{ secrets.AGENTMAIL_API_KEY__PILOT_SMOKEBALL }}
           AGENTMAIL_API_KEY__BROKERY: ${{ secrets.AGENTMAIL_API_KEY__BROKERY }}
+          AGENTMAIL_API_KEY__SCOTT: ${{ secrets.AGENTMAIL_API_KEY__SCOTT }}
         run: |
           set -u
           # Same `|| STATUS=$?` discipline as the reconcile step (ss#2309):

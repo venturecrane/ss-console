@@ -12,6 +12,7 @@ mapfile -t tmpd < "$lists/tmp-matter-dirs.txt" 2>/dev/null || IFS=$'\n' read -r 
 move "$HOME/Desktop" mac23/desktop "${desk[@]}"
 move "$HOME" mac23/home Downloads
 move /private/tmp/claude-501 mac23/tmp "${tmpd[@]}"
-move "$HOME/.claude/projects" mac23/transcripts $(cd "$HOME/.claude/projects" && ls -d -- -Users-scottdurgan-dev-ss-console*)
+mapfile -t transcripts < <(cd "$HOME/.claude/projects" && ls -d -- -Users-scottdurgan-dev-ss-console*)
+move "$HOME/.claude/projects" mac23/transcripts "${transcripts[@]}"
 move "$HOME" mac23/home smd-medchron-data
 echo "BATCH DONE"
