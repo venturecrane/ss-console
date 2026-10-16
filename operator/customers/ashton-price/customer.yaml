@@ -893,6 +893,14 @@ personas:
       # is false: no firm person, schedule or webhook starts it; the only start
       # is the note's handoff wake, sent by the note lane after root recorded a
       # Captain-approved note.
+      # settings.scheduled_recipients (2026-10-16, the new-message note): who a
+      # note with NO thread of hers in this mailbox may reach, as one new email
+      # (she asked Scott directly, or nobody asked: letters 387-392 all went from
+      # his mailbox). Activated on the Captain's word, 2026-10-16 ("let's work on
+      # that additional case now"). Christa only: the firm's 2026-10-07 rule bars
+      # the Operator from emailing an attorney who was not on the request, and
+      # Chris is an attorney. She must also stay on scope.admins; every number in
+      # such a note is checked against Smokeball before it is recorded.
       - name: smd-note
         version: pending
         initiation:
@@ -900,6 +908,8 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+        settings:
+          scheduled_recipients: 'christa@ashtonandprice.com'
     # Every entry is pre_run-gated (ADR 0021 Stream B, #1748). The escalator's
     # bespoke pre_run decides whether a deadline needs the ladder; the other
     # skills carry the shared empty-seat gate (operator/templates/pre_run_gate.py):
