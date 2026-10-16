@@ -1,0 +1,16 @@
+# smd-ops: SMD's own operations machine. See Dockerfile for why it exists.
+# No [http_service] and no [[services]]: nothing listens publicly, so Fly never
+# auto-stops it and nothing outside SMD's private network can reach it.
+app = "smd-ops"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[[mounts]]
+  source = "ops_home"
+  destination = "/home/ops"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "4gb"
