@@ -14,8 +14,11 @@ Execution class N (ADR 0050): reads and writes, $0. Ported rule for rule from
 the hand run of 2026-10-15 (vfy_01M50G3CBSHTXJPK1XR55N6WH7,
 vfy_01M50H3Z461FTKV2RSV7HKS5HN):
 
-* a matter's paralegal is ``personAssistingStaffId``; ``PATCH /matters/{id}``
-  with that SINGULAR field applies (the plural list is not written);
+* a matter's paralegal is ``personAssistingStaffId`` (the main), and a matter
+  may also carry ADDITIONAL assisting staff, read as ``personAssistingStaffs``
+  and written ONLY as ``personAssistingStaffIds`` (``assisting.py``, the
+  dry-run defect of 2026-10-15); every PATCH sends both, every read-back checks
+  both;
 * when it changes, Smokeball moves that person's open tasks on the matter
   itself, within about a minute; the rest need ``PUT /tasks/{id}``, which is a
   FULL REPLACE built from a fresh read (``merge_task_update``), carrying

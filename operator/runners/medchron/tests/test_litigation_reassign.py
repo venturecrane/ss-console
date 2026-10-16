@@ -134,17 +134,27 @@ class Vendor:
         if key in self.stuck or (key in self.late and self.sent[path] < 2):
             return {}
         if kind == "matters":
-            self.pending[path] = [2, lambda: self._move_matter(key, json["personAssistingStaffId"])]
+            self.pending[path] = [2, lambda: self._patch_matter(key, json)]
         else:
             self.pending[path] = [2, lambda: self._put_task(key, json)]
         return {}
 
-    def _move_matter(self, key: str, to: str) -> None:
+    def _patch_matter(self, key: str, body: dict[str, Any]) -> None:
+        """As the vendor does (proven 2026-10-15): the main from
+        ``personAssistingStaffId``, the additional list ONLY from
+        ``personAssistingStaffIds``; ``personAssistingStaffs`` is accepted and
+        ignored, and the list read back never holds the main."""
         row = self.w["matters"][key][0]
-        old, row["personAssistingStaffId"] = row["personAssistingStaffId"], to
-        for t in self.w["tasks"].values():
-            if t["matter"]["id"] == key and t["id"] in self.auto:
-                t["assignees"] = [{"id": to if a["id"] == old else a["id"]} for a in t["assignees"]]
+        if "personAssistingStaffIds" in body:
+            row["personAssistingStaffs"] = [
+                {"id": i, "href": f"/staff/{i}", "rel": "staff"} for i in body["personAssistingStaffIds"]
+            ]
+        if "personAssistingStaffId" in body:
+            old, row["personAssistingStaffId"] = row.get("personAssistingStaffId"), body["personAssistingStaffId"]
+            for t in self.w["tasks"].values():
+                if t["matter"]["id"] == key and t["id"] in self.auto and old != row["personAssistingStaffId"]:
+                    t["assignees"] = [{"id": row["personAssistingStaffId"] if a["id"] == old else a["id"]}
+                                      for a in t["assignees"]]  # fmt: skip
 
     def _put_task(self, key: str, body: dict[str, Any]) -> None:
         self.w["tasks"][key]["assignees"] = [{"id": i} for i in body["assigneeIds"]]
@@ -202,10 +212,10 @@ def test_eds_litigation_cases_move_and_the_vendor_moves_some_tasks_itself(tmp_pa
     assert d["outside_by_attorney"] == {"Chris Senior": 1, "Edward Lawyer": 1}
     assert d["from"] == ["Pat Example", "Wendy Sample"] and d["to"] == "Dana Newhire"
     assert d["attorneys"] == ["Edward Lawyer"] and d["from_with_nothing"] == []
-    # only the singular field is written, and the vendor's own task move is not re-sent
+    # the main and the (empty) additional list are written together, and the vendor's own task move is not re-sent
     patches = [w for w in v.writes if w[0] == "PATCH"]
     assert sorted(p[1] for p in patches) == [f"/matters/{mid(1)}", f"/matters/{mid(2)}"]
-    assert all(p[2] == {"personAssistingStaffId": DANA} for p in patches)
+    assert all(p[2] == {"personAssistingStaffId": DANA, "personAssistingStaffIds": []} for p in patches)
     assert not any(w[1] == f"/tasks/{tid(1)}" for w in v.writes)
     assert out["proof"]["readback"] == "confirmed" and "alerts" not in out["proof"]
 
@@ -360,3 +370,74 @@ def test_the_reassignment_waits_for_its_own_proof_run() -> None:
 
     assert lane_key("litigation", {"report": "reassign"}) == "litigation-status.reassign"
     assert lane_key("litigation", {}) == "litigation-status"
+
+
+# ---- the additional assisting list (the 2026-10-15 dry-run defect) ------------------------
+
+
+def _extra(v: Vendor, m: str) -> list[str]:
+    return [x["id"] for x in v.w["matters"][m][0].get("personAssistingStaffs") or []]
+
+
+def _listed_world(**rows: tuple[str, list[str]]) -> dict[str, Any]:
+    """Ed's litigation cases only, each (main, additional list)."""
+    w: dict[str, Any] = {"matters": {}, "tasks": {}}
+    for n, (main, extra) in enumerate(rows.values(), start=11):
+        w["matters"][mid(n)] = (
+            {"id": mid(n), "number": f"2000{n}", "personResponsibleStaffId": ED1, "personAssistingStaffId": main,
+             "personAssistingStaffs": [{"id": i, "href": f"/staff/{i}", "rel": "staff"} for i in extra]},
+            {CASE: f"CV-{n}"}, [],
+        )  # fmt: skip
+    return w
+
+
+def test_from_only_in_the_list_with_to_already_the_main_is_moved_out_of_the_list(tmp_path: Path) -> None:
+    v = Vendor(_listed_world(a=(DANA, [PAT])))
+    out = verdict(make_run(tmp_path, v))
+    assert out["counts"]["cases_to_move"] == 1 and out["counts"]["cases_moved"] == 1, out
+    row = v.w["matters"][mid(11)][0]
+    assert row["personAssistingStaffId"] == DANA and _extra(v, mid(11)) == []
+    assert v.writes[0][2] == {"personAssistingStaffId": DANA, "personAssistingStaffIds": []}
+
+
+def test_from_in_the_list_with_another_main_is_replaced_in_the_list_main_unchanged(tmp_path: Path) -> None:
+    v = Vendor(_listed_world(a=(OTHER, [PAT, CHR])))
+    verdict(make_run(tmp_path, v))
+    assert v.w["matters"][mid(11)][0]["personAssistingStaffId"] == OTHER
+    assert _extra(v, mid(11)) == [DANA, CHR]
+
+
+def test_from_as_main_with_another_person_in_the_list_keeps_the_list(tmp_path: Path) -> None:
+    v = Vendor(_listed_world(a=(PAT, [CHR])))
+    verdict(make_run(tmp_path, v))
+    assert v.w["matters"][mid(11)][0]["personAssistingStaffId"] == DANA
+    assert _extra(v, mid(11)) == [CHR]
+
+
+def test_falsifier_a_list_write_that_never_takes_is_not_moved(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fails if the list's read-back is removed: the main is already TO, so a
+    check of the main alone would call the matter moved while FROM stays."""
+    v = Vendor(_listed_world(a=(DANA, [PAT])), stuck=(mid(11),))
+    out = verdict(make_run(tmp_path, v))
+    assert out["counts"]["cases_moved"] == 0 and out["reassign"]["cases_not_moved"] == ["200011"]
+    assert out["proof"]["alerts"] == ["readback_mismatch"]
+
+
+def test_the_ignored_field_name_would_not_move_the_list() -> None:
+    """The fake honours only ``personAssistingStaffIds``, as the vendor does, so
+    a regression to ``personAssistingStaffs`` leaves FROM in the list."""
+    v = Vendor(_listed_world(a=(DANA, [PAT])))
+    v.request("PATCH", f"/matters/{mid(11)}", json={"personAssistingStaffs": [], "personAssistingStaffId": DANA})
+    for _ in range(3):
+        v.get(f"/matters/{mid(11)}")
+    assert _extra(v, mid(11)) == [PAT]
+
+
+def test_assisting_desired_state_rules() -> None:
+    from medchron.litigation.reassign import assisting
+
+    f = {PAT, WEN}
+    assert assisting.desired(PAT, [CHR], f, DANA) == (DANA, [CHR])
+    assert assisting.desired(OTHER, [PAT, WEN, CHR], f, DANA) == (OTHER, [DANA, CHR])
+    assert assisting.desired(PAT, [DANA, WEN], f, DANA) == (DANA, [])  # TO leaves the list when it is the main
+    assert assisting.body("", [PAT], f, DANA) == {"personAssistingStaffIds": [DANA]}  # no main is never sent empty
