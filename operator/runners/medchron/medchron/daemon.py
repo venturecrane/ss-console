@@ -43,7 +43,7 @@ from .covered import delivery_fields
 from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
 from . import config as config_mod, job as job_mod, lane_proof, proof_run, requeue, resume as resume_mod, retention
-from . import verdict as verdict_mod
+from . import verdict as verdict_mod, wake_grace
 from .proof import holds as proof_holds, watch as proof_watch
 
 logger = logging.getLogger("medchron.daemon")
@@ -63,6 +63,10 @@ GATE_URL_ENV = "SMD_MEDCHRON_GATE_URL"
 DEFAULT_GATE_URL = "http://127.0.0.1:8643"
 WAKE_SECRET_ENV = "WEBHOOK_SECRET_MCP"
 WAKE_MAX_ATTEMPTS = 5
+#: ``main``'s exit when the Machine's stop signal ended the loop (128 + SIGINT,
+#: the shell's own convention). ``operator/templates/entrypoint.sh`` does not
+#: respawn on it; every other exit is a crash and is respawned.
+STOPPED_EXIT = 130
 CHILD_UID_NAME = "medchron"
 CHILD_ENV_PASS = (
     "ANTHROPIC_API_KEY",
@@ -111,6 +115,9 @@ class Daemon:
     clock: Callable[[], float] = time.time
     child_env: dict[str, str] = field(default_factory=dict)
     started_at: float = field(default_factory=time.time)
+    #: Wake id -> when THIS process first found the gateway unreachable for it
+    #: (``wake_grace``). Never written to the volume.
+    _unreachable_since: dict[str, float] = field(default_factory=dict)
     jobs_run: int = 0
     wakes_failed: int = 0
     #: The loop's stop flag, bound by ``run_forever``; a lane reads it when its
@@ -467,8 +474,10 @@ class Daemon:
         than a lost one). Consuming a wake is NOT counting the reply as sent:
         a consumed wake arms the reply watch (``proof/watch.py``), which pages
         SMD when the requester's reply is not seen in Sent Items in time. A
-        paused seat's 503 retries without consuming an attempt; five real
-        failures write a same-state ledger note (an audit row) and page."""
+        paused seat's 503 retries without consuming an attempt, and so does a
+        gateway that cannot be reached at all, for
+        ``wake_grace.WAKE_UNREACHABLE_GRACE_SECONDS`` of this process; five real failures
+        write a same-state ledger note (an audit row) and page."""
         self._dispatch_wakes()
         proof_watch.check_reply_watches(self)
         proof_watch.check_reroutes(self)
@@ -485,6 +494,7 @@ class Daemon:
             body = json.dumps({"handoff_id": f"{self.LANE}-{job_id}", "task": wake["task"]})
             url = urlparse(self.gate_url)
             sent = False
+            requested = False
             outcome = "error"
             try:
                 conn = http.client.HTTPConnection(url.hostname or "127.0.0.1", url.port or 8643, timeout=15)
@@ -497,6 +507,7 @@ class Daemon:
                         body=body,
                         headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.wake_secret}"},
                     )
+                    requested = True
                     resp = conn.getresponse()
                     raw = resp.read()
                     if 200 <= resp.status < 300:
@@ -508,7 +519,7 @@ class Daemon:
                 finally:
                     conn.close()
             except Exception as exc:  # noqa: BLE001 - each shape maps to a wake decision
-                outcome = "timeout after send" if sent else f"unreachable ({type(exc).__name__})"
+                outcome = wake_grace.failed_outcome(exc, sent=sent, requested=requested)
             if outcome == "delivered" or (sent and outcome.startswith("timeout")):
                 wake.update(pending=False, sent_at=self.clock(), outcome=outcome)
                 self._write_state(job_id, wake=wake)
@@ -516,6 +527,8 @@ class Daemon:
                 continue
             if outcome == "paused":
                 logger.info("seat paused; wake for %s stays pending without consuming an attempt", job_id)
+                continue
+            if wake_grace.waiting(self, job_id, outcome):
                 continue
             wake["attempts"] = int(wake.get("attempts", 0)) + 1
             logger.warning(
@@ -630,7 +643,12 @@ def main(argv: list[str] | None = None) -> int:
 
     start_other_lanes(d, stop=lambda: stopped["flag"], poll_seconds=poll)
     d.run_forever(stop=lambda: stopped["flag"], poll_seconds=poll)
-    return 0
+    # The Machine's stop is FINAL for this process: the entrypoint's loop
+    # restarts the daemon on any other exit, and a daemon respawned inside a
+    # dying Machine has no stop flag. On 2026-10-15 one did exactly that,
+    # re-running claimed work and spending a DELIVER wake's five attempts on a
+    # gateway that was already gone (proof:wake_lost, a page for a deploy).
+    return STOPPED_EXIT if stopped["flag"] else 0
 
 
 if __name__ == "__main__":

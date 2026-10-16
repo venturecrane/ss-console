@@ -206,6 +206,16 @@ class NegotiationLane(DraftingLane):
                 beat.join(timeout=5)
         (self.run_dir / CHILD_PID).unlink(missing_ok=True)
         self.jobs_run += 1
+        # A run the Machine's stop cut short is left claimed for the next boot,
+        # as in the other lanes (resume.cut_short_by_stop). This lane's verdict
+        # is ONE object, which that helper's list reader cannot see, so a run
+        # that reached a real ending before the stop (delivered or held, the
+        # helper's FINISHED_OUTCOMES) is gated out here and recorded: it must
+        # never run twice. A "failed" written as the stop landed is the stop.
+        v = read_verdict(self.job_dir(job_id), out or "")
+        finished = v is not None and v.get("verdict") in resume_mod.FINISHED_OUTCOMES
+        if not finished and resume_mod.cut_short_by_stop(self, job_id, proc.returncode, out or ""):
+            return "interrupted"
         return self._report(job_id, proc.returncode, out or "")
 
     def _beat(self, job_id: str, stop: threading.Event) -> None:

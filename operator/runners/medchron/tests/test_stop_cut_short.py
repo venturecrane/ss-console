@@ -12,6 +12,7 @@ recorded exactly as before.
 from __future__ import annotations
 
 import os
+import signal
 import sys
 from pathlib import Path
 from typing import Any, Callable
@@ -20,6 +21,8 @@ import pytest
 
 import test_demand_lane as demand_t
 import test_drafting_lane as drafting_t
+import test_litigation_lane as litigation_t
+import test_negotiation_lane as negotiation_t
 import test_upload_daemon as chron_t
 from medchron import daemon as daemon_mod, resume as resume_mod
 
@@ -38,6 +41,17 @@ if mode == 'caught':
     sys.exit(1)
 if mode == 'held':
     print(json.dumps([{"unit": "u", "outcome": "held", "stage": "render", "reason": "format_check: held", "dollars": 1.0}]))
+    sys.exit(0)
+# The lanes whose runner writes ONE verdict object (negotiation, litigation).
+if mode == 'caught_dict':
+    print(json.dumps({"verdict": "failed", "stage": "x", "reason": "unexpected: interrupted"}))
+    sys.exit(1)
+if mode == 'held_dict':
+    print(json.dumps({"verdict": "held", "stage": "review", "reason": "review_held: one finding", "cents": 10}))
+    sys.exit(1)
+if mode == 'delivered_dict':
+    print(json.dumps({"verdict": "delivered", "stage": "report", "cents": 10, "notices": [],
+                      "proof": {"readback": "confirmed", "rows": 0, "review": "code_only", "review_cents": 0, "nothing_to_file": True}}))
     sys.exit(0)
 """
 
@@ -62,7 +76,34 @@ def _chronology(tmp_path: Path) -> tuple[Any, Any, Callable[[], str], str]:
     return d, broker, submit, "medchron"
 
 
-LANES = pytest.mark.parametrize("make", [_demand, _drafting, _chronology], ids=["demand", "drafting", "chronology"])
+def _negotiation(tmp_path: Path) -> tuple[Any, Any, Callable[[], str], str]:
+    """A scheduled negotiation run (2026-10-15: one cut short by a deploy was
+    recorded failed and paged SMD for a lost wake)."""
+    lane, client = negotiation_t._lane(tmp_path, [])
+    lane._stop_test_dict = {"caught": "caught_dict", "real_end": ("delivered_dict", "delivered")}
+    return lane, client, lambda: negotiation_t.JOB, "negotiation-watch"
+
+
+def _litigation(tmp_path: Path) -> tuple[Any, Any, Callable[[], str], str]:
+    lane, client = litigation_t._lane(tmp_path)
+    lane._stop_test_dict = {"caught": "caught_dict", "real_end": ("held_dict", "held")}
+    return lane, client, lambda: litigation_t._submit(lane, client), "litigation-status"
+
+
+LANES = pytest.mark.parametrize(
+    "make",
+    [_demand, _drafting, _chronology, _negotiation, _litigation],
+    ids=["demand", "drafting", "chronology", "negotiation", "litigation"],
+)
+
+
+def _mode(lane: Any, mode: str) -> str:
+    """The child mode in this lane's verdict shape."""
+    return (getattr(lane, "_stop_test_dict", None) or {}).get(mode, mode)
+
+
+def _real_end(lane: Any) -> tuple[str, str]:
+    return (getattr(lane, "_stop_test_dict", None) or {}).get("real_end", ("held", "held"))
 
 
 def _with_child(lane: Any, tmp_path: Path, mode: str) -> list[str]:
@@ -120,7 +161,7 @@ def test_the_stop_flag_arriving_just_after_the_child_died_still_counts(tmp_path,
 def test_a_child_that_reports_the_stop_as_its_own_failure_is_still_cut_short(tmp_path, make):
     lane, client, submit, _skill = make(tmp_path)
     submit()
-    _with_child(lane, tmp_path, "caught")
+    _with_child(lane, tmp_path, _mode(lane, "caught"))
     lane.stopping = lambda: True
     assert lane.tick() == "interrupted"
     assert _states(client) == ["running"]
@@ -130,10 +171,11 @@ def test_a_child_that_reports_the_stop_as_its_own_failure_is_still_cut_short(tmp
 def test_a_real_ending_reached_before_the_stop_is_recorded(tmp_path, make):
     lane, client, submit, _skill = make(tmp_path)
     submit()
-    _with_child(lane, tmp_path, "held")
+    mode, ending = _real_end(lane)
+    _with_child(lane, tmp_path, mode)
     lane.stopping = lambda: True
-    assert lane.tick() == "held"
-    assert _states(client)[-1] == "held"
+    assert lane.tick() == ending
+    assert _states(client)[-1] == ending
 
 
 @LANES
@@ -173,3 +215,42 @@ def test_run_forever_binds_the_loop_stop_flag_the_lanes_read(tmp_path):
     assert d.stopping() is True
     flag["stop"] = False
     assert d.stopping() is False
+
+
+# ---- the stop is final for the daemon process (2026-10-15) --------------------------
+def _main_with(monkeypatch, run_forever) -> int:
+    """``daemon.main`` with the seat parts stubbed: no broker socket, no lanes."""
+    monkeypatch.setattr(
+        daemon_mod,
+        "build",
+        lambda: daemon_mod.Daemon(run_dir=Path("/nonexistent"), broker=None, runner_cmd=[], customer_slug="example"),
+    )
+    monkeypatch.setattr(daemon_mod, "memory_cap_mode", lambda _root: "v2")
+    import medchron.demand_lane as dl
+    import medchron.lanes as lanes
+
+    monkeypatch.setattr(dl, "start_lane", lambda *a, **k: None)
+    monkeypatch.setattr(lanes, "start_other_lanes", lambda *a, **k: None)
+    monkeypatch.setattr(daemon_mod.Daemon, "run_forever", run_forever)
+    old = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT)}
+    try:
+        return daemon_mod.main([])
+    finally:
+        for s, h in old.items():
+            signal.signal(s, h)
+
+
+def test_main_exits_stopped_when_the_machine_stop_ended_the_loop(monkeypatch):
+    """FALSIFIER: the entrypoint respawns the daemon on any exit but this one, and
+    a daemon respawned in a stopping Machine has no stop flag (2026-10-15: it
+    spent a DELIVER wake on a gateway already gone, and SMD was paged)."""
+
+    def run_forever(self, stop, poll_seconds):
+        os.kill(os.getpid(), signal.SIGTERM)
+        assert stop()
+
+    assert _main_with(monkeypatch, run_forever) == daemon_mod.STOPPED_EXIT == 130
+
+
+def test_main_exits_zero_when_the_loop_ends_without_a_stop(monkeypatch):
+    assert _main_with(monkeypatch, lambda self, stop, poll_seconds: None) == 0

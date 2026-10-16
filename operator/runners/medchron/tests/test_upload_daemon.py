@@ -14,7 +14,7 @@ import pytest
 import yaml
 
 from medchron import config as config_mod, job as job_mod
-from medchron import resume as resume_mod
+from medchron import daemon as daemon_mod, resume as resume_mod, wake_grace
 from medchron.daemon import BrokerError, Daemon, memory_cap_mode, sticky_level
 from medchron.stages import upload
 from medchron.stages.base import StageRun
@@ -957,6 +957,76 @@ def test_a_paused_seat_never_consumes_wake_attempts(tmp_path):
     assert wake["pending"] is True and int(wake.get("attempts", 0)) == 0
 
 
+# ---- a gateway that is not up yet (2026-10-15) ----------------------------------
+# A wake pending across a deploy met a gateway that was gone, or still starting
+# (about four minutes at 1 GB), and spent its five attempts in under two
+# minutes: proof:wake_lost, a page for our own deploy.
+def _clocked(d):
+    now = [1_000_000.0]
+    d.clock = lambda: now[0]
+    return now
+
+
+def test_an_unreachable_gateway_spends_no_attempt_inside_the_grace(tmp_path):
+    d, broker = _wake_daemon(tmp_path, "http://127.0.0.1:1")  # nothing listens
+    now = _clocked(d)
+    _submit(d, broker, "01A")
+    d.tick()
+    for _ in range(8):
+        now[0] += 60
+        d.tick()
+    wake = d._daemon_state("01A")["wake"]
+    assert wake["pending"] is True and int(wake.get("attempts", 0)) == 0 and d.wakes_failed == 0
+
+
+def test_past_the_grace_an_unreachable_gateway_is_still_a_loud_loss(tmp_path):
+    d, broker = _wake_daemon(tmp_path, "http://127.0.0.1:1")
+    now = _clocked(d)
+    _submit(d, broker, "01A")
+    d.tick()
+    d.tick()  # the first refusal starts this process's grace
+    now[0] += wake_grace.WAKE_UNREACHABLE_GRACE_SECONDS + 1
+    for _ in range(daemon_mod.WAKE_MAX_ATTEMPTS + 1):
+        d.tick()
+    wake = d._daemon_state("01A")["wake"]
+    assert wake["pending"] is False and wake["outcome"].startswith("failed: unreachable") and d.wakes_failed == 1
+
+
+def test_the_grace_is_this_processs_own_never_carried_across_a_boot(tmp_path):
+    """FALSIFIER: a grace stamped on the volume would be spent by the downtime
+    and the first refusals of the next boot would page. A new daemon starts
+    its own grace."""
+    d, broker = _wake_daemon(tmp_path, "http://127.0.0.1:1")
+    now = _clocked(d)
+    _submit(d, broker, "01A")
+    d.tick()
+    d.tick()
+    assert "unreachable" not in json.dumps(d._daemon_state("01A"))
+    now[0] += 3600  # the Machine was down an hour
+    d2 = daemon_mod.Daemon(run_dir=d.run_dir, broker=broker, runner_cmd=d.runner_cmd, customer_slug=d.customer_slug)
+    d2.wake_secret, d2.gate_url, d2.clock = d.wake_secret, d.gate_url, d.clock
+    for _ in range(3):
+        now[0] += 60
+        d2.tick()
+    wake = d2._daemon_state("01A")["wake"]
+    assert wake["pending"] is True and int(wake.get("attempts", 0)) == 0
+
+
+def test_a_gateway_that_answers_clears_the_grace(tmp_path):
+    gate = _FakeGate(status=404, body=b'{"error": "unknown route"}')
+    d, broker = _wake_daemon(tmp_path, "http://127.0.0.1:1")
+    now = _clocked(d)
+    _submit(d, broker, "01A")
+    d.tick()
+    d.tick()
+    assert "01A" in d._unreachable_since
+    d.gate_url = gate.url
+    now[0] += 60
+    d.tick()
+    gate.close()
+    assert "01A" not in d._unreachable_since and int(d._daemon_state("01A")["wake"]["attempts"]) == 1
+
+
 # A decision hold's reason quotes the matter: the files it could not place.
 HELD_RUNNER = """
 import json, sys
@@ -980,7 +1050,9 @@ def test_a_held_job_wakes_with_the_stage_and_never_the_reason(tmp_path):
     assert wake["pending"] is True and "Held at: decide_orphans." in task and "rehearsal" in task
     assert "Example Clinic" not in task and "Alpha" not in task and ".pdf" not in task and "Reason:" not in task
     d.tick()
-    assert int(d._daemon_state("01B")["wake"]["attempts"]) == 1
+    # Nothing listens: a gateway that cannot be reached does not spend an
+    # attempt inside the grace (test_an_unreachable_gateway_*).
+    assert int(d._daemon_state("01B")["wake"].get("attempts", 0)) == 0
 
 
 def test_a_runner_with_no_verdict_wakes_without_a_stage(tmp_path):
