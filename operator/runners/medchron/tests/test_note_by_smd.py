@@ -391,3 +391,175 @@ def test_recent_lists_the_last_two_weeks_newest_first(tmp_path: Path) -> None:
     conn.close()
     assert [r["graph_message_id"] for r in nbs.recent(str(db), now=now)] == ["B", "A"]
     assert [r["graph_message_id"] for r in nbs.recent(str(db), match="900417", now=now)] == ["A"]
+
+
+# -- the new-message form (2026-10-16): no thread of hers; every number is a
+# Smokeball matter or declared plain, looked up here.
+
+ADMIN = "admin@firm.example"
+NEW_TEXT = "Hi,\n\nThe demand format for matter 900417 is live. 140 cases moved."
+#: The broker's TRIGGER line, pinned from the overlay (shared/turn_sources.py
+#: WAKE_TRIGGER): only a wake carrying it may bind one new email.
+WAKE_TRIGGER = re.compile(r"^Trigger: (request|scheduled)\.?\s*$", re.MULTILINE)
+
+
+class NewClient(FakeClient):
+    """The broker for a new-message note: it scans the words for numbers and
+    previews/records with what the runner resolved."""
+
+    def __init__(self, numbers: list[str] | None = None, **kw) -> None:
+        super().__init__(**kw)
+        self.numbers = ["900417", "140"] if numbers is None else numbers
+
+    def _request(self, req: dict) -> dict:
+        if req["action"] == "note_preview" and req.get("scan_numbers"):
+            self.calls.append(req)
+            return {"ok": True, "accepted": True, "numbers": self.numbers}
+        if req["action"] == "note_preview":
+            self.calls.append(req)
+            return {
+                "ok": True,
+                "accepted": True,
+                "mode": "new_message",
+                "sender": req["to"],
+                "subject": req["subject"],
+                "cc": [],
+                "matters": req["matters"],
+                "plain_numbers": req["plain_numbers"],
+                "identifiers": [],
+                "text": req["text"],
+                "digest": DIGEST,
+            }
+        if req["action"] == "note_record":
+            self.calls.append(req)
+            return {"ok": True, "accepted": True, "job_id": NOTE, "requester": req["to"], "mode": "new_message"}
+        return super()._request(req)
+
+
+class FakeSmokeball:
+    """The matter listing: ``matters`` maps number -> (id, title)."""
+
+    def __init__(self, matters: dict[str, tuple[str, str]], *, fail: bool = False) -> None:
+        self.matters = matters
+        self.fail = fail
+        self.gets: list[str] = []
+
+    def get(self, path: str, **params):
+        self.gets.append(path)
+        if self.fail:
+            raise ConnectionError("smokeball down")
+        if path == "/matters":
+            rows = [{"id": i, "number": n} for n, (i, _t) in self.matters.items()]
+            if params.get("Search"):
+                rows = [r for r in rows if r["number"] == params["Search"]]
+            return {"value": rows}
+        for _n, (i, title) in self.matters.items():
+            if path == f"/matters/{i}":
+                return {"id": i, "title": title}
+        raise AssertionError(f"unexpected Smokeball read {path}")
+
+
+def _new_args(**over) -> argparse.Namespace:
+    base = nbs.parser().parse_args(
+        ["--to", ADMIN, "--subject", "The demand format is live", "--text", NEW_TEXT, "--approved-by", "smd"]
+    )
+    for k, v in over.items():
+        setattr(base, k, v)
+    return base
+
+
+def _new_run(tmp_path: Path, client: FakeClient, smokeball=None, lane=None, **over) -> int:
+    clock = {"t": 0.0}
+
+    def sleep(s):
+        clock["t"] += s
+
+    def factory():
+        if isinstance(smokeball, Exception):
+            raise smokeball
+        return smokeball
+
+    return nbs.run(
+        _new_args(**over),
+        client=client,
+        lane=lane or _lane(tmp_path, client),
+        sleep=sleep,
+        clock=lambda: clock["t"],
+        audit_db=str(tmp_path / "none.db"),
+        matter_client=factory,
+    )
+
+
+def test_a_new_message_dry_run_names_each_matter_and_records_nothing(tmp_path: Path, capsys) -> None:
+    client = NewClient()
+    sb = FakeSmokeball({"900417": ("m-1", "Vasic v. Doe")})
+    lane = _lane(tmp_path, client)
+    assert _new_run(tmp_path, client, sb, lane, dry_run=True, plain_number=["140"]) == 0
+    out = capsys.readouterr().out
+    assert f"To: {ADMIN}" in out and "Cc: (nobody)" in out and "The demand format is live" in out
+    assert "Matter 900417: Vasic v. Doe" in out and "Plain numbers (not matters): 140" in out
+    preview = client.calls[1]
+    assert preview["matters"] == [{"number": "900417", "name": "Vasic v. Doe"}] and preview["plain_numbers"] == ["140"]
+    assert "graph_message_id" not in preview
+    assert not lane.jobs.exists()
+
+
+def test_a_number_smokeball_does_not_know_is_refused_with_the_plain_hint(tmp_path: Path) -> None:
+    """FALSIFIER: a lookup that answered found for everything would let a
+    mistyped matter number reach the firm."""
+    client = NewClient()
+    sb = FakeSmokeball({"900417": ("m-1", "Vasic v. Doe")})
+    with pytest.raises(nbs.Refused) as err:
+        _new_run(tmp_path, client, sb, dry_run=True)
+    assert "140" in str(err.value) and "--plain-number 140" in str(err.value)
+    assert [c.get("scan_numbers") for c in client.calls] == [True]
+
+
+def test_smokeball_unreachable_is_could_not_look_never_none_found(tmp_path: Path) -> None:
+    client = NewClient()
+    with pytest.raises(nbs.Refused) as err:
+        _new_run(tmp_path, client, FakeSmokeball({}, fail=True), dry_run=True, plain_number=["140"])
+    assert "could not look up" in str(err.value)
+
+
+def test_a_seat_without_smokeball_refuses_a_number_cleanly(tmp_path: Path) -> None:
+    """smd-staging: the client cannot be built at all (``ClientSeat()`` raises)."""
+    client = NewClient()
+    with pytest.raises(nbs.Refused) as err:
+        _new_run(tmp_path, client, RuntimeError("no SMOKEBALL env"), dry_run=True, plain_number=["140"])
+    assert "Smokeball is not reachable" in str(err.value)
+
+
+def test_a_note_with_no_numbers_never_builds_the_smokeball_client(tmp_path: Path, capsys) -> None:
+    client = NewClient(numbers=[])
+    assert _new_run(tmp_path, client, RuntimeError("must not be built"), dry_run=True, text="It is live.") == 0
+    assert client.calls[1]["matters"] == []
+
+
+def test_the_new_message_live_run_queues_a_scheduled_wake(tmp_path: Path, monkeypatch, capsys) -> None:
+    """FALSIFIER: without the trigger line the overlay refuses the new-message
+    binding and the note never goes."""
+    NoNetwork(monkeypatch)
+    client = NewClient(replies=[[], _sent()])
+    sb = FakeSmokeball({"900417": ("m-1", "Vasic v. Doe")})
+    lane = _lane(tmp_path, client)
+    assert _new_run(tmp_path, client, sb, lane, confirm=DIGEST, plain_number=["140"]) == 0
+    record = [c for c in client.calls if c["action"] == "note_record"][0]
+    assert record["to"] == ADMIN and record["confirm"] == DIGEST and record["matters"][0]["number"] == "900417"
+    task = lane._daemon_state(NOTE)["wake"]["task"]
+    assert WAKE_JOB.search(task).groups() == ("note", NOTE)
+    assert WAKE_TRIGGER.search(task).group(1) == "scheduled"
+    env = json.loads((lane.job_dir(NOTE) / "envelope.json").read_text())
+    assert env["requested_by"] == ADMIN and env["request_ref"] == ""
+    assert "reply: sent+located" in capsys.readouterr().out
+    # The live run looked the matter up again rather than reusing the dry run's.
+    assert sb.gets.count("/matters") >= 1
+
+
+def test_a_reply_note_wake_carries_no_trigger_line() -> None:
+    assert WAKE_TRIGGER.search(note_lane.wake_task(NOTE)) is None
+
+
+def test_main_refuses_both_a_graph_id_and_to(capsys) -> None:
+    assert nbs.main([GID, "--to", ADMIN, "--text", "x", "--approved-by", "smd", "--dry-run"]) == 2
+    assert "not both" in capsys.readouterr().err

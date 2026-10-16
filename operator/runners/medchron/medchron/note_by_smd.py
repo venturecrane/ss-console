@@ -1,8 +1,11 @@
-"""SMD has the Operator tell a firm colleague something, in her own thread.
+"""SMD has the Operator tell a firm colleague something: in her own thread,
+or (when she has no thread in this mailbox) in one new email.
 
     python -m medchron.note_by_smd --recent [--match TEXT]
     python -m medchron.note_by_smd <graph_id> --text-file F --approved-by WHO --dry-run
     python -m medchron.note_by_smd <graph_id> --text-file F --approved-by WHO --confirm DIGEST [--wait-min 20]
+    python -m medchron.note_by_smd --to ADDR --subject S --text-file F --approved-by WHO
+        [--plain-number N ...] --dry-run | --confirm DIGEST
 
 Root only, on the seat, with the medchron venv's python and the runner daemon's
 environment (``SMD_WORKSPACE_BROKER_SOCKET``, ``SMD_MEDCHRON_RUN_DIR``). Runbook:
@@ -36,6 +39,17 @@ DELIVER turn and to an unlocked read-modify-write of ``daemon.json``. This is
 writes ``daemon.json`` once, atomically, before the lane can see the job, and
 only reads it after.
 
+THE NEW-MESSAGE FORM (2026-10-16). Most of what SMD tells a firm has no
+thread of hers here: she asked Scott, or nobody asked. ``--to`` names a Named
+Administrator the smd-note skill authors (``settings.scheduled_recipients``),
+and ``--subject`` the email's subject. With no request email to check the words
+against, every three-to-ten-digit number in them is looked up as a Smokeball
+matter number (``smokeball_connector.library.lookup_matter``) unless SMD
+declares it plain (``--plain-number``: a count, a year, a dollar figure). Found
+prints the matter's title; not found, or Smokeball unreachable, refuses. The
+Smokeball client is built only when a number needs looking up, so a note with
+no numbers works on a seat without Smokeball. The live run looks them up again.
+
 Exit codes: 0 the reply was sent and the reply watch would count it proven
 (or a dry run / list succeeded); 1 any other ending (printed); 2 refused
 (nothing was recorded).
@@ -67,6 +81,68 @@ POLL_SECONDS = 15.0
 
 class Refused(RuntimeError):
     """The broker refused the note; nothing was recorded."""
+
+
+# -- the matter numbers (the new-message form) ---------------------------------------
+
+
+def numbers_in(client: Any, text: str, approved_by: str) -> list[str]:
+    """The note's bare digit runs, as the broker scans them: asked of the
+    broker (``note_preview`` with ``scan_numbers``), whose scan is the one it
+    refuses on. This venv cannot import the broker's package."""
+    resp = _request(client, {"action": "note_preview", "scan_numbers": True, "text": text, "approved_by": approved_by})
+    return [str(n) for n in resp.get("numbers") or []]
+
+
+def _default_matter_client() -> Any:
+    from .seat import ClientSeat
+
+    return ClientSeat().client
+
+
+def _matter_title(client: Any, matter_id: str) -> str:
+    try:
+        r = client.get(f"/matters/{matter_id}")
+    except Exception:  # noqa: BLE001 - a missing title is shown as such, never invented
+        return ""
+    if isinstance(r, dict) and isinstance(r.get("value"), list) and r["value"]:
+        r = r["value"][0]
+    if not isinstance(r, dict):
+        return ""
+    return str(r.get("title") or r.get("description") or "").strip()[:200]
+
+
+def resolve_matters(
+    numbers: list[str], *, client_factory: Callable[[], Any] = _default_matter_client
+) -> list[dict[str, str]]:
+    """Each number as a Smokeball matter (number + title), or ``Refused``. The
+    client is built only when there is something to look up."""
+    if not numbers:
+        return []
+    try:
+        from smokeball_connector.library import lookup_matter
+
+        client = client_factory()
+    except Exception as exc:  # noqa: BLE001 - "could not look" is a refusal, never "none found"
+        raise Refused(
+            f"could not look up matter numbers {', '.join(numbers)}: Smokeball is not reachable here "
+            f"({exc.__class__.__name__}); nothing was recorded"
+        ) from exc
+    out = []
+    for number in numbers:
+        try:
+            found = lookup_matter(client, number=number)
+        except Exception as exc:  # noqa: BLE001
+            raise Refused(f"could not look up matter {number} ({exc.__class__.__name__}); nothing was recorded") from exc
+        if found.failed:
+            raise Refused(f"could not look up matter {number} ({found.reason}); nothing was recorded")
+        if not found.found or not found.matter_id:
+            raise Refused(
+                f"{number} is not a matter number in Smokeball. If it is not meant as one (a count, a year, "
+                f"an amount), pass --plain-number {number}; otherwise correct it"
+            )
+        out.append({"number": number, "name": _matter_title(client, found.matter_id)})
+    return out
 
 
 # -- the request index --------------------------------------------------------------
@@ -228,6 +304,37 @@ def _request(client: Any, payload: dict[str, Any]) -> dict[str, Any]:
     return resp
 
 
+def _base(a: argparse.Namespace, text: str, client: Any, matter_client: Callable[[], Any]) -> dict[str, Any]:
+    if not a.to:
+        return {"graph_message_id": a.graph_id, "text": text, "approved_by": a.approved_by or ""}
+    plain = sorted({str(n).strip() for n in (a.plain_number or [])})
+    lookup = [n for n in numbers_in(client, text, a.approved_by or "") if n not in plain]
+    return {
+        "to": a.to,
+        "subject": a.subject or "",
+        "text": text,
+        "approved_by": a.approved_by or "",
+        "matters": resolve_matters(lookup, client_factory=matter_client),
+        "plain_numbers": plain,
+    }
+
+
+def _print_preview(p: dict[str, Any]) -> None:
+    print(f"To: {p['sender']}")
+    if p.get("mode") == "new_message":
+        print("Cc: (nobody)")
+        print(f"Subject: {p['subject']!r} (a new email; she has no thread to answer)")
+        for m in p.get("matters") or []:
+            print(f"Matter {m['number']}: {m['name'] or '(Smokeball gave no title)'}")
+        if p.get("plain_numbers"):
+            print(f"Plain numbers (not matters): {', '.join(p['plain_numbers'])}")
+        for ident in p.get("identifiers") or []:
+            print(f"Also states {ident} (nothing on the seat can check it: read it)")
+    else:
+        print(f"Cc: {', '.join(p['cc']) or '(nobody)'}")
+        print(f"Answering: {p['subject']!r}, received {p['received_at']}")
+
+
 def run(
     a: argparse.Namespace,
     *,
@@ -236,14 +343,13 @@ def run(
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.time,
     audit_db: str | None = None,
+    matter_client: Callable[[], Any] = _default_matter_client,
 ) -> int:
     text = _text(a)
-    base = {"graph_message_id": a.graph_id, "text": text, "approved_by": a.approved_by or ""}
+    base = _base(a, text, client, matter_client)
     if a.dry_run:
         p = _request(client, {"action": "note_preview", **base})
-        print(f"To: {p['sender']}")
-        print(f"Cc: {', '.join(p['cc']) or '(nobody)'}")
-        print(f"Answering: {p['subject']!r}, received {p['received_at']}")
+        _print_preview(p)
         print("Words, sent exactly as below and then 'Thanks,':")
         print("-----")
         print(p["text"])
@@ -257,7 +363,10 @@ def run(
     note_id = str(rec["job_id"])
     print(f"recorded note job {note_id}")
     created = clock()
-    _write_job(lane, note_id, str(rec.get("requester") or ""), a.graph_id, note_lane.wake_task(note_id), created)
+    new_message = rec.get("mode") == "new_message"
+    ref = "" if new_message else a.graph_id
+    task = note_lane.wake_task(note_id, new_message=new_message)
+    _write_job(lane, note_id, str(rec.get("requester") or ""), ref, task, created)
     print("wake: queued; the note lane sends it on its next tick and arms the reply watch then")
     outcome = poll(client, note_id, created=created, wait_min=a.wait_min, sleep=sleep, clock=clock)
     if outcome == "not sent":
@@ -277,6 +386,14 @@ def run(
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="medchron.note_by_smd", description=(__doc__ or "").split("\n\n")[0])
     ap.add_argument("graph_id", nargs="?", help="the colleague's request email (Graph id, from --recent)")
+    ap.add_argument("--to", help="a new email instead of a reply: the authored administrator it goes to")
+    ap.add_argument("--subject", help="with --to: the new email's subject")
+    ap.add_argument(
+        "--plain-number",
+        action="append",
+        default=[],
+        help="with --to: a number in the words that is not a matter number (repeatable)",
+    )
     ap.add_argument("--recent", action="store_true", help="list this seat's recent requests and exit")
     ap.add_argument("--match", default="", help="with --recent: only rows whose sender or subject contains this")
     ap.add_argument("--text", help="the note's exact words")
@@ -301,8 +418,11 @@ def main(argv: list[str] | None = None) -> int:
         for r in rows:
             print(f"{r['received_at']}  {r['graph_message_id']}  {r['sender']}  {r['subject']}")
         return 0
-    if not a.graph_id:
-        print("REFUSED: name the request email's Graph id (see --recent)", file=sys.stderr)
+    if a.to and a.graph_id:
+        print("REFUSED: a note answers an email (graph id) or is a new email (--to), not both", file=sys.stderr)
+        return 2
+    if not a.graph_id and not a.to:
+        print("REFUSED: name the request email's Graph id (see --recent), or --to for a new email", file=sys.stderr)
         return 2
     socket_path = os.environ.get(SOCKET_ENV, "").strip()
     if not socket_path:

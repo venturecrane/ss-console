@@ -99,6 +99,10 @@ def _job(broker: BrokerContext, channel: str, anchor: Anchor) -> Participants:
     row = job_ledger(broker, anchor.kind).read(anchor.ident)
     if row is None:
         raise _unverifiable("there is no such job")
+    if anchor.kind == "note_job" and row.get("trigger") == "scheduled":
+        # A new-message note answers no email (2026-10-16): its ref is
+        # ``new:<key>``, never a Message-ID or a Graph id to look up.
+        raise _unverifiable("a new-message note has no request email")
     ref = str(row.get("request_ref") or "").strip()
     requester = normalize_address(row.get("requester"))
     if not ref or not requester:

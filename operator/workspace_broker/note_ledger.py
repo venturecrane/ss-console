@@ -51,14 +51,31 @@ CREATE_SQL = (
     "attempt INTEGER NOT NULL DEFAULT 1, "
     "reply_sent_at TEXT, "
     "reply_key TEXT, "
+    "trigger TEXT NOT NULL DEFAULT 'request', "
+    "subject TEXT, "
     "UNIQUE(request_ref, text_digest)"
     ")"
 )
 CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_note_jobs_created ON note_jobs(created_at)"
+#: Added 2026-10-16 (the new-message note). A v1 table on a live seat gains
+#: them in place; its rows are reply notes, which the defaults describe.
+ADDED_COLUMNS = (("trigger", "TEXT NOT NULL DEFAULT 'request'"), ("subject", "TEXT"))
+#: A note with no request email takes ``trigger='scheduled'``, the reply
+#: binding's word for "no email asked for this": one new email to an authored
+#: admin (``reply_binding._verify_scheduled``).
+TRIGGER_REQUEST = "request"
+TRIGGER_NEW_MESSAGE = "scheduled"
+#: A new-message note's ``request_ref``: ``new:`` plus the recipient's key. It
+#: carries no ``@`` on purpose: ``participant_lookup._job`` reads a ref with an
+#: ``@`` as an RFC Message-ID.
+NEW_MESSAGE_REF_PREFIX = "new:"
 
 
-def text_digest(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+def text_digest(text: str, subject: str | None = None) -> str:
+    """The words' digest; a new-message note's covers its subject too, so the
+    same subject and words to the same person are recorded once."""
+    data = text if subject is None else f"{subject}\n\n{text}"
+    return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
 
 class NoteExists(ValueError):
@@ -86,15 +103,38 @@ class NoteLedger:
         try:
             conn.execute(CREATE_SQL)
             conn.execute(CREATE_INDEX_SQL)
+            have = {r["name"] for r in conn.execute("PRAGMA table_info(note_jobs)")}
+            for name, kind in ADDED_COLUMNS:
+                if name in have:
+                    continue
+                try:
+                    conn.execute(f"ALTER TABLE note_jobs ADD COLUMN {name} {kind}")
+                except sqlite3.OperationalError as exc:
+                    # The broker and the runner both construct the ledger: the
+                    # other may have added it between our read and the ALTER.
+                    if "duplicate column" not in str(exc).lower():
+                        raise
             conn.commit()
         finally:
             conn.close()
 
-    def create(self, *, requester: str, request_ref: str, text: str, approved_by: str, recorded_by: str) -> str:
+    def create(
+        self,
+        *,
+        requester: str,
+        request_ref: str,
+        text: str,
+        approved_by: str,
+        recorded_by: str,
+        subject: str | None = None,
+    ) -> str:
         """One note row, born ``delivered``. ``NoteExists`` when these exact
-        words were already recorded on this email."""
+        words were already recorded on this email (or, for a new-message note,
+        sent to this person under this subject). A ``subject`` makes it a
+        new-message note (``trigger='scheduled'``)."""
         job_id = _ulid()
-        digest = text_digest(text)
+        digest = text_digest(text, subject)
+        trigger = TRIGGER_REQUEST if subject is None else TRIGGER_NEW_MESSAGE
         conn = self._connect()
         try:
             conn.execute("BEGIN IMMEDIATE")
@@ -106,8 +146,8 @@ class NoteLedger:
                 raise NoteExists(dup["id"])
             conn.execute(
                 "INSERT INTO note_jobs (id, created_at, requester, request_ref, text, text_digest, approved_by, "
-                "recorded_by) VALUES (?,?,?,?,?,?,?,?)",
-                (job_id, _iso_utc(), requester, request_ref, text, digest, approved_by, recorded_by),
+                "recorded_by, trigger, subject) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (job_id, _iso_utc(), requester, request_ref, text, digest, approved_by, recorded_by, trigger, subject),
             )
             conn.commit()
         finally:
@@ -122,11 +162,12 @@ class NoteLedger:
         finally:
             conn.close()
 
-    def find(self, request_ref: str, text: str) -> str | None:
+    def find(self, request_ref: str, text: str, subject: str | None = None) -> str | None:
         conn = self._connect()
         try:
             row = conn.execute(
-                "SELECT id FROM note_jobs WHERE request_ref=? AND text_digest=?", (request_ref, text_digest(text))
+                "SELECT id FROM note_jobs WHERE request_ref=? AND text_digest=?",
+                (request_ref, text_digest(text, subject)),
             ).fetchone()
             return row["id"] if row else None
         finally:
@@ -160,4 +201,14 @@ class NoteLedger:
             conn.close()
 
 
-__all__ = ["AUDIT_TYPE", "SKILL_NAME", "STATES", "NoteExists", "NoteLedger", "text_digest"]
+__all__ = [
+    "AUDIT_TYPE",
+    "NEW_MESSAGE_REF_PREFIX",
+    "SKILL_NAME",
+    "STATES",
+    "TRIGGER_NEW_MESSAGE",
+    "TRIGGER_REQUEST",
+    "NoteExists",
+    "NoteLedger",
+    "text_digest",
+]

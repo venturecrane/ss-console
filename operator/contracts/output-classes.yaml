@@ -480,12 +480,13 @@ skill_bindings:
     internal:
       - { artifact: negotiation_rows, seam: smokeball_layout, class: record }
     outbound: derived # one new email per new offer to a firm administrator
-  # SMD note: SMD records approved words against a colleague's recent request
-  # email (root only, every identifier corroborated against that email); the
-  # wake sends them verbatim as one bound reply in her thread.
+  # SMD note: SMD records approved words (root only) against a colleague's
+  # recent request email (every identifier corroborated against it) or, with no
+  # thread of hers, for an authored admin (every number a Smokeball matter or
+  # declared plain); the wake sends them verbatim as one bound send.
   smd-note:
     internal: []
-    outbound: derived # one bound reply to a firm colleague, copying her request's vetted participants
+    outbound: derived # one bound reply in her thread (copying her request's vetted participants), or one new email to an authored admin
   mediation-settlement-tracker:
     internal:
       - { artifact: brief_inputs, seam: session_output, class: staff }

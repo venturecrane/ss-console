@@ -182,4 +182,21 @@ def uncorroborated(note: str, anchor: str, *, now: datetime.datetime | None = No
     return out
 
 
-__all__ = ["Hit", "ambient_dates", "bare_runs", "structured", "uncorroborated"]
+def new_message_scan(note: str, *, now: datetime.datetime | None = None) -> tuple[list[str], list[Hit]]:
+    """A new-message note has no request email to corroborate against
+    (2026-10-16). Returns (every distinct bare digit run, in order of first
+    appearance; every structured identifier that is not an ambient date).
+    The runs must each be a Smokeball matter or a number SMD declared plain
+    (``note_verbs``); the structured ones are listed in the dry run SMD reads
+    and bound into its digest, since nothing on the seat can vouch for them."""
+    hits = structured(note)
+    ambient = ambient_dates(now)
+    others = [h for h in hits if not (h.kind == "date" and h.canonical in ambient)]
+    runs: list[str] = []
+    for h in bare_runs(note, outside=[h.span for h in hits]):
+        if h.canonical not in runs:
+            runs.append(h.canonical)
+    return runs, others
+
+
+__all__ = ["Hit", "ambient_dates", "bare_runs", "new_message_scan", "structured", "uncorroborated"]

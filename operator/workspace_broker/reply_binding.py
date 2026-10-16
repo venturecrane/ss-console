@@ -107,14 +107,20 @@ _NOUN = {
     "note_job": "SMD note",
 }
 #: How a binding reaches its person: a reply in their thread, or (a scheduled
-#: litigation job or a negotiation notice) one new email to them, whose
-#: recipient and subject are the broker's (the overlay's scheduled wake takes
-#: only this mode).
+#: litigation job, a negotiation notice, or a new-message SMD note) one new
+#: email to them, whose recipient and subject are the broker's (the overlay's
+#: scheduled wake takes only this mode).
 MODE_REPLY = "reply"
 MODE_NEW_MESSAGE = "new_message"
 #: Each scheduled kind's authored lane (the skill whose scheduled_recipients it
 #: may reach).
-SCHEDULED_LANES = {"litigation_job": "skill:litigation-status", "negotiation_job": "skill:negotiation-watch"}
+SCHEDULED_LANES = {
+    "litigation_job": "skill:litigation-status",
+    "negotiation_job": "skill:negotiation-watch",
+    # 2026-10-16: a note with no request email (``note_ledger``
+    # trigger='scheduled'), to an admin the smd-note skill authors.
+    "note_job": "skill:smd-note",
+}
 #: The outcomes a requester is told about, for EVERY job kind (demand and
 #: drafting alike; the name predates the drafting lane). NOT ``failed``: a
 #: failed job is resumable and SMD's to resolve (a live demand job, 2026-10-06,
@@ -197,21 +203,37 @@ def _negotiation_ledger(broker: BrokerContext) -> NegotiationLedger:
     return NegotiationLedger(str(broker.audit_db_path), queue)
 
 
+def _authored_recipients(kind: str, customer_path: Any) -> tuple[list[str], bool]:
+    """(that kind's skill's authored ``scheduled_recipients``, whether only the
+    FIRST entry may be reached). An explicit table that raises on any other
+    kind: the old ``else`` read negotiation-watch's list for anything that was
+    not litigation, which a note must never inherit (2026-10-16)."""
+    if kind == "litigation_job":
+        from . import litigation_intake as intake
+    elif kind == "negotiation_job":
+        from . import negotiation_intake as intake
+    elif kind == "note_job":
+        from .note_verbs import note_recipients
+
+        return note_recipients(customer_path) or [], False
+    else:
+        raise ValueError(f"{kind} has no authored scheduled recipients")
+    return intake.scheduled_recipients(intake.settings_of(intake.skill_entry(customer_path))), True
+
+
 def _scheduled_recipient_ok(broker: BrokerContext, kind: str, requester: str) -> bool:
-    """The scheduled run's requester is still a Named Administrator AND the
-    first authored ``scheduled_recipients`` entry of that kind's skill, read
-    from the live yaml."""
+    """The scheduled run's requester is still a Named Administrator AND an
+    authored ``scheduled_recipients`` entry of that kind's skill, read from the
+    live yaml: the FIRST entry for litigation and negotiation, any entry for a
+    new-message note."""
     from .medchron_ledger import admins_from_customer_yaml
 
-    if kind == "litigation_job":
-        from .litigation_intake import scheduled_recipients, settings_of, skill_entry
-    else:
-        from .negotiation_intake import scheduled_recipients, settings_of, skill_entry
-
     who = normalize_address(requester)
-    recipients = scheduled_recipients(settings_of(skill_entry(broker.customer_path)))
+    recipients, first_only = _authored_recipients(kind, broker.customer_path)
     admins = admins_from_customer_yaml(str(broker.customer_path)) or ()
-    return bool(recipients) and recipients[0] == who and who in admins
+    if not recipients or who not in admins:
+        return False
+    return recipients[0] == who if first_only else who in recipients
 
 
 def _medchron_ledger(broker: BrokerContext) -> MedchronLedger:
@@ -340,6 +362,10 @@ def _verify_scheduled(broker: BrokerContext, kind: str, ident: str, key: str, ro
                 f"{_NOUN[kind]} job {ident} is announced by its notices, never itself; nothing was sent"
             )
         subject = negotiation_subject(row)
+    elif kind == "note_job":
+        subject = str(row.get("subject") or "").strip()
+        if not subject:
+            raise BindingRefused(f"{_NOUN[kind]} job {ident} records no subject; nothing was sent")
     else:
         subject = scheduled_subject(str(row["request_ref"]))
     if not _scheduled_recipient_ok(broker, kind, str(row["requester"])):
