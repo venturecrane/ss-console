@@ -198,7 +198,7 @@ def enforce(
     # scheduled litigation list or a negotiation notice), which the broker
     # marks with its own authored lane.
     # The rehearsal fence (rehearsal_fence.py) runs first and on every lane: a
-    # message marked as a rehearsal or test reaches SMD only, whoever composed it.
+    # message marked as a rehearsal reaches SMD only, whoever composed it.
     subject = payload.get("subject")
     if action.endswith("_reply") or (action == "msgraph_reply_bound" and not internal_lane):
         target = str(payload.get("message_id") or "").strip()
