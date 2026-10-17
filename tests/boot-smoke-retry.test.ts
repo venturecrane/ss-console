@@ -36,8 +36,13 @@ const SCRIPT = resolve('operator/bin/boot-smoke-test.sh')
 
 let dir: string
 
-/** A `fly` stub whose `status --json` reports the given machine state. */
-function writeFlyStub(state: string, sshExit: number): void {
+/**
+ * A `fly` stub whose `status --json` reports the given machine state. A failing
+ * ssh prints the check-failed marker when `verdict` is true (the check ran and
+ * said no), and nothing when false (the ssh session itself failed).
+ */
+function writeFlyStub(state: string, sshExit: number, verdict = true): void {
+  const mark = verdict && sshExit !== 0 ? 'echo SMD_CHECK_FAILED' : ':'
   writeFileSync(
     join(dir, 'fly'),
     `#!/bin/bash
@@ -48,6 +53,7 @@ fi
 if [ "$1" = "ssh" ]; then
   # Count attempts so a test can assert how many times the check actually ran.
   echo x >> "${dir}/ssh-attempts"
+  ${mark}
   exit ${sshExit}
 fi
 exit 0
@@ -180,6 +186,60 @@ echo "ATTEMPTS=$(wc -l < "${dir}/ssh-attempts" | tr -d ' ')"
     expect(out).not.toContain('passed on retry')
     // Exactly two: one retry, never a loop until it passes.
     expect(out).toMatch(/ATTEMPTS=2/)
+  })
+
+  it('retries once on a settled Machine when the ssh session returned no verdict, and passes', () => {
+    // 2026-10-17: customer-yaml-root-owned failed a pilot rebuild in 11 s on a
+    // root:root file. No marker came back, so the check never ran.
+    writeFileSync(join(dir, 'ssh-attempts'), '')
+    writeFileSync(
+      join(dir, 'fly'),
+      `#!/bin/bash
+if [ "$1" = "status" ]; then echo '{"Machines":[{"state":"started"}]}'; exit 0; fi
+if [ "$1" = "ssh" ]; then
+  echo x >> "${dir}/ssh-attempts"
+  [ "$(wc -l < "${dir}/ssh-attempts" | tr -d ' ')" -ge 2 ] && exit 0
+  echo "Error: ssh: handshake failed: EOF" >&2
+  exit 1
+fi
+exit 0
+`,
+      { mode: 0o755 }
+    )
+    chmodSync(join(dir, 'fly'), 0o755)
+    const out = runWithHelpers(`
+ssh_exec "a-check-whose-session-dropped" "true"
+echo "FAILED_COUNT=\${#FAILED_CHECKS[@]}"
+echo "ATTEMPTS=$(wc -l < "${dir}/ssh-attempts" | tr -d ' ')"
+`)
+    expect(out).toContain('FAILED_COUNT=0')
+    expect(out).toContain('the first attempt returned no verdict')
+    expect(out).toMatch(/ATTEMPTS=2/)
+  })
+
+  it('records a failure when two attempts both return no verdict, never a pass', () => {
+    writeFlyStub('started', 1, false)
+    writeFileSync(join(dir, 'ssh-attempts'), '')
+    const out = runWithHelpers(`
+ssh_exec "a-check-that-never-answers" "true"
+echo "FAILED_COUNT=\${#FAILED_CHECKS[@]}"
+echo "ATTEMPTS=$(wc -l < "${dir}/ssh-attempts" | tr -d ' ')"
+`)
+    expect(out).toContain('FAILED_COUNT=1')
+    expect(out).toContain('no verdict from the Machine on two attempts')
+    expect(out).toMatch(/ATTEMPTS=2/)
+  })
+
+  it('ssh_exec_script shares the verdict rule: a check that says no fails on one attempt', () => {
+    writeFlyStub('started', 1)
+    writeFileSync(join(dir, 'ssh-attempts'), '')
+    const out = runWithHelpers(`
+ssh_exec_script "a-quoted-check" "test 'a' = 'b'"
+echo "FAILED_COUNT=\${#FAILED_CHECKS[@]}"
+echo "ATTEMPTS=$(wc -l < "${dir}/ssh-attempts" | tr -d ' ')"
+`)
+    expect(out).toContain('FAILED_COUNT=1')
+    expect(out).toMatch(/ATTEMPTS=1/)
   })
 
   // Two settle waits at the 3s test budget (the explicit await_started, then
