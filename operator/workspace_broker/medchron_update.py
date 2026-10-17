@@ -9,6 +9,7 @@ delivered chronology, which comes back as one complete document
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -60,11 +61,26 @@ UPDATE_SHAPE = (
 )
 
 
+def client_keys(env: dict[str, Any]) -> list[str]:
+    """The clients an envelope is for, as the runner tells them apart: by
+    ``client_name``, which names each client's chronology file
+    (``update/locate.name_pattern``, matched case-insensitively, read by
+    ``stages/listing.py`` and the update's locator alike). Sorted, unique."""
+    return sorted({" ".join(str(u.get("client_name") or "").split()).lower() for u in env.get("units") or []} - {""})
+
+
 def delivered_refusal(env: dict[str, Any], delivered_count: Any) -> str | None:
     """A prose refusal when a RUN or a plain append (named ids, no ``update``
-    block) is asked on a matter that already holds a delivered chronology;
-    None when the envelope may queue (2026-10-13: a "full chronology" ask on
-    a client matter that already held one, queued as a full run).
+    block) is asked for a client who already holds a delivered chronology on
+    the matter; None when the envelope may queue (2026-10-13: a "full
+    chronology" ask on a client matter that already held one, queued as a
+    full run).
+
+    PER CLIENT, not per matter (2026-10-17). A joint matter holds one
+    chronology per client, and the runner's own guard looks for THIS job's
+    clients' files only, so client A's delivery must not refuse client B's
+    first chronology. A ledger row that records no clients (written before
+    the column, or a backfill) counts for every client: unknown is never none.
 
     Only the ledger's own delivery record is read here; the broker holds no
     practice-management session, so a chronology delivered before the ledger
@@ -78,7 +94,7 @@ def delivered_refusal(env: dict[str, Any], delivered_count: Any) -> str | None:
         return None
     matter_id = env["matter"]["id"]
     try:
-        count = int(delivered_count(matter_id))
+        count = int(delivered_count(matter_id, client_keys(env)))
     except Exception as exc:  # noqa: BLE001 - any read failure refuses, named
         return (
             f"whether matter {env['matter']['number']} holds a delivered chronology could not be "
@@ -94,17 +110,20 @@ def delivered_refusal(env: dict[str, Any], delivered_count: Any) -> str | None:
     )
 
 
-def delivered_count(ledger: Any, matter_id: str) -> int:
-    """How many chronologies the ledger records as delivered on the matter,
-    record or not (``delivered_coverage`` needs a coverage record; this asks
-    only whether a delivery happened). Here rather than on ``MedchronLedger``
-    so that module stays under the size ceiling. A read failure RAISES: the
-    caller refuses on it, because "could not look" must never read as "none"."""
+def delivered_count(ledger: Any, matter_id: str, clients: list[str]) -> int:
+    """How many chronologies the ledger records as delivered on the matter for
+    any of ``clients`` (``client_keys``), record or not (``delivered_coverage``
+    needs a coverage record; this asks only whether a delivery happened). A
+    row with no recorded clients counts. Here rather than on ``MedchronLedger``
+    so that module stays under the size ceiling. A read failure RAISES (a
+    corrupt ``client_keys`` included): the caller refuses on it, because
+    "could not look" must never read as "none"."""
     conn = ledger._connect()
     try:
-        row = conn.execute(
-            "SELECT COUNT(*) FROM medchron_jobs WHERE matter_id=? AND state='delivered'", (str(matter_id),)
-        ).fetchone()
+        rows = conn.execute(
+            "SELECT client_keys FROM medchron_jobs WHERE matter_id=? AND state='delivered'", (str(matter_id),)
+        ).fetchall()
     finally:
         conn.close()
-    return int(row[0])
+    wanted = set(clients)
+    return sum(1 for (raw,) in rows if raw is None or wanted & set(json.loads(raw)))

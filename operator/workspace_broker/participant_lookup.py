@@ -147,6 +147,18 @@ def _rule(broker: BrokerContext, channel: str, anchor: Anchor) -> Participants:
     return home
 
 
+def _own(broker: BrokerContext, channel: str) -> tuple[str, ...]:
+    """The seat's own mailbox, which a Graph reply never copies. Unreadable is
+    empty, which only makes the fence stricter (the mailbox must then be on the
+    anchor like anyone else at the firm), never looser."""
+    if channel != "msgraph" or broker.msgraph is None:
+        return ()
+    try:
+        return (broker.msgraph.mailbox(),)
+    except (MsGraphTransportError, OSError, ValueError):
+        return ()
+
+
 def resolver(broker: BrokerContext, channel: str) -> Callable[[Anchor], Participants]:
     """One read per anchor per transmit; every failure is FENCE_UNVERIFIABLE."""
     cache: dict[Anchor, Participants] = {}
@@ -205,7 +217,9 @@ def enforce(
         if not target:
             raise FenceRefused(FENCE_PARTICIPANTS, "a reply must name the email it answers.")
         rehearsal_fence.check(subject, [], lambda: resolve(Anchor(CHANNEL_KIND[channel], target)), reply=True)
-        check_reply(facts, target, anchor=anchor, resolve=resolve, target_kind=CHANNEL_KIND[channel])
+        check_reply(
+            facts, target, anchor=anchor, resolve=resolve, target_kind=CHANNEL_KIND[channel], own=_own(broker, channel)
+        )
     else:
         rehearsal_fence.check(subject, recipients, (lambda: resolve(anchor)) if anchor else None)
         check_send(facts, recipients, lane=lane, anchor=anchor, resolve=resolve)

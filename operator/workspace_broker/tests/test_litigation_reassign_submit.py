@@ -50,6 +50,13 @@ def test_the_firms_own_sentence_parses_from_to_attorney_and_scope() -> None:
     ("text", "frm", "to", "attorneys", "lit", "statuses"),
     [
         ("Please move Pat's cases to Dana.", ["Pat"], "Dana", [], False, ["Open", "Pending"]),
+        # DL1/DL2 (2026-10-17): a two-word possessive owner, and a name that
+        # ends its sentence does not swallow the next one.
+        ("Please move Pat Doe's cases to Dana Roe.", ["Pat Doe"], "Dana Roe", [], False, ["Open", "Pending"]),
+        ("Please move the cases from Pat Doe to Dana Roe. Let me know when done.",
+         ["Pat Doe"], "Dana Roe", [], False, ["Open", "Pending"]),
+        ("Please move the cases from Pat Doe to Mary J. Smith. Thanks!",
+         ["Pat Doe"], "Mary J. Smith", [], False, ["Open", "Pending"]),
         ("Reassign the files from Pat Example, Sam and Lee Roe to Dana Roe for Chris's cases, including closed ones",
          ["Pat Example", "Sam", "Lee Roe"], "Dana Roe", ["Chris"], False, ["Open", "Pending", "Closed"]),
         ("Can you switch all litigation matters assigned to Pat over to Dana? Open cases only.",
@@ -57,6 +64,7 @@ def test_the_firms_own_sentence_parses_from_to_attorney_and_scope() -> None:
     ],
 )  # fmt: skip
 def test_other_ways_of_asking_parse(text, frm, to, attorneys, lit, statuses) -> None:
+    assert is_reassignment(text)
     got = parse(text)
     assert (got["from_names"], got["to_name"], got["attorney_names"]) == (frm, to, attorneys)
     assert (got["litigation_only"], got["statuses"]) == (lit, statuses)

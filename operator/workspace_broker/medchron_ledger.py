@@ -48,7 +48,7 @@ from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
 from .cycle_window import Window, cycle_window, resolve_anchor, resolve_effective_from
-from .medchron_update import update_block
+from .medchron_update import client_keys, update_block
 from .medchron_coverage import parse_covered, union_coverage, validate_covered
 
 # Re-exported: `validate_covered` moved to medchron_coverage at ss#2834 when this
@@ -118,7 +118,8 @@ CREATE_SQL = (
     "reason TEXT, "
     "folder_id TEXT, "
     "delivery_json TEXT, "
-    "covered_json TEXT"
+    "covered_json TEXT, "
+    "client_keys TEXT"
     ")"
 )
 CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_medchron_jobs_created ON medchron_jobs(created_at)"
@@ -467,17 +468,22 @@ class MedchronLedger:
             # deliberate: rows written before this release have no work digest
             # and must not be guessed at, and `active_duplicate` treats NULL as
             # "not a match" so an old row can never masquerade as a duplicate.
+            #
+            # Same reason, 2026-09-17, for ``covered_json``: the covered/uncovered
+            # document id sets an UPDATE reads its delta from. Nullable on purpose
+            # — a job delivered before this release covered documents nobody
+            # recorded, and a guess would silently drop records from the next
+            # update (which is the whole defect this column exists to close). The
+            # skill treats NULL as "unknown", says so, and submits nothing.
+            #
+            # Same reason, 2026-10-17, for ``client_keys``: the clients a job is
+            # for (medchron_update.client_keys), so a joint matter's delivery
+            # refuses a RUN for its own clients only. NULL on an older row reads
+            # as every client.
             have = {r["name"] for r in conn.execute("PRAGMA table_info(medchron_jobs)")}
-            if "work_digest" not in have:
-                conn.execute("ALTER TABLE medchron_jobs ADD COLUMN work_digest TEXT")
-            # Same reason, 2026-09-17: the covered/uncovered document id sets an
-            # UPDATE reads its delta from. Nullable on purpose — a job delivered
-            # before this release covered documents nobody recorded, and a guess
-            # would silently drop records from the next update (which is the
-            # whole defect this column exists to close). The skill treats NULL
-            # as "unknown", says so, and submits nothing.
-            if "covered_json" not in have:
-                conn.execute("ALTER TABLE medchron_jobs ADD COLUMN covered_json TEXT")
+            for column in ("work_digest", "covered_json", "client_keys"):
+                if column not in have:
+                    conn.execute(f"ALTER TABLE medchron_jobs ADD COLUMN {column} TEXT")
             # After the column exists (the debit groups on it).
             conn.execute(CREATE_WORK_INDEX_SQL)
             conn.commit()
@@ -603,7 +609,7 @@ class MedchronLedger:
         try:
             conn.execute(
                 "INSERT INTO medchron_jobs (id, created_at, updated_at, state, matter_id, matter_number, requester, "
-                "request_ref, envelope_digest, work_digest) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "request_ref, envelope_digest, work_digest, client_keys) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     job_id,
                     now,
@@ -615,6 +621,7 @@ class MedchronLedger:
                     envelope.get("request_ref"),
                     digest(envelope),
                     work_digest(envelope),
+                    json.dumps(client_keys(envelope)),
                 ),
             )
             conn.commit()
