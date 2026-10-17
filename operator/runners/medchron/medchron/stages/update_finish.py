@@ -20,7 +20,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import time
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +30,8 @@ from .. import icd_tables
 from ..audit import claims as CL, coverage as audit_coverage
 from ..audit.page_text import exhibit_paths
 from ..audit.run import AuditPaths
-from ..update import assemble as A, body as B, collect as C, docx_md, proofs as P, review_repair as RR, reviewed as RV
+from ..update import assemble as A, body as B, collect as C, docx_md, handwritten as H, proofs as P
+from ..update import review_repair as RR, reviewed as RV
 from ..update.billing_page import BILLING
 from ..update.select import ALREADY, BLANK, OVERLAP
 from .base import StageRefusal, StageRun, read_json, read_jsonl
@@ -209,21 +212,40 @@ def run_render(sr: StageRun) -> int:
     return 0
 
 
-def _composed(ud: Path, rd: Path) -> tuple[list[str], set[int]]:
-    """Every composed entry in FINAL numbers; an uncited exhibit's entries are
-    checked too, under numbers no exhibit uses."""
+def _remap(ud: Path) -> dict[int, int]:
+    """{composed number: final number}; an uncited exhibit's under numbers no
+    exhibit uses."""
     remap = {int(k): v for k, v in read_json(ud / "remap.json", {}).items()}
-    unc = read_json(ud / "new_exhibits.uncited.json", [])
-    for i, r in enumerate(unc):
+    for i, r in enumerate(read_json(ud / "new_exhibits.uncited.json", [])):
         remap[int(r["composed_as"])] = 10_000 + i
-    comp = C.composed(rd)
+    return remap
+
+
+def _composed(ud: Path, rd: Path, incident_date: str | None = None) -> tuple[list[str], set[int]]:
+    """Every composed entry in FINAL numbers; an uncited exhibit's entries are
+    checked too, under numbers no exhibit uses. A yearless date takes its
+    neighbours' year exactly as collect gave it one (``handwritten.with_years``,
+    same entries, same fallback), so proof 10 reads it on the date the update
+    carries it under rather than on no date at all."""
+    remap = _remap(ud)
+    y = re.match(r"\d{4}", str(incident_date or ""))
+    comp, _ = H.with_years(C.composed(rd), int(y.group()) if y else date.today().year)
 
     def sub(m: Any) -> str:
         n = int(m.group(1))
         return m.group(0).replace(f"Exhibit {n}", f"Exhibit {remap.get(n, n)}", 1)
 
     keep = read_json(ud / "new_exhibits.final.json", [])
+    unc = read_json(ud / "new_exhibits.uncited.json", [])
     return [C.CITED_EX.sub(sub, e) for e in comp], {r["exhibit"] for r in keep} | {10_000 + i for i in range(len(unc))}
+
+
+def _redates(ud: Path) -> tuple[set[str], list[tuple[str, str, set[int]]]]:
+    """The collect stage's handwritten re-dates (``compose_report.json``), in
+    FINAL numbers: the readings they removed, and where each entry moved."""
+    named, moves = H.moves_of(read_json(ud / "compose_report.json", {}))
+    remap = _remap(ud)
+    return named, [(frm, to, {remap.get(n, n) for n in ex}) for frm, to, ex in moves]
 
 
 def run_proofs(sr: StageRun) -> int:
@@ -235,7 +257,8 @@ def run_proofs(sr: StageRun) -> int:
     keep_ex = set(exhibit_paths(out))
     paths = AuditPaths(sr.slug_dir, sr.unit.unit)
     gate, _ = audit_coverage.check(paths, lambda _m: None)
-    composed, new_ex = _composed(ud, rd)
+    composed, new_ex = _composed(ud, rd, sr.job.incident_date)
+    redate_named, redate_moves = _redates(ud)
     rep = read_json(ud / "assemble_report.json", {})
     x = P.Inputs(
         delivered_lines=docx_md.summary_lines(sr.slug_dir / "delivered" / p["chronology"]["name"]),
@@ -251,7 +274,8 @@ def run_proofs(sr: StageRun) -> int:
         gate_passed=gate,
         pre_note_itemized=bool(rep.get("pre_note_itemized")),
         respelled=dict(rep.get("provider_spelling_from_audit") or {}),
-        review_named=RR.named_values(read_json(ud / "review_repair.json", {})),
+        review_named=RR.named_values(read_json(ud / "review_repair.json", {})) | redate_named,
+        redate_moves=redate_moves,
     )
     r = P.run(x)
     for ln in r.lines:

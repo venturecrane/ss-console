@@ -50,16 +50,21 @@ _NOT_NAMES = frozenset(
     "i we and or also thanks thank kindly just now then so ok okay our my her his their".split()
 )
 _WORD = r"[A-Z][A-Za-z'’.\-]*"
-_NAME = rf"{_WORD}(?:[ \t]+{_WORD}){{0,2}}"
+#: A word another name word may FOLLOW: one that does not end a sentence. A
+#: period ends one ("to Dana Roe. Let me know" is "Dana Roe", 2026-10-17)
+#: unless the word is an initial or a title ("Mary J. Smith", "Dr. Roe").
+_WORD_ON = r"(?:[A-Z][A-Za-z'’.\-]*[A-Za-z'’\-]|[A-Z]|(?:[A-Z]|Dr|Mr|Mrs|Ms|Jr|Sr|St)\.)"
+_NAME = rf"(?:{_WORD_ON}[ \t]+){{0,2}}{_WORD}"
 _SEP = r"(?:\s*,\s*(?:and\s+|or\s+)?|\s+(?:and|or|&)\s+|\s*/\s*)"
 _LIST = rf"{_NAME}(?:{_SEP}{_NAME})*"
 _THINGS = r"(?:cases|matters|files|case\s+files)"
 
 #: Reads as a reassignment: a moving verb governing cases, then "to" later in
-#: the sentence; or the word reassign anywhere.
+#: the sentence; or the word reassign anywhere. A possessive owner may be a
+#: full name ("move Pat Doe's cases", 2026-10-17), its words capitalized.
 _INTENT = re.compile(
     rf"(?i)\breassign\w*\b|\b(?:mov(?:e|ing)|transfer\w*|switch\w*|chang(?:e|ing)|updat(?:e|ing))\s+"
-    rf"(?:(?:all|of|the|their|her|his|my|our|these|those|any|open|pending|litigation|remaining|[A-Za-z]+['’]s)\s+){{0,4}}"
+    rf"(?:(?:all|of|the|their|her|his|my|our|these|those|any|open|pending|litigation|remaining|(?-i:{_WORD_ON}[ \t]+){{0,2}}[A-Za-z]+['’]s)\s+){{0,4}}"
     rf"{_THINGS}\b[^.?!]*?\bto\b"
 )
 #: Who from and who to, first match wins: "assigned to A or B to C", "from A to

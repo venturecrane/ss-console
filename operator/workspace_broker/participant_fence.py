@@ -345,12 +345,25 @@ def check_reply(
     anchor: Anchor | None,
     resolve: Callable[[Anchor], Participants],
     target_kind: str,
+    own: Iterable[str] = (),
 ) -> None:
     """A reply answers the anchor's own email or one in its conversation, and
     reaches only someone the anchor allows. ``target_kind`` is the channel's
     message kind (``graph_message`` / ``agentmail_message``). A reply to the
     anchor itself needs no lookup: Graph and AgentMail derive its recipient from
-    that email, so it reaches the anchor's own sender."""
+    that email, so it reaches the anchor's own sender (and, on Graph, the
+    anchor's own To/Cc, every one of them a participant by definition).
+
+    WHO A REPLY REACHES. AgentMail's reply reaches the target's sender only.
+    Graph's (``MsGraphOps.reply``, since 2026-10-08) also copies the target's
+    authored To/Cc (``_request_participants``), so on Graph every firm person on
+    the target email, sender, To and Cc, must be one the anchor allows. ``own``
+    is the seat's own mailbox, which the reply never copies. A firm person the
+    anchor does not allow REFUSES the reply rather than being quietly dropped
+    from its Cc (2026-10-17): the 2026-10-07 rule is that the Operator does not
+    email an attorney the request did not include, and a reply that reaches
+    fewer people than the Operator composed it for is a different email than
+    the one it wrote."""
     if anchor is None:
         raise FenceRefused(FENCE_PARTICIPANTS, "a reply must name the email it answers, and this one names none.")
     if anchor.kind == target_kind and anchor.ident == target:
@@ -363,11 +376,20 @@ def check_reply(
         raise FenceRefused(
             FENCE_PARTICIPANTS, "the reply answers an email outside the conversation of the request it serves."
         )
-    if facts.classify(other.sender) == "firm" and other.sender not in allowed_by_anchor(facts, home):
+    skip = {normalize_address(a) for a in own}
+    reached = other.everyone() if target_kind == "graph_message" else frozenset({other.sender})
+    allowed = allowed_by_anchor(facts, home)
+    refused = sorted(
+        a
+        for a in {normalize_address(r) for r in reached} - skip
+        if a and facts.classify(a) == "firm" and a not in allowed
+    )
+    if refused:
         raise FenceRefused(
             FENCE_PARTICIPANTS,
-            f"the reply would reach {other.sender}, who was not on the request it serves.",
-            [other.sender],
+            f"the reply would reach {', '.join(refused)}, who {'was' if len(refused) == 1 else 'were'} "
+            "not on the request it serves.",
+            refused,
         )
 
 

@@ -226,7 +226,14 @@ def test_update_collect_settles_an_entry_cited_to_a_handwritten_page(tmp_path: P
     got, log = UC._settle_dates(sr, [hand, typed], [{"exhibit": 2, "id": "n1"}])  # type: ignore[arg-type]
     assert got[0].startswith("02/13/2026\n") and got[0].endswith("Adjustment C5. (Exhibit 2 - p. 1)")
     assert got[1] == typed and log == [
-        {"reading": "02/18/2026", "verdict": "redated", "date": "02/13/2026", "provider": "Example Chiropractic"}
+        {
+            "reading": "02/18/2026",
+            "verdict": "redated",
+            "date": "02/13/2026",
+            "provider": "Example Chiropractic",
+            # named to proof 10 (C2, 2026-10-17): where the entry moved and the reading it replaced
+            "moved": {"from": "2026-02-18", "to": "2026-02-13", "exhibits": [2], "removed": ["2/18/2026"]},
+        }
     ]
 
 
