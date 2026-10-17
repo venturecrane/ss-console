@@ -3,11 +3,14 @@ an empty success."""
 
 from __future__ import annotations
 
+import json
 from email.message import EmailMessage
 from pathlib import Path
 
 import pytest
 
+from medchron.deadline import CallDeadlineError
+from medchron.limits import LimitHold
 from medchron.litigation import extract
 from medchron_testkit import make_pdf
 
@@ -166,3 +169,50 @@ def test_extract_matter_is_resumable_and_records_failures(tmp_path):
     assert [r["file_id"] for r in extract.failures(tmp_path)] == ["b"]
     good.unlink()  # a resume does not re-read an extracted file
     assert [r["ok"] for r in extract.extract_matter(tmp_path, rows, None)] == [True, False]
+
+
+def _hold(png):
+    raise LimitHold("cap_usd", "cap_usd: cap reached")
+
+
+def test_a_spend_cap_stop_is_never_a_failure_record(tmp_path):
+    """A1 (2026-10-17): a LimitHold from vision was recorded `reader_error:
+    LimitHold`, and extract_matter's resume filter made it permanent."""
+    with pytest.raises(LimitHold):
+        _x(tmp_path, "a.png", b"x", ocr=_hold)
+
+
+def test_a_network_give_up_is_never_a_failure_record(tmp_path):
+    def gone(png):
+        raise CallDeadlineError("litigation_ocr: deadline, on all 3 attempts")
+
+    with pytest.raises(CallDeadlineError):
+        _x(tmp_path, "a.png", b"x", ocr=gone)
+
+
+def test_a_genuine_reader_crash_is_still_a_failure_record(tmp_path):
+    def broken(png):
+        raise ValueError("bad image")
+
+    rec = _x(tmp_path, "a.png", b"x", ocr=broken)
+    assert not rec["ok"] and rec["problem"] == "reader_error: ValueError"
+
+
+def test_a_stopped_matter_resumes_and_reads_the_file_again(tmp_path):
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "a.png").write_bytes(b"x")
+    (raw / "b.png").write_bytes(b"y")
+    rows = [
+        {"id": "a", "name": "A", "ok": True, "path": str(raw / "a.png"), "ext": ".png"},
+        {"id": "b", "name": "B", "ok": True, "path": str(raw / "b.png"), "ext": ".png"},
+    ]
+    with pytest.raises(LimitHold):
+        extract.extract_matter(tmp_path, rows, _hold)
+    assert extract.failures(tmp_path) == []
+    # a STOP record an older run wrote is dropped on resume, never kept
+    (tmp_path / "extracted.jsonl").write_text(
+        json.dumps({"file_id": "a", "name": "A", "ok": False, "problem": "reader_error: LimitHold"}) + "\n"
+    )
+    out = extract.extract_matter(tmp_path, rows, lambda png: "TRANSCRIBED PAGE")
+    assert [r["ok"] for r in out] == [True, True]
