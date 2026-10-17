@@ -1,0 +1,45 @@
+#!/bin/bash
+# ops-migrate-to-workspace <app> <list-file> (run ON smd-ops, as ops): move
+# archived laptop material from smd-ops (/home/ops/archive) to a client's ops
+# workspace, prove it, then remove it from smd-ops.
+#
+# list-file: one path per line, relative to /home/ops/archive and starting with
+# <host>/<area>/ (e.g. "mac23/smd-medchron-data/." for a whole area, or
+# "mac23/home/Downloads/AP - x.docx" for one file). For each line the files are
+# hashed HERE, streamed to <app>:/home/ops/archive/<same path>, and checked
+# THERE against a fresh manifest written next to them
+# (<host>/<area>/.manifest-migrated-<time>.sha256, paths relative to the area,
+# the layout laptop-offboard.py reads). Only a line whose every file verifies is
+# removed from smd-ops. FLY_API_TOKEN must reach <app> (a short-lived deploy
+# token for it; revoke it afterwards).
+set -uo pipefail
+app="$1"; list="$2"
+A=/home/ops/archive
+log="$HOME/logs/migrate-$app-$(date -u +%Y%m%dT%H%M%S).log"
+exec > >(tee -a "$log") 2>&1
+remote() { fly ssh console -a "$app" -u ops --pty=false -C "$1"; }
+ok=0; bad=0
+while IFS= read -r -u 3 rel || [ -n "$rel" ]; do
+  [ -z "$rel" ] && continue
+  host=${rel%%/*}; rest=${rel#*/}; area=${rest%%/*}; inner=${rest#"$area"}; inner=".${inner}"
+  base="$A/$host/$area"
+  [ -e "$base/$inner" ] || { echo "MISSING $rel"; bad=$((bad + 1)); continue; }
+  tag=$(date +%s%N)
+  man=$(mktemp)
+  (cd "$base" && find "$inner" -type f ! -name '.manifest-*.sha256' ! -name '.sync.sha256' -print0 | xargs -0 -r sha256sum) > "$man"
+  n=$(wc -l < "$man")
+  (cd "$base" && tar -cf - --exclude='.manifest-*.sha256' "$inner") \
+    | remote "sh -c 'mkdir -p $A/$host/$area && tar -xf - -C $A/$host/$area'" > /dev/null 2>&1
+  remote "sh -c 'cat > $A/$host/$area/.manifest-migrated-$tag.sha256'" < "$man" > /dev/null 2>&1
+  mism=$(remote "sh -c 'cd $A/$host/$area && sha256sum -c --quiet .manifest-migrated-$tag.sha256 2>&1 | wc -l'" < /dev/null 2>/dev/null | tail -1 | tr -d ' \r')
+  if [ "$n" -gt 0 ] && [ "$mism" = "0" ]; then
+    echo "VERIFIED $rel ($n files); removing from smd-ops"
+    (cd "$base" && rm -rf -- "$inner") 2>/dev/null || (cd "$base" && find "$inner" -type f -delete)
+    ok=$((ok + 1))
+  else
+    echo "FAILED $rel ($n files, mismatches=${mism:-unknown}); kept on smd-ops"
+    bad=$((bad + 1))
+  fi
+  rm -f "$man"
+done 3< "$list"
+echo "DONE verified=$ok failed=$bad"

@@ -1,0 +1,55 @@
+#!/bin/bash
+# ops-idle-stop (cron, every 10 min, client workspaces only): stop the Machine
+# when it has been idle for IDLE_MINUTES, so a workspace costs nothing between
+# uses. The volume and everything on it stay; `ops <client>` starts it again.
+#
+# Busy means ANY of, checked every run:
+#   * a tmux client is attached (the Captain is connected);
+#   * a job process runs as ops: python, uv, node (other than Claude Code and its
+#     MCP servers), fly ssh/sftp, rsync, tar, curl (chronologies are python;
+#     transfers are fly/tar);
+#   * a lock in ~/locks/ whose pid is alive (ops-job holds one for any command);
+#   * the Machine has been up less than IDLE_MINUTES.
+# Idle for IDLE_MINUTES straight (state/last-busy older than that) -> write
+# state/stop-requested, which the entrypoint turns into a clean exit.
+#
+# A detached Claude session with nothing running is idle on purpose: the
+# conversation survives (claude --resume), the Machine does not keep billing.
+set -uo pipefail
+IDLE_MINUTES="${IDLE_MINUTES:-60}"
+S="$HOME/state"; mkdir -p "$S"
+now=$(date +%s)
+
+reason=""
+if tmux list-clients 2>/dev/null | grep -q .; then reason="tmux client attached"; fi
+if [ -z "$reason" ]; then
+  job=$(ps -u "$(id -u)" -o pid=,args= | awk '
+    $2 ~ /(^|\/)(python[0-9.]*|uv|uvx|rsync|tar|curl)$/ {print; exit}
+    $2 ~ /(^|\/)(fly|flyctl)$/ && ($3=="ssh" || $3=="sftp") {print; exit}
+    $2 ~ /(^|\/)node$/ && $0 !~ /claude|crane|mcp/ {print; exit}')
+  [ -n "$job" ] && reason="job running: ${job:0:80}"
+fi
+if [ -z "$reason" ]; then
+  for l in "$HOME"/locks/*.lock; do
+    [ -f "$l" ] || continue
+    pid=$(cat "$l" 2>/dev/null)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then reason="lock $(basename "$l")"; break; fi
+    rm -f "$l"
+  done
+fi
+up=$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)
+[ -z "$reason" ] && [ "$up" -lt $((IDLE_MINUTES * 60)) ] && reason="up ${up}s"
+
+if [ -n "$reason" ]; then
+  echo "$now" > "$S/last-busy"
+  echo "$(date -u +%FT%TZ) busy: $reason"
+  exit 0
+fi
+last=$(cat "$S/last-busy" 2>/dev/null || echo "$now")
+idle=$(( (now - last) / 60 ))
+if [ "$idle" -ge "$IDLE_MINUTES" ]; then
+  echo "$(date -u +%FT%TZ) idle ${idle}m; requesting stop"
+  : > "$S/stop-requested"
+else
+  echo "$(date -u +%FT%TZ) idle ${idle}m of ${IDLE_MINUTES}"
+fi

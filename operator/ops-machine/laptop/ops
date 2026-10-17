@@ -1,0 +1,36 @@
+#!/bin/bash
+# ops <client>: open a client's ops workspace from a laptop. One command, the
+# same every time: starts the workspace if it is stopped, then puts the Captain
+# in its Claude session (a task handed over with ops-handoff opens first).
+#   ops ap          A&P's workspace (aliases come from workspaces.json)
+#   ops             list the workspaces
+# Uses the laptop's own Fly login (seat work stays on the laptops).
+set -uo pipefail
+reg="$HOME/.claude/smd-ops-workspaces.json"
+[ -f "$reg" ] || { echo "no workspace list at $reg (run operator/ops-machine/laptop/install.sh)"; exit 1; }
+if [ -z "${1:-}" ]; then
+  jq -r '.workspaces | to_entries[] | "  ops \(.value.aliases[0] // .key)    \(.key)  (\(.value.app))"' "$reg"
+  exit 0
+fi
+app=$(jq -r --arg a "$1" '.workspaces | to_entries[] | select(.key==$a or (.value.aliases // [] | index($a))) | .value.app' "$reg" | head -1)
+[ -n "$app" ] || { echo "no workspace called $1. Known:"; "$0"; exit 1; }
+
+ops_wake() {  # start the Machine if needed and wait until ssh answers
+  local id state i
+  id=$(fly machine list -a "$app" --json 2>/dev/null | jq -r '.[0].id // empty')
+  state=$(fly machine list -a "$app" --json 2>/dev/null | jq -r '.[0].state // empty')
+  [ -n "$id" ] || { echo "$app has no machine (fly status -a $app)"; return 1; }
+  if [ "$state" != "started" ]; then
+    echo "starting $app..."
+    fly machine start "$id" -a "$app" >/dev/null 2>&1 || true
+  fi
+  for i in $(seq 1 30); do
+    fly ssh console -a "$app" -u ops -C true </dev/null >/dev/null 2>&1 && return 0
+    sleep 3
+  done
+  echo "$app did not answer over ssh; try again, or: fly status -a $app"; return 1
+}
+
+[ "${OPS_WAKE_ONLY:-}" = 1 ] && { ops_wake; exit $?; }
+ops_wake || exit 1
+exec fly ssh console -a "$app" -u ops --pty -C /opt/ops/bin/ops-attach

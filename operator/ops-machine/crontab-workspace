@@ -1,0 +1,7 @@
+# A client ops workspace's schedule (smd-ops has its own, ./crontab). Installed
+# to /home/ops/.crontab on first boot by the entrypoint; edit it there.
+PATH=/home/ops/bin:/opt/ops/bin:/usr/local/bin:/usr/bin:/bin
+HOME=/home/ops
+TZ=America/Phoenix
+# Stop the Machine when nobody is attached and no job is running (see the script).
+*/10 * * * * /opt/ops/bin/ops-idle-stop >> /home/ops/logs/idle-stop.log 2>&1

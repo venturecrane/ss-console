@@ -1,0 +1,11 @@
+#!/bin/bash
+# ops-deliver <dir> [YYYY-MM-DD]: mark a piece of client work as delivered. The
+# daily sweep (ops-sweep) deletes the directory RETENTION_DAYS (30) after this
+# date, keeping only a sha256 ledger of what it held. Re-running moves the date.
+set -euo pipefail
+d="${1:?usage: ops-deliver <dir> [YYYY-MM-DD]}"
+[ -d "$d" ] || { echo "not a directory: $d"; exit 1; }
+date="${2:-$(date +%F)}"
+date -d "$date" +%F >/dev/null 2>&1 || { echo "not a date: $date"; exit 1; }
+printf '%s\n' "$date" > "$d/.DELIVERED"
+echo "marked $(cd "$d" && pwd) delivered $date; removed after $(date -d "$date + 30 days" +%F)"
