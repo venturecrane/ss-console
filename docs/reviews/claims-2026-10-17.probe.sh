@@ -138,7 +138,10 @@ check N13 FIXED exact "[1] []" "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator/
 check PCN14 FIXED at-least 1 "$(c pyyaml operator/pyproject.toml)" "instrument live: operator deps are read"
 check N14 FIXED at-least 1 "$(( $(c cryptography operator/pyproject.toml) + $(c 'with cryptography' operator/bin/decommission-customer.sh) ))" "live decommission can sign its packet"
 check PCN15 FIXED at-least 1 "$(c person $SB/sr1_form.py)" "instrument live: sr1_form checks person for the client"
-check N15 OPEN exact 0 "$(grep -A4 'def _other_driver' $SB/sr1_form.py | grep -c person)" "SR1 prints a company as the other driver"
+# N15 RESTATED 10-17: the person check lives in gather() since #3072 (pinned by
+# test_a_company_on_the_other_side_is_never_the_other_driver); the old instrument
+# grepped 4 lines after _other_driver and read 0 on correct code.
+check N15 FIXED exact 1 "$(c 'if other and isinstance(other.get("person"), dict)' $SB/sr1_form.py)" "SR1 other driver is a person only (company never printed)"
 
 # ================================================ NEW 10-06: operator/skills
 check N16 FIXED exact 0 "$(c 'handover_only=all(e.handover for e in listed)' operator/skills/task-list-keeper/review.py)" "closes-only task email has its own lead"
@@ -162,7 +165,11 @@ check R6  FIXED exact 0 "$(grep -rn 'JSON.parse(quote.line_items)' src/lib | n)"
 check R6b FIXED exact 1 "$(grep -rnE 'function stripeHeaders|stripeHeaders\s*=' src/lib | n)" "stripeHeaders defined once"
 check R8  FIXED exact 0 "$(comm -23 <(ls docs/adr | grep -oE '^0[0-9]{3}' | sort -u) <(grep -oE '\b0[0-9]{3}\b' docs/handbook/adr-index.md | sort -u) | n)" "handbook ADR index lists every ADR"
 
-# ================================================ NEW 10-17: medchron (A, B, C)
+# ===================================================== NEW 10-17 (fixed same day)
+# Found and fixed 10-17: #3266 (demand), #3267 (broker), #3268 (connectors),
+# #3270 (medchron). IDs carry a K prefix: the bare A1/B1-B4 ids above are older
+# claims. Expectations are the values measured on main after the merges, so a
+# returning defect reads REGRESSED. DB2/DB3 stay OPEN with the smd-ops session.
 MCR=operator/runners/medchron
 A1_PY='import sys,types,pathlib,tempfile
 for m in ("yaml","httpx"): sys.modules.setdefault(m,types.ModuleType(m))
@@ -172,49 +179,39 @@ d=pathlib.Path(tempfile.mkdtemp()); p=d/"a.png"; p.write_bytes(b"x")
 def ocr(b): raise LimitHold("cap_usd","cap_usd: cap reached")
 try: print(extract_file(p,".png",d/"a.txt",ocr)["problem"])
 except LimitHold: print("raised")'
-check A1  OPEN exact "reader_error: LimitHold" "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$MCR python3 -c "$A1_PY" 2>&1 | tail -1)" "litigation extract records a spend-cap stop as an unreadable file (permanent)"
-check PCB1 FIXED at-least 1 "$(c '_CONDITIONAL.search' $MC/demand/premise.py)" "instrument live: premise reads _CONDITIONAL"
-check B1  OPEN exact 2 "$(c '^_CONDITIONAL = re.compile' $MC/demand/premise.py)" "demand premise: limits regex shadowed, conditional-limits fact never emitted"
-check B2  OPEN exact 1 "$(c 'retry = \[r for r in rows if not r.get("ok") and r.get("http_status") != HTTP_ABSENT\]' $MC/demand/pull.py)" "demand/drafting pull fails forever on one HTTP 403 file"
-B3_PY='from types import SimpleNamespace as S; from medchron.demand import crosscheck, deliver, house_numbered as hn
-f={k:"x" for k in hn.FRONT_KEYS}; f.update(client="A B", dol="01/15/2026")
-md="---\n"+"\n".join(f"{k}: {v}" for k,v in f.items())+"\n---\nBody\n"
-facts={"client_names":["A B"],"client_name":"A B","date_of_loss":"01/15/2026"}
-print(len(crosscheck.check(md,facts,deliver.front_keys(S(data={})))["mismatches"]))'
-check B3  OPEN exact 1 "$(PYTHONDONTWRITEBYTECODE=1 uv run -q --no-project --with pyyaml --with httpx env PYTHONPATH=$MCR python3 -c "$B3_PY" 2>&1 | tail -1)" "resume after render reviews a Craig demand against house keys (holds every redo)"
+check KA1 FIXED exact raised "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$MCR python3 -c "$A1_PY" 2>&1 | tail -1)" "a spend-cap stop in litigation extract halts the job, never 'unreadable'"
+check PCKB1 FIXED at-least 1 "$(c '_CONDITIONAL_LIMITS.search' $MC/demand/premise.py)" "instrument live: decide() reads the limits regex"
+check KB1 FIXED exact 0 "$(c '^_CONDITIONAL = re.compile' $MC/demand/premise.py)" "conditional-limits regex is no longer shadowed"
+check KB2 FIXED exact 0 "$(c 'retry = \[r for r in rows if not r.get("ok") and r.get("http_status") != HTTP_ABSENT\]' $MC/demand/pull.py)" "a 403 file is recorded, not a fatal pull failure"
+# KB3 restated: the old instrument measured an unselected firm, house keys by design.
+check KB3 FIXED exact 1 "$(c 'def test_a_redo_after_render_reviews_the_mapped_attorneys_demand_in_his_own_format' $MCR/tests/test_demand_attorney_format.py)" "a redo after render reviews in the selected format (test-pinned)"
 B4_PY='import json,tempfile,pathlib; from medchron.demand import seed
 r=pathlib.Path(tempfile.mkdtemp()); (r/"old/data").mkdir(parents=True)
 (r/"old/data/state.json").write_text(json.dumps({"render":{"status":"done"},"review":{"status":"done"}}))
 seed.seed(r/"new", r/"old"); print(sorted(json.loads((r/"new/data/state.json").read_text())))'
-check B4  OPEN exact "['review']" "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$MCR python3 -c "$B4_PY" 2>&1 | tail -1)" "demand re-run inherits review:done, files a fresh render unreviewed"
+check KB4 FIXED exact "[]" "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$MCR python3 -c "$B4_PY" 2>&1 | tail -1)" "a demand re-run reviews its fresh render again"
 C1_PY='import tempfile,types,pathlib; from medchron.stages import vision as V
 d=pathlib.Path(tempfile.mkdtemp()); (d/"text").mkdir(); (d/"text"/"X.txt").write_text("[p.1]\nFax\n[p.2]\nTyped body\n")
 f={"rec":{"id":"X","name":"r.pdf"},"npages":2,"done":{1:V.FAILED},"part":d/"p.jsonl","only":[1]}
 V._finish(types.SimpleNamespace(slug_dir=d,log=lambda m:None),f,d/"ocr_results.jsonl"); print((d/"ocr_results.jsonl").exists())'
-check C1  OPEN exact False "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$MCR uv run --no-project -q --with pyyaml --with httpx --with anthropic --with pymupdf --with pypdf --with python-docx python3 -c "$C1_PY" 2>&1 | tail -1)" "a failed vision page on a text-layer PDF is never disclosed in Limitations"
-C2_PY='from datetime import date; from medchron.update import proofs as P, handwritten as H
-c="01/04/2025\nAcme Chiropractic | Treatment\n\nBlood pressure 128/84, pulse 76. (Exhibit 7 - p. 3)"
-s,_=H.redate(c,{date(2025,1,21)},(),("redated",date(2025,1,21)))
-print(len(P.dropped_values([c],[s],{7},set())))'
-check C2  OPEN exact 1 "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$MCR python3 -c "$C2_PY" 2>&1 | tail -1)" "collect-stage redate reads as a lost value: proof 10 fails the update"
-
-# ======================================== NEW 10-17: broker / connectors / ops (D)
+check KC1 FIXED exact True "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$MCR uv run --no-project -q --with pyyaml --with httpx --with anthropic --with pymupdf --with pypdf --with python-docx python3 -c "$C1_PY" 2>&1 | tail -1)" "a failed vision page on a text-layer PDF is disclosed"
+# KC2 restated: the old instrument called dropped_values with no move information.
+check KC2 FIXED exact 1 "$(c 'def test_a_collect_redate_is_not_read_as_a_lost_value' $MCR/tests/test_update_collect_redate_proof10.py)" "a collect-stage redate is not a lost value (test-pinned)"
 D1_PY='import sys,types; sys.modules.setdefault("yaml",types.ModuleType("yaml"))
 from workspace_broker.participant_fence import *
 f=SeatFacts(internal_domains=frozenset({"firm.com"}))
 home=Participants(sender="christa@firm.com",to=("op@firm.com",),conversation_id="C",message_id="M1")
 later=Participants(sender="christa@firm.com",to=("op@firm.com",),cc=("attorney@firm.com",),conversation_id="C",message_id="M2")
 db={Anchor("graph_message","M1"):home,Anchor("graph_message","M2"):later}
-r=check_reply(f,"M2",anchor=Anchor("graph_message","M1"),resolve=db.__getitem__,target_kind="graph_message")
-print("passed" if r is None else r, "attorney_on_anchor=", "attorney@firm.com" in allowed_by_anchor(f,home))'
-check D1  OPEN exact "passed attorney_on_anchor= False" "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator python3 -c "$D1_PY" 2>&1 | tail -1)" "reply fence checks only the target's sender; reply() cc's its To/Cc"
-check PCD1 FIXED exact 1 "$(c 'cc = \[\] if redirect else self._request_participants(source, sender, policy)' operator/workspace_broker/msgraph_ops.py)" "instrument live: msgraph reply cc's the target's participants"
-DL1_PY='from workspace_broker.litigation_verbs import LitigationVerbs; from workspace_broker.litigation_reassign import parse
+try: r=check_reply(f,"M2",anchor=Anchor("graph_message","M1"),resolve=db.__getitem__,target_kind="graph_message"); print("passed")
+except FenceRefused: print("refused")'
+check KD1 FIXED exact refused "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator python3 -c "$D1_PY" 2>&1 | tail -1)" "a reply that would copy a firm person off the request is refused"
+check PCKD1 FIXED exact 1 "$(c 'cc = \[\] if redirect else self._request_participants(source, sender, policy)' operator/workspace_broker/msgraph_ops.py)" "instrument live: msgraph reply cc's the target's participants"
+DL1_PY='from workspace_broker.litigation_verbs import LitigationVerbs
 t="Please move Pat Doe'"'"'s cases to Dana Roe."; print(LitigationVerbs._kind("request", t, {"staff_reassignment":"enabled"})[0])'
-check DL1 OPEN exact status "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator python3 -c "$DL1_PY" 2>&1 | tail -1)" "two-word possessive reassignment is queued as a status list"
-check DL2 OPEN exact "Dana Roe. Let" "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator python3 -c 'from workspace_broker.litigation_reassign import parse; print(parse("Please move the cases from Pat Doe to Dana Roe. Let me know when done.")["to_name"])' 2>&1 | tail -1)" "reassign to-name swallows the next sentence"
-check DL3 OPEN exact 1 "$(c "WHERE matter_id=? AND state='delivered'" operator/workspace_broker/medchron_update.py)" "joint matter: client B's first chronology refused (per-matter, runner is per-client)"
-check PCDL3 FIXED at-least 1 "$(c 'L.name_pattern(template, u.client_name) for u in sr.job.units' $MC/stages/listing.py)" "instrument live: runner guard is per client"
+check KDL1 FIXED exact reassign "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator python3 -c "$DL1_PY" 2>&1 | tail -1)" "a two-word possessive reassignment is a reassignment"
+check KDL2 FIXED exact "Dana Roe" "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator python3 -c 'from workspace_broker.litigation_reassign import parse; print(parse("Please move the cases from Pat Doe to Dana Roe. Let me know when done.")["to_name"])' 2>&1 | tail -1)" "the to-name stops at the sentence end"
+check KDL3 FIXED exact 1 "$(c 'def test_a_joint_matters_delivery_refuses_only_its_own_clients' operator/workspace_broker/tests/test_medchron_verbs.py)" "joint matter: the refusal is per client (test-pinned)"
 DC1_PY='from smokeball_connector.library import resolve_template, LibraryConfig
 class C:
     def get(self, path, **kw):
@@ -222,18 +219,18 @@ class C:
         raise RuntimeError("HTTP 429")
 r=resolve_template(C(), LibraryConfig(authored=True, matter_number="LIB", folder_name="Templates"), "letter")
 print(type(r).__name__, getattr(r,"transient",None))'
-check DC1 OPEN exact "NotResolved False" "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator/connectors/smokeball uv run -q --no-project --with httpx --with pyyaml python3 -c "$DC1_PY" 2>&1 | tail -1)" "a failed library listing reads as 'form missing' (non-transient)"
-check DC2 OPEN exact 1 "$(c 'if out.get("status") in ("filed", readback.MISMATCH, readback.NOT_VISIBLE):' $SB/police_request.py)" "police request says 'Filed:' when the read-back failed"
+check KDC1 FIXED exact "NotResolved True" "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator/connectors/smokeball uv run -q --no-project --with httpx --with pyyaml python3 -c "$DC1_PY" 2>&1 | tail -1)" "a failed library listing is transient, never 'form missing'"
+check KDC2 FIXED at-least 1 "$(c 'Uploaded, not confirmed' $SB/police_request.py)" "an unconfirmed police-request upload is never reported as filed"
 DS1_STUB=$(mktemp); printf '#!/bin/sh\necho "{\\"ok\\": false, \\"refused\\": false, \\"error\\": \\"refresh_token_not_persisted\\", \\"detail\\": \\"\\"}"\n' > "$DS1_STUB"; chmod +x "$DS1_STUB"
-check DS1 OPEN exact "('unchecked', 'refresh_token_not_persisted', '')" "$(SMD_CONNECTOR_VENV_PYTHON=$DS1_STUB PYTHONDONTWRITEBYTECODE=1 python3 -c 'import importlib.util as u; s=u.spec_from_file_location("p","operator/skills/connector-auth-check/pre_run.py"); m=u.module_from_spec(s); s.loader.exec_module(m); print(m.check())' 2>&1 | tail -1)" "an unsaved Smokeball refresh token no longer pages"
+check KDS1 FIXED exact "('unsaved', 'refresh_token_not_persisted', '')" "$(SMD_CONNECTOR_VENV_PYTHON=$DS1_STUB PYTHONDONTWRITEBYTECODE=1 python3 -c 'import importlib.util as u; s=u.spec_from_file_location("p","operator/skills/connector-auth-check/pre_run.py"); m=u.module_from_spec(s); s.loader.exec_module(m); print(m.check())' 2>&1 | tail -1)" "an unsaved Smokeball refresh token is its own paging outcome"
 rm -f "$DS1_STUB"
 DB1_PY='from datetime import datetime,timezone; from bin.lib import work_health as wh, work_health_sources as src
 cfg=wh.load_config(); now=datetime(2026,10,16,20,tzinfo=timezone.utc); R=lambda i,t,a,m:{"id":i,"ts":t,"action_type":a,"metadata":m}
 rows=[R("1","2026-10-16T10:00:00Z","MEDCHRON_JOB_SUBMITTED",{"job_id":"j1"}),R("2","2026-10-16T11:00:00Z","MEDCHRON_JOB_HELD",{"job_id":"j1","reason":"review_held"}),R("3","2026-10-16T12:00:00Z","MEDCHRON_JOB_DELIVERED",{"job_id":"j1"}),R("4","2026-10-16T12:05:00Z","DELIVERY_PROOF_FAILED",{"job_id":"j1","lane":"medchron","code":"readback_mismatch"})]
 print(len(wh.job_items("s",rows,cfg,now)), len(src.delivery_proof_items("s",rows,cfg,now)))'
-check DB1 OPEN exact "0 0" "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator uv run -q --no-project --with pyyaml python3 -c "$DB1_PY" 2>&1 | tail -1)" "a proof failure after an earlier hold never reaches work-health"
-check DB2 OPEN exact 1 "$(grep -o '\$status' operator/ops-machine/bin/ops-triage | n)" "ops-triage ignores work-health's exit (crash = green ping, no email)"
-check DB3 OPEN exact 1 "$(c "newermt '-60 minutes'" operator/ops-machine/laptop-offboard.sh)" "laptop offboard deletes whole verified dirs incl. memory/, guarded only by mtime"
+check KDB1 FIXED exact "0 1" "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator uv run -q --no-project --with pyyaml python3 -c "$DB1_PY" 2>&1 | tail -1)" "a proof failure after a released hold reaches work-health"
+check KDB2 OPEN exact 1 "$(grep -o '\$status' operator/ops-machine/bin/ops-triage | n)" "ops-triage ignores work-health's exit (smd-ops session fixing)"
+check KDB3 OPEN exact 1 "$(c "newermt '-60 minutes'" operator/ops-machine/laptop-offboard.sh)" "laptop offboard deletes whole verified dirs incl. memory/ (smd-ops session fixing)"
 
 echo
 echo "  $pass closed · $still_open still open · $regressed regressed · $drift changed"
