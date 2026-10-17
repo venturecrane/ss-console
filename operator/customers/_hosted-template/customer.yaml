@@ -181,9 +181,10 @@ safety:
 # ---- TELEGRAM ----
 # Per-customer bot (BotFather; see docs/runbooks/hosted-agent/). Token is
 # staged as a Fly secret, never here. Allowlist is MANDATORY (fails open
-# when empty).
+# when empty). Delete this block when the buyer has no Telegram handle.
 telegram:
-  allowed_users:
+  enabled: true
+  allow_from:
     - '[BUYER TELEGRAM NUMERIC ID — resolve from the handle at go-live]'
 
 # ---- VOICE LIBRARY ----
