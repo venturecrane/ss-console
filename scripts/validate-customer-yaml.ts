@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
 
 import { validate } from '../src/lib/operator/customer-yaml'
+import { telegramDeprecationNotes } from '../src/lib/operator/customer-yaml/sections-telegram'
 import {
   armingViolations,
   customerNameFloorViolations,
@@ -101,6 +102,10 @@ if (!result.ok) {
     process.stderr.write(`  [${e.code}] ${e.path}: ${e.message}\n`)
   }
   process.exit(1)
+}
+
+for (const note of telegramDeprecationNotes(parsed)) {
+  process.stderr.write(`note: ${note}\n`)
 }
 
 // Author-time guardrail (#1206): catch a bound-but-undeployed skill HERE, at the
