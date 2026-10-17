@@ -181,6 +181,33 @@ personas:
         schedule: '[PARTNER 2 CHECK-IN CRON, UTC]'
         wake_policy: always
         space: person:p2
+      - skill: gratitude-prompts
+        schedule: '[PARTNER 1 GRATITUDE CRON, UTC]'
+        wake_policy: always
+        space: person:p1
+      - skill: gratitude-prompts
+        schedule: '[PARTNER 2 GRATITUDE CRON, UTC]'
+        wake_policy: always
+        space: person:p2
+      # Daily: a private reminder ahead of each shared date (silent otherwise).
+      - skill: dates-to-remember
+        schedule: '[DAILY REMINDER CRON, UTC]'
+        wake_policy: always
+        space: person:p1
+      - skill: dates-to-remember
+        schedule: '[DAILY REMINDER CRON, UTC]'
+        wake_policy: always
+        space: person:p2
+      # Daily: the couple's price watches, reported to the group when one is
+      # under its target (silent otherwise).
+      - skill: travel
+        schedule: '[DAILY REMINDER CRON, UTC]'
+        wake_policy: always
+        space: shared
+      - skill: weekly-checkin-agenda
+        schedule: '[WEEKLY CHECK-IN AGENDA CRON, UTC]'
+        wake_policy: always
+        space: shared
 
 # ---- CONNECTORS ----
 connectors:
@@ -199,6 +226,44 @@ webhook_triggers:
     event_type: message.received
     skill: inbox-triage
     persona: '[AGENT NAME, lowercased]'
+
+# ---- RECORD STORES ----
+# What the couples skills keep. Every store is private per space: a record's
+# owner field names a person id (p1, p2) or shared, and each turn lists, reads
+# and writes only records in spaces it may read (ADR 0091). No readers: on a
+# seat that authors people: the validator refuses them. A write from a private
+# chat into a shared record is held until that partner confirms it ("share
+# it", overlay hermes-smd-space-gate). On the volume, so records survive a
+# reprovision.
+record_stores:
+  - name: couples-checkin
+    path: /opt/data/couples/checkin
+    owner_field: owner
+    index: [kind, topic, date]
+  - name: gratitude
+    path: /opt/data/couples/gratitude
+    owner_field: owner
+    index: [kind, date]
+  - name: dates
+    path: /opt/data/couples/dates
+    owner_field: owner
+    index: [kind, title, date]
+  - name: date-nights
+    path: /opt/data/couples/date-nights
+    owner_field: owner
+    index: [idea, status, last_tried]
+  - name: trips
+    path: /opt/data/couples/trips
+    owner_field: owner
+    index: [kind, trip, start_date, end_date]
+  - name: lists
+    path: /opt/data/couples/lists
+    owner_field: owner
+    index: [kind, title, due]
+  - name: journal
+    path: /opt/data/couples/journal
+    owner_field: owner
+    index: [date, title]
 
 # ---- SCOPE ----
 scope:

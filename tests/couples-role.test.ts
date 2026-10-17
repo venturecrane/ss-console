@@ -38,6 +38,7 @@ const role = parseYaml(readFileSync(resolve(ROLE_DIR, 'role.yaml'), 'utf8')) as 
   routines: RoleRoutine[]
   required_connections: unknown[]
   privacy: { model: string }
+  record_stores: string[]
 }
 const template = parseYaml(readFileSync(resolve(role.seat_template), 'utf8')) as {
   seat: { role: string; product: string }
@@ -45,6 +46,7 @@ const template = parseYaml(readFileSync(resolve(role.seat_template), 'utf8')) as
     skills: Array<{ name: string; enabled: boolean; settings?: Record<string, unknown> }>
     cron: Array<{ skill: string; space: string }>
   }>
+  record_stores: Array<{ name: string; path: string; owner_field?: string; readers?: unknown }>
 }
 
 describe('couples role package', () => {
@@ -72,6 +74,43 @@ describe('couples role package', () => {
     const got = template.personas[0].cron.map((c) => `${c.skill}@${c.space}`).sort()
     const want = role.routines.map((r) => `${r.skill}@${r.space}`).sort()
     expect(got).toEqual(want)
+  })
+
+  it('the template authors exactly the role record stores, each private per space', () => {
+    expect(template.record_stores.map((s) => s.name).sort()).toEqual([...role.record_stores].sort())
+    for (const store of template.record_stores) {
+      // owner_field makes the store private per space (a person id or shared);
+      // without it every record is shared and a gift list could not stay private.
+      expect(store.owner_field, store.name).toBe('owner')
+      expect(store.readers, store.name).toBeUndefined()
+    }
+  })
+
+  it('every store a built skill names is authored on the template', () => {
+    const authored = new Set(template.record_stores.map((s) => s.name))
+    for (const skill of role.skills.filter((s) => s.built)) {
+      const body = readFileSync(resolve('operator/skills', skill.name, 'SKILL.md'), 'utf8')
+      const m = body.match(/^\s+stores: \[([^\]]*)\]$/m)
+      for (const name of (m?.[1] ?? '')
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean)) {
+        expect(authored.has(name), `${skill.name} names store ${name}`).toBe(true)
+      }
+    }
+  })
+
+  it('no couples skill offers a tool this persona does not have', () => {
+    // ADR 0090 R2: no terminal, code, file or delegation tools on this persona.
+    const banned =
+      /\b(write_file|read_file|search_files|patch|terminal|execute_code|delegate_task|workspace_drive_upload)\(?/
+    for (const skill of role.skills.filter(
+      (s) => s.built && s.name !== 'workspace' && s.name !== 'inbox-triage'
+    )) {
+      const body = readFileSync(resolve('operator/skills', skill.name, 'SKILL.md'), 'utf8')
+      const used = [...body.matchAll(/`([a-z_]+)`/g)].map((x) => x[1]).filter((t) => banned.test(t))
+      expect(used, skill.name).toEqual([])
+    }
   })
 
   for (const skill of role.skills) {
