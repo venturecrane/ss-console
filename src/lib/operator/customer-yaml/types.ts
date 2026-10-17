@@ -533,6 +533,11 @@ export interface PersonaCron {
   schedule: string
   pre_run: string | null
   wake_policy: WakePolicy
+  /**
+   * The run's space and its delivery target on a space-mode seat (ADR 0091):
+   * `person:<id>` or `shared`. Present only when authored.
+   */
+  space?: string
 }
 
 /**
@@ -1130,6 +1135,13 @@ export interface Memory {
    */
   r2_skill_bodies_bucket: string | null
   r2_skill_bodies_prefix: string | null
+  /**
+   * Hermes native memory switches, passed through to the profile config
+   * (`config.memory`). Present only when authored. A seat that authors
+   * `people:` must author both as `false` (ADR 0091 enforcement point 1).
+   */
+  memory_enabled?: boolean
+  user_profile_enabled?: boolean
 }
 
 export interface VoiceLibrary {
@@ -1180,9 +1192,41 @@ export type SeatKind = (typeof SEAT_KINDS)[number]
 export const SEAT_PRODUCTS = ['operator', 'hosted-agent'] as const
 export type SeatProduct = (typeof SEAT_PRODUCTS)[number]
 
+/**
+ * Which packaged hosted-agent job this seat does (ADR 0090). Orthogonal to
+ * `product` (posture) and to surfaces (interface). Absent means no role, which
+ * is every seat authored before ADR 0090; the package lives at
+ * `operator/roles/<role>/`.
+ */
+export const SEAT_ROLES = ['couples'] as const
+export type SeatRole = (typeof SEAT_ROLES)[number]
+
 export interface Seat {
   kind: SeatKind
   product: SeatProduct
+  /** Present only when authored (ADR 0090); absent means no role. */
+  role?: SeatRole
+}
+
+/**
+ * One person on a multi-person seat (ADR 0091). Authoring `people:` turns the
+ * seat into space mode: every turn resolves to `person:<id>` or `shared`, and
+ * a turn that resolves no space fails closed. Consumed by the overlay's space
+ * resolver; validated here.
+ */
+export interface SeatPerson {
+  /** Stable slug, `[a-z0-9-]+`, unique on the seat. */
+  id: string
+  name: string
+  /** Numeric Telegram user id as a string; '' until onboarding binds it. */
+  telegram_id: string
+  /** Lowercased; also on `scope.inbound_allow_from`. */
+  email: string
+}
+
+export interface SeatSpaces {
+  /** The shared Telegram group chat id (negative numeric string); '' until created. */
+  shared_telegram_chat: string
 }
 
 /**
@@ -1411,6 +1455,10 @@ export interface CustomerYaml {
   voice_cohorts: VoiceCohorts | null
   /** What this seat IS. Kind and product only — state is derived, never authored. */
   seat: Seat | null
+  /** People on a multi-person seat (ADR 0091). Present only when authored. */
+  people?: SeatPerson[]
+  /** The seat's shared space channels (ADR 0091). Present only when authored. */
+  spaces?: SeatSpaces
   /** Per-output-class declaration of whether an authored spec is expected (ADR 0083). */
   output_classes: OutputClasses | null
   business_hours: BusinessHours | null
@@ -1557,6 +1605,11 @@ export type ValidationErrorCode =
   | 'UnknownTelegramField'
   /** An unknown key, a bad level, or a step above its job's level in `case_manager`. */
   | 'InvalidCaseManager'
+  /** A malformed `people:` / `spaces:` block, or a cross-field rule of a
+   * space-mode seat broken (ADR 0091). */
+  | 'InvalidPeople'
+  /** A cron `space` that is missing on a space-mode seat or names no space. */
+  | 'InvalidCronSpace'
 
 export interface ValidationError {
   code: ValidationErrorCode

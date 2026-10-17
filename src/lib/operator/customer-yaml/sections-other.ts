@@ -47,6 +47,7 @@ export function checkMemory(
     optionalNonEmptyString(raw, `r2_skill_bodies_${k}`, `memory.r2_skill_bodies_${k}`, errors)
   const skillBodiesBucket = optSkillBody('bucket')
   const skillBodiesPrefix = optSkillBody('prefix')
+  const switches = checkMemorySwitches(raw, errors)
   if (d1 === null || r2 === null || vec === null) return null
   return {
     d1_namespace: d1,
@@ -55,7 +56,34 @@ export function checkMemory(
     retention,
     r2_skill_bodies_bucket: skillBodiesBucket,
     r2_skill_bodies_prefix: skillBodiesPrefix,
+    ...switches,
   }
+}
+
+/**
+ * Hermes native memory switches (passthrough to the profile `config.memory`).
+ * Optional booleans; a space-mode seat must author both false, which is a
+ * cross-field rule in sections-people.ts (ADR 0091).
+ */
+function checkMemorySwitches(
+  raw: Record<string, unknown>,
+  errors: ValidationError[]
+): Pick<Memory, 'memory_enabled' | 'user_profile_enabled'> {
+  const out: Pick<Memory, 'memory_enabled' | 'user_profile_enabled'> = {}
+  for (const key of ['memory_enabled', 'user_profile_enabled'] as const) {
+    const v = raw[key]
+    if (v === undefined || v === null) continue
+    if (typeof v !== 'boolean') {
+      errors.push({
+        code: 'TypeMismatch',
+        path: `memory.${key}`,
+        message: `memory.${key} must be a boolean`,
+      })
+      continue
+    }
+    out[key] = v
+  }
+  return out
 }
 
 function checkMemoryField(

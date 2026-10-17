@@ -1,0 +1,162 @@
+# The couples role (ADR 0090): a hosted agent a couple shares.
+#
+# A role is a packaged hosted-agent job. A seat selects it with
+# `seat.role: couples`; `seat.product` stays `hosted-agent`. This file is the
+# package manifest: what the job is made of, so the next couple's seat is
+# generated from it rather than hand-copied from the last one.
+#
+# Privacy is by space (ADR 0091). Each partner talks to the agent privately,
+# and both talk to it together in one shared Telegram group. A turn in one
+# partner's space reads that partner's items plus shared ones; a turn in the
+# shared space reads shared items only; no turn reads the other partner's space.
+#
+# Kept in step with the seat template by tests/couples-role.test.ts: every skill
+# and routine named here appears in operator/customers/_couples-template, and
+# every `built:` flag below matches whether operator/skills/<name>/SKILL.md exists.
+
+role: couples
+schema_version: 1
+
+# The agent's persona prompt and its safety rules.
+persona: persona.md
+
+# The template a seat's customer.yaml is generated from.
+seat_template: operator/customers/_couples-template/customer.yaml
+
+# Skills the role's persona carries. `built: false` would mean the skill body
+# does not exist yet under operator/skills/. An enabled skill with no body fails
+# the seat's boot (overlay translate _install_persona_skills), so a seat cannot
+# be provisioned from this role until every enabled skill is built.
+skills:
+  - name: calendar
+    built: true
+    purpose: The shared calendar the agent owns, sent to both partners as invites (ADR 0092).
+  - name: workspace
+    built: true
+    purpose: Shared documents and the shared folder, in the owner partner's Google account.
+  - name: inbox-triage
+    built: true
+    purpose: Each partner's approved email to the agent, answered privately to that partner.
+  - name: couples-checkin
+    built: true
+    purpose: Private check-in nudges on topics the couple authors together, per person cadence and quiet hours.
+  - name: gratitude-prompts
+    built: true
+    purpose: Gratitude prompts, delivered to each partner privately.
+  - name: dates-to-remember
+    built: true
+    purpose: Dates to remember, with gift lists kept private to one partner.
+  - name: date-night-planner
+    built: true
+    purpose: Date ideas with a tried, loved, skip history.
+  - name: travel
+    built: true
+    purpose: Itineraries from forwarded confirmations, packing lists, passport expiry, price watches.
+  - name: shared-lists
+    built: true
+    purpose: Shared lists, chores, expenses and renewals.
+  - name: weekly-checkin-agenda
+    built: true
+    purpose: An agenda for the weekly joint check-in, built only from what each partner chose to share.
+  - name: memory-journal
+    built: true
+    purpose: A dated journal of moments, in the couple's words. Text only; photos stay in the Telegram chat.
+
+# Default routines. Every routine names its space: the space the run reads and
+# the chat it is delivered to (`person:<id>` delivers to that partner's DM,
+# `shared` to the group). Schedules are UTC and are set per couple from the
+# joint onboarding section.
+routines:
+  - skill: couples-checkin
+    space: person:p1
+    schedule_from: joint.checkin_cadence (partner 1)
+  - skill: couples-checkin
+    space: person:p2
+    schedule_from: joint.checkin_cadence (partner 2)
+  - skill: gratitude-prompts
+    space: person:p1
+    schedule_from: joint.gratitude_cadence (partner 1)
+  - skill: gratitude-prompts
+    space: person:p2
+    schedule_from: joint.gratitude_cadence (partner 2)
+  # A private reminder ahead of each shared date, with that partner's own gift
+  # ideas. Runs daily; silent when nothing is within 21 days.
+  - skill: dates-to-remember
+    space: person:p1
+    schedule_from: joint.daily_reminder_time
+  - skill: dates-to-remember
+    space: person:p2
+    schedule_from: joint.daily_reminder_time
+  # Price watches the couple asked for, reported to the group. Silent when no
+  # watch is active or none is under its target.
+  - skill: travel
+    space: shared
+    schedule_from: joint.daily_reminder_time
+  - skill: weekly-checkin-agenda
+    space: shared
+    schedule_from: joint.weekly_checkin_time
+
+# Record stores the skills use, all private per space (owner_field: owner, a
+# person id or `shared`), none with readers (ADR 0091 rule 7). Authored in the
+# seat template under record_stores.
+record_stores:
+  - couples-checkin
+  - gratitude
+  - dates
+  - date-nights
+  - trips
+  - lists
+  - journal
+
+privacy:
+  model: spaces
+  spaces: [shared, person]
+  adr: docs/adr/0091-privacy-by-space-for-multi-person-seats.md
+  # The seat-level config this model requires. The validator enforces it for
+  # any seat that authors people: (src/lib/operator/customer-yaml/sections-people.ts).
+  requires:
+    - people
+    - spaces
+    - memory.memory_enabled false
+    - memory.user_profile_enabled false
+    - a space on every routine
+
+# Connections the role needs at launch. None: the calendar is the agent's own
+# and reaches the partners as invites through the seat's own inbox (ADR 0092).
+# Google (shared documents) is optional and connected by the owner partner.
+required_connections: []
+optional_connections:
+  - name: google
+    connected_by: owner partner
+    used_for: shared documents and the shared folder
+
+# What onboarding collects. `per_person` fields are asked of each partner;
+# `joint` fields are not final until both partners confirm (ADR 0090 decision 4).
+onboarding:
+  per_person:
+    - field: name
+      maps_to: people[].name
+    - field: email
+      maps_to: people[].email and scope.inbound_allow_from
+    - field: consent
+      maps_to: none (recorded by onboarding, not in customer.yaml)
+    - field: telegram
+      maps_to: people[].telegram_id, telegram.allow_from, telegram.group_allow_from
+      note: bound by a single-use deep link, written through the reviewed customer.yaml change (ADR 0091 section 5)
+  joint:
+    - field: timezone
+      maps_to: routine schedules (expressed in UTC)
+    - field: checkin_topics
+      maps_to: couples-checkin
+    - field: checkin_cadence
+      maps_to: routines[].schedule, per partner
+    - field: gratitude_cadence
+      maps_to: routines[].schedule (gratitude-prompts), per partner
+    - field: daily_reminder_time
+      maps_to: routines[].schedule (dates-to-remember, travel)
+    - field: weekly_checkin_time
+      maps_to: routines[].schedule (weekly-checkin-agenda)
+    - field: quiet_hours
+      maps_to: couples-checkin
+    - field: shared_group
+      maps_to: spaces.shared_telegram_chat and telegram.group_chats

@@ -199,7 +199,7 @@ describe('output-class specs: the hash is computed server-side', () => {
     if (!built.ok) return
     for (const entry of Object.values(built.doc.classes)) {
       for (const spec of Object.values(entry)) {
-        expect(spec.sha256).toBe(await sha256Hex(spec.body))
+        expect(spec.sha256).toBe(await sha256Hex(spec.body ?? ''))
       }
     }
     expect(countBodies(built.doc.classes)).toBe(3)
@@ -551,5 +551,164 @@ describe('output-class specs: the write is proven, not assumed', () => {
       },
     }
     expect(serializeSpecDocument(a)).toBe(serializeSpecDocument(b))
+  })
+})
+
+describe('output-class specs: the second writer`s fields survive a portal save (OY-3)', () => {
+  // The overlay's establish_intake writes this same object. A corpus-fed
+  // establishment adds `provenance` beside a body; a confirmed firm adjustment
+  // appends to `adjustments`, possibly on a property with no body at all. This
+  // module owns body, sha256 and assertions and nothing else. Before OY-3 the
+  // parser kept only its own fields and required a body, so (a) every save
+  // deleted every confirmed firm sentence, and (b) an adjustments-only property
+  // made the document unreadable and every save was refused.
+  const KEY = 'vaults/ashton-price/output-classes.json'
+  const ADJUSTMENTS = [
+    {
+      applied_by: 'establish_intake',
+      at: '2026-10-01T15:04:05Z',
+      id: '0a1b2c3d',
+      instructed_by: 'christa@example.com',
+      text: 'Never open with "I hope this finds you well".',
+    },
+  ]
+  const PROVENANCE = {
+    document_count: 1,
+    documents: [{ doc_id: 'd-1', name: 'Demand letter.docx', sha256: 'ab'.repeat(32) }],
+    run_id: 'run-7',
+  }
+  const FORMAT_ADJUSTMENTS = [
+    {
+      at: '2026-10-02T09:00:00Z',
+      id: 'ffee0011',
+      instructed_by: 'christa@example.com',
+      text: 'Use numbered headings.',
+    },
+  ]
+
+  /** The document as the overlay writes it: compact, sorted keys, with `customer`. */
+  async function overlayDocument(): Promise<string> {
+    const body = 'Measured and plain.'
+    return JSON.stringify({
+      classes: {
+        work_product: {
+          // An adjustments-only property: instructed by confirmed sentence
+          // alone, never established from documents. The applier installs it.
+          format: { adjustments: FORMAT_ADJUSTMENTS },
+          voice: {
+            adjustments: ADJUSTMENTS,
+            body,
+            provenance: PROVENANCE,
+            sha256: await sha256Hex(body),
+          },
+        },
+      },
+      customer: 'ashton-price',
+      schema_version: SPEC_SCHEMA_VERSION,
+    })
+  }
+
+  /** The endpoint's own sequence: read, build with carry, write, parse the raw bytes back. */
+  async function save(
+    bucket: FakeBucket,
+    bodies: Parameters<typeof buildSpecDocument>[0]
+  ): Promise<Record<string, unknown>> {
+    const existing = await readSpecDocument(asBucket(bucket), 'ashton-price')
+    expect(existing.kind).toBe('document')
+    if (existing.kind !== 'document') throw new Error('unreadable')
+    const built = await buildSpecDocument(bodies, new Map(), {
+      existing: existing.doc,
+      addressed: ['work_product'],
+    })
+    expect(built.ok).toBe(true)
+    if (!built.ok) throw new Error(built.errors.join('; '))
+    const written = await writeSpecDocument(asBucket(bucket), 'ashton-price', built.doc)
+    expect(written.ok).toBe(true)
+    return JSON.parse(bucket.objects.get(KEY) ?? 'null') as Record<string, unknown>
+  }
+
+  function property(doc: Record<string, unknown>, prop: string): Record<string, unknown> {
+    const classes = doc['classes'] as Record<string, Record<string, Record<string, unknown>>>
+    return classes['work_product']?.[prop] ?? {}
+  }
+
+  it('parses an adjustments-only property instead of calling the document unreadable', async () => {
+    const parsed = parseSpecDocument(await overlayDocument())
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    const format = parsed.doc.classes['work_product']?.format
+    expect(format?.body).toBeUndefined()
+    expect(format?.carried?.['adjustments']).toEqual(FORMAT_ADJUSTMENTS)
+    expect(countBodies(parsed.doc.classes)).toBe(2)
+  })
+
+  it('still refuses a property with neither a body nor standing adjustments', () => {
+    for (const entry of [{}, { adjustments: [] }, { provenance: PROVENANCE }]) {
+      const parsed = parseSpecDocument(
+        JSON.stringify({
+          schema_version: SPEC_SCHEMA_VERSION,
+          classes: { staff: { voice: entry } },
+        })
+      )
+      expect(parsed.ok, JSON.stringify(entry)).toBe(false)
+    }
+  })
+
+  it('refuses, never drops, a malformed adjustments value', () => {
+    const parsed = parseSpecDocument(
+      JSON.stringify({
+        schema_version: SPEC_SCHEMA_VERSION,
+        classes: { staff: { voice: { body: 'x', sha256: 'y', adjustments: 'not a list' } } },
+      })
+    )
+    expect(parsed.ok).toBe(false)
+  })
+
+  it('preserves adjustments and provenance byte-for-byte across a save that rewrites the body', async () => {
+    const bucket = new FakeBucket()
+    bucket.objects.set(KEY, await overlayDocument())
+    const after = await save(bucket, [
+      { outputClass: 'work_product', property: 'voice', body: 'Rewritten by the admin.' },
+      { outputClass: 'work_product', property: 'format', body: '' },
+    ])
+    const voice = property(after, 'voice')
+    expect(voice['body']).toBe('Rewritten by the admin.')
+    expect(voice['sha256']).toBe(await sha256Hex('Rewritten by the admin.'))
+    expect(JSON.stringify(voice['adjustments'])).toBe(JSON.stringify(ADJUSTMENTS))
+    expect(JSON.stringify(voice['provenance'])).toBe(JSON.stringify(PROVENANCE))
+    // The adjustments-only property survives a blank form field.
+    const format = property(after, 'format')
+    expect(format['body']).toBeUndefined()
+    expect(JSON.stringify(format['adjustments'])).toBe(JSON.stringify(FORMAT_ADJUSTMENTS))
+    // Unknown top-level fields ride along too.
+    expect(after['customer']).toBe('ashton-price')
+  })
+
+  it('keeps the firm`s adjustments when every body is cleared, and the result reads back', async () => {
+    const bucket = new FakeBucket()
+    bucket.objects.set(KEY, await overlayDocument())
+    // Before the merge this is an empty document, but the seat still has two
+    // adjustments-only specs to install, so it is not refused as empty.
+    const after = await save(bucket, [
+      { outputClass: 'work_product', property: 'voice', body: '   ' },
+      { outputClass: 'work_product', property: 'format', body: '' },
+    ])
+    const voice = property(after, 'voice')
+    expect(voice['body']).toBeUndefined()
+    expect(voice['sha256']).toBeUndefined()
+    expect(JSON.stringify(voice['adjustments'])).toBe(JSON.stringify(ADJUSTMENTS))
+    expect(JSON.stringify(property(after, 'format')['adjustments'])).toBe(
+      JSON.stringify(FORMAT_ADJUSTMENTS)
+    )
+    // What was written parses cleanly, so the NEXT save is not refused either.
+    expect(parseSpecDocument(bucket.objects.get(KEY) ?? '').ok).toBe(true)
+  })
+
+  it('wires the existing document into the build at the endpoint', () => {
+    // The carry is optional on the builder so unit callers stay simple; the
+    // endpoint writing over a live object must pass it, or OY-3 is back.
+    const code = ENDPOINT_SOURCE.replace(/\/\/.*$/gm, '')
+    expect(code).toMatch(/buildSpecDocument\([\s\S]*?existing: existing\.doc, addressed: classes/)
+    expect(code).not.toContain('mergeUnaddressed')
   })
 })

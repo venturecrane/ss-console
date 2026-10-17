@@ -27,9 +27,11 @@ import { isPlainObject } from './helpers'
 import {
   SEAT_KINDS,
   SEAT_PRODUCTS,
+  SEAT_ROLES,
   type Seat,
   type SeatKind,
   type SeatProduct,
+  type SeatRole,
   type ValidationError,
 } from './types'
 
@@ -52,8 +54,16 @@ export function checkSeat(root: Record<string, unknown>, errors: ValidationError
   }
   const kind = checkEnumField(raw['kind'], 'seat.kind', SEAT_KINDS, errors)
   const product = checkEnumField(raw['product'], 'seat.product', SEAT_PRODUCTS, errors)
-  if (kind === null || product === null) return null
-  return { kind: kind as SeatKind, product: product as SeatProduct }
+  // `role` is optional (ADR 0090): absent means no role, so every seat authored
+  // before roles existed validates unchanged.
+  const role =
+    raw['role'] === undefined || raw['role'] === null
+      ? undefined
+      : checkEnumField(raw['role'], 'seat.role', SEAT_ROLES, errors)
+  if (kind === null || product === null || role === null) return null
+  const seat: Seat = { kind: kind as SeatKind, product: product as SeatProduct }
+  if (role !== undefined) seat.role = role as SeatRole
+  return seat
 }
 
 function checkEnumField(
