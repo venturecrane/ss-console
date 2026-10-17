@@ -1,54 +1,72 @@
 ---
-title: The Ops Machine
+title: Client Ops Workspaces
 section: operations
 order: 12
-summary: smd-ops, SMD's own operations machine on Fly. Where client operations run instead of the Captain's laptops, how to connect, what lives there, how its keys work, and the break-glass path.
+summary: Where client documents live (one Fly workspace per client, never a laptop), how to open one with a single command, how work is handed over from a laptop, what each workspace can reach, how long documents are kept, and smd-ops, SMD's own machine.
 sources:
-  - label: operator/ops-machine/Dockerfile - the image and why it exists
-    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/Dockerfile
-  - label: operator/ops-machine/fly.toml - the Machine (no public services, encrypted volume)
-    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/fly.toml
-  - label: operator/ops-machine/TRIAGE.md - the triage agent's standing orders
-    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/TRIAGE.md
-  - label: operator/ops-machine/laptop-offboard.py - taking client operations off a laptop
+  - label: operator/ops-machine/workspaces.json - the list of client workspaces
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/workspaces.json
+  - label: operator/ops-machine/bin/ops-workspace - create, update, status, destroy
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/bin/ops-workspace
+  - label: operator/ops-machine/laptop/client-data-guard.mjs - the laptop tripwire
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/laptop/client-data-guard.mjs
+  - label: operator/ops-machine/bin/ops-sweep - retention and health, run daily
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/bin/ops-sweep
+  - label: .github/workflows/ops-workspace-sweep.yml - the daily sweep
+    href: https://github.com/venturecrane/ss-console/blob/main/.github/workflows/ops-workspace-sweep.yml
+  - label: operator/ops-machine/laptop-offboard.py - removing verified copies from a laptop
     href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/laptop-offboard.py
+  - label: operator/ops-machine/TRIAGE.md - the smd-ops triage agent's standing orders
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/TRIAGE.md
 ---
 
-## Why it exists
+## The line
 
-Until 2026-10-16 every client operation (seat rebuilds, seat probes, chronology runs, the fixes agents made) ran from the Captain's laptops. That put every client seat's production keys and copies of client files on two personal machines, and it contradicted the A&P data terms, which describe matter content as read in memory during a task and not retained by SMD. The Captain's decision: one SMD-owned machine on Fly does that work, and the laptops go back to product development.
+Client documents are opened only in that client's ops workspace, never on a laptop (Captain, 2026-10-17). Client documents means a client's matter files and medical records, the chronologies, demands and reviews made from them, and the manual work done on them before an Operator lane exists.
 
-## What it is
+Everything else stays on the laptops: product development, seat work, rebuilds, deploys, proofs, letters and the engagement record (the `engagements` repo). None of that needs a client's files.
 
-- **Fly app `smd-ops`**, one Machine in `sjc`, shared-cpu-2x with 4 GB. No public IP and no services, so nothing outside SMD's private Fly network can reach it, and Fly never auto-stops it.
-- **An encrypted 150 GB volume** mounted as `/home/ops`, the only place anything client-related is written. Archived laptop data lives under `/home/ops/archive/`.
-- **The `ops` user** runs every session and scheduled job. Root is used only by the entrypoint, to prepare the volume and start cron.
-- **Tools pinned** to the versions the laptop ran: Claude Code, flyctl, the Infisical CLI, gh, Node, Python with uv, and the crane CLI.
+Why: by 2026-10-16 the laptops held 81 GB of chronology data, proof runs and client deliverables on mac23 and 7 GB on m16, accumulated by agents running the tools there. The A&P data terms describe matter content as read in memory during a task and not retained by SMD.
 
-## How to connect
+## One workspace per client
 
-From either laptop: `fly ssh console -a smd-ops -u ops`, then `tmux new -A -s main`, then `cd ~/dev/ss-console && crane ss` (or `claude`). A tmux session survives a dropped connection; reattach with the same command.
+Each client with document work has its own Fly app, `ops-<slug>` (A&P: `ops-ashton-price`), listed in `operator/ops-machine/workspaces.json`. Each workspace:
 
-## How its keys work
+- holds only that client's documents, on its own encrypted volume (`/home/ops`, client work under `~/work`);
+- reaches only that client's seat: its Fly token is a deploy token for `hermes-<slug>` alone, and its selftest proves another app refuses it;
+- runs the tools on that client's own Anthropic key, while Claude itself runs on the Captain's Max login;
+- has no Infisical identity, so nothing else in the vault is reachable from it;
+- stops itself after an hour with nobody attached and nothing running, and costs nothing while stopped.
 
-| Access | How | Expires |
-| --- | --- | --- |
-| Claude | The Captain's Max login, done on the Machine (`claude`, then `/login`) | Renew when Claude asks |
-| GitHub | The Captain's `gh auth login` on the Machine, with `read:packages` and `read:org` | Until revoked |
-| Production secrets | Its own read-only Infisical identity `smd-ops` (`~/.infisical-ua`); `ss-env <command>` runs a command with `/ss` prod loaded | Client secret: 90 days |
-| Client seats | One Fly deploy token per seat app, joined in `~/.fly-tokens`; each reaches only its own app | 30 days |
-| Email | Resend (team@) for reports; AgentMail for any inbox the Machine needs | Per vendor |
+`bin/ops-workspace create <slug>` builds one from a laptop: app, volume, secrets, image, health check. `update` rebuilds the image and re-mints its tokens; `status` shows its state and selftest; `destroy` deletes it and everything on it. Decommissioning a client destroys its workspace with its seat.
 
-When a key expires, `ops-selftest` on the Machine shows which one, and the matching step is re-run from a laptop that still has the Captain's own logins.
+## Opening one, and handing work over
 
-## The triage agent
+On a laptop the Captain types one command: `ops ap` (or `ops` to list the workspaces). It starts the workspace if it is stopped and puts him in its Claude session.
 
-`bin/ops-triage` runs from cron as `ops`. Each run evaluates work health the same way the hourly email does. When there is a new listed item, it starts Claude (capped at $5 a run, read-only tools only) to investigate each item under `TRIAGE.md`. It then emails team@ one report: handled, needs you, and fixes to approve. Quiet hours send nothing. The first version changes nothing on its own.
+When a laptop agent gets a request that would pull client documents, it does not start it. It runs `ops-handoff <client> "<task>"` and tells the Captain to type `ops <client>`; the task opens in front of him there. Every laptop session carries the rule (Law 15 in the operating doctrine), and a user-level hook (`client-data-guard.mjs`) stops the common commands and prints the same instruction.
 
-## Break-glass
+The first time on a new workspace, `ops` walks the Captain through his GitHub sign-in and Claude's own `/login`, then sets up the repos and tools.
 
-If the Machine is down when a client needs something, the Captain logs a laptop back into Fly (`fly auth login`) and works from there as before. A laptop used this way gets offboarded again afterwards (`laptop-offboard.py`).
+## How long documents are kept
 
-## Moving data onto it, and off a laptop
+Delivered work is kept 30 days after delivery, then deleted (Captain, 2026-10-17). A piece of work is marked delivered with `ops-deliver <dir>`. The daily sweep deletes it 30 days later and keeps a ledger of what it held: a hash and path per file, no content, so coverage checks still work. Work not marked delivered is never deleted. A long job runs under `ops-job <command>` so the idle stop leaves the Machine running until it finishes.
 
-`move-to-ops.sh` and `move-by-folder.sh` copy laptop folders onto the Machine and prove every file arrived with a sha256 manifest checked on the Machine. A folder is recorded as moved only when every file verifies. `laptop-offboard.py` deletes a laptop file only if it is listed in a copy's manifest and still hashes to the copied value, so anything changed since the copy stays. It never deletes a whole folder, the agent memory, or `~/dev`, and it reads back that every deleted file is gone. Run it without `--execute` first to see the counts.
+## Monitoring
+
+Once a day (`ops-workspace-sweep`) GitHub starts each workspace, runs retention and the selftest over SSH, and pings that workspace's healthchecks.io check (`ops-<slug>`, daily, 6 hours grace). A failed or missing run pages. The sweep also fails 30 days before any of the workspace's tokens expire, naming the command that renews them.
+
+## The honest limits
+
+- The tripwire is a habit-breaker, not a lock. It is installed per laptop by `operator/ops-machine/laptop/install.sh`; an agent can phrase a command it does not recognise; the Captain's own logins reach everything.
+- The Captain's Claude and GitHub logins on a workspace reach what they reach anywhere: his mail, his repos.
+- The engagements repo (letters, notes, dossiers) is the relationship record and stays on the laptops. It must not hold client documents; its CI refuses document files under `operator/customers/` outside an allowlist of SMD-authored material.
+- Break-glass: if a workspace is down and a client is waiting, a laptop session can run the tools with `SS_ALLOW_CLIENT_DATA_ON_LAPTOP="<reason>"` (audited). The laptop is offboarded again afterwards.
+
+## Removing copies from a laptop
+
+`move-to-ops.sh` and `move-by-folder.sh` copy laptop folders onto a workspace and prove every file arrived with a sha256 manifest checked on the Machine. `laptop-offboard.py` deletes a laptop file only if it is listed in a copy's manifest and still hashes to the copied value, so anything changed since the copy stays. It never deletes a whole folder, the agent memory, or `~/dev`, and it reads back that every deleted file is gone. Run it without `--execute` first to see the counts.
+
+## smd-ops, SMD's own machine
+
+`smd-ops` is not a client workspace. It runs SMD's own operations: the hourly work-health triage agent (`bin/ops-triage`, standing orders in `TRIAGE.md`), which reads the same evaluation as the work-health email, investigates each new item with read-only tools, and emails team@ one report. Its silence is caught by the healthchecks.io check `smd-ops-triage`. It holds the Captain's Max login, a read-only Infisical identity for `/ss` prod (`ss-env <command>`), and per-seat Fly deploy tokens for reading seats. Connect with `fly ssh console -a smd-ops -u ops`. It holds no client documents.

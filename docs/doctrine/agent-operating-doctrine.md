@@ -379,6 +379,32 @@ It is `primer` rather than `gate` because the failure is a missing read, and no 
 
 ---
 
+### Law 15: Client documents live in their workspace
+
+```yaml
+id: client-documents-in-workspace
+primer_line: "Client documents (matter files, medical records, chronologies, anything made from them) are opened only in that client's ops workspace, never on a laptop. When a request would pull them, do not start it here: run ops-handoff <client> '<the task>' and tell the Captain to type ops <client>."
+cost: low
+tier: primer
+enforcement:
+  - .claude/hooks/reflex-primer.sh
+  - operator/ops-machine/laptop/client-data-guard.mjs
+  - tests/client-data-guard.test.ts
+  - operator/ops-machine/laptop-offboard.py
+incidents:
+  - date: 2026-10-16
+    ref: 'laptop inventory (81 GB of chronology data, proof runs and client deliverables on mac23 plus 7 GB on m16, accumulated by agents running the chronology and drafting tools from the laptops, while the A&P data terms describe matter content as read in memory during a task and not retained by SMD; docs/handbook/ops-machine.md)'
+escalation: none pending
+```
+
+The Captain drew the line on 2026-10-17: only client documents move. Product development, seat work, rebuilds and deploys stay on the laptops, because that is where they work best and none of it needs a client's files. What moves is the material itself: a client's matter files and medical records, the chronologies, demands and reviews made from them, and the manual work done on them before an Operator lane exists. Each client has its own ops workspace (Fly app `ops-<slug>`, listed in `operator/ops-machine/workspaces.json`), which holds that client's documents and nothing else and reaches only that client's seat.
+
+An agent on a laptop recognises such a request before it runs anything, hands it over with `ops-handoff <client> "<task>"`, and tells the Captain the one command, `ops <client>`, that opens the workspace with the task waiting. The user-level hook `client-data-guard.mjs` stops the common commands (the chronology, drafting and file-review tools, their data folders, document pulls off a seat) and prints the same instruction.
+
+It is `primer` rather than `gate` on purpose. The hook is a habit-breaker, not a lock: it is installed per laptop rather than enforced by this repo, an agent can phrase a command it does not recognise, and the Captain's own logins reach everything. The primer line is what makes the agent notice the request in the first place; the hook catches the miss.
+
+---
+
 ## Mechanisms under review
 
 ```yaml
