@@ -603,6 +603,48 @@ skill_bindings:
   calendar:
     internal: []
     outbound: derived # calendar invites to rostered people only (people[].email)
+  # Each couples skill replies in the partner's own chat or the shared group
+  # (session_output) and keeps records in the space-fenced record store
+  # (local_file). Calendar invites go only to the seat's people.
+  couples-checkin:
+    internal:
+      - { artifact: checkin_prompt, seam: session_output, class: staff }
+      - { artifact: checkin_record, seam: local_file, class: record }
+    outbound: none
+  gratitude-prompts:
+    internal:
+      - { artifact: gratitude_prompt, seam: session_output, class: staff }
+      - { artifact: gratitude_record, seam: local_file, class: record }
+    outbound: none
+  dates-to-remember:
+    internal:
+      - { artifact: date_reminder, seam: session_output, class: staff }
+      - { artifact: date_record, seam: local_file, class: record }
+    outbound: derived # yearly calendar invites to the seat's people only
+  date-night-planner:
+    internal:
+      - { artifact: date_ideas, seam: session_output, class: staff }
+      - { artifact: date_night_record, seam: local_file, class: record }
+    outbound: derived # the chosen night as a calendar invite to the seat's people only
+  travel:
+    internal:
+      - { artifact: trip_summary, seam: session_output, class: staff }
+      - { artifact: trip_record, seam: local_file, class: record }
+    outbound: derived # leg invites to the travellers; email reply to the forwarding partner
+  shared-lists:
+    internal:
+      - { artifact: list_reply, seam: session_output, class: staff }
+      - { artifact: list_record, seam: local_file, class: record }
+    outbound: derived # renewal and chore reminder invites to the seat's people only
+  weekly-checkin-agenda:
+    internal:
+      - { artifact: agenda, seam: session_output, class: staff }
+      - { artifact: agenda_mark, seam: local_file, class: record }
+    outbound: none
+  memory-journal:
+    internal:
+      - { artifact: journal_entry, seam: local_file, class: record }
+    outbound: none
 
   # ---- conversational establishment (ADR 0085) ----
   # These two do not produce an output OF a class; they establish a PROPERTY of
