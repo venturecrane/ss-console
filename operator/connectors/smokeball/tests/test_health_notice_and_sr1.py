@@ -907,7 +907,7 @@ def _reply_lines_pass(block: str) -> None:
     import re
 
     for line in block.split("\n\n"):
-        if line.startswith("Filed: "):
+        if line.startswith(("Filed: ", "Uploaded, not confirmed: ")):
             continue  # the firm's own file name, as its toolbar names it
         assert "$" not in line and not re.search(r"\b[A-Z]{2,}\b", line), line
         assert "\n" not in line
@@ -1001,6 +1001,29 @@ def test_an_email_agency_and_an_ambiguous_one(
     record, out, _t = _police(monkeypatch, words="Roseville PD or Citrus Heights PD")
     assert out["status"] == "agency_unclear" and record.uploads == []
     _reply_lines_pass(out["reply_block"])
+
+
+@pytest.mark.parametrize(
+    ("download", "status", "says"),
+    [
+        (lambda self, _m, fid: ({"fileId": fid}, b"PK not the letter"), "readback_mismatch", "did not match"),
+        (lambda self, _m, _f: (_ for _ in ()).throw(RuntimeError("HTTP 500")), "link_not_visible", "may still appear"),
+    ],
+)
+def test_a_letter_whose_read_back_failed_is_never_reported_as_filed(
+    police_seat: Path, documents: None, monkeypatch: pytest.MonkeyPatch, download: Any, status: str, says: str
+) -> None:
+    """DC2 (2026-10-17 review): the reply opened "Filed: ..." for a read-back
+    mismatch or a file that never appeared, telling the firm it was on file."""
+    monkeypatch.setattr(_Record, "download_file", download)
+    _r, out, _t = _police(monkeypatch, words="Citrus Heights PD")
+    assert out["status"] == status
+    block = out["reply_block"]
+    assert not block.startswith("Filed:") and "Filed:" not in block
+    assert block.startswith("Uploaded, not confirmed: Police Rept Req.")
+    assert says in block and "do not ask for it again" in block
+    assert "Email it to the Citrus Heights police at records@city.example." in block
+    _reply_lines_pass(block)
 
 
 def test_no_agency_anywhere_files_nothing_and_asks(

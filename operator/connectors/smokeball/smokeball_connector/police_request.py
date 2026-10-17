@@ -185,8 +185,28 @@ def _gather_for(agency: Agency, spec_kind: str):
     return gather
 
 
+#: The reply's opening when the upload's read-back failed (readback.py). It
+#: never says "Filed:": the file was sent but Smokeball did not confirm it, and
+#: a retry can file a second copy (the same instruction readback's own note
+#: gives; 2026-10-17 review, DC2).
+_UNCONFIRMED = {
+    readback.MISMATCH: (
+        "Reading it back from Smokeball did not match what was uploaded, so check the letter before it goes out. "
+        "Please do not ask for it again: a retry can file a second copy. We have been alerted and will check the record."
+    ),
+    readback.NOT_VISIBLE: (
+        "Smokeball accepted it, but it could not be found when read back; it may still appear. "
+        "Please do not ask for it again: a retry can file a second copy. We have been alerted and will check the record."
+    ),
+}
+
+
 def reply_block(out: dict[str, Any], agency: Agency, number: str) -> str:
-    lines = [f"Filed: {out.get('fileName')} on matter {number}."]
+    status = out.get("status")
+    if status in _UNCONFIRMED:
+        lines = [f"Uploaded, not confirmed: {out.get('fileName')} on matter {number}.", _UNCONFIRMED[status]]
+    else:
+        lines = [f"Filed: {out.get('fileName')} on matter {number}."]
     if not agency.key:
         lines.append(f"{agency.name} is not on the firm's agency list; the letter uses the agency {agency.source}.")
     lines.append(where_it_goes(agency))

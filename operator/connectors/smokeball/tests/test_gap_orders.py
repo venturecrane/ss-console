@@ -500,3 +500,21 @@ def test_the_labs_row_is_asked_about_when_the_directory_has_only_the_clinic() ->
     labs = next(p for p in out["providers"] if p["name"] == "Northfield Spine Clinic labs")
     assert labs["outcome"] != "matched" and "Northfield Spine Clinic labs" in out["question"]
     assert out["merged"] == []  # the clinic's own entry is never taken for its lab
+
+
+class _ListingFails(FakeSmokeball):
+    """The matter's file listing raises (a 429 outlasting the client's waits)."""
+
+    def get(self, path: str, **params: Any) -> Any:
+        if path == f"/matters/{MATTER}/documents/files":
+            raise RuntimeError("Smokeball GET files -> HTTP 429: Too Many Requests")
+        return super().get(path, **params)
+
+
+def test_a_file_listing_that_could_not_be_read_never_reads_as_no_audit_on_file() -> None:
+    """DC1 (2026-10-17 review): a failed listing used to read as "no
+    missing-records list is filed on this matter"."""
+    out = _build(_ListingFails())
+    assert out["status"] == "refused"
+    assert "could not be listed just now" in out["reason"]
+    assert "No missing-records list" not in out["reason"]

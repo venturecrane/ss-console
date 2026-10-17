@@ -14,11 +14,14 @@ verb, ``decision_basis`` one of:
 
     connector_auth_ok:smokeball
     connector_auth_refused:smokeball:http_<4xx>     Smokeball refused the token
+    connector_auth_unsaved:smokeball:refresh_token_not_persisted
+                                                    the renewed token was not saved
     connector_auth_unchecked:smokeball:<ErrorClass> the check could not run
 
 Only a refusal is "dead"; a check that could not run says nothing about the
 token, and is reported as exactly that (a false dead-token page is worse than
-none, review 2026-10-13).
+none, review 2026-10-13). An unsaved token is neither: Smokeball answered and
+the seat failed to keep the answer, so it pages (see below).
 
 and the console's hourly work-health run (``operator/bin/work-health.py``) reads
 that row back through the runtime-read seam: a failure is on team@ within the
@@ -29,7 +32,9 @@ Rotation-safe: ``build_client_from_env`` passes the durable token file, so if
 the vendor rotates on refresh the client persists the new token atomically,
 exactly as the MCP server and the other pre_runs do. A persisted-token mismatch
 (``refresh_token_persisted: false``) is a FAILURE: the connection works now and
-bricks at the next restart.
+bricks at the next restart. It is its own outcome, ``unsaved``, and pages the
+same day (ADR 0080 amendment); until 2026-10-17 it fell through to
+``unchecked``, which does not page (review DS1).
 
 WHAT STDOUT CARRIES: the verdict word only. Never a token, never a scope.
 
@@ -50,6 +55,7 @@ SERVER = "smokeball"
 _TIMEOUT_SECONDS = 45
 _BROKER_TIMEOUT_SECONDS = 10
 _CONNECTOR_PYTHON_DEFAULT = "/opt/connectors/smokeball/.venv/bin/python"
+_NOT_PERSISTED = "refresh_token_not_persisted"  # the snippet's error code for a persist mismatch
 
 # Runs in the connector venv. Prints ONE json line: ok, or the error class.
 _CHECK_SNIPPET = """\
@@ -76,9 +82,11 @@ except Exception as exc:
 
 def check() -> tuple[str, str, str]:
     """(outcome, code, detail): outcome is ``ok``, ``refused`` (Smokeball's token
-    endpoint answered 4xx: the token is dead) or ``unchecked`` (the check itself
-    could not run, which says nothing about the token). Never conflate the last
-    two: a false "dead" page is worse than none."""
+    endpoint answered 4xx: the token is dead), ``unsaved`` (the refresh worked
+    but the rotated token was not written to the durable file: dead at the next
+    restart) or ``unchecked`` (the check itself could not run, which says
+    nothing about the token). Never conflate refused with unchecked: a false
+    "dead" page is worse than none."""
     python = os.environ.get("SMD_CONNECTOR_VENV_PYTHON", _CONNECTOR_PYTHON_DEFAULT)
     if not Path(python).exists():
         return "unchecked", "connector_python_missing", python
@@ -102,7 +110,11 @@ def check() -> tuple[str, str, str]:
         return "ok", "", ""
     code = "".join(ch for ch in str(verdict.get("error") or "unknown") if ch.isalnum() or ch in "_.-")[:64]
     detail = str(verdict.get("detail") or "")[:160]
-    return ("refused" if verdict.get("refused") is True else "unchecked"), code or "unknown", detail
+    if verdict.get("refused") is True:
+        return "refused", code or "unknown", detail
+    if code == _NOT_PERSISTED:
+        return "unsaved", code, detail
+    return "unchecked", code or "unknown", detail
 
 
 def _broker(request: dict) -> dict:
@@ -159,6 +171,8 @@ def main() -> int:
         basis = f"connector_auth_ok:{SERVER}"
     elif outcome == "refused":
         basis = f"connector_auth_refused:{SERVER}:{code}"
+    elif outcome == "unsaved":
+        basis = f"connector_auth_unsaved:{SERVER}:{code}"
     else:
         basis = f"connector_auth_unchecked:{SERVER}:{code}"
     if not record(basis, detail):
