@@ -43,7 +43,7 @@ def _fired(**overrides) -> dict:
         item_key="abc123def456",
         event="fired",
         attempt=1,
-        token="ACK-7Q3M2K",
+        token=el.token_for("abc123def456"),
     )
     event.update(overrides)
     return event
@@ -65,7 +65,7 @@ def test_fired_from_agent_uid_nongateway_pid_appends(tmp_path: Path) -> None:
     events = _read(broker.escalation_ledger_path)
     assert len(events) == 1
     assert events[0]["event"] == "fired"
-    assert events[0]["token"] == "ACK-7Q3M2K"
+    assert events[0]["token"] == el.token_for("abc123def456")
     assert events[0]["ts"] and events[0]["id"]  # server-stamped
 
 
@@ -93,7 +93,7 @@ def test_acked_with_prior_fired_is_accepted(tmp_path: Path) -> None:
         item_key="abc123def456",
         event="acked",
         attempt=1,
-        token="ACK-7Q3M2K",
+        token=el.token_for("abc123def456"),
     )
     resp = broker.handle(
         {"action": "escalation_event_append", "event": acked},

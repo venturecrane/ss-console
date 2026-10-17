@@ -78,7 +78,7 @@ def _raise(kind: str = "fired", *, n=1, dispatch_ref=REF, item_key: str = "item-
         item_key=item_key,
         event=kind,
         attempt=1,
-        token="ACK-7Q3M2K",
+        token=el.token_for(item_key),
     )
     event["session_id"] = SESSION
     if n is not None:
@@ -186,7 +186,7 @@ def test_digest_fields_on_an_ack_are_refused(tmp_path: Path, field: str) -> None
         item_key="item-one",
         event="acked",
         attempt=1,
-        token="ACK-7Q3M2K",
+        token=el.token_for("item-one"),
     )
     ack[field] = 1 if field == "n" else REF
     with pytest.raises(ValueError, match="carries no digest number"):
@@ -204,7 +204,7 @@ def test_an_ack_with_only_a_thread_ref_has_it_dropped_not_refused(tmp_path: Path
         item_key="item-one",
         event="acked",
         attempt=1,
-        token="ACK-7Q3M2K",
+        token=el.token_for("item-one"),
     )
     ack["thread_ref"] = "thr_digest"
     _append(broker, ack)
@@ -271,7 +271,7 @@ def test_snooze_days_on_an_ack_is_refused(tmp_path: Path) -> None:
         item_key="item-one",
         event="acked",
         attempt=1,
-        token="ACK-7Q3M2K",
+        token=el.token_for("item-one"),
     )
     ack["snooze_days"] = 7
     with pytest.raises(ValueError, match="carries no digest number"):

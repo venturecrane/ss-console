@@ -97,6 +97,38 @@ def test_deleted_row_breaks_verification(tmp_path):
     assert report["ok"] is False
 
 
+def test_deleting_the_leading_rows_breaks_verification(tmp_path):
+    """J-a: rows[1:] used to verify clean, the dangling parent read as a legacy
+    anchor. A start must be GENESIS or the anchor of a legacy row present."""
+    db = str(tmp_path / "audit.db")
+    _append_n(LedgerWriter(db), 4)
+    conn = sqlite3.connect(db)
+    conn.execute("DELETE FROM audit_log WHERE rowid = 1")
+    conn.commit()
+    conn.close()
+    report = verify_chain(_export(db))
+    assert report["ok"] is False
+    assert any("leading rows deleted" in b["reason"] for b in report["breaks"])
+
+
+def test_deleting_the_legacy_anchor_row_breaks_verification(tmp_path):
+    db = str(tmp_path / "audit.db")
+    conn = sqlite3.connect(db)
+    conn.execute(_LEGACY_CREATE)
+    conn.execute(
+        "INSERT INTO audit_log (id, ts, action_type, actor) VALUES (?, ?, ?, ?)",
+        ("01JLEGACYROW", "2026-07-01T00:00:00.000Z", "AGENT_RESUMED", "agent"),
+    )
+    conn.commit()
+    conn.close()
+    _append_n(LedgerWriter(db), 2)
+    rows = _export(db)
+    assert verify_chain(rows)["ok"] is True
+    report = verify_chain(rows[1:])  # the anchoring legacy row removed
+    assert report["ok"] is False
+    assert any("leading rows deleted" in b["reason"] for b in report["breaks"])
+
+
 def test_chain_survives_writer_restarts(tmp_path):
     db = str(tmp_path / "audit.db")
     _append_n(LedgerWriter(db), 2)
