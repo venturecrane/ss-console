@@ -1,6 +1,6 @@
 # ADR 0092: Calendar and documents for hosted agents: the agent owns the calendar and sends invites
 
-- **Status:** Accepted (2026-10-17). Live invite test passed the same day on Google and Apple (section 1a); Apple's removal on cancel is pending the Captain's visual confirmation
+- **Status:** Accepted (2026-10-17). Live invite test passed the same day on Google and Apple, including create, update and cancel (section 1a)
 - **Decider:** Captain (2026-10-17, recorded on [#3264](https://github.com/venturecrane/ss-console/issues/3264)); the optional Google upgrade follows the Captain's standing ruling of 2026-07-06
 - **Supersedes:** #3264 Captain decision 2 (a Workspace account for the agent through the domain-wide-delegation broker), and the same day's interim decisions (a purchased domain with its own Workspace tenant; then the customer connecting their own account through an SMD-owned verified OAuth app)
 - **Builds on:** ADR 0045 (mediated connector capability broker), ADR 0067 (Hosted Agent self-serve SKU: Telegram plus allowlisted email), ADR 0090 (hosted-agent roles), ADR 0091 (privacy by space)
@@ -36,8 +36,8 @@ The default needs no AgentMail Labs or beta feature. A plain AgentMail send carr
 
 Hand-built raw iMIP `.ics` files were sent through the plain AgentMail send endpoint from a test inbox (`smd-calendar-test@agentmail.to`). AgentMail Calendar was not used.
 
-- **Google Calendar.** The create landed within about 3 seconds with no click: one timed event and one all-day `RRULE:FREQ=YEARLY` event (`vfy_01M55T51PV1YB4D56PW7KK8WK0`). The update (same `UID`, `SEQUENCE:1`) moved the existing event in place, with no duplicate. The `METHOD:CANCEL` removed both events from Google with no action by the recipient (recorded in the verify ledger).
-- **Apple Calendar (iCloud).** Both events rendered as native invites. The update replaced the original (one entry, at the new 7:30 PM time), and the yearly event showed "Event will occur every year". Apple ran its own conflict check (`vfy_01M55THDN2KSHQ8YKAN0QQKPTE`). Removal on cancel is pending the Captain's visual confirmation.
+- **Google Calendar.** The create landed within about 3 seconds with no click: one timed event and one all-day `RRULE:FREQ=YEARLY` event (`vfy_01M55T51PV1YB4D56PW7KK8WK0`). The update (same `UID`, `SEQUENCE:1`) moved the existing event in place, with no duplicate. The `METHOD:CANCEL` removed both events from Google with no action by the recipient (`vfy_01M55TK7D5M02RNYGZ85WZAQR5`).
+- **Apple Calendar (iCloud).** Both events rendered as native invites. The update replaced the original (one entry, at the new 7:30 PM time), and the yearly event showed "Event will occur every year". Apple ran its own conflict check (`vfy_01M55THDN2KSHQ8YKAN0QQKPTE`). After the `METHOD:CANCEL`, both test events disappeared from Apple Calendar, confirmed by the Captain (`vfy_01M5635S9QQYD8H8590BHE7CCY`).
 
 ### 2. Documents: the agent holds them
 
