@@ -161,7 +161,7 @@ def _gather(
     for rec in queue:
         only = [int(p) for p in rec.get("vision_pages") or []]
         if only:
-            if merged(d / "text" / f"{rec['id']}.txt", only):
+            if merged(d / "text" / f"{rec['id']}.txt", only, retry_failed=True):
                 continue
         # The SAME reader build_units uses. These two asked the same question
         # with two copies of the same literal and drew opposite conclusions:
@@ -177,6 +177,9 @@ def _gather(
         done = load_partial(part_path)
         for pno in skips.get(rec["id"], ()):
             done.setdefault(pno, SKIPPED)
+        for pno in only:
+            if done.get(pno) == FAILED:
+                del done[pno]  # a failed image page is asked again on a resume, never kept as read
         try:
             doc = pymupdf.open(path)
             npages = len(doc)
@@ -207,23 +210,27 @@ def _finish(sr: StageRun, f: dict[str, Any], log_path: Path) -> bool:
     if f["only"]:
         _write_transcript(tp, merge_pages(tp.read_text(encoding="utf-8") if tp.is_file() else "", done, want))
         sr.log(f"image pages of {rec['name'][:45]}: {len(want)} transcribed into its text")
-        return True
-    body = "\n".join(f"[p.{n}] (machine transcription)\n{done.get(n, '')}" for n in range(1, npages + 1))
-    _write_transcript(tp, body)
+    else:
+        body = "\n".join(f"[p.{n}] (machine transcription)\n{done.get(n, '')}" for n in range(1, npages + 1))
+        _write_transcript(tp, body)
+        sr.log(f"scanned {rec['name'][:50]}: {npages}pp")
     # Failure markers are counted like illegible marks, so pages_out ==
-    # pages cannot report CLEAN over a page that transcribed to nothing.
+    # pages cannot report CLEAN over a page that transcribed to nothing. The
+    # image pages of a text-layer PDF get the row too: before 2026-10-17 that
+    # path returned first, and a page vision failed or refused on was
+    # disclosed in Limitations nowhere.
+    read = {n: done[n] for n in want}
     append_jsonl(
         log_path,
         {
             "id": rec["id"],
             "name": rec["name"],
             "pages": npages,
-            "pages_out": len(done),
-            "failed_pages": sum(1 for t in done.values() if FAILED in t or REFUSED in t),
-            "illegible_marks": sum(t.count("[illegible]") for t in done.values()),
+            "pages_out": len(read) if f["only"] else len(done),
+            "failed_pages": sum(1 for t in read.values() if FAILED in t or REFUSED in t),
+            "illegible_marks": sum(t.count("[illegible]") for t in read.values()),
         },
     )
-    sr.log(f"scanned {rec['name'][:50]}: {npages}pp")
     return True
 
 

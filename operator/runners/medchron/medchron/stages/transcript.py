@@ -96,14 +96,24 @@ def split_pages(text: str) -> dict[int, tuple[str, str]]:
     }
 
 
-def merged(text_path: Path, pages: list[int]) -> bool:
+#: What vision writes for a page whose request failed (``vision.FAILED``).
+FAILED_PAGE = "[page transcription failed]"
+
+
+def merged(text_path: Path, pages: list[int], *, retry_failed: bool = False) -> bool:
     """True when every one of `pages` is already a machine transcription in
     the document's text file: the image pages of a text-layer PDF
-    (``extract.vision_pages``) have been read."""
+    (``extract.vision_pages``) have been read. ``retry_failed`` (vision's
+    resume test) counts a page that FAILED as not merged, so it is asked
+    again; build_units leaves it False, because a failed page is recorded
+    in ``ocr_results.jsonl`` and disclosed in Limitations, never a halt."""
     if not text_path.is_file():
         return False
     got = split_pages(text_path.read_text(encoding="utf-8", errors="replace"))
-    return all("machine transcription" in got.get(p, ("", ""))[0] for p in pages)
+    return all(
+        "machine transcription" in got.get(p, ("", ""))[0] and not (retry_failed and got[p][1].strip() == FAILED_PAGE)
+        for p in pages
+    )
 
 
 def merge_pages(native: str, done: dict[int, str], pages: list[int]) -> str:

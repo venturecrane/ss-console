@@ -16,6 +16,10 @@ kind has its own reader and nothing falls through silently:
 * Anything else, a reader that raises, or text that comes out EMPTY is an
   extraction FAILURE record. A failure is never absence: the gates refuse a
   negative finding on a matter until the unreadable file is named on it.
+* A STOP is not a failure: a spend cap (``LimitHold``) or a vision call that
+  ran out of network retries (``deadline.is_transient``) says nothing about
+  the file. It propagates, so the job holds or fails as a whole and a resume
+  reads the file again; a failure record is permanent for the job.
 """
 
 from __future__ import annotations
@@ -31,6 +35,8 @@ from email.parser import BytesParser
 from pathlib import Path
 from typing import Any, Callable
 
+from ..deadline import is_transient
+from ..limits import LimitHold
 from ..stages.base import append_jsonl, read_jsonl
 
 PAGE_MARK = "===== page {n} ====="
@@ -43,6 +49,26 @@ OCR_PROMPT = (
     "read, and form labels. For a checkbox write [X] when it is marked and [ ] when it is empty. Output the text only."
 )
 Ocr = Callable[[bytes], str]
+
+
+#: Problems older runs recorded for a STOP (before stops propagated): a
+#: resume drops these records and reads the file again.
+_STOP_PROBLEMS = frozenset(
+    f"reader_error: {n}"
+    for n in (
+        "LimitHold",
+        "CallDeadlineError",
+        "APIConnectionError",
+        "APITimeoutError",
+        "RateLimitError",
+        "InternalServerError",
+        "OverloadedError",
+    )
+)
+
+
+def _stop(exc: BaseException) -> bool:
+    return isinstance(exc, LimitHold) or is_transient(exc)
 
 
 class ExtractFailure(RuntimeError):
@@ -320,7 +346,9 @@ def extract_file(path: Path, ext: str, out: Path, ocr: Ocr | None) -> dict[str, 
         text, scanned = text_of(path, ext, ocr)
     except ExtractFailure as exc:
         return {"ok": False, "problem": exc.problem}
-    except Exception as exc:  # noqa: BLE001 - a reader crash is a failure record, never an absence
+    except Exception as exc:  # a reader crash is a failure record, never an absence
+        if _stop(exc):
+            raise  # a spend cap or a network give-up stops the job; a resume re-reads the file
         return {"ok": False, "problem": f"reader_error: {type(exc).__name__}"}
     body = re.sub(r"===== page \d+ =====", "", text)
     if len(body.strip()) < MIN_TEXT:
@@ -343,7 +371,12 @@ def extract_matter(
     from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 
     log = mdir / "extracted.jsonl"
-    done = {r["file_id"]: r for r in read_jsonl(log)}
+    done: dict[str, dict[str, Any]] = {}
+    for r in read_jsonl(log):  # the last record per file wins; a recorded STOP is no record at all
+        if r.get("problem") in _STOP_PROBLEMS:
+            done.pop(r["file_id"], None)
+        else:
+            done[r["file_id"]] = r
     todo = [r for r in rows if str(r["id"]) not in done and r.get("ok") and r.get("path")]
     for r in rows:
         if str(r["id"]) in done and progress is not None:
@@ -364,6 +397,20 @@ def extract_matter(
 
     width = max(1, concurrency)
     queue = iter(todo)
+    stop: BaseException | None = None
+
+    def settle(finished: set[Future[dict[str, Any]]]) -> None:
+        # A STOP from one document is held until its siblings in flight have
+        # finished and been recorded: what was already paid for is kept, and
+        # nothing new is started.
+        nonlocal stop
+        for f in finished:
+            exc = f.exception()
+            if exc is None:
+                record(f.result())
+            elif stop is None:
+                stop = exc
+
     with ThreadPoolExecutor(max_workers=width) as pool:
         live: set[Future[dict[str, Any]]] = set()
         for r in queue:
@@ -371,10 +418,12 @@ def extract_matter(
             if len(live) < width:
                 continue
             finished, live = wait(live, return_when=FIRST_COMPLETED)
-            for f in finished:
-                record(f.result())
-        for f in live:
-            record(f.result())
+            settle(finished)
+            if stop is not None:
+                break
+        settle(set(wait(live).done))
+    if stop is not None:
+        raise stop
     return [done[str(r["id"])] for r in rows if str(r["id"]) in done]
 
 
