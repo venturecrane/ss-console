@@ -3,7 +3,7 @@
 - **Status:** Accepted (2026-10-17)
 - **Decider:** Captain (decision recorded on [#3264](https://github.com/venturecrane/ss-console/issues/3264), 2026-10-17)
 - **Builds on:** ADR 0067 (Hosted Agent self-serve SKU), ADR 0071 (confirm ceiling and the Hosted Agent tier ladder), ADR 0084 (agent-native applications; products are surfaces on a shared seat), ADR 0011 (persona is a Hermes profile)
-- **Related:** ADR 0091 (privacy by space for multi-person seats), the calendar and documents platform model for hosted agents (a separate ADR, to follow)
+- **Related:** ADR 0091 (privacy by space for multi-person seats), ADR 0092 (calendar and documents for hosted agents)
 - **Scope:** the concept, its home in the tree, and how a seat selects it. The first role (couples) is named; its build is tracked on #3264 and is not authorized by this record alone.
 
 ## Context
@@ -25,7 +25,7 @@ What the couple seat needs is neither posture nor interface nor an industry. It 
 
 **1. A role is a packaged hosted-agent job.** It lives at `operator/roles/<role>/` and contains:
 
-- `role.yaml`: the persona reference, the skills, the default routines, the privacy model (for a multi-person role, the spaces of ADR 0091), the required connections (for calendar and documents, the platform model in the ADR that follows this one), and the onboarding schema (the fields intake must collect, and which of them need every person's confirmation);
+- `role.yaml`: the persona reference, the skills, the default routines, the privacy model (for a multi-person role, the spaces of ADR 0091), the required connections (for calendar and documents, ADR 0092), and the onboarding schema (the fields intake must collect, and which of them need every person's confirmation);
 - the persona prompt and its safety rules;
 - a seat template, from which a seat's `customer.yaml` is generated.
 
