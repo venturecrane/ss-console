@@ -1221,7 +1221,14 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # tracked twins chain/escalation_ledger/citation_filter moved), #487 (typed
 # Graph connection failures, MCP thread history, cursorless poller). Also the
 # couples-role overlay work #467-#478 (inert on seats that author no people).
-ARG OVERLAY_REF="ccb525a2cca601b29b6172ca4f151579595e644e"
+# Pinned at e2f0c66d (the overlay #493 merge commit) rather than ccb525a2, so
+# the same rebuild also carries #488 (no route for an untriggered connector;
+# skills a persona stops enabling are pruned), #492 (authenticated HTTP follows
+# same-origin redirects only), #493 (escalation_ledger ack-token check split
+# out for the size ratchet; twin restamped) and the couples work #482 #486
+# #489 #490 (inert without seat.role / people: / a calendar skill; #486 renders
+# no persona when seat.role is absent, so SOUL.md is unchanged).
+ARG OVERLAY_REF="e2f0c66dfcf4dc65fac6343e7526d6125afdd094"
 
 ARG CUSTOMER_SLUG=customer-zero
 
