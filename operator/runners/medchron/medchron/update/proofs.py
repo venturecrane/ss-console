@@ -67,6 +67,9 @@ class Inputs:
     respelled: dict[str, str] = field(default_factory=dict)  # {composed: audited} provider spellings applied
     #: values the update review's applied corrections removed (``review_repair.named_values``)
     review_named: set[str] = field(default_factory=set)
+    #: the collect stage's handwritten re-dates, [(from, to, exhibits)] in final
+    #: numbers (``handwritten.moves_of``); their removed readings are in review_named
+    redate_moves: list[tuple[str, str, set[int]]] = field(default_factory=list)
 
 
 @dataclass
@@ -104,18 +107,32 @@ def cited_sentences(lines: list[str]) -> list[str]:
     return out
 
 
-def dropped_values(composed: list[str], updated_entries: list[str], new_ex: set[int], named: set[str]) -> list[tuple]:
+def dropped_values(
+    composed: list[str],
+    updated_entries: list[str],
+    new_ex: set[int],
+    named: set[str],
+    moved: list[tuple[str, str, set[int]]] | tuple = (),
+) -> list[tuple]:
     """[(entry head, [values])] for entries composed from a NEW exhibit whose
     values the updated document does not carry on that date and the audit did
-    not name."""
+    not name. `moved` is the collect stage's re-dates ([(from, to, exhibits)],
+    ``handwritten.moves_of``): an entry a re-date moved is looked for on the
+    date it moved to as well, never excused."""
     by_date: dict[str, set[str]] = {}
     for e in updated_entries:
         by_date.setdefault(B.iso(e), set()).update(numbers(e))
     out = []
     for e in composed:
-        if not (B.cited(e) & new_ex):
+        cites = B.cited(e)
+        if not (cites & new_ex):
             continue
-        gone = sorted(numbers(e) - by_date.get(B.iso(e), set()) - named)
+        day = B.iso(e)
+        have = set(by_date.get(day, set()))
+        for frm, to, ex in moved:
+            if frm == day and ex & cites:
+                have |= by_date.get(to, set())
+        gone = sorted(numbers(e) - have - named)
         if gone:
             out.append((e.splitlines()[0], gone))
     return out
@@ -192,7 +209,7 @@ def _added(x: Inputs, r: Result) -> None:
     named: set[str] = set(x.review_named)
     for row in x.audit_rows:
         named |= numbers(" ".join((row.get("unsupported_assertions") or []) + (row.get("contradictions") or [])))
-    lost = dropped_values(x.composed, ue, x.new_exhibits, named)
+    lost = dropped_values(x.composed, ue, x.new_exhibits, named, x.redate_moves)
     from_new = sum(1 for e in x.composed if B.cited(e) & x.new_exhibits)
     head = f"entries composed from new exhibits {from_new}; with a value the update does not carry: {len(lost)}"
     r.check("10", not lost, head + "".join(f" | {d}: {v[:12]}" for d, v in lost[:10]))

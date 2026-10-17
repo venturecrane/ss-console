@@ -182,7 +182,15 @@ def _settle_dates(
         by_rows = _by_rows(e, by_ex, hand[i])
         settled, row = H.redate(e, hand[i], tuple(readings.get(B.provider_of(e), ())), by_rows)
         out.append(settled)
-        log.append({**row, "provider": B.provider_of(e), **({"by": "ledger row order"} if by_rows else {})})
+        mv = H.moved(e, settled)  # named to proof 10, as review_repair names what its redate moved
+        log.append(
+            {
+                **row,
+                "provider": B.provider_of(e),
+                **({"by": "ledger row order"} if by_rows else {}),
+                **({"moved": mv} if mv else {}),
+            }
+        )
     return sorted(out, key=B.iso), log
 
 

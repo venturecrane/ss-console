@@ -1542,7 +1542,10 @@ describe('Operator customer Machine Dockerfile', () => {
     // completion wake binds note_job and reads the recorded words (pairs with note_verbs.py).
     // d4957208 -> fda15046 (overlay#459), 2026-10-16: a new-message SMD note's scheduled wake
     // binds the broker's one new email (pairs with note_verbs.py's new-message branch).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="c569f1b438dfef9fd5865969af684568a6635ecf"')
+    // fda15046 -> c6226013 (overlay#460) -> c569f1b4 (overlay#462) -> 534f9563 (overlay#463-#466),
+    // 2026-10-17: record-store read/write path fences, held-send approval binding, and the
+    // telegram allowed_users alias (pairs with #3271).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="534f9563356c8d4d959e10b32fff4e3b9706d0ef"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

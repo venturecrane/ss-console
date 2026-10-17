@@ -1205,7 +1205,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # (turn_sources SCHEDULED_KINDS); pairs with this repo's note_verbs.py
 # new-message branch, reply_binding SCHEDULED_LANES note_job and note_lane's
 # trigger line. No tracked twin moved.
-ARG OVERLAY_REF="c569f1b438dfef9fd5865969af684568a6635ecf"
+# 2026-10-17 (534f9563, the overlay #463 merge commit). Carries #464 (no
+# record is read by path on a seat that keeps records), #465 (each held send
+# is bound to the person and chat that raised it), #466 (no file tool writes
+# on a seat that keeps records) and #463 (telegram.allowed_users read as an
+# alias of allow_from; pairs with this repo's #3271). No tracked twin moved.
+ARG OVERLAY_REF="534f9563356c8d4d959e10b32fff4e3b9706d0ef"
 
 ARG CUSTOMER_SLUG=customer-zero
 
