@@ -542,6 +542,11 @@ class DemandRun:
 
     def _walk(self) -> Verdict:
         if self._is_done("render"):  # a resume after rendering: file the same bytes
+            # The review reads the selected format's front keys and signature:
+            # a redo against the unselected firm held every numbered demand
+            # and lost the house signature block (review 2026-10-17 B3).
+            if (self.data / "premise.json").is_file() and self._json("premise.json").get("passed"):
+                self._select_format()
             return self._file()
         self._stage("facts", self._facts)
         self._check_facts()
