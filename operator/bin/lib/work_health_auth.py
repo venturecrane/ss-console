@@ -74,6 +74,60 @@ def evidence(rows: list[dict]) -> list[tuple[datetime, str, str]]:
     return out
 
 
+def _trail_item(seat: str, trail: list[tuple[datetime, str, str]]) -> Optional[Item]:
+    """The one item for the trailing run of non-ok evidence, worst first:
+    refused (dead), unsaved (dies at restart), could not run, second-hand."""
+    refused = [ev for ev in trail if ev[1] == REFUSED]
+    unsaved = [ev for ev in trail if ev[1] == UNSAVED]
+    if refused:
+        since = refused[0][0]
+        return item(
+            seat,
+            "auth_failed",
+            f"smokeball:refused:{since.isoformat()}",
+            since,
+            f"Smokeball REFUSED this seat's sign-in at {hhmm(refused[-1][0])} ({refused[-1][2]}), first at "
+            f"{hhmm(since)}; every Smokeball read and write fails until it is re-consented.",
+            "Re-consent the Smokeball connection for this seat (memory: smokeball token program).",
+            page=f"ACTION: {seat} Smokeball sign-in is dead",
+        )
+    if unsaved:
+        since = unsaved[0][0]
+        return item(
+            seat,
+            "auth_failed",
+            f"smokeball:unsaved:{since.isoformat()}",
+            since,
+            f"Smokeball renewed this seat's sign-in but the new token was NOT saved at {hhmm(unsaved[-1][0])}, "
+            f"first at {hhmm(since)}; sign-in works now and every Smokeball read and write fails after the "
+            "seat's next restart.",
+            "Fix it before the seat restarts: check the durable token file is writable, then re-consent the "
+            "Smokeball connection for this seat (memory: smokeball token program).",
+            page=f"ACTION: {seat} Smokeball sign-in dies at the next restart",
+        )
+    if trail and trail[-1][1] == UNCHECKED:
+        ts, _o, detail = trail[-1]
+        return item(
+            seat,
+            "auth_unchecked",
+            "smokeball:check-could-not-run",
+            trail[0][0],
+            f"The hourly Smokeball sign-in check could not run at {hhmm(ts)} ({detail}); whether sign-in works is unknown.",
+            "Fix the check on the seat (connector venv, broker, network); this is not a dead token.",
+        )
+    if trail:
+        ts, _o, detail = trail[-1]
+        return item(
+            seat,
+            "auth_unchecked",
+            f"smokeball:secondhand:{trail[0][0].isoformat()}",
+            trail[0][0],
+            f"Smokeball work failed on sign-in at {hhmm(ts)} ({detail}) and nothing has succeeded since.",
+            "Check the seat's Smokeball connection; the hourly check (where it runs) says whether the token is refused.",
+        )
+    return None
+
+
 def smokeball_auth_items(
     seat: str, rows: list[dict], cfg: Config, now: datetime, *, probe_scheduled: bool
 ) -> list[Item]:
@@ -83,62 +137,9 @@ def smokeball_auth_items(
     for ev in all_evidence:
         trail = [] if ev[1] == OK else [*trail, ev]
     out: list[Item] = []
-    refused = [ev for ev in trail if ev[1] == REFUSED]
-    unsaved = [ev for ev in trail if ev[1] == UNSAVED]
-    if refused:
-        since = refused[0][0]
-        out.append(
-            item(
-                seat,
-                "auth_failed",
-                f"smokeball:refused:{since.isoformat()}",
-                since,
-                f"Smokeball REFUSED this seat's sign-in at {hhmm(refused[-1][0])} ({refused[-1][2]}), first at "
-                f"{hhmm(since)}; every Smokeball read and write fails until it is re-consented.",
-                "Re-consent the Smokeball connection for this seat (memory: smokeball token program).",
-                page=f"ACTION: {seat} Smokeball sign-in is dead",
-            )
-        )
-    elif unsaved:
-        since = unsaved[0][0]
-        out.append(
-            item(
-                seat,
-                "auth_failed",
-                f"smokeball:unsaved:{since.isoformat()}",
-                since,
-                f"Smokeball renewed this seat's sign-in but the new token was NOT saved at {hhmm(unsaved[-1][0])}, "
-                f"first at {hhmm(since)}; sign-in works now and every Smokeball read and write fails after the "
-                "seat's next restart.",
-                "Fix it before the seat restarts: check the durable token file is writable, then re-consent the "
-                "Smokeball connection for this seat (memory: smokeball token program).",
-                page=f"ACTION: {seat} Smokeball sign-in dies at the next restart",
-            )
-        )
-    elif trail and trail[-1][1] == UNCHECKED:
-        ts, _o, detail = trail[-1]
-        out.append(
-            item(
-                seat,
-                "auth_unchecked",
-                "smokeball:check-could-not-run",
-                trail[0][0],
-                f"The hourly Smokeball sign-in check could not run at {hhmm(ts)} ({detail}); whether sign-in works is unknown.",
-                "Fix the check on the seat (connector venv, broker, network); this is not a dead token.",
-            )
-        )
-    elif trail:
-        ts, _o, detail = trail[-1]
-        out.append(
-            item(
-                seat,
-                "auth_unchecked",
-                f"smokeball:secondhand:{trail[0][0].isoformat()}",
-                trail[0][0],
-                f"Smokeball work failed on sign-in at {hhmm(ts)} ({detail}) and nothing has succeeded since.",
-                "Check the seat's Smokeball connection; the hourly check (where it runs) says whether the token is refused.",
-            )
-        )
+    found = _trail_item(seat, trail)
+    if found:
+        out.append(found)
     probes = [ts for ts, outcome, _d in all_evidence if outcome in (OK, REFUSED, UNSAVED, UNCHECKED)]
     stale = timedelta(minutes=cfg.auth_probe_stale_minutes)
     if probe_scheduled and (not probes or now - probes[-1] > stale):
