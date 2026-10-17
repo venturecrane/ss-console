@@ -150,6 +150,32 @@ top_level:
       same on all eight seats including _template). Consumers land in two follow-ons:
       the git→R2 config publisher, where "does this seat carry a real firm's data"
       decides blast radius, and the fleet roster's derived lifecycle state.
+      `seat.role` (ADR 0090) is likewise validated console-side only (SEAT_ROLES);
+      it names the role package under operator/roles/<role>/ and changes nothing
+      at runtime by itself. The space-mode behavior a couples seat needs is keyed
+      on `people:`, not on the role.
+  people:
+    status: inert
+    materializer: src/lib/operator/customer-yaml/sections-people.ts (validation only, today)
+    note: >-
+      ADR 0091 multi-person seats. Maps each person's Telegram id and email to one
+      person id and turns on space mode. Validated console-side with its
+      cross-field rules (spaces required, both memory switches false, a space on
+      every cron entry, each email on scope.inbound_allow_from, a bound
+      telegram_id on telegram.allow_from and group_allow_from). The runtime
+      consumer is the overlay space resolver (shared/space.py) and the space
+      enforcement points, built in the overlay privacy-core and channels
+      workstreams (#3264). Declared inert until that overlay change is pinned;
+      flip to implemented with the overlay materializer named. Only the
+      _couples-template scaffold authors it today; no live seat does.
+  spaces:
+    status: inert
+    materializer: src/lib/operator/customer-yaml/sections-people.ts (validation only, today)
+    note: >-
+      ADR 0091. `shared_telegram_chat` is the shared group chat id that resolves to
+      space `shared`. Consumed by the overlay space resolver (#3264, overlay
+      privacy-core workstream). Declared inert until that overlay change is
+      pinned. Only the _couples-template scaffold authors it today.
   output_classes:
     status: inert
     materializer: >-

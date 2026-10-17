@@ -23,6 +23,13 @@
  * rejects `allowed_users`. Any OTHER unknown key is an error now, so the next
  * misspelled key cannot be silently ignored the same way.
  *
+ * Group keys (ADR 0091, multi-person seats). `group_allow_from` (Telegram user
+ * ids allowed to speak in a group), `group_chats` (allowed group chat ids, each
+ * a negative numeric string) and `group_sessions_per_user` (false makes the
+ * group one shared conversation) are passthroughs to the Hermes Telegram
+ * adapter. The cross-field rules that tie them to `people:` live in
+ * sections-people.ts.
+ *
  * Validate-only (pushes errors); the value is materialized by the overlay, not
  * consumed from the parsed CustomerYaml object.
  */
@@ -36,12 +43,15 @@ const KNOWN_KEYS = new Set([
   'allowed_users',
   'require_mention',
   'reactions',
+  'group_allow_from',
+  'group_chats',
+  'group_sessions_per_user',
 ])
 
 /** Validate one authored id list; returns the trimmed ids it holds. */
 function checkIdList(
   raw: Record<string, unknown>,
-  key: 'allow_from' | 'allowed_users',
+  key: 'allow_from' | 'allowed_users' | 'group_allow_from',
   errors: ValidationError[]
 ): string[] {
   const list = raw[key]
@@ -78,11 +88,17 @@ function checkKeysAndFlags(raw: Record<string, unknown>, errors: ValidationError
         path: `telegram.${key}`,
         message:
           `telegram.${key}: unknown key (the overlay never reads it). ` +
-          'Known keys: enabled, allow_from, require_mention, reactions.',
+          'Known keys: enabled, allow_from, require_mention, reactions, ' +
+          'group_allow_from, group_chats, group_sessions_per_user.',
       })
     }
   }
-  for (const key of ['enabled', 'require_mention', 'reactions'] as const) {
+  for (const key of [
+    'enabled',
+    'require_mention',
+    'reactions',
+    'group_sessions_per_user',
+  ] as const) {
     if (raw[key] !== undefined && typeof raw[key] !== 'boolean') {
       errors.push({
         code: 'TypeMismatch',
@@ -91,6 +107,30 @@ function checkKeysAndFlags(raw: Record<string, unknown>, errors: ValidationError
       })
     }
   }
+}
+
+/** `group_chats`: a list of group chat ids, each a negative numeric string. */
+function checkGroupChats(list: unknown, errors: ValidationError[]): void {
+  if (list === undefined || list === null) return
+  if (!Array.isArray(list)) {
+    errors.push({
+      code: 'TypeMismatch',
+      path: 'telegram.group_chats',
+      message: 'telegram.group_chats must be a list',
+    })
+    return
+  }
+  list.forEach((id, i) => {
+    if (typeof id !== 'string' || !/^-\d+$/.test(id.trim())) {
+      errors.push({
+        code: 'TypeMismatch',
+        path: `telegram.group_chats[${i}]`,
+        message:
+          'each group_chats entry must be a Telegram group chat id as a negative numeric ' +
+          'string (e.g. "-1001234567890")',
+      })
+    }
+  })
 }
 
 export function checkTelegram(root: Record<string, unknown>, errors: ValidationError[]): void {
@@ -106,6 +146,8 @@ export function checkTelegram(root: Record<string, unknown>, errors: ValidationE
 
   const allowFrom = checkIdList(raw, 'allow_from', errors)
   const legacy = checkIdList(raw, 'allowed_users', errors)
+  checkIdList(raw, 'group_allow_from', errors)
+  checkGroupChats(raw['group_chats'], errors)
   const effective = new Set([...allowFrom, ...legacy])
 
   if (enabled === true && effective.size === 0) {

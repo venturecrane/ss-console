@@ -23,6 +23,8 @@
  */
 
 export const SKILL_SUMMARIES: Record<string, string> = {
+  calendar:
+    'Keeps the shared calendar and sends each event as an invite to the people on the account. Never invites anyone else.',
   'client-matter-digest':
     'Drafts a per-matter status update for a client, in your voice. Reports status, never advises.',
   'client-verification-tracker':
