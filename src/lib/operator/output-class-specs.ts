@@ -48,6 +48,20 @@
  * the caller says so. Clearing the LAST authored spec is not something this
  * surface can do; clearing one of several is (the applier prunes what the new
  * document no longer declares).
+ *
+ * THIS IS NOT THE ONLY WRITER OF THIS OBJECT, AND IT OWNS ONLY ITS OWN FIELDS.
+ * The overlay's `establish_intake` writes the same document: a corpus-fed
+ * establishment adds `provenance` beside a distilled body, and a confirmed firm
+ * adjustment appends to a property's `adjustments` list, possibly on a property
+ * with no body at all, which the applier installs as an adjustments-only spec.
+ * This module owns `body`, `sha256` and `assertions`. Every other per-property
+ * field, and every unknown top-level field, is carried through parse, build and
+ * serialize VERBATIM (`carried`). Dropping them was the OY-3 defect
+ * (2026-10-17): every portal save silently deleted every sentence the firm had
+ * confirmed and been told was in effect, and an adjustments-only property made
+ * the whole document unreadable here, so every save was refused. A field this
+ * surface does not understand is a field another writer authored; the only safe
+ * thing to do with it is keep it.
  */
 
 import { assertionsApplyTo, parseAssertions, type Assertions } from './format-assertions'
@@ -103,15 +117,56 @@ export function specFieldName(outputClass: string, property: SpecProperty): stri
  * are authored together and stored together. See `./format-assertions`.
  */
 export interface SpecBody {
-  body: string
-  sha256: string
+  /**
+   * Absent ONLY on an adjustments-only property: one the firm has instructed
+   * by confirmed sentence but never established from documents. `sha256`
+   * covers this field and is present exactly when it is.
+   */
+  body?: string
+  sha256?: string
   assertions?: Assertions
+  /**
+   * Every field of this property this module does not own (`adjustments`,
+   * `provenance`, anything a later writer adds), exactly as read. Never
+   * interpreted, never rewritten. See the header note on the second writer.
+   */
+  carried?: Readonly<Record<string, unknown>>
 }
 
 /** The vault document: per class, per property, an authored body. */
 export type SpecDocument = {
   schema_version: number
   classes: Record<string, Partial<Record<SpecProperty, SpecBody>>>
+  /** Unknown top-level fields (the overlay writes `customer`), carried verbatim. */
+  carried?: Readonly<Record<string, unknown>>
+}
+
+/** The per-property fields this module owns. Everything else is carried. */
+const OWNED_PROPERTY_FIELDS: ReadonlySet<string> = new Set(['body', 'sha256', 'assertions'])
+
+/** The top-level fields this module owns. Everything else is carried. */
+const OWNED_DOCUMENT_FIELDS: ReadonlySet<string> = new Set(['schema_version', 'classes'])
+
+/** The fields of `record` outside `owned`, or undefined when there are none. */
+function carriedFields(
+  record: Readonly<Record<string, unknown>>,
+  owned: ReadonlySet<string>
+): Record<string, unknown> | undefined {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(record)) {
+    if (!owned.has(key)) out[key] = value
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+/**
+ * True when a property carries at least one standing firm adjustment. Such a
+ * property is a spec the applier installs even with no body, so it survives a
+ * cleared body and counts as a spec in its own right.
+ */
+export function hasStandingAdjustments(spec: SpecBody | undefined): boolean {
+  const adjustments = spec?.carried?.['adjustments']
+  return Array.isArray(adjustments) && adjustments.length > 0
 }
 
 export class SpecKeyError extends Error {}
@@ -219,7 +274,10 @@ export function parseSpecDocument(text: string): SpecParseResult {
     if (Object.keys(parsed).length > 0) out[slug] = parsed
   }
   if (errors.length > 0) return { ok: false, errors }
-  return { ok: true, doc: { schema_version: SPEC_SCHEMA_VERSION, classes: out } }
+  const doc: SpecDocument = { schema_version: SPEC_SCHEMA_VERSION, classes: out }
+  const carried = carriedFields(raw, OWNED_DOCUMENT_FIELDS)
+  if (carried !== undefined) doc.carried = carried
+  return { ok: true, doc }
 }
 
 function parseClassEntry(
@@ -235,17 +293,8 @@ function parseClassEntry(
       errors.push(`classes.${slug}.${prop}: must be an object with body and sha256`)
       continue
     }
-    const body = value['body']
-    const declared = value['sha256']
-    if (typeof body !== 'string' || body.trim().length === 0) {
-      errors.push(`classes.${slug}.${prop}.body: must be a non-empty string`)
-      continue
-    }
-    if (typeof declared !== 'string' || declared.trim().length === 0) {
-      errors.push(`classes.${slug}.${prop}.sha256: must be a hex sha256 string`)
-      continue
-    }
-    const stored: SpecBody = { body, sha256: declared.trim().toLowerCase() }
+    const stored = parseBodyAndCarried(`classes.${slug}.${prop}`, value, errors)
+    if (stored === null) continue
     // Assertions on a non-format property are refused rather than dropped: a
     // stored rule this surface will not render is a rule the client cannot see
     // and cannot have chosen. See `assertionsApplyTo`.
@@ -258,6 +307,46 @@ function parseClassEntry(
     parsed[prop] = stored
   }
   return parsed
+}
+
+/**
+ * The body, its digest, and every field this module does not own, for one
+ * property, or null with the reason pushed onto `errors`.
+ *
+ * The applier's own rule decides what is a property: a body, standing
+ * adjustments, or both, never neither. A malformed `adjustments` value is
+ * refused, never dropped, for the applier's reason: these are sentences the firm
+ * confirmed and was told were in effect.
+ */
+function parseBodyAndCarried(
+  path: string,
+  value: Record<string, unknown>,
+  errors: string[]
+): SpecBody | null {
+  const body = value['body']
+  const declared = value['sha256']
+  const carried = carriedFields(value, OWNED_PROPERTY_FIELDS)
+  const adjustments = carried?.['adjustments']
+  if (adjustments !== undefined && !Array.isArray(adjustments)) {
+    errors.push(`${path}.adjustments: must be a list when present`)
+    return null
+  }
+  const stored: SpecBody = {}
+  if (carried !== undefined) stored.carried = carried
+  if (typeof body === 'string' && body.trim().length > 0) {
+    if (typeof declared !== 'string' || declared.trim().length === 0) {
+      errors.push(`${path}.sha256: must be a hex sha256 string`)
+      return null
+    }
+    stored.body = body
+    stored.sha256 = declared.trim().toLowerCase()
+    return stored
+  }
+  if ((body !== undefined && typeof body !== 'string') || !hasStandingAdjustments(stored)) {
+    errors.push(`${path}.body: must be a non-empty string`)
+    return null
+  }
+  return stored
 }
 
 // ---------------------------------------------------------------------------
@@ -321,10 +410,18 @@ export type SpecBuildResult =
  * is how a class property is cleared, and the applier prunes the installed
  * file on the next cycle. A document that ends up with no bodies at all is
  * refused here; see the fail-closed note in the header.
+ *
+ * `carry` is the document already in the vault. A caller writing over an
+ * existing object MUST pass it: it is how the fields this module does not own
+ * (the firm's standing adjustments, the establishment's provenance) survive the
+ * save. See `mergeExisting`. The empty-document check runs after the merge, so
+ * a save that clears every body over a property with standing adjustments is
+ * not refused as empty: the seat still has a spec to install.
  */
 export async function buildSpecDocument(
   bodies: readonly AuthoredBody[],
-  assertionsByClass: ReadonlyMap<string, Assertions> = new Map()
+  assertionsByClass: ReadonlyMap<string, Assertions> = new Map(),
+  carry?: SpecCarry
 ): Promise<SpecBuildResult> {
   const errors: string[] = []
   let invalidClass = false
@@ -364,11 +461,13 @@ export async function buildSpecDocument(
     classes[slug] = entry
   }
 
+  const merged = mergeExisting(classes, carry)
+
   // A bad class slug outranks an over-long body: the first is a defect the
   // client cannot act on and must not be told to shorten something for.
   if (invalidClass) return { ok: false, reason: 'invalid_class', errors }
   if (tooLong) return { ok: false, reason: 'body_too_long', errors }
-  if (countBodies(classes) === 0) {
+  if (countBodies(merged.classes) === 0) {
     return {
       ok: false,
       reason: 'no_bodies',
@@ -379,31 +478,130 @@ export async function buildSpecDocument(
       ],
     }
   }
-  return { ok: true, doc: { schema_version: SPEC_SCHEMA_VERSION, classes } }
+  const doc: SpecDocument = { schema_version: SPEC_SCHEMA_VERSION, classes: merged.classes }
+  if (merged.carried !== undefined) doc.carried = merged.carried
+  return { ok: true, doc }
 }
 
+/**
+ * What a build carries forward from the document already in the vault.
+ *
+ * `addressed` is the set of classes the form spoke for (every declared class).
+ * Within them, this module's own fields come from the form and nothing else;
+ * outside them, the existing class is kept whole.
+ */
+export interface SpecCarry {
+  existing: SpecDocument
+  addressed: readonly string[]
+}
+
+type MergedClasses = {
+  classes: SpecDocument['classes']
+  carried?: Readonly<Record<string, unknown>>
+}
+
+/**
+ * Fold the existing vault document into a freshly built one, keeping every
+ * field this module does not own.
+ *
+ *  - A class the form did not address is carried whole. A class can leave
+ *    `output_classes:` while its authored prose is still in the vault;
+ *    rebuilding from the form alone would delete that prose on the next
+ *    unrelated save.
+ *  - A property the form wrote keeps the existing property's carried fields
+ *    (`adjustments`, `provenance`, ...) beside the new body.
+ *  - A property the form cleared (or did not submit) loses this module's
+ *    fields, but survives as an adjustments-only spec when the firm has
+ *    standing adjustments on it. Clearing a body is not an instruction to
+ *    forget what the firm said; nothing on this surface shows those sentences,
+ *    so nothing on it may remove them.
+ *  - Unknown top-level fields are carried.
+ */
+function mergeExisting(
+  built: SpecDocument['classes'],
+  carry: SpecCarry | undefined
+): MergedClasses {
+  if (carry === undefined) return { classes: built }
+  const classes: SpecDocument['classes'] = { ...built }
+  for (const [slug, existingEntry] of Object.entries(carry.existing.classes)) {
+    if (!carry.addressed.includes(slug)) {
+      classes[slug] = existingEntry
+      continue
+    }
+    const entry: Partial<Record<SpecProperty, SpecBody>> = { ...(classes[slug] ?? {}) }
+    for (const prop of SPEC_PROPERTIES) {
+      const previous = existingEntry[prop]
+      if (previous?.carried === undefined) continue
+      const written = entry[prop]
+      if (written !== undefined) {
+        entry[prop] = { ...written, carried: previous.carried }
+      } else if (hasStandingAdjustments(previous)) {
+        entry[prop] = { carried: previous.carried }
+      }
+    }
+    if (Object.keys(entry).length > 0) classes[slug] = entry
+  }
+  const merged: MergedClasses = { classes }
+  if (carry.existing.carried !== undefined) merged.carried = carry.existing.carried
+  return merged
+}
+
+/**
+ * How many class properties the document declares a spec for: a body, standing
+ * adjustments, or both. An adjustments-only property is a spec (the applier
+ * installs a file for it), so it counts.
+ */
 export function countBodies(classes: SpecDocument['classes']): number {
   let n = 0
   for (const entry of Object.values(classes)) {
-    for (const prop of SPEC_PROPERTIES) if (entry[prop]) n++
+    for (const prop of SPEC_PROPERTIES) {
+      const spec = entry[prop]
+      if (spec !== undefined && (spec.body !== undefined || hasStandingAdjustments(spec))) n++
+    }
   }
   return n
 }
 
-/** Serialize deterministically: class slugs sorted, properties in declared order. */
+/**
+ * Serialize deterministically: class slugs sorted, properties in declared
+ * order, owned fields first, then carried fields in sorted key order with their
+ * values untouched.
+ */
 export function serializeSpecDocument(doc: SpecDocument): string {
-  const classes: SpecDocument['classes'] = {}
+  const classes: Record<string, Record<string, Record<string, unknown>>> = {}
   for (const slug of Object.keys(doc.classes).sort()) {
     const entry = doc.classes[slug]
     if (!entry) continue
-    const ordered: Partial<Record<SpecProperty, SpecBody>> = {}
+    const ordered: Record<string, Record<string, unknown>> = {}
     for (const prop of SPEC_PROPERTIES) {
       const value = entry[prop]
-      if (value) ordered[prop] = value
+      if (value) ordered[prop] = serializeProperty(value)
     }
     classes[slug] = ordered
   }
-  return `${JSON.stringify({ schema_version: doc.schema_version, classes }, null, 2)}\n`
+  const out: Record<string, unknown> = { schema_version: doc.schema_version, classes }
+  appendCarried(out, doc.carried)
+  return `${JSON.stringify(out, null, 2)}\n`
+}
+
+function serializeProperty(spec: SpecBody): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  if (spec.body !== undefined) out['body'] = spec.body
+  if (spec.sha256 !== undefined) out['sha256'] = spec.sha256
+  if (spec.assertions !== undefined) out['assertions'] = spec.assertions
+  appendCarried(out, spec.carried)
+  return out
+}
+
+/** Append carried fields in sorted key order, never over an owned field. */
+function appendCarried(
+  out: Record<string, unknown>,
+  carried: Readonly<Record<string, unknown>> | undefined
+): void {
+  if (carried === undefined) return
+  for (const key of Object.keys(carried).sort()) {
+    if (!(key in out)) out[key] = carried[key]
+  }
 }
 
 // ---------------------------------------------------------------------------

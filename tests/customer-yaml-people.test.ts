@@ -33,6 +33,10 @@ const FILL: Record<string, string> = {
   '[AGENT NAME from intake]': 'Juniper',
   '[PARTNER 1 CHECK-IN CRON, UTC]': '0 15 * * 1',
   '[PARTNER 2 CHECK-IN CRON, UTC]': '0 16 * * 1',
+  '[PARTNER 1 GRATITUDE CRON, UTC]': '0 2 * * 4',
+  '[PARTNER 2 GRATITUDE CRON, UTC]': '0 3 * * 4',
+  '[DAILY REMINDER CRON, UTC]': '0 15 * * *',
+  '[WEEKLY CHECK-IN AGENDA CRON, UTC]': '0 1 * * 1',
   '[SMD SENTINEL TELEGRAM ID until both partners bind]': '1000000001',
 }
 
@@ -104,7 +108,16 @@ describe('couples seat template', () => {
     expect(r.value.seat?.role).toBe('couples')
     expect(r.value.people?.map((p) => p.id)).toEqual(['p1', 'p2'])
     expect(r.value.spaces?.shared_telegram_chat).toBe('-1001234567890')
-    expect(r.value.personas[0].cron.map((c) => c.space)).toEqual(['person:p1', 'person:p2'])
+    expect(r.value.personas[0].cron.map((c) => c.space)).toEqual([
+      'person:p1',
+      'person:p2',
+      'person:p1',
+      'person:p2',
+      'person:p1',
+      'person:p2',
+      'shared',
+      'shared',
+    ])
     expect(r.value.memory.memory_enabled).toBe(false)
     expect(r.value.memory.user_profile_enabled).toBe(false)
   })
@@ -273,7 +286,7 @@ describe('people and spaces shape', () => {
     const s = seat()
     delete s.people
     delete s.spaces
-    delete s.personas[0].cron[1].space
+    for (const c of s.personas[0].cron.slice(1)) delete c.space
     expect(codesAt(s)).toEqual([['InvalidCronSpace', 'personas[0].cron[0].space']])
   })
 })

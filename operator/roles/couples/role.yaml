@@ -23,10 +23,10 @@ persona: persona.md
 # The template a seat's customer.yaml is generated from.
 seat_template: operator/customers/_couples-template/customer.yaml
 
-# Skills the role's persona carries. `built: false` means the skill body does
-# not exist yet under operator/skills/. An enabled skill with no body fails the
-# seat's boot (overlay translate _install_persona_skills), so a seat cannot be
-# provisioned from this role until every enabled skill is built.
+# Skills the role's persona carries. `built: false` would mean the skill body
+# does not exist yet under operator/skills/. An enabled skill with no body fails
+# the seat's boot (overlay translate _install_persona_skills), so a seat cannot
+# be provisioned from this role until every enabled skill is built.
 skills:
   - name: calendar
     built: true
@@ -38,29 +38,29 @@ skills:
     built: true
     purpose: Each partner's approved email to the agent, answered privately to that partner.
   - name: couples-checkin
-    built: false
+    built: true
     purpose: Private check-in nudges on topics the couple authors together, per person cadence and quiet hours.
   - name: gratitude-prompts
-    built: false
+    built: true
     purpose: Gratitude prompts, delivered to each partner privately.
   - name: dates-to-remember
-    built: false
+    built: true
     purpose: Dates to remember, with gift lists kept private to one partner.
   - name: date-night-planner
-    built: false
+    built: true
     purpose: Date ideas with a tried, loved, skip history.
   - name: travel
-    built: false
+    built: true
     purpose: Itineraries from forwarded confirmations, packing lists, passport expiry, price watches.
   - name: shared-lists
-    built: false
+    built: true
     purpose: Shared lists, chores, expenses and renewals.
   - name: weekly-checkin-agenda
-    built: false
+    built: true
     purpose: An agenda for the weekly joint check-in, built only from what each partner chose to share.
   - name: memory-journal
-    built: false
-    purpose: Photos and notes from the shared group, kept in the shared folder.
+    built: true
+    purpose: A dated journal of moments, in the couple's words. Text only; photos stay in the Telegram chat.
 
 # Default routines. Every routine names its space: the space the run reads and
 # the chat it is delivered to (`person:<id>` delivers to that partner's DM,
@@ -73,6 +73,40 @@ routines:
   - skill: couples-checkin
     space: person:p2
     schedule_from: joint.checkin_cadence (partner 2)
+  - skill: gratitude-prompts
+    space: person:p1
+    schedule_from: joint.gratitude_cadence (partner 1)
+  - skill: gratitude-prompts
+    space: person:p2
+    schedule_from: joint.gratitude_cadence (partner 2)
+  # A private reminder ahead of each shared date, with that partner's own gift
+  # ideas. Runs daily; silent when nothing is within 21 days.
+  - skill: dates-to-remember
+    space: person:p1
+    schedule_from: joint.daily_reminder_time
+  - skill: dates-to-remember
+    space: person:p2
+    schedule_from: joint.daily_reminder_time
+  # Price watches the couple asked for, reported to the group. Silent when no
+  # watch is active or none is under its target.
+  - skill: travel
+    space: shared
+    schedule_from: joint.daily_reminder_time
+  - skill: weekly-checkin-agenda
+    space: shared
+    schedule_from: joint.weekly_checkin_time
+
+# Record stores the skills use, all private per space (owner_field: owner, a
+# person id or `shared`), none with readers (ADR 0091 rule 7). Authored in the
+# seat template under record_stores.
+record_stores:
+  - couples-checkin
+  - gratitude
+  - dates
+  - date-nights
+  - trips
+  - lists
+  - journal
 
 privacy:
   model: spaces
@@ -116,6 +150,12 @@ onboarding:
       maps_to: couples-checkin
     - field: checkin_cadence
       maps_to: routines[].schedule, per partner
+    - field: gratitude_cadence
+      maps_to: routines[].schedule (gratitude-prompts), per partner
+    - field: daily_reminder_time
+      maps_to: routines[].schedule (dates-to-remember, travel)
+    - field: weekly_checkin_time
+      maps_to: routines[].schedule (weekly-checkin-agenda)
     - field: quiet_hours
       maps_to: couples-checkin
     - field: shared_group
