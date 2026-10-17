@@ -368,15 +368,8 @@ def extract_matter(
     the head never lets finished work pile up behind it (``pool.map`` submits
     every document at once and holds each result until the head is done).
     ``progress`` (a ``progress.Progress``) is stepped once per document."""
-    from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-
     log = mdir / "extracted.jsonl"
-    done: dict[str, dict[str, Any]] = {}
-    for r in read_jsonl(log):  # the last record per file wins; a recorded STOP is no record at all
-        if r.get("problem") in _STOP_PROBLEMS:
-            done.pop(r["file_id"], None)
-        else:
-            done[r["file_id"]] = r
+    done = _recorded(log)
     todo = [r for r in rows if str(r["id"]) not in done and r.get("ok") and r.get("path")]
     for r in rows:
         if str(r["id"]) in done and progress is not None:
@@ -395,36 +388,56 @@ def extract_matter(
                 progress.add("failures")
             progress.step()
 
-    width = max(1, concurrency)
-    queue = iter(todo)
-    stop: BaseException | None = None
+    _in_flight(todo, one, record, max(1, concurrency))
+    return [done[str(r["id"])] for r in rows if str(r["id"]) in done]
+
+
+def _recorded(log: Path) -> dict[str, dict[str, Any]]:
+    """{file id: its last record}; a recorded STOP is no record at all."""
+    done: dict[str, dict[str, Any]] = {}
+    for r in read_jsonl(log):
+        if r.get("problem") in _STOP_PROBLEMS:
+            done.pop(r["file_id"], None)
+        else:
+            done[r["file_id"]] = r
+    return done
+
+
+def _in_flight(
+    todo: list[dict[str, Any]],
+    one: Callable[[dict[str, Any]], dict[str, Any]],
+    record: Callable[[dict[str, Any]], None],
+    width: int,
+) -> None:
+    """Run `one` over `todo`, at most `width` at a time, `record`ing each
+    result on this thread. A STOP from one document is held until its
+    siblings in flight have finished and been recorded (what was already paid
+    for is kept), nothing new is started, and then it is raised."""
+    from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+
+    stop: list[BaseException] = []
 
     def settle(finished: set[Future[dict[str, Any]]]) -> None:
-        # A STOP from one document is held until its siblings in flight have
-        # finished and been recorded: what was already paid for is kept, and
-        # nothing new is started.
-        nonlocal stop
         for f in finished:
             exc = f.exception()
             if exc is None:
                 record(f.result())
-            elif stop is None:
-                stop = exc
+            else:
+                stop.append(exc)
 
     with ThreadPoolExecutor(max_workers=width) as pool:
         live: set[Future[dict[str, Any]]] = set()
-        for r in queue:
+        for r in todo:
             live.add(pool.submit(one, r))
             if len(live) < width:
                 continue
             finished, live = wait(live, return_when=FIRST_COMPLETED)
             settle(finished)
-            if stop is not None:
+            if stop:
                 break
         settle(set(wait(live).done))
-    if stop is not None:
-        raise stop
-    return [done[str(r["id"])] for r in rows if str(r["id"]) in done]
+    if stop:
+        raise stop[0]
 
 
 def failures(mdir: Path) -> list[dict[str, Any]]:
