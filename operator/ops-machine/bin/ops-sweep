@@ -1,0 +1,50 @@
+#!/bin/bash
+# ops-sweep (client workspaces; run daily by .github/workflows/ops-workspace-sweep.yml
+# over fly ssh): enforce retention and report health. Prints counts and names,
+# never client content. Exit 0 healthy, 1 a check failed (the workflow pings
+# that workspace's healthchecks.io check /fail either way it cannot finish).
+#
+# RETENTION (Captain, 2026-10-17): delivered work is kept RETENTION_DAYS (30)
+# after its delivery date, then deleted. "Delivered" is a .DELIVERED file
+# (ops-deliver) holding the date, at the top of the directory it covers. Before
+# deleting, the sweep writes ~/ledger/<dir>-<date>.sha256: the hash and path of
+# every file, so coverage and "did we already have this page" checks still work
+# with the content gone. Directories with no .DELIVERED are never touched.
+# ~/inbox handoff notes older than RETENTION_DAYS are deleted too.
+set -uo pipefail
+RETENTION_DAYS="${RETENTION_DAYS:-30}"
+[ -f "$HOME/.ops-secrets" ] && . "$HOME/.ops-secrets"
+mkdir -p "$HOME/ledger" "$HOME/state"
+echo "$(date +%s)" > "$HOME/state/last-busy"   # the sweep itself is activity
+fail=0
+today=$(date +%s)
+
+removed=0; kept=0
+while IFS= read -r -d '' marker; do
+  dir=$(dirname "$marker")
+  d=$(head -1 "$marker" | tr -d '[:space:]')
+  when=$(date -d "$d" +%s 2>/dev/null) || { echo "WARN bad date in $marker"; fail=1; continue; }
+  if [ $(( (today - when) / 86400 )) -ge "$RETENTION_DAYS" ]; then
+    rel=${dir#"$HOME"/}
+    ledger="$HOME/ledger/$(printf '%s' "$rel" | tr '/ ' '__')-$d.sha256"
+    if (cd "$dir" && find . -type f ! -name .DELIVERED -print0 | xargs -0 -r sha256sum) > "$ledger"; then
+      rm -rf -- "$dir" && removed=$((removed + 1)) && echo "removed $rel (delivered $d; ledger $(wc -l < "$ledger") files)"
+    else
+      echo "FAIL ledger for $rel; kept"; fail=1
+    fi
+  else
+    kept=$((kept + 1))
+  fi
+done < <(find "$HOME" -maxdepth 5 \( -path "$HOME/dev" -o -path "$HOME/.claude" -o -path "$HOME/ledger" \) -prune -o -name .DELIVERED -type f -print0)
+inbox=$(find "$HOME/inbox" -type f -mtime +"$RETENTION_DAYS" -print -delete 2>/dev/null | wc -l)
+echo "retention: removed $removed, delivered-but-kept $kept, old inbox notes $inbox"
+
+if [ -n "${OPS_SEAT_TOKEN_EXPIRES:-}" ]; then
+  left=$(( ($(date -d "$OPS_SEAT_TOKEN_EXPIRES" +%s) - today) / 86400 ))
+  if [ "$left" -lt 30 ]; then echo "FAIL seat token expires in ${left}d: run bin/ops-workspace update ${OPS_WORKSPACE:-<slug>} from a laptop"; fail=1
+  else echo "seat token: ${left}d left"; fi
+fi
+
+/opt/ops/bin/ops-selftest || fail=1
+df -h "$HOME" | awk 'NR==2 {print "volume: " $3 " used of " $2 " (" $5 ")"}'
+exit "$fail"

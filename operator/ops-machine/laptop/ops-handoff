@@ -1,0 +1,17 @@
+#!/bin/bash
+# ops-handoff <client> "<task>": hand a task from a laptop session to a client's
+# ops workspace, without doing it here. What a laptop agent runs when the
+# client-data guard stops it; the Captain then types `ops <client>` and the
+# task is waiting. The task text goes to the workspace's ~/inbox/pending.md
+# (appended if one is already waiting); nothing is kept on the laptop.
+set -uo pipefail
+[ -n "${1:-}" ] && [ -n "${2:-}" ] || { echo 'usage: ops-handoff <client> "<task>"'; exit 2; }
+reg="$HOME/.claude/smd-ops-workspaces.json"
+app=$(jq -r --arg a "$1" '.workspaces | to_entries[] | select(.key==$a or (.value.aliases // [] | index($a))) | .value.app' "$reg" | head -1)
+[ -n "$app" ] || { echo "no workspace called $1"; exit 1; }
+OPS_WAKE_ONLY=1 "$(dirname "$0")/ops" "$1" || exit 1
+printf '## Handed over %s from %s\n\n%s\n\n' "$(date -u +%FT%TZ)" "$(hostname -s)" "$2" \
+  | fly ssh console -a "$app" -u ops --pty=false -C "sh -c 'mkdir -p ~/inbox && cat >> ~/inbox/pending.md'" >/dev/null 2>&1
+n=$(fly ssh console -a "$app" -u ops -C "sh -c 'wc -c < ~/inbox/pending.md'" </dev/null 2>/dev/null | tail -1 | tr -d ' \r')
+[ "${n:-0}" -gt 0 ] || { echo "handoff did not arrive on $app"; exit 1; }
+echo "Handed over to $app. Tell the Captain: type \`ops $1\` to continue there."

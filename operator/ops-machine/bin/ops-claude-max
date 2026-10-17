@@ -1,0 +1,16 @@
+#!/bin/bash
+# ops-claude-max: make every Claude on smd-ops use the Captain's Max login, never
+# the ANTHROPIC_API_KEY that rides in with the /ss secrets (crane injects them).
+# Claude Code asks once per key whether to use it; this records "no" for the
+# current key, the way the laptop's ~/.claude.json already does. Prints nothing
+# about the key itself. Re-run after the key is rotated (ss-env supplies it).
+set -euo pipefail
+f="$HOME/.claude.json"
+[ -f "$f" ] || echo '{}' > "$f"
+tail20="${ANTHROPIC_API_KEY: -20}"
+[ -n "$tail20" ] || { echo "no ANTHROPIC_API_KEY in env; run under ss-env"; exit 1; }
+tmp=$(mktemp)
+jq --arg k "$tail20" '.customApiKeyResponses.rejected = ((.customApiKeyResponses.rejected // []) + [$k] | unique)
+  | .customApiKeyResponses.approved = ((.customApiKeyResponses.approved // []) - [$k])' "$f" > "$tmp"
+mv "$tmp" "$f"; chmod 600 "$f"
+echo "rejected keys recorded: $(jq '.customApiKeyResponses.rejected | length' "$f")"

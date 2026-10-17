@@ -346,10 +346,21 @@ def fly_app_name(slug: str) -> str:
     return f"hermes-{slug}"
 
 
+def ops_workspace_app_name(slug: str) -> str:
+    """The client's ops workspace (operator/ops-machine/workspaces.json): the Fly
+    app that holds that client's documents. Retired with the seat, because its
+    volume IS the client's documents."""
+    return f"ops-{slug}"
+
+
 @dataclass
 class FlyAppDestroyer:
     """``fly apps destroy hermes-<slug> --yes``: Machine, volume and secrets in
-    one act. Lists first so an already-destroyed app is a skip, not an error."""
+    one act, then the same for the client's ops workspace ``ops-<slug>`` when
+    one exists (its volume holds the client's documents; leaving it would be a
+    removal that is not complete). Lists first so an already-destroyed app is a
+    skip, not an error, and lists again after so the manifest reports what is
+    observed gone."""
 
     runner: Runner = run_subprocess
 
@@ -367,14 +378,31 @@ class FlyAppDestroyer:
             if isinstance(a, dict) and "Name" in a
         }
 
-    async def destroy_machine(self, customer_slug: str) -> dict:
-        app = fly_app_name(customer_slug)
-        if app not in self._apps():
-            return {"skipped": True, "reason": "app_already_absent", "app_destroyed": False, "app": app}
+    def _destroy(self, app: str) -> None:
         proc = self.runner(["fly", "apps", "destroy", app, "--yes"])
         if proc.returncode != 0:
             raise RuntimeError(f"fly apps destroy {app} failed: {proc.stderr.strip() or proc.stdout.strip()}")
-        return {"skipped": False, "app_destroyed": True, "app": app}
+
+    async def destroy_machine(self, customer_slug: str) -> dict:
+        app = fly_app_name(customer_slug)
+        ws = ops_workspace_app_name(customer_slug)
+        present = self._apps()
+        workspace: dict = {"app": ws, "existed": ws in present}
+        if ws in present:
+            self._destroy(ws)
+            workspace["destroyed"] = ws not in self._apps()
+            if not workspace["destroyed"]:
+                raise RuntimeError(f"fly apps destroy {ws} reported success but the app is still listed")
+        if app not in present:
+            return {
+                "skipped": True,
+                "reason": "app_already_absent",
+                "app_destroyed": False,
+                "app": app,
+                "ops_workspace": workspace,
+            }
+        self._destroy(app)
+        return {"skipped": False, "app_destroyed": True, "app": app, "ops_workspace": workspace}
 
 
 # ---------------------------------------------------------------------------
@@ -421,19 +449,22 @@ class HealthchecksAndFleetStatusCleanup:
     d1: ConsoleD1
     http: Http = http_request
 
-    def _delete_check(self, slug: str) -> tuple[bool, Optional[str]]:
+    def _delete_check(
+        self, slug: str, *, tag: str = "operator", name: Optional[str] = None
+    ) -> tuple[bool, Optional[str]]:
         if not self.hc_api_key:
             return False, None
         headers = {"X-Api-Key": self.hc_api_key, "Accept": "application/json"}
         listing = self.http(
             "GET",
-            f"{HEALTHCHECKS_API}/checks/?tag=operator&tag=" + urllib.parse.quote(slug, safe=""),
+            f"{HEALTHCHECKS_API}/checks/?tag={urllib.parse.quote(tag, safe='')}&tag="
+            + urllib.parse.quote(slug, safe=""),
             headers,
             None,
         )
         if listing.status != 200 or not isinstance(listing.body, dict):
             raise RuntimeError(f"healthchecks list failed: HTTP {listing.status}")
-        wanted = healthchecks_check_name(slug)
+        wanted = name or healthchecks_check_name(slug)
         for check in listing.body.get("checks") or []:
             if not isinstance(check, dict) or check.get("name") != wanted:
                 continue
@@ -475,11 +506,16 @@ class HealthchecksAndFleetStatusCleanup:
 
     async def cleanup(self, customer_slug: str) -> dict:
         cancelled, uuid = self._delete_check(customer_slug)
+        # The ops workspace's daily sweep check (bin/ops-workspace creates it).
+        ws_cancelled, _ = self._delete_check(
+            customer_slug, tag="ops-workspace", name=ops_workspace_app_name(customer_slug)
+        )
         observed = {table: self._clear_table(table, customer_slug) for table in CONSOLE_SEAT_TABLES}
         manifest: dict = {
             "healthchecks_check_cancelled": cancelled,
             "healthchecks_check_uuid": uuid,
             "healthchecks_configured": bool(self.hc_api_key),
+            "ops_workspace_check_cancelled": ws_cancelled,
             "customer_slug": customer_slug,
         }
         short = {
@@ -637,6 +673,7 @@ __all__ = [
     "customer_r2_prefixes",
     "customer_vectorize_indexes",
     "fly_app_name",
+    "ops_workspace_app_name",
     "healthchecks_check_name",
     "seat_inbox_address",
 ]
