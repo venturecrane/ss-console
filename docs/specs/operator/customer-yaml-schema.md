@@ -552,6 +552,77 @@ Field rules:
 - **A step never exceeds its job.** A step authored above `date_prep.level` is refused: a firm that chose "Prepares it for you" for prep has not chosen "Handles it" for any part of it.
 - Materialization is config-as-data: the `task-list-keeper`, `date-prep-brief` and `deadline-miss-escalator` pre_runs read the block off the seat's own `/var/lib/smd-config/customer.yaml` at each tick (`operator/contracts/customer-yaml-blocks.yaml`, `case_manager`). Not portal-editable yet: the levels change by PR (`src/lib/portal/operator/customer-yaml-editor.ts` keeps them locked).
 
+## Multi-person seats: `people`, `spaces` and roles (ADR 0090, ADR 0091)
+
+A seat may name the packaged job it does with `seat.role` (ADR 0090; today only
+`couples`, whose package is `operator/roles/couples/`). Absent means no role.
+
+Authoring `people:` turns a seat into space mode (ADR 0091): every turn resolves
+to `person:<id>` or `shared`, structurally, and a turn that resolves no space
+fails closed. The shape:
+
+```yaml
+seat:
+  kind: customer
+  product: hosted-agent
+  role: couples # optional
+
+people: # one entry per person
+  - id: p1 # [a-z0-9-]+, unique
+    name: First Last
+    telegram_id: '123456789' # numeric string; '' until bound
+    email: a@example.com # lowercased
+
+spaces:
+  shared_telegram_chat: '-1001234567890' # negative numeric string; '' until created
+
+telegram:
+  enabled: true
+  allow_from: ['123456789'] # DMs
+  group_allow_from: ['123456789'] # sender gate inside the group
+  group_chats: ['-1001234567890'] # chat gate (Hermes allowed_chats)
+  group_sessions_per_user: false # the group is one shared conversation
+
+memory:
+  memory_enabled: false # Hermes native memory, passed through
+  user_profile_enabled: false
+
+personas:
+  - cron:
+      - skill: couples-checkin
+        schedule: '0 15 * * 1'
+        wake_policy: always
+        space: person:p1 # or shared; the run space AND the delivery target
+```
+
+Cross-field rules (`src/lib/operator/customer-yaml/sections-people.ts`):
+
+- `people` requires `spaces`, `memory.memory_enabled: false`,
+  `memory.user_profile_enabled: false`, and a `space` on every cron entry.
+- A cron `space` names `shared` or `person:<id>` for a `people[].id`. A `space`
+  or a `spaces:` block on a seat without `people:` is rejected.
+- Each person's email is on `scope.inbound_allow_from`.
+- A non-empty `telegram_id` is on both `telegram.allow_from` and
+  `telegram.group_allow_from`.
+- `telegram.group_chats` is the chat gate and maps to Hermes `allowed_chats`,
+  not `group_allowed_chats` (which admits a whole chat with no sender check).
+  A non-empty `group_chats` requires a non-empty `group_allow_from`, on any seat.
+- On a seat with `people:`, every `group_allow_from` id is a bound person's
+  `telegram_id` (never the onboarding sentinel), and `group_chats` holds at most
+  `spaces.shared_telegram_chat`. An unbound shared chat (`''`) is allowed; the
+  overlay then delivers shared routines locally.
+- No two cron entries share a `(skill, space)` pair.
+
+- No `record_stores[].readers` on a seat with `people:`. A record's owner there
+  is a space (`p1`, `person:p1` or `shared`) and each turn reads only its own
+  spaces, so `readers` would grant nothing.
+
+These mirror the overlay's translate-time rules (hermes-smd-overlay #469).
+
+The runtime consumers (the space resolver and its enforcement points) live in
+the overlay; `operator/contracts/customer-yaml-blocks.yaml` records `people` and
+`spaces` as inert until that overlay change is pinned.
+
 ## Failure modes
 
 | Condition                                                             | Validator behavior                                                                                                                                                                              |

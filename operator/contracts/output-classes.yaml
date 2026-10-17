@@ -599,6 +599,11 @@ skill_bindings:
     internal: []
     outbound: none
 
+  # ---- hosted-agent roles (ADR 0090): couples ----
+  calendar:
+    internal: []
+    outbound: derived # calendar invites to rostered people only (people[].email)
+
   # ---- conversational establishment (ADR 0085) ----
   # These two do not produce an output OF a class; they establish a PROPERTY of
   # one. The derived spec is not bound here on purpose: binding it would make

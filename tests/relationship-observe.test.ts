@@ -161,6 +161,16 @@ describe('parseLearnedPreferences', () => {
     ])
   })
 
+  it("FALSIFIER: skips kind 'memory' rows (a space-mode seat's remembered items, ADR 0091)", () => {
+    const out = parseLearnedPreferences({
+      entries: [
+        { peer_id: 'p1', preference: 'Private note', source: 'stated', kind: 'memory' },
+        { peer_id: 'p1', preference: 'Short replies', source: 'stated' },
+      ],
+    })
+    expect(out.map((p) => p.preferences.map((x) => x.preference))).toEqual([['Short replies']])
+  })
+
   it('normalizes optional fields (absent why/how_to_apply/recorded_at → null)', () => {
     const out = parseLearnedPreferences({
       entries: [{ peer_id: 'p1', preference: 'P', source: 'demonstrated' }],

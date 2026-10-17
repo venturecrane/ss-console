@@ -224,7 +224,22 @@ function checkOneCron(
   if (skill === null || schedule === null || wakePolicy === null || preRun === undefined) {
     return null
   }
-  return { skill, schedule, pre_run: preRun, wake_policy: wakePolicy }
+  const cron: PersonaCron = { skill, schedule, pre_run: preRun, wake_policy: wakePolicy }
+  // ADR 0091: `space` is shape-checked here; whether it names a real space is
+  // a cross-field rule in sections-people.ts.
+  const space = raw['space']
+  if (space !== undefined && space !== null) {
+    if (typeof space !== 'string') {
+      errors.push({
+        code: 'TypeMismatch',
+        path: `${path}.space`,
+        message: 'cron.space must be a string ("shared" or "person:<id>")',
+      })
+      return null
+    }
+    cron.space = space
+  }
+  return cron
 }
 
 function checkCronSkill(
