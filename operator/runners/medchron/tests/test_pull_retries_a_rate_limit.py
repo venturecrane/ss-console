@@ -82,3 +82,42 @@ def test_a_limit_that_outlasts_every_pass_is_still_reported(tmp_path: Path, monk
     rows = pull.fetch_all(seat, "m", _targets("b"), tmp_path, lambda _m: None)
     assert rows[0]["ok"] is False
     assert len(seat.mints) == 1 + pull.RETRY_PASSES
+
+
+class _ListingSeat(_Seat):
+    """A seat whose fetch answers HTTP 403 for the ``shut`` file (the status on
+    the exception's response, as the connector raises it)."""
+
+    def list_files(self, matter_id: str) -> list[dict[str, Any]]:
+        return _targets("a", "gone", "shut")
+
+    def folder_tree(self, matter_id: str) -> list[dict[str, Any]]:
+        return []
+
+    def fetch(self, url: str, dest: Path, expected_size: int | None) -> int:
+        if url.endswith("/shut"):
+            exc = RuntimeError("Smokeball GET /x/download -> HTTP 403: forbidden")
+            exc.response = type("R", (), {"status_code": 403})()  # type: ignore[attr-defined]
+            raise exc
+        return super().fetch(url, dest, expected_size)
+
+
+def test_the_pull_records_a_403_and_a_404_and_does_not_fail(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """FALSIFIER (review 2026-10-17 B2): ``run`` raised PullError for every
+    failed row but a 404 status, so one file Smokeball will not serve (403)
+    failed the demand and drafting pulls forever, though ``fetch_all`` already
+    treated it as final and did not retry it."""
+    monkeypatch.setattr(pull.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(pull, "select", lambda docs, paths, firm: docs)
+    seat = _ListingSeat({"gone": (9, "Smokeball GET /x/download -> HTTP 404: not found")})
+    report = pull.run(seat, "m", None, set(), tmp_path, lambda _m: None)  # type: ignore[arg-type]
+    assert report["absent_from_storage"] == ["gone.pdf"]
+    assert report["refused_by_smokeball"] == ["shut.pdf"]
+
+
+def test_the_pull_still_fails_on_a_file_a_retry_could_fix(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(pull.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(pull, "select", lambda docs, paths, firm: docs)
+    seat = _ListingSeat({"a": (9, "Smokeball GET /x/download -> HTTP 429: Too Many Requests")})
+    with pytest.raises(pull.PullError):
+        pull.run(seat, "m", None, set(), tmp_path, lambda _m: None)  # type: ignore[arg-type]

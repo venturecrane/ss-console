@@ -30,7 +30,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-_CONDITIONAL = re.compile(r"(?i)\blimits?\b[^.\n]{0,120}\b(if|would be|subject to confirmation)\b")
+#: G3: limits spoken of conditionally ("limits would be $100,000 if ..."), a
+#: premise fact for the drafter, never a failure.
+_CONDITIONAL_LIMITS = re.compile(r"(?i)\blimits?\b[^.\n]{0,120}\b(if|would be|subject to confirmation)\b")
 
 
 def _texts(extracted: list[dict[str, Any]]) -> list[tuple[dict[str, Any], str]]:
@@ -61,7 +63,7 @@ _NEGATED = re.compile(
 #: once a settlement has been reached", a med-pay carrier's standard notice) is
 #: not a settlement. Read as one, it ended a live pre-suit file with a coverage
 #: report instead of the demand that was asked for (2026-10-09).
-_CONDITIONAL = re.compile(
+_CONDITIONAL_LEAD = re.compile(
     r"(?i)\b(once|when|whenever|until|unless|if|after|before|upon|in the event( that)?)\s+(a|an|the|any)?\s*$"
 )
 
@@ -86,7 +88,7 @@ def _phrase_hits(
         lead = t[max(0, m.start() - 30) : m.start()]
         if negatable and _NEGATED.search(lead):
             return False
-        return not (conditional and _CONDITIONAL.search(lead))
+        return not (conditional and _CONDITIONAL_LEAD.search(lead))
 
     for r, t in texts:
         for p in pats:
@@ -310,7 +312,7 @@ def decide(
     for h in _phrase_hits(theirs, [_ROR], negatable=True):
         facts_out.append(f"reservation of rights (a posture, not a denial): {h['document']}: {h['quote']}")
     for r, t in texts:
-        m = _CONDITIONAL.search(t)
+        m = _CONDITIONAL_LIMITS.search(t)
         if m:
             facts_out.append(f"conditional limits language (a constraint on figures): {r.get('name')}: {_quote(t, m)}")
     return {

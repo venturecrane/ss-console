@@ -1362,6 +1362,21 @@ def test_a_settlement_that_has_been_reached_still_fails_g4(tmp_path):
     assert g4["passed"] is False
 
 
+def test_conditional_limits_language_reaches_the_drafter_as_a_g3_fact(tmp_path):
+    """FALSIFIER (review 2026-10-17 B1): a second module-level ``_CONDITIONAL``
+    (the settlement-lead regex, #3113) shadowed the limits regex, so decide()
+    searched whole documents for "once a ... $" and the G3 conditional-limits
+    fact was never emitted."""
+    from medchron.demand import premise
+
+    t = tmp_path / "a.txt"
+    t.write_text("Our insured's policy limits would be $100,000 subject to confirmation of coverage.")
+    out = premise.decide(
+        [{"name": "carrier letter", "text_path": str(t)}], {"premise_hits": []}, {"insurer": "X"}, _g4_prem()
+    )
+    assert any(f.startswith("conditional limits language") for f in out["premise_facts"]), out["premise_facts"]
+
+
 @pytest.mark.parametrize(
     "lead",
     [

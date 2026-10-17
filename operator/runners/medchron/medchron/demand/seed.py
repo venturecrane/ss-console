@@ -23,6 +23,9 @@ What does NOT carry over, so the new job decides it afresh:
   2026-10-09),
 * the drafting gate's results and the render (cheap, and they decide what is
   filed),
+* the independent review: its stage marker and its record (``review.json``),
+  either of which would let a fresh render reach the matter unreviewed, and
+  the markdown the review's findings were written into (review 2026-10-17),
 * the rendered files, the upload manifest and any delivery record,
 * the spend ledger: the new job's spend is its own, and the old job's cents are
   already in the month's total.
@@ -38,10 +41,13 @@ import json
 import shutil
 from pathlib import Path
 
-DROP_STATE = ("dates", "premise", "render", "gate.json", "gate-gap-audit.json", "gate-coverage.json")
+DROP_STATE = ("dates", "premise", "render", "review", "gate.json", "gate-gap-audit.json", "gate-coverage.json")
 DROP_PATHS = (
     "out",
     "runs",
+    "review.json",
+    "delivered-md.json",
+    "readback",
     "usage-ledger.jsonl",
     "premise.json",
     "coverage-report.md",
