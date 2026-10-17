@@ -20,6 +20,7 @@ Fail-closed: no authored URL means no subscription, never a caller-chosen one.
 from __future__ import annotations
 
 import os
+from typing import Any
 from urllib.parse import urlsplit
 
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
@@ -57,3 +58,29 @@ def seat_webhook_url(path: str | None = None) -> str | None:
     if parts.query or parts.fragment or parts.username or parts.password:
         return None
     return url
+
+
+def subscription_body(
+    name: str, event_types: list[str], notification_url: str | None, key: str | None
+) -> dict[str, Any]:
+    """The ``POST /webhooks`` body for ``create_webhook_subscription``, pinned to
+    the seat's gate. Raises ``ValueError`` (the tool's refusal) when no gate is
+    authored, or when the caller named any other URL. ``key`` defaults to the
+    gate's own ``WEBHOOK_SECRET_SMOKEBALL`` so deliveries verify at the gate."""
+    target = seat_webhook_url()
+    if target is None:
+        raise ValueError(
+            "create_webhook_subscription refused: this seat has no authored Smokeball webhook gate URL "
+            "(connectors.<cap>.webhook_url on the enabled mcp:smokeball connector, path /webhooks/smokeball). "
+            "A subscription can only ever point at the seat's own gate."
+        )
+    if notification_url is not None and notification_url.strip() != target:
+        raise ValueError(
+            "create_webhook_subscription refused: notification_url is not this seat's webhook gate. "
+            "Omit it; the subscription always targets the seat's own authored gate URL."
+        )
+    body: dict[str, Any] = {"name": name, "eventTypes": event_types, "eventNotificationUrl": target}
+    resolved_key = key or os.environ.get("WEBHOOK_SECRET_SMOKEBALL")
+    if resolved_key:
+        body["key"] = resolved_key
+    return body
