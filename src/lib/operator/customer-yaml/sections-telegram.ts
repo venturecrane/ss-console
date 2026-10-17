@@ -23,12 +23,16 @@
  * rejects `allowed_users`. Any OTHER unknown key is an error now, so the next
  * misspelled key cannot be silently ignored the same way.
  *
- * Group keys (ADR 0091, multi-person seats). `group_allow_from` (Telegram user
- * ids allowed to speak in a group), `group_chats` (allowed group chat ids, each
- * a negative numeric string) and `group_sessions_per_user` (false makes the
- * group one shared conversation) are passthroughs to the Hermes Telegram
- * adapter. The cross-field rules that tie them to `people:` live in
- * sections-people.ts.
+ * Group keys (ADR 0091, multi-person seats), passthroughs to the Hermes
+ * Telegram adapter (overlay #469):
+ *   - `group_chats` is the CHAT gate: the group chat ids the bot answers in
+ *     (each a negative numeric string). It maps to Hermes `allowed_chats`, NOT
+ *     `group_allowed_chats`; the latter grants a whole chat with no sender check.
+ *   - `group_allow_from` is the SENDER gate inside those chats: the Telegram
+ *     user ids that may speak there. `group_chats` without it would be a chat
+ *     nobody may speak in, so a non-empty `group_chats` requires it.
+ *   - `group_sessions_per_user: false` makes the group one shared conversation.
+ * The cross-field rules that tie them to `people:` live in sections-people.ts.
  *
  * Validate-only (pushes errors); the value is materialized by the overlay, not
  * consumed from the parsed CustomerYaml object.
@@ -146,8 +150,21 @@ export function checkTelegram(root: Record<string, unknown>, errors: ValidationE
 
   const allowFrom = checkIdList(raw, 'allow_from', errors)
   const legacy = checkIdList(raw, 'allowed_users', errors)
-  checkIdList(raw, 'group_allow_from', errors)
+  const groupFrom = checkIdList(raw, 'group_allow_from', errors)
   checkGroupChats(raw['group_chats'], errors)
+  if (
+    Array.isArray(raw['group_chats']) &&
+    (raw['group_chats'] as unknown[]).length > 0 &&
+    groupFrom.length === 0
+  ) {
+    errors.push({
+      code: 'MissingField',
+      path: 'telegram.group_allow_from',
+      message:
+        'telegram.group_allow_from must be a non-empty list when telegram.group_chats is set: ' +
+        'group_chats is the chat gate and group_allow_from the sender gate inside it.',
+    })
+  }
   const effective = new Set([...allowFrom, ...legacy])
 
   if (enabled === true && effective.size === 0) {

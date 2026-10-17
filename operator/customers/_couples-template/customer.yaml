@@ -20,8 +20,8 @@ schema_version: 1
 #   - telegram_id stays '' until that partner binds Telegram through the
 #     single-use deep link; the bind lands through a reviewed change to this
 #     file and a restart (ADR 0091 section 5). Until both are bound, allow_from
-#     and group_allow_from carry the SMD sentinel id so the boot guard against
-#     an empty allowlist holds.
+#     carries the SMD sentinel id so the boot guard against an empty allowlist
+#     holds. group_allow_from holds bound partners only, never the sentinel.
 #   - external_send stays confirm. code_execution stays unauthored, which
 #     refuses it and drops terminal, code_execution and delegation (R2).
 #   - A seat cannot boot until every enabled skill below has a body under
@@ -234,8 +234,11 @@ telegram:
   enabled: true
   allow_from:
     - '[SMD SENTINEL TELEGRAM ID until both partners bind]'
-  group_allow_from:
-    - '[SMD SENTINEL TELEGRAM ID until both partners bind]'
+  # The sender gate inside the group: bound partners only, never the sentinel
+  # (the validator and the overlay both require every id here to be a person).
+  group_allow_from: []
+  # The chat gate (Hermes allowed_chats): only spaces.shared_telegram_chat,
+  # once the group exists. Empty until then; shared routines deliver locally.
   group_chats: []
   # The group is one shared conversation, not one session per sender.
   group_sessions_per_user: false

@@ -22,6 +22,13 @@
  *   4. A bound `telegram_id` is on both `telegram.allow_from` (DMs) and
  *      `telegram.group_allow_from` (the shared group). An empty id means the
  *      person has not bound Telegram yet (onboarding), and is allowed.
+ *   5. The group answers only people (mirrors overlay #469's translate-time
+ *      rules): every `telegram.group_allow_from` id is a bound person's
+ *      `telegram_id`, and `telegram.group_chats` holds at most
+ *      `spaces.shared_telegram_chat`. An unbound shared chat ('') is allowed;
+ *      the overlay then delivers shared routines locally.
+ *   6. No two cron entries share a (skill, space) pair: the pair is the
+ *      routine's identity once space mode is on.
  *
  * `spaces` without `people` is rejected for the same reason as rule 2.
  *
@@ -211,6 +218,56 @@ function checkCronSpaces(
   }
 }
 
+/** Rule 6: a (skill, space) pair names one routine. */
+function checkDuplicateCronSpaces(root: Record<string, unknown>, errors: ValidationError[]): void {
+  const seen = new Set<string>()
+  for (const [path, cron] of cronEntries(root)) {
+    const { skill, space } = cron
+    // A non-string skill or space is already reported by its own check.
+    if (typeof skill !== 'string' || typeof space !== 'string') continue
+    const key = `${skill}\u0000${space}`
+    if (seen.has(key)) {
+      errors.push({
+        code: 'InvalidCronSpace',
+        path: `${path}.space`,
+        message: `another cron entry already runs ${skill} in ${space}`,
+      })
+    }
+    seen.add(key)
+  }
+}
+
+/** Rule 5: the group fences admit only people, and only the shared chat. */
+function checkGroupFence(
+  root: Record<string, unknown>,
+  people: SeatPerson[],
+  errors: ValidationError[]
+): void {
+  const bound = new Set(people.map((p) => p.telegram_id).filter((t) => t !== ''))
+  idList(root['telegram'], 'group_allow_from').forEach((id, i) => {
+    if (!bound.has(id.trim())) {
+      err(
+        `telegram.group_allow_from[${i}]`,
+        'on a seat that authors people:, every group_allow_from id must be a bound ' +
+          "person's telegram_id (the group answers only people)",
+        errors
+      )
+    }
+  })
+  const spaces = root['spaces']
+  const shared = isPlainObject(spaces) ? spaces['shared_telegram_chat'] : undefined
+  idList(root['telegram'], 'group_chats').forEach((chat, i) => {
+    if (typeof shared !== 'string' || shared === '' || chat.trim() !== shared) {
+      err(
+        `telegram.group_chats[${i}]`,
+        'on a seat that authors people:, telegram.group_chats may hold only ' +
+          'spaces.shared_telegram_chat',
+        errors
+      )
+    }
+  })
+}
+
 /** Rule 1: the blocks and memory switches a space-mode seat must author. */
 function checkSpaceModePrerequisites(
   root: Record<string, unknown>,
@@ -291,5 +348,9 @@ export function checkSpaceMode(
       .filter((id): id is string => typeof id === 'string')
   )
   checkCronSpaces(root, ids, errors)
-  if (people !== null) checkPersonChannels(root, people, errors)
+  checkDuplicateCronSpaces(root, errors)
+  if (people !== null) {
+    checkPersonChannels(root, people, errors)
+    checkGroupFence(root, people, errors)
+  }
 }

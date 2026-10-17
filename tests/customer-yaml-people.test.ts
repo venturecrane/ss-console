@@ -282,19 +282,73 @@ describe('telegram group keys', () => {
   it('FALSIFIER: group_chats entries must be negative numeric strings', () => {
     const s = bound()
     s.telegram.group_chats = ['1001234567890']
-    expect(codesAt(s)).toEqual([['TypeMismatch', 'telegram.group_chats[0]']])
+    expect(codesAt(s)).toContainEqual(['TypeMismatch', 'telegram.group_chats[0]'])
   })
 
   it('group_allow_from entries must be numeric user ids', () => {
     const s = bound()
     s.telegram.group_allow_from = ['111', '222', '@x']
-    expect(codesAt(s)).toEqual([['TypeMismatch', 'telegram.group_allow_from[2]']])
+    expect(codesAt(s)).toContainEqual(['TypeMismatch', 'telegram.group_allow_from[2]'])
   })
 
   it('group_sessions_per_user must be a boolean', () => {
     const s = bound()
     s.telegram.group_sessions_per_user = 'no'
     expect(codesAt(s)).toEqual([['TypeMismatch', 'telegram.group_sessions_per_user']])
+  })
+})
+
+describe('rule 5: the group answers only people (overlay #469 parity)', () => {
+  it('FALSIFIER: group_chats without group_allow_from is rejected (any seat)', () => {
+    const s = bound()
+    s.telegram.group_allow_from = []
+    s.people[0].telegram_id = ''
+    s.people[1].telegram_id = ''
+    s.telegram.allow_from = ['1000000001']
+    expect(codesAt(s)).toEqual([['MissingField', 'telegram.group_allow_from']])
+  })
+
+  it('FALSIFIER: a group_allow_from id that is not a bound person is rejected', () => {
+    const s = bound()
+    s.telegram.group_allow_from = ['111', '222', '999']
+    expect(codesAt(s)).toEqual([['InvalidPeople', 'telegram.group_allow_from[2]']])
+  })
+
+  it('FALSIFIER: the onboarding sentinel may not sit on group_allow_from', () => {
+    const s = seat()
+    s.telegram.group_allow_from = ['1000000001']
+    expect(codesAt(s)).toEqual([['InvalidPeople', 'telegram.group_allow_from[0]']])
+  })
+
+  it('FALSIFIER: group_chats holding a chat other than the shared one is rejected', () => {
+    const s = bound()
+    s.telegram.group_chats = ['-1001234567890', '-1009999999999']
+    expect(codesAt(s)).toEqual([['InvalidPeople', 'telegram.group_chats[1]']])
+  })
+
+  it('FALSIFIER: group_chats set while the shared chat is unbound is rejected', () => {
+    const s = bound()
+    s.spaces.shared_telegram_chat = ''
+    expect(codesAt(s)).toEqual([['InvalidPeople', 'telegram.group_chats[0]']])
+  })
+
+  it('an unbound shared chat with shared routines is allowed (delivers locally)', () => {
+    const s = seat()
+    s.personas[0].cron[0].space = 'shared'
+    expect(s.spaces.shared_telegram_chat).toBe('')
+    expect(errorsOf(s)).toEqual([])
+  })
+})
+
+describe('rule 6: no two cron entries share a (skill, space) pair', () => {
+  it('FALSIFIER: a repeated pair is rejected', () => {
+    const s = seat()
+    s.personas[0].cron[1].space = 'person:p1'
+    expect(codesAt(s)).toEqual([['InvalidCronSpace', 'personas[0].cron[1].space']])
+  })
+
+  it('the same skill in two spaces is fine', () => {
+    expect(errorsOf(seat())).toEqual([])
   })
 })
 
