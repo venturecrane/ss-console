@@ -419,13 +419,20 @@ def test_a_folder_reads_back_in_its_tree_and_an_absent_one_is_link_not_visible(t
 
 
 def test_a_webhook_reads_back_and_a_dropped_event_type_is_a_mismatch(
-    tenant: Tenant, monkeypatch: pytest.MonkeyPatch
+    tenant: Tenant, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
 ) -> None:
     monkeypatch.delenv("WEBHOOK_SECRET_SMOKEBALL", raising=False)
-    out = server.create_webhook_subscription("ops", ["matter.updated"], "https://gw.example/hook")
+    # The callback is the seat's authored gate (webhook_target.py), never caller-chosen.
+    cfg = tmp_path / "customer.yaml"
+    cfg.write_text(
+        "connectors:\n  PM:\n    backend: mcp:smokeball\n    enabled: true\n"
+        "    webhook_url: https://gw.example/webhooks/smokeball\n"
+    )
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(cfg))
+    out = server.create_webhook_subscription("ops", ["matter.updated"])
     assert out["readback"] == "confirmed"
     tenant.plants["/webhooks"] = lambda v: {"value": [{**w, "eventTypes": []} for w in v["value"]]}
-    out = server.create_webhook_subscription("ops2", ["task.created"], "https://gw.example/hook")
+    out = server.create_webhook_subscription("ops2", ["task.created"])
     _shortfall(out, "readback_mismatch")
 
 
