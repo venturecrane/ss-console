@@ -153,49 +153,64 @@ def _addressed(payload: dict[str, Any]) -> frozenset[str]:
     return frozenset(a for a in found if a)
 
 
-def _structure(lines: Iterable[_Line]) -> tuple[list[_Line], list[list[_Line]], list[_Line]]:
-    """(calendar-level properties, each VEVENT's own properties, every VALARM's
-    properties). Refuses anything but a well-nested allowed component tree."""
+def _check_begin(component: str, stack: list[str], opened: bool) -> None:
+    """Refuse a BEGIN that would put a component where an invitation has none."""
+    if component not in _ALLOWED_COMPONENTS:
+        raise CalendarRefused(f"calendar refused: an invitation carries no {component} component")
+    if (not stack) != (component == "VCALENDAR") or (component == "VCALENDAR" and opened):
+        raise CalendarRefused("calendar refused: exactly one VCALENDAR must hold everything")
+    if component == "VEVENT" and stack != ["VCALENDAR"]:
+        raise CalendarRefused("calendar refused: a VEVENT must sit directly in the VCALENDAR")
+    if component == "VALARM" and stack[-1:] != ["VEVENT"]:
+        raise CalendarRefused("calendar refused: a VALARM must sit in the VEVENT")
+
+
+@dataclass
+class _Tree:
+    """The calendar's properties by where they sit."""
+
+    top: list[_Line]
+    events: list[list[_Line]]
+    alarms: list[_Line]
+
+
+def _place(tree: _Tree, stack: list[str], line: _Line) -> None:
+    if not stack:
+        raise CalendarRefused("calendar refused: content outside the VCALENDAR")
+    if stack == ["VCALENDAR"]:
+        tree.top.append(line)
+    elif stack[-1] == "VEVENT":
+        tree.events[-1].append(line)
+    elif stack[-1] == "VALARM":
+        tree.alarms.append(line)
+
+
+def _structure(lines: Iterable[_Line]) -> _Tree:
+    """The calendar's properties by component. Refuses anything but a well-nested
+    tree of the allowed components."""
     stack: list[str] = []
-    top: list[_Line] = []
-    events: list[list[_Line]] = []
-    alarms: list[_Line] = []
+    tree = _Tree([], [], [])
     opened = closed = False
     for line in lines:
         if closed:
             raise CalendarRefused("calendar refused: content after the VCALENDAR")
+        component = line.value.strip().upper()
         if line.name == "BEGIN":
-            component = line.value.strip().upper()
-            if component not in _ALLOWED_COMPONENTS:
-                raise CalendarRefused(f"calendar refused: an invitation carries no {component} component")
-            if (not stack) != (component == "VCALENDAR") or (component == "VCALENDAR" and opened):
-                raise CalendarRefused("calendar refused: exactly one VCALENDAR must hold everything")
-            if component == "VEVENT" and stack != ["VCALENDAR"]:
-                raise CalendarRefused("calendar refused: a VEVENT must sit directly in the VCALENDAR")
-            if component == "VALARM" and stack[-1:] != ["VEVENT"]:
-                raise CalendarRefused("calendar refused: a VALARM must sit in the VEVENT")
+            _check_begin(component, stack, opened)
             if component == "VEVENT":
-                events.append([])
+                tree.events.append([])
             opened = True
             stack.append(component)
-            continue
-        if line.name == "END":
-            if not stack or stack[-1] != line.value.strip().upper():
+        elif line.name == "END":
+            if not stack or stack[-1] != component:
                 raise CalendarRefused("calendar refused: components are not properly nested")
             stack.pop()
             closed = not stack
-            continue
-        if not stack:
-            raise CalendarRefused("calendar refused: content outside the VCALENDAR")
-        if stack == ["VCALENDAR"]:
-            top.append(line)
-        elif stack[-1] == "VEVENT":
-            events[-1].append(line)
-        elif stack[-1] == "VALARM":
-            alarms.append(line)
+        else:
+            _place(tree, stack, line)
     if not closed:
         raise CalendarRefused("calendar refused: the VCALENDAR is not closed")
-    return top, events, alarms
+    return tree
 
 
 def _one(props: list[_Line], name: str, where: str) -> _Line:
@@ -205,12 +220,8 @@ def _one(props: list[_Line], name: str, where: str) -> _Line:
     return found[0]
 
 
-def build(payload: dict[str, Any], *, organizer: str) -> Invitation | None:
-    """The invitation ``payload`` asks to carry, or ``None`` when it asks none.
-
-    ``organizer`` is this seat's own inbox address, which the event's ORGANIZER
-    must name: a calendar client shows the organizer as who invited you, and a
-    message from this inbox claiming another organizer is a forgery."""
+def _declared(payload: dict[str, Any]) -> tuple[str, bytes] | None:
+    """``(method, ics bytes)`` the payload declares, or ``None`` for no field."""
     raw = payload.get(CALENDAR_FIELD)
     if raw is None:
         return None
@@ -224,13 +235,11 @@ def build(payload: dict[str, Any], *, organizer: str) -> Invitation | None:
     data = ics.encode("utf-8")
     if len(data) > MAX_ICS_BYTES:
         raise CalendarRefused(f"calendar refused: over {MAX_ICS_BYTES} bytes is not an invitation")
-    top, events, alarms = _structure(_lines(ics))
-    if _one(top, "METHOD", "calendar").value.strip().upper() != method:
-        raise CalendarRefused("calendar refused: the calendar's METHOD is not the method declared")
-    _one(top, "VERSION", "calendar")
-    if len(events) != 1:
-        raise CalendarRefused("calendar refused: an invitation carries exactly one VEVENT")
-    event = events[0]
+    return str(method), data
+
+
+def _identity(event: list[_Line]) -> tuple[str, int]:
+    """The event's UID and SEQUENCE, with its other required properties checked."""
     uid = _one(event, "UID", "event").value.strip()
     if not uid:
         raise CalendarRefused("calendar refused: the event's UID is empty")
@@ -242,6 +251,12 @@ def build(payload: dict[str, Any], *, organizer: str) -> Invitation | None:
         raise CalendarRefused("calendar refused: SEQUENCE must be a whole number") from exc
     if sequence < 0:
         raise CalendarRefused("calendar refused: SEQUENCE must not be negative")
+    return uid, sequence
+
+
+def _people(event: list[_Line], payload: dict[str, Any], organizer: str) -> tuple[str, ...]:
+    """The attendees, once the ORGANIZER is this inbox and every attendee is a
+    to/cc recipient of the message."""
     if _mailto(_one(event, "ORGANIZER", "event").value) != normalize_address(organizer):
         raise CalendarRefused("calendar refused: the ORGANIZER must be this seat's own inbox")
     attendees = tuple(_mailto(p.value) for p in event if p.name == "ATTENDEE")
@@ -254,13 +269,40 @@ def build(payload: dict[str, Any], *, organizer: str) -> Invitation | None:
             "calendar refused: every ATTENDEE must be a to or cc recipient of this message, "
             "so the fences that govern the message govern the invitation: " + ", ".join(missing)
         )
+    return attendees
+
+
+def _nothing_reaches_past(event: list[_Line], alarms: list[_Line]) -> None:
+    """No ATTACH, and no alarm that could mail anyone or name anyone."""
     if any(p.name == "ATTACH" for p in event):
         raise CalendarRefused("calendar refused: an invitation carries no ATTACH")
     for prop in alarms:
-        if prop.name == "ATTENDEE" or prop.name == "ATTACH":
+        if prop.name in ("ATTENDEE", "ATTACH"):
             raise CalendarRefused(f"calendar refused: an alarm carries no {prop.name}")
         if prop.name == "ACTION" and prop.value.strip().upper() not in _ALARM_ACTIONS:
             raise CalendarRefused("calendar refused: an alarm's ACTION must be DISPLAY or AUDIO")
+
+
+def build(payload: dict[str, Any], *, organizer: str) -> Invitation | None:
+    """The invitation ``payload`` asks to carry, or ``None`` when it asks none.
+
+    ``organizer`` is this seat's own inbox address, which the event's ORGANIZER
+    must name: a calendar client shows the organizer as who invited you, and a
+    message from this inbox claiming another organizer is a forgery."""
+    declared = _declared(payload)
+    if declared is None:
+        return None
+    method, data = declared
+    tree = _structure(_lines(data.decode("utf-8")))
+    if _one(tree.top, "METHOD", "calendar").value.strip().upper() != method:
+        raise CalendarRefused("calendar refused: the calendar's METHOD is not the method declared")
+    _one(tree.top, "VERSION", "calendar")
+    if len(tree.events) != 1:
+        raise CalendarRefused("calendar refused: an invitation carries exactly one VEVENT")
+    event = tree.events[0]
+    uid, sequence = _identity(event)
+    attendees = _people(event, payload, organizer)
+    _nothing_reaches_past(event, tree.alarms)
     return Invitation(
         method=method,
         attachment={
