@@ -36,12 +36,25 @@ start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 (cd "$REPO/operator" && "$HOME/bin/ss-env" python3 bin/work-health.py "${args[@]}") > "$body" 2>&1
 status=$?
 echo "work-health exit=$status"
-mv -f "$STATE/triage-state.next.json" "$STATE/triage-state.json" 2>/dev/null || true
-echo "$start" > "$STATE/triage-since"
+# A failed evaluation (3 = HOLD, nothing could be read; anything else = crash)
+# pages, and does NOT advance the window: what it could not see is still new
+# next hour. Peer /code-review 2026-10-17: the first version ignored this exit
+# and advanced triage-since unconditionally, so a broken evaluator read as
+# "nothing new" every hour behind a green heartbeat.
+if [ "$status" -ne 0 ]; then
+  echo "work-health failed; window kept at ${since:-never}"; tail -20 "$body"; exit "$status"
+fi
+
+# The window and seen-item state advance only once this run's items are
+# accounted for: here when nothing is new, at the end once the report is sent.
+commit_window() {
+  mv -f "$STATE/triage-state.next.json" "$STATE/triage-state.json" 2>/dev/null || true
+  echo "$start" > "$STATE/triage-since"
+}
 
 # Only a NEW listed item wakes the agent ("N need attention (M new)", M > 0).
 new=$(grep -o -E 'need attention \(([0-9]+) new\)' "$body" | grep -o -E '[0-9]+' | tail -1)
-if [ "${new:-0}" = "0" ]; then echo "nothing new; no agent run"; exit 0; fi
+if [ "${new:-0}" = "0" ]; then echo "nothing new; no agent run"; commit_window; exit 0; fi
 
 prompt="You are SMD's ops triage agent on the smd-ops machine (read docs/handbook/work-health.md and operator/ops-machine/TRIAGE.md first; follow TRIAGE.md exactly). The work-health evaluation just reported the items below. Investigate each NEW item to ground, take only the actions TRIAGE.md allows, and end with the report in the exact format TRIAGE.md gives.
 
@@ -72,3 +85,8 @@ req = urllib.request.Request(
 )
 print("resend", urllib.request.urlopen(req, timeout=30).status)
 PY
+sent=$?
+# An unsent report keeps the window, so the same items are triaged next hour,
+# and the non-zero exit pings /fail.
+[ "$sent" -eq 0 ] || exit "$sent"
+commit_window

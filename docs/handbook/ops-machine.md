@@ -10,8 +10,8 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/fly.toml
   - label: operator/ops-machine/TRIAGE.md - the triage agent's standing orders
     href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/TRIAGE.md
-  - label: operator/ops-machine/laptop-offboard.sh - taking client operations off a laptop
-    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/laptop-offboard.sh
+  - label: operator/ops-machine/laptop-offboard.py - taking client operations off a laptop
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/laptop-offboard.py
 ---
 
 ## Why it exists
@@ -47,8 +47,8 @@ When a key expires, `ops-selftest` on the Machine shows which one, and the match
 
 ## Break-glass
 
-If the Machine is down when a client needs something, the Captain logs a laptop back into Fly (`fly auth login`) and works from there as before. A laptop used this way gets offboarded again afterwards (`laptop-offboard.sh`).
+If the Machine is down when a client needs something, the Captain logs a laptop back into Fly (`fly auth login`) and works from there as before. A laptop used this way gets offboarded again afterwards (`laptop-offboard.py`).
 
 ## Moving data onto it, and off a laptop
 
-`move-to-ops.sh` and `move-by-folder.sh` copy laptop folders onto the Machine and prove every file arrived with a sha256 manifest checked on the Machine. A folder is recorded as moved only when every file verifies. `laptop-offboard.sh` deletes only what is recorded as verified, plus engagements clones with no unsaved work. It then logs the laptop out of Fly and reads the filesystem back to prove each path is gone. Run it without `--execute` first to see the list.
+`move-to-ops.sh` and `move-by-folder.sh` copy laptop folders onto the Machine and prove every file arrived with a sha256 manifest checked on the Machine. A folder is recorded as moved only when every file verifies. `laptop-offboard.py` deletes a laptop file only if it is listed in a copy's manifest and still hashes to the copied value, so anything changed since the copy stays. It never deletes a whole folder, the agent memory, or `~/dev`, and it reads back that every deleted file is gone. Run it without `--execute` first to see the counts.
