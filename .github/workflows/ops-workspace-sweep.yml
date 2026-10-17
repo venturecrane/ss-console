@@ -36,6 +36,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
       - id: m
         run: |
+          set -euo pipefail
           m=$(jq -c '[.workspaces | to_entries[] | {slug: .key, app: .value.app,
                  suffix: (.key | ascii_upcase | gsub("-"; "_"))}]' operator/ops-machine/workspaces.json)
           echo "matrix=$m" >> "$GITHUB_OUTPUT"
@@ -57,6 +58,7 @@ jobs:
     steps:
       - name: Install flyctl
         run: |
+          set -euo pipefail
           curl -fsSL https://github.com/superfly/flyctl/releases/download/v0.4.115/flyctl_0.4.115_Linux_x86_64.tar.gz \
             | tar -xz -C /usr/local/bin flyctl
           ln -sf flyctl /usr/local/bin/fly

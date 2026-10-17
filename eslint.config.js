@@ -406,6 +406,8 @@ export default tseslint.config(
       '.claude/**/*.js',
       '.claude/**/*.mjs',
       '.claude/**/*.cjs',
+      // The laptop hook that laptop/install.sh copies to ~/.claude/hooks.
+      'operator/ops-machine/laptop/*.mjs',
     ],
     ...tseslint.configs.disableTypeChecked,
   },

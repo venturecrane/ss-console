@@ -57,11 +57,32 @@ const PULL_PATTERNS = [
   /seat-probe\.sh\b[^|;&]*\b(download|mint|get_document|read_document|read_attachment|extract)/,
 ]
 
+/** A string field of a parsed JSON object, or '' (external input: never cast). */
+function str(obj, key) {
+  if (obj === null || typeof obj !== 'object') return ''
+  const v = /** @type {Record<string, unknown>} */ (obj)[key]
+  return typeof v === 'string' ? v : ''
+}
+
+/** @returns {{slug: string, alias: string}[]} */
 function workspaces() {
   try {
     const f = path.join(HOME, '.claude', 'smd-ops-workspaces.json')
+    /** @type {unknown} */
     const j = JSON.parse(fs.readFileSync(f, 'utf8'))
-    return Object.entries(j.workspaces || {}).map(([slug, w]) => ({ slug, alias: (w.aliases || [])[0] || slug }))
+    const ws =
+      j !== null && typeof j === 'object'
+        ? /** @type {Record<string, unknown>} */ (j).workspaces
+        : null
+    if (ws === null || typeof ws !== 'object') return []
+    return Object.entries(/** @type {Record<string, unknown>} */ (ws)).map(([slug, w]) => {
+      const aliases =
+        w !== null && typeof w === 'object'
+          ? /** @type {Record<string, unknown>} */ (w).aliases
+          : null
+      const first = Array.isArray(aliases) && typeof aliases[0] === 'string' ? aliases[0] : slug
+      return { slug, alias: first }
+    })
   } catch {
     return []
   }
@@ -84,11 +105,16 @@ function guess(text, list) {
 
 try {
   if (fs.existsSync(MARKER)) process.exit(0)
+  /** @type {unknown} */
   const payload = JSON.parse(fs.readFileSync(0, 'utf8'))
-  const input = payload?.tool_input ?? {}
-  const isBash = typeof input.command === 'string'
-  const raw = isBash ? input.command : (input.file_path ?? input.notebook_path)
-  if (typeof raw !== 'string' || !raw) process.exit(0)
+  const input =
+    payload !== null && typeof payload === 'object'
+      ? /** @type {Record<string, unknown>} */ (payload).tool_input
+      : null
+  const command = str(input, 'command')
+  const isBash = command !== ''
+  const raw = isBash ? command : str(input, 'file_path') || str(input, 'notebook_path')
+  if (!raw) process.exit(0)
   // An absolute laptop path to a data folder also counts for Edit/Write.
   const text = isBash ? raw : raw.replace(HOME, '~')
   const hit = which(text, isBash)
@@ -100,7 +126,7 @@ try {
       fs.mkdirSync(path.join(HOME, '.claude'), { recursive: true })
       fs.appendFileSync(
         path.join(HOME, '.claude', 'client-data-guard-audit.log'),
-        `${new Date().toISOString()}\t${payload?.session_id ?? '?'}\t${reason}\t${hit}\n`
+        `${new Date().toISOString()}\t${str(payload, 'session_id') || '?'}\t${reason}\t${hit}\n`
       )
     } catch {
       /* auditing never blocks the act it records */
@@ -111,7 +137,9 @@ try {
   const list = workspaces()
   const w = guess(text, list)
   const alias = w ? w.alias : '<client>'
-  const known = list.length ? list.map((x) => `${x.alias} (${x.slug})`).join(', ') : 'none installed'
+  const known = list.length
+    ? list.map((x) => `${x.alias} (${x.slug})`).join(', ')
+    : 'none installed'
   process.stderr.write(
     `client-data-guard: this would put client documents on a laptop (matched "${hit}").\n` +
       `Client documents are opened only in that client's ops workspace.\n` +
