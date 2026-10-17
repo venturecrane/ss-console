@@ -153,7 +153,18 @@ Confirm in a line.
 4. If any result is at or below its `target`, reply with a short note to the
    group: what, the price found, where it was found, and when you checked. Say
    it is what the search shows, not a quote. Otherwise reply `[SILENT]`.
-5. You cannot save anything after searching in this run. Do not try.
+5. If a partner asked you to keep the prices found, save them to the watch
+   record. This run may write only into its own shared space; the seat marks
+   the record "from a web search" (`from_web: true`).
+
+**A price check a partner asks for in their private chat:** search, report
+what you found and where, and, if they want it kept, save it in their own
+space (`owner: <id>`). The seat marks it "from a web search". Sharing it with
+both still goes through "share it": show the exact text, marked as from a web
+search, and wait for their reply. After the search, calendar invites are
+refused for the rest of that conversation: save the find privately and tell
+them to say "put it on our calendar" in a new message in a fresh conversation
+(in Telegram, `/new` starts one). Do not suggest any other way.
 
 **Stopping one:** set `status: stopped` when a partner asks, or tell them
 when `until` has passed and ask whether to keep watching.
