@@ -23,6 +23,8 @@
  */
 
 export const SKILL_SUMMARIES: Record<string, string> = {
+  calendar:
+    'Keeps the shared calendar and sends each event as an invite to the people on the account. Never invites anyone else.',
   'client-matter-digest':
     'Drafts a per-matter status update for a client, in your voice. Reports status, never advises.',
   'client-verification-tracker':
@@ -35,8 +37,14 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Verifies daily that the connection to your practice management system is alive, so a broken connection is caught before it interrupts work. Checks the connection only; reads and writes no matter data.',
   'consult-scheduler':
     'Offers consult times within your rules and drafts the confirmation for a human to send.',
+  'couples-checkin':
+    'Asks each of you, privately, about the topics you chose together. Your answers stay yours.',
   'daily-needs-you-digest':
     'One batched daily digest of what across your matters genuinely needs attention. Never acts, never manufactures urgency.',
+  'date-night-planner':
+    'Suggests date nights from what you have loved before, keeps the history, and sends you both the invite.',
+  'dates-to-remember':
+    'Keeps birthdays and anniversaries on your shared calendar. Gift ideas stay private to whoever had them.',
   'date-prep-brief':
     'When a court date comes into view, checks the file is ready, does the prep you turned on, and asks the attorney only what needs them.',
   'deadline-and-sol-tracker':
@@ -67,6 +75,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     "Makes your rep letters on your own forms and enters a client's medical facilities on the matter your staff name. Letter values come from the matter; anything missing is marked, never filled in.",
   'follow-up-discovery-drafter':
     "On your attorney's request, drafts the next round of written discovery aimed at what the record leaves unestablished, plus a short plan. Targeting decisions stay with the attorney; it never serves.",
+  'gratitude-prompts':
+    'Asks each of you, now and then, what you appreciated. Shared only when you choose.',
   'inbox-triage': 'Triages your inbox daily and drafts categorized replies for your review.',
   'intake-to-system-sync':
     'Syncs a converted lead from your intake CRM into Smokeball, with dedupe and conflict checks.',
@@ -74,6 +84,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Tracks every provider balance blocking disbursement and chases the open ones, one contact per provider. Never computes a reduction or moves money.',
   'litigation-status':
     'Builds a status list of your open litigation cases when an administrator asks: filing, service, answers, court dates and discovery, each date citing its document. Filed in your firm library.',
+  'memory-journal':
+    'Keeps a dated journal of moments you want to remember, in your words. Photos stay in your chat.',
   'matter-document-review':
     "Reads a matter's documents and surfaces highlights, timelines, and gaps for an attorney. Never drafts legal work product.",
   'matter-inbox-router':
@@ -124,6 +136,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Watches for the proof of service to sync in, reads the served date, and surfaces the responsive-pleading deadline for confirmation. Never computes it.',
   'settlement-statement-feeder':
     'Assembles the settlement-statement and disbursement figures when a case settles, for a person to execute in Smokeball. Never moves trust money.',
+  'shared-lists':
+    'Keeps your shared lists, chores, expenses and renewals in one place you can both see.',
   'shape-establishment':
     'Establishes how a kind of output is shaped, from examples you point it at. Admin only. Installs only rules it can show you in plain words.',
   'smd-note':
@@ -136,6 +150,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Emails the person you name a monthly spreadsheet of open cases with a statute date in the next three months and nothing filed, and what changed since last month. Never computes a date.',
   'task-list-keeper':
     'Keeps your task list honest: each week it sorts overdue tasks and sends each attorney suggested calls to answer in plain words. Nothing changes until someone says yes.',
+  travel:
+    'Builds your trip from forwarded confirmations, sends calendar invites, keeps packing lists, and watches prices.',
   'trial-binder-assembler':
     'Assembles the trial binder from authored components and tracks pre-trial deadlines. Organizes and stages, never authors or argues.',
   'trust-balance-nudge':
@@ -144,5 +160,7 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Stages the vendor invoices your staff forward as unfinalized expenses on the right matter, invoice filed alongside. Never finalizes or pays; flags any invoice it cannot place.',
   'voice-establishment':
     "Establishes your firm's writing voice from documents you point it at, and names which of your own documents break the rules it derived. Admin only. Keeps none of your prose.",
+  'weekly-checkin-agenda':
+    'Brings an agenda to your weekly check-in, built only from what each of you chose to share.',
   workspace: 'Reads and writes Google Workspace through trust-classified tools.',
 }

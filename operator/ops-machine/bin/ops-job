@@ -1,0 +1,14 @@
+#!/bin/bash
+# ops-job <command...>: run a command on a client workspace that must not be cut
+# short by the idle stop (a long chronology, a transfer), even with nobody
+# attached. Holds ~/locks/<pid>.lock for the command's lifetime; ops-idle-stop
+# treats a live lock as busy. Output goes to ~/logs/job-<time>.log as well.
+set -uo pipefail
+mkdir -p "$HOME/locks" "$HOME/logs"
+lock="$HOME/locks/$$.lock"
+echo $$ > "$lock"
+trap 'rm -f "$lock"' EXIT
+log="$HOME/logs/job-$(date -u +%Y%m%dT%H%M%S).log"
+echo "ops-job: $* (log $log)"
+"$@" 2>&1 | tee "$log"
+exit "${PIPESTATUS[0]}"

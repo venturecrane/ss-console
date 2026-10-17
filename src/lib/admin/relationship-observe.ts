@@ -164,6 +164,8 @@ export async function loadLearnedPreferences(
  *   • a row missing `peer_id` or `preference` is skipped (never half-rendered);
  *   • a row whose `superseded_by` is non-null was replaced — it is filtered out
  *     so only ACTIVE preferences surface;
+ *   • a row of kind `memory` (space-keyed remembered items, ADR 0091) is not a
+ *     working preference and is skipped;
  *   • `source` must be one of the two valid values (`stated`/`demonstrated`); a
  *     row with any other source is skipped rather than mislabeled;
  *   • `why`/`how_to_apply`/`recorded_at` normalize to `null`.
@@ -178,6 +180,10 @@ export function parseLearnedPreferences(data: unknown): LearnedPreferencePerson[
     if (!entry || typeof entry !== 'object') continue
     const row = entry as Record<string, unknown>
     if (asStringOrNull(row.superseded_by) !== null) continue
+    // A space-mode seat's remembered items (kind 'memory', ADR 0091) share this
+    // table. They are a person's or the couple's own words, not working
+    // preferences, so this lane never renders them.
+    if (row.kind === 'memory') continue
     const peerId = asNonEmptyString(row.peer_id)
     const preference = asNonEmptyString(row.preference)
     if (peerId === null || preference === null) continue

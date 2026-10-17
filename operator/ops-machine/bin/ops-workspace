@@ -1,0 +1,143 @@
+#!/bin/bash
+# ops-workspace create|update|status|destroy <slug>: a client's ops workspace,
+# the Fly app ops-<slug> that holds that client's documents (matter files,
+# medical records, chronologies, anything made from them) so they are never on
+# a laptop. Run from a laptop with the Captain's Fly, Infisical and gh logins
+# (seat work stays on the laptops; only client documents move). The workspace is
+# listed in operator/ops-machine/workspaces.json first; this script refuses a
+# slug that is not.
+#
+# WHAT A WORKSPACE HOLDS, AND WHAT IT CAN REACH (Captain, 2026-10-17):
+#   * its own encrypted volume (/home/ops), the only place its documents live;
+#   * FLY_API_TOKEN: a deploy token for that client's seat app ONLY (1 year);
+#   * ANTHROPIC_API_KEY (as OPS_TOOL_ANTHROPIC_API_KEY): that client's own key,
+#     for the chronology and drafting tools; Claude itself runs on the Captain's
+#     Max login (bin/claude);
+#   * CRANE_CONTEXT_KEY, so sessions record verifications and handoffs;
+#   * no Infisical identity: nothing else in the vault is reachable from it.
+# The Captain's Claude and GitHub logins are done on it once, by hand, on the
+# first `ops <alias>`; they reach what his logins reach (the honest limit).
+#
+# create   app, volume, secrets, image, healthchecks check, sweep token. Idempotent.
+# update   rebuild the image and re-mint both tokens (the seat token is checked
+#          by the daily sweep and pages 30 days before it expires).
+# status   machine state, image, secret names, selftest.
+# destroy  delete the app and its volume (every document on it), the check and
+#          the sweep secrets. Asks for the slug typed back. Decommission
+#          (operator/bin/decommission-customer.sh step 06b) calls this.
+set -euo pipefail
+here="$(cd "$(dirname "$0")/.." && pwd)"
+reg="$here/workspaces.json"
+repo="venturecrane/ss-console"
+cmd="${1:-}"; slug="${2:-}"
+[ -n "$cmd" ] && [ -n "$slug" ] || { sed -n 2,30p "$0"; exit 2; }
+
+app=$(jq -r --arg s "$slug" '.workspaces[$s].app // empty' "$reg")
+seat=$(jq -r --arg s "$slug" '.workspaces[$s].seat_app // empty' "$reg")
+region=$(jq -r --arg s "$slug" '.workspaces[$s].region // "sjc"' "$reg")
+gb=$(jq -r --arg s "$slug" '.workspaces[$s].volume_gb // 50' "$reg")
+[ -n "$app" ] && [ -n "$seat" ] || { echo "$slug is not in $reg; add it there first (a reviewed change)"; exit 2; }
+suffix=$(printf '%s' "$slug" | tr '[:lower:]-' '[:upper:]_' | tr -cd 'A-Z0-9_')
+log() { printf '[ops-workspace %s] %s\n' "$slug" "$*"; }
+
+# Secrets come from /ss prod. Re-exec under Infisical when they are not loaded.
+need_vault() {
+  local k="ANTHROPIC_API_KEY__${suffix}"
+  if [ -z "${!k:-}" ] && [ -z "${OPS_WS_IN_VAULT:-}" ]; then
+    OPS_WS_IN_VAULT=1 exec infisical run --env=prod --path=/ss --silent -- "$0" "$@"
+  fi
+  [ -n "${!k:-}" ] || { echo "ANTHROPIC_API_KEY__${suffix} is not in /ss prod; the client needs its own key first"; exit 1; }
+  [ -n "${CRANE_CONTEXT_KEY:-}" ] || { echo "CRANE_CONTEXT_KEY missing from /ss prod"; exit 1; }
+}
+
+mint_and_stage() {
+  local k="ANTHROPIC_API_KEY__${suffix}" seat_tok sweep_tok expires
+  expires=$(date -u -v+365d +%F 2>/dev/null || date -u -d '+365 days' +%F)
+  seat_tok=$(fly tokens create deploy -a "$seat" --expiry 8760h --name "workspace $app" 2>/dev/null | tail -1)
+  [ "${seat_tok:0:6}" = "FlyV1 " ] || { echo "could not mint a deploy token for $seat"; exit 1; }
+  printf '%s\n' \
+    "OPS_WORKSPACE=$slug" "OPS_SEAT_APP=$seat" "OPS_SEAT_TOKEN_EXPIRES=$expires" \
+    "FLY_API_TOKEN=$seat_tok" "OPS_TOOL_ANTHROPIC_API_KEY=${!k}" "CRANE_CONTEXT_KEY=$CRANE_CONTEXT_KEY" \
+    | fly secrets import --stage -a "$app" >/dev/null
+  log "staged secrets (seat token for $seat until $expires)"
+  # The daily sweep's own token reaches this workspace only.
+  sweep_tok=$(fly tokens create deploy -a "$app" --expiry 8760h --name "ops-workspace-sweep" 2>/dev/null | tail -1)
+  [ "${sweep_tok:0:6}" = "FlyV1 " ] || { echo "could not mint the sweep token for $app"; exit 1; }
+  printf '%s' "$sweep_tok" | gh secret set "OPS_FLY_TOKEN__${suffix}" --repo "$repo" >/dev/null
+  gh variable set "OPS_SWEEP_TOKEN_EXPIRES__${suffix}" --repo "$repo" --body "$expires" >/dev/null
+  log "sweep token stored in $repo (OPS_FLY_TOKEN__${suffix}, until $expires)"
+}
+
+healthcheck() {
+  [ -n "${HEALTHCHECKS_API_KEY:-}" ] || { log "WARN HEALTHCHECKS_API_KEY not set; no check"; return 0; }
+  local url
+  url=$(jq -n --arg n "$app" --arg t "ops-workspace $slug" \
+        '{name:$n, tags:$t, timeout:86400, grace:21600, unique:["name","tags"]}' \
+    | curl -fsS -X POST https://healthchecks.io/api/v3/checks/ -H "X-Api-Key: $HEALTHCHECKS_API_KEY" \
+        -H 'Content-Type: application/json' -d @- | jq -r '.ping_url // empty')
+  [ -n "$url" ] || { echo "healthchecks.io returned no ping url"; exit 1; }
+  printf '%s' "$url" | gh secret set "OPS_HC_URL__${suffix}" --repo "$repo" >/dev/null
+  log "healthchecks.io check $app (daily, 6h grace) wired to the sweep"
+}
+
+deploy() {
+  # One shared image for smd-ops and every workspace; -a picks the app.
+  (cd "$here" && fly deploy -a "$app" -c fly.toml --remote-only --ha=false --yes)
+  log "deployed; selftest:"
+  fly ssh console -a "$app" -u ops -C "/opt/ops/bin/ops-selftest" 2>/dev/null || true
+}
+
+case "$cmd" in
+  create)
+    need_vault "$@"
+    if fly status -a "$app" >/dev/null 2>&1; then log "app exists"; else
+      fly apps create "$app" --org personal >/dev/null && log "app created"; fi
+    if fly volumes list -a "$app" --json | jq -e 'map(select(.name=="ops_home")) | length > 0' >/dev/null; then
+      log "volume exists"
+    else
+      fly volumes create ops_home -a "$app" -r "$region" -s "$gb" --yes >/dev/null && log "encrypted volume ${gb}GB created"
+    fi
+    mint_and_stage
+    healthcheck
+    deploy
+    log "next: ops ${slug} on a laptop (first time: claude /login, gh auth login, then ops-bootstrap)"
+    ;;
+  update)
+    need_vault "$@"
+    mint_and_stage
+    deploy
+    ;;
+  status)
+    fly status -a "$app"
+    fly secrets list -a "$app" --json | jq -r '.[].name' | sort | tr '\n' ' '; echo
+    fly ssh console -a "$app" -u ops -C "/opt/ops/bin/ops-selftest" 2>/dev/null || true
+    ;;
+  destroy)
+    # Decommission passes OPS_WS_CONFIRM=<slug>; a person types it.
+    typed="${OPS_WS_CONFIRM:-}"
+    if [ -z "$typed" ]; then
+      printf 'This deletes %s and its volume: every document on it. Type the slug to confirm: ' "$app"
+      read -r typed
+    fi
+    [ "$typed" = "$slug" ] || { echo "not confirmed"; exit 1; }
+    if [ -z "${HEALTHCHECKS_API_KEY:-}" ] && [ -z "${OPS_WS_IN_VAULT:-}" ]; then
+      OPS_WS_IN_VAULT=1 OPS_WS_CONFIRM="$typed" exec infisical run --env=prod --path=/ss --silent -- "$0" "$@"
+    fi
+    if fly status -a "$app" >/dev/null 2>&1; then fly apps destroy "$app" --yes; fi
+    fly status -a "$app" >/dev/null 2>&1 && { echo "FAIL $app still exists"; exit 1; }
+    gh secret delete "OPS_FLY_TOKEN__${suffix}" --repo "$repo" 2>/dev/null || true
+    gh secret delete "OPS_HC_URL__${suffix}" --repo "$repo" 2>/dev/null || true
+    gh variable delete "OPS_SWEEP_TOKEN_EXPIRES__${suffix}" --repo "$repo" 2>/dev/null || true
+    if [ -n "${HEALTHCHECKS_API_KEY:-}" ]; then
+      curl -fsS https://healthchecks.io/api/v3/checks/ -H "X-Api-Key: $HEALTHCHECKS_API_KEY" \
+        | jq -r --arg n "$app" '.checks[] | select(.name==$n) | .update_url' \
+        | while read -r k; do
+            u="$k"
+            curl -fsS -X DELETE "$u" -H "X-Api-Key: $HEALTHCHECKS_API_KEY" >/dev/null && log "healthchecks.io check removed"
+          done
+    fi
+    gh secret list --repo "$repo" | grep -q "^OPS_[A-Z_]*__${suffix}\b" && { echo "FAIL a sweep secret for $suffix remains"; exit 1; }
+    log "destroyed and read back: app gone, sweep secrets gone. Remove its workspaces.json entry in the same change."
+    ;;
+  *) echo "unknown command $cmd"; exit 2 ;;
+esac

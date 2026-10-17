@@ -27,10 +27,12 @@ import type { OutputClasses } from '../../../lib/operator/customer-yaml/types'
  * The prose is preformatted-with-wrapping rather than reflowed, because it was
  * authored conversationally and its line breaks are the author's.
  *
- * NO PROVENANCE IS SHOWN, BECAUSE THE VAULT DOCUMENT CARRIES NONE. A stored
- * `SpecBody` is a body, a digest, and (for format) rules. There is no
- * by-whom and no when in it. Rendering either would mean deriving a
- * client-facing fact from a field never authored as one, which is the Pattern B
+ * NO PROVENANCE IS SHOWN. A stored `SpecBody` is a body, a digest, (for format)
+ * rules, and the fields another writer owns, carried opaquely (`carried`: the
+ * overlay's `adjustments` and `provenance`, OY-3). This view reads none of the
+ * carried fields, so it states no by-whom and no when. Rendering either would
+ * mean deriving a client-facing fact from a field never authored as one, which
+ * is the Pattern B
  * fabrication this repo treats as P0. The provenance trail lives in D1
  * (`voice-corrections`) and gets its own surface with the corrections queue;
  * absent is the honest display of absent.

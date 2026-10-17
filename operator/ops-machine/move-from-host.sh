@@ -6,7 +6,8 @@
 # smd-ops (nothing is written locally). Each entry of list-file (relative to
 # remote-base, "./"-prefixed) is checked against a sha256 manifest built ON the
 # source host. Verified entries are recorded on the SOURCE host's ledger
-# (~/.smd-ops-moved-<host>_<sub>.txt), which its laptop-offboard.sh reads.
+# (~/.smd-ops-moved-<host>_<sub>.txt); laptop-offboard.py deletes from the
+# manifests themselves, file by file.
 set -uo pipefail
 host="$1"; base="$2"; sub="$3"; list="$4"
 dest="/home/ops/archive/$sub"

@@ -1,0 +1,33 @@
+#!/bin/bash
+# ops-start (client workspace, inside tmux): get the Captain into a working
+# Claude session. First time on a new workspace it walks him through the two
+# logins that are his (GitHub, then Claude's own /login on first launch) and
+# runs ops-bootstrap. A task handed over from a laptop opens with it in hand.
+# When Claude exits it leaves a shell, so the tmux window survives.
+set -uo pipefail
+. "$HOME/.bashrc" 2>/dev/null || true
+slug=$(cat /etc/smd-ops-workspace 2>/dev/null || echo "?")
+echo "== ops workspace $slug (client documents live here, nowhere else)"
+
+if ! gh auth status >/dev/null 2>&1; then
+  echo "First time here: sign in to GitHub (choose GitHub.com, HTTPS, browser)."
+  gh auth login -s read:packages,read:org || { echo "GitHub sign-in did not finish; run ops-start again"; exec bash -l; }
+fi
+if [ ! -d "$HOME/dev/engagements/.git" ] || [ ! -x "$HOME/.venvs/tools/bin/python" ]; then
+  echo "Setting up the repos and tools (a few minutes, once)..."
+  /opt/ops/bin/ops-bootstrap || { echo "setup failed; see ~/logs/bootstrap.log"; exec bash -l; }
+  . "$HOME/.bashrc" 2>/dev/null || true
+fi
+git -C "$HOME/dev/ss-console" pull -q --ff-only 2>/dev/null || true
+git -C "$HOME/dev/engagements" pull -q --ff-only 2>/dev/null || true
+cd "$HOME/dev/ss-console" || exit 1
+
+task="$HOME/inbox/pending.md"
+if [ -s "$task" ]; then
+  taken="$HOME/inbox/task-$(date -u +%Y%m%dT%H%M%S).md"
+  mv "$task" "$taken"
+  claude "A task was handed to this workspace from a laptop session; it is in $taken. Read it, then do it here. Client documents for this work stay on this workspace (under ~/work); only finished deliverables leave, through the seat."
+else
+  claude
+fi
+exec bash -l

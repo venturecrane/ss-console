@@ -23,6 +23,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl git tmux jq ripgrep sqlite3 openssh-client less procps \
       python3 python3-venv python3-pip build-essential unzip cron gnupg sudo locales \
+      poppler-utils chromium \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
@@ -45,6 +46,11 @@ RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
 RUN useradd --uid 1000 --create-home --shell /bin/bash ops
 COPY entrypoint.sh /usr/local/bin/ops-entrypoint
 RUN chmod 0755 /usr/local/bin/ops-entrypoint
+# The ops tooling ships in the image, so every workspace runs the reviewed copy
+# (a file in ~/bin still wins, for smd-ops's hand-installed ones).
+COPY bin/ /opt/ops/bin/
+COPY crontab-workspace /opt/ops/crontab-workspace
+RUN chmod 0755 /opt/ops/bin/*
 
 # Root only for the entrypoint itself: it chowns the freshly mounted volume and
 # starts cron, which runs the ops user's jobs AS ops. Every interactive session

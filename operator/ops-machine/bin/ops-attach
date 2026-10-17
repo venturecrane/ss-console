@@ -1,0 +1,16 @@
+#!/bin/bash
+# ops-attach (client workspace; what `ops <alias>` on a laptop runs over fly ssh):
+# attach to the workspace's tmux session "main", creating it if needed. A task
+# handed over from a laptop (~/inbox/pending.md, written by ops-handoff) gets a
+# new window running ops-start, so it opens in front of the Captain even when a
+# session is already running.
+set -uo pipefail
+if [ -s "$HOME/inbox/pending.md" ]; then
+  if tmux has-session -t main 2>/dev/null; then
+    tmux new-window -t main -n task /opt/ops/bin/ops-start
+  else
+    tmux new-session -d -s main -n task /opt/ops/bin/ops-start
+  fi
+fi
+tmux has-session -t main 2>/dev/null || tmux new-session -d -s main /opt/ops/bin/ops-start
+exec tmux attach -t main

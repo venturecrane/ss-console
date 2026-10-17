@@ -1,21 +1,46 @@
 #!/bin/bash
-# ops-selftest: prove the smd-ops Machine can do the work, printing names and
-# counts only (never a secret value).
+# ops-selftest: prove this Machine can do its work, printing names and counts
+# only (never a secret value). smd-ops and client workspaces check different
+# things; /etc/smd-ops-workspace says which this is. Exit 1 on any FAIL.
 set -uo pipefail
+rc=0
 ok() { printf 'PASS %s\n' "$1"; }
-bad() { printf 'FAIL %s\n' "$1"; }
-
-n=$("$HOME/bin/ss-env" bash -c 'env | cut -d= -f1 | grep -c -E "KEY|SECRET|TOKEN"' 2>/dev/null || echo 0)
-[ "${n:-0}" -gt 10 ] && ok "infisical /ss prod readable ($n credential names)" || bad "infisical /ss prod ($n)"
+bad() { printf 'FAIL %s\n' "$1"; rc=1; }
 
 claude --version >/dev/null 2>&1 && ok "claude installed" || bad "claude"
-[ -f "$HOME/.claude/.credentials.json" ] || [ -f "$HOME/.claude.json" ] && ok "claude login present" || bad "claude login missing"
-gh auth status >/dev/null 2>&1 && ok "github login" || bad "github login missing"
-[ -f "$HOME/.fly-tokens" ] && ok "fly tokens present" || bad "fly tokens missing"
-if [ -f "$HOME/.fly-tokens" ]; then
-  # shellcheck disable=SC1090
-  . "$HOME/.fly-tokens"
-  for app in $FLY_OPS_APPS; do
-    FLY_API_TOKEN="$FLY_API_TOKEN" fly status -a "$app" >/dev/null 2>&1 && ok "fly status $app" || bad "fly status $app"
+{ [ -f "$HOME/.claude/.credentials.json" ] || [ -f "$HOME/.claude.json" ]; } && ok "claude login present" || bad "claude login missing (claude, then /login)"
+gh auth status >/dev/null 2>&1 && ok "github login" || bad "github login missing (gh auth login)"
+
+if [ -f /etc/smd-ops-workspace ]; then
+  slug=$(cat /etc/smd-ops-workspace)
+  [ -f "$HOME/.ops-secrets" ] && . "$HOME/.ops-secrets"
+  for v in OPS_SEAT_APP FLY_API_TOKEN ANTHROPIC_API_KEY CRANE_CONTEXT_KEY; do
+    [ -n "${!v:-}" ] && ok "workspace $slug has $v" || bad "workspace $slug missing $v"
   done
+  if [ -n "${OPS_SEAT_APP:-}" ]; then
+    fly status -a "$OPS_SEAT_APP" >/dev/null 2>&1 && ok "reaches its seat $OPS_SEAT_APP" || bad "cannot reach $OPS_SEAT_APP"
+    # The scope check: the seat token must reach this client's seat and nothing
+    # else. smd-ops is always present, so it is the stand-in for "another app".
+    fly status -a smd-ops >/dev/null 2>&1 && bad "token reaches smd-ops (scope too wide)" || ok "token refused at other apps"
+  fi
+  for r in ss-console engagements; do
+    [ -d "$HOME/dev/$r/.git" ] && ok "repo $r cloned" || bad "repo $r missing (run ops-bootstrap)"
+  done
+  if [ -x "$HOME/.venvs/tools/bin/python" ]; then
+    "$HOME/.venvs/tools/bin/python" -c "import anthropic, yaml" 2>/dev/null && ok "tools venv imports" || bad "tools venv imports"
+  else
+    bad "tools venv missing (run ops-bootstrap)"
+  fi
+else
+  n=$("$HOME/bin/ss-env" bash -c 'env | cut -d= -f1 | grep -c -E "KEY|SECRET|TOKEN"' 2>/dev/null || echo 0)
+  [ "${n:-0}" -gt 10 ] && ok "infisical /ss prod readable ($n credential names)" || bad "infisical /ss prod ($n)"
+  [ -f "$HOME/.fly-tokens" ] && ok "fly tokens present" || bad "fly tokens missing"
+  if [ -f "$HOME/.fly-tokens" ]; then
+    # shellcheck disable=SC1090
+    . "$HOME/.fly-tokens"
+    for app in $FLY_OPS_APPS; do
+      FLY_API_TOKEN="$FLY_API_TOKEN" fly status -a "$app" >/dev/null 2>&1 && ok "fly status $app" || bad "fly status $app"
+    done
+  fi
 fi
+exit "$rc"

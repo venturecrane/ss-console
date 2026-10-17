@@ -66,6 +66,7 @@ import { checkCredentialCustodyDefault } from './sections-connectors'
 import { checkGmailPush } from './sections-gmail-push'
 import { checkFirmIdentity } from './sections-firm-identity'
 import { checkTelegram } from './sections-telegram'
+import { checkPeople, checkSpaceMode, checkSpaces } from './sections-people'
 import { checkRecordStores } from './sections-record-stores'
 import { checkObservability } from './sections-observability'
 import { checkVoiceCohorts } from './sections-voice'
@@ -270,6 +271,8 @@ interface ParsedSections {
   mcpConnector: ReturnType<typeof checkMcpConnector>
   relationship: ReturnType<typeof checkRelationship>
   caseManager: ReturnType<typeof checkCaseManager>
+  people: ReturnType<typeof checkPeople>
+  spaces: ReturnType<typeof checkSpaces>
 }
 
 function validateSections(
@@ -307,7 +310,13 @@ function validateSections(
   // ADR 0044 Decision 8 / ADR 0045 §7 (#1841): code_execution vs gateway-held creds
   const custodyExceptions = checkCustodyExceptions(root, errors)
   checkCustodyGuard(root, personas, connectors, custodyExceptions, errors)
+  // ADR 0091: people/spaces + the space-mode cross-field rules.
+  const people = checkPeople(root, errors)
+  const spaces = checkSpaces(root, errors)
+  checkSpaceMode(root, people, errors)
   return {
+    people,
+    spaces,
     schemaVersion,
     customerId,
     vertical: verticalResult.vertical,
@@ -384,5 +393,7 @@ function assembleCustomerYaml(root: Record<string, unknown>, p: ParsedSections):
     mcp_connector: p.mcpConnector,
     relationship: p.relationship,
     case_manager: p.caseManager,
+    ...(p.people !== null ? { people: p.people } : {}),
+    ...(p.spaces !== null ? { spaces: p.spaces } : {}),
   }
 }
