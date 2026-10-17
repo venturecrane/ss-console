@@ -372,20 +372,46 @@ def _walk_folder_paths(nodes: Any) -> list[tuple[dict[str, Any], list[str]]]:
     return out
 
 
+class ListingFailed(RuntimeError):
+    """A page of a matter's file listing could not be read.
+
+    Raised rather than returning the pages already read: a partial (often
+    empty) list is indistinguishable from "the file is not there", and every
+    caller reads absence as a fact about the matter (2026-10-17 review, DC1: a
+    429 on the listing told the firm its form was missing). ``partial`` holds
+    what was read before the failure, for diagnostics only."""
+
+    def __init__(self, matter_id: str, offset: int, cause: BaseException, partial: list[dict[str, Any]]):
+        super().__init__(f"listing matter {matter_id} files failed at offset {offset} ({cause.__class__.__name__})")
+        self.partial = partial
+
+
 def list_matter_files(client: Any, matter_id: str) -> list[dict[str, Any]]:
+    """Every file entry on the matter, paged past the vendor's 500-row cap.
+    Raises ``ListingFailed`` when any page cannot be read: "could not look"
+    must never read as "none"."""
     files: list[dict[str, Any]] = []
     offset = 0
     while True:
         try:
             resp = client.get(f"/matters/{matter_id}/documents/files", Limit=500, Offset=offset)
-        except Exception:  # noqa: BLE001 - a page fetch failing ends the listing with what was already read; the caller treats the list as partial
-            break
+        except Exception as exc:  # any transport error is a failed read, surfaced as ListingFailed
+            raise ListingFailed(matter_id, offset, exc, files) from exc
         items = _listing(resp)
         files.extend(items)
         if len(items) < 500:
             break
         offset += 500
     return files
+
+
+def same_named_ids(client: Any, matter_id: str, file_name: str) -> list[str] | None:
+    """Ids of files already on the matter under ``file_name``, or None when the
+    listing could not be read (unknown, never "none")."""
+    try:
+        return [str(e.get("id")) for e in list_matter_files(client, matter_id) if name_matches(e, file_name)]
+    except ListingFailed:
+        return None
 
 
 def _strip_ext(name: str) -> str:
@@ -496,7 +522,16 @@ def resolve_template(client: Any, cfg: LibraryConfig, document_class: str) -> Re
         return NotResolved(f"library matter {cfg.matter_number!r} not found")
     folder_id = find_folder_id(client, matter_id, cfg.folder_name or "")
     want = cfg.template_name(document_class)
-    candidates = [e for e in list_matter_files(client, matter_id) if name_matches(e, want)]
+    try:
+        listed = list_matter_files(client, matter_id)
+    except ListingFailed as exc:
+        return NotResolved(
+            f"library matter {cfg.matter_number!r} files could not be listed just now ({exc.__cause__.__class__.__name__})",
+            matter_id=matter_id,
+            folder_id=folder_id,
+            transient=True,
+        )
+    candidates = [e for e in listed if name_matches(e, want)]
     if folder_id:
         in_folder = [e for e in candidates if _entry_folder_id(e) == folder_id]
         if in_folder:
@@ -543,6 +578,7 @@ __all__ = [
     "LOOKUP_NOT_FOUND",
     "OPERATOR_LIBRARY_NUMBER",
     "LibraryConfig",
+    "ListingFailed",
     "MatterLookup",
     "NotResolved",
     "ResolvedTemplate",
@@ -553,4 +589,5 @@ __all__ = [
     "list_matter_files",
     "load_library_config",
     "resolve_template",
+    "same_named_ids",
 ]

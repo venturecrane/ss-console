@@ -45,7 +45,7 @@ from . import cited_facts, readback
 from . import form_letter_facts as facts
 from .form_docx import FormError, fill_form, placeholders_in
 from .form_letter_facts import Fact
-from .library import ResolvedTemplate, list_matter_files, load_library_config, name_matches, resolve_template
+from .library import ResolvedTemplate, load_library_config, resolve_template, same_named_ids
 
 
 @dataclass(frozen=True)
@@ -526,7 +526,8 @@ def render_firm_form_letter(
     ``reason`` and nothing filed), ``fileId``, ``fileName``, ``unfilled``,
     ``facts_used`` (each field and where it was read), ``template`` (the form
     used) and ``same_name_on_matter`` (ids of files already carrying this
-    name, which the person should know about). A health notice also returns
+    name, which the person should know about; null when the listing could not
+    be read, which is unknown, never none). A health notice also returns
     ``card_values_to_check`` (each card value it printed, which the reply
     lists so the person checks it against the card) and ``cited_refused``. It
     does not send, fax or mail the letter, and does not complete any task."""
@@ -632,7 +633,7 @@ def _fill_and_file(
     unfilled = [MARKER.format(found[k].missing) for k in filled.placeholders if k in found and found[k].value is None]
     unfilled += [MARKER.format(name) for name in filled.unknown]
     unfilled += [MARKER.format(f.missing) for k, f in found.items() if k.endswith("_mailing_address")]
-    same = [str(e.get("id")) for e in list_matter_files(client, matter) if name_matches(e, spec.file_name)]
+    same = same_named_ids(client, matter, spec.file_name)
     file_id, proof = _file_proved(client, matter, spec.file_name, filled.data)
     out = {
         "status": "filed",
