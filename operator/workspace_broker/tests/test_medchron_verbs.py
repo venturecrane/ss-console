@@ -1346,6 +1346,45 @@ def test_a_backfilled_laptop_delivery_also_routes_to_an_update(verbs):
     assert r["accepted"] is False and _SHAPE in r["reason"]
 
 
+def _joint_unit(name: str, surname: str) -> dict:
+    return {"client_name": name, "surname": surname, "dob": "01/02/1980", "folder_prefix": surname}
+
+
+def test_a_joint_matters_delivery_refuses_only_its_own_clients(verbs):
+    """DL3 (2026-10-17). The runner finds a delivered chronology per CLIENT
+    (its file is named by client_name), so the broker routes per client too:
+    client A's delivered chronology does not refuse client B's first run on
+    the same matter, and still refuses another run for A, alone or joint."""
+    v, _, queue = verbs
+    _delivered_matter(v)  # Alpha Example, on m-1
+    beta = [{"client_name": "Beta Example", "surname": "Beta", "dob": "03/04/1985"}]
+    r = call(v, "medchron_job_submit", envelope=envelope(units=beta))
+    assert r["accepted"] is True, r
+    again = call(
+        v, "medchron_job_submit", envelope=envelope(units=[{**envelope()["units"][0], "client_name": "ALPHA  example"}])
+    )
+    assert again["accepted"] is False and _SHAPE in again["reason"]
+    joint = [_joint_unit("Alpha Example", "Example"), _joint_unit("Gamma Example", "Gamma")]
+    assert call(v, "medchron_job_submit", envelope=envelope(units=joint))["accepted"] is False
+    assert len(list(queue.glob("*.json"))) == 2
+
+
+def test_a_delivery_that_records_no_clients_refuses_every_client(verbs):
+    """A row from before the ledger recorded clients, or a backfill, cannot
+    say whose chronology it was, so it counts for every client."""
+    v, _, _ = verbs
+    first = _delivered_matter(v)
+    conn = v._db._connect()
+    try:
+        conn.execute("UPDATE medchron_jobs SET client_keys=NULL WHERE id=?", (first,))
+        conn.commit()
+    finally:
+        conn.close()
+    beta = [{"client_name": "Beta Example", "surname": "Beta", "dob": "03/04/1985"}]
+    r = call(v, "medchron_job_submit", envelope=envelope(units=beta))
+    assert r["accepted"] is False and _SHAPE in r["reason"]
+
+
 def test_the_update_it_names_is_accepted_on_the_delivered_matter(verbs):
     v, _, _ = verbs
     _delivered_matter(v)
@@ -1382,7 +1421,7 @@ def test_a_delivery_read_failure_refuses_with_its_own_reason(verbs, monkeypatch)
 
     import workspace_broker.medchron_verbs as verbs_mod
 
-    def broken(_ledger, _matter_id):
+    def broken(_ledger, _matter_id, _clients):
         import sqlite3
 
         raise sqlite3.OperationalError("database is locked")

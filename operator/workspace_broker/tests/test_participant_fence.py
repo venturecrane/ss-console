@@ -114,6 +114,9 @@ class FakeMailbox:
         self.messages = {
             "REQ": _graph_message("REQ", ALICE, "C1", cc=(DANA,)),
             "REQ2": _graph_message("REQ2", DANA, "C1"),
+            # A later email in the request's conversation that copies the
+            # attorney the request never included (claim D1, 2026-10-17).
+            "LATER": _graph_message("LATER", ALICE, "C1", cc=(BRUNO,)),
             "OTHER": _graph_message("OTHER", BRUNO, "C2"),
             # A participant's email in ANOTHER conversation.
             "DANA_ELSE": _graph_message("DANA_ELSE", DANA, "C9"),
@@ -348,6 +351,41 @@ def test_a_reply_in_the_anchor_conversation_to_a_participant_is_allowed(tmp_path
     box = FakeMailbox()
     broker = _broker(tmp_path, box)
     assert _reply(broker, "REQ2", anchor=_anchor("REQ"))["ok"] is True
+
+
+def test_a_reply_that_would_copy_a_firm_person_off_the_request_is_refused(tmp_path: Path) -> None:
+    """D1 (2026-10-17). Graph's reply copies the target's To/Cc, so the fence
+    must vet every firm person on the target, not only its sender. Alice sent
+    both emails and was on the request; Bruno was copied only on the later one.
+    The reply is refused, not sent to Alice with Bruno silently dropped."""
+    box = FakeMailbox()
+    broker = _broker(tmp_path, box)
+    _refused(broker, box, lambda: _reply(broker, "LATER", anchor=_anchor("REQ")))
+
+
+def test_a_reply_reaches_only_people_the_anchor_allows_but_never_vets_the_own_mailbox() -> None:
+    facts = pf.SeatFacts(internal_domains=frozenset({"firm.example"}))
+    # The request reached the Operator through an alias, so its own mailbox is
+    # not on the anchor; the reply never copies it, so it is not vetted.
+    home = pf.Participants(sender=ALICE, to=("alias@firm.example",), cc=(DANA,), conversation_id="C", message_id="M1")
+    later = pf.Participants(sender=DANA, to=(MAILBOX,), cc=(ALICE,), conversation_id="C", message_id="M2")
+    copied = pf.Participants(sender=DANA, to=(MAILBOX,), cc=(BRUNO, CLIENT), conversation_id="C", message_id="M3")
+    graph = {pf.Anchor("graph_message", m.message_id): m for m in (home, later, copied)}
+    anchor = pf.Anchor("graph_message", "M1")
+    kw = {"anchor": anchor, "resolve": graph.__getitem__, "own": (MAILBOX,)}
+    assert pf.check_reply(facts, "M2", target_kind="graph_message", **kw) is None
+    with pytest.raises(pf.FenceRefused) as caught:
+        pf.check_reply(facts, "M3", target_kind="graph_message", **kw)
+    assert caught.value.refused == [sender_key(BRUNO)]
+    # Without ``own`` the Operator mailbox is a firm address like any other.
+    with pytest.raises(pf.FenceRefused):
+        pf.check_reply(facts, "M2", target_kind="graph_message", anchor=anchor, resolve=graph.__getitem__)
+    # AgentMail's reply reaches the target's sender only.
+    mail = {pf.Anchor("agentmail_message", k.ident): v for k, v in graph.items()}
+    am_anchor = pf.Anchor("agentmail_message", "M1")
+    assert (
+        pf.check_reply(facts, "M3", target_kind="agentmail_message", anchor=am_anchor, resolve=mail.__getitem__) is None
+    )
 
 
 def test_a_reply_outside_the_anchor_conversation_is_refused(tmp_path: Path) -> None:
