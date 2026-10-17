@@ -56,6 +56,7 @@ import {
   readSpecDocument,
   writeSpecDocument,
   SPEC_PROPERTIES,
+  type SpecBody,
   type SpecBuildFailure,
   type SpecDocument,
 } from '../../../../../lib/operator/output-class-specs'
@@ -109,28 +110,6 @@ function declaredClasses(raw: unknown): string[] {
 }
 
 /**
- * Carry forward any class the form did not address.
- *
- * A class can leave `output_classes:` while its authored prose is still in the
- * vault. Rebuilding the document from the form alone would silently delete
- * that prose on the next unrelated save. Merging preserves it, and the write
- * stays idempotent for everything the form did address.
- */
-function mergeUnaddressed(
-  built: SpecDocument,
-  existing: SpecDocument | null,
-  addressed: readonly string[]
-): SpecDocument {
-  if (existing === null) return built
-  const classes = { ...built.classes }
-  for (const [slug, entry] of Object.entries(existing.classes)) {
-    if (addressed.includes(slug)) continue
-    classes[slug] = entry
-  }
-  return { schema_version: built.schema_version, classes }
-}
-
-/**
  * Every declared class's machine-checkable rules, or the first refusal.
  *
  * ALL CLASSES ARE VALIDATED BEFORE ANY IS ACCEPTED. Errors accumulate across
@@ -154,6 +133,18 @@ function collectAssertions(
   }
   if (errors.length > 0) return { ok: false, errors }
   return { ok: true, byClass }
+}
+
+/**
+ * True when a written property carries a body and its digest. An
+ * adjustments-only property carries neither: the firm's sentences reached it by
+ * confirmed reply, not by this save, so there is nothing of the administrator's
+ * in it to promote.
+ */
+function hasAuthoredBody(
+  spec: SpecBody | undefined
+): spec is SpecBody & { body: string; sha256: string } {
+  return spec !== undefined && spec.body !== undefined && spec.sha256 !== undefined
 }
 
 async function recordAttempt(
@@ -210,7 +201,7 @@ async function recordPromotions(
     if (!entry) continue
     for (const property of SPEC_PROPERTIES) {
       const written = entry[property]
-      if (!written) continue
+      if (!hasAuthoredBody(written)) continue
       const cited = citations.get(citationKey(outputClass, property)) ?? null
       try {
         await promoteCorrection(env.DB, {
@@ -275,17 +266,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return redirectToAdvancedSettings(auth.customerSlug, 'spec_invalid_rule')
   }
 
-  const built = await buildSpecDocument(collectAuthoredBodies(form, classes), rules.byClass)
-  if (!built.ok) {
-    await recordAttempt(auth, 'rejected', { reason: built.reason, errors: built.errors })
-    return redirectToAdvancedSettings(auth.customerSlug, BUILD_FAILURE_STATUS[built.reason])
-  }
-
-  // Read before write. An unparseable existing document must not be
-  // overwritten: whatever prose it holds was authored by someone, and we could
-  // not show it back to them. An R2 fault at either end is a refusal, never a
-  // partial claim — the key-space guard throws rather than addressing a
-  // neighbouring object, and that throw must land here, not as a 500.
+  // Read before build, and before write. An unparseable existing document must
+  // not be overwritten: whatever prose it holds was authored by someone, and we
+  // could not show it back to them. A readable one is folded into the build so
+  // every field this surface does not own (the firm's standing adjustments, the
+  // establishment's provenance, any class the form did not address) survives
+  // the save verbatim. An R2 fault at either end is a refusal, never a partial
+  // claim: the key-space guard throws rather than addressing a neighbouring
+  // object, and that throw must land here, not as a 500.
   try {
     const existing = await readSpecDocument(env.CUSTOMER_CONFIG, auth.customerSlug)
     if (existing.kind === 'unreadable') {
@@ -293,11 +281,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
       return redirectToAdvancedSettings(auth.customerSlug, 'spec_unreadable')
     }
 
-    const merged = mergeUnaddressed(
-      built.doc,
-      existing.kind === 'document' ? existing.doc : null,
-      classes
+    const built = await buildSpecDocument(
+      collectAuthoredBodies(form, classes),
+      rules.byClass,
+      existing.kind === 'document' ? { existing: existing.doc, addressed: classes } : undefined
     )
+    if (!built.ok) {
+      await recordAttempt(auth, 'rejected', { reason: built.reason, errors: built.errors })
+      return redirectToAdvancedSettings(auth.customerSlug, BUILD_FAILURE_STATUS[built.reason])
+    }
+    const merged = built.doc
 
     const written = await writeSpecDocument(env.CUSTOMER_CONFIG, auth.customerSlug, merged)
     if (!written.ok) {
