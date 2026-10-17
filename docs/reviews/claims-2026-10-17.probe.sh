@@ -199,6 +199,16 @@ print(len(P.dropped_values([c],[s],{7},set())))'
 check C2  OPEN exact 1 "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$MCR python3 -c "$C2_PY" 2>&1 | tail -1)" "collect-stage redate reads as a lost value: proof 10 fails the update"
 
 # ======================================== NEW 10-17: broker / connectors / ops (D)
+D1_PY='import sys,types; sys.modules.setdefault("yaml",types.ModuleType("yaml"))
+from workspace_broker.participant_fence import *
+f=SeatFacts(internal_domains=frozenset({"firm.com"}))
+home=Participants(sender="christa@firm.com",to=("op@firm.com",),conversation_id="C",message_id="M1")
+later=Participants(sender="christa@firm.com",to=("op@firm.com",),cc=("attorney@firm.com",),conversation_id="C",message_id="M2")
+db={Anchor("graph_message","M1"):home,Anchor("graph_message","M2"):later}
+r=check_reply(f,"M2",anchor=Anchor("graph_message","M1"),resolve=db.__getitem__,target_kind="graph_message")
+print("passed" if r is None else r, "attorney_on_anchor=", "attorney@firm.com" in allowed_by_anchor(f,home))'
+check D1  OPEN exact "passed attorney_on_anchor= False" "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator python3 -c "$D1_PY" 2>&1 | tail -1)" "reply fence checks only the target's sender; reply() cc's its To/Cc"
+check PCD1 FIXED exact 1 "$(c 'cc = \[\] if redirect else self._request_participants(source, sender, policy)' operator/workspace_broker/msgraph_ops.py)" "instrument live: msgraph reply cc's the target's participants"
 DL1_PY='from workspace_broker.litigation_verbs import LitigationVerbs; from workspace_broker.litigation_reassign import parse
 t="Please move Pat Doe'"'"'s cases to Dana Roe."; print(LitigationVerbs._kind("request", t, {"staff_reassignment":"enabled"})[0])'
 check DL1 OPEN exact status "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator python3 -c "$DL1_PY" 2>&1 | tail -1)" "two-word possessive reassignment is queued as a status list"
