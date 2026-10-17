@@ -410,7 +410,7 @@ class MedchronVerbs:
         # run queued on a client matter). Refused with the update shape so the
         # agent resubmits in the same turn. After the duplicate check, so a live
         # twin is still named by its job id.
-        routed = delivered_refusal(envelope, lambda mid: delivered_count(self._db, mid))
+        routed = delivered_refusal(envelope, lambda mid, clients: delivered_count(self._db, mid, clients))
         if routed is not None:
             return {"ok": True, "accepted": False, "reason": routed}
         if state["remaining"] <= 0:
