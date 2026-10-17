@@ -31,7 +31,18 @@ while IFS= read -r -u 3 rel || [ -n "$rel" ]; do
   (cd "$base" && tar -cf - --exclude='.manifest-*.sha256' "$inner") \
     | remote "sh -c 'mkdir -p $A/$host/$area && tar -xf - -C $A/$host/$area'" > /dev/null 2>&1
   remote "sh -c 'cat > $A/$host/$area/.manifest-migrated-$tag.sha256'" < "$man" > /dev/null 2>&1
-  mism=$(remote "sh -c 'cd $A/$host/$area && sha256sum -c --quiet .manifest-migrated-$tag.sha256 2>&1 | wc -l'" < /dev/null 2>/dev/null | tail -1 | tr -d ' \r')
+  # The check runs detached ON the workspace and is polled: a 546,000-file
+  # folder takes about an hour to hash, longer than one held-open fly ssh
+  # session reliably lives (2026-10-17: that read came back empty, and an
+  # empty read is "unknown", never "verified").
+  r="$A/$host/$area/.verify-$tag"
+  remote "sh -c 'cd $A/$host/$area && setsid nohup sh -c \"sha256sum -c --quiet .manifest-migrated-$tag.sha256 > $r.out 2>&1; wc -l < $r.out > $r.n\" > /dev/null 2>&1 < /dev/null &'" < /dev/null > /dev/null 2>&1
+  mism=""
+  for _ in $(seq 1 720); do
+    mism=$(remote "cat $r.n 2>/dev/null" < /dev/null 2>/dev/null | tail -1 | tr -d ' \r')
+    case "$mism" in ''|*[!0-9]*) mism=""; sleep 15 ;; *) break ;; esac
+  done
+  remote "rm -f $r.out $r.n" < /dev/null > /dev/null 2>&1
   if [ "$n" -gt 0 ] && [ "$mism" = "0" ]; then
     echo "VERIFIED $rel ($n files); removing from smd-ops"
     (cd "$base" && rm -rf -- "$inner") 2>/dev/null || (cd "$base" && find "$inner" -type f -delete)

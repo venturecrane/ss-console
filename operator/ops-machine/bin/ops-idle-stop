@@ -5,9 +5,13 @@
 #
 # Busy means ANY of, checked every run:
 #   * a tmux client is attached (the Captain is connected);
-#   * a job process runs as ops: python, uv, node (other than Claude Code and its
-#     MCP servers), fly ssh/sftp, rsync, tar, curl (chronologies are python;
-#     transfers are fly/tar);
+#   * ANY process runs as ops that is not on the short idle list below (shells,
+#     sleep, tmux, cron, this script and its helpers, and Claude Code with its
+#     MCP servers waiting at a prompt). An allowlist of IDLE, never a list of
+#     busy: the first version listed busy programs and stopped the Machine
+#     mid-migration (2026-10-17 20:40Z), because a 546,000-file sha256sum ran
+#     for 55 minutes after its tar finished and sha256sum was not on the list.
+#     Anything not known to be idle is work;
 #   * a lock in ~/locks/ whose pid is alive (ops-job holds one for any command);
 #   * the Machine has been up less than IDLE_MINUTES.
 # Idle for IDLE_MINUTES straight (state/last-busy older than that) -> write
@@ -23,10 +27,12 @@ now=$(date +%s)
 reason=""
 if tmux list-clients 2>/dev/null | grep -q .; then reason="tmux client attached"; fi
 if [ -z "$reason" ]; then
-  job=$(ps -u "$(id -u)" -o pid=,args= | awk '
-    $2 ~ /(^|\/)(python[0-9.]*|uv|uvx|rsync|tar|curl)$/ {print; exit}
-    $2 ~ /(^|\/)(fly|flyctl)$/ && ($3=="ssh" || $3=="sftp") {print; exit}
-    $2 ~ /(^|\/)node$/ && $0 !~ /claude|crane|mcp/ {print; exit}')
+  me=$$
+  job=$(ps -u "$(id -u)" -o pid=,ppid=,comm=,args= | awk -v me="$me" '
+    $1 == me || $2 == me {next}
+    $3 ~ /^(bash|sh|dash|sleep|tmux|tmux:|cron|ps|awk|grep|cut|date|cat|tail|tee|less)$/ {next}
+    $3 ~ /^(claude|node)$/ && $0 ~ /claude|crane|mcp/ {next}
+    {print $1, $3; exit}')
   [ -n "$job" ] && reason="job running: ${job:0:80}"
 fi
 if [ -z "$reason" ]; then

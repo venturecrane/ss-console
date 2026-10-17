@@ -12,7 +12,7 @@ ONLY if it still hashes to the manifest value. A file changed after the copy, a
 symlink, a path that escapes its area, or anything unlisted is kept. Directories
 are never deleted wholesale: only directories this run emptied are removed.
 
-Never touched, even when listed: ~/.claude/projects/*/memory/ (agent memory) and
+Never touched, even when listed: ~/.claude/projects/*/memory/ (agent memory), ~/Downloads and
 ~/dev (product repos).
 
 WHY FILE-BY-FILE (peer /code-review, 2026-10-17): the first version deleted every
@@ -56,7 +56,8 @@ def protected(path: Path, home: Path) -> bool:
         rel = path.relative_to(projects).parts
         if len(rel) >= 2 and rel[1] == "memory":
             return True
-    return (home / "dev") in path.parents or path == home / "dev"
+    # ~/Downloads is the Captain's own, never client material (Captain, 2026-10-17).
+    return any(d in path.parents or path == d for d in (home / "dev", home / "Downloads"))
 
 
 def parse_manifest(text: str) -> list[tuple[str, str]]:

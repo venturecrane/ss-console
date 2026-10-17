@@ -41,6 +41,7 @@ def _setup(tmp_path: Path):
         "memory": (projects / "memory" / "MEMORY.md", "index"),
         "later": (projects / "def.jsonl", "copied then appended"),
         "devfile": (home / "dev" / "ss-console" / "x.py", "code"),
+        "download": (home / "Downloads" / "TaxReturn.pdf", "personal"),
     }
     digests = {k: _write(p, body) for k, (p, body) in files.items()}
     # A transcript that changed after the copy: the manifest holds the OLD hash.
@@ -57,6 +58,7 @@ def _setup(tmp_path: Path):
         "home": _manifest(
             [
                 (digests["devfile"], "./dev/ss-console/x.py"),
+                (digests["download"], "./Downloads/TaxReturn.pdf"),
                 (digests["chron"], "../../etc/passwd"),
             ]
         ),
@@ -81,6 +83,7 @@ def test_execute_deletes_only_hash_matched_unprotected_files(tmp_path: Path) -> 
     assert files["memory"][0].exists(), "agent memory must never be deleted"
     assert files["later"][0].exists(), "a file changed since the copy must be kept"
     assert files["devfile"][0].exists(), "~/dev must never be deleted"
+    assert files["download"][0].exists(), "~/Downloads must never be deleted"
     assert "read-back: 0 still present" in out.getvalue()
     # The emptied folder goes; the area base and the memory folder stay.
     assert not (home / "smd-medchron-data" / "irma").exists()
@@ -90,7 +93,7 @@ def test_execute_deletes_only_hash_matched_unprotected_files(tmp_path: Path) -> 
 def test_path_escaping_its_area_is_kept(tmp_path: Path) -> None:
     home, _, fetch = _setup(tmp_path)
     t = lo.classify(home, lo.parse_manifest(fetch("home")), home)
-    assert t.escaped == 1 and t.protected == 1 and not t.match
+    assert t.escaped == 1 and t.protected == 2 and not t.match
 
 
 def test_symlink_is_never_followed(tmp_path: Path) -> None:
