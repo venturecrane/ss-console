@@ -65,8 +65,10 @@ A cron row that names `pre_run: pre_run.py` with `wake_policy:
 pre_run_decides` runs the same check as code and never wakes a turn: one
 `auth_status` refresh grant in the connector venv, then one `SUPPRESSED_WAKE`
 row with `decision_basis` `connector_auth_ok:smokeball` or
-`connector_auth_refused:smokeball:http_<4xx>` (Smokeball refused the token: the only outcome that pages) or
-`connector_auth_unchecked:smokeball:<ErrorClass>` (the check itself could not run). SMD's hourly work-health email
+`connector_auth_refused:smokeball:http_<4xx>` (Smokeball refused the token: pages as dead) or
+`connector_auth_unsaved:smokeball:refresh_token_not_persisted` (the renewed token was not saved: pages as
+dying at the next restart) or
+`connector_auth_unchecked:smokeball:<ErrorClass>` (the check itself could not run; an item, never a page). SMD's hourly work-health email
 (console-side, it reads the ledger) picks that row up: a failure reaches team@ within
 the hour as its own ACTION email (repeated hourly while it stays dead), and
 a Smokeball seat whose check is not running is an ACTION item too. Authored

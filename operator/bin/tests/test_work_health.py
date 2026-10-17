@@ -632,6 +632,36 @@ def test_pre_run_never_wakes_and_records_the_basis(tmp_path, monkeypatch, capsys
     ]
 
 
+def test_an_unsaved_refresh_token_pages_the_same_day(tmp_path, monkeypatch, capsys):
+    """DS1 (2026-10-17 review): ``refresh_token_persisted: false`` (the token
+    works now, bricks at the next restart) fell through to ``unchecked``,
+    which never pages, though the module says it must page the same day."""
+    module = _pre_run()
+    monkeypatch.setenv(
+        "SMD_CONNECTOR_VENV_PYTHON",
+        _fake_python(tmp_path, '{"ok": false, "refused": false, "error": "refresh_token_not_persisted", "detail": ""}'),
+    )
+    assert module.check() == ("unsaved", "refresh_token_not_persisted", "")
+    seen = []
+    monkeypatch.setattr(module, "_broker", lambda req: seen.append(req) or {"ok": True})
+    assert module.main() == 0
+    row_meta = json.loads(seen[0]["row"]["metadata"])
+    assert row_meta["decision_basis"] == "connector_auth_unsaved:smokeball:refresh_token_not_persisted"
+    row = {
+        "ts": NOW.isoformat(),
+        "action_type": "SUPPRESSED_WAKE",
+        "skill_name": "connector-auth-check",
+        "metadata": seen[0]["row"]["metadata"],
+    }
+    items = auth.smokeball_auth_items(SEAT, [row], CFG, NOW, probe_scheduled=True)
+    assert _kinds(items) == ["auth_failed"]
+    assert items[0].page == f"ACTION: {SEAT} Smokeball sign-in dies at the next restart"
+    assert "next restart" in items[0].what and "could not run" not in items[0].what
+    # A later ok clears it, like a refusal.
+    ok = _probe(NOW + timedelta(minutes=5), "ok")
+    assert auth.smokeball_auth_items(SEAT, [row, ok], CFG, NOW + timedelta(minutes=6), probe_scheduled=True) == []
+
+
 def test_every_smokeball_seat_authors_the_hourly_check():
     import yaml
 
@@ -782,6 +812,25 @@ def test_a_failed_delivery_proof_is_open_until_proven():
     assert _kinds(items) == ["job_failed"] and "the files on the matter differ" in items[0].what
     proven = _row("DELIVERY_PROVEN", NOW - timedelta(minutes=30), job_id="J7", lane="drafting")
     assert src.delivery_proof_items(SEAT, [fail, proven], CFG, NOW) == []
+
+
+def test_a_proof_failure_after_a_released_hold_is_reported():
+    """DB1 (2026-10-17 review): any earlier HELD row dropped the job's proof
+    failure, so held -> released -> delivered -> proof failed reached nobody
+    (job_items sees it delivered). Only a HELD/FAILED landing at or after the
+    proof failure already reports it."""
+    rows = [
+        _job("MEDCHRON", "SUBMITTED", NOW - timedelta(hours=10), job_id="J9"),
+        _job("MEDCHRON", "HELD", NOW - timedelta(hours=9), job_id="J9", reason="review_held"),
+        _job("MEDCHRON", "DELIVERED", NOW - timedelta(hours=8), job_id="J9"),
+        _row("DELIVERY_PROOF_FAILED", NOW - timedelta(hours=8) + timedelta(minutes=5), job_id="J9",
+             lane="medchron", code="readback_mismatch"),
+    ]  # fmt: skip
+    assert wh.job_items(SEAT, rows, CFG, NOW) == []
+    assert _kinds(src.delivery_proof_items(SEAT, rows, CFG, NOW)) == ["job_failed"]
+    # A hold AFTER the proof failure is the job's own line already: one line, not two.
+    later = [*rows, _job("MEDCHRON", "HELD", NOW - timedelta(hours=7), job_id="J9", reason="update_held: x")]
+    assert src.delivery_proof_items(SEAT, later, CFG, NOW) == []
 
 
 def test_a_missed_hourly_run_is_an_item_and_breaks_the_all_clear():

@@ -128,6 +128,22 @@ def test_settle_unit():
         finalpass.settle("## Liability\n\nNothing here.\n", "## AUDIT: Liability\n\n- zebra quartz | INVENTED | x\n")
 
 
+def test_two_same_titled_sections_both_survive_the_final_pass():
+    """FALSIFIER (review 2026-10-17): the sections were held in a dict keyed by
+    heading, so the second "Damages" body was written twice and the first was
+    dropped from the letter."""
+    draft = (
+        "## Damages\n\nThe ER bill totals $500.00 (bill, p. 1). First stays.\n"
+        "## Liability\n\nFault is clear (cite).\n"
+        "## Damages\n\nThe clinic bill totals $900.00 (bill, p. 2). Second stays.\n"
+    )
+    md, _ = finalpass.settle(draft, "## AUDIT: Damages\n\n- The clinic bill totals $900.00 | ARITHMETIC | sum $850\n")
+    assert "The ER bill totals $500.00" in md and "First stays." in md and "Second stays." in md
+    assert "$900.00" not in md and md.count("## Damages") == 2
+    md2, _ = finalpass.settle(draft, "## AUDIT: Damages\n\n- The ER bill totals $500.00 | ARITHMETIC | sum $450\n")
+    assert "$500.00" not in md2 and "The clinic bill totals $900.00" in md2
+
+
 def test_a_marker_never_carries_braces_brackets_or_pipes():
     audit = "## AUDIT: Damages\n\n- The bill totals $500.00 | ARITHMETIC | sum {is} [x] $450.00\n"
     md, _ = finalpass.settle("## Damages\n\nThe bill totals $500.00 (bill).\n", audit, "curly")

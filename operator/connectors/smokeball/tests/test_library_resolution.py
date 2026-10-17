@@ -26,12 +26,15 @@ from smokeball_connector.library import (
     LOOKUP_NOT_FOUND,
     OPERATOR_LIBRARY_NUMBER,
     LibraryConfig,
+    ListingFailed,
     NotResolved,
     ResolvedTemplate,
     is_library_file,
     load_library_config,
+    list_matter_files,
     lookup_matter,
     resolve_template,
+    same_named_ids,
 )
 from smokeball_connector.render import render_markdown_to_docx
 
@@ -253,6 +256,45 @@ def test_a_library_that_could_not_be_read_is_never_reported_as_missing() -> None
 def test_a_library_that_was_read_and_lacks_the_matter_is_not_transient() -> None:
     out = resolve_template(_FakeClient(matters=[{"id": "m", "number": "OTHER"}], folders=[], files=[]), _CFG, "memo")
     assert isinstance(out, NotResolved) and out.transient is False and "not found" in out.reason
+
+
+class _FileListingFailsClient(_FakeClient):
+    """The matter lookup succeeds but a page of the FILE listing raises (a 429
+    on ``/documents/files``), after ``pages_ok`` full pages were read."""
+
+    def __init__(self, *, pages_ok: int = 0, **kw) -> None:
+        super().__init__(**kw)
+        self.pages_ok = pages_ok
+
+    def get(self, path, **params):  # type: ignore[override]
+        if path.endswith("/documents/files"):
+            if params.get("Offset", 0) // 500 >= self.pages_ok:
+                raise RuntimeError("Smokeball GET files -> HTTP 429: Too Many Requests")
+            return {"value": [{"id": f"x{params['Offset'] + i}", "name": "other"} for i in range(500)]}
+        return super().get(path, **params)
+
+
+def test_a_file_listing_that_could_not_be_read_is_transient_never_missing() -> None:
+    """DC1 (2026-10-17 review): a failed page of the library's file listing
+    used to end the listing with what was read, so the form read as "no file
+    named ..." and non-transient: the firm was told to restore a form that was
+    there."""
+    client = _FileListingFailsClient(
+        matters=[{"id": "m", "number": "2026-OPS-001"}], folders=[{"id": "f", "name": "Document Library"}], files=[]
+    )
+    out = resolve_template(client, _CFG, "memo")
+    assert isinstance(out, NotResolved)
+    assert out.transient is True
+    assert "could not be listed just now" in out.reason
+    assert "no file named" not in out.reason
+
+
+def test_a_later_page_failing_raises_with_what_was_read_never_a_short_list() -> None:
+    client = _FileListingFailsClient(pages_ok=1, matters=[], folders=[], files=[])
+    with pytest.raises(ListingFailed) as err:
+        list_matter_files(client, "m")
+    assert len(err.value.partial) == 500
+    assert same_named_ids(client, "m", "other") is None  # unknown, never "no same-named file"
 
 
 _LIVE_ENTRY_IN_FOLDER = {

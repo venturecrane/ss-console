@@ -45,7 +45,7 @@ from . import form_letter_facts as facts
 from .form_letter_facts import Fact
 from . import readback
 from .form_letters import READBACK_WAITS, _file_proved  # noqa: F401 - READBACK_WAITS re-exported for tests
-from .library import ResolvedTemplate, list_matter_files, load_library_config, name_matches, resolve_template
+from .library import ResolvedTemplate, load_library_config, resolve_template, same_named_ids
 
 DOCUMENT_CLASS = "sr1_form"
 DEFAULT_TEMPLATE = "Form - DMV SR1.pdf"
@@ -337,7 +337,7 @@ def render_sr1(matter_id: str, cited: dict[str, Any] | None = None) -> Any:
         data = fill_sr1(resolved.bytes, values, injured_driver="DRIVERS NAME.0" in values)
     except Exception as exc:  # noqa: BLE001 - a form pypdf cannot fill is refused, never filed half-made
         return _refused(f"{resolved.name!r} could not be filled ({exc.__class__.__name__}); nothing was filed")
-    same = [str(e.get("id")) for e in list_matter_files(client, matter) if name_matches(e, FILE_NAME)]
+    same = same_named_ids(client, matter, FILE_NAME)
     file_id, proof = _file_proved(client, matter, FILE_NAME, data)
     out = {
         "status": "filed",

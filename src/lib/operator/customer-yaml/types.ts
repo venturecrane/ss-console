@@ -1553,6 +1553,8 @@ export type ValidationErrorCode =
   | 'IneligibleCustodyException'
   /** An unrecognized key inside an authored send_policy block (#2070). */
   | 'UnknownSendPolicyField'
+  /** An unrecognized key inside the `telegram:` block. */
+  | 'UnknownTelegramField'
   /** An unknown key, a bad level, or a step above its job's level in `case_manager`. */
   | 'InvalidCaseManager'
 

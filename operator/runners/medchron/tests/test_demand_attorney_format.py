@@ -173,6 +173,43 @@ def test_a_litigation_file_of_an_attorney_whose_format_has_no_litigation_variant
     assert v.outcome == "held" and f"{NUMBERED_ATTORNEY}'s demands" in v.reason and client.calls == []
 
 
+def test_a_redo_after_render_reviews_the_mapped_attorneys_demand_in_his_own_format(tmp_path, pricing):
+    """FALSIFIER (review 2026-10-17 B3): a resume after render went straight to
+    filing without ``_select_format``, so the redo's review read the firm's
+    default front keys and signature against a numbered letter and held every
+    redo of his demands."""
+    from medchron.demand import review as rv
+
+    seat = seat_with(standard_docs())
+    seat.facts = {**seat.facts, "responsible_attorney": NUMBERED_ATTORNEY}
+    client = ScriptedClient(
+        draft=NUMBERED_DRAFT,
+        review="| MUST-FIX | 1 wording | planted | p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+    )
+    jd = make_job(tmp_path / "job")
+    inputs = make_numbered_inputs(tmp_path / "in")
+
+    def run():
+        return DemandRun(
+            jd,
+            inputs_dir=str(inputs),
+            pricing=str(pricing),
+            seat_factory=lambda: seat,
+            client=client,
+            log=lambda _m: None,
+            readback_pause=0.0,
+            vendor_factory=lambda: None,
+        ).run()
+
+    v1 = run()
+    assert v1.outcome == "failed" and v1.stage == "review" and seat.sent == [], v1.reason
+    (jd / rv.REDO_MARKER).write_text("{}")
+    client.review = "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+    v2 = run()
+    assert v2.outcome == "delivered", v2.reason
+    assert {s["name"] for s in seat.sent} >= {"Demand.Alpha Example.docx"}
+
+
 # ---- render and format check, directly ---------------------------------------------
 def _render(tmp_path: Path, md: str = NUMBERED_DRAFT, **kw):
     tmp_path.mkdir(parents=True, exist_ok=True)
