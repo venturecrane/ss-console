@@ -48,8 +48,10 @@ from __future__ import annotations
 
 import re
 from datetime import date
+from typing import Any
 
 from . import body as B
+from .values import lost
 
 MARK = "[handwritten]"
 MARK_OPEN = "(handwritten date)"
@@ -363,6 +365,34 @@ def redate(
     shown = f"{MARK_OPEN} {NO_YEAR}" if yearless else MARK_OPEN
     log = {"reading": _mdy(reading), "verdict": "open", **({"year": "not stated"} if yearless else {})}
     return f"{_mdy(reading)} {shown}{tail}\n" + rest, log
+
+
+def moved(entry: str, settled: str) -> dict[str, Any]:
+    """What a re-date moved, for proof 10 (``update/proofs.dropped_values``):
+    the entry's date before and after, the exhibits it cites (in COMPOSED
+    numbers, as collect holds them), and the values the re-date itself took
+    out of the entry (its handwritten reading). Empty when the date did not
+    change. The entry's other values are not named: proof 10 looks for them
+    on the date the entry moved to, so a value a later step loses still
+    fails the update."""
+    before, after = B.iso(entry), B.iso(settled)
+    if not before or not after or before == after:
+        return {}
+    return {"from": before, "to": after, "exhibits": sorted(B.cited(entry)), "removed": lost(entry, settled)}
+
+
+def moves_of(report: dict[str, Any]) -> tuple[set[str], list[tuple[str, str, set[int]]]]:
+    """(values the collect stage's re-dates removed, [(from, to, exhibits)])
+    from ``compose_report.json``'s ``handwritten_dates`` rows."""
+    named: set[str] = set()
+    moves: list[tuple[str, str, set[int]]] = []
+    for row in report.get("handwritten_dates") or []:
+        m = row.get("moved") if isinstance(row, dict) else None
+        if not isinstance(m, dict) or not m.get("from") or not m.get("to"):
+            continue
+        named |= {str(v) for v in m.get("removed") or [] if isinstance(v, str)}
+        moves.append((str(m["from"]), str(m["to"]), {int(x) for x in m.get("exhibits") or [] if isinstance(x, int)}))
+    return named, moves
 
 
 def statement_block(

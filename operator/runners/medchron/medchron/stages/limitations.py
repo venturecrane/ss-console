@@ -108,7 +108,9 @@ def _unread_lines(d: Path, failed: list, log: Callable[[str], None]) -> list[str
     if unread:
         o += ["", "The following documents could not be read, and nothing from them appears in this chronology:\n"]
         o += [f'* "{name}"{f" ({where})" if where else ""} - {why}' for name, where, why in sorted(unread)]
-    ocr = read_jsonl(d / "ocr_results.jsonl")
+    # The last row per document: a resume that re-asks a failed image page
+    # records the document again, and the newer row is the one that holds.
+    ocr = list({r.get("id"): r for r in read_jsonl(d / "ocr_results.jsonl")}.values())
     # `failed_pages` was computed on every scanned document and read by nobody,
     # so a page the reader could not transcribe at all was disclosed to the
     # client exactly nowhere. An unread page belongs in the section above this
