@@ -4,7 +4,7 @@
 - **Decider:** Captain ("private by default", #3264 Captain decision 1, 2026-10-17); enforcement design by the agent, revised by the 2026-10-17 critique (R1 to R7)
 - **Closes for multi-person seats:** the within-customer per-user isolation that ADR 0007 (Out of scope, line 81) and ADR 0009 (Out of scope, line 78) left to "the multi-user role model"
 - **Builds on:** ADR 0007 (per-customer Machine isolation), ADR 0009 (cross-Machine query prohibition), ADR 0016 (Honcho disposition), ADR 0071 (confirm ceiling), ADR 0090 (hosted-agent roles)
-- **Related:** the calendar and documents platform model (a separate ADR, to follow), [#3264](https://github.com/venturecrane/ss-console/issues/3264)
+- **Related:** ADR 0092 (calendar and documents for hosted agents), [#3264](https://github.com/venturecrane/ss-console/issues/3264)
 - **Scope:** any seat that authors a `people:` block in `customer.yaml`. Single-person seats, and Brokery's seat, behave as today.
 
 ## Context
@@ -62,7 +62,7 @@ Anything else resolves no space. On a seat that authors `people:`, a turn with n
 
 ### 4. What leaves the seat
 
-Private-space artifacts never go to Google (R5). A gift list or a surprise plan stays in the record store and is shown in a DM only. Google holds shared items only, because content in Google lives in the owner partner's account (the owner partner is the one who connects Google), and that partner could read it there. The persona says so if asked.
+Private-space artifacts never leave the seat toward the other partner (R5). A gift list or a surprise plan stays in the record store and is shown in a DM only. A calendar invite for a private item goes only to its owner, and only when the item is meant to appear on a calendar at all (ADR 0092). If a couple later connects a Google account (the optional upgrade in ADR 0092), Google holds shared items only, because content in Google lives in the connecting partner's account and that partner could read it there. The persona says so if asked.
 
 ### 5. Telegram identity is authored, not appended at runtime (R4)
 
