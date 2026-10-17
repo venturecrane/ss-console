@@ -25,16 +25,17 @@ their own email, so the event appears in whatever calendar they already use
 
 ## Tools
 
-- `calendar_create`: create an event and send the invite.
-- `calendar_update`: change an event; every recipient gets the update.
-- `calendar_cancel`: cancel an event; every recipient gets the cancellation.
-- `calendar_list`: list the events the agent holds.
+- `calendar_invite_create`: create an event and send the invite.
+- `calendar_invite_update`: change an event; every recipient gets the update.
+- `calendar_invite_cancel`: cancel an event; every recipient gets the
+  cancellation.
+- `calendar_invite_list`: list the events the agent holds.
 
-`attendees` is a list of person ids from the seat's `people:` block (for
-example `p1`, `p2`), never email addresses. The tools resolve each id to that
-person's rostered email (`people[].email`), so an invite can reach only the
-people on the seat. There is no way to invite anyone else, and a request to do
-so is declined plainly.
+Invite only the people the request is for. `attendees` names them: on a seat
+that authors `people:`, by person id (for example `p1`, `p2`); otherwise by
+address. Each must be one of the seat's people, whose addresses are on the
+seat's roster (`scope.inbound_allow_from`). There is no way to invite anyone
+else, and a request to do so is declined plainly.
 
 ## Privacy
 
