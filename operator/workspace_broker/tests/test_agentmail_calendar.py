@@ -331,3 +331,29 @@ def test_without_the_lane_the_participant_fence_refuses_the_same_invitation(tmp_
     with pytest.raises(AgentMailRefused, match="participant fence:"):
         _send(broker, {"payload": payload()})
     assert http.posts() == []
+
+
+# -- the overlay's own invitations (MIRROR) -------------------------------------
+
+#: COPIED from hermes-smd-overlay ``tests/fixtures/calendar/`` (the golden
+#: invitations ``shared.ical`` renders, overlay#475). The overlay cannot run this
+#: validator and this repo cannot run that renderer, so the bytes themselves are
+#: the contract: when the overlay regenerates its goldens, copy them here in
+#: the same change, or this proves an old renderer.
+OVERLAY_GOLDEN = Path(__file__).parent / "fixtures" / "calendar"
+OVERLAY_ORGANIZER = "couples-demo@agentmail.to"
+
+
+@pytest.mark.parametrize("name", sorted(p.name for p in OVERLAY_GOLDEN.glob("*.ics")))
+def test_every_invitation_the_overlay_renders_passes_this_validator(name: str) -> None:
+    data = (OVERLAY_GOLDEN / name).read_bytes()
+    assert b"\r\n" in data and b"\n" not in data.replace(b"\r\n", b""), "the copy lost its CRLFs"
+    text = data.decode("utf-8")
+    method = "CANCEL" if "\r\nMETHOD:CANCEL\r\n" in text else "REQUEST"
+    body = {"to": ["ana@example.com", "ben@example.com"], "calendar": {"method": method, "ics": text}}
+    invitation = agentmail_calendar.build(body, organizer=OVERLAY_ORGANIZER)
+    assert invitation is not None and invitation.sha256 == hashlib.sha256(data).hexdigest()
+
+
+def test_the_mirror_is_not_empty() -> None:
+    assert len(list(OVERLAY_GOLDEN.glob("*.ics"))) == 6
