@@ -16,6 +16,8 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0057-operator-claude-connector-access-model.md
   - label: ADR 0078 - Client-custody email channel
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0078-client-custody-email-channel.md
+  - label: ADR 0092 - Calendar and documents for hosted agents
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0092-calendar-and-documents-platform-model.md
   - label: operator/README.md - connector code location
     href: https://github.com/venturecrane/ss-console/blob/main/operator/README.md
   - label: operator/connectors/README.md - the author-built connector contract
@@ -133,6 +135,8 @@ Only the `mcp:` path has a runtime materializer today. At boot, `translate._mate
 ### Google is a special case: the broker, not a connector
 
 Google Workspace (Gmail, Calendar, Drive, Docs, Sheets) was originally wired as `build:google-*` CLI adapters. Those were **superseded 2026-06-17 by [ADR 0045](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0045-mediated-connector-capability-broker.md)**, the Mediated Connector Capability Broker. Google now runs through a **Workspace broker**: a separate process holds the domain-wide-delegation service-account credential and exposes governed `workspace_*` tools. The agent never holds the Google credential, and there is no connector CLI for it to shell to. Google is therefore **not** a `connectors[]` entry - it is declared by `customer.yaml.google_auth:` and served by the broker. The broker is the authorization boundary for every Google operation; see `/admin/playbook/autonomy-governance` for how that boundary enforces entitlements.
+
+**Hosted-agent seats do not use the Google broker by default.** Domain-wide delegation cannot be scoped to one user, so it is never used for consumer seats, and SMD runs no central verified Google OAuth app (Captain ruling, 2026-07-06). Under [ADR 0092](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0092-calendar-and-documents-platform-model.md) (2026-10-17) a hosted agent owns its calendar and sends standard calendar invites from its AgentMail address, so events land in each person's own Google, Apple or Outlook calendar with no setup; it holds its documents and shares them by link or attachment. A customer who later wants the agent working directly in their Google account connects it through their own GCP OAuth client, set up with the agent's guidance through the Hermes `google-workspace` skill, and the token goes to the broker, never to the agent.
 
 ## Leverage Hermes native primitives
 

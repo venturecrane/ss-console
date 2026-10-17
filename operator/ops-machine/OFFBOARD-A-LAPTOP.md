@@ -27,10 +27,14 @@ and append the absolute path to `~/.smd-ops-verified.txt` only after it prints
 
 ## 3. Offboard
 
-Run `operator/ops-machine/laptop-offboard.sh` (dry run), show the Captain the
-list, then `laptop-offboard.sh --execute`. It deletes only verified paths and
-clean engagements clones, logs out of Fly, and reads the filesystem back.
-Record the result with `crane_verify`.
+Run `operator/ops-machine/laptop-offboard.py` (dry run), show the Captain the
+counts, then `laptop-offboard.py --execute`. It reads the sha256 manifests
+stored with each copy and deletes a local file only if it still hashes to the
+copied value; changed files, symlinks and anything unlisted stay. It never
+deletes a whole folder, `~/.claude/projects/*/memory/`, or `~/dev`, and it
+reads back that every deleted file is gone. A laptop without Fly access passes
+`--manifest-dir DIR` (manifests fetched from another machine). Logging out of
+Fly is a separate, deliberate step. Record the result with `crane_verify`.
 
 Not in scope here: product repos under `~/dev`, the agent memory, and personal
 files that are not client material.

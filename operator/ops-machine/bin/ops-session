@@ -1,0 +1,16 @@
+#!/bin/bash
+# ops-session [crane args...]: start `crane ss` on smd-ops with the Machine's own
+# Infisical identity already signed in (crane's `infisical run` honours
+# INFISICAL_TOKEN), so no interactive Infisical login is ever needed here.
+# Leaves a shell open when crane exits, so the tmux session survives.
+export PATH="$HOME/.npm-global/bin:$HOME/.venvs/ops/bin:$HOME/bin:$PATH"
+# crane signs in with ~/.infisical-ua (and passes the project id) only on what it
+# sees as a remote session (crane-mcp src/cli/ssh-auth.ts). A `fly ssh` session
+# is one, but does not always set the variables crane looks for; say so.
+export SSH_CONNECTION="${SSH_CONNECTION:-fly-ssh smd-ops}"
+# shellcheck disable=SC1090
+[ -f "$HOME/.fly-tokens" ] && . "$HOME/.fly-tokens"
+cd "$HOME/dev/ss-console" || exit 1
+git pull -q --ff-only 2>/dev/null || true
+crane ss "$@"
+[ -t 0 ] && exec bash -l
