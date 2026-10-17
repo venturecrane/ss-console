@@ -1210,7 +1210,18 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # is bound to the person and chat that raised it), #466 (no file tool writes
 # on a seat that keeps records) and #463 (telegram.allowed_users read as an
 # alias of allow_from; pairs with this repo's #3271). No tracked twin moved.
-ARG OVERLAY_REF="534f9563356c8d4d959e10b32fff4e3b9706d0ef"
+# 2026-10-17 (ccb525a2, the overlay #485 merge commit). The first overlay code
+# review's fixes: #479 (failed sends told, no skill-created on block, a question
+# never approves), #480 (webhook registration off the menu + COMMITMENT, job
+# segments charged; pairs with this file's smokeball manifest class), #481
+# (admin establishment read exemption scoped), #483 (Sentry formatted-line
+# scrub, refusal/done shapes, failed reads never empty), #484 (every webhook
+# delivery fenced, approved sends scanned under their composing session), #485
+# (citation caption exemption, content-floor disclaimer, chain head, ack token;
+# tracked twins chain/escalation_ledger/citation_filter moved), #487 (typed
+# Graph connection failures, MCP thread history, cursorless poller). Also the
+# couples-role overlay work #467-#478 (inert on seats that author no people).
+ARG OVERLAY_REF="ccb525a2cca601b29b6172ca4f151579595e644e"
 
 ARG CUSTOMER_SLUG=customer-zero
 
