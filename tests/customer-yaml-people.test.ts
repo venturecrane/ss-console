@@ -352,6 +352,27 @@ describe('rule 6: no two cron entries share a (skill, space) pair', () => {
   })
 })
 
+describe('rule 7: record_stores readers is rejected on a space-mode seat', () => {
+  it('FALSIFIER: a store with readers is rejected', () => {
+    const s = seat()
+    s.record_stores = [
+      {
+        name: 'lists',
+        path: '/opt/data/couple/lists',
+        owner_field: 'owner',
+        readers: ['alex@example.com'],
+      },
+    ]
+    expect(codesAt(s)).toEqual([['InvalidPeople', 'record_stores[0].readers']])
+  })
+
+  it('a store with an owner field and no readers is fine', () => {
+    const s = seat()
+    s.record_stores = [{ name: 'lists', path: '/opt/data/couple/lists', owner_field: 'owner' }]
+    expect(errorsOf(s)).toEqual([])
+  })
+})
+
 describe('memory switches on a single-person seat', () => {
   it('are optional, and must be booleans when authored', () => {
     const s = seat()

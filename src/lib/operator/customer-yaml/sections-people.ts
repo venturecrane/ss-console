@@ -29,6 +29,10 @@
  *      the overlay then delivers shared routines locally.
  *   6. No two cron entries share a (skill, space) pair: the pair is the
  *      routine's identity once space mode is on.
+ *   7. No record store authors `readers`. On a space-mode seat a record's owner
+ *      is a space (`p1`, `person:p1` or `shared`) and the fence reads by the
+ *      turn's spaces, so `readers` would grant nothing; authoring it would
+ *      read as an access grant the runtime does not honour.
  *
  * `spaces` without `people` is rejected for the same reason as rule 2.
  *
@@ -268,6 +272,22 @@ function checkGroupFence(
   })
 }
 
+/** Rule 7: `readers` grants nothing on a space-mode seat. */
+function checkRecordStoreReaders(root: Record<string, unknown>, errors: ValidationError[]): void {
+  const stores = root['record_stores']
+  if (!Array.isArray(stores)) return
+  stores.forEach((store, i) => {
+    if (isPlainObject(store) && store['readers'] !== undefined) {
+      err(
+        `record_stores[${i}].readers`,
+        'readers is not allowed on a seat that authors people: record owners are spaces ' +
+          'and each turn reads only its own spaces, so readers grants nothing (ADR 0091)',
+        errors
+      )
+    }
+  })
+}
+
 /** Rule 1: the blocks and memory switches a space-mode seat must author. */
 function checkSpaceModePrerequisites(
   root: Record<string, unknown>,
@@ -349,6 +369,7 @@ export function checkSpaceMode(
   )
   checkCronSpaces(root, ids, errors)
   checkDuplicateCronSpaces(root, errors)
+  checkRecordStoreReaders(root, errors)
   if (people !== null) {
     checkPersonChannels(root, people, errors)
     checkGroupFence(root, people, errors)

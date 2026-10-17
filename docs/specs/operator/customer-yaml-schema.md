@@ -613,6 +613,10 @@ Cross-field rules (`src/lib/operator/customer-yaml/sections-people.ts`):
   overlay then delivers shared routines locally.
 - No two cron entries share a `(skill, space)` pair.
 
+- No `record_stores[].readers` on a seat with `people:`. A record's owner there
+  is a space (`p1`, `person:p1` or `shared`) and each turn reads only its own
+  spaces, so `readers` would grant nothing.
+
 These mirror the overlay's translate-time rules (hermes-smd-overlay #469).
 
 The runtime consumers (the space resolver and its enforcement points) live in

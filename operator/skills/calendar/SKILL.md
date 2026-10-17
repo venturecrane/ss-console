@@ -30,8 +30,11 @@ their own email, so the event appears in whatever calendar they already use
 - `calendar_cancel`: cancel an event; every recipient gets the cancellation.
 - `calendar_list`: list the events the agent holds.
 
-Invites go only to addresses on the seat's roster (`people[].email`). There is
-no tool to invite anyone else, and a request to do so is declined plainly.
+`attendees` is a list of person ids from the seat's `people:` block (for
+example `p1`, `p2`), never email addresses. The tools resolve each id to that
+person's rostered email (`people[].email`), so an invite can reach only the
+people on the seat. There is no way to invite anyone else, and a request to do
+so is declined plainly.
 
 ## Privacy
 
