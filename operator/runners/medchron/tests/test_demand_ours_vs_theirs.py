@@ -194,6 +194,23 @@ def test_a_rerun_decides_the_premise_afresh(tmp_path):
     assert (new / "data" / "preflight.json").exists()
 
 
+def test_a_rerun_reviews_its_fresh_render_again(tmp_path, pricing):
+    """FALSIFIER (review 2026-10-17 B4): keep "review" out of DROP_STATE (or
+    review.json out of DROP_PATHS) and a re-run of a reviewed job inherits the
+    passed review, so its fresh render is filed with no review of its own."""
+    _r, v, _ = _run(tmp_path, pricing, ScriptedClient(), job="old")
+    assert v.outcome == "delivered", v.reason
+    old = tmp_path / "old"
+    assert json.loads((old / "data" / "state.json").read_text())["review"]["status"] == "done"
+    new = make_job(tmp_path / "new", job_id="01DEMANDJOB0000000000000002")
+    carried = seed.seed(new, old)
+    assert "review" not in carried and not (new / "data" / "review.json").exists()
+    client = ScriptedClient()
+    _r, v2, _ = _run(tmp_path, pricing, client, job="new")
+    assert v2.outcome == "delivered", v2.reason
+    assert any("INDEPENDENT PRE-DELIVERY REVIEW" in json.dumps(c.get("system")) for c in client.calls)
+
+
 def test_the_lane_seeds_a_rerun_from_the_superseded_job_dir(tmp_path):
     lane, client = _lane(tmp_path)
     old_id, new_id = "01DEMAND0000000000000000AA", "01DEMAND0000000000000000AB"

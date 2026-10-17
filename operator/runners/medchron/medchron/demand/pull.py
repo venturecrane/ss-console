@@ -193,6 +193,10 @@ def _retryable(row: dict[str, Any]) -> bool:
     return not _FINAL.search(str(row.get("error") or ""))
 
 
+def _refused(row: dict[str, Any]) -> bool:
+    return row.get("http_status") == 403 or bool(re.search(r"HTTP 403\b", str(row.get("error") or "")))
+
+
 def _pull(
     seat: Any, matter_id: str, todo: list[dict[str, Any]], raw: Path, seen: dict[str, str], log_path: Path, log: Any
 ) -> dict[str, dict[str, Any]]:
@@ -368,10 +372,14 @@ def run(
     targets = select(docs, folder_paths(folders), firm)
     log(f"{len(docs)} documents listed, {len(targets)} selected")
     rows = fetch_all(seat, matter_id, targets, data, log)
-    retry = [r for r in rows if not r.get("ok") and r.get("http_status") != HTTP_ABSENT]
+    # The same final/retryable line `fetch_all` retries by: a 403 (a file
+    # Smokeball will not serve) or a 404 (one it does not hold) is a finding
+    # in the report, never a failed pull; a retry would not change it.
+    retry = [r for r in rows if _retryable(r)]
     if retry:
         raise PullError(f"{len(retry)} of {len(rows)} documents are not pulled for a reason a retry can fix")
-    absent = [str(r.get("name")) for r in rows if not r.get("ok")]
+    refused = [str(r.get("name")) for r in rows if not r.get("ok") and _refused(r)]
+    absent = [str(r.get("name")) for r in rows if not r.get("ok") and not _refused(r)]
     mail = split_emails(rows, data, firm, client_emails)
     files = [
         {**r, "kind": "file"} for r in rows if r.get("ok") and r.get("path") and (r.get("ext") or "").lower() != ".msg"
@@ -380,6 +388,7 @@ def run(
         "listed": len(docs),
         "selected": len(targets),
         "absent_from_storage": absent,
+        "refused_by_smokeball": refused,
         "emails_kept": sum(1 for k in mail["kept"] if k["kind"] == "email_body"),
         "emails_walled": [{"name": w["name"], "reason": w["reason"]} for w in mail["walled"]],
         "emails_unreadable": mail["unreadable"],

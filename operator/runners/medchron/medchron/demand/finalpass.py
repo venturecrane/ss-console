@@ -178,6 +178,13 @@ def sentences(text: str) -> list[tuple[int, int]]:
 
 
 def locate(body: str, claim: str) -> tuple[int, int] | None:
+    return _match(body, claim)[0]
+
+
+def _match(body: str, claim: str) -> tuple[tuple[int, int] | None, float]:
+    """The unit a claim names and how well it matched: a verbatim match
+    scores above any word overlap, so two same-titled sections pick the one
+    that carries the claim, not a near neighbour."""
     bare = claim.strip().strip('"“”').strip()
     units = _units(body)
     if len(bare) >= 12:
@@ -185,16 +192,16 @@ def locate(body: str, claim: str) -> tuple[int, int] | None:
         if i >= 0:
             for a, b in units:
                 if " ".join(bare.split()) in " ".join(body[a:b].split()):
-                    return a, b
+                    return (a, b), 2.0
     want = _toks(bare)
     if not want:
-        return None
+        return None, 0.0
     best, score = None, 0.0
     for a, b in units:
         s = len(want & _toks(body[a:b])) / len(want)
         if s > score:
             best, score = (a, b), s
-    return best if score >= MIN_OVERLAP else None
+    return (best, score) if score >= MIN_OVERLAP else (None, 0.0)
 
 
 #: The words code writes, one place: the markers by dialect and the notes.
@@ -234,6 +241,26 @@ def remaining(claim: str, body: str) -> list[str] | None:
     return None if len(bare) >= 12 and bare in flat else []
 
 
+def _place(
+    heads: list[str], bodies: list[str], head: str, claim: str, verdict: str
+) -> tuple[int, tuple[int, int] | None]:
+    """The same-named section that locates the claim best (the first on a
+    tie), and the span (an ARITHMETIC finding falls back to its figure); else
+    the first such section and None."""
+    idxs = [i for i, h in enumerate(heads) if h == head]
+    found = [(score, -i, i, span) for i in idxs for span, score in [_match(bodies[i], claim)] if span is not None]
+    if found:
+        _s, _n, i, span = max(found)
+        return i, span
+    if verdict == "ARITHMETIC":
+        for i in idxs:
+            figs = [f for f in _FIG.findall(claim) if f in bodies[i]]
+            if figs:
+                a = bodies[i].find(figs[-1])
+                return i, (a, a + len(figs[-1]))
+    return idxs[0], None
+
+
 def settle(draft_md: str, audit_md: str, dialect: str = SQUARE) -> tuple[str, list[str]]:
     """The letter with every INVENTED statement removed and every ARITHMETIC
     figure flagged, in ``dialect``'s markers, and the attorney-notes lines
@@ -241,23 +268,22 @@ def settle(draft_md: str, audit_md: str, dialect: str = SQUARE) -> tuple[str, li
     if dialect not in (SQUARE, CURLY):
         raise ValueError(f"unknown marker dialect {dialect!r}")
     secs = sections(draft_md)
-    bodies = {h: b for h, b in secs}
+    # A list, never a dict keyed by heading: two sections with the same title
+    # (two "Damages" headings) are two bodies, and a dict kept only the last,
+    # writing it twice and dropping the first (drafting/settle.py's shape).
+    heads = [h for h, _ in secs]
+    bodies = [b for _, b in secs]
     notes: list[str] = []
     for head, verdict, claim, detail in findings(audit_md):
-        if head not in bodies:
+        if head not in heads:
             raise Unlocated(f"the final audit names section {head[:60]!r}, which the letter does not have")
-        body = bodies[head]
         if verdict == "ARITHMETIC" and self_cleared(detail):
             notes.append(NOTE_CLEARED.format(head=head, claim=_clean(claim, 120)))
             continue
-        span = locate(body, claim)
+        idx, span = _place(heads, bodies, head, claim, verdict)
         if span is None:
-            if verdict == "ARITHMETIC" and any(f in body for f in _FIG.findall(claim)):
-                fig = [f for f in _FIG.findall(claim) if f in body][-1]
-                a = body.find(fig)
-                span = (a, a + len(fig))
-            else:
-                raise Unlocated(f"a final-audit {verdict} finding in {head[:60]!r} matches nothing in that section")
+            raise Unlocated(f"a final-audit {verdict} finding in {head[:60]!r} matches nothing in that section")
+        body = bodies[idx]
         a, b = span
         unit = body[a:b]
         if verdict == "INVENTED":
@@ -291,8 +317,8 @@ def settle(draft_md: str, audit_md: str, dialect: str = SQUARE) -> tuple[str, li
                 raise Unlocated(f"a final-audit ARITHMETIC finding in {head[:60]!r} could not be marked")
             body = edited
             notes.append(NOTE_FLAGGED.format(head=head, claim=_clean(claim, 160), why=_clean(detail, 160)))
-        bodies[head] = body
-    out = "\n".join(bodies[h] for h, _ in secs)
+        bodies[idx] = body
+    out = "\n".join(bodies)
     return out + ("\n" if draft_md.endswith("\n") else ""), notes
 
 
