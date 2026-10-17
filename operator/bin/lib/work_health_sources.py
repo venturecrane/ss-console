@@ -548,7 +548,7 @@ def delivery_proof_items(seat: str, rows: list[dict], cfg: Config, now: datetime
     DELIVERY_PROVEN row for the same job lands after it."""
     proven: dict[str, datetime] = {}
     failures: dict[str, tuple[datetime, dict]] = {}
-    ended_bad: set[str] = set()
+    ended_bad: dict[str, datetime] = {}
     for ts, row in stamped(rows):
         md = meta(row)
         job_id = str(md.get("job_id") or "")
@@ -559,14 +559,17 @@ def delivery_proof_items(seat: str, rows: list[dict], cfg: Config, now: datetime
         elif row.get("action_type") == "DELIVERY_PROOF_FAILED":
             failures[job_id] = (ts, md)
         elif str(row.get("action_type") or "").endswith(("_JOB_FAILED", "_JOB_HELD")):
-            ended_bad.add(job_id)
+            ended_bad[job_id] = ts
     out: list[Item] = []
     for job_id, (ts, md) in failures.items():
         if (job_id in proven and proven[job_id] >= ts) or now - ts > timedelta(hours=cfg.ended_job_hours):
             continue
-        if job_id in ended_bad:
-            # The job's own FAILED/HELD line already says it did not deliver
-            # (job_items); a second line about the same job is noise.
+        if job_id in ended_bad and ended_bad[job_id] >= ts:
+            # The job's own FAILED/HELD line, landing AFTER the proof failure,
+            # already says it did not deliver (job_items); a second line about
+            # the same job is noise. A hold BEFORE it is not: a job held, then
+            # released and delivered, then failing its proof, is reported by
+            # nothing else (job_items sees it delivered; review DB1, 2026-10-17).
             continue
         if "delivered, and its lane raised" in str(md.get("detail") or ""):
             # The job DELIVERED; the lane carried an alert of its own (on

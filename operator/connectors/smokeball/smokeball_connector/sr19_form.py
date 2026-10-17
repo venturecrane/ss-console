@@ -33,7 +33,7 @@ from . import cited_facts
 from . import form_letter_facts as facts
 from . import readback
 from .form_letters import _file_proved
-from .library import ResolvedTemplate, list_matter_files, load_library_config, name_matches, resolve_template
+from .library import ResolvedTemplate, load_library_config, resolve_template, same_named_ids
 from .sr1_form import _address_parts, _birth_date, _other_driver, fill_acroform
 
 DOCUMENT_CLASS = "sr19_form"
@@ -181,7 +181,7 @@ def render_sr19(matter_id: str, cited: dict[str, Any] | None = None) -> Any:
         data = fill_acroform(resolved.bytes, values, CHECKS)
     except Exception as exc:  # noqa: BLE001 - a form pypdf cannot fill is refused, never filed half-made
         return _refused(f"{resolved.name!r} could not be filled ({exc.__class__.__name__}); nothing was filed")
-    same = [str(e.get("id")) for e in list_matter_files(client, matter) if name_matches(e, FILE_NAME)]
+    same = same_named_ids(client, matter, FILE_NAME)
     file_id, proof = _file_proved(client, matter, FILE_NAME, data)
     out = {
         "status": "filed",

@@ -513,6 +513,15 @@ def _would_order(providers: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def _listing_refusal() -> dict[str, Any]:
+    # A listing that could not be read must never read as "no missing-records
+    # list" or "no records on file for this provider" (2026-10-17 review, DC1).
+    return {
+        "status": "refused",
+        "reason": "The matter's documents could not be listed just now. Nothing was ordered; try again shortly.",
+    }
+
+
 def build(
     client: Any,
     yc: Any,
@@ -522,7 +531,12 @@ def build(
     vendor_name: str,
     log: Callable[[str], None] = lambda m: None,
 ) -> dict[str, Any]:
-    meta, blob = latest_audit(client, matter_id)
+    from .library import ListingFailed
+
+    try:
+        meta, blob = latest_audit(client, matter_id)
+    except ListingFailed:
+        return _listing_refusal()
     if blob is None:
         return {
             "status": "refused",
@@ -530,7 +544,10 @@ def build(
         }
     kept, skipped = split_rows(audit_rows(blob))
     providers = group(kept, today, first_date(kept, today))
-    facilities, questions = resolve_providers(client, yc, matter_id, providers, log)
+    try:
+        facilities, questions = resolve_providers(client, yc, matter_id, providers, log)
+    except ListingFailed:
+        return _listing_refusal()
     facilities, merged, later = one_order(facilities, providers)
     orders = []
     if facilities:

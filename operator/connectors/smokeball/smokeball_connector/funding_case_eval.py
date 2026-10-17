@@ -42,7 +42,7 @@ from . import form_letter_facts as facts
 from . import readback
 from .form_letters import _file_proved
 from .letterhead import load_firm_identity
-from .library import ResolvedTemplate, list_matter_files, load_library_config, name_matches, resolve_template
+from .library import ResolvedTemplate, load_library_config, resolve_template, same_named_ids
 from .medicals_layout import layout_values, provider_rows
 from .medicals_tools import _pi_items
 from .sr1_form import _address_parts, _birth_date, fill_acroform
@@ -341,7 +341,7 @@ def render_funding_case_eval(matter_id: str) -> Any:
         text, ticked = landed(data)
     except Exception as exc:  # noqa: BLE001 - a form pypdf cannot fill is refused, never filed half-made
         return _refused(f"{resolved.name!r} could not be filled ({exc.__class__.__name__}); nothing was filed")
-    same = [str(e.get("id")) for e in list_matter_files(client, matter) if name_matches(e, FILE_NAME)]
+    same = same_named_ids(client, matter, FILE_NAME)
     file_id, proof = _file_proved(client, matter, FILE_NAME, data)
     out = {
         "status": "filed",
