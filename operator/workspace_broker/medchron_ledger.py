@@ -48,7 +48,7 @@ from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
 from .cycle_window import Window, cycle_window, resolve_anchor, resolve_effective_from
-from .medchron_update import client_keys, update_block
+from .medchron_update import ADDED_COLUMNS, client_keys, update_block
 from .medchron_coverage import parse_covered, union_coverage, validate_covered
 
 # Re-exported: `validate_covered` moved to medchron_coverage at ss#2834 when this
@@ -481,9 +481,9 @@ class MedchronLedger:
             # refuses a RUN for its own clients only. NULL on an older row reads
             # as every client.
             have = {r["name"] for r in conn.execute("PRAGMA table_info(medchron_jobs)")}
-            for column in ("work_digest", "covered_json", "client_keys"):
+            for column, alter in ADDED_COLUMNS:
                 if column not in have:
-                    conn.execute(f"ALTER TABLE medchron_jobs ADD COLUMN {column} TEXT")
+                    conn.execute(alter)
             # After the column exists (the debit groups on it).
             conn.execute(CREATE_WORK_INDEX_SQL)
             conn.commit()

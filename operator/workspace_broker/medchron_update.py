@@ -18,6 +18,16 @@ from typing import Any
 UPDATE_INTO = "delivered_chronology"
 _FILE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
+#: The ``medchron_jobs`` columns added after the table first shipped, each with
+#: its own literal statement (no SQL is composed), run by
+#: ``MedchronLedger.ensure_schema`` when the column is missing. Here rather than
+#: in ``medchron_ledger`` so that module stays under the size ceiling.
+ADDED_COLUMNS = (
+    ("work_digest", "ALTER TABLE medchron_jobs ADD COLUMN work_digest TEXT"),
+    ("covered_json", "ALTER TABLE medchron_jobs ADD COLUMN covered_json TEXT"),
+    ("client_keys", "ALTER TABLE medchron_jobs ADD COLUMN client_keys TEXT"),
+)
+
 
 def update_block(req: dict[str, Any], env: dict[str, Any]) -> dict[str, Any]:
     """``{"update": {...}}`` for an update into the delivered chronology, ``{}``
