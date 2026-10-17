@@ -5,7 +5,10 @@ Machine holds a credential that can transmit (ss#2258 — see ``agentmail_auth``
 for the full rationale). Two verbs, both fail-closed:
 
 * ``send``  — a fresh message. Every recipient must be on the seat's authored
-  counterparty surface, and the From is pinned from config.
+  counterparty surface, and the From is pinned from config. It may carry ONE
+  calendar invitation (``calendar: {method, ics}``), which the broker
+  validates and builds into the only attachment AgentMail carries
+  (``agentmail_calendar``).
 * ``reply`` — an answer to an inbound message. The broker fetches the source
   message itself and checks the ORIGINAL SENDER against ``inbound_allow_from``.
   Without that check the reply lane would be an exfiltration primitive: anyone on
@@ -28,6 +31,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from . import agentmail_calendar
 from .agentmail_auth import (
     RecipientPolicy,
     authored_policy,
@@ -266,14 +270,31 @@ class AgentMailOps:
         policy = authored_policy(self._customer_path)
         recipients = collect_recipients(payload)
         enforce_recipients(policy, recipients)
-        body = {k: payload[k] for k in _BODY_FIELDS if payload.get(k) not in (None, "", [])}
+        invitation = self._invitation(payload)
+        body: dict[str, Any] = {k: payload[k] for k in _BODY_FIELDS if payload.get(k) not in (None, "", [])}
+        if invitation is not None:
+            # The one attachment AgentMail carries, built broker-side
+            # (agentmail_calendar), never a caller's attachments list.
+            body["attachments"] = [invitation.attachment]
         response = self._request(self._path("messages", "send"), "POST", body)
         return {
             "message_id": _message_id(response),
             "thread_id": _thread_id(response),
             "recipients": recipients,
             "inbox_id": self.inbox_id(),
+            # The exact invitation bytes sent, for the CONFIRM_SEND row.
+            **({"attachment_sha256": invitation.sha256} if invitation is not None else {}),
         }
+
+    def _invitation(self, payload: dict[str, Any]) -> agentmail_calendar.Invitation | None:
+        """The calendar invitation this send carries, validated, or ``None``.
+        Its ORGANIZER must be this seat's own inbox (``agentmail_calendar``)."""
+        if payload.get(agentmail_calendar.CALENDAR_FIELD) is None:
+            return None
+        try:
+            return agentmail_calendar.build(payload, organizer=self.inbox_id())
+        except agentmail_calendar.CalendarRefused as exc:
+            raise AgentMailRefused(str(exc)) from exc
 
     def reply(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Answer an inbound message, but only one from an allowed sender.
@@ -284,6 +305,8 @@ class AgentMailOps:
         sender could name any sender.
         """
         _refuse_attachments(payload)
+        if payload.get(agentmail_calendar.CALENDAR_FIELD) is not None:
+            raise AgentMailRefused("calendar refused: an invitation is a fresh send to its attendees, never a reply")
         message_id = str(payload.get("message_id") or "").strip()
         if not message_id:
             raise AgentMailRefused("reply requires the source message_id")
