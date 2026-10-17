@@ -1581,6 +1581,14 @@ COPY operator/adapter/ /app/adapter/
 # Canonical skill library (markdown + references)
 COPY operator/skills/ /app/skills/
 
+# Hosted-agent role packages (ADR 0090): role.yaml + the persona prompt. A seat
+# with `seat.role: <role>` gets /app/roles/<role>/<persona> rendered verbatim
+# into every profile's SOUL.md by the overlay's translate (bootstrap/role_persona.py);
+# a seat whose role package is missing here fails its boot rather than running
+# without the persona's safety rules. A seat with no role never reads this dir.
+# Pinned by tests/role-persona-delivery.test.ts.
+COPY operator/roles/ /app/roles/
+
 # Drafting discipline + the mechanical gate checker (ss-console #2083).
 #
 # The destination mirrors the repo path on purpose. Four work-product skills
