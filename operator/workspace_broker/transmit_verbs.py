@@ -68,6 +68,11 @@ _OPS_AUDIT_KEYS: tuple[str, ...] = (
     # caller key: the broker hashes the message it built, so no caller can
     # pre-stamp it. Absent on a Text body, and that absence is a fact.
     "html_body_sha256",
+    # ``attachment_sha256``: sha256 of the calendar invitation the AgentMail
+    # send verb built and attached (agentmail_calendar). The broker hashes the
+    # bytes it sent, so on that send this OPS value overrides any caller stamp
+    # of the same name (it is spread after ``audit_extra``).
+    "attachment_sha256",
 )
 
 #: Of those, the ones that stay in the ledger and never travel back to the agent.
