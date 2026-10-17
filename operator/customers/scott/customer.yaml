@@ -229,7 +229,8 @@ safety:
 # staged as a Fly secret, never here. Allowlist is MANDATORY (fails open
 # when empty).
 telegram:
-  allowed_users:
+  enabled: true
+  allow_from:
     - '7367659986'
 
 # ---- VOICE LIBRARY ----
