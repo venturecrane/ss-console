@@ -1,0 +1,90 @@
+# Daily sweep of every client ops workspace (operator/ops-machine/workspaces.json).
+#
+# WHY (Captain, 2026-10-17). Client documents live only in that client's ops
+# workspace (Fly app ops-<slug>), which stops itself when idle. A stopped
+# Machine runs no cron, so retention and health cannot live on it alone. Once a
+# day this run starts each workspace, runs ops-sweep on it (delete delivered
+# work 30 days after its delivery date, keeping a hash-only ledger; selftest;
+# seat-token expiry), leaves it to stop itself (ops-idle-stop), and pings that
+# workspace's healthchecks.io check. A failed or missing run pages through
+# healthchecks.io (daily period, 6h grace), never silence.
+#
+# Tokens: OPS_FLY_TOKEN__<SUFFIX> reaches that workspace's app only, minted by
+# bin/ops-workspace (1 year; OPS_SWEEP_TOKEN_EXPIRES__<SUFFIX> holds the date
+# and this run fails 30 days before it). The run prints counts and names only.
+
+name: ops-workspace-sweep
+
+on:
+  schedule:
+    - cron: '17 13 * * *' # 06:17 Phoenix, before the working day
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ops-workspace-sweep
+  cancel-in-progress: false
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+      - id: m
+        run: |
+          m=$(jq -c '[.workspaces | to_entries[] | {slug: .key, app: .value.app,
+                 suffix: (.key | ascii_upcase | gsub("-"; "_"))}]' operator/ops-machine/workspaces.json)
+          echo "matrix=$m" >> "$GITHUB_OUTPUT"
+
+  sweep:
+    needs: list
+    if: needs.list.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        ws: ${{ fromJson(needs.list.outputs.matrix) }}
+    env:
+      APP: ${{ matrix.ws.app }}
+      FLY_API_TOKEN: ${{ secrets[format('OPS_FLY_TOKEN__{0}', matrix.ws.suffix)] }}
+      HC_URL: ${{ secrets[format('OPS_HC_URL__{0}', matrix.ws.suffix)] }}
+      TOKEN_EXPIRES: ${{ vars[format('OPS_SWEEP_TOKEN_EXPIRES__{0}', matrix.ws.suffix)] }}
+    steps:
+      - name: Install flyctl
+        run: |
+          curl -fsSL https://github.com/superfly/flyctl/releases/download/v0.4.115/flyctl_0.4.115_Linux_x86_64.tar.gz \
+            | tar -xz -C /usr/local/bin flyctl
+          ln -sf flyctl /usr/local/bin/fly
+
+      - name: Sweep ${{ matrix.ws.app }}
+        run: |
+          set -uo pipefail
+          ping() { [ -n "$HC_URL" ] && curl -fsS -m 10 --retry 3 "$HC_URL$1" >/dev/null || true; }
+          [ -n "$FLY_API_TOKEN" ] || { echo "no OPS_FLY_TOKEN__${{ matrix.ws.suffix }}: run bin/ops-workspace create"; ping /fail; exit 1; }
+          ping /start
+          rc=0
+          if [ -n "$TOKEN_EXPIRES" ]; then
+            left=$(( ($(date -d "$TOKEN_EXPIRES" +%s) - $(date +%s)) / 86400 ))
+            echo "sweep token: ${left}d left"
+            [ "$left" -ge 30 ] || { echo "FAIL sweep token expires in ${left}d: bin/ops-workspace update ${{ matrix.ws.slug }}"; rc=1; }
+          fi
+          id=$(fly machine list -a "$APP" --json | jq -r '.[0].id')
+          was=$(fly machine list -a "$APP" --json | jq -r '.[0].state')
+          echo "machine $id was $was"
+          [ "$was" = started ] || fly machine start "$id" -a "$APP" >/dev/null
+          up=0
+          for i in $(seq 1 30); do fly ssh console -a "$APP" -u ops -C true >/dev/null 2>&1 && { up=1; break; }; sleep 5; done
+          if [ "$up" = 1 ]; then
+            fly ssh console -a "$APP" -u ops -C /opt/ops/bin/ops-sweep 2>/dev/null | tee sweep.txt
+            grep -q '^FAIL' sweep.txt && rc=1
+            grep -q '^retention:' sweep.txt || { echo "FAIL ops-sweep did not finish"; rc=1; }
+          else
+            echo "FAIL $APP did not answer over ssh"; rc=1
+          fi
+          if [ "$rc" -eq 0 ]; then ping ""; else ping /fail; fi
+          exit "$rc"

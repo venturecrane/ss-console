@@ -1,8 +1,16 @@
 #!/bin/bash
-# claude (smd-ops shim, first on PATH): every Claude Code run on the ops machine
-# uses the Captain's Max login. The /ss secrets that crane and ss-env inject
-# include a generic ANTHROPIC_API_KEY, which Claude Code would otherwise use
-# instead of the login (and which disables the claude.ai connectors). Only that
-# one variable is removed; the per-seat keys (ANTHROPIC_API_KEY__<SLUG>) that
-# Operator scripts read stay in place.
-exec env -u ANTHROPIC_API_KEY /usr/local/bin/claude "$@"
+# claude (ops shim, first on PATH on smd-ops and every client workspace): Claude
+# itself always runs on the Captain's Max login, never on an API key.
+#
+# smd-ops: the /ss secrets that crane and ss-env inject include a generic
+# ANTHROPIC_API_KEY, which Claude Code would otherwise use instead of the login
+# (and which disables the claude.ai connectors).
+#
+# A client workspace: ~/.ops-secrets carries that client's own Anthropic key as
+# ANTHROPIC_API_KEY for the chronology and drafting tools. It is removed from
+# Claude's own environment and handed back to every command Claude's Bash tool
+# runs via CLAUDE_ENV_FILE (probed 2026-10-17: sourced before each command), so
+# tools bill the client's key and Claude bills the Max plan.
+envfile=()
+[ -f "$HOME/.ops-secrets" ] && envfile=(CLAUDE_ENV_FILE="$HOME/.ops-secrets")
+exec env -u ANTHROPIC_API_KEY "${envfile[@]}" /usr/local/bin/claude "$@"

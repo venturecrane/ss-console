@@ -234,8 +234,56 @@ def test_fly_destroys_the_app_with_yes_when_it_exists():
         }
     )
     manifest = _run(FlyAppDestroyer(runner=runner).destroy_machine("acme"))
-    assert manifest == {"skipped": False, "app_destroyed": True, "app": "hermes-acme"}
+    assert manifest == {
+        "skipped": False,
+        "app_destroyed": True,
+        "app": "hermes-acme",
+        "ops_workspace": {"app": "ops-acme", "existed": False},
+    }
     assert ["fly", "apps", "destroy", "hermes-acme", "--yes"] in runner.calls
+    assert not any(c[:4] == ["fly", "apps", "destroy", "ops-acme"] for c in runner.calls)
+
+
+class _SequencedApps:
+    """`fly apps list` answers change as apps are destroyed: the read-back."""
+
+    def __init__(self, apps: list[str], fail_destroy: str = "") -> None:
+        self.apps = list(apps)
+        self.fail_destroy = fail_destroy
+        self.calls: list[list[str]] = []
+
+    def __call__(self, cmd):
+        self.calls.append(list(cmd))
+        if cmd[:3] == ["fly", "apps", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, json.dumps([{"Name": a} for a in self.apps]), "")
+        if cmd[:3] == ["fly", "apps", "destroy"]:
+            if cmd[3] != self.fail_destroy and cmd[3] in self.apps:
+                self.apps.remove(cmd[3])
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        raise AssertionError(f"unexpected command {cmd}")
+
+
+def test_fly_destroys_the_clients_ops_workspace_too():
+    """Its volume IS the client's documents: a seat retired without it is a
+    removal that is not complete (CLAUDE.md, gone means gone)."""
+    runner = _SequencedApps(["hermes-acme", "ops-acme", "hermes-other", "ops-other"])
+    manifest = _run(FlyAppDestroyer(runner=runner).destroy_machine("acme"))
+    assert manifest["ops_workspace"] == {"app": "ops-acme", "existed": True, "destroyed": True}
+    assert manifest["app_destroyed"] is True
+    assert runner.apps == ["hermes-other", "ops-other"]
+
+
+def test_fly_workspace_still_listed_after_destroy_is_an_error():
+    runner = _SequencedApps(["hermes-acme", "ops-acme"], fail_destroy="ops-acme")
+    with pytest.raises(RuntimeError, match="still listed"):
+        _run(FlyAppDestroyer(runner=runner).destroy_machine("acme"))
+
+
+def test_fly_workspace_is_destroyed_even_when_the_seat_is_already_gone():
+    runner = _SequencedApps(["ops-acme"])
+    manifest = _run(FlyAppDestroyer(runner=runner).destroy_machine("acme"))
+    assert manifest["skipped"] is True and manifest["ops_workspace"]["destroyed"] is True
+    assert runner.apps == []
 
 
 def test_fly_absent_app_is_a_skip():
@@ -312,6 +360,10 @@ def test_observability_deletes_the_check_by_uuid_and_both_d1_rows():
                 200, {"checks": [{"name": "hermes-other", "uuid": "u0"}, {"name": "hermes-acme", "uuid": "u1"}]}
             ),
             ("DELETE", f"{HEALTHCHECKS_API}/checks/u1"): HttpResponse(200, {}),
+            ("GET", f"{HEALTHCHECKS_API}/checks/?tag=ops-workspace&tag=acme"): HttpResponse(
+                200, {"checks": [{"name": "ops-other", "uuid": "w0"}, {"name": "ops-acme", "uuid": "w1"}]}
+            ),
+            ("DELETE", f"{HEALTHCHECKS_API}/checks/w1"): HttpResponse(200, {}),
         }
     )
     runner = _d1_runner()
@@ -319,6 +371,10 @@ def test_observability_deletes_the_check_by_uuid_and_both_d1_rows():
     manifest = _run(cleanup.cleanup("acme"))
     assert manifest["healthchecks_check_cancelled"] is True
     assert manifest["healthchecks_check_uuid"] == "u1"
+    # The ops workspace's sweep check goes with the seat; another client's stays.
+    assert manifest["ops_workspace_check_cancelled"] is True
+    assert ("DELETE", f"{HEALTHCHECKS_API}/checks/w1") in http.calls
+    assert ("DELETE", f"{HEALTHCHECKS_API}/checks/w0") not in http.calls
     assert manifest["fleet_status_row_deleted"] is True
     assert manifest["runtime_summary_row_deleted"] is True
     assert manifest["machine_credentials_row_deleted"] is True

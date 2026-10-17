@@ -2,13 +2,24 @@
 # ops-bootstrap: after the Captain's `gh auth login`, clone SMD's repos into the
 # same layout the laptop used (~/dev/<repo>) so every script that assumes it
 # (the Law 2 guard, boot smoke, input staging) works unchanged, and install the
-# ss-console Node deps. Idempotent: an existing clone is fetched, not recloned.
+# Node and Python environments. Idempotent: an existing clone is fetched.
+#
+# smd-ops gets every repo and the /ss Infisical wiring. A client workspace
+# (/etc/smd-ops-workspace) gets ss-console, engagements and crane-console, a
+# tools venv for the engagements chronology/drafting tools, and the crane MCP
+# server registered for Claude, and no Infisical at all: its secrets are its own
+# Fly secrets (~/.ops-secrets).
 set -euo pipefail
+mkdir -p "$HOME/logs"
 exec > >(tee "$HOME/logs/bootstrap.log") 2>&1
 trap 'echo "bootstrap FAILED at line $LINENO: $BASH_COMMAND"' ERR
+workspace=""
+[ -f /etc/smd-ops-workspace ] && workspace=$(cat /etc/smd-ops-workspace)
+repos="ss-console engagements hermes-smd-overlay crane-console"
+[ -n "$workspace" ] && repos="ss-console engagements crane-console"
 cd "$HOME/dev"
 gh auth setup-git >/dev/null
-for repo in ss-console engagements hermes-smd-overlay crane-console; do
+for repo in $repos; do
   if [ -d "$repo/.git" ]; then
     git -C "$repo" fetch -q origin && echo "fetched $repo"
   else
@@ -26,6 +37,18 @@ export NODE_AUTH_TOKEN
 # one venv, first on PATH via ss-env and .bashrc.
 uv venv -q --allow-existing "$HOME/.venvs/ops"
 VIRTUAL_ENV="$HOME/.venvs/ops" uv pip install -q pyyaml pytest -e ss-console/operator && echo "python env ready"
+
+if [ -n "$workspace" ]; then
+  # The engagements tools (chronology, drafting, file review) and their pins.
+  uv venv -q --allow-existing "$HOME/.venvs/tools"
+  VIRTUAL_ENV="$HOME/.venvs/tools" uv pip install -q -r "engagements/operator/customers/$workspace/tools/requirements.txt" && echo "tools env ready"
+  grep -q venvs/tools "$HOME/.bashrc" || echo 'export PATH="$HOME/.venvs/tools/bin:$PATH"' >> "$HOME/.bashrc"
+  /opt/ops/bin/ops-crane-install
+  claude mcp list 2>/dev/null | grep -q '^crane' || claude mcp add -s user crane -- "$HOME/.npm-global/bin/crane-mcp"
+  echo "bootstrap done (workspace $workspace)"
+  exit 0
+fi
+
 # .infisical.json is gitignored on the laptop; the ops identity supplies the
 # project id instead (see ss-env), but scripts that read the file find it here.
 # shellcheck disable=SC1090
