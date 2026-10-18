@@ -100,6 +100,14 @@ personas:
         enabled: true
         settings:
           recipients: roster
+      # Schedules and settings set in conversation (#3264).
+      - name: couples-settings
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
       - name: gratitude-prompts
         version: pending
         initiation:
