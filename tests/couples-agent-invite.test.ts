@@ -2,8 +2,11 @@
  * POST /api/internal/agent/couples/:id/invite: an SMD agent sends a couples
  * partner's portal invitation through the website, authenticated by
  * SMD_AGENT_ADMIN_KEY, inviting as the SMD admin user. Shares the flow with
- * the admin-console button (src/lib/hosted-agent/couples/invite.ts). Clerk is
- * mocked: no invitation leaves the test.
+ * the admin-console button (src/lib/hosted-agent/couples/invite.ts).
+ *
+ * SMD sends its OWN welcome invitation email; Clerk's is suppressed by
+ * creating an application invitation with `notify: false`. Clerk and the
+ * mailer are both mocked: no invitation and no email leaves the test.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
@@ -19,19 +22,40 @@ import { env as testEnv } from 'cloudflare:workers'
 const clerk = vi.hoisted(() => ({
   createOrganization: vi.fn(),
   createOrganizationInvitation: vi.fn(),
+  revokeOrganizationInvitation: vi.fn(),
+  createInvitation: vi.fn(),
+  revokeInvitation: vi.fn(),
+  getUserList: vi.fn(),
 }))
 vi.mock('@clerk/astro/server', () => ({
-  clerkClient: () => ({ organizations: clerk }),
+  clerkClient: () => ({
+    organizations: {
+      createOrganization: clerk.createOrganization,
+      createOrganizationInvitation: clerk.createOrganizationInvitation,
+      revokeOrganizationInvitation: clerk.revokeOrganizationInvitation,
+    },
+    invitations: {
+      createInvitation: clerk.createInvitation,
+      revokeInvitation: clerk.revokeInvitation,
+    },
+    users: { getUserList: clerk.getUserList },
+  }),
 }))
+const mail = vi.hoisted(() => ({ sendEmail: vi.fn() }))
+vi.mock('../src/lib/email/resend', () => ({ sendEmail: mail.sendEmail }))
 
 import { POST as createPost } from '../src/pages/api/admin/hosted-agent/couples/index'
 import { POST as adminInvitePost } from '../src/pages/api/admin/hosted-agent/couples/[id]/invite'
 import { POST as agentInvitePost } from '../src/pages/api/internal/agent/couples/[id]/invite'
-import { listPeople } from '../src/lib/db/couples-onboarding'
+import { getCouplesInstance, listPeople } from '../src/lib/db/couples-onboarding'
 import { SMD_ADMIN_USER_ID } from '../src/lib/auth/agent-admin-key'
+import { resolveCouplesAccess } from '../src/lib/portal/couples-access'
+import { couplesWelcomeEmail } from '../src/lib/email/couples-templates'
 
 const ORG_ID = '01JQFK0000SMDSERVICES000'
 const KEY = 'test-agent-key-not-a-real-secret'
+const ACCEPT = 'https://clerk.example/v1/tickets/accept?ticket=t1'
+const LANDING = 'https://portal.smd.services/portal/products/hosted-agent/couples'
 const ADMIN = {
   userId: 'admin-1',
   orgId: ORG_ID,
@@ -72,7 +96,7 @@ async function created(p1Email = 'alex@example.com', p2Email = 'sam@example.com'
     adminCtx({
       couple_name: 'Alex and Sam',
       agent_name: 'Juniper',
-      p1_name: 'Alex',
+      p1_name: 'Alex Rivera',
       p1_email: p1Email,
       p2_name: 'Sam',
       p2_email: p2Email,
@@ -81,6 +105,19 @@ async function created(p1Email = 'alex@example.com', p2Email = 'sam@example.com'
   const m = /couples\/([0-9a-f-]{36})\?st=created/.exec(res.headers.get('Location') ?? '')
   if (!m) throw new Error('create failed')
   return m[1]
+}
+
+/** Astro locals for a fresh Clerk session (no Organization) with a verified email. */
+function signedIn(clerkUserId: string, email: string): App.Locals {
+  return {
+    auth: () => ({ userId: clerkUserId, orgId: null, sessionId: `sess_${clerkUserId}` }),
+    currentUser: async () => ({
+      primaryEmailAddress: { emailAddress: email, verification: { status: 'verified' } },
+      firstName: 'Alex',
+      lastName: 'Rivera',
+    }),
+    session: null,
+  } as unknown as App.Locals
 }
 
 beforeEach(async () => {
@@ -92,6 +129,7 @@ beforeEach(async () => {
     DB: db,
     PORTAL_BASE_URL: 'https://portal.smd.services',
     SMD_AGENT_ADMIN_KEY: KEY,
+    RESEND_API_KEY: 'test-resend-key-not-real',
   })
   await db
     .prepare(
@@ -105,8 +143,13 @@ beforeEach(async () => {
     .prepare(`UPDATE users SET clerk_user_id = 'clerk_smd_admin' WHERE id = ?`)
     .bind(SMD_ADMIN_USER_ID)
     .run()
-  clerk.createOrganization.mockReset().mockResolvedValue({ id: 'org_new' })
-  clerk.createOrganizationInvitation.mockReset().mockResolvedValue({ id: 'orginv_1' })
+  clerk.createOrganization.mockReset()
+  clerk.createOrganizationInvitation.mockReset()
+  clerk.revokeOrganizationInvitation.mockReset().mockResolvedValue({})
+  clerk.createInvitation.mockReset().mockResolvedValue({ id: 'inv_1', url: ACCEPT })
+  clerk.revokeInvitation.mockReset().mockResolvedValue({})
+  clerk.getUserList.mockReset().mockResolvedValue({ data: [], totalCount: 0 })
+  mail.sendEmail.mockReset().mockResolvedValue({ success: true, id: 'email_1' })
 })
 
 describe('auth (fail closed)', () => {
@@ -115,7 +158,8 @@ describe('auth (fail closed)', () => {
     Object.assign(testEnv, { SMD_AGENT_ADMIN_KEY: undefined })
     const res = await agentInvitePost(agentCtx(id, { person_key: 'p1' }))
     expect(res.status).toBe(401)
-    expect(clerk.createOrganizationInvitation).not.toHaveBeenCalled()
+    expect(clerk.createInvitation).not.toHaveBeenCalled()
+    expect(mail.sendEmail).not.toHaveBeenCalled()
   })
 
   it('FALSIFIER: 401 when SMD_AGENT_ADMIN_KEY is empty and the bearer is empty', async () => {
@@ -131,22 +175,25 @@ describe('auth (fail closed)', () => {
       const res = await agentInvitePost(agentCtx(id, { person_key: 'p1' }, auth))
       expect(res.status).toBe(401)
     }
-    expect(clerk.createOrganizationInvitation).not.toHaveBeenCalled()
+    expect(clerk.createInvitation).not.toHaveBeenCalled()
   })
 })
 
 describe('body and target validation', () => {
-  it('400 on malformed JSON, a non-object, an unknown key, or both refs', async () => {
+  it('400 on malformed JSON, a non-object, an unknown key, both refs, or a non-boolean resend', async () => {
     const id = await created()
     expect((await agentInvitePost(agentCtx(id, '{not json', undefined, true))).status).toBe(400)
     expect((await agentInvitePost(agentCtx(id, ['p1']))).status).toBe(400)
     expect((await agentInvitePost(agentCtx(id, { person_key: 'p3' }))).status).toBe(400)
     expect((await agentInvitePost(agentCtx(id, {}))).status).toBe(400)
+    expect((await agentInvitePost(agentCtx(id, { person_key: 'p1', resend: 'yes' }))).status).toBe(
+      400
+    )
     const [p1] = await listPeople(db, id)
     expect(
       (await agentInvitePost(agentCtx(id, { person_key: 'p1', person_id: p1.id }))).status
     ).toBe(400)
-    expect(clerk.createOrganizationInvitation).not.toHaveBeenCalled()
+    expect(clerk.createInvitation).not.toHaveBeenCalled()
   })
 
   it('404 invalid on an unknown instance', async () => {
@@ -164,7 +211,8 @@ describe('body and target validation', () => {
     const res = await agentInvitePost(agentCtx(id, { person_id: foreign.id }))
     expect(res.status).toBe(404)
     expect(await res.json()).toEqual({ result: 'invalid' })
-    expect(clerk.createOrganizationInvitation).not.toHaveBeenCalled()
+    expect(clerk.createInvitation).not.toHaveBeenCalled()
+    expect(mail.sendEmail).not.toHaveBeenCalled()
   })
 
   it('409 when the SMD admin user has no Clerk user id', async () => {
@@ -179,63 +227,217 @@ describe('body and target validation', () => {
   })
 })
 
-describe('happy path', () => {
-  it('invites p1 by key as the SMD admin user and returns the invitation id', async () => {
+describe('SMD sends its own invitation; Clerk sends nothing', () => {
+  it('creates a Clerk application invitation with notify:false and emails its url', async () => {
     const id = await created()
     const res = await agentInvitePost(agentCtx(id, { person_key: 'p1' }))
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ result: 'invited', invitation_id: 'orginv_1' })
-    expect(clerk.createOrganization).toHaveBeenCalledWith({
-      name: 'Alex and Sam',
-      createdBy: 'clerk_smd_admin',
-    })
-    expect(clerk.createOrganizationInvitation).toHaveBeenCalledWith({
-      organizationId: 'org_new',
+    expect(await res.json()).toEqual({ result: 'invited', invitation_id: 'inv_1' })
+    expect(clerk.createInvitation).toHaveBeenCalledWith({
       emailAddress: 'alex@example.com',
-      role: 'org:member',
-      inviterUserId: 'clerk_smd_admin',
-      redirectUrl: 'https://portal.smd.services/portal/products/hosted-agent/couples',
+      redirectUrl: LANDING,
+      notify: false,
     })
+    // The org invitation (Clerk's own email, no way to suppress it) is never used.
+    expect(clerk.createOrganizationInvitation).not.toHaveBeenCalled()
+    expect(clerk.createOrganization).not.toHaveBeenCalled()
+
+    expect(mail.sendEmail).toHaveBeenCalledTimes(1)
+    const [apiKey, payload] = mail.sendEmail.mock.calls[0]
+    expect(apiKey).toBe('test-resend-key-not-real')
+    expect(payload.to).toBe('alex@example.com')
+    expect(payload.reply_to).toBe('team@smd.services')
+    expect(payload.subject).toBe('Juniper: your invitation to set up your couples assistant')
+    expect(payload.html).toContain(ACCEPT.replace(/&/g, '&amp;'))
+    expect(payload.text).toContain(ACCEPT)
+    // Partner names are the authored first names; the other partner is named.
+    expect(payload.text).toMatch(/^Hi Alex,/)
+    expect(payload.text).toContain('You and Sam each confirm the shared settings')
+    expect(payload.text).toContain('create your account with this email address')
+
     const [p1, p2] = await listPeople(db, id)
     expect(p1.invited_at).not.toBeNull()
-    expect(p1.clerk_invitation_id).toBe('orginv_1')
+    expect(p1.clerk_invitation_id).toBe('inv_1')
     expect(p2.invited_at).toBeNull()
   })
 
-  it('invites by person_id and reuses the bound org', async () => {
+  it('a second send without resend sends nothing and reports already_invited', async () => {
     const id = await created()
     await agentInvitePost(agentCtx(id, { person_key: 'p1' }))
-    const [, p2] = await listPeople(db, id)
-    const res = await agentInvitePost(agentCtx(id, { person_id: p2.id }))
-    expect(res.status).toBe(200)
-    expect(clerk.createOrganization).toHaveBeenCalledTimes(1)
-    expect(clerk.createOrganizationInvitation).toHaveBeenCalledTimes(2)
+    const res = await agentInvitePost(agentCtx(id, { person_key: 'p1' }))
+    expect(await res.json()).toEqual({ result: 'already_invited' })
+    expect(clerk.createInvitation).toHaveBeenCalledTimes(1)
+    expect(mail.sendEmail).toHaveBeenCalledTimes(1)
   })
 
-  it('maps Clerk outcomes and never logs the invitee address', async () => {
+  it('resend revokes a pending ORG invitation from the old flow, then sends the new email', async () => {
+    const id = await created()
+    const inst = await getCouplesInstance(db, id)
+    await db
+      .prepare('UPDATE entities SET clerk_org_id = ? WHERE id = ?')
+      .bind('org_couple', inst!.entity_id)
+      .run()
+    const [p1] = await listPeople(db, id)
+    await db
+      .prepare(
+        `UPDATE hosted_agent_people SET invited_at = datetime('now'), clerk_invitation_id = 'orginv_old' WHERE id = ?`
+      )
+      .bind(p1.id)
+      .run()
+    clerk.createInvitation.mockResolvedValueOnce({ id: 'inv_2', url: ACCEPT })
+    const res = await agentInvitePost(agentCtx(id, { person_key: 'p1', resend: true }))
+    expect(await res.json()).toEqual({ result: 'resent', invitation_id: 'inv_2' })
+    expect(clerk.revokeOrganizationInvitation).toHaveBeenCalledWith({
+      organizationId: 'org_couple',
+      invitationId: 'orginv_old',
+      requestingUserId: 'clerk_smd_admin',
+    })
+    expect(clerk.createInvitation).toHaveBeenCalledWith({
+      emailAddress: 'alex@example.com',
+      redirectUrl: LANDING,
+      notify: false,
+      ignoreExisting: true,
+    })
+    expect(mail.sendEmail).toHaveBeenCalledTimes(1)
+    expect((await listPeople(db, id))[0].clerk_invitation_id).toBe('inv_2')
+  })
+
+  it('resend revokes a previous APPLICATION invitation', async () => {
+    const id = await created()
+    await agentInvitePost(agentCtx(id, { person_key: 'p1' }))
+    await agentInvitePost(agentCtx(id, { person_key: 'p1', resend: true }))
+    expect(clerk.revokeInvitation).toHaveBeenCalledWith('inv_1')
+    expect(mail.sendEmail).toHaveBeenCalledTimes(2)
+  })
+
+  it('a partner who already has a Clerk account gets no invitation and a sign-in link', async () => {
+    const id = await created()
+    clerk.getUserList.mockResolvedValueOnce({
+      data: [{ emailAddresses: [{ emailAddress: 'Alex@Example.com' }] }],
+      totalCount: 1,
+    })
+    const res = await agentInvitePost(agentCtx(id, { person_key: 'p1' }))
+    expect(await res.json()).toEqual({ result: 'invited' })
+    expect(clerk.createInvitation).not.toHaveBeenCalled()
+    const payload = mail.sendEmail.mock.calls[0][1]
+    expect(payload.text).toContain(LANDING)
+    expect(payload.text).toContain('sign in with this email address')
+    const [p1] = await listPeople(db, id)
+    expect(p1.invited_at).not.toBeNull()
+    expect(p1.clerk_invitation_id).toBeNull()
+  })
+
+  it('FALSIFIER: a partial Clerk email match is not an existing account', async () => {
+    const id = await created()
+    clerk.getUserList.mockResolvedValueOnce({
+      data: [{ emailAddresses: [{ emailAddress: 'malex@example.com' }] }],
+      totalCount: 1,
+    })
+    await agentInvitePost(agentCtx(id, { person_key: 'p1' }))
+    expect(clerk.createInvitation).toHaveBeenCalledTimes(1)
+  })
+
+  it('FALSIFIER: an address bound to another customer is refused, nothing sent', async () => {
+    const id = await created()
+    await db
+      .prepare(
+        `INSERT INTO users (id, org_id, email, name, role, entity_id, created_at)
+         VALUES ('u-other', ?, 'alex@example.com', 'Alex', 'client', 'some-other-entity', datetime('now'))`
+      )
+      .bind(ORG_ID)
+      .run()
+    const res = await agentInvitePost(agentCtx(id, { person_key: 'p1' }))
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ result: 'account_conflict' })
+    expect(clerk.createInvitation).not.toHaveBeenCalled()
+    expect(mail.sendEmail).not.toHaveBeenCalled()
+  })
+
+  it('a failed email revokes the new invitation and leaves the partner un-invited', async () => {
     const id = await created()
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    clerk.createOrganizationInvitation.mockRejectedValueOnce(new Error('already invited'))
-    let res = await agentInvitePost(agentCtx(id, { person_key: 'p1' }))
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ result: 'already_invited' })
+    mail.sendEmail.mockResolvedValueOnce({ success: false, error: 'boom' })
+    const res = await agentInvitePost(agentCtx(id, { person_key: 'p1' }))
+    expect(res.status).toBe(502)
+    expect(await res.json()).toEqual({ result: 'email_failed' })
+    expect(clerk.revokeInvitation).toHaveBeenCalledWith('inv_1')
+    expect((await listPeople(db, id))[0].invited_at).toBeNull()
+    expect(JSON.stringify(spy.mock.calls)).not.toContain('alex@example.com')
+    spy.mockRestore()
+  })
 
-    clerk.createOrganizationInvitation.mockRejectedValueOnce(new Error('boom'))
+  it('maps Clerk failures and never logs the invitee address', async () => {
+    const id = await created()
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    clerk.createInvitation.mockRejectedValueOnce(new Error('duplicate'))
+    let res = await agentInvitePost(agentCtx(id, { person_key: 'p1' }))
+    expect(await res.json()).toEqual({ result: 'already_invited' })
+    clerk.createInvitation.mockRejectedValueOnce(new Error('boom'))
     res = await agentInvitePost(agentCtx(id, { person_key: 'p1' }))
     expect(res.status).toBe(502)
     expect(await res.json()).toEqual({ result: 'invite_failed' })
+    expect(mail.sendEmail).not.toHaveBeenCalled()
     expect(JSON.stringify(spy.mock.calls)).not.toContain('alex@example.com')
     spy.mockRestore()
   })
 })
 
+describe('reachability: the invited partner lands on the couples surface', () => {
+  it('first sign-in with no Clerk Organization resolves the entity and claims the partner', async () => {
+    const id = await created()
+    await agentInvitePost(agentCtx(id, { person_key: 'p1' }))
+    const access = await resolveCouplesAccess(db, signedIn('clerk_alex', 'ALEX@example.com'))
+    expect(access.kind).toBe('allowed')
+    if (access.kind === 'allowed') expect(access.person.person_key).toBe('p1')
+  })
+
+  it('FALSIFIER: without the invitation, the same sign-in reaches no entity', async () => {
+    await created()
+    const access = await resolveCouplesAccess(db, signedIn('clerk_alex', 'alex@example.com'))
+    expect(access).toEqual({ kind: 'redirect', to: '/auth/sign-in?status=no_subscription' })
+  })
+})
+
 describe('admin route shares the flow', () => {
-  it('the admin button still invites as the signed-in admin and redirects with the banner', async () => {
+  it('the admin button invites and redirects with the banner', async () => {
     const id = await created()
     const [p1] = await listPeople(db, id)
     const res = await adminInvitePost(adminCtx({ person_id: p1.id }, { id }))
     expect(res.status).toBe(303)
     expect(res.headers.get('Location')).toBe(`/admin/hosted-agent/couples/${id}?st=invited`)
-    expect(clerk.createOrganizationInvitation.mock.calls[0][0].inviterUserId).toBe('clerk_admin')
+    expect(mail.sendEmail).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the welcome email copy', () => {
+  const base = {
+    agentName: 'Juniper',
+    partnerName: 'Alex Rivera',
+    otherPartnerName: 'Sam Lee',
+    acceptUrl: 'https://clerk.example/a?x=1&y=2',
+    existingAccount: false,
+  }
+
+  it('carries no em dash, dollar amount, or banned placeholder copy', () => {
+    const e = couplesWelcomeEmail(base)
+    for (const part of [e.subject, e.html, e.text]) {
+      expect(part).not.toMatch(/—/)
+      expect(part).not.toMatch(/\$\d/)
+      expect(part.toLowerCase()).not.toContain('coming soon')
+    }
+  })
+
+  it('escapes authored names in the HTML', () => {
+    const e = couplesWelcomeEmail({ ...base, partnerName: '<b>Al</b>', agentName: 'J&J' })
+    expect(e.html).not.toContain('<b>Al</b>')
+    expect(e.html).toContain('J&amp;J is a private assistant')
+    expect(e.html).toContain('x=1&amp;y=2')
+  })
+
+  it('without an authored agent name, the subject and opening stay generic', () => {
+    const e = couplesWelcomeEmail({ ...base, agentName: null, otherPartnerName: null })
+    expect(e.subject).toBe('Your invitation to set up your couples assistant')
+    expect(e.text).toContain('You are invited to a private assistant the two of you share.')
+    expect(e.text).toContain('shared with your partner.')
   })
 })

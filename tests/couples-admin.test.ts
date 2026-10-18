@@ -1,7 +1,7 @@
 /**
  * Admin actions on a couples instance (ADR 0090 decision 4): create, invite
- * each partner through a Clerk Organization (the Operator invitation pattern,
- * driven by SMD), record the Telegram bot and group, and read the onboarding
+ * each partner (SMD's own welcome email over a Clerk invitation whose own
+ * email is suppressed), record the Telegram bot and group, and read the onboarding
  * state. Clerk is mocked: no invitation leaves the test.
  */
 
@@ -18,9 +18,24 @@ import { env as testEnv } from 'cloudflare:workers'
 const clerk = vi.hoisted(() => ({
   createOrganization: vi.fn(),
   createOrganizationInvitation: vi.fn(),
+  revokeOrganizationInvitation: vi.fn(),
+  createInvitation: vi.fn(),
+  revokeInvitation: vi.fn(),
+  getUserList: vi.fn(),
 }))
 vi.mock('@clerk/astro/server', () => ({
-  clerkClient: () => ({ organizations: clerk }),
+  clerkClient: () => ({
+    organizations: {
+      createOrganization: clerk.createOrganization,
+      createOrganizationInvitation: clerk.createOrganizationInvitation,
+      revokeOrganizationInvitation: clerk.revokeOrganizationInvitation,
+    },
+    invitations: {
+      createInvitation: clerk.createInvitation,
+      revokeInvitation: clerk.revokeInvitation,
+    },
+    users: { getUserList: clerk.getUserList },
+  }),
 }))
 const mail = vi.hoisted(() => ({ sendEmail: vi.fn() }))
 vi.mock('../src/lib/email/resend', () => ({ sendEmail: mail.sendEmail }))
@@ -86,6 +101,12 @@ beforeEach(async () => {
     .run()
   clerk.createOrganization.mockReset().mockResolvedValue({ id: 'org_new' })
   clerk.createOrganizationInvitation.mockReset().mockResolvedValue({ id: 'orginv_1' })
+  clerk.revokeOrganizationInvitation.mockReset().mockResolvedValue({})
+  clerk.createInvitation
+    .mockReset()
+    .mockResolvedValue({ id: 'inv_1', url: 'https://clerk.example/accept?t=1' })
+  clerk.revokeInvitation.mockReset().mockResolvedValue({})
+  clerk.getUserList.mockReset().mockResolvedValue({ data: [], totalCount: 0 })
   mail.sendEmail.mockReset().mockResolvedValue({ success: true })
 })
 
@@ -95,6 +116,7 @@ describe('create', () => {
     expect(await listCouplesInstances(db)).toHaveLength(1)
     expect(clerk.createOrganization).not.toHaveBeenCalled()
     expect(clerk.createOrganizationInvitation).not.toHaveBeenCalled()
+    expect(clerk.createInvitation).not.toHaveBeenCalled()
   })
 
   it('FALSIFIER: refuses a non-admin', async () => {
@@ -111,26 +133,21 @@ describe('create', () => {
 })
 
 describe('invite', () => {
-  it('creates the Clerk org once, binds it, and invites one partner as org:member', async () => {
+  it('invites each partner with Clerk email suppressed and sends the SMD email', async () => {
     const id = await created()
     const [p1, p2] = await listPeople(db, id)
     await invitePost(ctx(form({ person_id: p1.id }), { id }))
     await invitePost(ctx(form({ person_id: p2.id }), { id }))
-    expect(clerk.createOrganization).toHaveBeenCalledTimes(1)
-    expect(clerk.createOrganization).toHaveBeenCalledWith({
-      name: 'Alex and Sam',
-      createdBy: 'clerk_admin',
-    })
-    expect(clerk.createOrganizationInvitation).toHaveBeenCalledTimes(2)
-    expect(clerk.createOrganizationInvitation.mock.calls[0][0]).toEqual({
-      organizationId: 'org_new',
+    expect(clerk.createOrganizationInvitation).not.toHaveBeenCalled()
+    expect(clerk.createInvitation).toHaveBeenCalledTimes(2)
+    expect(clerk.createInvitation.mock.calls[0][0]).toEqual({
       emailAddress: 'alex@example.com',
-      role: 'org:member',
-      inviterUserId: 'clerk_admin',
       redirectUrl: 'https://portal.smd.services/portal/products/hosted-agent/couples',
+      notify: false,
     })
+    expect(mail.sendEmail).toHaveBeenCalledTimes(2)
     const people = await listPeople(db, id)
-    expect(people.every((p) => p.invited_at !== null && p.clerk_invitation_id === 'orginv_1')).toBe(
+    expect(people.every((p) => p.invited_at !== null && p.clerk_invitation_id === 'inv_1')).toBe(
       true
     )
   })
@@ -144,15 +161,21 @@ describe('invite', () => {
     const [foreign] = await listPeople(db, other)
     const res = await invitePost(ctx(form({ person_id: foreign.id }), { id }))
     expect(res.headers.get('Location')).toContain('st=invalid')
-    expect(clerk.createOrganizationInvitation).not.toHaveBeenCalled()
+    expect(clerk.createInvitation).not.toHaveBeenCalled()
+    expect(mail.sendEmail).not.toHaveBeenCalled()
   })
 
-  it('maps a duplicate invitation to a banner', async () => {
+  it('a second click without resend sends nothing; resend=1 re-sends', async () => {
     const id = await created()
     const [p1] = await listPeople(db, id)
-    clerk.createOrganizationInvitation.mockRejectedValueOnce(new Error('already invited'))
-    const res = await invitePost(ctx(form({ person_id: p1.id }), { id }))
+    await invitePost(ctx(form({ person_id: p1.id }), { id }))
+    let res = await invitePost(ctx(form({ person_id: p1.id }), { id }))
     expect(res.headers.get('Location')).toContain('st=already_invited')
+    expect(mail.sendEmail).toHaveBeenCalledTimes(1)
+    res = await invitePost(ctx(form({ person_id: p1.id, resend: '1' }), { id }))
+    expect(res.headers.get('Location')).toContain('st=resent')
+    expect(clerk.revokeInvitation).toHaveBeenCalledWith('inv_1')
+    expect(mail.sendEmail).toHaveBeenCalledTimes(2)
   })
 })
 

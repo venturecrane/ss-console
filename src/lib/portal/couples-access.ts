@@ -10,8 +10,9 @@
  *      which keep admitting `principal` only.
  *   2. A partner who has never signed in has no role yet. SMD authored their
  *      partner row with an email; the first time they reach this entity (by
- *      Clerk Organization membership from SMD's invitation, or a direct
- *      binding), a VERIFIED email match claims that row and grants the role.
+ *      the `users.entity_id` binding SMD's invitation pre-creates, see
+ *      src/lib/hosted-agent/couples/invite.ts, or by Clerk Organization
+ *      membership), a VERIFIED email match claims that row and grants the role.
  *      An unverified address never reaches here (clerk-profile.ts returns
  *      null and the bridge refuses the user).
  *

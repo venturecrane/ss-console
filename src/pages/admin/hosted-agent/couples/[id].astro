@@ -23,6 +23,10 @@ const st = Astro.url.searchParams.get('st')
 const banners: Record<string, string> = {
   created: 'Instance created. Nothing has been sent.',
   invited: 'Invitation sent.',
+  resent: 'A fresh invitation was sent. The previous link no longer works.',
+  account_conflict:
+    'That address belongs to a portal account tied to another customer, or to staff. Nothing was sent.',
+  email_failed: 'The welcome email failed to send, so no invitation is live. Check Sentry.',
   already_invited: 'That partner already has a pending invitation.',
   already_member: 'That partner is already a member.',
   invite_failed: 'The invitation failed. Check Sentry.',
@@ -115,6 +119,7 @@ const button =
             </div>
             <form method="POST" action={`/api/admin/hosted-agent/couples/${instance.id}/invite`}>
               <input type="hidden" name="person_id" value={p.id} />
+              {p.invited_at && <input type="hidden" name="resend" value="1" />}
               <button type="submit" class={button}>
                 {p.invited_at ? 'Resend invitation' : 'Send invitation'}
               </button>

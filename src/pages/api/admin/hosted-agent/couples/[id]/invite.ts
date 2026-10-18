@@ -16,6 +16,9 @@ import {
  * src/lib/hosted-agent/couples/invite.ts, shared with the SMD agent route
  * /api/internal/agent/couples/:id/invite.
  *
+ * The button on an already-invited partner posts `resend=1`, which revokes
+ * the previous invitation and sends a fresh one.
+ *
  * Sending is an explicit per-partner click, never part of creating the
  * instance. The outcome maps to a status banner; the invitee's address is not
  * logged.
@@ -35,7 +38,9 @@ export const POST: APIRoute = async (context) => {
   const id = context.params.id
   if (typeof id !== 'string' || id.length === 0) return back('', 'invalid')
 
-  const personId = trimString((await context.request.formData()).get('person_id'))
+  const form = await context.request.formData()
+  const personId = trimString(form.get('person_id'))
+  const resend = trimString(form.get('resend')) === '1'
   if (!personId) return back(id, 'invalid')
 
   const inviter = await clerkUserIdFor(env.DB, auth.session.userId)
@@ -46,6 +51,7 @@ export const POST: APIRoute = async (context) => {
     personId,
     inviterClerkUserId: inviter,
     source: 'admin',
+    resend,
   })
   return back(id, outcome.result)
 }

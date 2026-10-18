@@ -10,14 +10,27 @@
  * Unset secret = every request is 401.
  *
  * Scope: invitations only. It creates no instance, deletes nothing, and
- * changes no partner data beyond marking the partner invited.
+ * changes no partner data beyond marking the partner invited (and pre-binding
+ * the partner's portal identity to the couple, so first sign-in lands there).
  *
- * Body: { "person_key": "p1" | "p2" }  or  { "person_id": "<id>" }
- * 200 { "result": "invited", "invitation_id": "orginv_..." }
+ * SMD sends its own welcome invitation email; Clerk's is suppressed (see
+ * src/lib/hosted-agent/couples/invite.ts for the documented mechanism).
+ *
+ * Body: { "person_key": "p1" | "p2" }  or  { "person_id": "<id>" },
+ *       plus optional "resend": true to re-send to an already-invited partner
+ *       (the previous invitation is revoked and a fresh one issued).
+ * 200 { "result": "invited" | "resent", "invitation_id"?: "inv_..." }
+ *     (no invitation_id when the partner already had an account: the email
+ *     links to the portal sign-in instead)
  * 200 { "result": "already_member" | "already_invited" }
+ *     (already_invited: a second send without "resend": true sends nothing)
  * 404 { "result": "invalid" }        unknown instance, or a partner not on it
  * 409 { "result": "no_clerk_user" }  the SMD admin user has no Clerk user id
+ * 409 { "result": "account_conflict" } the address is a portal account bound
+ *                                    to another customer, or a staff account
  * 502 { "result": "invite_failed" }  Clerk refused for another reason
+ * 502 { "result": "email_failed" }   the welcome email did not send; the new
+ *                                    invitation was revoked
  * 401 bad or missing key; 400 malformed body.
  *
  * The invitee's address is never logged or returned.
@@ -36,10 +49,13 @@ import {
 
 const STATUS: Record<CouplesInviteResult, number> = {
   invited: 200,
+  resent: 200,
   already_member: 200,
   already_invited: 200,
+  account_conflict: 409,
   invalid: 404,
   invite_failed: 502,
+  email_failed: 502,
 }
 
 type PersonRef = { key: 'p1' | 'p2' } | { id: string }
@@ -70,6 +86,10 @@ export const POST: APIRoute = async (context) => {
   if (!isRecord(body)) return errorResponse(400, 'invalid_json')
   const ref = parsePersonRef(body)
   if (!ref) return errorResponse(400, 'invalid_body')
+  const resendField = body['resend']
+  if (resendField !== undefined && typeof resendField !== 'boolean') {
+    return errorResponse(400, 'invalid_body')
+  }
 
   let personId: string
   if ('id' in ref) {
@@ -88,6 +108,7 @@ export const POST: APIRoute = async (context) => {
     personId,
     inviterClerkUserId: inviter,
     source: 'agent',
+    resend: resendField === true,
   })
   return jsonResponse(STATUS[outcome.result], {
     result: outcome.result,
