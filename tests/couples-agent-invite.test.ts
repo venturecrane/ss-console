@@ -390,11 +390,68 @@ describe('reachability: the invited partner lands on the couples surface', () =>
     expect(access.kind).toBe('allowed')
     if (access.kind === 'allowed') expect(access.person.person_key).toBe('p1')
   })
+})
 
-  it('FALSIFIER: without the invitation, the same sign-in reaches no entity', async () => {
+describe('the couples landing never depends on the active Clerk Organization', () => {
+  // An old-flow invitee (Clerk org invitation, no pre-bound users row) whose
+  // ticket sign-up left no active org: the session reaches no entity.
+  it('binds an entity-less user to the couple by verified email, then claims the partner', async () => {
+    const id = await created()
+    const access = await resolveCouplesAccess(db, signedIn('clerk_alex', 'Alex@Example.com'))
+    expect(access.kind).toBe('allowed')
+    if (access.kind === 'allowed') {
+      expect(access.person.person_key).toBe('p1')
+      expect(access.instance.id).toBe(id)
+    }
+    const row = await db
+      .prepare(`SELECT entity_id FROM users WHERE clerk_user_id = 'clerk_alex'`)
+      .first<{ entity_id: string }>()
+    expect(row?.entity_id).toBe((await getCouplesInstance(db, id))!.entity_id)
+  })
+
+  it('FALSIFIER: an email SMD did not author reaches nothing', async () => {
     await created()
-    const access = await resolveCouplesAccess(db, signedIn('clerk_alex', 'alex@example.com'))
+    const access = await resolveCouplesAccess(db, signedIn('clerk_x', 'stranger@example.com'))
     expect(access).toEqual({ kind: 'redirect', to: '/auth/sign-in?status=no_subscription' })
+  })
+
+  it('FALSIFIER: a partner row claimed by someone else is not reachable by email', async () => {
+    const id = await created()
+    await resolveCouplesAccess(db, signedIn('clerk_alex', 'alex@example.com'))
+    // A second Clerk identity with the same address (a new account) gets nothing.
+    await db
+      .prepare(`UPDATE users SET email = 'old-alex@example.com' WHERE clerk_user_id = 'clerk_alex'`)
+      .run()
+    const access = await resolveCouplesAccess(db, signedIn('clerk_alex2', 'alex@example.com'))
+    expect(access.kind).toBe('redirect')
+    expect((await listPeople(db, id))[0].user_id).not.toBeNull()
+  })
+
+  it('FALSIFIER: one address authored on two couples binds nothing', async () => {
+    await created('alex@example.com', 'sam@example.com')
+    await created('alex@example.com', 'pat@example.com')
+    const access = await resolveCouplesAccess(db, signedIn('clerk_alex', 'alex@example.com'))
+    expect(access.kind).toBe('redirect')
+    const row = await db
+      .prepare(`SELECT entity_id FROM users WHERE clerk_user_id = 'clerk_alex'`)
+      .first<{ entity_id: string | null }>()
+    expect(row?.entity_id).toBeNull()
+  })
+
+  it('FALSIFIER: a user already bound to another entity is never re-pointed', async () => {
+    await created()
+    await db
+      .prepare(
+        `INSERT INTO users (id, org_id, email, name, role, clerk_user_id, entity_id, created_at)
+         VALUES ('u-a', ?, 'alex@example.com', 'Alex', 'client', 'clerk_alex', 'elsewhere', datetime('now'))`
+      )
+      .bind(ORG_ID)
+      .run()
+    await resolveCouplesAccess(db, signedIn('clerk_alex', 'alex@example.com'))
+    const row = await db
+      .prepare(`SELECT entity_id FROM users WHERE id = 'u-a'`)
+      .first<{ entity_id: string }>()
+    expect(row?.entity_id).toBe('elsewhere')
   })
 })
 

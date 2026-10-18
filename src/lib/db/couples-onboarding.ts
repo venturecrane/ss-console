@@ -158,6 +158,42 @@ export async function getCouplesInstanceByEntity(
   )
 }
 
+/**
+ * Bind a signed-in portal user who reaches NO entity to the one couples
+ * entity whose SMD-authored partner row carries their email, unclaimed or
+ * already claimed by them. Returns the bound entity id, or null.
+ *
+ * Exists so the couples landing never depends on Clerk's active
+ * Organization: a ticket sign-up may not make an invited org active, and an
+ * application invitation joins no org at all. `email` must be the user row's
+ * address, which the bridge only ever sets from Clerk's VERIFIED primary
+ * email (clerk-bridge.ts ensureLocalUser). Ambiguity binds nothing: one
+ * address authored on two couples instances needs SMD, not a guess. Only a
+ * row with no entity binding is touched, so this never re-points a user.
+ */
+export async function bindUnboundUserToCouplesByEmail(
+  db: D1Database,
+  user: { id: string; email: string; entity_id: string | null }
+): Promise<string | null> {
+  if (user.entity_id) return null
+  const { results } = await db
+    .prepare(
+      `SELECT DISTINCT i.entity_id FROM hosted_agent_people p
+         JOIN hosted_agent_intake i ON i.id = p.intake_id
+        WHERE i.role = '${COUPLES_ROLE}' AND lower(p.email) = ?
+          AND (p.user_id IS NULL OR p.user_id = ?)`
+    )
+    .bind(normalizeEmail(user.email), user.id)
+    .all<{ entity_id: string }>()
+  if (results.length !== 1) return null
+  const entityId = results[0].entity_id
+  const updated = await db
+    .prepare('UPDATE users SET entity_id = ? WHERE id = ? AND entity_id IS NULL')
+    .bind(entityId, user.id)
+    .run()
+  return (updated.meta?.changes ?? 0) === 1 ? entityId : null
+}
+
 /** Both partners, p1 first. SMD-side (admin, generator) only. */
 export async function listPeople(db: D1Database, intakeId: string): Promise<CouplesPersonRow[]> {
   const r = await db

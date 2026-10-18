@@ -11,8 +11,9 @@
  *   2. A partner who has never signed in has no role yet. SMD authored their
  *      partner row with an email; the first time they reach this entity (by
  *      the `users.entity_id` binding SMD's invitation pre-creates, see
- *      src/lib/hosted-agent/couples/invite.ts, or by Clerk Organization
- *      membership), a VERIFIED email match claims that row and grants the role.
+ *      src/lib/hosted-agent/couples/invite.ts; by Clerk Organization
+ *      membership; or, for a session that reaches no entity, by the email
+ *      match in resolveCouplesAccess below), a VERIFIED email match claims that row and grants the role.
  *      An unverified address never reaches here (clerk-profile.ts returns
  *      null and the bridge refuses the user).
  *
@@ -25,8 +26,10 @@ import type { Entity } from '../db/entities'
 import type { PortalUserRow } from '../auth/clerk-bridge'
 import type { SubscriptionRow } from './product-access'
 import { resolveHostedAgentAccess } from './hosted-agent-access'
+import { getPortalClient } from './session'
 import {
   PARTNER_PRODUCT_ROLE,
+  bindUnboundUserToCouplesByEmail,
   claimPartnerByEmail,
   getCouplesInstanceByEntity,
   getPersonForUser,
@@ -49,7 +52,27 @@ export type CouplesAccess =
       person: CouplesPersonRow
     }
 
+/**
+ * The couples landing must find the partner's couple WITHOUT relying on
+ * Clerk's active Organization (a ticket sign-up may not make an invited org
+ * active; SMD's application invitation joins none). When the session reaches
+ * no entity at all, bind the user to the one couples entity whose partner row
+ * carries their verified email, then resolve again. The claim and the role
+ * grant below are unchanged.
+ */
 export async function resolveCouplesAccess(
+  db: D1Database,
+  locals: App.Locals
+): Promise<CouplesAccess> {
+  const first = await resolveCouplesAccessOnce(db, locals)
+  if (first.kind !== 'redirect' || first.to !== NO_ACCESS_PATH) return first
+  const portal = await getPortalClient(db, locals)
+  if (!portal || portal.client) return first
+  const bound = await bindUnboundUserToCouplesByEmail(db, portal.user)
+  return bound ? resolveCouplesAccessOnce(db, locals) : first
+}
+
+async function resolveCouplesAccessOnce(
   db: D1Database,
   locals: App.Locals
 ): Promise<CouplesAccess> {
