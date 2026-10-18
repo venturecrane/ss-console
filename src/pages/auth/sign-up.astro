@@ -4,6 +4,7 @@ import AuthHeader from '../../components/AuthHeader.astro'
 import Footer from '../../components/Footer.astro'
 import { SignUp } from '@clerk/astro/components'
 import { clerkAppearance } from '../../lib/auth/clerk-appearance'
+import { safeRedirectPath } from '../../lib/auth/auth-redirect'
 
 /**
  * Unified account creation. Same Clerk-backed identity used by both
@@ -20,14 +21,16 @@ import { clerkAppearance } from '../../lib/auth/clerk-appearance'
  * unauthenticated buyers here and needs the checkout intent to survive
  * account creation. Only same-origin absolute paths are honored (must
  * start with a single '/'); anything else falls back to the standard
- * after-sign-in route.
+ * after-sign-in route. An invitation link's `__clerk_ticket` stays on this
+ * page's URL, where <SignUp> reads it to accept the invitation
+ * (src/lib/auth/auth-redirect.ts carries it here from the auth gate).
  */
 
-const requestedRedirect = Astro.url.searchParams.get('redirect_url')
-const redirectUrl =
-  requestedRedirect && requestedRedirect.startsWith('/') && !requestedRedirect.startsWith('//')
-    ? requestedRedirect
-    : '/auth/after-sign-in'
+const returnPath = safeRedirectPath(Astro.url.searchParams.get('redirect_url'))
+const redirectUrl = returnPath ?? '/auth/after-sign-in'
+const signInUrl = returnPath
+  ? `/auth/sign-in?redirect_url=${encodeURIComponent(returnPath)}`
+  : '/auth/sign-in'
 ---
 
 <Base title="Create Account | SMD Services" disableAnalytics={true}>
@@ -47,7 +50,7 @@ const redirectUrl =
         </p>
 
         <SignUp
-          signInUrl="/auth/sign-in"
+          signInUrl={signInUrl}
           fallbackRedirectUrl={redirectUrl}
           forceRedirectUrl={redirectUrl}
           appearance={clerkAppearance}

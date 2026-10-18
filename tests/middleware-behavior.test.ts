@@ -248,7 +248,7 @@ describe('middleware runtime: behavior', () => {
       const { res } = await invoke({ url: 'https://portal.smd.services/portal/engagement' })
       expect(res.headers.get(REWRITE_MARKER)).toBeNull()
       expect(res.status).toBe(302)
-      expect(res.headers.get('Location')).toBe('/auth/sign-in')
+      expect(res.headers.get('Location')).toBe('/auth/sign-in?redirect_url=%2Fportal%2Fengagement')
     })
 
     it('does NOT rewrite /auth paths on the admin subdomain (exempt)', async () => {
@@ -331,7 +331,7 @@ describe('middleware runtime: behavior', () => {
     it('redirects an unauthenticated admin PAGE request to /auth/sign-in', async () => {
       const { res } = await invoke({ url: 'https://admin.smd.services/admin/entities' })
       expect(res.status).toBe(302)
-      expect(res.headers.get('Location')).toBe('/auth/sign-in')
+      expect(res.headers.get('Location')).toBe('/auth/sign-in?redirect_url=%2Fadmin%2Fentities')
     })
 
     it('returns 401 JSON for an unauthenticated admin API request', async () => {
@@ -391,7 +391,30 @@ describe('middleware runtime: behavior', () => {
     it('redirects an unauthenticated portal PAGE request to /auth/sign-in', async () => {
       const { res } = await invoke({ url: 'https://portal.smd.services/portal/engagement' })
       expect(res.status).toBe(302)
-      expect(res.headers.get('Location')).toBe('/auth/sign-in')
+      expect(res.headers.get('Location')).toBe('/auth/sign-in?redirect_url=%2Fportal%2Fengagement')
+    })
+
+    it('carries a Clerk invitation ticket to /auth/sign-up (the invitee has no account yet)', async () => {
+      const { res } = await invoke({
+        url: 'https://portal.smd.services/portal/products/hosted-agent/couples?__clerk_ticket=tkt_abc.def&__clerk_status=sign_up',
+      })
+      expect(res.status).toBe(302)
+      const loc = new URL(res.headers.get('Location')!, 'https://portal.smd.services')
+      expect(loc.pathname).toBe('/auth/sign-up')
+      expect(loc.searchParams.get('__clerk_ticket')).toBe('tkt_abc.def')
+      expect(loc.searchParams.get('__clerk_status')).toBe('sign_up')
+      expect(loc.searchParams.get('redirect_url')).toBe('/portal/products/hosted-agent/couples')
+    })
+
+    it('carries a sign_in ticket to /auth/sign-in', async () => {
+      const { res } = await invoke({
+        url: 'https://portal.smd.services/portal/products/operator?__clerk_ticket=tkt_x&__clerk_status=sign_in',
+      })
+      const loc = new URL(res.headers.get('Location')!, 'https://portal.smd.services')
+      expect(loc.pathname).toBe('/auth/sign-in')
+      expect(loc.searchParams.get('__clerk_ticket')).toBe('tkt_x')
+      expect(loc.searchParams.get('__clerk_status')).toBe('sign_in')
+      expect(loc.searchParams.get('redirect_url')).toBe('/portal/products/operator')
     })
 
     it('returns 401 JSON for an unauthenticated portal API request', async () => {
@@ -425,7 +448,7 @@ describe('middleware runtime: behavior', () => {
         cookie: `${SESSION_COOKIE_NAME}=not-a-real-token`,
       })
       expect(res.status).toBe(302)
-      expect(res.headers.get('Location')).toBe('/auth/sign-in')
+      expect(res.headers.get('Location')).toBe('/auth/sign-in?redirect_url=%2Fportal%2Fengagement')
     })
   })
 

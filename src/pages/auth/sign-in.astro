@@ -4,6 +4,7 @@ import AuthHeader from '../../components/AuthHeader.astro'
 import Footer from '../../components/Footer.astro'
 import { SignIn, SignOutButton } from '@clerk/astro/components'
 import { clerkAppearance } from '../../lib/auth/clerk-appearance'
+import { safeRedirectPath } from '../../lib/auth/auth-redirect'
 
 /**
  * Unified sign-in. Single entry point for both admins and clients.
@@ -13,6 +14,12 @@ import { clerkAppearance } from '../../lib/auth/clerk-appearance'
  * natively. After authentication Clerk redirects to /auth/after-sign-in,
  * which inspects the user's role in the local users table and routes
  * to admin.smd.services or portal.smd.services accordingly.
+ *
+ * `?redirect_url=` (a safe same-origin path only, auth-redirect.ts) is passed
+ * THROUGH /auth/after-sign-in rather than to Clerk directly, so the local-user
+ * link and login stamp still run; the dispatcher honors it only when it falls
+ * under the surface it picked. Clerk's `__clerk_ticket` (invitation) stays on
+ * this page's URL, where <SignIn> reads it.
  *
  * Wrapped in the standard site chrome (Base layout + AuthHeader + Footer)
  * so the auth surface matches marketing and admin.
@@ -34,6 +41,14 @@ const statusMessages: Record<string, { text: string; type: 'success' | 'error' }
 }
 
 const message = status ? statusMessages[status] : null
+
+const returnPath = safeRedirectPath(Astro.url.searchParams.get('redirect_url'))
+const afterSignInUrl = returnPath
+  ? `/auth/after-sign-in?redirect_url=${encodeURIComponent(returnPath)}`
+  : '/auth/after-sign-in'
+const signUpUrl = returnPath
+  ? `/auth/sign-up?redirect_url=${encodeURIComponent(returnPath)}`
+  : '/auth/sign-up'
 ---
 
 <Base title="Sign In | SMD Services" disableAnalytics={true}>
@@ -83,9 +98,9 @@ const message = status ? statusMessages[status] : null
         }
 
         <SignIn
-          signUpUrl="/auth/sign-up"
-          fallbackRedirectUrl="/auth/after-sign-in"
-          forceRedirectUrl="/auth/after-sign-in"
+          signUpUrl={signUpUrl}
+          fallbackRedirectUrl={afterSignInUrl}
+          forceRedirectUrl={afterSignInUrl}
           appearance={clerkAppearance}
         />
       </div>

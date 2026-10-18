@@ -3,6 +3,7 @@ import { defineMiddleware, sequence } from 'astro:middleware'
 import type { APIContext, MiddlewareNext } from 'astro'
 import { clerkMiddleware } from '@clerk/astro/server'
 import { resolveAdminSessionFromClerk } from './lib/auth/admin-session-shim'
+import { unauthenticatedRedirectLocation } from './lib/auth/auth-redirect'
 import { parseSessionToken, validateSession, renewSession } from './lib/auth/session'
 import { captureError, withSentryRequestHandler } from './lib/observability/sentry'
 import { applySecurityHeaders } from './lib/security/response-headers'
@@ -138,7 +139,9 @@ function handleSubdomainRewrite(
 function enforceAdminAuth(context: APIContext, isAdminApiRoute: boolean): Response | null {
   const auth = context.locals.auth()
   if (!auth.userId) {
-    return isAdminApiRoute ? errorResponse(401, 'unauthorized') : context.redirect('/auth/sign-in')
+    return isAdminApiRoute
+      ? errorResponse(401, 'unauthorized')
+      : context.redirect(unauthenticatedRedirectLocation(context.url, context.url.pathname))
   }
   // Clerk user signed in but no admin row in D1 (or role != 'admin').
   // Treat as forbidden — they're authenticated but lack admin clearance.
@@ -163,7 +166,11 @@ function enforcePortalAuth(context: APIContext, isPortalApiRoute: boolean): Resp
   if (auth.userId) return null
   if (context.locals.session?.role === 'client') return null
 
-  return isPortalApiRoute ? errorResponse(401, 'unauthorized') : context.redirect('/auth/sign-in')
+  // A Clerk invitation link carries `__clerk_ticket`; the bounce must carry it
+  // to the sign-up/sign-in page or the invitee cannot accept (auth-redirect.ts).
+  return isPortalApiRoute
+    ? errorResponse(401, 'unauthorized')
+    : context.redirect(unauthenticatedRedirectLocation(context.url, context.url.pathname))
 }
 
 function enforceAuth(context: APIContext, pathname: string): Response | null {
