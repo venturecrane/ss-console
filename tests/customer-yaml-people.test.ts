@@ -196,6 +196,27 @@ describe('rule 2: a cron space names a person id or shared', () => {
   })
 })
 
+describe('rule 8: scope.inbound_allow_from is exactly the people emails', () => {
+  it('FALSIFIER: an SMD address on the roster is rejected', () => {
+    const s = seat()
+    s.scope.inbound_allow_from = ['alex@example.com', 'sam@example.com', 'team@smd.services']
+    expect(codesAt(s)).toEqual([['InvalidPeople', 'scope.inbound_allow_from[2]']])
+  })
+
+  it('FALSIFIER: a domain wildcard on the roster is rejected', () => {
+    const s = seat()
+    s.scope.inbound_allow_from = ['alex@example.com', 'sam@example.com', '@example.com']
+    expect(codesAt(s)).toEqual([['InvalidPeople', 'scope.inbound_allow_from[2]']])
+  })
+
+  it('the template roster is exactly the two partners', () => {
+    const s = seat()
+    expect([...s.scope.inbound_allow_from].sort()).toEqual(
+      s.people.map((p: { email: string }) => p.email).sort()
+    )
+  })
+})
+
 describe('rule 3: each person email is on scope.inbound_allow_from', () => {
   it('FALSIFIER: an email missing from the allowlist is rejected', () => {
     const s = seat()

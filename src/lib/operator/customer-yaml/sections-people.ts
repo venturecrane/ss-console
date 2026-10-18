@@ -33,6 +33,12 @@
  *      is a space (`p1`, `person:p1` or `shared`) and the fence reads by the
  *      turn's spaces, so `readers` would grant nothing; authoring it would
  *      read as an access grant the runtime does not honour.
+ *   8. `scope.inbound_allow_from` is EXACTLY the people's emails: no SMD
+ *      address, no other address, no domain. On such a seat a skill authored
+ *      `recipients: roster` sends on a lane the broker opens to every rostered
+ *      address, and the model picks the recipient; a Brokery rehearsal reached
+ *      a real client that way (2026-10-16). The roster must be only the people
+ *      the seat serves, so nobody else can be picked.
  *
  * `spaces` without `people` is rejected for the same reason as rule 2.
  *
@@ -319,6 +325,18 @@ function checkPersonChannels(
   const inbound = new Set(idList(root['scope'], 'inbound_allow_from').map((a) => a.toLowerCase()))
   const dm = new Set(idList(root['telegram'], 'allow_from').map((a) => a.trim()))
   const group = new Set(idList(root['telegram'], 'group_allow_from').map((a) => a.trim()))
+  const emails = new Set(people.map((p) => p.email))
+  idList(root['scope'], 'inbound_allow_from').forEach((a, i) => {
+    if (!emails.has(a.toLowerCase())) {
+      err(
+        `scope.inbound_allow_from[${i}]`,
+        `${a} is not one of the people: on a seat that authors people:, ` +
+          'scope.inbound_allow_from must be exactly their emails, because a roster-lane ' +
+          'send may go to any rostered address',
+        errors
+      )
+    }
+  })
   people.forEach((p, i) => {
     if (!inbound.has(p.email)) {
       err(
