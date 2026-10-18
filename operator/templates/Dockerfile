@@ -1240,7 +1240,14 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # applicable" unless pair is authored), the heartbeat a telegram-bind leg that
 # finds an empty spool, and two plugins that register nothing or do nothing
 # without people:. No tracked twin moved.
-ARG OVERLAY_REF="8a6e2f2579fe0bb60a575548b1c11651ef956e79"
+# 2026-10-18 (ade63ad6, the overlay #504 merge commit). #504: an AgentMail From
+# carries no standing without an aligned DMARC or DKIM pass from the vendor's
+# authentication_results (shared/sender_auth.py); a forged From naming an
+# authored admin or rostered address is delivered as an unknown external
+# sender with no recorded origin, and calendar ingest files nothing from it.
+# Graph seats unchanged. Also carries #501 (couples portal onboarding removed
+# seat-side; inert, no seat authors people:). No tracked twin moved.
+ARG OVERLAY_REF="ade63ad6ff4d7f11ba1488d5abd331ebe89f5c0a"
 
 ARG CUSTOMER_SLUG=customer-zero
 
