@@ -116,7 +116,7 @@ def test_conformance_every_tool_classified() -> None:
     assert not any("transaction" in k or "protect" in k for k in runtime_map)
     # Writes carry their classes under the runtime name; reads are reads.
     assert runtime_map[runtime_tool_name("smokeball", "create_memo")] == "internal_write"
-    assert runtime_map[runtime_tool_name("smokeball", "create_webhook_subscription")] == "internal_write"
+    assert runtime_map[runtime_tool_name("smokeball", "create_webhook_subscription")] == "commitment"
     assert runtime_map[runtime_tool_name("smokeball", "add_file")] == "internal_write"
     assert runtime_map[runtime_tool_name("smokeball", "delete_file")] == "destructive"
     assert runtime_map[runtime_tool_name("smokeball", "delete_events")] == "destructive"
@@ -147,7 +147,7 @@ def test_write_surface_is_memo_document_and_deadline_engine() -> None:
         "create_memo": "internal_write",
         # The same file note, updated in place (memo_tools.py).
         "update_memo": "internal_write",
-        "create_webhook_subscription": "internal_write",
+        "create_webhook_subscription": "commitment",
         "add_file": "internal_write",
         "file_attachment_to_matter": "internal_write",
         "delete_file": "destructive",
