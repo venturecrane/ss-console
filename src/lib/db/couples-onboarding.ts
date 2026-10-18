@@ -158,6 +158,42 @@ export async function getCouplesInstanceByEntity(
   )
 }
 
+/**
+ * Bind a signed-in portal user who reaches NO entity to the one couples
+ * entity whose SMD-authored partner row carries their email, unclaimed or
+ * already claimed by them. Returns the bound entity id, or null.
+ *
+ * Exists so the couples landing never depends on Clerk's active
+ * Organization: a ticket sign-up may not make an invited org active, and an
+ * application invitation joins no org at all. `email` must be the user row's
+ * address, which the bridge only ever sets from Clerk's VERIFIED primary
+ * email (clerk-bridge.ts ensureLocalUser). Ambiguity binds nothing: one
+ * address authored on two couples instances needs SMD, not a guess. Only a
+ * row with no entity binding is touched, so this never re-points a user.
+ */
+export async function bindUnboundUserToCouplesByEmail(
+  db: D1Database,
+  user: { id: string; email: string; entity_id: string | null }
+): Promise<string | null> {
+  if (user.entity_id) return null
+  const { results } = await db
+    .prepare(
+      `SELECT DISTINCT i.entity_id FROM hosted_agent_people p
+         JOIN hosted_agent_intake i ON i.id = p.intake_id
+        WHERE i.role = '${COUPLES_ROLE}' AND lower(p.email) = ?
+          AND (p.user_id IS NULL OR p.user_id = ?)`
+    )
+    .bind(normalizeEmail(user.email), user.id)
+    .all<{ entity_id: string }>()
+  if (results.length !== 1) return null
+  const entityId = results[0].entity_id
+  const updated = await db
+    .prepare('UPDATE users SET entity_id = ? WHERE id = ? AND entity_id IS NULL')
+    .bind(entityId, user.id)
+    .run()
+  return (updated.meta?.changes ?? 0) === 1 ? entityId : null
+}
+
 /** Both partners, p1 first. SMD-side (admin, generator) only. */
 export async function listPeople(db: D1Database, intakeId: string): Promise<CouplesPersonRow[]> {
   const r = await db
@@ -263,10 +299,62 @@ export async function claimPartnerByEmail(
   return getPersonForUser(db, intakeId, user.id)
 }
 
+export type PartnerUserBinding =
+  { kind: 'bound'; clerkUserId: string | null } | { kind: 'conflict' }
+
+/**
+ * Make sure the invited partner's portal identity reaches the couple's entity
+ * before they ever sign in, by a local `users` row bound with `entity_id`.
+ *
+ * This is the "admin-created client invite that hasn't been redeemed via
+ * Clerk yet" path that ensureLocalUser (src/lib/auth/clerk-bridge.ts)
+ * already links on first sign-in by VERIFIED email, and the same shape the
+ * SOW finalize flow uses. It replaces the Clerk Organization membership the
+ * old org invitation granted: SMD's own invitation is an application
+ * invitation, which joins no organization. Grants no role; the couples gate
+ * still claims the partner row by verified email (couples-access.ts).
+ *
+ * Refuses (conflict) rather than re-point an identity that is already bound
+ * to a different entity, or a non-client (staff) row.
+ */
+export async function bindPartnerUser(
+  db: D1Database,
+  person: { email: string; name: string },
+  entityId: string
+): Promise<PartnerUserBinding> {
+  const existing = await db
+    .prepare(
+      `SELECT id, role, entity_id, clerk_user_id FROM users
+        WHERE org_id = ? AND ${EMAIL_IDENTITY_PREDICATE} LIMIT 1`
+    )
+    .bind(ORG_ID, normalizeEmail(person.email))
+    .first<{ id: string; role: string; entity_id: string | null; clerk_user_id: string | null }>()
+  if (existing) {
+    if (existing.role !== 'client') return { kind: 'conflict' }
+    if (existing.entity_id && existing.entity_id !== entityId) return { kind: 'conflict' }
+    if (!existing.entity_id) {
+      await db
+        .prepare('UPDATE users SET entity_id = ? WHERE id = ? AND entity_id IS NULL')
+        .bind(entityId, existing.id)
+        .run()
+    }
+    return { kind: 'bound', clerkUserId: existing.clerk_user_id }
+  }
+  await db
+    .prepare(
+      `INSERT INTO users (id, org_id, email, name, role, entity_id, created_at)
+       VALUES (?, ?, ?, ?, 'client', ?, datetime('now'))`
+    )
+    .bind(crypto.randomUUID(), ORG_ID, person.email, person.name, entityId)
+    .run()
+  return { kind: 'bound', clerkUserId: null }
+}
+
 export async function markPersonInvited(
   db: D1Database,
   personId: string,
-  clerkInvitationId: string
+  /** Null when no Clerk invitation exists: the partner already had an account. */
+  clerkInvitationId: string | null
 ): Promise<void> {
   await db
     .prepare(
@@ -321,19 +409,5 @@ export async function setSharedTelegramChat(
         WHERE id = ? AND role = '${COUPLES_ROLE}'`
     )
     .bind(chatId, intakeId)
-    .run()
-}
-
-export async function setEntityClerkOrg(
-  db: D1Database,
-  entityId: string,
-  clerkOrgId: string
-): Promise<void> {
-  await db
-    .prepare(
-      `UPDATE entities SET clerk_org_id = ?, updated_at = datetime('now')
-        WHERE id = ? AND clerk_org_id IS NULL`
-    )
-    .bind(clerkOrgId, entityId)
     .run()
 }
