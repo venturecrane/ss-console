@@ -125,6 +125,8 @@ describe('generated customer.yaml', () => {
     const { root } = generated()
     const skill = root.personas[0].skills.find((s: Root) => s.name === 'couples-checkin')
     expect(skill.settings).toEqual({
+      // FALSIFIER: the template's send lane survives the onboarding settings.
+      recipients: 'roster',
       timezone: 'America/Phoenix',
       topics: 'how the week felt; money; time together',
       quiet_hours: '21:00-08:00',

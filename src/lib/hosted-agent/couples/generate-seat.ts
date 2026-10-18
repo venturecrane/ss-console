@@ -26,7 +26,7 @@
  * that onboarding has not bound.
  */
 
-import { parseDocument, isMap, isScalar, isSeq, type Document } from 'yaml'
+import { YAMLMap, parseDocument, isMap, isScalar, isSeq, type Document } from 'yaml'
 import { validate, type ValidationError } from '../../operator/customer-yaml'
 import { WEEKDAYS, type Cadence, type JointSettings, type PersonKey } from './joint-settings'
 
@@ -217,21 +217,23 @@ function setCheckinSettings(doc: Document, input: CouplesSeatInput): void {
   if (!isSeq(skills)) return
   for (const item of skills.items) {
     if (!isMap(item) || item.get('name') !== 'couples-checkin') continue
-    const settings = doc.createNode({
+    const authored: Record<string, string | number> = {
       timezone: input.joint.timezone,
       topics: input.joint.checkin_topics.join('; '),
       quiet_hours: `${input.joint.quiet_hours.start}-${input.joint.quiet_hours.end}`,
       preferred_channels: `p1=${input.joint.preferred_channel.p1}; p2=${input.joint.preferred_channel.p2}`,
       onboarding_version: input.jointVersion,
-    })
-    // Quote every string: the overlay reads this file with a YAML 1.1 parser,
-    // where an unquoted `21:00`-shaped value can become a base-60 number.
-    if (isMap(settings)) {
-      for (const pair of settings.items) {
-        if (isScalar(pair.value) && typeof pair.value.value === 'string') {
-          pair.value.type = 'QUOTE_SINGLE'
-        }
-      }
+    }
+    // MERGE into the template's settings, never replace them: the template
+    // authors `recipients: roster` there (the skill's send lane).
+    const existing = item.get('settings', true)
+    const settings: YAMLMap<unknown, unknown> = isMap(existing) ? existing : new YAMLMap()
+    for (const [key, value] of Object.entries(authored)) {
+      const node = doc.createNode(value)
+      // Quote every string: the overlay reads this file with a YAML 1.1
+      // parser, where an unquoted `21:00`-shaped value can become a number.
+      if (isScalar(node) && typeof node.value === 'string') node.type = 'QUOTE_SINGLE'
+      settings.set(key, node)
     }
     item.set('settings', settings)
   }
