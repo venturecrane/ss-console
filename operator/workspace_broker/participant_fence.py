@@ -54,6 +54,7 @@ from typing import Any
 
 import yaml
 
+from .space_people import LANE_SPACE, people_emails
 from .recipient_policy import (
     canonicalize,
     domain_of,
@@ -258,6 +259,10 @@ def seat_facts(customer_path: Path) -> SeatFacts:
         LANE_ESCALATION: _escalation_lane(data.get("escalation")),
         LANE_SEND_AS: frozenset(staff),
         **_skill_lanes(data.get("personas"), frozenset(inbound_exact)),
+        # A space-mode seat's people, exactly (space_people.py): a routine's
+        # email to a person, or to both, when Telegram is not bound. Empty on
+        # every seat that authors no ``people:``, so the lane reaches nobody there.
+        LANE_SPACE: frozenset(people_emails(data)),
     }
     return SeatFacts(
         typed=typed,
@@ -288,7 +293,7 @@ def parse_lane(raw: Any) -> str | None:
     """A caller's lane, or None. ``send_as`` is the broker's own and refused here."""
     if raw is None or raw == "":
         return None
-    if raw in (LANE_RULE_DISPATCH, LANE_ESCALATION):
+    if raw in (LANE_RULE_DISPATCH, LANE_ESCALATION, LANE_SPACE):
         return str(raw)
     if isinstance(raw, str) and raw.startswith(LANE_SKILL_PREFIX) and _SKILL_SLUG.match(raw[len(LANE_SKILL_PREFIX) :]):
         return raw
@@ -346,6 +351,7 @@ def check_reply(
     resolve: Callable[[Anchor], Participants],
     target_kind: str,
     own: Iterable[str] = (),
+    copies_thread: bool = False,
 ) -> None:
     """A reply answers the anchor's own email or one in its conversation, and
     reaches only someone the anchor allows. ``target_kind`` is the channel's
@@ -377,7 +383,10 @@ def check_reply(
             FENCE_PARTICIPANTS, "the reply answers an email outside the conversation of the request it serves."
         )
     skip = {normalize_address(a) for a in own}
-    reached = other.everyone() if target_kind == "graph_message" else frozenset({other.sender})
+    # A SHARED AgentMail reply (space_people.py) also copies the target's
+    # people from its To/Cc, so it is fenced the way a Graph reply is.
+    copies = target_kind == "graph_message" or copies_thread
+    reached = other.everyone() if copies else frozenset({other.sender})
     allowed = allowed_by_anchor(facts, home)
     refused = sorted(
         a
