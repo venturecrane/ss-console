@@ -179,13 +179,45 @@ trap summarize EXIT
 # (its neighbours took 2 s) on a file that was root:root; the re-run was 80/0.
 CHECK_FAILED_MARK="SMD_CHECK_FAILED"
 
+# Wall-clock budget for one `fly ssh console`. 2026-10-18: one check's ssh on a
+# brokery rebuild HUNG for 38 minutes on a healthy Machine and never exited, so
+# the retry below (which fires only when ssh exits) never ran and the whole smoke
+# stalled. A check takes ~2 s; a slow ssh handshake ~15 s.
+SSH_TIMEOUT_S="${BOOT_SMOKE_SSH_TIMEOUT_S:-90}"
+SSH_TIMEOUT_MARK="SMD_SSH_TIMEOUT"
+
+with_timeout() { # <seconds> <command...> -- exit 124 and print the timeout mark if it overruns
+  # macOS has no `timeout` binary. The watcher's output goes to /dev/null so a
+  # caller's $(...) is not held open by it after the command finishes.
+  # The watcher touches a flag before it kills, so "it fired" is read from the
+  # flag and never inferred from an exit code fly could also produce.
+  local secs="$1" pid watcher rc=0 fired
+  shift
+  fired="$(mktemp)"
+  rm -f "${fired}"
+  "$@" &
+  pid=$!
+  ( sleep "${secs}"; touch "${fired}"; kill -TERM "${pid}" 2>/dev/null; sleep 5; kill -KILL "${pid}" 2>/dev/null ) >/dev/null 2>&1 &
+  watcher=$!
+  wait "${pid}" || rc=$?
+  kill "${watcher}" 2>/dev/null || true
+  wait "${watcher}" 2>/dev/null || true
+  if [ -e "${fired}" ]; then
+    rm -f "${fired}"
+    echo "${SSH_TIMEOUT_MARK} (no answer in ${secs}s)"
+    return 124
+  fi
+  return "${rc}"
+}
+
 ssh_run() {
   # `fly ssh console --command` execs the string directly (no shell), so compound
   # commands (&&, |, $(...), [ ]) fail unless wrapped in an explicit shell. Wrap
   # every check in `sh -c` so shell constructs evaluate ON THE MACHINE. (Check
   # commands contain no single quotes, so the single-quoted wrapper is safe.) The
   # subshell keeps a check's own `exit` from skipping the marker.
-  fly ssh console -a "${APP_NAME}" --command "sh -c '( ${1} ) || { echo ${CHECK_FAILED_MARK}; exit 1; }'" 2>&1
+  # A timeout prints no CHECK_FAILED mark, so it takes the no-verdict retry path.
+  with_timeout "${SSH_TIMEOUT_S}" fly ssh console -a "${APP_NAME}" --command "sh -c '( ${1} ) || { echo ${CHECK_FAILED_MARK}; exit 1; }'" 2>&1
 }
 
 ssh_exec() {
@@ -211,7 +243,11 @@ ssh_check() { # <step> <command as reported> <command as run on the Machine>
   fi
   # No verdict: one retry, after letting a cycling Machine settle. A second
   # attempt with no verdict is recorded as a failure, never as a pass.
-  log "  (no verdict from the Machine for ${step}; the ssh session failed, retrying once)"
+  if [[ "${out}" == *"${SSH_TIMEOUT_MARK}"* ]]; then
+    log "  (no verdict from the Machine for ${step}; ssh hung past ${SSH_TIMEOUT_S}s and was killed, retrying once)"
+  else
+    log "  (no verdict from the Machine for ${step}; the ssh session failed, retrying once)"
+  fi
   retry_if_machine_cycling || true
   if out="$(ssh_run "${remote}")"; then
     pass "${step} (passed on retry; the first attempt returned no verdict)"
@@ -409,7 +445,7 @@ STAGED_SCRIPTS_CHECK
 staged_scripts_current() {
   local encoded
   encoded="$(printf '%s' "${STAGED_SCRIPTS_CHECK}" | base64 | tr -d '\n')"
-  STAGED_OUT="$(fly ssh console -a "${APP_NAME}" --command "sh -c 'echo ${encoded} | base64 -d | sh'" 2>&1)"
+  STAGED_OUT="$(with_timeout "${SSH_TIMEOUT_S}" fly ssh console -a "${APP_NAME}" --command "sh -c 'echo ${encoded} | base64 -d | sh'" 2>&1)"
 }
 STAGED_OUT=""
 if staged_scripts_current; then

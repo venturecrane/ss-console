@@ -94,7 +94,13 @@ ${body}
     // A short settle budget so the "never comes back" case does not spend the
     // production default (120s) inside a unit test. The retry LOGIC is what is
     // under test; the budget is a knob.
-    env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, BOOT_SMOKE_SETTLE_S: '3' },
+    env: {
+      ...process.env,
+      PATH: `${dir}:${process.env.PATH}`,
+      BOOT_SMOKE_SETTLE_S: '3',
+      // Same reasoning: the production ssh budget is 90s.
+      BOOT_SMOKE_SSH_TIMEOUT_S: '2',
+    },
   })
 }
 
@@ -229,6 +235,68 @@ echo "ATTEMPTS=$(wc -l < "${dir}/ssh-attempts" | tr -d ' ')"
     expect(out).toContain('no verdict from the Machine on two attempts')
     expect(out).toMatch(/ATTEMPTS=2/)
   })
+
+  // 2026-10-18: a brokery rebuild's ssh hung 38 minutes on a healthy Machine and
+  // never exited, so the no-verdict retry never fired. Remove with_timeout from
+  // ssh_run and both of these hang until vitest kills them.
+  it(
+    'kills an ssh that hangs and retries it on the no-verdict path, passing if the retry answers',
+    { timeout: 20_000 },
+    () => {
+      writeFileSync(join(dir, 'ssh-attempts'), '')
+      writeFileSync(
+        join(dir, 'fly'),
+        `#!/bin/bash
+if [ "$1" = "status" ]; then echo '{"Machines":[{"state":"started"}]}'; exit 0; fi
+if [ "$1" = "ssh" ]; then
+  echo x >> "${dir}/ssh-attempts"
+  [ "$(wc -l < "${dir}/ssh-attempts" | tr -d ' ')" -ge 2 ] && exit 0
+  exec sleep 600
+fi
+exit 0
+`,
+        { mode: 0o755 }
+      )
+      chmodSync(join(dir, 'fly'), 0o755)
+      const started = Date.now()
+      const out = runWithHelpers(`
+ssh_exec "a-check-whose-ssh-hangs" "true"
+echo "FAILED_COUNT=\${#FAILED_CHECKS[@]}"
+echo "ATTEMPTS=$(wc -l < "${dir}/ssh-attempts" | tr -d ' ')"
+`)
+      expect(out).toContain('ssh hung past 2s and was killed')
+      expect(out).toContain('FAILED_COUNT=0')
+      expect(out).toContain('the first attempt returned no verdict')
+      expect(out).toMatch(/ATTEMPTS=2/)
+      expect(Date.now() - started).toBeLessThan(15_000)
+    }
+  )
+
+  it(
+    'records a failure, never a pass or a stall, when ssh hangs on both attempts',
+    { timeout: 20_000 },
+    () => {
+      writeFileSync(join(dir, 'ssh-attempts'), '')
+      writeFileSync(
+        join(dir, 'fly'),
+        `#!/bin/bash
+if [ "$1" = "status" ]; then echo '{"Machines":[{"state":"started"}]}'; exit 0; fi
+if [ "$1" = "ssh" ]; then echo x >> "${dir}/ssh-attempts"; exec sleep 600; fi
+exit 0
+`,
+        { mode: 0o755 }
+      )
+      chmodSync(join(dir, 'fly'), 0o755)
+      const out = runWithHelpers(`
+ssh_exec "a-check-whose-ssh-always-hangs" "true"
+echo "FAILED_COUNT=\${#FAILED_CHECKS[@]}"
+echo "ATTEMPTS=$(wc -l < "${dir}/ssh-attempts" | tr -d ' ')"
+`)
+      expect(out).toContain('FAILED_COUNT=1')
+      expect(out).toContain('no verdict from the Machine on two attempts')
+      expect(out).toMatch(/ATTEMPTS=2/)
+    }
+  )
 
   it('ssh_exec_script shares the verdict rule: a check that says no fails on one attempt', () => {
     writeFlyStub('started', 1)
