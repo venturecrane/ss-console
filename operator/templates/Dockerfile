@@ -1228,7 +1228,19 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # out for the size ratchet; twin restamped) and the couples work #482 #486
 # #489 #490 (inert without seat.role / people: / a calendar skill; #486 renders
 # no persona when seat.role is absent, so SOUL.md is unchanged).
-ARG OVERLAY_REF="00a2d1dd5d116316b8e08022d58ada8a329e9751"
+# 2026-10-17 (8a6e2f25, the overlay #500 merge commit). The couples seat over
+# email and Telegram: #495 (joint threads, "share it" and two-person answers by
+# reply), #498 (translate refuses a people: seat whose roster is not exactly the
+# people; mirrors this repo's rule 8, #3289), #497 (email delivery of unbound
+# routines and shared replies; pairs with the broker space lane, #3290), #499
+# (tests), #496 (Telegram bind from a /start token, unknown DMs dropped,
+# onboarding records seeded) and #500 (each partner's authored channel; boot
+# refuses `unauthorized_dm_behavior: pair` without the drop). Inert without
+# people:; on every seat the activation gate gains step 6 (reports "not
+# applicable" unless pair is authored), the heartbeat a telegram-bind leg that
+# finds an empty spool, and two plugins that register nothing or do nothing
+# without people:. No tracked twin moved.
+ARG OVERLAY_REF="8a6e2f2579fe0bb60a575548b1c11651ef956e79"
 
 ARG CUSTOMER_SLUG=customer-zero
 

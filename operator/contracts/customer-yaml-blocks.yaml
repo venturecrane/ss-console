@@ -155,8 +155,12 @@ top_level:
       at runtime by itself. The space-mode behavior a couples seat needs is keyed
       on `people:`, not on the role.
   people:
-    status: inert
-    materializer: src/lib/operator/customer-yaml/sections-people.ts (validation only, today)
+    status: implemented
+    materializer: >-
+      overlay bootstrap/translate.py (space-mode materialization; bootstrap/validate.py
+      mirrors the console rules) + overlay shared/space.py (the space resolver) and its
+      enforcement points, pinned at OVERLAY_REF 8a6e2f25; validated console-side by
+      src/lib/operator/customer-yaml/sections-people.ts.
     note: >-
       ADR 0091 multi-person seats. Maps each person's Telegram id and email to one
       person id and turns on space mode. Validated console-side with its
@@ -168,17 +172,21 @@ top_level:
       cron pair; mirrors overlay #469's translate-time rules). The runtime
       consumer is the overlay space resolver (shared/space.py) and the space
       enforcement points, built in the overlay privacy-core and channels
-      workstreams (#3264). Declared inert until that overlay change is pinned;
-      flip to implemented with the overlay materializer named. Only the
-      _couples-template scaffold authors it today; no live seat does.
+      workstreams (#3264). Implemented since OVERLAY_REF 8a6e2f25, which ships
+      those consumers. Only the _couples-template scaffold authors it today; no
+      live seat does.
   spaces:
-    status: inert
-    materializer: src/lib/operator/customer-yaml/sections-people.ts (validation only, today)
+    status: implemented
+    materializer: >-
+      overlay bootstrap/translate.py (shared chat -> group_chats / allowed_chats) +
+      overlay shared/space.py (resolves `shared_telegram_chat` to space `shared`),
+      pinned at OVERLAY_REF 8a6e2f25; validated console-side by
+      src/lib/operator/customer-yaml/sections-people.ts.
     note: >-
       ADR 0091. `shared_telegram_chat` is the shared group chat id that resolves to
       space `shared`. Consumed by the overlay space resolver (#3264, overlay
-      privacy-core workstream). Declared inert until that overlay change is
-      pinned. Only the _couples-template scaffold authors it today.
+      privacy-core workstream), implemented since OVERLAY_REF 8a6e2f25. Only the
+      _couples-template scaffold authors it today.
   output_classes:
     status: inert
     materializer: >-
