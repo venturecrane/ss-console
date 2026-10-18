@@ -1550,7 +1550,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // over email and Telegram (joint threads, email routines, /start binding, authored channel).
     // -> ade63ad6 (overlay#501, #504), 2026-10-18: an AgentMail From needs an aligned
     // DMARC or DKIM pass before it carries any roster or admin standing.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="ade63ad6ff4d7f11ba1488d5abd331ebe89f5c0a"')
+    // -> 36eb1bd5 (overlay#502, #503, #505), 2026-10-18: voice notes need an authenticated
+    // rostered sender; couples settings by conversation.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="36eb1bd504845c6cc3ec8e55f91918e820f48b2f"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
