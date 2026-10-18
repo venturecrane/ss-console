@@ -275,6 +275,15 @@ declare namespace Cloudflare {
      * the binding breakdown. Not required for the liveness probe itself.
      */
     HEALTH_DETAIL_TOKEN?: string
+
+    /**
+     * Bearer secret for SMD's own agents acting on the console as SMD
+     * (`/api/internal/agent/*`, src/lib/auth/agent-admin-key.ts). Today it
+     * unlocks one act: sending a couples partner's portal invitation. Worker
+     * secret sourced from Infisical /ss prod. Unset or empty = every agent
+     * request is 401 (fail closed).
+     */
+    SMD_AGENT_ADMIN_KEY?: string
   }
 }
 
