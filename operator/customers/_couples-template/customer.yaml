@@ -315,6 +315,10 @@ safety:
     web_search_daily_cap: 200
 
 # ---- TELEGRAM ----
+# OPTIONAL. Email is the default channel; a partner may connect Telegram later.
+# The generator (scripts/couples-seat.ts) authors `enabled: false` with only the
+# sentinel until SMD records the couple's bot, so a seat validates and boots
+# with Telegram fully absent.
 # One bot per couple (BotFather). Turn group privacy off with /setprivacy so the
 # bot sees the shared group. The token is a Fly secret, never here.
 telegram:

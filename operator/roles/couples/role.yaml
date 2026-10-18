@@ -150,6 +150,9 @@ optional_connections:
 
 # What onboarding collects. `per_person` fields are asked of each partner;
 # `joint` fields are not final until both partners confirm (ADR 0090 decision 4).
+# Built: portal /portal/products/hosted-agent/couples, admin
+# /admin/hosted-agent/couples, generator scripts/couples-seat.ts
+# (runbook docs/runbooks/hosted-agent/couples-onboarding.md).
 onboarding:
   per_person:
     - field: name
@@ -160,7 +163,11 @@ onboarding:
       maps_to: none (recorded by onboarding, not in customer.yaml)
     - field: telegram
       maps_to: people[].telegram_id, telegram.allow_from, telegram.group_allow_from
-      note: bound by a single-use deep link, written through the reviewed customer.yaml change (ADR 0091 section 5)
+      note: >-
+        OPTIONAL, connect any time (email is the default channel). Bound by a
+        single-use deep link, written through the reviewed customer.yaml change
+        (ADR 0091 section 5). With no bot and nobody bound the seat's Telegram
+        block is generated `enabled: false`.
   joint:
     - field: timezone
       maps_to: routine schedules (expressed in UTC)
@@ -176,5 +183,7 @@ onboarding:
       maps_to: routines[].schedule (weekly-checkin-agenda)
     - field: quiet_hours
       maps_to: couples-checkin
+    - field: preferred_channel
+      maps_to: couples-checkin settings.preferred_channels (email by default)
     - field: shared_group
-      maps_to: spaces.shared_telegram_chat and telegram.group_chats
+      maps_to: spaces.shared_telegram_chat and telegram.group_chats (optional, recorded by SMD)
