@@ -98,6 +98,7 @@ const CANDIDATES: readonly string[] = [
   // live seats
   'ashton-price',
   'brokery',
+  'captain-mark',
   'pilot-smokeball',
   'scott',
   'smd-staging',
@@ -137,6 +138,7 @@ const MUST_REJECT: readonly string[] = [
 const LIVE_SLUGS: readonly string[] = [
   'ashton-price',
   'brokery',
+  'captain-mark',
   'pilot-smokeball',
   'scott',
   'smd-staging',
