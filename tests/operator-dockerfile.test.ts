@@ -1544,8 +1544,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // binds the broker's one new email (pairs with note_verbs.py's new-message branch).
     // fda15046 -> c6226013 (overlay#460) -> c569f1b4 (overlay#462) -> 534f9563 (overlay#463-#466),
     // 2026-10-17: record-store read/write path fences, held-send approval binding, and the
-    // telegram allowed_users alias (pairs with #3271).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="534f9563356c8d4d959e10b32fff4e3b9706d0ef"')
+    // telegram allowed_users alias (pairs with #3271). -> ccb525a2 (overlay#467-#487), 2026-10-17:
+    // the first overlay code review's fixes plus the couples-role overlay work.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="00a2d1dd5d116316b8e08022d58ada8a329e9751"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

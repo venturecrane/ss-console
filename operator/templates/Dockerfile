@@ -1210,7 +1210,25 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # is bound to the person and chat that raised it), #466 (no file tool writes
 # on a seat that keeps records) and #463 (telegram.allowed_users read as an
 # alias of allow_from; pairs with this repo's #3271). No tracked twin moved.
-ARG OVERLAY_REF="534f9563356c8d4d959e10b32fff4e3b9706d0ef"
+# 2026-10-17 (ccb525a2, the overlay #485 merge commit). The first overlay code
+# review's fixes: #479 (failed sends told, no skill-created on block, a question
+# never approves), #480 (webhook registration off the menu + COMMITMENT, job
+# segments charged; pairs with this file's smokeball manifest class), #481
+# (admin establishment read exemption scoped), #483 (Sentry formatted-line
+# scrub, refusal/done shapes, failed reads never empty), #484 (every webhook
+# delivery fenced, approved sends scanned under their composing session), #485
+# (citation caption exemption, content-floor disclaimer, chain head, ack token;
+# tracked twins chain/escalation_ledger/citation_filter moved), #487 (typed
+# Graph connection failures, MCP thread history, cursorless poller). Also the
+# couples-role overlay work #467-#478 (inert on seats that author no people).
+# Pinned at 00a2d1dd (the overlay #494 merge commit; #494 trims validate_append under the size ratchet) rather than ccb525a2, so
+# the same rebuild also carries #488 (no route for an untriggered connector;
+# skills a persona stops enabling are pruned), #492 (authenticated HTTP follows
+# same-origin redirects only), #493 (escalation_ledger ack-token check split
+# out for the size ratchet; twin restamped) and the couples work #482 #486
+# #489 #490 (inert without seat.role / people: / a calendar skill; #486 renders
+# no persona when seat.role is absent, so SOUL.md is unchanged).
+ARG OVERLAY_REF="00a2d1dd5d116316b8e08022d58ada8a329e9751"
 
 ARG CUSTOMER_SLUG=customer-zero
 
@@ -1580,6 +1598,14 @@ COPY operator/adapter/ /app/adapter/
 
 # Canonical skill library (markdown + references)
 COPY operator/skills/ /app/skills/
+
+# Hosted-agent role packages (ADR 0090): role.yaml + the persona prompt. A seat
+# with `seat.role: <role>` gets /app/roles/<role>/<persona> rendered verbatim
+# into every profile's SOUL.md by the overlay's translate (bootstrap/role_persona.py);
+# a seat whose role package is missing here fails its boot rather than running
+# without the persona's safety rules. A seat with no role never reads this dir.
+# Pinned by tests/role-persona-delivery.test.ts.
+COPY operator/roles/ /app/roles/
 
 # Drafting discipline + the mechanical gate checker (ss-console #2083).
 #

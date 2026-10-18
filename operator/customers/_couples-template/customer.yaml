@@ -15,8 +15,8 @@ schema_version: 1
 #
 # Hard rules for this role (do not loosen per couple):
 #   - people: turns on space mode. The validator then requires spaces:, both
-#     memory switches false, a space on every cron entry, each person's email on
-#     scope.inbound_allow_from, and a bound telegram_id on both telegram lists.
+#     memory switches false, a space on every cron entry, scope.inbound_allow_from
+#     exactly the people's emails, and a bound telegram_id on both telegram lists.
 #   - telegram_id stays '' until that partner binds Telegram through the
 #     single-use deep link; the bind lands through a reviewed change to this
 #     file and a restart (ADR 0091 section 5). Until both are bound, allow_from
@@ -59,10 +59,15 @@ people:
     name: '[PARTNER 1 NAME]'
     telegram_id: ''
     email: '[PARTNER 1 EMAIL, lowercased]'
+    # How the seat reaches this partner on its own initiative (routines,
+    # two-person notices). email (the default) or telegram; telegram is used
+    # only once this partner's telegram_id is bound.
+    channel: email
   - id: p2
     name: '[PARTNER 2 NAME]'
     telegram_id: ''
     email: '[PARTNER 2 EMAIL, lowercased]'
+    channel: email
 
 spaces:
   # The shared Telegram group chat id (negative). '' until the group exists.
@@ -120,6 +125,10 @@ personas:
           scheduled: true
           webhook: false
         enabled: true
+        # Scheduled email delivery and the seat's two-person notices ride this
+        # skill's roster lane; the roster is exactly the two partners.
+        settings:
+          recipients: roster
       - name: gratitude-prompts
         version: pending
         initiation:
@@ -127,6 +136,10 @@ personas:
           scheduled: true
           webhook: false
         enabled: true
+        # Scheduled email delivery and the seat's two-person notices ride this
+        # skill's roster lane; the roster is exactly the two partners.
+        settings:
+          recipients: roster
       - name: dates-to-remember
         version: pending
         initiation:
@@ -134,6 +147,10 @@ personas:
           scheduled: true
           webhook: false
         enabled: true
+        # Scheduled email delivery and the seat's two-person notices ride this
+        # skill's roster lane; the roster is exactly the two partners.
+        settings:
+          recipients: roster
       - name: date-night-planner
         version: pending
         initiation:
@@ -148,6 +165,10 @@ personas:
           scheduled: true
           webhook: true
         enabled: true
+        # Scheduled email delivery and the seat's two-person notices ride this
+        # skill's roster lane; the roster is exactly the two partners.
+        settings:
+          recipients: roster
       - name: shared-lists
         version: pending
         initiation:
@@ -162,6 +183,10 @@ personas:
           scheduled: true
           webhook: false
         enabled: true
+        # Scheduled email delivery and the seat's two-person notices ride this
+        # skill's roster lane; the roster is exactly the two partners.
+        settings:
+          recipients: roster
       - name: memory-journal
         version: pending
         initiation:
@@ -273,7 +298,9 @@ scope:
   email_folders_blind: []
   email_keyword_blocks: []
   domain_blocks: []
-  # Exactly the two partners. Never a domain wildcard.
+  # EXACTLY the two partners: no SMD address, no other address, never a domain
+  # wildcard. A roster-lane send (recipients: roster) may go to any address
+  # here, so the roster must be only the couple. The validator enforces it.
   inbound_allow_from:
     - '[PARTNER 1 EMAIL, lowercased]'
     - '[PARTNER 2 EMAIL, lowercased]'
@@ -293,6 +320,10 @@ safety:
     web_search_daily_cap: 200
 
 # ---- TELEGRAM ----
+# OPTIONAL. Email is the default channel; a partner may connect Telegram later.
+# The generator (scripts/couples-seat.ts) authors `enabled: false` with only the
+# sentinel until SMD records the couple's bot, so a seat validates and boots
+# with Telegram fully absent.
 # One bot per couple (BotFather). Turn group privacy off with /setprivacy so the
 # bot sees the shared group. The token is a Fly secret, never here.
 telegram:

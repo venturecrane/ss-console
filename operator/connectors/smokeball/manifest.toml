@@ -238,7 +238,7 @@ render_firm_form_letter = "internal_write"
 add_workbook = "internal_write"
 get_webhook_subscriptions = "read"
 get_event_types = "read"
-create_webhook_subscription = "internal_write"
+create_webhook_subscription = "commitment"
 create_memo = "internal_write"
 # update_memo (2026-09-29, one file note per routine per matter): PUT over an
 # existing memo on the matter, the same record create_memo writes, read back by

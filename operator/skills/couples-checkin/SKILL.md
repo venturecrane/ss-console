@@ -64,7 +64,8 @@ only these:
 
 All in the store `couples-checkin`. Frontmatter is one `key: value` per line.
 
-**`joint-settings.md`** (`owner: shared`). What the couple chose together:
+**`joint-settings.md`** (`owner: shared`). What the couple chose together.
+`confirmed_by` is set by the seat when both partners agree; you never write it:
 
 ```
 ---
@@ -146,23 +147,38 @@ Write `settings-<id>.md` (`owner: <id>`, `overwrite: true` when it exists),
 read it back, and confirm the change in one line. This never touches the other
 partner's settings, and nothing about it is shown to the other partner.
 
-How often check-ins come is set by the routine's schedule on the seat. If a
-partner asks for a different rhythm, tell them you will pass that along for
-both of them to confirm in the shared group, and record the request in their
-private settings as `cadence_request:`. A change to the schedule waits until
-both partners have said yes (persona rule 6).
+How often check-ins come is set by the routine's schedule on the seat. A
+different rhythm is a joint change: propose it as a `cadence_request:` line in
+`joint-settings.md`, exactly as for topics below. Once both partners have
+agreed, the schedule on the seat is changed to match (persona rule 6).
 
 ## Changing the topics (a joint change)
 
-Topics belong to both partners. They change only in the shared group:
+Topics belong to both partners, and the seat makes sure a change applies only
+when both agree. Either partner can ask, in their private chat or in the group:
 
-1. One partner proposes the change in the group. Restate it in one line and ask
-   the other partner to say yes in the group.
-2. Only when the other partner says yes there, write `joint-settings.md`
-   (`owner: shared`, `overwrite: true`) with the new topics and both ids in
-   `confirmed_by`, read it back, and confirm in the group.
-3. If a partner asks for a topic change in their private chat, tell them it is
-   something both of them decide, and suggest raising it in the group.
+1. As soon as they ask, read `joint-settings.md` (if it exists) and write it
+   whole with the change: `owner: shared`, `kind: joint-settings`,
+   `overwrite: true`. Leave `confirmed_by` out; the seat sets it.
+2. The seat does not write it yet. It holds the change as a proposal, counts
+   the asker's request as their yes, and itself sends the other partner the
+   exact change in their own private chat.
+3. Tell the asker, in a line, that the change waits on their partner. Each
+   partner answers `agree` or `reject` in their OWN private chat. A yes in the
+   group does not count, and either partner can reject.
+4. A proposal expires after 7 days, and only one can be open at a time. If the
+   seat refuses because another proposal is open, say so and ask them to wait
+   until it is decided. The person who proposed it may replace their own.
+5. When both have agreed, the seat writes the change and tells both partners.
+   Do not announce it as done before then, and do not look for another way to
+   make it land.
+
+A request by email, or from a scheduled run, is refused by the seat. Tell the
+person to ask in their Telegram chat or the group.
+
+Any other skill that changes `joint-settings.md`, or any record of
+`kind: joint-settings`, follows these same steps. Nothing else is gated this
+way.
 
 ## What this skill never does
 
@@ -180,6 +196,8 @@ Topics belong to both partners. They change only in the shared group:
 ## Verification
 
 - A scheduled run with no `joint-settings.md` replies `[SILENT]`.
+- A topic change asked by p1 does not land until p2 replies `agree` in p2's own
+  chat; a yes in the group leaves it waiting.
 - A run for `person:p1` while p1 is snoozed replies `[SILENT]`.
 - p1's answer is readable from p1's chat and absent from p2's chat and the
   group (the store refuses or omits it).

@@ -294,6 +294,8 @@ The governing constraint: the Captain cannot see any artifact a run produces, so
 
 **`/sos` and `/eos` are SMD's own, forked 2026-09-17.** They live at `.claude/skills/{sos,eos}/SKILL.md` — tracked, reviewed, and covered by `tests/smd-session-skills.test.ts`. They were crane-console enterprise skills, byte-identical across ke/dfg/sc/ss; ss-console is the primary venture, so the session lifecycle is authored here rather than inherited, and enterprise updates no longer reach it. Each file records its fork point so a diff against crane's copy stays possible.
 
+**`/code-review` is SMD's own too, forked 2026-10-17** (`.claude/skills/code-review/SKILL.md`, same test). The inherited skill reviewed only the repo it ran in, so the overlay (the Operator's runtime on every seat) had never been reviewed, and it ended in a list of recommendations. The fork reviews ss-console and the overlay, fixes every finding in the same session, and counts a fix done only when the seats run it.
+
 Note the directory is load-bearing. `.claude/commands/` is written by TWO crane mechanisms — `syncClaudeAssets` on every `crane ss` launch, and `sync-commands.sh`, which also deletes anything crane does not have — and is gitignored here, so a fork placed there would be silently overwritten with no diff to notice. Nothing in the crane toolchain writes `.claude/skills/`.
 
 ## Venture Handbook

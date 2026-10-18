@@ -1,0 +1,180 @@
+---
+import PortalShell from '../../../../../layouts/PortalShell.astro'
+import PortalPageHead from '../../../../../components/portal/PortalPageHead.astro'
+import Field from '../../../../../components/portal/form/Field.astro'
+import TextInput from '../../../../../components/portal/form/TextInput.astro'
+import SubmitButton from '../../../../../components/portal/form/SubmitButton.astro'
+import { resolveCouplesAccess } from '../../../../../lib/portal/couples-access'
+import { loadCouplesView } from '../../../../../lib/portal/couples-view'
+import { env } from 'cloudflare:workers'
+
+/**
+ * Couples onboarding: one partner's view (ADR 0090 decision 4, ADR 0091 R7).
+ *
+ * Two steps, each the true state of an authored row:
+ *   1. Your details and consent  (this partner's own row)
+ *   2. Settings you choose together (the joint section; final only when both confirm)
+ * Onboarding is complete with those two. Telegram is optional and can be
+ * connected any time later (Captain, 2026-10-17): email is the default channel.
+ *
+ * Everything private on this page is the signed-in partner's own. The other
+ * partner appears by name only (couples-view.ts).
+ */
+
+export const prerender = false
+
+const access = await resolveCouplesAccess(env.DB, Astro.locals)
+if (access.kind === 'redirect') {
+  return Astro.redirect(access.to)
+}
+const view = await loadCouplesView(env.DB, access.instance, access.person)
+const { me, partner, joint } = view
+const partnerName = partner?.name ?? 'your partner'
+
+const st = Astro.url.searchParams.get('st')
+const banner =
+  st === 'details_saved'
+    ? { ok: true, text: 'Your details and consent were saved.' }
+    : st === 'consent_required'
+      ? { ok: false, text: 'Please tick the consent box to continue.' }
+      : st === 'invalid'
+        ? { ok: false, text: 'Please enter your name.' }
+        : null
+
+const telegramState: 'closed' | 'waiting_bot' | 'open' | 'done' = me.telegramBound
+  ? 'done'
+  : !me.consented
+    ? 'closed'
+    : view.botUsername
+      ? 'open'
+      : 'waiting_bot'
+
+const jointLine = !joint
+  ? 'Not started. Either of you can fill these in first.'
+  : joint.final
+    ? 'Agreed by both of you.'
+    : !joint.confirmedByMe
+      ? `${partnerName} saved new settings. They are waiting for your confirmation.`
+      : `Waiting for ${partnerName} to confirm.`
+
+const boxClass = 'border-[3px] border-[color:var(--ss-color-text-primary)] p-5 md:p-6'
+const stepTitle =
+  'font-body text-lg font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]'
+const bodyClass = 'mt-2 font-body text-base text-[color:var(--ss-color-text-secondary)]'
+const linkClass =
+  'mt-4 inline-flex items-center justify-center px-6 py-3 border-[3px] border-[color:var(--ss-color-text-primary)] font-bold uppercase tracking-[0.08em] font-body'
+---
+
+<PortalShell
+  title="Shared Agent Setup"
+  clientName={access.client.name}
+  orgId={access.client.org_id}
+  entityId={access.client.id}
+  pathname={Astro.url.pathname}
+>
+  <PortalPageHead tag="Setup" h1="Shared Agent Setup" meta={null} />
+
+  {
+    banner && (
+      <div
+        role="status"
+        class={`mt-6 border-[3px] px-5 py-3 font-mono text-label uppercase tracking-[0.14em] font-bold ${
+          banner.ok
+            ? 'border-[color:var(--ss-color-complete)] text-[color:var(--ss-color-complete)]'
+            : 'border-[color:var(--ss-color-error)] text-[color:var(--ss-color-error)]'
+        }`}
+      >
+        {banner.text}
+      </div>
+    )
+  }
+
+  <p class="mt-6 font-body text-base text-[color:var(--ss-color-text-secondary)]">
+    {view.agentName ? `${view.agentName} is the agent you and ${partnerName} will share.` : null}
+    These are your steps. {partnerName} has their own, and what each of you enters about yourself stays
+    private to you.
+  </p>
+
+  <ol class="mt-8 flex flex-col gap-6">
+    <li class={boxClass}>
+      <p class={stepTitle}>1. Your details</p>
+      {
+        me.consented ? (
+          <p class={bodyClass}>
+            Saved as {me.name} ({me.email}). Consent recorded {me.consentAt} UTC.
+          </p>
+        ) : (
+          <form
+            method="POST"
+            action="/api/portal/products/hosted-agent/couples/intake"
+            class="mt-4 flex flex-col gap-4"
+          >
+            <Field label="Your name, as the agent should use it">
+              <TextInput name="name" required maxlength={80} value={me.name} />
+            </Field>
+            <p class="font-body text-sm text-[color:var(--ss-color-text-secondary)]">
+              Signed in as <span class="font-mono">{me.email}</span>.
+            </p>
+            <label class="flex items-start gap-3">
+              <input type="checkbox" name="consent" value="1" required class="mt-1 h-5 w-5" />
+              <span class="font-body text-base text-[color:var(--ss-color-text-primary)]">
+                I agree to share an agent with {partnerName}, run by SMD Services. What I tell the
+                agent in my own chat or email stays in my private space, and the agent does not show
+                it to {partnerName}. What we say in our shared group, and anything I choose to
+                share, is visible to both of us. SMD Services holds this information to run the
+                agent.
+              </span>
+            </label>
+            <SubmitButton label="Save and agree" tone="primary" />
+          </form>
+        )
+      }
+    </li>
+
+    <li class={boxClass}>
+      <p class={stepTitle}>2. Settings you choose together</p>
+      <p class={bodyClass}>
+        Your timezone, the topics for check-ins, how often they come, and quiet hours. Nothing here
+        is final until both of you confirm it. {jointLine}
+      </p>
+      {
+        me.consented ? (
+          <a href="/portal/products/hosted-agent/couples/joint" class={linkClass}>
+            {joint ? 'Review settings' : 'Start settings'}
+          </a>
+        ) : (
+          <p class={bodyClass}>Opens after you save your details above.</p>
+        )
+      }
+    </li>
+  </ol>
+
+  <section class={`mt-10 ${boxClass}`}>
+    <p class={stepTitle}>Telegram (optional)</p>
+    <p class={bodyClass}>
+      You reach the agent by email at the address you signed in with. Telegram is an extra way to
+      chat with it, and you can connect it now or any time later.
+    </p>
+    {telegramState === 'done' && <p class={bodyClass}>Connected {me.telegramBoundAt} UTC.</p>}
+    {
+      telegramState === 'closed' && (
+        <p class={bodyClass}>Available after you save your details above.</p>
+      )
+    }
+    {
+      telegramState === 'waiting_bot' && (
+        <p class={bodyClass}>
+          Not available yet: your agent's Telegram bot is not set up. This page shows a connect
+          button when it is.
+        </p>
+      )
+    }
+    {
+      telegramState === 'open' && (
+        <a href="/portal/products/hosted-agent/couples/telegram" class={linkClass}>
+          Connect Telegram
+        </a>
+      )
+    }
+  </section>
+</PortalShell>
