@@ -72,25 +72,47 @@ def parse_manifest(text: str) -> list[tuple[str, str]]:
     return pairs
 
 
+NO_AREA = "OFFBOARD-NO-AREA"
+END = "OFFBOARD-END-OF-MANIFESTS"
+
+
+class FetchFailed(RuntimeError):
+    pass
+
+
+def check_fetch(stdout: str, area: str) -> str:
+    """The manifests, "" for an area the workspace does not have, or FetchFailed.
+
+    WHY (m16 dry run, 2026-10-18): the read used to return whatever stdout held,
+    so a fly ssh call that failed returned "" and the area was skipped as if it
+    had nothing to delete. m16's `home` area (10,405 listed files) vanished from
+    the report that way. A failed read must never look like an empty result.
+    """
+    lines = stdout.replace("\r", "").rstrip("\n").split("\n")
+    if lines and lines[-1].strip() == NO_AREA:
+        return ""
+    if not lines or lines[-1].strip() != END:
+        raise FetchFailed(f"{area}: could not read the manifests (no end marker); nothing was decided for it")
+    return "\n".join(lines[:-1]) + "\n"
+
+
 def fetch_from_app(app: str, host: str, area: str) -> str:
     root = f"/home/ops/archive/{host}/{area}"
-    out = subprocess.run(  # noqa: S603 - literal fly argv, no local shell; app and host come from this script's own flags
-        [
-            "fly",
-            "ssh",
-            "console",
-            "-a",
-            app,
-            "-u",
-            "ops",
-            "-C",
-            f"sh -c 'cat {root}/.manifest-*.sha256 {root}/.sync.sha256 2>/dev/null'",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=600,
+    remote = (
+        f"sh -c 'test -d {root} || {{ echo {NO_AREA}; exit 0; }}; "
+        f"cat {root}/.manifest-*.sha256 {root}/.sync.sha256 2>/dev/null; echo {END}'"
     )
-    return out.stdout
+    try:
+        out = subprocess.run(  # noqa: S603 - literal fly argv, no local shell; app and host come from this script's own flags
+            ["fly", "ssh", "console", "-a", app, "-u", "ops", "-C", remote],
+            capture_output=True,
+            text=True,
+            timeout=600,
+            stdin=subprocess.DEVNULL,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise FetchFailed(f"{area}: fly ssh timed out") from e
+    return check_fetch(out.stdout, area)
 
 
 def fetch_from_dir(d: Path, area: str) -> str:
@@ -141,6 +163,29 @@ def classify(base: Path, pairs: list[tuple[str, str]], home: Path) -> Tally:
     return t
 
 
+def unlisted(base: Path, pairs: list[tuple[str, str]], home: Path) -> dict[str, int]:
+    """Files under the folders a manifest names that no manifest lists. They are kept.
+
+    Counted so a run reports what it will leave behind, not only what it removes:
+    "deleted N" alone cannot tell a clean laptop from one where half the copy
+    was never made.
+    """
+    listed = {Path(os.path.normpath(base / rel)) for _, rel in pairs}
+    tops = {Path(os.path.normpath(base / rel)).relative_to(base).parts[0] for _, rel in pairs if (base / rel) != base}
+    n: dict[str, int] = {}
+    if base != home and base.is_dir():  # loose files at an area's root; ~ itself is not an area to sweep
+        n["."] = sum(1 for p in base.iterdir() if p.is_file() and not p.is_symlink() and p not in listed)
+    for top in tops:
+        root = base / top
+        if not root.is_dir() or root.is_symlink() or protected(root, home):
+            continue
+        for dirpath, dirnames, filenames in os.walk(root):
+            d = Path(dirpath)
+            dirnames[:] = [x for x in dirnames if not protected(d / x, home)]
+            n[top] = n.get(top, 0) + sum(1 for f in filenames if (d / f) not in listed)
+    return {k: v for k, v in n.items() if v}
+
+
 def remove_emptied(dirs: set[Path], stop: set[Path], home: Path) -> None:
     for d in sorted(dirs, key=lambda x: len(x.parts), reverse=True):
         while d not in stop and d != home and not protected(d, home) and home in d.parents:
@@ -155,8 +200,15 @@ def run(home: Path, host: str, fetch, execute: bool, out=sys.stdout) -> int:
     base_by_area = areas(home)
     deleted: list[Path] = []
     total = 0
+    # Every area is read before anything is decided, so a read that fails
+    # midway cannot leave a run that deleted some areas and silently skipped others.
+    try:
+        texts = {area: fetch(area) for area in base_by_area}
+    except FetchFailed as e:
+        print(f"STOPPED on {host}: {e}. Nothing deleted; re-run.", file=out)
+        return 2
     for area, base in base_by_area.items():
-        pairs = parse_manifest(fetch(area))
+        pairs = parse_manifest(texts[area])
         if not pairs:
             continue
         t = classify(base, pairs, home)
@@ -166,10 +218,12 @@ def run(home: Path, host: str, fetch, execute: bool, out=sys.stdout) -> int:
                 p.unlink()
                 deleted.append(p)
         verb = "deleted" if execute else "would delete"
+        left = unlisted(base, pairs, home)
         print(
             f"{area}: {verb} {len(t.match)}; kept: changed since copy {t.changed}, "
             f"protected {t.protected}, symlink {t.symlink}, outside area {t.escaped}; "
-            f"already gone {t.gone}",
+            f"already gone {t.gone}; unlisted, kept {sum(left.values())}"
+            + (f" ({', '.join(f'{k} {v}' for k, v in sorted(left.items()))})" if left else ""),
             file=out,
         )
     if not execute:
