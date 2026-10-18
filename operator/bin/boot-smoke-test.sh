@@ -173,20 +173,52 @@ trap summarize EXIT
 # ssh_exec <step-name> <command>
 # Run a command inside the Machine via `fly ssh console`. The command is
 # passed as a single string; non-zero exit fails the test with the step name.
-ssh_exec() {
-  local step="$1"
-  shift
-  local cmd="$*"
+# The marker a check prints when it RAN and returned false. Its absence on a
+# failed attempt means no verdict came back at all: the ssh session failed, not
+# the check. 2026-10-17: `customer-yaml-root-owned` failed a pilot rebuild in 11 s
+# (its neighbours took 2 s) on a file that was root:root; the re-run was 80/0.
+CHECK_FAILED_MARK="SMD_CHECK_FAILED"
+
+ssh_run() {
   # `fly ssh console --command` execs the string directly (no shell), so compound
   # commands (&&, |, $(...), [ ]) fail unless wrapped in an explicit shell. Wrap
   # every check in `sh -c` so shell constructs evaluate ON THE MACHINE. (Check
-  # commands contain no single quotes, so the single-quoted wrapper is safe.)
-  if fly ssh console -a "${APP_NAME}" --command "sh -c '${cmd}'" >/dev/null 2>&1; then
+  # commands contain no single quotes, so the single-quoted wrapper is safe.) The
+  # subshell keeps a check's own `exit` from skipping the marker.
+  fly ssh console -a "${APP_NAME}" --command "sh -c '( ${1} ) || { echo ${CHECK_FAILED_MARK}; exit 1; }'" 2>&1
+}
+
+ssh_exec() {
+  local step="$1"
+  shift
+  ssh_check "${step}" "$*" "$*"
+}
+
+ssh_check() { # <step> <command as reported> <command as run on the Machine>
+  local step="$1" cmd="$2" remote="$3" out
+  if out="$(ssh_run "${remote}")"; then
     pass "${step}"
-  elif retry_if_machine_cycling && fly ssh console -a "${APP_NAME}" --command "sh -c '${cmd}'" >/dev/null 2>&1; then
-    pass "${step} (passed on retry; the Machine was cycling on the first attempt)"
-  else
+    return
+  fi
+  if [[ "${out}" == *"${CHECK_FAILED_MARK}"* ]]; then
+    # The check ran and said no. Retry only if the Machine was cycling under it.
+    if retry_if_machine_cycling && ssh_run "${remote}" >/dev/null; then
+      pass "${step} (passed on retry; the Machine was cycling on the first attempt)"
+    else
+      check_fail "${step} — command failed: ${cmd}"
+    fi
+    return
+  fi
+  # No verdict: one retry, after letting a cycling Machine settle. A second
+  # attempt with no verdict is recorded as a failure, never as a pass.
+  log "  (no verdict from the Machine for ${step}; the ssh session failed, retrying once)"
+  retry_if_machine_cycling || true
+  if out="$(ssh_run "${remote}")"; then
+    pass "${step} (passed on retry; the first attempt returned no verdict)"
+  elif [[ "${out}" == *"${CHECK_FAILED_MARK}"* ]]; then
     check_fail "${step} — command failed: ${cmd}"
+  else
+    check_fail "${step} — no verdict from the Machine on two attempts (ssh failed): ${cmd}"
   fi
 }
 
@@ -208,15 +240,7 @@ ssh_exec_script() {
   local cmd="$*"
   local encoded
   encoded="$(printf '%s' "${cmd}" | base64 | tr -d '\n')"
-  if fly ssh console -a "${APP_NAME}" \
-    --command "sh -c 'echo ${encoded} | base64 -d | sh'" >/dev/null 2>&1; then
-    pass "${step}"
-  elif retry_if_machine_cycling && fly ssh console -a "${APP_NAME}" \
-    --command "sh -c 'echo ${encoded} | base64 -d | sh'" >/dev/null 2>&1; then
-    pass "${step} (passed on retry; the Machine was cycling on the first attempt)"
-  else
-    check_fail "${step} — command failed: ${cmd}"
-  fi
+  ssh_check "${step}" "${cmd}" "echo ${encoded} | base64 -d | sh"
 }
 
 # ---------- Step 1: wait for Machine state=started ----------
