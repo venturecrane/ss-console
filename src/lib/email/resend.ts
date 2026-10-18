@@ -54,8 +54,6 @@ export interface EmailPayload {
   to: string
   subject: string
   html: string
-  /** Plain-text alternative part, sent alongside the HTML when present. */
-  text?: string
   reply_to?: string
   attachments?: EmailAttachment[]
   tags?: EmailTag[]
@@ -93,7 +91,6 @@ export async function sendEmail(
     to: [payload.to],
     subject: payload.subject,
     html: payload.html,
-    ...(payload.text ? { text: payload.text } : {}),
     ...(payload.reply_to ? { reply_to: payload.reply_to } : {}),
   }
 

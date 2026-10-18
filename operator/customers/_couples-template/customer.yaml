@@ -3,12 +3,14 @@ schema_version: 1
 # COUPLES seat template customer.yaml (ADR 0090 role `couples`, ADR 0091 spaces).
 #
 # Derived from _hosted-template. The role package is operator/roles/couples/
-# (role.yaml, persona.md); this file is the seat it generates. A seat is made
-# from intake through a reviewed PR (ADR 0090 decision 4), never by hand-copying
-# another couple's seat.
+# (role.yaml, persona.md); this file is the seat it describes. Set up like any
+# hand-authored seat: copy this template (never another couple's seat), SMD
+# fills in the names and emails, merge through a PR, reprovision. The agent
+# then emails each partner from its own inbox; settings and schedules after
+# that are set in conversation with the agent. There is no web setup.
 #
 # Copy to operator/customers/{slug}/customer.yaml, replace every bracketed
-# value from the intake, then validate:
+# value, then validate:
 #
 #   npx tsx scripts/validate-customer-yaml.ts \
 #     operator/customers/{slug}/customer.yaml
@@ -17,11 +19,11 @@ schema_version: 1
 #   - people: turns on space mode. The validator then requires spaces:, both
 #     memory switches false, a space on every cron entry, scope.inbound_allow_from
 #     exactly the people's emails, and a bound telegram_id on both telegram lists.
-#   - telegram_id stays '' until that partner binds Telegram through the
-#     single-use deep link; the bind lands through a reviewed change to this
-#     file and a restart (ADR 0091 section 5). Until both are bound, allow_from
-#     carries the SMD sentinel id so the boot guard against an empty allowlist
-#     holds. group_allow_from holds bound partners only, never the sentinel.
+#   - telegram_id stays '' until that partner gives SMD their Telegram id;
+#     SMD records it here through a PR and a reprovision. Until both are
+#     recorded, allow_from carries the SMD sentinel id so the boot guard
+#     against an empty allowlist holds. group_allow_from holds recorded
+#     partners only, never the sentinel.
 #   - external_send stays confirm. code_execution stays unauthored, which
 #     refuses it and drops terminal, code_execution and delegation (R2).
 #   - A seat cannot boot until every enabled skill below has a body under
@@ -29,7 +31,7 @@ schema_version: 1
 
 # ---- IDENTITY ----
 customer_id: '[SLUG]'
-customer_name: '[COUPLE NAME from intake]'
+customer_name: '[COUPLE NAME]'
 
 # ---- SEAT DESCRIPTOR ----
 seat:
@@ -61,7 +63,7 @@ people:
     email: '[PARTNER 1 EMAIL, lowercased]'
     # How the seat reaches this partner on its own initiative (routines,
     # two-person notices). email (the default) or telegram; telegram is used
-    # only once this partner's telegram_id is bound.
+    # only once this partner's telegram_id is recorded.
     channel: email
   - id: p2
     name: '[PARTNER 2 NAME]'
@@ -73,7 +75,9 @@ spaces:
   # The shared Telegram group chat id (negative). '' until the group exists.
   shared_telegram_chat: ''
 
-# ---- HUMANS WITH PORTAL ACCESS ----
+# ---- USERS ----
+# Required by the schema. The couples role has no web portal: the partners
+# reach the agent only through its channels.
 users:
   - email: '[PARTNER 1 EMAIL, lowercased]'
     role: principal
@@ -83,7 +87,7 @@ users:
 personas:
   - slug: '[AGENT NAME, lowercased]'
     status: active
-    name: '[AGENT NAME from intake]'
+    name: '[AGENT NAME]'
     title: Assistant
     tone:
       - plainspoken
@@ -197,7 +201,8 @@ personas:
     cron:
       # Each routine names its space: the space the run reads and the chat it
       # lands in. person:<id> is that partner's DM; shared is the group.
-      # Schedules are UTC, set from the joint onboarding section.
+      # Schedules are UTC, filled in by SMD at setup; the partners change them
+      # in conversation with the agent.
       - skill: couples-checkin
         schedule: '[PARTNER 1 CHECK-IN CRON, UTC]'
         wake_policy: always
@@ -320,17 +325,16 @@ safety:
     web_search_daily_cap: 200
 
 # ---- TELEGRAM ----
-# OPTIONAL. Email is the default channel; a partner may connect Telegram later.
-# The generator (scripts/couples-seat.ts) authors `enabled: false` with only the
-# sentinel until SMD records the couple's bot, so a seat validates and boots
-# with Telegram fully absent.
+# OPTIONAL, later. Email is the channel at launch. `enabled: false` with only
+# the sentinel lets a seat validate and boot with Telegram fully absent; SMD
+# turns it on through a PR once the couple's bot exists.
 # One bot per couple (BotFather). Turn group privacy off with /setprivacy so the
 # bot sees the shared group. The token is a Fly secret, never here.
 telegram:
-  enabled: true
+  enabled: false
   allow_from:
-    - '[SMD SENTINEL TELEGRAM ID until both partners bind]'
-  # The sender gate inside the group: bound partners only, never the sentinel
+    - '[SMD SENTINEL TELEGRAM ID until both partners are recorded]'
+  # The sender gate inside the group: recorded partners only, never the sentinel
   # (the validator and the overlay both require every id here to be a person).
   group_allow_from: []
   # The chat gate (Hermes allowed_chats): only spaces.shared_telegram_chat,

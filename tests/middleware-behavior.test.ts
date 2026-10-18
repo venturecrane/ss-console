@@ -396,14 +396,14 @@ describe('middleware runtime: behavior', () => {
 
     it('carries a Clerk invitation ticket to /auth/sign-up (the invitee has no account yet)', async () => {
       const { res } = await invoke({
-        url: 'https://portal.smd.services/portal/products/hosted-agent/couples?__clerk_ticket=tkt_abc.def&__clerk_status=sign_up',
+        url: 'https://portal.smd.services/portal/products/operator?__clerk_ticket=tkt_abc.def&__clerk_status=sign_up',
       })
       expect(res.status).toBe(302)
       const loc = new URL(res.headers.get('Location')!, 'https://portal.smd.services')
       expect(loc.pathname).toBe('/auth/sign-up')
       expect(loc.searchParams.get('__clerk_ticket')).toBe('tkt_abc.def')
       expect(loc.searchParams.get('__clerk_status')).toBe('sign_up')
-      expect(loc.searchParams.get('redirect_url')).toBe('/portal/products/hosted-agent/couples')
+      expect(loc.searchParams.get('redirect_url')).toBe('/portal/products/operator')
     })
 
     it('carries a sign_in ticket to /auth/sign-in', async () => {

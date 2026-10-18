@@ -103,15 +103,6 @@ not secrets, and are set in the build/deploy environment - see
   credential cannot raise the Operator above the letter commitment. (The
   fine-grained `OPERATOR_CONFIG_PR_TOKEN` this section previously described
   belonged to the superseded PR-based delivery leg and was never minted.)
-- **SMD agents act through the website, never with the Clerk key.**
-  `SMD_AGENT_ADMIN_KEY` is a bearer secret held in Infisical (`/ss`, `prod`) and set
-  as a Worker secret on `ss-web`; the Captain mints and rotates it. It is accepted only
-  by the `/api/internal/agent/*` routes (`src/lib/auth/agent-admin-key.ts`), and today
-  that is one act: `POST /api/internal/agent/couples/:id/invite` sends a couples
-  partner's portal invitation, inviting as the SMD admin user. It cannot create or
-  delete an instance, read partner data, or reach any admin page. Unset or empty means
-  every agent request is refused (401), so a Worker without the secret exposes nothing.
-  Each new agent route widens what this key can do and must be added here.
 
 ## Related
 

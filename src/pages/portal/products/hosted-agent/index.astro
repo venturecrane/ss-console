@@ -2,8 +2,6 @@
 import PortalShell from '../../../../layouts/PortalShell.astro'
 import { getPortalClient } from '../../../../lib/portal/session'
 import { resolveHostedAgentState } from '../../../../lib/portal/hosted-agent-state'
-import { getCouplesInstanceByEntity } from '../../../../lib/db/couples-onboarding'
-import { COUPLES_LANDING_PATH } from '../../../../lib/portal/couples-access'
 import PortalPageHead from '../../../../components/portal/PortalPageHead.astro'
 import { env } from 'cloudflare:workers'
 
@@ -39,12 +37,6 @@ if (!portalData.client) {
 }
 
 const { user, client } = portalData
-
-// A couples instance (ADR 0090 role `couples`) has its own onboarding surface,
-// shared by both partners; this page's single-buyer journey does not apply.
-if (await getCouplesInstanceByEntity(env.DB, client.id)) {
-  return Astro.redirect(COUPLES_LANDING_PATH)
-}
 
 const agentState = await resolveHostedAgentState(env.DB, client.id, user.id)
 const { surfaceState, intake, needsIntake, needsKey, keyReceived } = agentState

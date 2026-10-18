@@ -22,7 +22,7 @@ const TEMPLATE = 'operator/customers/_couples-template/customer.yaml'
 /** Every bracketed placeholder in the template, and a valid value for it. */
 const FILL: Record<string, string> = {
   '[SLUG]': 'couple-test',
-  '[COUPLE NAME from intake]': 'Test Couple',
+  '[COUPLE NAME]': 'Test Couple',
   '[CURRENT BLESSED FLEET PIN, e.g., v2026.5.7@<40-hex-sha>]':
     'v2026.5.7@a91a57fa5a13d516c38b07a141a9ce8a3daabeb0',
   '[PARTNER 1 NAME]': 'Alex Example',
@@ -30,14 +30,14 @@ const FILL: Record<string, string> = {
   '[PARTNER 1 EMAIL, lowercased]': 'alex@example.com',
   '[PARTNER 2 EMAIL, lowercased]': 'sam@example.com',
   '[AGENT NAME, lowercased]': 'juniper',
-  '[AGENT NAME from intake]': 'Juniper',
+  '[AGENT NAME]': 'Juniper',
   '[PARTNER 1 CHECK-IN CRON, UTC]': '0 15 * * 1',
   '[PARTNER 2 CHECK-IN CRON, UTC]': '0 16 * * 1',
   '[PARTNER 1 GRATITUDE CRON, UTC]': '0 2 * * 4',
   '[PARTNER 2 GRATITUDE CRON, UTC]': '0 3 * * 4',
   '[DAILY REMINDER CRON, UTC]': '0 15 * * *',
   '[WEEKLY CHECK-IN AGENDA CRON, UTC]': '0 1 * * 1',
-  '[SMD SENTINEL TELEGRAM ID until both partners bind]': '1000000001',
+  '[SMD SENTINEL TELEGRAM ID until both partners are recorded]': '1000000001',
 }
 
 function templateText(): string {
@@ -65,7 +65,7 @@ function codesAt(root: unknown): Array<[string, string]> {
   return errorsOf(root).map((e) => [e.code, e.path])
 }
 
-/** Bind both partners' Telegram ids the way onboarding does. */
+/** Record both partners' Telegram ids the way SMD authors them by PR. */
 function bound(): Root {
   const s = seat()
   s.people[0].telegram_id = '111'
@@ -348,7 +348,7 @@ describe('rule 5: the group answers only people (overlay #469 parity)', () => {
     expect(codesAt(s)).toEqual([['InvalidPeople', 'telegram.group_allow_from[2]']])
   })
 
-  it('FALSIFIER: the onboarding sentinel may not sit on group_allow_from', () => {
+  it('FALSIFIER: the SMD sentinel may not sit on group_allow_from', () => {
     const s = seat()
     s.telegram.group_allow_from = ['1000000001']
     expect(codesAt(s)).toEqual([['InvalidPeople', 'telegram.group_allow_from[0]']])

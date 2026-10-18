@@ -1,10 +1,16 @@
 # ADR 0090: Hosted-agent roles: a packaged agent job, selected by `seat.role`
 
-- **Status:** Accepted (2026-10-17)
+- **Status:** Accepted (2026-10-17). Decision 4 (onboarding) superseded 2026-10-18; see the section below
 - **Decider:** Captain (decision recorded on [#3264](https://github.com/venturecrane/ss-console/issues/3264), 2026-10-17)
 - **Builds on:** ADR 0067 (Hosted Agent self-serve SKU), ADR 0071 (confirm ceiling and the Hosted Agent tier ladder), ADR 0084 (agent-native applications; products are surfaces on a shared seat), ADR 0011 (persona is a Hermes profile)
 - **Related:** ADR 0091 (privacy by space for multi-person seats), ADR 0092 (calendar and documents for hosted agents)
 - **Scope:** the concept, its home in the tree, and how a seat selects it. The first role (couples) is named; its build is tracked on #3264 and is not authorized by this record alone.
+
+## Superseded 2026-10-18: decision 4 (onboarding)
+
+The Captain decided on 2026-10-18 that the couples agent has no web or portal setup interface: "rip it out with the root". Decision 4 and every passage below that depends on it (the onboarding schema in decision 1, the generator from intake, the role-driven portal intake and the widened hosted access gate in Consequences) are superseded. What was built for it (admin create-instance pages, Clerk invitations, the welcome email, partner intake and consent forms, the joint-settings form with two-person confirm, the Telegram deep-link binding and its token store, and the seat generator reading those D1 rows) was removed from ss-console and `hermes-smd-overlay` under #3264; migration 0128 drops its tables.
+
+The model that replaces it: SMD authors a couples seat by hand, like the Brokery seat. SMD copies `operator/customers/_couples-template/customer.yaml`, fills in the two partners' names and emails in `people:`, merges it through a PR and reprovisions. The agent then emails each partner from its own inbox. Every interaction after that, setup and settings included, happens through the agent's channels (email now, Telegram later), where joint changes stay two-person acts (ADR 0091). A role is still a packaged job (decisions 1 to 3, 5 and 6 stand) without an onboarding schema. Runbook: `docs/runbooks/hosted-agent/couples-setup.md`.
 
 ## Context
 
@@ -33,7 +39,7 @@ What the couple seat needs is neither posture nor interface nor an industry. It 
 
 **3. "Pack" stays reserved for `operator/verticals/`.** A role is not a pack. A pack tailors the Operator to an industry; a role defines a job a hosted agent does for a person or a household. The word "role" here means the agent's job. It does not mean a permission role such as `product_roles` or the PRD's Principal/Operator/Compliance roles, and code and docs must not use it for those.
 
-**4. A role carries its onboarding, and onboarding produces authored config.** Intake collects the role's onboarding schema, and its output becomes the seat's `customer.yaml` through a reviewed PR. That is the ADR 0067 "guided generator from intake fields" seam, built once per role rather than once per seat. The existing validator and provisioning path then run unchanged. Anything the role's schema marks joint is not final until every person on the seat confirms it.
+**4. (Superseded 2026-10-18, see above.) A role carries its onboarding, and onboarding produces authored config.** Intake collects the role's onboarding schema, and its output becomes the seat's `customer.yaml` through a reviewed PR. That is the ADR 0067 "guided generator from intake fields" seam, built once per role rather than once per seat. The existing validator and provisioning path then run unchanged. Anything the role's schema marks joint is not final until every person on the seat confirms it.
 
 **5. Couples is the first role.** `operator/roles/couples/` is built under #3264, and `captain-mark` is its first instance. Its persona rules are authored, not inferred: never relay one partner's private words to the other, answer a crisis disclosure with support resources, refuse a request to monitor the other partner, never take sides, and support the relationship without counseling it (#3264, Captain decision 5).
 

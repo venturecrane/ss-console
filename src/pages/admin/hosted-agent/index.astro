@@ -56,12 +56,6 @@ const openCount = queue.filter((r) => openStatuses.has(r.status)).length
       openCount === 1 ? '' : 's'
     }. Runbook: docs/runbooks/hosted-agent/concierge.md
   </p>
-  <p class="mt-2 text-base">
-    <a class="underline font-bold" href="/admin/hosted-agent/couples">Couples instances</a>
-    <span class="text-[color:var(--ss-color-text-secondary)]">
-      (role couples, SMD-paid, onboarded by both partners)</span
-    >
-  </p>
 
   <div class="mt-6 flex flex-col gap-6">
     {queue.map((row) => <HostedAgentQueueCard row={row} />)}
