@@ -1247,7 +1247,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # sender with no recorded origin, and calendar ingest files nothing from it.
 # Graph seats unchanged. Also carries #501 (couples portal onboarding removed
 # seat-side; inert, no seat authors people:). No tracked twin moved.
-ARG OVERLAY_REF="ade63ad6ff4d7f11ba1488d5abd331ebe89f5c0a"
+# 2026-10-18 (36eb1bd5, the overlay #505 merge commit). #505: voice notes are
+# transcribed only when the message's From is authenticated by the same rule
+# as #504 (aligned DMARC or named, aligned DKIM), then rostered. Also carries
+# #502 (couples settings by conversation; inert without people:) and #503
+# (gate snapshot mirror of this repo's). No tracked twin moved.
+ARG OVERLAY_REF="36eb1bd504845c6cc3ec8e55f91918e820f48b2f"
 
 ARG CUSTOMER_SLUG=customer-zero
 
