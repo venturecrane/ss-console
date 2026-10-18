@@ -41,6 +41,12 @@ const OUR_DOMAINS = new Set([
 ])
 
 /**
+ * Consumer mail providers. A roster address on one of these is banned as the
+ * exact address, never as the provider's domain.
+ */
+const CONSUMER_PROVIDERS = new Set(['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com'])
+
+/**
  * Roots scanned for leaked identity: source, tests, fixtures, scripts.
  *
  * `docs/` and `.stitch/` are scanned for identity DATA only (emails and roster
@@ -105,17 +111,19 @@ function rosterDomains(): Map<string, string[]> {
 
     const domains = new Set<string>()
     for (const addr of raw.match(EMAIL_RE) ?? []) {
-      domains.add(
-        addr
-          .split('@')[1]
-          .toLowerCase()
-          .replace(/[.,'"]+$/, '')
-      )
+      const lower = addr.toLowerCase().replace(/[.,'"]+$/, '')
+      const domain = lower.split('@')[1]
+      // A consumer mailbox (a couples seat's partners) is identified by the
+      // whole address: banning gmail.com would ban every synthetic fixture.
+      domains.add(CONSUMER_PROVIDERS.has(domain) ? lower : domain)
     }
     // Whole-domain roster grants appear as bare `@domain` entries.
     for (const line of raw.split('\n')) {
       const m = line.match(/'?(@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'?\s*$/)
-      if (m && DOMAIN_ENTRY_RE.test(m[1])) domains.add(m[1].slice(1).toLowerCase())
+      if (!m || !DOMAIN_ENTRY_RE.test(m[1])) continue
+      const d = m[1].slice(1).toLowerCase()
+      // The tail of `name@gmail.com` is not a whole-domain grant.
+      if (!CONSUMER_PROVIDERS.has(d)) domains.add(d)
     }
 
     for (const d of domains) {

@@ -1,0 +1,248 @@
+schema_version: 1
+
+# captain-mark: Laurie Perrin and Scott Durgan's couples agent, SMD's own proof
+# of concept of the couples role (ADR 0090, ADR 0091; ss-console#3264). Made
+# from operator/customers/_couples-template. Like The Brokery: the only
+# interface is email to and from the agent's own inbox, and only the two
+# partners' addresses reach it. Telegram is set up later. Schedules and other
+# settings are given to the agent in conversation, not authored here.
+
+# ---- IDENTITY ----
+customer_id: captain-mark
+customer_name: Laurie & Scott
+
+# ---- SEAT DESCRIPTOR ----
+seat:
+  kind: customer
+  product: hosted-agent
+  role: couples
+
+vertical: mixed
+addons: []
+practice_areas:
+  - general
+fly_region: lax # nearest to Phoenix; Fly has no phx region
+
+# ---- RUNTIME ----
+model: claude-sonnet-4-6
+hermes_ref: v2026.9.14@345cd2b057a452236de401d3534b8502a7465e8d
+
+machine:
+  size: shared-cpu-1x
+  memory_mb: 1024
+
+# ---- PEOPLE (ADR 0091) ----
+people:
+  - id: p1
+    name: Laurie Perrin
+    telegram_id: ''
+    email: lsperrin.lp@gmail.com
+    channel: email
+  - id: p2
+    name: Scott Durgan
+    telegram_id: ''
+    email: scott.durgan@gmail.com
+    channel: email
+
+spaces:
+  shared_telegram_chat: ''
+
+# ---- SMD OPERATOR OF THE SEAT ----
+users:
+  - email: scott@smd.services
+    role: principal
+    full_name: Scott Durgan
+
+# ---- PERSONA ----
+personas:
+  - slug: captain-mark
+    status: active
+    name: Captain Mark
+    title: Assistant
+    tone:
+      - plainspoken
+      - warm
+      - concise
+    entitlements:
+      exposure:
+        internal_write: autonomous
+        external_send: confirm
+    skills:
+      - name: calendar
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+        settings:
+          recipients: roster
+      - name: workspace
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: inbox-triage
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: true
+        enabled: true
+      - name: couples-checkin
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          recipients: roster
+      - name: gratitude-prompts
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          recipients: roster
+      - name: dates-to-remember
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          recipients: roster
+      - name: date-night-planner
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: travel
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: true
+        enabled: true
+        settings:
+          recipients: roster
+      - name: shared-lists
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: weekly-checkin-agenda
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          recipients: roster
+      - name: memory-journal
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+    # No authored routines: the couple sets every schedule by email.
+    cron: []
+
+# ---- CONNECTORS ----
+connectors:
+  Email:
+    adapter: agentmail
+    backend: 'mcp:agentmail'
+    enabled: true
+    webhook_url: 'https://hermes-captain-mark.fly.dev/webhooks/agentmail'
+  WebSearch:
+    adapter: brave
+    backend: 'native:brave-free'
+    enabled: true
+
+webhook_triggers:
+  - source: agentmail
+    event_type: message.received
+    skill: inbox-triage
+    persona: captain-mark
+
+# ---- RECORD STORES ----
+record_stores:
+  - name: couples-checkin
+    path: /opt/data/couples/checkin
+    owner_field: owner
+    index: [kind, topic, date]
+  - name: gratitude
+    path: /opt/data/couples/gratitude
+    owner_field: owner
+    index: [kind, date]
+  - name: dates
+    path: /opt/data/couples/dates
+    owner_field: owner
+    index: [kind, title, date]
+  - name: date-nights
+    path: /opt/data/couples/date-nights
+    owner_field: owner
+    index: [idea, status, last_tried]
+  - name: trips
+    path: /opt/data/couples/trips
+    owner_field: owner
+    index: [kind, trip, start_date, end_date]
+  - name: lists
+    path: /opt/data/couples/lists
+    owner_field: owner
+    index: [kind, title, due]
+  - name: journal
+    path: /opt/data/couples/journal
+    owner_field: owner
+    index: [date, title]
+
+# ---- SCOPE ----
+scope:
+  email_folders_visible:
+    - Inbox
+    - Sent
+  email_folders_blind: []
+  email_keyword_blocks: []
+  domain_blocks: []
+  inbound_allow_from:
+    - lsperrin.lp@gmail.com
+    - scott.durgan@gmail.com
+
+# ---- ESCALATION ----
+escalation:
+  red_flag_recipients:
+    - scott@smd.services
+  failure_recipients:
+    - team@smd.services
+
+# ---- SAFETY ----
+safety:
+  sticky_stop:
+    cost_cap_daily_cents: 500
+    inbound_daily_cap: 100
+    web_search_daily_cap: 200
+
+# ---- VOICE LIBRARY ----
+voice_library:
+  samples_path: 'r2://vaults/captain-mark/voice/samples/'
+
+# ---- MEMORY ----
+memory:
+  d1_namespace: captain-mark
+  r2_vault_path: 'vaults/captain-mark/'
+  vectorize_index: 'hermes-captain-mark-vault'
+  memory_enabled: false
+  user_profile_enabled: false
