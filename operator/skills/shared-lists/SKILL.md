@@ -17,7 +17,7 @@ metadata:
     weight: light
     action_class: read + internal_write # record store and agent-sent invites to the seat's people
     content_ceiling: partner_words
-    stores: [lists, couples-checkin]
+    stores: [lists]
 ---
 
 # Shared lists
@@ -49,7 +49,7 @@ Never route around the confirmation.
 No shell, code, file or delegation tools on this persona (ADR 0090 R2). Use:
 
 - `record_store_list`, `record_store_read`, `record_store_write` on the store
-  `lists`; read `couples-checkin` `joint-settings.md` for `timezone`.
+  `lists`; `couples_settings_read` for the couple's `timezone`.
 - `calendar_invite_create`, `calendar_invite_update`, `calendar_invite_cancel`,
   `calendar_invite_list` (skill `calendar`), for renewals and chore dates.
   Attendees are person ids.

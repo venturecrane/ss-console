@@ -17,7 +17,8 @@ schema_version: 1
 #
 # Hard rules for this role (do not loosen per couple):
 #   - people: turns on space mode. The validator then requires spaces:, both
-#     memory switches false, a space on every cron entry, scope.inbound_allow_from
+#     memory switches false, no authored cron for the skills the couple
+#     schedules in conversation (rule 9), scope.inbound_allow_from
 #     exactly the people's emails, and a bound telegram_id on both telegram lists.
 #   - telegram_id stays '' until that partner gives SMD their Telegram id;
 #     SMD records it here through a PR and a reprovision. Until both are
@@ -133,6 +134,15 @@ personas:
         # skill's roster lane; the roster is exactly the two partners.
         settings:
           recipients: roster
+      # Schedules and settings set in conversation (couples_settings_read /
+      # couples_settings_change). Manual only: it is how the couple asks.
+      - name: couples-settings
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
       - name: gratitude-prompts
         version: pending
         initiation:
@@ -198,46 +208,14 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
-    cron:
-      # Each routine names its space: the space the run reads and the chat it
-      # lands in. person:<id> is that partner's DM; shared is the group.
-      # Schedules are UTC, filled in by SMD at setup; the partners change them
-      # in conversation with the agent.
-      - skill: couples-checkin
-        schedule: '[PARTNER 1 CHECK-IN CRON, UTC]'
-        wake_policy: always
-        space: person:p1
-      - skill: couples-checkin
-        schedule: '[PARTNER 2 CHECK-IN CRON, UTC]'
-        wake_policy: always
-        space: person:p2
-      - skill: gratitude-prompts
-        schedule: '[PARTNER 1 GRATITUDE CRON, UTC]'
-        wake_policy: always
-        space: person:p1
-      - skill: gratitude-prompts
-        schedule: '[PARTNER 2 GRATITUDE CRON, UTC]'
-        wake_policy: always
-        space: person:p2
-      # Daily: a private reminder ahead of each shared date (silent otherwise).
-      - skill: dates-to-remember
-        schedule: '[DAILY REMINDER CRON, UTC]'
-        wake_policy: always
-        space: person:p1
-      - skill: dates-to-remember
-        schedule: '[DAILY REMINDER CRON, UTC]'
-        wake_policy: always
-        space: person:p2
-      # Daily: the couple's price watches, reported to the group when one is
-      # under its target (silent otherwise).
-      - skill: travel
-        schedule: '[DAILY REMINDER CRON, UTC]'
-        wake_policy: always
-        space: shared
-      - skill: weekly-checkin-agenda
-        schedule: '[WEEKLY CHECK-IN AGENDA CRON, UTC]'
-        wake_policy: always
-        space: shared
+    # No cron here, on purpose. The couple sets every schedule in conversation
+    # (skill couples-settings, overlay tool couples_settings_change), and the
+    # seat keeps it on its volume. At boot the overlay registers one slot job
+    # per scheduled skill and space (operator/roles/couples/role.yaml `slots`)
+    # that checks those settings every quarter hour, in the couple's own
+    # timezone. Nothing is scheduled until the couple asks for it. An authored
+    # cron entry for these skills is refused (validator rule 9).
+    cron: []
 
 # ---- CONNECTORS ----
 connectors:

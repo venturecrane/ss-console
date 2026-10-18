@@ -31,12 +31,6 @@ const FILL: Record<string, string> = {
   '[PARTNER 2 EMAIL, lowercased]': 'sam@example.com',
   '[AGENT NAME, lowercased]': 'juniper',
   '[AGENT NAME]': 'Juniper',
-  '[PARTNER 1 CHECK-IN CRON, UTC]': '0 15 * * 1',
-  '[PARTNER 2 CHECK-IN CRON, UTC]': '0 16 * * 1',
-  '[PARTNER 1 GRATITUDE CRON, UTC]': '0 2 * * 4',
-  '[PARTNER 2 GRATITUDE CRON, UTC]': '0 3 * * 4',
-  '[DAILY REMINDER CRON, UTC]': '0 15 * * *',
-  '[WEEKLY CHECK-IN AGENDA CRON, UTC]': '0 1 * * 1',
   '[SMD SENTINEL TELEGRAM ID until both partners are recorded]': '1000000001',
 }
 
@@ -52,8 +46,24 @@ function filledText(): string {
 
 type Root = Record<string, any>
 
+/**
+ * The couples template authors no cron (#3264: the couple schedules in
+ * conversation, rule 9). The space-mode cron rules (1, 2, 6) still govern any
+ * seat with people, so the baseline adds two space-bound routines on a skill
+ * the couple does NOT schedule in conversation.
+ */
+function withGenericRoutines(s: Root): Root {
+  const lists = s.personas[0].skills.find((k: Root) => k.name === 'shared-lists')
+  lists.initiation.scheduled = true
+  s.personas[0].cron = [
+    { skill: 'shared-lists', schedule: '0 15 * * 1', wake_policy: 'always', space: 'person:p1' },
+    { skill: 'shared-lists', schedule: '0 16 * * 1', wake_policy: 'always', space: 'person:p2' },
+  ]
+  return s
+}
+
 function seat(): Root {
-  return parseYaml(filledText()) as Root
+  return withGenericRoutines(parseYaml(filledText()) as Root)
 }
 
 function errorsOf(root: unknown): ValidationError[] {
@@ -108,16 +118,7 @@ describe('couples seat template', () => {
     expect(r.value.seat?.role).toBe('couples')
     expect(r.value.people?.map((p) => p.id)).toEqual(['p1', 'p2'])
     expect(r.value.spaces?.shared_telegram_chat).toBe('-1001234567890')
-    expect(r.value.personas[0].cron.map((c) => c.space)).toEqual([
-      'person:p1',
-      'person:p2',
-      'person:p1',
-      'person:p2',
-      'person:p1',
-      'person:p2',
-      'shared',
-      'shared',
-    ])
+    expect(r.value.personas[0].cron.map((c) => c.space)).toEqual(['person:p1', 'person:p2'])
     expect(r.value.memory.memory_enabled).toBe(false)
     expect(r.value.memory.user_profile_enabled).toBe(false)
   })
@@ -383,6 +384,33 @@ describe('rule 6: no two cron entries share a (skill, space) pair', () => {
 
   it('the same skill in two spaces is fine', () => {
     expect(errorsOf(seat())).toEqual([])
+  })
+})
+
+describe('rule 9: a couples seat authors no cron for what the couple schedules by talking', () => {
+  it('the template as shipped validates and authors no cron', () => {
+    const s = parseYaml(filledText()) as Root
+    expect(s.personas[0].cron).toEqual([])
+    expect(errorsOf(s)).toEqual([])
+  })
+
+  it.each([
+    'couples-checkin',
+    'gratitude-prompts',
+    'dates-to-remember',
+    'weekly-checkin-agenda',
+    'travel',
+  ])('FALSIFIER: an authored %s routine is rejected', (skill) => {
+    const s = seat()
+    s.personas[0].cron[0].skill = skill
+    expect(codesAt(s)).toContainEqual(['InvalidCronSpace', 'personas[0].cron[0].skill'])
+  })
+
+  it('applies only to a couples seat', () => {
+    const s = seat()
+    s.personas[0].cron[0].skill = 'gratitude-prompts'
+    delete s.seat.role
+    expect(codesAt(s)).not.toContainEqual(['InvalidCronSpace', 'personas[0].cron[0].skill'])
   })
 })
 

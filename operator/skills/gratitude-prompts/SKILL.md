@@ -17,7 +17,7 @@ metadata:
     weight: light
     action_class: read + internal_write # records in the record store; no email, no send tool
     content_ceiling: partner_words
-    stores: [gratitude, couples-checkin]
+    stores: [gratitude]
 ---
 
 # Gratitude prompts
@@ -41,8 +41,10 @@ delivered to that partner's DM.
 No shell, code, file or delegation tools on this persona (ADR 0090 R2). Use:
 
 - `record_store_list`, `record_store_read`, `record_store_write` on the store
-  `gratitude`, and read-only on `couples-checkin` (for the couple's timezone
-  and each partner's quiet hours and snooze).
+  `gratitude`.
+- `couples_settings_read` / `couples_settings_change` (skill
+  `couples-settings`) for when prompts come: the couple sets them in
+  conversation, and nothing is scheduled until they ask.
 - `remember`, only for a preference the partner asked you to keep.
 
 ## The records
@@ -65,10 +67,12 @@ She took the car in so I could sleep in on Saturday.
 
 ## Scheduled prompt (a routine in `person:<id>`)
 
-1. Read `couples-checkin` records `joint-settings.md` (for `timezone`) and
-   `settings-<id>.md` (for `quiet_hours`, `snoozed_until`, and
-   `gratitude: paused`). If prompts are paused, snoozed, or it is quiet hours
-   for this partner, reply with exactly `[SILENT]` and nothing else.
+The seat wakes you only when one of this partner's gratitude routines is due
+now in the couple's timezone, it is not paused, and they are not in quiet
+hours; it hands you an `smd_couples_routine` block.
+
+1. If there is no `smd_couples_routine` block, reply with exactly `[SILENT]`
+   and nothing else.
 2. Otherwise reply with one short question, warm and plain. Vary the wording
    from one week to the next. Never more than one question, never a lecture on
    why gratitude matters.
@@ -86,13 +90,14 @@ She took the car in so I could sleep in on Saturday.
    "share it" if that is what they want shared. Nothing lands until they do.
    Never route around that confirmation.
 
-## Pausing
+## Starting, moving, pausing, stopping
 
-"Stop the gratitude questions" or "pause gratitude" in their private chat: in
-`couples-checkin`, write their `settings-<id>.md` with `gratitude: paused`
-(keep every other line as it was, `overwrite: true`), read it back, and confirm.
-"Start them again" removes the line. This is that partner's own setting and
-never touches the other partner's.
+All through `couples_settings_change` (skill `couples-settings`). A partner's
+own gratitude routine is theirs alone and applies at once: "send me one Sunday
+mornings at 9" adds it (`kind: gratitude-prompts`, `for` their id), "pause
+them for a week" pauses it, "stop the gratitude questions" removes it. "Send
+us both one" is one routine for each partner; the one for the other partner
+waits for their `agree`. Restate the lines the tool returns.
 
 ## What this skill never does
 
@@ -103,7 +108,9 @@ never touches the other partner's.
 
 ## Verification
 
-- A paused partner's scheduled run replies `[SILENT]`.
+- A paused routine, or one inside the partner's quiet hours, does not wake at
+  all (the seat's gate); a run with no `smd_couples_routine` block replies
+  `[SILENT]`.
 - p1's private note is absent from p2's chat and from the group.
 - A note p1 chose to share lands only after p1's "share it", and its text is
   exactly the text p1 saw.

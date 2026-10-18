@@ -1,6 +1,6 @@
 ---
 name: couples-checkin
-description: Private check-in nudges on topics the couple chose. Asks one partner at a time, in their own chat, on the topics the couple authored together; keeps every answer in that partner's private space; honors each partner's quiet hours and snooze. Never shows one partner what the other answered.
+description: Private check-in nudges on topics the couple chose. Asks one partner at a time, in their own chat, on the topics the couple authored together; keeps every answer in that partner's private space; runs only when the couple's own schedule says, outside quiet hours and pauses. Never shows one partner what the other answered.
 version: 0.1.0
 author: SMD Services
 license: MIT
@@ -59,37 +59,21 @@ only these:
   partner's id (`p1`, `p2`) for private records, `shared` for shared ones.
 - `remember`, for a small preference the partner asked you to keep ("ask me in
   the evening"). It keeps the fact in the space you are in, and nowhere else.
+- `couples_settings_read` / `couples_settings_change` (skill
+  `couples-settings`) for everything about WHEN and WHAT: the topics, the
+  timezone, how often check-ins come, quiet hours, pauses, skipped topics.
+
+## The settings (not records)
+
+The couple's check-in topics, timezone and schedule, and each partner's quiet
+hours and skipped topics, are kept by the seat, set in conversation through
+`couples_settings_change` (skill `couples-settings`). You never write them as
+records. A change to the topics or to any check-in routine is decided by both
+partners; the seat holds it until both say `agree`.
 
 ## The records
 
 All in the store `couples-checkin`. Frontmatter is one `key: value` per line.
-
-**`joint-settings.md`** (`owner: shared`). What the couple chose together.
-`confirmed_by` is set by the seat when both partners agree; you never write it:
-
-```
----
-owner: shared
-kind: joint-settings
-timezone: America/Phoenix
-topics: how the week felt; money; time together; the house
-confirmed_by: p1, p2
-updated: 2026-10-20
----
-```
-
-**`settings-<id>.md`** (`owner: <id>`, private). One partner's own preferences:
-
-```
----
-owner: p1
-kind: settings
-quiet_hours: 21:00-08:00
-snoozed_until: 2026-10-27
-paused_topics: money
-updated: 2026-10-20
----
-```
 
 **`asked-<date>-<id>.md`** (`owner: <id>`). The topic you asked, so the next
 check-in picks a different one.
@@ -103,19 +87,22 @@ from these (skill `weekly-checkin-agenda`).
 
 ## Scheduled check-in (a routine in `person:<id>`)
 
-1. Read `joint-settings.md`. If it does not exist, or has no topics, reply with
-   exactly `[SILENT]` and nothing else: there is nothing the couple has chosen
-   to talk about yet, and you never invent topics.
-2. Read `settings-<id>.md` for this partner, if it exists. If `snoozed_until`
-   is later than today, or the current time in the couple's `timezone` falls
-   inside `quiet_hours`, reply with exactly `[SILENT]` and nothing else.
+The seat wakes you only when one of this partner's check-in routines is due
+now in the couple's timezone, it is not paused, and they are not in quiet
+hours. It hands you an `smd_couples_routine` block with `checkin_topics` and
+this partner's `paused_topics`.
+
+1. If there is no `smd_couples_routine` block, or `checkin_topics` is empty,
+   reply with exactly `[SILENT]` and nothing else: there is nothing the couple
+   has chosen to talk about yet, and you never invent topics.
+2. Do not re-check the time, the pause or quiet hours: the seat already did.
 3. List the store and read this partner's recent `asked-` records. Choose one
-   topic from `topics` that is not in `paused_topics` and was not the last one
-   asked. If every topic is paused, reply `[SILENT]`.
+   topic from `checkin_topics` that is not in `paused_topics` and was not the
+   last one asked. If every topic is skipped, reply `[SILENT]`.
 4. Write `asked-<date>-<id>.md` with `owner: <id>` and the topic.
 5. Your reply is the check-in. One short, open question about that topic, warm
-   and plain, with a line saying they can answer whenever they like, skip it,
-   or say "snooze" to pause check-ins. One question, never a list.
+   and plain, with a line saying they can answer whenever they like or skip
+   it. One question, never a list.
 
 ## When the partner answers (their private chat)
 
@@ -135,50 +122,27 @@ from these (skill `weekly-checkin-agenda`).
    of the other partner. That gate is the promise this seat makes to both of
    them.
 
-## Snooze, quiet hours and paused topics (their private chat)
+## Topics, cadence, quiet hours, pauses (skill `couples-settings`)
 
-A partner changes their own preferences on their own, privately:
+Every change to how check-ins run goes through `couples_settings_change`, on
+any channel the partner is using (email or Telegram):
 
-- "Snooze check-ins for a week" sets `snoozed_until`. "Resume" clears it.
-- "Not after 9 at night" sets `quiet_hours`.
-- "Skip money for now" adds the topic to `paused_topics`.
+- "Check in with me Tuesdays and Fridays at 8pm": an `add_routine` of kind
+  `couples-checkin` for that partner. Check-ins are decided together, so the
+  seat sends the other partner the exact change and it starts only when they
+  reply `agree`.
+- "Talk to us about money and the house": `set_checkin_topics`, also decided
+  together.
+- "Not after 9 at night": `set_quiet_hours` for that partner; theirs alone,
+  applied at once.
+- "Skip money for now": `set_paused_topics` for that partner; theirs alone.
+- "Pause the check-ins for two weeks": `pause_routine` on the check-in
+  routines, decided together.
 
-Write `settings-<id>.md` (`owner: <id>`, `overwrite: true` when it exists),
-read it back, and confirm the change in one line. This never touches the other
-partner's settings, and nothing about it is shown to the other partner.
-
-How often check-ins come is set by the routine's schedule on the seat. A
-different rhythm is a joint change: propose it as a `cadence_request:` line in
-`joint-settings.md`, exactly as for topics below. Once both partners have
-agreed, the schedule on the seat is changed to match (persona rule 6).
-
-## Changing the topics (a joint change)
-
-Topics belong to both partners, and the seat makes sure a change applies only
-when both agree. Either partner can ask, in their private chat or in the group:
-
-1. As soon as they ask, read `joint-settings.md` (if it exists) and write it
-   whole with the change: `owner: shared`, `kind: joint-settings`,
-   `overwrite: true`. Leave `confirmed_by` out; the seat sets it.
-2. The seat does not write it yet. It holds the change as a proposal, counts
-   the asker's request as their yes, and itself sends the other partner the
-   exact change in their own private chat.
-3. Tell the asker, in a line, that the change waits on their partner. Each
-   partner answers `agree` or `reject` in their OWN private chat. A yes in the
-   group does not count, and either partner can reject.
-4. A proposal expires after 7 days, and only one can be open at a time. If the
-   seat refuses because another proposal is open, say so and ask them to wait
-   until it is decided. The person who proposed it may replace their own.
-5. When both have agreed, the seat writes the change and tells both partners.
-   Do not announce it as done before then, and do not look for another way to
-   make it land.
-
-A request by email, or from a scheduled run, is refused by the seat. Tell the
-person to ask in their Telegram chat or the group.
-
-Any other skill that changes `joint-settings.md`, or any record of
-`kind: joint-settings`, follows these same steps. Nothing else is gated this
-way.
+Follow `couples-settings` for the exact ops and for confirming: restate the
+lines the tool returns, and when it says HELD, say it is waiting on the other
+partner. Never announce a joint change as done before both agreed, and never
+look for another way to make it land.
 
 ## What this skill never does
 
@@ -188,17 +152,19 @@ way.
 - Never writes a partner's answer to a shared record except an agenda point
   they confirmed with "share it".
 - Never asks about a topic the couple did not choose.
-- Never sends a check-in during quiet hours or while snoozed.
+- Never schedules or sends a check-in itself: the seat runs the routines the
+  couple set, outside quiet hours and pauses.
 - Never interprets an answer as a sign about the relationship. If an answer
   suggests either partner may not be safe, follow persona rule 2 at once, and
   keep it in that partner's space.
 
 ## Verification
 
-- A scheduled run with no `joint-settings.md` replies `[SILENT]`.
-- A topic change asked by p1 does not land until p2 replies `agree` in p2's own
-  chat; a yes in the group leaves it waiting.
-- A run for `person:p1` while p1 is snoozed replies `[SILENT]`.
+- A scheduled run with no topics set replies `[SILENT]`.
+- A topic change asked by p1 does not land until p2 replies `agree`; a yes in
+  the group leaves it waiting.
+- A check-in routine paused through a date, or inside p1's quiet hours, does
+  not wake at all (the seat's gate).
 - p1's answer is readable from p1's chat and absent from p2's chat and the
   group (the store refuses or omits it).
 - An agenda point raised in p1's chat lands in the shared store only after p1

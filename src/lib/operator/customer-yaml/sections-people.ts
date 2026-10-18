@@ -41,6 +41,11 @@
  *      address, and the model picks the recipient; a Brokery rehearsal reached
  *      a real client that way (2026-10-16). The roster must be only the people
  *      the seat serves, so nobody else can be picked.
+ *   9. On a couples seat (`seat.role: couples`) no cron entry names a skill
+ *      the couple schedules in conversation (#3264). The seat keeps those
+ *      schedules on its volume and runs them from its own slot jobs; an
+ *      authored entry would collide with a slot and bring back per-couple
+ *      authoring.
  *
  * `spaces` without `people` is rejected for the same reason as rule 2.
  *
@@ -249,6 +254,43 @@ function checkCronSpaces(
   }
 }
 
+/**
+ * The skills a couple schedules in conversation (#3264). Mirrors the overlay's
+ * `shared/couples_settings.py` KINDS and `operator/roles/couples/role.yaml`
+ * `slots` (pinned by tests/couples-role.test.ts).
+ */
+export const CONVERSATION_SCHEDULED_SKILLS: ReadonlySet<string> = new Set([
+  'couples-checkin',
+  'gratitude-prompts',
+  'dates-to-remember',
+  'weekly-checkin-agenda',
+  'travel',
+])
+
+/**
+ * Rule 9: on a couples seat no cron entry names a skill the couple schedules
+ * in conversation. The overlay materializes those skills' slot jobs itself and
+ * refuses to boot on an authored entry (overlay bootstrap/validate.py
+ * `_validate_couples_cron`, the mirror of this rule).
+ */
+function checkConversationScheduledCron(
+  root: Record<string, unknown>,
+  errors: ValidationError[]
+): void {
+  const seat = root['seat']
+  if (!isPlainObject(seat) || seat['role'] !== 'couples') return
+  for (const [path, cron] of cronEntries(root)) {
+    const skill = cron['skill']
+    if (typeof skill === 'string' && CONVERSATION_SCHEDULED_SKILLS.has(skill)) {
+      errors.push({
+        code: 'InvalidCronSpace',
+        path: `${path}.skill`,
+        message: `${skill} is scheduled by the couple in conversation on a couples seat; remove the cron entry (rule 9, #3264)`,
+      })
+    }
+  }
+}
+
 /** Rule 6: a (skill, space) pair names one routine. */
 function checkDuplicateCronSpaces(root: Record<string, unknown>, errors: ValidationError[]): void {
   const seen = new Set<string>()
@@ -408,6 +450,7 @@ export function checkSpaceMode(
   )
   checkCronSpaces(root, ids, errors)
   checkDuplicateCronSpaces(root, errors)
+  checkConversationScheduledCron(root, errors)
   checkRecordStoreReaders(root, errors)
   if (people !== null) {
     checkPersonChannels(root, people, errors)
