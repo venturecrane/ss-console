@@ -22,6 +22,7 @@ import type { D1Database } from '@cloudflare/workers-types'
 import { validate } from '../src/lib/operator/customer-yaml'
 import {
   COUPLES_SENTINEL_TELEGRAM_ID,
+  observesDst,
   cadenceToUtcCron,
   generateCouplesSeat,
   personaSlug,
@@ -99,7 +100,42 @@ describe('UTC schedule conversion', () => {
   })
 })
 
+describe('daylight saving (Hermes cron has no per-job timezone at the pinned ref)', () => {
+  it('knows which zones observe DST', () => {
+    expect(observesDst('America/Phoenix', NOW)).toBe(false)
+    expect(observesDst('America/Denver', NOW)).toBe(true)
+    expect(observesDst('Europe/London', NOW)).toBe(true)
+    expect(observesDst('Asia/Kolkata', NOW)).toBe(false)
+  })
+
+  it('FALSIFIER: a DST zone produces a warning and a header note; Phoenix does not', () => {
+    const denver = generateCouplesSeat(
+      TEMPLATE,
+      input({ joint: { ...JOINT, timezone: 'America/Denver' } })
+    )
+    expect(denver.ok && denver.warnings.some((w) => w.includes('observes daylight saving'))).toBe(
+      true
+    )
+    expect(denver.ok && denver.yaml).toContain('America/Denver observes daylight saving time')
+    const phoenix = generateCouplesSeat(TEMPLATE, input())
+    expect(phoenix.ok && phoenix.warnings.some((w) => w.includes('daylight saving'))).toBe(false)
+    expect(phoenix.ok && phoenix.yaml).toContain(
+      'America/Phoenix does not observe daylight saving time'
+    )
+  })
+})
+
 describe('generated customer.yaml', () => {
+  it("FALSIFIER: each partner's chosen channel is authored on people[]", () => {
+    const { root } = generated()
+    expect(validate(root).ok).toBe(true)
+    expect(root.people.map((p: Root) => p.channel)).toEqual(['email', 'telegram'])
+    const emailOnly = generated({
+      joint: { ...JOINT, preferred_channel: { p1: 'email', p2: 'email' } },
+    }).root
+    expect(emailOnly.people.map((p: Root) => p.channel)).toEqual(['email', 'email'])
+  })
+
   it('validates, with every template placeholder filled', () => {
     const { yaml, root } = generated()
     expect(validate(root).ok).toBe(true)
@@ -130,7 +166,6 @@ describe('generated customer.yaml', () => {
       timezone: 'America/Phoenix',
       topics: 'how the week felt; money; time together',
       quiet_hours: '21:00-08:00',
-      preferred_channels: 'p1=email; p2=telegram',
       onboarding_version: 3,
     })
   })

@@ -30,6 +30,8 @@ export interface HostedAgentIntakeRow {
   customer_slug: string | null
   /** Captain-authored go-live channel details; rendered verbatim on the live view. */
   channel_details: string | null
+  /** NULL for the single-person SKU; 'couples' for a couples instance (migration 0127). */
+  role: string | null
   submitted_at: string | null
   created_at: string
   updated_at: string
@@ -38,7 +40,7 @@ export interface HostedAgentIntakeRow {
 const COLUMNS =
   'id, org_id, entity_id, subscription_id, status, agent_name, use_cases, telegram_handle, ' +
   'timezone, allowed_senders_json, spend_limit_confirmed, anthropic_key_status, customer_slug, ' +
-  'channel_details, submitted_at, created_at, updated_at'
+  'channel_details, role, submitted_at, created_at, updated_at'
 
 export async function createHostedAgentIntake(
   db: D1Database,

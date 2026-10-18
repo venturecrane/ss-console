@@ -184,6 +184,6 @@ onboarding:
     - field: quiet_hours
       maps_to: couples-checkin
     - field: preferred_channel
-      maps_to: couples-checkin settings.preferred_channels (email by default)
+      maps_to: people[].channel (email by default; telegram used only once bound)
     - field: shared_group
       maps_to: spaces.shared_telegram_chat and telegram.group_chats (optional, recorded by SMD)

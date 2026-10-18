@@ -29,6 +29,7 @@ const banners: Record<string, string> = {
   no_clerk_user: 'Your admin account has no Clerk identity to send invitations from.',
   saved: 'Saved.',
   slug_saved: 'Customer slug assigned.',
+  activated: 'Seat activated and the go-live email sent to both partners.',
   invalid: 'Rejected: check the field and try again.',
   error: 'The action failed. Check logs.',
 }
@@ -197,6 +198,36 @@ const button =
       <button type="submit" class={button}>Save</button>
     </form>
   </section>
+
+  {
+    instance.customer_slug && instance.status !== 'live' && instance.status !== 'cancelled' && (
+      <section class={`mt-6 ${box}`}>
+        <h2 class={h2}>Go live</h2>
+        <p class="mt-2">
+          Run after the seat is provisioned and its boot smoke test passes. Sends the go-live email
+          to both partners at their authored addresses.
+        </p>
+        <form
+          method="POST"
+          action={`/api/admin/hosted-agent/${instance.id}/activate`}
+          class="mt-4 flex flex-col gap-3"
+        >
+          <input
+            type="hidden"
+            name="return_to"
+            value={`/admin/hosted-agent/couples/${instance.id}`}
+          />
+          <label class={label}>
+            Channel details (authored for this couple, rendered verbatim)
+            <textarea name="channel_details" required rows="4" class={input} />
+          </label>
+          <button type="submit" class={button}>
+            Activate
+          </button>
+        </form>
+      </section>
+    )
+  }
 
   <section class={`mt-6 ${box}`}>
     <h2 class={h2}>Seat config (customer.yaml)</h2>

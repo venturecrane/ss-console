@@ -59,10 +59,15 @@ people:
     name: '[PARTNER 1 NAME]'
     telegram_id: ''
     email: '[PARTNER 1 EMAIL, lowercased]'
+    # How the seat reaches this partner on its own initiative (routines,
+    # two-person notices). email (the default) or telegram; telegram is used
+    # only once this partner's telegram_id is bound.
+    channel: email
   - id: p2
     name: '[PARTNER 2 NAME]'
     telegram_id: ''
     email: '[PARTNER 2 EMAIL, lowercased]'
+    channel: email
 
 spaces:
   # The shared Telegram group chat id (negative). '' until the group exists.

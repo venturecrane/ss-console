@@ -112,6 +112,21 @@ export function dailyToUtcCron(time: string, offsetMinutes: number): string {
   )
 }
 
+/**
+ * True when `tz` observes daylight saving time: its UTC offset differs between
+ * mid-January and mid-July of `at`'s year. Hermes at the pinned ref evaluates a
+ * cron job in the PROFILE's timezone and has no per-job timezone
+ * (`cron/jobs.py`, `hermes_time.get_timezone`), and translate authors none, so
+ * schedules are emitted in UTC and drift by an hour across a DST change.
+ */
+export function observesDst(tz: string, at: Date): boolean {
+  const year = at.getUTCFullYear()
+  return (
+    utcOffsetMinutes(tz, new Date(Date.UTC(year, 0, 15, 12))) !==
+    utcOffsetMinutes(tz, new Date(Date.UTC(year, 6, 15, 12)))
+  )
+}
+
 /** A persona slug from the agent's name: lowercase, hyphens for anything else. */
 export function personaSlug(agentName: string): string {
   return agentName
@@ -160,8 +175,13 @@ function header(input: CouplesSeatInput): string {
     '#',
     `# Schedules are UTC, converted from ${input.joint.timezone} at UTC offset`,
     `# ${utcOffsetMinutes(input.joint.timezone, input.now)} minutes on ${input.now.toISOString().slice(0, 10)}.`,
-    '# A timezone with daylight saving time shifts them by an hour for part of the',
-    '# year; regenerate after a change if the couple wants the local time kept.',
+    ...(observesDst(input.joint.timezone, input.now)
+      ? [
+          `# ${input.joint.timezone} observes daylight saving time: these UTC schedules`,
+          '# arrive an hour off local time for part of the year. Regenerate after each',
+          '# change to keep the local time the couple chose.',
+        ]
+      : [`# ${input.joint.timezone} does not observe daylight saving time.`]),
     '',
   ].join('\n')
 }
@@ -183,7 +203,12 @@ export function telegramEnabled(input: CouplesSeatInput): boolean {
 }
 
 function setTelegram(doc: Document, input: CouplesSeatInput): void {
-  input.people.forEach((p, i) => doc.setIn(['people', i, 'telegram_id'], p.telegramId ?? ''))
+  input.people.forEach((p, i) => {
+    doc.setIn(['people', i, 'telegram_id'], p.telegramId ?? '')
+    // The channel each partner chose in the joint section (email by default).
+    // The overlay delivers routines and two-person notices on it.
+    doc.setIn(['people', i, 'channel'], input.joint.preferred_channel[p.key])
+  })
   doc.setIn(['telegram', 'enabled'], telegramEnabled(input))
   const bound = boundIds(input)
   const allow = bound.length === 2 ? bound : [...bound, COUPLES_SENTINEL_TELEGRAM_ID]
@@ -221,7 +246,6 @@ function setCheckinSettings(doc: Document, input: CouplesSeatInput): void {
       timezone: input.joint.timezone,
       topics: input.joint.checkin_topics.join('; '),
       quiet_hours: `${input.joint.quiet_hours.start}-${input.joint.quiet_hours.end}`,
-      preferred_channels: `p1=${input.joint.preferred_channel.p1}; p2=${input.joint.preferred_channel.p2}`,
       onboarding_version: input.jointVersion,
     }
     // MERGE into the template's settings, never replace them: the template
@@ -266,6 +290,12 @@ export function generateCouplesSeat(templateText: string, input: CouplesSeatInpu
   } else if (bound < 2) {
     warnings.push(
       `${2 - bound} partner(s) have not linked Telegram: the sentinel id stays on allow_from.`
+    )
+  }
+  if (observesDst(input.joint.timezone, input.now)) {
+    warnings.push(
+      `${input.joint.timezone} observes daylight saving time: schedules are fixed in UTC and ` +
+        'will be an hour off local time after the next change. Regenerate then.'
     )
   }
   if (telegramEnabled(input) && !input.sharedTelegramChat) {

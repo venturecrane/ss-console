@@ -53,11 +53,27 @@ customer.yaml publishes to R2 within a minute and the seat reads it on its next
 boot. `hermes_ref` is the pin every live seat agrees on; pass `--hermes-ref`
 when they disagree.
 
-Schedules are converted to UTC at today's offset. In a timezone with daylight
-saving time they drift by an hour for part of the year; regenerate if the
-couple wants the local time kept.
+Schedules are converted to UTC at today's offset. Hermes at the pinned ref
+(`345cd2b`) has no per-job timezone (a cron job runs in its profile's
+timezone, and translate authors none), so a timezone that observes daylight
+saving time drifts by an hour after each change. The generator prints a
+warning and notes it in the file header for such a timezone (America/Phoenix
+does not observe DST); regenerate after each change to keep the local time.
 
-Provision with `reprovision.sh <slug>` (Captain).
+Each partner's preferred channel (email by default) is authored as
+`people[].channel`. The seat delivers that partner's routines and two-person
+notices on it: Telegram only when the partner chose Telegram AND is bound,
+otherwise email. A shared routine goes to the group only when every partner is
+reached on Telegram; otherwise it is one email to both.
+
+Provision with `reprovision.sh <slug>` (Captain). A seat that forwards unknown
+Telegram DMs to the binding hook refuses to boot if that hook is not loaded
+(overlay activation gate), so a broken plugin is a visible boot failure, never
+pairing codes to strangers.
+
+Go live from the instance page (Activate) after the boot smoke test passes: the
+go-live email, with the channel details you author, goes to both partners at
+their authored addresses.
 
 ## 5. Telegram, optional and any time later (manual steps)
 
