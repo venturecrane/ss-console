@@ -439,6 +439,8 @@ describe('existing seats are unchanged', () => {
       const text = readFileSync(resolve(CUSTOMERS, slug, 'customer.yaml'), 'utf8')
       const root = parseYaml(text) as Root
       expect(errorsOf(root)).toEqual([])
+      // A couples seat is space-mode by design (ADR 0091); it only has to validate.
+      if (root.seat?.role === 'couples') return
       expect(root.people).toBeUndefined()
       expect(root.spaces).toBeUndefined()
       expect(root.seat?.role).toBeUndefined()
