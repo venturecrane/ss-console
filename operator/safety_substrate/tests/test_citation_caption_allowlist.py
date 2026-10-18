@@ -17,6 +17,27 @@ from safety_substrate.citation_filter import canonical_caption, contains_citatio
 CAPTION = "Alvarez v. Draper"
 
 
+def test_fabricated_case_beside_the_allowlisted_caption_still_blocks() -> None:
+    """OSA-1: the case-name regex swallows the caption and a neighbouring case
+    into ONE hit; containing the caption must not exempt the whole hit."""
+    for body in (
+        "Alvarez v. Draper follows Smith v. Jones here.",
+        "Under Alvarez v. Draper and Palsgraf v. Long Island the duty is clear.",
+        "Smith v. Jones follows Alvarez v. Draper.",
+        "Alvarez versus Draper follows Smith v. Jones here.",
+    ):
+        assert contains_citation(body, allowed_case_names=[CAPTION]), body
+
+
+def test_allowlisted_caption_with_ordinary_prose_still_passes() -> None:
+    for body in (
+        "Alvarez v. Draper",
+        "The Alvarez v. Draper deposition is Friday.",
+        "Alvarez versus Draper compares apples versus oranges.",
+    ):
+        assert not contains_citation(body, allowed_case_names=[CAPTION]), body
+
+
 def test_unlisted_caption_still_blocks() -> None:
     assert contains_citation("Deadline proposed on Alvarez v. Draper.")
 

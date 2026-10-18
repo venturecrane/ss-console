@@ -356,11 +356,40 @@ def test_validate_append_rejects_acked_without_raise() -> None:
 
 
 def test_validate_append_matches_ack_by_token() -> None:
-    existing = [_ev("fired", ts="2026-07-14T07:00:00.000Z", token="ACK-ABCDEF", key="k9")]
-    # same token, different item_key spelling still matches on token
+    existing = [_ev("fired", ts="2026-07-14T07:00:00.000Z", token=el.token_for("k9"), key="k9")]
     el.validate_append(
         existing,
-        _ev("acked", ts="2026-07-14T08:00:00.000Z", token="ACK-ABCDEF", key="k9"),
+        _ev("acked", ts="2026-07-14T08:00:00.000Z", token=el.token_for("k9"), key="k9"),
+        send_witness=_witnessed,
+    )
+
+
+def test_validate_append_refuses_an_ack_quoting_another_items_token() -> None:
+    """J-b: a raise was matched by token OR item_key, so an ack naming k1 while
+    quoting k9's code found k9's raise and was accepted; derive_state folds by
+    item_key, so k1 read as acknowledged. The token must be token_for(item_key)."""
+    existing = [
+        _ev("fired", ts="2026-07-14T07:00:00.000Z", token=el.token_for("k1"), key="k1"),
+        _ev("fired", ts="2026-07-14T07:00:00.000Z", token=el.token_for("k9"), key="k9"),
+    ]
+    with pytest.raises(ValueError, match="different item"):
+        el.validate_append(
+            existing,
+            _ev("acked", ts="2026-07-14T08:00:00.000Z", token=el.token_for("k9"), key="k1"),
+            send_witness=_witnessed,
+        )
+    with pytest.raises(ValueError, match="different item"):
+        el.validate_append(
+            existing[1:],
+            _ev("acked", ts="2026-07-14T08:00:00.000Z", token=el.token_for("k9"), key="k1"),
+            send_witness=_witnessed,
+        )
+
+
+def test_validate_append_tokenless_ack_matches_by_item_key() -> None:
+    el.validate_append(
+        [_ev("fired", ts="2026-07-14T07:00:00.000Z", token=el.token_for("k1"), key="k1")],
+        _ev("acked", ts="2026-07-14T08:00:00.000Z", token=None, key="k1"),
         send_witness=_witnessed,
     )
 
@@ -428,10 +457,10 @@ def test_non_raising_events_never_consult_the_witness() -> None:
         calls.append(event)
         return False
 
-    existing = [_ev("fired", ts="2026-08-01T07:00:00.000Z", token="ACK-ABCDEF", key="k9")]
+    existing = [_ev("fired", ts="2026-08-01T07:00:00.000Z", token=el.token_for("k9"), key="k9")]
     el.validate_append(
         existing,
-        _ev("acked", ts="2026-08-01T08:00:00.000Z", token="ACK-ABCDEF", key="k9"),
+        _ev("acked", ts="2026-08-01T08:00:00.000Z", token=el.token_for("k9"), key="k9"),
         send_witness=_recording,
     )
     el.validate_append(existing, _ev("resolved", ts="2026-08-01T09:00:00.000Z", key="k9"), send_witness=_recording)
@@ -486,24 +515,24 @@ def test_ack_against_pre_epoch_raise_is_refused_by_name() -> None:
 def test_ack_still_accepted_when_a_current_raise_exists() -> None:
     """The epoch guard must not block a legitimate ack. A pre-epoch row alongside
     a current raise for the same token resolves against the current one."""
-    stale = _ev("fired", ts="2026-08-11T14:05:18.711Z", token="ACK-8SQ6CJ", key="k-live")
+    stale = _ev("fired", ts="2026-08-11T14:05:18.711Z", token=el.token_for("k-live"), key="k-live")
     stale["v"] = 1
-    current = _ev("fired", ts="2026-08-12T14:00:00.000Z", token="ACK-8SQ6CJ", key="k-live")
+    current = _ev("fired", ts="2026-08-12T14:00:00.000Z", token=el.token_for("k-live"), key="k-live")
     el.validate_append(
         [stale, current],
-        _ev("acked", ts="2026-08-12T15:00:00.000Z", token="ACK-8SQ6CJ", key="k-live"),
+        _ev("acked", ts="2026-08-12T15:00:00.000Z", token=el.token_for("k-live"), key="k-live"),
         send_witness=_witnessed,
     )
 
 
 def test_raise_with_missing_version_is_treated_as_pre_epoch() -> None:
     """Unknown provenance is not evidence of a current key."""
-    stale = _ev("fired", ts="2026-08-11T14:05:18.711Z", token="ACK-ZZZZZZ", key="k-unknown")
+    stale = _ev("fired", ts="2026-08-11T14:05:18.711Z", token=el.token_for("k-unknown"), key="k-unknown")
     stale.pop("v", None)
     with pytest.raises(ValueError, match="ss #2151"):
         el.validate_append(
             [stale],
-            _ev("acked", ts="2026-08-12T09:00:00.000Z", token="ACK-ZZZZZZ", key="k-unknown"),
+            _ev("acked", ts="2026-08-12T09:00:00.000Z", token=el.token_for("k-unknown"), key="k-unknown"),
             send_witness=_witnessed,
         )
 

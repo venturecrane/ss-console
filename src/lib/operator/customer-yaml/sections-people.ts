@@ -29,10 +29,18 @@
  *      the overlay then delivers shared routines locally.
  *   6. No two cron entries share a (skill, space) pair: the pair is the
  *      routine's identity once space mode is on.
+ *   (`people[].channel`, optional, is `email` or `telegram`: how the seat
+ *   reaches that person on its own initiative. Email when absent.)
  *   7. No record store authors `readers`. On a space-mode seat a record's owner
  *      is a space (`p1`, `person:p1` or `shared`) and the fence reads by the
  *      turn's spaces, so `readers` would grant nothing; authoring it would
  *      read as an access grant the runtime does not honour.
+ *   8. `scope.inbound_allow_from` is EXACTLY the people's emails: no SMD
+ *      address, no other address, no domain. On such a seat a skill authored
+ *      `recipients: roster` sends on a lane the broker opens to every rostered
+ *      address, and the model picks the recipient; a Brokery rehearsal reached
+ *      a real client that way (2026-10-16). The roster must be only the people
+ *      the seat serves, so nobody else can be picked.
  *
  * `spaces` without `people` is rejected for the same reason as rule 2.
  *
@@ -43,7 +51,7 @@
 import type { SeatPerson, SeatSpaces, ValidationError } from './types'
 import { isPlainObject } from './helpers'
 
-const PERSON_KEYS = new Set(['id', 'name', 'telegram_id', 'email'])
+const PERSON_KEYS = new Set(['id', 'name', 'telegram_id', 'email', 'channel'])
 const SPACES_KEYS = new Set(['shared_telegram_chat'])
 const PERSON_ID = /^[a-z0-9-]+$/
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -69,6 +77,22 @@ function checkPersonId(
   }
   seen.add(id)
   return true
+}
+
+/** `people[].channel`: absent means email (the default channel). Null when invalid. */
+function checkChannel(
+  raw: unknown,
+  path: string,
+  errors: ValidationError[]
+): 'email' | 'telegram' | undefined | null {
+  if (raw === undefined) return undefined
+  if (raw === 'email' || raw === 'telegram') return raw
+  err(
+    `${path}.channel`,
+    "people[].channel must be 'email' or 'telegram' (email when absent)",
+    errors
+  )
+  return null
 }
 
 function checkPerson(
@@ -104,12 +128,15 @@ function checkPerson(
     err(`${path}.email`, 'people[].email must be a lowercased email address', errors)
     ok = false
   }
+  const channel = checkChannel(raw['channel'], path, errors)
+  if (channel === null) ok = false
   if (!ok) return null
   return {
     id: id as string,
     name: name as string,
     telegram_id: tg as string,
     email: email as string,
+    ...(channel ? { channel } : {}),
   }
 }
 
@@ -319,6 +346,18 @@ function checkPersonChannels(
   const inbound = new Set(idList(root['scope'], 'inbound_allow_from').map((a) => a.toLowerCase()))
   const dm = new Set(idList(root['telegram'], 'allow_from').map((a) => a.trim()))
   const group = new Set(idList(root['telegram'], 'group_allow_from').map((a) => a.trim()))
+  const emails = new Set(people.map((p) => p.email))
+  idList(root['scope'], 'inbound_allow_from').forEach((a, i) => {
+    if (!emails.has(a.toLowerCase())) {
+      err(
+        `scope.inbound_allow_from[${i}]`,
+        `${a} is not one of the people: on a seat that authors people:, ` +
+          'scope.inbound_allow_from must be exactly their emails, because a roster-lane ' +
+          'send may go to any rostered address',
+        errors
+      )
+    }
+  })
   people.forEach((p, i) => {
     if (!inbound.has(p.email)) {
       err(

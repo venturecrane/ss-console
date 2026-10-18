@@ -96,7 +96,7 @@ def _fired(session_id: str | None = SESSION, event: str = "fired") -> dict:
         item_key="item-under-test",
         event=event,
         attempt=1,
-        token="ACK-7Q3M2K",
+        token=el.token_for("item-under-test"),
     )
     if session_id is not None:
         ev["session_id"] = session_id
@@ -240,7 +240,7 @@ def test_an_ack_still_works_without_any_dispatch(tmp_path: Path) -> None:
         item_key="item-under-test",
         event="acked",
         attempt=1,
-        token="ACK-7Q3M2K",
+        token=el.token_for("item-under-test"),
     )
     resp = _append(broker, acked)
     assert resp["ok"] is True
