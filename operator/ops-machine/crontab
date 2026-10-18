@@ -6,3 +6,10 @@ TZ=America/Phoenix
 # Work-health triage, hourly at :47 (the GitHub Actions work-health run lands
 # around :30; this follows it).
 47 * * * * /home/ops/bin/ops-triage
+# Archived laptop transcripts (archive/<host>/transcripts) expire 30 days after
+# they were last written, the same rule the laptops' cleanupPeriodDays applies.
+# They mix clients and ventures, so they stay here, not on a client workspace,
+# and only for that long (Captain, 2026-10-17). The memory/ copies in that tree
+# are agent memory, not transcripts, and a backup that loses its old files is
+# no backup: they are not expired.
+23 3 * * * find /home/ops/archive -mindepth 3 -path '/home/ops/archive/*/transcripts/*' ! -path '*/memory/*' -type f -mtime +30 -print -delete | wc -l | sed 's/^/expired transcripts: /' >> /home/ops/logs/transcript-expiry.log 2>&1; find /home/ops/archive -mindepth 3 -path '/home/ops/archive/*/transcripts/*' -type d -empty -delete 2>/dev/null
