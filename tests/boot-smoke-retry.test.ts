@@ -91,6 +91,10 @@ ${body}
   // needs a slug to get past it. `fly` is stubbed, so nothing is contacted.
   return execFileSync('bash', [harness, 'pilot-smokeball'], {
     encoding: 'utf-8',
+    // execFileSync blocks the worker, so vitest's own timeout cannot fire: a
+    // regression that removes the ssh timeout would hang CI instead of failing.
+    timeout: 18_000,
+    killSignal: 'SIGKILL',
     // A short settle budget so the "never comes back" case does not spend the
     // production default (120s) inside a unit test. The retry LOGIC is what is
     // under test; the budget is a knob.
