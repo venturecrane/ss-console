@@ -19,6 +19,7 @@ For local D1 (testing):
 ## Per-file safety notes
 
 - `0033_add_prospect_role_down.sql` — restores the original narrow `users.role CHECK (role IN ('admin', 'client'))`. The INSERT into `users_old` will fail if any `users.role = 'prospect'` rows exist (intentional safeguard). Cleanup or migrate prospect rows to `'client'` before invoking.
+- `0128_drop_couples_onboarding_down.sql` — recreates the empty couples onboarding tables and the three `hosted_agent_intake` columns that 0128 dropped (the schema exactly as 0127 created it). Rows are not restored. Only for rolling the code back to a commit before 0128.
 - `0127_couples_onboarding_down.sql` — drops the couples onboarding tables and the three `hosted_agent_intake` columns. Destroys recorded consents, Telegram bindings and joint confirmations; export them first (queries in the file header).
 - `0126_operator_service_per_seat_down.sql` — recreates the one-operator-service-per-entity unique index and drops `services.label`. The index creation fails if any entity holds two operator services (intentional safeguard). Merge each such entity onto one service first; the file header gives the query and the steps.
 - `0110_invoices_implementation_type_down.sql` — restores the original `invoices.type CHECK` (five consulting/retainer types). The INSERT into `invoices_old` will fail if any `invoices.type = 'implementation'` rows exist (intentional safeguard). Void or reclassify those rows before invoking. Runs the same invoice_line_items FK ceremony as the up migration.

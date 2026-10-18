@@ -16,12 +16,8 @@ import { trimString } from '../../../../../lib/api/helpers'
 const QUEUE = '/admin/hosted-agent'
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/
 
-/** A couples instance page may ask to come back to itself; nothing else may. */
-const COUPLES_RETURN = /^\/admin\/hosted-agent\/couples\/[0-9a-f-]{36}$/
-
-function back(st: string, returnTo: string | null = null): Response {
-  const base = returnTo && COUPLES_RETURN.test(returnTo) ? returnTo : QUEUE
-  return new Response(null, { status: 303, headers: { Location: `${base}?st=${st}` } })
+function back(st: string): Response {
+  return new Response(null, { status: 303, headers: { Location: `${QUEUE}?st=${st}` } })
 }
 
 export const POST: APIRoute = async ({ locals, params, request }) => {
@@ -35,9 +31,8 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
   if (!intake) return back('invalid')
 
   const form = await request.formData()
-  const returnTo = trimString(form.get('return_to'))
   const slug = trimString(form.get('customer_slug'))
-  if (!slug || !SLUG_PATTERN.test(slug)) return back('invalid', returnTo)
+  if (!slug || !SLUG_PATTERN.test(slug)) return back('invalid')
 
   try {
     await setIntakeCustomerSlug(env.DB, id, slug)
@@ -51,7 +46,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
       .run()
   } catch (err) {
     console.error('[admin/hosted-agent] assign-slug failed:', err)
-    return back('error', returnTo)
+    return back('error')
   }
-  return back('slug_saved', returnTo)
+  return back('slug_saved')
 }

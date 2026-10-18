@@ -55,10 +55,10 @@ Gmail, if a customer wants the agent to read their own mailbox, is a separate ti
 
 ## Consequences
 
-- No Google account, no OAuth client and no domain are needed to give a couple a shared calendar. Onboarding asks only for each person's email address, which the seat's email allowlist already requires (ADR 0067).
+- No Google account, no OAuth client and no domain are needed to give a couple a shared calendar. Setup needs only each person's email address, which the seat's email allowlist already requires (ADR 0067).
 - **The partners cannot edit the agent's events directly.** The organizer owns an iMIP event, and the organizer is the agent. A partner changes an event by asking the agent, or by sending their own invite to the agent's address.
 - **There is no single overlay calendar in their app.** Each event is an invite in each person's own calendar, not a calendar they can toggle on and off. An optional read-only subscription link can be added for an overlay view, but Google can take up to 48 hours to refresh a subscribed feed (per Cozi's published guidance at cozi.com), so it is a convenience, never the delivery path.
-- Each person's calendar provider controls how the invite is shown and whether it is auto-added. A provider that holds invites from unknown senders for acceptance is a one-time onboarding step, covered in the guided onboarding.
+- Each person's calendar provider controls how the invite is shown and whether it is auto-added. A provider that holds invites from unknown senders for acceptance is a one-time onboarding step, covered when SMD sets the seat up (since 2026-10-18 there is no guided web onboarding: ADR 0090, superseded decision 4).
 - "SMD owns the data" (#3264 Captain decision 6) holds in full by default: the calendar and documents live on the seat. Copies sit in each person's calendar as accepted invites.
 - The broker's existing Google verbs (`operator/workspace_broker/operations.py:168-252`) are not on the default path. They matter only to the optional upgrade.
 - The OAuth consent flow in the portal (`src/pages/portal/products/operator/oauth/[connector]/index.ts`) and its relay (`src/lib/oauth/store.ts:54-159`) assume an SMD-owned client. They are not used for hosted seats under this record.

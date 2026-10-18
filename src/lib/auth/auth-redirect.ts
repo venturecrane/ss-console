@@ -3,8 +3,10 @@
  * values the auth pages will honor.
  *
  * Why this exists: a Clerk Organization invitation email links through Clerk
- * to our redirect URL (for example portal.smd.services/portal/products/
- * hosted-agent/couples) with `__clerk_ticket` and `__clerk_status` appended.
+ * to our redirect URL (the Operator users page invites to
+ * portal.smd.services/portal/products/operator,
+ * src/pages/api/portal/products/operator/invitations.ts) with
+ * `__clerk_ticket` and `__clerk_status` appended.
  * The invitee is not signed in, so the portal auth gate bounces them. That
  * bounce used to be a bare `/auth/sign-in`, which dropped the ticket: the
  * invitee landed on a sign-in form with no account and nothing to accept.

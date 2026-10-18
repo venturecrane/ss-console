@@ -1,11 +1,15 @@
 # ADR 0091: Privacy by space for multi-person seats
 
-- **Status:** Accepted (2026-10-17)
+- **Status:** Accepted (2026-10-17). Enforcement point 8 and the deep-link half of section 5 superseded 2026-10-18; see the section below
 - **Decider:** Captain ("private by default", #3264 Captain decision 1, 2026-10-17); enforcement design by the agent, revised by the 2026-10-17 critique (R1 to R7)
 - **Closes for multi-person seats:** the within-customer per-user isolation that ADR 0007 (Out of scope, line 81) and ADR 0009 (Out of scope, line 78) left to "the multi-user role model"
 - **Builds on:** ADR 0007 (per-customer Machine isolation), ADR 0009 (cross-Machine query prohibition), ADR 0016 (Honcho disposition), ADR 0071 (confirm ceiling), ADR 0090 (hosted-agent roles)
 - **Related:** ADR 0092 (calendar and documents for hosted agents), [#3264](https://github.com/venturecrane/ss-console/issues/3264)
 - **Scope:** any seat that authors a `people:` block in `customer.yaml`. Single-person seats, and Brokery's seat, behave as today.
+
+## Superseded 2026-10-18: portal views and Telegram binding
+
+With ADR 0090 decision 4 (onboarding) superseded on 2026-10-18, the couples seat has no portal and no web binding flow. Enforcement point 8 (portal views filtered by space) has no portal to apply to, and section 5's deep-link token and generator PR are removed. Section 5's rule stands in a simpler form: a Telegram id joins `people:` only through a reviewed `customer.yaml` PR that SMD authors, never at runtime, and until both partners are recorded the seat boots with the SMD sentinel on the allowlist. A seat's Telegram adapter drops every DM from a sender who is not an authored person; nothing on the seat redeems a token. Every other decision here stands.
 
 ## Context
 

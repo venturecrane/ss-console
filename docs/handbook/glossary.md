@@ -38,7 +38,7 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **vertical pack.** A quick-start template that configures an Operator for a specific industry (law, marketing, insurance, etc.). Packs turn the universal capability into something recognizable to a customer (ADR 0037 Tenet 5; architecture in ADR 0022). A pack is a starting point, not a claim of expertise in the client's business. See [Vertical Packs](/admin/playbook/vertical-packs).
 
-**role (hosted-agent role).** A packaged hosted-agent job: persona and safety rules, skills, default routines, privacy model, required connections, onboarding schema and seat template, kept at `operator/roles/<role>/` and selected by `seat.role` (ADR 0090). It is a different axis from `seat.product` (how a seat is sold and governed), a surface (the interface, ADR 0084) and a vertical pack (an industry). Couples is the first role. The word never means a permission role.
+**role (hosted-agent role).** A packaged hosted-agent job: persona and safety rules, skills, default routines, privacy model, required connections and seat template, kept at `operator/roles/<role>/` and selected by `seat.role` (ADR 0090). It is a different axis from `seat.product` (how a seat is sold and governed), a surface (the interface, ADR 0084) and a vertical pack (an industry). Couples is the first role. The word never means a permission role.
 
 **space.** On a seat shared by several people, the privacy partition a turn runs in: `shared`, or one person's own space. A person sees the shared space plus their own; the shared space sees only itself (ADR 0091).
 
