@@ -11,6 +11,9 @@ import {
 } from '../../lib/config/app-url'
 import { chooseSignedInSurface, hostnameOf } from '../../lib/auth/after-sign-in-target'
 import { clerkProfile } from '../../lib/auth/clerk-profile'
+import { honoredReturnPath } from '../../lib/auth/auth-redirect'
+import { getCouplesInstanceByEntity } from '../../lib/db/couples-onboarding'
+import { COUPLES_LANDING_PATH } from '../../lib/portal/couples-access'
 
 /**
  * Post-sign-in dispatcher.
@@ -38,6 +41,13 @@ import { clerkProfile } from '../../lib/auth/clerk-profile'
  * identity by email on first sign-in — before the admin shim reads it — which
  * also makes admin eligibility resolve correctly on that first login.
  *
+ * Landing path within the chosen surface: a `?redirect_url=` passed through
+ * from /auth/sign-in is honored only when it is a safe same-origin path under
+ * that surface's own prefix (auth-redirect.ts honoredReturnPath), so it can
+ * never pick the surface or the host. Without one, a portal user on a couples
+ * entity lands on the couples onboarding page: the portal home would show them
+ * the single-person Hosted Agent setup card, which is not theirs to complete.
+ *
  * When host base URLs are not configured (local dev without
  * ADMIN_BASE_URL/PORTAL_BASE_URL), fall back to relative paths so the
  * subdomain rewrite in src/middleware.ts handles routing on a single host.
@@ -64,14 +74,15 @@ export const GET: APIRoute = async ({ locals, redirect, url }) => {
   // no_subscription state.
   const userRow = await ensureLocalUser(env.DB, auth.userId, clerkProfile(clerkUser))
 
+  let entityId: string | null = null
   if (userRow) {
+    entityId =
+      userRow.entity_id ??
+      (auth.orgId ? ((await resolveClerkEntity(env.DB, auth.orgId))?.id ?? null) : null)
     // Login accountability: record the sign-in at the true sign-in moment.
     // Covers admin-only and dual-eligible users who may never hit a portal
     // route (entity_id is NULL for admin-only). Never throws.
-    const loginEntityId =
-      userRow.entity_id ??
-      (auth.orgId ? ((await resolveClerkEntity(env.DB, auth.orgId))?.id ?? null) : null)
-    await stampLoginIfNewSession(env.DB, userRow, auth.sessionId, loginEntityId)
+    await stampLoginIfNewSession(env.DB, userRow, auth.sessionId, entityId)
   }
 
   const adminSession = await resolveAdminSessionFromClerk(auth.userId, env.DB, env.SESSIONS)
@@ -107,11 +118,36 @@ export const GET: APIRoute = async ({ locals, redirect, url }) => {
     })
   }
 
+  if (surface === 'none') return redirect('/auth/sign-in?status=no_subscription', 302)
+  return redirect(await landingUrl(surface, url.searchParams.get('redirect_url'), entityId), 302)
+}
+
+/**
+ * Where a signed-in user lands on the chosen surface: an honored redirect_url,
+ * else (portal) the couples landing for a couples entity, else the surface home.
+ */
+async function landingUrl(
+  surface: 'admin' | 'portal',
+  requestedReturn: string | null,
+  entityId: string | null
+): Promise<string> {
   if (surface === 'admin') {
-    return redirect(getAdminBaseUrl(env) ? buildAdminUrl(env, '/') : '/admin', 302)
+    const path = honoredReturnPath(requestedReturn, 'admin')
+    if (getAdminBaseUrl(env)) return buildAdminUrl(env, path ?? '/')
+    return path ?? '/admin'
   }
-  if (surface === 'portal') {
-    return redirect(getPortalBaseUrl(env) ? buildPortalUrl(env, '/portal') : '/portal', 302)
+  const path =
+    honoredReturnPath(requestedReturn, 'portal') ?? (await couplesLandingFor(entityId)) ?? '/portal'
+  return getPortalBaseUrl(env) ? buildPortalUrl(env, path) : path
+}
+
+/** The couples landing path when the entity is a couples instance, else null. */
+async function couplesLandingFor(entityId: string | null): Promise<string | null> {
+  if (!entityId) return null
+  try {
+    return (await getCouplesInstanceByEntity(env.DB, entityId)) ? COUPLES_LANDING_PATH : null
+  } catch {
+    // A failed lookup must not strand the user: fall back to the portal home.
+    return null
   }
-  return redirect('/auth/sign-in?status=no_subscription', 302)
 }

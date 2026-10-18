@@ -140,7 +140,9 @@ describe('auth: middleware', () => {
 
   it('redirects unauthenticated requests to the unified sign-in', () => {
     const source = readFileSync(resolve('src/middleware.ts'), 'utf-8')
-    expect(source).toContain("'/auth/sign-in'")
+    expect(source).toContain('unauthenticatedRedirectLocation(')
+    const helper = readFileSync(resolve('src/lib/auth/auth-redirect.ts'), 'utf-8')
+    expect(helper).toContain("'/auth/sign-in'")
   })
 
   it('attaches session to locals', () => {
@@ -174,7 +176,10 @@ describe('auth: unified sign-in pages', () => {
 
   it('sign-in page forces redirect through /auth/after-sign-in', () => {
     const source = readFileSync(resolve('src/pages/auth/sign-in.astro'), 'utf-8')
-    expect(source).toContain('forceRedirectUrl="/auth/after-sign-in"')
+    // Through the dispatcher always; a safe redirect_url rides along as a query.
+    expect(source).toContain('forceRedirectUrl={afterSignInUrl}')
+    expect(source).toContain("'/auth/after-sign-in'")
+    expect(source).toContain('`/auth/after-sign-in?redirect_url=${encodeURIComponent(returnPath)}`')
   })
 
   it('after-sign-in dispatcher routes by users.role via ensureLocalUser (so pre-Clerk rows auto-link by email)', () => {
