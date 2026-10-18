@@ -1,0 +1,310 @@
+---
+import PortalShell from '../../../../../layouts/PortalShell.astro'
+import PortalPageHead from '../../../../../components/portal/PortalPageHead.astro'
+import Field from '../../../../../components/portal/form/Field.astro'
+import TextInput from '../../../../../components/portal/form/TextInput.astro'
+import TextArea from '../../../../../components/portal/form/TextArea.astro'
+import SelectField from '../../../../../components/portal/form/SelectField.astro'
+import CheckboxOption from '../../../../../components/portal/form/CheckboxOption.astro'
+import SubmitButton from '../../../../../components/portal/form/SubmitButton.astro'
+import {
+  resolveCouplesAccess,
+  COUPLES_LANDING_PATH,
+} from '../../../../../lib/portal/couples-access'
+import { loadCouplesView } from '../../../../../lib/portal/couples-view'
+import {
+  WEEKDAYS,
+  type Cadence,
+  type PersonKey,
+} from '../../../../../lib/hosted-agent/couples/joint-settings'
+import { env } from 'cloudflare:workers'
+
+/**
+ * Couples onboarding step 3: settings the couple chooses together (ADR 0090
+ * decision 4; role.yaml `onboarding.joint`).
+ *
+ * Either partner may save. A save is a new version that the saver has agreed
+ * to; the section is final only when the OTHER partner confirms that same
+ * version. The confirm button posts the version shown on this page, so a
+ * partner can never confirm settings they did not see.
+ */
+
+export const prerender = false
+
+const access = await resolveCouplesAccess(env.DB, Astro.locals)
+if (access.kind === 'redirect') {
+  return Astro.redirect(access.to)
+}
+if (access.person.consent_at === null) {
+  return Astro.redirect(COUPLES_LANDING_PATH)
+}
+const view = await loadCouplesView(env.DB, access.instance, access.person)
+const { me, partner, joint } = view
+const partnerName = partner?.name ?? 'your partner'
+const nameOf = (key: PersonKey): string =>
+  key === me.personKey ? `${me.name} (you)` : (partner?.name ?? 'your partner')
+
+const s = joint?.settings ?? null
+const dayLabel: Record<string, string> = {
+  sun: 'Sun',
+  mon: 'Mon',
+  tue: 'Tue',
+  wed: 'Wed',
+  thu: 'Thu',
+  fri: 'Fri',
+  sat: 'Sat',
+}
+const cadenceOf = (kind: 'checkin' | 'gratitude', key: PersonKey): Cadence | null =>
+  s ? s[kind][key] : null
+
+const cadenceRows: Array<{ kind: 'checkin' | 'gratitude'; key: PersonKey; label: string }> = [
+  { kind: 'checkin', key: 'p1', label: `Check-ins for ${nameOf('p1')}` },
+  { kind: 'checkin', key: 'p2', label: `Check-ins for ${nameOf('p2')}` },
+  { kind: 'gratitude', key: 'p1', label: `Gratitude prompts for ${nameOf('p1')}` },
+  { kind: 'gratitude', key: 'p2', label: `Gratitude prompts for ${nameOf('p2')}` },
+]
+
+const st = Astro.url.searchParams.get('st')
+const banner =
+  st === 'saved'
+    ? { ok: true, text: `Saved. ${partnerName} now needs to confirm these settings.` }
+    : st === 'confirmed'
+      ? { ok: true, text: 'Your confirmation was recorded.' }
+      : st === 'stale'
+        ? {
+            ok: false,
+            text: 'These settings changed since you opened the page. Review them again.',
+          }
+        : st === 'invalid'
+          ? {
+              ok: false,
+              text: 'Some settings were missing or invalid. Every field is needed, times are HH:MM, and each schedule needs at least one day.',
+            }
+          : null
+
+const statusLine = !joint
+  ? 'Nothing saved yet.'
+  : joint.final
+    ? 'Agreed by both of you.'
+    : joint.confirmedByMe
+      ? `You agreed to these settings. Waiting for ${partnerName} to confirm.`
+      : `${partnerName} saved these settings. Confirm them below, or change them and save.`
+
+const fieldset = 'border-[3px] border-[color:var(--ss-color-text-primary)] p-5 flex flex-col gap-4'
+const legend = 'font-mono text-label uppercase tracking-[0.14em] font-bold px-1'
+const hint = 'font-body text-sm text-[color:var(--ss-color-text-secondary)]'
+---
+
+<PortalShell
+  title="Settings You Choose Together"
+  clientName={access.client.name}
+  orgId={access.client.org_id}
+  entityId={access.client.id}
+  pathname={Astro.url.pathname}
+>
+  <PortalPageHead
+    crumbHref={COUPLES_LANDING_PATH}
+    crumbLabel="Shared Agent Setup"
+    tag="Setup"
+    h1="Settings You Choose Together"
+    meta={null}
+  />
+
+  {
+    banner && (
+      <div
+        role="status"
+        class={`mt-6 border-[3px] px-5 py-3 font-mono text-label uppercase tracking-[0.14em] font-bold ${
+          banner.ok
+            ? 'border-[color:var(--ss-color-complete)] text-[color:var(--ss-color-complete)]'
+            : 'border-[color:var(--ss-color-error)] text-[color:var(--ss-color-error)]'
+        }`}
+      >
+        {banner.text}
+      </div>
+    )
+  }
+
+  <p class="mt-6 font-body text-base text-[color:var(--ss-color-text-primary)]">{statusLine}</p>
+
+  {
+    joint && !joint.final && !joint.confirmedByMe && (
+      <form
+        method="POST"
+        action="/api/portal/products/hosted-agent/couples/joint"
+        class="mt-4 flex flex-wrap items-center gap-4"
+      >
+        <input type="hidden" name="action" value="confirm" />
+        <input type="hidden" name="version" value={String(joint.version)} />
+        <SubmitButton label="Confirm these settings" tone="primary" />
+      </form>
+    )
+  }
+
+  <form
+    method="POST"
+    action="/api/portal/products/hosted-agent/couples/joint"
+    class="mt-8 flex flex-col gap-6"
+  >
+    <input type="hidden" name="action" value="save" />
+
+    <Field label="Your timezone">
+      <TextInput
+        name="timezone"
+        required
+        maxlength={64}
+        placeholder="America/Phoenix"
+        value={s?.timezone ?? ''}
+        mono
+      />
+    </Field>
+
+    <div>
+      <Field label="Check-in topics, one per line">
+        <TextArea
+          name="checkin_topics"
+          required
+          rows={5}
+          maxlength={1200}
+          value={s?.checkin_topics.join('\n') ?? ''}
+        />
+      </Field>
+      <p class={hint}>
+        The topics the agent may ask each of you about, privately. Each of you answers in your own
+        chat, and your answers stay yours.
+      </p>
+    </div>
+
+    {
+      cadenceRows.map((row) => {
+        const c = cadenceOf(row.kind, row.key)
+        const prefix = `${row.kind}_${row.key}`
+        return (
+          <fieldset class={fieldset}>
+            <legend class={legend}>{row.label}</legend>
+            <div class="flex flex-wrap gap-4">
+              {WEEKDAYS.map((d) => (
+                <CheckboxOption
+                  name={`${prefix}_days`}
+                  value={d}
+                  label={dayLabel[d] ?? d}
+                  checked={c?.days.includes(d) ?? false}
+                />
+              ))}
+            </div>
+            <Field label="Time (HH:MM, 24 hour)">
+              <TextInput
+                name={`${prefix}_time`}
+                required
+                maxlength={5}
+                placeholder="18:30"
+                value={c?.time ?? ''}
+                mono
+              />
+            </Field>
+          </fieldset>
+        )
+      })
+    }
+
+    <fieldset class={fieldset}>
+      <legend class={legend}>Reminders and the weekly check-in</legend>
+      <Field label="Daily reminder time (HH:MM)">
+        <TextInput
+          name="daily_reminder_time"
+          required
+          maxlength={5}
+          placeholder="08:00"
+          value={s?.daily_reminder_time ?? ''}
+          mono
+        />
+      </Field>
+      <p class={hint}>When the agent sends reminders ahead of dates and travel price watches.</p>
+      <Field label="Weekly check-in day">
+        <SelectField
+          name="weekly_checkin_day"
+          options={WEEKDAYS.map((d) => ({
+            value: d,
+            label: dayLabel[d] ?? d,
+            selected: s?.weekly_checkin.day === d,
+          }))}
+        />
+      </Field>
+      <Field label="Weekly check-in agenda time (HH:MM)">
+        <TextInput
+          name="weekly_checkin_time"
+          required
+          maxlength={5}
+          placeholder="19:00"
+          value={s?.weekly_checkin.time ?? ''}
+          mono
+        />
+      </Field>
+    </fieldset>
+
+    <fieldset class={fieldset}>
+      <legend class={legend}>How the agent reaches each of you</legend>
+      <p class={hint}>
+        Email is the default. Telegram works once that partner has connected it, which can happen
+        any time after setup.
+      </p>
+      {
+        (['p1', 'p2'] as const).map((key) => (
+          <Field label={nameOf(key)}>
+            <SelectField
+              name={`channel_${key}`}
+              options={[
+                {
+                  value: 'email',
+                  label: 'Email',
+                  selected: s?.preferred_channel[key] !== 'telegram',
+                },
+                {
+                  value: 'telegram',
+                  label: 'Telegram',
+                  selected: s?.preferred_channel[key] === 'telegram',
+                },
+              ]}
+            />
+          </Field>
+        ))
+      }
+    </fieldset>
+
+    <fieldset class={fieldset}>
+      <legend class={legend}>Quiet hours</legend>
+      <p class={hint}>
+        No check-ins arrive between these times. Each of you can change your own later.
+      </p>
+      <Field label="Starts (HH:MM)">
+        <TextInput
+          name="quiet_start"
+          required
+          maxlength={5}
+          placeholder="21:00"
+          value={s?.quiet_hours.start ?? ''}
+          mono
+        />
+      </Field>
+      <Field label="Ends (HH:MM)">
+        <TextInput
+          name="quiet_end"
+          required
+          maxlength={5}
+          placeholder="08:00"
+          value={s?.quiet_hours.end ?? ''}
+          mono
+        />
+      </Field>
+    </fieldset>
+
+    <p class={hint}>
+      Saving records that you agree to these settings. {partnerName} then confirms them before they are
+      final.
+    </p>
+    <SubmitButton
+      label="Save settings"
+      tone={joint && !joint.confirmedByMe ? 'neutral' : 'primary'}
+    />
+  </form>
+</PortalShell>

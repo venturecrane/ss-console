@@ -171,6 +171,9 @@ export async function listHostedAgentQueue(db: D1Database): Promise<HostedAgentQ
          FROM hosted_agent_intake i
          JOIN entities e ON e.id = i.entity_id
          JOIN subscriptions s ON s.id = i.subscription_id
+        -- Couples instances (role 'couples', migration 0127) have their own
+        -- onboarding view; this queue is the single-person SKU's.
+        WHERE i.role IS NULL
         ORDER BY CASE i.status
                    WHEN 'intake_submitted' THEN 0
                    WHEN 'awaiting_intake' THEN 1
