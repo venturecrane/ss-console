@@ -6,6 +6,8 @@ import { trimString, escapeHtml } from '../../../../../lib/api/helpers'
 import { sendEmail } from '../../../../../lib/email/resend'
 import { hostedAgentLiveEmailHtml } from '../../../../../lib/email/hosted-agent-templates'
 import { getPortalBaseUrl } from '../../../../../lib/config/app-url'
+import { COUPLES_ROLE, listPeople } from '../../../../../lib/db/couples-onboarding'
+import { COUPLES_LANDING_PATH } from '../../../../../lib/portal/couples-access'
 
 /**
  * POST /api/admin/hosted-agent/:id/activate (ADR 0067)
@@ -14,43 +16,82 @@ import { getPortalBaseUrl } from '../../../../../lib/config/app-url'
  * smoke test pass, the Captain flips the seat live here. This endpoint
  * does not provision anything: it promotes the subscription
  * (provisioning → active; deliberately the only code path that does),
- * closes the intake work item, and sends the go-live email whose channel
+ * closes the intake work item, and sends the go-live email (to the principal;
+ * on a couples instance to BOTH partners, from their authored rows) whose channel
  * details the Captain authored in the form — the wrapper renders exactly
  * what was written, never templated channel copy.
  */
 
 const QUEUE = '/admin/hosted-agent'
 
-function back(st: string): Response {
-  return new Response(null, { status: 303, headers: { Location: `${QUEUE}?st=${st}` } })
+/** A couples instance page may ask to come back to itself; nothing else may. */
+const COUPLES_RETURN = /^\/admin\/hosted-agent\/couples\/[0-9a-f-]{36}$/
+
+function back(st: string, returnTo: string | null = null): Response {
+  const base = returnTo && COUPLES_RETURN.test(returnTo) ? returnTo : QUEUE
+  return new Response(null, { status: 303, headers: { Location: `${base}?st=${st}` } })
 }
 
-/** Best-effort go-live email to the principal contact. Never fails the action. */
+interface GoLiveRecipient {
+  email: string
+  name: string
+}
+
+/**
+ * Who the go-live email reaches, from authored rows only: on a couples
+ * instance BOTH partners, from the partner rows SMD authored at creation
+ * (ADR 0090; a couples instance has no principal); otherwise the principal.
+ */
+async function goLiveRecipients(intake: {
+  id: string
+  entity_id: string
+  role: string | null
+}): Promise<{ recipients: GoLiveRecipient[]; portalPath: string }> {
+  if (intake.role === COUPLES_ROLE) {
+    const people = await listPeople(env.DB, intake.id)
+    return {
+      recipients: people.map((p) => ({ email: p.email, name: p.name })),
+      portalPath: COUPLES_LANDING_PATH,
+    }
+  }
+  const buyer = await env.DB.prepare(
+    `SELECT u.email, u.name FROM product_roles r
+         JOIN users u ON u.id = r.user_id
+        WHERE r.entity_id = ? AND r.product_slug = 'hosted-agent'
+          AND r.role = 'principal' AND r.revoked_at IS NULL
+        ORDER BY r.granted_at ASC LIMIT 1`
+  )
+    .bind(intake.entity_id)
+    .first<{ email: string; name: string | null }>()
+  return {
+    recipients: buyer?.email
+      ? [{ email: buyer.email, name: buyer.name?.trim() || buyer.email }]
+      : [],
+    portalPath: '/portal/products/hosted-agent',
+  }
+}
+
+/** Best-effort go-live email to each recipient. Never fails the action. */
 async function sendGoLiveEmail(
-  intake: { entity_id: string; agent_name: string | null },
+  intake: { id: string; entity_id: string; agent_name: string | null; role: string | null },
   channelDetails: string
 ): Promise<void> {
   try {
-    const buyer = await env.DB.prepare(
-      `SELECT u.email, u.name FROM product_roles r
-           JOIN users u ON u.id = r.user_id
-          WHERE r.entity_id = ? AND r.product_slug = 'hosted-agent'
-            AND r.role = 'principal' AND r.revoked_at IS NULL
-          ORDER BY r.granted_at ASC LIMIT 1`
-    )
-      .bind(intake.entity_id)
-      .first<{ email: string; name: string | null }>()
-    if (!buyer?.email) return
+    const { recipients, portalPath } = await goLiveRecipients(intake)
     const portalBase = getPortalBaseUrl(env) ?? 'https://portal.smd.services'
-    await sendEmail(env.RESEND_API_KEY, {
-      to: buyer.email,
-      subject: `${intake.agent_name ?? 'Your agent'} is live`,
-      html: hostedAgentLiveEmailHtml(
-        buyer.name?.trim() || buyer.email,
-        escapeHtml(channelDetails).replace(/\n/g, '<br>'),
-        `${portalBase}/portal/products/hosted-agent`
-      ),
-    })
+    const details = escapeHtml(channelDetails).replace(/\n/g, '<br>')
+    for (const r of recipients) {
+      try {
+        await sendEmail(env.RESEND_API_KEY, {
+          to: r.email,
+          subject: `${intake.agent_name ?? 'Your agent'} is live`,
+          html: hostedAgentLiveEmailHtml(r.name, details, `${portalBase}${portalPath}`),
+        })
+      } catch (err) {
+        // One recipient's failure must not stop the other partner's email.
+        console.error('[admin/hosted-agent] go-live email failed for one recipient:', err)
+      }
+    }
   } catch (err) {
     console.error('[admin/hosted-agent] go-live email failed:', err)
   }
@@ -68,8 +109,9 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
   if (intake.status === 'live' || intake.status === 'cancelled') return back('invalid')
 
   const form = await request.formData()
+  const returnTo = trimString(form.get('return_to'))
   const channelDetails = trimString(form.get('channel_details'))
-  if (!channelDetails || channelDetails.length > 2000) return back('invalid')
+  if (!channelDetails || channelDetails.length > 2000) return back('invalid', returnTo)
 
   try {
     await env.DB.prepare(
@@ -89,9 +131,9 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
     await setIntakeStatus(env.DB, id, 'live')
   } catch (err) {
     console.error('[admin/hosted-agent] activate failed:', err)
-    return back('error')
+    return back('error', returnTo)
   }
 
   await sendGoLiveEmail(intake, channelDetails)
-  return back('activated')
+  return back('activated', returnTo)
 }

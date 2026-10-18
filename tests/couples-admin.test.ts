@@ -22,10 +22,13 @@ const clerk = vi.hoisted(() => ({
 vi.mock('@clerk/astro/server', () => ({
   clerkClient: () => ({ organizations: clerk }),
 }))
+const mail = vi.hoisted(() => ({ sendEmail: vi.fn() }))
+vi.mock('../src/lib/email/resend', () => ({ sendEmail: mail.sendEmail }))
 
 import { POST as createPost } from '../src/pages/api/admin/hosted-agent/couples/index'
 import { POST as invitePost } from '../src/pages/api/admin/hosted-agent/couples/[id]/invite'
 import { POST as telegramPost } from '../src/pages/api/admin/hosted-agent/couples/[id]/telegram'
+import { POST as activatePost } from '../src/pages/api/admin/hosted-agent/[id]/activate'
 import { listCouplesInstances, listPeople } from '../src/lib/db/couples-onboarding'
 import { getCouplesOnboardingStatus } from '../src/lib/hosted-agent/couples/status'
 
@@ -83,6 +86,7 @@ beforeEach(async () => {
     .run()
   clerk.createOrganization.mockReset().mockResolvedValue({ id: 'org_new' })
   clerk.createOrganizationInvitation.mockReset().mockResolvedValue({ id: 'orginv_1' })
+  mail.sendEmail.mockReset().mockResolvedValue({ success: true })
 })
 
 describe('create', () => {
@@ -175,5 +179,42 @@ describe('telegram facts and onboarding state', () => {
     const id = await created()
     const res = await telegramPost(ctx(form({ shared_telegram_chat: '12345' }), { id }))
     expect(res.headers.get('Location')).toContain('st=invalid')
+  })
+})
+
+async function withSlug(id: string): Promise<void> {
+  await db
+    .prepare(`UPDATE hosted_agent_intake SET customer_slug = 'couple-test' WHERE id = ?`)
+    .bind(id)
+    .run()
+}
+
+describe('activation (go live)', () => {
+  it('FALSIFIER: on a couples instance the go-live email goes to BOTH partners, from their rows', async () => {
+    const id = await created()
+    await withSlug(id)
+    const res = await activatePost(
+      ctx(
+        form({
+          channel_details: 'Email juniper@example.agentmail.to.',
+          return_to: `/admin/hosted-agent/couples/${id}`,
+        }),
+        { id }
+      )
+    )
+    expect(res.headers.get('Location')).toBe(`/admin/hosted-agent/couples/${id}?st=activated`)
+    const to = mail.sendEmail.mock.calls.map((c) => (c[1] as { to: string }).to).sort()
+    expect(to).toEqual(['alex@example.com', 'sam@example.com'])
+    const html = (mail.sendEmail.mock.calls[0][1] as { html: string }).html
+    expect(html).toContain('Email juniper@example.agentmail.to.')
+    expect(html).toContain('https://portal.smd.services/portal/products/hosted-agent/couples')
+  })
+
+  it("one partner's failed email does not stop the other partner's", async () => {
+    const id = await created()
+    await withSlug(id)
+    mail.sendEmail.mockRejectedValueOnce(new Error('bounce'))
+    await activatePost(ctx(form({ channel_details: 'Email us.' }), { id }))
+    expect(mail.sendEmail).toHaveBeenCalledTimes(2)
   })
 })

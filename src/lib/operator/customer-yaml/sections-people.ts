@@ -29,6 +29,8 @@
  *      the overlay then delivers shared routines locally.
  *   6. No two cron entries share a (skill, space) pair: the pair is the
  *      routine's identity once space mode is on.
+ *   (`people[].channel`, optional, is `email` or `telegram`: how the seat
+ *   reaches that person on its own initiative. Email when absent.)
  *   7. No record store authors `readers`. On a space-mode seat a record's owner
  *      is a space (`p1`, `person:p1` or `shared`) and the fence reads by the
  *      turn's spaces, so `readers` would grant nothing; authoring it would
@@ -49,7 +51,7 @@
 import type { SeatPerson, SeatSpaces, ValidationError } from './types'
 import { isPlainObject } from './helpers'
 
-const PERSON_KEYS = new Set(['id', 'name', 'telegram_id', 'email'])
+const PERSON_KEYS = new Set(['id', 'name', 'telegram_id', 'email', 'channel'])
 const SPACES_KEYS = new Set(['shared_telegram_chat'])
 const PERSON_ID = /^[a-z0-9-]+$/
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -75,6 +77,22 @@ function checkPersonId(
   }
   seen.add(id)
   return true
+}
+
+/** `people[].channel`: absent means email (the default channel). Null when invalid. */
+function checkChannel(
+  raw: unknown,
+  path: string,
+  errors: ValidationError[]
+): 'email' | 'telegram' | undefined | null {
+  if (raw === undefined) return undefined
+  if (raw === 'email' || raw === 'telegram') return raw
+  err(
+    `${path}.channel`,
+    "people[].channel must be 'email' or 'telegram' (email when absent)",
+    errors
+  )
+  return null
 }
 
 function checkPerson(
@@ -110,12 +128,15 @@ function checkPerson(
     err(`${path}.email`, 'people[].email must be a lowercased email address', errors)
     ok = false
   }
+  const channel = checkChannel(raw['channel'], path, errors)
+  if (channel === null) ok = false
   if (!ok) return null
   return {
     id: id as string,
     name: name as string,
     telegram_id: tg as string,
     email: email as string,
+    ...(channel ? { channel } : {}),
   }
 }
 

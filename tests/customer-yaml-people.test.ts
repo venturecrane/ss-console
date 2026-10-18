@@ -445,3 +445,18 @@ describe('existing seats are unchanged', () => {
     })
   }
 })
+
+describe('people[].channel (how the seat reaches a person; email by default)', () => {
+  it('accepts email and telegram, and absence', () => {
+    const s = bound()
+    s.people[0].channel = 'telegram'
+    delete s.people[1].channel
+    expect(errorsOf(s)).toEqual([])
+  })
+
+  it('FALSIFIER: any other value is rejected', () => {
+    const s = bound()
+    s.people[0].channel = 'sms'
+    expect(codesAt(s)).toContainEqual(['InvalidPeople', 'people[0].channel'])
+  })
+})
