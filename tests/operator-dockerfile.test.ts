@@ -1548,7 +1548,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // the first overlay code review's fixes plus the couples-role overlay work.
     // -> 00a2d1dd (overlay#488-#494) -> 8a6e2f25 (overlay#495-#500), 2026-10-17: the couples seat
     // over email and Telegram (joint threads, email routines, /start binding, authored channel).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="8a6e2f2579fe0bb60a575548b1c11651ef956e79"')
+    // -> ade63ad6 (overlay#501, #504), 2026-10-18: an AgentMail From needs an aligned
+    // DMARC or DKIM pass before it carries any roster or admin standing.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="ade63ad6ff4d7f11ba1488d5abd331ebe89f5c0a"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
