@@ -24,6 +24,7 @@ const ROLE_DIR = 'operator/roles/couples'
 interface RoleSkill {
   name: string
   built: boolean
+  settings?: Record<string, unknown>
 }
 interface RoleRoutine {
   skill: string
@@ -63,6 +64,21 @@ describe('couples role package', () => {
     const persona = template.personas[0]
     expect(persona.skills.map((s) => s.name).sort()).toEqual(role.skills.map((s) => s.name).sort())
     expect(persona.skills.every((s) => s.enabled)).toBe(true)
+  })
+
+  it('the template skill settings are the role skill settings', () => {
+    for (const skill of role.skills) {
+      const t = template.personas[0].skills.find((s) => s.name === skill.name)
+      expect(t?.settings ?? {}, skill.name).toEqual(skill.settings ?? {})
+    }
+  })
+
+  it('every scheduled skill rides the roster lane', () => {
+    const scheduled = new Set(template.personas[0].cron.map((c) => c.skill))
+    for (const name of scheduled) {
+      const t = template.personas[0].skills.find((s) => s.name === name)
+      expect(t?.settings?.recipients, name).toBe('roster')
+    }
   })
 
   it('the calendar skill is limited to the roster', () => {
