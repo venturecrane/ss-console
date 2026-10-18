@@ -80,6 +80,10 @@ const GATE_RULES: ReadonlyArray<{ label: string; test: (src: string, path: strin
   },
   { label: 'Machine bearer (per-seat credential)', test: (s) => /verifyMachineRequest\(/.test(s) },
   {
+    label: 'SMD agent bearer (SMD_AGENT_ADMIN_KEY, fail-closed)',
+    test: (s) => /verifyAgentAdminKey\(/.test(s),
+  },
+  {
     label: 'portal client, tenant-bound',
     test: (s) =>
       /(getPortalClient|resolveOperatorAccess|resolveHostedAgentAccess|resolveCouplesAccess|authorizeAdvancedSettings)\(/.test(
