@@ -15,32 +15,32 @@ function loc(href: string): URL {
 }
 
 describe('unauthenticatedRedirectLocation', () => {
-  const couples = 'https://portal.smd.services/portal/products/hosted-agent/couples'
+  const invited = 'https://portal.smd.services/portal/products/operator'
 
   it('ticket + sign_up goes to /auth/sign-up with ticket, status and redirect_url', () => {
-    const l = loc(`${couples}?__clerk_ticket=eyJ.abc-_~&__clerk_status=sign_up`)
+    const l = loc(`${invited}?__clerk_ticket=eyJ.abc-_~&__clerk_status=sign_up`)
     expect(l.pathname).toBe('/auth/sign-up')
     expect(l.searchParams.get('__clerk_ticket')).toBe('eyJ.abc-_~')
     expect(l.searchParams.get('__clerk_status')).toBe('sign_up')
-    expect(l.searchParams.get('redirect_url')).toBe('/portal/products/hosted-agent/couples')
+    expect(l.searchParams.get('redirect_url')).toBe('/portal/products/operator')
   })
 
   it('ticket with no status goes to /auth/sign-up and adds no status', () => {
-    const l = loc(`${couples}?__clerk_ticket=t1`)
+    const l = loc(`${invited}?__clerk_ticket=t1`)
     expect(l.pathname).toBe('/auth/sign-up')
     expect(l.searchParams.get('__clerk_ticket')).toBe('t1')
     expect(l.searchParams.has('__clerk_status')).toBe(false)
   })
 
   it('ticket + sign_in goes to /auth/sign-in', () => {
-    const l = loc(`${couples}?__clerk_ticket=t2&__clerk_status=sign_in`)
+    const l = loc(`${invited}?__clerk_ticket=t2&__clerk_status=sign_in`)
     expect(l.pathname).toBe('/auth/sign-in')
     expect(l.searchParams.get('__clerk_ticket')).toBe('t2')
     expect(l.searchParams.get('__clerk_status')).toBe('sign_in')
   })
 
   it('ticket + complete goes to /auth/sign-in, status preserved', () => {
-    const l = loc(`${couples}?__clerk_ticket=t3&__clerk_status=complete`)
+    const l = loc(`${invited}?__clerk_ticket=t3&__clerk_status=complete`)
     expect(l.pathname).toBe('/auth/sign-in')
     expect(l.searchParams.get('__clerk_status')).toBe('complete')
   })
@@ -88,8 +88,8 @@ describe('safeRedirectPath', () => {
 
 describe('honoredReturnPath', () => {
   it('honors a path under the surface prefix', () => {
-    expect(honoredReturnPath('/portal/products/hosted-agent/couples', 'portal')).toBe(
-      '/portal/products/hosted-agent/couples'
+    expect(honoredReturnPath('/portal/products/operator', 'portal')).toBe(
+      '/portal/products/operator'
     )
     expect(honoredReturnPath('/portal', 'portal')).toBe('/portal')
     expect(honoredReturnPath('/admin/entities', 'admin')).toBe('/admin/entities')

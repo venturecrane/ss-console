@@ -608,7 +608,7 @@ Cross-field rules (`src/lib/operator/customer-yaml/sections-people.ts`):
   not `group_allowed_chats` (which admits a whole chat with no sender check).
   A non-empty `group_chats` requires a non-empty `group_allow_from`, on any seat.
 - On a seat with `people:`, every `group_allow_from` id is a bound person's
-  `telegram_id` (never the onboarding sentinel), and `group_chats` holds at most
+  `telegram_id` (never the SMD sentinel), and `group_chats` holds at most
   `spaces.shared_telegram_chat`. An unbound shared chat (`''`) is allowed; the
   overlay then delivers shared routines locally.
 - No two cron entries share a `(skill, space)` pair.

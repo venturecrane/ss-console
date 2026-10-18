@@ -31,9 +31,6 @@ const TENANT_HELPERS = [
   'getPortalClient',
   'resolveOperatorAccess',
   'resolveHostedAgentAccess',
-  // The couples surfaces' gate: resolveHostedAgentAccess plus the partner's
-  // own row (src/lib/portal/couples-access.ts).
-  'resolveCouplesAccess',
   'authorizeAdvancedSettings',
   'validateStateOrReject',
 ] as const

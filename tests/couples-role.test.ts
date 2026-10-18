@@ -1,11 +1,11 @@
 /**
  * The couples role package (ADR 0090) stays in step with its seat template.
  *
- * operator/roles/couples/role.yaml is the manifest a couple's seat is generated
+ * operator/roles/couples/role.yaml is the manifest a couple's seat is copied
  * from. Three things could drift silently, and each is pinned here:
  *
  *   1. A skill or routine in the manifest that the template does not carry (or
- *      the reverse), so a generated seat is not the role it claims to be.
+ *      the reverse), so a seat copied from the template is not the role it claims to be.
  *   2. A `built:` flag that lies. An enabled skill with no body fails the seat's
  *      boot, so "built: true" with no SKILL.md, or "built: false" for a skill
  *      that now exists, would mislead whoever provisions the next couple.
