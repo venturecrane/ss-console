@@ -1546,7 +1546,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // 2026-10-17: record-store read/write path fences, held-send approval binding, and the
     // telegram allowed_users alias (pairs with #3271). -> ccb525a2 (overlay#467-#487), 2026-10-17:
     // the first overlay code review's fixes plus the couples-role overlay work.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="00a2d1dd5d116316b8e08022d58ada8a329e9751"')
+    // -> 00a2d1dd (overlay#488-#494) -> 8a6e2f25 (overlay#495-#500), 2026-10-17: the couples seat
+    // over email and Telegram (joint threads, email routines, /start binding, authored channel).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="8a6e2f2579fe0bb60a575548b1c11651ef956e79"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
