@@ -611,6 +611,11 @@ skill_bindings:
       - { artifact: checkin_prompt, seam: session_output, class: staff }
       - { artifact: checkin_record, seam: local_file, class: record }
     outbound: none
+  couples-settings:
+    internal:
+      - { artifact: settings_confirmation, seam: session_output, class: staff }
+      - { artifact: couples_settings, seam: local_file, class: record }
+    outbound: derived # the seat's own two-person notice (code-rendered setting) to the other partner only
   gratitude-prompts:
     internal:
       - { artifact: gratitude_prompt, seam: session_output, class: staff }
