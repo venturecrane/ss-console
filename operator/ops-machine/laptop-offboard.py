@@ -171,7 +171,8 @@ def unlisted(base: Path, pairs: list[tuple[str, str]], home: Path) -> dict[str, 
     was never made.
     """
     listed = {Path(os.path.normpath(base / rel)) for _, rel in pairs}
-    tops = {Path(os.path.normpath(base / rel)).relative_to(base).parts[0] for _, rel in pairs if (base / rel) != base}
+    inside = [p for p in listed if base in p.parents]  # a path escaping the area is never walked
+    tops = {p.relative_to(base).parts[0] for p in inside}
     n: dict[str, int] = {}
     if base != home and base.is_dir():  # loose files at an area's root; ~ itself is not an area to sweep
         n["."] = sum(1 for p in base.iterdir() if p.is_file() and not p.is_symlink() and p not in listed)
