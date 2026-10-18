@@ -82,7 +82,7 @@ const GATE_RULES: ReadonlyArray<{ label: string; test: (src: string, path: strin
   {
     label: 'portal client, tenant-bound',
     test: (s) =>
-      /(getPortalClient|resolveOperatorAccess|resolveHostedAgentAccess|authorizeAdvancedSettings)\(/.test(
+      /(getPortalClient|resolveOperatorAccess|resolveHostedAgentAccess|resolveCouplesAccess|authorizeAdvancedSettings)\(/.test(
         s
       ),
   },

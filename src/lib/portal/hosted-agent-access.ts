@@ -39,9 +39,24 @@ export type HostedAgentAccess =
     }
 
 export interface ResolveHostedAgentAccessOptions {
-  /** Roles that grant access. Hosted Agent vocabulary is `principal` only at
-   * launch (single-user product); the vocabulary can widen later. */
+  /** Roles that grant access. The single-person SKU's surfaces admit
+   * `principal` only. A multi-person role widens the vocabulary (ADR 0090
+   * Consequences): the couples surfaces admit `partner`, a role that is NOT
+   * principal-only and grants nothing on the single-person surfaces. */
   allowedRoles: readonly string[]
+  /**
+   * Runs after the entity and subscription checks pass and before roles are
+   * read, so a surface can grant a role it is entitled to grant just in time.
+   * The couples surfaces use it to let an invited partner claim their own
+   * partner row by verified email (src/lib/portal/couples-access.ts). It must
+   * never grant a role on evidence weaker than the entity binding plus an
+   * SMD-authored match.
+   */
+  beforeRoleCheck?: (ctx: {
+    user: PortalUserRow
+    client: Entity
+    subscription: SubscriptionRow
+  }) => Promise<void>
 }
 
 /**
@@ -66,6 +81,10 @@ export async function resolveHostedAgentAccess(
   const subscription = await getProductSubscription(db, client.id, HOSTED_AGENT_PRODUCT_SLUG)
   if (!subscription) {
     return { kind: 'redirect', to: HOSTED_AGENT_LANDING_PATH }
+  }
+
+  if (options.beforeRoleCheck) {
+    await options.beforeRoleCheck({ user, client, subscription })
   }
 
   const roles = await listProductRoles(db, user.id, client.id, HOSTED_AGENT_PRODUCT_SLUG)
