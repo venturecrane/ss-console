@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import os
 import re
 from typing import Any
 
@@ -39,6 +38,7 @@ from .expense_ledger import drop_deleted as drop_deleted_expenses
 from .matter_create import create_operator_matter
 from .readback import file_and_prove, prove_file_deleted, prove_folder
 from .readback_records import prove_event, prove_reminder, prove_task, prove_webhook
+from .webhook_target import subscription_body
 from .local_time import _next_day  # noqa: F401 - re-exported; tests import it from the server
 from .local_time import enrich_events, enrich_task, enrich_tasks, event_span, refuse_shifted_clocks
 from .listing import contact_listing_is_complete as _contact_listing_is_complete
@@ -1898,7 +1898,7 @@ def get_event_types() -> Any:
 def create_webhook_subscription(
     name: str,
     event_types: list[str],
-    notification_url: str,
+    notification_url: str | None = None,
     key: str | None = None,
 ) -> Any:
     """Register a webhook subscription so Smokeball PUSHES events to the Operator's
@@ -1915,15 +1915,15 @@ def create_webhook_subscription(
     header; the webhook gate verifies it). ``key`` defaults to the gate's own
     ``WEBHOOK_SECRET_SMOKEBALL`` so the subscription's signing key matches what the
     gate verifies with — the caller normally omits it. Classified INTERNAL_WRITE (a
-    provisioning-time config write; never an external send)."""
-    body: dict[str, Any] = {
-        "name": name,
-        "eventTypes": event_types,
-        "eventNotificationUrl": notification_url,
-    }
-    resolved_key = key or os.environ.get("WEBHOOK_SECRET_SMOKEBALL")
-    if resolved_key:
-        body["key"] = resolved_key
+    provisioning-time config write; never an external send).
+
+    The callback is ALWAYS the seat's own authored webhook gate
+    (``webhook_target.seat_webhook_url``: the ``webhook_url`` on the enabled
+    ``mcp:smokeball`` connector in customer.yaml). ``notification_url`` may be
+    omitted; if given it must equal that URL exactly, else the call is refused.
+    No authored gate URL refuses too: a persistent, gate-signed feed of the
+    firm's matter events must never point anywhere the seat did not author."""
+    body = subscription_body(name, event_types, notification_url, key)
     client = _get_client()
     return prove_webhook(client, body, client.request("POST", "/webhooks", json=body))
 

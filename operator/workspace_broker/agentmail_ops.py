@@ -41,6 +41,7 @@ from .agentmail_auth import (
     sender_key,
 )
 from .request_errors import BrokerRefusal
+from .space_people import seat_people_emails
 
 API_BASE = "https://api.agentmail.to/v0"
 TIMEOUT_S = 15.0
@@ -296,6 +297,45 @@ class AgentMailOps:
         except agentmail_calendar.CalendarRefused as exc:
             raise AgentMailRefused(str(exc)) from exc
 
+    def _shared_copies(
+        self, payload: dict[str, Any], source: dict[str, Any], sender: str, policy: RecipientPolicy
+    ) -> tuple[str, ...]:
+        """Who else a SHARED reply copies (ADR 0091): ``()`` unless ``shared`` is set.
+
+        A shared reply answers a joint thread on a space-mode seat, so it reaches
+        every authored person, not just the one who wrote last. The caller only
+        asks; WHO is decided here, from the seat's own config and the source
+        message this process fetched:
+
+        * the seat authors ``people:`` and the sender is one of them;
+        * every other person is already on the source's To or Cc (the thread
+          is joint; this reply adds nobody the thread did not include);
+        * each copied person may be replied to (``inbound_allow_from``).
+
+        The copies are exactly the other people. A stranger on the thread is
+        never copied, and any failed condition refuses the whole reply rather
+        than quietly answering only the sender."""
+        flag = payload.get("shared")
+        if flag is None or flag is False:
+            return ()
+        if flag is not True:
+            raise AgentMailRefused("shared must be true or absent")
+        people = seat_people_emails(self._customer_path)
+        if len(people) < 2:
+            raise AgentMailRefused("a shared reply needs a seat that authors two or more people")
+        if sender not in people:
+            raise AgentMailRefused("a shared reply answers only an email from one of the seat's people")
+        on_thread = {a for a in _as_addresses(source.get("to")) + _as_addresses(source.get("cc"))}
+        others = tuple(p for p in people if p != sender)
+        missing = [p for p in others if p not in on_thread]
+        if missing:
+            raise AgentMailRefused(
+                f"a shared reply needs every person on the thread; {len(missing)} were not on its To or Cc"
+            )
+        if not all(policy.allows_reply_to(p) for p in others):
+            raise AgentMailRefused("a person a shared reply would copy is not on scope.inbound_allow_from")
+        return others
+
     def reply(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Answer an inbound message, but only one from an allowed sender.
 
@@ -324,11 +364,14 @@ class AgentMailOps:
         body = {k: payload[k] for k in ("text", "html") if payload.get(k)}
         if not body:
             raise AgentMailRefused("refusing to send an empty reply")
+        copied = self._shared_copies(payload, source, sender, policy)
+        if copied:
+            body["cc"] = list(copied)
         response = self._request(self._path("messages", message_id, "reply"), "POST", body)
         return {
             "message_id": _message_id(response),
             "thread_id": _thread_id(response),
-            "recipients": [sender],
+            "recipients": [sender, *copied],
             "inbox_id": self.inbox_id(),
             # ss#2497 — the twin of the msgraph verb. The broker is the only
             # party that knows who this answered, because it fetched the source

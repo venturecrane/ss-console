@@ -218,7 +218,13 @@ def enforce(
             raise FenceRefused(FENCE_PARTICIPANTS, "a reply must name the email it answers.")
         rehearsal_fence.check(subject, [], lambda: resolve(Anchor(CHANNEL_KIND[channel], target)), reply=True)
         check_reply(
-            facts, target, anchor=anchor, resolve=resolve, target_kind=CHANNEL_KIND[channel], own=_own(broker, channel)
+            facts,
+            target,
+            anchor=anchor,
+            resolve=resolve,
+            target_kind=CHANNEL_KIND[channel],
+            own=_own(broker, channel),
+            copies_thread=payload.get("shared") is True,
         )
     else:
         rehearsal_fence.check(subject, recipients, (lambda: resolve(anchor)) if anchor else None)

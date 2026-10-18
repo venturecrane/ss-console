@@ -30,6 +30,8 @@ seat_template: operator/customers/_couples-template/customer.yaml
 skills:
   - name: calendar
     built: true
+    settings:
+      recipients: roster
     purpose: The shared calendar the agent owns, sent to both partners as invites (ADR 0092).
   - name: workspace
     built: true
@@ -39,28 +41,44 @@ skills:
     purpose: Each partner's approved email to the agent, answered privately to that partner.
   - name: couples-checkin
     built: true
+    settings:
+      recipients: roster
     purpose: Private check-in nudges on topics the couple authors together, per person cadence and quiet hours.
   - name: gratitude-prompts
     built: true
+    settings:
+      recipients: roster
     purpose: Gratitude prompts, delivered to each partner privately.
   - name: dates-to-remember
     built: true
+    settings:
+      recipients: roster
     purpose: Dates to remember, with gift lists kept private to one partner.
   - name: date-night-planner
     built: true
     purpose: Date ideas with a tried, loved, skip history.
   - name: travel
     built: true
+    settings:
+      recipients: roster
     purpose: Itineraries from forwarded confirmations, packing lists, passport expiry, price watches.
   - name: shared-lists
     built: true
     purpose: Shared lists, chores, expenses and renewals.
   - name: weekly-checkin-agenda
     built: true
+    settings:
+      recipients: roster
     purpose: An agenda for the weekly joint check-in, built only from what each partner chose to share.
   - name: memory-journal
     built: true
     purpose: A dated journal of moments, in the couple's words. Text only; photos stay in the Telegram chat.
+
+# `settings.recipients: roster` puts a skill's sends on its roster lane: the
+# broker admits only the seat's rostered addresses, which on this role are
+# exactly the two partners (validator rule 8, sections-people.ts). Every skill
+# that sends on a schedule or carries the seat's two-person notices authors it;
+# the overlay's cron email delivery also locks recipients in code.
 
 # Default routines. Every routine names its space: the space the run reads and
 # the chat it is delivered to (`person:<id>` delivers to that partner's DM,
@@ -132,6 +150,9 @@ optional_connections:
 
 # What onboarding collects. `per_person` fields are asked of each partner;
 # `joint` fields are not final until both partners confirm (ADR 0090 decision 4).
+# Built: portal /portal/products/hosted-agent/couples, admin
+# /admin/hosted-agent/couples, generator scripts/couples-seat.ts
+# (runbook docs/runbooks/hosted-agent/couples-onboarding.md).
 onboarding:
   per_person:
     - field: name
@@ -142,7 +163,11 @@ onboarding:
       maps_to: none (recorded by onboarding, not in customer.yaml)
     - field: telegram
       maps_to: people[].telegram_id, telegram.allow_from, telegram.group_allow_from
-      note: bound by a single-use deep link, written through the reviewed customer.yaml change (ADR 0091 section 5)
+      note: >-
+        OPTIONAL, connect any time (email is the default channel). Bound by a
+        single-use deep link, written through the reviewed customer.yaml change
+        (ADR 0091 section 5). With no bot and nobody bound the seat's Telegram
+        block is generated `enabled: false`.
   joint:
     - field: timezone
       maps_to: routine schedules (expressed in UTC)
@@ -158,5 +183,7 @@ onboarding:
       maps_to: routines[].schedule (weekly-checkin-agenda)
     - field: quiet_hours
       maps_to: couples-checkin
+    - field: preferred_channel
+      maps_to: people[].channel (email by default; telegram used only once bound)
     - field: shared_group
-      maps_to: spaces.shared_telegram_chat and telegram.group_chats
+      maps_to: spaces.shared_telegram_chat and telegram.group_chats (optional, recorded by SMD)

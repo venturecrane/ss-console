@@ -28,13 +28,14 @@ import { execFileSync } from 'child_process'
 import { resolve } from 'path'
 
 const ROOT = process.cwd()
-const SKILLS = ['sos', 'eos'] as const
+const SKILLS = ['sos', 'eos', 'code-review'] as const
 
 /** Literal paths, not composed ones: the set is closed and the scanner is right
  * to distrust a path built from a variable. */
 const SKILL_PATHS: Record<(typeof SKILLS)[number], string> = {
   sos: resolve(ROOT, '.claude/skills/sos/SKILL.md'),
   eos: resolve(ROOT, '.claude/skills/eos/SKILL.md'),
+  'code-review': resolve(ROOT, '.claude/skills/code-review/SKILL.md'),
 }
 
 function skillPath(name: (typeof SKILLS)[number]): string {
@@ -144,5 +145,35 @@ describe('the register is wired into both skills', () => {
     // Grep, or pasted into the prompt is invisible. A negative result here
     // means nothing, and the skill has to say so.
     expect(skillBody('eos')).toMatch(/blind spot/i)
+  })
+})
+
+describe('/code-review covers the Operator and ends in fixes (fork, 2026-10-17)', () => {
+  it('reviews the overlay, not only the repo it runs in', () => {
+    // The inherited skill reviewed ss-console only; the overlay, the Operator's
+    // runtime on every seat, had never been reviewed.
+    const body = skillBody('code-review')
+    expect(body).toMatch(/venturecrane\/hermes-smd-overlay/)
+    expect(body).toMatch(/OVERLAY_REF/)
+  })
+
+  it('tells a probe to look where the code runs', () => {
+    // F1 was carried open for two reviews by a probe that searched only
+    // ss-console for a control that is wired in the overlay.
+    expect(skillBody('code-review')).toMatch(/A probe looks where the code runs/)
+  })
+
+  it('fixes what it finds instead of asking which subset to fix', () => {
+    const body = skillBody('code-review')
+    expect(body).toMatch(/## Step 9 — Fix everything, now/)
+    expect(body).toMatch(/does not wait for a go-ahead/)
+    // The inherited closing step that produced lists must not come back.
+    expect(body).not.toMatch(/\*\*ask\*\* before creating GitHub issues/)
+  })
+
+  it('counts a fix done only when the seats run it', () => {
+    const body = skillBody('code-review')
+    expect(body).toMatch(/## Step 10 — Done means the seats run it/)
+    expect(body).toMatch(/Never kill a running job/)
   })
 })

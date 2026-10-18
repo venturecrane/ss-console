@@ -1222,6 +1222,12 @@ export interface SeatPerson {
   telegram_id: string
   /** Lowercased; also on `scope.inbound_allow_from`. */
   email: string
+  /**
+   * How the seat reaches this person on its own initiative (routines,
+   * two-person notices): Telegram only when `telegram` AND bound, else email.
+   * Absent means email, the default channel.
+   */
+  channel?: 'email' | 'telegram'
 }
 
 export interface SeatSpaces {
