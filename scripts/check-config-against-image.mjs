@@ -2,7 +2,17 @@
 // Refuse to publish a customer.yaml that names a skill the seat's running image
 // does not carry (the 2026-10-13 A&P outage).
 //
-// Usage: check-config-against-image.mjs <customer.yaml> <image-manifest.json|""> <published.yaml|"">
+// Usage: check-config-against-image.mjs <customer.yaml> <image-manifest.json|""> <published.yaml|""> [<skills-manifest.json|"">]
+//
+// FLEET RELEASE (2026-10-19). Skills now reach a seat separately from its image
+// (`fleet release --skills`), so what a seat can run is its CURRENT IMAGE's
+// manifest UNION its CURRENT SKILLS release's manifest (the one its
+// vaults/<slug>/skills-pointer.json names). The publisher resolves both per seat:
+// the image manifest from fleet/images/<digest>/image-manifest.json via the
+// seat's heartbeat image_ref (falling back to the per-seat
+// vaults/<slug>/image-manifest.json the entrypoint uploads at boot), and the
+// skills manifest from the pointer. A seat with no pointer passes "" and only
+// the image counts.
 //
 // The seat re-fetches customer.yaml from R2 on EVERY boot, so publishing a
 // config the running image cannot run is a latent seat change: the next
@@ -31,7 +41,7 @@ import { readFileSync } from 'node:fs'
 
 import { parse as parseYaml } from 'yaml'
 
-const [cfgPath, manifestPath, publishedPath] = process.argv.slice(2)
+const [cfgPath, manifestPath, publishedPath, skillsManifestPath] = process.argv.slice(2)
 if (!cfgPath) {
   process.stderr.write(
     'Usage: check-config-against-image.mjs <customer.yaml> <manifest|""> <published|"">\n'
@@ -80,6 +90,23 @@ function provided(manifest) {
   return out
 }
 
+/** What a skills release manifest provides (fleet/skills/<version>.json), or null. */
+function providedBySkills(manifest) {
+  if (!manifest || typeof manifest.files !== 'object' || typeof manifest.version !== 'string')
+    return null
+  const out = new Set()
+  for (const rel of Object.keys(manifest.files)) {
+    const [name, ...rest] = rel.split('/')
+    if (!name || rest.length === 0) continue
+    out.add(`skill:${name}`)
+    out.add(`pre_run:${name}/${rest.join('/')}`)
+  }
+  for (const [name, pin] of Object.entries(manifest.pins ?? {})) {
+    if (typeof pin === 'string') out.add(`pin:${name}@${pin}`)
+  }
+  return out
+}
+
 function readYaml(path) {
   return parseYaml(readFileSync(path, 'utf8'))
 }
@@ -106,6 +133,24 @@ if (manifestPath) {
     else manifestNote = `image built from ${manifest.built_from ?? 'unknown commit'}`
   } catch (err) {
     manifestNote = `the image manifest is unreadable (${err.message})`
+  }
+}
+
+if (skillsManifestPath) {
+  try {
+    const sm = JSON.parse(readFileSync(skillsManifestPath, 'utf8'))
+    const fromSkills = providedBySkills(sm)
+    if (fromSkills === null) {
+      manifestNote += '; the skills manifest is not a fleet skills manifest (ignored)'
+    } else {
+      const imageKnown = have !== null
+      have = new Set([...(have ?? []), ...fromSkills])
+      manifestNote = imageKnown
+        ? `${manifestNote} plus skills release ${sm.version}`
+        : `skills release ${sm.version} (${manifestNote})`
+    }
+  } catch (err) {
+    manifestNote += `; the skills manifest is unreadable (${err.message})`
   }
 }
 

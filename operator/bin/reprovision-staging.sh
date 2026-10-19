@@ -53,7 +53,24 @@ ISOLATE_NAMES="$(cd "${REPO_ROOT}" && uv run --quiet --with pyyaml python3 \
 [ -n "${ISOLATE_NAMES}" ] \
   || { echo "reprovision-staging: empty isolate set — refusing to run without isolation" >&2; exit 1; }
 
-exec infisical run --env=prod --path=/ss --silent -- bash -c '
+# Never restart a seat in the middle of a job (fleet release, 2026-10-19). The
+# same live busy gate `fleet release` uses: a running lane job, pending wakes,
+# a managed cron firing within 10 minutes or a stale heartbeat all mean busy;
+# busy sets the quiesce marker (no new claims) and waits up to 30 minutes for
+# idle. Still busy, or the probe could not tell, refuses. A seat with no app yet
+# is idle by definition. FLEET_FORCE_MID_JOB=1 overrides, loudly, on purpose.
+if [ "${FLEET_FORCE_MID_JOB:-}" = "1" ]; then
+  echo "reprovision: WARNING FLEET_FORCE_MID_JOB=1: skipping the busy gate; a running job will be stopped" >&2
+elif ! "${HERE}/fleet" busy "${SLUG}" --wait; then
+  echo "reprovision: ${SLUG} is busy (or the busy probe could not tell); refusing to restart it mid-job. Re-run when idle, or set FLEET_FORCE_MID_JOB=1." >&2
+  exit 1
+fi
+
+# The busy gate above may have left a quiesce marker, and it lives on the volume
+# (/run/smd-medchron is a bind mount), so the new boot would claim no new work
+# until it expired. Clear it once provisioning is done, whatever the outcome.
+rc=0
+infisical run --env=prod --path=/ss --silent -- bash -c '
   set -euo pipefail
   HERE="$1"; SLUG="$2"; ISOLATE_NAMES="$3"
 
@@ -81,4 +98,6 @@ exec infisical run --env=prod --path=/ss --silent -- bash -c '
   _rc=${PIPESTATUS[1]}
   set -o pipefail
   exit "${_rc}"
-' _ "${HERE}" "${SLUG}" "${ISOLATE_NAMES}"
+' _ "${HERE}" "${SLUG}" "${ISOLATE_NAMES}" || rc=$?
+"${HERE}/fleet" unquiesce "${SLUG}" || true
+exit "${rc}"

@@ -1,0 +1,25 @@
+# Release rings: which seats take a release first. MEMBERSHIP ONLY.
+#
+# `operator/bin/fleet release` walks these in order. A ring finishes before the
+# next starts; any seat that FAILS (smoke red, so it is rolled back) or ends in a
+# TOOLING ERROR halts the whole rollout, so a defect stops at the smallest ring
+# that shows it. Ring 0 is SMD's own staging seat; the last ring is the paying
+# client's seat and always deploys one seat at a time.
+#
+# Holds are NOT authored here. `fleet hold <slug> --reason "..."` writes D1
+# fleet_holds and takes effect at once, without a PR (a held seat is skipped
+# and recorded as skipped_held).
+#
+# A seat that exists under operator/customers/ but is named in no ring joins the
+# LAST ring: a new seat is never in an early ring by omission.
+# tests: operator/bin/tests/test_fleet_rings.py
+rings:
+  - ring: 0
+    seats: [smd-staging]
+  - ring: 1
+    seats: [pilot-smokeball]
+  - ring: 2
+    seats: [scott, brokery, captain-mark]
+  - ring: 3
+    seats: [ashton-price]
+    max_parallel: 1

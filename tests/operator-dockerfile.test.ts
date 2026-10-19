@@ -1994,3 +1994,64 @@ describe('Operator Machine npm installs are lock-pinned', () => {
     expect(unhashed, 'lock entries without an integrity hash').toEqual([])
   })
 })
+
+describe('Dockerfile: one image for every seat, layers cached across releases (fleet release, 2026-10-19)', () => {
+  const lines = DOCKERFILE_CODE.split('\n')
+  const runtimeStart = lines.findIndex((l) => /^FROM debian:/.test(l))
+  const runtime = lines.slice(runtimeStart)
+  const firstIndex = (re: RegExp): number => runtime.findIndex((l) => re.test(l))
+
+  it('takes no per-seat CUSTOMER_SLUG build arg (the slug reaches the Machine only as fly.toml [env])', () => {
+    expect(DOCKERFILE_CODE).not.toMatch(/^\s*(ARG|ENV)\s+CUSTOMER_SLUG\b/m)
+    expect(DOCKERFILE_CODE).not.toMatch(/\$\{?CUSTOMER_SLUG/)
+  })
+
+  it('declares OVERLAY_REF and SS_CONSOLE_SHA only after the heavy layers (apt, npm, uv, the Hermes build)', () => {
+    // Every RUN after an ARG declaration in a stage is invalidated when it
+    // changes. FALSIFIER: move `ARG OVERLAY_REF` back to the top of the stage
+    // and every overlay pin rebuilds apt, npm and uv from scratch.
+    const overlayArg = firstIndex(/^ARG OVERLAY_REF\b/)
+    const shaArg = firstIndex(/^ARG SS_CONSOLE_SHA\b/)
+    const heavy = [
+      /^RUN apt-get update/,
+      /^RUN npm ci/,
+      /^RUN uv sync/,
+      /^RUN cd web && npm run build/,
+    ].map(firstIndex)
+    expect(overlayArg).toBeGreaterThan(0)
+    expect(shaArg).toBeGreaterThan(0)
+    for (const idx of heavy) {
+      expect(idx).toBeGreaterThan(0)
+      expect(overlayArg).toBeGreaterThan(idx)
+      expect(shaArg).toBeGreaterThan(idx)
+    }
+    // ...and immediately before their first use.
+    expect(runtime.slice(overlayArg, overlayArg + 12).join('\n')).toMatch(
+      /^RUN[\s\S]*\$\{OVERLAY_REF\}/m
+    )
+    expect(runtime.slice(shaArg, shaArg + 2).join('\n')).toMatch(/^RUN[^\n]*\$\{SS_CONSOLE_SHA\}/m)
+    expect(runtime[firstIndex(/ENV SMD_OVERLAY_REF=/)]).toBeDefined()
+    expect(firstIndex(/ENV SMD_OVERLAY_REF=/)).toBeGreaterThan(overlayArg)
+  })
+
+  it('bakes the capability file a skills release is checked against, after every COPY into /app and /opt', () => {
+    const gen = firstIndex(/gen-image-capabilities\.py \/app\/image-capabilities\.json/)
+    expect(gen).toBeGreaterThan(0)
+    const lastCopy = runtime.reduce(
+      (acc, l, i) => (/^COPY\s+(?!--from)/.test(l) && !/gen-image-capabilities/.test(l) ? i : acc),
+      -1
+    )
+    expect(gen).toBeGreaterThan(lastCopy)
+  })
+
+  it('copies nothing from operator/customers (no client content in the shared image)', () => {
+    const copies = DOCKERFILE_CODE.split('\n').filter((l) => /^COPY\s/.test(l))
+    expect(copies.length).toBeGreaterThan(10)
+    expect(copies.filter((l) => /operator\/customers/.test(l))).toEqual([])
+  })
+
+  it('the Hermes pin lives here, not in customer.yaml', () => {
+    expect(DOCKERFILE).toMatch(/^ARG HERMES_UPSTREAM_SHA=[0-9a-f]{40}$/m)
+    expect(DOCKERFILE_CODE).not.toMatch(/from customer\.yaml hermes_ref/)
+  })
+})
