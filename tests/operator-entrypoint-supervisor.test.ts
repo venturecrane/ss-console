@@ -94,7 +94,13 @@ interface Run {
   dir: string
   code: number | null
   events: { e: string; t: number; daemon_exited?: boolean }[]
-  gateway: { pid: number; sid: number; env_pid: string; late: string | null; dropped: string | null } | null
+  gateway: {
+    pid: number
+    sid: number
+    env_pid: string
+    late: string | null
+    dropped: string | null
+  } | null
   log: string
 }
 
@@ -156,10 +162,16 @@ function alive(pid: number): boolean {
   }
 }
 
-async function runStop(body: string, env: Record<string, string> = {}, signalGroup = true): Promise<Run> {
+async function runStop(
+  body: string,
+  env: Record<string, string> = {},
+  signalGroup = true
+): Promise<Run> {
   const dir = mkdtempSync(join(tmpdir(), 'smd-supervisor-'))
   const child = scenario(dir, body, env)
-  const exited = new Promise<number | null>((r) => child.on('exit', (code, sig) => r(code ?? (sig ? 128 : null))))
+  const exited = new Promise<number | null>((r) =>
+    child.on('exit', (code, sig) => r(code ?? (sig ? 128 : null)))
+  )
   await until(() => existsSync(`${dir}/gateway.json`) && existsSync(`${dir}/job-ready`))
   if (signalGroup) process.kill(-child.pid!, 'SIGTERM') // tini -g
   const code = await exited
@@ -170,7 +182,13 @@ async function runStop(body: string, env: Record<string, string> = {}, signalGro
         .map((l) => JSON.parse(l))
     : []
   const gateway = JSON.parse(readFileSync(`${dir}/gateway.json`, 'utf8'))
-  return { dir, code, events, gateway, log: existsSync(`${dir}/log`) ? readFileSync(`${dir}/log`, 'utf8') : '' }
+  return {
+    dir,
+    code,
+    events,
+    gateway,
+    log: existsSync(`${dir}/log`) ? readFileSync(`${dir}/log`, 'utf8') : '',
+  }
 }
 
 const NEW_SHAPE = (gatewayMode = 'drain') => `
@@ -190,9 +208,10 @@ export LATE_VAR=late
 smd_supervise
 `
 
-const bashOk = spawnSync('bash', ['-c', 'command -v ps && command -v pkill && command -v python3'], {
-  encoding: 'utf8',
-}).status === 0
+const bashOk =
+  spawnSync('bash', ['-c', 'command -v ps && command -v pkill && command -v python3'], {
+    encoding: 'utf8',
+  }).status === 0
 
 describe.skipIf(!bashOk)('entrypoint supervisor: the Machine stop drains before it stops', () => {
   it('quiesces, drains the daemon, spares the job child, THEN stops the gateway and exits with its code', async () => {
@@ -201,11 +220,14 @@ describe.skipIf(!bashOk)('entrypoint supervisor: the Machine stop drains before 
     expect(r.code, r.log).toBe(0) // the gateway's own exit code
     expect(order.indexOf('daemon-term')).toBeGreaterThan(-1)
     expect(order.indexOf('daemon-exit')).toBeGreaterThan(order.indexOf('daemon-term'))
-    expect(order.indexOf('gateway-term'), 'the gateway is stopped only after the daemon drained').toBeGreaterThan(
-      order.indexOf('daemon-exit')
-    )
+    expect(
+      order.indexOf('gateway-term'),
+      'the gateway is stopped only after the daemon drained'
+    ).toBeGreaterThan(order.indexOf('daemon-exit'))
     expect(r.events.find((e) => e.e === 'gateway-term')?.daemon_exited).toBe(true)
-    expect(order, 'a job child in its own session never sees the group signal').not.toContain('job-term')
+    expect(order, 'a job child in its own session never sees the group signal').not.toContain(
+      'job-term'
+    )
     const jobPid = Number(readFileSync(`${r.dir}/job.pid`, 'utf8'))
     expect(alive(jobPid)).toBe(true)
     process.kill(jobPid, 'SIGKILL')
@@ -257,7 +279,10 @@ exec ${process.env.PYTHON ?? 'python3'} "$OUT/gateway.py"
 describe.skipIf(!bashOk)('entrypoint supervisor: the held gateway and the quiesce file', () => {
   it('a boot that dies before the release execs no gateway', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'smd-supervisor-'))
-    const child = scenario(dir, `. "${SUPERVISOR}"\nsmd_supervisor_boot\necho "$SMD_GATEWAY_PID" > "$OUT/held.pid"\nexit 3`)
+    const child = scenario(
+      dir,
+      `. "${SUPERVISOR}"\nsmd_supervisor_boot\necho "$SMD_GATEWAY_PID" > "$OUT/held.pid"\nexit 3`
+    )
     const code = await new Promise<number | null>((r) => child.on('exit', (c) => r(c)))
     expect(code).toBe(3) // the boot gates' refusal code passes through
     await sleep(500)
@@ -276,7 +301,10 @@ describe.skipIf(!bashOk)('entrypoint supervisor: the held gateway and the quiesc
       writeFileSync(`${dir}/run/quiesce`, `{"until": 9999999999, "by": "${by}", "reason": "x"}\n`)
       const r = spawnSync(
         'bash',
-        ['-c', `set -euo pipefail\nlog() { :; }\nMEDCHRON_RUN_DIR="${dir}/run"\n. "${SUPERVISOR}"\nsmd_quiesce_clear_stale`],
+        [
+          '-c',
+          `set -euo pipefail\nlog() { :; }\nMEDCHRON_RUN_DIR="${dir}/run"\n. "${SUPERVISOR}"\nsmd_quiesce_clear_stale`,
+        ],
         { encoding: 'utf8' }
       )
       expect(r.status, r.stderr).toBe(0)
@@ -299,10 +327,14 @@ describe.skipIf(!bashOk)('entrypoint supervisor: the held gateway and the quiesc
         `#!/bin/bash\nn=$(cat "${dir}/n" 2>/dev/null || echo 0)\necho $((n+1)) > "${dir}/n"\ncodes=(${codes.join(' ')})\nexit \${codes[$n]:-130}\n`,
         { mode: 0o755 }
       )
-      const r = spawnSync('bash', ['-c', `set -e\nlog() { :; }\nSTUB="${stub}"\n${fn}\nsmd_root_poller x x\nwait`], {
-        encoding: 'utf8',
-        timeout: 10000,
-      })
+      const r = spawnSync(
+        'bash',
+        ['-c', `set -e\nlog() { :; }\nSTUB="${stub}"\n${fn}\nsmd_root_poller x x\nwait`],
+        {
+          encoding: 'utf8',
+          timeout: 10000,
+        }
+      )
       expect(r.status, r.stderr).toBe(0)
       return Number(readFileSync(`${dir}/n`, 'utf8').trim())
     }
@@ -341,7 +373,11 @@ describe('entrypoint.sh wires the supervisor', () => {
 
   it('keeps every boot gate before the release', () => {
     const release = code.lastIndexOf('\nsmd_supervise')
-    for (const gate of ['INVARIANT7_BOOT_CHECK=', 'SPEC_OWNERSHIP_CHECK=', 'unset AGENTMAIL_SEND_API_KEY']) {
+    for (const gate of [
+      'INVARIANT7_BOOT_CHECK=',
+      'SPEC_OWNERSHIP_CHECK=',
+      'unset AGENTMAIL_SEND_API_KEY',
+    ]) {
       expect(code.indexOf(gate), gate).toBeGreaterThan(-1)
       expect(code.indexOf(gate), gate).toBeLessThan(release)
     }
@@ -401,7 +437,9 @@ describe('bootstrap.sh: the skills release seed and its fallback', () => {
     expect(r.args).toContain(`--dest ${r.dir}/home/skills`)
     expect(r.args).toContain('--retired-file /app/retired-skills.txt')
     expect(r.args).toContain(`--enabled-skills-from ${r.dir}/customer.yaml`)
-    expect(r.args).toMatch(/--source \S*smd-skills\/v7/) // the resolved version dir, never the symlink
+    // the resolved version dir's skills/, never the symlink; plus the release's own retired list
+    expect(r.args).toMatch(/--source \S*smd-skills\/v7\/skills /)
+    expect(r.args).toMatch(/--retired-file \S*smd-skills\/v7\/retired\.txt /)
   })
 
   it('falls back to the image seed when there is no release, no module, or a failed sync', () => {
@@ -414,8 +452,12 @@ describe('bootstrap.sh: the skills release seed and its fallback', () => {
 
   it('skips the image seed and both image prunes only when the release seeded', () => {
     const tail = src.slice(end)
-    expect(tail).toMatch(/if \[ "\$\{_skills_from_release\}" = 1 \]; then\n\s+:[^\n]*\nelif \[ -d \/app\/skills \]; then/)
-    expect(tail).toMatch(/if \[ "\$\{_skills_from_release\}" != 1 \]; then\n# retired-skill-prune:begin/)
+    expect(tail).toMatch(
+      /if \[ "\$\{_skills_from_release\}" = 1 \]; then\n\s+:[^\n]*\nelif \[ -d \/app\/skills \]; then/
+    )
+    expect(tail).toMatch(
+      /if \[ "\$\{_skills_from_release\}" != 1 \]; then\n# retired-skill-prune:begin/
+    )
     expect(tail).toMatch(/# omitted-skill-prune:end\nfi /)
   })
 })

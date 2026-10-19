@@ -5,7 +5,10 @@ import { resolve } from 'path'
 const dockerfile = readFileSync(resolve('operator/templates/Dockerfile'), 'utf8')
 const entrypoint = readFileSync(resolve('operator/templates/entrypoint.sh'), 'utf8')
 // The gateway's privilege drop lives in the supervisor the entrypoint sources.
-const supervisor = readFileSync(resolve('operator/runners/supervisor/entrypoint-supervisor.sh'), 'utf8')
+const supervisor = readFileSync(
+  resolve('operator/runners/supervisor/entrypoint-supervisor.sh'),
+  'utf8'
+)
 const bootstrap = readFileSync(resolve('operator/templates/bootstrap.sh'), 'utf8')
 const bootSmoke = readFileSync(resolve('operator/bin/boot-smoke-test.sh'), 'utf8')
 const workspaceSkill = readFileSync(resolve('operator/skills/workspace/SKILL.md'), 'utf8')
@@ -28,7 +31,9 @@ describe('ADR 0045 Workspace capability broker', () => {
     expect(dockerfile).toContain('usermod -a -G smokeball-token medchron')
     expect(dockerfile).toContain('usermod -a -G smokeball-token hermes')
     expect(entrypoint).toContain('--reuid=workspace-broker')
-    expect(supervisor).toContain('setpriv --reuid=hermes --regid=hermes --init-groups --no-new-privs /app/bootstrap.sh')
+    expect(supervisor).toContain(
+      'setpriv --reuid=hermes --regid=hermes --init-groups --no-new-privs /app/bootstrap.sh'
+    )
     expect(entrypoint).toContain('--no-new-privs')
     expect(entrypoint).toContain('/usr/bin/env -i')
     expect(entrypoint).toContain('PYTHONPATH="/opt/workspace-broker"')

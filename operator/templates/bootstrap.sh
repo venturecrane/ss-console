@@ -381,13 +381,18 @@ _skills_release=/var/lib/smd-skills/current
 _skills_from_release=0
 if [ -d "${_skills_release}" ] \
    && /opt/hermes/.venv/bin/python3 -c "import skills_applier.sync" 2>/dev/null; then
+  # The release keeps its skill dirs under skills/, beside its own retired.txt
+  # (the manifest's retired names); sync refuses a symlinked --source, so the
+  # pointer is resolved first.
+  _skills_release_dir="$(readlink -f "${_skills_release}")"
   if /opt/hermes/.venv/bin/python3 -m skills_applier.sync \
-       --source "$(readlink -f "${_skills_release}")" \
+       --source "${_skills_release_dir}/skills" \
        --dest "${HERMES_HOME}/skills" \
        --retired-file /app/retired-skills.txt \
+       --retired-file "${_skills_release_dir}/retired.txt" \
        --enabled-skills-from "${CUSTOMER_YAML}"; then
     _skills_from_release=1
-    log "Skill catalog seeded from the installed skills release ($(readlink -f "${_skills_release}"))"
+    log "Skill catalog seeded from the installed skills release (${_skills_release_dir})"
   else
     log "WARNING: skills release sync failed; seeding from the image catalog instead"
   fi
