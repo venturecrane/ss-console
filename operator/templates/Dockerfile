@@ -1292,7 +1292,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # sent it and who asked ("Captain Mark added this to your shared calendar at
 # Scott's request."), then the description, then a reply line (Captain: the
 # Kids invite was "a little stark").
-ARG OVERLAY_REF="222ae51d93b8a92d0eab1d8d63dfa2c213383c8a"
+# 2026-10-19e (972a8d7d, overlay #518-#520): per-seat policy profiles (ADR 0093). A
+# seat's role.yaml `policy:` may verify yearly dates by month and day, name its
+# own calendar/settings as provenance sources, and use the household checklist;
+# SSN/A-number/receipt/case number/pair stay floors on every seat. Routine emails
+# are rendered to plain text before the scan, and their subject is a short title
+# line or the fixed one (#519). The hook worker starts at plugin load (#520).
+ARG OVERLAY_REF="972a8d7d9b88d83b2ce3b9cff88d732d53da4298"
 
 # No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
 # across seats; the slug reaches the Machine only as fly.toml [env]
