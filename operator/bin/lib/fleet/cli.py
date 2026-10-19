@@ -234,7 +234,9 @@ def dispatch(ctx: Ctx, a: argparse.Namespace) -> int:
             raise Refusal("give exactly one of <release-id> or --skills <version>")
         return cmd_release_skills(ctx, a) if a.skills else cmd_release_image(ctx, a)
     if a.cmd == "status":
-        rows = status.seat_rows(ctx.store, ctx.rings())
+        rings = ctx.rings()
+        seats = [seat for ring in rings for seat in ring.seats]
+        rows = status.seat_rows(ctx.store, rings, status.lever_flags(ctx.fly, seats))
         print(json.dumps(rows, indent=1, default=str) if a.json else status.render_table(rows))
         return 0
     if a.cmd == "releases":

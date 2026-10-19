@@ -22,11 +22,21 @@ import { parse as parseYaml } from 'yaml'
 
 const ROLES_DIR = 'operator/roles'
 
-/** Each knob: its allowed values, the first being the platform default. */
+/**
+ * Each knob: its allowed values. A scalar knob's first value is the platform
+ * default. A list knob (LIST_KNOBS) takes a list of unique allowed values; the
+ * empty list is the platform default.
+ */
 const KNOBS: Record<string, Record<string, readonly string[]>> = {
-  identifier_gate: { recurring_dates: ['block', 'verify_by_month_day'] },
+  identifier_gate: {
+    recurring_dates: ['block', 'verify_by_month_day'],
+    // Seat-owned stores whose reads also count as a source for a date the
+    // agent then sends (the couple's own schedules and invites).
+    provenance_sources: ['calendar_invite_list', 'couples_settings_read'],
+  },
   output_checklist: { profile: ['paralegal', 'household'] },
 }
+const LIST_KNOBS = new Set(['identifier_gate.provenance_sources'])
 const CITATION_KEYS = ['rationale', 'adr'] as const
 const TOP_KEYS = new Set([...Object.keys(KNOBS), ...CITATION_KEYS])
 
@@ -54,6 +64,20 @@ function policyErrors(policy: unknown): string[] {
       const allowed = knobs[knob]
       if (!allowed) {
         errors.push(`unknown key policy.${section}.${knob}`)
+        continue
+      }
+      if (LIST_KNOBS.has(`${section}.${knob}`)) {
+        const ok =
+          Array.isArray(value) &&
+          value.every((v) => typeof v === 'string' && allowed.includes(v)) &&
+          new Set(value).size === value.length
+        if (!ok) {
+          errors.push(
+            `policy.${section}.${knob} must be a list of unique values from ${allowed.join(', ')}`
+          )
+          continue
+        }
+        if ((value as unknown[]).length > 0) looser = true
         continue
       }
       if (typeof value !== 'string' || !allowed.includes(value)) {
@@ -114,6 +138,24 @@ describe('role policy schema (ADR 0093)', () => {
     expect(policyErrors({ output_checklist: { profile: 'casual' } })).toEqual([
       'policy.output_checklist.profile must be one of paralegal, household',
     ])
+    const listErr =
+      'policy.identifier_gate.provenance_sources must be a list of unique values from ' +
+      'calendar_invite_list, couples_settings_read'
+    expect(
+      policyErrors({ identifier_gate: { provenance_sources: 'calendar_invite_list' } })
+    ).toEqual([listErr])
+    expect(policyErrors({ identifier_gate: { provenance_sources: ['smokeball_read'] } })).toEqual([
+      listErr,
+    ])
+    expect(
+      policyErrors({
+        identifier_gate: { provenance_sources: ['calendar_invite_list', 'calendar_invite_list'] },
+      })
+    ).toEqual([listErr])
+    expect(
+      policyErrors({ identifier_gate: { provenance_sources: ['couples_settings_read'] } })
+    ).toEqual(['a loosening requires policy.rationale', 'a loosening requires policy.adr'])
+    expect(policyErrors({ identifier_gate: { provenance_sources: [] } })).toEqual([])
     expect(policyErrors({ identifier_gate: { recurring_dates: 'verify_by_month_day' } })).toEqual([
       'a loosening requires policy.rationale',
       'a loosening requires policy.adr',

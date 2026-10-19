@@ -266,3 +266,28 @@ def test_cli_busy_exit_codes() -> None:
 def test_launcher_runs() -> None:
     proc = subprocess.run([str(OPERATOR / "bin/fleet"), "--help"], capture_output=True, text=True, timeout=120)  # noqa: S603 - the repo's own launcher, literal argv
     assert proc.returncode == 0 and "release" in proc.stdout
+
+
+# -- status: the identifier-gate rollback lever (ADR 0093) --------------------------
+def test_status_names_a_seat_carrying_the_identifier_gate_lever() -> None:
+    from bin.lib.fleet import status
+    from bin.lib.fleet.rings import Ring
+
+    class OneBrokenFly(FakeFly):
+        def secret_names(self, app: str) -> tuple[set[str], set[str]]:
+            if app == "hermes-c-seat":
+                raise ToolingError("fly secrets list failed")
+            return super().secret_names(app)
+
+    fly = OneBrokenFly()
+    fly.secrets["hermes-a-seat"] = ({"ANTHROPIC_API_KEY", status.LEVER}, set())
+    fly.secrets["hermes-d-seat"] = (set(), {status.LEVER})  # staged counts too
+    levers = status.lever_flags(fly, ["a-seat", "b-seat", "c-seat", "d-seat"])
+    # Unreadable is None, never False: unknown must not read as unset.
+    assert levers == {"a-seat": True, "b-seat": False, "c-seat": None, "d-seat": True}
+
+    rows = status.seat_rows(FakeStore(), [Ring(1, ["a-seat", "b-seat", "c-seat"])], levers)
+    assert [r["identifier_gate_lever"] for r in rows] == [True, False, None]
+    table = status.render_table(rows).splitlines()
+    assert table[0].rstrip().endswith("id-lever")
+    assert [line.rstrip().rsplit(" ", 1)[-1] for line in table[1:]] == ["SET", "-", "?"]
