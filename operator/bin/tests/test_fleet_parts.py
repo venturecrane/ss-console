@@ -187,7 +187,8 @@ def test_extractor_reads_artifacts_from_small_layers_newest_first(monkeypatch: p
             {"digest": "sha256:big", "size": 10**10},
         ]
     }
-    ex = ImageExtractor(ScriptRunner(Result(0, json.dumps(manifest), "")))
+    ex = ImageExtractor(ScriptRunner(Result(0, "tok", "")))
+    monkeypatch.setattr(ex, "_manifest", lambda repo, digest: json.dumps(manifest).encode())
     monkeypatch.setattr(ex, "_blob", lambda ref: layers[ref.split("@", 1)[1]])
     found = ex.extract(f"{ids.FLEET_REGISTRY}:rel-1@sha256:" + "a" * 64)
     assert found["image-manifest.json"] == b'{"new": 1}'

@@ -22,12 +22,15 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
+import http.client
 import io
 import json
 import re
-import subprocess
+import ssl
 import tarfile
+import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -85,17 +88,35 @@ class BuildOptions:
     volume_forward_compatible: bool = True
 
 
+REGISTRY_HOST = ids.FLEET_REGISTRY.split("/", 1)[0]
+MANIFEST_ACCEPT = ", ".join(
+    (
+        "application/vnd.oci.image.manifest.v1+json",
+        "application/vnd.docker.distribution.manifest.v2+json",
+    )
+)
+
+
 class ImageExtractor:
-    """Read named files out of a pushed image, small layers first-from-the-top."""
+    """Read named files out of a pushed image, small layers first-from-the-top.
+
+    Talks to the registry's v2 HTTP API directly with the Fly auth token
+    (Basic, any username). It deliberately does not shell out to `crane`: on
+    SMD laptops that name is the crane VENTURE launcher, not
+    go-containerregistry, and the first real build (2026-10-19) recorded no
+    capabilities because of it.
+    """
 
     def __init__(self, runner: Runner) -> None:
         self.runner = runner
+        self._token: str | None = None
 
     def extract(self, ref: str) -> dict[str, bytes]:
-        man = json.loads(require_ok(self.runner.run(["crane", "manifest", ref], timeout=120), "crane manifest").stdout)
+        repo, digest = ref.split("@", 1)
+        repo = repo.rsplit(":", 1)[0]
+        man = json.loads(self._manifest(repo, digest))
         wanted = {v: k for k, v in ARTIFACT_PATHS.items()}
         found: dict[str, bytes] = {}
-        repo = ref.split("@", 1)[0].rsplit(":", 1)[0]
         for layer in reversed(man.get("layers") or []):
             missing = {path for path, name in wanted.items() if name not in found}
             if not missing:
@@ -106,11 +127,58 @@ class ImageExtractor:
                 found.setdefault(wanted[member], data)
         return found
 
+    def _auth(self) -> str:
+        if self._token is None:
+            tok = require_ok(self.runner.run(["fly", "auth", "token"], timeout=60), "fly auth token").stdout.strip()
+            if not tok:
+                raise ToolingError("fly auth token printed nothing")
+            self._token = tok
+        return "Basic " + base64.b64encode(f"x:{self._token}".encode()).decode()
+
+    def _get(self, host: str, path: str, accept: str | None = None) -> bytes:
+        """HTTPS GET on the registry host; one https redirect (the blob store) is followed without auth."""
+        if host != REGISTRY_HOST or not path.startswith("/v2/"):
+            raise ToolingError(f"refusing a non-registry request {host}{path}")
+        headers = {"Authorization": self._auth()}
+        if accept:
+            headers["Accept"] = accept
+        try:
+            status, location, body = _https_get(host, path, headers)
+            if status in (301, 302, 303, 307, 308) and location:
+                target = urllib.parse.urlsplit(location)
+                if target.scheme != "https" or not target.hostname:
+                    raise ToolingError(f"refusing a non-https redirect from {path}")
+                status, _, body = _https_get(target.hostname, target.path + ("?" + target.query if target.query else ""), {})
+        except (OSError, http.client.HTTPException) as exc:
+            raise ToolingError(f"registry GET {path} failed: {exc}") from exc
+        if status != 200:
+            raise ToolingError(f"registry GET {path} returned HTTP {status}")
+        return body
+
+    @staticmethod
+    def _split(repo: str) -> tuple[str, str]:
+        host, _, name = repo.partition("/")
+        return host, name
+
+    def _manifest(self, repo: str, digest: str) -> bytes:
+        host, name = self._split(repo)
+        return self._get(host, f"/v2/{name}/manifests/{digest}", MANIFEST_ACCEPT)
+
     def _blob(self, ref: str) -> bytes:
-        proc = subprocess.run(["crane", "blob", ref], capture_output=True, timeout=600, check=False)  # noqa: S603 - literal crane argv, no shell; ref is the digest from crane's own manifest
-        if proc.returncode != 0:
-            raise ToolingError(f"crane blob {ref} failed: {proc.stderr.decode(errors='replace')[-300:]}")
-        return proc.stdout
+        repo, digest = ref.split("@", 1)
+        host, name = self._split(repo)
+        return self._get(host, f"/v2/{name}/blobs/{digest}")
+
+
+def _https_get(host: str, path: str, headers: dict[str, str]) -> tuple[int, str | None, bytes]:
+    # Python 3.13 with an explicit default context: certificates and hostnames are verified.
+    conn = http.client.HTTPSConnection(host, timeout=600, context=ssl.create_default_context())  # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected
+    try:
+        conn.request("GET", path, headers=headers)
+        resp = conn.getresponse()
+        return resp.status, resp.getheader("Location"), resp.read()
+    finally:
+        conn.close()
 
     @staticmethod
     def _members(blob: bytes, names: set[str]) -> list[tuple[str, bytes]]:
@@ -186,7 +254,9 @@ class Builder:
         res = self.fly.build_push(str(toml_path), label, pins["ss_console_sha"])
         require_ok(res, "fly deploy --build-only --push")
         image_ref = f"{ids.FLEET_REGISTRY}:{label}"
-        digest = digest_from_build_output(res.text) or self._crane_digest(image_ref)
+        digest = digest_from_build_output(res.text)
+        if not digest:
+            raise ToolingError("could not read the pushed image digest from the build output")
         release = {
             "release_id": f"img-{stamp}-{pins['ss_console_sha'][:8]}-{pins['overlay_ref'][:8]}",
             "kind": "image", "image_ref": image_ref, "image_digest": ids.digest(digest),
@@ -199,13 +269,8 @@ class Builder:
         self.log(f"release {release['release_id']}: {image_ref} {digest}")
         return release
 
-    def _crane_digest(self, ref: str) -> str:
-        return require_ok(self.runner.run(["crane", "digest", ref], timeout=120), "crane digest").stdout.strip()
-
     def upload_artifacts(self, release: dict[str, Any], pins: dict[str, str]) -> None:
         digest = release["image_digest"]
-        # crane reads registry.fly.io with the docker credential `fly auth docker` writes.
-        self.runner.run(["fly", "auth", "docker"], timeout=60)
         try:
             files = self.extractor.extract(f"{release['image_ref']}@{digest}")
         except (ToolingError, OSError, tarfile.TarError, json.JSONDecodeError) as exc:
