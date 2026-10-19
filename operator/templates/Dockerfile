@@ -1288,7 +1288,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # refused every recurring invite on 'FREQ' (captain-mark, Scott's every-other-
 # week event, 16:31Z). Tracked twin moved: couples persona ("Offer only what
 # you can do").
-ARG OVERLAY_REF="f231791df88de5986c875fb4595ecc384a682c61"
+# 2026-10-19d (222ae51d, overlay #517): a calendar invitation opens with who
+# sent it and who asked ("Captain Mark added this to your shared calendar at
+# Scott's request."), then the description, then a reply line (Captain: the
+# Kids invite was "a little stark").
+ARG OVERLAY_REF="222ae51d93b8a92d0eab1d8d63dfa2c213383c8a"
 
 # No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
 # across seats; the slug reaches the Machine only as fly.toml [env]
