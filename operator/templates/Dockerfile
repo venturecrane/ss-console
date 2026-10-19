@@ -1258,7 +1258,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # patch, search_files and skill_manage are disabled, and activation step 5a
 # refuses a couples seat offered any of them or with no record-store fence.
 # New tracked twin: the couples template (tests/fixtures/roles/couples/customer.yaml).
-ARG OVERLAY_REF="71af305c29b352915bed2061f86976852e59d668"
+# 2026-10-18 (9cca5192, the overlay #507 merge commit). #507 is TEST-ONLY: the
+# couples template twin now authors external_send_internal: autonomous and
+# test_couples_template_boots.py proves a rostered send is allowed on a
+# scheduled turn. No runtime file moved since 71af305c; the bump exists so the
+# SEC-32 drift gate sees the twin at the pinned ref.
+ARG OVERLAY_REF="9cca51923e912695fee90f38ad657a475d7ca7cd"
 
 ARG CUSTOMER_SLUG=customer-zero
 
