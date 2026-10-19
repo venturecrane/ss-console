@@ -238,8 +238,8 @@ def test_heartbeat_secrets_stripped_from_agent_before_gateway_exec() -> None:
 
 
 def test_config_applier_launches_as_root_before_exec_drop() -> None:
-    """The `python -m config_applier` launch must come BEFORE the
-    `exec setpriv --reuid=hermes` drop (ADR 0044 Decision 5 / OP-P2-1).
+    """The config_applier launch must come BEFORE the drop to hermes, now the
+    `smd_supervise` release (ADR 0044 Decision 5 / OP-P2-1).
 
     Forked before the exec, the applier is a root background child that survives
     the exec and keeps uid 0 — the only uid that can write the hermes-owned
@@ -250,13 +250,17 @@ def test_config_applier_launches_as_root_before_exec_drop() -> None:
     loudly on that regression.
     """
     lines = _code_lines(_ENTRYPOINT)
-    launch_idx = _first_index(lines, r"python\b.*-m\s+config_applier")
-    # `exec setpriv` and `--reuid=hermes` sit on separate continuation lines, so
-    # match the `exec setpriv` head only.
-    exec_idx = _first_index(lines, r"\bexec\b\s+setpriv\b")
+    # Launched through the supervisor's root respawn loop (smd_root_poller,
+    # operator/runners/supervisor/entrypoint-supervisor.sh), which no longer
+    # respawns on the applier's stopped exit 130.
+    launch_idx = _first_index(lines, r"^\s*smd_root_poller\s+config_applier\b")
+    # The drop: the entrypoint no longer execs into the gateway; `smd_supervise`
+    # releases the held gateway process (setpriv --reuid=hermes inside it) and
+    # supervises it. Everything before that line runs as root.
+    exec_idx = _first_index(lines, r"^smd_supervise$")
 
-    assert launch_idx != -1, "could not find the `python -m config_applier` launch in entrypoint.sh"
-    assert exec_idx != -1, "could not find the `exec setpriv --reuid=hermes` drop in entrypoint.sh"
+    assert launch_idx != -1, "could not find the `smd_root_poller config_applier` launch in entrypoint.sh"
+    assert exec_idx != -1, "could not find the `smd_supervise` release (the drop to hermes) in entrypoint.sh"
     assert launch_idx < exec_idx, (
         f"the config-applier launch (line {launch_idx + 1}) must run BEFORE the "
         f"exec-drop to hermes (line {exec_idx + 1}) so it stays root — moving it after "

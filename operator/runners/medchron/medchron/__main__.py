@@ -450,6 +450,19 @@ def _cmd_explain_date(args: argparse.Namespace) -> int:
     return 0
 
 
+def _dispatch(args: argparse.Namespace) -> int:
+    """Run the chosen command. A job run (``run``, ``draft``) watches for the
+    daemon's Machine-stop checkpoint (``stop_request.py``) and exits 76 at it,
+    writing no verdict, so the job stays claimed and the next boot resumes it."""
+    if args.cmd in ("run", "draft") and not getattr(args, "dry_run", False):
+        stop_request.arm(args.job_dir)
+    try:
+        return int(args.fn(args))
+    except stop_request.StopRequested as stop:
+        print(f"medchron: {stop}; exiting {stop_request.STOP_EXIT} for the next boot to resume", file=sys.stderr)
+        return stop_request.STOP_EXIT
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="medchron")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -522,14 +535,7 @@ def main(argv: list[str] | None = None) -> int:
     ex.add_argument("date", help="YYYY-MM-DD")
     ex.add_argument("reason")
     ex.set_defaults(fn=_cmd_explain_date)
-    args = p.parse_args(argv)
-    if args.cmd in ("run", "draft") and not getattr(args, "dry_run", False):
-        stop_request.arm(args.job_dir)  # the daemon's Machine-stop checkpoint (stop_request.py)
-    try:
-        return int(args.fn(args))
-    except stop_request.StopRequested as stop:
-        print(f"medchron: {stop}; exiting {stop_request.STOP_EXIT} for the next boot to resume", file=sys.stderr)
-        return stop_request.STOP_EXIT
+    return _dispatch(p.parse_args(argv))
 
 
 if __name__ == "__main__":
