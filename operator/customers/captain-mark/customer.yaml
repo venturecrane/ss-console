@@ -36,7 +36,10 @@ people:
   - id: p1
     name: Laurie Perrin
     telegram_id: ''
-    email: lsperrin.lp@gmail.com
+    # REHEARSAL (2026-10-18): an SMD test inbox stands in for Laurie so no
+    # rehearsal message can reach her. Restore lsperrin.lp@gmail.com here and
+    # in scope.inbound_allow_from before her real hello.
+    email: ss-probe-runner@agentmail.to
     channel: email
   - id: p2
     name: Scott Durgan
@@ -226,7 +229,7 @@ scope:
   email_keyword_blocks: []
   domain_blocks: []
   inbound_allow_from:
-    - lsperrin.lp@gmail.com
+    - ss-probe-runner@agentmail.to
     - scott.durgan@gmail.com
 
 # ---- ESCALATION ----
