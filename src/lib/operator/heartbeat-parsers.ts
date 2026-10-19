@@ -47,6 +47,12 @@ export interface HeartbeatBody {
   shortfalls?: unknown
   shortfalls_last_ts?: unknown
   shortfalls_json?: unknown
+  image_ref?: unknown
+  skills_version?: unknown
+  config_digest?: unknown
+  jobs_running?: unknown
+  jobs_queued?: unknown
+  wakes_pending?: unknown
 }
 
 // The breaker ladder vocabulary (overlay shared/cost_breaker.read_stop_state).
@@ -529,4 +535,62 @@ export function parseStickyStop(body: HeartbeatBody): ParsedStickyStop {
       ? body.sticky_stop_condition
       : null
   return { level, reason, condition }
+}
+
+/**
+ * A fleet-release field as the beat carried it. `reported: false` is an
+ * ABSENT key -- the seat (an older overlay) said nothing, and the column keeps
+ * what it had. `reported: true` with `value: null` is the seat saying it does
+ * not know, or a value that failed to parse, and stores NULL.
+ */
+export type Reported<T> = { reported: false } | { reported: true; value: T | null }
+
+export interface ParsedFleetRelease {
+  imageRef: Reported<string>
+  skillsVersion: Reported<string>
+  configDigest: Reported<string>
+  jobsRunning: Reported<number>
+  jobsQueued: Reported<number>
+  wakesPending: Reported<number>
+}
+
+// The receiver's own bound on the three identity strings, for the same reason
+// as the stop reason: a seat running unexpected code must not write an
+// unbounded or control-character column that `fleet status` later prints.
+// Printable ASCII only; an image ref, a version and a digest are all ASCII.
+const FLEET_RELEASE_STRING_RE = /^[\x20-\x7E]{1,300}$/
+
+function reported<T>(
+  body: HeartbeatBody,
+  key: keyof HeartbeatBody,
+  parse: (v: unknown) => T | null
+): Reported<T> {
+  if (!Object.prototype.hasOwnProperty.call(body, key)) return { reported: false }
+  const raw: unknown = body[key]
+  if (raw === undefined) return { reported: false }
+  return { reported: true, value: parse(raw) }
+}
+
+export function parseFleetReleaseString(value: unknown): string | null {
+  return typeof value === 'string' && FLEET_RELEASE_STRING_RE.test(value) ? value : null
+}
+
+/**
+ * What the seat says it runs and how busy it is (seat fleet scaling, migration
+ * 0129). Unlike `parseObservability`, these distinguish ABSENT from null:
+ * every seat on an older overlay omits all six, and an omission must not erase
+ * what the last seat that did report said. `fleet release` reads `image_ref`
+ * and `skills_version` back after a deploy, and the busy gate reads the three
+ * counts, where NULL means unknown (gate falls back to its live probe) and 0
+ * means none.
+ */
+export function parseFleetRelease(body: HeartbeatBody): ParsedFleetRelease {
+  return {
+    imageRef: reported(body, 'image_ref', parseFleetReleaseString),
+    skillsVersion: reported(body, 'skills_version', parseFleetReleaseString),
+    configDigest: reported(body, 'config_digest', parseFleetReleaseString),
+    jobsRunning: reported(body, 'jobs_running', parseNonNegInt),
+    jobsQueued: reported(body, 'jobs_queued', parseNonNegInt),
+    wakesPending: reported(body, 'wakes_pending', parseNonNegInt),
+  }
 }

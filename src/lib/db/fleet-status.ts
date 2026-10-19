@@ -11,6 +11,7 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types'
+import type { ParsedFleetRelease, Reported } from '../operator/heartbeat-parsers'
 
 export const DEFAULT_PERIOD_SECONDS = 60
 export const DEFAULT_GRACE_MINUTES = 5
@@ -57,6 +58,8 @@ export interface FleetStatusUpsert {
   shortfalls: number | null
   shortfallsLastTs: string | null
   shortfallsJson: string | null
+  /** Migration 0129. Absent keys keep the column; reported nulls store NULL. */
+  release: ParsedFleetRelease
 }
 
 /**
@@ -85,8 +88,11 @@ const FLEET_STATUS_UPSERT_SQL = `INSERT INTO fleet_status (
        gateway_loop_ok, gateway_loop_age_seconds, gateway_supervisor_state,
        gateway_restarts_last_hour,
        send_refusals, send_refusals_last_ts, send_refusals_json, tool_failures_json,
-       shortfalls, shortfalls_last_ts, shortfalls_json, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+       shortfalls, shortfalls_last_ts, shortfalls_json,
+       image_ref, skills_version, config_digest,
+       jobs_running, jobs_queued, wakes_pending, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+               ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(customer_slug) DO UPDATE SET
        entity_id               = excluded.entity_id,
        last_heartbeat_ts       = excluded.last_heartbeat_ts,
@@ -123,7 +129,37 @@ const FLEET_STATUS_UPSERT_SQL = `INSERT INTO fleet_status (
        shortfalls              = COALESCE(excluded.shortfalls, fleet_status.shortfalls),
        shortfalls_last_ts      = COALESCE(excluded.shortfalls_last_ts, fleet_status.shortfalls_last_ts),
        shortfalls_json         = COALESCE(excluded.shortfalls_json, fleet_status.shortfalls_json),
+       image_ref      = CASE WHEN ? = 1 THEN excluded.image_ref ELSE fleet_status.image_ref END,
+       skills_version = CASE WHEN ? = 1 THEN excluded.skills_version ELSE fleet_status.skills_version END,
+       config_digest  = CASE WHEN ? = 1 THEN excluded.config_digest ELSE fleet_status.config_digest END,
+       jobs_running   = CASE WHEN ? = 1 THEN excluded.jobs_running ELSE fleet_status.jobs_running END,
+       jobs_queued    = CASE WHEN ? = 1 THEN excluded.jobs_queued ELSE fleet_status.jobs_queued END,
+       wakes_pending  = CASE WHEN ? = 1 THEN excluded.wakes_pending ELSE fleet_status.wakes_pending END,
        updated_at              = datetime('now')`
+
+type ReleaseField = Reported<string> | Reported<number>
+const reportedValue = (r: ReleaseField): string | number | null => (r.reported ? r.value : null)
+const reportedFlag = (r: ReleaseField): 0 | 1 => (r.reported ? 1 : 0)
+
+/**
+ * The 0129 fields bind twice: their values into VALUES (a first beat inserts
+ * whatever it reported, NULL for the rest), then one present-flag each into
+ * the DO UPDATE `CASE`, in column order. A flag of 0 is an ABSENT key and the
+ * column keeps what it had; 1 overwrites, INCLUDING to NULL. COALESCE cannot
+ * express this: it would make an explicit "unknown" indistinguishable from
+ * silence, and a stale `jobs_running` would then outlive the seat's own report.
+ */
+function releaseBinds(r: ParsedFleetRelease): Array<string | number | null> {
+  const fields: ReleaseField[] = [
+    r.imageRef,
+    r.skillsVersion,
+    r.configDigest,
+    r.jobsRunning,
+    r.jobsQueued,
+    r.wakesPending,
+  ]
+  return [...fields.map(reportedValue), ...fields.map(reportedFlag)]
+}
 
 export async function upsertFleetStatus(db: D1Database, u: FleetStatusUpsert): Promise<void> {
   await db
@@ -164,7 +200,8 @@ export async function upsertFleetStatus(db: D1Database, u: FleetStatusUpsert): P
       u.toolFailuresJson,
       u.shortfalls,
       u.shortfallsLastTs,
-      u.shortfallsJson
+      u.shortfallsJson,
+      ...releaseBinds(u.release)
     )
     .run()
 }
