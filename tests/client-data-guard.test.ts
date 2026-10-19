@@ -87,6 +87,25 @@ describe('client-data-guard: leaves product and seat work alone', () => {
   })
 })
 
+describe('client-data-guard: the tools that take documents OFF a laptop', () => {
+  it.each([
+    'OPS_APP=ops-ashton-price bash operator/ops-machine/move-by-folder.sh ~/smd-medchron-data mac23/smd-medchron-data /tmp/list.txt',
+    'bash /x/operator/ops-machine/move-to-ops.sh /Users/scott/smd-medchron-data mac23/smd-medchron-data ./run-1',
+    'python3 operator/ops-machine/laptop-offboard.py --host mac23 --from ops-ashton-price --execute',
+  ])('allows: %s', (cmd) => {
+    expect(bash(cmd)).toBe(0)
+  })
+
+  it.each([
+    'bash operator/ops-machine/move-to-ops.sh ~/smd-medchron-data x ./a; cat ~/smd-medchron-data/irma/a.pdf',
+    'bash operator/ops-machine/move-to-ops.sh ~/smd-medchron-data x ./a && ls ~/smd-medchron-data',
+    'bash operator/ops-machine/move-to-ops.sh $(ls ~/smd-medchron-data)',
+    'cp ~/smd-medchron-data/a.pdf /tmp # operator/ops-machine/move-to-ops.sh',
+  ])('still blocks anything chained to one: %s', (cmd) => {
+    expect(bash(cmd)).toBe(2)
+  })
+})
+
 describe('client-data-guard: workspace and break-glass', () => {
   it('allows everything on a workspace (marker present)', () => {
     const marker = path.join(tmp, 'marker')
