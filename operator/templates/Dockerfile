@@ -1276,7 +1276,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # two-person agree are removed (Captain, 2026-10-19: an assistant, not a
 # conflict-resolution tool; Laurie's own calendar request was refused). #511:
 # the couples template twin. Tracked twins moved: couples persona, template.
-ARG OVERLAY_REF="782d5c592e5c0be80257f05b31e890272734acf6"
+# 2026-10-19b (8f6d28d5, the overlay #515 merge commit; carries #512-#514).
+# #512/#515: concurrent cron routines and concurrent email text replies each
+# deliver; Hermes skips a post_llm_call callback still running for another
+# session, so the plugins now only enqueue and a worker sends; a dropped one is
+# an ERROR + alert (captain-mark lost Laurie's welcome 15:51Z). #513/#514: fleet
+# heartbeat facts + skills_applier; hermes_ref optional in validate.
+ARG OVERLAY_REF="8f6d28d5b744e39e929956ed8ab53c44e0456399"
 
 ARG CUSTOMER_SLUG=customer-zero
 

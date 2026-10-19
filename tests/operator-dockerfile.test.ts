@@ -1560,7 +1560,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // text gets that text as its reply (captain-mark 03:12Z silence).
     // -> 782d5c59 (overlay#510, #511), 2026-10-19: either couples partner acts
     // alone; no "share it" hold, no two-person agree.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="782d5c592e5c0be80257f05b31e890272734acf6"')
+    // -> 8f6d28d5 (overlay#512-#515), 2026-10-19: concurrent routines and
+    // replies each deliver; a dropped one is loud.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="8f6d28d5b744e39e929956ed8ab53c44e0456399"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
