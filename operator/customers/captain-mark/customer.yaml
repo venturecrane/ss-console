@@ -70,6 +70,12 @@ personas:
       exposure:
         internal_write: autonomous
         external_send: confirm
+        # Sends to a ROSTERED address only, which on a couples seat is exactly
+        # the two partners (validator rule: roster == people). Without it the
+        # seat cannot deliver a hello, a routine, or a two-person notice by
+        # email: those run on scheduled turns with no channel to confirm on.
+        # Same grant as The Brokery. Anything off the roster stays confirm.
+        external_send_internal: autonomous
     skills:
       - name: calendar
         version: pending
