@@ -38,6 +38,7 @@ from . import (
     proof_mode,
     rehearsal,
     seat as seat_mod,
+    stop_request,
     unit_proof,
 )
 from .covered import covered_sets, documents_pulled
@@ -367,6 +368,9 @@ class Driver:
             if st.is_done(stage.name) and self.start is None:
                 self._note_skip(stage, slug_done, notes)
                 continue
+            # The Machine-stop checkpoint: every stage before this one is on
+            # disk, so the next attempt starts here and repeats nothing paid.
+            stop_request.check(stage.name)
             if stage.decision:
                 out = self._decide(stage, unit, st, notes)
             else:

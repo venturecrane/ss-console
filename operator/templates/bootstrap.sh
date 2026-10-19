@@ -367,7 +367,35 @@ fi
 # version (the image is the deploy unit). The copy runs as the hermes user into
 # the hermes-owned volume. FAIL-CLOSED: a Machine whose bound catalog cannot be
 # seeded MUST NOT proceed to a guaranteed crash-loop with a misleading error.
-if [ -d /app/skills ]; then
+#
+# Skills as a release (fleet waves, 2026-10-19): when the root skills applier
+# has installed a verified release at /var/lib/smd-skills/current, the volume
+# is seeded from THAT, not from the image, by the overlay's one shared module
+# (seed + retired prune + omitted prune, the same rules as the blocks below,
+# run as this hermes process, refusing symlinks). The blocks below stay as the
+# fallback: no release installed, or an image built from an overlay that
+# predates skills_applier.sync, or a sync that failed (logged, then the image
+# seed runs, which is what every boot did before).
+# skills-release-seed:begin (tests/operator-skill-deploy.test.ts runs this block)
+_skills_release=/var/lib/smd-skills/current
+_skills_from_release=0
+if [ -d "${_skills_release}" ] \
+   && /opt/hermes/.venv/bin/python3 -c "import skills_applier.sync" 2>/dev/null; then
+  if /opt/hermes/.venv/bin/python3 -m skills_applier.sync \
+       --source "$(readlink -f "${_skills_release}")" \
+       --dest "${HERMES_HOME}/skills" \
+       --retired-file /app/retired-skills.txt \
+       --enabled-skills-from "${CUSTOMER_YAML}"; then
+    _skills_from_release=1
+    log "Skill catalog seeded from the installed skills release ($(readlink -f "${_skills_release}"))"
+  else
+    log "WARNING: skills release sync failed; seeding from the image catalog instead"
+  fi
+fi
+# skills-release-seed:end
+if [ "${_skills_from_release}" = 1 ]; then
+  : # the release sync above seeded and pruned the catalog
+elif [ -d /app/skills ]; then
   log "Seeding repo skill catalog onto the volume (/app/skills -> ${HERMES_HOME}/skills)..."
   # If the catalog ROOT is itself a stale symlink (an older seeding approach
   # aliased the whole dir back into /app/skills), drop the link before seeding —
@@ -419,6 +447,7 @@ fi
 # in the image catalog is logged and skipped here; tests/forbidden-strings.test.ts
 # is where that conflict fails, before an image is built. boot-smoke-test.sh
 # step 6c asserts the absence on the seat.
+if [ "${_skills_from_release}" != 1 ]; then
 # retired-skill-prune:begin (tests/operator-skill-deploy.test.ts runs this block)
 _app_skills=/app/skills
 _retired_list=/app/retired-skills.txt
@@ -502,6 +531,7 @@ else
   done
 fi
 # omitted-skill-prune:end
+fi # the image-catalog prunes, skipped when the release sync ran
 
 # Publish the seat's timezone on the env channel Hermes' clock resolves first
 # (hermes_time._resolve_timezone_name: HERMES_TIMEZONE env > global config.yaml

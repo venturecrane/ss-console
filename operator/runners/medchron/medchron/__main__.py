@@ -10,7 +10,15 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import config as config_mod, dag, driver as driver_mod, proof_mode, rehearsal, verdict as verdict_mod
+from . import (
+    config as config_mod,
+    dag,
+    driver as driver_mod,
+    proof_mode,
+    rehearsal,
+    stop_request,
+    verdict as verdict_mod,
+)
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
@@ -515,7 +523,13 @@ def main(argv: list[str] | None = None) -> int:
     ex.add_argument("reason")
     ex.set_defaults(fn=_cmd_explain_date)
     args = p.parse_args(argv)
-    return int(args.fn(args))
+    if args.cmd in ("run", "draft") and not getattr(args, "dry_run", False):
+        stop_request.arm(args.job_dir)  # the daemon's Machine-stop checkpoint (stop_request.py)
+    try:
+        return int(args.fn(args))
+    except stop_request.StopRequested as stop:
+        print(f"medchron: {stop}; exiting {stop_request.STOP_EXIT} for the next boot to resume", file=sys.stderr)
+        return stop_request.STOP_EXIT
 
 
 if __name__ == "__main__":

@@ -57,7 +57,7 @@ describe('Operator customer Machine entrypoint — broker respawn supervisor', (
 
   it('forks the supervisor while still root, BEFORE dropping to the hermes gateway', () => {
     const supervisorIdx = ENTRYPOINT_CODE.indexOf('SUPERVISOR_PID=$!')
-    const hermesExec = ENTRYPOINT_CODE.search(/exec\s+setpriv[\s\S]*?--reuid=hermes/)
+    const hermesExec = ENTRYPOINT_CODE.search(/^smd_supervise$/m)
     expect(supervisorIdx, 'supervisor must be present').toBeGreaterThan(-1)
     expect(hermesExec, 'hermes exec-drop must be present').toBeGreaterThan(-1)
     expect(
@@ -141,7 +141,7 @@ describe('Operator customer Machine entrypoint — ADR 0085 establishment spool 
       /while\s+true;?\s*do[\s\S]*?-m establish_intake[\s\S]*?done\s*\)\s*&/
     )
     const launchIdx = ENTRYPOINT_CODE.indexOf('-m establish_intake')
-    const hermesExec = ENTRYPOINT_CODE.search(/exec\s+setpriv[\s\S]*?--reuid=hermes/)
+    const hermesExec = ENTRYPOINT_CODE.search(/^smd_supervise$/m)
     expect(launchIdx).toBeGreaterThan(-1)
     expect(
       launchIdx < hermesExec,
@@ -242,7 +242,7 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
       /while\s+true;?\s*do[\s\S]*?-m medchron\.daemon[\s\S]*?done\s*\)\s*&/
     )
     const launchIdx = ENTRYPOINT_CODE.indexOf('-m medchron.daemon')
-    const hermesExec = ENTRYPOINT_CODE.search(/exec\s+setpriv[\s\S]*?--reuid=hermes/)
+    const hermesExec = ENTRYPOINT_CODE.search(/^smd_supervise$/m)
     expect(launchIdx).toBeGreaterThan(-1)
     expect(launchIdx < hermesExec, 'the daemon must be forked while still root').toBe(true)
     expect(ENTRYPOINT_CODE).toMatch(/Root medchron daemon NOT launched/)
@@ -260,7 +260,7 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
   it('does not respawn the daemon after the Machine stop, and does after a crash', () => {
     // The loop that encloses the daemon start: the last loop opener before it.
     const launch = ENTRYPOINT_CODE.indexOf('-m medchron.daemon')
-    const open = ENTRYPOINT_CODE.lastIndexOf('( while true; do', launch)
+    const open = ENTRYPOINT_CODE.lastIndexOf('( _mc_stop=', launch)
     const close = ENTRYPOINT_CODE.indexOf('done ) &', launch)
     expect(launch > -1 && open > -1 && close > launch, 'the medchron respawn loop').toBe(true)
     const body = ENTRYPOINT_CODE.slice(open, close + 'done ) &'.length)
@@ -370,7 +370,7 @@ describe('Operator customer Machine entrypoint — ADR 0009 / SEC-22 isolation b
 
   it('runs the boot check BEFORE the exec-drop to the hermes gateway', () => {
     const checkIdx = ENTRYPOINT_CODE.indexOf('INVARIANT7_BOOT_CHECK=')
-    const hermesExec = ENTRYPOINT_CODE.search(/exec\s+setpriv[\s\S]*?--reuid=hermes/)
+    const hermesExec = ENTRYPOINT_CODE.search(/^smd_supervise$/m)
     expect(checkIdx, 'the boot check must be present').toBeGreaterThan(-1)
     expect(hermesExec, 'hermes exec-drop must be present').toBeGreaterThan(-1)
     expect(
@@ -426,7 +426,7 @@ describe('Operator customer Machine entrypoint — gateway liveness supervisor (
 
   it('forks the supervisor while still root, BEFORE the exec-drop to hermes', () => {
     const supervisorIdx = ENTRYPOINT_CODE.indexOf('gateway_liveness_escalate()')
-    const hermesExec = ENTRYPOINT_CODE.search(/exec\s+setpriv[\s\S]*?--reuid=hermes/)
+    const hermesExec = ENTRYPOINT_CODE.search(/^smd_supervise$/m)
     expect(supervisorIdx, 'supervisor must be present').toBeGreaterThan(-1)
     expect(
       supervisorIdx < hermesExec,
@@ -435,7 +435,7 @@ describe('Operator customer Machine entrypoint — gateway liveness supervisor (
   })
 
   it('is forked AFTER SMD_GATEWAY_PID is exported (its kill target)', () => {
-    const pidExport = ENTRYPOINT_CODE.indexOf('export SMD_GATEWAY_PID=')
+    const pidExport = ENTRYPOINT_CODE.indexOf('smd_supervisor_boot')
     const supervisorIdx = ENTRYPOINT_CODE.indexOf('gateway_heartbeat_path()')
     expect(pidExport).toBeGreaterThan(-1)
     expect(pidExport < supervisorIdx).toBe(true)

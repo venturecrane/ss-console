@@ -54,7 +54,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import budget as budget_mod, limits as limits_mod, proof_mode
+from .. import budget as budget_mod, limits as limits_mod, proof_mode, stop_request
 from ..demand import deliver, facts as facts_mod, preflight, pull, summarize, transcribe
 from ..demand.firm import DemandFirm
 from ..ledger import Ledger
@@ -228,6 +228,7 @@ class DraftingRun(Placing):
     def _stage(self, name: str, fn: Callable[[], Any]) -> None:
         if self._is_done(name):
             return
+        stop_request.check(name)  # the Machine-stop checkpoint: every earlier stage is on disk
         t0 = time.time()
         self.log(f"[{name}] start")
         fn()

@@ -22,7 +22,7 @@ import signal
 import time
 from typing import Any
 
-from . import verdict as verdict_mod
+from . import stop_request, verdict as verdict_mod
 from .proof import review as _review
 
 #: The job-dir markers ``proof/review.gate`` reads: review.py's own constants,
@@ -36,6 +36,9 @@ MARKER_PREFIX = ".resume-"
 #: The signals a Machine stop delivers. A child that died of one of these while
 #: the daemon was stopping was cut short by the stop, not by its own defect.
 STOP_SIGNALS = frozenset({-signal.SIGTERM, -signal.SIGINT})
+#: A child that found ``.stop-request`` at a checkpoint and exited there
+#: (``stop_request.py``): stopped by the Machine, never by its own defect.
+CHECKPOINT_EXIT = stop_request.STOP_EXIT
 #: How long a lane waits for the daemon's own stop flag after its child died of
 #: a stop signal: the same signal reaches the daemon's main thread, which sets
 #: the flag between bytecodes, so this is a race window and not a timeout.
@@ -119,6 +122,9 @@ def start_run(d: Any, job_id: str, base: list[str]) -> list[str]:
     """
     st = d._daemon_state(job_id)
     redo = [str(x) for x in (st.get("resume_redo") or [])]
+    # The request that cut the previous attempt is spent: a resumed child that
+    # found it would stop at its first checkpoint, every boot.
+    (d.job_dir(job_id) / stop_request.NAME).unlink(missing_ok=True)
     marker = d.job_dir(job_id) / RELEASE_MARKER
     if st.get("resume_release"):
         # The child reads this file, never argv: one marker every lane's runner
@@ -188,7 +194,14 @@ def cut_short_by_stop(d: Any, job_id: str, code: int, out: str) -> bool:
     Only a stop counts. A child the cgroup OOM-killed dies of SIGKILL with
     the daemon running; that is a real failure, recorded, and a re-run
     would die the same way. A real ending (delivered, held, refused) is
-    recorded even mid-stop: the work happened."""
+    recorded even mid-stop: the work happened.
+
+    A child that exited :data:`CHECKPOINT_EXIT` stopped at a checkpoint on the
+    daemon's own request and wrote no verdict: kept claimed whatever the flag
+    reads, because only a stop writes that request."""
+    if code == CHECKPOINT_EXIT:
+        logger.warning("%s job %s checkpointed on the stop request (exit %s); left claimed", d.LANE, job_id, code)
+        return True
     if code in STOP_SIGNALS:
         waited = 0.0
         while not d.stopping() and waited < STOP_FLAG_GRACE_SECONDS:

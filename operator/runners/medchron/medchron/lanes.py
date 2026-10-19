@@ -35,12 +35,19 @@ def _module(name: str) -> Any:
     raise ValueError(f"no lane module {name!r}")
 
 
-def start_other_lanes(d: Any, *, stop: Callable[[], bool], poll_seconds: float) -> None:
+def start_other_lanes(d: Any, *, stop: Callable[[], bool], poll_seconds: float) -> list[Any]:
+    """Start each lane; returns the threads that started, which the daemon
+    joins on a Machine stop so a lane's child drains instead of being cut."""
+    threads: list[Any] = []
     for lane in LANES:
         try:
-            _module(lane).start_lane(d, stop=stop, poll_seconds=poll_seconds)
+            t = _module(lane).start_lane(d, stop=stop, poll_seconds=poll_seconds)
         except Exception:  # logged with its trace; the other lanes keep running
             logger.exception("%s not started", lane)
+            continue
+        if t is not None:
+            threads.append(t)
+    return threads
 
 
 __all__ = ["LANES", "start_other_lanes"]

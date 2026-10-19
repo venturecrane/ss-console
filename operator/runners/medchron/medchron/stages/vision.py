@@ -34,7 +34,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .. import llm
+from .. import llm, stop_request
 from ..update.pageid import SKIPPED
 from .base import StageRun, append_jsonl, read_jsonl
 from .transcript import UNREAD, merge_pages, merged, recorded_ids, transcript_state
@@ -276,6 +276,7 @@ def run(sr: StageRun) -> int:
         groups.append(group)
     timed_out = 0
     for items in groups:
+        stop_request.check("vision")  # every finished page is already appended to its part file
         s = sr.doorway.batch_call(
             "vision",
             items,
