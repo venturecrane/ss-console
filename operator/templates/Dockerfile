@@ -1263,7 +1263,14 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # test_couples_template_boots.py proves a rostered send is allowed on a
 # scheduled turn. No runtime file moved since 71af305c; the bump exists so the
 # SEC-32 drift gate sees the twin at the pinned ref.
-ARG OVERLAY_REF="9cca51923e912695fee90f38ad657a475d7ca7cd"
+# 2026-10-19 (774977a9, the overlay #509 merge commit; carries #508). #508: a
+# rostered sender's email turn that ends in text and drafted nothing gets that
+# text as its reply (hermes-smd-reply text_delivery, post_llm_call), through
+# the trust plugin's own pre_tool_call and the relay's full decision; AgentMail
+# seats only, once per inbound message, never when anything answered it.
+# captain-mark 03:12Z silence. #509: the couples persona twin (persona.md
+# gains "How you answer email"). Tracked twin moved: couples persona.
+ARG OVERLAY_REF="774977a9b951e04feb7b6c695e38c671993a3f8b"
 
 ARG CUSTOMER_SLUG=customer-zero
 
