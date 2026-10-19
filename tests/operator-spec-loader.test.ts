@@ -51,7 +51,7 @@ describe('Operator entrypoint — authored-spec tree delivery', () => {
 
   it('runs the boot fetch synchronously BEFORE the privilege drop', () => {
     const fetchIdx = CODE.indexOf('-m spec_applier --once')
-    const dropIdx = CODE.search(/exec\s+setpriv[\s\S]*?--reuid=hermes/)
+    const dropIdx = CODE.search(/^smd_supervise$/m)
     expect(fetchIdx, 'boot fetch must be present').toBeGreaterThan(-1)
     expect(dropIdx, 'hermes exec-drop must be present').toBeGreaterThan(-1)
     // bootstrap.sh runs translate.py right after the drop, and translate renders
@@ -61,9 +61,9 @@ describe('Operator entrypoint — authored-spec tree delivery', () => {
   })
 
   it('forks the spec poller as a supervised root child before the drop', () => {
-    expect(CODE).toMatch(/while\s+true;\s*do[\s\S]*?-m spec_applier[\s\S]*?done\s*\)\s*&/)
-    const forkIdx = CODE.indexOf('python -m spec_applier || true')
-    const dropIdx = CODE.search(/exec\s+setpriv[\s\S]*?--reuid=hermes/)
+    expect(CODE).toMatch(/smd_root_poller spec_applier "spec applier"/)
+    const forkIdx = CODE.indexOf('smd_root_poller spec_applier')
+    const dropIdx = CODE.search(/^smd_supervise$/m)
     expect(forkIdx).toBeGreaterThan(-1)
     expect(forkIdx).toBeLessThan(dropIdx)
   })
@@ -99,7 +99,7 @@ describe('Operator entrypoint — spec-dir ownership boot gate', () => {
   it('runs the gate before the exec-drop, after the spec tree is installed', () => {
     const installIdx = CODE.indexOf('-m spec_applier --once')
     const gateIdx = CODE.indexOf('SPEC_OWNERSHIP_CHECK="')
-    const dropIdx = CODE.search(/exec\s+setpriv[\s\S]*?--reuid=hermes/)
+    const dropIdx = CODE.search(/^smd_supervise$/m)
     expect(installIdx).toBeLessThan(gateIdx)
     expect(gateIdx).toBeLessThan(dropIdx)
   })

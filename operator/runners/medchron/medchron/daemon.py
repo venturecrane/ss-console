@@ -31,7 +31,6 @@ import json
 import logging
 import os
 import signal
-import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -42,7 +41,8 @@ from .broker_client import BrokerClient, BrokerError
 from .covered import delivery_fields
 from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
-from . import config as config_mod, job as job_mod, lane_proof, proof_run, requeue, resume as resume_mod, retention
+from . import child as child_mod, config as config_mod, job as job_mod, lane_proof, proof_run, quiesce, requeue
+from . import resume as resume_mod, retention
 from . import verdict as verdict_mod, wake_grace
 from .proof import holds as proof_holds, watch as proof_watch
 
@@ -125,6 +125,13 @@ class Daemon:
     stopping: Callable[[], bool] = lambda: False
     #: Explicit firm-config path; None resolves the env/default the seat uses.
     firm_config: str | None = None
+    #: How often a running job's beat thread rewrites the heartbeat
+    #: (``child.run_child``), and how long a stop waits for a child to
+    #: checkpoint before terminating it.
+    heartbeat_seconds: float = 30.0
+    drain_seconds: float = field(default_factory=child_mod.drain_seconds)
+    #: The quiesce lines this lane already logged (``quiesce.py``: once each).
+    _quiesce_logged: set[str] = field(default_factory=set)
     gate_url: str = field(default_factory=lambda: os.environ.get(GATE_URL_ENV) or DEFAULT_GATE_URL)
     wake_secret: str = field(default_factory=lambda: os.environ.get(WAKE_SECRET_ENV, ""))
     #: What a lane names itself by: the wake's handoff id prefix, the memory
@@ -158,6 +165,7 @@ class Daemon:
             "queued": len(self._queued()),
             "wakes_pending": len(self._wakes_pending()),
             "wakes_failed": self.wakes_failed,
+            "quiesced": quiesce.active(self),
         }
         tmp = self.run_dir / f".{self.HEARTBEAT}.tmp"
         try:
@@ -185,8 +193,13 @@ class Daemon:
         p.write_text(json.dumps(st, indent=1), encoding="utf-8")
         return st
 
+    def _beat(self, job_id: str, stop: Any) -> None:
+        while not stop.wait(self.heartbeat_seconds):
+            self.heartbeat(running=job_id)
+
     def _in_progress(self) -> list[str]:
-        if not self.jobs.is_dir():
+        # A quiesced lane resumes nothing either: a resume starts a child.
+        if not self.jobs.is_dir() or quiesce.active(self):
             return []
         out = []
         for d in sorted(self.jobs.iterdir()):
@@ -207,7 +220,7 @@ class Daemon:
         """Move the oldest envelope into its job dir. A file the broker has no
         row for is quarantined. An idle lane runs a requested proof first; a
         job whose kind is not proven on this seat waits (``lane_proof.py``)."""
-        if proof_run.run_pending(self):
+        if quiesce.active(self) or proof_run.run_pending(self):
             return None
         for env_path in self._queued():
             job_id = env_path.stem
@@ -348,25 +361,18 @@ class Daemon:
         env.setdefault("MEDCHRON_SEAT", "client")
         env.setdefault("PATH", "/usr/bin:/bin")
         env.setdefault("HOME", str(jd))
-        log = (jd / "daemon.log").open("a", encoding="utf-8")
-        pidfile = self.run_dir / "child.pid"
         verdict_mod.clear(jd)
-        try:
-            proc = subprocess.Popen(  # noqa: S603 - argv is the configured runner command plus the job dir, no shell; the env is filtered
+        with (jd / "daemon.log").open("a", encoding="utf-8") as log:
+            code, out = child_mod.run_child(
+                self,
+                job_id,
                 resume_mod.start_run(self, job_id, [*self.runner_cmd, str(jd), "--json"]),
-                cwd=str(jd),
+                cwd=jd,
                 env=env,
-                stdout=subprocess.PIPE,
-                stderr=log,
-                text=True,
-                preexec_fn=self._cgroup_preexec(),
+                log=log,
+                pidfile=self.run_dir / "child.pid",
+                preexec=self._cgroup_preexec(),
             )
-            pidfile.write_text(str(proc.pid))
-            out, _ = proc.communicate()
-            code = proc.returncode
-        finally:
-            log.close()
-            pidfile.unlink(missing_ok=True)
         self.jobs_run += 1
         if resume_mod.cut_short_by_stop(self, job_id, code, out or ""):
             return "interrupted"
@@ -618,10 +624,11 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(
         level=os.environ.get("SMD_MEDCHRON_LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s"
     )
-    stopped = {"flag": False}
+    stopped: dict[str, Any] = {"flag": False, "at": None}
 
     def _stop(*_: Any) -> None:
         stopped["flag"] = True
+        stopped["at"] = stopped["at"] or time.monotonic()
 
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
@@ -638,11 +645,15 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("medchron daemon up: run_dir=%s poll=%ss", d.run_dir, poll)
     from .demand_lane import start_lane  # its own slot: a demand never waits on a chronology, nor the reverse
 
-    start_lane(d, stop=lambda: stopped["flag"], poll_seconds=poll)
+    threads = [start_lane(d, stop=lambda: stopped["flag"], poll_seconds=poll)]
     from .lanes import start_other_lanes  # drafting and negotiation, each in its own module
 
-    start_other_lanes(d, stop=lambda: stopped["flag"], poll_seconds=poll)
+    threads += start_other_lanes(d, stop=lambda: stopped["flag"], poll_seconds=poll) or []
     d.run_forever(stop=lambda: stopped["flag"], poll_seconds=poll)
+    # Each lane drains its own child under the same deadline; the process waits
+    # for them instead of abandoning them mid-checkpoint (they are daemon threads).
+    if stopped["flag"]:
+        child_mod.join_lanes([t for t in threads if t is not None], since=stopped["at"], budget=d.drain_seconds)
     # The Machine's stop is FINAL for this process: the entrypoint's loop
     # restarts the daemon on any other exit, and a daemon respawned inside a
     # dying Machine has no stop flag. On 2026-10-15 one did exactly that,

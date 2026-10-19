@@ -4,6 +4,11 @@ import { resolve } from 'path'
 
 const dockerfile = readFileSync(resolve('operator/templates/Dockerfile'), 'utf8')
 const entrypoint = readFileSync(resolve('operator/templates/entrypoint.sh'), 'utf8')
+// The gateway's privilege drop lives in the supervisor the entrypoint sources.
+const supervisor = readFileSync(
+  resolve('operator/runners/supervisor/entrypoint-supervisor.sh'),
+  'utf8'
+)
 const bootstrap = readFileSync(resolve('operator/templates/bootstrap.sh'), 'utf8')
 const bootSmoke = readFileSync(resolve('operator/bin/boot-smoke-test.sh'), 'utf8')
 const workspaceSkill = readFileSync(resolve('operator/skills/workspace/SKILL.md'), 'utf8')
@@ -26,7 +31,9 @@ describe('ADR 0045 Workspace capability broker', () => {
     expect(dockerfile).toContain('usermod -a -G smokeball-token medchron')
     expect(dockerfile).toContain('usermod -a -G smokeball-token hermes')
     expect(entrypoint).toContain('--reuid=workspace-broker')
-    expect(entrypoint).toContain('--reuid=hermes')
+    expect(supervisor).toContain(
+      'setpriv --reuid=hermes --regid=hermes --init-groups --no-new-privs /app/bootstrap.sh'
+    )
     expect(entrypoint).toContain('--no-new-privs')
     expect(entrypoint).toContain('/usr/bin/env -i')
     expect(entrypoint).toContain('PYTHONPATH="/opt/workspace-broker"')
@@ -62,7 +69,7 @@ describe('ADR 0045 Workspace capability broker', () => {
   it('runs the gateway with a writable non-root home', () => {
     expect(entrypoint).toContain('export HOME=/opt/data')
     expect(entrypoint.indexOf('export HOME=/opt/data')).toBeLessThan(
-      entrypoint.lastIndexOf('exec setpriv')
+      entrypoint.lastIndexOf('\nsmd_supervise\n')
     )
     expect(entrypoint).not.toContain('HERMES_HOME_MODE')
   })
@@ -94,7 +101,7 @@ describe('ADR 0045 Workspace capability broker', () => {
     // a credential out of /proc/<pid>/environ, so a strip after the exec-drop
     // would be cosmetic.
     expect(entrypoint.indexOf('unset AGENTMAIL_SEND_API_KEY')).toBeLessThan(
-      entrypoint.lastIndexOf('exec setpriv')
+      entrypoint.lastIndexOf('\nsmd_supervise\n')
     )
   })
 
@@ -133,7 +140,7 @@ describe('ADR 0045 Workspace capability broker', () => {
     // The strip must precede the exec-drop, or it is cosmetic (ADR 0044 Decision 8).
     expect(
       entrypoint.indexOf('unset AGENTMAIL_SEND_API_KEY AGENTMAIL_WEBHOOK_READ_API_KEY')
-    ).toBeLessThan(entrypoint.indexOf('exec setpriv'))
+    ).toBeLessThan(entrypoint.lastIndexOf('\nsmd_supervise\n'))
     expect(bootSmoke).toContain('agentmail-webhook-read-key-stripped-from-agent')
     expect(bootSmoke).toContain(
       'r2-account-key-strip-probe.py hermes AGENTMAIL_WEBHOOK_READ_API_KEY'
@@ -147,7 +154,7 @@ describe('ADR 0045 Workspace capability broker', () => {
     expect(entrypoint).toContain('unset MSGRAPH_SEND_TENANT_ID')
     expect(entrypoint).toContain('MSGRAPH_SEND_CLIENT_SECRET')
     expect(entrypoint.indexOf('unset MSGRAPH_SEND_TENANT_ID')).toBeLessThan(
-      entrypoint.lastIndexOf('exec setpriv')
+      entrypoint.lastIndexOf('\nsmd_supervise\n')
     )
   })
 
