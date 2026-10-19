@@ -171,6 +171,18 @@ class ImageExtractor:
         host, name = self._split(repo)
         return self._get(host, f"/v2/{name}/blobs/{digest}")
 
+    @staticmethod
+    def _members(blob: bytes, names: set[str]) -> list[tuple[str, bytes]]:
+        out = []
+        with tarfile.open(fileobj=io.BytesIO(blob), mode="r:*") as tar:
+            for info in tar:
+                name = info.name.lstrip("./")
+                if name in names and info.isfile():
+                    fh = tar.extractfile(info)
+                    if fh is not None:
+                        out.append((name, fh.read()))
+        return out
+
 
 def _https_get(host: str, path: str, headers: dict[str, str]) -> tuple[int, str | None, bytes]:
     # Python 3.13 with an explicit default context: certificates and hostnames are verified.
@@ -183,18 +195,6 @@ def _https_get(host: str, path: str, headers: dict[str, str]) -> tuple[int, str 
         return resp.status, resp.getheader("Location"), resp.read()
     finally:
         conn.close()
-
-    @staticmethod
-    def _members(blob: bytes, names: set[str]) -> list[tuple[str, bytes]]:
-        out = []
-        with tarfile.open(fileobj=io.BytesIO(blob), mode="r:*") as tar:
-            for info in tar:
-                name = info.name.lstrip("./")
-                if name in names and info.isfile():
-                    fh = tar.extractfile(info)
-                    if fh is not None:
-                        out.append((name, fh.read()))
-        return out
 
 
 class Builder:
