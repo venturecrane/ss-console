@@ -11,6 +11,7 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types'
+import type { ParsedFleetRelease } from '../operator/heartbeat-parsers'
 
 export const DEFAULT_PERIOD_SECONDS = 60
 export const DEFAULT_GRACE_MINUTES = 5
@@ -57,6 +58,8 @@ export interface FleetStatusUpsert {
   shortfalls: number | null
   shortfallsLastTs: string | null
   shortfallsJson: string | null
+  /** Migration 0129. Plain overwrite, including to NULL (absent = unknown). */
+  release: ParsedFleetRelease
 }
 
 /**
@@ -85,8 +88,11 @@ const FLEET_STATUS_UPSERT_SQL = `INSERT INTO fleet_status (
        gateway_loop_ok, gateway_loop_age_seconds, gateway_supervisor_state,
        gateway_restarts_last_hour,
        send_refusals, send_refusals_last_ts, send_refusals_json, tool_failures_json,
-       shortfalls, shortfalls_last_ts, shortfalls_json, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+       shortfalls, shortfalls_last_ts, shortfalls_json,
+       image_ref, skills_version, config_digest,
+       jobs_running, jobs_queued, wakes_pending, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+               ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(customer_slug) DO UPDATE SET
        entity_id               = excluded.entity_id,
        last_heartbeat_ts       = excluded.last_heartbeat_ts,
@@ -123,6 +129,12 @@ const FLEET_STATUS_UPSERT_SQL = `INSERT INTO fleet_status (
        shortfalls              = COALESCE(excluded.shortfalls, fleet_status.shortfalls),
        shortfalls_last_ts      = COALESCE(excluded.shortfalls_last_ts, fleet_status.shortfalls_last_ts),
        shortfalls_json         = COALESCE(excluded.shortfalls_json, fleet_status.shortfalls_json),
+       image_ref               = excluded.image_ref,
+       skills_version          = excluded.skills_version,
+       config_digest           = excluded.config_digest,
+       jobs_running            = excluded.jobs_running,
+       jobs_queued             = excluded.jobs_queued,
+       wakes_pending           = excluded.wakes_pending,
        updated_at              = datetime('now')`
 
 export async function upsertFleetStatus(db: D1Database, u: FleetStatusUpsert): Promise<void> {
@@ -164,7 +176,13 @@ export async function upsertFleetStatus(db: D1Database, u: FleetStatusUpsert): P
       u.toolFailuresJson,
       u.shortfalls,
       u.shortfallsLastTs,
-      u.shortfallsJson
+      u.shortfallsJson,
+      u.release.imageRef,
+      u.release.skillsVersion,
+      u.release.configDigest,
+      u.release.jobsRunning,
+      u.release.jobsQueued,
+      u.release.wakesPending
     )
     .run()
 }

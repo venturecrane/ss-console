@@ -39,7 +39,16 @@
  *     "send_refusals":           <integer>,        // optional (ss#2547 muted routine)
  *     "send_refusals_last_ts":   <ISO 8601 UTC>,   // optional (ss#2547 pager marker)
  *     "send_refusals_json":      <array of <=5>    // optional (ss#2547 newest events)
+ *     "image_ref":               <string <=300>    // optional (0129 fleet release)
+ *     "skills_version":          <string <=300>    // optional (0129)
+ *     "config_digest":           <string <=300>    // optional (0129)
+ *     "jobs_running":            <integer>         // optional (0129 busy gate)
+ *     "jobs_queued":             <integer>         // optional (0129 busy gate)
+ *     "wakes_pending":           <integer>         // optional (0129 busy gate)
  *   }
+ *
+ * The six 0129 fields overwrite every beat, absent included: the overlay omits
+ * what it does not know, so absent stores NULL = unknown. 0 = none.
  *
  * `audit_head` / `audit_rows` are the one pair here that does NOT land only in
  * `fleet_status`. They are also appended to `audit_head_history` (migration
@@ -77,6 +86,7 @@ import {
 import { recordAuditHead } from '../../../lib/operator/audit-head'
 import { reportAuditWriteFailureDelta } from '../../../lib/operator/heartbeat-alerts'
 import {
+  parseFleetRelease,
   parseObservability,
   parseStickyStop,
   type HeartbeatBody,
@@ -135,6 +145,7 @@ export const POST: APIRoute = async ({ request }) => {
     stickyStopReason: stickyStop.reason,
     stickyStopCondition: stickyStop.condition,
     ...obs,
+    release: parseFleetRelease(body),
   })
 
   // ss#2500. Appended, not upserted: this is the off-Machine pin history, and a

@@ -47,6 +47,12 @@ export interface HeartbeatBody {
   shortfalls?: unknown
   shortfalls_last_ts?: unknown
   shortfalls_json?: unknown
+  image_ref?: unknown
+  skills_version?: unknown
+  config_digest?: unknown
+  jobs_running?: unknown
+  jobs_queued?: unknown
+  wakes_pending?: unknown
 }
 
 // The breaker ladder vocabulary (overlay shared/cost_breaker.read_stop_state).
@@ -529,4 +535,45 @@ export function parseStickyStop(body: HeartbeatBody): ParsedStickyStop {
       ? body.sticky_stop_condition
       : null
   return { level, reason, condition }
+}
+
+export interface ParsedFleetRelease {
+  imageRef: string | null
+  skillsVersion: string | null
+  configDigest: string | null
+  jobsRunning: number | null
+  jobsQueued: number | null
+  wakesPending: number | null
+}
+
+// The receiver's own bound on the three identity strings, for the same reason
+// as the stop reason: a seat running unexpected code must not write an
+// unbounded or control-character column that `fleet status` later prints.
+// Printable ASCII only; an image ref, a version and a digest are all ASCII.
+const FLEET_RELEASE_STRING_RE = /^[\x20-\x7E]{1,300}$/
+
+export function parseFleetReleaseString(value: unknown): string | null {
+  return typeof value === 'string' && FLEET_RELEASE_STRING_RE.test(value) ? value : null
+}
+
+/**
+ * What the seat says it runs and how busy it is (seat fleet scaling, migration
+ * 0129). Same contract as `parseObservability`: overwrite every beat INCLUDING
+ * back to NULL. The overlay OMITS a value it does not know (it never sends JSON
+ * null), so an absent key is the seat saying "unknown", and keeping the old
+ * column would let a stale `image_ref` or `jobs_running` outlive the seat's
+ * knowledge: `fleet release` would read back a deploy that never happened, and
+ * the busy gate would trust a job count nobody reported. A seat on an older
+ * overlay sends none of the six and stores NULL = unknown, which is true.
+ * NULL = unknown (the busy gate falls back to its live probe), 0 = none.
+ */
+export function parseFleetRelease(body: HeartbeatBody): ParsedFleetRelease {
+  return {
+    imageRef: parseFleetReleaseString(body.image_ref),
+    skillsVersion: parseFleetReleaseString(body.skills_version),
+    configDigest: parseFleetReleaseString(body.config_digest),
+    jobsRunning: parseNonNegInt(body.jobs_running),
+    jobsQueued: parseNonNegInt(body.jobs_queued),
+    wakesPending: parseNonNegInt(body.wakes_pending),
+  }
 }
