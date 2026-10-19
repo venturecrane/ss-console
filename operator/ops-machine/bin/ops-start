@@ -26,8 +26,13 @@ task="$HOME/inbox/pending.md"
 if [ -s "$task" ]; then
   taken="$HOME/inbox/task-$(date -u +%Y%m%dT%H%M%S).md"
   mv "$task" "$taken"
-  claude "A task was handed to this workspace from a laptop session; it is in $taken. Read it, then do it here. Client documents for this work stay on this workspace (under ~/work); only finished deliverables leave, through the seat."
+  # The laptop that handed the task over reads the outcome back with
+  # `ops-handoff <client> --results`. The outbox carries the outcome, never
+  # document content: that stays here under ~/work.
+  out="$HOME/outbox/$(basename "$taken")"
+  mkdir -p "$HOME/outbox"
+  /opt/ops/bin/claude "A task was handed to this workspace from a laptop session; it is in $taken. Read it, then do it here. Client documents for this work stay on this workspace (under ~/work); only finished deliverables leave, through the seat. When you finish (or stop), write the outcome to $out for the laptop session that handed it over: what you did, what you found (the verdict, not the documents: no quoted record text, no medical detail), and anything still open. A laptop reads that file."
 else
-  claude
+  /opt/ops/bin/claude
 fi
 exec bash -l
