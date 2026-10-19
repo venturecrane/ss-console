@@ -19,7 +19,7 @@ metadata:
     content_ceiling: partner_words + cited_search_results
     connectors:
       - brave # WebSearch, for new ideas only when asked
-    stores: [date-nights, couples-checkin]
+    stores: [date-nights]
 ---
 
 # Date night planner
@@ -41,7 +41,7 @@ chat keeps that plan private (see below).
 No shell, code, file or delegation tools on this persona (ADR 0090 R2). Use:
 
 - `record_store_list`, `record_store_read`, `record_store_write` on the store
-  `date-nights`; read `couples-checkin` `joint-settings.md` for `timezone`.
+  `date-nights`; `couples_settings_read` for the couple's `timezone`.
 - `web_search`, for new ideas, only when the couple asks for something new.
 - `calendar_invite_create`, `calendar_invite_update`, `calendar_invite_cancel`,
   `calendar_invite_list` (skill `calendar`). Attendees are person ids.
@@ -114,7 +114,7 @@ When they pick an idea and a time:
 
 1. Create the invite with `calendar_invite_create`: `title` the idea in their
    words, `start` and `end` in the couple's `timezone` (from
-   `joint-settings.md`, passed as `timezone`), `location` if they gave one,
+   `couples_settings_read`, passed as `timezone`; if it is not set yet, ask), `location` if they gave one,
    `attendees: ["p1", "p2"]`.
 2. Set the idea's `status: planned` in its record.
 3. From a private chat, the invite and the record each go through "share it"

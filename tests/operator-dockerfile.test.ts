@@ -1552,7 +1552,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // DMARC or DKIM pass before it carries any roster or admin standing.
     // -> 36eb1bd5 (overlay#502, #503, #505), 2026-10-18: voice notes need an authenticated
     // rostered sender; couples settings by conversation.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="36eb1bd504845c6cc3ec8e55f91918e820f48b2f"')
+    // -> 71af305c (overlay#506), 2026-10-18: couples keep a fenced read_file on
+    // email (captain-mark activation fix).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="71af305c29b352915bed2061f86976852e59d668"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

@@ -4,8 +4,10 @@
  * operator/roles/couples/role.yaml is the manifest a couple's seat is copied
  * from. Three things could drift silently, and each is pinned here:
  *
- *   1. A skill or routine in the manifest that the template does not carry (or
+ *   1. A skill or slot in the manifest that the template does not carry (or
  *      the reverse), so a seat copied from the template is not the role it claims to be.
+ *      Routines themselves are set by the couple in conversation (#3264), so
+ *      the template authors no cron at all.
  *   2. A `built:` flag that lies. An enabled skill with no body fails the seat's
  *      boot, so "built: true" with no SKILL.md, or "built: false" for a skill
  *      that now exists, would mislead whoever provisions the next couple.
@@ -18,6 +20,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
+import { CONVERSATION_SCHEDULED_SKILLS } from '../src/lib/operator/customer-yaml/sections-people'
 
 const ROLE_DIR = 'operator/roles/couples'
 
@@ -26,7 +29,7 @@ interface RoleSkill {
   built: boolean
   settings?: Record<string, unknown>
 }
-interface RoleRoutine {
+interface RoleSlot {
   skill: string
   space: string
 }
@@ -36,7 +39,7 @@ const role = parseYaml(readFileSync(resolve(ROLE_DIR, 'role.yaml'), 'utf8')) as 
   persona: string
   seat_template: string
   skills: RoleSkill[]
-  routines: RoleRoutine[]
+  slots: RoleSlot[]
   required_connections: unknown[]
   privacy: { model: string }
   record_stores: string[]
@@ -44,7 +47,12 @@ const role = parseYaml(readFileSync(resolve(ROLE_DIR, 'role.yaml'), 'utf8')) as 
 const template = parseYaml(readFileSync(resolve(role.seat_template), 'utf8')) as {
   seat: { role: string; product: string }
   personas: Array<{
-    skills: Array<{ name: string; enabled: boolean; settings?: Record<string, unknown> }>
+    skills: Array<{
+      name: string
+      enabled: boolean
+      settings?: Record<string, unknown>
+      initiation?: { scheduled?: boolean }
+    }>
     cron: Array<{ skill: string; space: string }>
   }>
   record_stores: Array<{ name: string; path: string; owner_field?: string; readers?: unknown }>
@@ -73,23 +81,40 @@ describe('couples role package', () => {
     }
   })
 
-  it('every scheduled skill rides the roster lane', () => {
-    const scheduled = new Set(template.personas[0].cron.map((c) => c.skill))
-    for (const name of scheduled) {
-      const t = template.personas[0].skills.find((s) => s.name === name)
-      expect(t?.settings?.recipients, name).toBe('roster')
+  it('every slot skill is scheduled and rides the roster lane', () => {
+    for (const slot of role.slots) {
+      const t = template.personas[0].skills.find((s) => s.name === slot.skill)
+      expect(t?.settings?.recipients, slot.skill).toBe('roster')
+      expect(t?.initiation?.scheduled, slot.skill).toBe(true)
+      expect(['person', 'shared']).toContain(slot.space)
     }
+  })
+
+  it('the template authors no cron: the couple sets every schedule in conversation', () => {
+    expect(template.personas[0].cron).toEqual([])
+  })
+
+  it('the slots are exactly the scheduled skills, and match the overlay set', () => {
+    // A scheduled skill with no slot would never run; the overlay's
+    // shared/couples_settings.py KINDS must carry the same five.
+    const scheduled = template.personas[0].skills
+      .filter((s) => s.initiation?.scheduled)
+      .map((s) => s.name)
+      .sort()
+    expect(role.slots.map((s) => s.skill).sort()).toEqual(scheduled)
+    expect([...CONVERSATION_SCHEDULED_SKILLS].sort()).toEqual(scheduled)
+    expect(Object.fromEntries(role.slots.map((s) => [s.skill, s.space]))).toEqual({
+      'couples-checkin': 'person',
+      'gratitude-prompts': 'person',
+      'dates-to-remember': 'person',
+      travel: 'shared',
+      'weekly-checkin-agenda': 'shared',
+    })
   })
 
   it('the calendar skill is limited to the roster', () => {
     const cal = template.personas[0].skills.find((s) => s.name === 'calendar')
     expect(cal?.settings?.recipients).toBe('roster')
-  })
-
-  it('the template routines are the role routines, each with its space', () => {
-    const got = template.personas[0].cron.map((c) => `${c.skill}@${c.space}`).sort()
-    const want = role.routines.map((r) => `${r.skill}@${r.space}`).sort()
-    expect(got).toEqual(want)
   })
 
   it('the template authors exactly the role record stores, each private per space', () => {

@@ -1252,7 +1252,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # as #504 (aligned DMARC or named, aligned DKIM), then rostered. Also carries
 # #502 (couples settings by conversation; inert without people:) and #503
 # (gate snapshot mirror of this repo's). No tracked twin moved.
-ARG OVERLAY_REF="36eb1bd504845c6cc3ec8e55f91918e820f48b2f"
+# 2026-10-18 (71af305c, the overlay #506 merge commit). #506: a couples seat
+# keeps a fenced read_file on email (it disabled the whole file toolset, which
+# stripped read_file and killed captain-mark's activation); only write_file,
+# patch, search_files and skill_manage are disabled, and activation step 5a
+# refuses a couples seat offered any of them or with no record-store fence.
+# New tracked twin: the couples template (tests/fixtures/roles/couples/customer.yaml).
+ARG OVERLAY_REF="71af305c29b352915bed2061f86976852e59d668"
 
 ARG CUSTOMER_SLUG=customer-zero
 

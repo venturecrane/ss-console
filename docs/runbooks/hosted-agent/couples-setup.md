@@ -15,7 +15,10 @@ the agent over its channels: email now, Telegram later.
 2. Fill in every bracketed value. The two partners go in `people:` (name,
    lowercased email, `channel: email`); the same two addresses are the whole of
    `scope.inbound_allow_from`. Leave `telegram_id` empty and `telegram.enabled`
-   false.
+   false. Author no schedule: `cron: []` stays empty. The couple sets every
+   check-in, prompt, reminder, quiet hour and the timezone by talking to the
+   agent (skill `couples-settings`), and validator rule 9 refuses an authored
+   cron entry for those skills.
 3. Validate:
 
        npx tsx scripts/validate-customer-yaml.ts operator/customers/<slug>/customer.yaml

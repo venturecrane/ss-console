@@ -47,6 +47,9 @@ skills:
     settings:
       recipients: roster
     purpose: Private check-in nudges on topics the couple authors together, per person cadence and quiet hours.
+  - name: couples-settings
+    built: true
+    purpose: The couple's schedules and settings, set by talking to the agent; joint changes need both partners.
   - name: gratitude-prompts
     built: true
     settings:
@@ -83,27 +86,27 @@ skills:
 # that sends on a schedule or carries the seat's two-person notices authors it;
 # the overlay's cron email delivery also locks recipients in code.
 
-# Default routines. Every routine names its space: the space the run reads and
-# the chat it is delivered to (`person:<id>` delivers to that partner's DM,
-# `shared` to the group). Schedules are UTC, authored in the seat's
-# customer.yaml when SMD sets it up; the partners change them by conversation.
-routines:
+# Schedules are set by the couple in conversation, never authored here or in
+# the seat's customer.yaml (skill couples-settings; overlay tool
+# couples_settings_change, state on the seat's volume). Nothing is scheduled
+# until the couple asks. At boot the overlay registers one slot job per entry
+# below, per person for `space: person` and once for `space: shared`
+# (overlay shared/couples_slots.py, which must list the same skills in
+# couples_settings.KINDS); every quarter hour the slot's gate runs whichever of
+# the couple's routines is due in the couple's own timezone, honouring quiet
+# hours and pauses. Who it reaches is the slot's space, never an address.
+# Validator rule 9 refuses an authored cron entry for any skill here.
+slots:
   - skill: couples-checkin
-    space: person:p1
-  - skill: couples-checkin
-    space: person:p2
+    space: person
   - skill: gratitude-prompts
-    space: person:p1
-  - skill: gratitude-prompts
-    space: person:p2
+    space: person
   # A private reminder ahead of each shared date, with that partner's own gift
-  # ideas. Runs daily; silent when nothing is within 21 days.
+  # ideas, as many days ahead as that partner chose.
   - skill: dates-to-remember
-    space: person:p1
-  - skill: dates-to-remember
-    space: person:p2
-  # Price watches the couple asked for, reported to the group. Silent when no
-  # watch is active or none is under its target.
+    space: person
+  # Price watches the couple asked for, reported to both. Silent when no watch
+  # is active or none is under its target.
   - skill: travel
     space: shared
   - skill: weekly-checkin-agenda
@@ -133,6 +136,7 @@ privacy:
     - memory.memory_enabled false
     - memory.user_profile_enabled false
     - a space on every routine
+    - no authored cron for a slot skill (rule 9)
 
 # Connections the role needs at launch. None: the calendar is the agent's own
 # and reaches the partners as invites through the seat's own inbox (ADR 0092).

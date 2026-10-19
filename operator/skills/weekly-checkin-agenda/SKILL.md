@@ -64,8 +64,13 @@ one partner raised against the other.
 
 ## The scheduled run (a routine in `shared`)
 
-1. Read the records above. If there is nothing in any section, reply with
-   exactly `[SILENT]` and nothing else.
+The seat wakes this run only when the couple's weekly agenda routine is due
+(they set its day and time in conversation, skill `couples-settings`, decided
+by both); it hands you an `smd_couples_routine` block.
+
+1. If there is no `smd_couples_routine` block, reply `[SILENT]`. Read the
+   records above. If there is nothing in any section, reply with exactly
+   `[SILENT]` and nothing else.
 2. Otherwise reply with the agenda. The reply is delivered to the group.
 3. Mark each agenda point you included: write it back with
    `included: <date>` added (`overwrite: true`), so next week starts fresh.
