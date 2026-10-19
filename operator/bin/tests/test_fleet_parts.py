@@ -160,6 +160,19 @@ def test_lane_inputs_digest_every_lane_schema() -> None:
     assert set(lane_inputs(REPO)) == {"medchron", "demand", "drafting", "litigation"}
 
 
+def test_volume_id_prefers_the_attached_volume_over_an_orphan() -> None:
+    from bin.lib.fleet.fly import Fly
+
+    vols = [
+        {"id": "vol_orphan", "name": "hermes_state", "attached_machine_id": None},
+        {"id": "vol_live", "name": "hermes_state", "attached_machine_id": "812e65f9411798"},
+    ]
+    assert Fly(ScriptRunner(Result(0, json.dumps(vols), "")), ".").volume_id("hermes-x") == "vol_live"
+    both = [dict(v, attached_machine_id="m") for v in vols]
+    with pytest.raises(ToolingError):
+        Fly(ScriptRunner(Result(0, json.dumps(both), "")), ".").volume_id("hermes-x")
+
+
 def _layer(files: dict[str, bytes]) -> bytes:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:

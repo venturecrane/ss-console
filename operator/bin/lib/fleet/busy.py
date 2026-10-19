@@ -38,8 +38,14 @@ from .runner import ToolingError, looks_like_transport_failure
 HERE = Path(__file__).resolve().parent
 PROBE_MARK = "SMD_BUSY_PROBE "
 STALE_AFTER_S = 300.0
-CRON_AHEAD_S = 600.0
-CRON_BEHIND_S = 300.0
+# The cron windows must leave a gap inside the tightest managed schedule. Couples
+# seats run slot crons every 15 minutes; 600 + 300 left no gap at all, so the
+# gate could never pass there (captain-mark, 2026-10-19). Ahead covers one
+# restart (deploy + boot, ~5 min observed on smd-staging); behind covers a
+# slot's own turn. 360 + 120 leaves 7 minutes in every quarter hour, and the
+# 30 s poll lands in it.
+CRON_AHEAD_S = 360.0
+CRON_BEHIND_S = 120.0
 QUIESCE_TTL_S = 1800.0
 POLL_S = 30.0
 
