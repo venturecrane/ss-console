@@ -16,9 +16,10 @@
 --   jobs_queued     lane jobs accepted and waiting
 --   wakes_pending   scheduled wakes not yet taken
 --
--- All nullable. NULL = unknown (a seat on an older overlay emits none of these);
--- 0 = none. At ingest an ABSENT key leaves the column unchanged and an explicit
--- null stores NULL (src/lib/db/fleet-status.ts).
+-- All nullable. NULL = unknown, 0 = none. Overwritten every beat: the overlay
+-- omits a value it does not know, so an absent key stores NULL (a seat on an
+-- older overlay emits none of these and reads as unknown). See
+-- src/lib/db/fleet-status.ts.
 --
 -- The four new tables are the rollout's own state:
 --   fleet_releases  one row per built image or skills version

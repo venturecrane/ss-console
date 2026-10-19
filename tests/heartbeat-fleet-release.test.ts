@@ -1,13 +1,13 @@
 /**
  * The fleet-release heartbeat fields (seat fleet scaling, migration 0129).
  *
- * These six are the only heartbeat fields that tell ABSENT from null. Every
- * seat on an older overlay omits all six, and `fleet release` reads
- * `image_ref` / `skills_version` back after a deploy and the busy gate reads
- * the three counts, so an omission erasing a known value would read as
- * "unknown" fleet-wide; and a stale count outliving the seat's own explicit
- * "unknown" would let the gate deploy into a running job. Both directions are
- * pinned here, at the parser and through the real handler against D1.
+ * `fleet release` reads `image_ref` / `skills_version` back after a deploy and
+ * the busy gate reads the three counts. The overlay OMITS a value it does not
+ * know (its tests pin "omit None"; it never sends JSON null), so an absent key
+ * must store NULL = unknown. Keeping the old column instead would let a stale
+ * image ref read back as a deploy that never landed, or a stale job count let
+ * the gate trust a number nobody reported. Pinned at the parser and through
+ * the real handler against D1.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
@@ -27,59 +27,66 @@ installWorkerdPolyfills()
 
 const beat = (extra: Record<string, unknown>) => parseFleetRelease({ heartbeat_ts: 't', ...extra })
 
+const ALL_NULL = {
+  imageRef: null,
+  skillsVersion: null,
+  configDigest: null,
+  jobsRunning: null,
+  jobsQueued: null,
+  wakesPending: null,
+}
+
 describe('parseFleetRelease', () => {
   it('keeps good values', () => {
-    const r = beat({
-      image_ref: 'registry.fly.io/hermes-fleet:rel-abcd1234-ef567890',
-      skills_version: '2026-10-19.1',
-      config_digest: 'sha256:0123abcd',
-      jobs_running: 0,
-      jobs_queued: 3,
-      wakes_pending: 1,
+    expect(
+      beat({
+        image_ref: 'registry.fly.io/hermes-fleet:rel-abcd1234-ef567890',
+        skills_version: '2026-10-19.1',
+        config_digest: 'sha256:0123abcd',
+        jobs_running: 0,
+        jobs_queued: 3,
+        wakes_pending: 1,
+      })
+    ).toEqual({
+      imageRef: 'registry.fly.io/hermes-fleet:rel-abcd1234-ef567890',
+      skillsVersion: '2026-10-19.1',
+      configDigest: 'sha256:0123abcd',
+      jobsRunning: 0,
+      jobsQueued: 3,
+      wakesPending: 1,
     })
-    expect(r.imageRef).toEqual({
-      reported: true,
-      value: 'registry.fly.io/hermes-fleet:rel-abcd1234-ef567890',
-    })
-    expect(r.skillsVersion).toEqual({ reported: true, value: '2026-10-19.1' })
-    expect(r.configDigest).toEqual({ reported: true, value: 'sha256:0123abcd' })
-    expect(r.jobsRunning).toEqual({ reported: true, value: 0 })
-    expect(r.jobsQueued).toEqual({ reported: true, value: 3 })
-    expect(r.wakesPending).toEqual({ reported: true, value: 1 })
   })
 
-  it('reports an absent key as not reported', () => {
-    const r = beat({})
-    for (const f of Object.values(r)) expect(f).toEqual({ reported: false })
+  it('reads an absent key as unknown (NULL)', () => {
+    expect(beat({})).toEqual(ALL_NULL)
   })
 
-  it('reports an explicit null as a reported NULL', () => {
-    const r = beat({
-      image_ref: null,
-      skills_version: null,
-      config_digest: null,
-      jobs_running: null,
-      jobs_queued: null,
-      wakes_pending: null,
-    })
-    for (const f of Object.values(r)) expect(f).toEqual({ reported: true, value: null })
+  it('reads an explicit null as unknown (NULL)', () => {
+    expect(
+      beat({
+        image_ref: null,
+        skills_version: null,
+        config_digest: null,
+        jobs_running: null,
+        jobs_queued: null,
+        wakes_pending: null,
+      })
+    ).toEqual(ALL_NULL)
   })
 
   it('stores NULL for junk, never a cast', () => {
-    const r = beat({
-      image_ref: 'x'.repeat(301),
-      skills_version: 'v1\nInjected: line',
-      config_digest: 42,
-      jobs_running: -1,
-      jobs_queued: 1.5,
-      wakes_pending: '3',
-    })
-    for (const f of Object.values(r)) expect(f).toEqual({ reported: true, value: null })
-    expect(beat({ image_ref: '' }).imageRef).toEqual({ reported: true, value: null })
-    expect(beat({ image_ref: 'x'.repeat(300) }).imageRef).toEqual({
-      reported: true,
-      value: 'x'.repeat(300),
-    })
+    expect(
+      beat({
+        image_ref: 'x'.repeat(301),
+        skills_version: 'v1\nInjected: line',
+        config_digest: 42,
+        jobs_running: -1,
+        jobs_queued: 1.5,
+        wakes_pending: '3',
+      })
+    ).toEqual(ALL_NULL)
+    expect(beat({ image_ref: '' }).imageRef).toBeNull()
+    expect(beat({ image_ref: 'x'.repeat(300) }).imageRef).toBe('x'.repeat(300))
   })
 })
 
@@ -93,6 +100,7 @@ const COLUMNS = [
   'jobs_queued',
   'wakes_pending',
 ] as const
+const NULL_ROW = Object.fromEntries(COLUMNS.map((c) => [c, null]))
 
 async function seed(db: D1Database): Promise<void> {
   await db
@@ -163,43 +171,30 @@ describe('fleet-release fields through the heartbeat ingest', () => {
     await seedMachineCredential(db, SLUG, MACHINE_KEY)
   })
 
-  it('a first beat stores what it reported and NULL for the rest', async () => {
-    expect(await post({ image_ref: 'img-a', jobs_running: 0 })).toBe(200)
-    expect(await row()).toEqual({
-      image_ref: 'img-a',
-      skills_version: null,
-      config_digest: null,
-      jobs_running: 0,
-      jobs_queued: null,
-      wakes_pending: null,
-    })
-  })
-
-  it('an absent key keeps the stored value (an older overlay erases nothing)', async () => {
-    await post(full)
-    await post({})
+  it('stores every reported value', async () => {
+    expect(await post(full)).toBe(200)
     expect(await row()).toEqual(full)
   })
 
-  it('an explicit null overwrites to NULL', async () => {
+  it('an absent key overwrites to NULL (no stale image ref or job count survives)', async () => {
     await post(full)
-    await post(Object.fromEntries(COLUMNS.map((c) => [c, null])))
-    expect(await row()).toEqual(Object.fromEntries(COLUMNS.map((c) => [c, null])))
+    await post({})
+    expect(await row()).toEqual(NULL_ROW)
   })
 
-  it('a partial beat overwrites only what it reported', async () => {
+  it('a partial beat stores what it reported and NULL for the rest', async () => {
     await post(full)
-    await post({ image_ref: 'registry.fly.io/hermes-fleet:rel-2', jobs_running: null })
+    await post({ image_ref: 'registry.fly.io/hermes-fleet:rel-2', jobs_running: 0 })
     expect(await row()).toEqual({
-      ...full,
+      ...NULL_ROW,
       image_ref: 'registry.fly.io/hermes-fleet:rel-2',
-      jobs_running: null,
+      jobs_running: 0,
     })
   })
 
-  it('NEGATIVE CONTROL: junk is reported, so it stores NULL rather than holding', async () => {
+  it('NEGATIVE CONTROL: junk stores NULL rather than holding the old value', async () => {
     await post(full)
-    await post({ jobs_running: -5, image_ref: 'bad\u0000ref' })
+    await post({ ...full, jobs_running: -5, image_ref: 'bad\u0000ref' })
     const r = await row()
     expect(r?.jobs_running).toBeNull()
     expect(r?.image_ref).toBeNull()

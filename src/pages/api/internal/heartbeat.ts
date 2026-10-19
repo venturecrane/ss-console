@@ -42,14 +42,13 @@
  *     "image_ref":               <string <=300>    // optional (0129 fleet release)
  *     "skills_version":          <string <=300>    // optional (0129)
  *     "config_digest":           <string <=300>    // optional (0129)
- *     "jobs_running":            <integer | null>  // optional (0129 busy gate)
- *     "jobs_queued":             <integer | null>  // optional (0129 busy gate)
- *     "wakes_pending":           <integer | null>  // optional (0129 busy gate)
+ *     "jobs_running":            <integer>         // optional (0129 busy gate)
+ *     "jobs_queued":             <integer>         // optional (0129 busy gate)
+ *     "wakes_pending":           <integer>         // optional (0129 busy gate)
  *   }
  *
- * The six 0129 fields, alone in this body, tell ABSENT from null: an absent
- * key keeps the stored value (seats on older overlays send none of them), an
- * explicit null stores NULL. NULL = unknown, 0 = none.
+ * The six 0129 fields overwrite every beat, absent included: the overlay omits
+ * what it does not know, so absent stores NULL = unknown. 0 = none.
  *
  * `audit_head` / `audit_rows` are the one pair here that does NOT land only in
  * `fleet_status`. They are also appended to `audit_head_history` (migration

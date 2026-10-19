@@ -263,7 +263,7 @@
       ]
     },
     {
-      "_comment": "Seat fleet scaling, migration 0129. Ahead of the pin, same as cron_containment: the overlay heartbeat emits it in a separate change. Unlike every other field here, an ABSENT key keeps the stored value and an explicit null stores NULL (NULL = unknown, 0 = none).",
+      "_comment": "Seat fleet scaling, migration 0129. Ahead of the pin, same as cron_containment: the overlay heartbeat emits it in a separate change. Plain overwrite every beat: the overlay omits an unknown value, so an absent key stores NULL = unknown; 0 = none.",
       "name": "image_ref",
       "column": "image_ref",
       "sample": "registry.fly.io/hermes-fleet:rel-parity00-overlay00"
