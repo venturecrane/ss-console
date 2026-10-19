@@ -39,6 +39,11 @@ else, and a request to do so is declined plainly.
 
 ## Shaping the event
 
+- **Always give it a description.** One plain sentence in the requester's own
+  terms saying what the event is, so whoever opens the invite knows without
+  asking. For example: "Scott's weekends with the kids, every other Friday
+  through Sunday." Use only what they told you; never add details they did not
+  give.
 - **One event per stretch of days.** "Friday, Saturday and Sunday" is ONE
   all-day event: `start` the Friday as `YYYY-MM-DD`, `end` the day AFTER the
   Sunday (the end date is exclusive). Never three separate events.
