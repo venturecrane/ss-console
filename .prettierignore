@@ -46,6 +46,10 @@ docs/handbook/
 # permanently red. The sibling gate-coverage-snapshot.json is NOT exempt — it
 # has no short arrays, so the two formatters already agree on it.
 operator/contracts/gate-coverage-snapshot.overlay.json
+# Same reason for the policy-inputs fixture (tests/policy-matrix.test.ts, ADR
+# 0093): copied verbatim to the overlay tests/contract/policy_inputs.json, and
+# its provenance_sources list is short enough for prettier to collapse.
+operator/contracts/policy-inputs.overlay.json
 .stitch/shadow-firm/
 # Generated Settlement Closeout proving data (ss #2455). render_seed.py emits
 # both the keying sheet a person works from and the canned layout payloads the
