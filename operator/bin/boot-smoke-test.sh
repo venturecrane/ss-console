@@ -65,6 +65,18 @@ check_fail() {
   return 0
 }
 
+# A WARNING is a state worth a human's attention that is not, by itself, a
+# broken seat: it never changes the exit code, and the summary lists every one
+# so it cannot scroll past unread. The first user is the identifier-gate
+# rollback lever (ADR 0093): legitimate during an incident, wrong as a
+# standing per-seat loosening.
+WARNED_CHECKS=()
+check_warn() {
+  WARNED_CHECKS+=("$*")
+  log "WARN: $*"
+  return 0
+}
+
 # The Machine's state RIGHT NOW, or "error" if it cannot be read.
 machine_state() {
   fly status -a "${APP_NAME}" --json 2>/dev/null \
@@ -149,6 +161,12 @@ summarize() {
   if [ "${n}" -gt 0 ]; then
     local c
     for c in "${FAILED_CHECKS[@]}"; do log "  FAILED: ${c}"; done
+  fi
+  local w=${#WARNED_CHECKS[@]}
+  log "warnings: ${w}"
+  if [ "${w}" -gt 0 ]; then
+    local x
+    for x in "${WARNED_CHECKS[@]}"; do log "  WARNING: ${x}"; done
   fi
   # A precondition abort already carries its own non-zero code; do not mask it.
   # A non-zero code with NOTHING recorded is the third case and the confusing
@@ -770,6 +788,33 @@ ssh_exec "msgraph-read-app-cannot-send-on-send-as-seat" \
 # reading, so one approver being out of it says nothing about the next.
 ssh_exec "msgraph-read-app-cannot-read-staff-mailbox" \
   "/opt/hermes/.venv/bin/python3 /app/msgraph-read-app-cannot-read-staff-probe.py /var/lib/smd-config/customer.yaml hermes"
+
+# ---------- Step 13b: the identifier-gate rollback lever is not set (ADR 0093) ----------
+# SMD_IDENTIFIER_GATE_MODE=report turns OFF all identifier blocking on a seat,
+# SSNs and case numbers included. ADR 0093 keeps it only as an incident-time,
+# fleet-wide rollback; what a seat may send is authored as a role policy in
+# operator/roles/<role>/role.yaml and reviewed as the seat x gate matrix. A
+# lever left set on one seat is a loosening nobody reviewed (captain-mark,
+# 2026-10), so the smoke names it on every run.
+#
+# WARN, not FAIL: during an incident the lever is the right tool and a red
+# smoke would block the very reprovision that rolls back. The summary still
+# prints it, so it cannot be forgotten once the incident is over.
+#
+# Reads every process environ as root and prints only whether the NAME is
+# present, never the value (`grep -q`). A fresh ssh session inherits none of
+# the app env (see step 11), so a match is the gateway or a sibling, not us.
+LEVER_PROBE="for e in /proc/[0-9]*/environ; do if tr \"\\000\" \"\\n\" 2>/dev/null < \$e | grep -q ^SMD_IDENTIFIER_GATE_MODE=; then echo SMD_LEVER=set; exit 0; fi; done; echo SMD_LEVER=unset"
+LEVER_OUT="$(ssh_run "${LEVER_PROBE}" || true)"
+case "${LEVER_OUT}" in
+  *SMD_LEVER=set*)
+    check_warn "identifier-gate-lever-set: SMD_IDENTIFIER_GATE_MODE is set on ${APP_NAME}; identifier blocking may be off. Incident rollback only (ADR 0093): unset it once the incident is over" ;;
+  *SMD_LEVER=unset*)
+    pass "identifier-gate-lever-unset" ;;
+  *)
+    check_warn "identifier-gate-lever-unknown: could not read whether SMD_IDENTIFIER_GATE_MODE is set on ${APP_NAME}" ;;
+esac
+unset LEVER_PROBE LEVER_OUT
 
 # ---------- Step 14: the chronology runner is present, idle, capped, and fenced (ss#2614) ----------
 # The runner daemon is a root process that spends the firm's model budget on
