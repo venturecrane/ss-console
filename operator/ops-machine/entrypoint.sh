@@ -21,6 +21,16 @@ EOF
   chown ops:ops "$HOME_DIR/.bashrc"
 fi
 grep -q /opt/ops/bin "$HOME_DIR/.bashrc" || echo 'export PATH="$HOME/bin:/opt/ops/bin:$PATH"' >> "$HOME_DIR/.bashrc"
+# The claude shim (/opt/ops/bin/claude) must be the `claude` every shell finds.
+# Later .bashrc lines prepend ~/.npm-global/bin (ops-crane-install) and the tools
+# venv, and Claude's auto-updater installs a copy into ~/.npm-global: on
+# 2026-10-19 that copy shadowed the shim and a workspace session ran on the
+# client's own Anthropic key. So the LAST line of .bashrc puts the shim first,
+# re-asserted every boot.
+# Login shells (ops-start ends in `exec bash -l`) read only ~/.bash_profile.
+[ -f "$HOME_DIR/.bash_profile" ] || { echo '[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"' > "$HOME_DIR/.bash_profile"; chown ops:ops "$HOME_DIR/.bash_profile"; }
+sed -i '/# smd: claude shim first/d' "$HOME_DIR/.bashrc"
+echo 'export PATH="/opt/ops/bin:$PATH"  # smd: claude shim first' >> "$HOME_DIR/.bashrc"
 
 # A client workspace (OPS_WORKSPACE=<slug>, set by bin/ops-workspace).
 #  * /etc/smd-ops-workspace is the marker the laptop tripwire

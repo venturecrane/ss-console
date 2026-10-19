@@ -22,6 +22,11 @@ if [ -f /etc/smd-ops-workspace ]; then
     # The scope check: the seat token must reach this client's seat and nothing
     # else. smd-ops is always present, so it is the stand-in for "another app".
     fly status -a smd-ops >/dev/null 2>&1 && bad "token reaches smd-ops (scope too wide)" || ok "token refused at other apps"
+    # Claude must run through the shim, or it runs on the client's own key
+    # (2026-10-19: an auto-updated copy in ~/.npm-global shadowed it).
+    first=$(bash -lc 'command -v claude' 2>/dev/null)   # login shell: .bash_profile -> .bashrc
+    [ "$first" = /opt/ops/bin/claude ] && ok "claude resolves to the key-stripping shim" \
+      || bad "claude resolves to ${first:-nothing}, not /opt/ops/bin/claude (sessions would bill the client's key)"
   fi
   for r in ss-console engagements; do
     [ -d "$HOME/dev/$r/.git" ] && ok "repo $r cloned" || bad "repo $r missing (run ops-bootstrap)"
