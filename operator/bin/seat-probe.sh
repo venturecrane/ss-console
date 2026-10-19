@@ -15,7 +15,8 @@
 #      empty env and a refused turn (persona=(none)).
 #
 # Usage:
-#   operator/bin/seat-probe.sh <slug> <command...>
+#   operator/bin/seat-probe.sh <slug> <command...>       # argv, run as given
+#   operator/bin/seat-probe.sh <slug> "<shell string>"   # one arg: pipes, >, && work
 #
 # Examples:
 #   operator/bin/seat-probe.sh pilot-smokeball hermes -p operator cron list
@@ -56,11 +57,50 @@ APP_NAME="hermes-${SLUG}"
 ACTOR_RAW="seat-probe:${SMD_ACTOR:-$(whoami)}@$(hostname -s 2>/dev/null || echo unknown)"
 DIRECT_WRITE_ACTOR="$(printf '%s' "${ACTOR_RAW}" | tr -cd 'A-Za-z0-9@._:+-' | cut -c1-120)"
 
-# Quote the argv safely for transport through the remote sh -c.
-QUOTED=""
-for arg in "$@"; do
-  QUOTED+=" $(printf '%q' "${arg}")"
-done
+# The probe command, and how it travels (2026-10-18 env-dump incident).
+#
+# ONE argument is a shell command string: pipes, redirection, `&&` and quoting
+# inside it work (`seat-probe.sh <slug> "echo ... | base64 -d | python3"`).
+# SEVERAL arguments keep argv semantics: each is %q-quoted and the words are
+# joined, so `seat-probe.sh <slug> hermes -p operator cron create "2m" "<p>"`
+# runs exactly that argv.
+#
+# Either way the result is ONE string, CMD, which the seat runs as
+# `env -i ... /bin/sh -c "$CMD"`. It travels BASE64-ENCODED, because its
+# alphabet ([A-Za-z0-9+/=]) means nothing to any of the three parsers between
+# here and the seat (this bash string, fly's -C word splitting, the remote
+# `sh -c '...'`), so single quotes, double quotes, `=`, pipes and backslashes
+# all arrive byte for byte.
+#
+# NEVER let the command reach `env` as a bare word again. Until 2026-10-18 the
+# argv was %q-quoted straight onto the `env -i ${ENVV} ...` line. A one-string
+# probe containing `=` before its first unescaped space (a base64 payload
+# ending in `==`) became ONE escaped word that `env` parsed as a NAME=VALUE
+# assignment; with no program left to run, `env` PRINTS ITS ENVIRONMENT, which
+# here is the gateway's entire environ, every secret value, into the session
+# transcript. `/bin/sh -c "$CMD"` means `env` always has a real program, and an
+# empty CMD is refused on both sides before `env` is reached.
+# Test: tests/seat-probe-env-leak.test.ts runs this script's real remote side
+# against a fake environ holding a canary secret.
+if [ "$#" -eq 1 ]; then
+  CMD="$1"
+else
+  CMD=""
+  for arg in "$@"; do
+    CMD+="${CMD:+ }$(printf '%q' "${arg}")"
+  done
+  # Every argument empty: %q renders each as '' and the string looks non-empty.
+  ALL_EMPTY=1
+  for arg in "$@"; do
+    if [ -n "${arg//[[:space:]]/}" ]; then ALL_EMPTY=0; fi
+  done
+  [ "${ALL_EMPTY}" -eq 0 ] || CMD=""
+fi
+if [ -z "${CMD//[[:space:]]/}" ]; then
+  echo "seat-probe: refusing an empty command" >&2
+  exit 2
+fi
+CMD_B64="$(printf '%s' "${CMD}" | base64 | tr -d '\n')"
 
 # Resolve the gateway pid INLINE on the seat (never pre-resolved — stale pid =
 # empty env = refused turn), export its env, drop to hermes, run the command.
@@ -122,5 +162,11 @@ if [ -z \"\${GPID}\" ]; then
   exit 1
 fi
 ENVV=\$(tr \"\\0\" \"\\n\" < /proc/\${GPID}/environ | grep -vE \"^(PWD|SHLVL|_|MSGRAPH_SEND_TENANT_ID|MSGRAPH_SEND_CLIENT_ID|MSGRAPH_SEND_CLIENT_SECRET|AGENTMAIL_SEND_API_KEY|AGENTMAIL_WEBHOOK_READ_API_KEY|R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY)=\" | tr \"\\n\" \" \")
-exec runuser -u hermes -- env -i \${ENVV} PATH=/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin SMD_DIRECT_WRITE_ACTOR=${DIRECT_WRITE_ACTOR} ${QUOTED}
+CMD_B64=${CMD_B64}
+CMD=\$(printf %s \"\${CMD_B64}\" | base64 -d) || { echo \"seat-probe: command did not decode on ${APP_NAME}\" >&2; exit 2; }
+case \"\${CMD}\" in
+  *[![:space:]]*) ;;
+  *) echo \"seat-probe: refusing an empty command on ${APP_NAME}\" >&2; exit 2 ;;
+esac
+exec runuser -u hermes -- env -i \${ENVV} PATH=/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin SMD_DIRECT_WRITE_ACTOR=${DIRECT_WRITE_ACTOR} /bin/sh -c \"\${CMD}\"
 '"
