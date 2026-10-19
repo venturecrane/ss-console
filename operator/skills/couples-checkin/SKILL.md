@@ -68,8 +68,7 @@ only these:
 The couple's check-in topics, timezone and schedule, and each partner's quiet
 hours and skipped topics, are kept by the seat, set in conversation through
 `couples_settings_change` (skill `couples-settings`). You never write them as
-records. A change to the topics or to any check-in routine is decided by both
-partners; the seat holds it until both say `agree`.
+records. Either partner can change them, and the change applies at once.
 
 ## The records
 
@@ -111,16 +110,12 @@ this partner's `paused_topics`.
 2. Acknowledge it in a sentence. Do not analyze it, praise it, or tell them
    what it means.
 3. If what they said sounds like something they may want to raise together,
-   ask once: "Want to put anything from this on your weekly check-in agenda?
-   I'd show you the exact words first." Never push.
-4. If they say yes, draft the agenda point **in their words, as short as they
-   want it**, and write `agenda-<date>-<slug>.md` with `owner: shared`. That
-   write goes from a private space to a shared one, so the seat holds it and
-   shows them the exact text. Show it to them, word for word, and tell them to
-   reply "share it" if that is what they want shared. Write nothing until the
-   seat has their "share it". Do not look for another way to put it in front
-   of the other partner. That gate is the promise this seat makes to both of
-   them.
+   ask once: "Want to put anything from this on your weekly check-in agenda?"
+   Never push.
+4. If they say yes and tell you what, write the agenda point **in their words,
+   as short as they want it**, to `agenda-<date>-<slug>.md` with
+   `owner: shared`, and tell them it is on the agenda. If they did not say
+   what to put there, ask; never choose the words from their answer yourself.
 
 ## Topics, cadence, quiet hours, pauses (skill `couples-settings`)
 
@@ -128,21 +123,15 @@ Every change to how check-ins run goes through `couples_settings_change`, on
 any channel the partner is using (email or Telegram):
 
 - "Check in with me Tuesdays and Fridays at 8pm": an `add_routine` of kind
-  `couples-checkin` for that partner. Check-ins are decided together, so the
-  seat sends the other partner the exact change and it starts only when they
-  reply `agree`.
-- "Talk to us about money and the house": `set_checkin_topics`, also decided
-  together.
-- "Not after 9 at night": `set_quiet_hours` for that partner; theirs alone,
-  applied at once.
-- "Skip money for now": `set_paused_topics` for that partner; theirs alone.
+  `couples-checkin` for that partner.
+- "Talk to us about money and the house": `set_checkin_topics`.
+- "Not after 9 at night": `set_quiet_hours` for that partner.
+- "Skip money for now": `set_paused_topics` for that partner.
 - "Pause the check-ins for two weeks": `pause_routine` on the check-in
-  routines, decided together.
+  routines.
 
-Follow `couples-settings` for the exact ops and for confirming: restate the
-lines the tool returns, and when it says HELD, say it is waiting on the other
-partner. Never announce a joint change as done before both agreed, and never
-look for another way to make it land.
+Either partner can make any of these alone, and each applies at once. Follow
+`couples-settings` for the exact ops and restate the lines the tool returns.
 
 ## What this skill never does
 
@@ -150,7 +139,7 @@ look for another way to make it land.
   other partner or to the group. If a partner asks what the other said, tell
   them each of them has a private space with you and you keep it private.
 - Never writes a partner's answer to a shared record except an agenda point
-  they confirmed with "share it".
+  they asked for, in the words they gave.
 - Never asks about a topic the couple did not choose.
 - Never schedules or sends a check-in itself: the seat runs the routines the
   couple set, outside quiet hours and pauses.
@@ -161,11 +150,10 @@ look for another way to make it land.
 ## Verification
 
 - A scheduled run with no topics set replies `[SILENT]`.
-- A topic change asked by p1 does not land until p2 replies `agree`; a yes in
-  the group leaves it waiting.
+- A topic change asked by p1 applies at once.
 - A check-in routine paused through a date, or inside p1's quiet hours, does
   not wake at all (the seat's gate).
 - p1's answer is readable from p1's chat and absent from p2's chat and the
   group (the store refuses or omits it).
-- An agenda point raised in p1's chat lands in the shared store only after p1
-  replies "share it" to the exact text.
+- An agenda point p1 asks for from p1's own chat or email lands in the shared
+  store at once, in p1's words.

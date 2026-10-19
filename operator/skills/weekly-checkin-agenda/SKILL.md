@@ -78,16 +78,14 @@ by both); it hands you an `smd_couples_routine` block.
 
 ## Adding a point
 
-A partner adds a point from the group: write a `couples-checkin`
-`agenda-<date>-<slug>.md` record with `owner: shared` and `kind: agenda-item`
-at once. From a private chat the same write is held by the seat: show the exact
-text, word for word, and ask them to reply "share it". Nothing lands until they
-do. Never route around it (skill `couples-checkin` describes this).
+Either partner adds a point alone, from their own email or chat or from a
+shared group: write a `couples-checkin` `agenda-<date>-<slug>.md` record with
+`owner: shared` and `kind: agenda-item`, in their words, at once.
 
 ## What this skill never does
 
 - Never uses a private record, a private check-in answer, or anything said in
-  a private chat that was not shared with "share it".
+  a private chat that the partner did not ask to put on the agenda.
 - Never adds a point a partner did not raise.
 - Never summarizes how the week "went" for the couple.
 
@@ -95,6 +93,6 @@ do. Never route around it (skill `couples-checkin` describes this).
 
 - An agenda built while p1 has private check-in answers and private gift ideas
   contains none of them.
-- A point p1 raised in p1's chat appears only after p1's "share it".
+- A point p1 asks for from p1's own email or chat appears at once.
 - A run with nothing shared replies `[SILENT]`.
 - An included point is marked and does not repeat the next week.

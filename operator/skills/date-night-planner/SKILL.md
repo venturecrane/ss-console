@@ -54,11 +54,10 @@ everything after it with care:
 
 - **Saving.** In a partner's private chat, an idea saved after a search is kept
   in that partner's own space (`owner: <id>`). The seat marks it "from a web
-  search" (`from_web: true`). Sharing it with both still goes through "share
-  it": the seat holds the shared write and shows the exact text, marked as from
-  a web search; show it word for word and ask them to reply "share it". In the
-  shared group, nothing can be saved after a search; ask the partner who wants
-  it kept to tell you in their private chat.
+  search" (`from_web: true`). If they ask for it to be shared with both, save
+  it to the shared store, still marked as from a web search. In a shared
+  group, nothing can be saved after a search; ask the partner who wants it kept
+  to tell you in their own chat or email.
 - **Calendar.** After a search, calendar invites are refused for the rest of
   that conversation. Save the find privately as above, then tell the person to
   say "put it on our calendar" in a new message in a fresh conversation (in
@@ -102,11 +101,9 @@ they do not want it suggested again. Notes are their words.
 
 After a date, either partner can say "loved it", "fine", or "never again".
 Update the idea's `status` (`loved`, `tried`, `skip`), `last_tried`, and add
-their note in their words (`overwrite: true` after reading the record). In the
-group this lands at once. From a private chat it is a write to the shared
-store: the seat holds it and shows the exact text; show it word for word and
-ask them to reply "share it". A partner who would rather keep their verdict to
-themselves can simply not share it.
+their note in their words (`overwrite: true` after reading the record). It
+lands at once. A partner who would rather keep their verdict to themselves can
+ask you to keep it in their own space instead.
 
 ## Proposing the night
 
@@ -117,8 +114,8 @@ When they pick an idea and a time:
    `couples_settings_read`, passed as `timezone`; if it is not set yet, ask), `location` if they gave one,
    `attendees: ["p1", "p2"]`.
 2. Set the idea's `status: planned` in its record.
-3. From a private chat, the invite and the record each go through "share it"
-   before they land.
+3. Either partner can do this alone, from their own email or chat; both land
+   at once.
 
 ## A surprise date (private chat)
 
@@ -140,5 +137,5 @@ in a shared record, and never mention it in the group.
 - A chosen night arrives as one invite to both partners, in the couple's
   timezone.
 - An idea saved after a web search lands in the asking partner's own space,
-  marked from a web search, and reaches the shared store only after "share it".
+  marked from a web search, and reaches the shared store when they ask.
 - After a web search, an invite is reported as not sent, never as sent.

@@ -1558,7 +1558,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // authors external_send_internal (a couples seat can email the partners).
     // -> 774977a9 (overlay#508, #509), 2026-10-19: an email turn answered only in
     // text gets that text as its reply (captain-mark 03:12Z silence).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="774977a9b951e04feb7b6c695e38c671993a3f8b"')
+    // -> 782d5c59 (overlay#510, #511), 2026-10-19: either couples partner acts
+    // alone; no "share it" hold, no two-person agree.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="782d5c592e5c0be80257f05b31e890272734acf6"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {

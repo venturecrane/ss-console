@@ -32,17 +32,10 @@ The space is resolved by the seat (ADR 0091). The group is `shared` and reads
 shared records only. A partner's private chat is `person:<id>` and reads their
 own records plus shared ones.
 
-- **In the group**, adding to a shared list lands at once.
-- **In a private chat**, adding to a shared list is a write from a private
-  space to a shared one. The seat holds it and shows the exact text. Show it
-  word for word and ask the partner to reply "share it"; it lands only then.
-  Anything a partner wants kept to themselves goes on a private list
+- Either partner adds to a shared list alone, from their own email or chat or
+  from a shared group. It lands at once.
+- Anything a partner wants kept to themselves goes on a private list
   (`owner: <id>`) instead, which lands at once and only they can see.
-- **By email**, a shared write is refused; there is no chat to confirm it in.
-  A private list works. Tell them they can add it to the shared list from
-  their Telegram chat or the group.
-
-Never route around the confirmation.
 
 ## Tools
 
@@ -99,9 +92,7 @@ then reads it back before you confirm.
   it helps them.
 - Chores: who has which chore and how often, as the couple says. If they want
   a reminder, send an invite to the partner who has the chore, on the schedule
-  they named (`rrule`, for example `FREQ=WEEKLY;BYDAY=SA`). A chore assigned to
-  the other partner from a private chat is a shared write and goes through
-  "share it".
+  they named (`rrule`, for example `FREQ=WEEKLY;BYDAY=SA`).
 - Never decide who should do a chore, and never keep score of who does more.
 
 ## Expenses
@@ -136,7 +127,7 @@ private list, it never appears in a shared total (persona rule 3).
 ## Verification
 
 - An item added in the group appears for both partners at once.
-- An item a partner adds from a private chat lands on the shared list only
-  after their "share it".
+- An item a partner adds from their own email or chat lands on the shared list
+  at once.
 - A private list is absent from the other partner's chat and the group.
 - An expense total shows its working and matches the recorded lines.

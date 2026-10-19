@@ -39,12 +39,10 @@ price check runs in `shared` and is delivered to the group.
 
 What can go where depends on the channel, and the seat enforces it:
 
-- **Group:** shared writes land at once.
-- **Private Telegram chat:** a shared write (a shared record, an invite to the
-  other partner) is held, and the seat shows the exact text. Show it word for
-  word and ask the partner to reply "share it". Nothing lands until they do.
-- **Email:** a shared write is refused, because there is no chat to confirm it
-  in. Private writes, and invites to the sender alone, work.
+- Either partner can add a trip for both of them, or change one, from their
+  own email or chat or from a shared group. It lands at once.
+- A trip a partner asks to keep to themselves (a surprise) stays in their own
+  space, with invites to them alone.
 
 Never look for a way around any of this. Propose; the partner confirms.
 
@@ -102,15 +100,10 @@ pasted into a chat.
    time zone is not stated, say so and leave it for the partner to confirm.
 2. Find the trip it belongs to (list `trips`, match by dates and place), or
    start a new one.
-3. **By email:** write it into a trip record with `owner: <sender id>`, which
-   only the sender can see. Reply by email with the legs you recorded and say:
-   to add it to your shared trip and send calendar invites to you both, reply
-   "add the <trip> trip" in your Telegram chat with me. You may send the sender
-   alone an invite for each leg now, if they want that.
-4. **In the group:** write the shared trip record and send an invite per leg to
-   both partners, at once.
-5. **In a private chat:** propose the shared trip record and the invites. Each
-   is held for "share it"; show the exact text each time.
+3. Write the shared trip record and send an invite per leg to both partners,
+   at once, and reply with the legs you recorded. If the partner said the trip
+   is a surprise or just for them, keep it in their own space
+   (`owner: <id>`) and invite them alone.
 
 A private trip record and its shared copy are two records: a record never
 moves between spaces. Leave the private one as it is unless the partner asks
@@ -142,7 +135,7 @@ Shared by default; a partner's own list stays `owner: <id>`.
 
 ## Price watches
 
-**Starting one** (group, or private chat with "share it"): write
+**Starting one** (either partner, anywhere): write
 `watch-<slug>.md` with what to watch, their `target` price, and `until`.
 Confirm in a line.
 
@@ -164,9 +157,8 @@ The seat wakes this run only when the couple's `travel` routine is due (an
 
 **A price check a partner asks for in their private chat:** search, report
 what you found and where, and, if they want it kept, save it in their own
-space (`owner: <id>`). The seat marks it "from a web search". Sharing it with
-both still goes through "share it": show the exact text, marked as from a web
-search, and wait for their reply. After the search, calendar invites are
+space (`owner: <id>`), or in the shared space if they ask. The seat marks it
+"from a web search". After the search, calendar invites are
 refused for the rest of that conversation: save the find privately and tell
 them to say "put it on our calendar" in a new message in a fresh conversation
 (in Telegram, `/new` starts one). Do not suggest any other way.
@@ -179,13 +171,12 @@ when `until` has passed and ask whether to keep watching.
 - Never books, changes, cancels or pays for anything.
 - Never stores a passport number, a payment card, or any account login.
 - Never invents a detail missing from a confirmation.
-- Never moves a partner's private trip into the shared space without their
-  "share it".
+- Never moves a partner's private trip into the shared space unless they ask.
 
 ## Verification
 
-- A confirmation emailed by p1 lands in a record only p1 can open; the reply
-  tells p1 how to add it to the shared trip.
+- A confirmation emailed by p1 lands in the shared trip at once, with an
+  invite per leg to both partners.
 - In the group, a trip with two legs produces two invites to the travellers.
 - p1's passport record and reminder are absent from p2's chat and the group.
 - A price check with no active watch replies `[SILENT]`; one with a result

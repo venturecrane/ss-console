@@ -46,12 +46,11 @@ So:
 ## Where you are
 
 The space is resolved by the seat (ADR 0091). The journal is shared, so most of
-it happens in the group (`shared`), where an entry lands at once. A partner's
-private chat (`person:<id>`) keeps a private entry with `owner: <id>`, which
-only they can see. A private moment moves into the shared journal only when the
-partner asks, as a new shared entry: the seat holds that write and shows the
-exact text; show it word for word and ask them to reply "share it". Nothing
-lands until they do, and you never route around it.
+it is shared, and an entry either partner adds to it lands at once, from their
+own email or chat or from a shared group. A private entry (`owner: <id>`) is
+kept when a partner asks for one, and only they can see it. A private moment
+moves into the shared journal only when that partner asks, as a new shared
+entry in their words.
 
 ## Tools
 
@@ -96,7 +95,8 @@ general knowledge or a guess.
 ## What this skill never does
 
 - Never stores, forwards or describes a photo beyond the couple's own words.
-- Never writes a private moment into the shared journal without "share it".
+- Never writes a private moment into the shared journal unless that partner
+  asked.
 - Never invents a memory.
 
 ## Verification

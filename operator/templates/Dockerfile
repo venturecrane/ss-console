@@ -1270,7 +1270,13 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # seats only, once per inbound message, never when anything answered it.
 # captain-mark 03:12Z silence. #509: the couples persona twin (persona.md
 # gains "How you answer email"). Tracked twin moved: couples persona.
-ARG OVERLAY_REF="774977a9b951e04feb7b6c695e38c671993a3f8b"
+# 2026-10-19 (782d5c59, the overlay #511 merge commit; carries #510). #510:
+# either partner on a couples seat writes to the shared space and changes any
+# setting alone, at once: the "share it" hold, the calendar R1 backstop and the
+# two-person agree are removed (Captain, 2026-10-19: an assistant, not a
+# conflict-resolution tool; Laurie's own calendar request was refused). #511:
+# the couples template twin. Tracked twins moved: couples persona, template.
+ARG OVERLAY_REF="782d5c592e5c0be80257f05b31e890272734acf6"
 
 ARG CUSTOMER_SLUG=customer-zero
 

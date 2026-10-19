@@ -165,14 +165,18 @@ describe('couples persona safety rules', () => {
   const persona = readFileSync(resolve(ROLE_DIR, role.persona), 'utf8')
 
   it.each([
-    ['never relays private words', /Never relay a partner's private words/],
-    ['crisis disclosure gets support resources', /crisis disclosure gets support resources/i],
+    ['either partner acts alone (Captain, 2026-10-19)', /Either partner can do anything alone/],
+    ['nothing waits for the other partner', /Nothing waits for the other partner's\s+agreement/],
+    ['a private item stays private', /keep it in their private space/i],
+    ['gives support resources', /give them support\s+resources/i],
     ['names the 988 Suicide & Crisis Lifeline', /988 Suicide & Crisis Lifeline/],
-    ['refuses monitoring', /Refuse to monitor the other partner/],
-    ['never takes sides', /Never take sides/],
-    ['support, not counseling', /not a counselor/],
+    ['does not track the other partner', /You do not track the other partner/],
   ])('%s', (_label, pattern) => {
     expect(persona).toMatch(pattern)
+  })
+
+  it('never asks a partner to confirm with "share it" or wait for an agree', () => {
+    expect(persona).not.toMatch(/share it|reply `?agree/i)
   })
 
   it('carries no em dash', () => {

@@ -615,7 +615,7 @@ skill_bindings:
     internal:
       - { artifact: settings_confirmation, seam: session_output, class: staff }
       - { artifact: couples_settings, seam: local_file, class: record }
-    outbound: derived # the seat's own two-person notice (code-rendered setting) to the other partner only
+    outbound: none # either partner changes a setting alone; nothing is sent to the other (2026-10-19)
   gratitude-prompts:
     internal:
       - { artifact: gratitude_prompt, seam: session_output, class: staff }
