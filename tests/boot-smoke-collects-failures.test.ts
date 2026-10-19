@@ -136,6 +136,10 @@ for a in "$@"; do
     exit 0
   }
 done
+# The identifier-gate lever probe (step 13b) reads a VERDICT from stdout, so
+# the stub answers it from lever.txt when present (SMD_LEVER=set|unset).
+LEVER="$(dirname "$0")/lever.txt"
+case "$*" in *SMD_IDENTIFIER_GATE_MODE*) [ -f "$LEVER" ] && cat "$LEVER" ;; esac
 NEEDLES="$(dirname "$0")/needles.txt"
 if [ -s "$NEEDLES" ] && printf '%s' "$*" | grep -qFf "$NEEDLES"; then exit 1; fi
 exit 0
@@ -208,9 +212,10 @@ function staleCheckout(dir: string, rel: string): void {
 
 function run(
   failOn: string[],
-  opts: { medchronAuthored?: boolean; staleLane?: string } = {}
+  opts: { medchronAuthored?: boolean; staleLane?: string; lever?: 'set' | 'unset' } = {}
 ): { out: string; code: number } {
   const dir = stubDir(failOn)
+  if (opts.lever) writeFileSync(join(dir, 'lever.txt'), `SMD_LEVER=${opts.lever}\n`)
   if (opts.staleLane) {
     const l = opts.staleLane
     staleCheckout(dir, `operator/customers/pilot-smokeball/${l}/${l}-firm.yaml`)
@@ -308,6 +313,26 @@ describe('boot smoke reports every check, not just the first red (ss#2487)', () 
     expect(out).toContain('checks failed: 0')
     expect(out).not.toContain('FAIL:')
   })
+
+  // ADR 0093: SMD_IDENTIFIER_GATE_MODE is an incident-only rollback. A seat
+  // where it is set is WARNED in the summary on every run, and never fails it,
+  // because during an incident the lever is the right tool.
+  it('the identifier-gate lever is warned in the summary when set, and never fails the run', () => {
+    const set = run([], { lever: 'set' })
+    expect(set.code).toBe(0)
+    expect(set.out).toContain('checks failed: 0')
+    expect(set.out).toContain('warnings: 1')
+    expect(set.out).toContain('WARNING: identifier-gate-lever-set')
+    // The control: unset is a pass and no warning.
+    const unset = run([], { lever: 'unset' })
+    expect(unset.code).toBe(0)
+    expect(unset.out).toContain('PASS: identifier-gate-lever-unset')
+    expect(unset.out).toContain('warnings: 0')
+    // No verdict is never read as unset.
+    const silent = run([])
+    expect(silent.out).toContain('WARNING: identifier-gate-lever-unknown')
+    expect(silent.out).not.toContain('PASS: identifier-gate-lever-unset')
+  }, 180_000)
 
   it('a precondition abort still summarizes what had run', () => {
     // The Machine never reaching `started` is not a check result: every ssh

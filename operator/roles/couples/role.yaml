@@ -146,3 +146,24 @@ optional_connections:
   - name: google
     connected_by: owner partner
     used_for: shared documents and the shared folder
+
+# What this role's seats may send, beyond the platform default (ADR 0093).
+# Read by the overlay's policy resolver from the image (COPY operator/roles/),
+# so it always ships with the code that reads it. Floors stay in code and are
+# not authorable here: SSN, A-number, receipt number, case number and a case
+# number paired with a date block on every seat. Every value looser than the
+# default needs the rationale and the ADR below (tests/role-policy.test.ts), and
+# any change here moves the seat x gate matrix (tests/policy-matrix.test.ts).
+policy:
+  identifier_gate:
+    recurring_dates: verify_by_month_day
+  output_checklist:
+    profile: household
+  rationale: >-
+    A couples seat reminds the couple of their own recorded birthdays and
+    anniversaries, whose next occurrence falls in a year nobody wrote down; a
+    date verifies only when its month and day match a date read from the seat's
+    own record store this session, so invented dates stay blocked. Its sends are
+    household notes between two partners, so paralegal wording rules
+    (exclamation marks, unknown all-caps words) do not apply.
+  adr: docs/adr/0093-seat-policy-profiles.md
