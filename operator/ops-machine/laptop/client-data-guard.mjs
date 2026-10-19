@@ -21,7 +21,8 @@
  *   1. /etc/smd-ops-workspace exists (we ARE on a workspace) -> allow
  *   2. SS_ALLOW_CLIENT_DATA_ON_LAPTOP is set to a reason -> allow, audited
  *      (break-glass: a workspace is down and a client needs something now)
- *   3. the command or path matches a client-document pattern -> exit 2
+ *   3. the command or path matches a client-document pattern -> exit 2,
+ *      unless the whole command is one off-laptop tool (OFFBOARD_TOOL)
  *   4. otherwise -> allow
  * Fails open on a crash: a broken hook must not brick unrelated work.
  */
@@ -56,6 +57,16 @@ const PULL_PATTERNS = [
   /\bfly(ctl)?\s+(ssh\s+)?sftp\s+get\b/,
   /seat-probe\.sh\b[^|;&]*\b(download|mint|get_document|read_document|read_attachment|extract)/,
 ]
+
+/**
+ * The tools that take client documents OFF a laptop (copy to a workspace with a
+ * verified manifest, then delete the laptop copy). Naming a data folder is their
+ * job, so a command that is exactly one of them, nothing chained, is allowed.
+ * WHY (2026-10-19): a 260k-file folder no manifest covered could not be moved to
+ * the A&P workspace, because the guard blocked the move it exists to cause.
+ */
+const OFFBOARD_TOOL =
+  /^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:(?:\/bin\/)?bash\s+|python3?\s+(?:-I\s+)?)?(?:\S*\/)?operator\/ops-machine\/(?:move-to-ops\.sh|move-by-folder\.sh|move-from-host\.sh|laptop-offboard\.py)(?:\s+[^;&|`$<>()\n]*)?$/
 
 /** A string field of a parsed JSON object, or '' (external input: never cast). */
 function str(obj, key) {
@@ -119,6 +130,7 @@ try {
   const text = isBash ? raw : raw.replace(HOME, '~')
   const hit = which(text, isBash)
   if (!hit) process.exit(0)
+  if (isBash && OFFBOARD_TOOL.test(command)) process.exit(0)
 
   const reason = process.env.SS_ALLOW_CLIENT_DATA_ON_LAPTOP
   if (reason && reason !== '0') {

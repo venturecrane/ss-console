@@ -11,10 +11,11 @@
 set -uo pipefail
 host="$1"; base="$2"; sub="$3"; list="$4"
 dest="/home/ops/archive/$sub"
+app="${OPS_APP:-smd-ops}"  # a client's documents go to its workspace: OPS_APP=ops-<slug>
 short=$(ssh -o BatchMode=yes "$host" 'hostname -s')
-ledger=".smd-ops-moved-$(echo "$sub" | sed "s|^$short/|${short}_|" | tr '/' '_').txt"
+ledger=".${app}-moved-$(echo "$sub" | sed "s|^$short/|${short}_|" | tr '/' '_').txt"
 ssh -o BatchMode=yes "$host" "touch ~/$ledger"
-fly ssh console -a smd-ops -u ops -C "mkdir -p $dest" > /dev/null 2>&1
+fly ssh console -a "$app" -u ops -C "mkdir -p $dest" > /dev/null 2>&1
 ok=0; failed=0
 while IFS= read -r -u 3 e; do
   [ -z "$e" ] && continue
@@ -25,9 +26,9 @@ while IFS= read -r -u 3 e; do
   n=$(wc -l < "$manifest" | tr -d ' ')
   for try in 1 2 3; do
     ssh -o BatchMode=yes "$host" "cd '$base' && tar -cf - '$e'" < /dev/null \
-      | fly ssh console -a smd-ops -u ops --pty=false -C "tar -xf - -C $dest" > /dev/null 2>&1
-    fly ssh console -a smd-ops -u ops --pty=false -C "tee $dest/.manifest-$tag.sha256" < "$manifest" > /dev/null 2>&1
-    bad=$(fly ssh console -a smd-ops -u ops -C "sh -c 'cd $dest && sha256sum -c --quiet .manifest-$tag.sha256 2>&1 | wc -l'" < /dev/null 2>/dev/null | tail -1 | tr -d ' \r')
+      | fly ssh console -a "$app" -u ops --pty=false -C "tar -xf - -C $dest" > /dev/null 2>&1
+    fly ssh console -a "$app" -u ops --pty=false -C "tee $dest/.manifest-$tag.sha256" < "$manifest" > /dev/null 2>&1
+    bad=$(fly ssh console -a "$app" -u ops -C "sh -c 'cd $dest && sha256sum -c --quiet .manifest-$tag.sha256 2>&1 | wc -l'" < /dev/null 2>/dev/null | tail -1 | tr -d ' \r')
     if [ "$n" -gt 0 ] && [ "$bad" = "0" ]; then
       ssh -o BatchMode=yes "$host" "echo '$e' >> ~/$ledger" < /dev/null
       ok=$((ok+1)); echo "ok   $e ($n files)"; break

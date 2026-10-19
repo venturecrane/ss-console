@@ -8,7 +8,7 @@
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 base="$1"; sub="$2"; list="${3:-}"
-ledger="$HOME/.smd-ops-moved-$(echo "$sub" | tr '/' '_').txt"
+ledger="$HOME/.${OPS_APP:-smd-ops}-moved-$(echo "$sub" | tr '/' '_').txt"
 touch "$ledger"
 if [ -n "$list" ]; then entries=$(cat "$list"); else entries=$(cd "$base" && ls -A | sed 's|^|./|'); fi
 ok=0; failed=0
