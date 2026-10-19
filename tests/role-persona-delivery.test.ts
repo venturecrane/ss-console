@@ -51,7 +51,9 @@ describe('role persona delivery', () => {
         expect(existsSync(personaPath)).toBe(true)
         const body = readFileSync(personaPath, 'utf8')
         expect(body.trim().length).toBeGreaterThan(0)
-        expect(body).toMatch(/^## Safety rules$/m)
+        // The couples persona names its section "A few rules that always hold"
+        // since it was rewritten as an assistant (2026-10-19).
+        expect(body).toMatch(/^## (Safety rules|A few rules that always hold)$/m)
       })
     })
   }
