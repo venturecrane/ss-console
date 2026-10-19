@@ -46,6 +46,10 @@ On a laptop the Captain types one command: `ops ap` (or `ops` to list the worksp
 
 When a laptop agent gets a request that would pull client documents, it does not start it. It runs `ops-handoff <client> "<task>"` and tells the Captain to type `ops <client>`; the task opens in front of him there. Every laptop session carries the rule (Law 15 in the operating doctrine), and a user-level hook (`client-data-guard.mjs`) stops the common commands and prints the same instruction.
 
+The outcome comes back the same way. A handed-over task's session writes what it did and found to `~/outbox/` on the workspace (the verdict, never document content), and the laptop session reads it with `ops-handoff <client> --results`, so the Captain does not copy results between windows.
+
+Claude on a workspace always runs through the shim `/opt/ops/bin/claude`, which keeps the client's Anthropic key away from Claude itself (Claude runs on the Captain's Max login; only the tools bill the client's key). On 2026-10-19 Claude's own auto-updater put a copy into `~/.npm-global`, ahead of the shim on PATH, and a session ran on A&P's key. The shim now turns the updater off, the last line of `.bashrc` puts the shim first on every boot, and the selftest fails if `claude` resolves anywhere else.
+
 The first time on a new workspace, `ops` walks the Captain through his GitHub sign-in and Claude's own `/login`, then sets up the repos and tools.
 
 ## How long documents are kept

@@ -11,6 +11,10 @@
 # Claude's own environment and handed back to every command Claude's Bash tool
 # runs via CLAUDE_ENV_FILE (probed 2026-10-17: sourced before each command), so
 # tools bill the client's key and Claude bills the Max plan.
+#
+# DISABLE_AUTOUPDATER: the version is pinned by the image (CLAUDE_CODE_VERSION).
+# The updater installs into the ops user's npm prefix (~/.npm-global), and that
+# copy, first on PATH, ran a session past this shim on 2026-10-19.
 envfile=()
 [ -f "$HOME/.ops-secrets" ] && envfile=(CLAUDE_ENV_FILE="$HOME/.ops-secrets")
-exec env -u ANTHROPIC_API_KEY "${envfile[@]}" /usr/local/bin/claude "$@"
+exec env -u ANTHROPIC_API_KEY DISABLE_AUTOUPDATER=1 "${envfile[@]}" /usr/local/bin/claude "$@"

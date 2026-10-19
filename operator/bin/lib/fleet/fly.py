@@ -98,6 +98,11 @@ class Fly:
     def volume_id(self, app: str, name: str = "hermes_state") -> str:
         rows = _json(self._fly("volumes", "list", "-a", app, "--json"), f"fly volumes list -a {app}")
         vols = [v for v in rows or [] if isinstance(v, dict) and v.get("name") == name]
+        # An app can carry an orphan volume of the same name (hermes-brokery,
+        # 2026-10-19); the one that matters is the one the Machine mounts.
+        attached = [v for v in vols if v.get("attached_machine_id")]
+        if len(vols) > 1 and len(attached) == 1:
+            vols = attached
         if len(vols) != 1:
             raise ToolingError(f"{app}: expected one {name} volume, found {len(vols)}")
         return str(vols[0].get("id"))
@@ -112,6 +117,8 @@ class Fly:
         """The fly.toml the app is deployed with now (its rollback toml)."""
         with tempfile.TemporaryDirectory() as tmp:
             dest = os.path.join(tmp, "fly.toml")
+            # flyctl refuses `--config <path>` unless the file already exists.
+            open(dest, "w", encoding="utf-8").close()
             require_ok(self._fly("config", "save", "-a", app, "--config", dest, "--yes"), f"fly config save -a {app}")
             with open(dest, encoding="utf-8") as fh:
                 return fh.read()
