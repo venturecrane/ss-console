@@ -1554,7 +1554,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // rostered sender; couples settings by conversation.
     // -> 71af305c (overlay#506), 2026-10-18: couples keep a fenced read_file on
     // email (captain-mark activation fix).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="71af305c29b352915bed2061f86976852e59d668"')
+    // -> 9cca5192 (overlay#507), 2026-10-18: test-only; the couples template twin
+    // authors external_send_internal (a couples seat can email the partners).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="9cca51923e912695fee90f38ad657a475d7ca7cd"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
