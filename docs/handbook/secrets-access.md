@@ -53,6 +53,24 @@ environment, root-only secrets included, and naming those secrets one at a time 
 twice (the Graph send credential in #2879, the account-wide R2 keys in #2902, each found by
 boot smoke on a live seat). The named list survives only as a second filter on the copy.
 
+### `env` with no program prints the environment
+
+`env NAME=VALUE ...` with no program after the assignments prints its whole environment,
+which inside `seat-probe.sh` is the gateway's environ, every secret value included. On
+2026-10-18 a probe passed one command string ending in a base64 payload (`...==`); the
+wrapper quoted it onto the `env -i ${ENVV} ...` line as one escaped word containing `=`,
+`env` read it as an assignment, and the gateway environment went to stdout and into the
+agent transcript.
+
+The probe command now never reaches `env` as a bare word. The wrapper runs
+`env -i ${ENVV} ... /bin/sh -c "$CMD"`, so `env` always has a program. The command travels
+base64-encoded, so quotes, `=`, pipes and redirection arrive intact, and both the caller
+and the seat refuse an empty command before `env` runs. One argument is a shell string
+(pipes and `>` work); several arguments are run as that argv. Any new wrapper that ends in
+`env ... <caller-supplied words>` has the same flaw: put a fixed program after the
+assignments. Test: `tests/seat-probe-env-leak.test.ts` runs the wrapper's real remote side
+against a fake environ holding a canary secret.
+
 ## Where secrets live
 
 | Store | Holds | Notes |
