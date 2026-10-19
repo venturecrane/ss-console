@@ -1562,7 +1562,9 @@ describe('Operator customer Machine Dockerfile', () => {
     // alone; no "share it" hold, no two-person agree.
     // -> 8f6d28d5 (overlay#512-#515), 2026-10-19: concurrent routines and
     // replies each deliver; a dropped one is loud.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="8f6d28d5b744e39e929956ed8ab53c44e0456399"')
+    // -> f231791d (overlay#516), 2026-10-19: recurring invites send; the body
+    // states the rule in words.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="f231791df88de5986c875fb4595ecc384a682c61"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
