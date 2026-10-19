@@ -56,14 +56,38 @@ describe('operator fly.toml template — [[vm]] renders cpus from machine.size (
     expect(template).not.toMatch(/^\s*cpus\s*=\s*\d/m)
   })
 
-  it('provision-customer.sh substitutes both placeholders', () => {
+  it('the one renderer substitutes both placeholders, and provisioning uses it', () => {
+    // Rendering moved to operator/bin/lib/render-fly-toml.sh (fleet release,
+    // 2026-10-19) so `fleet release` deploys with exactly the toml provisioning
+    // renders. Provisioning sources it; it derives the cpu fields from the size.
+    const render = readFileSync(
+      resolve(__dirname, '../operator/bin/lib/render-fly-toml.sh'),
+      'utf8'
+    )
+    expect(render).toContain('{{MACHINE_CPU_KIND}}')
+    expect(render).toContain('{{MACHINE_CPUS}}')
+    expect(render).toContain('machine-size.sh')
     const provision = readFileSync(
       resolve(__dirname, '../operator/bin/provision-customer.sh'),
       'utf8'
     )
-    expect(provision).toContain('{{MACHINE_CPU_KIND}}')
-    expect(provision).toContain('{{MACHINE_CPUS}}')
+    expect(provision).toContain('lib/render-fly-toml.sh')
     expect(provision).toContain('lib/machine-size.sh')
+  })
+})
+
+describe('operator fly.toml template: one image for every seat (fleet release, 2026-10-19)', () => {
+  it('gives the supervisor its stop allowance: SIGTERM and 300 s', () => {
+    // Fly's default (SIGINT, 5 s) killed every running job on every deploy.
+    expect(template).toMatch(/^kill_signal\s*=\s*"SIGTERM"\s*$/m)
+    expect(template).toMatch(/^kill_timeout\s*=\s*300\s*$/m)
+  })
+
+  it('passes no per-seat build args (the slug and the Hermes pin never reach the image)', () => {
+    expect(template).not.toMatch(/\[build\.args\]/)
+    expect(template).not.toMatch(/HERMES_REF|HERMES_UPSTREAM_(TAG|SHA)/)
+    // [build] stays only for the --build fallback.
+    expect(template).toMatch(/^\[build\]\s*$/m)
   })
 
   it.each([

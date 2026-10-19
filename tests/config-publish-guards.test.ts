@@ -565,6 +565,96 @@ describe('ci-publish-customer-configs: image guard (2026-10-13 A&P outage)', () 
     expect(uploads(res.awsCalls)).toHaveLength(1)
     expect(res.stdout).toContain('adds no skill or pre_run')
   })
+
+  // FLEET RELEASE (2026-10-19): skills reach a seat as their own release, so a
+  // seat runs its image's manifest PLUS the skills release its pointer names.
+  const skillsRelease = (version: string, files: Record<string, string[]>): string =>
+    JSON.stringify({
+      version,
+      source_sha: 'c'.repeat(40),
+      files: Object.fromEntries(
+        Object.entries(files).flatMap(([skill, fs]) =>
+          fs.map((f) => [`${skill}/${f}`, { sha256: 'd'.repeat(64), size: 1 }])
+        )
+      ),
+      retired: [],
+      needs: {},
+      pins: {},
+    })
+  const pointTo = (fx: Fixture, slug: string, version: string): void =>
+    seedObject(
+      fx,
+      `vaults/${slug}/skills-pointer.json`,
+      JSON.stringify({
+        version,
+        manifest_key: `fleet/skills/${version}.json`,
+        manifest_sha256: '0'.repeat(64),
+      })
+    )
+
+  it("a pre_run the image lacks but the seat's skills release carries: publishes", () => {
+    const fx = fixtureWith('ashton-price', withCron('ashton-price'))
+    seedObject(fx, 'vaults/ashton-price/customer.yaml', withoutCron('ashton-price'))
+    seedObject(
+      fx,
+      'vaults/ashton-price/image-manifest.json',
+      manifest({ 'inbox-triage': ['SKILL.md'] })
+    )
+    seedObject(
+      fx,
+      'fleet/skills/202610191200-abcdef12.json',
+      skillsRelease('202610191200-abcdef12', { 'connector-auth-check': ['SKILL.md', 'pre_run.py'] })
+    )
+    pointTo(fx, 'ashton-price', '202610191200-abcdef12')
+
+    const res = runPublisher(fx)
+
+    expect(res.code).toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(1)
+    expect(res.stdout).toContain('skills release 202610191200-abcdef12')
+  })
+
+  it('the skills release the pointer names lacks it too: refuses', () => {
+    const fx = fixtureWith('ashton-price', withCron('ashton-price'))
+    seedObject(fx, 'vaults/ashton-price/customer.yaml', withoutCron('ashton-price'))
+    seedObject(
+      fx,
+      'vaults/ashton-price/image-manifest.json',
+      manifest({ 'inbox-triage': ['SKILL.md'] })
+    )
+    seedObject(
+      fx,
+      'fleet/skills/202610191200-abcdef12.json',
+      skillsRelease('202610191200-abcdef12', { 'connector-auth-check': ['SKILL.md'] })
+    )
+    pointTo(fx, 'ashton-price', '202610191200-abcdef12')
+
+    const res = runPublisher(fx)
+
+    expect(res.code).not.toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(0)
+    expect(res.stdout + res.stderr).toContain('pre_run:connector-auth-check/pre_run.py')
+  })
+
+  it('a pointer outside the skills key space is ignored, never followed', () => {
+    const fx = fixtureWith('ashton-price', withCron('ashton-price'))
+    seedObject(fx, 'vaults/ashton-price/customer.yaml', withoutCron('ashton-price'))
+    seedObject(
+      fx,
+      'vaults/ashton-price/image-manifest.json',
+      manifest({ 'inbox-triage': ['SKILL.md'] })
+    )
+    seedObject(
+      fx,
+      'vaults/ashton-price/skills-pointer.json',
+      JSON.stringify({ version: 'x', manifest_key: 'vaults/ashton-price/customer.yaml' })
+    )
+
+    const res = runPublisher(fx)
+
+    expect(res.code).not.toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(0)
+  })
 })
 
 describe('entrypoint boot fetch validates before adopting', () => {

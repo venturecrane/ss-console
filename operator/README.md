@@ -44,7 +44,7 @@ operator/
 ├── skills/                         # canonical SKILL.md library
 ├── connectors/                     # BUILD wrappers — only filevine/, lawpay/, no_pm/ per ADR 0020
 ├── templates/                      # Dockerfile, fly.toml.template, bootstrap.sh
-├── bin/                            # provision-customer.sh, pause-customer.sh, rollback-skill.sh
+├── bin/                            # provision-customer.sh, pause-customer.sh, fleet (releases; skill rollback = fleet release --skills <previous>)
 ├── fixtures/                       # synthetic data per vertical
 ├── grading/                        # per-skill / per-customer test result tracking
 └── customers/<slug>/

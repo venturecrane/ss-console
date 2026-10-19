@@ -1,7 +1,7 @@
 ---
 title: Hermes Consumption and Update Cadence — SHA-Pin, Golden Base Image, Track-vs-Deploy, Blessed Fleet Version
 date: 2026-05-28
-status: accepted
+status: implemented (amended 2026-10-19)
 captain: Scott Durgan
 supersedes: 0015-hermes-fork-vs-upstream.md
 amends: 0007-per-customer-machine-isolation.md, 0018-gepa-disposition.md
@@ -11,6 +11,8 @@ related-issue: https://github.com/venturecrane/ss-console/issues/1133 (migration
 # ADR 0024 — Hermes Consumption and Update Cadence
 
 **Status:** Accepted (Captain decision, 2026-05-28). Migration Step 1 (SHA-pin + de-fork the build path) lands with this ADR; Steps 2–5 are sequenced per the migration plan below.
+
+**Implemented with amendments (2026-10-19).** Decisions 2, 3, 6 and 7 are built as the fleet release system (`operator/bin/fleet`), with four amendments recorded in [the amendment section](#amendment-2026-10-19-implemented-as-the-fleet-release-system) below: the Fly registry app `hermes-fleet` instead of GHCR, rings instead of a single canary, skills as their own release artifact, and a supervisor drain so a deploy never kills a running job. The Hermes pin moved from `customer.yaml.hermes_ref` to the Dockerfile's own `ARG` defaults (one image, so one pin).
 
 **Source:** A first-principles audit on 2026-05-28 of two coupled questions: (1) why `venturecrane/hermes-agent` exists, and (2) whether we have a real strategy for keeping current with Hermes given upstream's weekly release train. The audit found the fork to be a retrofitted relic of the pre-2026-05-24 "code-in-fork" posture, with a supply-chain-mirror justification that does not survive scrutiny, and found the update strategy to be a quarterly-clock posture bolted onto a weekly-shipping dependency. This ADR replaces the fork posture of ADR 0015 and adds the update-cadence strategy ADR 0015 never contained.
 
@@ -165,6 +167,20 @@ How we know we are following this decision:
 4. A CI run exists that, on a synthetic new upstream tag, produces a candidate image and a pass/fail compatibility report including a hook-surface diff.
 5. The fleet view shows one blessed version with any exceptions carrying a recorded reason.
 6. The base-image build asserts both the Hermes SHA and the Honcho version/commit.
+
+## Amendment (2026-10-19): implemented as the fleet release system
+
+Plan `zesty-gathering-axolotl`; every seat was still rebuilt from source per deploy (about 12 minutes each, serial, by hand), and every deploy killed running jobs (Fly's default stop is SIGINT plus 5 seconds). What was built, and where it departs from Decisions 2, 3, 6 and 7:
+
+1. **Registry: the Fly app `hermes-fleet`, not GHCR.** All seat apps live in one Fly org, whose registry is shared across its apps, so an image pushed to `registry.fly.io/hermes-fleet` deploys to every `hermes-<slug>` app with `fly deploy --image`. CI holds no Fly token and GHCR would add a second registry credential to every seat's pull path for no gain. `fleet build` runs `fly deploy --build-only --push --remote-only -a hermes-fleet` once per release; the app has no Machines. The base image is the whole image (Hermes, overlay, our code), built once per release, not a base layered per seat: the Dockerfile declares `OVERLAY_REF` and `SS_CONSOLE_SHA` immediately before their first use and no longer takes `CUSTOMER_SLUG`, so the apt, npm, uv and Hermes layers are cached across releases and an overlay-only release rebuilds only the tail.
+2. **The Hermes pin is the Dockerfile's.** `ARG HERMES_UPSTREAM_TAG` / `HERMES_UPSTREAM_SHA` are the one pin (still `vYYYY.M.D@<sha>` in shape, still asserted against the clone). A per-seat `customer.yaml.hermes_ref` could only disagree with the one image every seat runs; provisioning and boot smoke read the Dockerfile. Removing the field from every `customer.yaml` (and making the validator reject it) waits until every seat runs an overlay whose boot validator no longer requires it.
+3. **Rings, not one canary.** `operator/fleet/rings.yaml`: 0 `smd-staging`, 1 `pilot-smokeball`, 2 `scott` `brokery` `captain-mark`, 3 `ashton-price` (always serial); a seat in no ring joins the last. Per seat: holds (D1 `fleet_holds`), preflight (required env present, no undeclared staged secret, lane-input schemas current), a live busy gate over ssh, snapshot, deploy, boot smoke, and a heartbeat read-back of the image and overlay. Only a genuine seat failure rolls the seat back (to its recorded image and fly.toml) and halts; a tooling error or timeout halts and touches nothing. One rollout at a time (D1 `fleet_lease`). "Blessed" (Decision 6) is concrete: the newest release with `completed_last_ring_at`, which provisioning deploys to a new seat.
+4. **Skills are a release artifact.** A skill-only change ships without an image: CI publishes content-addressed objects and a manifest (with each skill's needs from its image) to R2, and `fleet release --skills <version>` repoints each seat ring by ring after checking the seat's image capabilities (`/app/image-capabilities.json`, baked at build). No restart. A skill rollback is a skills release of the previous version.
+5. **Supervisor drain.** `kill_signal = "SIGTERM"`, `kill_timeout = 300` in the seat's fly.toml; the entrypoint supervises the gateway instead of exec-ing it, quiesces the runner lanes and lets a running job checkpoint before stopping. The busy gate quiesces (`/run/smd-medchron/quiesce`, expiring) and waits for idle before it deploys, so a release never interrupts a job in the first place.
+
+**Considered and rejected: fetching the overlay at boot.** A seat could pull the pinned overlay from git on every boot and skip image builds for overlay-only changes. Rejected because (a) it breaks image identity: the digest would no longer say what code runs, and the heartbeat's image ref would stop being evidence; (b) it breaks overlay-pairs twin parity, which is checked against the image's baked overlay at build time; (c) it weakens the tamper boundary, since the code a seat runs would be whatever the network returned at boot rather than a reviewed, content-addressed artifact; and (d) once the heavy layers cache, an overlay-only image release costs minutes, so the gain is negligible.
+
+Verification items 3 and 5 below are met by the fleet system (`fly deploy --image`, `fleet status`); item 4 (an automated upstream-tracking job) is still open.
 
 ---
 

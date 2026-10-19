@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# fleet: build one Operator image per release and roll it out to every seat in
+# rings (operator/fleet/rings.yaml). The code is the Python package
+# operator/bin/lib/fleet/; its cli.py docstring is the usage.
+#
+# Run under Infisical so R2 (release artifacts, skills pointers) is reachable:
+#   infisical run --env=prod --path=/ss --silent -- operator/bin/fleet status
+# flyctl and wrangler use their own logins (fly auth, wrangler's CF token).
+#
+# The interpreter is `uv run --with pyyaml`, the same one provision-customer.sh
+# uses: the laptop's system python carries no yaml module. --no-project keeps uv
+# from resolving operator/pyproject.toml's environment for a CLI that needs only
+# the stdlib and PyYAML.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="${HERE%/bin}${PYTHONPATH:+:${PYTHONPATH}}"
+if python3 -c 'import sys, yaml; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
+  exec python3 -m bin.lib.fleet "$@"
+fi
+exec uv run --quiet --no-project --python '>=3.11' --with pyyaml python3 -m bin.lib.fleet "$@"
