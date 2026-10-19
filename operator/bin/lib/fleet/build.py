@@ -185,10 +185,8 @@ class ImageExtractor:
 
 
 def _https_get(host: str, path: str, headers: dict[str, str]) -> tuple[int, str | None, bytes]:
-    # Python 3.13 with an explicit default context: certificates and hostnames are verified.
-    conn = http.client.HTTPSConnection(
-        host, timeout=600, context=ssl.create_default_context()
-    )  # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected
+    ctx = ssl.create_default_context()
+    conn = http.client.HTTPSConnection(host, timeout=600, context=ctx)  # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected - Python 3.13 with an explicit default context verifies certificates and hostnames  # fmt: skip
     try:
         conn.request("GET", path, headers=headers)
         resp = conn.getresponse()
