@@ -1564,7 +1564,8 @@ describe('Operator customer Machine Dockerfile', () => {
     // replies each deliver; a dropped one is loud.
     // -> f231791d (overlay#516), 2026-10-19: recurring invites send; the body
     // states the rule in words.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="f231791df88de5986c875fb4595ecc384a682c61"')
+    // -> 222ae51d (overlay#517), 2026-10-19: invites say who sent them and who asked.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="222ae51d93b8a92d0eab1d8d63dfa2c213383c8a"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
