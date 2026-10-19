@@ -148,7 +148,9 @@ class ImageExtractor:
                 target = urllib.parse.urlsplit(location)
                 if target.scheme != "https" or not target.hostname:
                     raise ToolingError(f"refusing a non-https redirect from {path}")
-                status, _, body = _https_get(target.hostname, target.path + ("?" + target.query if target.query else ""), {})
+                status, _, body = _https_get(
+                    target.hostname, target.path + ("?" + target.query if target.query else ""), {}
+                )
         except (OSError, http.client.HTTPException) as exc:
             raise ToolingError(f"registry GET {path} failed: {exc}") from exc
         if status != 200:
@@ -172,7 +174,9 @@ class ImageExtractor:
 
 def _https_get(host: str, path: str, headers: dict[str, str]) -> tuple[int, str | None, bytes]:
     # Python 3.13 with an explicit default context: certificates and hostnames are verified.
-    conn = http.client.HTTPSConnection(host, timeout=600, context=ssl.create_default_context())  # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected
+    conn = http.client.HTTPSConnection(
+        host, timeout=600, context=ssl.create_default_context()
+    )  # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected
     try:
         conn.request("GET", path, headers=headers)
         resp = conn.getresponse()
