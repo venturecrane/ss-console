@@ -28,7 +28,6 @@ import json
 import logging
 import os
 import re
-import subprocess
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,6 +35,7 @@ from typing import Any, Callable
 
 from . import resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
+from .child import run_child
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, Daemon
 from .proof import holds as proof_holds, watch as proof_watch
 from .drafting_lane import DraftingLane
@@ -193,38 +193,25 @@ class LitigationLane(DraftingLane):
 
     def _spawn(self, job_id: str, jd: Path) -> str:
         verdict_mod.clear(jd)
-        stop = threading.Event()
-        beat = threading.Thread(target=self._beat, args=(job_id, stop), name="litigation-heartbeat", daemon=True)
         with (jd / "daemon.log").open("a", encoding="utf-8") as log:
-            proc = subprocess.Popen(  # noqa: S603 - argv is the configured runner command plus the job dir, no shell; env filtered
+            code, out = run_child(
+                self,
+                job_id,
                 resume_mod.start_run(self, job_id, [*self.runner_cmd, str(jd)]),
-                cwd=str(jd),
+                cwd=jd,
                 env=self._child_env(job_id, jd),
-                stdout=subprocess.PIPE,
-                stderr=log,
-                text=True,
-                preexec_fn=self._cgroup_preexec(),
+                log=log,
+                pidfile=self.run_dir / CHILD_PID,
+                preexec=self._cgroup_preexec(),
             )
-            (self.run_dir / CHILD_PID).write_text(str(proc.pid))
-            beat.start()
-            try:
-                out, _ = proc.communicate()
-            finally:
-                stop.set()
-                beat.join(timeout=5)
-        (self.run_dir / CHILD_PID).unlink(missing_ok=True)
         self.jobs_run += 1
         # A run the Machine's stop cut short is left claimed for the next boot,
         # as in the other lanes; a real ending reached first is recorded and
         # never runs twice (resume.finished_verdict reads this one-object shape).
-        finished = resume_mod.finished_verdict(read_verdict(self.job_dir(job_id), out or ""))
-        if not finished and resume_mod.cut_short_by_stop(self, job_id, proc.returncode, out or ""):
+        finished = resume_mod.finished_verdict(read_verdict(self.job_dir(job_id), out))
+        if not finished and resume_mod.cut_short_by_stop(self, job_id, code, out):
             return "interrupted"
-        return self._report(job_id, proc.returncode, out or "")
-
-    def _beat(self, job_id: str, stop: threading.Event) -> None:
-        while not stop.wait(self.heartbeat_seconds):
-            self.heartbeat(running=job_id)
+        return self._report(job_id, code, out)
 
     def _fail_unconfigured(self, job_id: str, exc: Exception) -> str:
         reason = (

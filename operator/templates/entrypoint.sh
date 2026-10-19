@@ -387,7 +387,15 @@ install -d -o root -g workspace-broker -m 0770 "${ESTABLISH_SPOOL_DIR}/results"
 export SMD_WORKSPACE_BROKER_SOCKET="${BROKER_SOCKET}"
 export SMD_WORKSPACE_CREDENTIAL_PATH="${BROKER_DIR}/google.json"
 export SMD_CUSTOMER_YAML="${BROKER_CUSTOMER_PATH}"
-export SMD_GATEWAY_PID="$$"
+# The gateway's process is forked HERE and held until the boot gates pass, so
+# SMD_GATEWAY_PID (the broker's SO_PEERCRED identity for it, the liveness
+# watcher's kill target) is its real pid before the broker starts. The
+# entrypoint no longer execs into it: it stays tini's child and supervises the
+# Machine stop (drain the medchron daemon, then the gateway). Both halves live
+# in the sourced file, which says why.
+# shellcheck source=/dev/null
+. /app/runners/supervisor/entrypoint-supervisor.sh
+smd_supervisor_boot
 
 PYTHONPATH="/opt/workspace-broker" \
   /opt/workspace-broker/.venv/bin/python -c \
@@ -532,8 +540,8 @@ launch_broker() {
 # bottom — so each respawn can re-setpriv a fresh broker to uid workspace-broker
 # (a hermes process could not re-acquire that uid). The server unlinks its stale
 # socket on bind (server.py), so respawns rebind cleanly. SMD_GATEWAY_PID is the
-# entrypoint PID, preserved across the exec, so the SO_PEERCRED gate still admits
-# the gateway after a respawn. A broker that is broken from the FIRST boot is NOT
+# held gateway process's pid (smd_supervisor_boot), unchanged through its execs,
+# so the SO_PEERCRED gate still admits the gateway after a respawn. A broker that is broken from the FIRST boot is NOT
 # masked: the parent's socket-wait below still FATALs the whole Machine (Fly
 # restarts it); the supervisor only covers death AFTER a healthy first start. The
 # `if` guard keeps the inherited `set -e` from killing the loop on a non-zero
@@ -635,6 +643,9 @@ if [ -n "${R2_ACCESS_KEY_ID:-}" ] && [ -n "${R2_BUCKET_CONFIG:-}" ] \
 else
   log "Authored-spec boot fetch NOT run (R2 config creds absent, or spec_applier not in this overlay)"
 fi
+# Skills as a release artifact (fleet waves): installed before the drop so
+# bootstrap seeds from it; its poller re-installs a promoted version live.
+smd_skills_applier
 
 # Re-assert ownership after the fetch. The applier hardens each file it writes,
 # but asserting here too means a tree left behind by an OLDER overlay build — one
@@ -671,11 +682,7 @@ log "Workspace broker started as uid $(id -u workspace-broker); dropping gateway
 # only when the R2 config credentials are present.
 if [ -n "${R2_ACCESS_KEY_ID:-}" ] && [ -n "${R2_BUCKET_CONFIG:-}" ] \
    && /opt/hermes/.venv/bin/python -c "import config_applier" 2>/dev/null; then
-  ( while true; do
-      /opt/hermes/.venv/bin/python -m config_applier || true
-      log "config applier exited; restarting in 5s"
-      sleep 5
-    done ) &
+  smd_root_poller config_applier "config applier"
   log "Root config applier launched (uid 0; polls R2 for live customer.yaml changes)"
 else
   log "Root config applier NOT launched (R2 config creds absent, or config_applier not in this overlay)"
@@ -698,7 +705,10 @@ fi
 # config change reaches the next daemon start. The words are digits only.
 if [ -x /opt/medchron/.venv/bin/python ] \
    && /opt/medchron/.venv/bin/python -c "import medchron.daemon" 2>/dev/null; then
-  ( while true; do
+  # The stop flag: the supervisor (and tini's group signal) TERMs this loop
+  # and the daemon together; the loop waits for the daemon's drain, then ends.
+  ( _mc_stop=""; trap '_mc_stop=1' TERM INT
+    while true; do
       # shellcheck disable=SC2046  # word-split on purpose: NAME=BYTES words
       /usr/bin/env $(/opt/medchron/.venv/bin/python -m medchron.lane_memory "${LIVE_CUSTOMER_YAML}" 2>/dev/null || true) SMD_MEDCHRON_RUN_DIR="${MEDCHRON_RUN_DIR}" \
       SMOKEBALL_REFRESH_TOKEN_FILE="${SMOKEBALL_TOKEN_RUN_DIR}/refresh_token" \
@@ -709,9 +719,11 @@ if [ -x /opt/medchron/.venv/bin/python ] \
       # respawned now has no stop flag and works inside a dying Machine
       # (2026-10-15: a lost wake paged SMD for a deploy). Any other exit is a
       # crash, and the loop restarts it as before.
-      [ "${rc}" = 130 ] && { log "medchron daemon stopped by the Machine stop; not restarting"; break; }
+      { [ "${rc}" = 130 ] || [ -n "${_mc_stop}" ]; } && { log "medchron daemon stopped by the Machine stop (${rc}); not restarting"; break; }
       log "medchron daemon exited (${rc}); restarting in 5s"; sleep 5
     done ) &
+  # shellcheck disable=SC2034 # read by _smd_supervisor_stop in the sourced supervisor
+  SMD_MEDCHRON_LOOP_PID=$!
   log "Root medchron daemon launched (uid 0; runs chronology jobs as the medchron uid from ${MEDCHRON_RUN_DIR}/queue)"
 else
   log "Root medchron daemon NOT launched (the runner venv is not in this image)"
@@ -732,11 +744,7 @@ fi
 # updates simply stop arriving and the installed tree keeps serving.
 if [ -n "${R2_ACCESS_KEY_ID:-}" ] && [ -n "${R2_BUCKET_CONFIG:-}" ] \
    && /opt/hermes/.venv/bin/python -c "import spec_applier" 2>/dev/null; then
-  ( while true; do
-      /opt/hermes/.venv/bin/python -m spec_applier || true
-      log "spec applier exited; restarting in 5s"
-      sleep 5
-    done ) &
+  smd_root_poller spec_applier "spec applier"
   log "Root authored-spec applier launched (uid 0; polls R2 for live spec changes)"
 else
   log "Root authored-spec applier NOT launched (R2 config creds absent, or spec_applier not in this overlay)"
@@ -1281,7 +1289,7 @@ chmod 0700 "${CONNECTOR_HEALTH_DIR}"
 # violation it prints the offending binding to stderr AND emits an
 # INVARIANT_BOOT_CHECK_FAILED row through the broker's append-only audit_append
 # (SMD_AUDIT_BROKER_SOCKET is live at this point — the broker started above, and
-# this root process is still the admitted SMD_GATEWAY_PID peer). The exit code
+# the held gateway process is the admitted SMD_GATEWAY_PID peer). The exit code
 # is the load-bearing refusal; audit-emit is best-effort and never weakens it.
 # On a clean boot verify_at_boot returns 0 without touching the broker socket.
 #
@@ -1334,9 +1342,7 @@ else
   exit 3
 fi
 
-exec setpriv \
-  --reuid=hermes \
-  --regid=hermes \
-  --init-groups \
-  --no-new-privs \
-  /app/bootstrap.sh
+# Release the held gateway (setpriv to hermes, then bootstrap, in its own
+# session) with this shell's final environment, and supervise it until it
+# exits or the Machine stops (entrypoint-supervisor.sh).
+smd_supervise

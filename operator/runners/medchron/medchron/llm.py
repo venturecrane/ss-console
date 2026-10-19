@@ -36,6 +36,7 @@ from .config import FirmConfig
 from .deadline import NETWORK_RETRY_S, STALL_S, RetryClock, bounded_call, deadline_for, retrying_call
 from .ledger import Ledger, count_pages
 from .limits import LimitHold
+from .stop_request import sleep as _stop_aware_sleep
 
 # Only rows a call site actually leaves to the table. Every other stage passes
 # effort itself: every effort reading on 2026-08-27 failed its content bar
@@ -634,17 +635,14 @@ class Doorway:
 
     def _poll(self, client: Any, batch_ids: list[str]) -> set[str]:
         """Block until every id is 'ended'. Returns the set that timed out."""
-        pending = set(batch_ids)
+        pending, batches = set(batch_ids), client.messages.batches
         t0 = time.time()
         while pending:
-            for bid in list(pending):
-                st = client.messages.batches.retrieve(bid)
-                if getattr(st, "processing_status", None) == "ended":
-                    pending.discard(bid)
+            pending -= {b for b in pending if getattr(batches.retrieve(b), "processing_status", None) == "ended"}
             if not pending:
                 break
             if time.time() - t0 > self.max_wait_s:
                 return pending
             self.log(f"  batch: {len(pending)} still processing")
-            time.sleep(self.poll_s)
+            _stop_aware_sleep(self.poll_s)  # the batch ids are on disk: a stop re-attaches next attempt
         return set()

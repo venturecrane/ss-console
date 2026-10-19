@@ -30,7 +30,6 @@ import json
 import logging
 import os
 import re
-import subprocess
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -38,6 +37,7 @@ from typing import Any, Callable
 
 from . import resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
+from .child import run_child
 from .proof import watch as proof_watch
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon, sticky_level
 
@@ -168,22 +168,20 @@ class DemandLane(Daemon):
         env.setdefault("HOME", str(jd))
         verdict_mod.clear(jd)
         with (jd / "daemon.log").open("a", encoding="utf-8") as log:
-            proc = subprocess.Popen(  # noqa: S603 - argv is the configured runner command plus the job dir, no shell; env filtered
+            code, out = run_child(
+                self,
+                job_id,
                 resume_mod.start_run(self, job_id, [*self.runner_cmd, str(jd)]),
-                cwd=str(jd),
+                cwd=jd,
                 env=env,
-                stdout=subprocess.PIPE,
-                stderr=log,
-                text=True,
-                preexec_fn=self._cgroup_preexec(),
+                log=log,
+                pidfile=self.run_dir / "demand-child.pid",
+                preexec=self._cgroup_preexec(),
             )
-            (self.run_dir / "demand-child.pid").write_text(str(proc.pid))
-            out, _ = proc.communicate()
-        (self.run_dir / "demand-child.pid").unlink(missing_ok=True)
         self.jobs_run += 1
-        if resume_mod.cut_short_by_stop(self, job_id, proc.returncode, out or ""):
+        if resume_mod.cut_short_by_stop(self, job_id, code, out):
             return "interrupted"
-        return self._report(job_id, proc.returncode, out or "")
+        return self._report(job_id, code, out)
 
     def _report(self, job_id: str, code: int, out: str) -> str:
         outcomes = verdict_mod.read(self.job_dir(job_id), out)
