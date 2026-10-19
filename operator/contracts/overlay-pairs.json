@@ -90,9 +90,9 @@
     {
       "adapterPath": "operator/customers/_couples-template/customer.yaml",
       "overlayPath": "tests/fixtures/roles/couples/customer.yaml",
-      "syncNote": "NEW PAIR 2026-10-18 (ss#3264, overlay#506): the couples seat template. The overlay's tests/test_couples_template_boots.py translates it and runs the webhook read-surface check and activation step 5a on the rendered config, the exact checks captain-mark failed on 2026-10-18 (read_file stripped by disabling the file toolset). Byte-identical: edit the template here, then COPY it over the overlay fixture in the same change.",
-      "sha256": "21eea45fefd141bda8635f640326ef6f8c5bbae117b48abd1d136656715af428",
-      "overlaySha256": "21eea45fefd141bda8635f640326ef6f8c5bbae117b48abd1d136656715af428"
+      "syncNote": "NEW PAIR 2026-10-18 (ss#3264, overlay#506): the couples seat template. The overlay's tests/test_couples_template_boots.py translates it and runs the webhook read-surface check and activation step 5a on the rendered config, the exact checks captain-mark failed on 2026-10-18 (read_file stripped by disabling the file toolset). Byte-identical: edit the template here, then COPY it over the overlay fixture in the same change. 2026-10-18b (overlay#507): the template authors external_send_internal: autonomous (captain-mark refused its first scheduled partner email, no authored exposure); fixture copied, both sha256 re-recorded; overlay test_couples_template_boots.py now proves a rostered send is allowed on a scheduled turn. Fixture-only on the overlay side, so overlayRef is unchanged.",
+      "sha256": "cdabd7cf61f46dc0bad061ba3ab54b9303110bc5f3347523bad4421e79923f24",
+      "overlaySha256": "cdabd7cf61f46dc0bad061ba3ab54b9303110bc5f3347523bad4421e79923f24"
     }
   ]
 }
