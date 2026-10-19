@@ -3,7 +3,9 @@
 # Infisical identity already signed in (crane's `infisical run` honours
 # INFISICAL_TOKEN), so no interactive Infisical login is ever needed here.
 # Leaves a shell open when crane exits, so the tmux session survives.
-export PATH="$HOME/.npm-global/bin:$HOME/.venvs/ops/bin:$HOME/bin:$PATH"
+# /opt/ops/bin first: its claude shim keeps the generic /ss ANTHROPIC_API_KEY away
+# from Claude, and an auto-updated copy in ~/.npm-global would not (2026-10-19).
+export PATH="/opt/ops/bin:$HOME/.npm-global/bin:$HOME/.venvs/ops/bin:$HOME/bin:$PATH"
 # crane signs in with ~/.infisical-ua (and passes the project id) only on what it
 # sees as a remote session (crane-mcp src/cli/ssh-auth.ts). A `fly ssh` session
 # is one, but does not always set the variables crane looks for; say so.
