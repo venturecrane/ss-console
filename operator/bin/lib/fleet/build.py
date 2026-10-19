@@ -28,7 +28,9 @@ import http.client
 import io
 import json
 import re
+import shutil
 import ssl
+import subprocess
 import tarfile
 import urllib.parse
 from dataclasses import dataclass
@@ -89,6 +91,7 @@ class BuildOptions:
 
 
 REGISTRY_HOST = ids.FLEET_REGISTRY.split("/", 1)[0]
+ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
 MANIFEST_ACCEPT = ", ".join(
     (
         "application/vnd.oci.image.manifest.v1+json",
@@ -174,6 +177,9 @@ class ImageExtractor:
     @staticmethod
     def _members(blob: bytes, names: set[str]) -> list[tuple[str, bytes]]:
         out = []
+        if blob[:4] == ZSTD_MAGIC:
+            # The Fly/Depot builder pushes tar+zstd layers, which tarfile cannot open.
+            blob = _zstd_decompress(blob)
         with tarfile.open(fileobj=io.BytesIO(blob), mode="r:*") as tar:
             for info in tar:
                 name = info.name.lstrip("./")
@@ -182,6 +188,22 @@ class ImageExtractor:
                     if fh is not None:
                         out.append((name, fh.read()))
         return out
+
+
+def _zstd_decompress(blob: bytes) -> bytes:
+    try:
+        from compression import zstd  # Python 3.14+
+
+        return zstd.decompress(blob)
+    except ImportError:
+        pass
+    exe = shutil.which("zstd")
+    if not exe:
+        raise ToolingError("this layer is zstd-compressed: needs Python 3.14+ or the zstd CLI")
+    proc = subprocess.run([exe, "-dc"], input=blob, capture_output=True, timeout=600, check=False)  # noqa: S603 - fixed argv from shutil.which; the blob goes on stdin, no shell
+    if proc.returncode != 0:
+        raise ToolingError(f"zstd -dc failed: {proc.stderr.decode(errors='replace')[-300:]}")
+    return proc.stdout
 
 
 def _https_get(host: str, path: str, headers: dict[str, str]) -> tuple[int, str | None, bytes]:
@@ -275,7 +297,7 @@ class Builder:
         digest = release["image_digest"]
         try:
             files = self.extractor.extract(f"{release['image_ref']}@{digest}")
-        except (ToolingError, OSError, tarfile.TarError, json.JSONDecodeError) as exc:
+        except (ToolingError, OSError, ValueError, tarfile.TarError, json.JSONDecodeError) as exc:
             self.log(f"WARN: could not read artifacts out of the image ({exc}); recording without capabilities")
             files = {}
         arrays = (
