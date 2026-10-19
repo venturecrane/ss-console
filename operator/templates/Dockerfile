@@ -1282,7 +1282,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # session, so the plugins now only enqueue and a worker sends; a dropped one is
 # an ERROR + alert (captain-mark lost Laurie's welcome 15:51Z). #513/#514: fleet
 # heartbeat facts + skills_applier; hermes_ref optional in validate.
-ARG OVERLAY_REF="8f6d28d5b744e39e929956ed8ab53c44e0456399"
+# 2026-10-19c (f231791d, overlay #516): a repeating invitation's email body
+# states the rule in words, not RRULE text; the "paralegal" capitals check had
+# refused every recurring invite on 'FREQ' (captain-mark, Scott's every-other-
+# week event, 16:31Z). Tracked twin moved: couples persona ("Offer only what
+# you can do").
+ARG OVERLAY_REF="f231791df88de5986c875fb4595ecc384a682c61"
 
 ARG CUSTOMER_SLUG=customer-zero
 
