@@ -91,6 +91,8 @@ def _parser() -> argparse.ArgumentParser:
     b.add_argument(
         "--not-volume-forward-compatible", action="store_true", help="a failing seat is halted, never auto-rolled back"
     )
+    art = sub.add_parser("artifacts", help="re-read an image release's manifest/capabilities into R2")
+    art.add_argument("release_id")
     r = sub.add_parser("release", help="roll a release out through the rings")
     r.add_argument("release_id", nargs="?")
     r.add_argument("--skills", metavar="VERSION")
@@ -124,6 +126,17 @@ def cmd_build(ctx: Ctx, a: argparse.Namespace) -> int:
     opts = BuildOptions(a.notes, tuple(a.declare_secret), not a.not_volume_forward_compatible)
     rel = Builder(ctx.repo, ctx.runner, ctx.fly, ctx.store, ctx.r2, ImageExtractor(ctx.runner), ctx.log).build(opts)
     print(rel["release_id"])
+    return 0
+
+
+def cmd_artifacts(ctx: Ctx, a: argparse.Namespace) -> int:
+    """Re-read an image release's artifacts out of the registry and re-upload them to R2."""
+    release = ctx.store.release(ids.release_id(a.release_id))
+    if not release or release.get("kind") != "image":
+        raise Refusal(f"no image release {a.release_id} in fleet_releases (fleet releases lists them)")
+    meta = ctx.r2.get_json(image_key(release["image_digest"], "release.json")) or {}
+    builder = Builder(ctx.repo, ctx.runner, ctx.fly, ctx.store, ctx.r2, ImageExtractor(ctx.runner), ctx.log)
+    builder.upload_artifacts(release, {"hermes_sha": meta.get("hermes_sha") or ""})
     return 0
 
 
@@ -229,6 +242,8 @@ def _who() -> str:
 def dispatch(ctx: Ctx, a: argparse.Namespace) -> int:
     if a.cmd == "build":
         return cmd_build(ctx, a)
+    if a.cmd == "artifacts":
+        return cmd_artifacts(ctx, a)
     if a.cmd == "release":
         if bool(a.skills) == bool(a.release_id):
             raise Refusal("give exactly one of <release-id> or --skills <version>")
