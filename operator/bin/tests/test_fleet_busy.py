@@ -77,7 +77,9 @@ def test_quarter_hour_slot_crons_leave_an_idle_window() -> None:
         t
         for t in range(0, period, 30)
         if not busy.decide(
-            _facts(crons=[{"name": "op-managed:cm:couples-checkin@person:p1", "next_in_s": period - t, "last_ago_s": t}])
+            _facts(
+                crons=[{"name": "op-managed:cm:couples-checkin@person:p1", "next_in_s": period - t, "last_ago_s": t}]
+            )
         ).busy
     ]
     assert idle_seconds, "no idle window inside a 15-minute cron period"
