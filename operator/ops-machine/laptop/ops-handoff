@@ -4,11 +4,21 @@
 # client-data guard stops it; the Captain then types `ops <client>` and the
 # task is waiting. The task text goes to the workspace's ~/inbox/pending.md
 # (appended if one is already waiting); nothing is kept on the laptop.
+#
+# ops-handoff <client> --results: print the outcomes the workspace wrote back
+# (~/outbox, newest last), so a laptop session sees what happened without the
+# Captain copying it across. Outcomes only; documents never leave ~/work.
 set -uo pipefail
-[ -n "${1:-}" ] && [ -n "${2:-}" ] || { echo 'usage: ops-handoff <client> "<task>"'; exit 2; }
+[ -n "${1:-}" ] && [ -n "${2:-}" ] || { echo 'usage: ops-handoff <client> "<task>" | ops-handoff <client> --results'; exit 2; }
 reg="$HOME/.claude/smd-ops-workspaces.json"
 app=$(jq -r --arg a "$1" '.workspaces | to_entries[] | select(.key==$a or (.value.aliases // [] | index($a))) | .value.app' "$reg" | head -1)
 [ -n "$app" ] || { echo "no workspace called $1"; exit 1; }
+if [ "$2" = "--results" ]; then
+  OPS_WAKE_ONLY=1 "$(dirname "$0")/ops" "$1" >/dev/null || exit 1
+  fly ssh console -a "$app" -u ops --pty=false \
+    -C "sh -c 'ls -tr ~/outbox/*.md 2>/dev/null | while read f; do echo \"== \$(basename \$f)\"; cat \"\$f\"; echo; done'" </dev/null 2>/dev/null
+  exit 0
+fi
 OPS_WAKE_ONLY=1 "$(dirname "$0")/ops" "$1" || exit 1
 printf '## Handed over %s from %s\n\n%s\n\n' "$(date -u +%FT%TZ)" "$(hostname -s)" "$2" \
   | fly ssh console -a "$app" -u ops --pty=false -C "sh -c 'mkdir -p ~/inbox && cat >> ~/inbox/pending.md'" >/dev/null 2>&1
