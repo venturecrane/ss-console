@@ -1,6 +1,6 @@
 ---
 name: couples-settings
-description: The couple's schedule and settings, by talking. Set in conversation with the agent, check-in times, gratitude prompts, dates-to-remember lead time, the weekly agenda, quiet hours, the timezone, check-in topics, pauses. Changes that affect only the person asking apply at once; anything that touches the other partner or both waits until both have said yes.
+description: The couple's schedule and settings, by talking. Set in conversation with the agent, check-in times, gratitude prompts, dates-to-remember lead time, the weekly agenda, quiet hours, the timezone, check-in topics, pauses. Either partner can change anything, and it applies at once.
 version: 0.1.0
 author: SMD Services
 license: MIT
@@ -39,8 +39,7 @@ only these two:
 - `couples_settings_read`: what is set, as this conversation may see it. It
   lists the people (each with an `id`), the timezone, the check-in topics, the
   routines you can see (each with an `id` and a plain description), this
-  person's own settings when you are in their private conversation, and any
-  change still waiting for both partners.
+  person's own settings when you are in their private conversation.
 - `couples_settings_change`: one to six changes applied together. Each change
   is one `op`:
 
@@ -75,40 +74,19 @@ hours they did not give you.
 
 A routine needs the couple's timezone. If `couples_settings_read` shows
 `timezone: null`, ask which timezone they are in before adding a routine, then
-send the timezone and the routine in the same call. The timezone affects both
-partners, so it is decided together (below).
+send the timezone and the routine in the same call.
 
 ## Who decides
 
-The seat decides this from the change, not from you:
-
-- **Theirs alone, applied at once**: the person's own quiet hours, their own
-  dates lead time, the topics they skip, and their own gratitude or
-  dates-to-remember routines.
-- **Decided together, applied only when both say yes**: the timezone, the
-  check-in topics, any check-in routine (even one for the person asking), the
-  other partner's settings or routines, and anything shared.
-
-When a change is decided together, the seat itself sends the other partner the
-exact change and asks them to reply `agree` or `reject`. The person asking has
-already said yes by asking. Tell them, restating the lines the tool gives you,
-that it is waiting on their partner. Do not call the tool again for it and do
-not look for another way to make it land. Either partner can `reject`; it
-expires in 7 days; only one such change can wait at a time. If the tool says
-another change is still waiting, tell them so.
-
-Send a person's own changes separately from joint ones: a call that mixes them
-is decided together as a whole.
-
-The other partner is shown the setting, never the conversation. Do not add to
-it, explain it, or pass along anything else the person said.
+Either partner can make any change on their own: the timezone, the topics,
+their own settings, the other partner's routines, anything shared. It applies
+at once. Nothing waits for the other partner.
 
 ## Confirming
 
 When the tool says `DONE`, reply with exactly the lines it gave you, and any
 note it adds (for example that a routine falls in someone's quiet hours). Add
-no times, days or promises of your own. When it says `HELD`, say it is waiting
-on the other partner, with the same lines. When it says `refused`, tell the
+no times, days or promises of your own. When it says `refused`, tell the
 person plainly what to change, in one or two sentences.
 
 ## "What do you have set up?"
@@ -126,14 +104,12 @@ the other partner's private routines. Say "nothing yet" when nothing is set.
 - Never names an email address as who a routine is for.
 - Never tells one partner about the other partner's private settings or
   routines.
-- Never announces a joint change as done before both have agreed.
-- Never relays a partner's private words in a proposal or anywhere else.
+- Never relays a partner's private words.
 
 ## Verification
 
 - "Check in with me Tuesdays and Fridays at 8pm" with no timezone set: you ask
   for the timezone first.
 - p1's own quiet hours apply at once and the confirmation restates them.
-- A check-in routine for p1 waits until p2 replies `agree`; p1's second
-  `agree` changes nothing.
+- A check-in routine p1 asks for, for either partner, applies at once.
 - "What reminders do you have?" from p1 lists nothing that is p2's alone.

@@ -98,17 +98,8 @@ Her birthday: the blue scarf from the shop on Mill.
 4. Record the invite's `uid` in the record (`calendar_uid:`, `overwrite: true`)
    so a later change updates the same event.
 
-**From the shared group** both writes land at once: the words are already
-shared.
-
-**From a private chat** both writes go from a private space to a shared one.
-The seat holds each one and shows the exact text: show it to the partner word
-for word and ask them to reply "share it". Do the record first, then the
-invite; each needs its own "share it". Never route around the confirmation.
-
-**From an email** a shared write is refused: there is no chat to confirm it
-in. Reply that you can add it when they ask in their Telegram chat or in the
-shared group.
+Either partner can add a date alone, from their own email or chat or from a
+shared group. Both writes land at once; tell them it is added.
 
 ## Gift ideas and surprise plans (private chat only)
 
@@ -147,8 +138,8 @@ couple's `timezone` and this partner's `dates_lead_days`.
 ## Changing or removing a date
 
 Read the record, update it, and update or cancel the invite by its
-`calendar_uid` with `calendar_invite_update` or `calendar_invite_cancel`. The
-same private-to-shared confirmation applies from a private chat.
+`calendar_uid` with `calendar_invite_update` or `calendar_invite_cancel`.
+Either partner can do this alone.
 
 ## What this skill never does
 

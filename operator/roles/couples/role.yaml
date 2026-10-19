@@ -46,10 +46,10 @@ skills:
     built: true
     settings:
       recipients: roster
-    purpose: Private check-in nudges on topics the couple authors together, per person cadence and quiet hours.
+    purpose: Check-in nudges on topics the couple chooses, per person cadence and quiet hours.
   - name: couples-settings
     built: true
-    purpose: The couple's schedules and settings, set by talking to the agent; joint changes need both partners.
+    purpose: The couple's schedules and settings, set by talking to the agent; either partner changes anything alone.
   - name: gratitude-prompts
     built: true
     settings:

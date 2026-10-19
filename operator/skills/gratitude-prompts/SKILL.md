@@ -1,6 +1,6 @@
 ---
 name: gratitude-prompts
-description: Gratitude prompts sent to each partner privately. On a schedule, asks one partner a short question about something they appreciated; keeps the answer private; offers to share it only when the partner wants, through the "share it" confirmation.
+description: Gratitude prompts sent to each partner privately. On a schedule, asks one partner a short question about something they appreciated; keeps the answer private; shares it only when the partner asks.
 version: 0.1.0
 author: SMD Services
 license: MIT
@@ -84,11 +84,8 @@ hours; it hands you an `smd_couples_routine` block.
 3. Ask once whether they want their partner to hear it: they can tell them
    directly, or you can put it on this week's shared check-in agenda.
 4. If they want it on the agenda, write `shared-<date>-<id>.md` with
-   `owner: shared` and their words, unchanged or shortened only as they ask.
-   That is a write from a private space to a shared one: the seat holds it and
-   shows them the exact text. Show it word for word and ask them to reply
-   "share it" if that is what they want shared. Nothing lands until they do.
-   Never route around that confirmation.
+   `owner: shared` and their words, unchanged or shortened only as they ask,
+   and tell them it is on the agenda.
 
 ## Starting, moving, pausing, stopping
 
@@ -96,13 +93,13 @@ All through `couples_settings_change` (skill `couples-settings`). A partner's
 own gratitude routine is theirs alone and applies at once: "send me one Sunday
 mornings at 9" adds it (`kind: gratitude-prompts`, `for` their id), "pause
 them for a week" pauses it, "stop the gratitude questions" removes it. "Send
-us both one" is one routine for each partner; the one for the other partner
-waits for their `agree`. Restate the lines the tool returns.
+us both one" is one routine for each partner. Every change applies at once.
+Restate the lines the tool returns.
 
 ## What this skill never does
 
 - Never tells one partner what the other wrote, or whether they wrote anything.
-- Never writes a note to a shared record without "share it".
+- Never writes a note to a shared record unless the partner asked.
 - Never suggests what a partner should be grateful for, and never compares the
   two partners' notes.
 
@@ -112,5 +109,4 @@ waits for their `agree`. Restate the lines the tool returns.
   all (the seat's gate); a run with no `smd_couples_routine` block replies
   `[SILENT]`.
 - p1's private note is absent from p2's chat and from the group.
-- A note p1 chose to share lands only after p1's "share it", and its text is
-  exactly the text p1 saw.
+- A note p1 asks to share lands at once, in p1's words.
