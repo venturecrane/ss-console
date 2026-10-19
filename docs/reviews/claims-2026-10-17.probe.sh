@@ -52,6 +52,11 @@ c() { grep -c "$@" 2>/dev/null | tr -d ' '; }
 
 MC=operator/runners/medchron/medchron
 SB=operator/connectors/smokeball/smokeball_connector
+# The overlay is read from origin/main, never a working tree (the local clone
+# is shared and may be dirty).
+OV="${OVERLAY_DIR:-$HOME/dev/hermes-smd-overlay}"; git -C "$OV" fetch -q origin 2>/dev/null
+# count of lines in an overlay file (origin/main) containing a literal string
+ovc() { git -C "$OV" show "origin/main:$1" 2>/dev/null | grep -cF -- "$2" | tr -d ' '; }
 
 echo "Claims for ss-console, 2026-10-17"
 echo
@@ -99,7 +104,11 @@ check PCI15 FIXED at-least 1 "$(git grep -nE '[a-z]+@smd\.services' -- src opera
 check I15 FIXED exact 0 "$(git grep -nE '[a-z0-9._-]+@venturecrane\.com' -- src operator scripts workers public | n)" "no venturecrane address in SMD code/config/skills"
 
 # ============================================================ STILL OPEN
-check F1  OPEN at-most 1 "$(grep -rn 'record_tool_failure\|record_refusal\|record_tool_success' operator/ --include='*.py' | grep -v test | grep -v 'sticky_stop.py:' | grep -v control-probes | n)" "sticky_stop arms have no code callers (a docstring)"
+# F1 RESTATED 10-18: a stale instrument. It searched only ss-console; the brake
+# runs in the overlay, where the audit plugin's post-tool hook arms it. The old
+# grep (ss-console only) still reads 1, a docstring, on correct code.
+check PCF1 FIXED at-least 1 "$(ovc shared/cost_breaker.py 'def record_tool_failure(')" "instrument live: the overlay breaker defines the arm"
+check F1  FIXED at-least 2 "$(ovc plugins/hermes-smd-audit/__init__.py 'breaker.record_tool_failure(')" "sticky_stop arms are dispatched by the overlay's audit hook"
 # I12 CLOSED 10-06 (#3067): callback events persist to oauth_callback_audit
 # (migration 0121, applied on prod: vfy_01M499BC3Y6N669K5CBSY69BXZ).
 check I12 FIXED exact 0 "$(c 'TODO(#891)' src/lib/oauth/audit.ts)" "OAuth consent audit persists to D1"
@@ -229,8 +238,83 @@ cfg=wh.load_config(); now=datetime(2026,10,16,20,tzinfo=timezone.utc); R=lambda 
 rows=[R("1","2026-10-16T10:00:00Z","MEDCHRON_JOB_SUBMITTED",{"job_id":"j1"}),R("2","2026-10-16T11:00:00Z","MEDCHRON_JOB_HELD",{"job_id":"j1","reason":"review_held"}),R("3","2026-10-16T12:00:00Z","MEDCHRON_JOB_DELIVERED",{"job_id":"j1"}),R("4","2026-10-16T12:05:00Z","DELIVERY_PROOF_FAILED",{"job_id":"j1","lane":"medchron","code":"readback_mismatch"})]
 print(len(wh.job_items("s",rows,cfg,now)), len(src.delivery_proof_items("s",rows,cfg,now)))'
 check KDB1 FIXED exact "0 1" "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=operator uv run -q --no-project --with pyyaml python3 -c "$DB1_PY" 2>&1 | tail -1)" "a proof failure after a released hold reaches work-health"
-check KDB2 OPEN exact 1 "$(grep -o '\$status' operator/ops-machine/bin/ops-triage | n)" "ops-triage ignores work-health's exit (smd-ops session fixing)"
-check KDB3 OPEN exact 1 "$(c "newermt '-60 minutes'" operator/ops-machine/laptop-offboard.sh)" "laptop offboard deletes whole verified dirs incl. memory/ (smd-ops session fixing)"
+# KDB2/KDB3 RESTATED 10-18: fixed by #3269 (smd-ops session). The shell offboard
+# script was replaced by laptop-offboard.py, which unlinks hash-matched files only.
+check KDB2 FIXED exact 1 "$(c 'work-health failed; window kept at' operator/ops-machine/bin/ops-triage)" "ops-triage stops and keeps its window when work-health fails"
+check KDB3 FIXED exact 0 "$(git ls-files operator/ops-machine/laptop-offboard.sh | n)" "the dir-deleting shell offboard is gone"
+check KDB3b FIXED exact 1 "$(c 'rel\[1\] == "memory"' operator/ops-machine/laptop-offboard.py)" "offboard never touches agent memory/"
+check KDB3c FIXED exact 0 "$(c rmtree operator/ops-machine/laptop-offboard.py)" "offboard deletes files, never whole dirs"
+check KDB3d FIXED exact 1 "$(c 'def test_execute_deletes_only_hash_matched_unprotected_files' operator/bin/tests/test_laptop_offboard.py)" "offboard deletion is test-pinned"
+
+# ===================== NEW 10-17/18: overlay (fixed same day)
+# First-ever review of venturecrane/hermes-smd-overlay; every finding fixed and
+# merged in overlay #479-#504 (ids in parentheses are the PR's own). Read from
+# the overlay's origin/main via ovc. Each exact-0 removed line is paired with a
+# >=1 line in the same file, so a moved file cannot pass as fixed.
+check PCOV FIXED at-least 1 "$(ovc pyproject.toml '[project]')" "instrument live: ovc reads the overlay's origin/main"
+check OY1  FIXED at-least 1 "$(ovc plugins/hermes-smd-reply/__init__.py 'def _send_failed(')" "#479 (OR1) a failed send is told to the agent and paged"
+check OY1b FIXED exact 0 "$(ovc plugins/hermes-smd-reply/__init__.py 'except relay.RelaySendError as exc:')" "#479 (OR1) transmit except is no longer RelaySendError-only"
+check OY2  FIXED at-least 1 "$(ovc plugins/hermes-smd-audit/emit.py 'status.strip().lower() in {"error", "blocked"}')" "#479 (OR2) a blocked skill create is not AGENT_SKILL_CREATED"
+check OY3  FIXED at-least 1 "$(ovc plugins/hermes-smd-escalation/reply_items.py 'def _asked_about(')" "#479 (OR3) a question about a line approves nothing"
+check OY4  FIXED exact 0 "$(ovc plugins/hermes-smd-reply/sweeper.py 'if not policy.held_release_enabled:')" "#479 (J2) release off still expires stranded held replies"
+check OY5  FIXED at-least 1 "$(ovc plugins/hermes-smd-reply/sweeper.py 'store.purge_terminal()')" "#479 (J6) the sweeper purges terminal rows"
+check OY6  FIXED exact 0 "$(ovc shared/action_classes.py '"mcp_smokeball_create_webhook_subscription": ActionClass.INTERNAL_WRITE')" "#480 (OS-2) webhook registration is not an open internal write"
+check OY6b FIXED exact 1 "$(ovc shared/action_classes.py '"mcp_smokeball_create_webhook_subscription": ActionClass.COMMITMENT')" "#480 (OS-2) webhook registration is a taint-gated commitment"
+check OY6c FIXED at-least 1 "$(ovc bootstrap/mcp_registry.py 'blocked_tools=("create_webhook_subscription",)')" "#480 (OS-2) webhook registration is off the Smokeball menu"
+check OY6d FIXED exact 1 "$(c 'create_webhook_subscription = "commitment"' operator/connectors/smokeball/manifest.toml)" "#480 (OS-2) ss-console manifest mirrors the class"
+check OY7  FIXED at-least 1 "$(ovc shared/job_worker_runtime.py 'def _fallback_segment_cents(')" "#480 (OS-1) an unpriceable job segment is charged, never 0"
+check OY7b FIXED exact 0 "$(ovc shared/job_worker_runtime.py 'float(cost)')" "#480 (OS-1) no float() of Hermes' CostResult"
+check OY8  FIXED at-least 1 "$(ovc webhook_gate.py '"cost_note": STICKY_STOP_CLEAR_COST_NOTE')" "#480 (J4) sticky-stop clear says the day's spend is kept"
+check OY9  FIXED at-least 1 "$(ovc plugins/hermes-smd-establishment/__init__.py 'def _revoke_read_exemption(')" "#481 (OX-1) the matter-mixing fence stays on for ordinary admin turns"
+check OY10 FIXED at-least 1 "$(ovc plugins/hermes-smd-medchron/__init__.py "could not find the requester's thread; nothing was queued")" "#481 (OX-2) an unbound email chronology submits nothing"
+check OY11 FIXED at-least 1 "$(ovc config_applier/applier.py 'if old_cfg is None:')" "#481 (J1) an unreadable current config refuses the apply"
+check OY12 FIXED at-least 1 "$(ovc shared/sentry_init.py 'event["logentry"] = _scrub_value(logentry)')" "#483 (OSB-2) Sentry scrubs the formatted log line"
+check OY13 FIXED at-least 1 "$(ovc shared/rule_confirm.py 'declining = _is_refusal(own)')" "#483 (OSB-1) a clarifying question never declines a rule"
+check OY13b FIXED exact 0 "$(ovc shared/rule_confirm.py 'declining = any(_contains_phrase(text, token) for token in DECLINE_TOKENS)')" "#483 (OSB-1) no any-token decline"
+check OY14 FIXED at-least 1 "$(ovc shared/rule_confirm.py '_OPS_NOT_YET = re.compile(')" "#483 (OSB-4) 'Done by Friday.' does not close an ops request"
+check OY15 FIXED at-least 1 "$(ovc shared/runtime_read.py 'def _honest_empty_or_raise(')" "#483 (OSB-3) a locked audit read raises"
+check OY15b FIXED exact 0 "$(ovc shared/runtime_read.py 'except sqlite3.OperationalError:')" "#483 (OSB-3) no bare OperationalError read as empty"
+check OY16 FIXED exact 1 "$(ovc tests/test_spec_stamp_refresh.py 'def test_one_unwritable_skill_does_not_stop_the_rest')" "#483 one unwritable skill does not stop the stamp (test-pinned)"
+check OY17 FIXED at-least 1 "$(ovc plugins/hermes-smd-webhook-router/__init__.py 'def _quarantine_unverified(')" "#484 (OT-1) every webhook delivery is fenced, routed or not"
+check OY17b FIXED at-least 1 "$(ovc plugins/hermes-smd-webhook-router/__init__.py 'return {"action": "skip"}')" "#484 (OT-1) an unverified delivery is dropped"
+check OY18 FIXED at-least 1 "$(ovc plugins/hermes-smd-trust/__init__.py 'scan_session = getattr(rec, "session_id", None) or session_id')" "#484 (OT-2) an approved send is scanned under its composing session"
+check OY19 FIXED at-least 1 "$(ovc plugins/hermes-smd-initiation/seat_facts.py 'exposure_override.effective_exposure(')" "#484 (OT-3) seat facts report the posture the gate enforces"
+check OY20 FIXED exact 0 "$(ovc webhook_gate.py 'def _replay_check_and_record(')" "#484 (J1) a Smokeball retry after a failed forward is not a replay"
+check OY20b FIXED at-least 1 "$(ovc webhook_gate.py 'def _mark_handled(')" "#484 (J1) replay ids recorded only once handled"
+check OY21 FIXED at-least 1 "$(ovc plugins/hermes-smd-initiation/skill_fence.py 'PROFILES_DIR = "/opt/data/profiles"')" "#484 (J2) the skill fence covers per-profile skills"
+check OY22 FIXED at-least 1 "$(ovc shared/citation_filter.py 'def _residual_after_allowlist(')" "#485 (OSA-1) a case beside an allowlisted caption still blocks"
+check OY22b FIXED at-least 1 "$(c 'def _residual_after_allowlist(' operator/safety_substrate/citation_filter.py)" "#485 (OSA-1) ss-console twin carries it"
+check OY23 FIXED at-least 1 "$(ovc shared/content_floor.py '_DISCLAIMER_PHRASE_RE = re.compile(')" "#485 (OSA-2) a disclaimer blanks only its phrase"
+check OY24 FIXED at-least 1 "$(ovc shared/audit_chain.py 'if prev != GENESIS and prev not in legacy_anchors:')" "#485 (J-a) a truncated chain head is detected"
+check OY24b FIXED at-least 1 "$(c 'if prev != GENESIS and prev not in legacy_anchors:' operator/workspace_broker/chain.py)" "#485 (J-a) ss-console chain.py twin carries it"
+check OY25 FIXED at-least 1 "$(ovc shared/escalation_ledger.py 'if token is not None and str(token) != token_for(key):')" "#485 (J-b) an ack cannot carry another item's token"
+check OY26 FIXED at-least 1 "$(ovc shared/mcp_result_store.py 'if entry.name.startswith(_THREAD_FILE_PREFIX):')" "#487 (OSA-3) result prune keeps MCP thread history"
+check OY27 FIXED at-least 2 "$(ovc shared/msgraph_client.py 'except (OSError, http.client.HTTPException) as exc:')" "#487 (OSA-4) a hung Graph is a typed, paged failure"
+check OY28 FIXED at-least 1 "$(ovc shared/msgraph_poller.py 'def _baseline_now()')" "#487 (J-d) a cursorless poller starts from now, no inbox replay"
+check OY29 FIXED exact 0 "$(ovc shared/approve_page.py 'could not record your answer just now, so nothing was sent')" "#487 (J-e) approve page never says nothing was sent on no verdict"
+check OY29b FIXED at-least 1 "$(ovc shared/approve_page.py 'We could not confirm what happened')" "#487 (J-e) it says the outcome is unknown"
+check OY30 FIXED at-least 1 "$(ovc shared/agentmail_broker.py '_DOWNLOAD_OPENER = urllib.request.build_opener(_AllowlistedRedirects)')" "#487 (J-f) attachment redirects stay on the host allowlist"
+check OY31 FIXED at-least 1 "$(ovc bootstrap/translate.py 'if adapter not in trigger_sources:')" "#488 (OY-2) no route for a connector no trigger names"
+check OY31b FIXED at-least 1 "$(ovc webhook_gate.py 'def _route_untriggered(')" "#488 (OY-2) the gate suppresses an untriggered route"
+check OY32 FIXED at-least 1 "$(ovc bootstrap/translate.py 'prune: Iterable[str] = (),')" "#488 (OY-1) a skill a persona stops enabling is removed"
+check OY33 FIXED at-least 1 "$(ovc shared/calendar_inbox.py 'TTL_SECONDS = 60.0')" "#490 a stale calendar mark never swallows an email"
+check OY34 FIXED at-least 1 "$(ovc plugins/hermes-smd-calendar/ingest.py 'return bool(self.replies) and not self.others and not self.noted')" "#490 a calendar answer with a note still reaches its turn"
+check OY35 FIXED exact 3 "$(( $(ovc shared/agentmail_broker.py 'return open_same_origin(req, timeout=timeout)') + $(ovc shared/msgraph_client.py 'self._open = opener or open_same_origin') + $(ovc plugins/hermes-smd-memory-mirror/honcho_client.py 'with open_same_origin(req, timeout=self._timeout) as resp:') ))" "#492 (R-1) AgentMail, Graph, Honcho hold bearer redirects to origin"
+check OY36 FIXED exact 1 "$(ovc tests/test_audit_client_buffer.py 'def test_an_earlier_tests_retrier_counts_nothing_here')" "#492 (R-2) the audit-buffer flake is fixed (test-pinned)"
+OY37_PY='import sys; sys.path.insert(0, sys.argv[1]); import sender_auth as s
+print(s.evaluate("a@firm.example", {"dkim": "pass"})[0], s.evaluate("pat@firm.example", {"dmarc": "pass", "dmarc_domain": "firm.example"})[0])'
+OY37_D=$(mktemp -d); git -C "$OV" show origin/main:shared/sender_auth.py > "$OY37_D/sender_auth.py" 2>/dev/null
+check OY37 FIXED exact "False True" "$(PYTHONDONTWRITEBYTECODE=1 python3 -I -c "$OY37_PY" "$OY37_D" 2>&1 | tail -1)" "#504 a bare DKIM pass is refused; aligned DMARC authenticates"
+rm -rf "$OY37_D"
+check OY37b FIXED exact 2 "$(( $(ovc plugins/hermes-smd-webhook-router/__init__.py 'sender_auth.sender_authenticated(dto)') + $(ovc plugins/hermes-smd-calendar/ingest.py 'sender_auth.sender_authenticated(dto)') ))" "#504 the router and calendar ingest check sender auth"
+check OY38 FIXED exact 1 "$(ovc plugins/hermes-smd-voice-notes/__init__.py 'authenticated, reason = sender_auth.evaluate(sender, results)')" "#505 a voice note is transcribed only for an authenticated sender"
+check OY38b FIXED exact 1 "$(ovc tests/test_voice_notes.py 'def test_a_forged_rostered_from_is_refused_before_any_byte_is_read(')" "#505 forged rostered From refused (test-pinned)"
+# OYPIN: how many of the fix merges the seats' pinned OVERLAY_REF carries (the
+# twelve review fixes, then #508 b0162538 and #509 774977a9). Flipped FIXED 10-18:
+# ss-console #3305 + #3307 pinned 36eb1bd5 (seats proven on it, Brokery + scott,
+# smoke 71/0 each: vfy_01M58NBYSCHQ0BYGJCMRPR2Q07); #3312 pins 774977a9.
+OY_PIN=$(sed -n 's/^ARG OVERLAY_REF="\([0-9a-f]*\)".*/\1/p' operator/templates/Dockerfile | head -1)
+check OYPIN FIXED exact 14 "$(for s in cb18ba00 bc23a3f7 a596a7dd fc30cb9e ff57de5c ccb525a2 0f9df9f9 1c62ee47 09a5e8c1 a9efe0d4 ade63ad6 36eb1bd5 b0162538 774977a9; do git -C "$OV" merge-base --is-ancestor "$s" "$OY_PIN" 2>/dev/null && echo "$s"; done | n)" "the seat pin carries every overlay fix"
 
 echo
 echo "  $pass closed · $still_open still open · $regressed regressed · $drift changed"
