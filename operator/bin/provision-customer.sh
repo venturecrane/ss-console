@@ -2,7 +2,16 @@
 # provision-customer.sh — one command to stand up a customer's Hermes Machine
 #
 # Usage:
-#   operator/bin/provision-customer.sh <slug>
+#   operator/bin/provision-customer.sh <slug>           # deploy the fleet release image
+#   operator/bin/provision-customer.sh <slug> --build   # build this checkout from source
+#
+# DEPLOY BY IMAGE (fleet release, 2026-10-19). By default the Machine runs the
+# newest release that completed its last ring (`operator/bin/fleet latest-image`
+# reads D1 fleet_releases): one image built once by `fleet build` for every seat,
+# never a per-seat build. `--build` keeps the from-source path for a bring-up
+# before any release exists, or a deliberate one-off; it builds THIS checkout.
+# Rolling a new release out to existing seats is `fleet release`, not this
+# script.
 #
 # Reads operator/customers/<slug>/customer.yaml, validates it, uploads
 # customer.yaml to R2 (so bootstrap.sh can fetch it on first boot — no more
@@ -70,7 +79,13 @@
 set -euo pipefail
 
 SLUG="${1:-}"
-[ -n "${SLUG}" ] || { echo "Usage: $0 <customer-slug>" >&2; exit 1; }
+[ -n "${SLUG}" ] || { echo "Usage: $0 <customer-slug> [--build]" >&2; exit 1; }
+BUILD_FROM_SOURCE=0
+case "${2:-}" in
+  "") ;;
+  --build) BUILD_FROM_SOURCE=1 ;;
+  *) echo "Usage: $0 <customer-slug> [--build]" >&2; exit 1 ;;
+esac
 
 # Validate the slug charset as the FIRST action (issue #1127). The slug flows
 # into filesystem paths, central-D1 SQL, a sed RHS, a python -c program, and
@@ -104,6 +119,7 @@ export SLUG
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CUSTOMER_DIR="${REPO_ROOT}/operator/customers/${SLUG}"
 CUSTOMER_YAML="${CUSTOMER_DIR}/customer.yaml"
+# shellcheck disable=SC2034 # read by the sourced lib/build-source-guard.sh and lib/render-fly-toml.sh
 TEMPLATE_DIR="${REPO_ROOT}/operator/templates"
 RENDERED_DIR="${REPO_ROOT}/operator/.rendered/${SLUG}"
 BIN_DIR="${REPO_ROOT}/operator/bin"
@@ -119,108 +135,12 @@ die() { log "FATAL: $*"; exit 1; }
 unset_stale() { local why="$1"; shift; log "${why} — removing any stale value from the Machine: $*"; fly secrets unset --stage -a "${APP_NAME}" "$@" >/dev/null 2>&1 || log "already absent on the Machine (nothing to unset): $*"; }
 
 # ---------- Step 0-: the build source is what you think it is ----------
-#
-# REPO_ROOT is derived from THIS SCRIPT'S OWN LOCATION, so the image is built
-# from whichever checkout you invoked — not from a canonical one. That is easy
-# to state and easy to forget, because runbooks, muscle memory, and shell
-# history all say `~/dev/ss-console/operator/bin/reprovision.sh` while an
-# agent's verified work is usually sitting in a worktree under
-# `.claude/worktrees/`.
-#
-# WHAT THIS COSTS WHEN IT GOES WRONG (2026-07-31). The primary checkout sat two
-# commits behind origin/main carrying thirty staged entries that reverted a
-# whole merged programme — the config publisher, both CI guards, a migration,
-# the Dockerfile and entrypoint changes — with OVERLAY_REF still on the previous
-# pin. A reprovision in that state builds an image containing none of the work,
-# pins the wrong overlay, and EXITS ZERO. Every observation taken afterwards is
-# then a true statement about the wrong artifact, which is worse than a failure,
-# because a failure gets investigated and a green run gets believed.
-#
-# So: refuse by default, and print the resolved source on every run so a
-# reprovision can never leave doubt about which tree produced the image.
-# Escape hatch is deliberate, named, and loud — the same shape as
-# SS_ALLOW_PRIMARY_WRITES and SS_ALLOW_UNREAD_ENGAGEMENT_WRITES.
-assert_build_source_is_current() {
-  log "Build source: ${REPO_ROOT}"
-
-  if ! git -C "${REPO_ROOT}" rev-parse --git-dir >/dev/null 2>&1; then
-    log "WARN: ${REPO_ROOT} is not a git checkout; source currency cannot be verified"
-    return 0
-  fi
-
-  local head_sha upstream_sha dirty behind pin manifest_pin
-  head_sha="$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
-  log "Build source HEAD: ${head_sha}"
-
-  # A stale index reverting merged work is exactly the incident above, and it
-  # presents as ordinary dirt. Report the paths — "dirty" alone sends people
-  # looking for their own edits rather than at a damaged index.
-  #
-  # `.claude/` is excluded, and ONLY `.claude/`. It holds agent session markers
-  # and the worktrees themselves, so it is dirty in essentially every working
-  # checkout; it is in `.dockerignore` and no COPY in the Dockerfile names it,
-  # so it cannot reach the image this guard protects. On the guard's FIRST real
-  # use it refused a rebuild over a lone `parallel-isolation-required-<uuid>`
-  # marker (#2101). That matters more than the nuisance: a guard that trips on
-  # ordinary working conditions teaches people to reach for
-  # SS_ALLOW_DIVERGENT_SOURCE by reflex, and a reflexive bypass is worse than no
-  # guard — it is one everybody believes is protecting them while it is waved
-  # through unread. Reaching for the flag has to stay a decision.
-  #
-  # Narrow ON PURPOSE. The tempting widening is "exclude whatever .dockerignore
-  # excludes", which is wrong: an untracked source file elsewhere in the tree
-  # genuinely can change the image, and .dockerignore also excludes paths whose
-  # presence in git still matters. `.claude/` is the one directory that is
-  # session state by definition — the repo already treats it specially, since
-  # .claude/hooks/worktree-guard.mjs exempts it from the read-only primary rule
-  # for exactly this reason.
-  #
-  # The pattern anchors to porcelain's `XY ` prefix (two status chars plus a
-  # space) so it matches a top-level `.claude/` and not some nested
-  # `src/.claude/` that would be a genuine surprise worth refusing.
-  # `|| true` is load-bearing: grep exits 1 when it emits nothing, which under
-  # `set -euo pipefail` aborts the script on a CLEAN tree — the guard would kill
-  # every well-formed build while letting dirty ones through to the next check.
-  dirty="$(git -C "${REPO_ROOT}" status --porcelain 2>/dev/null | grep -v '^...\.claude/' || true)"
-  dirty="$(printf '%s' "${dirty}" | head -20)"
-  if [ -n "${dirty}" ] && [ "${SS_ALLOW_DIVERGENT_SOURCE:-}" != "1" ]; then
-    echo "${dirty}" >&2
-    die "build source ${REPO_ROOT} has uncommitted changes (above). An image built from a \
-dirty tree is not the code you reviewed. Commit, stash, or reset it — or set \
-SS_ALLOW_DIVERGENT_SOURCE=1 if you deliberately mean to build from these exact bytes."
-  fi
-
-  # Non-fatal: an offline operator should not be blocked, but they should know
-  # the comparison below is against whatever origin/main was last fetched.
-  git -C "${REPO_ROOT}" fetch origin --quiet 2>/dev/null \
-    || log "WARN: could not fetch origin; comparing against the last-known origin/main"
-
-  if git -C "${REPO_ROOT}" rev-parse --verify origin/main >/dev/null 2>&1; then
-    upstream_sha="$(git -C "${REPO_ROOT}" rev-parse --short origin/main)"
-    behind="$(git -C "${REPO_ROOT}" rev-list --count HEAD..origin/main 2>/dev/null || echo 0)"
-    if [ "${behind}" != "0" ] && [ "${SS_ALLOW_DIVERGENT_SOURCE:-}" != "1" ]; then
-      die "build source is ${behind} commit(s) behind origin/main (HEAD ${head_sha}, \
-origin/main ${upstream_sha}). Whatever landed in those commits will NOT be in this image. \
-Update it, or set SS_ALLOW_DIVERGENT_SOURCE=1 to build this ref on purpose."
-    fi
-  fi
-
-  # The vitest drift gate proves these agree at MERGE time. Nothing proved it at
-  # BUILD time, which is the only moment it protects an actual image.
-  pin="$(sed -n 's/^ARG OVERLAY_REF="\([0-9a-f]*\)".*/\1/p' "${TEMPLATE_DIR}/Dockerfile" | head -1)"
-  manifest_pin="$(sed -n 's/.*"overlayRef"[[:space:]]*:[[:space:]]*"\([0-9a-f]*\)".*/\1/p' \
-    "${REPO_ROOT}/operator/contracts/overlay-pairs.json" | head -1)"
-  if [ -n "${pin}" ] && [ -n "${manifest_pin}" ] && [ "${pin}" != "${manifest_pin}" ]; then
-    die "OVERLAY_REF mismatch: Dockerfile pins ${pin}, overlay-pairs.json pins ${manifest_pin}. \
-The image would ship an overlay the pair manifest does not describe."
-  fi
-  [ -n "${pin}" ] && log "Overlay pin: ${pin}"
-
-  if [ "${SS_ALLOW_DIVERGENT_SOURCE:-}" = "1" ]; then
-    log "WARN: SS_ALLOW_DIVERGENT_SOURCE=1 — source currency checks bypassed BY REQUEST. \
-The image is being built from ${REPO_ROOT} at ${head_sha} exactly as it stands."
-  fi
-}
+# The guard and its incident history live in lib/build-source-guard.sh, shared
+# with `fleet build`. It runs for EVERY provision, including the default
+# deploy-by-image path, because steps 2 and later publish this checkout's
+# customer.yaml and firm inputs.
+# shellcheck source=lib/build-source-guard.sh
+source "${BIN_DIR}/lib/build-source-guard.sh"
 
 assert_build_source_is_current
 
@@ -271,7 +191,6 @@ print(c['customer_id'])
 print(c['fly_region'])
 print(m.get('size', 'shared-cpu-2x'))
 print(m.get('memory_mb', 2048))
-print(c.get('hermes_ref', 'v2026.9.14@345cd2b057a452236de401d3534b8502a7465e8d'))
 "
 # Portable line-array read (macOS bash 3.2 doesn't have mapfile)
 FIELDS=()
@@ -282,33 +201,24 @@ CUSTOMER_ID="${FIELDS[0]}"
 FLY_REGION="${FIELDS[1]}"
 MACHINE_SIZE="${FIELDS[2]}"
 MEMORY_MB="${FIELDS[3]}"
-HERMES_REF="${FIELDS[4]}"
 # cpu_kind + cpus come from the size name (ss#2612); an unrecognised size dies
 # here rather than rendering a one-vCPU Machine by fallback.
 # shellcheck source=lib/machine-size.sh
 source "${REPO_ROOT}/operator/bin/lib/machine-size.sh"
+# shellcheck disable=SC2034 # MACHINE_CPU_KIND / MACHINE_CPUS are read by the sourced lib/render-fly-toml.sh
 MACHINE_CPU_KIND="$(machine_cpu_kind "${MACHINE_SIZE}")" || die "machine.size '${MACHINE_SIZE}' is not a Fly size this template can render"
+# shellcheck disable=SC2034
 MACHINE_CPUS="$(machine_cpus "${MACHINE_SIZE}")" || die "machine.size '${MACHINE_SIZE}' is not a Fly size this template can render"
 
 [ "${CUSTOMER_ID}" = "${SLUG}" ] || die "customer.yaml customer_id (${CUSTOMER_ID}) does not match slug (${SLUG})"
 APP_NAME="hermes-${SLUG}"
 
-log "App: ${APP_NAME} · region: ${FLY_REGION} · machine: ${MACHINE_SIZE}/${MEMORY_MB}MB · hermes: ${HERMES_REF}"
+log "App: ${APP_NAME} · region: ${FLY_REGION} · machine: ${MACHINE_SIZE}/${MEMORY_MB}MB"
 
-# ---------- Step 1b: split the upstream pin into tag + SHA (ADR 0024) ----------
-# hermes_ref pins upstream Hermes as v{YYYY}.{M}.{D}@{40-hex-sha}. The tag
-# before '@' is the clone target; the SHA after '@' is the immutable pin the
-# Dockerfile asserts the cloned HEAD against. Because the SHA travels in the
-# ref itself, we do NOT resolve it from a live upstream lookup here (this is
-# the availability fix in ADR 0024 — provisioning no longer phones a second
-# repo). The venturecrane/hermes-agent fork was retired by ADR 0024; the
-# Dockerfile clones NousResearch/hermes-agent directly.
-HERMES_UPSTREAM_TAG="${HERMES_REF%@*}"
-HERMES_UPSTREAM_SHA="${HERMES_REF#*@}"
-[ "${HERMES_UPSTREAM_TAG}" != "${HERMES_REF}" ] || die "hermes_ref ${HERMES_REF} is missing the @<sha> pin; expected v{YYYY}.{M}.{D}@{40-hex-sha} per ADR 0024"
-[ "${#HERMES_UPSTREAM_SHA}" -eq 40 ] || die "hermes_ref SHA has unexpected length (got ${#HERMES_UPSTREAM_SHA}, expected 40): ${HERMES_UPSTREAM_SHA}"
-case "${HERMES_UPSTREAM_SHA}" in *[!0-9a-f]*) die "hermes_ref SHA must be lowercase hex: ${HERMES_UPSTREAM_SHA}" ;; esac
-log "Hermes upstream pin: ${HERMES_UPSTREAM_TAG} @ ${HERMES_UPSTREAM_SHA}"
+# ---------- Step 1b: the Hermes pin ----------
+# No per-seat Hermes pin (ADR 0024, amended 2026-10-19): the Dockerfile's
+# HERMES_UPSTREAM_TAG / HERMES_UPSTREAM_SHA ARG defaults are the one pin, baked
+# into the release image every seat runs. Nothing to read from customer.yaml.
 
 # ---------- Step 2: upload customer.yaml to R2 ----------
 # bootstrap.sh fetches this from R2 on first boot and writes it to
@@ -460,26 +370,14 @@ fi
 for _stage in demand drafting litigation lane-proofs; do source "${BIN_DIR}/lib/stage-${_stage}-inputs.sh"; done
 
 # ---------- Step 3: render fly.toml ----------
+# One renderer, shared with `fleet release` (lib/render-fly-toml.sh).
 log "Rendering fly.toml..."
-mkdir -p "${RENDERED_DIR}"
-# Per-customer skill bodies bucket name (ADR 0022 Stream 2). One bucket per
-# customer; the bucket itself is the trust boundary. Bucket-scoped access
-# keys are entered via the secret-paste flow below; the bucket name is
-# rendered into fly.toml [env] (not a credential, just a string).
-R2_SKILL_BODIES_BUCKET="ss-operator-${SLUG}-skills"
-sed -e "s/{{CUSTOMER_SLUG}}/${SLUG}/g" \
-    -e "s/{{FLY_REGION}}/${FLY_REGION}/g" \
-    -e "s/{{MACHINE_SIZE}}/${MACHINE_SIZE}/g" \
-    -e "s/{{MEMORY_MB}}/${MEMORY_MB}/g" \
-    -e "s/{{MACHINE_CPU_KIND}}/${MACHINE_CPU_KIND}/g" \
-    -e "s/{{MACHINE_CPUS}}/${MACHINE_CPUS}/g" \
-    -e "s/{{HERMES_REF}}/${HERMES_REF}/g" \
-    -e "s/{{HERMES_UPSTREAM_TAG}}/${HERMES_UPSTREAM_TAG}/g" \
-    -e "s/{{HERMES_UPSTREAM_SHA}}/${HERMES_UPSTREAM_SHA}/g" \
-    -e "s|{{R2_BUCKET_CONFIG}}|${R2_BUCKET_CONFIG}|g" \
-    -e "s|{{R2_SKILL_BODIES_BUCKET}}|${R2_SKILL_BODIES_BUCKET}|g" \
-    "${TEMPLATE_DIR}/fly.toml.template" > "${RENDERED_DIR}/fly.toml"
+# shellcheck source=lib/render-fly-toml.sh
+source "${BIN_DIR}/lib/render-fly-toml.sh"
+render_fly_toml "${RENDERED_DIR}/fly.toml" || die "fly.toml render failed (above)"
 log "Rendered to ${RENDERED_DIR}/fly.toml"
+# The per-customer skill-bodies bucket (ADR 0022 Stream 2), as the renderer names it.
+R2_SKILL_BODIES_BUCKET="ss-operator-${SLUG}-skills"
 
 # ---------- Step 4: create Fly app (idempotent) ----------
 log "Creating Fly app (idempotent)..."
@@ -1249,12 +1147,17 @@ fi
 # `fly deploy` applies staged secrets as part of the NEW release — even when the
 # image digest is unchanged — so the running code and its secret contract always
 # change together. (Verified against flyctl v0.4.x docs + the staging gate.)
-log "Deploying ${APP_NAME} (new image + staged secrets roll together)..."
-(cd "${REPO_ROOT}" && fly deploy --config "${RENDERED_DIR}/fly.toml" \
-  --build-arg HERMES_REF="${HERMES_REF}" \
-  --build-arg HERMES_UPSTREAM_TAG="${HERMES_UPSTREAM_TAG}" \
-  --build-arg HERMES_UPSTREAM_SHA="${HERMES_UPSTREAM_SHA}" \
-  --build-arg CUSTOMER_SLUG="${SLUG}" --build-arg SS_CONSOLE_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)")
+# The image: the newest release that completed its last ring, unless --build.
+if [ "${BUILD_FROM_SOURCE}" = 1 ]; then
+  log "Deploying ${APP_NAME} built from THIS checkout (--build; new image + staged secrets roll together)..."
+  (cd "${REPO_ROOT}" && fly deploy --config "${RENDERED_DIR}/fly.toml" \
+    --build-arg SS_CONSOLE_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)")
+else
+  RELEASE_IMAGE="$("${BIN_DIR}/fleet" latest-image)" \
+    || die "no fleet release has completed its last ring (operator/bin/fleet releases). Run \`operator/bin/fleet build\` and \`fleet release\`, or pass --build to build this checkout"
+  log "Deploying ${APP_NAME} on release image ${RELEASE_IMAGE} (staged secrets roll with it)..."
+  (cd "${REPO_ROOT}" && fly deploy --config "${RENDERED_DIR}/fly.toml" --image "${RELEASE_IMAGE}")
+fi
 
 # Post-deploy guard: `fly deploy` must have applied EVERY staged secret as part
 # of the new release. If any remain STAGED (the STATUS column in

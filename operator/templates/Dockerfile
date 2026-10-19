@@ -28,12 +28,13 @@
 #   - operator/templates/bootstrap.sh
 
 # ---------- Build args ----------
-# customer.yaml.hermes_ref pins an upstream Hermes release as
-# v{YYYY}.{M}.{D}@{40-hex-sha} per ADR 0024
-# (docs/adr/0024-hermes-consumption-and-update-cadence.md). The customer.yaml
-# validator (src/lib/operator/customer-yaml/helpers.ts) enforces that shape.
-# provision-customer.sh splits the pin into the upstream tag (clone target) and
-# the SHA (assertion) and passes both here. We clone NousResearch/hermes-agent
+# THE Hermes pin. These three ARG defaults are the single source of truth for
+# which upstream Hermes every seat runs (ADR 0024, amended 2026-10-19): one image
+# is built per release and deployed to every seat, so a per-seat pin could only
+# ever disagree with the image. customer.yaml no longer carries hermes_ref for
+# the image to obey; provision-customer.sh and `fleet build` pass no Hermes
+# build-args, and boot-smoke's hermes-sha-matches-pin reads these lines. The
+# shape is v{YYYY}.{M}.{D}@{40-hex-sha}. We clone NousResearch/hermes-agent
 # directly; the venturecrane/hermes-agent fork was retired by ADR 0024.
 #
 # HERMES_REF is the full pin string, retained for provenance and logging.
@@ -1278,7 +1279,10 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # the couples template twin. Tracked twins moved: couples persona, template.
 ARG OVERLAY_REF="782d5c592e5c0be80257f05b31e890272734acf6"
 
-ARG CUSTOMER_SLUG=customer-zero
+# No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
+# across seats; the slug reaches the Machine only as fly.toml [env]
+# CUSTOMER_SLUG / SMD_CUSTOMER_SLUG. No RUN ever read it, but an ARG that differs
+# per seat still forced a separate build per seat, so it is gone.
 
 # ---------- Stage 1: clone Hermes upstream at the pinned tag, assert SHA ----------
 FROM alpine/git:2.45.2 AS hermes_source
@@ -1291,7 +1295,7 @@ RUN git clone --depth 1 --branch ${HERMES_UPSTREAM_TAG} \
  && INSTALLED_SHA="$(cat /src/HERMES_SHA)" \
  && if [ "${INSTALLED_SHA}" != "${HERMES_UPSTREAM_SHA}" ]; then \
       echo "FATAL: upstream tag ${HERMES_UPSTREAM_TAG} points at ${INSTALLED_SHA}" >&2 ; \
-      echo "       Expected pinned SHA ${HERMES_UPSTREAM_SHA} (from customer.yaml hermes_ref)." >&2 ; \
+      echo "       Expected pinned SHA ${HERMES_UPSTREAM_SHA} (the Dockerfile's HERMES_UPSTREAM_SHA)." >&2 ; \
       echo "       Upstream re-tagged, or the pin is stale; refusing to build." >&2 ; \
       echo "       See ADR 0024." >&2 ; \
       exit 1 ; \
@@ -1315,15 +1319,13 @@ FROM ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie AS uv_source
 FROM node:26-bookworm-slim@sha256:9e6f9357d371591e32ab6f2d8a26d63bdd0d17c29eee3f4f3e7e454d9634bf73 AS node_source
 FROM debian:13.4
 
-ARG CUSTOMER_SLUG
-ARG OVERLAY_REPO
-ARG OVERLAY_REF
-
-ENV CUSTOMER_SLUG=${CUSTOMER_SLUG}
-# ADR 0023 Wave 1: expose the baked overlay ref at runtime so the gate's
-# heartbeat emitter reports it as the fleet-view `version` — the boot-time
-# overlay refresh pins /opt/data to this exact ref, so it is the running code.
-ENV SMD_OVERLAY_REF=${OVERLAY_REF}
+# LAYER CACHE ORDER IS LOAD-BEARING (fleet release, 2026-10-19). Every RUN after
+# an ARG declaration in a stage sees that ARG and is invalidated when its value
+# changes. OVERLAY_REF changes with every overlay pin (several a day) and
+# SS_CONSOLE_SHA with every release, so both are declared immediately before
+# their first use below, never here: apt, npm, uv and the Hermes build stay
+# cached across releases and an overlay-only release rebuilds only the layers
+# from the overlay install down. tests/operator-dockerfile.test.ts pins this.
 ENV PYTHONUNBUFFERED=1
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/hermes/.playwright
 ENV HERMES_HOME=/opt/data
@@ -1518,6 +1520,12 @@ COPY operator/requirements/ /app/requirements/
 #      the overlay (or anything else in the venv) declares is unmet. That is
 #      the backstop for an overlay that grows a dependency before compile.sh
 #      is re-run; substrate's verify-overlay-pairs.py catches it earlier.
+ARG OVERLAY_REPO
+ARG OVERLAY_REF
+# ADR 0023 Wave 1: expose the baked overlay ref at runtime so the gate's
+# heartbeat emitter reports it as the fleet-view `version` — the boot-time
+# overlay refresh pins /opt/data to this exact ref, so it is the running code.
+ENV SMD_OVERLAY_REF=${OVERLAY_REF}
 RUN uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
       --no-config --require-hashes --no-deps -r /app/requirements/hermes-overlay.txt \
  && uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
@@ -1889,6 +1897,16 @@ COPY operator/templates/connector-classification-probe.py /app/connector-classif
 # indistinguishable from a clean fleet — no error, no alert, sends simply stop
 # being checked.
 COPY operator/templates/matter-mixing-fence-probe.py /app/matter-mixing-fence-probe.py
+
+# What this image can do for a skill (fleet release, 2026-10-19). Skills now
+# reach seats separately from the image (`fleet release --skills`), so a skill
+# version must be checked against what the seat's IMAGE provides: the files
+# under /app and /opt a skill may cite, the tools the trust plugin knows
+# (overlay shared.action_classes), the broker verbs (workspace_broker/verbs.py)
+# and the action classes. Generated LAST, after every COPY into /app and /opt,
+# so the path list is the image's real tree. A failure here fails the build.
+COPY operator/templates/gen-image-capabilities.py /app/gen-image-capabilities.py
+RUN /opt/hermes/.venv/bin/python3 -I /app/gen-image-capabilities.py /app/image-capabilities.json
 
 # NOTE: customer.yaml is NOT copied into the image. It lives on the Fly
 # volume at /opt/data/customer.yaml; bootstrap.sh fetches it from R2 on

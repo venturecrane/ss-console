@@ -83,6 +83,13 @@ function makeCheckout(): { root: string; script: string } {
     join(REPO_ROOT, 'operator', 'bin', 'provision-customer.sh'),
     join(root, 'operator', 'bin', 'provision-customer.sh')
   )
+  // The guard itself lives in lib/build-source-guard.sh since the fleet release
+  // (2026-10-19), shared with `fleet build`; provisioning sources it.
+  mkdirSync(join(root, 'operator', 'bin', 'lib'), { recursive: true })
+  cpSync(
+    join(REPO_ROOT, 'operator', 'bin', 'lib', 'build-source-guard.sh'),
+    join(root, 'operator', 'bin', 'lib', 'build-source-guard.sh')
+  )
   writeFileSync(join(root, 'operator', 'templates', 'Dockerfile'), `ARG OVERLAY_REF="${PIN}"\n`)
   writeFileSync(
     join(root, 'operator', 'contracts', 'overlay-pairs.json'),
@@ -130,6 +137,30 @@ function checkout(): { root: string; script: string } {
   checkouts.push(made.root)
   return made
 }
+
+describe('fleet build runs the same guard, executed directly', () => {
+  it('refuses a dirty tree and passes a clean one', () => {
+    const { root } = checkout()
+    const guard = join(root, 'operator', 'bin', 'lib', 'build-source-guard.sh')
+    const clean = (() => {
+      try {
+        execFileSync('bash', [guard, root], { env: cleanEnv(), stdio: 'pipe' })
+        return true
+      } catch {
+        return false
+      }
+    })()
+    expect(clean).toBe(true)
+    writeFileSync(join(root, 'stray.txt'), 'x')
+    let refused = false
+    try {
+      execFileSync('bash', [guard, root], { env: cleanEnv(), stdio: 'pipe' })
+    } catch {
+      refused = true
+    }
+    expect(refused).toBe(true)
+  })
+})
 
 describe('provision refuses a build source that is not what you think it is', () => {
   it('prints the resolved build source and pin on every run', () => {

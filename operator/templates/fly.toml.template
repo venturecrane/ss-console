@@ -1,7 +1,8 @@
 # Fly.io app config for hermes-{{CUSTOMER_SLUG}}
 #
-# Rendered by provision-customer.sh: every {{TOKEN}} substituted before
-# `fly deploy`. The template is the only fly.toml the repo holds; per-
+# Rendered by operator/bin/lib/render-fly-toml.sh (sourced by
+# provision-customer.sh, called by `fleet release`): every {{TOKEN}} substituted
+# before `fly deploy`. The template is the only fly.toml the repo holds; per-
 # customer rendered output is gitignored.
 #
 # Architecture (per §6 of the build plan):
@@ -16,17 +17,27 @@
 app = "hermes-{{CUSTOMER_SLUG}}"
 primary_region = "{{FLY_REGION}}"
 
+# Stop allowance (fleet release, 2026-10-19). Fly's default is SIGINT with 5 s
+# before SIGKILL, which killed every running chronology, drafting or demand job
+# on every deploy. The entrypoint supervisor traps SIGTERM, quiesces the
+# runners, lets the running job checkpoint, then stops the gateway; 300 s is the
+# ceiling Fly allows a shared-cpu Machine. Never lower either without moving
+# the supervisor's drain budget with it.
+kill_signal = "SIGTERM"
+kill_timeout = 300
+
 # Rendered fly.toml lives at operator/.rendered/<slug>/fly.toml. Dockerfile
 # is two levels up at operator/templates/Dockerfile. The Docker build
 # context root is the repo root, which Fly infers from where `fly deploy`
 # runs. provision-customer.sh always runs from repo root.
+#
+# Used ONLY by the from-source fallback (`provision-customer.sh <slug> --build`,
+# a new seat's bring-up). A normal deploy is `fly deploy --image <release>`,
+# built once by `fleet build` for every seat. No per-seat build args: the
+# Hermes pin is the Dockerfile's own ARG defaults (ADR 0024, amended) and the
+# slug reaches the Machine through [env] below, never through the image.
 [build]
   dockerfile = "../../templates/Dockerfile"
-  [build.args]
-    HERMES_REF = "{{HERMES_REF}}"
-    HERMES_UPSTREAM_TAG = "{{HERMES_UPSTREAM_TAG}}"
-    HERMES_UPSTREAM_SHA = "{{HERMES_UPSTREAM_SHA}}"
-    CUSTOMER_SLUG = "{{CUSTOMER_SLUG}}"
 
 # Persistent volume hosting (10GB, was 1GB pre-§6 rework):
 #   /opt/data/customer.yaml         — R2-mirrored live config (ADR 0019)

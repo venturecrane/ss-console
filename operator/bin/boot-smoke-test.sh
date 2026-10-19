@@ -483,23 +483,23 @@ ssh_exec "hermes-plugins-installed" "/opt/hermes/.venv/bin/hermes plugins list |
 # identically on 0.18 and 0.20, so until now boot-smoke could not tell a promoted
 # seat from one a peer quietly rebuilt at the old pin from origin/main. The
 # image bakes the cloned upstream commit at /opt/hermes/HERMES_SHA (Dockerfile
-# hermes_source stage); the authored pin is customer.yaml `hermes_ref`
-# (<tag>@<40-hex sha>), read from THIS checkout's operator/customers/<slug>/ —
-# the same file provision-customer.sh rendered the build from. A mismatch is the
-# one failure that means "the wrong Hermes is running", so it is a FAIL, not a log.
+# hermes_source stage). The pin it is compared to is the Dockerfile's own
+# `ARG HERMES_UPSTREAM_SHA` default (ADR 0024, amended 2026-10-19: one image for
+# every seat, so customer.yaml no longer carries a per-seat hermes_ref), read
+# from THIS checkout. `fleet release` deploys an image built from a recorded
+# commit, which may not be this checkout's, so it passes that release's pin in
+# BOOT_SMOKE_EXPECTED_HERMES_SHA. A mismatch is the one failure that means "the
+# wrong Hermes is running", so it is a FAIL, not a log.
 REPO_ROOT_FOR_PIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CUSTOMER_YAML_FOR_PIN="${REPO_ROOT_FOR_PIN}/operator/customers/${SLUG}/customer.yaml"
-if [ -f "${CUSTOMER_YAML_FOR_PIN}" ]; then
-  # Same interpreter shape provision-customer.sh uses (uv + pyyaml; no yq, and
-  # the host python3 has no yaml module).
-  EXPECTED_HERMES_SHA="$(uv run --quiet --with pyyaml python3 -c 'import sys, yaml; ref = str((yaml.safe_load(open(sys.argv[1])) or {}).get("hermes_ref", "")); print(ref.split("@", 1)[1] if "@" in ref else "")' "${CUSTOMER_YAML_FOR_PIN}")"
-  if printf '%s' "${EXPECTED_HERMES_SHA}" | grep -qE '^[0-9a-f]{40}$'; then
-    ssh_exec "hermes-sha-matches-pin" "[ \"\$(tr -d \"[:space:]\" < /opt/hermes/HERMES_SHA)\" = ${EXPECTED_HERMES_SHA} ]"
-  else
-    fail "hermes-sha-matches-pin — could not read a 40-hex sha from hermes_ref in ${CUSTOMER_YAML_FOR_PIN}"
-  fi
+DOCKERFILE_FOR_PIN="${REPO_ROOT_FOR_PIN}/operator/templates/Dockerfile"
+EXPECTED_HERMES_SHA="${BOOT_SMOKE_EXPECTED_HERMES_SHA:-}"
+if [ -z "${EXPECTED_HERMES_SHA}" ] && [ -f "${DOCKERFILE_FOR_PIN}" ]; then
+  EXPECTED_HERMES_SHA="$(grep -m1 -E '^ARG HERMES_UPSTREAM_SHA=' "${DOCKERFILE_FOR_PIN}" | cut -d= -f2 | tr -d '"[:space:]')"
+fi
+if printf '%s' "${EXPECTED_HERMES_SHA}" | grep -qE '^[0-9a-f]{40}$'; then
+  ssh_exec "hermes-sha-matches-pin" "[ \"\$(tr -d \"[:space:]\" < /opt/hermes/HERMES_SHA)\" = ${EXPECTED_HERMES_SHA} ]"
 else
-  fail "hermes-sha-matches-pin — no customer.yaml at ${CUSTOMER_YAML_FOR_PIN} (run from the checkout that provisioned ${SLUG})"
+  fail "hermes-sha-matches-pin — could not read a 40-hex ARG HERMES_UPSTREAM_SHA from ${DOCKERFILE_FOR_PIN} (or BOOT_SMOKE_EXPECTED_HERMES_SHA)"
 fi
 
 # ---------- Step 8: Hermes curator disabled (ADR 0017) ----------

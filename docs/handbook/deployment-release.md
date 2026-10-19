@@ -2,7 +2,7 @@
 title: Deployment & Release
 section: operations
 order: 4
-summary: The two deploy paths - the website to Cloudflare Workers, and the Operator to a per-customer Fly Machine
+summary: The two deploy paths - the website to Cloudflare Workers, and the Operator as one image rolled out to every seat in rings
 sources:
   - label: CI - deploy.yml
     href: https://github.com/venturecrane/ss-console/blob/main/.github/workflows/deploy.yml
@@ -10,6 +10,16 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/wrangler.toml
   - label: operator/bin/reprovision.sh
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/reprovision.sh
+  - label: operator/bin/fleet (the release CLI; code in operator/bin/lib/fleet/)
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/fleet/cli.py
+  - label: operator/fleet/rings.yaml
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/fleet/rings.yaml
+  - label: operator/bin/lib/render-fly-toml.sh
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/render-fly-toml.sh
+  - label: scripts/ci-publish-skills.sh
+    href: https://github.com/venturecrane/ss-console/blob/main/scripts/ci-publish-skills.sh
+  - label: ADR 0024 (Hermes consumption; amended for fleet release)
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0024-hermes-consumption-and-update-cadence.md
   - label: operator/bin/overlay-ref-drift.py
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/overlay-ref-drift.py
   - label: operator/rehearsal/run.py
@@ -23,8 +33,9 @@ sources:
 This venture ships two different runtimes, and they deploy in completely
 different ways. The **website** is an Astro app on a single Cloudflare Worker,
 deployed automatically by CI on merge to main. The **Operator** is a per-customer
-Fly.io Machine running the Hermes runtime, deployed by hand by rebuilding that
-customer's Machine image. They share almost nothing operationally. This page owns
+Fly.io Machine running the Hermes runtime; one image is built per release and
+rolled out to every seat in rings by `operator/bin/fleet`, and skills ship as
+their own release through the same rings. They share almost nothing operationally. This page owns
 both. The dev workflow that precedes either deploy is in
 `/admin/playbook/building-the-platform`.
 
@@ -102,76 +113,154 @@ incident. The periodic code reviews under `docs/reviews/` grade this as an
 accepted gap each time, so it stays visible; revisit when a second human
 maintainer exists.
 
-## Path B: the Operator (per-customer Fly Machine)
+## Path B: the Operator (one image, rolled out in rings)
 
 The Operator runs as a per-customer Fly.io Machine hosting the Hermes runtime;
 our code is a plugin-only overlay in a separate repo,
 `venturecrane/hermes-smd-overlay` (it must not modify Hermes core - see
-`/admin/playbook/operator-platform`). A release is delivered by rebuilding the
-customer's Machine image against a new overlay commit. The flow:
+`/admin/playbook/operator-platform`). Since 2026-10-19 a release is built ONCE
+and rolled out to every seat by `operator/bin/fleet`; nothing builds per seat
+(ADR 0024, amended). A release is a pair: an **image** (one digest in the Fly
+registry app `hermes-fleet`, which has no Machines) and a **skills version** (a
+content-addressed manifest in R2). Overlay and code changes are image releases;
+a skill-only change is a skills release and restarts nothing.
 
-1. **Cut an overlay release.** Land the change in the overlay repo and get the
-   commit it should pin to.
-2. **Bump `OVERLAY_REF`.** The overlay commit is pinned as the `ARG OVERLAY_REF`
-   in `operator/templates/Dockerfile`. This is the desired state for every
-   customer Machine. The PR names its tracking issue and carries an acceptance
-   criterion tagged `(runtime)`: a green shadow-firm run on the rig at this ref.
-   Steps 3 and 4 are how that AC is met, and they happen after this PR merges.
-3. **Reprovision the rig, before any client seat.** The rig is
-   `pilot-smokeball`. Run `yes s | operator/bin/reprovision.sh pilot-smokeball`.
-   This step exists here, in this position, because a rig runs a candidate
-   overlay ref only once it has been reprovisioned onto it. The old procedure
-   asked step 2 to cite a green run "on the candidate ref", which no rig could
-   produce yet, and three bumps in a row (#2518, #2525, #2531) cited nothing.
-4. **Drive the shadow firm against the rig, and cite the run id.** The shadow
-   firm (`operator/rehearsal/`, runbook `docs/runbooks/operator/shadow-firm.md`)
-   replays every incident class this venture has had - an unaudited direct-API
-   send, cross-matter content, a fabricated matter number under failure, an
-   instruction injected through inbound mail, a dead connector mid-task, a
-   privileged instruction from an unauthored sender - against the rig seat, and
-   scores each from audit rows and mailbox observations rather than from how the
-   answers read. Run it as
-   `infisical run --env=prod --path=/ss -- operator/rehearsal/run.py --seat pilot-smokeball --overlay-ref <candidate> --drive`.
-   The runner reads the rig's running overlay ref off the live seam and refuses
-   to drive unless it equals the candidate, so the id cannot be produced by a rig
-   still on the previous release, and a ref it cannot read refuses too. Cite the
-   run id, with the report's evidence table, on the tracking issue or as a
-   comment on the merged bump PR: that citation is the `(runtime)` AC's proof.
-   `.stitch/shadow-firm/` is gitignored (PR #2407: the provision-source guard
-   refuses a dirty tree), so the report is NOT committed; the digest-shaped run
-   id is recomputable from the pasted report body, which is what makes the
-   citation auditable. A run id ending in `-notgreen` does not satisfy this, and
-   neither does a run with skipped scenarios: a skipped scenario did not run, so
-   it certifies nothing. A bump with no green id once the rig has been
-   reprovisioned is drift, not a completed release. The suite never touches a
-   client seat or a client-visible address; that is enforced in
-   `operator/rehearsal/scope.py`, not by convention.
-5. **Reprovision the customer Machines.** Run `operator/bin/reprovision.sh <slug>`
-   from the repo root. That wrapper is exactly
-   `infisical run --env=prod --path=/ss --silent -- operator/bin/provision-customer.sh <slug>`;
-   it injects the R2 credentials the provisioner needs (historically not stored
-   anywhere, so every agent re-derived them and lost time - they now live in
-   Infisical `/ss` prod). Provisioning rebuilds the image at the pinned overlay
-   ref, redeploys the Machine, and runs the boot smoke test. Use
-   `yes s | operator/bin/reprovision.sh <slug>` to skip the secret prompts
-   non-interactively (Machine secrets persist across deploy, so there is nothing
-   to re-enter). git is the single source of truth for `customer.yaml`;
-   provisioning projects it to R2 unconditionally.
-6. **Pass the verify gate.** Confirm the runtime came up against the live read
-   seam (a correct key returns 200; a wrong key or wrong slug returns 401) and
-   the boot smoke test passed - not just that the config validated.
-7. **Flip secrets** on the website side if the release changes the per-customer
-   seam keys.
+Run every `fleet` command from the repo root under Infisical, so R2 is
+reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <command>`.
 
-**An `OVERLAY_REF` bump only reaches a Machine when that Machine is
-reprovisioned.** Nothing reprovisions automatically. `overlay-ref-drift.py` reads
-each Machine's running overlay commit from the live read seam and compares it to
-the ref pinned in the Dockerfile, so drift between desired and deployed is a
-surfaced fact rather than something to remember. It is also how you answer "which
-seats did this bump actually reach" after step 5. Run it under Infisical (it needs
-the seam master key) and treat a non-zero exit as drift to resolve. The shadow
-firm's release gate reads a seat's running ref through that same code path, so
-the runner and the drift report cannot disagree about what a seat is running.
+### An image release
+
+1. **Cut an overlay release** and land it in the overlay repo.
+2. **Bump `OVERLAY_REF`.** The overlay commit is pinned as `ARG OVERLAY_REF` in
+   `operator/templates/Dockerfile`, beside the Hermes pin (`ARG
+   HERMES_UPSTREAM_TAG` / `HERMES_UPSTREAM_SHA`, the one Hermes pin for the
+   fleet; `customer.yaml` no longer carries one). The PR names its tracking
+   issue and carries a `(runtime)` acceptance criterion: a green shadow-firm
+   run on the rig at this ref.
+3. **Build once:** `fleet build [--notes "..."]`. It refuses a tree that is
+   dirty, behind origin/main, or whose `OVERLAY_REF` disagrees with
+   `operator/contracts/overlay-pairs.json` (`operator/bin/lib/build-source-guard.sh`,
+   the same guard a from-source provision runs), builds on Fly's remote builder
+   with the label `rel-<ss-console sha8>-<overlay sha8>-<utc minute>`, records
+   the release in D1 `fleet_releases`, and uploads the image's own
+   `image-manifest.json`, `image-capabilities.json` and required-env list (read
+   out of the pushed image with `crane`) plus the lane-input schema digests to
+   R2 `fleet/images/<digest>/`. The apt, npm, uv and Hermes layers are cached
+   across releases (the overlay and commit build-args are declared just before
+   their first use), so an overlay-only release rebuilds only the tail. It
+   prints the release id. Flags: `--declare-secret NAME` when the release
+   needs a newly staged secret, `--not-volume-forward-compatible` when the new
+   image changes the volume in a way the old image cannot read (a failing seat
+   then halts instead of rolling back).
+4. **Prove it on the rig, then release:** `fleet release <release-id> --only
+   pilot-smokeball`, drive the shadow firm against the rig and cite the run id
+   (below), then `fleet release <release-id>` for the rings. Rings live in
+   `operator/fleet/rings.yaml`: 0 `smd-staging`, 1 `pilot-smokeball`, 2 `scott`
+   `brokery` `captain-mark`, 3 `ashton-price` (always one at a time); a seat in
+   no ring joins the last. `--parallel N` widens a ring; `--dry-run` runs every
+   check and touches nothing.
+
+For each seat, in order, every step recorded in D1 `fleet_rollouts`:
+
+- **Hold.** A seat in `fleet_holds` (`fleet hold <slug> --reason "..."`, takes
+  effect at once, no PR) is skipped as `skipped_held`.
+- **Preflight.** The release's required env must all be on the seat (secret
+  names or rendered `[env]`); a staged secret the release does not declare is
+  refused (`fly deploy` would apply it); a lane whose firm-input schema changed
+  since the seat's current image, for a lane the seat authors, is refused until
+  its inputs are re-staged (`operator/bin/reprovision.sh <slug>`, then rerun
+  with `--accept-lane-inputs`).
+- **Busy gate, read live over ssh.** A running job (a live job child, or a lane
+  heartbeat naming one), pending wakes, a heartbeat gone stale while its daemon
+  lives, or a managed cron firing within 10 minutes (or fired within 5) means
+  busy. Busy writes the quiesce marker (`/run/smd-medchron/quiesce`, root-owned,
+  expires on its own) so no new job is claimed, and waits for idle, up to
+  `--max-idle-wait` (30 minutes). Still busy: the seat is skipped as
+  `waiting_idle`, never deployed mid-job. Queued work is not busy; the queue is
+  on the volume and survives the restart. `--force-mid-job` skips the gate, and
+  says so loudly.
+- **Record and snapshot.** The seat's current image and deployed fly.toml are
+  recorded as its rollback target, and the volume is snapshotted.
+- **Deploy** `fly deploy --image <release> --config <rendered>`. The rendered
+  toml (`operator/bin/lib/render-fly-toml.sh`, the renderer provisioning uses)
+  sets `kill_signal = "SIGTERM"` and `kill_timeout = 300`, so the entrypoint
+  supervisor drains running jobs to a checkpoint before the gateway stops.
+- **Verify.** The boot smoke test (`operator/bin/boot-smoke-test.sh`, pinned to
+  the release's Hermes commit), then a heartbeat read-back from D1
+  `fleet_status`: within 6 minutes the seat must report the release image and
+  overlay.
+- **Classify.** Only a real seat failure (a smoke check that ran and said no, a
+  Machine that never started, a heartbeat naming another image) rolls the seat
+  back to its recorded image and toml, re-smokes it, and HALTS the rollout. A
+  tooling error (ssh with no verdict, Fly agent or wrangler errors) or a timeout
+  halts without touching the seat. Seats not reached are recorded `halted`.
+  A rollout that halts nowhere marks the release `completed_last_ring_at`.
+
+One rollout runs at a time: `fleet release` takes the D1 `fleet_lease` (2-hour
+TTL, renewed per seat) and a second one is refused, naming the holder.
+
+### A skills release
+
+A merge touching `operator/skills/**` makes the deploy workflow's
+`publish-skills` job (`scripts/ci-publish-skills.sh`) upload the skill files to
+R2 `fleet/skills/objects/<sha256>` and a candidate manifest
+`fleet/skills/<yyyymmddHHMM>-<sha8>.json` that records each file, the retired
+skill names, and what each skill NEEDS from its image (cited paths, tools,
+broker verbs, action classes). It writes no seat pointer; nothing changes on a
+seat until `fleet release --skills <version>` walks the same rings. Per seat it
+checks the needs against that seat's image (`image-capabilities.json` for the
+digest its heartbeat reports; an unknown image is refused), writes
+`vaults/<slug>/skills-pointer.json`, and waits up to 3 minutes for the
+heartbeat to report the version. No restart, no busy gate: open sessions keep
+their prompt, new turns read the new files. A seat that never confirms gets its
+previous pointer back and the rollout halts. **Rolling a skill back is a
+skills release of the previous version** (`fleet release --skills
+<previous>`); `rollback-skill.sh` is gone.
+
+The config publisher (`scripts/ci-publish-customer-configs.sh`) checks every
+`customer.yaml` against what the seat runs NOW: its current image's manifest
+plus its current skills release. A config naming a skill, pin or pre_run
+neither carries is refused.
+
+### Driving the shadow firm (the bump's `(runtime)` proof)
+
+The shadow firm (`operator/rehearsal/`, runbook `docs/runbooks/operator/shadow-firm.md`)
+replays every incident class this venture has had - an unaudited direct-API
+send, cross-matter content, a fabricated matter number under failure, an
+instruction injected through inbound mail, a dead connector mid-task, a
+privileged instruction from an unauthored sender - against the rig seat, and
+scores each from audit rows and mailbox observations rather than from how the
+answers read. Once the rig runs the release, run
+`infisical run --env=prod --path=/ss -- operator/rehearsal/run.py --seat pilot-smokeball --overlay-ref <candidate> --drive`.
+The runner reads the rig's running overlay ref off the live seam and refuses to
+drive unless it equals the candidate, and a ref it cannot read refuses too.
+Cite the run id, with the report's evidence table, on the tracking issue or the
+merged bump PR. `.stitch/shadow-firm/` is gitignored (the build-source guard
+refuses a dirty tree), so the report is NOT committed; the digest-shaped run id
+is recomputable from the pasted report body. A run id ending in `-notgreen`
+does not satisfy the AC, and neither does a run with skipped scenarios. The
+suite never touches a client seat or a client-visible address
+(`operator/rehearsal/scope.py`).
+
+### Status, provisioning, reprovisioning
+
+- `fleet status [--json]` shows each seat's ring, hold, image, overlay ref,
+  skills version, config digest, jobs (running / queued / wakes pending),
+  heartbeat age, last rollout state and drift against the newest completed
+  release. `fleet releases` lists releases. `overlay-ref-drift.py` still reads
+  each seat's running overlay off the live seam.
+- **A new seat:** `operator/bin/reprovision.sh <slug>` (exactly `infisical run
+  --env=prod --path=/ss --silent -- operator/bin/provision-customer.sh <slug>`)
+  deploys the newest release that completed its last ring (`fleet
+  latest-image`); `--build` builds the checkout from source instead, for a
+  bring-up before any release exists. git is the single source of truth for
+  `customer.yaml`; provisioning projects it to R2 unconditionally. `yes s |`
+  skips the secret prompts (Machine secrets persist across deploy).
+- **Reprovisioning an existing seat** runs the same busy gate first (`fleet busy
+  <slug> --wait`), refuses a seat still busy (`FLEET_FORCE_MID_JOB=1` overrides),
+  and clears its quiesce marker afterwards (`fleet unquiesce <slug>`).
+- **Flip secrets** on the website side if a release changes the per-customer
+  seam keys.
 
 ## Never root-SSH a live Operator Machine
 
@@ -180,7 +269,10 @@ root-owned `__pycache__/*.pyc` files that the hermes-user bootstrap then cannot
 remove, which breaks the next boot and can crash-loop the Machine (this caused a
 multi-hour customer outage). Read a live Machine's state through the runtime read
 seam over HTTPS, and test a change by deploying it - never by hand-poking the live
-box. A handler also cannot prove its own non-execution by inspection; verify
+box. The `fleet` busy probe and quiesce writer are the sanctioned exceptions:
+each is a stdlib-only program fed to the image's system `python3 -I -` on
+stdin (no overlay import, no `__pycache__` written), the probe only reads, and
+the writer touches only the root-owned `/run/smd-medchron/quiesce` marker. A handler also cannot prove its own non-execution by inspection; verify
 against the running Machine.
 
 > TODO(why): The exact contents of the reprovision verify gate (which read-seam
