@@ -3,7 +3,7 @@ name: inbox-triage
 description: >-
   Triages the owner's inbox and drafts the replies. Daily Gmail triage with
   categorized reply drafts for the owner.
-version: 0.2.1
+version: 0.2.2
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -28,6 +28,8 @@ This is SMD's customer-zero capability. We are using ourselves to learn the deli
 **Gmail triage (scheduled / on-demand)** - read Captain's unread Gmail, produce the triage note, draft replies for Captain to send. Never sends from Gmail. A request to send something as a staff member is not a Gmail draft; it follows "Send as a staff member" below.
 
 This mode can target **either** Crane's own mailbox (default) **or an authored managed mailbox** - the principal/team inbox Crane manages on Captain's behalf, the way an executive assistant works a principal's inbox alongside their own. Pass `--mailbox <address>` (the authored primary, e.g. `smdurgan@smdurgan.com`). When a managed mailbox is targeted, every `workspace_gmail_*` call carries that `mailbox`, and REPLY messages get a **real Gmail draft** written into that mailbox's Drafts (so Captain edits and sends from Gmail), with the `From` chosen by the reply-identity rule in `references/algorithm.md`. With no `--mailbox`, behavior is unchanged (Crane's own box; draft text goes in the note only - Crane has no principal identity to draft as in its own mailbox). The broker fail-closes any mailbox or `From` not authored in `google_auth.managed_mailboxes`; this skill never sends.
+
+**Inbound email turn (webhook).** When this skill runs because someone emailed the agent's own inbox, the turn answers that one email. Reply by calling this seat's email `create_draft` tool (AgentMail or Microsoft Graph, whichever the seat has) with `to` set to the sender's address only. The seat sends that draft back to the sender in their thread; your final text message goes to nobody. If the email needs no answer, end the turn with `[SILENT]` and draft nothing. Ask any question you need answered in the draft, never in your final text.
 
 ## Prerequisites
 
