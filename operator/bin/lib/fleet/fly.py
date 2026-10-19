@@ -112,6 +112,8 @@ class Fly:
         """The fly.toml the app is deployed with now (its rollback toml)."""
         with tempfile.TemporaryDirectory() as tmp:
             dest = os.path.join(tmp, "fly.toml")
+            # flyctl refuses `--config <path>` unless the file already exists.
+            open(dest, "w", encoding="utf-8").close()
             require_ok(self._fly("config", "save", "-a", app, "--config", dest, "--yes"), f"fly config save -a {app}")
             with open(dest, encoding="utf-8") as fh:
                 return fh.read()

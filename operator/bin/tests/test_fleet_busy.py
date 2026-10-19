@@ -70,6 +70,20 @@ def test_cron_window_and_recent_fire() -> None:
     assert busy.decide(_facts(crons=[just])).busy
 
 
+def test_quarter_hour_slot_crons_leave_an_idle_window() -> None:
+    """Couples slot crons tick every 15 min; somewhere in each quarter hour the gate must pass."""
+    period = 900
+    idle_seconds = [
+        t
+        for t in range(0, period, 30)
+        if not busy.decide(
+            _facts(crons=[{"name": "op-managed:cm:couples-checkin@person:p1", "next_in_s": period - t, "last_ago_s": t}])
+        ).busy
+    ]
+    assert idle_seconds, "no idle window inside a 15-minute cron period"
+    assert len(idle_seconds) * 30 >= 300
+
+
 def test_unreadable_store_is_busy() -> None:
     assert busy.decide(_facts(errors=["/run/smd-medchron/heartbeat.json unreadable"])).busy
 
