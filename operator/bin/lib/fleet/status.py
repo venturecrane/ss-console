@@ -2,8 +2,14 @@
 
 Per seat: ring, hold, image (and the release it is), overlay ref, skills
 version, config digest, jobs (running / queued / wakes pending), heartbeat age,
-the last rollout's state, and DRIFT against the newest release that completed
-its last ring. NULL means unknown and is shown as "?", never as 0.
+the last rollout's state, DRIFT against the newest release that completed
+its last ring, and whether the identifier-gate rollback lever is set. NULL means
+unknown and is shown as "?", never as 0.
+
+The lever (`SMD_IDENTIFIER_GATE_MODE`) turns off all identifier blocking on a
+seat. ADR 0093 keeps it only as an incident-time, fleet-wide rollback, so a seat
+carrying it is named here and in boot smoke. Read from Fly secret NAMES only;
+values never leave Fly.
 """
 
 from __future__ import annotations
@@ -24,11 +30,36 @@ def _age(ts: str | None) -> str:
     return f"{secs}s" if secs < 120 else f"{secs // 60}m" if secs < 7200 else f"{secs // 3600}h"
 
 
+def _lever(value: bool | None) -> str:
+    return "?" if value is None else "SET" if value else "-"
+
+
 def _q(value: Any) -> str:
     return "?" if value is None else str(value)
 
 
-def seat_rows(store: FleetStore, rings: list[Ring]) -> list[dict[str, Any]]:
+LEVER = "SMD_IDENTIFIER_GATE_MODE"
+
+
+def lever_flags(fly: Any, seats: list[str]) -> dict[str, bool | None]:
+    """Per seat: is the identifier-gate lever a Fly secret (deployed or staged)?
+
+    None when the secret list cannot be read: unknown is never reported as unset.
+    """
+    out: dict[str, bool | None] = {}
+    for seat in seats:
+        try:
+            deployed, staged = fly.secret_names(f"hermes-{seat}")
+        except Exception:  # noqa: BLE001 - one unreadable seat must not hide the others
+            out[seat] = None
+            continue
+        out[seat] = LEVER in deployed or LEVER in staged
+    return out
+
+
+def seat_rows(
+    store: FleetStore, rings: list[Ring], levers: dict[str, bool | None] | None = None
+) -> list[dict[str, Any]]:
     status = store.fleet_status()
     holds = store.holds()
     last = store.last_rollouts()
@@ -55,6 +86,7 @@ def seat_rows(store: FleetStore, rings: list[Ring]) -> list[dict[str, Any]]:
                 "jobs_queued": st.get("jobs_queued"), "wakes_pending": st.get("wakes_pending"),
                 "heartbeat_ts": st.get("last_heartbeat_ts"), "heartbeat_status": st.get("heartbeat_status"),
                 "last_rollout": (last.get(seat) or {}).get("state"), "drift": drift,
+                "identifier_gate_lever": (levers or {}).get(seat),
             })  # fmt: skip
     return rows
 
@@ -72,6 +104,7 @@ def render_table(rows: list[dict[str, Any]]) -> str:
         "beat",
         "last rollout",
         "drift",
+        "id-lever",
     ]
     lines = [head]
     for r in rows:
@@ -81,7 +114,7 @@ def render_table(rows: list[dict[str, Any]]) -> str:
             _q(r["skills_version"]), (r["config_digest"] or "?")[:10],
             f"{_q(r['jobs_running'])}/{_q(r['jobs_queued'])}/{_q(r['wakes_pending'])}",
             f"{_age(r['heartbeat_ts'])} {r['heartbeat_status'] or ''}".strip(), _q(r["last_rollout"]),
-            ",".join(r["drift"]) or "-",
+            ",".join(r["drift"]) or "-", _lever(r.get("identifier_gate_lever")),
         ])  # fmt: skip
     widths = [max(len(row[i]) for row in lines) for i in range(len(head))]
     return "\n".join("  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)).rstrip() for row in lines)

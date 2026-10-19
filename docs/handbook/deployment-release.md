@@ -246,8 +246,11 @@ suite never touches a client seat or a client-visible address
 
 - `fleet status [--json]` shows each seat's ring, hold, image, overlay ref,
   skills version, config digest, jobs (running / queued / wakes pending),
-  heartbeat age, last rollout state and drift against the newest completed
-  release. `fleet releases` lists releases. `overlay-ref-drift.py` still reads
+  heartbeat age, last rollout state, drift against the newest completed
+  release, and `id-lever` (`SET` when the incident-only
+  `SMD_IDENTIFIER_GATE_MODE` rollback is a Fly secret on the seat, `?` when the
+  secret list could not be read; ADR 0093). Boot smoke warns on the same lever.
+  `fleet releases` lists releases. `overlay-ref-drift.py` still reads
   each seat's running overlay off the live seam.
 - **A new seat:** `operator/bin/reprovision.sh <slug>` (exactly `infisical run
   --env=prod --path=/ss --silent -- operator/bin/provision-customer.sh <slug>`)

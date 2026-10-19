@@ -374,7 +374,13 @@ controls:
       declared, never client-authorable; unset or garbage = block; rows keep
       emitting in either mode — telemetry continuity). Rollback runbook:
       `fly secrets set SMD_IDENTIFIER_GATE_MODE=report -a hermes-<slug>` +
-      restart (minutes) vs pin revert + reprovision (slow path). ENFORCED,
+      restart (minutes) vs pin revert + reprovision (slow path). ADR 0093
+      (2026-10-19): the lever is an INCIDENT-ONLY rollback, never a standing
+      per-seat loosening; boot smoke warns on any seat where it is set (step
+      13b), and a seat that legitimately needs a narrower gate gets it as a
+      cited role policy (operator/roles/<role>/role.yaml `policy:`), reviewed
+      as the seat x gate matrix. Floors (SSN, A-number, receipt, case number,
+      case-number-and-date pair) are not affected by any role policy. ENFORCED,
       manual-observed 2026-08-09 on BOTH product seats at
       SMD_OVERLAY_REF=ba6d116a: pilot-smokeball
       (vfy_01KZMK0Q0EHQ0M6AJQ8VBA795G) — fabricated A-number draft BLOCKED

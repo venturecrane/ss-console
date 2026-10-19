@@ -22,7 +22,8 @@
  *   2. SS_ALLOW_CLIENT_DATA_ON_LAPTOP is set to a reason -> allow, audited
  *      (break-glass: a workspace is down and a client needs something now)
  *   3. the command or path matches a client-document pattern -> exit 2,
- *      unless the whole command is one off-laptop tool (OFFBOARD_TOOL)
+ *      unless the whole command is one off-laptop tool (OFFBOARD_TOOL) or one
+ *      plain deletion (DELETE_ONLY)
  *   4. otherwise -> allow
  * Fails open on a crash: a broken hook must not brick unrelated work.
  */
@@ -67,6 +68,14 @@ const PULL_PATTERNS = [
  */
 const OFFBOARD_TOOL =
   /^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:(?:\/bin\/)?bash\s+|python3?\s+(?:-I\s+)?)?(?:\S*\/)?operator\/ops-machine\/(?:move-to-ops\.sh|move-by-folder\.sh|move-from-host\.sh|laptop-offboard\.py)(?:\s+[^;&|`$<>()\n]*)?$/
+
+/**
+ * Deleting client documents from a laptop is the goal, never the harm: a command
+ * that is exactly one `rm` of literal paths, nothing chained, piped, globbed or
+ * substituted, is allowed. WHY (2026-10-19): the Captain approved deleting a
+ * 260k-file test folder from mac23 and the guard blocked the deletion.
+ */
+const DELETE_ONLY = /^\s*rm\s+(?:-[A-Za-z]+\s+)*(?:[^\s;&|`$<>()*?[\]{}\n]+\s*)+$/
 
 /** A string field of a parsed JSON object, or '' (external input: never cast). */
 function str(obj, key) {
@@ -130,7 +139,7 @@ try {
   const text = isBash ? raw : raw.replace(HOME, '~')
   const hit = which(text, isBash)
   if (!hit) process.exit(0)
-  if (isBash && OFFBOARD_TOOL.test(command)) process.exit(0)
+  if (isBash && (OFFBOARD_TOOL.test(command) || DELETE_ONLY.test(command))) process.exit(0)
 
   const reason = process.env.SS_ALLOW_CLIENT_DATA_ON_LAPTOP
   if (reason && reason !== '0') {
