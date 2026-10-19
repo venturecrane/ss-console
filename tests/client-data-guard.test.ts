@@ -106,6 +106,25 @@ describe('client-data-guard: the tools that take documents OFF a laptop', () => 
   })
 })
 
+describe('client-data-guard: deleting documents from a laptop', () => {
+  it.each([
+    'rm -rf /Users/scottdurgan/smd-medchron-data/_parity-check-2026-10-14',
+    'rm ~/smd-filereview-data/irma/a.pdf ~/smd-filereview-data/irma/b.pdf',
+  ])('allows: %s', (cmd) => {
+    expect(bash(cmd)).toBe(0)
+  })
+
+  it.each([
+    'rm -rf ~/smd-medchron-data/x; cat ~/smd-medchron-data/y.pdf',
+    'rm -rf ~/smd-medchron-data/x && python3 download.py 1',
+    'rm ~/smd-medchron-data/*.tmp',
+    'rm $(ls ~/smd-medchron-data)',
+    'cp ~/smd-medchron-data/a.pdf /tmp/rm',
+  ])('still blocks anything more than a deletion: %s', (cmd) => {
+    expect(bash(cmd)).toBe(2)
+  })
+})
+
 describe('client-data-guard: workspace and break-glass', () => {
   it('allows everything on a workspace (marker present)', () => {
     const marker = path.join(tmp, 'marker')
