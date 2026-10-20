@@ -276,6 +276,25 @@ describe('#2498 a rise in lost rows reaches a person', () => {
     expect(captureWarning.mock.calls[0][0]).toContain('gap_exit x1')
   })
 
+  it('a key that drops out of the seat histogram and returns is not re-reported whole', async () => {
+    // The seat reads a bounded tail and sends its 32 largest keys, so a key can
+    // vanish and come back. The console keeps a per-key high-water (review
+    // 2026-10-20); diffing against the lowered report named all 6 as new.
+    await POST(beat({ audit_write_failures: 6, audit_write_failure_reasons: { gap_exit: 6 } }))
+    await POST(beat({ audit_write_failures: 6, audit_write_failure_reasons: {} }))
+    captureWarning.mockClear()
+    await POST(beat({ audit_write_failures: 7, audit_write_failure_reasons: { gap_exit: 7 } }))
+    expect(captureWarning.mock.calls[0][0]).toContain('gap_exit x1')
+  })
+
+  it('a replaced volume restarts the baseline from what the seat reports', async () => {
+    await POST(beat({ audit_write_failures: 9, audit_write_failure_reasons: { gap_exit: 9 } }))
+    await POST(beat({ audit_write_failures: 1, audit_write_failure_reasons: { gap_exit: 1 } }))
+    captureWarning.mockClear()
+    await POST(beat({ audit_write_failures: 2, audit_write_failure_reasons: { gap_exit: 2 } }))
+    expect(captureWarning.mock.calls[0][0]).toContain('gap_exit x1')
+  })
+
   it('the beat still succeeds when the delta read throws', async () => {
     // Losing liveness reporting to protect an alert trades a big signal for a
     // small one. The alert path is best-effort; the heartbeat is not.

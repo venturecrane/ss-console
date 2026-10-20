@@ -572,7 +572,7 @@ for _ in 1 2 3 4 5; do
 done
 [ -S "${BROKER_SOCKET}" ] || {
   log "FATAL: Workspace broker socket was not created"
-  kill "${SUPERVISOR_PID}" 2>/dev/null || true
+  kill -KILL "${SUPERVISOR_PID}" 2>/dev/null || true
   exit 1
 }
 

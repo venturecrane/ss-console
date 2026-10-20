@@ -73,7 +73,8 @@ describe('Operator customer Machine entrypoint — broker respawn supervisor', (
   })
 
   it('tears down the supervisor (not a stale broker PID) if the socket never appears', () => {
-    expect(ENTRYPOINT_CODE).toMatch(/kill\s+"\$\{SUPERVISOR_PID\}"/)
+    // KILL: the loop ignores TERM since 2026-10-20 so the broker survives tini -g.
+    expect(ENTRYPOINT_CODE).toMatch(/kill\s+-KILL\s+"\$\{SUPERVISOR_PID\}"/)
     // The old BROKER_PID variable is gone — the supervised loop owns the lifecycle.
     expect(/BROKER_PID=/.test(ENTRYPOINT_CODE)).toBe(false)
   })
