@@ -1319,7 +1319,10 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # through the root-only config_write_append verb (this PR); routine changes are
 # drained from the seat home by the gateway (undated backlog kept off the client
 # feed); root writers' audit losses live in a root-owned .smd-root. No tracked twin moved.
-ARG OVERLAY_REF="1a05699a38fe72053bb55d6338b45bd3d348192a"
+# 2026-10-20f (184df81b, overlay #530): the gate reads the kill ledger from
+# .smd-root/gateway-liveness (this PR moves it), never through a link, FIFO or
+# device. No tracked twin moved.
+ARG OVERLAY_REF="184df81b9377c42e12d24d36396f0052fc9278be"
 
 # No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
 # across seats; the slug reaches the Machine only as fly.toml [env]

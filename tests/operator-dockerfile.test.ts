@@ -1573,7 +1573,8 @@ describe('Operator customer Machine Dockerfile', () => {
     // -> 64c56ad3 (overlay#526), 2026-10-20: the inbound prompt names an email's attachments.
     // -> 4f1c6506 (overlay#527), 2026-10-20: a lost audit row records why.
     // -> 1a05699a (overlay#528), 2026-10-20: root appliers record CONFIG_WRITE; routine drain.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="1a05699a38fe72053bb55d6338b45bd3d348192a"')
+    // -> 184df81b (overlay#530), 2026-10-20: kill ledger read from .smd-root.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="184df81b9377c42e12d24d36396f0052fc9278be"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
