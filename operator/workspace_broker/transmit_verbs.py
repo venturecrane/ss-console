@@ -299,6 +299,53 @@ def _fenced(
         raise refused(str(exc)) from exc
 
 
+def _failure_outcome(exc: Exception, refused: type[Exception], transport: type[Exception]) -> dict[str, str]:
+    """The ``outcome`` / ``reason`` a failed vendor call is recorded with."""
+    if isinstance(exc, refused):
+        return {"outcome": "refused", "reason": str(exc)}
+    if isinstance(exc, transport):
+        # A transport failure is NOT a policy refusal and must never read as
+        # one: the seat was permitted to write and the vendor call failed.
+        # The outcome is genuinely unknown (the message may have gone out),
+        # which is exactly what the console-side reconciler exists to settle.
+        return {"outcome": "transport_error", "reason": str(exc)}
+    # Anything else the send raised (a bound reply's own ledger write, a
+    # programming fault) used to leave no row at all; under record-before-send
+    # it would leave an intent with no confirm, which reads as "may have gone".
+    # Settled as a failure so the pair joins. The type only, never the message:
+    # an unexpected exception's text is not a closed field (2026-10-20).
+    return {"outcome": "error", "reason": type(exc).__name__}
+
+
+def _dispatched_row(result: dict[str, Any], identity_key: str, digest: str, stamps: dict[str, Any]) -> dict[str, Any]:
+    """The CONFIRM_SEND_DISPATCHED metadata for a vendor call that returned.
+
+    ``stamps`` is the caller's closed-list ``audit_extra`` plus the fence's
+    fields. Then the ops verb's own contributions, written through by NAME
+    rather than by wholesale copy, so a transmit result can never quietly widen
+    what the ledger records.
+
+    ss#2497: on a REPLY the ops verb resolved the original sender itself (it
+    had to: a caller naming the sender could name any sender), so the row can
+    name the person it answered without an address entering the ledger. A send
+    names no such person and contributes no key.
+
+    ss#2499: and on msgraph it contributes the message's identity, which
+    Graph's 202 does not return and which the broker goes and looks up. Every
+    key here is OPTIONAL: AgentMail contributes none of them and writes exactly
+    the row it writes today.
+    """
+    return {
+        "outcome": "sent",
+        "recipients": result.get("recipients") or [],
+        "message_id": result.get("message_id") or "",
+        identity_key: result.get(identity_key) or "",
+        "input_digest": digest,
+        **stamps,
+        **{key: result[key] for key in _OPS_AUDIT_KEYS if isinstance(result.get(key), str) and result[key]},
+    }
+
+
 def dispatch_transmit(
     broker: BrokerContext,
     action: str,
@@ -356,85 +403,18 @@ def dispatch_transmit(
     intent_id = record_intent(
         append_send_row, broker, action, failed_row, session_id=session_id, matter_ref=matter_ref, refused=refused
     )
+    joins = {"session_id": session_id, "matter_ref": matter_ref}
     try:
         result = send(payload) if action.endswith("_send") else reply(payload)
-    except refused as exc:
-        record_confirm(
-            append_send_row,
-            broker,
-            "CONFIRM_SEND_FAILED",
-            action,
-            {"outcome": "refused", "reason": str(exc), **failed_row},
-            intent_id,
-            session_id=session_id,
-            matter_ref=matter_ref,
-        )
-        raise
-    except transport as exc:
-        # A transport failure is NOT a policy refusal and must never read as
-        # one: the seat was permitted to write and the vendor call failed.
-        # The outcome is genuinely unknown (the message may have gone out),
-        # which is exactly what the console-side reconciler exists to settle.
-        record_confirm(
-            append_send_row,
-            broker,
-            "CONFIRM_SEND_FAILED",
-            action,
-            {"outcome": "transport_error", "reason": str(exc), **failed_row},
-            intent_id,
-            session_id=session_id,
-            matter_ref=matter_ref,
-        )
-        raise
     except Exception as exc:
-        # Anything else the send raised (a bound reply's own ledger write, a
-        # programming fault) used to leave no row at all; now it would leave an
-        # intent with no confirm, which reads as "may have gone". Settle it as
-        # a failure so the pair joins. The type only, never the message: an
-        # unexpected exception's text is not a closed field (2026-10-20).
+        outcome = _failure_outcome(exc, refused, transport)
         record_confirm(
-            append_send_row,
-            broker,
-            "CONFIRM_SEND_FAILED",
-            action,
-            {"outcome": "error", "reason": type(exc).__name__, **failed_row},
-            intent_id,
-            session_id=session_id,
-            matter_ref=matter_ref,
+            append_send_row, broker, "CONFIRM_SEND_FAILED", action, {**outcome, **failed_row}, intent_id, **joins
         )
         raise
+    dispatched = _dispatched_row(result, identity_key, digest, {**audit_extra, **fence_meta})
     confirmed = record_confirm(
-        append_send_row,
-        broker,
-        "CONFIRM_SEND_DISPATCHED",
-        action,
-        {
-            "outcome": "sent",
-            "recipients": result.get("recipients") or [],
-            "message_id": result.get("message_id") or "",
-            identity_key: result.get(identity_key) or "",
-            "input_digest": digest,
-            **audit_extra,
-            **fence_meta,
-            # The ops verb's own contributions to the row, written through by
-            # NAME rather than by wholesale copy, so a transmit result can
-            # never quietly widen what the ledger records.
-            #
-            # ss#2497: on a REPLY the ops verb resolved the original sender
-            # itself (it had to: a caller naming the sender could name any
-            # sender), so the row can name the person it answered without an
-            # address entering the ledger. A send names no such person and
-            # contributes no key.
-            #
-            # ss#2499: and on msgraph it contributes the message's identity,
-            # which Graph's 202 does not return and which the broker goes and
-            # looks up. Every key here is OPTIONAL: AgentMail contributes none
-            # of them and writes exactly the row it writes today.
-            **{key: result[key] for key in _OPS_AUDIT_KEYS if isinstance(result.get(key), str) and result[key]},
-        },
-        intent_id,
-        session_id=session_id,
-        matter_ref=matter_ref,
+        append_send_row, broker, "CONFIRM_SEND_DISPATCHED", action, dispatched, intent_id, **joins
     )
     # ``sender_key`` and ``audit_row_token`` are audit provenance, not
     # transmit results: they stay in the row and do not travel back to the
