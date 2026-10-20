@@ -645,7 +645,7 @@ class MsGraphOps:
         """
         try:
             return self._find_in_sent_items(audit_token, conversation_id=conversation_id)
-        except Exception as exc:  # the message is already gone; record, never raise
+        except Exception as exc:  # noqa: BLE001 - the message is already gone; record, never raise
             return {"lookup": f"failed: {type(exc).__name__} while looking it up"}
 
     def _find_in_sent_items(self, audit_token: str, *, conversation_id: str = "") -> dict[str, str]:

@@ -533,17 +533,16 @@ def _report_failure(
     meta: dict[str, Any],
     intent_id: str,
 ) -> dict[str, Any]:
-    """No automatic retry: a transport failure's outcome is unknown and a retry
-    could deliver twice. The approver is told, never left guessing."""
+    """No automatic retry: a transport failure's outcome is unknown and a retry could deliver
+    twice, so its approver is told "not confirmed" (never "not sent", which invites a resend)."""
     store.claim(row["id"], from_status=STATUS_SENDING, to_status=STATUS_FAILED, fields={"result": str(exc)[:500]})
     _settle(broker, "SEND_AS_FAILED", {**meta, "reason": str(exc)}, intent_id)
+    sure = isinstance(exc, MsGraphRefused)
+    said = f"was not sent: {exc}." if sure else f"did not complete ({exc}); SMD is checking whether it went out."
+    subject = f"{'Not sent' if sure else 'Not confirmed'}: {msg['subject']} {tag_for(row['id'])}"
+    body = f"The email {said} Nothing was retried. Look in your Sent folder before sending it again."
     try:
-        _notice(
-            broker,
-            row["approver"],
-            f"Not sent: {msg['subject']} {tag_for(row['id'])}",
-            f"The email was not sent: {exc}. Nothing was retried.",
-        )
+        _notice(broker, row["approver"], subject, body)
     except (MsGraphRefused, MsGraphTransportError):
         pass
     return {**_BASE, "status": "FAILED", "reason": str(exc)}
