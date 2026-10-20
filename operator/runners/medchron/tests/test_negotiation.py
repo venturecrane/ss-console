@@ -5,6 +5,7 @@ after the write reads back. Every name, number and date is invented."""
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 
@@ -183,11 +184,50 @@ def test_the_notice_names_matter_party_amount_date_and_the_entry():
     rec = {"event": _offer(), "status": "written", "row": 2}
     text = N.compose({"number": "200123", "title": "Doe v. Example"}, DOC, rec)
     assert text.splitlines() == [
-        "New offer on matter 200123, Doe v. Example.",
-        "Example Mutual offer of $15,000 dated 10/7/26, per 'Offer letter 10-07.pdf' letter.",
+        'New offer on matter 200123, "Doe v. Example".',
+        'Example Mutual offer of $15,000 dated 10/7/26, per "Offer letter 10-07.pdf" letter.',
         "Entered in Negotiation Details, row 3.",
     ]
     assert "—" not in text
+
+
+# The seat's outgoing-email check (overlay shared/output_checklist.py) holds a
+# reply carrying an unquoted run of 4+ capitals it does not know, and lets
+# double-quoted text through as someone else's words. The firm keeps many matter
+# titles and file names in capitals; unquoted, 201167's alert was held unsent
+# twice on 2026-10-20. This mirrors that rule's two patterns (_CAPS, _QUOTED).
+_CAPS = re.compile(r"\b[A-Z]{4,}\b")
+_QUOTED = re.compile(r'"[^"\n]{1,200}"')
+
+
+def _unquoted_capitals(text: str) -> list[str]:
+    spans = [(m.start(), m.end()) for m in _QUOTED.finditer(text)]
+    return [m.group(0) for m in _CAPS.finditer(text) if not any(a <= m.start() < b for a, b in spans)]
+
+
+def test_capitals_in_the_firms_record_names_ride_inside_double_quotes():
+    doc = {**DOC, "name": "SETTLEMENT OFFER LETTER 10-07.pdf"}
+    rec = {"event": _offer(), "status": "written", "row": 0}
+    text = N.compose({"number": "201167", "title": "JONES, MARIA v. ACME TRUCKING"}, doc, rec)
+    assert _unquoted_capitals(text) == [], text
+    unread = N.compose({"number": "201167", "title": "JONES v. ACME"}, doc, {**rec, "unread": True})
+    assert _unquoted_capitals(unread) == [], unread
+
+
+def test_a_double_quote_in_a_record_name_cannot_end_the_quoting_early():
+    doc = {**DOC, "name": 'OFFER "FINAL" LETTER.pdf'}
+    rec = {"event": _offer(), "status": "written", "row": 0}
+    text = N.compose({"number": "201167", "title": 'SMITH "JUNIOR" v. ACME'}, doc, rec)
+    assert _unquoted_capitals(text) == [], text
+
+
+def test_a_pipe_in_a_record_name_never_reaches_the_alert():
+    """Two pipes on a line read as a table row to the outgoing-email check
+    (overlay _PIPE_ROW), which held the alert."""
+    doc = {**DOC, "name": "Offer | Example Mutual | 10-07.pdf"}
+    rec = {"event": {**_offer(), "by": "Example | Mutual"}, "status": "written", "row": 0}
+    text = N.compose({"number": "202508", "title": "Doe | Roe | MVA"}, doc, rec)
+    assert "|" not in text, text
 
 
 def test_a_not_entered_notice_asks_for_the_letter_to_be_checked():
@@ -397,7 +437,7 @@ def test_a_new_offer_is_written_announced_and_the_cursor_moves_after(tmp_path, m
     v = r.run()
     assert layout.order == ["write", "commit"]
     assert len(v["notices"]) == 1 and v["notices"][0]["status"] == "entered"
-    assert v["notices"][0]["text"].startswith("New offer on matter 200123, Doe v. Example.")
+    assert v["notices"][0]["text"].startswith('New offer on matter 200123, "Doe v. Example".')
     assert arrivals.cursor("negotiation", M1, data=tmp_path / "state") == {"f1": "1", "f2": "1"}
 
 
@@ -681,7 +721,7 @@ def test_plaintiff_names_come_from_the_matters_contacts(tmp_path, monkeypatch):
 def test_the_email_does_not_repeat_the_matter_number():
     rec = {"event": _offer(), "status": "written", "row": 1}
     text = N.compose({"number": "200226", "title": "200226 - Doe, Dana - Motor Vehicle Accident"}, DOC, rec)
-    assert text.splitlines()[0] == "New offer on matter 200226, Doe, Dana - Motor Vehicle Accident."
+    assert text.splitlines()[0] == 'New offer on matter 200226, "Doe, Dana - Motor Vehicle Accident".'
     assert "accepted" not in text
 
 
