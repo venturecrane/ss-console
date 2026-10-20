@@ -79,6 +79,8 @@ const EXPECTED_VERBS = [
   // Case-manager casework ledger: proposals, a person's verdicts, and the task
   // writes they authorize. Agent uid only, validated and stamped server-side.
   'casework_event_append',
+  // CONFIG_WRITE from the root config and skills appliers (not the gateway).
+  'config_write_append',
   'correction_propose',
   // The demand job's request edge (demand_verbs.py): submit gateway-or-root,
   // reads open to the agent, record and resume root only.

@@ -547,7 +547,17 @@ launch_broker() {
 # `if` guard keeps the inherited `set -e` from killing the loop on a non-zero
 # broker exit. (Fail-open-with-respawn is intentional for this PR; the stronger
 # fail-closed ack-before-dispatch is deferred to the autonomous-send workstream.)
-(
+#
+# The loop and every broker it launches IGNORE SIGTERM/SIGINT (an ignored
+# signal stays ignored across setpriv, env -i and exec). tini -g signals this
+# whole process group at a Machine stop, and the broker has no handler, so it
+# used to die at the first instant of the stop while the gateway (its own
+# session since the job-safe stop) ran on for up to 45 s and the medchron
+# daemon drained for up to 240 s with nothing to record to: the daemon's
+# job_record calls failed, the gateway's rows were held and lost, and a send
+# in flight could leave with no row (2026-10-20). Now the broker outlives both
+# and dies with the container when the supervisor exits.
+( trap '' TERM INT
   while true; do
     if launch_broker; then _brk_rc=0; else _brk_rc=$?; fi
     log "Workspace broker exited (rc=${_brk_rc}); respawning in 2s"

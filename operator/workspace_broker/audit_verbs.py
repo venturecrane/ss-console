@@ -94,6 +94,19 @@ def webhook_suppressed_append(
     return _append_pinned(broker, action, request, "WEBHOOK_SUPPRESSED")
 
 
+def config_write_append(
+    broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
+    """CONFIG_WRITE from the root config and skills appliers (2026-10-20).
+
+    They run as root pollers, never as the gateway, so the generic
+    ``audit_append`` refused every row they wrote: every live customer.yaml
+    apply and every skills release landed with no record. Root-only at the
+    table, action_type pinned here, so no caller can mint any other row.
+    """
+    return _append_pinned(broker, action, request, "CONFIG_WRITE")
+
+
 def correction_propose(
     broker: BrokerContext, _action: str, request: dict[str, Any], _pid: int, _uid: int | None
 ) -> dict[str, Any]:

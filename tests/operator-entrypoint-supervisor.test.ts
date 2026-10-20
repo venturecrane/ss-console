@@ -344,6 +344,42 @@ describe.skipIf(!bashOk)('entrypoint supervisor: the held gateway and the quiesc
   })
 })
 
+describe.skipIf(!bashOk)('a broker launched under the loop survives tini -g', () => {
+  async function brokerAfterGroupTerm(trap: string): Promise<boolean> {
+    const dir = mkdtempSync(join(tmpdir(), 'smd-broker-term-'))
+    const py = process.env.PYTHON ?? 'python3'
+    const script = `
+( ${trap}
+  /usr/bin/env -i ${py} -c 'import os, time; open("${dir}/pid", "w").write(str(os.getpid())); time.sleep(30)' ) &
+wait
+`
+    writeFileSync(`${dir}/loop.sh`, script)
+    // nosemgrep: javascript.lang.security.audit.dangerous-spawn-shell.dangerous-spawn-shell -- argv is bash plus a script this test wrote into its own mkdtemp dir; no input reaches it
+    const child = spawn('bash', [`${dir}/loop.sh`], { detached: true, stdio: 'ignore' })
+    await until(() => existsSync(`${dir}/pid`) && readFileSync(`${dir}/pid`, 'utf8').length > 0)
+    const brokerPid = Number(readFileSync(`${dir}/pid`, 'utf8'))
+    process.kill(-child.pid!, 'SIGTERM') // tini -g
+    await sleep(300)
+    const survived = alive(brokerPid)
+    for (const pid of [brokerPid, -child.pid!]) {
+      try {
+        process.kill(pid, 'SIGKILL')
+      } catch {
+        // already gone
+      }
+    }
+    return survived
+  }
+
+  it('a group SIGTERM leaves an env -i python child of an ignoring subshell running', async () => {
+    expect(await brokerAfterGroupTerm("trap '' TERM INT")).toBe(true)
+  }, 15000)
+
+  it('FALSIFIER: without the trap the same child dies with the group', async () => {
+    expect(await brokerAfterGroupTerm(':')).toBe(false)
+  }, 15000)
+})
+
 describe('entrypoint.sh wires the supervisor', () => {
   const code = ENTRYPOINT.split('\n')
     .filter((l) => !/^\s*#/.test(l))
@@ -369,6 +405,13 @@ describe('entrypoint.sh wires the supervisor', () => {
     expect(code).toContain('smd_root_poller config_applier "config applier"')
     expect(code).toContain('smd_root_poller spec_applier "spec applier"')
     expect(code).not.toMatch(/-m (config|spec)_applier \|\| true/)
+  })
+
+  it('the broker respawn loop ignores the group stop signal, so the broker outlives the gateway', () => {
+    // 2026-10-20: tini -g signals this group at a Machine stop; the broker has
+    // no handler and died at once while the gateway and the medchron daemon
+    // drained for minutes with nothing to record to.
+    expect(code).toMatch(/\( trap '' TERM INT\n\s+while true; do\n\s+if launch_broker; then/)
   })
 
   it('keeps every boot gate before the release', () => {
