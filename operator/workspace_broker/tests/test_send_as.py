@@ -389,7 +389,25 @@ def test_a_transport_failure_is_reported_and_never_retried(tmp_path: Path) -> No
     assert out["status"] == "FAILED"
     assert _decide(broker, tag, "send", internet_message_id="<answer-2@examplefirm.example>")["status"] == "REFUSED"
     notice = http.sent_messages[-1]
-    assert notice["subject"].startswith("Not sent:")
+    # A 503 can follow an accepted send, so the approver is never told it did
+    # not go (that would invite sending it again by hand).
+    assert notice["subject"].startswith("Not confirmed:")
+    assert "not sent" not in json.dumps(notice).lower()
+
+
+def test_a_refused_send_as_is_reported_as_not_sent(tmp_path: Path) -> None:
+    http = SendAsGraph()
+    broker = _broker(tmp_path, http)
+    tag = _propose(broker)["tag"]
+
+    def refuse(_msg, _from):
+        from workspace_broker.msgraph_ops import MsGraphRefused
+
+        raise MsGraphRefused("msgraph POST refused: HTTP 403")
+
+    broker.msgraph.send_as_staff = refuse  # type: ignore[method-assign]
+    assert _decide(broker, tag, "send")["status"] == "FAILED"
+    assert http.sent_messages[-1]["subject"].startswith("Not sent:")
 
 
 def test_a_draft_whose_sender_left_the_roster_does_not_send(tmp_path: Path) -> None:
