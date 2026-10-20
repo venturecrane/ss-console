@@ -21,7 +21,7 @@
     "re-reads build_payload at the new ref and re-stamps this file. Read the",
     "limits of that in the test's header before trusting it further than it goes."
   ],
-  "overlay_ref": "64c56ad3f99ad9bbc3054a8fe9ffb555b06e8ce4",
+  "overlay_ref": "4f1c65065fc734c3d2570a5dac9562fbdb30cd07",
   "fields": [
     {
       "name": "heartbeat_ts",
@@ -141,6 +141,14 @@
       "name": "audit_write_failures",
       "column": "audit_write_failures",
       "sample": 0
+    },
+    {
+      "_comment": "2026-10-20, hermes-smd-overlay#527, migration 0131. The same tally explained: cumulative lost rows keyed `reason` or `reason:ACTION_TYPE` (shared/audit_failure_counter.loss_key, a closed reason vocabulary plus the row's action_type, never content), summed over the seat and profile homes. The console names the per-key rise in the lost-rows warning.",
+      "name": "audit_write_failure_reasons",
+      "column": "audit_write_failure_reasons_json",
+      "sample": {
+        "refused_not_gateway:CONFIG_WRITE": 1
+      }
     },
     {
       "_comment": "ss#2500, hermes-smd-overlay#292. Ahead of the pin. row_hash of the newest CHAINED audit row (sha-256 hexdigest, 64 lowercase hex); the console pins it off-Machine so a ledger cannot be rewritten without the pin disagreeing. Read in the same read-only pass as audit_rows and last_audit_ts so the head and the count always describe one moment.",

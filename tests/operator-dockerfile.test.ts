@@ -1571,7 +1571,8 @@ describe('Operator customer Machine Dockerfile', () => {
     // -> e6c89423 (overlay#522-#524), 2026-10-20: the couples settings read carries today.
     // -> 100632c3 (overlay#525), 2026-10-20: seats can see images (model names its provider).
     // -> 64c56ad3 (overlay#526), 2026-10-20: the inbound prompt names an email's attachments.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="64c56ad3f99ad9bbc3054a8fe9ffb555b06e8ce4"')
+    // -> 4f1c6506 (overlay#527), 2026-10-20: a lost audit row records why.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="4f1c65065fc734c3d2570a5dac9562fbdb30cd07"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
