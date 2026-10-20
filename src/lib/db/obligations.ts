@@ -92,6 +92,15 @@ export type ObligationState =
 /**
  * Legal transitions.
  *
+ * `void` is "never was an obligation" (ADR 0088 amendment 2026-10-20): a row
+ * captured or imported in error, or one that turned out to be a contract term
+ * or a scheduled routine another control already watches. It is distinct from
+ * `cancelled` (the client released a real promise) and `delivered` (we kept
+ * one), and it is terminal with no way out: a row retired because it was never
+ * owed has nothing to resume. `register retire` is the command, and it may
+ * reach `void` from any working state, because the mistake can be noticed at
+ * any point before the row settles.
+ *
  * `parked` is the failure state and it is not terminal: it returns to open,
  * active, or awaiting_external, so a stalled obligation is always resumable.
  * `closed` keeps a single outbound edge to `open` — the Captain reopen the
@@ -99,8 +108,8 @@ export type ObligationState =
  */
 export const VALID_TRANSITIONS: Record<ObligationState, readonly ObligationState[]> = {
   open: ['active', 'awaiting_external', 'delivered', 'parked', 'cancelled', 'void'],
-  active: ['awaiting_external', 'delivered', 'parked', 'cancelled'],
-  awaiting_external: ['active', 'delivered', 'parked', 'cancelled'],
+  active: ['awaiting_external', 'delivered', 'parked', 'cancelled', 'void'],
+  awaiting_external: ['active', 'delivered', 'parked', 'cancelled', 'void'],
   delivered: ['verified', 'parked', 'active'],
   verified: ['closed', 'parked'],
   closed: ['open'],
@@ -227,6 +236,36 @@ export interface UpsertObligationInput {
 }
 
 /**
+ * Why a recurring row may not be written without its window, or null if it may.
+ *
+ * A recurring duty is defined by the period it repeats over. Without
+ * window_start/window_end the register cannot say which cycle a row is for or
+ * when that cycle ends, so the row can never be discharged (there is no "this
+ * cycle is done") and only ages: it sits undated until the stale ladder pages
+ * on it. Both A&P recurring rows on 2026-10-20 had that shape. The rule lives
+ * here, in the one upsert every writer goes through (the capture CLI and the
+ * nightly importer), so no route can add a windowless recurring row.
+ */
+export function recurringWindowRefusal(input: {
+  kind: string
+  window_start?: string | null
+  window_end?: string | null
+}): string | null {
+  if (input.kind !== 'recurring') return null
+  if (input.window_start && input.window_end) return null
+  return (
+    'a recurring obligation needs --window-start and --window-end: a duty that repeats is ' +
+    'owed per period, and a row with no period can never be discharged, only aged into an alert'
+  )
+}
+
+/** Throw when `recurringWindowRefusal` refuses: the form every writer meets. */
+function assertRecurringWindow(input: UpsertObligationInput): void {
+  const refusal = recurringWindowRefusal(input)
+  if (refusal) throw new Error(`recurring_without_window: ${refusal}`)
+}
+
+/**
  * Insert an obligation, or refresh one that already exists.
  *
  * Identity is (customer_slug, kind, stable_key). On conflict this refreshes
@@ -239,6 +278,7 @@ export async function upsertObligation(
   db: D1Database,
   input: UpsertObligationInput
 ): Promise<string> {
+  assertRecurringWindow(input)
   const id = crypto.randomUUID()
   await db
     .prepare(

@@ -64,6 +64,8 @@ The reason for that split: an earlier design had agents record everything as a b
 
 **No obligation goes overdue on an invented date.** Checking a quote grounds the *citation*, never the *interpretation* - a well-cited sentence can still be summarized wrongly. So a due date needs its own quote containing that date, and a row without one never reports as overdue. The residual extraction error stays somewhere it gets read deliberately rather than landing in an inbox.
 
+**A recurring duty carries its period.** `--kind recurring` is refused without `--window-start` and `--window-end`, and the refusal says why: a duty that repeats is owed per period, and a row with no period can never be done for this cycle, only aged into an alert. The rule sits in the one write every path uses, so the nightly import is held to it too (no importer creates recurring rows today).
+
 That gate is strict enough that in practice almost nothing carries a date, which is why an undated row raises a different alarm on age alone. See "What a stalled row does now" below.
 
 **Nothing closes itself.** A row reaches `verified` only when a scheduled CI run probed the real surface - the mailbox, the R2 object, the GitHub state, the seat. The database enforces it: the certifying run is a foreign key, so a certification naming a run that never happened is rejected outright.
@@ -147,6 +149,24 @@ Same evidence line as `deliver`: the letter is read off `origin/main`, it cannot
 
 It moves `delivered` to `active` and nothing else: `verified` and `closed` have their own exits, and every working state is already open. Same evidence line as `cancel`, plus a required reason. It clears the delivery's receipt, so the nightly run reads the row as owed again rather than re-certifying it, and the disposition names the letter and the reason. The row is then ordinary owed work: deliver it again, or `cancel` it if the client's letter also released the ask. Added 2026-10-13, the day a delivered draft was withdrawn and its row had no way back.
 
+**A row that was never an obligation is retired, not closed.** Some rows turn out to be something other than work owed: a contract term every job already checks before it starts, or a scheduled routine that work-health already grades on every run. Marking those delivered or cancelled would record a fact that is false, so they get their own exit, on the Captain's word:
+
+```
+.claude/bin/register retire --client <slug> --key <stable-key> \
+  --why "<a sentence: why this was never an obligation>"
+```
+
+The row moves to `void`, a terminal state distinct from `delivered` and `cancelled`, from any working state. The reason is required (six words or more, so a label cannot stand in for one), stored on the row as its disposition, read back, and journaled. It works on imported rows too, and a retired imported row stays retired: the nightly import restates a row without ever touching its state, and the run never looks at `void` rows. Added 2026-10-20, when two A&P rows of exactly those two kinds were paging the ops inbox daily.
+
+**A row waiting on someone else says so.** When the next step belongs to the client or a vendor, the row moves to `awaiting_external`, citing the letter that says whose move it is:
+
+```
+.claude/bin/register await --client <slug> --key <stable-key> \
+  --evidence <path of the letter> --quote "<verbatim: whose move it is>"
+```
+
+Same evidence line as `deliver` (read off `origin/main`, quote must be in it), except the letter that made the promise is allowed, because a promise is often stated with its prerequisites. The row stores the letter's locator and the quote. It does not store a delivery receipt, because the nightly run would read a receipt as proof the work was done. `deliver` still works from this state when the work is finally sent.
+
 CI holds no credential for the private engagements repo, so this evidence is **attested**, the same class as a Smokeball filing. The command is the thing that can see the archive, and the receipt it leaves (the letter pinned to the commit it was read at, plus the time it was read) is what CI certifies against. The receipt proves the letter was archived as sent. It does not prove the email left the mailbox; the archive is the venture's record of what was sent.
 
 Until 2026-09-19 neither route existed. Nothing moved any row out of `open`, the run counted derived rows whose source had cleared as "verified this run" while leaving them open, and a promise kept in a sent letter stayed on the list forever. `/eos` Check I now asks for deliveries as well as captures.
@@ -157,6 +177,8 @@ Only a dated obligation can go overdue, and a due date is only accepted with its
 
 So an undated obligation that stays open becomes a finding on age alone - a warning at 30 days, critical at 60 - and that finding counts toward the run's exit code rather than merely raising an alert beside a green report. Thirty days is one billing cycle. The ladder applies only to hand-captured rows; a derived GitHub row is ordinary backlog that other surfaces already show.
 
+It also skips a row that is **waiting on someone else**: any row in `awaiting_external`, and every row of kind `external_dependency`, which waits on a third party by definition. "Open 32 days" about those measures the other party's pace, not ours, and a daily page about it teaches the inbox to be skimmed. A due date still alarms on those rows: a dated promise is ours to chase. Added 2026-10-20, when a review list already marked as waiting on the firm's approval alerted every morning.
+
 ## If you change X, update Y
 
 | If you change | Update |
@@ -166,6 +188,7 @@ So an undated obligation that stays open becomes a finding on age alone - a warn
 | The alert conditions | `migrations/0118` CHECK, `src/lib/admin/fleet-alerts.ts`, and "How you hear about it" |
 | The grounding rules | `.claude/hooks/lib/register.mjs` and "What makes a row trustworthy" |
 | Who captures, and when | `.claude/skills/eos/SKILL.md` Check I, `CLAUDE.md`, and "Who records what we owe" below |
-| How a row closes, or what counts as delivery evidence | `.claude/hooks/lib/register.mjs` (`deliver`), `.claude/hooks/lib/register-retire.mjs` (`cancel`, `reopen`), `certify` in `scripts/ci-reconcile-obligations.ts`, `tests/register-deliver.test.ts`, `tests/register-cancel.test.ts`, `tests/register-reopen.test.ts`, and "How a row closes" |
+| How a row closes, or what counts as delivery evidence | `.claude/hooks/lib/register.mjs` (`deliver`), `.claude/hooks/lib/register-retire.mjs` (`cancel`, `reopen`, `retire`, `await`), `certify` in `scripts/ci-reconcile-obligations.ts`, `tests/register-deliver.test.ts`, `tests/register-cancel.test.ts`, `tests/register-reopen.test.ts`, `tests/register-retire-await.test.ts`, and "How a row closes" |
+| Which rows the undated age ladder skips | `waitsOnSomeoneElse` in `scripts/lib/obligation-reconcile/verdicts.ts`, `tests/register-retire-await.test.ts`, and "What a stalled row does now" |
 | Which seats roll up to which client | `scripts/lib/seat-clients.mjs` and "Who records what we owe" below |
 | What the session-start line says | `.claude/skills/sos/SKILL.md` Step 4 and the `--json` allowlist in `.claude/hooks/lib/register.mjs` |
