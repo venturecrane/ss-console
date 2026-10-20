@@ -457,7 +457,10 @@ describe('Operator customer Machine entrypoint — gateway liveness supervisor (
 
   it('bounds restarts with a ledger on the VOLUME, so a flapping seat stops', () => {
     // The ledger has to survive the restart it records, or it bounds nothing.
-    expect(ENTRYPOINT_CODE).toMatch(/GATEWAY_LIVENESS_LEDGER_DIR="\/opt\/data\//)
+    // Under root's own .smd-root since 2026-10-20 (still on the volume).
+    expect(ENTRYPOINT_CODE).toMatch(
+      /GATEWAY_LIVENESS_LEDGER_DIR="\$\{HERMES_HOME:-\/opt\/data\}\/\.smd-root\//
+    )
     expect(ENTRYPOINT_CODE).toMatch(/gateway_liveness_kill_budget_ok/)
     expect(ENTRYPOINT_CODE).toMatch(/REFUSING to restart/)
   })
