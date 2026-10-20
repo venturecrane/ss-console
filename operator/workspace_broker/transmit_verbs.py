@@ -69,10 +69,11 @@ _OPS_AUDIT_KEYS: tuple[str, ...] = (
     # caller key: the broker hashes the message it built, so no caller can
     # pre-stamp it. Absent on a Text body, and that absence is a fact.
     "html_body_sha256",
-    # ``attachment_sha256``: sha256 of the calendar invitation the AgentMail
-    # send verb built and attached (agentmail_calendar). The broker hashes the
-    # bytes it sent, so on that send this OPS value overrides any caller stamp
-    # of the same name (it is spread after ``audit_extra``).
+    # ``attachment_sha256``: sha256 of what the AgentMail send verb attached,
+    # the calendar invitation it built (agentmail_calendar) or each file it
+    # re-validated, comma-joined in order (agentmail_attachments). The broker
+    # hashes the bytes it sent, so on that send this OPS value overrides any
+    # caller stamp of the same name (it is spread after ``audit_extra``).
     "attachment_sha256",
 )
 
@@ -134,9 +135,11 @@ _AUDIT_ONLY_KEYS = frozenset({"sender_key", "audit_row_token", "html_body_sha256
 #:
 #: ``attachment_sha256``    sha256 (64 lowercase hex) of the decoded bytes of
 #:                          the attachment the send carried, stamped by the
-#:                          overlay. The base64 itself never reaches the row:
-#:                          this hash and ``input_digest`` do. A value of any
-#:                          other shape is dropped like any unnamed key.
+#:                          overlay; one per attachment, comma-joined in order,
+#:                          when it carried up to three. The base64 itself never
+#:                          reaches the row: these hashes and ``input_digest``
+#:                          do. A value of any other shape is dropped like any
+#:                          unnamed key.
 #:
 #: CLOSED ALLOWLIST, AND SILENTLY SO. The filter below drops any key not named
 #: here with no error and no log, which is the right posture for an untrusted
@@ -160,7 +163,7 @@ _CALLER_AUDIT_KEYS: tuple[str, ...] = (
     "reply_binding",
 )
 _TAINT_EXEMPT_VALUES: tuple[str, ...] = ("code_fixed_recipients",)
-_SHA256_HEX = re.compile(r"[0-9a-f]{64}")
+_SHA256_LIST = re.compile(r"[0-9a-f]{64}(?:,[0-9a-f]{64}){0,2}")
 
 
 def append_send_row(
@@ -248,7 +251,7 @@ def _audit_extra(request: dict[str, Any]) -> dict[str, str]:
         del extra["dispatch_ref"]
     if extra.get("taint_exempt") not in (None, *_TAINT_EXEMPT_VALUES):
         del extra["taint_exempt"]
-    if "attachment_sha256" in extra and not _SHA256_HEX.fullmatch(extra["attachment_sha256"]):
+    if "attachment_sha256" in extra and not _SHA256_LIST.fullmatch(extra["attachment_sha256"]):
         del extra["attachment_sha256"]
     return extra
 

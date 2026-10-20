@@ -1326,7 +1326,14 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # "outcome unknown", never "not sent, retry"; an identical resend is held; the
 # client gives up at 25s, inside Hermes's 30s hook budget. Pairs with #3349
 # (broker side, merged). No tracked twin moved.
-ARG OVERLAY_REF="1aa0a762d05fe256bde5c130f09ead7fe16e1fb8"
+# 2026-10-20h (33b97ca3, overlay #531 + #532): #531 addresses operations cards
+# to scott@smd.services, not the team@ Google Group (pairs with #3356). #532:
+# AgentMail sends carry files (PDFs, at most one workbook) through the full gate,
+# the send scans read each PDF's text (new dependency pypdf, pinned in
+# requirements/hermes-overlay.txt), and shared/staged_send stages one exact send
+# with sha256-pinned files (docs/runbooks/operator/staged-send.md). Pairs with the
+# broker's agentmail_attachments in this PR. No tracked twin moved.
+ARG OVERLAY_REF="33b97ca3927081264d91db97f84fecc73fbff46f"
 
 # No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
 # across seats; the slug reaches the Machine only as fly.toml [env]

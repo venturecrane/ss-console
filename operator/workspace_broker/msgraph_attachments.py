@@ -23,8 +23,9 @@ The Graph shape emitted (``#microsoft.graph.fileAttachment`` with ``name``,
 ``contentType``, ``contentBytes``) is the one the v1.0 ``sendMail`` reference
 documents (vendor docs fetched via Context7, vfy_01M3TKFJRYTVF6P4CMG10JDYZ0).
 Inline attachments on sendMail are bounded by Graph at roughly 3 MB per request;
-512 KiB keeps the broker frame (``server.MAX_REQUEST_BYTES``, 1 MiB) comfortable
-with the base64 expansion on top.
+512 KiB keeps the broker frame (``server.MAX_REQUEST_BYTES``, 1 MiB when this
+was written, 6 MiB since AgentMail sends carry files) comfortable with the
+base64 expansion on top.
 
 The base64 never reaches the audit ledger: the row carries the caller's
 ``attachment_sha256`` (``transmit_verbs._CALLER_AUDIT_KEYS``) and the payload

@@ -66,10 +66,11 @@ SUBMIT_PHASES: frozenset[str] = frozenset({"analyze", "install"})
 _CLASS_SLUG_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789_-")
 _MAX_CLASS_SLUG = 64
 
-# Staging ceilings (design §3 step 3). The per-document text ceiling matches
-# the broker's whole-frame ceiling (server.py MAX_REQUEST_BYTES) — a larger
-# document could never arrive anyway; stating it here makes the refusal named
-# instead of a transport error.
+# Staging ceilings (design §3 step 3). The per-document text ceiling was set to
+# the broker's whole-frame ceiling (server.py MAX_REQUEST_BYTES, then 1 MiB) so
+# a larger document was refused by name instead of as a transport error. The
+# frame grew to 6 MiB for AgentMail file sends (2026-10-20); this ceiling did
+# not, so establishment staging admits exactly what it did before.
 MAX_DOC_TEXT_BYTES = 1_048_576
 MAX_DOCS_PER_SET = 64
 MAX_SET_BYTES = 16 * 1_048_576

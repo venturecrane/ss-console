@@ -22,12 +22,12 @@ Email to team@smd.services ("Hosted Agent purchase") + a new row in the admin qu
 
 ## Adding or removing senders on request
 
-A rostered sender can ask the agent to add people ("add these agents, here are their emails"). The open-house skill's **Access request** passes the exact addresses to team@smd.services as an operations request (subject `Operations request from <sender> [ops <tag>]`) and tells the sender it was passed on. To act on it:
+A rostered sender can ask the agent to add people ("add these agents, here are their emails"). The open-house skill's **Access request** passes the exact addresses to scott@smd.services as an operations request (subject `Operations request from <sender> [ops <tag>]`) and tells the sender it was passed on. To act on it:
 
 1. In one PR, change **only** `scope.inbound_allow_from` in `operator/customers/<slug>/customer.yaml`. Any other non-live key in the same diff (`record_stores`, `outbound_roster`, `ops_reply_from`) holds the whole change back.
 2. Merge it, and wait for CI to publish `vaults/<slug>/customer.yaml` to R2.
 3. Restart the Machine (`fly machine restart <id> -a hermes-<slug>`). The agent sees the new sender within seconds of the publish, but the workspace broker replies from a boot-time copy, so a new sender gets no reply until the restart.
-4. Reply "done" to the `[ops <tag>]` email. The seat tells the sender. A request nobody answers lapses after seven days and the sender is told. If the sender was already answered some other way, close the card instead so no second letter goes ([ops-close-by-smd](../operator/ops-close-by-smd.md)).
+4. Reply "done" to the `[ops <tag>]` email, and check the reply is addressed to the seat's own mailbox. The seat tells the sender. A reply addressed to team@smd.services never reaches the seat: that address is a Google Group, which rewrites an AgentMail seat's From to itself, so a reply built from From (the Gmail API does this) goes to the Group. Cards are addressed to scott@smd.services for that reason. A request nobody answers lapses after seven days and the sender is told. If the sender was already answered some other way, close the card instead so no second letter goes ([ops-close-by-smd](../operator/ops-close-by-smd.md)).
 
 On the open-house seat, a new agent needs only `inbound_allow_from`: `owner_field: agent` makes them the owner of their own records. `readers` is for the broker.
 
