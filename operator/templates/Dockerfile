@@ -1308,7 +1308,10 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # 2026-10-20b (100632c3, overlay #525): a Claude model names its provider in
 # the profile config, so Hermes offers vision_analyze (it was silently absent on
 # every seat); the couples persona fixture gains pictures and voice messages.
-ARG OVERLAY_REF="100632c358e45581b4e9ba301ef3230ca7fa9927"
+# 2026-10-20c (64c56ad3, overlay #526): an email from a rostered sender that
+# carries attachments says so above the delimiter (kinds and MIME types, never
+# filenames); a picture-only email no longer reads as empty. No tracked twin moved.
+ARG OVERLAY_REF="64c56ad3f99ad9bbc3054a8fe9ffb555b06e8ce4"
 
 # No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
 # across seats; the slug reaches the Machine only as fly.toml [env]

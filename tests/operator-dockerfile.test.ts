@@ -1570,7 +1570,8 @@ describe('Operator customer Machine Dockerfile', () => {
     // -> 90c36b67 (overlay#521), 2026-10-19: couples seats drop operations_request.
     // -> e6c89423 (overlay#522-#524), 2026-10-20: the couples settings read carries today.
     // -> 100632c3 (overlay#525), 2026-10-20: seats can see images (model names its provider).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="100632c358e45581b4e9ba301ef3230ca7fa9927"')
+    // -> 64c56ad3 (overlay#526), 2026-10-20: the inbound prompt names an email's attachments.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="64c56ad3f99ad9bbc3054a8fe9ffb555b06e8ce4"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
