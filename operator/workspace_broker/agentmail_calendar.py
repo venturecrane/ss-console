@@ -9,10 +9,10 @@ vfy_01M55THDN2KSHQ8YKAN0QQKPTE, vfy_01M55TK7D5M02RNYGZ85WZAQR5), with a test
 script that called AgentMail with a send-capable key directly. No seat may do
 that (ss#2258): every transmit goes through this broker and leaves a row.
 
-AgentMail carries no general attachments here (``agentmail_ops``
-``_refuse_attachments``), and that stays true. This module is not an
-attachment lane. It is one field, ``calendar: {method, ics}``, and the broker
-decides everything about the part it becomes:
+This module is not the file lane (that is ``agentmail_attachments``, for
+SMD-staged files, and a send carries one or the other, never both). It is one
+field, ``calendar: {method, ics}``, and the broker decides everything about the
+part it becomes:
 
 * the filename (``invite.ics``), the content type
   (``text/calendar; method=<METHOD>; charset=UTF-8``) and the disposition
