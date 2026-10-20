@@ -979,15 +979,18 @@ gateway_heartbeat_path() {
 gateway_liveness_record_kill() {
   "${SMD_ROOT_LEDGER_PY:-/opt/hermes/.venv/bin/python3}" "${SMD_ROOT_LEDGER:-/app/runners/supervisor/root_ledger.py}" \
     append "${GATEWAY_LIVENESS_LEDGER_DIR}" kills "$(date -u +%s) $(date -u +%Y-%m-%dT%H:%M:%SZ) $1" \
-    || log "WARN: kill ledger refused this restart (see root_ledger); it is not counted toward the budget"
+    || log "WARN: kill ledger refused this restart (see root_ledger); it is not counted, and the restart limit is NOT being enforced"
 }
 
 # A ledger root_ledger refuses (not root's, a link, not a regular file) counts
 # as empty: the pre-ledger behaviour, and never a reason to stop restarting.
+# Accepted residual: while /opt/data is the agent's, it can rename .smd-root
+# aside at runtime and so switch the limit off until the next boot; it can never
+# make root write, chmod or follow anything (review 2026-10-20).
 gateway_liveness_kill_budget_ok() {
   local count
   count="$("${SMD_ROOT_LEDGER_PY:-/opt/hermes/.venv/bin/python3}" "${SMD_ROOT_LEDGER:-/app/runners/supervisor/root_ledger.py}" \
-    count "${GATEWAY_LIVENESS_LEDGER_DIR}" kills "$(( $(date -u +%s) - SMD_GATEWAY_LIVENESS_KILL_WINDOW_SECONDS ))")" || count=0
+    count "${GATEWAY_LIVENESS_LEDGER_DIR}" kills "$(( $(date -u +%s) - SMD_GATEWAY_LIVENESS_KILL_WINDOW_SECONDS ))")" || { count=0; gateway_liveness_nag "kill ledger unreadable (see root_ledger); the restart limit is NOT being enforced"; }
   [ "${count:-0}" -lt "${SMD_GATEWAY_LIVENESS_MAX_KILLS}" ]
 }
 

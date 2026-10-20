@@ -62,6 +62,17 @@ def test_a_directory_link_is_refused(tmp_path):
     assert list(real.iterdir()) == []
 
 
+def test_a_parent_link_is_refused(tmp_path):
+    """.smd-root itself sits in the agent's /opt/data and can be swapped for a
+    link; the parent is opened without following one too."""
+    real = tmp_path / "real-root"
+    (real / "gateway-liveness").mkdir(parents=True)
+    (tmp_path / ".smd-root").symlink_to(real, target_is_directory=True)
+    with pytest.raises(OSError):
+        rl.append(str(tmp_path / ".smd-root" / "gateway-liveness"), "kills", "1 x y")
+    assert list((real / "gateway-liveness").iterdir()) == []
+
+
 def test_a_directory_others_can_write_is_refused(ledger):
     # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions -- the test's own tmp dir, made group-writable to prove the helper REFUSES it
     os.chmod(ledger, 0o775)

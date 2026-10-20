@@ -28,13 +28,28 @@ import sys
 _READ_CAP_BYTES = 1024 * 1024
 
 
-def _open_dir(path: str) -> int:
-    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+def _check_dir(fd: int, path: str) -> int:
     st = os.fstat(fd)
     if st.st_uid != os.geteuid() or st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
         os.close(fd)
         raise PermissionError(f"{path}: not owned by uid {os.geteuid()} or writable by others")
     return fd
+
+
+def _open_dir(path: str) -> int:
+    """The ledger directory AND its parent, each a real directory of ours.
+
+    Both components are opened without following a link, the child relative to
+    the checked parent, so neither ``.smd-root`` nor the ledger directory can be
+    a link or someone else's directory (review 2026-10-20).
+    """
+    parent, name = os.path.split(os.path.normpath(path))
+    pfd = _check_dir(os.open(parent or ".", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW), parent)
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=pfd)
+    finally:
+        os.close(pfd)
+    return _check_dir(fd, path)
 
 
 def _open_file(dfd: int, name: str, flags: int) -> int:
