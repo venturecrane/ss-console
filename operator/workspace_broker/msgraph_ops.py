@@ -632,6 +632,23 @@ class MsGraphOps:
         return str(found.get("conversationId") or "")
 
     def _locate_sent(self, audit_token: str, *, conversation_id: str = "") -> dict[str, str]:
+        """:meth:`_find_in_sent_items`, held to its promise that it never raises.
+
+        That promise used to rest on catching one exception class per read, while
+        the path build re-reads customer.yaml (``mailbox``) and can raise anything
+        a file read can. A raise here comes after Graph accepted the message, and
+        the broker replied to it with a refusal code (``PermissionError``), which
+        the overlay reads as "not sent, retry fine": the duplicate the docstring
+        below exists to prevent (2026-10-20 review of overlay#529). The type is
+        recorded, never the message, because an accident's text is not a closed
+        field (``request_errors.py``).
+        """
+        try:
+            return self._find_in_sent_items(audit_token, conversation_id=conversation_id)
+        except Exception as exc:  # noqa: BLE001 - the message is already gone; record, never raise
+            return {"lookup": f"failed: {type(exc).__name__} while looking it up"}
+
+    def _find_in_sent_items(self, audit_token: str, *, conversation_id: str = "") -> dict[str, str]:
         """Find the message just sent in Sent Items, by the header stamped on it.
 
         ON THE READ CREDENTIAL, NECESSARILY AND RIGHTLY. Under the two-app fence
@@ -785,6 +802,9 @@ class MsGraphOps:
         cc = [] if redirect else self._request_participants(source, sender, policy)
         conversation_id = str(source.get("conversationId") or "")
         audit_token = new_row_token()
+        # Read BEFORE the POST: after it, a config read that raised would turn a
+        # delivered reply into an error the caller may retry.
+        mailbox = self.mailbox()
         if redirect:
             stamped = send_redirected(
                 self,
@@ -814,7 +834,7 @@ class MsGraphOps:
             # still names the device, which is who wrote in. Otherwise the
             # sender, then the request's other authored participants copied.
             "recipients": [redirect] if redirect else [sender, *cc],
-            "mailbox": self.mailbox(),
+            "mailbox": mailbox,
             # Empty when the header was refused, so the row never claims a key
             # that is not on the message. The reconciler reads a blank token as
             # "no exact join available here", which is true.

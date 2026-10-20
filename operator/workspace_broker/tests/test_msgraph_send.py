@@ -1412,6 +1412,29 @@ def test_a_lookup_failure_is_recorded_and_never_raised(tmp_path: Path) -> None:
     assert http.audit_token_on_the_wire() == result["audit_row_token"] != ""
 
 
+def test_a_lookup_that_raises_anything_is_recorded_and_never_raised(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The never-raises promise held only for one exception class. The path
+    build re-reads customer.yaml, and a PermissionError there, after Graph had
+    accepted the message, reached the overlay as a refusal code it reads as "not
+    sent, retry fine": the duplicate (2026-10-20 review of overlay#529)."""
+    http = FakeGraph()
+    ops = _ops(tmp_path, http)
+    real_path = ops._mail_path
+
+    def unreadable(*parts: str) -> str:
+        if parts and parts[0] == "mailFolders":
+            raise PermissionError("customer.yaml: permission denied")
+        return real_path(*parts)
+
+    monkeypatch.setattr(ops, "_mail_path", unreadable)
+    result = ops.send({"to": ["scott@smd.services"], "body_text": "x"})
+    assert len(http.graph_posts()) == 1  # it went
+    assert result["lookup"] == "failed: PermissionError while looking it up"
+    assert "permission denied" not in result["lookup"]  # the type, never the text
+
+
 def test_a_seat_with_no_read_credential_records_that_it_could_not_look(
     tmp_path: Path,
 ) -> None:
