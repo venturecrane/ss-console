@@ -11,6 +11,7 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types'
+import { parseAuditWriteFailureReasons } from '../operator/heartbeat-parsers'
 import type { ParsedFleetRelease } from '../operator/heartbeat-parsers'
 
 export const DEFAULT_PERIOD_SECONDS = 60
@@ -45,6 +46,8 @@ export interface FleetStatusUpsert {
   webhookSurfaceOk: 0 | 1 | null
   cronContainment: 0 | 1 | null
   auditWriteFailures: number | null
+  /** Migration 0131. Cumulative lost rows by reason key; COALESCE like the count. */
+  auditWriteFailureReasons: Record<string, number> | null
   auditHead: string | null
   auditRows: number | null
   gatewayLoopOk: 0 | 1 | null
@@ -84,7 +87,7 @@ const FLEET_STATUS_UPSERT_SQL = `INSERT INTO fleet_status (
        connectors_json, connector_check_ok, connector_token_age_json,
        spec_control_json, spec_control_ok,
        webhook_surface_json, webhook_surface_ok, cron_containment,
-       audit_write_failures, audit_head, audit_rows,
+       audit_write_failures, audit_write_failure_reasons_json, audit_head, audit_rows,
        gateway_loop_ok, gateway_loop_age_seconds, gateway_supervisor_state,
        gateway_restarts_last_hour,
        send_refusals, send_refusals_last_ts, send_refusals_json, tool_failures_json,
@@ -92,7 +95,7 @@ const FLEET_STATUS_UPSERT_SQL = `INSERT INTO fleet_status (
        image_ref, skills_version, config_digest,
        jobs_running, jobs_queued, wakes_pending, updated_at
      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-               ?, ?, ?, ?, ?, ?, datetime('now'))
+               ?, ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(customer_slug) DO UPDATE SET
        entity_id               = excluded.entity_id,
        last_heartbeat_ts       = excluded.last_heartbeat_ts,
@@ -116,6 +119,7 @@ const FLEET_STATUS_UPSERT_SQL = `INSERT INTO fleet_status (
        webhook_surface_ok      = excluded.webhook_surface_ok,
        cron_containment        = excluded.cron_containment,
        audit_write_failures    = COALESCE(excluded.audit_write_failures, fleet_status.audit_write_failures),
+       audit_write_failure_reasons_json = COALESCE(excluded.audit_write_failure_reasons_json, fleet_status.audit_write_failure_reasons_json),
        audit_head              = COALESCE(excluded.audit_head, fleet_status.audit_head),
        audit_rows              = COALESCE(excluded.audit_rows, fleet_status.audit_rows),
        gateway_loop_ok            = excluded.gateway_loop_ok,
@@ -164,6 +168,7 @@ export async function upsertFleetStatus(db: D1Database, u: FleetStatusUpsert): P
       u.webhookSurfaceOk,
       u.cronContainment,
       u.auditWriteFailures,
+      u.auditWriteFailureReasons === null ? null : JSON.stringify(u.auditWriteFailureReasons),
       u.auditHead,
       u.auditRows,
       u.gatewayLoopOk,
@@ -187,16 +192,40 @@ export async function upsertFleetStatus(db: D1Database, u: FleetStatusUpsert): P
     .run()
 }
 
+interface AuditWriteFailureState {
+  total: number | null
+  reasons: Record<string, number> | null
+}
+
 /**
- * The prior cumulative audit-write-failure count for a seat, or null when the
- * seat has never reported one. Read BEFORE the upsert overwrites it (#2498).
+ * The prior cumulative audit-write-failure count for a seat and its reason
+ * histogram, each null when the seat has never reported one. Read BEFORE the
+ * upsert overwrites them (#2498, migration 0131). The stored histogram was
+ * written by this module from a parsed beat, and is re-parsed on the way out
+ * all the same: a value that is not the shape reads as unknown.
  */
-export async function readAuditWriteFailures(db: D1Database, slug: string): Promise<number | null> {
+export async function readAuditWriteFailureState(
+  db: D1Database,
+  slug: string
+): Promise<AuditWriteFailureState> {
   const row = await db
-    .prepare('SELECT audit_write_failures FROM fleet_status WHERE customer_slug = ?')
+    .prepare(
+      'SELECT audit_write_failures, audit_write_failure_reasons_json FROM fleet_status WHERE customer_slug = ?'
+    )
     .bind(slug)
-    .first<{ audit_write_failures: number | null }>()
-  return row?.audit_write_failures ?? null
+    .first<{
+      audit_write_failures: number | null
+      audit_write_failure_reasons_json: string | null
+    }>()
+  let reasons: Record<string, number> | null = null
+  if (typeof row?.audit_write_failure_reasons_json === 'string') {
+    try {
+      reasons = parseAuditWriteFailureReasons(JSON.parse(row.audit_write_failure_reasons_json))
+    } catch {
+      reasons = null
+    }
+  }
+  return { total: row?.audit_write_failures ?? null, reasons }
 }
 
 export function deriveHeartbeatStatus(

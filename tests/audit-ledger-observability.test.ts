@@ -235,6 +235,47 @@ describe('#2498 a rise in lost rows reaches a person', () => {
     expect(captureWarning).not.toHaveBeenCalled()
   })
 
+  it('the warning names the reasons that rose, not the whole history', async () => {
+    await POST(beat({ audit_write_failures: 3, audit_write_failure_reasons: { gap_exit: 3 } }))
+    captureWarning.mockClear()
+    await POST(
+      beat({
+        audit_write_failures: 5,
+        audit_write_failure_reasons: { gap_exit: 3, 'refused_not_gateway:CONFIG_WRITE': 2 },
+      })
+    )
+    expect(captureWarning).toHaveBeenCalledTimes(1)
+    const [message, , extra] = captureWarning.mock.calls[0]
+    expect(message).toContain('refused_not_gateway:CONFIG_WRITE x2')
+    expect(message).not.toContain('gap_exit')
+    expect(extra).toMatchObject({ lost: 2, reasons: { 'refused_not_gateway:CONFIG_WRITE': 2 } })
+  })
+
+  it('a rise with no reason histogram says so rather than guessing', async () => {
+    await POST(beat({ audit_write_failures: 2 }))
+    expect(captureWarning.mock.calls[0][0]).toContain('reason not recorded')
+  })
+
+  it('a key that is not the closed shape never reaches the message', async () => {
+    await POST(
+      beat({
+        audit_write_failures: 1,
+        audit_write_failure_reasons: { 'to jane@example.com': 1, gap_full: 1 },
+      })
+    )
+    const [message] = captureWarning.mock.calls[0]
+    expect(message).toContain('gap_full x1')
+    expect(message).not.toContain('jane')
+  })
+
+  it('a beat without the histogram keeps the stored one as the baseline', async () => {
+    await POST(beat({ audit_write_failures: 2, audit_write_failure_reasons: { gap_exit: 2 } }))
+    await POST(beat({ audit_write_failures: 2 }))
+    captureWarning.mockClear()
+    await POST(beat({ audit_write_failures: 3, audit_write_failure_reasons: { gap_exit: 3 } }))
+    expect(captureWarning.mock.calls[0][0]).toContain('gap_exit x1')
+  })
+
   it('the beat still succeeds when the delta read throws', async () => {
     // Losing liveness reporting to protect an alert trades a big signal for a
     // small one. The alert path is best-effort; the heartbeat is not.
