@@ -1322,7 +1322,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # 2026-10-20f (184df81b, overlay #530): the gate reads the kill ledger from
 # .smd-root/gateway-liveness (this PR moves it), never through a link, FIFO or
 # device. No tracked twin moved.
-ARG OVERLAY_REF="184df81b9377c42e12d24d36396f0052fc9278be"
+# 2026-10-20g (1aa0a762, overlay #529): a send whose broker answer was lost is
+# "outcome unknown", never "not sent, retry"; an identical resend is held; the
+# client gives up at 25s, inside Hermes's 30s hook budget. Pairs with #3349
+# (broker side, merged). No tracked twin moved.
+ARG OVERLAY_REF="1aa0a762d05fe256bde5c130f09ead7fe16e1fb8"
 
 # No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
 # across seats; the slug reaches the Machine only as fly.toml [env]
