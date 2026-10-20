@@ -1298,7 +1298,10 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # SSN/A-number/receipt/case number/pair stay floors on every seat. Routine emails
 # are rendered to plain text before the scan, and their subject is a short title
 # line or the fixed one (#519). The hook worker starts at plugin load (#520).
-ARG OVERLAY_REF="972a8d7d9b88d83b2ce3b9cff88d732d53da4298"
+# 2026-10-19f (90c36b67, overlay #521): couples seats drop the establishment
+# toolset, so operations_request can no longer tell a partner that SMD sets
+# their schedule; the couple sets it with couples_settings_change.
+ARG OVERLAY_REF="90c36b67580527253813557d23b064f75e909192"
 
 # No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
 # across seats; the slug reaches the Machine only as fly.toml [env]
