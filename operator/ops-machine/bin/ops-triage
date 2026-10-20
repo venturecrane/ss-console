@@ -33,7 +33,10 @@ args=(--dry-run --print-body --state-out "$STATE/triage-state.next.json")
 [ -n "$since" ] && args+=(--since "$since")
 start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-(cd "$REPO/operator" && "$HOME/bin/ss-env" python3 bin/work-health.py "${args[@]}") > "$body" 2>&1
+# STDERR goes to its own file, never into a file a parser reads: ss-env wraps
+# `infisical run`, which writes "INF Injecting N Infisical secrets ..." to
+# stderr even under --silent (see the report capture below).
+(cd "$REPO/operator" && "$HOME/bin/ss-env" python3 bin/work-health.py "${args[@]}") > "$body" 2> "$body.err"
 status=$?
 echo "work-health exit=$status"
 # A failed evaluation (3 = HOLD, nothing could be read; anything else = crash)
@@ -42,7 +45,7 @@ echo "work-health exit=$status"
 # and advanced triage-since unconditionally, so a broken evaluator read as
 # "nothing new" every hour behind a green heartbeat.
 if [ "$status" -ne 0 ]; then
-  echo "work-health failed; window kept at ${since:-never}"; tail -20 "$body"; exit "$status"
+  echo "work-health failed; window kept at ${since:-never}"; tail -20 "$body"; tail -20 "$body.err"; exit "$status"
 fi
 
 # The window and seen-item state advance only once this run's items are
@@ -61,18 +64,41 @@ prompt="You are SMD's ops triage agent on the smd-ops machine (read docs/handboo
 $(sed -n '/^Subject:/,$p' "$body")"
 
 report="$STATE/triage-report-$now.txt"
+report_err="$STATE/triage-report-$now.err"
+# The agent's STDERR is kept out of the report. Until 2026-10-20 this was
+# `> "$report" 2>&1`, so infisical's "INF Injecting 93 Infisical secrets" line
+# (stderr, ANSI-coloured) became line 1, `head -1` never matched the Subject,
+# and every triage email from at least 10-17 was titled "report (format not
+# followed)", hiding "N need you" from the subject. tests/ops-triage.test.ts.
 (cd "$REPO" && "$HOME/bin/ss-env" claude -p "$prompt" \
    --max-budget-usd 5 \
    --permission-mode default \
    --allowedTools "Read" "Grep" "Glob" "Bash(fly status:*)" "Bash(fly logs:*)" \
      "Bash(operator/bin/seat-probe.sh:*)" "Bash(python3 operator/bin/work-health.py:*)" \
      "Bash(.claude/bin/requests:*)" "Bash(.claude/bin/register list:*)" "Bash(gh pr list:*)" "Bash(gh issue list:*)" \
-   --output-format text) > "$report" 2>&1
+   --output-format text) > "$report" 2> "$report_err"
 echo "agent exit=$?"
 
-subject=$(head -1 "$report" | sed 's/^Subject: //' | cut -c1-150)
+# The subject is the FIRST "Subject: " line, wherever it is; that line (and the
+# blank line after it) is dropped from the emailed body.
+subject_line=$(grep -m1 '^Subject: ' "$report" | tr -d '\r' || true)
+subject=$(printf '%s' "${subject_line#Subject: }" | cut -c1-150)
 case "$subject" in "[SMD Ops] Triage"*) ;; *) subject="[SMD Ops] Triage: report (format not followed)";; esac
-"$HOME/bin/ss-env" python3 - "$subject" "$report" <<'PY'
+email="$STATE/triage-email-$now.txt"
+{
+  if [ -n "$subject_line" ]; then
+    awk '!done && /^Subject: /{done=1; skip=1; next} skip && /^[[:space:]]*$/{skip=0; next} {skip=0; print}' "$report"
+  else
+    cat "$report"
+  fi
+  # Stderr beyond infisical's own banner is named, not pasted: it stays on the
+  # Machine, and its contents are never mailed.
+  n_err=$(grep -v -c 'Injecting [0-9]* Infisical secrets' "$report_err" || true)
+  if [ "${n_err:-0}" -gt 0 ]; then
+    printf '\n--- agent stderr: %s line(s) in %s on smd-ops\n' "$n_err" "$report_err"
+  fi
+} > "$email"
+"$HOME/bin/ss-env" python3 - "$subject" "$email" <<'PY'
 import json, os, sys, urllib.request
 subject, path = sys.argv[1], sys.argv[2]
 text = open(path, encoding="utf-8", errors="replace").read()

@@ -3,4 +3,6 @@
 # per-run budget, read-only tools, secrets via ss-env, a real seat read).
 cd "$HOME/dev/ss-console" || exit 1
 "$HOME/bin/ss-env" claude -p "Run: fly status -a hermes-ashton-price. Reply with exactly one line: 'SEAT <state> <version>' using the machine state and version from the output, nothing else." \
-  --max-budget-usd 1 --permission-mode default --allowedTools "Bash(fly status:*)" --output-format text 2>&1 | tail -1
+  --max-budget-usd 1 --permission-mode default --allowedTools "Bash(fly status:*)" --output-format text | tail -1
+# No 2>&1 above: ss-env's infisical banner is on stderr, and merged into the
+# pipe it would be the only line left when claude prints nothing.
