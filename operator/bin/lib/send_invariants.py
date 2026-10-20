@@ -31,6 +31,7 @@ import hashlib
 import json
 import os
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 _OPERATOR_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,7 +43,7 @@ class InvariantFinding:
     """One conflict with a COMMITTED expectation. Hashed keys only -- the
     committed expectation file is public, and so is anything this renders."""
 
-    rule: str  # recipient_set | ack_stability
+    rule: str  # recipient_set | ack_stability | send_unconfirmed
     skill_name: str
     hashed_key: str
     expected: Optional[str] = None
@@ -211,11 +212,67 @@ def ack_invariant(
     return findings, proposals
 
 
+#: The broker's record-before-send row (workspace_broker/send_intent.py) and
+#: the key its confirm row names it by. Mirrored as literals, not imported:
+#: this module is stdlib-only and runs console-side, off the seat.
+INTENT_ACTION_TYPE = "CONFIRM_SEND_INTENT"
+INTENT_KEY = "intent_row"
+
+#: How long an intent may stand unconfirmed before it is a finding. A live send
+#: settles within seconds (the msgraph Sent Items lookup's backoff is the long
+#: pole, well under a minute); the margin keeps a send in flight at the moment
+#: of the read from paging.
+INTENT_GRACE = timedelta(minutes=30)
+
+
+def _parse_ts(value: object) -> Optional[datetime]:
+    try:
+        stamp = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
+
+
+def intent_invariant(rows: list[dict], now: Optional[datetime] = None) -> list[InvariantFinding]:
+    """An intent row with no confirm row naming it (2026-10-20).
+
+    The broker writes ``CONFIRM_SEND_INTENT`` before every vendor call and
+    names it from the CONFIRM_SEND_* / SEND_AS_* row that settles the call. An
+    intent nobody names means the call was made and its outcome went
+    unrecorded: the ledger failed after the send, or the broker died between
+    the two. The message may be out, so this is a FINDING, never a proposal:
+    there is no committed expectation an orphan could be the first-seen value
+    of. Keyed by the intent row's own id, an opaque ULID, so nothing personal is
+    rendered, and a reviewed orphan can be dispositioned like any finding.
+    """
+    now = now or datetime.now(timezone.utc)
+    named = {str(_metadata(row).get(INTENT_KEY) or "") for row in rows if row.get("action_type") != INTENT_ACTION_TYPE}
+    findings: list[InvariantFinding] = []
+    for row in rows:
+        if row.get("action_type") != INTENT_ACTION_TYPE or str(row.get("id") or "") in named:
+            continue
+        stamp = _parse_ts(row.get("ts"))
+        if stamp is not None and now - stamp < INTENT_GRACE:
+            continue
+        findings.append(
+            InvariantFinding(
+                rule="send_unconfirmed",
+                skill_name=str(row.get("skill_name") or _metadata(row).get("verb") or ""),
+                hashed_key=str(row.get("id") or ""),
+                detail="a send was attempted and no confirm row records its outcome; it may have gone out",
+            )
+        )
+    return findings
+
+
 __all__ = [
     "DEFAULT_INVARIANTS_PATH",
+    "INTENT_ACTION_TYPE",
+    "INTENT_GRACE",
     "InvariantFinding",
     "InvariantProposal",
     "ack_invariant",
+    "intent_invariant",
     "load_invariants",
     "recipient_invariant",
 ]

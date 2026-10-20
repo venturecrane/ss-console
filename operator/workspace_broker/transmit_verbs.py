@@ -28,6 +28,7 @@ from .digest_ref import valid_dispatch_ref
 from .msgraph_ops import MsGraphRefused, MsGraphTransportError
 from .msgraph_ops import collect_recipients as collect_msgraph_recipients
 from .participant_fence import FenceRefused
+from .send_intent import CONFIRM_FLAG, record_confirm, record_intent
 
 VERBS: tuple[str, ...] = ("agentmail_send", "agentmail_reply", "msgraph_send", "msgraph_reply")
 
@@ -170,8 +171,11 @@ def append_send_row(
     *,
     session_id: str = "",
     matter_ref: str | None = None,
-) -> None:
+) -> str:
     """Record a transmit attempt. Body digests only, never the body.
+
+    Returns the row's id (``""`` when no ledger is configured), which an
+    intent row hands to its confirm row (send_intent.py, 2026-10-20).
 
     Written by the broker itself so the row cannot be skipped. The four
     unaudited messages of 2026-08 were possible because emission lived in
@@ -206,7 +210,7 @@ def append_send_row(
     passed is mutated on purpose: every caller hands over a literal.
     """
     if broker.ledger is None:
-        return
+        return ""
     skill_name = metadata.pop("skill_name", "")
     row: dict[str, Any] = {
         "action_type": action_type,
@@ -225,7 +229,7 @@ def append_send_row(
             separators=(",", ":"),
         ),
     }
-    broker.ledger.append(row)
+    return broker.ledger.append(row)
 
 
 def _audit_extra(request: dict[str, Any]) -> dict[str, str]:
@@ -345,14 +349,23 @@ def dispatch_transmit(
         broker, action, request, payload, failed_row, channel=channel, internal_lane=internal_lane, refused=refused
     )
     failed_row.update(fence_meta)
+    # Record-before-send (send_intent.py, 2026-10-20): the intent lands or
+    # nothing is attempted. Written AFTER the fence on purpose: a fence refusal
+    # attempted nothing and has its own row already, so an intent row always
+    # means the vendor was about to be called.
+    intent_id = record_intent(
+        append_send_row, broker, action, failed_row, session_id=session_id, matter_ref=matter_ref, refused=refused
+    )
     try:
         result = send(payload) if action.endswith("_send") else reply(payload)
     except refused as exc:
-        append_send_row(
+        record_confirm(
+            append_send_row,
             broker,
             "CONFIRM_SEND_FAILED",
             action,
             {"outcome": "refused", "reason": str(exc), **failed_row},
+            intent_id,
             session_id=session_id,
             matter_ref=matter_ref,
         )
@@ -362,16 +375,36 @@ def dispatch_transmit(
         # one: the seat was permitted to write and the vendor call failed.
         # The outcome is genuinely unknown (the message may have gone out),
         # which is exactly what the console-side reconciler exists to settle.
-        append_send_row(
+        record_confirm(
+            append_send_row,
             broker,
             "CONFIRM_SEND_FAILED",
             action,
             {"outcome": "transport_error", "reason": str(exc), **failed_row},
+            intent_id,
             session_id=session_id,
             matter_ref=matter_ref,
         )
         raise
-    append_send_row(
+    except Exception as exc:
+        # Anything else the send raised (a bound reply's own ledger write, a
+        # programming fault) used to leave no row at all; now it would leave an
+        # intent with no confirm, which reads as "may have gone". Settle it as
+        # a failure so the pair joins. The type only, never the message: an
+        # unexpected exception's text is not a closed field (2026-10-20).
+        record_confirm(
+            append_send_row,
+            broker,
+            "CONFIRM_SEND_FAILED",
+            action,
+            {"outcome": "error", "reason": type(exc).__name__, **failed_row},
+            intent_id,
+            session_id=session_id,
+            matter_ref=matter_ref,
+        )
+        raise
+    confirmed = record_confirm(
+        append_send_row,
         broker,
         "CONFIRM_SEND_DISPATCHED",
         action,
@@ -399,6 +432,7 @@ def dispatch_transmit(
             # of them and writes exactly the row it writes today.
             **{key: result[key] for key in _OPS_AUDIT_KEYS if isinstance(result.get(key), str) and result[key]},
         },
+        intent_id,
         session_id=session_id,
         matter_ref=matter_ref,
     )
@@ -409,7 +443,12 @@ def dispatch_transmit(
     # that a later message could then be stamped with to borrow this row's
     # identity. The vendor ids DO go back: they are the agent's own message,
     # and naming it to the firm is the point of resolving them.
-    return {"ok": True, **{k: v for k, v in result.items() if k not in _AUDIT_ONLY_KEYS}}
+    #
+    # A send that went out stays a success when its confirm row did not land
+    # (2026-10-20): "failed" would invite the duplicate. The flag says the
+    # record is short; the orphan intent is what the reconciler pages on.
+    out = {"ok": True, **{k: v for k, v in result.items() if k not in _AUDIT_ONLY_KEYS}}
+    return out if confirmed else {**out, CONFIRM_FLAG: False}
 
 
 def agentmail(

@@ -337,3 +337,13 @@ describe('SMOKEBALL_WRITE stays off the activity feed', () => {
     expect(mod.SUPPRESSED_ACTION_REASONS['SMOKEBALL_WRITE']).toMatch(/audit record/i)
   })
 })
+
+describe('CONFIRM_SEND_INTENT stays off the activity feed', () => {
+  // Record-before-send (2026-10-20). The intent is written before the send; the
+  // client-visible event is the sent or failed line that settles it.
+  it('is suppressed with a stated reason, so a send never shows twice', async () => {
+    const mod = await import('../src/lib/portal/operator/activity-language')
+    expect(mod.activityDisposition('CONFIRM_SEND_INTENT')).toBe('suppressed')
+    expect(mod.SUPPRESSED_ACTION_REASONS['CONFIRM_SEND_INTENT']).toMatch(/audit record/i)
+  })
+})

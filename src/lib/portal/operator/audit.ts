@@ -154,6 +154,9 @@ export const AUDIT_ACTION_TYPES = [
   'CONFIG_WRITE',
   'CONFIRM_SEND_DISPATCHED',
   'CONFIRM_SEND_FAILED',
+  // Record-before-send (2026-10-20): written by the workspace broker before
+  // every vendor call (send_intent.py); its confirm row names it.
+  'CONFIRM_SEND_INTENT',
   'SPEC_GATE_TRIGGERED',
   'VOICE_GATE_TRIGGERED',
   'CORRECTION_PROPOSED',

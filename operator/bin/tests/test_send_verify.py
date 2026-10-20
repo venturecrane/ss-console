@@ -1832,3 +1832,67 @@ def test_the_verifier_applies_dispositions_per_seat(tmp_path):
     assert [v.is_dispositioned for v in verdicts] == [True]
     verdicts, _, _ = verifier.verify_inbox([], rows, inbox="another-seat")
     assert [v.is_finding for v in verdicts] == [True]
+
+
+# ---------------------------------------------------------------------------
+# send_unconfirmed (2026-10-20): the broker writes CONFIRM_SEND_INTENT before
+# every vendor call and names it from the row that settles the call. An intent
+# nobody names is a send whose outcome the ledger never recorded.
+# ---------------------------------------------------------------------------
+
+
+def _intent_row(row_id="01INTENT", minute=0, skill="deadline-miss-escalator"):
+    return {
+        "id": row_id,
+        "ts": _ts(minute),
+        "action_type": "CONFIRM_SEND_INTENT",
+        "skill_name": skill,
+        "metadata": json.dumps({"verb": "msgraph_send", "recipients": ["x@example.invalid"], "input_digest": "d"}),
+    }
+
+
+def _settling_row(intent_id, minute=0):
+    return {
+        "id": f"confirm-{intent_id}",
+        "ts": _ts(minute),
+        "action_type": "CONFIRM_SEND_DISPATCHED",
+        "metadata": json.dumps({"outcome": "sent", "intent_row": intent_id}),
+    }
+
+
+_LATER = datetime(2026, 8, 30, 12, 0, tzinfo=UTC)
+
+
+def test_an_intent_with_no_confirm_is_a_finding():
+    findings = sv.intent_invariant([_intent_row()], now=_LATER)
+    assert [(f.rule, f.hashed_key, f.skill_name) for f in findings] == [
+        ("send_unconfirmed", "01INTENT", "deadline-miss-escalator")
+    ]
+    lines = sv.render_lines("i@agentmail.to", [], findings)
+    assert any("send_unconfirmed" in line for line in lines)
+    assert all("x@example.invalid" not in line for line in lines)
+
+
+def test_falsifier_the_same_intent_with_its_confirm_finds_nothing():
+    assert sv.intent_invariant([_intent_row(), _settling_row("01INTENT")], now=_LATER) == []
+
+
+def test_a_failure_row_settles_an_intent_too():
+    failed = _settling_row("01INTENT")
+    failed["action_type"] = "SEND_AS_FAILED"
+    assert sv.intent_invariant([_intent_row(), failed], now=_LATER) == []
+
+
+def test_an_intent_still_inside_its_grace_is_not_yet_a_finding():
+    """A send in flight at the moment of the read is not an orphan."""
+    just_now = datetime(2026, 8, 30, 9, 5, tzinfo=UTC)
+    assert sv.intent_invariant([_intent_row()], now=just_now) == []
+
+
+def test_an_orphan_intent_reddens_the_reconciler_through_the_verifier():
+    verifier = sv.SendVerifier(_declares(), {"recipients": {}, "ack_codes": {}})
+    _verdicts, findings, _proposals = verifier.verify_inbox([], [_intent_row()], None)
+    report = rec.InboxReport(inbox="i@agentmail.to", slug="pilot-smokeball")
+    report.invariant_findings = findings
+    assert report.is_finding
+    assert rec.exit_code([report]) == rec.EXIT_FINDING
