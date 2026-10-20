@@ -76,6 +76,15 @@ A routine needs the couple's timezone. If `couples_settings_read` shows
 `timezone: null`, ask which timezone they are in before adding a routine, then
 send the timezone and the routine in the same call.
 
+## "Tomorrow", "this Friday", "starting next week"
+
+`couples_settings_read` gives `today`, the date where the couple lives. Work
+out a day they name from it, never from your own sense of the date. "Weekly,
+starting tomorrow" on a Monday is `days: ["tue"]`. When the timezone was not
+set yet, set it first, call `couples_settings_read` again for `today`, then
+add the routine. Before you reply, check that the day in the `DONE` lines is
+the day they asked for; if it is not, fix it with `change_routine`.
+
 ## Who decides
 
 Either partner can make any change on their own: the timezone, the topics,

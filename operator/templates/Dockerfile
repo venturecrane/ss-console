@@ -1301,7 +1301,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # 2026-10-19f (90c36b67, overlay #521): couples seats drop the establishment
 # toolset, so operations_request can no longer tell a partner that SMD sets
 # their schedule; the couple sets it with couples_settings_change.
-ARG OVERLAY_REF="90c36b67580527253813557d23b064f75e909192"
+# 2026-10-20 (e6c89423, overlay #522-#524): couples_settings_read carries
+# `today` in the couple's timezone, so "starting tomorrow" lands on the right
+# weekday (captain-mark scheduled Mondays for a Tuesday ask); #522/#523 are
+# test-fixture only.
+ARG OVERLAY_REF="e6c89423f5c0945e7e4227c81604fb16446402d7"
 
 # No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
 # across seats; the slug reaches the Machine only as fly.toml [env]
