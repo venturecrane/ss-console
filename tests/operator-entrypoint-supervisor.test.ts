@@ -401,6 +401,21 @@ wait
   }, 15000)
 })
 
+describe('the root audit-loss directory is made by root before the agent runs', () => {
+  const src = readFileSync(SUPERVISOR, 'utf8')
+  it('is the first thing smd_supervisor_boot does, and replaces anything that is not root’s', () => {
+    // 2026-10-20 review: /opt/data is the agent's; a planted .smd-root (its own
+    // dir or a symlink) is removed, never followed, and root's is created 0755.
+    const boot = src.slice(src.indexOf('smd_supervisor_boot() {'))
+    expect(boot.split('\n')[1].trim()).toBe('smd_root_loss_dir')
+    expect(src).toMatch(
+      /\[ -L "\$\{_d\}" \] \|\| \[ ! -d "\$\{_d\}" \] \|\| \[ "\$\(stat -c %u "\$\{_d\}"\)" != 0 \]/
+    )
+    expect(src).toContain('rm -rf -- "${_d}"')
+    expect(src).toContain('install -d -o root -g root -m 0755 "${_d}"')
+  })
+})
+
 describe('entrypoint.sh wires the supervisor', () => {
   const code = ENTRYPOINT.split('\n')
     .filter((l) => !/^\s*#/.test(l))

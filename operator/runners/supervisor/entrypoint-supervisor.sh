@@ -90,7 +90,24 @@ _smd_gateway_held() {
   exec setsid setpriv --reuid=hermes --regid=hermes --init-groups --no-new-privs /app/bootstrap.sh
 }
 
+# Root writers' audit-loss directory (overlay shared/audit_failure_counter.py
+# _record_as_root, 2026-10-20). Made here, as root, before any agent-uid process
+# exists this boot: /opt/data is the agent's, so anything it left at this name
+# (its own directory, a symlink) is removed first and the real one created. The
+# overlay refuses a .smd-root that is not root-owned and private to root, so a
+# planted one costs counts, never ownership; this keeps the counts.
+smd_root_loss_dir() {
+  local _d="${HERMES_HOME:-/opt/data}/.smd-root"
+  [ "$(id -u)" = 0 ] && [ -d "${HERMES_HOME:-/opt/data}" ] || return 0
+  if [ -L "${_d}" ] || [ ! -d "${_d}" ] || [ "$(stat -c %u "${_d}")" != 0 ]; then
+    rm -rf -- "${_d}"
+  fi
+  install -d -o root -g root -m 0755 "${_d}" \
+    || log "WARN: could not create ${_d}; root appliers' audit losses go uncounted this boot"
+}
+
 smd_supervisor_boot() {
+  smd_root_loss_dir
   smd_quiesce_clear_stale
   _SMD_GW_GATE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/smd-gateway-gate.XXXXXX")"
   chmod 0700 "${_SMD_GW_GATE_DIR}"
