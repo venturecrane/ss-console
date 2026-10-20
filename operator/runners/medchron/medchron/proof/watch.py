@@ -37,6 +37,9 @@ from . import PROOF_KEY, gate, holds
 logger = logging.getLogger("medchron.daemon")
 
 REPLY_DEADLINE_SECONDS = 20 * 60.0
+#: After a hold in the wake turn, how long a redraft has before the watch pages.
+#: The model's one redraft lands in seconds (A&P 20:29Z 2026-10-20: 8 s).
+HELD_GRACE_SECONDS = 3 * 60.0
 REALERT_SECONDS = 23 * 3600.0
 #: The bound-reply kind each lane's jobs answer under (reply_binding.KINDS).
 REPLY_KIND = {
@@ -382,6 +385,15 @@ def check_reply_watches(d: Any) -> None:
         if any(r.get("outcome") == "sent" and r.get("located") is False for r in rows):
             # The broker already paged (reply_not_in_sent_items); close the watch.
             w.update(done=True, outcome="unlocated")
+            d._write_state(job_id, reply_watch=w)
+            continue
+        armed = float(w.get("due") or 0) - REPLY_DEADLINE_SECONDS
+        if int(resp.get("holds") or 0) > 0 and d.clock() >= armed + HELD_GRACE_SECONDS:
+            # The send check held the turn's reply and nothing followed within
+            # the grace (a redraft goes in seconds): page now, not at the
+            # deadline (A&P 201167, 2026-10-20). `medchron rewake` re-sends it.
+            alert(d, job_id, "reply_unproven", "the reply was held by the outgoing-email check and none followed")
+            w.update(done=True, outcome="held")
             d._write_state(job_id, reply_watch=w)
             continue
         if d.clock() >= float(w.get("due") or 0):

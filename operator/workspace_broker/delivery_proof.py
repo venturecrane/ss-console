@@ -239,6 +239,7 @@ def reply_status_verb(
         "replies": reply_rows(str(broker.audit_db_path), kind, ident),
         "expected_key": _expected_key(broker, kind, ident),
         "channel": "msgraph" if broker.msgraph is not None else "agentmail",
+        "holds": holds_for(str(broker.audit_db_path), kind, ident, str(request.get("since") or "")),
     }
     if out["channel"] == "agentmail":
         out["sends_to_requester"] = sends_to(
@@ -277,6 +278,35 @@ def sends_to(db_path: str, requester: str, since: str) -> int:
         return int(row[0] if row else 0)
     except sqlite3.Error as exc:
         logger.warning("delivery_reply_status: dispatched sends unreadable: %s", exc)
+        return 0
+    finally:
+        conn.close()
+
+
+def holds_for(db_path: str, kind: str, ident: str, since: str) -> int:
+    """Replies the outgoing-email checks held in this job's own wake turn since
+    ``since``: ``REPLY_HELD`` rows the trust plugin stamped with the wake's
+    ``wake_kind``/``wake_job_id`` (overlay, 2026-10-20). A reply queued for
+    automatic release (``held_for_release``) is not counted: it goes by itself.
+
+    WHY. A held reply claims no bound-reply row, so until now the daemon's reply
+    watch saw a hold only as an absence, and paged twenty minutes after the turn
+    had already ended unsent (A&P 201167, 2026-10-20). 0 on an unreadable
+    ledger or a missing ``since``: the deadline page still stands behind it."""
+    if not since:
+        return 0
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5.0)
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM audit_log WHERE action_type='REPLY_HELD' "
+            "AND json_extract(metadata,'$.wake_kind') = ? AND json_extract(metadata,'$.wake_job_id') = ? "
+            "AND coalesce(json_extract(metadata,'$.held_for_release'), 0) = 0 "
+            "AND substr(ts,1,19) >= substr(?,1,19)",
+            (kind, ident, since),
+        ).fetchone()
+        return int(row[0] if row else 0)
+    except sqlite3.Error as exc:
+        logger.warning("delivery_reply_status: held replies unreadable: %s", exc)
         return 0
     finally:
         conn.close()

@@ -260,11 +260,12 @@ class ReplyBroker(ud.FakeBroker):
         super().__init__()
         self.replies: list[dict] = []
         self.expected_key: str | None = None
+        self.holds = 0
 
     def _request(self, req):
         if req["action"] == "delivery_reply_status":
             self.proof_requests.append(req)
-            out = {"ok": True, "replies": list(self.replies)}
+            out = {"ok": True, "replies": list(self.replies), "holds": self.holds}
             if self.expected_key is not None:
                 out["expected_key"] = self.expected_key
             return out
@@ -317,6 +318,41 @@ def test_no_reply_before_the_deadline_waits_and_after_it_pages(tmp_path):
     d.dispatch_wakes()
     assert _codes(broker) == ["reply_unproven"]
     d.dispatch_wakes()  # the watch is closed; it never pages twice
+    assert _codes(broker) == ["reply_unproven"]
+
+
+def test_a_held_reply_with_none_after_it_pages_inside_minutes_not_at_the_deadline(tmp_path):
+    """A&P 201167 (2026-10-20): the send check held the alert, the turn ended
+    unsent, and the page came at twenty minutes. FALSIFIER: drop the holds branch."""
+    d, broker = _watching(tmp_path)
+    broker.holds = 1
+    d.dispatch_wakes()  # inside the grace: a redraft may still go
+    assert _codes(broker) == []
+    d._now["t"] += watch.HELD_GRACE_SECONDS + 1
+    d.dispatch_wakes()
+    assert _codes(broker) == ["reply_unproven"]
+    w = d._daemon_state("01A")["reply_watch"]
+    assert w["done"] is True and w["outcome"] == "held"
+    assert watch.HELD_GRACE_SECONDS < watch.REPLY_DEADLINE_SECONDS / 4
+
+
+def test_a_hold_then_a_sent_redraft_closes_the_watch_with_no_page(tmp_path):
+    d, broker = _watching(tmp_path)
+    broker.holds = 1
+    broker.replies = [_row("medchron_job:01A:1:delivered")]
+    d._now["t"] += watch.HELD_GRACE_SECONDS + 1
+    d.dispatch_wakes()
+    assert _codes(broker) == [] and d._daemon_state("01A")["reply_watch"]["done"] is True
+
+
+def test_a_broker_without_the_holds_count_still_pages_at_the_deadline(tmp_path):
+    d, broker = _watching(tmp_path)
+    broker.holds = None
+    d._now["t"] += watch.HELD_GRACE_SECONDS + 1
+    d.dispatch_wakes()
+    assert _codes(broker) == []
+    d._now["t"] += watch.REPLY_DEADLINE_SECONDS
+    d.dispatch_wakes()
     assert _codes(broker) == ["reply_unproven"]
 
 
