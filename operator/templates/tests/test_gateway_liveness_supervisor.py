@@ -27,6 +27,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -34,6 +35,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ENTRYPOINT = REPO_ROOT / "operator" / "templates" / "entrypoint.sh"
+ROOT_LEDGER = REPO_ROOT / "operator" / "runners" / "supervisor" / "root_ledger.py"
 
 # The extracted region: from the argv-resolution helper through the `) &` that
 # closes the backgrounded supervisor subshell. Anchored on comment text that is
@@ -145,6 +147,10 @@ kill() {{
 SMD_GATEWAY_PID="{GATEWAY_PID}"
 GATEWAY_LIVENESS_RUN_DIR="{self.run_dir}"
 GATEWAY_LIVENESS_LEDGER_DIR="{self.ledger_dir}"
+# The REAL ledger helper (2026-10-20), so the budget and the record are tested
+# through the same no-follow path the Machine uses.
+SMD_ROOT_LEDGER_PY="{sys.executable}"
+SMD_ROOT_LEDGER="{ROOT_LEDGER}"
 GATEWAY_LIVENESS_PROC_DIR="{self.proc_dir}"
 GATEWAY_LIVENESS_PROFILES_DIR="{self.profiles_dir}"
 SMD_GATEWAY_LIVENESS_POLL_SECONDS=1
@@ -532,3 +538,21 @@ def test_state_tick_and_ledger_are_world_readable_for_the_gate(harness):
         assert mode & st.S_IROTH, f"{name} is not world-readable"
         assert not (mode & st.S_IWOTH), f"{name} is world-writable"
         assert not (mode & st.S_IWGRP), f"{name} is group-writable"
+
+
+def test_a_planted_kills_link_is_never_written_through(harness, tmp_path):
+    """2026-10-20: the ledger dir sat directly under the agent-owned /opt/data,
+    so the agent could swap in a dir whose `kills` links to a root file. Root's
+    `>>` appended to whatever it named. Every write now goes through
+    root_ledger.py (no follow); the restart still happens, uncounted."""
+    victim = tmp_path / "victim"
+    victim.write_text("root-owned content\n")
+    (harness.ledger_dir / "kills").symlink_to(victim)
+    harness.write_heartbeat("crane", age_seconds=0)
+    harness.start()
+    harness.wait_for_log(r"ARMED")
+    harness.wait_for_log(r"SIGTERM to container main")
+    harness.wait_for_log(r"kill ledger refused this restart")
+    # The seat says, through the liveness nag, that it runs without its limit.
+    harness.wait_for_log(r"GATEWAY LIVENESS: kill ledger unreadable.*restart limit is NOT being enforced")
+    assert victim.read_text() == "root-owned content\n"

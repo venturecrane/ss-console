@@ -170,7 +170,12 @@ LEGACY_AUDIT_DB="/opt/data/audit.db"
 # hand the agent ownership of its own restart budget on the second boot onward
 # (the dir is re-created root-owned every boot, but the `kills` FILE inside it
 # would already have flipped). Same reasoning, same fix, as the audit subtree.
-GATEWAY_LIVENESS_LEDGER_DIR="/opt/data/gateway-liveness"
+# 2026-10-20: moved under root's .smd-root (smd_root_loss_dir verifies it at
+# boot). Directly under the agent-owned /opt/data the agent could rename it
+# aside and plant a directory whose `kills` was a symlink; root's `>>` and
+# `chmod` then wrote to, or re-moded, whatever it named. Every runtime write and
+# read now goes through runners/supervisor/root_ledger.py (dir fd, no follow).
+GATEWAY_LIVENESS_LEDGER_DIR="${HERMES_HOME:-/opt/data}/.smd-root/gateway-liveness"
 # ss#2614: the chronology runner's queue + job workdirs. Root-owned on the
 # volume (a job's exhibits are hundreds of MB and a crash must resume), pruned
 # from the sweep for the same reason as the audit subtree, and reached by the
@@ -896,16 +901,13 @@ SMD_GATEWAY_LIVENESS_KILL_VERIFY_SECONDS="${SMD_GATEWAY_LIVENESS_KILL_VERIFY_SEC
 # precede. wrangler.toml carries the same sentence.
 install -d -o root -g root -m 0755 "${GATEWAY_LIVENESS_RUN_DIR}"
 install -d -o root -g root -m 0755 "${GATEWAY_LIVENESS_LEDGER_DIR}"
-# Converge the ledger FILE's mode every boot, not only at creation. The volume
-# persists, so a seat that restarted under the 0700/umask-027 first cut carries
-# a 0640 `kills` forever; `install -m 0644` on creation never re-runs for it.
-# Found live on hermes-scott 2026-08-21: the gate read "Permission denied" and
-# shipped gateway_restarts_last_hour as absent -- a hold, so not dangerous, but
-# the one field a restart cannot race was silently missing. A reconciler, not a
-# sweep (CLAUDE.md "prefer structural fixes"): every boot makes the layer
-# converge on authored state. `|| true` because a missing file is the normal
-# first-boot case and `set -e` is live here.
-chmod 0644 "${GATEWAY_LIVENESS_LEDGER_DIR}/kills" 2>/dev/null || true
+# The ledger's old home, directly under the agent-owned /opt/data (moved
+# 2026-10-20, see GATEWAY_LIVENESS_LEDGER_DIR). Removed before the agent runs:
+# rm never follows a link it finds there. The file mode the old boot-time chmod
+# converged is now set by root_ledger.py on every write, on a file it opened
+# without following a link. One cost, once: the restart budget's window starts
+# empty on the first boot of this image.
+rm -rf -- /opt/data/gateway-liveness
 # The supervisor's state machine, one word, rewritten on every transition so the
 # gate (and boot-smoke) can tell an ARMED supervisor from one that is inert,
 # not-watching this pin, or refusing further restarts. Same loud-not-silent
@@ -975,23 +977,21 @@ gateway_heartbeat_path() {
 
 # Epoch first so the window comparison is integer arithmetic, no date parsing.
 gateway_liveness_record_kill() {
-  [ -f "${GATEWAY_LIVENESS_LEDGER_DIR}/kills" ] \
-    || install -m 0644 -o root -g root /dev/null "${GATEWAY_LIVENESS_LEDGER_DIR}/kills"
-  printf '%s %s %s\n' "$(date -u +%s)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" \
-    >> "${GATEWAY_LIVENESS_LEDGER_DIR}/kills"
+  "${SMD_ROOT_LEDGER_PY:-/opt/hermes/.venv/bin/python3}" "${SMD_ROOT_LEDGER:-/app/runners/supervisor/root_ledger.py}" \
+    append "${GATEWAY_LIVENESS_LEDGER_DIR}" kills "$(date -u +%s) $(date -u +%Y-%m-%dT%H:%M:%SZ) $1" \
+    || log "WARN: kill ledger refused this restart (see root_ledger); it is not counted, and the restart limit is NOT being enforced"
 }
 
+# A ledger root_ledger refuses (not root's, a link, not a regular file) counts
+# as empty: the pre-ledger behaviour, and never a reason to stop restarting.
+# Accepted residual: while /opt/data is the agent's, it can rename .smd-root
+# aside at runtime and so switch the limit off until the next boot; it can never
+# make root write, chmod or follow anything (review 2026-10-20).
 gateway_liveness_kill_budget_ok() {
-  local ledger="${GATEWAY_LIVENESS_LEDGER_DIR}/kills" cutoff now line ts count=0
-  [ -f "${ledger}" ] || return 0
-  now="$(date -u +%s)"
-  cutoff=$(( now - SMD_GATEWAY_LIVENESS_KILL_WINDOW_SECONDS ))
-  while IFS= read -r line; do
-    ts="${line%% *}"
-    case "${ts}" in ''|*[!0-9]*) continue ;; esac
-    [ "${ts}" -ge "${cutoff}" ] && count=$(( count + 1 ))
-  done < "${ledger}"
-  [ "${count}" -lt "${SMD_GATEWAY_LIVENESS_MAX_KILLS}" ]
+  local count
+  count="$("${SMD_ROOT_LEDGER_PY:-/opt/hermes/.venv/bin/python3}" "${SMD_ROOT_LEDGER:-/app/runners/supervisor/root_ledger.py}" \
+    count "${GATEWAY_LIVENESS_LEDGER_DIR}" kills "$(( $(date -u +%s) - SMD_GATEWAY_LIVENESS_KILL_WINDOW_SECONDS ))")" || { count=0; gateway_liveness_nag "kill ledger unreadable (see root_ledger); the restart limit is NOT being enforced"; }
+  [ "${count:-0}" -lt "${SMD_GATEWAY_LIVENESS_MAX_KILLS}" ]
 }
 
 gateway_liveness_heartbeat_pid() {
