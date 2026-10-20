@@ -1305,7 +1305,10 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # `today` in the couple's timezone, so "starting tomorrow" lands on the right
 # weekday (captain-mark scheduled Mondays for a Tuesday ask); #522/#523 are
 # test-fixture only.
-ARG OVERLAY_REF="e6c89423f5c0945e7e4227c81604fb16446402d7"
+# 2026-10-20b (100632c3, overlay #525): a Claude model names its provider in
+# the profile config, so Hermes offers vision_analyze (it was silently absent on
+# every seat); the couples persona fixture gains pictures and voice messages.
+ARG OVERLAY_REF="100632c358e45581b4e9ba301ef3230ca7fa9927"
 
 # No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
 # across seats; the slug reaches the Machine only as fly.toml [env]
