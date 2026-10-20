@@ -65,16 +65,16 @@ def rewake(
         print(f"{job_id}'s reply watch is still open (due {_iso(float(w.get('due') or 0))}); wait for it to settle")
         return 1
     if w.get("proven_at") and not again:
-        print(f"{job_id}'s reply was proven sent at {_iso(float(w['proven_at']))}; --again sends the requester a second")
+        print(
+            f"{job_id}'s reply was proven sent at {_iso(float(w['proven_at']))}; --again sends the requester a second"
+        )
         return 1
     n = int(wake.get("resend") or 0) + 1
     now = clock()
     wake.update(pending=True, attempts=0, resend=n, sent_at=None, outcome=None)
     st["wake"] = wake
     st.pop("reply_watch", None)
-    st["proof_alerts"] = {
-        k: v for k, v in (st.get("proof_alerts") or {}).items() if not k.startswith(_RESET_ALERTS)
-    }
+    st["proof_alerts"] = {k: v for k, v in (st.get("proof_alerts") or {}).items() if not k.startswith(_RESET_ALERTS)}
     st["rewakes"] = [*(st.get("rewakes") or []), {"at": now, "by": by, "why": why[:300], "resend": n}]
     with p.open("r+", encoding="utf-8") as f:
         f.write(json.dumps(st, indent=1))
