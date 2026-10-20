@@ -45,7 +45,6 @@ function validInput(): ProvisioningInput {
     practice_areas: ['personal-injury'],
     fly_region: 'lax',
     model: 'claude-opus-4-7',
-    hermes_ref: 'v2026.5.7@a91a57fa5a13d516c38b07a141a9ce8a3daabeb0',
     machine_size: 'shared-cpu-1x',
     machine_memory_mb: 1024,
     user_email: 'partner@firm.com',
@@ -92,7 +91,6 @@ describe('parseProvisioningForm', () => {
     form.set('practice_areas', 'personal-injury, workers-comp')
     form.set('fly_region', 'lax')
     form.set('model', 'claude-opus-4-7')
-    form.set('hermes_ref', 'v2026.5.7@a91a57fa5a13d516c38b07a141a9ce8a3daabeb0')
     form.set('machine_size', 'shared-cpu-1x')
     form.set('machine_memory_mb', '1024')
     form.set('user_email', 'partner@firm.com')
@@ -157,17 +155,21 @@ describe('buildCandidateDoc + validateCandidate', () => {
     expect(result.ok).toBe(true)
   })
 
-  it('reports validator errors for a bad slug and a bad hermes_ref', () => {
+  it('reports validator errors for a bad slug and a bad model', () => {
     const bad = validInput()
     bad.customer_id = 'Bad Slug!'
-    bad.hermes_ref = 'not-a-pin'
+    bad.model = ''
     const { result } = validateCandidate(buildCandidateDoc(bad))
     expect(result.ok).toBe(false)
     if (!result.ok) {
       const paths = result.errors.map((e) => e.path)
       expect(paths).toContain('customer_id')
-      expect(paths).toContain('hermes_ref')
+      expect(paths).toContain('model')
     }
+  })
+
+  it('never authors a hermes_ref (the Hermes pin lives in the Dockerfile)', () => {
+    expect('hermes_ref' in buildCandidateDoc(validInput())).toBe(false)
   })
 
   it('fails closed when an authored field carries an inline secret', () => {

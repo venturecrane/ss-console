@@ -44,7 +44,6 @@ fly_region: lax # nearest to Phoenix; Fly has no phx region
 
 # ---- RUNTIME ----
 model: claude-sonnet-4-6
-hermes_ref: v2026.9.14@345cd2b057a452236de401d3534b8502a7465e8d
 
 machine:
   size: shared-cpu-1x

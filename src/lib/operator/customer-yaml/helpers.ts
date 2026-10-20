@@ -52,41 +52,25 @@ export function checkOptionalString(
   }
 }
 
-// Upstream-pin pattern per ADR 0024 (docs/adr/0024-hermes-consumption-and-update-cadence.md).
-// hermes_ref pins an UPSTREAM Hermes release by date-tag AND commit SHA:
-//   v{YYYY}.{M}.{D}@{40-hex-sha}
-//   (e.g. v2026.5.16@a91a57fa5a13d516c38b07a141a9ce8a3daabeb0)
-//   - {YYYY}.{M}.{D} is Hermes' date-based upstream version, present for human
-//     readability. Legacy SemVer tags (v0.14.0) are not accepted; Hermes
-//     switched to date-based tagging in 2026.
-//   - The @{sha} is the immutable pin. A commit SHA is content-addressed, so
-//     upstream cannot mutate what it points at — this is the immutability the
-//     retired fork only claimed to provide. Carrying the SHA in the ref also
-//     means provisioning never resolves it from a live upstream lookup
-//     (closes the availability defect documented in ADR 0024).
-// ADR 0024 retired the venturecrane/hermes-agent fork and its v...-smd.N tag
-// scheme. Bare date-tags (no @sha), bare SHAs (no v-tag), -smd.N fork tags,
-// and legacy SemVer tags are all rejected. Security patches are applied in the
-// base-image build and tracked by image digest, not by a ref suffix.
-const UPSTREAM_PIN_PATTERN = /^v\d{4}\.\d{1,2}\.\d{1,2}@[0-9a-f]{40}$/
-
-export function checkHermesRef(root: Record<string, unknown>, errors: ValidationError[]): void {
-  const v = root['hermes_ref']
-  // Required-string check already runs upstream of this; no-op cleanly when
-  // the field is absent or wrong-typed so we don't duplicate that error.
-  if (typeof v !== 'string' || v.length === 0) return
-  if (!UPSTREAM_PIN_PATTERN.test(v)) {
-    errors.push({
-      code: 'InvalidFormat',
-      path: 'hermes_ref',
-      message:
-        'hermes_ref must pin an upstream Hermes release of the form ' +
-        'v{YYYY}.{M}.{D}@{40-hex-sha} ' +
-        '(e.g. v2026.5.16@a91a57fa5a13d516c38b07a141a9ce8a3daabeb0). ' +
-        'Bare tags, bare SHAs, -smd.N fork tags, and legacy SemVer tags are ' +
-        'not accepted. See ADR 0024.',
-    })
-  }
+// `hermes_ref` is RETIRED. The Hermes pin lives once, in
+// operator/templates/Dockerfile (ARG HERMES_UPSTREAM_TAG / HERMES_UPSTREAM_SHA),
+// and every seat runs the shared fleet image built from it (ADR 0024, amended
+// 2026-10-19). A per-seat copy in customer.yaml was read by nothing and could
+// only drift silently, so the key is rejected rather than tolerated. The
+// on-box validator (overlay bootstrap/validate.py) still TOLERATES it, so a
+// stale file never fails a boot; this console check stops it being authored.
+export function checkHermesRefRetired(
+  root: Record<string, unknown>,
+  errors: ValidationError[]
+): void {
+  if (root['hermes_ref'] === undefined) return
+  errors.push({
+    code: 'RetiredField',
+    path: 'hermes_ref',
+    message:
+      'hermes_ref is retired; the Hermes pin lives in operator/templates/Dockerfile ' +
+      '(ARG HERMES_UPSTREAM_TAG / HERMES_UPSTREAM_SHA). Remove this field. See ADR 0024.',
+  })
 }
 
 export function optionalString(

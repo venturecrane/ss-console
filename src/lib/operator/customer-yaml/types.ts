@@ -1441,7 +1441,6 @@ export interface CustomerYaml {
    * `null` ⇒ no second tier; delegated work inherits the main model.
    */
   escalation_model: string | null
-  hermes_ref: string
   machine: MachineSpec
   users: User[]
   personas: Persona[]
@@ -1580,6 +1579,7 @@ export type ValidationErrorCode =
   | 'UnknownWebhookSkill'
   | 'InvalidWebhookUrl'
   | 'ExtendsReserved'
+  | 'RetiredField'
   | 'InvalidVerticalSpec'
   | 'InvalidAddonSpec'
   | 'UnknownAddon'

@@ -87,12 +87,11 @@ prog=""; file=""
 for a in "$@"; do
   case "$a" in
     */customer.yaml) file="$a" ;;
-    *machine*|*hermes_ref*) prog="$a" ;;
+    *machine*) prog="$a" ;;
   esac
 done
 [ -n "$file" ] || exit 1
 case "$prog" in
-  *hermes_ref*) awk -F@ '/^hermes_ref:/{gsub(/[[:space:]]/,"",$2); print $2; exit}' "$file" ;;
   *memory_mb*)  awk '/^machine:/{m=1;next} m&&/memory_mb:/{print $2;exit} m&&/^[^ ]/{exit}' "$file" ;;
   *size*)       awk '/^machine:/{m=1;next} m&&/size:/{print $2;exit} m&&/^[^ ]/{exit}' "$file" ;;
   *)            exit 1 ;;

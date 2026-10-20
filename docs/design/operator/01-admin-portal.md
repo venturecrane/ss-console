@@ -221,7 +221,7 @@ them self-serve control of (say) people-access or connectors. Every flip is audi
 
 ### 5.10 Lifecycle
 
-Provision status, Hermes `hermes_ref` pin + repin, VM size, **pause/resume**, and **decommission** (the existing
+Provision status, the fleet release (Hermes pin) the seat runs, VM size, **pause/resume**, and **decommission** (the existing
 9-step idempotent pipeline). Plus config-history (reuses `/config-history`): the customer.yaml sync log with git SHAs.
 `smd_admin`-only.
 

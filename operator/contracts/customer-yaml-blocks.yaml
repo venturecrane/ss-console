@@ -51,9 +51,6 @@ top_level:
   machine:
     status: implemented
     materializer: provision-customer.sh (Machine size/region)
-  hermes_ref:
-    status: implemented
-    materializer: provision-customer.sh (Docker build args + pinned-SHA assertion)
   vertical:
     status: implemented
     materializer: translate _persona_config (config.yaml) + SOUL.md + SMD_VERTICAL (trust)

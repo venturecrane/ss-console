@@ -88,7 +88,7 @@ The script prompts for each; copy to clipboard, press Enter (or `s` to skip). Va
 
 ### Customer fixture
 
-`operator/customers/<slug>/customer.yaml` must exist and validate. **customer-zero is `smd`** (`operator/customers/smd/customer.yaml`) — we dogfood the SMD Operator on SMD itself. Its `hermes_ref` is pinned (`v2026.5.16@a91a57fa…`); the Dockerfile clones `NousResearch/hermes-agent` at that tag and asserts the cloned HEAD matches the SHA.
+`operator/customers/<slug>/customer.yaml` must exist and validate. **customer-zero is `smd`** (`operator/customers/smd/customer.yaml`) — we dogfood the SMD Operator on SMD itself. The Hermes pin is not in customer.yaml (`hermes_ref` is retired and rejected): it is `ARG HERMES_UPSTREAM_TAG` / `HERMES_UPSTREAM_SHA` in `operator/templates/Dockerfile`, which clones `NousResearch/hermes-agent` at that tag and asserts the cloned HEAD matches the SHA.
 
 ## The command
 

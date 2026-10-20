@@ -780,8 +780,10 @@ describe('portal list-row registry: UI-PATTERNS R7 enforcement', () => {
 /**
  * Operator customer.yaml invariants.
  *
- * Guards the exact regression #776 shipped: a customer config with an invalid
- * `hermes_ref` fork tag (`v2026.5.16-smd.0`). Also bans `composio:` backends:
+ * Bans the retired `hermes_ref` key from every committed customer.yaml,
+ * templates included (#776 shipped an invalid fork tag there; the key is now
+ * retired outright because the Hermes pin lives once, in
+ * operator/templates/Dockerfile). Also bans `composio:` backends:
  * composio is retired (ADR 0020, 2026-05-30 revision) and the `composio:` prefix
  * is no longer accepted by the customer.yaml validator — this is a defensive
  * second layer so no committed config can reintroduce it. Narrow on purpose —
@@ -789,13 +791,10 @@ describe('portal list-row registry: UI-PATTERNS R7 enforcement', () => {
  * not code).
  *
  * @see docs/adr/0020-connector-strategy.md (composio retired)
- * @see docs/adr/0024-hermes-consumption-and-update-cadence.md (hermes_ref pin format)
+ * @see docs/adr/0024-hermes-consumption-and-update-cadence.md (Hermes pin lives in the Dockerfile)
  */
 describe('operator customer.yaml invariants', () => {
   const customersRoot = resolve('operator/customers')
-  // v{YYYY}.{M}.{D}@{40-hex-sha} — fork tags like -smd.N do not match.
-  const HERMES_REF_RE = /^v\d{4}\.\d{1,2}\.\d{1,2}@[0-9a-f]{40}$/
-
   function customerYamls(): string[] {
     const out: string[] = []
     let entries: string[]
@@ -816,7 +815,7 @@ describe('operator customer.yaml invariants', () => {
     return out
   }
 
-  it('no committed customer.yaml uses a composio: backend or a hermes_ref fork tag', () => {
+  it('no committed customer.yaml uses a composio: backend', () => {
     for (const file of customerYamls()) {
       const rel = file.replace(resolve('.') + '/', '')
       const content = readFileSync(file, 'utf-8')
@@ -825,15 +824,31 @@ describe('operator customer.yaml invariants', () => {
         `${rel} uses a composio: backend — composio is retired and the prefix is ` +
           `no longer accepted by the validator (ADR 0020).`
       ).toBe(false)
-      const match = content.match(/^\s*hermes_ref:\s*['"]?([^'"\n]+?)['"]?\s*$/m)
-      if (match) {
-        const ref = match[1].trim()
-        expect(
-          HERMES_REF_RE.test(ref),
-          `${rel} hermes_ref "${ref}" is not v{YYYY}.{M}.{D}@{40-hex-sha} ` +
-            `(fork tags like -smd.N are rejected per ADR 0024).`
-        ).toBe(true)
+    }
+  })
+
+  it('no committed customer.yaml or template carries the retired hermes_ref key', () => {
+    const files: string[] = []
+    for (const entry of readdirSync(customersRoot)) {
+      const file = join(customersRoot, entry, 'customer.yaml')
+      try {
+        if (statSync(file).isFile()) files.push(file)
+      } catch {
+        // no customer.yaml in this dir
       }
+    }
+    const templatesRoot = resolve('operator/templates')
+    for (const entry of readdirSync(templatesRoot)) {
+      if (entry.endsWith('.yaml')) files.push(join(templatesRoot, entry))
+    }
+    expect(files.length).toBeGreaterThan(0)
+    for (const file of files) {
+      const rel = file.replace(resolve('.') + '/', '')
+      expect(
+        /^\s*hermes_ref\s*:/m.test(readFileSync(file, 'utf-8')),
+        `${rel} carries hermes_ref — the key is retired; the Hermes pin lives in ` +
+          `operator/templates/Dockerfile (ARG HERMES_UPSTREAM_SHA). Remove the line.`
+      ).toBe(false)
     }
   })
 })

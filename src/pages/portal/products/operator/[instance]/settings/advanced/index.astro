@@ -65,8 +65,8 @@ import { env } from 'cloudflare:workers'
  * as read-only. The server-side validator rejects any attempt to
  * mutate them even if the form is bypassed.
  *
- * Identity fields the PROJECTION does not carry (the Hermes pin, the machine
- * size, the model, the region) are not rendered at all. The resolver used to
+ * Identity fields the PROJECTION does not carry (the machine size, the
+ * model, the region) are not rendered at all. The resolver used to
  * invent them — `model: 'unknown'`, `vertical: 'mixed'` for a law firm, a
  * fabricated version pin — and only avoided showing a client those values by
  * failing to render entirely (#1965). Absent is the honest display of absent.
