@@ -182,6 +182,19 @@ def test_update_event_moving_a_date_keeps_the_matter_link(rec: _Recorder) -> Non
     }
 
 
+def test_update_event_rename_keeps_the_provenance_mark(rec: _Recorder) -> None:
+    """create_event stamps "[Operator]"; a rename through update_event used to
+    send the new subject bare, so staff could no longer tell the entry was
+    machine-made (seen live on the pilot 2026-10-20, vfy_01M5D8FMQ95CWE0JDS5WN1ZZA5)."""
+    rec.responses["/events/e-2"] = dict(_LINKED_EVENT)
+    try:
+        server.update_event(event_id="e-2", subject="Discovery: responses due 11/30")
+    except Exception:  # the read-back may disagree with the canned GET; the PUT is what is under test
+        pass
+    put = next(c for c in rec.calls if c["method"] == "PUT")
+    assert put["json"]["subject"] == "[Operator] Discovery: responses due 11/30"
+
+
 def test_update_event_explicit_matter_id_relinks(rec: _Recorder) -> None:
     rec.responses["/events/e-2"] = {**_LINKED_EVENT, "matter": None}
     server.update_event(event_id="e-2", matter_id="m-9")

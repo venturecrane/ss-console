@@ -991,7 +991,9 @@ def update_event(
     matter link, attendees and every unchanged field (``event_update``).
     ``matter_id`` changes the link only when passed."""
     refuse_shifted_clocks("update_event", all_day, start_time, end_time)
-    changes = dict(subject=subject, start_time=start_time, end_time=end_time, description=description)
+    # A renamed event keeps the provenance mark create_event put on it; without
+    # this an Operator edit silently turned a machine entry into a "human" one.
+    changes = dict(subject=_stamp(subject), start_time=start_time, end_time=end_time, description=description)
     changes.update(location=location, all_day=all_day, attendees=attendees, time_zone=time_zone)
     return put_event_update(_get_client(), event_id, _verify_matter_reference, matter_id=matter_id, **changes)
 
