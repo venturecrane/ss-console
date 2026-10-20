@@ -72,7 +72,7 @@ import {
 import { seatsOf } from '../../../scripts/lib/seat-clients.mjs'
 import { JSON_FIELDS, projectRow, renderTable } from '../../../scripts/lib/register-view.mjs'
 import { wranglerD1 } from '../../../scripts/lib/wrangler-d1.ts'
-import { upsertObligation } from '../../../src/lib/db/obligations.ts'
+import { recurringWindowRefusal, upsertObligation } from '../../../src/lib/db/obligations.ts'
 import {
   entityIdForSeat,
   findOpenByKey,
@@ -88,7 +88,7 @@ import {
   validateCancellation,
   validateDelivery,
 } from './register-close.mjs'
-import { cmdCancel, cmdReopen } from './register-retire.mjs'
+import { cmdAwait, cmdCancel, cmdReopen, cmdRetire } from './register-retire.mjs'
 
 // Re-exported so the CLI stays the single import surface for its own tests and
 // for any caller that thinks in terms of `register`, not of where the rendering
@@ -231,6 +231,12 @@ export function validateCapture(args, opts = {}) {
     if (!args[field]) return { ok: false, error: `missing_${field}` }
   }
   if (!KINDS.includes(args.kind)) return { ok: false, error: 'unknown_kind' }
+  const windowRefusal = recurringWindowRefusal({
+    kind: args.kind,
+    window_start: args['window-start'],
+    window_end: args['window-end'],
+  })
+  if (windowRefusal) return { ok: false, error: 'recurring_without_window', detail: windowRefusal }
   if (args.due && !args['date-quote']) return { ok: false, error: 'due_without_date_quote' }
 
   const sourceKind = args['source-kind'] || inferSourceKind(args.source)
@@ -368,6 +374,8 @@ function usage() {
   register cancel --client <slug> --key <stable-key> \\
       --evidence <the client's withdrawing letter> --quote "<verbatim from it>" [--kind <kind>]
   register reopen --client <slug> --key <key> --evidence <letter> --quote "<verbatim>" --why "<why>"
+  register retire --client <slug> --key <key> --why "<why this was never an obligation>" [--kind <kind>]
+  register await --client <slug> --key <key> --evidence <letter> --quote "<verbatim: whose move it is>"
   register sync
   register list [--client <slug>]`)
 }
@@ -405,6 +413,7 @@ function explainCaptureRefusal(check, args) {
     console.error(`  ${engagementsDir()} is not checked out; cannot verify the quote.`)
     console.error('  This fails closed on purpose: an unverifiable citation is not a citation.')
   }
+  if (check.detail) console.error(`  ${check.detail}`)
   if (check.error === 'quote_too_short') {
     console.error(`  a ${check.words}-word quote matches too much; give at least ${MIN_QUOTE_WORDS}.`)
   }
@@ -629,6 +638,10 @@ export async function main(argv) {
       return cmdCancel(args, retireCli())
     case 'reopen':
       return cmdReopen(args, retireCli())
+    case 'retire':
+      return cmdRetire(args, retireCli())
+    case 'await':
+      return cmdAwait(args, retireCli())
     case 'sync':
       return cmdSync()
     case 'list':

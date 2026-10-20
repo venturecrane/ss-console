@@ -230,3 +230,72 @@ export async function markReopenedAttested(
   }
   return { ok: true }
 }
+
+/**
+ * Move a row by setting only its state and disposition, guarded on the state
+ * the caller read, then READ IT BACK. The shared body of `markRetired` and
+ * `markAwaitingExternal`, which differ only in the edge and its meaning.
+ */
+async function moveWithDisposition(
+  db: D1Database,
+  input: { obligationId: string; fromState: ObligationState; disposition: string },
+  to: 'void' | 'awaiting_external'
+): Promise<DeliveryWrite> {
+  const legal = checkTransition(input.fromState, to, null)
+  if (!legal.ok) return { ok: false, error: 'illegal_transition' }
+
+  const closes = to === 'void' ? `, closed_at = datetime('now')` : ''
+  await db
+    .prepare(
+      `UPDATE client_obligations SET state = '${to}', disposition = ?${closes} ` +
+        `WHERE obligation_id = ? AND state = ?`
+    )
+    .bind(input.disposition, input.obligationId, input.fromState)
+    .run()
+
+  const after = await getObligation(db, input.obligationId)
+  if (!after || after.state !== to || after.disposition !== input.disposition) {
+    return { ok: false, error: 'did_not_land', reads: after?.state ?? null }
+  }
+  return { ok: true }
+}
+
+/**
+ * Retire a row that was NEVER an obligation (`-> void`), then READ IT BACK.
+ *
+ * Distinct from both closures above. `delivered` says we kept a promise and
+ * `cancelled` says the client released one; a retired row says there was no
+ * promise to keep: a contract term every job already checks, or a scheduled
+ * routine another control already grades. Until 2026-10-20 such a row could
+ * leave `open` only by being misfiled as one of those two, or by aging into a
+ * daily alert about work nobody owed.
+ *
+ * Imported rows are allowed: a retired imported row is NOT re-created by the
+ * nightly import, because `upsertObligation` never touches `state` on conflict
+ * and the reconciler's universe excludes `void`. The reason is the evidence;
+ * the disposition stores it, so the row itself says why it left the list.
+ */
+export async function markRetired(
+  db: D1Database,
+  input: { obligationId: string; fromState: ObligationState; disposition: string }
+): Promise<DeliveryWrite> {
+  return moveWithDisposition(db, input, 'void')
+}
+
+/**
+ * Record that a row is waiting on someone else (`-> awaiting_external`), then
+ * READ IT BACK.
+ *
+ * The evidence is a letter on the archive's main that says the next step is
+ * theirs; the disposition stores its commit-pinned locator and the verbatim
+ * quote. The evidence_* columns are deliberately NOT set: an attested row with
+ * a receipt probes `present`, and the nightly run would then certify work
+ * nobody did. A row in this state does not raise the undated aging alert,
+ * because "open N days" is then a fact about the other party, not about us.
+ */
+export async function markAwaitingExternal(
+  db: D1Database,
+  input: { obligationId: string; fromState: ObligationState; disposition: string }
+): Promise<DeliveryWrite> {
+  return moveWithDisposition(db, input, 'awaiting_external')
+}

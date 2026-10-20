@@ -65,7 +65,13 @@ export function classifyRow(row: Obligation, probe: ProbeResult, now: Date): Ver
   // for as long as its issue is merely open, so alarming on those would page on
   // ordinary backlog that `crane_status` already lists. Captured rows -- the
   // letter-stated promises -- are the ones nothing else in the venture watches.
-  if (!row.due_at && row.origin === 'captured') {
+  //
+  // And not for a row WAITING ON SOMEONE ELSE. "Open 32 days" about a row in
+  // `awaiting_external`, or of kind `external_dependency` (waiting on a third
+  // party by definition), measures the other party's pace, and paging SMD about
+  // it daily trains the ops inbox to be skimmed. Found 2026-10-20: an A&P review
+  // list already marked awaiting the firm's approval alerted every morning.
+  if (!row.due_at && row.origin === 'captured' && !waitsOnSomeoneElse(row)) {
     // ageInDays, not `new Date(...)`: SQLite writes UTC with no zone marker and
     // JS parses that as local, which reads every row younger than it is and
     // delays the ladder by the machine's offset.
@@ -73,6 +79,15 @@ export function classifyRow(row: Obligation, probe: ProbeResult, now: Date): Ver
     if (days !== null && days >= UNDATED_STALE_DAYS) return { verdict: 'stale', days }
   }
   return { verdict: 'still_open' }
+}
+
+/**
+ * Is the next move on this row someone else's? The state says so for one row;
+ * the kind says so for every row of it. Either exempts the undated age ladder
+ * (a DUE DATE still alarms: a dated promise is ours to chase).
+ */
+export function waitsOnSomeoneElse(row: Pick<Obligation, 'state' | 'kind'>): boolean {
+  return row.state === 'awaiting_external' || row.kind === 'external_dependency'
 }
 
 /** Severity ladder for an overdue obligation. Warning at due, critical a week on. */
