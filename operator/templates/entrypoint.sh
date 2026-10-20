@@ -185,7 +185,9 @@ umask 027
 # Agent owns its data EXCEPT the broker-owned audit subtree (R1). This REPLACES
 # a plain `chown -R hermes:hermes /opt/data`, which would re-own the ledger back
 # to hermes on every reboot and silently false-close the tamper-resistance.
-find /opt/data \( -path "${AUDIT_DIR}" -o -path "${GATEWAY_LIVENESS_LEDGER_DIR}" -o -path "${MEDCHRON_DATA_DIR}" \) -prune -o -print0 | xargs -0 -r chown hermes:hermes
+# .smd-root is root's own audit-loss tally (overlay audit_failure_counter); re-
+# owning it would make smd_root_loss_dir wipe it as agent-planted every boot.
+find /opt/data \( -path "${AUDIT_DIR}" -o -path "${GATEWAY_LIVENESS_LEDGER_DIR}" -o -path "${MEDCHRON_DATA_DIR}" -o -path "${HERMES_HOME:-/opt/data}/.smd-root" \) -prune -o -print0 | xargs -0 -r chown hermes:hermes
 
 # NOTE: the broker reaches the ledger via the bind mount established below, NOT
 # by traversing /opt/data. The Hermes gateway chmods its home (/opt/data) to
@@ -547,7 +549,17 @@ launch_broker() {
 # `if` guard keeps the inherited `set -e` from killing the loop on a non-zero
 # broker exit. (Fail-open-with-respawn is intentional for this PR; the stronger
 # fail-closed ack-before-dispatch is deferred to the autonomous-send workstream.)
-(
+#
+# The loop and every broker it launches IGNORE SIGTERM/SIGINT (an ignored
+# signal stays ignored across setpriv, env -i and exec). tini -g signals this
+# whole process group at a Machine stop, and the broker has no handler, so it
+# used to die at the first instant of the stop while the gateway (its own
+# session since the job-safe stop) ran on for up to 45 s and the medchron
+# daemon drained for up to 240 s with nothing to record to: the daemon's
+# job_record calls failed, the gateway's rows were held and lost, and a send
+# in flight could leave with no row (2026-10-20). Now the broker outlives both
+# and dies with the container when the supervisor exits.
+( trap '' TERM INT
   while true; do
     if launch_broker; then _brk_rc=0; else _brk_rc=$?; fi
     log "Workspace broker exited (rc=${_brk_rc}); respawning in 2s"
@@ -562,7 +574,7 @@ for _ in 1 2 3 4 5; do
 done
 [ -S "${BROKER_SOCKET}" ] || {
   log "FATAL: Workspace broker socket was not created"
-  kill "${SUPERVISOR_PID}" 2>/dev/null || true
+  kill -KILL "${SUPERVISOR_PID}" 2>/dev/null || true
   exit 1
 }
 

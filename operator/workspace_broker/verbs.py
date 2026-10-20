@@ -130,6 +130,9 @@ VERBS: tuple[Verb, ...] = (
     # connector's write_record.py). Agent uid for the Operator's MCP server and
     # seat-probe scripts; root for a raw ssh session and the boot reconciler.
     Verb("smokeball_write_append", ROOT_OR_AGENT, audit_verbs.smokeball_write_append),
+    # CONFIG_WRITE from the root config and skills appliers, which are not the
+    # gateway and so had every generic append refused (2026-10-20).
+    Verb("config_write_append", _only(ROOT), audit_verbs.config_write_append),
     Verb("escalation_event_append", _only(AGENT), _escalation),
     # Case-manager casework ledger (proposals, verdicts, task writes).
     Verb("casework_event_append", _only(AGENT), casework_verbs.append_casework_event),

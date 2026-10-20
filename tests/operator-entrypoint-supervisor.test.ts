@@ -247,6 +247,27 @@ describe.skipIf(!bashOk)('entrypoint supervisor: the Machine stop drains before 
     process.kill(Number(readFileSync(`${r.dir}/job.pid`, 'utf8')), 'SIGKILL')
   }, 30000)
 
+  it('the broker survives the group stop, outlives the gateway, then is killed with no extra wait', async () => {
+    // 2026-10-20: the broker loop ignores TERM (entrypoint.sh) so the gateway
+    // and the daemon drain can still record; the supervisor KILLs it once the
+    // gateway has exited, so the stop takes no longer than before.
+    const py = process.env.PYTHON ?? 'python3'
+    const broker = `( trap '' TERM INT
+  while true; do
+    ${py} -c 'import os, time; open(os.environ["OUT"] + "/broker.pids", "a").write(f"{os.getpid()}\\n"); time.sleep(120)'
+    sleep 0.2
+  done ) &
+SUPERVISOR_PID=$!
+`
+    const started = Date.now()
+    const r = await runStop(NEW_SHAPE().replace('smd_supervise\n', `${broker}smd_supervise\n`))
+    expect(r.code, r.log).toBe(0)
+    const pids = readFileSync(`${r.dir}/broker.pids`, 'utf8').trim().split('\n').map(Number)
+    expect(pids, 'one broker for the whole stop: the group signal did not kill it').toHaveLength(1)
+    expect(alive(pids[0]), 'killed once the gateway exited').toBe(false)
+    expect(Date.now() - started).toBeLessThan(20000)
+  }, 30000)
+
   it('exits with the gateway code when the gateway exits on its own (crash semantics kept)', async () => {
     const r = await runStop(NEW_SHAPE('crash'), {}, false)
     expect(r.code).toBe(7)
@@ -344,6 +365,74 @@ describe.skipIf(!bashOk)('entrypoint supervisor: the held gateway and the quiesc
   })
 })
 
+describe.skipIf(!bashOk)('a broker launched under the loop survives tini -g', () => {
+  async function brokerAfterGroupTerm(trap: string): Promise<boolean> {
+    const dir = mkdtempSync(join(tmpdir(), 'smd-broker-term-'))
+    const py = process.env.PYTHON ?? 'python3'
+    const script = `
+( ${trap}
+  /usr/bin/env -i ${py} -c 'import os, time; open("${dir}/pid", "w").write(str(os.getpid())); time.sleep(30)' ) &
+wait
+`
+    writeFileSync(`${dir}/loop.sh`, script)
+    // nosemgrep: javascript.lang.security.audit.dangerous-spawn-shell.dangerous-spawn-shell -- argv is bash plus a script this test wrote into its own mkdtemp dir; no input reaches it
+    const child = spawn('bash', [`${dir}/loop.sh`], { detached: true, stdio: 'ignore' })
+    await until(() => existsSync(`${dir}/pid`) && readFileSync(`${dir}/pid`, 'utf8').length > 0)
+    const brokerPid = Number(readFileSync(`${dir}/pid`, 'utf8'))
+    process.kill(-child.pid!, 'SIGTERM') // tini -g
+    await sleep(300)
+    const survived = alive(brokerPid)
+    for (const pid of [brokerPid, -child.pid!]) {
+      try {
+        process.kill(pid, 'SIGKILL')
+      } catch {
+        // already gone
+      }
+    }
+    return survived
+  }
+
+  it('a group SIGTERM leaves an env -i python child of an ignoring subshell running', async () => {
+    expect(await brokerAfterGroupTerm("trap '' TERM INT")).toBe(true)
+  }, 15000)
+
+  it('FALSIFIER: without the trap the same child dies with the group', async () => {
+    expect(await brokerAfterGroupTerm(':')).toBe(false)
+  }, 15000)
+})
+
+describe('the root audit-loss directory is made by root before the agent runs', () => {
+  const src = readFileSync(SUPERVISOR, 'utf8')
+  it('is the first thing smd_supervisor_boot does, and replaces anything that is not root’s', () => {
+    // 2026-10-20 review: /opt/data is the agent's; a planted .smd-root (its own
+    // dir or a symlink) is removed, never followed, and root's is created 0755.
+    const boot = src.slice(src.indexOf('smd_supervisor_boot() {'))
+    expect(boot.split('\n')[1].trim()).toBe('smd_root_loss_dir')
+    expect(src).toMatch(
+      /\[ -L "\$\{_d\}" \] \|\| \[ ! -d "\$\{_d\}" \] \|\| \[ "\$\(stat -c %u "\$\{_d\}"\)" != 0 \]/
+    )
+    expect(src).toContain('rm -rf -- "${_d}"')
+    expect(src).toContain('install -d -o root -g root -m 0755 "${_d}"')
+  })
+
+  it('the boot chown of /opt/data leaves .smd-root alone, or root’s counts reset every boot', () => {
+    const line = ENTRYPOINT.split('\n').find((l) => l.startsWith('find /opt/data')) ?? ''
+    const pruned = /-o -path ("[^"]*\.smd-root") \\\) -prune/.exec(line)?.[1]
+    const created = /local _d=("[^"]*")/.exec(readFileSync(SUPERVISOR, 'utf8'))?.[1]
+    expect(pruned, 'the prune names .smd-root').toBeDefined()
+    expect(created).toBeDefined()
+    // Same path from the same variable, whatever HERMES_HOME is.
+    for (const home of ['', '/opt/data', '/srv/elsewhere']) {
+      const env: NodeJS.ProcessEnv = { ...process.env, HERMES_HOME: home }
+      if (home === '') delete env.HERMES_HOME
+      const sh = (expr: string) =>
+        // nosemgrep: javascript.lang.security.audit.dangerous-spawn-shell.dangerous-spawn-shell -- expr is a quoted path expression read from this repo's own shell source by a closed regex; no external input reaches it
+        spawnSync('bash', ['-c', `printf '%s' ${expr}`], { env, encoding: 'utf8' }).stdout
+      expect(sh(pruned!), `HERMES_HOME=${home}`).toBe(sh(created!))
+    }
+  })
+})
+
 describe('entrypoint.sh wires the supervisor', () => {
   const code = ENTRYPOINT.split('\n')
     .filter((l) => !/^\s*#/.test(l))
@@ -369,6 +458,13 @@ describe('entrypoint.sh wires the supervisor', () => {
     expect(code).toContain('smd_root_poller config_applier "config applier"')
     expect(code).toContain('smd_root_poller spec_applier "spec applier"')
     expect(code).not.toMatch(/-m (config|spec)_applier \|\| true/)
+  })
+
+  it('the broker respawn loop ignores the group stop signal, so the broker outlives the gateway', () => {
+    // 2026-10-20: tini -g signals this group at a Machine stop; the broker has
+    // no handler and died at once while the gateway and the medchron daemon
+    // drained for minutes with nothing to record to.
+    expect(code).toMatch(/\( trap '' TERM INT\n\s+while true; do\n\s+if launch_broker; then/)
   })
 
   it('keeps every boot gate before the release', () => {

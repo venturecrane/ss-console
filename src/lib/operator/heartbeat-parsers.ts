@@ -373,7 +373,9 @@ function parseToolFailureEntry(value: unknown): Record<string, unknown> | null {
 // `reason:ACTION_TYPE`, both from closed shapes on the seat and re-checked
 // here, because the key reaches a Sentry message. A key of another shape is
 // dropped; an object with more keys than the seat may send is NULL.
-const AUDIT_LOSS_REASONS_MAX_KEYS = 32
+// The seat sends at most 32; the console's stored high-water baseline
+// (heartbeat-alerts.ts) keeps up to 64 and is read back through this parser.
+const AUDIT_LOSS_REASONS_MAX_KEYS = 64
 const AUDIT_LOSS_REASON_KEY_RE = /^[a-z][a-z_]{0,39}(:[A-Z][A-Z0-9_]{0,63})?$/
 
 export function parseAuditWriteFailureReasons(value: unknown): Record<string, number> | null {

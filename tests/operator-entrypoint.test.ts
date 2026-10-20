@@ -73,7 +73,8 @@ describe('Operator customer Machine entrypoint — broker respawn supervisor', (
   })
 
   it('tears down the supervisor (not a stale broker PID) if the socket never appears', () => {
-    expect(ENTRYPOINT_CODE).toMatch(/kill\s+"\$\{SUPERVISOR_PID\}"/)
+    // KILL: the loop ignores TERM since 2026-10-20 so the broker survives tini -g.
+    expect(ENTRYPOINT_CODE).toMatch(/kill\s+-KILL\s+"\$\{SUPERVISOR_PID\}"/)
     // The old BROKER_PID variable is gone — the supervised loop owns the lifecycle.
     expect(/BROKER_PID=/.test(ENTRYPOINT_CODE)).toBe(false)
   })
@@ -177,7 +178,9 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
       /mount --bind "\$\{MEDCHRON_DATA_DIR\}" "\$\{MEDCHRON_RUN_DIR\}"/
     )
     // Pruned from the hermes chown sweep like the audit subtree.
-    expect(ENTRYPOINT_CODE).toMatch(/-o -path "\$\{MEDCHRON_DATA_DIR\}" \\\) -prune/)
+    expect(ENTRYPOINT_CODE).toMatch(
+      /-o -path "\$\{MEDCHRON_DATA_DIR\}" (-o -path [^ ]+ )?\\\) -prune/
+    )
   })
 
   it('carries the queue path into the broker env allowlist', () => {

@@ -1315,7 +1315,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # reason class plus its action_type, never content) beside the tally, and the
 # heartbeat carries the histogram (audit_write_failure_reasons, migration 0131).
 # emit.py stops counting a broker loss twice. emit.py twin re-hashed.
-ARG OVERLAY_REF="4f1c65065fc734c3d2570a5dac9562fbdb30cd07"
+# 2026-10-20e (1a05699a, overlay #528): root config/skills appliers record CONFIG_WRITE
+# through the root-only config_write_append verb (this PR); routine changes are
+# drained from the seat home by the gateway (undated backlog kept off the client
+# feed); root writers' audit losses live in a root-owned .smd-root. No tracked twin moved.
+ARG OVERLAY_REF="1a05699a38fe72053bb55d6338b45bd3d348192a"
 
 # No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
 # across seats; the slug reaches the Machine only as fly.toml [env]

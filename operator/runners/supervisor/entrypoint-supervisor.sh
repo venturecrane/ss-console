@@ -90,7 +90,24 @@ _smd_gateway_held() {
   exec setsid setpriv --reuid=hermes --regid=hermes --init-groups --no-new-privs /app/bootstrap.sh
 }
 
+# Root writers' audit-loss directory (overlay shared/audit_failure_counter.py
+# _record_as_root, 2026-10-20). Made here, as root, before any agent-uid process
+# exists this boot: /opt/data is the agent's, so anything it left at this name
+# (its own directory, a symlink) is removed first and the real one created. The
+# overlay refuses a .smd-root that is not root-owned and private to root, so a
+# planted one costs counts, never ownership; this keeps the counts.
+smd_root_loss_dir() {
+  local _d="${HERMES_HOME:-/opt/data}/.smd-root"
+  [ "$(id -u)" = 0 ] && [ -d "${HERMES_HOME:-/opt/data}" ] || return 0
+  if [ -L "${_d}" ] || [ ! -d "${_d}" ] || [ "$(stat -c %u "${_d}")" != 0 ]; then
+    rm -rf -- "${_d}"
+  fi
+  install -d -o root -g root -m 0755 "${_d}" \
+    || log "WARN: could not create ${_d}; root appliers' audit losses go uncounted this boot"
+}
+
 smd_supervisor_boot() {
+  smd_root_loss_dir
   smd_quiesce_clear_stale
   _SMD_GW_GATE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/smd-gateway-gate.XXXXXX")"
   chmod 0700 "${_SMD_GW_GATE_DIR}"
@@ -151,6 +168,18 @@ _smd_wait_for() { # pid seconds; 0 when it is gone in time
   return 0
 }
 
+# The broker and its respawn loop ignore TERM (entrypoint.sh) so they outlive
+# the gateway and the daemon drain; once the gateway has exited nothing is left
+# to record, so they are KILLed here and add no time to the stop. Without this
+# they would still end with the Machine, but only when Fly tears it down.
+_smd_stop_broker() {
+  [ -n "${SUPERVISOR_PID:-}" ] || return 0
+  local _brk
+  _brk="$(pgrep -P "${SUPERVISOR_PID}" 2>/dev/null | tr '\n' ' ')" || true
+  # shellcheck disable=SC2086 # _brk is a space-separated pid list on purpose
+  kill -KILL "${SUPERVISOR_PID}" ${_brk} 2>/dev/null || true
+}
+
 _smd_supervisor_stop() {
   trap '' TERM INT
   local _rc=0
@@ -173,6 +202,7 @@ _smd_supervisor_stop() {
   wait "${SMD_GATEWAY_PID}" 2>/dev/null || _rc=$?
   # Whatever the gateway left in its session (MCP stdio servers).
   kill -TERM -- "-${SMD_GATEWAY_PID}" 2>/dev/null || true
+  _smd_stop_broker
   log "Supervisor: gateway exited (${_rc}); exiting with its code"
   exit "${_rc}"
 }
@@ -189,6 +219,7 @@ smd_supervise() {
   rm -rf "${_SMD_GW_GATE_DIR}"
   log "Supervisor: gateway released (pid ${SMD_GATEWAY_PID}); the entrypoint stays as its supervisor"
   wait "${SMD_GATEWAY_PID}" || _rc=$?
+  _smd_stop_broker
   log "Supervisor: gateway exited on its own (${_rc}); exiting with its code"
   exit "${_rc}"
 }

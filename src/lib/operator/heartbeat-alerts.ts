@@ -27,6 +27,14 @@ import { captureError, captureWarning } from '../observability/sentry'
  * x2`. Rows lost before the seat recorded reasons, or a beat without the
  * histogram, read "reason not recorded" rather than a guess.
  *
+ * Returns the reason baseline to STORE for the next beat: the per-key
+ * high-water of the stored and reported histograms (review 2026-10-20). The
+ * seat's histogram can go DOWN without anything being un-lost (it reads a
+ * bounded tail of its file and reports its 32 largest keys), and diffing
+ * against a lowered value would name a key's whole history as new. A count
+ * that went down means the volume was replaced: the baseline restarts from
+ * what the seat reports.
+ *
  * Best-effort. A failure to read the prior value must never 500 the heartbeat:
  * losing liveness reporting to protect an alert would trade a big signal for a
  * small one.
@@ -36,8 +44,8 @@ export async function reportAuditWriteFailureDelta(
   slug: string,
   reported: number | null,
   reportedReasons: Record<string, number> | null = null
-): Promise<void> {
-  if (reported === null) return
+): Promise<Record<string, number> | null> {
+  if (reported === null) return reportedReasons
   let prior: number | null
   let priorReasons: Record<string, number> | null
   try {
@@ -46,10 +54,12 @@ export async function reportAuditWriteFailureDelta(
     priorReasons = state.reasons
   } catch (err) {
     captureError(err, 'heartbeat-audit-failure-delta')
-    return
+    return reportedReasons
   }
+  const reset = prior !== null && reported < prior
+  const baseline = reset ? reportedReasons : highWater(priorReasons, reportedReasons)
   const lost = reported - (prior ?? 0)
-  if (lost <= 0) return
+  if (lost <= 0) return baseline
   const reasons = reasonDelta(reportedReasons, priorReasons)
   const named = Object.entries(reasons)
     .map(([key, n]) => `${key} x${n}`)
@@ -58,6 +68,25 @@ export async function reportAuditWriteFailureDelta(
     `Operator seat ${slug} lost ${lost} audit row(s) since the last heartbeat (${named || 'reason not recorded'})`,
     'operator-audit-write-failure',
     { customer_slug: slug, lost, reported_total: reported, prior_total: prior, reasons }
+  )
+  return baseline
+}
+
+/** Keys kept in the stored baseline; the parser that reads it back allows this many. */
+const BASELINE_MAX_KEYS = 64
+
+/** Per-key maximum of two cumulative histograms, the largest keys kept. */
+function highWater(
+  prior: Record<string, number> | null,
+  reported: Record<string, number> | null
+): Record<string, number> | null {
+  if (reported === null) return null
+  const merged: Record<string, number> = { ...(prior ?? {}) }
+  for (const [key, n] of Object.entries(reported)) merged[key] = Math.max(n, merged[key] ?? 0)
+  return Object.fromEntries(
+    Object.entries(merged)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, BASELINE_MAX_KEYS)
   )
 }
 

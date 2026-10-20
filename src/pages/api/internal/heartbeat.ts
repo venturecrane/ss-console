@@ -125,7 +125,7 @@ export const POST: APIRoute = async ({ request }) => {
   // #2498: read the prior count BEFORE the upsert overwrites it. A rise means
   // the seat lost audit rows since the last beat — the state that is otherwise
   // indistinguishable from a seat with nothing to record.
-  await reportAuditWriteFailureDelta(
+  const reasonBaseline = await reportAuditWriteFailureDelta(
     env.DB,
     auth.slug,
     obs.auditWriteFailures,
@@ -151,6 +151,8 @@ export const POST: APIRoute = async ({ request }) => {
     stickyStopReason: stickyStop.reason,
     stickyStopCondition: stickyStop.condition,
     ...obs,
+    // The per-key high-water, not the raw report: see reportAuditWriteFailureDelta.
+    auditWriteFailureReasons: reasonBaseline,
     release: parseFleetRelease(body),
   })
 
