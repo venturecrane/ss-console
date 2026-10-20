@@ -73,6 +73,23 @@ def test_a_parent_link_is_refused(tmp_path):
     assert list((real / "gateway-liveness").iterdir()) == []
 
 
+def test_a_renamed_aside_smd_root_replaced_by_a_dir_not_ours_is_refused(tmp_path):
+    """The agent owns /opt/data, so it can rename .smd-root aside and plant its
+    own. A group-writable directory stands in for "not root's private dir"
+    (a test cannot create a directory owned by another uid). The ledger dir
+    inside it is ours and private, so only the PARENT check can refuse it."""
+    root = tmp_path / ".smd-root"
+    (root / "gateway-liveness").mkdir(parents=True, mode=0o755)
+    root.rename(tmp_path / ".smd-root.aside")
+    planted = tmp_path / ".smd-root"
+    (planted / "gateway-liveness").mkdir(parents=True, mode=0o755)
+    # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions -- the planted stand-in must be writable by others to be refused
+    os.chmod(planted, 0o770)
+    with pytest.raises(PermissionError):
+        rl.append(str(planted / "gateway-liveness"), "kills", "1 x y")
+    assert list((planted / "gateway-liveness").iterdir()) == []
+
+
 def test_a_directory_others_can_write_is_refused(ledger):
     # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions -- the test's own tmp dir, made group-writable to prove the helper REFUSES it
     os.chmod(ledger, 0o775)

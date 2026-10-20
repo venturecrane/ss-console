@@ -553,4 +553,6 @@ def test_a_planted_kills_link_is_never_written_through(harness, tmp_path):
     harness.wait_for_log(r"ARMED")
     harness.wait_for_log(r"SIGTERM to container main")
     harness.wait_for_log(r"kill ledger refused this restart")
+    # The seat says, through the liveness nag, that it runs without its limit.
+    harness.wait_for_log(r"GATEWAY LIVENESS: kill ledger unreadable.*restart limit is NOT being enforced")
     assert victim.read_text() == "root-owned content\n"
