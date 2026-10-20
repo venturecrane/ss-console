@@ -829,7 +829,8 @@ def test_dispatch_ref_rides_the_row_only_in_its_one_shape(tmp_path: Path) -> Non
 
 
 # ---------------------------------------------------------------------------
-# Attachments: AgentMail carries none, and says so rather than dropping them.
+# Attachments: a send carries validated files; a malformed one refuses the
+# whole send rather than being dropped (agentmail_attachments, 2026-10-20).
 # ---------------------------------------------------------------------------
 
 _ATTACHMENT = {
@@ -840,9 +841,10 @@ _ATTACHMENT = {
 }
 
 
-def test_agentmail_send_refuses_an_attachment_rather_than_dropping_it(tmp_path: Path) -> None:
-    """``attachments`` is not in the closed body allowlist, so without an explicit
-    refusal it would be stripped and the message sent as though it never had one."""
+def test_agentmail_send_refuses_a_malformed_attachment_rather_than_dropping_it(tmp_path: Path) -> None:
+    """``attachments`` is not in the closed body allowlist, so without the
+    broker's own build it would be stripped and the message sent as though it
+    never had one. A descriptor whose sha256 does not match its bytes refuses."""
     http = FakeHTTP()
     ops = _ops(tmp_path, http)
     with pytest.raises(AgentMailRefused) as excinfo:
@@ -857,6 +859,32 @@ def test_agentmail_send_refuses_an_attachment_rather_than_dropping_it(tmp_path: 
     assert str(excinfo.value).startswith("attachment refused: ")
 
 
+def test_agentmail_send_carries_a_valid_attachment(tmp_path: Path) -> None:
+    import base64
+    import hashlib
+
+    data = b"PK\x03\x04 a workbook"
+    attachment = {
+        **_ATTACHMENT,
+        "content_b64": base64.b64encode(data).decode(),
+        "sha256": hashlib.sha256(data).hexdigest(),
+    }
+    http = FakeHTTP()
+    result = _ops(tmp_path, http).send(
+        {"to": ["ap-client-standin@agentmail.to"], "text": "hello", "attachments": [attachment]}
+    )
+    [post] = [c for c in http.calls if c[0] == "POST"]
+    assert post[2]["attachments"] == [
+        {
+            "filename": "Statute watch.xlsx",
+            "content_type": _ATTACHMENT["content_type"],
+            "content_disposition": "attachment",
+            "content": base64.b64encode(data).decode(),
+        }
+    ]
+    assert result["attachment_sha256"] == hashlib.sha256(data).hexdigest()
+
+
 def test_agentmail_reply_refuses_an_attachment(tmp_path: Path) -> None:
     http = _reply_http("scott@smd.services")
     ops = _ops(tmp_path, http)
@@ -867,9 +895,12 @@ def test_agentmail_reply_refuses_an_attachment(tmp_path: Path) -> None:
 
 
 def test_agentmail_send_without_attachments_is_unchanged(tmp_path: Path) -> None:
-    """Falsifier: the refusal is keyed on the attachment, not on every send."""
+    """Falsifier: the attachment handling is keyed on the attachment, not on
+    every send. No attachments key reaches the wire and none reaches the row."""
     http = FakeHTTP()
     ops = _ops(tmp_path, http)
     ops.send({"to": ["ap-client-standin@agentmail.to"], "text": "hello", "attachments": None})
     posts = [c for c in http.calls if c[0] == "POST"]
     assert len(posts) == 1 and "attachments" not in posts[0][2]
+    result = ops.send({"to": ["ap-client-standin@agentmail.to"], "text": "hello"})
+    assert "attachment_sha256" not in result

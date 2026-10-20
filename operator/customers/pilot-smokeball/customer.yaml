@@ -1037,7 +1037,13 @@ scope:
     # internal firm staff instead of falling to the outside external_send
     # ceiling. It grants NO inbound trust — the address is deliberately absent
     # from scope.inbound_allow_from above, so mail claiming to come from it does
-    # not untaint a turn and cannot instruct the seat.
+    # not untaint a turn and cannot instruct the seat. Cards are addressed to
+    # scott@smd.services since 2026-10-20: team@ is a Google Group that rewrites
+    # an agentmail.to From to itself, so an answer went to the Group and never
+    # reached the seat (the brokery [ops dbd3bf32] lapse).
+    - address: scott@smd.services
+      class: firm_staff
+      note: 'SMD operations desk (cards are addressed here); outbound classification only, never inbound trust'
     - address: team@smd.services
       class: firm_staff
       note: 'SMD operations desk; outbound classification only, never inbound trust'

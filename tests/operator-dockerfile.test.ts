@@ -1575,7 +1575,8 @@ describe('Operator customer Machine Dockerfile', () => {
     // -> 1a05699a (overlay#528), 2026-10-20: root appliers record CONFIG_WRITE; routine drain.
     // -> 184df81b (overlay#530), 2026-10-20: kill ledger read from .smd-root.
     // -> 1aa0a762 (overlay#529), 2026-10-20: a lost send answer is unknown, never "retry".
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="1aa0a762d05fe256bde5c130f09ead7fe16e1fb8"')
+    // -> 33b97ca3 (overlay#531 + #532), 2026-10-20: ops cards to scott@; AgentMail sends carry PDFs.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="33b97ca3927081264d91db97f84fecc73fbff46f"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
