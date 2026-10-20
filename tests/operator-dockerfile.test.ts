@@ -1569,7 +1569,8 @@ describe('Operator customer Machine Dockerfile', () => {
     // routine subjects are a title line; the hook worker starts at plugin load.
     // -> 90c36b67 (overlay#521), 2026-10-19: couples seats drop operations_request.
     // -> e6c89423 (overlay#522-#524), 2026-10-20: the couples settings read carries today.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="e6c89423f5c0945e7e4227c81604fb16446402d7"')
+    // -> 100632c3 (overlay#525), 2026-10-20: seats can see images (model names its provider).
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="100632c358e45581b4e9ba301ef3230ca7fa9927"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
