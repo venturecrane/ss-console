@@ -1568,7 +1568,8 @@ describe('Operator customer Machine Dockerfile', () => {
     // -> 972a8d7d (overlay#518-#520), 2026-10-19: per-seat policy profiles (ADR 0093);
     // routine subjects are a title line; the hook worker starts at plugin load.
     // -> 90c36b67 (overlay#521), 2026-10-19: couples seats drop operations_request.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="90c36b67580527253813557d23b064f75e909192"')
+    // -> e6c89423 (overlay#522-#524), 2026-10-20: the couples settings read carries today.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="e6c89423f5c0945e7e4227c81604fb16446402d7"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
