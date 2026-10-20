@@ -7,8 +7,10 @@ for the full rationale). Two verbs, both fail-closed:
 * ``send``  — a fresh message. Every recipient must be on the seat's authored
   counterparty surface, and the From is pinned from config. It may carry ONE
   calendar invitation (``calendar: {method, ics}``), which the broker
-  validates and builds into the only attachment AgentMail carries
-  (``agentmail_calendar``).
+  validates and builds (``agentmail_calendar``), OR up to three files (PDFs
+  and at most one workbook) the overlay staged from code the model cannot
+  reach, which the broker re-validates and builds (``agentmail_attachments``).
+  Never both: an invitation is its own message.
 * ``reply`` — an answer to an inbound message. The broker fetches the source
   message itself and checks the ORIGINAL SENDER against ``inbound_allow_from``.
   Without that check the reply lane would be an exfiltration primitive: anyone on
@@ -31,7 +33,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from . import agentmail_calendar
+from . import agentmail_attachments, agentmail_calendar
 from .agentmail_auth import (
     RecipientPolicy,
     authored_policy,
@@ -58,17 +60,31 @@ class AgentMailRefused(BrokerRefusal):
 
 
 def _refuse_attachments(payload: dict[str, Any]) -> None:
-    """AgentMail carries no attachments here: refuse loudly, never drop silently.
+    """A REPLY carries no files: refuse loudly, never drop silently.
 
-    ``attachments`` is deliberately NOT in ``_BODY_FIELDS``, so without this
-    check the closed allowlist would quietly strip it and the recipient would
-    get a message referring to a file that is not there. Outbound attachments
-    ride the msgraph transport only (statute-watch plan, revision 9). The
+    ``attachments`` is deliberately NOT in ``_BODY_FIELDS`` (nor in the reply's
+    two body keys), so without this check the closed allowlist would quietly
+    strip it and the recipient would get a message referring to a file that is
+    not there. A fresh send carries them (``_files``); a reply answers whoever
+    wrote in, and SMD stages files only for an authored recipient. The
     "attachment refused:" prefix is the contract the overlay keys its
-    body-without-attachment fallback on.
+    attachment-refusal handling on.
     """
     if payload.get("attachments") is not None:
-        raise AgentMailRefused("attachment refused: the AgentMail transport does not carry attachments")
+        raise AgentMailRefused("attachment refused: a reply carries no attachments")
+
+
+def _files(payload: dict[str, Any]) -> agentmail_attachments.Attachments | None:
+    """The send's files, validated and built, or ``None``. Every refusal is an
+    ``AgentMailRefused`` with the "attachment refused:" prefix the overlay keys
+    on, so the whole send is refused and audited, never sent without them."""
+    try:
+        files = agentmail_attachments.build(payload)
+    except agentmail_attachments.AttachmentRefused as exc:
+        raise AgentMailRefused(f"attachment refused: {exc}") from exc
+    if files is not None and payload.get(agentmail_calendar.CALENDAR_FIELD) is not None:
+        raise AgentMailRefused("attachment refused: an invitation carries no other attachment")
+    return files
 
 
 class AgentMailTransportError(BrokerRefusal):
@@ -267,24 +283,31 @@ class AgentMailOps:
 
     def send(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Fence every recipient, then transmit from this seat's pinned inbox."""
-        _refuse_attachments(payload)
+        files = _files(payload)
         policy = authored_policy(self._customer_path)
         recipients = collect_recipients(payload)
         enforce_recipients(policy, recipients)
         invitation = self._invitation(payload)
         body: dict[str, Any] = {k: payload[k] for k in _BODY_FIELDS if payload.get(k) not in (None, "", [])}
+        sent_sha256 = ""
         if invitation is not None:
-            # The one attachment AgentMail carries, built broker-side
-            # (agentmail_calendar), never a caller's attachments list.
+            # Built broker-side (agentmail_calendar), never a caller's part.
             body["attachments"] = [invitation.attachment]
+            sent_sha256 = invitation.sha256
+        elif files is not None:
+            # Built broker-side from the re-validated descriptors
+            # (agentmail_attachments), never a caller's raw list.
+            body["attachments"] = list(files.parts)
+            sent_sha256 = files.audit_sha256
         response = self._request(self._path("messages", "send"), "POST", body)
         return {
             "message_id": _message_id(response),
             "thread_id": _thread_id(response),
             "recipients": recipients,
             "inbox_id": self.inbox_id(),
-            # The exact invitation bytes sent, for the CONFIRM_SEND row.
-            **({"attachment_sha256": invitation.sha256} if invitation is not None else {}),
+            # The exact bytes sent (the invitation, or each file in order,
+            # comma-joined), for the CONFIRM_SEND row.
+            **({"attachment_sha256": sent_sha256} if sent_sha256 else {}),
         }
 
     def _invitation(self, payload: dict[str, Any]) -> agentmail_calendar.Invitation | None:
