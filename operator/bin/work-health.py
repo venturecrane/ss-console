@@ -157,7 +157,7 @@ class Console:
         self.shortfalls: dict[str, list[dict]] = {}
         self.sentry: dict[str, list[dict]] = {}
         self.personas: dict[str, Optional[str]] = {}
-        self.synced_at: dict[str, Optional[str]] = {}
+        self.schedule_changed_at: dict[str, Optional[str]] = {}
         self.lane_holds: dict[str, list[dict]] = {}
         try:
             self._load(d1)
@@ -176,9 +176,17 @@ class Console:
             f"WHERE kind = 'lane_unproven' AND job_lane IS NOT NULL AND event_at >= '{week}'"
         ):
             self.lane_holds.setdefault(str(row["customer_slug"]), []).append(row)
-        for row in d1.execute("SELECT customer_slug, personas_json, synced_at FROM customer_configs"):
-            self.personas[str(row["customer_slug"])] = row.get("personas_json")
-            self.synced_at[str(row["customer_slug"])] = row.get("synced_at")
+        for row in d1.execute(
+            "SELECT customer_slug, personas_json, synced_at, schedule_changed_at FROM customer_configs"
+        ):
+            slug = str(row["customer_slug"])
+            self.personas[slug] = row.get("personas_json")
+            # When the SCHEDULE last changed (migration 0130), not when the config
+            # was last published: synced_at moves on every publish, and grading
+            # against it switched A&P's grading off after #3332's unrelated merge.
+            # A row not re-projected since 0130 falls back to synced_at, the
+            # conservative answer (grading waits for a rebuild, never invents misses).
+            self.schedule_changed_at[slug] = row.get("schedule_changed_at") or row.get("synced_at")
         for row in d1.execute(
             "SELECT customer_slug, condition, opened_at FROM fleet_alert_state WHERE status = 'open'"
         ):
@@ -274,7 +282,7 @@ def _operator_items(
     if config:
         status = console.status.get(slug) or {}
         boot = {k: status.get(k) for k in ("last_heartbeat_ts", "process_uptime_seconds")}
-        adopted = src.schedule_adopted_at(console.synced_at.get(slug), boot)
+        adopted = src.schedule_adopted_at(console.schedule_changed_at.get(slug), boot)
         items += src.missed_slot_items(slug, rows, cfg, now, boot, config, deployed, adopted)
     return items + _graph_items(slug, now), resolved_shortfalls + resolved_silent
 

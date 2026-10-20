@@ -40,6 +40,17 @@ fi
 mapfile -t changed < <(git diff --name-only "$BEFORE" "$AFTER" -- \
   'operator/customers/*/customer.yaml' 'operator/customers/*/routine-grid.yaml' || true)
 
+# Rows never projected with schedule_changed_at (migration 0130) re-project
+# too, whatever the push range touched: until they do, work-health grades their
+# schedule against synced_at, which every unrelated publish moves. Self-healing,
+# so a row seeded by hand without the column converges on the next deploy.
+mapfile -t unstamped < <(npx wrangler d1 execute "$DB" --remote --json \
+  --command "SELECT customer_slug FROM customer_configs WHERE schedule_changed_at IS NULL" |
+  node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const r=JSON.parse(s)[0].results;process.stdout.write(r.map(x=>x.customer_slug).join('\n'))})")
+for slug in "${unstamped[@]}"; do
+  [[ -n "$slug" ]] && changed+=("operator/customers/${slug}/customer.yaml")
+done
+
 if [[ ${#changed[@]} -eq 0 ]]; then
   echo "No customer.yaml / routine-grid.yaml changes in ${BEFORE}..${AFTER} — nothing to sync."
   exit 0

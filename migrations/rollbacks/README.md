@@ -19,6 +19,7 @@ For local D1 (testing):
 ## Per-file safety notes
 
 - `0033_add_prospect_role_down.sql` — restores the original narrow `users.role CHECK (role IN ('admin', 'client'))`. The INSERT into `users_old` will fail if any `users.role = 'prospect'` rows exist (intentional safeguard). Cleanup or migrate prospect rows to `'client'` before invoking.
+- `0130_customer_configs_schedule_changed_at_down.sql` — drops `customer_configs.schedule_changed_at`. Roll the code back first: the customer.yaml projection SQL and work-health both name the column.
 - `0129_fleet_release_system_down.sql` — drops `fleet_releases`, `fleet_rollouts`, `fleet_holds`, `fleet_lease` and the six fleet-release columns on `fleet_status`. Roll the web Worker back first: its heartbeat upsert names those columns and fails on their absence. Release and rollout history is lost; export it first.
 - `0128_drop_couples_onboarding_down.sql` — recreates the empty couples onboarding tables and the three `hosted_agent_intake` columns that 0128 dropped (the schema exactly as 0127 created it). Rows are not restored. Only for rolling the code back to a commit before 0128.
 - `0127_couples_onboarding_down.sql` — drops the couples onboarding tables and the three `hosted_agent_intake` columns. Destroys recorded consents, Telegram bindings and joint confirmations; export them first (queries in the file header).
