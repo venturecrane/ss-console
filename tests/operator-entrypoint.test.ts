@@ -178,7 +178,9 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
       /mount --bind "\$\{MEDCHRON_DATA_DIR\}" "\$\{MEDCHRON_RUN_DIR\}"/
     )
     // Pruned from the hermes chown sweep like the audit subtree.
-    expect(ENTRYPOINT_CODE).toMatch(/-o -path "\$\{MEDCHRON_DATA_DIR\}" \\\) -prune/)
+    expect(ENTRYPOINT_CODE).toMatch(
+      /-o -path "\$\{MEDCHRON_DATA_DIR\}" (-o -path [^ ]+ )?\\\) -prune/
+    )
   })
 
   it('carries the queue path into the broker env allowlist', () => {

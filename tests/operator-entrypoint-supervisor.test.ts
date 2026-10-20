@@ -414,6 +414,11 @@ describe('the root audit-loss directory is made by root before the agent runs', 
     expect(src).toContain('rm -rf -- "${_d}"')
     expect(src).toContain('install -d -o root -g root -m 0755 "${_d}"')
   })
+
+  it('the boot chown of /opt/data leaves .smd-root alone, or root’s counts reset every boot', () => {
+    const line = ENTRYPOINT.split('\n').find((l) => l.startsWith('find /opt/data'))
+    expect(line).toContain('-o -path /opt/data/.smd-root \\) -prune')
+  })
 })
 
 describe('entrypoint.sh wires the supervisor', () => {
