@@ -36,6 +36,7 @@ import {
   buildProjectionSql,
   projectCustomerYamlToConfigRow,
 } from '../src/lib/portal/customer-config-projection'
+import { scheduleChangedAt, type Revision } from '../src/lib/portal/schedule-change'
 import { ORG_ID } from '../src/lib/constants'
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -125,6 +126,37 @@ function resolveGitSha(relPath: string): string {
 }
 
 /**
+ * When the seat's schedule last changed (src/lib/portal/schedule-change.ts):
+ * every committed revision of customer.yaml, newest first, reduced to the
+ * commit time of the newest schedule change. Needs full history (the deploy
+ * and reconcile checkouts use fetch-depth: 0); a shallow clone sees only its
+ * oldest reachable revision and so answers no earlier than the truth, which
+ * suspends grading rather than inventing misses. Returned in UTC.
+ */
+function resolveScheduleChangedAt(relPath: string): string | null {
+  const log = execFileSync('git', ['log', '--format=%H %cI', '--', relPath], {
+    cwd: REPO_ROOT,
+    encoding: 'utf-8',
+  }).trim()
+  const revisions: Revision[] = []
+  for (const line of log ? log.split('\n') : []) {
+    const [sha, at] = line.split(' ')
+    let text: string
+    try {
+      text = execFileSync('git', ['show', `${sha}:${relPath}`], {
+        cwd: REPO_ROOT,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+    } catch {
+      continue // the commit deleted the file at this path
+    }
+    revisions.push({ committedAt: new Date(at).toISOString(), text })
+  }
+  return scheduleChangedAt(revisions)
+}
+
+/**
  * Load + validate the seat's routine-grid.yaml when it exists next to
  * customer.yaml (ADR 0075). Absent → null (the seat has no grid). Present →
  * clean-tree guarded, parsed, and HARD-VALIDATED: CI must never project a
@@ -181,6 +213,7 @@ function main(): void {
       orgId: args.orgId,
       gitSha,
       syncedAt: new Date().toISOString(),
+      scheduleChangedAt: resolveScheduleChangedAt(relPath),
     },
     routineGrid
   )
@@ -193,6 +226,7 @@ function main(): void {
   process.stdout.write(
     `  customer_slug=${row.customer_slug} entity_id=${row.entity_id} git_sha=${gitSha}\n`
   )
+  process.stdout.write(`  schedule_changed_at=${row.schedule_changed_at ?? 'unknown'}\n`)
   process.stdout.write(
     `  routine_grid: ${routineGrid ? `${routineGrid.rows.length} rows` : 'none'}\n\n`
   )

@@ -203,6 +203,10 @@ export interface CustomerConfigDbRow {
   routine_grid_json: string | null
   git_sha: string
   synced_at: string
+  /** When the seat's schedule last changed in git (migration 0130). NULL on a
+   *  row not re-projected since the column was added; optional because the
+   *  portal read side never selects it. */
+  schedule_changed_at?: string | null
 }
 
 /**

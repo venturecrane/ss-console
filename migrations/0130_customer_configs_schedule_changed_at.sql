@@ -1,0 +1,21 @@
+-- 0130: customer_configs.schedule_changed_at (work-health schedule adoption).
+--
+-- Work-health grades a seat's scheduled runs only after its Machine has booted
+-- into the schedule it is graded against (operator/bin/lib/work_health_sources.py
+-- schedule_adopted_at). It compared the boot time against synced_at, but
+-- synced_at moves on EVERY publish of customer.yaml. On 2026-10-19 #3332 only
+-- removed hermes_ref from A&P's customer.yaml, and A&P's scheduled runs then went
+-- ungraded until the next rebuild: a missed run would have gone unreported.
+--
+-- schedule_changed_at is the commit time of the newest change to the parts of
+-- customer.yaml grading depends on (cron rows' skill/schedule/wake_policy and
+-- business_hours.timezone), derived from git history at projection time by
+-- scripts/project-customer-config.ts (src/lib/portal/schedule-change.ts). It
+-- moves only when the schedule does.
+--
+-- Additive and nullable. NULL = not re-projected since this column was added;
+-- the reader falls back to synced_at (the old, conservative behavior), and the
+-- merge-triggered sync (scripts/ci-sync-customer-configs.sh) re-projects every
+-- row still NULL, so the backfill happens on the deploy that applies this.
+
+ALTER TABLE customer_configs ADD COLUMN schedule_changed_at TEXT;

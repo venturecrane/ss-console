@@ -207,21 +207,27 @@ def schedule_drift(git_config: dict, deployed: set[tuple[str, str]]) -> dict[str
     }
 
 
-def schedule_adopted_at(synced_at: Optional[str], boot: Optional[dict]) -> Optional[datetime]:
+def schedule_adopted_at(schedule_changed_at: Optional[str], boot: Optional[dict]) -> Optional[datetime]:
     """Since when the Machine has run the provisioned schedule, or None when it
     has not adopted it yet.
+
+    ``schedule_changed_at`` is when the SCHEDULE last changed
+    (``customer_configs.schedule_changed_at``, migration 0130), never merely when
+    the config was last published: ``synced_at`` moves on every publish, and on
+    2026-10-19 #3332 (which only removed ``hermes_ref``) switched A&P's grading
+    off until its next rebuild, so a missed run would have gone unreported.
 
     A merge publishes customer.yaml at once (deploy.yml), but the Machine's cron
     store changes only when it next boots. On 2026-10-13 A&P's new hourly row
     was published 20:35Z and adopted at the 21:12Z rebuild, and a grid that
     ignored the gap reported 23 "missed" runs from a schedule the seat had never
     held. Slots before adoption are not owed."""
-    synced = parse_ts(synced_at)
+    changed = parse_ts(schedule_changed_at)
     window = cron_slots.boot_window((boot or {}).get("last_heartbeat_ts"), (boot or {}).get("process_uptime_seconds"))
     booted = window[0] + timedelta(minutes=45) if window else None
-    if synced is None:
+    if changed is None:
         return booted
-    if booted is None or booted < synced:
+    if booted is None or booted < changed:
         return None
     return booted
 

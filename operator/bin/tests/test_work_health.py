@@ -860,6 +860,65 @@ def test_slots_before_the_machine_adopted_the_schedule_are_not_owed():
     assert _kinds(items) == ["schedule_drift"] and "not been rebuilt" in items[0].what
 
 
+class _PublishD1:
+    """customer_configs as the console holds it: one row, two timestamps."""
+
+    def __init__(self, synced_at, schedule_changed_at):
+        self.row = {
+            "customer_slug": "pilot",
+            "personas_json": json.dumps([{"cron": [{"skill": "connector-auth-check", "schedule": "13 * * * *"},
+                                                    {"skill": "daily-thing", "schedule": "47 5 * * *"}]}]),
+            "synced_at": synced_at.isoformat() if synced_at else None,
+            "schedule_changed_at": schedule_changed_at.isoformat() if schedule_changed_at else None,
+        }  # fmt: skip
+
+    def execute(self, sql: str) -> list[dict]:
+        return [self.row] if "customer_configs" in sql else []
+
+
+def _graded_after_publish(synced_at, schedule_changed_at):
+    """Machine booted two days ago; daily-thing's 12:47Z slot today did not run;
+    the hourly check ran every hour. The console row decides whether that miss
+    is graded."""
+    boot = {"last_heartbeat_ts": NOW.isoformat(), "process_uptime_seconds": 2 * 86400}
+    console = cli.Console(_PublishD1(synced_at, schedule_changed_at))
+    assert console.error is None
+    rows = [_wake("connector-auth-check", NOW - timedelta(minutes=m)) for m in range(17, 1440, 60)]
+    adopted = src.schedule_adopted_at(console.schedule_changed_at.get("pilot"), boot)
+    deployed = src.deployed_cron(console.personas.get("pilot"))
+    return src.missed_slot_items("pilot", rows, CFG, NOW, boot, PILOT_GIT, deployed, adopted)
+
+
+def test_a_republish_that_did_not_change_the_schedule_leaves_grading_on():
+    """FALSIFIER for 2026-10-19: #3332 only removed hermes_ref from A&P's
+    customer.yaml, its publish moved synced_at past the Machine's boot, and
+    every scheduled run went ungraded until the next rebuild. Grading follows
+    when the SCHEDULE changed, so the missed daily run is still reported."""
+    republished = NOW - timedelta(hours=3)  # after the boot
+    items = _graded_after_publish(synced_at=republished, schedule_changed_at=NOW - timedelta(days=6))
+    assert _kinds(items) == ["missed_slot"] and "daily-thing" in items[0].what
+    # Grading against synced_at, the defect, would have said nothing was owed.
+    boot = {"last_heartbeat_ts": NOW.isoformat(), "process_uptime_seconds": 2 * 86400}
+    assert src.schedule_adopted_at(republished.isoformat(), boot) is None
+
+
+def test_a_real_schedule_change_still_waits_for_the_rebuild():
+    """The 2026-10-13 guard stays: a schedule published after the boot is not
+    graded (one drift line, no misses) until the Machine boots into it."""
+    changed = NOW - timedelta(hours=3)
+    items = _graded_after_publish(synced_at=changed, schedule_changed_at=changed)
+    assert _kinds(items) == ["schedule_drift"] and "not been rebuilt" in items[0].what
+
+
+def test_a_row_without_schedule_changed_at_falls_back_to_synced_at():
+    """A row not re-projected since migration 0130 keeps the old, conservative
+    answer: suspended, never graded against a schedule the seat may not run."""
+    items = _graded_after_publish(synced_at=NOW - timedelta(hours=3), schedule_changed_at=None)
+    assert _kinds(items) == ["schedule_drift"]
+    items = _graded_after_publish(synced_at=NOW - timedelta(days=6), schedule_changed_at=None)
+    assert _kinds(items) == ["missed_slot"]
+
+
 def test_a_job_a_person_ended_as_superseded_is_not_open_work():
     rows = [
         _job("MEDCHRON", "SUBMITTED", NOW - timedelta(minutes=10)),

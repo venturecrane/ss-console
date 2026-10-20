@@ -36,6 +36,10 @@ export interface ProjectionContext {
   gitSha: string
   /** ISO-8601 timestamp the projection ran. */
   syncedAt: string
+  /** ISO-8601 time the seat's SCHEDULE last changed in git (./schedule-change.ts),
+   *  which work-health grades boot adoption against. Distinct from syncedAt,
+   *  which moves on every publish. Null when it could not be derived. */
+  scheduleChangedAt?: string | null
 }
 
 /**
@@ -123,6 +127,7 @@ export function projectCustomerYamlToConfigRow(
     routine_grid_json: routineGrid ? JSON.stringify(routineGrid) : null,
     git_sha: ctx.gitSha,
     synced_at: ctx.syncedAt,
+    schedule_changed_at: ctx.scheduleChangedAt ?? null,
   }
 }
 
@@ -160,6 +165,7 @@ const CONFIG_COLUMNS = [
   'routine_grid_json',
   'git_sha',
   'synced_at',
+  'schedule_changed_at',
 ] as const
 
 /**
@@ -200,6 +206,7 @@ export function buildProjectionSql(
     e(row.routine_grid_json),
     e(row.git_sha),
     e(row.synced_at),
+    e(row.schedule_changed_at ?? null),
   ]
   // entity_id is deliberately excluded from the update set: since migration 0090
   // the PK is customer_slug, and a routine re-projection must NEVER silently move
