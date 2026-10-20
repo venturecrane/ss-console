@@ -64,7 +64,6 @@ export interface ProvisioningInput {
   practice_areas: string[]
   fly_region: string
   model: string
-  hermes_ref: string
   machine_size: string
   machine_memory_mb: number
   user_email: string
@@ -109,7 +108,6 @@ export function parseProvisioningForm(form: FormData): ProvisioningInput {
     practice_areas: splitList(str(form, 'practice_areas')),
     fly_region: str(form, 'fly_region'),
     model: str(form, 'model'),
-    hermes_ref: str(form, 'hermes_ref'),
     machine_size: str(form, 'machine_size'),
     machine_memory_mb: Number.isFinite(memNum) ? memNum : Number.NaN,
     user_email: str(form, 'user_email'),
@@ -184,7 +182,6 @@ export function buildCandidateDoc(input: ProvisioningInput): Record<string, unkn
     practice_areas: input.practice_areas,
     fly_region: input.fly_region,
     model: input.model,
-    hermes_ref: input.hermes_ref,
     machine: { size: input.machine_size, memory_mb: input.machine_memory_mb },
     users: [{ email: input.user_email, role: input.user_role, full_name: input.user_full_name }],
     personas: [persona],

@@ -128,7 +128,6 @@ export interface LockedFieldsView {
   practice_areas: string[]
   fly_region: string
   model: string
-  hermes_ref: string
   machine: { size: string; memory_mb: number }
   memory: { d1_namespace: string; r2_vault_path: string; vectorize_index: string }
   connector_token_refs: Record<string, string | null>
@@ -190,7 +189,6 @@ function projectLocked(
     practice_areas: yaml.practice_areas,
     fly_region: yaml.fly_region,
     model: yaml.model,
-    hermes_ref: yaml.hermes_ref,
     machine: yaml.machine,
     memory: yaml.memory,
     connector_token_refs: connectorTokenRefs,
@@ -449,7 +447,6 @@ function lockedFromCurrent(current: CustomerYaml): Pick<
   | 'fly_region'
   | 'model'
   | 'escalation_model'
-  | 'hermes_ref'
   | 'machine'
   | 'memory'
   | 'users'
@@ -487,7 +484,6 @@ function lockedFromCurrent(current: CustomerYaml): Pick<
     fly_region: current.fly_region,
     model: current.model,
     escalation_model: current.escalation_model,
-    hermes_ref: current.hermes_ref,
     machine: current.machine,
     memory: current.memory,
     users: current.users,
@@ -664,7 +660,7 @@ export interface ResolvedEditableConfigFromRow {
  * is effectively a pass over the EDITABLE surface: personas, connectors,
  * scope, escalation, business hours, voice library. The previous
  * reconstruction seeded fields that could not validate — an invalid
- * `hermes_ref` by design, an empty `users`, cron entries missing the
+ * Hermes pin by design, an empty `users`, cron entries missing the
  * `wake_policy` the projection strips — so this call failed for every
  * customer and the editor never rendered.
  *

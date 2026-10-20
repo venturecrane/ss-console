@@ -40,7 +40,6 @@ fly_region: '[FLY REGION SLUG, e.g., iad / lax / ord]'
 
 # ---- RUNTIME ----
 model: claude-opus-4-7
-hermes_ref: '[HERMES UPSTREAM PIN, e.g., v2026.5.7@<40-hex-sha>]'
 
 machine:
   size: shared-cpu-1x

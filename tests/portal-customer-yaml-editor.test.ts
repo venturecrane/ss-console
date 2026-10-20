@@ -45,7 +45,6 @@ function validFixture(): Record<string, unknown> {
     practice_areas: ['personal-injury', 'workers-comp'],
     fly_region: 'lax',
     model: 'claude-opus-4-7',
-    hermes_ref: 'v2026.5.7@a91a57fa5a13d516c38b07a141a9ce8a3daabeb0',
     machine: { size: 'performance-1x', memory_mb: 1024 },
     users: [{ email: 'partner@firm.com', role: 'principal', full_name: 'Jane Smith' }],
     personas: [

@@ -14,15 +14,16 @@
  * WHAT A RECONSTRUCTION IS FOR, and the #1965 failure it caused. The
  * projection is a read replica of a subset: it carries personas, connectors,
  * scope, escalation, business hours and voice library, and it carries NONE of
- * the identity/runtime block (`hermes_ref`, `machine`, `model`, `fly_region`,
- * `users`) and none of cron's runtime mechanics. The validator, however, wants
- * a whole document. The previous reconstruction squared that circle by
- * inventing values — and, for `hermes_ref`, by deliberately inventing an
- * INVALID one (`v0.0.0@000…`) so it would fail `checkHermesRef` "and prompt
- * the operator to set a real pin". That reasoning belongs to a real config
- * being authored; applied to a reconstruction of a replica it guaranteed the
- * strict pass failed for every customer, always, which is exactly what it did:
- * every seat in `operator/customers/` resolved to CONFIGURATION ERROR.
+ * the identity/runtime block (`machine`, `model`, `fly_region`, `users`) and
+ * none of cron's runtime mechanics. The validator, however, wants a whole
+ * document. The previous reconstruction squared that circle by inventing
+ * values — including a deliberately INVALID Hermes pin, so the document would
+ * fail validation "and prompt the operator to set a real pin". That reasoning
+ * belongs to a real config being authored; applied to a reconstruction of a
+ * replica it guaranteed the strict pass failed for every customer, always,
+ * which is exactly what it did: every seat in `operator/customers/` resolved
+ * to CONFIGURATION ERROR. (The per-seat Hermes pin is now retired outright —
+ * it lives in operator/templates/Dockerfile — so there is nothing to fill.)
  *
  * THE POSTURE HERE. Fields the projection does not carry are filled with
  * placeholders chosen to be structurally valid and semantically inert, so the
@@ -46,16 +47,6 @@
 import type { CustomerConfigRow, PersonaConfig } from '../customer-config'
 import type { DeviceSenderEntry } from '../../operator/customer-yaml/types'
 import { parseDeviceSenders } from './configure'
-
-/**
- * Structurally-valid stand-in for the upstream pin the projection does not
- * carry. Matches the ADR 0024 shape (`v{YYYY}.{M}.{D}@{40-hex}`) with an
- * all-zero date and sha so it cannot be confused with a real release, and
- * PASSES validation — unlike the `v0.0.0@…` sentinel it replaces, whose whole
- * design was to fail. See the header: this document is validated and thrown
- * away, so a failing pin bought nothing and cost the editor.
- */
-export const UNPROJECTED_HERMES_REF = `v0000.0.0@${'0'.repeat(40)}`
 
 /**
  * `users` is required and must be non-empty, and the projection carries no
@@ -128,7 +119,6 @@ export function reconstructFromProjection(row: CustomerConfigRow): unknown {
     vertical: UNPROJECTED_VERTICAL,
     fly_region: 'unprojected',
     model: 'unprojected',
-    hermes_ref: UNPROJECTED_HERMES_REF,
     machine: { size: 'unprojected', memory_mb: 256 },
     users: [{ ...UNPROJECTED_USER }],
     personas: row.personas.map(withoutCron),
@@ -197,7 +187,6 @@ export interface ProjectedLockedFields {
   vertical: string | null
   fly_region: null
   model: null
-  hermes_ref: null
   machine: null
   connector_token_refs: Record<string, string | null>
 }
@@ -212,7 +201,6 @@ export function projectLockedFromRow(
     vertical: row.vertical,
     fly_region: null,
     model: null,
-    hermes_ref: null,
     machine: null,
     connector_token_refs: connectorTokenRefs,
   }

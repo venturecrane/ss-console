@@ -47,7 +47,6 @@ function validFixture(): Record<string, unknown> {
     practice_areas: ['personal-injury', 'workers-comp'],
     fly_region: 'lax',
     model: 'claude-opus-4-7',
-    hermes_ref: 'v2026.5.7@a91a57fa5a13d516c38b07a141a9ce8a3daabeb0',
     machine: {
       size: 'performance-1x',
       memory_mb: 1024,
@@ -388,7 +387,6 @@ describe('validate — MissingField', () => {
     'vertical',
     'fly_region',
     'model',
-    'hermes_ref',
     'machine',
     'users',
     'personas',
@@ -1150,146 +1148,37 @@ describe('validate — aggregate error behavior', () => {
 })
 
 // -----------------------------------------------------------------------------
-// hermes_ref upstream-pin enforcement (ADR 0024)
+// hermes_ref is retired (ADR 0024, amended 2026-10-19)
+//
+// The Hermes pin lives once, in operator/templates/Dockerfile. A per-seat copy
+// in customer.yaml could only drift, so the console validator rejects the key
+// outright (the on-box validator tolerates it so a stale file never fails boot).
 // -----------------------------------------------------------------------------
 
-describe('validate — hermes_ref upstream-pin enforcement (ADR 0024)', () => {
-  it('accepts a valid upstream pin (v{date}@{40-hex-sha})', () => {
+describe('validate — hermes_ref is retired', () => {
+  it('accepts a document with no hermes_ref', () => {
     const f = validFixture()
-    f['hermes_ref'] = 'v2026.5.16@a91a57fa5a13d516c38b07a141a9ce8a3daabeb0'
+    expect('hermes_ref' in f).toBe(false)
     const r = validate(f)
-    if (!r.ok) {
-      throw new Error(`expected ok; got: ${JSON.stringify(r.errors)}`)
-    }
-    expect(r.value.hermes_ref).toBe('v2026.5.16@a91a57fa5a13d516c38b07a141a9ce8a3daabeb0')
+    if (!r.ok) throw new Error(`expected ok; got: ${JSON.stringify(r.errors)}`)
+    expect('hermes_ref' in r.value).toBe(false)
   })
 
-  it('accepts another valid upstream pin at a different release', () => {
+  it.each([
+    ['a well-formed upstream pin', 'v2026.9.14@345cd2b057a452236de401d3534b8502a7465e8d'],
+    ['a retired -smd.N fork tag', 'v2026.5.16-smd.0'],
+    ['the empty string', ''],
+    ['null', null],
+  ])('rejects hermes_ref carrying %s with RetiredField', (_label, value) => {
     const f = validFixture()
-    f['hermes_ref'] = 'v2026.5.28@0123456789abcdef0123456789abcdef01234567'
-    expect(validate(f).ok).toBe(true)
-  })
-
-  it('rejects a retired -smd.N fork tag', () => {
-    const f = validFixture()
-    f['hermes_ref'] = 'v2026.5.16-smd.0'
+    f['hermes_ref'] = value
     const r = validate(f)
     expect(r.ok).toBe(false)
     if (r.ok) return
-    expect(codesOf(r.errors)).toContain('InvalidFormat')
-  })
-
-  it('rejects a retired -smd.security.N fork tag', () => {
-    const f = validFixture()
-    f['hermes_ref'] = 'v2026.5.16-smd.security.0'
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(codesOf(r.errors)).toContain('InvalidFormat')
-  })
-
-  it('rejects a bare date-tag (no @sha)', () => {
-    const f = validFixture()
-    f['hermes_ref'] = 'v2026.5.16'
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(r.errors.some((e) => e.path === 'hermes_ref' && e.code === 'InvalidFormat')).toBe(true)
-  })
-
-  it('rejects legacy SemVer-style tags (year is not 4 digits)', () => {
-    const f = validFixture()
-    f['hermes_ref'] = 'v0.14.0@a91a57fa5a13d516c38b07a141a9ce8a3daabeb0'
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(codesOf(r.errors)).toContain('InvalidFormat')
-  })
-
-  it('rejects a missing v-prefix', () => {
-    const f = validFixture()
-    f['hermes_ref'] = '2026.5.16@a91a57fa5a13d516c38b07a141a9ce8a3daabeb0'
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(codesOf(r.errors)).toContain('InvalidFormat')
-  })
-
-  it('rejects a short SHA (fewer than 40 hex chars)', () => {
-    const f = validFixture()
-    f['hermes_ref'] = 'v2026.5.16@a91a57fa'
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(codesOf(r.errors)).toContain('InvalidFormat')
-  })
-
-  it('rejects a long SHA (more than 40 hex chars)', () => {
-    const f = validFixture()
-    f['hermes_ref'] = 'v2026.5.16@a91a57fa5a13d516c38b07a141a9ce8a3daabeb0ff'
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(codesOf(r.errors)).toContain('InvalidFormat')
-  })
-
-  it('rejects a non-hex SHA', () => {
-    const f = validFixture()
-    f['hermes_ref'] = 'v2026.5.16@zz1a57fa5a13d516c38b07a141a9ce8a3daabeb0'
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(codesOf(r.errors)).toContain('InvalidFormat')
-  })
-
-  it('rejects an uppercase SHA (must be lowercase hex)', () => {
-    const f = validFixture()
-    f['hermes_ref'] = 'v2026.5.16@A91A57FA5A13D516C38B07A141A9CE8A3DAABEB0'
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(codesOf(r.errors)).toContain('InvalidFormat')
-  })
-
-  it('rejects a date-tag with an empty @sha', () => {
-    const f = validFixture()
-    f['hermes_ref'] = 'v2026.5.16@'
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(codesOf(r.errors)).toContain('InvalidFormat')
-  })
-
-  it('rejects a bare content-hash SHA (no v{date}@ prefix)', () => {
-    const f = validFixture()
-    f['hermes_ref'] = '7ce6b504a269ac3f9aed5b406b7a18c432e2fdb5'
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(codesOf(r.errors)).toContain('InvalidFormat')
-  })
-
-  it('rejects the empty string with MissingField/EmptyField, not InvalidFormat', () => {
-    const f = validFixture()
-    f['hermes_ref'] = ''
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    // The required-string check fires first and exclusively when the value
-    // is empty; the fork-tag check intentionally no-ops on the empty case
-    // so authors only see one error per defect.
-    expect(codesOf(r.errors)).toContain('EmptyField')
-    expect(codesOf(r.errors)).not.toContain('InvalidFormat')
-  })
-
-  it('rejects a missing field with MissingField, not InvalidFormat', () => {
-    const f = validFixture()
-    delete f['hermes_ref']
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(codesOf(r.errors)).toContain('MissingField')
-    expect(codesOf(r.errors)).not.toContain('InvalidFormat')
+    const hit = r.errors.filter((e) => e.path === 'hermes_ref')
+    expect(hit).toHaveLength(1)
+    expect(hit[0]?.code).toBe('RetiredField')
+    expect(hit[0]?.message).toMatch(/operator\/templates\/Dockerfile/)
   })
 })
 

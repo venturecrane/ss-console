@@ -78,9 +78,9 @@ describe('advanced settings: the editor resolves for real projections (#1965)', 
   }
 
   it('a law-firm seat with projected cron resolves — the three failure classes #1965 named', () => {
-    // hermes_ref (an invalid sentinel by design), users (reconstructed empty),
-    // and cron[].wake_policy (stripped by the projection). A&P carries all
-    // three; the assertion is that none of them reaches the client.
+    // A Hermes pin (an invalid sentinel by design; the key is now retired
+    // outright), users (reconstructed empty), and cron[].wake_policy (stripped
+    // by the projection). The assertion is that none of them reaches the client.
     const resolved = resolveEditableConfigFromRow(projectionFor('ashton-price'))
     expect('error' in resolved).toBe(false)
   })
@@ -94,7 +94,6 @@ describe('advanced settings: the editor resolves for real projections (#1965)', 
     // fabricated version pin, all of which would have rendered.
     expect(resolved.locked.customer_id).toBe('ashton-price')
     expect(resolved.locked.vertical).toBe('law-firm')
-    expect(resolved.locked.hermes_ref).toBeNull()
     expect(resolved.locked.model).toBeNull()
     expect(resolved.locked.fly_region).toBeNull()
     expect(resolved.locked.machine).toBeNull()
