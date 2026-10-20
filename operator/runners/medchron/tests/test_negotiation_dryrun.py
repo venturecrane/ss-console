@@ -53,7 +53,7 @@ def test_the_dry_run_plans_and_composes_but_never_writes(tmp_path, monkeypatch):
     e = report["entries"][0]
     assert e["file"] == "Offer letter 10-09.pdf" and e["date_created"] == "2026-10-09T15:30:00Z"
     assert e["rows_planned"][0]["offer_amount"] == "15000" and e["offers"][0]["status"] == "written"
-    assert e["emails"][0].startswith("New offer on matter 200123, Doe v. Example.")
+    assert e["emails"][0].startswith('New offer on matter 200123, "Doe v. Example".')
     assert "Entered in Negotiation Details, row 1." in e["emails"][0]
     assert "would write" in (wd / dryrun.REPORT_TEXT).read_text()
 
