@@ -638,7 +638,7 @@ ssh_exec "gateway-liveness-supervisor-armed" "n=0; while [ \$n -lt 36 ]; do s=\$
 # denied, and the field went absent (a hold) with every root-side check green.
 # An absent ledger FILE passes (first boot, no kills yet); a present-but-unreadable
 # one fails. tick and state must exist by this point (the two checks above).
-ssh_exec "gateway-liveness-files-readable-by-gate" "setpriv --reuid=hermes --regid=hermes --init-groups sh -c \"head -c 1 /run/smd-gateway-liveness/state >/dev/null && head -c 0 /run/smd-gateway-liveness/tick && { [ ! -e /opt/data/gateway-liveness/kills ] || head -c 0 /opt/data/gateway-liveness/kills; }\""
+ssh_exec "gateway-liveness-files-readable-by-gate" "setpriv --reuid=hermes --regid=hermes --init-groups sh -c \"head -c 1 /run/smd-gateway-liveness/state >/dev/null && head -c 0 /run/smd-gateway-liveness/tick && { [ ! -e /opt/data/.smd-root/gateway-liveness/kills ] || head -c 0 /opt/data/.smd-root/gateway-liveness/kills; }\""
 
 # The supervisor is only as good as the signal it reads, and that signal is
 # UPSTREAM's: an asyncio task on the gateway loop rewrites this file every 30s.
