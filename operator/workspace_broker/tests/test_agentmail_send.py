@@ -487,8 +487,15 @@ def _broker(tmp_path: Path, http: FakeHTTP, yaml_text: str = PILOT_YAML) -> Brok
     return broker
 
 
+def _confirms(broker: Broker) -> list[dict]:
+    """The rows a send settles with. Every send now writes its intent row
+    first (send_intent.py, 2026-10-20); those are asserted on their own in
+    test_send_intent.py, and these tests read the confirm row as before."""
+    return [row for row in broker.ledger.rows if row["action_type"] != "CONFIRM_SEND_INTENT"]
+
+
 def _meta(broker: Broker, index: int = 0) -> dict:
-    return json.loads(broker.ledger.rows[index]["metadata"])
+    return json.loads(_confirms(broker)[index]["metadata"])
 
 
 def test_reply_verb_answers_an_authored_sender_and_keeps_the_sender_key_in_the_row(
@@ -523,7 +530,7 @@ def test_reply_verb_answers_an_authored_sender_and_keeps_the_sender_key_in_the_r
     assert response["recipients"] == ["scott@smd.services"]
     assert "sender_key" not in response
     meta = _meta(broker)
-    assert broker.ledger.rows[0]["action_type"] == "CONFIRM_SEND_DISPATCHED"
+    assert _confirms(broker)[0]["action_type"] == "CONFIRM_SEND_DISPATCHED"
     assert meta["verb"] == "agentmail_reply"
     assert meta["recipients"] == ["scott@smd.services"]
     assert meta["sender_key"] and "scott" not in meta["sender_key"]
@@ -558,7 +565,7 @@ def test_dispatch_writes_a_row_carrying_the_message_id(tmp_path: Path) -> None:
         peer_uid=AGENT_UID,
     )
     assert response["ok"] and response["message_id"] == "msg_generated"
-    row = broker.ledger.rows[0]
+    row = _confirms(broker)[0]
     assert row["action_type"] == "CONFIRM_SEND_DISPATCHED"
     meta = _meta(broker)
     assert meta["message_id"] == "msg_generated"
@@ -575,7 +582,7 @@ def test_a_refusal_is_audited_not_silent(tmp_path: Path) -> None:
             peer_pid=GATEWAY_PID,
             peer_uid=AGENT_UID,
         )
-    assert broker.ledger.rows[0]["action_type"] == "CONFIRM_SEND_FAILED"
+    assert _confirms(broker)[0]["action_type"] == "CONFIRM_SEND_FAILED"
     assert _meta(broker)["outcome"] == "refused"
 
 
@@ -674,7 +681,7 @@ def test_caller_audit_extra_rides_the_row_through_a_closed_allowlist(tmp_path: P
     # console's wake<->confirm join reads, and nowhere else. FALSIFIER: drop
     # "skill_name" from _CALLER_AUDIT_KEYS and the column assertion fails; leave
     # the pop out of transmit_verbs.append_send_row and the metadata assertion fails.
-    assert broker.ledger.rows[0]["skill_name"] == "deadline-miss-escalator"
+    assert _confirms(broker)[0]["skill_name"] == "deadline-miss-escalator"
     assert "skill_name" not in meta
 
 
@@ -726,7 +733,7 @@ def test_audit_extra_rides_the_refusal_row_too(tmp_path: Path) -> None:
     assert meta["routing_leg"] == "fallback"
     # A refused templated send is still that routine's send: the column rides
     # every row transmit_verbs.dispatch_transmit writes, not only the dispatched one.
-    assert broker.ledger.rows[0]["skill_name"] == "deadline-miss-escalator"
+    assert _confirms(broker)[0]["skill_name"] == "deadline-miss-escalator"
     assert "skill_name" not in meta
 
 
@@ -765,7 +772,7 @@ def test_absent_audit_extra_writes_exactly_todays_row(tmp_path: Path) -> None:
     # Omitted, never written as "": the hash chain canonicalizes "" and NULL
     # distinctly, and an in-turn send (no cron routine) must read as NULL in the
     # column, which is what the console's tri-state attribution keys on.
-    assert "skill_name" not in broker.ledger.rows[0]
+    assert "skill_name" not in _confirms(broker)[0]
     assert "skill_name" not in meta
 
 

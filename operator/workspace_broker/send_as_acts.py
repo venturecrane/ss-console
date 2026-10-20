@@ -60,6 +60,9 @@ from .send_as_transport import audited_send as _audited_send
 from .send_as_transport import graph_of as _graph
 from .send_as_transport import notice as _notice
 from .send_as_transport import require_configured as _require_configured
+from .send_as_transport import open_intent as _open_intent
+from .send_as_transport import settle as _settle
+from .send_intent import NOT_SENT as _NOT_SENT
 
 #: How long a staff member has to answer. Its own constant, deliberately not the
 #: act TTL: the act window was authorized for matter creation and widening it
@@ -528,11 +531,12 @@ def _report_failure(
     msg: dict[str, Any],
     exc: Exception,
     meta: dict[str, Any],
+    intent_id: str,
 ) -> dict[str, Any]:
     """No automatic retry: a transport failure's outcome is unknown and a retry
     could deliver twice. The approver is told, never left guessing."""
     store.claim(row["id"], from_status=STATUS_SENDING, to_status=STATUS_FAILED, fields={"result": str(exc)[:500]})
-    _audit(broker, "SEND_AS_FAILED", "send_as_decide", {**meta, "reason": str(exc)})
+    _settle(broker, "SEND_AS_FAILED", {**meta, "reason": str(exc)}, intent_id)
     try:
         _notice(
             broker,
@@ -565,10 +569,18 @@ def _apply_send(
         fields={"decided_by": decided_by, "decided_at": store._now()},
     ):
         return _refused("this draft was answered already")
+    # Record-before-send (send_intent.py, 2026-10-20), the same rule as every
+    # other broker transmit: no intent row, no send. The draft goes back to
+    # open, so the approver's answer can simply be given again (the next claim
+    # overwrites the decided_by/decided_at this one stamped).
+    intent_id = _open_intent(broker, {**meta, "from": approver, "recipients": collect_recipients(msg)})
+    if not intent_id:
+        store.claim(row["id"], from_status=STATUS_SENDING, to_status=STATUS_OPEN, fields={})
+        return _refused(_NOT_SENT)
     try:
         result = _graph(broker).send_as_staff(msg, approver)
     except (MsGraphRefused, MsGraphTransportError) as exc:
-        return _report_failure(broker, store, row, msg, exc, meta)
+        return _report_failure(broker, store, row, msg, exc, meta, intent_id)
     conversation = _graph(broker).conversation_of(result.get("graph_message_id") or "")
     fields = {"conversation_id": conversation, "result": result.get("lookup") or ""}
     store.claim(row["id"], from_status=STATUS_SENDING, to_status=STATUS_DISPATCHED, fields=fields)
@@ -586,8 +598,10 @@ def _apply_send(
         "mailbox": result.get("mailbox") or "",
         **joins,
     }
-    _audit(broker, "SEND_AS_SENT", "send_as_decide", sent)
-    return {**_BASE, "status": "DISPATCHED", "reason": f"sent from {approver}"}
+    # The email is out: a confirm row that did not land is flagged, never
+    # reported as a failure that invites a second send (2026-10-20).
+    flag = _settle(broker, "SEND_AS_SENT", sent, intent_id)
+    return {**_BASE, "status": "DISPATCHED", "reason": f"sent from {approver}", **flag}
 
 
 def decide(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any]:

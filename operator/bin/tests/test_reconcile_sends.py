@@ -1116,3 +1116,21 @@ def test_the_scheduled_run_passes_no_channel_filter():
     body = workflow.split("Reconcile every inbox", 1)[1]
     assert "reconcile-sends.py $ARGS" in body
     assert "--channel" not in body.split("Open an issue", 1)[0]
+
+
+def test_an_intent_row_alone_never_accounts_for_a_send():
+    """Record-before-send (2026-10-20). The broker's CONFIRM_SEND_INTENT row is
+    written before the vendor call and carries no message id, so it can neither
+    match a message by identity nor be claimed by time: a send whose confirm row
+    never landed stays unaccounted here, which is one of the two ways it is seen
+    (the other is send_verify's ``send_unconfirmed``)."""
+    sent = [_graph_sent("<orphan@firm.example>", "2026-10-20T09:00:00Z")]
+    intent = {
+        "id": "01INTENT",
+        "ts": "2026-10-20T09:00:00Z",
+        "action_type": "CONFIRM_SEND_INTENT",
+        "metadata": {"verb": "msgraph_send", "recipients": ["x@example.invalid"], "input_digest": "d"},
+    }
+    exact, _tool, broker, unaccounted = rec.reconcile(sent, [intent])
+    assert (exact, broker) == (0, 0)
+    assert [m["message_id"] for m in unaccounted] == ["<orphan@firm.example>"]

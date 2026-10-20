@@ -243,6 +243,9 @@ export const SUPPRESSED_ACTION_REASONS: Readonly<Record<string, string>> = {
     'INTERNAL. Proven delivery: a job whose delivery could not be proven (its review held it, its read-back failed, or the requester reply was not seen in Sent Items). It pages SMD to act; the job itself shows on this feed through its own held or failed line.',
   DELIVERY_PROVEN:
     'INTERNAL. Proven delivery: the evidence a delivered job rests on (files re-read by id, size and hash; the review status and its cost). The delivery shows on this feed through its own delivered line.',
+  // Record-before-send (2026-10-20), the email twin of SMOKEBALL_WRITE.
+  CONFIRM_SEND_INTENT:
+    'INTERNAL. Written before every message the Operator sends, so a send can never happen without a record. The message itself shows on this feed through its sent or failed line; an intent alone is a send in flight, or one SMD is paged to look at. Complete in the audit record and its export.',
   SMOKEBALL_WRITE:
     'INTERNAL. Every write to the firm’s Smokeball is recorded twice (intent before it is sent, result after), by the Operator or SMD. The act already shows on this feed through its own line, and a raw intent/result pair would show a refused write as a change. Complete in the audit record and its export.',
   MEMORY_RULE_ADDED:

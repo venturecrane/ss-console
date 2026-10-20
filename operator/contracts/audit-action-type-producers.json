@@ -352,6 +352,11 @@
       "producerFile": "operator/workspace_broker/transmit_verbs.py",
       "note": "the refusal / transport-error sibling of CONFIRM_SEND_DISPATCHED, written by the same _dispatch_transmit; same producer, same correction."
     },
+    "CONFIRM_SEND_INTENT": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/send_intent.py",
+      "reason": "Record-before-send (2026-10-20). The workspace broker appends this row before every vendor call (dispatch_transmit in transmit_verbs.py, and the send-as transmit in send_as_acts.py) and refuses to send when it cannot land. It carries the recipients attempted, the input digest, the verb and the session/matter joins, never the body; the confirm row names it as intent_row."
+    },
     "SPEC_GATE_TRIGGERED": {
       "side": "overlay",
       "overlayProducer": "shared/spec_gate.py (authored-format gate, overlay#207)",
