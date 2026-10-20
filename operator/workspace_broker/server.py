@@ -46,7 +46,11 @@ from .operations import WorkspaceOperations
 from .request_errors import error_response_for
 from .verbs import dispatch
 
-MAX_REQUEST_BYTES = 1_048_576
+#: One request frame. 6 MiB since AgentMail sends carry files
+#: (``agentmail_attachments``): up to 3 MiB decoded is 4 MiB of base64 on the
+#: wire, which a 1 MiB frame refused as ``request_too_large`` before any check
+#: could name the reason. AgentMail itself bounds a send request at 6 MB.
+MAX_REQUEST_BYTES = 6 * 1_048_576
 GRANT_TTL_SECONDS = 10
 
 

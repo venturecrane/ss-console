@@ -164,8 +164,14 @@ scope:
     - smdurgan@smdurgan.com
   # SMD's operations desk, so that request can be SENT. Outbound classification
   # only: team@ is deliberately absent from inbound_allow_from, so mail
-  # claiming to come from it cannot instruct the seat.
+  # claiming to come from it cannot instruct the seat. The card is addressed to
+  # scott@smd.services since 2026-10-20: team@ is a Google Group that rewrote
+  # this seat's agentmail.to From to itself, so SMD's answer to [ops dbd3bf32]
+  # went to the Group, never reached the seat, and the request lapsed.
   outbound_roster:
+    - address: scott@smd.services
+      class: firm_staff
+      note: 'SMD operations desk (cards are addressed here); outbound classification only, never inbound trust'
     - address: team@smd.services
       class: firm_staff
       note: 'SMD operations desk; outbound classification only, never inbound trust'

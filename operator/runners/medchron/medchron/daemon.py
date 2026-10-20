@@ -43,7 +43,7 @@ from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
 from . import child as child_mod, config as config_mod, job as job_mod, lane_proof, proof_run, quiesce, requeue
 from . import resume as resume_mod, retention
-from . import verdict as verdict_mod, wake_grace
+from . import rewake, verdict as verdict_mod, wake_grace
 from .proof import holds as proof_holds, watch as proof_watch
 
 logger = logging.getLogger("medchron.daemon")
@@ -497,7 +497,8 @@ class Daemon:
             if not self.wake_secret:
                 logger.warning("no %s in the daemon env; wake for %s stays pending", WAKE_SECRET_ENV, job_id)
                 return
-            body = json.dumps({"handoff_id": f"{self.LANE}-{job_id}", "task": wake["task"]})
+            # A re-send (`medchron rewake`) carries its number: the gateway drops a reused id.
+            body = json.dumps({"handoff_id": rewake.handoff_id(self.LANE, job_id, wake), "task": wake["task"]})
             url = urlparse(self.gate_url)
             sent = False
             outcome = "error"
