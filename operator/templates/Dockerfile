@@ -1311,7 +1311,11 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # 2026-10-20c (64c56ad3, overlay #526): an email from a rostered sender that
 # carries attachments says so above the delimiter (kinds and MIME types, never
 # filenames); a picture-only email no longer reads as empty. No tracked twin moved.
-ARG OVERLAY_REF="64c56ad3f99ad9bbc3054a8fe9ffb555b06e8ce4"
+# 2026-10-20d (4f1c6506, overlay #527): a lost audit row records WHY (a closed
+# reason class plus its action_type, never content) beside the tally, and the
+# heartbeat carries the histogram (audit_write_failure_reasons, migration 0131).
+# emit.py stops counting a broker loss twice. emit.py twin re-hashed.
+ARG OVERLAY_REF="4f1c65065fc734c3d2570a5dac9562fbdb30cd07"
 
 # No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
 # across seats; the slug reaches the Machine only as fly.toml [env]
