@@ -247,6 +247,27 @@ describe.skipIf(!bashOk)('entrypoint supervisor: the Machine stop drains before 
     process.kill(Number(readFileSync(`${r.dir}/job.pid`, 'utf8')), 'SIGKILL')
   }, 30000)
 
+  it('the broker survives the group stop, outlives the gateway, then is killed with no extra wait', async () => {
+    // 2026-10-20: the broker loop ignores TERM (entrypoint.sh) so the gateway
+    // and the daemon drain can still record; the supervisor KILLs it once the
+    // gateway has exited, so the stop takes no longer than before.
+    const py = process.env.PYTHON ?? 'python3'
+    const broker = `( trap '' TERM INT
+  while true; do
+    ${py} -c 'import os, time; open(os.environ["OUT"] + "/broker.pids", "a").write(f"{os.getpid()}\\n"); time.sleep(120)'
+    sleep 0.2
+  done ) &
+SUPERVISOR_PID=$!
+`
+    const started = Date.now()
+    const r = await runStop(NEW_SHAPE().replace('smd_supervise\n', `${broker}smd_supervise\n`))
+    expect(r.code, r.log).toBe(0)
+    const pids = readFileSync(`${r.dir}/broker.pids`, 'utf8').trim().split('\n').map(Number)
+    expect(pids, 'one broker for the whole stop: the group signal did not kill it').toHaveLength(1)
+    expect(alive(pids[0]), 'killed once the gateway exited').toBe(false)
+    expect(Date.now() - started).toBeLessThan(20000)
+  }, 30000)
+
   it('exits with the gateway code when the gateway exits on its own (crash semantics kept)', async () => {
     const r = await runStop(NEW_SHAPE('crash'), {}, false)
     expect(r.code).toBe(7)
