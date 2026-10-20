@@ -34,6 +34,7 @@ export interface HeartbeatBody {
   webhook_surface?: unknown
   cron_containment?: unknown
   audit_write_failures?: unknown
+  audit_write_failure_reasons?: unknown
   audit_head?: unknown
   audit_rows?: unknown
   gateway_loop_ok?: unknown
@@ -367,6 +368,26 @@ function parseToolFailureEntry(value: unknown): Record<string, unknown> | null {
   return entry
 }
 
+// 2026-10-20: why the seat's audit rows were lost (overlay
+// shared/audit_failure_counter.loss_key). Cumulative, keyed `reason` or
+// `reason:ACTION_TYPE`, both from closed shapes on the seat and re-checked
+// here, because the key reaches a Sentry message. A key of another shape is
+// dropped; an object with more keys than the seat may send is NULL.
+const AUDIT_LOSS_REASONS_MAX_KEYS = 32
+const AUDIT_LOSS_REASON_KEY_RE = /^[a-z][a-z_]{0,39}(:[A-Z][A-Z0-9_]{0,63})?$/
+
+export function parseAuditWriteFailureReasons(value: unknown): Record<string, number> | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const entries = Object.entries(value as Record<string, unknown>)
+  if (entries.length > AUDIT_LOSS_REASONS_MAX_KEYS) return null
+  const parsed: Record<string, number> = {}
+  for (const [key, raw] of entries.sort(([a], [b]) => a.localeCompare(b))) {
+    const count = parseNonNegInt(raw)
+    if (AUDIT_LOSS_REASON_KEY_RE.test(key) && count !== null && count > 0) parsed[key] = count
+  }
+  return parsed
+}
+
 function parseToolFailuresJson(value: unknown): string | null {
   if (value === undefined) return null
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
@@ -471,6 +492,9 @@ export function parseObservability(body: HeartbeatBody) {
     // failure count with an absence would erase the record and silently reset
     // the delta baseline to zero.
     auditWriteFailures: parseNonNegInt(body.audit_write_failures),
+    // The same tally explained by reason (migration 0131). COALESCE like the
+    // count: NULL is "could not answer", never "nothing lost".
+    auditWriteFailureReasons: parseAuditWriteFailureReasons(body.audit_write_failure_reasons),
     auditHead: parseAuditHead(body.audit_head),
     auditRows: parseNonNegInt(body.audit_rows),
     // ss#2488 part 2: the gateway's loop pulse and the part-1 supervisor's own

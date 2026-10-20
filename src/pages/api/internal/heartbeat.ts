@@ -34,6 +34,7 @@
  *     "webhook_surface_ok":      <boolean | 0/1>,  // optional (ss#2222 warn tier)
  *     "webhook_surface":         <map tool → entry> // optional (ss#2222 warn tier)
  *     "audit_write_failures":    <integer>,        // optional (ss#2498 lost rows, cumulative)
+ *     "audit_write_failure_reasons": <map key → n>  // optional (0131 why, cumulative)
  *     "audit_head":              <64 hex chars>,   // optional (ss#2500 chain pin)
  *     "audit_rows":              <integer>,        // optional (ss#2500 chain pin)
  *     "send_refusals":           <integer>,        // optional (ss#2547 muted routine)
@@ -124,7 +125,12 @@ export const POST: APIRoute = async ({ request }) => {
   // #2498: read the prior count BEFORE the upsert overwrites it. A rise means
   // the seat lost audit rows since the last beat — the state that is otherwise
   // indistinguishable from a seat with nothing to record.
-  await reportAuditWriteFailureDelta(env.DB, auth.slug, obs.auditWriteFailures)
+  await reportAuditWriteFailureDelta(
+    env.DB,
+    auth.slug,
+    obs.auditWriteFailures,
+    obs.auditWriteFailureReasons
+  )
 
   // One parsed beat, spread into the upsert: every alert-driving field in
   // parseObservability reaches the row by name, and a field added there

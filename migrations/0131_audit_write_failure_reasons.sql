@@ -1,0 +1,22 @@
+-- 0131: why a seat's audit rows were lost, beside how many (2026-10-20)
+--
+-- THE GAP. 0107 gave fleet_status a cumulative count of audit rows each seat
+-- could not persist, and the heartbeat alert raised "lost N audit row(s)" on a
+-- rise. It could never say why. The reason lived only in a rate-limited log
+-- line inside the losing process, on a seat whose logs carry client content
+-- and are read by nobody, so captain-mark losing about two rows after each
+-- release was countable and could not be explained.
+--
+-- The overlay now records one reason key per lost row on the volume (overlay
+-- shared/audit_failure_counter.py: a closed reason class plus the row's
+-- action_type, never content) and the heartbeat sends the cumulative histogram
+-- as `audit_write_failure_reasons`. This column holds the last one received, as
+-- canonical JSON, so the ingest path can diff it against the next beat and name
+-- the classes in the warning.
+--
+-- COALESCE, like audit_write_failures and for the same reason: NULL means the
+-- seat could not answer, and overwriting a known histogram with that absence
+-- would make the next beat's delta re-report every reason the seat has ever
+-- had.
+
+ALTER TABLE fleet_status ADD COLUMN audit_write_failure_reasons_json TEXT;
