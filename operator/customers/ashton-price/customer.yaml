@@ -1254,7 +1254,16 @@ scope:
   # draft. It grants NO inbound trust — this address is deliberately absent from
   # scope.inbound_allow_from, so mail claiming to come from it does not untaint
   # a turn and cannot instruct the seat.
+  #
+  # scott@smd.services is where the card is ADDRESSED since 2026-10-20 (overlay
+  # shared/operations_request.py SMD_OPERATIONS_DESK). team@ is a Google Group,
+  # and a Group rewrites a DMARC-strict sender's From to itself, so SMD's answer
+  # went to the Group instead of the seat ([ops dbd3bf32] on brokery lapsed that
+  # way). team@ stays listed for any send that names it.
   outbound_roster:
+    - address: scott@smd.services
+      class: firm_staff
+      note: 'SMD operations desk (cards are addressed here); outbound classification only, never inbound trust'
     - address: team@smd.services
       class: firm_staff
       note: 'SMD operations desk; outbound classification only, never inbound trust'
