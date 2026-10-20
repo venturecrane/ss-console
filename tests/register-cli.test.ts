@@ -197,6 +197,10 @@ describe('dated obligations', () => {
         key: 'chronology-cycle',
         due: 'the 15th',
         'date-quote': 'runs once per billing cycle from the 15th',
+        // A recurring row needs its window (2026-10-20); this case is about
+        // the date quote, so it supplies one.
+        'window-start': '2026-10-15',
+        'window-end': '2026-11-14',
       })
     )
     expect(result.ok).toBe(true)

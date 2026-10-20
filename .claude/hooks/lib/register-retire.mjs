@@ -19,14 +19,18 @@
  */
 
 import {
+  markAwaitingExternal,
   markCancelledAttested,
   markReopenedAttested,
+  markRetired,
 } from '../../../src/lib/db/obligation-capture.ts'
 import {
   explainRefusal,
   readArchivedLetter,
+  validateAwait,
   validateCancellation,
   validateReopen,
+  validateRetire,
 } from './register-close.mjs'
 
 /** The first line of a failure, which is the line that says why. */
@@ -181,5 +185,124 @@ export async function cmdReopen(args, cli) {
   console.log(`register: reopened ${row.customer_slug}/${row.kind}/${row.stable_key}`)
   console.log(`  the delivery did not hold: ${letter.locator}`)
   console.log('  the row is active (owed) again; cancel it if the client also released it.')
+  return 0
+}
+
+// ------------------------------------------------------------ retire, await
+
+/** Write a state-plus-disposition move through `mark`, and say why it failed if it did. */
+async function recordMove(mark, db, row, disposition, to) {
+  let write
+  try {
+    write = await mark(db, { obligationId: row.obligation_id, fromState: row.state, disposition })
+  } catch (err) {
+    return { ok: false, error: `the write failed (${firstLine(err)})` }
+  }
+  if (write.ok) return { ok: true }
+  if (write.error === 'illegal_transition') {
+    return { ok: false, error: `the register refuses ${row.state} -> ${to}` }
+  }
+  const reads = write.reads ? `"${write.reads}"` : 'unreadable'
+  return { ok: false, error: `the write did not land: row ${row.obligation_id} reads ${reads}` }
+}
+
+/** The one row a client's key names, or null after printing why there is not one. */
+async function resolveRow(args, cli, required) {
+  const absent = required.find((field) => !args[field])
+  if (absent) {
+    console.error(`register: --${absent} is required`)
+    cli.usage()
+    return null
+  }
+  const found = await cli.findOpenRow(args)
+  if (!found.ok) {
+    if (found.error === 'ambiguous_key') explainRefusal(found, args)
+    else console.error(`register: ${found.error}`)
+    return null
+  }
+  return { row: found.row }
+}
+
+/**
+ * `register retire`: the row was NEVER an obligation (-> void).
+ *
+ * Found 2026-10-20: two A&P rows were a contract term (the monthly page
+ * allowance, which every chronology job's pre-flight already checks) and a
+ * scheduled routine (which work-health already grades per run). Neither was
+ * work owed, neither could honestly be delivered or cancelled, and both paged
+ * the ops inbox daily as "open with no due date". The reason is required and
+ * stored as the disposition; the act is journaled like every other transition.
+ * A Captain act: the CLI records the call, it does not make it.
+ */
+export async function cmdRetire(args, cli) {
+  const resolved = await resolveRow(args, cli, ['client', 'key', 'why'])
+  if (!resolved) return 1
+  const { row } = resolved
+  const check = validateRetire(row, args.why)
+  if (!check.ok) {
+    explainRefusal(check, args)
+    return 1
+  }
+  const why = String(args.why).trim()
+  const disposition = `retired, never an obligation: ${why}`
+  const recorded = await recordMove(markRetired, cli.registerDb(), row, disposition, 'void')
+  if (!recorded.ok) {
+    console.error(`register: ${recorded.error}`)
+    return 1
+  }
+  cli.journalAppend({
+    ts: new Date().toISOString(),
+    kind: 'retired',
+    client: args.client,
+    key: row.stable_key,
+    obligation_id: row.obligation_id,
+    why,
+    session: cli.sessionId(),
+    synced: true,
+  })
+  console.log(`register: retired ${row.customer_slug}/${row.kind}/${row.stable_key} (void)`)
+  console.log(`  never an obligation: ${why}`)
+  return 0
+}
+
+/**
+ * `register await`: the next step is someone else's (-> awaiting_external).
+ *
+ * The state existed from day one and nothing could put a row in it but a
+ * hand-written UPDATE, so a quote waiting on the client's answers aged into a
+ * daily alert about our own lateness. The evidence is a letter on the
+ * archive's main whose quote says whose move it is; the disposition stores the
+ * commit-pinned locator and that quote. `deliver` still works from this state.
+ */
+export async function cmdAwait(args, cli) {
+  const resolved = await resolveRow(args, cli, ['client', 'key', 'evidence', 'quote'])
+  if (!resolved) return 1
+  const { row } = resolved
+  const letter = row ? readArchivedLetter(args.evidence) : { ok: false, error: 'no_such_obligation' }
+  const check = validateAwait(row, letter, args.quote)
+  if (!check.ok) {
+    explainRefusal(check, args)
+    return 1
+  }
+  const disposition = `awaiting external: "${String(args.quote).trim()}" (${letter.locator})`
+  const to = 'awaiting_external'
+  const recorded = await recordMove(markAwaitingExternal, cli.registerDb(), row, disposition, to)
+  if (!recorded.ok) {
+    console.error(`register: ${recorded.error}`)
+    return 1
+  }
+  cli.journalAppend({
+    ts: new Date().toISOString(),
+    kind: 'awaiting_external',
+    client: args.client,
+    key: row.stable_key,
+    obligation_id: row.obligation_id,
+    evidence: letter.locator,
+    quote: args.quote,
+    session: cli.sessionId(),
+    synced: true,
+  })
+  console.log(`register: ${row.customer_slug}/${row.kind}/${row.stable_key} is awaiting_external`)
+  console.log(`  evidence ${letter.locator}`)
   return 0
 }

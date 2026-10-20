@@ -47,6 +47,7 @@ on:
   pull_request:
     paths:
       - 'scripts/ci-reconcile-obligations.ts'
+      - 'scripts/lib/obligation-reconcile/**'
       - 'tests/obligation-reconcile.test.ts'
       - 'src/lib/db/obligations.ts'
       - '.github/workflows/obligation-reconcile.yml'

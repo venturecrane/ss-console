@@ -15,6 +15,12 @@
 #       --quote "<verbatim from it>" --why "<one sentence>"
 #       (Captain act; delivered -> active only. `cancel` it afterwards if the
 #       client's letter also released the ask.)
+#   .claude/bin/register retire --client <slug> --key <stable-key> \
+#       --why "<why this was never an obligation>"
+#       (Captain act; -> void. A contract term or a watched routine, not work owed.)
+#   .claude/bin/register await --client <slug> --key <stable-key> \
+#       --evidence <letter saying whose move it is> --quote "<verbatim from it>"
+#       (-> awaiting_external; such rows do not raise the undated age alert)
 #   .claude/bin/register sync
 #   .claude/bin/register list [--client <slug>]
 #

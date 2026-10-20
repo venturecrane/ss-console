@@ -616,6 +616,22 @@ describe('the stale ladder for undated obligations', () => {
     expect(result.stdout).not.toMatch(/with no due date/)
   })
 
+  it('a row waiting on someone else never goes stale: awaiting_external, or external_dependency', () => {
+    // 2026-10-20: a review list already marked awaiting the firm's approval
+    // paged the ops inbox every morning. The first test in this block is the
+    // paired control: the same row in `open` still alerts.
+    setState({
+      obligations: [
+        captured({ obligation_id: 'o-wait', state: 'awaiting_external' }),
+        captured({ obligation_id: 'o-dep', kind: 'external_dependency' }),
+      ],
+    })
+    const result = run()
+    expect(result.code).toBe(0)
+    expect(result.stdout).not.toMatch(/with no due date/)
+    expect(readState().writes.some((w) => w.includes('obligation_stale'))).toBe(false)
+  })
+
   it('an IMPORTED undated row never goes stale, however old', () => {
     // A derived GitHub row probes `absent` for as long as its issue is merely
     // open, so an unscoped ladder pages on ordinary backlog -- 51 open issues

@@ -162,6 +162,61 @@ export function validateReopen(row, letter, quote, why) {
   return { ok: true }
 }
 
+// ------------------------------------------------------------------- retire
+
+/**
+ * The states a row can be retired FROM. Mirrors the `void` edges in
+ * VALID_TRANSITIONS; tests/register-retire-await.test.ts pins the two equal.
+ * Every working state: a row that was never an obligation can be noticed at
+ * any point before it settles. Settled rows (delivered onward, cancelled) have
+ * their own exits and a retire would overwrite what they already record.
+ */
+export const RETIRABLE_FROM = ['open', 'active', 'awaiting_external', 'parked']
+
+/** A reason shorter than this is a label, not a reason ("n/a", "not needed"). */
+export const MIN_RETIRE_REASON_WORDS = 6
+
+/**
+ * Validate a retirement: the row was never an obligation. There is no letter,
+ * because nothing was promised and nothing was released; the stated reason IS
+ * the evidence, and it is stored on the row. Imported rows are allowed (a
+ * retired imported row stays retired through the nightly import; see
+ * markRetired). A Captain act, like `cancel`.
+ */
+export function validateRetire(row, why) {
+  if (!row) return { ok: false, error: 'no_such_obligation' }
+  if (!RETIRABLE_FROM.includes(row.state)) {
+    return { ok: false, error: 'not_retirable_from_state', state: row.state }
+  }
+  const words = String(why ?? '').trim().split(/\s+/).filter(Boolean).length
+  if (words < MIN_RETIRE_REASON_WORDS) return { ok: false, error: 'retire_needs_a_reason', words }
+  return { ok: true }
+}
+
+// -------------------------------------------------------------------- await
+
+/** The states a row can start waiting on someone else FROM (the `awaiting_external` edges). */
+export const AWAITABLE_FROM = ['open', 'active', 'parked']
+
+/**
+ * Validate a move to `awaiting_external`: a letter on the archive's main whose
+ * quote says the next step belongs to someone else. Unlike `deliver`, the
+ * letter that made the promise IS acceptable evidence here, because a promise
+ * is often stated with its prerequisites ("the quote follows those"). Captured
+ * rows only: an imported row's state follows its source.
+ */
+export function validateAwait(row, letter, quote) {
+  if (!row) return { ok: false, error: 'no_such_obligation' }
+  if (row.origin !== 'captured') return { ok: false, error: 'imported_rows_follow_their_source' }
+  if (!AWAITABLE_FROM.includes(row.state)) {
+    return { ok: false, error: 'not_awaitable_from_state', state: row.state }
+  }
+  if (!letter.ok) return { ok: false, error: letter.error }
+  const quoteCheck = checkQuote(letter.text, quote ?? '')
+  if (!quoteCheck.ok) return { ok: false, ...quoteCheck }
+  return { ok: true }
+}
+
 export function explainRefusal(check, args) {
   console.error(`register: REFUSED (${check.error})`)
   const why = {
@@ -173,6 +228,11 @@ export function explainRefusal(check, args) {
     not_cancellable_from_state: `  the row is "${check.state}"; only ${CANCELLABLE_FROM.join(', ')} rows can be cancelled.`,
     not_reopenable_from_state: `  the row is "${check.state}"; only ${REOPENABLE_FROM.join(', ')} rows can be reopened.`,
     reopen_needs_a_reason: '  --why is required: say in one sentence why the delivery was not one.',
+    not_retirable_from_state: `  the row is "${check.state}"; only ${RETIRABLE_FROM.join(', ')} rows can be retired.`,
+    retire_needs_a_reason: `  --why must say in a sentence (${MIN_RETIRE_REASON_WORDS}+ words) why this was never an obligation; it is stored on the row.`,
+    not_awaitable_from_state: `  the row is "${check.state}"; only ${AWAITABLE_FROM.join(', ')} rows can move to awaiting_external.`,
+    imported_rows_follow_their_source:
+      "  this row was imported; its state follows its source (issue, alert, change request), not a letter.",
     engagements_repo_absent: `  ${engagementsDir()} is not checked out; the delivery cannot be proven, so it is refused.`,
     engagements_unreachable: '  could not fetch the engagements repo; an unread archive proves nothing either way.',
     evidence_not_on_main: `  ${args.evidence} is not on engagements origin/main. Merge the letter's archive PR first.`,
