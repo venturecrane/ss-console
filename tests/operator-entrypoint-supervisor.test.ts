@@ -416,8 +416,20 @@ describe('the root audit-loss directory is made by root before the agent runs', 
   })
 
   it('the boot chown of /opt/data leaves .smd-root alone, or root’s counts reset every boot', () => {
-    const line = ENTRYPOINT.split('\n').find((l) => l.startsWith('find /opt/data'))
-    expect(line).toContain('-o -path /opt/data/.smd-root \\) -prune')
+    const line = ENTRYPOINT.split('\n').find((l) => l.startsWith('find /opt/data')) ?? ''
+    const pruned = /-o -path ("[^"]*\.smd-root") \\\) -prune/.exec(line)?.[1]
+    const created = /local _d=("[^"]*")/.exec(readFileSync(SUPERVISOR, 'utf8'))?.[1]
+    expect(pruned, 'the prune names .smd-root').toBeDefined()
+    expect(created).toBeDefined()
+    // Same path from the same variable, whatever HERMES_HOME is.
+    for (const home of ['', '/opt/data', '/srv/elsewhere']) {
+      const env: NodeJS.ProcessEnv = { ...process.env, HERMES_HOME: home }
+      if (home === '') delete env.HERMES_HOME
+      const sh = (expr: string) =>
+        // nosemgrep: javascript.lang.security.audit.dangerous-spawn-shell.dangerous-spawn-shell -- expr is a quoted path expression read from this repo's own shell source by a closed regex; no external input reaches it
+        spawnSync('bash', ['-c', `printf '%s' ${expr}`], { env, encoding: 'utf8' }).stdout
+      expect(sh(pruned!), `HERMES_HOME=${home}`).toBe(sh(created!))
+    }
   })
 })
 
