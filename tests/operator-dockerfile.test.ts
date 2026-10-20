@@ -1574,7 +1574,8 @@ describe('Operator customer Machine Dockerfile', () => {
     // -> 4f1c6506 (overlay#527), 2026-10-20: a lost audit row records why.
     // -> 1a05699a (overlay#528), 2026-10-20: root appliers record CONFIG_WRITE; routine drain.
     // -> 184df81b (overlay#530), 2026-10-20: kill ledger read from .smd-root.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="184df81b9377c42e12d24d36396f0052fc9278be"')
+    // -> 1aa0a762 (overlay#529), 2026-10-20: a lost send answer is unknown, never "retry".
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="1aa0a762d05fe256bde5c130f09ead7fe16e1fb8"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
