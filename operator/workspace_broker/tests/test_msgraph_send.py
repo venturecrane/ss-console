@@ -926,8 +926,15 @@ def _broker(tmp_path: Path, http: FakeGraph, yaml_text: str = STAGING_YAML) -> B
     return broker
 
 
+def _confirms(broker: Broker) -> list[dict]:
+    """The rows a send settles with. Every send now writes its intent row
+    first (send_intent.py, 2026-10-20); those are asserted on their own in
+    test_send_intent.py, and these tests read the confirm row as before."""
+    return [row for row in broker.ledger.rows if row["action_type"] != "CONFIRM_SEND_INTENT"]
+
+
 def _meta(broker: Broker, index: int = 0) -> dict:
-    return json.loads(broker.ledger.rows[index]["metadata"])
+    return json.loads(_confirms(broker)[index]["metadata"])
 
 
 def test_verb_is_unreachable_from_a_non_gateway_pid(tmp_path: Path) -> None:
@@ -953,7 +960,7 @@ def test_dispatch_writes_a_row_naming_the_mailbox_and_recipients(tmp_path: Path)
         peer_uid=AGENT_UID,
     )
     assert response["ok"]
-    row = broker.ledger.rows[0]
+    row = _confirms(broker)[0]
     assert row["action_type"] == "CONFIRM_SEND_DISPATCHED"
     meta = _meta(broker)
     assert meta["outcome"] == "sent"
@@ -972,7 +979,7 @@ def test_a_refusal_is_audited_not_silent(tmp_path: Path) -> None:
             peer_pid=GATEWAY_PID,
             peer_uid=AGENT_UID,
         )
-    assert broker.ledger.rows[0]["action_type"] == "CONFIRM_SEND_FAILED"
+    assert _confirms(broker)[0]["action_type"] == "CONFIRM_SEND_FAILED"
     meta = _meta(broker)
     assert meta["outcome"] == "refused"
     assert meta["recipients"] == [UNAUTHORED]
@@ -1081,7 +1088,7 @@ def test_the_send_row_carries_the_session_and_the_matter(tmp_path: Path) -> None
         peer_pid=GATEWAY_PID,
         peer_uid=AGENT_UID,
     )
-    row = broker.ledger.rows[0]
+    row = _confirms(broker)[0]
     # matter_ref goes to the COLUMN, which is what the portal record filters on.
     assert row["matter_ref"] == "matter-uuid-1"
     assert _meta(broker)["session_id"] == "20260820_195837_68d654ce"
@@ -1102,7 +1109,7 @@ def test_a_refusal_row_carries_them_too(tmp_path: Path) -> None:
             peer_pid=GATEWAY_PID,
             peer_uid=AGENT_UID,
         )
-    assert broker.ledger.rows[0]["matter_ref"] == "matter-uuid-2"
+    assert _confirms(broker)[0]["matter_ref"] == "matter-uuid-2"
     assert _meta(broker)["session_id"] == "sess-2"
 
 
@@ -1120,9 +1127,9 @@ def test_a_caller_that_sends_no_joins_writes_the_row_it_writes_today(tmp_path: P
         peer_pid=GATEWAY_PID,
         peer_uid=AGENT_UID,
     )
-    assert "matter_ref" not in broker.ledger.rows[0]
+    assert "matter_ref" not in _confirms(broker)[0]
     assert "session_id" not in _meta(broker)
-    assert "skill_name" not in broker.ledger.rows[0]
+    assert "skill_name" not in _confirms(broker)[0]
 
 
 def test_audit_extra_rides_the_msgraph_row_through_the_same_allowlist(tmp_path: Path) -> None:
@@ -1156,7 +1163,7 @@ def test_audit_extra_rides_the_msgraph_row_through_the_same_allowlist(tmp_path: 
         peer_pid=GATEWAY_PID,
         peer_uid=AGENT_UID,
     )
-    row = broker.ledger.rows[0]
+    row = _confirms(broker)[0]
     meta = _meta(broker)
     assert meta["routing_leg"] == "central"
     assert meta["rendered_body_sha256"] == sha
@@ -1184,7 +1191,7 @@ def test_a_refused_msgraph_send_still_names_its_routine(tmp_path: Path) -> None:
             peer_pid=GATEWAY_PID,
             peer_uid=AGENT_UID,
         )
-    row = broker.ledger.rows[0]
+    row = _confirms(broker)[0]
     assert row["action_type"] == "CONFIRM_SEND_FAILED"
     assert row["skill_name"] == "deadline-miss-escalator"
     assert _meta(broker)["body_variant"] == "full"
@@ -2027,7 +2034,7 @@ def test_the_row_never_carries_the_attachment_bytes(tmp_path: Path) -> None:
             peer_uid=AGENT_UID,
         )
     rows = json.dumps(broker.ledger.rows)
-    assert [r["action_type"] for r in broker.ledger.rows] == [
+    assert [r["action_type"] for r in _confirms(broker)] == [
         "CONFIRM_SEND_DISPATCHED",
         "CONFIRM_SEND_FAILED",
     ]

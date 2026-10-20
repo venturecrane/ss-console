@@ -276,6 +276,11 @@ ACCEPTED_ACTION_TYPES = frozenset(
         # Confirm-send seam (overlay hermes-smd-trust):
         "CONFIRM_SEND_DISPATCHED",
         "CONFIRM_SEND_FAILED",
+        # Record-before-send (2026-10-20): the broker's row written BEFORE every
+        # vendor call, settled by the confirm row above that names it
+        # (operator/workspace_broker/send_intent.py). Broker-written; the overlay
+        # neither emits nor validates it.
+        "CONFIRM_SEND_INTENT",
         # Authored-format spec gate (overlay shared/spec_gate.py, overlay#207):
         "SPEC_GATE_TRIGGERED",
         # Report-only voice gate (overlay hermes-smd-trust/voice_gate.py) —

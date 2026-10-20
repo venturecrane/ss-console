@@ -155,6 +155,7 @@ from .send_invariants import (  # noqa: F401 -- re-exports; callers and tests re
     _item_hash,
     _recipient_hash,
     ack_invariant,
+    intent_invariant,
     load_invariants,
     recipient_invariant,
 )
@@ -825,8 +826,11 @@ class SendVerifier:
         # send-invariants.json PR, never findings.
         findings, proposals = recipient_invariant(rows, self._declares, self._invariants)
         ack_findings, ack_proposals = ack_invariant(wakes, self._declares, self._invariants)
-        apply_dispositions(inbox, verdicts, findings + ack_findings, self._dispositions)
-        return verdicts, findings + ack_findings, proposals + ack_proposals
+        # Record-before-send (2026-10-20): an intent no confirm row names is a
+        # send whose outcome the ledger never recorded.
+        findings += ack_findings + intent_invariant(rows)
+        apply_dispositions(inbox, verdicts, findings, self._dispositions)
+        return verdicts, findings, proposals + ack_proposals
 
 
 def verifier_from_contract(
@@ -865,6 +869,7 @@ __all__ = [
     "has_holds",
     "index_dispatches",
     "index_wakes",
+    "intent_invariant",
     "load_invariants",
     "load_send_render",
     "recipient_invariant",

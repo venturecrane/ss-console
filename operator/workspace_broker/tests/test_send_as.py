@@ -571,3 +571,78 @@ def test_an_expired_link_sends_nothing(tmp_path: Path, links) -> None:
     broker.send_as_now.t += SEND_AS_TTL_SECONDS + 1
     assert _click(broker, token)["status"] in ("EXPIRED", "REFUSED")
     assert not any("from" in m for m in http.sent_messages)
+
+
+# -- record-before-send (send_intent.py, 2026-10-20) ---------------------------
+
+
+class _LedgerFailingOn(RecordingLedger):
+    """Raises the way the sqlite writer does under contention for the rows
+    ``fail`` names. Installed after the proposal, so the approval email's own
+    rows land as they always did."""
+
+    def __init__(self, rows: list[dict]) -> None:
+        super().__init__()
+        self.rows = rows
+        self.fail = lambda _row: False
+
+    def append(self, row: dict) -> str:
+        if self.fail(row):
+            import sqlite3
+
+            raise sqlite3.OperationalError("database is locked")
+        return super().append(row)
+
+
+def _send_as_intent(row: dict) -> bool:
+    return row["action_type"] == "CONFIRM_SEND_INTENT" and json.loads(row["metadata"])["verb"] == "send_as_decide"
+
+
+def _staff_sends(http: SendAsGraph) -> int:
+    return sum(1 for m in http.sent_messages if "from" in m)
+
+
+def test_a_send_as_whose_intent_cannot_be_recorded_is_not_sent_and_stays_open(tmp_path: Path) -> None:
+    """Falsifier: the old code called send_as_staff with nothing recorded first."""
+    http = SendAsGraph()
+    broker = _broker(tmp_path, http)
+    tag = _propose(broker)["tag"]
+    ledger = _LedgerFailingOn(broker.ledger.rows)
+    ledger.fail = _send_as_intent
+    broker.ledger = ledger
+    out = _decide(broker, tag, "send")
+    assert out["status"] == "REFUSED" and out["reason"].startswith("not sent")
+    assert _staff_sends(http) == 0
+    # Nothing was spent: the same approval, given again, sends once.
+    ledger.fail = lambda _row: False
+    again = _decide(broker, tag, "send", internet_message_id="<answer-2@examplefirm.example>")
+    assert again["status"] == "DISPATCHED"
+    assert _staff_sends(http) == 1
+
+
+def test_a_send_as_whose_confirm_cannot_be_recorded_still_reports_dispatched(tmp_path: Path) -> None:
+    """Falsifier: the old code let the ledger's exception escape after the email
+    had gone from the staff member's address, so the answer read as a failure."""
+    http = SendAsGraph()
+    broker = _broker(tmp_path, http)
+    tag = _propose(broker)["tag"]
+    ledger = _LedgerFailingOn(broker.ledger.rows)
+    ledger.fail = lambda row: row["action_type"] == "SEND_AS_SENT"
+    broker.ledger = ledger
+    out = _decide(broker, tag, "send")
+    assert out["status"] == "DISPATCHED"
+    assert out["confirm_row_written"] is False
+    assert _staff_sends(http) == 1
+    assert "SEND_AS_SENT" not in _action_types(broker)
+
+
+def test_send_as_sent_names_its_intent(tmp_path: Path) -> None:
+    broker = _broker(tmp_path, SendAsGraph())
+    tag = _propose(broker)["tag"]
+    before = len(broker.ledger.rows)
+    assert _decide(broker, tag, "send")["status"] == "DISPATCHED"
+    new = broker.ledger.rows[before:]
+    assert [r["action_type"] for r in new] == ["CONFIRM_SEND_INTENT", "SEND_AS_SENT"]
+    intent_meta = json.loads(new[0]["metadata"])
+    assert intent_meta["from"] == STAFF and intent_meta["recipients"] == [OUTSIDE]
+    assert json.loads(new[1]["metadata"])["intent_row"] == f"row-{before + 1}"

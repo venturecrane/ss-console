@@ -17,9 +17,11 @@ from typing import Any
 from .broker_context import BrokerContext
 from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError, collect_recipients
 from .participant_fence import LANE_SEND_AS
+from .send_intent import CONFIRM_FLAG, record_confirm, record_intent
 from .transmit_verbs import append_send_row, dispatch_transmit
 
 NOT_CONFIGURED = "send-as is not configured on this broker (needs msgraph, an audit ledger, and an audit db)"
+_DECIDE_VERB = "send_as_decide"
 
 
 def require_configured(broker: BrokerContext) -> None:
@@ -68,4 +70,33 @@ def audit(broker: BrokerContext, action_type: str, verb: str, meta: dict[str, An
     append_send_row(broker, action_type, verb, meta, session_id=session_id)
 
 
-__all__ = ["NOT_CONFIGURED", "audit", "audited_send", "graph_of", "notice", "require_configured"]
+def open_intent(broker: BrokerContext, meta: dict[str, Any]) -> str:
+    """The send-as transmit's intent row (send_intent.py, 2026-10-20), written
+    before ``send_as_staff``. ``""`` when it could not land, and then nothing
+    may be sent: the caller refuses with ``send_intent.NOT_SENT``."""
+    try:
+        return record_intent(append_send_row, broker, _DECIDE_VERB, meta, refused=MsGraphRefused)
+    except MsGraphRefused:
+        return ""
+
+
+def settle(broker: BrokerContext, action_type: str, meta: dict[str, Any], intent_id: str) -> dict[str, bool]:
+    """Write the SEND_AS_SENT / SEND_AS_FAILED row naming its intent. Returns
+    the response flag to spread: empty when the row landed, and
+    ``confirm_row_written: False`` when it did not, so a send that went out is
+    never reported as one that failed."""
+    if record_confirm(append_send_row, broker, action_type, _DECIDE_VERB, meta, intent_id):
+        return {}
+    return {CONFIRM_FLAG: False}
+
+
+__all__ = [
+    "NOT_CONFIGURED",
+    "audit",
+    "audited_send",
+    "graph_of",
+    "notice",
+    "open_intent",
+    "require_configured",
+    "settle",
+]
