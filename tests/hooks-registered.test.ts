@@ -62,6 +62,24 @@ describe('.claude/hooks registration', () => {
     expect(wrapper).toContain('hooks/trap-recurrence.mjs')
   })
 
+  it('the deciding guards block when they cannot run (onFailure: "block")', () => {
+    // Without it, a guard that fails to start or times out lets the tool call
+    // through, so "could not evaluate" reads as "permitted". Each script still
+    // fails open on errors it catches itself; this covers only the cases where
+    // the script never got to decide.
+    const settings = JSON.parse(settingsText) as {
+      hooks: Record<string, { hooks: { command?: string; onFailure?: string }[] }[]>
+    }
+    const handlers = Object.values(settings.hooks).flatMap((groups) =>
+      groups.flatMap((g) => g.hooks)
+    )
+    for (const name of ['worktree-guard.mjs', 'engagement-guard.mjs', 'plan-premise-gate.mjs']) {
+      const handler = handlers.find((h) => h.command?.includes(`.claude/hooks/${name}`))
+      expect(handler, `${name} not registered`).toBeDefined()
+      expect(handler?.onFailure, `${name} must set onFailure: "block"`).toBe('block')
+    }
+  })
+
   it('the scan sees the hooks that matter', () => {
     const names = hookScripts()
     expect(names).toContain('worktree-guard.mjs')
