@@ -4,137 +4,76 @@ section: business
 order: 10
 owner: captain
 review_every: 180
-status: Rewrite pending
-summary: Who decides and who executes - the Captain, the fleet of agents, and the system they run
+last_reviewed: "2026-10-21"
+summary: How the Captain, the administrator and the AI agents divide SMD's work, how a piece of work moves between them, and how to direct an agent well.
 sources:
-  - label: ADR 0035 - No imposed entitlement defaults (authored ceilings)
-    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0035-no-imposed-entitlement-defaults.md
-  - label: ADR 0030 - Control plane / human-principal surface
-    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0030-control-plane-human-principal-surface.md
+  - label: Agent operating doctrine
+    href: docs/doctrine/agent-operating-doctrine.md
+  - label: CLAUDE.md (session mechanics, done means the client can do it, gone means gone)
+    href: CLAUDE.md
+  - label: Ops triage agent orders
+    href: operator/ops-machine/TRIAGE.md
+  - label: Fleet alerts schedule
+    href: workers/fleet-alerts/wrangler.toml
+  - label: Work-health schedule
+    href: .github/workflows/work-health.yml
+  - label: ADR 0035 - No imposed entitlement defaults
+    href: docs/adr/0035-no-imposed-entitlement-defaults.md
 ---
 
-## How the work is organized
+SMD runs on three layers: the Captain makes the decisions that bind the firm, you run the business day to day, and AI agents do the technical work and report back with proof. This page explains how work moves between those layers and how to direct an agent; the exact list of who may approve what is on [Who Does What](/admin/playbook/who-does-what), and this page does not repeat it.
 
-SMD Services is run by one human directing a band of AI agents. The human is the
-Captain. The agents are the fleet. The division of labor is not "boss and staff."
-It is a judgment layer over a throughput layer: the Captain sets the mission and
-holds the decisions that bind the venture, and the agents do the work inside the
-boundaries the Captain authored.
+## The three layers
 
-This page owns that split and the operating culture that goes with it. For the
-rhythm of a single working session (start, end, escalation timing) see
-`/admin/playbook/operating-cadence`. For how the Operator product expresses this
-same split toward a paying client, see `/admin/playbook/operator-thesis`.
+| Layer | Holds | In one sentence |
+|---|---|---|
+| **The Captain** | Strategy, pricing, contract terms, new commitments, spending, taking on or ending a client | Decides what binds the firm |
+| **You, the administrator** | The daily and weekly routine, directing agents, routine client emails, invoices at set prices, routing change requests | Keeps the business running and brings the Captain only what is the Captain's |
+| **AI agents** | Changes to the systems, live operations on client seats, investigation, drafting, monitoring | Do the work and prove it |
 
-## The Captain's Domain
+A fourth party sits beside these: **each client** decides how far its own Operator may go, within what its agreement allows. Neither SMD nor an agent sets a client's limits for them; an unconfigured action is refused (ADR 0035).
 
-Some decisions belong to the Captain and never get delegated. They are the
-decisions that commit the venture or change what an agent is allowed to do. The
-Captain governs the Operator product through a single control plane (ADR 0030):
-one surface for authority, configuration, and lifecycle. The same shape governs
-the venture itself.
+The rule underneath all of it is the first law of the agent doctrine: every call has exactly one owner, and the first step is to name it. Agents own execution and anything a repository or tool can answer; the Captain owns strategy, commitments and spend; the client owns its own posture (`docs/doctrine/agent-operating-doctrine.md`, Law 1).
 
-- **Client acceptance.** Who gets in. For the Operator, an allow-list controls
-  which inbound contacts reach the agent; the Captain sets that list.
-- **Authority delegation.** What an agent may do, per client and per domain.
-  Authority is off by default and the Captain enables it explicitly. This is the
-  governance boundary - see `/admin/playbook/autonomy-governance`.
-- **Scope and pricing.** Every engagement's scope and price is a Captain
-  decision. See `/admin/playbook/pricing-economics`.
-- **Escalation resolution.** When an agent hits a decision it cannot make, it
-  routes up with a clear summary and the specific decision needed; the Captain
-  resolves it.
-- **Go / kill.** The Captain authorizes continuation, pause, or termination of
-  any active engagement.
-- **Operator development.** New capabilities, vertical packs, skill additions,
-  and platform direction are Captain calls.
+## How work moves
 
-## Agent Execution
+| What arrives | Who handles it first | Goes to the Captain when |
+|---|---|---|
+| An alert in team@ (a seat stopped, a job missed, a connection down) | You read it; an agent investigates and fixes it ([When Something Goes Wrong](/admin/playbook/when-something-goes-wrong)) | Clearing a cost stop, or the fix would cost money or change a promise |
+| A routine client email (scheduling, status, a billing question) | You | It would make a new commitment or change terms |
+| A client asks for a change to their Operator | You route it ([Changing a Client's Operator](/admin/playbook/changing-a-clients-operator)); an agent does the work | It is a new kind of work that needs priced terms |
+| An invoice at an agreed price | You send or present it ([Money](/admin/playbook/money)) | The amount does not match what was agreed |
+| A prospect | The Captain (acquisition is founder-run, ADR 0060) | Always |
+| Ending a client | The Captain decides; agents then run the offboarding ([Customer Lifecycle](/admin/playbook/customer-lifecycle)) | Always |
 
-Everything that is not a Captain decision is agent execution. Agents run the work
-inside the ceilings the Captain authored - the no-imposed-defaults model in ADR
-0035, surfaced at `/admin/playbook/autonomy-governance`:
+Live operations on a client's seat (rebuilding it, rotating a key, restarting it) are agent work. You do not need to run them or hand them to the Captain; ask an agent to do it and report back.
 
-- Inbound client communications - email, voice, chat - handled within the
-  configured autonomy ceilings.
-- Assessment preparation and extraction support. The agent-run assessment
-  interview (`/assessment`) is an internal dogfood page behind a flag, not a
-  live client flow (`src/pages/assessment.astro`); the Captain runs assessment
-  conversations and owns closing.
-- Consulting analysis and deliverable drafting executed by agents; the Captain
-  reviews before any client-facing send.
-- Fleet health monitoring, which runs autonomously with the Captain notified on
-  degradation.
-- Platform maintenance and deployment, handled through PRs (never a direct push
-  to main - see `/admin/playbook/building-the-platform`).
-- Learned preferences, which accumulate automatically; the Captain can dismiss
-  any memory, and dismissal is a physical delete, not a flag.
+## Directing an agent
 
-The throughput is the agent. The judgment is the Captain.
+- **Give it a mission in one line.** A session starts by recording what it is for, and that line stays in front of the agent all session (`CLAUDE.md`, Session Mechanics). If you cannot say the mission in one line, the work is not ready to start.
+- **Expect a short report that leads with the status.** A long reply opens with what the mission was, its status (OK, blocked, decision needed, or defect found), what was done and what is next (`CLAUDE.md`, reply contract). Bad news is never shortened.
+- **Expect every fact to carry its source**: a command, a file, or the words "I'm inferring." A claim with no source should not be acted on (`CLAUDE.md`; doctrine Law 5).
+- **"Done" means a client can do it.** A feature is done when someone performed the act on the system the client uses and saw it work, not when the code merged. A removal is done only when it is gone from every place it lived. Reports cite a check of the running system for each (`CLAUDE.md`, "Done means the client can do it" and "Gone means gone").
+- **Agents finish the work in reach rather than filing it.** An agent files an issue only when the work truly cannot be done now (doctrine Law 13).
+- **"Not now" stands until you lift it.** An agent stops before anything that costs money, touches a client or changes a promise, and brings it back ([Who Does What](/admin/playbook/who-does-what)).
 
-## The operating ethos
+## What is watched without anyone asking
 
-The fleet does not work like a corporate team. The enterprise operating ethos
-(the global `operating-ethos.md` module, the Captain's standing order) sets the
-culture for every agent in every session:
+- The fleet-alerts service checks every seat every two minutes and emails team@ when a seat's state changes (`workers/fleet-alerts/wrangler.toml`).
+- The work-health check runs hourly at 23 minutes past the hour (`.github/workflows/work-health.yml`; [Work Health](/admin/playbook/work-health)).
+- The ops triage agent investigates each new problem every hour and writes a report; it may not change code, deploy, restart anything or message a client (`operator/ops-machine/TRIAGE.md`).
 
-> We are a wild band of AI agents with an ape commander. We can and we will. You
-> know the mission. Execute it. If you are not clear on the mission, ask.
-> Otherwise, move out.
+What arrives from these, and when, is on [The Administrator's Week](/admin/playbook/administrators-week).
 
-In practice this licenses an agent to:
+## Guardrails that do not bend
 
-- **Parallelize.** Independent work goes out at once - independent tool calls in
-  one message, independent branches to sub-agents. Working serially on
-  embarrassingly parallel work wastes context and time.
-- **Hold whole systems in context, not files.** Read what is needed up front;
-  do not keyhole through one file at a time when the module fits in the window.
-- **Verify end to end.** "Typecheck passes" is not "it works." Browser, deploy,
-  observe the running thing. For the Operator, verify against the running Machine
-  and the runtime read seam, not the config that was written
-  (`/admin/playbook/deployment-release`).
+- Every change to the systems goes through a reviewed pull request; nothing is pushed straight to the live code, and a merge happens only when every required check passes ([Building the Platform](/admin/playbook/building-the-platform)).
+- Client documents are opened only inside that client's ops workspace (doctrine Law 15).
+- Client material lives only in the private `venturecrane/engagements` repository (Decision #52).
+- No secret value is ever put in a message, a page or a chat (`CLAUDE.md`).
 
-## The skunkworks stance
+## Related pages
 
-This is a pre-launch venture run as a skunkworks, not a process shop. The ethos
-distinguishes bureaucracy (which is cut) from safety (which is kept). No phases,
-feature flags, or follow-up tickets for work that fits in one session: do it now
-or kill it. No "good enough" shortcut when the professional move is clear - the
-right path is the right path.
-
-The guardrails that survive this stance are the ones where lost work or broken
-trust costs more than moving slightly slower: all changes ship through PRs and
-never a push to main; destroying data, removing a feature, or touching auth gets
-escalated first; context switches (repo, venture, branch) get announced;
-irreversible, shared, or external actions (a merge, a deploy, a message sent on
-the Captain's behalf) get confirmed. The ethos is about removing ceremony, not
-removing safety.
-
-Fleet health is watched on two schedules. The `ss-fleet-alerts` Worker checks every
-2 minutes and emails team@smd.services only when a seat's state changes
-(`workers/fleet-alerts/wrangler.toml`, `crons = ["*/2 * * * *", ...]`). The
-work-health control runs hourly at :23 (`.github/workflows/work-health.yml`). See
-[Work Health](/admin/playbook/work-health) and
-[Incident Response](/admin/playbook/incident-response).
-
-## The tools of the fleet
-
-The fleet's leverage comes from a state-of-the-art model with a large context
-window plus a full toolkit (per `operating-ethos.md`, "Your Kit, Your
-Confidence"). The ones that shape how work gets parallelized here:
-
-- **Parallel sub-agents.** A session spawns sub-agents to run independent
-  branches of research or implementation at once, then synthesizes the results.
-  This handbook was authored that way - a fan-out of agents, one section each.
-- **Workflows and slash commands.** Repeatable procedures (start of session, end
-  of session, ship, code review) are encoded as commands so the procedure is
-  executed the same way every time rather than re-derived.
-- **Fleet dispatch.** Long-running or cross-machine work is dispatched to a fleet
-  machine rather than blocking the live session.
-- **Git worktrees.** Parallel sessions each get an isolated copy of the repo so
-  they do not collide - the mechanics are covered in
-  `/admin/playbook/building-the-platform`.
-
-A newcomer inherits a running operation, not a blank slate: the harness defines
-the governance boundary, the guide (per-client `customer.yaml`) carries the
-context, and the memory holds the history. The Captain directs from day one.
+- [Who Does What](/admin/playbook/who-does-what): every position and every approval point.
+- [Operating Cadence](/admin/playbook/operating-cadence): the rhythm of an agent's working session.
+- [The Operator Thesis](/admin/playbook/operator-thesis): the same split, as the Operator offers it to a client.

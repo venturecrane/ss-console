@@ -4,6 +4,7 @@ section: engineering
 order: 7
 owner: engineering
 review_every: 90
+last_reviewed: "2026-10-21"
 summary: Where the venture's data lives - a Cloudflare D1 relational store whose source of truth is the migrations directory, with R2 for objects and KV for sessions
 sources:
   - label: migrations/ (D1 schema source of truth; the whole directory, so a new migration flags this page in handbook:drift)
@@ -12,19 +13,25 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/migrations/0001_create_tables.sql
   - label: src/lib/db/ (data access layer)
     href: https://github.com/venturecrane/ss-console/tree/main/src/lib/db
-  - label: Operator per-customer D1 schema spec
+  - label: Operator per-customer D1 schema spec (historical; never built)
     href: https://github.com/venturecrane/ss-console/blob/main/docs/specs/operator/d1-schema.md
+  - label: ADR 0009 - the Phase-1 Machine storage note
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0009-cross-machine-query-prohibition.md
+  - label: docs/pm/prd.md - the portal PRD, section 11 Proposed Data Model
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/pm/prd.md
   - label: ADR 0012 - customer.yaml storage
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0012-customer-yaml-storage.md
 ---
+
+This page says where SMD's records live and what each database table holds. An administrator needs it when an agent's report names a table (for example `fleet_status` or `client_obligations`) and you want to know what kind of record it is.
 
 ## Where the data lives
 
 The console's data lives in three Cloudflare stores, each bound to the single `ss-web` Worker:
 
 - **D1** (SQLite at the edge) is the relational store. It holds the pipeline: leads, businesses, assessments, quotes, engagements, invoices, and the Operator control-plane tables. This is the primary store and the one most code touches.
-- **R2** (object storage) holds large or binary artifacts that do not belong in a relational row: assessment transcripts (`assessments.transcript_path` is an R2 key), generated SOW PDFs, and the canonical `customer.yaml` upload per Operator customer (the Hermes read replica, per ADR 0012).
-- **KV** has two namespaces. `SESSIONS` holds session state for the legacy magic-link auth path; `BOOKING_CACHE` holds the `/api/booking/reserve` IP rate limit and the public live assessment's per-session turn and cost ceiling (`as:turns:*` keys, `src/lib/assessment/session.ts`), per the comments in `wrangler.toml`. See `/admin/playbook/client-portal` for the auth model and `/admin/playbook/secrets-access` for how the bindings are wired.
+- **R2** (object storage) holds large or binary artifacts that do not belong in a relational row: assessment transcripts (`assessments.transcript_path` is an R2 key), generated SOW PDFs, and, in the separate `smd-customer-config` bucket, each Operator seat's published `customer.yaml` (the copy the Machine reads, per ADR 0012), the client's authored voice and format specs (`output-classes.json`, ADR 0083), and the seat's own `image-manifest.json` (see `/admin/playbook/architecture-map`).
+- **KV** has two namespaces. `SESSIONS` is a cache: in front of the D1 `sessions` table for the legacy magic-link auth path (`src/lib/auth/session.ts`), and of the Clerk-user-to-admin lookup (`src/lib/auth/admin-session-shim.ts`); `BOOKING_CACHE` holds the `/api/booking/reserve` IP rate limit and the public live assessment's per-session turn and cost ceiling (`as:turns:*` keys, `src/lib/assessment/session.ts`), per the comments in `wrangler.toml`. See `/admin/playbook/client-portal` for the auth model and `/admin/playbook/secrets-access` for how the bindings are wired.
 
 The **`migrations/` directory is the schema source of truth.** Every table and column exists because a numbered migration created it. Migrations are forward-only and additive by convention - there is no down-migration path in normal operation (`migrations/rollbacks/` holds explicit exceptions). To learn the real shape of any table, read its migration, not a model class. `src/lib/db/` is the typed data-access layer over D1; each module owns the queries for one table group (`entities.ts`, `assessments.ts`, `quotes.ts`, `engagements.ts`, `invoices.ts`, and so on).
 
@@ -32,8 +39,8 @@ The **`migrations/` directory is the schema source of truth.** Every table and c
 
 Do not conflate them:
 
-1. **The console D1** - the venture's own operational database, defined by `migrations/` in this repo, bound to the `ss-web` Worker. Everything below describes this database.
-2. **The per-Operator-customer D1** - one isolated database per Operator Machine (`hermes-{slug}-d1`), defined by `operator/migrations/` and specced in `docs/specs/operator/d1-schema.md`. It holds that one customer's runtime state (audit log, memory rules, draft queue, voice samples) and never touches the console D1. Isolation is enforced at the binding layer (one D1 binding per Machine), not by a customer_id column. See `/admin/playbook/operator-platform`.
+1. **The console D1** - the venture's own operational database, defined by `migrations/` in this repo, bound to the `ss-web` Worker and read and written by the three sibling workers. Everything below describes this database.
+2. **Each Operator Machine's own storage** - not a D1 at all. A seat keeps its runtime state (audit log, memory, drafts, matters) in per-Machine SQLite, and never touches the console D1; the volume is the customer boundary (ADR 0007, and the 2026-06-15 storage note in ADR 0009). The console reads it only through the runtime read seam (`/admin/playbook/architecture-map`). The per-customer D1 that early designs called `hermes-{slug}-d1`, with its schema in `operator/migrations/` and `docs/specs/operator/d1-schema.md`, was never provisioned; `operator/migrations/README.md` records it as history and says no new consumer may be designed against it. See `/admin/playbook/operator-platform`.
 
 ## The console schema, by group
 
@@ -48,7 +55,8 @@ The original portal schema (migration `0001_create_tables.sql`) modeled a busine
 | `context` | Append-only log of everything learned about an entity (migration 0008). Feeds the cached attributes on `entities`. |
 | `clients` | Legacy business record from the original schema. Superseded by `entities` for new work; see the rename above. |
 | `contacts` | People at a business (name, email, phone, role). |
-| `users` | Auth principals. `role` is `admin` or `client`; `client` users link to their business so the portal can scope their view. |
+| `users` | Auth principals. `role` is `admin` or `client` (CHECK-constrained again since migration 0035); `client` users link to their business so the portal can scope their view. |
+| `sessions` / `magic_links` | The legacy magic-link path that predates Clerk: one-time sign-in tokens, and the D1 session rows (source of truth, with KV as a cache) that `/auth/verify` mints for an invited client (migrations 0001, 0006; `src/lib/auth/session.ts`). Clerk owns every other sign-in. |
 
 ### Assessment -> quote -> engagement
 
@@ -56,9 +64,9 @@ This is the core funnel; the tables chain by foreign key.
 
 | Table | Purpose |
 |---|---|
-| `assessments` | One assessment call. Holds the structured `extraction` JSON (the full `AssessmentExtraction` from `src/portal/assessments/extraction-schema.ts`), `problems`, and `disqualifiers`. Status flows `scheduled` -> `completed` -> `disqualified` / `converted`. |
+| `assessments` | One assessment call. Holds the structured `extraction` JSON (the full `AssessmentExtraction` from `src/portal/assessments/extraction-schema.ts`), `problems`, and `disqualifiers`. Status flows `scheduled` -> `completed` -> `disqualified` / `converted`, or `cancelled` (migration 0011). |
 | `quotes` | A proposal derived from an assessment. Self-references via `parent_quote_id` for versioning. Carries `line_items` JSON, `total_price` (the project price the client sees), and the authored client-facing content (migration 0021). |
-| `engagements` | A signed, in-flight project. Status flows `scheduled` -> `active` -> `handoff` -> `safety_net` -> `completed`. Carries consultant attribution and next-touchpoint fields (migration 0019). |
+| `engagements` | A signed, in-flight project. Status flows `scheduled` -> `active` -> `handoff` -> `safety_net` -> `completed`, or `cancelled` (migration 0011). Carries consultant attribution and next-touchpoint fields (migration 0019). |
 | `milestones` | Per-engagement milestones; a `payment_trigger` flag marks the ones that release a billing milestone. |
 | `engagement_contacts` | Maps contacts to an engagement with a role (`owner`, `decision_maker`, `champion`). |
 | `parking_lot` | Out-of-scope requests captured during an engagement, dispositioned `fold_in` / `follow_on` / `dropped`. The scope-discipline ledger. |
@@ -90,7 +98,7 @@ The `operator_*` tables (and the projection/audit tables around them) are the co
 
 | Table | Purpose |
 |---|---|
-| `customer_configs` | The portal's read-only projection of each customer's `customer.yaml` (migration 0039). CI projects the git source of truth into this table on merge; portal pages read it on the hot path and never write it (ADR 0012). |
+| `customer_configs` | The portal's read-only projection of each customer's `customer.yaml` (migration 0039, keyed by `customer_slug` since 0090). CI projects the git source of truth into this table on merge (`scripts/project-customer-config.ts`); portal pages read it on the hot path and never write it (ADR 0012). Since migration 0130, `schedule_changed_at` records when the parts of the config that scheduled-run grading depends on last changed, so a publish that touches nothing else does not reset grading. |
 | `customer_config_history` / `config_change_audit` | History and audit of config changes (migrations 0045-0047). |
 | `operator_provisioning_intent` | Records each admin-console attempt to author a new Operator (migration 0067). It keys on a proposed `customer_id`, not an `entity_id`, because the customer does not exist yet - a Worker cannot itself stand up a Machine (ADR 0012 puts that out of scope). |
 | `customer_configs.authority_json` / `operator_authority_audit` | Per-customer authority posture, held as a column on `customer_configs` (migration 0049), and the audit trail of its changes (migration 0066). |
@@ -105,12 +113,12 @@ The `operator_*` tables (and the projection/audit tables around them) are the co
 | `portal_login_events` / `portal_action_events` | Durable portal sign-in history (migration 0098) and client-initiated console actions such as role grants, invitations and connector re-consent (migration 0099, rebuilt 0101). |
 | `operator_voice_corrections` | The client's corrections to an output class, stored console-side (migration 0102, ADR 0083). |
 | `operator_shortfalls` | Each time an Operator could not give a person what they asked (`not_allowed`, `limit`, `failed`, `partial`), reported on the heartbeat and paged once by the `ss-fleet-alerts` Worker (migration 0120). |
-| `operator_request_cards` | One card per request a person sends a seat (`replied`, `no_reply`, `job_done`), posted to `POST /api/internal/operator-request-card` and emailed to SMD ops (migration 0122, rebuilt 0123-0125). |
+| `operator_request_cards` | One card per request a person sends a seat (`replied`, `no_reply`, `job_done`, or `lane_unproven` when the request asks for a kind of job not yet proven on that seat, since migration 0125), posted to `POST /api/internal/operator-request-card` and emailed to SMD ops (migration 0122, rebuilt 0123-0125). |
 | `fleet_releases` / `fleet_rollouts` / `fleet_holds` / `fleet_lease` | The seat fleet release system (migration 0129): one row per built image or skills version, one per release-and-seat rollout attempt, seats a rollout must skip, and a single lease so only one rollout drives the fleet at a time. The same migration added `image_ref`, `skills_version`, `config_digest` and the busy counts `jobs_running`, `jobs_queued`, `wakes_pending` to `fleet_status`. |
-| `cost_telemetry` / `captain_time_events` | Operator cost rows, keyed by `customer_slug` (migration 0083, ADR 0062). Written nightly by the `ss-cost-telemetry` worker from the Anthropic usage report; per-seat attribution maps `customer_configs.anthropic_workspace_id` to a seat, with reserved slugs `_org` (reconciliation) and `_unmapped` (unclaimed workspace usage). ADR 0062 superseded the per-customer-D1 placement, which was never provisioned. |
+| `cost_telemetry` / `captain_time_events` | Operator cost rows, keyed by `customer_slug` (migration 0083, ADR 0062). `captain_time_events` holds one row per `crane operator log-time` entry (Captain time logged against a seat; the CLI lives in the crane toolchain, not this repo, and no code here reads the table). `cost_telemetry` is written nightly by the `ss-cost-telemetry` worker from the Anthropic usage report; per-seat attribution maps `customer_configs.anthropic_workspace_id` to a seat, with reserved slugs `_org` (reconciliation) and `_unmapped` (unclaimed workspace usage). ADR 0062 superseded the per-customer-D1 placement, which was never provisioned. |
 | `cost_anomaly_alerts` | Nightly spike detections over `cost_telemetry` plus Captain snooze/ack state (migration 0041), written by the `ss-cost-anomaly` worker. Multi-source since 0044: `cost`, `sentry`, `healthchecks`, `audit_integrity`, and `obligation` (0118). A new source is a writer, not a new surface. |
 | `fleet_status` | One row per seat, keyed by `customer_slug` (migration 0093 re-keyed it from `entity_id` because several seats can share an entity). Written only by `POST /api/internal/heartbeat`, read by the admin roster and the `ss-fleet-alerts` pager. It is everything the seat reports about itself on each tick: liveness, and the alert-driving fields added as each blind spot was found. Migration 0105 added `cron_containment` (crons deliberately off is visible, not mistaken for broken); 0106 `webhook_surface_ok` and `webhook_surface_json` (the expected-tool surface the seat had been reporting and the console had been dropping); 0107 `audit_write_failures`, `audit_head`, `audit_rows` (the ledger reports on itself) and `gateway_loop_ok`, `gateway_loop_age_seconds`, `gateway_supervisor_state`, `gateway_restarts_last_hour` (a wedged event loop no longer reads green); 0112 `sticky_stop_reason` and `sticky_stop_condition` (a stopped seat says why, not just that it stopped); 0131 `audit_write_failure_reasons_json` (lost audit rows by reason class and action type, so the loss warning can say why); 0132 `audit_write_failures_rose_at` (when the lifetime count last rose, so the shortfall email names lost writes only when they fall inside its 24-hour window). NULL in any of these means the seat could not answer, never zero. |
-| `fleet_alert_state` | The pager's ledger: one open or resolved row per seat and condition, so a condition pages once when it opens and once when it clears rather than every minute. Rebuilt by migration 0107 (the gateway-loop conditions) and 0109 (refused or unsent escalations: the 2026-08-19 incident where a seat's deadline escalator was refused by its own gates for four days and nobody was paged). Since migration 0115 it also holds the `edge_down` row for the web Worker's own outside-in probe, keyed by the host name rather than a seat; migration 0116 admits that condition into the CHECK, which 0115 had missed (the pager would have emailed every tick and recorded nothing). |
+| `fleet_alert_state` | The pager's ledger: one open or resolved row per seat and condition, so a condition pages once when it opens and once when it clears rather than every minute. Its `condition` CHECK cannot be altered in SQLite, so the table is rebuilt each time a condition class is added (migrations 0093, 0094, 0103, 0104, 0106, 0107, 0109, 0116, 0119); 0109, for example, added refused or unsent escalations after the 2026-08-19 incident where a seat's deadline escalator was refused by its own gates for four days and nobody was paged. Since migration 0115 it also holds the `edge_down` row for the web Worker's own outside-in probe, keyed by the host name rather than a seat; migration 0116 admits that condition into the CHECK, which 0115 had missed (the pager would have emailed every tick and recorded nothing). |
 | `edge_poll_state` | The pager's memory of its own outside-in probe of the web Worker (migration 0115): per target, the consecutive failed and good probe counts, what the last probe saw, and when the edge last answered well. Read and written only by `workers/fleet-alerts/src/edge-poll.ts`; a target is down after three consecutive failures and up after two consecutive successes, and the open or resolved alert itself is the `fleet_alert_state` row above. |
 | `audit_head_history` | The seat's audit-chain head pinned off the Machine per heartbeat (migration 0108). The on-seat verifier can prove a row in the middle of the chain was altered but cannot see rows removed from the end; this table can, because the console keeps every head it was ever told. |
 | `promotion_card_dismissals` | Orphaned. Recorded a principal dismissing a "skill ready for promotion" card (migration 0040, #811); the card and every reader and writer were deleted in #2732, so nothing touches the table. Dropping it is a destructive migration and needs a Captain directive. |
@@ -128,8 +136,10 @@ Secrets never enter any of these tables; non-secret references (token pointers) 
 ## Conventions
 
 - **Primary keys are ULIDs** (TEXT, lexicographically sortable by creation time).
-- **Multi-tenancy by `org_id`.** Nearly every table carries it; queries filter on it. `organizations` and `magic_links` are the exceptions.
+- **Two tenancy keys.** The original pipeline and CRM tables carry `org_id` and queries filter on it (`organizations`, `magic_links` and `events` are the exceptions). The Operator control-plane tables key on `customer_slug` instead (for example `fleet_status`, `cost_telemetry`, `machine_credentials`, `client_obligations`), because a seat, not an organization, is their unit.
 - **JSON columns carry contracts**, documented in the head comment of `migrations/0001_create_tables.sql` (the `branding`, `settings`, `extraction`, `problems`, `disqualifiers`, and `line_items` shapes). Parse these on read; never cast (per `coding-standards.md`).
 - **Status columns are CHECK-constrained enums.** The allowed values are in the migration; treat the migration as authoritative when a status string looks unfamiliar.
 
-> TODO(why): The original schema was specced against "PRD Section 7 (Data Model)" (cited in `migrations/0001_create_tables.sql` head comment), but that PRD is not in the repo, so the original rationale for some early modeling choices (for example why `clients` and `entities` briefly coexisted rather than a single rename) is reconstructed from the migration comments only.
+## Where the early design came from
+
+The original schema was specced in the client-portal PRD, `docs/pm/prd.md`, section 11 "Proposed Data Model" (added the same day as migration 0001, 2026-03-30). The migration's head comment cites "PRD Section 7 (Data Model)", which does not match the PRD's numbering in the repo, where section 7 is the MVP user journey and section 11 holds the schema. `clients` and `entities` coexisted because the entity-context change was deliberately staged: migration 0008 calls itself "Phase A (additive only, no drops)", safe to run beside the existing tables while data was backfilled into `entities`, and migration 0010 then dropped the legacy `client_id` column from the five tables that still carried it, because the application code by then wrote only `entity_id`.

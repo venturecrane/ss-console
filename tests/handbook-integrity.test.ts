@@ -122,7 +122,7 @@ const pages: Page[] = readdirSync(HANDBOOK)
 const slugSet = new Set(pages.map((p) => p.slug))
 
 /** The handbook-wide TODO(why) count, as of the last PR that resolved one. */
-const TODO_CEILING = 11
+const TODO_CEILING = 2
 
 /** Markdown link targets that are neither a URL, a site path, nor an anchor. */
 function unresolvableLinks(body: string): string[] {
@@ -135,7 +135,10 @@ function unresolvableLinks(body: string): string[] {
 function isCitableHref(href: unknown): boolean {
   if (typeof href !== 'string') return false
   return (
-    /^https?:\/\//.test(href) || [...REPO_PATH_ROOTS, '.claude/'].some((r) => href.startsWith(r))
+    /^https?:\/\//.test(href) ||
+    [...REPO_PATH_ROOTS, '.claude/'].some((r) => href.startsWith(r)) ||
+    // A root-level file (CLAUDE.md, wrangler.toml, eslint.config.js) is a real source.
+    (/^[\w.-]+$/.test(href) && existsSync(resolve(REPO_ROOT, href)))
   )
 }
 
@@ -422,6 +425,8 @@ describe('pages that list what exists name all of it', () => {
     expect(count('runbook')).toBeGreaterThan(20)
     expect(blank.find((o) => o.what === 'deployed worker')?.missing).toContain('fleet-alerts')
     expect(blank.find((o) => o.what === 'live table')?.missing).toContain('client_obligations')
+    // Dropped and recreated in one migration (0011): still live.
+    expect(blank.find((o) => o.what === 'live table')?.missing).toContain('quotes')
     expect(scheduledJobs(REPO_ROOT).some((j) => j.name.includes('work-health'))).toBe(true)
   })
 })

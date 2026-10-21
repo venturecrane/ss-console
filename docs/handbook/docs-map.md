@@ -4,11 +4,14 @@ section: engineering
 order: 14
 owner: engineering
 review_every: 90
+last_reviewed: "2026-10-21"
 summary: Where every canonical document lives under docs/, so a newcomer can find anything
 sources:
   - label: docs/README.md
     href: https://github.com/venturecrane/ss-console/blob/main/docs/README.md
 ---
+
+This page says where each kind of document lives in the repository's `docs/` folder. An administrator needs it when an agent's report cites a document path and you want to know what sort of document it is, or when you are looking for a runbook, a spec or a template and do not know its folder.
 
 ## What this is
 
@@ -29,7 +32,7 @@ The "why" canon. Numbered ADRs (`0001` through `0093`, 91 files, with gaps) capt
 
 Formal specs, each the implementation contract for a build issue. Two subtrees:
 
-- **`specs/operator/`** - the Operator platform specs (about 30 files). Examples: `customer-yaml-schema.md`, `capability-contracts.md`, `d1-schema.md`, `audit-emit-points.md`, `safety-invariants.md`, `inbound-trust-boundary.md`, `voice-ingestion.md`, `decommission-customer.md`, `vertical-manifest-schema.md`. `index.md` maps each spec to its P0/P1 issue.
+- **`specs/operator/`** - the Operator platform specs (35 files including `index.md`). Examples: `customer-yaml-schema.md`, `capability-contracts.md`, `d1-schema.md` (the per-customer D1 that was never built; historical), `audit-emit-points.md`, `safety-invariants.md`, `inbound-trust-boundary.md`, `voice-ingestion.md`, `decommission-customer.md`, `vertical-manifest-schema.md`. `index.md` maps each spec to its P0/P1 issue.
 - **`specs/verticals/`** - one spec per industry vertical pack: `law-firm.md`, `marketing-agency.md`, `insurance.md`, `accounting.md`, `dental.md`, `home-services.md`, `med-spa.md`, `mortgage.md`, `property-management.md`, `ria.md`, `title.md`, `veterinary.md`, plus `_template.md`.
 
 ### `docs/collateral/` - Sales and marketing collateral
@@ -38,7 +41,7 @@ The go-to-market deliverables. Key files: `assessment-call-script.md`, `proposal
 
 ### `docs/design/` - Functional design and UX specs
 
-Design specifications for the portal and the Operator surfaces. Top-level: `brief.md`, `context.md`, `design-spec.md`, `index.md`. The `design/operator/` subtree holds the Operator portal designs: `00-foundations.md`, `01-admin-portal.md`, `02-client-portal.md`, `03-mcp-server-exposure.md`, `durable-task-execution-substrate.md`, `mcp-clerk-setup.md`, and the `b3-sticky-stop-live-wiring-review.md` review. Note: the canonical venture design spec is also fetched at runtime via `crane_doc('ss', 'design-spec.md')`.
+Design specifications for the portal and the Operator surfaces. Top-level: `brief.md`, `context.md`, `design-spec.md`, `index.md`. The `design/operator/` subtree holds the Operator portal designs: `00-foundations.md`, `01-admin-portal.md`, `02-client-portal.md`, `03-mcp-server-exposure.md`, `04-console-structure.md`, `05-console-blueprint.md`, `durable-task-execution-substrate.md`, `legibility-ground-truth-matrix.md`, `mcp-clerk-setup.md`, `substrate-watch.md`, the `b3-sticky-stop-live-wiring-review.md` review, and `surface-briefs/` (one locked brief per Operator console surface). `design/admin/surface-briefs/` holds the admin surface briefs (`clients.md`), `design/hosted-agent/` the Hosted Agent product model (`tiered-autonomy-product-model.md`), and `design/draft-crane/` prior-art product shape carried over from another venture. Note: the canonical venture design spec is also fetched at runtime via `crane_doc('ss', 'design-spec.md')`.
 
 ### `docs/templates/` - Document and deliverable templates
 
@@ -50,7 +53,7 @@ Step-by-step operational procedures, in two subtrees. `runbooks/hosted-agent/` h
 
 ### `docs/security/` - Security documents
 
-`smd-services-security-overview.md` (external-facing controls overview), `operator-threat-model.md` (living document), `phase2-design-package.md` (security design tracks awaiting review), and `demo-reply-relay-design.md`.
+`smd-services-security-overview.md` (external-facing controls overview), `operator-threat-model.md` (living document), `phase2-design-package.md` (security design tracks awaiting review), and `branch-protection.md` (the documented snapshot of `main` branch protection).
 
 ### `docs/operator/` - Operator design documents
 
@@ -78,7 +81,7 @@ The tracked source of venture-local slash commands (`medchron/SKILL.md`, `backlo
 
 ### `docs/style/` - Content and visual style rules
 
-Enforcement rules for content quality: `empty-state-pattern.md` (render nothing rather than fabricate), `UI-PATTERNS.md` (the six visual/component rules), and `diagnostic-artifact-content-rules.md`.
+Enforcement rules for content quality: `empty-state-pattern.md` (render nothing rather than fabricate), `UI-PATTERNS.md` (the six visual/component rules), `surface-brief.md` (the per-surface definition exercise every portal and admin surface goes through before design), and `diagnostic-artifact-content-rules.md`.
 
 ### `docs/process/` - Process and workflow guides
 
@@ -95,8 +98,8 @@ The Venture Handbook source - the markdown pages rendered in the admin portal, i
 ### Records, audits, and history
 
 - **`docs/api/`** - the API inventory (`README.md`), one row per file under `src/pages/api` with its methods, auth gate, and purpose. Generated by `scripts/api-inventory.ts`; `tests/api-inventory.test.ts` fails when it and the tree disagree, so it is never hand-edited.
-- **`docs/reviews/`** - code-review and platform-audit records, dated (`code-review-2026-06-12.md`, etc.), plus `index.md`.
-- **`docs/audits/`** - content audits (`client-facing-content-2026-04-15.md`).
+- **`docs/reviews/`** - code-review and platform-audit records, dated (`code-review-2026-06-12.md`, etc.), the dated claims reviews (`claims-<date>.md`, each with the `.probe.sh` that re-runs its checks), the 2026-07-04 Operator strategic review and its evidence, plus `index.md`.
+- **`docs/audits/`** - content audits (`client-facing-content-2026-04-15.md`, `operator-output-provenance-2026-07-31.md`).
 - **`docs/ci-verification/`** - CI verification records (`semgrep-initial-canary.md`).
 - **`docs/spikes/`** - technical research spikes and feasibility investigations (`d1-batch-api.md`, `forme-wasm-pdf.md`), plus `index.md`. The README notes this is equivalent to the hub's `research/`.
 - **`docs/decisions/`** - standalone decision notes outside the ADR sequence (`vertical-selection-phase-1.md`).

@@ -4,10 +4,25 @@ section: product
 order: 2
 owner: captain
 review_every: 90
+last_reviewed: "2026-10-21"
 summary: The portal.smd.services surface where a client sees what they own - engagement lifecycle, product consoles, and one billing surface - plus the auth model and the integrations behind them
 sources:
   - label: src/pages/portal/ (portal surfaces)
     href: https://github.com/venturecrane/ss-console/tree/main/src/pages/portal
+  - label: src/lib/portal/offerings.ts and nav.ts (what the client sees)
+    href: src/lib/portal/offerings.ts
+  - label: src/lib/portal/nav.ts
+    href: src/lib/portal/nav.ts
+  - label: src/lib/portal/billing.ts (the start-subscription door)
+    href: src/lib/portal/billing.ts
+  - label: src/lib/webhooks/operator-checkout-handler.ts
+    href: src/lib/webhooks/operator-checkout-handler.ts
+  - label: src/lib/webhooks/stripe-subscription-handler.ts (payments)
+    href: src/lib/webhooks/stripe-subscription-handler.ts
+  - label: src/lib/webhooks/stripe-subscription-lifecycle.ts (cancellations)
+    href: src/lib/webhooks/stripe-subscription-lifecycle.ts
+  - label: src/lib/pricing/card-fee.ts (card fee rule)
+    href: src/lib/pricing/card-fee.ts
   - label: src/middleware.ts (subdomain rewrite + portal auth)
     href: https://github.com/venturecrane/ss-console/blob/main/src/middleware.ts
   - label: src/lib/portal/session.ts (getPortalClient)
@@ -16,68 +31,100 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/migrations/0038_portal_clerk_subscriptions_substrate.sql
 ---
 
+The client portal at `portal.smd.services` is where a paying client sees what they have with SMD: their consulting engagement and proposals, their Operator or Hosted Agent, and their invoices and subscription, each appearing only once it exists. A client starts their own Operator subscription here and pays invoices here; nothing in the portal is invented, so a section with no authored data is simply absent.
+
 ## What the portal is
 
-The client portal is the surface a paying client sees. It is served at `portal.smd.services` and lives in source under `src/pages/portal/`. One Astro app, one Worker; the `portal.` subdomain is a front door, not a separate deployment (the rewrite mechanics live in `/admin/playbook/the-website`). Pages are marked `noindex, nofollow` - this is private client space, never a marketing surface, and it ships effectively no client JavaScript: mutations are HTML forms validated server-side.
+The portal is served at `portal.smd.services` from `src/pages/portal/`. It is one Astro app and one Worker; the `portal.` subdomain is a front door, not a separate deployment (the mechanics are on [The Website](/admin/playbook/the-website)). Pages are marked `noindex, nofollow`, and changes are HTML forms checked on the server.
 
-The portal serves clients who arrive three ways: through a consulting engagement, as an Operator subscriber, or as a Hosted Agent subscriber. A client can hold any combination on one entity, and the portal composes to exactly what they own (ADR 0068: offerings as destinations). This page documents the shared shell, the engagement and billing destinations, and the auth model. The client-facing Operator product console - a large surface in its own right - is documented separately at `/admin/playbook/operator-console`. How a business travels from lead to portal account is `/admin/playbook/customer-lifecycle`.
+A client can arrive through a consulting engagement, as an Operator subscriber, or as a Hosted Agent subscriber, in any combination, and the portal shows exactly what they own (ADR 0068). This page covers the shared shell, the engagement and billing pages, and sign-in. The Operator console is its own page, [The Operator Console](/admin/playbook/operator-console). How a business becomes a portal client is [Customer Lifecycle](/admin/playbook/customer-lifecycle).
 
-## The destinations
+## The tabs
 
-Navigation is computed from data in exactly one place: `resolvePortalOfferings` (src/lib/portal/offerings.ts) answers "what does this entity own," `buildPortalNav` (src/lib/portal/nav.ts) turns that into the destination list, and every page renders through the single chrome owner `src/layouts/PortalShell.astro`. Pages carry no nav-shaping props, so the tab set cannot drift page to page. The destinations, in fixed order: Home (always), Engagement (when any engagement or proposal exists), Operator and Agent (per subscription), and Billing (once any invoice or subscription exists). An entity that owns nothing yet gets a warm holding page on Home.
+The tabs are worked out in one place: `resolvePortalOfferings` (`src/lib/portal/offerings.ts`) answers what the client owns, `buildPortalNav` (`src/lib/portal/nav.ts`) turns that into tabs, and every page renders through `src/layouts/PortalShell.astro`, so the tabs cannot differ page to page. In fixed order:
 
-Every surface scopes to the signed-in client's own entity and renders authored data only. The surfaces, from `src/pages/portal/`:
+| Tab | Shown when |
+|---|---|
+| Home | Always, except for a client whose only product is an Operator not yet live; they land on the Operator itself |
+| Engagement | Any engagement or proposal exists |
+| Operator | The client has any Operator (one tab, however many) |
+| Agent | The client has a Hosted Agent subscription |
+| Billing | A billing relationship exists: an invoice sent, paid or overdue, or a subscription past set-up |
+
+Every page is limited to the signed-in client's own records and shows authored data only.
 
 ### Home (`index.astro`)
 
-The status dashboard: one card per owned offering (src/lib/portal/home-cards.ts) showing its live status and, when something genuinely needs the client, a needs-you door (sign the proposal, pay the invoice, finish agent setup, review operator drafts). Below the cards, the recent-activity timeline assembled from real events - a proposal sent or signed, an invoice sent or paid, a milestone completed - in concrete past tense, never synthesized copy.
+One card per thing the client owns (`src/lib/portal/home-cards.ts`), with its status and, when something needs the client, one action: sign the proposal, pay the invoice, start the subscription, finish agent setup, or review Operator drafts. Below the cards, a timeline of real events (a proposal sent or signed, an invoice sent or paid, a milestone done), never made-up copy. A client with nothing yet sees a holding page.
 
-### Engagement (`engagement/index.astro` and children)
+### Engagement (`engagement/`)
 
-The one lifecycle destination. An open proposal renders as a spotlight above the active workspace - both can be true at once, because a follow-on proposal to an active client is a real state. The active engagement shows the overview (scope summary, start, estimated end) and the milestone list with status and evidence, never a synthesized percent-complete. Completed engagements live in a past-work list linking to read-only detail pages (`engagement/[id].astro`).
+The one consulting destination. An open proposal shows above the active engagement; both can be true at once. The active engagement shows its scope summary, start, estimated end, and the milestone list with status and evidence, never a made-up percent complete. Finished engagements are listed with read-only detail pages (`engagement/[id].astro`).
 
-Proposal review and signing lives at `engagement/proposals/[id].astro`: deliverables and schedule rendered only from authored quote fields, terms (total price and payment split), and the SignWell review-and-sign block. SignWell calls back to `src/pages/api/webhooks/signwell.ts`; the signed SOW downloads via `/api/portal/quotes/[id]/sow`. The client never sees an hourly rate.
+A proposal is reviewed and signed at `engagement/proposals/[id].astro`: deliverables and schedule only from what was authored on the quote, the total price and payment split, and the SignWell signing block. SignWell reports back to `src/pages/api/webhooks/signwell.ts`; the signed SOW downloads from `/api/portal/quotes/[id]/sow`. The client never sees an hourly rate.
 
-The document library lives at `engagement/documents/index.astro`: files stored in R2 across ALL of the client's engagements plus the signed SOW, served through the org-scoped, traversal-checked `/api/portal/documents/[...key]` endpoint.
+Documents are at `engagement/documents/index.astro`: files stored in R2 across all of the client's engagements plus the signed SOW, served only through `/api/portal/documents/[...key]`, which checks the file belongs to the client.
 
-### Billing (`billing/index.astro`, `billing/invoices/[id].astro`)
+### Billing (`billing/`)
 
-The one money surface, composed as a ledger (2026-09-09): two lists of the same ticket row, subscriptions above invoices, each row stamped with its state (NOT STARTED, ACTIVE, CANCELS; DUE, PAID) and linking to the page where its act happens. The amount due sits in the page meta, once. An Operator row opens the subscription page (`/portal/billing/subscriptions/<instance>`, src/pages/portal/billing/subscriptions/[instance].astro), which states what the client is starting (the authored monthly fee, monthly in advance, cancellation at the end of the paid month; the payment method is Stripe's to ask for at checkout and is not stated) and carries the one primary action, **Start monthly subscription**, for a principal on a startable row; once started, the same page holds the Manage Billing door that opens a Stripe Billing Portal session via `POST /api/portal/billing/manage` (principal-gated per product; the Stripe customer id comes from the subscription row, never user input). The earlier composition, a subscription block with its own inline button, a Paid-to-date / Balance-due pair inherited from the consulting-era invoices page, then the invoice list, was retired the day the Captain read it as confusing: it put two primaries on one screen, restated the one invoice's amount beside it, and labelled a startable Operator "Being set up". Cancelling lives behind the Manage Billing door: the Stripe portal configuration cancels at period end with no proration, so a client who cancels keeps the month they paid for and is never charged again. Stripe signals that as `cancel_at_period_end` on an otherwise healthy `active` subscription, which is why the webhook mirrors the end date to `subscriptions.settings_json.cancel_at` (`setSubscriptionCancelSchedule`, src/lib/db/subscriptions.ts) and both surfaces read it back through `parseCancelAt` - the client sees "Cancels Sep 8", the client hub sees the same date. Without that mirror a cancellation is invisible on both sides until the subscription actually ends weeks later. Invoices list below; the detail page (src/pages/portal/billing/invoices/[id].astro) has the same shape as the subscription page: the dates in the head meta, one ink-bordered fact table of the authored line items with a Total row, and one primary **Pay invoice** link with a mono caption when a Stripe hosted-invoice URL exists (a prose "Payment link pending" otherwise, never a link to a server route). The two share three primitives, `PortalDetailTable`, `PortalDetailRow`, and `PortalActionLink` (an anchor in the form kit's geometry and tones), added 2026-09-09 when the invoice page was still in the calm card register ADR 0082 retired and the Captain read the pair as two designs made without knowledge of each other. The invoice's title is its type (`INVOICE_TYPES` in src/lib/db/invoices.ts): the consulting types, the Operator's monthly `retainer` (mirrored from Stripe cycle invoices), and the Operator's one-time `implementation` stand-up fee. Old `/portal/quotes`, `/portal/invoices`, and `/portal/documents` URLs 301 permanently to their new homes (src/lib/routing/legacy-redirects.ts, `portal-ia-redirects`).
+The one money page, laid out as a ledger: subscriptions above invoices, each row stamped with its state (NOT STARTED, ACTIVE, CANCELS; DUE, PAID) and linking to where its action happens. The amount due appears once, at the top.
 
-**When Billing appears.** The destination is revealed by a billing relationship, not by a flag: an invoice in `sent`/`paid`/`overdue`, or a subscription whose status has moved past `provisioning` (`hasBillingRelationship`, src/lib/portal/offerings.ts). Until then an Operator client lands straight on their operator page with no Home and no Billing tab, which is the review-and-configure window during stand-up. Two acts end that window, and neither sends the client anything they did not ask for. The first is the client's own: once a monthly price is authored on the client hub, the start door opens on every surface the client lands on, decided by one predicate (`canStartOperatorSubscription`, src/lib/portal/billing.ts): Home's Operator card reads "Ready to start" with the price and a **Start monthly subscription** action, the Operator page's hero carries the same link, and Billing's Operator row is stamped NOT STARTED; all three land on the subscription page, where the one primary button lives. It was a button on Billing alone until 2026-09-09, when the firm's partner said it was time to start paying and nobody signed in as a client could find the door. A principal clicks it, pays the first month on Stripe Checkout on the rail the Captain authored for the client on the client hub next to the price (`services.payment_method`, migration 0113): bank account by default (ACH, verified instantly or by micro-deposits, no fee), or card when the client has asked for one (the first did on 2026-09-10), in which case the checkout and every monthly invoice carry a second recurring line, "Card processing fee (3%)", and the subscription page states the fee and the charged total before the client clicks, as the Operator Service Agreement §3.8 promises. One checkout cannot offer both rails and add the fee only for a card, which is why the rail is authored rather than chosen at checkout. Stripe charges that same account or card every month from then on. The `checkout.session.completed` webhook (src/lib/webhooks/operator-checkout-handler.ts) binds the Stripe subscription and customer to the row and promotes it to `active` when the session's `payment_status` is not `unpaid`. An ACH payment settles days later, so the row stays `provisioning` (bound, not live) until the money lands, and three webhook paths can then promote it, whichever Stripe delivers first: that same handler on `checkout.session.async_payment_succeeded`; the retainer `invoice.paid` handler (src/lib/webhooks/stripe-subscription-handler.ts) when the first invoice is paid on a bound row; and the same `invoice.paid` handler when the invoice arrives before the checkout event at all, in which case it binds the row from the subscription metadata the checkout stamped and promotes it. Nothing else promotes an operator row. If the ACH payment bounces (`checkout.session.async_payment_failed`), the subscription is cancelled at Stripe, unbound from the row, and team@ is told; the row is back to `provisioning` with no subscription, so the door opens again on all three surfaces. No SMD-side act creates a retainer on a client's behalf (the admin-started, Stripe-emailed retainer was removed 2026-08-29). The second is the Captain's: issuing an invoice from the client hub. An invoice can be **presented** (finalized in Stripe with automatic collection off, so it is payable in the portal and nobody is emailed) or **sent** (Stripe's hosted-invoice email plus our notification). Both land the invoice in Billing identically; present is for the client who already knows the amount and will pay when directed. Invoices are payable by ACH with no fee; when a client asks to pay by card, the issue form's card option adds a "Card processing fee (3%)" line (`CARD_FEE_LINE_DESCRIPTION`, src/lib/db/invoices.ts) and the Stripe invoice then offers card instead of ACH, so the fee is on the invoice before payment as the Operator Service Agreement §3.8 promises. Retainer cycle invoices are ACH only.
+- **The subscription page** (`billing/subscriptions/[instance].astro`) states what the client is starting: the authored monthly fee, billed monthly in advance, cancellable at the end of the paid month. For a principal it carries one button, **Start monthly subscription**. Once started, the same page holds **Manage Billing**, which opens Stripe's billing portal (`POST /api/portal/billing/manage`, principal only; the Stripe customer comes from the subscription record, never from what the user sends).
+- **An invoice page** (`billing/invoices/[id].astro`) shows the dates, the authored line items with a total, and one **Pay invoice** link when Stripe has a payment page for it, or "Payment link pending" otherwise. The invoice's title is its type (`INVOICE_TYPES`, `src/lib/db/invoices.ts`): the consulting types, the Operator's monthly `retainer`, and its one-time `implementation` fee.
 
-**What reaches team@smd.services.** Money and billing intent are never left to be discovered in the Stripe dashboard. `src/lib/webhooks/stripe-subscription-handler.ts` alerts the operational address on four events: a retainer payment received, a payment failed, a cancellation scheduled (naming the date service runs through), and a subscription actually ended. The cancellation alerts are edge-triggered off the stored `cancel_at`, because Stripe re-sends the whole subscription object on every update and an unguarded alert would re-fire on unrelated changes. When Stripe reports a scheduled cancellation but names no end date, the alert says exactly that rather than putting a guessed date in front of a client. No alert takes an action: pausing, decommissioning, and offboarding stay human decisions under the offboarding doctrine (#1684).
+The two pages share three building blocks (`PortalDetailTable`, `PortalDetailRow`, `PortalActionLink`). Old `/portal/quotes`, `/portal/invoices` and `/portal/documents` links redirect permanently to their new homes (`src/lib/routing/legacy-redirects.ts`).
 
-### Product consoles
+**Cancelling.** A client cancels through Manage Billing. Stripe is set to cancel at the end of the paid period with no proration, so they keep the month they paid for and are not charged again. Stripe reports this as a healthy subscription with an end date, so the webhook copies the date to the subscription record (`setSubscriptionCancelSchedule`, `src/lib/db/subscriptions.ts`) and both the portal and the admin client hub show it ("Cancels Sep 8"). Without that, a cancellation would be invisible until the subscription ended.
 
-The Operator console (`products/operator/`) and Hosted Agent console (`products/hosted-agent/`) keep their own subtrees (paths frozen: email deep links and externally registered OAuth callbacks point at them). Client-facing operator activity renders curated language only: the allowlist in src/lib/portal/operator/activity-language.ts maps raw audit actions to authored copy, unmapped actions render nothing, and a guard test bans the raw formatter from client surfaces.
+## How an Operator client starts paying
 
-## The auth model
+Until a billing relationship exists, an Operator client lands straight on their Operator page with no Home or Billing tab: the review-and-set-up window. Two acts end it, and neither sends the client anything they did not ask for.
 
-Portal auth is enforced in `src/middleware.ts`. Two paths are accepted, with Clerk primary:
+**The client starts the subscription.** Once the Captain has authored a monthly price on the client hub, the start door opens everywhere the client looks, decided by one rule (`canStartOperatorSubscription`, `src/lib/portal/billing.ts`): Home's Operator card reads "Ready to start" with the price, the Operator page links to it, and Billing shows the row as NOT STARTED. All three lead to the subscription page. A principal clicks **Start monthly subscription** and pays the first month on Stripe Checkout, using the payment method authored for that client next to the price (`services.payment_method`, migration 0113):
 
-1. **Clerk (primary).** `clerkMiddleware` runs first in the composed pipeline and populates `locals.auth()`. `enforcePortalAuth` lets a request through if a Clerk session is present; if not, it redirects to `/auth/sign-in` (or returns 401 on `/api/portal/*`). The bridge from a Clerk identity to the local user and business runs lazily per route via `getPortalClient()` (`src/lib/portal/session.ts`), which maps the Clerk user to the local `users` row and its `entity_id` and `org_id`. Every query is scoped to that entity, so a client sees only their own data.
-2. **Legacy magic-link (fallback).** Before Clerk, the portal used emailed magic links that created a KV/D1 session. `resolveLegacyPortalSession` still accepts those cookies, but only for a session whose `role === 'client'`, and renews them on a sliding window. This path exists solely to keep in-flight invitation emails working through the Clerk transition; treat it as temporary, not a second permanent auth system.
+- **Bank account (ACH)** by default, with no fee.
+- **Card**, when the client asked for one. The checkout and every monthly invoice then carry a second line, "Card processing fee (3%)", and the subscription page shows the fee and the total before the client clicks (`src/lib/pricing/card-fee.ts`, which cites the Operator Service Agreement section 3.8). One checkout cannot offer both and add the fee only to cards, which is why the method is set per client rather than chosen at checkout.
 
-### The role=client gate
+Stripe charges the same account or card each month after that.
 
-The portal is for clients, the admin console is for staff, and the boundary is the `users.role` column (`admin` or `client`). The gate is asymmetric:
+When the checkout completes, `src/lib/webhooks/operator-checkout-handler.ts` ties the Stripe subscription to the client's record and makes it active if the payment has gone through. A bank payment settles days later, so the record stays in set-up until the money lands; then any of three Stripe events makes it active, whichever arrives first (the checkout's settled event, or the first invoice being paid, handled in `src/lib/webhooks/stripe-subscription-handler.ts`). Nothing else makes an Operator subscription active. If the bank payment bounces, the Stripe subscription is cancelled, the record returns to set-up, team@ is told, and the start door opens again. SMD never starts a retainer on a client's behalf.
 
-- The **admin** console requires `role === 'admin'`; a signed-in client who hits an admin path is redirected to `/portal` (`enforceAdminAuth`).
-- The **portal** accepts any Clerk-authenticated user at the middleware layer, then narrows per route. The Operator surfaces narrow hardest: a request needs a Clerk session, a local user linked to an entity, an active `subscriptions` row on `(entity, 'operator')`, and at least one granted role on `(user, entity, 'operator')` in `product_roles` - the vocabulary is `principal | staff | compliance` (migration 0038). Anything less degrades to the appropriate empty state, never to fabricated content.
+**The Captain issues an invoice** from the client hub. It can be **presented** (payable in the portal, nobody emailed) or **sent** (Stripe's invoice email plus our notification). Both appear in Billing the same way. Invoices are paid by bank transfer with no fee; when a client asks to pay by card, the issue form adds the card fee line and the invoice then takes card instead. Monthly retainer invoices are bank transfer only. Who may send or present an invoice is on [Who Does What](/admin/playbook/who-does-what) and [Money](/admin/playbook/money).
 
-### Cookie boundaries
+## What reaches team@smd.services
 
-Session cookies are per-host (no `Domain` attribute), so a portal cookie lives only on `portal.smd.services` and an admin cookie only on `admin.smd.services`. The subdomain and cookie-isolation mechanics are owned by `/admin/playbook/the-website`.
+Money events are never left to be found in the Stripe dashboard. team@ is emailed when a retainer payment is received, when a payment fails (`src/lib/webhooks/stripe-subscription-handler.ts`), when a client schedules a cancellation (naming the last day of service), and when a subscription ends (`src/lib/webhooks/stripe-subscription-lifecycle.ts`), and when a first bank payment bounces (`src/lib/webhooks/operator-checkout-handler.ts`). The cancellation emails fire once per change, because Stripe resends the whole subscription on every update. If Stripe gives no end date, the email says so rather than guessing. The client also gets a "Payment received" thank-you email for each retainer payment.
 
-## The integrations behind the portal
+No alert takes an action. Pausing, ending or offboarding a client stays a human decision ([Customer Lifecycle](/admin/playbook/customer-lifecycle)).
 
-The consulting portal is a read-and-act surface over three external systems, all documented in `/admin/playbook/integrations-tooling`:
+## Product consoles
 
-- **SignWell** signs proposals. The admin creates the signature request from the quote; the portal presents it; SignWell's webhook records the signed state and the executed PDF.
-- **Stripe** collects payment. The admin attaches a hosted-checkout URL to the invoice; the portal links to it; Stripe's webhook marks the invoice paid.
-- **R2** stores documents and the signed SOW, served only through the org-scoped, traversal-checked download endpoint.
+The Operator console (`products/operator/`) and the Hosted Agent pages (`products/hosted-agent/`) keep their own paths, because email links and registered sign-in callbacks point at them. The Hosted Agent pages show where the client is: no subscription, set-up (complete the questionnaire, or answers received), paused, or live, with the channel details SMD authored; and a write-only page for the client's own AI key (ADR 0067). Operator activity shown to a client uses authored wording only: `src/lib/portal/operator/activity-language.ts` maps each kind of recorded action to a sentence, unmapped actions show nothing, and tests keep the raw labels off client pages.
+
+## Sign-in
+
+Portal sign-in is enforced in `src/middleware.ts`. Two paths are accepted, Clerk first:
+
+1. **Clerk (primary).** If a Clerk session is present the request goes through; if not, a page redirects to sign-in and an API call gets 401. `getPortalClient()` (`src/lib/portal/session.ts`) then maps the Clerk user to the local user and its business, and every query is limited to that business.
+2. **Old emailed links (fallback).** Before Clerk, the portal used emailed sign-in links. `resolveLegacyPortalSession` still accepts those sessions, only for client users, so invitations sent before the switch keep working. Treat it as temporary.
+
+### Clients and staff are kept apart
+
+The `users.role` column (`admin` or `client`) is the line:
+
+- The **admin** console requires `admin`. A signed-in client who opens an admin page is sent to `/portal`; an admin API call without the role gets 401 if not signed in and 403 if signed in without it (`enforceAdminAuth`).
+- The **portal** accepts any signed-in user at the first check, then each page narrows. Operator pages narrow most: a linked business, an active Operator subscription, and at least one role (`principal`, `staff` or `compliance`; migration 0038). Anything less shows the right empty state.
+
+Session cookies are per host, so a portal cookie works only on `portal.smd.services` and an admin cookie only on `admin.smd.services` ([The Website](/admin/playbook/the-website)).
+
+## The services behind the portal
+
+Described in full on [Integrations & Tooling](/admin/playbook/integrations-tooling):
+
+- **SignWell** signs proposals. The admin creates the signing request from the quote; the portal shows it; SignWell's webhook records the signature and the signed PDF.
+- **Stripe** takes payment. Invoices are created in Stripe when the admin sends or presents them; subscriptions start from the client's own checkout. Stripe's webhooks mark invoices paid and keep subscriptions in step.
+- **R2** stores documents and the signed SOW, served only through the checked download endpoint.
 
 ## What the portal never does
 
-The portal renders authored data only. Timelines, next-touchpoint copy, consultant outreach sentences, deliverables, schedules, and invoice line items come from columns a human authored, or they render nothing. This is the no-fabricated-client-facing-content policy applied at the surface that faces a real customer; the policy, its Pattern A and Pattern B failure modes, and the tests that enforce it are in `/admin/playbook/security-trust`.
+It shows authored data only. Timelines, next steps, consultant messages, deliverables, schedules and invoice lines come from fields a person filled in, or they show nothing. This is the no-fabricated-client-content policy applied where a real client looks; the policy and its tests are on [Security & Trust](/admin/playbook/security-trust).

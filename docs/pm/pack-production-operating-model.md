@@ -58,4 +58,4 @@ Each pack is handed to a team with: the target-landscape entry, the spec templat
 
 ## Sequence
 
-Law (done) proves the motion. Then the rest of the target landscape, leading with the Tier-A verticals (insurance, veterinary), then the others as demand pulls. A page goes live when the pack behind it can be delivered.
+Law (done) proves the motion. Then the rest of the target landscape, leading with the Tier-A verticals (insurance, veterinary), then the others as demand pulls. A pack page is published from its written spec; building the pack out, seat and skills, starts with its first client in that vertical. (Amended 2026-10-21 by the Captain to match practice: all twelve pack pages are public while only law has been delivered. The earlier rule held a page back until the pack could be delivered.)

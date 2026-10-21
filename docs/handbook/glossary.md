@@ -4,23 +4,42 @@ section: running
 order: 25
 owner: captain
 review_every: 30
+last_reviewed: "2026-10-21"
 summary: The venture's vocabulary, defined for a newcomer with zero context
 sources:
   - label: CLAUDE.md (project instructions)
     href: https://github.com/venturecrane/ss-console/blob/main/CLAUDE.md
   - label: ADR 0037 (Operator Thesis)
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0037-operator-thesis.md
+  - label: ADR 0064 (severity ladder)
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0064-operator-service-commitments.md
+  - label: ADR 0071 (confirm and draft-for-review)
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0071-confirm-ceiling-and-hosted-agent-tier-ladder.md
+  - label: ADR 0075 (routine levels)
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0075-routine-grid-compositional-enforcement.md
+  - label: Ops triage agent orders
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/TRIAGE.md
+  - label: Lane-proof runbook
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/runbooks/operator/lane-proof.md
+  - label: Routine promotion checklist (rungs)
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/runbooks/operator/enable-gate-checklist.md
+  - label: Invoice actions (send and present)
+    href: https://github.com/venturecrane/ss-console/blob/main/src/pages/api/admin/invoices/[id].ts
+  - label: Release rings
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/fleet/rings.yaml
 ---
+
+Every term an agent's report or a Playbook page is likely to use, defined in plain words. When a word in a report is not here, ask the agent to explain it and to add it to this page.
 
 ## How to use this page
 
-Definitions are short on purpose - one to three sentences each. Where a term carries more weight than a definition can hold, the entry points at the page or ADR that owns it. Terms are grouped: the business, the product and its architecture, governance, infrastructure, and tooling.
+Definitions are short on purpose - one to three sentences each. Where a term carries more weight than a definition can hold, the entry points at the page or ADR that owns it. Terms are grouped: the business, running SMD day to day, the product and its architecture, governance, infrastructure, and tooling.
 
 ## The business and the people
 
 **Captain.** The human principal who authorizes decisions. In this venture the Captain is Scott Durgan, the founder. A decision becomes canon only when the Captain authorizes it; the agent can propose but never self-govern (ADR 0030).
 
-**The fleet.** The set of machines and agent sessions that do the venture's work. Tasks can be dispatched to fleet machines (see the `crane_fleet_dispatch` tooling) and run in parallel. Distinct from the Operator's per-customer Machines, which are customer runtime, not the fleet.
+**The fleet.** Two uses. In agent tooling, the set of machines and agent sessions that do the venture's work; tasks can be dispatched to fleet machines (`crane_fleet_dispatch`) and run in parallel. In Operator operations (a "fleet release", the "fleet dashboard"), the set of all client and SMD seats (`operator/fleet/rings.yaml`).
 
 **VCMS.** The enterprise memory and notes system (the "venture content management system") reached through the crane MCP. Agents never auto-save to VCMS without explicit Captain approval (CLAUDE.md, content-policy).
 
@@ -29,6 +48,68 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 **A&P.** Short for Ashton & Price, the first client running an Operator in production. Handbook pages that cite the first live engagement use the abbreviation.
 
 **obligation register.** The single list of every piece of work SMD owes a client, held in the D1 table `client_obligations` and read from a terminal with `.claude/bin/register list`. Most rows are imported nightly; obligations stated in client letters are recorded by the session that reads them (ADR 0088). See [What We Owe Clients](/admin/playbook/obligation-register).
+
+## Running SMD day to day
+
+**team@.** `team@smd.services`, the shared inbox where SMD's systems send every alert and report, from "SMD Services Ops". Reading it is the first step of the daily routine ([The Administrator's Week](/admin/playbook/administrators-week)).
+
+**healthchecks.io.** An outside service that expects a regular "still running" signal from each of SMD's watchers (the 2-minute alerter, the triage agent, each ops workspace) and emails when one goes silent. It is what makes an empty inbox trustworthy ([The Administrator's Week](/admin/playbook/administrators-week)).
+
+**triage agent.** The AI agent that runs every hour on `smd-ops`, investigates each new work-health item with read-only tools, and emails team@ one report: what it handled, what needs you, and fixes for the Captain to approve. It may not change code, restart anything or message a client (`operator/ops-machine/TRIAGE.md`; [Work Health](/admin/playbook/work-health)).
+
+**work health.** The hourly check of the work on every live seat: unanswered requests, stuck or held jobs, missed scheduled runs, dead sign-ins ([Work Health](/admin/playbook/work-health)).
+
+**ACTION page.** An email whose subject starts `ACTION:`, sent every hour while a client sign-in is dead or a connection keeps failing, because that seat's work in that system has stopped until it is fixed ([Work Health](/admin/playbook/work-health)).
+
+**ops workspace.** A client's own locked-down machine in the cloud (`ops-<slug>`), the only place that client's documents are opened and worked on; never a laptop ([Client Ops Workspaces](/admin/playbook/ops-machine)).
+
+**smd-ops.** SMD's own operations machine. It runs the hourly triage agent and keeps archived agent transcripts for 30 days; it holds no client documents ([Client Ops Workspaces](/admin/playbook/ops-machine)).
+
+**break-glass.** Doing something the normal rules forbid because a client is waiting and the normal path is down, such as opening client documents on a laptop when the workspace is broken. It must name a reason, and it is recorded ([Client Ops Workspaces](/admin/playbook/ops-machine)).
+
+**SEV1, SEV2, SEV3.** The three severity levels of an incident. SEV1: the Operator is down or acted outside what the client authorized; work starts at once and the client hears within 24 hours. SEV2: degraded, worked the same business day. SEV3: a question or small request, answered the next business day (ADR 0064; [Incident Response](/admin/playbook/incident-response)).
+
+**NO REPLY.** The alarm kind of **request card** (defined below): a person at the client asked the Operator something and had no answer after 30 minutes.
+
+**SHORTFALL.** The team@ email `[SMD Ops] SHORTFALL <seat>`, sent when the Operator could not give someone what they asked; see **shortfall** below.
+
+**lane.** A kind of job a seat runs in the background, such as a medical chronology, a demand letter, or drafting one class of document (`docs/runbooks/operator/lane-proof.md`).
+
+**NEW KIND OF ASK / proof run.** When a client asks for a job its seat has never done, the seat holds the job and emails team@ "NEW KIND OF ASK". An agent then does a proof run: the whole job on the client's real matter with nothing filed or sent, so you can read the result and accept it or say no before it runs for real (`docs/runbooks/operator/lane-proof.md`).
+
+**held job.** A job that stopped on purpose before delivering, usually because an independent review found something to fix or a check failed. Nothing was filed; a person decides whether to release, redo or explain ([Incident Response](/admin/playbook/incident-response), History).
+
+**staged send.** A message SMD needs a client's seat to send with exact words and files SMD made. The Captain approves the words, recipient and files, and an agent sends it through the seat's own safety checks and record (`docs/runbooks/operator/staged-send.md`).
+
+**SMD note.** A message in which the Operator tells a person at the client, in words the Captain approved, something SMD did for them (`docs/runbooks/operator/smd-note.md`).
+
+**change request.** A client's request to change their Operator, made with the **Request a change** button in their portal; it emails team@ and appears at `/admin/operator/requests` ([Changing a Client's Operator](/admin/playbook/changing-a-clients-operator)).
+
+**pause.** Stopping a seat's Operator from working while keeping its machine running so an agent can look at it; an agent runs `operator/bin/pause-customer.sh`, and the same script resumes it ([Changing a Client's Operator](/admin/playbook/changing-a-clients-operator)).
+
+**decommission.** Ending a client's seat for good with `operator/bin/decommission-customer.sh`, which also destroys its ops workspace. The Captain decides; an agent runs it ([Customer Lifecycle](/admin/playbook/customer-lifecycle)).
+
+**present vs send (invoice).** **Present** makes an invoice payable in the client's portal without emailing anyone. **Send** has Stripe email the invoice and the system send its own notice (`src/pages/api/admin/invoices/[id].ts`; [Money](/admin/playbook/money)).
+
+**stand-up fee.** The one-time fee for setting up a client's Operator, billed as its own implementation invoice, separate from the monthly retainer ([Money](/admin/playbook/money)).
+
+**ACH (bank debit).** Paying straight from a bank account. It is each seat's default payment method and carries no fee; a card adds a 3% processing fee ([Money](/admin/playbook/money)).
+
+**P0, P1 (issue priority).** Labels on GitHub issues (`prio:P0`, `prio:P1`); P0 is the most serious. The nightly safety checks report as P0 or P1 issues, and reading them is part of the daily routine ([The Administrator's Week](/admin/playbook/administrators-week)).
+
+**rolling issue.** One GitHub issue that a scheduled check keeps updating run after run, instead of opening a new one each time, and closes when there is nothing to report. "Handbook: pages due for review" and "Obligation register: overdue or unverifiable work" are rolling issues.
+
+**pull request (PR) and required checks.** Every change to SMD's code and configuration is proposed as a pull request; it merges only when every required automated check passes, with no person's approval needed ([Who Does What](/admin/playbook/who-does-what)).
+
+**live-apply vs rebuild.** A merged change to a client's configuration either takes effect on the running seat within about 15 seconds (routine levels, permissions, who may email the Operator, and similar), or needs the seat rebuilt (connections, the AI model, memory and more), which an agent does and reports ([Changing a Client's Operator](/admin/playbook/changing-a-clients-operator)).
+
+**fleet release, skills release.** How a change to the Operator itself reaches the seats. A fleet release ships new Operator code ring by ring (see **ring** below) and rolls a seat back on its own if it fails its checks; a skills release ships new or changed skills with no restart ([Deployment & Release](/admin/playbook/deployment-release)).
+
+**Claude-connector grant.** Permission for a person at a client to reach their Operator from their own Claude app. SMD can revoke it at once, and only an admin can issue it again (ADR 0057; [Changing a Client's Operator](/admin/playbook/changing-a-clients-operator)).
+
+**private companion.** The `admin/` pages in the private engagements repository that hold what cannot be public: accounts, recovery contacts, vendor bills, and each client's commercial detail ([Handoff Companion](/admin/playbook/handoff-companion)).
+
+**Max login.** The Captain's personal Claude subscription login. Agents, `smd-ops` and every ops workspace run Claude on it today, which is one of the single-person dependencies on [Continuity](/admin/playbook/continuity).
 
 ## The Operator and its architecture
 
@@ -76,7 +157,17 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **broker.** A mediating service that holds connector credentials outside the agent runtime and validates each operation against what the engagement authored, so the agent never holds the raw credential. It is the authorization boundary for mediated connectors (ADR 0045).
 
-**sticky stop / HARD_STOP.** The seat's automated circuit breaker. It moves from `OK` to `HARD_STOP` on recorded conditions such as cost spend or repeated tool failures, and the stopped seat stays stopped until it is cleared through the authenticated clear surface (ADR 0062; `docs/runbooks/operator/sticky-stop-clear.md`).
+**sticky stop / HARD_STOP / cost stop.** The seat's automated circuit breaker. It moves from `OK` to `HARD_STOP` on recorded conditions such as cost spend or repeated tool failures, and the stopped seat stays stopped until someone investigates and uses the **Clear stop** form in the admin console. A stop caused by spending is a cost stop, and only the Captain clears it (ADR 0062; `docs/runbooks/operator/sticky-stop-clear.md`).
+
+**routine level: flag-only, prepare-and-route, auto-handle.** How far one routine may go. Flag-only reads and tells someone; prepare-and-route drafts for a person to send; auto-handle acts on its own. Anything touching deadlines or money, or sending to opposing counsel or a court, never auto-handles (ADR 0075).
+
+**draft-for-review and confirm.** Two settings for an outside email. Under draft-for-review the Operator drafts and a person at the client sends it themselves; under confirm the Operator asks a person yes or no in the same conversation and, on a yes, sends it itself (ADR 0071).
+
+**exposure ladder and rung.** The three steps a routine climbs before it may act on its own: rehearsed against a fake firm (rung 1), drafting on the client's seat under review (rung 2), acting on its own with the Captain's signed approval (rung 3). Each rung needs its own written evidence, and after a SEV1 the routine drops to the bottom and climbs again (`docs/runbooks/operator/enable-gate-checklist.md`).
+
+**shadow firm.** A standing rehearsal in which a fake, hostile client is played against a test seat to replay every kind of incident SMD has had; a routine's first rung is a passing shadow-firm run (`docs/runbooks/operator/shadow-firm.md`).
+
+**demotion rule.** The rule, decided in advance, that any SEV1 pauses the seat and drops every routine involved to the bottom rung until the root cause is fixed and the incident has been rehearsed against the fix ([Incident Response](/admin/playbook/incident-response)).
 
 **DWD (domain-wide delegation).** A Google Workspace mechanism that lets a service account act as a specific user for a specific operation. The Operator uses per-operation DWD subjects, validated by the broker against the authored managed-mailbox list, to manage a principal's mailbox.
 

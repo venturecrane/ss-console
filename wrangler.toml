@@ -286,7 +286,6 @@ id = "a5492270f5764a1dbd806dbdcec44eaa"
 #                                read key is derived (HMAC-SHA256(master, slug));
 #                                lives ONLY here, never on a Machine
 #
-# Bulk-load from Infisical:
-#   infisical export --env=prod --path=/ss --format=dotenv \
-#     | grep -vE '^(APP_|ADMIN_|PORTAL_|MEETING_|PUBLIC_)' \
-#     | npx wrangler secret bulk
+# Set one key at a time, value piped from Infisical (docs/handbook/secrets-access.md,
+# "Rotation procedure"). Never bulk-export /ss into `wrangler secret bulk`: it
+# re-sets every key under the path, including ones retired from the Worker.

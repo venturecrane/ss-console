@@ -4,19 +4,28 @@ section: engineering
 order: 11
 owner: engineering
 review_every: 90
+last_reviewed: "2026-10-21"
 summary: How a single working session runs - start, end, the heartbeat, and when to stop and escalate
 sources:
   - label: CLAUDE.md - Session Start
     href: https://github.com/venturecrane/ss-console/blob/main/CLAUDE.md
   - label: Enterprise Rules (CLAUDE.md) - Escalation triggers
     href: https://github.com/venturecrane/ss-console/blob/main/CLAUDE.md
+  - label: Memory audit (reachability, thresholds, wiring receipt)
+    href: .claude/hooks/memory-audit.mjs
+  - label: Trap-recurrence counter
+    href: .claude/hooks/trap-recurrence.mjs
 ---
+
+This page covers how an AI agent's working session runs: how it starts, how it hands
+off, when it must stop and escalate, and how agents remember across sessions. An
+administrator needs it when an agent's report sends you here, or when an agent stops
+with a `BLOCKED:` message and you want to know why it stopped.
 
 ## What this page is
 
 This page describes an AI agent's working session, not the administrator's
-operating rhythm; the administrator's rhythm is a separate subject this page
-does not cover.
+operating rhythm; the administrator's week is in `/admin/playbook/administrators-week`.
 
 This is how a working session actually runs, start to finish. The operating model
 (who decides versus who executes) lives in `/admin/playbook/operating-model`; this
@@ -34,7 +43,31 @@ Every session begins the same way, per `CLAUDE.md` (Session Start):
    context from the previous session.
 
 The result is a session that starts warm: it knows the venture, the active
-directives, and where the last session left off. The `/sos` skill wraps this.
+directives, and where the last session left off. The `/sos` skill wraps this;
+since 2026-09-17 `/sos` and `/eos` are SMD's own skills
+(`.claude/skills/sos/SKILL.md`, `.claude/skills/eos/SKILL.md`, pinned by
+`tests/smd-session-skills.test.ts`), so enterprise updates no longer reach them.
+
+## Inside the session: four mechanical checks
+
+`CLAUDE.md` (Session Mechanics) adds four checks, built after the 2026-08-01 review
+of fourteen sessions. Each one produces or checks an artifact rather than asking an
+agent to remember:
+
+1. **Reply contract.** A Stop hook (`.claude/hooks/reply-contract.mjs`) bounces a
+   reply over 25 prose lines that does not lead with `MISSION:` / `STATUS:` /
+   `DID:` / `NEXT:`, where STATUS is one of `OK`, `BLOCKED`, `DECISION-NEEDED`
+   or `DEFECT-FOUND`.
+2. **Mission and board.** Once the session's focus is set, the agent records it
+   with `.claude/bin/mission set "<one line>" --focus <issue or branch>`. The
+   per-turn primer re-injects it and shows every live peer session's mission, so
+   two sessions do not build the same thing.
+3. **Premise gate.** A hook (`.claude/hooks/plan-premise-gate.mjs`) refuses to
+   let a plan leave plan mode without a `## Premises` table whose every row
+   carries evidence.
+4. **Fresh doctrine.** The per-turn primer (`.claude/hooks/reflex-primer.sh`)
+   serves the operating laws from `origin/main`, labeled with commit and age, so
+   a law merged to main reaches every running session on its next turn.
 
 ## End of Session
 
@@ -52,8 +85,11 @@ so a context compaction or a crash does not lose the thread.
 
 ## The heartbeat
 
-A long-running session can be kept alive by the `/heartbeat` skill, which keeps
-the session from going idle while a long operation completes. This is a session
+A long-running session can be kept alive by the `/heartbeat` skill (an enterprise
+skill synced from crane-console into `.agents/skills/heartbeat/`), which updates
+the session's last-heartbeat time in the crane context service so a session busy
+on a long task is not timed out as idle (its stated timeout is 45 minutes).
+`/sos`, `/update` and `/eos` refresh the heartbeat themselves. This is a session
 liveness tool, distinct from the fleet-health monitoring described in
 `/admin/playbook/operating-model` (that monitors the running Operator Machines;
 the heartbeat keeps a working session warm).
@@ -67,10 +103,14 @@ obligations (audits, reviews, follow-ups) surface at the right time rather than
 relying on memory. The `/calendar-sync` skill keeps the planned events and the
 calendar aligned.
 
-> TODO(why): The specific cadence items SMD runs (which audits, on what
-> interval) are driven by `crane_schedule` data, not by a file I could read in
-> this repo. I verified the mechanism (the `crane_schedule` tool and its
-> list/complete/planned-event actions) but not the populated schedule.
+The schedule is data in the crane context service, not a file in this repo, so
+the list below is a probe, not a contract (`crane_schedule` with action `items`,
+probed 2026-10-21). Two items are SMD's own: **Code Review (ss)** and **Executive
+Summary Refresh (ss)**, each on a roughly 30-day interval (their last completion
+and next due date are 30 days apart). The rest of the list is enterprise-wide
+items shared with the other ventures (context refresh, skill audit, docs audit,
+memory audit, the weekly verify-ledger audit, fleet and secrets checks). Re-run
+the probe before relying on the list; it changes without a commit here.
 
 ## The memory system
 
@@ -85,18 +125,17 @@ The fleet remembers across sessions on two layers:
   to be relearned.
 
 The two are complementary. The handoff carries this week's work; durable memory
-carries the venture's accumulated judgment. Captain dismissal of a memory is a
-physical delete (the same discipline as Operator memory dismissal, see
-`/admin/playbook/knowledge-memory`).
+carries the venture's accumulated judgment. (The Operator's own memory, which
+serves clients, is a different system; see `/admin/playbook/knowledge-memory`.)
 
 Durable memory is tiered, because the index loads into every session and cannot
 grow without bound. `MEMORY.md` is the always-on layer and carries two
 thresholds: a hard read limit of 24,985 bytes (24.4 KiB), past which the index is
 truncated, and a recommended target of 17,510 bytes (17.1 KiB) that the harness
 asks you to compact under. Headroom is measured against the target, because that
-is the number that should change a decision. Depth lives one hop away, in sub-indexes grouped
-by theme, and retired memories move to an `attic/` directory rather than being
-deleted. A memory reached only through a sub-index still loads: the tier model
+is the number that should change a decision. The design puts depth one hop away,
+in sub-indexes grouped by theme, and moves retired memories to an `attic/`
+directory rather than deleting them; the audit below follows both. A memory reached only through a sub-index still loads: the tier model
 works because following the pointer is the rule (see Law 2 in
 `docs/doctrine/agent-operating-doctrine.md`).
 

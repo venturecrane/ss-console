@@ -16,9 +16,16 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0016-honcho-disposition.md
   - label: ADR 0083 - Authorship model and output classes
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0083-authorship-model-output-classes.md
+  - label: ADR 0091 - Privacy by space for multi-person seats
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0091-privacy-by-space-for-multi-person-seats.md
+  - label: Peer-memory plugin (overlay)
+    href: https://github.com/venturecrane/hermes-smd-overlay/blob/main/plugins/hermes-smd-peer-memory/__init__.py
   - label: ADR 0037 - The Operator Thesis
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0037-operator-thesis.md
+last_reviewed: "2026-10-21"
 ---
+
+This page explains what the Operator knows about a client and its people, where each kind of knowledge comes from, and what the Operator may and may not change about it. An administrator needs it when an agent's report about a seat's memory, a learned preference or a correction sends you here.
 
 ## Three lanes, one legible surface
 
@@ -36,7 +43,7 @@ The operator **reads all three**. It **cannot write the authored lane and cannot
 
 The authored lane is `customer.yaml` - the Captain-authored configuration that is the high-confidence backbone of the model and the seed of every per-person relationship. It is where the human guide encodes how a specific business works, who its people are, and what the operator may do. This is the "guide" leg of the harness-plus-guide-plus-memory moat (ADR 0037, Tenet 4).
 
-**Storage (ADR 0012).** Git is the source of truth. Each customer's config lives at one canonical path, is PR-reviewed, schema-validated, and secret-scanned before merge. On merge, CI projects the YAML into two read replicas: a normalized JSON projection in portal D1 (for fast portal reads on the hot path) and the canonical YAML in the customer's R2 prefix (which the Machine reads at boot). The replicas are never edited directly - if drift is ever detected, the resolution is always "re-sync from git," never "patch the replica." This is the GitOps pattern that Kubernetes manifests and Terraform state converged on: reviewability and version history come from git, read-path latency comes from local replicas. Onboarding and offboarding are themselves PRs. Critically, `customer.yaml` never contains literal secret values - the OAuth section declares scopes only, and secrets stay in Infisical or on the customer's volume (ADR 0012; see `/admin/playbook/operator-platform`).
+**Storage (ADR 0012).** Git is the source of truth. Each customer's config lives at one canonical path, is PR-reviewed, schema-validated, and secret-scanned before merge. On merge, CI projects the YAML into two read replicas: a normalized JSON projection in portal D1 (for fast portal reads on the hot path) and the canonical YAML under the customer's prefix in the shared `smd-customer-config` R2 bucket (`vaults/<slug>/customer.yaml`), which the Machine reads at boot and the root config applier polls (`.github/workflows/deploy.yml`). The replicas are never edited directly - if drift is ever detected, the resolution is always "re-sync from git," never "patch the replica." This is the GitOps pattern that Kubernetes manifests and Terraform state converged on: reviewability and version history come from git, read-path latency comes from local replicas. Onboarding and offboarding are themselves PRs. Critically, `customer.yaml` never contains literal secret values - the OAuth section declares scopes only, and secrets stay in Infisical or on the customer's volume (ADR 0012; see `/admin/playbook/operator-platform`).
 
 **Translation (ADR 0019).** At Machine boot, the `hermes-smd bootstrap` CLI translates the authored `customer.yaml` into each persona's Hermes-native `config.yaml` and `SOUL.md`. The relationship block is materialized into `SOUL.md` and served back to the legible surface through a config-export seam. The translation is deterministic and idempotent (covered in `/admin/playbook/operator-platform`).
 
@@ -48,11 +55,12 @@ It is built by the overlay's **`hermes-smd-peer-memory`** plugin on top of Herme
 
 - **Explicit capture.** The agent records a stated or demonstrated preference with the `record_peer_preference` tool; the write happens server-side in `post_tool_call`, so the agent never names whose preference it is.
 - **Per-peer keying.** Each unit is keyed on the person the turn belongs to (the verified inbound sender on email, the per-user id on channels that thread one), so one person's preferences stay separate from another's, and that peer's active preferences are injected at the start of each turn.
+- **Spaces on a shared seat.** On a seat that authors `people:` (several people share it), every row is kept in the space it was said in, a turn sees only the spaces it may read, a person's channels resolve to one identity, and a `remember` tool keeps facts in the current space. Hermes' own MEMORY.md and USER.md stores are forced off on such a seat (ADR 0091; overlay `plugins/hermes-smd-peer-memory/space_memory.py`, `bootstrap/translate.py`). Every other seat behaves as described above.
 - **Inspectable storage with provenance.** Rows live in the Machine-local agent-state SQLite database on the seat's own volume (`SMD_D1_AGENT_STATE_BINDING`), with source and session recorded, so they are Captain-inspectable and reversible (ADR 0016's mirror-don't-gate posture). The per-customer D1 this lane was first designed against was never built (ADR 0062).
 
-Two disciplines keep this lane honest. First, each unit is a **stated or concretely demonstrated** preference, written as preference plus why plus how-to-apply - **never a trait or psychological label** (ADR 0048 §3). The model records "prefers bulleted summaries, asked for them twice," not "is a detail-oriented person." Second, **taint-aware learning**: a capture sourced from a session that ingested untrusted inbound is not promoted to a standing preference, so an injected message can never become a learned rule (ADR 0048 §2f; the taint mechanism is in `/admin/playbook/autonomy-governance`).
+Two disciplines keep this lane honest. First, each unit is a **stated or concretely demonstrated** preference, written as preference plus why plus how-to-apply - **never a trait or psychological label** (ADR 0048 §3). The model records "prefers bulleted summaries, asked for them twice," not "is a detail-oriented person." Second, **taint-aware learning**: a capture on a session that ingested untrusted inbound is refused outright, so an injected message can never become a learned rule (ADR 0048 §2f; the taint mechanism is in `/admin/playbook/autonomy-governance`).
 
-There is no approval gate between the agent and its memory. Safety is the trust discipline (stated/demonstrated only), inspectability (the D1 mirror), and taint-awareness - not an interposed queue (ADR 0048 §3).
+There is no approval gate between the agent and its memory. Safety is the trust discipline (stated/demonstrated only), inspectability (the rows on the seat's volume), and taint-awareness - not an interposed queue (ADR 0048 §3).
 
 ## Adjacent stores: corrections and record stores
 
@@ -72,4 +80,4 @@ Two binding policies carry across all three lanes (ADR 0048 §2): the overlay ca
 
 ## Why the memory is part of the moat
 
-The reason this page sits in the product section and not a reference appendix: the memory is one of the three things that are scarce and compound (ADR 0037, Tenet 4). A human hire starts over at offboarding and exits with everything they learned. The Operator's per-customer operating memory deepens with every session and raises switching cost over time. Competitors will have configurable agents; they will not easily have the accumulated, legible, correctable memory of a specific business - and they will not have the guide who authored the seed well. The harness, the guide, and the memory are the system; no single feature is the moat (ADR 0037; see `/admin/playbook/operator-platform`).
+Why this matters beyond engineering: the memory is one of the three things that are scarce and compound (ADR 0037, Tenet 4). A human hire starts over at offboarding and exits with everything they learned. The Operator's per-customer operating memory deepens with every session and raises switching cost over time. Competitors will have configurable agents; they will not easily have the accumulated, legible, correctable memory of a specific business - and they will not have the guide who authored the seed well. The harness, the guide, and the memory are the system; no single feature is the moat (ADR 0037; see `/admin/playbook/operator-platform`).

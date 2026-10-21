@@ -21,14 +21,12 @@ Read in this order. Everything in the Engineering Appendix is reached by link wh
 
 | Day | Read | You will know |
 |---|---|---|
-| 1 | [Overview](/admin/playbook/overview), [Business Model](/admin/playbook/business-model), [The Operator Thesis](/admin/playbook/operator-thesis), [Positioning & Voice](/admin/playbook/positioning-voice) | What SMD is, what it sells, and how it talks |
+| 1 | [Overview](/admin/playbook/overview), [Business Model](/admin/playbook/business-model), [The Operator, in Plain Terms](/admin/playbook/the-operator), [The Operator Thesis](/admin/playbook/operator-thesis), [Positioning & Voice](/admin/playbook/positioning-voice) | What SMD is, what it sells, what the Operator does for a client, and how SMD talks |
 | 2 | [Who Does What](/admin/playbook/who-does-what), [Money](/admin/playbook/money) | What you may decide alone, what goes to the Captain, and how clients pay |
 | 3 | [Clients & Commitments](/admin/playbook/clients-and-commitments), [What We Owe Clients](/admin/playbook/obligation-register) | Who the clients are and what we have promised them |
 | 4 | [The Administrator's Week](/admin/playbook/administrators-week), [When Something Goes Wrong](/admin/playbook/when-something-goes-wrong), [Work Health](/admin/playbook/work-health) | What arrives in the team inbox and what to do about each kind |
 | 5 | [Changing a Client's Operator](/admin/playbook/changing-a-clients-operator), [The Operator Console](/admin/playbook/operator-console), [The Client Portal](/admin/playbook/client-portal), [Glossary](/admin/playbook/glossary) | How a client's Operator is changed, and what the client sees |
 | Week 2 | [Continuity](/admin/playbook/continuity), [Handoff Companion](/admin/playbook/handoff-companion), [Disaster Recovery](/admin/playbook/disaster-recovery), the [Operator implementation playbook](https://github.com/venturecrane/ss-console/blob/main/docs/runbooks/operator/implementation-playbook.md) | What happens when the Captain is away, where the private material is, and how a new client is stood up |
-
-Some business pages carry a **Rewrite pending** badge. They are accurate on the points that were checked but were written before the Operator had a paying client; read them for the why, and trust Who Does What and Money for how things work today.
 
 Every page shows who owns it and when it was last checked against its sources. "Not yet reviewed" means nobody has checked it since the review system started, not that it is wrong.
 

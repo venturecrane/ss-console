@@ -4,6 +4,7 @@ section: engineering
 order: 13
 owner: engineering
 review_every: 90
+last_reviewed: "2026-10-21"
 summary: One Astro app, one Cloudflare Worker, three custom domains - routed entirely by src/middleware.ts rather than separate deployments
 sources:
   - label: src/middleware.ts - subdomain routing, cookie boundaries, legacy 301s
@@ -14,7 +15,11 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/src/lib/config/app-url.ts
   - label: CLAUDE.md - Three-Subdomain Architecture
     href: https://github.com/venturecrane/ss-console/blob/main/CLAUDE.md
+  - label: wrangler.toml - the one Worker, its custom domains and [vars]
+    href: https://github.com/venturecrane/ss-console/blob/main/wrangler.toml
 ---
+
+This page explains how one deployment serves the marketing site, the admin console and the client portal, which old addresses still redirect, and which settings decide the links in outbound email. An administrator needs it when an agent's report mentions a redirect, a cookie, or a base-URL setting, or when a link in an email points at the wrong site.
 
 ## One app, one Worker, three domains
 
@@ -37,7 +42,7 @@ The admin and portal source files live under `src/pages/admin/*` and `src/pages/
 
 The rewrite is internal - the URL in the browser does not change. The middleware pipeline is composed as `sequence(clerkMiddleware(), ssMiddleware)`: Clerk parses the session and populates `locals.auth()` first, then the SS-owned middleware does the subdomain rewrites, legacy redirects, the admin session shim, and auth enforcement.
 
-The rewrite runs **before** auth enforcement, and the operator-rename redirect (see below) runs before the rewrite, because a rewrite terminates the chain.
+The rewrite runs **before** auth enforcement, and the operator-rename redirect (see below) runs before the rewrite, because a rewrite terminates the chain. After auth, a state-changing request that arrives cross-site is refused (`src/lib/security/cross-site.ts`), and every response, including early redirects and denials, leaves with the security headers from `src/lib/security/response-headers.ts`.
 
 ## Auth enforcement per host
 
@@ -50,7 +55,7 @@ Auth is unified on Clerk (2026-05-25). After the rewrite, `enforceAuth` gates by
 
 ## Per-host cookie boundaries
 
-The legacy magic-link session cookie (`session_token`) carries no `Domain` attribute, so it is host-only: the browser returns it only to the host that set it (`buildSessionCookie` in `src/lib/auth/session.ts`). Clerk's own session cookies are set and scoped by Clerk, not by this code. No code clears a stale cookie on the apex: the only `Set-Cookie` writers in `src/` are the magic-link session (`src/pages/auth/verify.astro`), the anonymous marketing-events session (`src/pages/api/events.ts`), and the change-request flash cookie (`src/lib/portal/operator/change-request-flash.ts`). A second layer sits behind the cookies: state-changing requests on the signed-in surfaces are refused when they come cross-site (`src/lib/security/cross-site.ts`).
+The legacy magic-link session cookie (`session_token`) carries no `Domain` attribute, so it is host-only: the browser returns it only to the host that set it (`buildSessionCookie` in `src/lib/auth/session.ts`). Clerk's own session cookies are set and scoped by Clerk, not by this code. No code clears a stale cookie on the apex: the only cookie writers in `src/` are the magic-link session (`src/pages/auth/verify.astro`), the anonymous marketing-events session (`src/pages/api/events.ts`), the change-request flash cookie (`src/lib/portal/operator/change-request-flash.ts`, set by `src/pages/api/portal/operator/change-request.ts`), and the first-touch ad-attribution cookie the middleware sets on the marketing host only when a landing URL carries `utm_*`, `gclid` or `fbclid` (`captureAdAttribution` in `src/middleware.ts`, ADR 0066). A second layer sits behind the cookies: state-changing requests on the signed-in surfaces are refused when they come cross-site (`src/lib/security/cross-site.ts`).
 
 ## Backwards-compat 301s
 
@@ -59,7 +64,8 @@ The middleware keeps old URLs working with permanent (301) redirects, so bookmar
 - **Admin and portal host moves:** on `smd.services`, any `/admin` or `/admin/*` path 301s to `admin.smd.services` (the `admin-host-canonicalize` rule), and any `/portal` or `/portal/*` path 301s to `portal.smd.services` (`portal-host-canonicalize`).
 - **Legacy auth paths:** `/auth/login`, `/auth/portal-sign-in`, `/auth/portal-sign-up`, `/auth/portal-login` all 301 to the unified `/auth/sign-in` or `/auth/sign-up` (the `legacy-auth-paths` rule).
 - **Operator rename (ADR 0034):** the product was renamed "AI Employee" to "Operator." Every `/ai-employee` path - marketing, portal product surface, admin - 301s to the `/operator` equivalent. The redirect SOURCES are the legacy `/ai-employee` paths; renaming them would self-redirect into a loop.
-- **Retired lead-magnet surfaces:** `/scan`, `/scorecard`, `/outside-view`, and bare `/get-started` 301 to home. These were the Outside View surfaces, retired 2026-05-04 (PR #702/#703); they are gone, not merely hidden.
+- **Retired marketing surfaces:** `/scan`, `/scorecard`, `/outside-view`, `/consulting`, `/ai` (and anything under the last four prefixes), and bare `/get-started` 301 to home; `/why` 301s to `/operator#compare`. `/scan`, `/scorecard` and `/outside-view` were the Outside View surfaces, retired 2026-05-04 (PR #702/#703); the rest went in the marketing consolidation of 2026-06-29 or earlier lead-magnet retirements (the comment on the rule table). They are gone, not merely hidden. `/get-started?booked=1` stays live as the post-booking questionnaire, and the old `/book/thanks` 301s to it.
+- **Portal reorganization:** the old top-level portal routes `/portal/quotes`, `/portal/invoices` and `/portal/documents` 301 into `/portal/engagement/proposals`, `/portal/billing/invoices` and `/portal/engagement/documents` (the `portal-ia-redirects` rule).
 
 ## The base-URL environment variables
 
@@ -69,7 +75,7 @@ Outbound links (magic links, invitation and follow-up emails, invoice notificati
 - **`PORTAL_BASE_URL`** - the portal origin. **Falls back to `APP_BASE_URL`** when unset, since the portal is served by the same Worker under a subdomain rewrite.
 - **`ADMIN_BASE_URL`** - the admin origin (for example `https://admin.smd.services`). Used for the OAuth redirect URI and outbound admin links. It does **not** fall back to `APP_BASE_URL` - a silent fallback would emit OAuth redirect URIs on the marketing domain, producing `redirect_uri_mismatch` errors that are hard to diagnose. `requireAdminBaseUrl` throws when it is missing.
 
-> TODO(why): the doc comments in `src/lib/config/app-url.ts` still say "the same Pages project" and reference Cloudflare Pages, but the venture migrated off Pages to Cloudflare Workers in April 2026 (per `CLAUDE.md`). The behavior is unchanged (same Worker, subdomain rewrite), but the comment is stale. Flagged here rather than edited, since this handbook page is documentation-only. Checked: src/lib/config/app-url.ts lines 12, 46, and the `ADMIN_BASE_URL` error message at line 131, which still says "Cloudflare Pages env"; CLAUDE.md §Three-Subdomain Architecture.
+A note for anyone reading that file: its doc comments (lines 12 and 46) still say "the same Pages project", and the `ADMIN_BASE_URL` error message (line 131) still says "Cloudflare Pages env". The site moved from Cloudflare Pages to the `ss-web` Worker (see the `wrangler.toml` header); the behavior those comments describe is unchanged, only the product name in them is out of date. On the Worker, these values are the `[vars]` block in `wrangler.toml`.
 
 ## Local development
 

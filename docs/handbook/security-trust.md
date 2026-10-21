@@ -4,6 +4,7 @@ section: product
 order: 5
 owner: captain
 review_every: 90
+last_reviewed: "2026-10-21"
 summary: The two halves of trust - content integrity (no fabricated client-facing content, enforced by tests and merge gates) and Operator runtime security (a maintained threat model verified against the running system)
 sources:
   - label: CLAUDE.md - No fabricated client-facing content
@@ -26,7 +27,15 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/adapter/evidence/packet_render.py
   - label: src/lib/portal/operator/object-audit-record.ts
     href: https://github.com/venturecrane/ss-console/blob/main/src/lib/portal/operator/object-audit-record.ts
+  - label: src/pages/security.astro (public security page)
+    href: src/pages/security.astro
+  - label: operator/connectors/smokeball/tests/test_write_record.py
+    href: operator/connectors/smokeball/tests/test_write_record.py
+  - label: operator/observability/heartbeat-fields.json (lost audit rows)
+    href: operator/observability/heartbeat-fields.json
 ---
+
+Trust has two parts here: nothing a client sees may be invented, and the Operator may do only what the client authorized, with a record of everything it did that it cannot alter. For you, the practical points are three: never send or approve client-facing words that nobody authored for that client, treat any alert about the audit record as same-day work ([When Something Goes Wrong](/admin/playbook/when-something-goes-wrong)), and when a client's reviewer asks how the record can be trusted, the honest answer, limits included, is written below.
 
 ## Two halves of trust
 
@@ -98,7 +107,7 @@ This is the claim a firm's insurer, the State Bar, or opposing counsel would tes
 
 **What closes that is a head pinned off the machine.** Every heartbeat carries the hash of the newest row, and the control plane appends it to a table on our side that nothing on the client's machine can reach backwards into (`audit_head_history`, migration 0108). A daily job (`.github/workflows/audit-chain-verify.yml`) pulls each seat's full ledger and requires the newest pinned hash to still be in it. If it is gone, rows that existed at that moment are gone, and that opens a P0 issue and an alert on the fleet dashboard. The same job writes the ledger to object storage under `audit/<slug>/<date>/<HHMMSS>Z-<head12>.json.gz`, a fresh object for every run because that storage refuses overwrites, so the record survives loss of the machine. Before that job existed, the only copy off the machine was a five day volume snapshot, and one seat's ledger had already lost its early rows once during a rebuild.
 
-**The honest limit.** A pinned head protects the rows older than the last pinned head. Rows newer than it stay rewritable by a root user on the machine until the next heartbeat lands. That window is one heartbeat wide and shortening it means beating more often, not a different mechanism. A forged row appended with a correct hash also descends from the pin like a real one; per-row signing was considered and rejected (ADR 0074). Both limits are stated on the public security page too, in the same words.
+**The honest limit.** A pinned head protects the rows older than the last pinned head. Rows newer than it stay rewritable by a root user on the machine until the next heartbeat lands. That window is one heartbeat wide and shortening it means beating more often, not a different mechanism. A forged row appended with a correct hash also descends from the pin like a real one. Signing each row is out of scope: `operator/bin/lib/chain_pin.py` says ADR 0074 rejected it, but ADR 0074 (the independent oversight plane) does not discuss signing, so where that decision was made is not recorded. The public security page states the first limit (a window of about one minute); it does not state the second.
 
 ### A firm can check a sent message without asking us
 

@@ -129,8 +129,10 @@ one that can actually be followed:
 2. **Bump `ARG OVERLAY_REF`** in `operator/templates/Dockerfile`. The PR names its
    tracking issue and carries an acceptance criterion tagged `(runtime)`: a green
    shadow-firm run on the rig at this ref.
-3. **Reprovision the rig** onto the new pin, before any client seat:
-   `yes s | operator/bin/reprovision.sh pilot-smokeball`.
+3. **Release onto the rig only**, before any client seat: build the image once
+   (`operator/bin/fleet build`), then `operator/bin/fleet release <release-id>
+--only pilot-smokeball`. Seats have run the shared fleet image since the fleet
+   release system (migration 0129), so this replaces the per-seat reprovision.
 4. **Drive the suite** against the rig. The runner refuses unless the rig's
    running ref equals the candidate, so the id cannot be produced from a stale
    rig, and the report records the ref it observed:
@@ -145,12 +147,12 @@ one that can actually be followed:
    proof. `.stitch/shadow-firm/` is gitignored, so the report is not committed;
    the digest is recomputable from the pasted body, which is what makes the
    citation auditable.
-6. **Only then reprovision client seats.**
+6. **Only then release to the rings:** `operator/bin/fleet release <release-id>`.
 
 `/admin/playbook/deployment-release` (Path B) is the same order from the deploy
 side, and is the page someone performing a bump is actually reading.
 
-A bump that has no green run id once the rig has been reprovisioned is drift, not
+A bump that has no green run id once the rig has been released is drift, not
 a completed release. `operator/bin/overlay-ref-drift.py` reads every Machine's
 running ref off the live seam and reports which seats are behind the pin, so
 "which seats did this bump actually reach" is a surfaced fact rather than
