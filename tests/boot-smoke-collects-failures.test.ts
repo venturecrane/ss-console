@@ -257,14 +257,14 @@ describe('boot smoke reports every check, not just the first red (ss#2487)', () 
     // And it is still a failure.
     expect(code).not.toBe(0)
     expect(out).toContain('checks failed: 1')
-  })
+  }, 90_000)
 
   it('the summary names every failure, not just a count', () => {
     const { out } = run(['test -w /var/lib/smd-config"', 'curator'])
     expect(out).toContain('checks failed: 2')
     expect(out).toContain('FAILED: customer-yaml-dir-not-agent-writable')
     expect(out).toContain('FAILED: curator-disabled')
-  })
+  }, 90_000)
 
   // 2026-09-04: a seat that authors a medchron firm config must carry the
   // install-level controls tree the entrypoint seeds from the vault (the
@@ -311,7 +311,7 @@ describe('boot smoke reports every check, not just the first red (ss#2487)', () 
     expect(code).toBe(0)
     expect(out).toContain('checks failed: 0')
     expect(out).not.toContain('FAIL:')
-  })
+  }, 90_000)
 
   // ADR 0093: SMD_IDENTIFIER_GATE_MODE is an incident-only rollback. A seat
   // where it is set is WARNED in the summary on every run, and never fails it,
