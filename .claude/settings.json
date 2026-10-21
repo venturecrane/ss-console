@@ -45,7 +45,8 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/plan-premise-gate.mjs\"",
-            "timeout": 10
+            "timeout": 10,
+            "onFailure": "block"
           }
         ]
       },
@@ -55,12 +56,14 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/worktree-guard.mjs\"",
-            "timeout": 15
+            "timeout": 15,
+            "onFailure": "block"
           },
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/engagement-guard.mjs\"",
-            "timeout": 15
+            "timeout": 15,
+            "onFailure": "block"
           }
         ]
       }

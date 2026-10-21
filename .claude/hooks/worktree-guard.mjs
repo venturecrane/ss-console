@@ -14,7 +14,11 @@
  *
  * Failure posture: parse/lookup errors fail OPEN. This is workflow hygiene,
  * not a safety gate; a broken guard must not brick every session's edits, and
- * a bypass shows up as a dirty tree in the next /sos briefing.
+ * a bypass shows up as a dirty tree in the next /sos briefing. The one
+ * exception is the guard never getting to decide: settings.json registers it
+ * with onFailure "block", so a script that cannot start (node missing, file
+ * gone, syntax error) or hits its timeout blocks the edit instead of passing
+ * it silently. Errors the script catches still exit 0.
  *
  * Exit 2 blocks the tool call and surfaces stderr to the model.
  */

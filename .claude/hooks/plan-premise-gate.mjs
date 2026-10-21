@@ -21,7 +21,9 @@
  *      so this cannot cross sessions)
  *   3. neither -> WARN-ONLY: log, allow, never deny on a guess.
  *
- * Fail-open on every error. Escape hatch: SS_SKIP_PREMISE_GATE=1.
+ * Fail-open on every error the script catches. A gate that cannot start or
+ * times out blocks instead (onFailure "block" in settings.json), since then it
+ * never evaluated the plan at all. Escape hatch: SS_SKIP_PREMISE_GATE=1.
  *
  * Env: SS_BOARD_DIR (log dir), SS_SKIP_PREMISE_GATE.
  */

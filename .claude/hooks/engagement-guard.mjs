@@ -40,7 +40,10 @@
  * engagement work -- the worktree-guard idiom), but fail CLOSED on the one
  * decision that used to be open and is now across a repo boundary: a missing
  * engagements checkout. Bash writes are not intercepted; that gap is
- * prose-covered in CLAUDE.md, same as the worktree rule.
+ * prose-covered in CLAUDE.md, same as the worktree rule. A crash the script
+ * never reaches its own catch for (cannot start, timeout) blocks: settings.json
+ * registers it with onFailure "block", so "the guard did not run" never reads
+ * as "permitted".
  */
 
 import fs from 'node:fs'
