@@ -43,11 +43,11 @@ The test of this Playbook is whether you can do each of these without asking the
 | 3 | Run the daily and weekly routine, including the GitHub issues no email announces | Yes |
 | 4 | Respond when a client's Operator stops doing its scheduled work | Yes |
 | 5 | Take a client's request for a new capability from ask to done | Yes |
-| 6 | Take a new client from signed to live | Partly: the implementation playbook covers the work; the commercial steps live in the private repository |
-| 7 | Issue and present an invoice, and know what SMD spends each month | Partly: the mechanics are here; the monthly vendor spend is not written down yet |
-| 8 | Get your own access to every system you need | Not yet: there is no account register, and several accounts are under the Captain's name today |
+| 6 | Take a new client from signed to live | Partly: the implementation playbook covers the work; the commercial steps are in each client's folder in the private repository |
+| 7 | Issue and present an invoice, and know what SMD spends each month | Partly: the mechanics are here; the monthly amounts in `admin/vendor-billing.md` are still blank for the Captain to fill |
+| 8 | Get your own access to every system you need | Partly: `admin/accounts.md` lists every account and how it transfers; who owns each and how it is recovered are still blank for the Captain, and several accounts are under the Captain's name today |
 | 9 | Say what you must never do (client data, voice, sends) | Yes |
 | 10 | Know the plan if the Captain is unreachable, a key leaks, or a vendor goes down | Partly: the Captain-away posture is written; key compromise and vendor outage plans are not |
 | 11 | Look up any term an agent's report uses | Mostly: the glossary still lacks some terms |
 
-Rows marked "not yet" or "partly" are the next waves of work on this Playbook; see [Handoff Companion](/admin/playbook/handoff-companion) for what the private companion will add.
+Rows marked "partly" are waiting on facts only the Captain holds, written as blanks in the private companion ([Handoff Companion](/admin/playbook/handoff-companion)).

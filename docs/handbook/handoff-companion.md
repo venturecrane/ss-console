@@ -31,9 +31,9 @@ The private repository **`venturecrane/engagements`**. Access is granted by the 
 
 Each client folder has the same name as that client's seat (see [Clients & Commitments](/admin/playbook/clients-and-commitments)). The seat's operational configuration stays in this public repository; the narrative and the terms stay private.
 
-## What it will hold
+## The administrator's folder: `admin/`
 
-The next wave of work on the Playbook adds an `admin/` folder with what a new administrator needs and nobody has written down yet:
+Added 2026-10-21. Start with `admin/README.md`, then `accounts.md`.
 
 | File | Answers |
 |---|---|
@@ -46,7 +46,9 @@ The next wave of work on the Playbook adds an `admin/` folder with what a new ad
 | `admin/clients.md` | Each client's status, agreement, billing method and contact |
 | `admin/crane-dependency.md` | Each point where SMD depends on Venture Crane, and the agreement that covers it |
 
-An agent can fill in everything the systems can prove. Facts only the Captain holds, such as account recovery details, the bank and policy numbers, stay as visible blanks until the Captain fills them in; nothing is guessed.
+Everything the systems can prove is filled in, with its source: the domains and their expiry dates, the insurance in force, which accounts are shared with Venture Crane, where each credential lives. Facts only the Captain holds, such as who owns each account, how it is recovered, the bank and the monthly vendor spend, are written `TBD (Captain)` and stay visibly blank until filled; nothing is guessed. Each file carries the date it was last checked against the live account.
+
+A check in that repository fails when the system gains a credential for a vendor that has no row in `accounts.md`, so a new vendor cannot arrive without an owner of record.
 
 ## Rules for the private material
 
