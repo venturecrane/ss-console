@@ -1,7 +1,9 @@
 ---
 title: The Website
-section: product
-order: 7
+section: engineering
+order: 13
+owner: engineering
+review_every: 90
 summary: One Astro app, one Cloudflare Worker, three custom domains - routed entirely by src/middleware.ts rather than separate deployments
 sources:
   - label: src/middleware.ts - subdomain routing, cookie boundaries, legacy 301s

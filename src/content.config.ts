@@ -1,6 +1,7 @@
 import { defineCollection } from 'astro:content'
 import { glob } from 'astro/loaders'
 import { z } from 'zod'
+import { HANDBOOK_OWNERS, HANDBOOK_SECTION_KEYS } from './lib/handbook/sections'
 
 /**
  * Venture Handbook collection — the E-Myth franchise operations manual.
@@ -23,14 +24,20 @@ import { z } from 'zod'
  *   - sources[]        optional ({ label, href }; rendered as the Sources footer
  *                      and the hook a future drift-check keys off)
  *   - status           optional (e.g. "draft" — surfaced as a badge)
+ *   - owner, last_reviewed, review_every
+ *                      freshness metadata, rendered on every page. Each falls back
+ *                      to undefined on a malformed value instead of failing the
+ *                      build; tests/handbook-integrity.test.ts is the gate that
+ *                      requires owner and review_every and checks the date format.
+ *
+ * Sections come from src/lib/handbook/sections.ts, the one definition shared
+ * with the sidebar, landing page, integrity test and ADR-index generator.
  */
-const SECTIONS = ['business', 'product', 'system', 'operations', 'reference'] as const
-
 const handbook = defineCollection({
   loader: glob({ base: './docs/handbook', pattern: ['**/*.md', '!**/README.md'] }),
   schema: z.object({
     title: z.string(),
-    section: z.enum(SECTIONS),
+    section: z.enum(HANDBOOK_SECTION_KEYS),
     order: z.number().default(999),
     summary: z.string().optional(),
     sources: z
@@ -42,6 +49,9 @@ const handbook = defineCollection({
       )
       .optional(),
     status: z.string().optional(),
+    owner: z.enum(HANDBOOK_OWNERS).optional().catch(undefined),
+    last_reviewed: z.coerce.date().optional().catch(undefined),
+    review_every: z.number().int().positive().optional().catch(undefined),
   }),
 })
 

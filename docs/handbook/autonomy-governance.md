@@ -1,7 +1,9 @@
 ---
 title: Autonomy & Governance
-section: product
+section: engineering
 order: 2
+owner: engineering
+review_every: 90
 summary: How the Operator's autonomy is bounded - persona-level exposure ceilings plus per-skill initiation flags enforced in code, fail-closed when unauthored, and a taint gate that stops an injected message from driving a privileged action
 sources:
   - label: ADR 0025 - Autonomy ceilings are configurable

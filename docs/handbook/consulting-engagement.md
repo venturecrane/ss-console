@@ -1,7 +1,9 @@
 ---
 title: The Consulting Engagement
-section: product
+section: business
 order: 6
+owner: captain
+review_every: 180
 summary: The scope-based consulting product - one bounded engagement that runs assessment to handoff, priced per scope, where the assessment call is the product
 sources:
   - label: Engagement Phases & "The Assessment Call Is the Product" (CLAUDE.md)

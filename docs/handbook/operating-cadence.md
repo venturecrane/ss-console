@@ -1,7 +1,9 @@
 ---
 title: Operating Cadence
-section: operations
-order: 2
+section: engineering
+order: 11
+owner: engineering
+review_every: 90
 summary: How a single working session runs - start, end, the heartbeat, and when to stop and escalate
 sources:
   - label: CLAUDE.md - Session Start

@@ -1,7 +1,9 @@
 ---
 title: The Operator Console
-section: system
-order: 6
+section: product
+order: 1
+owner: captain
+review_every: 90
 summary: The client-facing Operator product console inside the portal - a management console for the client's AI employee (Direct / Account / Administer, per ADR 0052), the authority-domain model that governs every settable surface, and how the surfaces stay honest before the runtime bridge is wired
 sources:
   - label: src/pages/portal/products/operator/ (console surfaces)

@@ -1,7 +1,9 @@
 ---
 title: Vertical Packs
 section: product
-order: 5
+order: 4
+owner: captain
+review_every: 90
 summary: A pack is a quick-start template that makes the universal Operator recognizable as "exactly your thing" - not a claim that we are experts in the client's business
 sources:
   - label: ADR 0037 - The Operator Thesis (Tenet 5, packs)

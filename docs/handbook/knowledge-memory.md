@@ -1,7 +1,9 @@
 ---
 title: Knowledge & Memory
-section: product
+section: engineering
 order: 3
+owner: engineering
+review_every: 90
 summary: The three knowledge lanes - authored, learned, inferred - that compose the Operator's model of a client, why the operator reads all three but writes none of the authored lane, and why the memory is part of the moat
 sources:
   - label: ADR 0048 - Operator relationship model

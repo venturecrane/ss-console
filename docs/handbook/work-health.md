@@ -1,7 +1,9 @@
 ---
 title: Work Health
-section: operations
-order: 11
+section: running
+order: 21
+owner: captain
+review_every: 30
 summary: The hourly email to team@ about the state of the WORK on every live seat - requests with no reply, stuck or held jobs, missed and silent scheduled runs, failing connections, new errors - what each line means and what to do with it.
 sources:
   - label: operator/bin/work-health.py - the run

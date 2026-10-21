@@ -1,7 +1,9 @@
 ---
 title: Positioning & Voice
 section: business
-order: 5
+order: 4
+owner: captain
+review_every: 180
 summary: The seven tone rules, the identity-marker rule, and the client-is-hero / we-are-guide frame that govern all client-facing language
 sources:
   - label: CLAUDE.md - Tone & Positioning Standard

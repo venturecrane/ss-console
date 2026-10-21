@@ -1,7 +1,10 @@
 ---
 title: Business Model
 section: business
-order: 3
+order: 2
+owner: captain
+review_every: 180
+status: Rewrite pending
 summary: Three front doors, the three-layer problem framework, the engagement phases, and pain clusters by vertical
 sources:
   - label: CLAUDE.md - The Business Model

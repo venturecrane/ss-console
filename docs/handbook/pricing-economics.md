@@ -1,7 +1,10 @@
 ---
 title: Pricing & Economics
 section: business
-order: 4
+order: 5
+owner: captain
+review_every: 180
+status: Rewrite pending
 summary: The internal rate ladder, engagement range, payment terms, paid assessment, and the Operator and Hosted Agent pricing postures - consulting and Operator figures internal; the Hosted Agent price is the one published exception (ADR 0067)
 sources:
   - label: Decision Stack (Decisions #13, #14, #16)

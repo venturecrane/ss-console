@@ -1,7 +1,9 @@
 ---
 title: Operator Platform Architecture
-section: product
+section: engineering
 order: 1
+owner: engineering
+review_every: 90
 summary: How the Operator is built - the Hermes substrate, the plugin-only overlay, and the per-customer Machine that isolates one customer's runtime from every other
 sources:
   - label: Operator Architecture (CLAUDE.md)

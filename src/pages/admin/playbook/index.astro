@@ -1,6 +1,6 @@
 ---
 /**
- * Venture Handbook — landing.
+ * Venture Handbook (the Playbook) — landing.
  *
  * The franchise operations manual (E-Myth): how to run, build, and grow SMD
  * Services from zero context. This index renders the full table of contents
@@ -13,34 +13,19 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro'
 import HandbookSidebar from './_HandbookSidebar.astro'
 import { getCollection } from 'astro:content'
+import { HANDBOOK_SECTIONS } from '../../../lib/handbook/sections'
 
 const session = Astro.locals.session!
 if (session.role !== 'admin') {
   return Astro.redirect('/auth/sign-in')
 }
 
-const SECTIONS: { key: string; label: string; blurb: string }[] = [
-  {
-    key: 'business',
-    label: 'The Business',
-    blurb: 'What it is, why it exists, where it is going.',
-  },
-  { key: 'product', label: 'The Product', blurb: 'What we sell and build.' },
-  {
-    key: 'system',
-    label: 'The System',
-    blurb: 'Where everything lives — the code and infrastructure map.',
-  },
-  {
-    key: 'operations',
-    label: 'How We Work',
-    blurb: 'The operating model, delivery, deployment, and recovery.',
-  },
-  { key: 'reference', label: 'Reference', blurb: 'Indexes, glossary, and the map of the docs.' },
-]
-
 const entries = await getCollection('handbook')
-const grouped = SECTIONS.map((s) => ({
+// The first page of the reading path. Start Here once it exists; until then the
+// Overview, so the landing page never links to a page that is not there.
+const startPage =
+  entries.find((e) => e.id === 'start-here') ?? entries.find((e) => e.id === 'overview')
+const grouped = HANDBOOK_SECTIONS.map((s) => ({
   ...s,
   items: entries
     .filter((e) => e.data.section === s.key)
@@ -54,7 +39,7 @@ const SEC =
 const BODY = 'text-sm leading-relaxed text-[color:var(--ss-color-text-secondary)]'
 ---
 
-<AdminLayout title="Handbook | SMD Services" maxWidth="max-w-6xl">
+<AdminLayout title="Playbook | SMD Services" maxWidth="max-w-6xl">
   <div class="grid grid-cols-1 gap-8 md:grid-cols-[220px_1fr]">
     <aside
       class="md:sticky md:top-20 md:self-start md:max-h-[calc(100vh-6rem)] md:overflow-y-auto md:overscroll-contain md:pr-2"
@@ -64,23 +49,45 @@ const BODY = 'text-sm leading-relaxed text-[color:var(--ss-color-text-secondary)
 
     <div class="min-w-0">
       <header class="mb-7 border-b border-[color:var(--ss-color-border)] pb-5">
-        <h1 class="text-3xl font-bold text-[color:var(--ss-color-text-primary)]">
-          Venture Handbook
-        </h1>
+        <h1 class="text-3xl font-bold text-[color:var(--ss-color-text-primary)]">Playbook</h1>
         <p class={`mt-2 max-w-2xl text-base leading-relaxed ${BODY}`}>
-          The franchise operations manual. Everything a newcomer with zero context needs to run this
-          venture, keep building it, and succeed: what it is, why it exists, how it works, and where
-          everything lives. The source of truth is markdown in the repo, kept accurate as the
-          venture is built.
+          The venture handbook. Written for an administrator who runs SMD Services day to day and
+          directs AI agents and contractors for the technical work: what arrives, what we owe, who
+          decides, and what the business is. The Engineering Appendix explains how it is built and
+          is reached by link.
         </p>
       </header>
+
+      {
+        startPage && (
+          <a
+            href={`/admin/playbook/${startPage.id}`}
+            class="mb-7 block border-2 border-[color:var(--ss-color-primary)] px-[18px] py-4 hover:bg-[color:var(--ss-color-border-subtle)]"
+          >
+            <span class="font-mono text-[12px] font-bold uppercase tracking-[0.16em] text-[color:var(--ss-color-primary)]">
+              Start here
+            </span>
+            <span class="mt-1 block text-base font-bold text-[color:var(--ss-color-text-primary)]">
+              {startPage.data.title}
+            </span>
+            {startPage.data.summary && (
+              <span class={`mt-1 block ${BODY}`}>{startPage.data.summary}</span>
+            )}
+          </a>
+        )
+      }
 
       <div class="space-y-7">
         {
           grouped.map((g) => (
             <section class="border border-[color:var(--ss-color-text-primary)]">
               <div class="flex items-baseline justify-between border-b border-[color:var(--ss-color-text-primary)] px-[18px] py-3">
-                <span class={SEC}>{g.label}</span>
+                <span class={SEC}>
+                  {g.label}
+                  <span class="ml-2 font-normal normal-case tracking-normal text-[color:var(--ss-color-text-muted)]">
+                    {g.audience === 'admin' ? 'for the administrator' : 'for engineers'}
+                  </span>
+                </span>
                 <span class="text-[11px] text-[color:var(--ss-color-text-muted)]">{g.blurb}</span>
               </div>
               <ul>

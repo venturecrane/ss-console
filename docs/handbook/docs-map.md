@@ -1,7 +1,9 @@
 ---
 title: Docs Map
-section: reference
-order: 3
+section: engineering
+order: 14
+owner: engineering
+review_every: 90
 summary: Where every canonical document lives under docs/, so a newcomer can find anything
 sources:
   - label: docs/README.md

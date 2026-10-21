@@ -1,7 +1,9 @@
 ---
 title: Repository Map
-section: system
-order: 2
+section: engineering
+order: 6
+owner: engineering
+review_every: 90
 summary: The "where is the code for X" index - the top-level directory layout, the key src/lib modules and what each does, and how src/pages splits across marketing, admin, portal, and api
 sources:
   - label: CLAUDE.md - Build Commands, Tech Stack

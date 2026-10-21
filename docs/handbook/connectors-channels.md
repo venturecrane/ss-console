@@ -1,7 +1,9 @@
 ---
 title: Connectors & Channels
-section: product
+section: engineering
 order: 4
+owner: engineering
+review_every: 90
 summary: How the Operator reaches a customer's systems (connectors) and how people reach the Operator (channels) - and why both sides treat the channel as a dumb pipe
 sources:
   - label: ADR 0020 - Connector Strategy (MCP-first; Composio dropped)

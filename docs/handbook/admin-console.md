@@ -1,7 +1,9 @@
 ---
 title: The Admin Console
-section: system
-order: 4
+section: product
+order: 3
+owner: captain
+review_every: 90
 summary: The operator-facing console at admin.smd.services - every surface, the lead-to-cash working spine, the Operator fleet cockpit, and the cross-cutting patterns that hold across all of it
 sources:
   - label: src/layouts/AdminLayout.astro (top nav + shell)

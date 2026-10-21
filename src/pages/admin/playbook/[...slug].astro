@@ -9,7 +9,9 @@
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro'
 import HandbookSidebar from './_HandbookSidebar.astro'
-import { getEntry, render } from 'astro:content'
+import { getCollection, getEntry, render } from 'astro:content'
+import { neighbours, reviewStatus } from '../../../lib/handbook/freshness'
+import { OWNER_LABELS } from '../../../lib/handbook/sections'
 
 const session = Astro.locals.session!
 if (session.role !== 'admin') {
@@ -23,7 +25,25 @@ if (!entry) {
 }
 
 const { Content } = await render(entry)
-const { title, summary, sources, status } = entry.data
+const { title, summary, sources, status, owner, last_reviewed, review_every } = entry.data
+
+// Freshness is computed per request, so "N days ago" and the overdue badge are
+// true on the day the page is read, not the day it was built.
+const review = reviewStatus(last_reviewed, review_every, new Date())
+const reviewedOn = last_reviewed ? last_reviewed.toISOString().slice(0, 10) : undefined
+const freshnessParts = [
+  owner ? `Owner: ${OWNER_LABELS[owner]}` : undefined,
+  review.kind === 'unreviewed'
+    ? 'Not yet reviewed against its sources'
+    : `Reviewed ${reviewedOn} (${review.daysSince === 0 ? 'today' : `${review.daysSince} day${review.daysSince === 1 ? '' : 's'} ago`})`,
+  review_every ? `review every ${review_every} days` : undefined,
+].filter(Boolean)
+
+const all = await getCollection('handbook')
+const { prev, next } = neighbours(
+  all.map((e) => ({ id: e.id, title: e.data.title, section: e.data.section, order: e.data.order })),
+  entry.id
+)
 
 const LAB =
   'font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--ss-color-text-secondary)]'
@@ -32,7 +52,7 @@ const LINK =
 ---
 
 <AdminLayout
-  title={`${title} | Handbook`}
+  title={`${title} | Playbook`}
   maxWidth="max-w-6xl"
   breadcrumbs={[{ label: 'Playbook', href: '/admin/playbook' }, { label: title }]}
 >
@@ -60,6 +80,18 @@ const LINK =
             </p>
           )
         }
+        <p
+          class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-[color:var(--ss-color-text-muted)]"
+        >
+          {
+            review.kind === 'overdue' && (
+              <span class="border border-[color:var(--ss-color-attention)] px-2 py-0.5 uppercase tracking-wide text-[color:var(--ss-color-attention)]">
+                Review overdue by {review.overdueByDays} day{review.overdueByDays === 1 ? '' : 's'}
+              </span>
+            )
+          }
+          <span>{freshnessParts.join(' · ')}</span>
+        </p>
       </header>
 
       <div class="handbook-prose">
@@ -76,6 +108,36 @@ const LINK =
               </a>
             ))}
           </div>
+        )
+      }
+
+      {
+        (prev || next) && (
+          <nav
+            aria-label="Reading order"
+            class="mt-8 grid grid-cols-1 gap-3 border-t border-[color:var(--ss-color-border)] pt-5 sm:grid-cols-2"
+          >
+            {prev ? (
+              <a
+                href={`/admin/playbook/${prev.id}`}
+                class="block hover:text-[color:var(--ss-color-primary)]"
+              >
+                <span class={LAB}>Previous</span>
+                <span class="block text-sm font-medium">{prev.title}</span>
+              </a>
+            ) : (
+              <span />
+            )}
+            {next && (
+              <a
+                href={`/admin/playbook/${next.id}`}
+                class="block text-right hover:text-[color:var(--ss-color-primary)]"
+              >
+                <span class={LAB}>Next</span>
+                <span class="block text-sm font-medium">{next.title}</span>
+              </a>
+            )}
+          </nav>
         )
       }
     </article>

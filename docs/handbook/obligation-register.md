@@ -1,7 +1,9 @@
 ---
 title: What We Owe Clients
-section: operations
-order: 10
+section: running
+order: 20
+owner: captain
+review_every: 30
 summary: The obligation register - how every piece of work SMD owes a client gets recorded without anyone maintaining a list, how it is read from the terminal, how it gets closed only by a probe of the real system, and what it deliberately cannot see
 sources:
   - label: docs/adr/0088-obligation-register.md (the decision)

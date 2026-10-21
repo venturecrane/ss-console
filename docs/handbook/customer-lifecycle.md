@@ -1,7 +1,10 @@
 ---
 title: Customer Lifecycle
-section: operations
+section: business
 order: 7
+owner: captain
+review_every: 180
+status: Rewrite pending
 summary: The end-to-end walk of a business through the system - lead to outreach to assessment to quote to signing to delivery to billing to handoff - and which admin surface and data object owns each step
 sources:
   - label: Entity stages & transitions (src/lib/db/entities.ts)

@@ -1,7 +1,9 @@
 ---
 title: Disaster Recovery & Runbooks
-section: operations
-order: 8
+section: running
+order: 23
+owner: captain
+review_every: 30
 summary: What breaks, how to recover, and when to stop and escalate. The known failure modes and the runbooks that exist.
 sources:
   - label: Operator runbooks

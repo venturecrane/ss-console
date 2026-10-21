@@ -1,7 +1,9 @@
 ---
 title: Secrets & Access
-section: operations
-order: 5
+section: engineering
+order: 9
+owner: engineering
+review_every: 90
 summary: Where credentials live, how they rotate, and the rules for handling them. Pointers and procedures only, never values.
 sources:
   - label: CLAUDE.md (Deployment, Secrets)
