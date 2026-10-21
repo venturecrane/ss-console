@@ -22,6 +22,16 @@ git -C "$HOME/dev/ss-console" pull -q --ff-only 2>/dev/null || true
 git -C "$HOME/dev/engagements" pull -q --ff-only 2>/dev/null || true
 cd "$HOME/dev/ss-console" || exit 1
 
+# Remote Control, named ops-<slug>, makes this session a peer the laptop
+# sessions can message and hear back from (SendMessage), so a handed-over task
+# is not driven by the Captain copying text between windows (2026-10-21). The
+# channel carries instructions and verdicts; documents stay here (the rule is
+# in the prompt below and in the handoff's own contract).
+# --name is what a peer addresses (the docs do not promise the --remote-control
+# argument sets it); both carry the same name.
+rc=(--name "ops-$slug" --remote-control "ops-$slug")
+channel="Laptop sessions can message you over Remote Control and you can reply with SendMessage to the sender's address; send verdicts, codes and verify IDs only, never record text, names or amounts from client files."
+
 task="$HOME/inbox/pending.md"
 if [ -s "$task" ]; then
   taken="$HOME/inbox/task-$(date -u +%Y%m%dT%H%M%S).md"
@@ -31,8 +41,8 @@ if [ -s "$task" ]; then
   # document content: that stays here under ~/work.
   out="$HOME/outbox/$(basename "$taken")"
   mkdir -p "$HOME/outbox"
-  /opt/ops/bin/claude "A task was handed to this workspace from a laptop session; it is in $taken. Read it, then do it here. Client documents for this work stay on this workspace (under ~/work); only finished deliverables leave, through the seat. When you finish (or stop), write the outcome to $out for the laptop session that handed it over: what you did, what you found (the verdict, not the documents: no quoted record text, no medical detail), and anything still open. A laptop reads that file."
+  /opt/ops/bin/claude "${rc[@]}" "A task was handed to this workspace from a laptop session; it is in $taken. Read it, then do it here. Client documents for this work stay on this workspace (under ~/work); only finished deliverables leave, through the seat. When you finish (or stop), write the outcome to $out for the laptop session that handed it over: what you did, what you found (the verdict, not the documents: no quoted record text, no medical detail), and anything still open. A laptop reads that file. $channel"
 else
-  /opt/ops/bin/claude
+  /opt/ops/bin/claude "${rc[@]}"
 fi
 exec bash -l

@@ -48,6 +48,8 @@ When a laptop agent gets a request that would pull client documents, it does not
 
 The outcome comes back the same way. A handed-over task's session writes what it did and found to `~/outbox/` on the workspace (the verdict, never document content), and the laptop session reads it with `ops-handoff <client> --results`, so the Captain does not copy results between windows.
 
+While the task is in progress, the two sessions talk directly. Every workspace session starts with Remote Control on, named `ops-<client>` (`ops-ashton-price`), so a laptop session can message it, and it can answer, with SendMessage. The Captain still approves every seat command and write in the workspace window. The channel carries instructions and verdicts only; record text, names and amounts stay on the workspace.
+
 Claude on a workspace always runs through the shim `/opt/ops/bin/claude`, which keeps the client's Anthropic key away from Claude itself (Claude runs on the Captain's Max login; only the tools bill the client's key). On 2026-10-19 Claude's own auto-updater put a copy into `~/.npm-global`, ahead of the shim on PATH, and a session ran on A&P's key. The shim now turns the updater off, the last line of `.bashrc` puts the shim first on every boot, and the selftest fails if `claude` resolves anywhere else.
 
 The first time on a new workspace, `ops` walks the Captain through his GitHub sign-in and Claude's own `/login`, then sets up the repos and tools.
