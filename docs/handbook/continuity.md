@@ -52,7 +52,7 @@ Everything in the Captain's row of [Who Does What](/admin/playbook/who-does-what
 | AI agents, the ops machine and every client ops workspace run Claude on the Captain's personal login | No agent session can start without that login | The administrator gets their own seat on every vendor, Claude included |
 | The GitHub organization, the Cloudflare account and the secrets vault are shared with Venture Crane, another venture, and a required merge check calls a Venture Crane service | A change on that side can stop SMD from merging or deploying | A written agreement that SMD keeps that access |
 
-Who holds each account, its recovery method and how it transfers is private material for the companion ([Handoff Companion](/admin/playbook/handoff-companion)).
+Who holds each account, its recovery method and how it transfers is in the private companion's `admin/accounts.md` and `admin/recovery-contacts.md` ([Handoff Companion](/admin/playbook/handoff-companion)); `admin/crane-dependency.md` lists every point where SMD depends on Venture Crane.
 
 ## Named successor
 
