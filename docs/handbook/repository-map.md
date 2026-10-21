@@ -12,6 +12,18 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/src/middleware.ts
 ---
 
+## The three repositories
+
+The venture spans three repositories, and moving between them is ordinary work inside one venture (CLAUDE.md, Venture Repositories):
+
+| Repository | Visibility | What lives there |
+|---|---|---|
+| `venturecrane/ss-console` | Public | This repo: the marketing site, admin console, client portal, Operator skills, contracts and config, and each seat's `customer.yaml`. |
+| `venturecrane/hermes-smd-overlay` | Public | The Operator runtime overlay: the trust plugin, gates, the Python side of the connectors, the boot smoke test, and contract fixtures that mirror this repo's. Seats pin it by `OVERLAY_REF`. |
+| `venturecrane/engagements` | Private | Client material: dossiers, correspondence, proposals, agreements, under the same `operator/customers/<slug>/` prefix used here (ADR 0081). |
+
+A change that spans more than one of them is shipped only when every repository it touches is shipped; mirrored fixtures are copied across in the same change.
+
 ## Top-level directories
 
 The repo is `venturecrane/ss-console`. From the root:
@@ -20,7 +32,7 @@ The repo is `venturecrane/ss-console`. From the root:
 |---|---|
 | `src/` | The Astro SSR application - marketing, admin, portal, API, and all the business logic in `src/lib/`. The bulk of the console plane. |
 | `operator/` | The Operator plane's authored content and tooling: vertical skill bodies, the safety substrate, capability adapters, connectors, per-customer `customer.yaml` files, the workspace broker, provisioning scripts. Python and YAML, not the Worker. |
-| `workers/` | Two sibling Cloudflare Workers run outside the request path: `cost-telemetry` and `cost-anomaly` (Operator cost ingest + anomaly detection). The lead-gen pipelines that used to live here were retired 2026-07-01 (PRs #1610/#1616). |
+| `workers/` | Three sibling Cloudflare Workers run outside the request path: `cost-telemetry` and `cost-anomaly` (Operator cost ingest + anomaly detection), and `fleet-alerts` (`ss-fleet-alerts`, the pager: it runs every 2 minutes and mails `team@smd.services` on seat heartbeat, overdue work, connector, token-expiry and edge-health conditions; `workers/fleet-alerts/wrangler.toml`). The lead-gen pipelines that used to live here were retired 2026-07-01 (PRs #1610/#1616). Any other directory found under `workers/` in a local checkout holds no tracked files; it is a leftover, not live code. |
 | `migrations/` | D1 schema migrations for the console database `ss-console-db`, numbered `0001_*` upward (forward migrations, plus a `rollbacks/` directory; the directory is the count). Applied with `wrangler d1 migrations apply`. See `/admin/playbook/data-model`. |
 | `tests/` | Vitest suites, including the policy-enforcing tests cited in CLAUDE.md (`forbidden-strings.test.ts`, `intake-questionnaire.test.ts`). |
 | `docs/` | All venture documentation: `adr/` (decision records), `handbook/` (this manual), plus `design/`, `runbooks/`, `specs/`, `security/`, and more. The full map is at `/admin/playbook/docs-map`. |
@@ -37,8 +49,9 @@ Build, test, and deploy commands for these are in CLAUDE.md (Build Commands) and
 src/
   middleware.ts     subdomain routing + Clerk/legacy auth + Sentry (the front door)
   env.d.ts          Cloudflare.Env binding types
-  layouts/          AdminLayout.astro, Base.astro
-  components/        shared Astro components
+  content.config.ts the handbook content collection (docs/handbook/ rendered at /admin/playbook)
+  layouts/          AdminLayout.astro, Base.astro, PortalShell.astro
+  components/       shared Astro components
   styles/           global.css (Tailwind v4)
   pages/            all routes (see below)
   lib/              all business logic (see below)
@@ -50,10 +63,10 @@ src/
 
 `src/pages/` holds every route. Which host serves which is decided by `src/middleware.ts` (subdomain rewrite), not by directory separation - the admin and portal trees live here and the subdomain prepends their prefix.
 
-- **Marketing** (`smd.services`) - top-level `.astro` files: `index.astro`, `operator.astro`, `about.astro`, `industries.astro`, `patterns.astro`, `contact.astro`, `book.astro`, `assessment.astro`, `get-started.astro` (live only as the `?booked=1` post-booking questionnaire; otherwise it 301s home), `privacy.astro`, `terms.astro`, and `404.astro`, plus `packs/` (the per-vertical pack pages). The `consulting`, `why`, and `/scan` / `/scorecard` lead-magnet routes were removed and now 301 to home (the marketing consolidation + Outside View retirement); the redirect rules live in `src/lib/routing/legacy-redirects.ts`. Treat those paths as legacy, not live surfaces.
-- **Admin** (`admin.smd.services` to `/admin/*`) - `src/pages/admin/`: `entities` (Leads), `clients`, `services`, `billing`, `operator`, `analytics`, `settings`, plus `assessments`, `engagements`, `follow-ups`. (The `generators` surface was removed with the lead-gen retirement.) Full surface map at `/admin/playbook/admin-console`.
-- **Portal** (`portal.smd.services` to `/portal/*`) - `src/pages/portal/`: `quotes`, `engagement`, `documents`, `invoices`, `products`. See `/admin/playbook/client-portal`.
-- **API** (`src/pages/api/`) - JSON and webhook endpoints: `admin/` (admin mutations and fleet reads), `operator/[customer]/`, `portal/`, `auth/`, `oauth/`, `booking/`, `assessment/`, `intake/`, `webhooks/` (`stripe`, `signwell`, `resend`, `sentry`, `healthchecks`), plus `contact.ts`, `events.ts`, `health.ts`, `mcp.ts`.
+- **Marketing** (`smd.services`) - top-level `.astro` files: `index.astro`, `operator.astro`, `about.astro`, `industries.astro`, `patterns.astro`, `contact.astro`, `book.astro`, `assessment.astro`, `get-started.astro` (live only as the `?booked=1` post-booking questionnaire; otherwise it 301s home), `privacy.astro`, `terms.astro`, `security.astro` (the public security overview), `trust.astro` (where a holder of a compliance evidence packet verifies its signature), `ai-disclosure.astro`, `agent.astro` plus `agent/` (the Hosted Agent storefront and its terms and thanks pages, ADR 0067), and `404.astro`, plus `packs/` (the per-vertical pack pages), `case-studies/`, and `book/manage/` (manage an existing booking). `design-preview/` and `dev/` hold fixture-driven component previews, not marketing pages. The `consulting`, `why`, and `/scan` / `/scorecard` lead-magnet routes were removed and now 301 to home (the marketing consolidation + Outside View retirement); the redirect rules live in `src/lib/routing/legacy-redirects.ts`. Treat those paths as legacy, not live surfaces.
+- **Admin** (`admin.smd.services` to `/admin/*`) - `src/pages/admin/`: `entities` (Leads), `clients`, `services`, `billing`, `operator`, `hosted-agent` (the Hosted Agent concierge queue, ADR 0067), `playbook` (this handbook), `settings`, plus `assessments`, `engagements`, `follow-ups`. (The `generators` surface was removed with the lead-gen retirement, and `analytics` was retired in #1930.) Full surface map at `/admin/playbook/admin-console`.
+- **Portal** (`portal.smd.services` to `/portal/*`) - `src/pages/portal/`: `engagement/` (the engagement page, its `proposals/` and `documents/`), `billing/` (`invoices/` and `subscriptions/`), and `products/` (`operator/[instance]/` with its account, activity, calendar, compliance, configure, connections, onboarding, people, scope, settings, skills, team and work pages, plus the connector `oauth/` callback; and `hosted-agent/`). The older top-level `quotes`, `documents` and `invoices` routes were removed in #1790. See `/admin/playbook/client-portal`.
+- **API** (`src/pages/api/`) - JSON and webhook endpoints: `admin/` (admin mutations and fleet reads), `operator/[customer]/`, `portal/`, `auth/`, `booking/`, `assessment/`, `intake/`, `checkout/` (the Hosted Agent buy entry), `internal/` (Machine-to-console seams: heartbeat, request card, runtime summary, Sentry probe), `webhooks/` (`stripe`, `signwell`, `resend`, `sentry`, `healthchecks`), plus `contact.ts`, `events.ts`, `health.ts`, `intake.ts` (standalone intake without a booking), `mcp.ts`. Connector OAuth callbacks are not under `api/`; they live at `src/pages/portal/products/operator/oauth/[connector]/`.
 
 ## src/lib - the "where is the code for X" index
 
@@ -73,20 +86,27 @@ src/
 | `email/` | Resend transactional email, templates, booking and follow-up emails. |
 | `entities/` | Entity domain logic: slug, recompute, meeting substate, list sort. |
 | `follow-ups/` | The follow-up cadence scheduler. |
+| `identity/` | The canonical email normalization used as the identity join key (`email.ts`, #2315). |
 | `llm/` | Model id constants (`models.ts`). |
+| `marketing/` | Paid-ad attribution capture (`attribution.ts`) and Meta Conversions API events (`meta-capi.ts`), ADR 0066. |
 | `oauth/` | OAuth provider plumbing for the console's own integrations: state, store, audit, providers. |
 | `observability/` | Sentry wiring (`sentry.ts`), no-op when `SENTRY_DSN` is unset. |
 | `operator/` | The console side of the Operator plane: `output-class-specs.ts` (write the customer's authored output-class specs to `vaults/<slug>/output-classes.json` in R2 - the console's only writer into that bucket, and never `customer.yaml`, which CI publishes from git), `runtime-read.ts` (the read seam), `customer-yaml/` (authoring and validation, one file per `customer.yaml` section), `capabilities/types.ts` (the closed capability-name vocabulary; the typed adapter layer that once sat beside it was superseded by the connector platform, ADR 0053, and removed 2026-09-10), `mcp/` (the MCP route and audit), `authority.ts`, credential custody and secret transport, the Fly app registry. |
 | `operator-packs/` | Shared vertical-pack helpers (`shared.ts`). |
 | `pdf/` | PDF rendering and the SOW template (`sow-template.tsx`). |
+| `pricing/` | The card-processing fee rule (`card-fee.ts`). |
 | `portal/` | Client-portal logic: states, ledger, formatters, product access, the operator-access and customer-config projections. |
+| `routing/` | Legacy-path redirect rules (`legacy-redirects.ts`). |
+| `security/` | Cross-site request check, encryption, security response headers, and the signed-token codec. |
+| `seo/` | JSON-LD serialization and the sitemap filter. |
 | `signwell/` | SignWell e-signature client and types. |
 | `sow/` | SOW service, finalize, and store. |
 | `storage/` | R2 access (`r2.ts`). |
 | `stripe/` | Stripe invoicing client and types. |
+| `trust/` | The evidence-packet signing key registry (`signing-keys.ts`, #2122). |
 | `ui/` | Server-rendered UI helpers: status badge, pipeline badge, admin action button. |
 | `webhooks/` | Inbound webhook handlers (Stripe, SignWell, Resend) with their tests. |
 
 ## operator/ at a glance
 
-The `operator/` tree is the Operator plane's content, distinct from the `src/lib/operator/` console glue above. Key subdirectories: `skills/` (vertical skill bodies), `verticals/` (per-vertical packs - law-firm, accounting, dental, insurance, and others), `safety_substrate/` (invariants, citation and identifier filters, sticky-stop), `adapter/` (audit log, cost ingest, inbound envelope), `connectors/`, `capabilities`, `workspace_broker/` (the managed-mailbox authorization boundary), `customers/` (per-customer `customer.yaml`), `contracts/` (the block and hook surface contracts), `bin/` and `templates/` (provisioning and bootstrap). Its architecture is covered at `/admin/playbook/operator-platform` and its connectors at `/admin/playbook/connectors-channels`.
+The `operator/` tree is the Operator plane's content, distinct from the `src/lib/operator/` console glue above. Key subdirectories: `skills/` (vertical skill bodies), `verticals/` (per-vertical packs - law-firm, accounting, dental, insurance, and others), `safety_substrate/` (invariants, citation and identifier filters, sticky-stop), `adapter/` (audit log, cost ingest, inbound envelope), `connectors/`, `workspace_broker/` (the managed-mailbox authorization boundary), `customers/` (per-customer `customer.yaml`), `contracts/` (the block and hook surface contracts), `bin/` and `templates/` (provisioning and bootstrap), `fleet/` (the rollout ring definitions, `rings.yaml`) and `ops-machine/` (the ops machine image, crontab and Fly config). Its architecture is covered at `/admin/playbook/operator-platform` and its connectors at `/admin/playbook/connectors-channels`.

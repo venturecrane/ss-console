@@ -4,10 +4,6 @@ section: operations
 order: 3
 summary: The dev workflow, the verify gate, worktree isolation, and the coding standards every change ships under
 sources:
-  - label: Team Workflow (global) - Story Lifecycle, DoD
-    href: crane_doc('global', 'team-workflow.md')
-  - label: Coding Standards (global)
-    href: crane_doc('global', 'coding-standards.md')
   - label: CI - verify.yml
     href: https://github.com/venturecrane/ss-console/blob/main/.github/workflows/verify.yml
   - label: package.json - npm scripts
@@ -18,8 +14,11 @@ sources:
 
 All changes ship through PRs. Never push to main. This is the first Enterprise
 Rule in `CLAUDE.md` and the spine of the team workflow (global
-`team-workflow.md`): branch from main, open a PR, pass CI, verify, merge on a
-Captain directive. A direct push to main bypasses CI, the verify gate, and review
+`team-workflow.md`): branch from main, open a PR, pass CI, verify, merge. The
+Captain is not the per-PR reviewer: `/ship` merges once the required checks are
+green, without waiting for a per-PR directive. The two global modules this page
+cites, `team-workflow.md` and `coding-standards.md`, are enterprise docs fetched
+with `crane_doc('global', '<module>')`, not files in this repo. A direct push to main bypasses CI, the verify gate, and review
 in one move, so it is prohibited even for a one-line change. This page owns how a
 change moves from a branch to a merge. The two deploy paths that run after a merge
 - the website and the Operator - are owned by `/admin/playbook/deployment-release`.
@@ -32,9 +31,11 @@ The trust controls a change is reviewed against are in `/admin/playbook/security
 3. **Open a PR** that links its issue (`Closes #NNN`) and fills the template:
    summary, how to test, screenshots for UI.
 4. **CI runs.** The `Verify` workflow runs on every PR regardless of base branch
-   (see below). The PR cannot merge red.
+   (see below). Its job is a required check, so the PR cannot merge red; the
+   full required set is under "The merge gates" below.
 5. **QA against the preview**, not production, checking each acceptance criterion.
-6. **Merge on a Captain directive**, then the issue closes with `status:done`.
+6. **Merge** once the required checks are green (`/ship` does this without a
+   per-PR Captain directive), then the issue closes with `status:done`.
 
 `status:verified` means QA passed and the PR is still open; `status:done` means
 merged and deployed. The Definition of Done (global `team-workflow.md`) requires
@@ -51,12 +52,15 @@ order, and stops on the first failure:
    that has its own `package.json`.
 3. `npm run format:check` - Prettier in check mode.
 4. `npm run lint` - ESLint over the repo.
-5. `npm run build` - the production Astro build.
-6. `npm run test` - the Vitest suite (`vitest run`).
-7. `npm run test:workers` - each sub-worker's own Vitest suite.
+5. `npm run deadcode` - `knip --production`, which fails on unused files,
+   exports, and dependencies in production code.
+6. `npm run build` - the production Astro build.
+7. `npm run test` - the Vitest suite (`vitest run`).
+8. `npm run test:workers` - each sub-worker's own Vitest suite.
 
 CI mirrors this. `verify.yml` runs Typecheck, Typecheck Workers, Format check,
-Lint, Build, Test, then Test Workers, then a dry-run wrangler build of each
+Lint, Dead code, Build, a check that the bundle carries no inlined secret, Test,
+then Test Workers, then a dry-run wrangler build of each
 sub-worker. Two steps in that file carry scars worth knowing: the workflow runs
 on every pull request with no `branches` filter, because a `branches: [main]`
 filter (removed 2026-06-08) matched the PR's base, so a stacked PR based on a
@@ -65,11 +69,13 @@ added 2026-06-12 after worker suites ran locally under `npm run verify` but
 never in CI.
 
 There is a separate workflow, `operator-substrate.yml`, that runs the Operator's
-Python pytest suites. It triggers only on changes under `operator/**` (and a few
-named contract files), and it does not run as part of `npm run verify`. A
-`customer.yaml` change with a new top-level block can pass `npm run verify` and
-still turn main red on the substrate workflow - so Operator config changes get
-the pytest suite run locally before merge (`cd operator && python3 -m pytest ...`).
+Python pytest suites, and it does not run as part of `npm run verify`. Its
+`substrate` job runs on every PR with no path filter, because it is a required
+check and a path-filtered required check would strand skipped PRs at "Expected";
+a detect step decides from `.github/operator-substrate-paths.txt` whether the
+suites need to run. A `customer.yaml` change with a new top-level block can pass
+`npm run verify` and still fail `substrate` - so Operator config changes get the
+pytest suite run locally before merge (`cd operator && python3 -m pytest ...`).
 
 The Operator tree is one Python project (`operator/pyproject.toml`). Its CLIs
 (`operator/bin/*.py`, `operator/rehearsal/run.py`) import `bin.lib.*`,
@@ -179,9 +185,20 @@ a union, and named exports only (defaults allowed only in framework positions li
 
 ## The merge gates
 
-Beyond CI, this repo carries domain-specific merge gates that block a PR on
-policy, not just on tests. They enforce the no-fabricated-client-facing-content
-policy in `CLAUDE.md`:
+Four checks are required to merge to main. Branch protection requires the
+`Verify` job (`Typecheck, Lint, Format, Test`), and the `Main Branch Protection`
+ruleset requires three more: `Security Summary` (`security.yml`), `substrate`
+(`operator-substrate.yml`), and `Runtime ACs carry a verification ID`
+(`runtime-ac-proof.yml`, which refuses to mark an acceptance criterion tagged
+`(runtime)` as met without a `crane_verify` ID in the PR's Evidence column).
+Probe both surfaces when checking what is required
+(`gh api repos/venturecrane/ss-console/branches/main/protection` and
+`gh api repos/venturecrane/ss-console/rules/branches/main`); either alone gives
+half the list.
+
+Beyond those, this repo carries domain-specific gates that act on policy, not
+just on tests. They enforce the no-fabricated-client-facing-content policy in
+`CLAUDE.md`:
 
 - `scope-deferred-todo.yml` - blocks a TODO-deferred acceptance criterion that
   lacks the `scope-deferred` label.

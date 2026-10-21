@@ -56,8 +56,10 @@ inside the ceilings the Captain authored - the no-imposed-defaults model in ADR
 
 - Inbound client communications - email, voice, chat - handled within the
   configured autonomy ceilings.
-- Assessment interviews conducted by the agent; the Captain owns reading the
-  result and closing.
+- Assessment preparation and extraction support. The agent-run assessment
+  interview (`/assessment`) is an internal dogfood page behind a flag, not a
+  live client flow (`src/pages/assessment.astro`); the Captain runs assessment
+  conversations and owns closing.
 - Consulting analysis and deliverable drafting executed by agents; the Captain
   reviews before any client-facing send.
 - Fleet health monitoring, which runs autonomously with the Captain notified on
@@ -107,11 +109,12 @@ irreversible, shared, or external actions (a merge, a deploy, a message sent on
 the Captain's behalf) get confirmed. The ethos is about removing ceremony, not
 removing safety.
 
-> TODO(why): The fleet-health monitor runs on a recurring cadence, but the exact
-> interval is unverified - no scheduler config or worker enforcing a specific
-> period was found in the repo, and the prior "30-minute" figure traced only to
-> the retired playbook page, not to a cron definition. Confirm the real interval
-> against the running scheduler before quoting one.
+Fleet health is watched on two schedules. The `ss-fleet-alerts` Worker checks every
+2 minutes and emails team@smd.services only when a seat's state changes
+(`workers/fleet-alerts/wrangler.toml`, `crons = ["*/2 * * * *", ...]`). The
+work-health control runs hourly at :23 (`.github/workflows/work-health.yml`). See
+[Work Health](/admin/playbook/work-health) and
+[Incident Response](/admin/playbook/incident-response).
 
 ## The tools of the fleet
 

@@ -21,7 +21,7 @@ Two things to know first, both from `docs/README.md`:
 
 ### `docs/adr/` - Architecture Decision Records
 
-The "why" canon. Numbered ADRs (`0001` through `0051`, with gaps) capturing strategic and architectural decisions, plus two top-level files: `decision-stack.md` (the full 6-layer go-to-market decision corpus) and `index.md`. Most ADRs concern the Operator platform. For the full list with summaries and the numbering gaps, see the [ADR Index](/admin/playbook/adr-index); for the 6-layer model, see [The Decision Stack](/admin/playbook/decision-stack).
+The "why" canon. Numbered ADRs (`0001` through `0093`, 91 files, with gaps) capturing strategic and architectural decisions, plus two top-level files: `decision-stack.md` (the full 6-layer go-to-market decision corpus) and `index.md`. Most ADRs concern the Operator platform. For the full list with summaries and the numbering gaps, see the [ADR Index](/admin/playbook/adr-index); for the 6-layer model, see [The Decision Stack](/admin/playbook/decision-stack).
 
 ### `docs/specs/` - Implementation contracts
 
@@ -44,11 +44,35 @@ Reusable templates filled in per engagement. Top-level: `sow-template.md`. Subtr
 
 ### `docs/runbooks/` - Operational runbooks
 
-Step-by-step operational procedures. Currently one subtree, `runbooks/operator/`: `first-boot.md` (standing up a customer Machine end to end), `curator-supervised-consolidation.md`, `ms-graph-azure-ad-setup.md`, `enable-gate-checklist.md` (the per-routine promotion instrument: three rungs, one recorded artifact per rung, and the pre-committed demotion rule a SEV1 triggers), `routine-lifecycle.md` (how a routine definition is created, changed, added and retired across the six artifacts that hold it, and which check catches a skipped step), and the Hermes fleet promotion runbooks `hermes-v0.18-upgrade-plan.md`, `hermes-v0.20-upgrade-plan.md` and `hermes-v0.21-upgrade-plan.md` (how a pinned Hermes version is evaluated, staged across the seats, and blessed). Nested under it, `runbooks/operator/incidents/` holds the dated post-incident notes mandated by [Incident Response](/admin/playbook/incident-response), plus `_TEMPLATE.md` and a `README.md` index.
+Step-by-step operational procedures, in two subtrees. `runbooks/hosted-agent/` holds the Hosted Agent runbooks: `concierge.md` (the per-sale manual half of ADR 0067) and `couples-setup.md` (ADR 0090, ADR 0091). `runbooks/operator/` holds the Operator runbooks, among them `implementation-playbook.md`, `sticky-stop-clear.md`, `first-boot.md` (standing up a customer Machine end to end), `curator-supervised-consolidation.md`, `ms-graph-azure-ad-setup.md`, `enable-gate-checklist.md` (the per-routine promotion instrument: three rungs, one recorded artifact per rung, and the pre-committed demotion rule a SEV1 triggers), `routine-lifecycle.md` (how a routine definition is created, changed, added and retired across the six artifacts that hold it, and which check catches a skipped step), and the Hermes fleet promotion runbooks `hermes-v0.18-upgrade-plan.md`, `hermes-v0.20-upgrade-plan.md` and `hermes-v0.21-upgrade-plan.md` (how a pinned Hermes version is evaluated, staged across the seats, and blessed). Nested under it, `runbooks/operator/incidents/` holds the dated post-incident notes mandated by [Incident Response](/admin/playbook/incident-response), plus `_TEMPLATE.md` and a `README.md` index.
 
 ### `docs/security/` - Security documents
 
 `smd-services-security-overview.md` (external-facing controls overview), `operator-threat-model.md` (living document), `phase2-design-package.md` (security design tracks awaiting review), and `demo-reply-relay-design.md`.
+
+### `docs/operator/` - Operator design documents
+
+`task-execution-framework.md`, the full design that [ADR 0050](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0050-operator-task-execution-framework.md) and ADR 0051 point to for the task-execution framework.
+
+### `docs/doctrine/` - Agent operating doctrine
+
+`agent-operating-doctrine.md` (the registry of agent operating laws, each with its incidents and enforcement tier), `wired-contract.md` (the reachability contract `/wired` produces), and `report-is-a-probe-checklist.md`.
+
+### `docs/legal/` - Legal templates
+
+`operator-dpa-template.md`, the Operator data processing addendum template.
+
+### `docs/marketing/` - Marketing source documents
+
+`positioning-spine.md`, `elevator-pitch.md`, `pack-standard.md`, `proof-ledger.md`, and `paid-ads-launch-kit.md`.
+
+### `docs/research/` - Research
+
+Background research kept for reference: `paid-ads/` (competitive landscape, channel economics, funnel and tracking), `hosted-agent/`, `voice-distillation/`, and `draft-crane/` (prior art carried over from another venture's console).
+
+### `docs/skills/` - Captain-side skill sources
+
+The tracked source of venture-local slash commands (`medchron/SKILL.md`, `backlog-review/SKILL.md`), installed by `scripts/install-captain-skills.sh` (CLAUDE.md, Captain-Side Skills).
 
 ### `docs/style/` - Content and visual style rules
 
@@ -77,10 +101,6 @@ The Venture Handbook source - the markdown pages rendered in the admin portal, i
 - **`docs/wireframes/`** - UI wireframes (Stitch-generated, committed before issues move to ready); `index.md`.
 - **`docs/handoffs/`** - session handoff records for continuity between agent sessions; `index.md`.
 - **`docs/archive/`** - retired or point-in-time documents kept for the historical record: closure audits, code reviews, the workers-migration and booking-cutover validations, the lead-gen-pivot validation, and more.
-
-## Gaps to know about
-
-> TODO(why): ADR 0051 references `docs/operator/task-execution-framework.md` (and an ADR 0050) as the full design for the task-execution framework, but no `docs/operator/` directory and no `0050-*.md` exist in this worktree. The durable-task-execution design that does exist here is `docs/design/operator/durable-task-execution-substrate.md`. Whether the referenced `docs/operator/` path lives on another branch or was never committed is unverifiable from this tree.
 
 ## Related
 

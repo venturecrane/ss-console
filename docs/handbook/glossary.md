@@ -24,6 +24,10 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **crane MCP.** The shared enterprise tooling server (tools prefixed `crane_`) that loads session context, documentation, secrets verification, notifications, and memory. Every session starts by calling `crane_preflight` then `crane_sos` (CLAUDE.md, Session Start).
 
+**A&P.** Short for Ashton & Price, the first client running an Operator in production. Handbook pages that cite the first live engagement use the abbreviation.
+
+**obligation register.** The single list of every piece of work SMD owes a client, held in the D1 table `client_obligations` and read from a terminal with `.claude/bin/register list`. Most rows are imported nightly; obligations stated in client letters are recorded by the session that reads them (ADR 0088). See [What We Owe Clients](/admin/playbook/obligation-register).
+
 ## The Operator and its architecture
 
 **Operator.** SMD's productized monthly-retainer product: a configurable AI worker stood up per customer (ADR 0004, named in ADR 0034). It competes with a hire, not with software; incumbent systems are connection targets, not competitors (ADR 0037). Renamed from "AI employee"; never write "AI employee" as the product. See [The Operator Thesis](/admin/playbook/operator-thesis).
@@ -42,6 +46,20 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **space.** On a seat shared by several people, the privacy partition a turn runs in: `shared`, or one person's own space. A person sees the shared space plus their own; the shared space sees only itself (ADR 0091).
 
+**seat.** One running Operator instance for one customer, named by its customer slug (for example `smd-staging`). Each seat has its own `operator/customers/<slug>/customer.yaml`, its own Fly Machine, and one row in `fleet_status`; one client may hold several seats (migrations 0089, 0093).
+
+**routine.** A named duty the client bought: what the Operator does, how it starts, its level of autonomy, and any volume limit. Its definition lives in six artifacts, from the agreement's schedule to `routine-grid.yaml` and the skill body (`docs/runbooks/operator/routine-lifecycle.md`, ADR 0075).
+
+**Named Administrator.** The client's person, named in the signed agreement, who may administer their Operator: apply firm-wide rules, establish its voice, and change routine levels. In configuration these people are `scope.admins` (ADR 0085).
+
+**hosted agent.** SMD's second recurring product: a self-serve, published-price personal agent subscription bought at `/agent` and provisioned by SMD on the Operator substrate (ADR 0067). Distinct from the Operator, whose pricing stays internal.
+
+**heartbeat.** The status report each seat posts to `POST /api/internal/heartbeat` about every 60 seconds. The console upserts it into `fleet_status`, and the `ss-fleet-alerts` pager pages when it goes stale (ADR 0023; `src/pages/api/internal/heartbeat.ts`).
+
+**request card.** A one-line record the seat posts for every request a person sends it (`replied`, `no_reply`, or `job_done`), which the console emails to SMD ops, so an unanswered request does not look like a quiet day (migration 0122).
+
+**shortfall.** A time the Operator could not give a person what they asked: refused, hit a limit, failed, or did only part of it. The seat reports shortfalls on its heartbeat and SMD is paged (migration 0120).
+
 **persona.** A distinct identity an Operator can present, implemented as a Hermes profile (ADR 0011). One customer can have multiple personas; v1 ships one. Switching is done through Hermes' native `/handoff`.
 
 ## Governance and safety
@@ -56,6 +74,8 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **broker.** A mediating service that holds connector credentials outside the agent runtime and validates each operation against what the engagement authored, so the agent never holds the raw credential. It is the authorization boundary for mediated connectors (ADR 0045).
 
+**sticky stop / HARD_STOP.** The seat's automated circuit breaker. It moves from `OK` to `HARD_STOP` on recorded conditions such as cost spend or repeated tool failures, and the stopped seat stays stopped until it is cleared through the authenticated clear surface (ADR 0062; `docs/runbooks/operator/sticky-stop-clear.md`).
+
 **DWD (domain-wide delegation).** A Google Workspace mechanism that lets a service account act as a specific user for a specific operation. The Operator uses per-operation DWD subjects, validated by the broker against the authored managed-mailbox list, to manage a principal's mailbox.
 
 ## Infrastructure and connectivity
@@ -66,9 +86,23 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **Honcho.** A memory subsystem within Hermes that draws conclusions about people the Operator interacts with. SMD's disposition is "mirror, don't gate": conclusions are mirrored to per-customer D1 with provenance, and Captain dismissal triggers a physical delete from Honcho (ADR 0016).
 
+**D1.** Cloudflare's SQLite database service. The console's database is the D1 `ss-console-db`; see [Data Model](/admin/playbook/data-model).
+
+**R2.** Cloudflare's object storage. It holds documents, SOW PDFs, and each seat's published config under `vaults/<slug>/` (`wrangler.toml`).
+
+**Fly Machine.** The Fly.io virtual machine a seat runs on, one per customer, named `hermes-<slug>` (ADR 0007).
+
+**reprovision.** Rebuilding or redeploying one seat's Machine from its authored config with `operator/bin/reprovision.sh <slug>`, which wraps `provision-customer.sh` under Infisical credentials.
+
+**ring (rollout).** A group of seats that takes a fleet release together. `operator/fleet/rings.yaml` orders them from SMD's own staging seat to the paying client's seat, and a failure in one ring halts the rollout before the next. See [Deployment & Release](/admin/playbook/deployment-release).
+
+**Infisical.** The one secrets vault for SMD; every credential is stored at the `/ss` path and pushed from there to the runtime stores. See [Secrets & Access](/admin/playbook/secrets-access).
+
+**Clerk.** The identity service behind sign-in for both the admin console and the client portal (`src/middleware.ts`).
+
 ## The two-layer taxonomy
 
-**The two-layer taxonomy.** SMD keeps two deliberately distinct lists of what it does (ADR 0001). The **delivery taxonomy** has six categories (process design, custom internal tools, systems integration, operational visibility, vendor/platform selection, AI & automation) and is the marketing and doctrine source of truth. The **observation taxonomy** has five IDs (`process_design`, `tool_systems`, `data_visibility`, `customer_pipeline`, `team_operations`, in `src/portal/assessments/extraction-schema.ts`) and is the operational pain the lead-gen layer detects from public data. Outreach speaks observation, marketing speaks delivery, and the assessment call is the bridge - do not conflate them.
+**The two-layer taxonomy.** SMD keeps two deliberately distinct lists of what it does (ADR 0001). The **delivery taxonomy** has six categories (process design, custom internal tools, systems integration, operational visibility, vendor/platform selection, AI & automation) and is the marketing and doctrine source of truth. The **client-assessment extraction taxonomy** has five IDs (`process_design`, `tool_systems`, `data_visibility`, `customer_pipeline`, `team_operations`, in `src/portal/assessments/extraction-schema.ts`) and structures what the assessment call captures. It began as the observation taxonomy of the automated lead-gen layer, which ADR 0060 retired on 2026-07-01. Assessments speak the extraction taxonomy, marketing speaks delivery, and the consultant translates between them - do not conflate them.
 
 ## Related
 

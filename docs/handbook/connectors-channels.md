@@ -18,6 +18,10 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0078-client-custody-email-channel.md
   - label: ADR 0092 - Calendar and documents for hosted agents
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0092-calendar-and-documents-platform-model.md
+  - label: ADR 0070 - Web search as a shared connector (native cut)
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0070-web-search-shared-connector-divergent-defaults.md
+  - label: Connector backend materializer contract
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/contracts/connector-backend-materializers.json
   - label: operator/README.md - connector code location
     href: https://github.com/venturecrane/ss-console/blob/main/operator/README.md
   - label: operator/connectors/README.md - the author-built connector contract
@@ -42,11 +46,12 @@ Both sides follow one rule that is easy to get wrong: **a channel is a dumb pipe
 
 ## Connector strategy: MCP-first
 
-Connectors are governed by [ADR 0020](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0020-connector-strategy.md), locked 2026-05-24. Every system the Operator touches resolves at runtime through one of three backend patterns, distinguished by the `customer.yaml.connectors{}.backend:` prefix:
+Connectors are governed by [ADR 0020](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0020-connector-strategy.md), locked 2026-05-24. Every system the Operator touches resolves at runtime through one of four backend patterns, distinguished by the `customer.yaml.connectors{}.backend:` prefix (the validator's `ACCEPTED_BACKEND_PREFIXES` in `src/lib/operator/customer-yaml/types.ts`):
 
 - **`mcp:<server>`** - a Model Context Protocol server, vendor-official or vetted community. The MCP server boots as a child process of Hermes from the per-profile config; **there is no in-tree code** for an `mcp:` binding. Examples: M365 Mail/Calendar/Teams, QuickBooks (Intuit, 144 tools), Xero, Stripe, HubSpot, Salesforce, Slack, CourtListener, Clio (`oktopeak/clio-mcp`), Twilio.
 - **`build:<vendor>`** - a Python adapter we maintain, reserved by ADR 0020 for a vendor with no acceptable MCP. No `build:` adapter exists today: the pre-realignment adapter directories are gone from `operator/connectors/`, and when we did have to write a connector ourselves, [ADR 0053](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0053-author-built-mcp-connectors-per-customer-installed.md) made it an MCP server rather than a `build:` adapter (next section).
-- **`synthetic:<name>`** - an in-process substrate backed by per-customer D1 and R2 (for example `no_pm`, for a firm with no real practice-management system).
+- **`synthetic:<name>`** - a demo or substrate stand-in (for example `no_pm`, for a firm with no real practice-management system). It has no live connector and surfaces no real tools; it is inert by design and acceptable only in templates and demo seats (`operator/contracts/connector-backend-materializers.json`).
+- **`native:<provider>`** - a capability Hermes ships natively, bound through the same `connectors{}` block. Today this is web search: `native:brave-free` makes the overlay set Hermes' `web.search_backend`, and the agent calls the native `web_search` tool, classified READ ([ADR 0070](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0070-web-search-shared-connector-divergent-defaults.md), 2026-07-08 amendment).
 
 The decision order for a new binding is: vendor-direct MCP first, then a vetted community MCP (subject to a code-review acceptance checklist in ADR 0020), then one we author ourselves only when neither exists. The per-vendor decision table in ADR 0020 records the reasoned choice for each vendor we expect to wire.
 
@@ -128,9 +133,9 @@ An earlier revision of ADR 0020 reserved a fourth `composio:<connector>` backend
 
 ### What is wired today vs. planned
 
-Only the `mcp:` path has a runtime materializer today. At boot, `translate._materialize_mcp_servers` writes the `mcp_servers.*` entries into the per-profile Hermes config (`operator/contracts/customer-yaml-blocks.yaml`). The `build:` and `synthetic:` paths are **planned** - their runtime tool-registration bridge does not exist yet, so a `synthetic:no_pm` binding surfaces zero PM tools at runtime. These are built demand-pull through the first vertical per ADR 0038. A binding in `customer.yaml` is aspirational until the runtime actually materializes it.
+Two prefixes have a runtime materializer today. At boot, the overlay's `translate._materialize_mcp_servers` writes the `mcp_servers.*` entries into the per-profile Hermes config, and `translate._materialize_web_search` maps a `native:` binding to Hermes' web-search backend (`operator/contracts/connector-backend-materializers.json`). A `build:` binding is materialized only for an adapter that has an implementation under `operator/connectors/`, and none does today; `synthetic:` is inert, so a `synthetic:no_pm` binding surfaces zero PM tools at runtime. These are built demand-pull through the first vertical per ADR 0038. A binding in `customer.yaml` is aspirational until the runtime actually materializes it.
 
-> TODO(why): ADR 0020's verification section says BUILD-adapter tool registration via `ctx.register_tool()` in the overlay is the target contract, but the adapters "do not exist yet." The handbook should be re-checked once the first `build:` adapter ships in `hermes-smd-overlay`, because the "only mcp: is wired" statement here will then be stale. Checked: ADR 0020 §"Customer.yaml backend resolution at boot" and §Verification; operator/README.md.
+This status is enforced, not remembered: `tests/operator-connector-materializer.test.ts` fails if the validator accepts a prefix the materializer contract does not classify, derives the set of materialized `build:` adapters from the implementations actually present, and refuses any real seat whose capability's sole backend would boot with zero tools.
 
 ### Google is a special case: the broker, not a connector
 
@@ -154,9 +159,10 @@ The point of ADR 0021 is restraint: no new architectural primitives, no modifica
 
 A channel carries a message in and a message out. It holds none of the worker's intelligence. The channels the Operator supports:
 
-- **Inbound email** - `crane@smd.services`, allow-list gated. Only senders on the authored allow-list can reach the worker by email; everything else is dropped. The inbound path routes the message body to the worker through the gateway.
-- **Outbound Gmail push** - event-driven outbound, so the Operator can send (under whatever send-posture the engagement authored) rather than only reply when polled.
-- **Voice** - a voice-synthesis backend plus a transform hook, so the Operator can speak in the customer's authored voice. Voice is a separate concern from the worker's personality; the channel renders, it does not decide.
+- **Email** - each seat has its own mailbox. Most seats use a per-seat AgentMail inbox, whose inbound arrives as a signed webhook routed through the overlay's webhook router to the worker; a client-custody seat instead uses a mailbox on the firm's own mail system through `mcp:msgraph-mail` (ADR 0078). The Operator replies only to senders on the seat's authored roster, `scope.inbound_allow_from` (exact addresses or `@domain` grants, ADR 0055); empty or absent is fail-closed to drafts only (`docs/specs/operator/customer-yaml-schema.md`). Inbound content is untrusted and taint-marks the turn (see `/admin/playbook/autonomy-governance`).
+- **Gmail push is not a channel.** A Gmail `users.watch()` rebuild as a broker operation (#1444) was closed 2026-07-13 as superseded by the AgentMail posture; there is no Gmail push path today.
+- **Telegram** - a per-seat bot, authored in `customer.yaml` under `telegram:` with a mandatory `allow_from` list of Telegram user ids; the bot token is a Fly secret, never in the file (`operator/customers/_hosted-template/customer.yaml`).
+- **Voice notes** - an audio attachment from a rostered sender is transcribed to text by the overlay's `hermes-smd-voice-notes` plugin (`voice_note_transcribe`) through the seat's speech-to-text provider, refusing any other sender before touching the bytes. Separately, the `hermes-smd-voice` plugin transforms customer-facing drafts toward the customer's authored writing voice from samples; it is a drafting concern, not a channel, and there is no speech-synthesis channel.
 - **Conversational MCP channel** - an MCP connection (the Claude custom connector) supporting multi-turn conversation. This is the "just talk to it" front door: one verb, the worker on the other end. Access follows the ADR 0057 model: Clerk per-user OAuth proves who is talking, but authorization is a row in the `mcp_issued_grants` table, read live on every request - the instant kill switch. An explicit revoke cuts access on the next call, and every grant carries a bounded `expires_at` (there is no forever grant). Who may connect is authored per firm in `customer.yaml` (`allowlist` by default, or verified firm-domain JIT under `open`). The §4 screening-attestation gate was ripped out by the 2026-06-29 amendment: access fails closed on authorization, never on paperwork. Per the 2026-07-02 console-sole amendment, the Machine's direct public `/mcp` door is closed (410 Gone); every Claude request flows through the console's `ask_operator` sync-proxy, which checks the grant per request and forwards the turn to the Machine's authenticated `/mcp/turn` endpoint. The authored entitlements still govern what the worker will do once a caller is through.
 
 ### The managed-mailbox capability
@@ -167,4 +173,4 @@ Beyond reaching the Operator's own mailbox, the Operator can **manage a principa
 
 ## Why the dumb-pipe rule is load-bearing
 
-If channels held intelligence, every new front door would mean re-implementing memory, entitlements, and governance, and the four doors would drift apart. Keeping the worker as the single seat of intelligence means a capability authored once is reachable through every pipe, and a governance ceiling set once binds every pipe. The connector side mirrors this: the boundary that matters is per-customer credential isolation (per-customer OAuth or API keys, the broker for Google), not which backend pattern a vendor happens to use. Both sides push all the judgment into the worker and keep the edges dumb on purpose.
+If channels held intelligence, every new front door would mean re-implementing memory, entitlements, and governance, and the front doors would drift apart. Keeping the worker as the single seat of intelligence means a capability authored once is reachable through every pipe, and a governance ceiling set once binds every pipe. The connector side mirrors this: the boundary that matters is per-customer credential isolation (per-customer OAuth or API keys, the broker for Google), not which backend pattern a vendor happens to use. Both sides push all the judgment into the worker and keep the edges dumb on purpose.

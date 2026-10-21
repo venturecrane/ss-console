@@ -58,4 +58,4 @@ The full doctrine. Cite the tenet number when you reason from it.
 - `/admin/playbook/autonomy-governance` - the entitlement axes and how trust is configured and enforced.
 - `/admin/playbook/knowledge-memory` - the memory that compounds.
 - `/admin/playbook/vertical-packs` - how packs turn the universal into the recognizable.
-- `/admin/playbook/business-model` - the two front doors and where the Operator sits in the firm.
+- `/admin/playbook/business-model` - the three front doors and where the Operator sits in the firm.

@@ -31,7 +31,7 @@ The admin and portal source files live under `src/pages/admin/*` and `src/pages/
 `src/middleware.ts` inspects `context.url.hostname` in `handleSubdomainRewrite`:
 
 - On a `portal.` host, a path that does **not** already start with `/portal`, `/api/portal`, `/auth`, or `/api/auth` gets `/portal` prepended (`/` becomes `/portal`). The request is then `context.rewrite`-d to the new path.
-- On an `admin.` host, the same pattern prepends `/admin`, with the exclusions `/admin`, `/api/admin`, `/auth`, `/api/auth`, and `/api/oauth`.
+- On an `admin.` host, the same pattern prepends `/admin`, with the exclusions `/admin`, `/api/admin`, `/auth`, and `/api/auth`.
 
 The rewrite is internal - the URL in the browser does not change. The middleware pipeline is composed as `sequence(clerkMiddleware(), ssMiddleware)`: Clerk parses the session and populates `locals.auth()` first, then the SS-owned middleware does the subdomain rewrites, legacy redirects, the admin session shim, and auth enforcement.
 
@@ -48,15 +48,13 @@ Auth is unified on Clerk (2026-05-25). After the rewrite, `enforceAuth` gates by
 
 ## Per-host cookie boundaries
 
-Session cookies are **per-host** - they carry no `Domain` attribute. The consequence is hard isolation: an admin cookie only lives on `admin.smd.services`, a client cookie only lives on `portal.smd.services`. An admin cookie that lands on the apex (from a pre-migration login) is proactively cleared on the next visit. The boundary is structural, not a policy you have to remember.
-
-> TODO(why): the proactive apex-cookie clearing is documented in `CLAUDE.md` ("Three-Subdomain Architecture") but the clearing code was not located in `src/middleware.ts` during this pass - it may live in a layout, a separate handler, or an auth route. Checked: src/middleware.ts (no `Set-Cookie` clearing found); CLAUDE.md §Cookie boundaries. The exact location should be confirmed before relying on this in a security review.
+The legacy magic-link session cookie (`session_token`) carries no `Domain` attribute, so it is host-only: the browser returns it only to the host that set it (`buildSessionCookie` in `src/lib/auth/session.ts`). Clerk's own session cookies are set and scoped by Clerk, not by this code. No code clears a stale cookie on the apex: the only `Set-Cookie` writers in `src/` are the magic-link session (`src/pages/auth/verify.astro`), the anonymous marketing-events session (`src/pages/api/events.ts`), and the change-request flash cookie (`src/lib/portal/operator/change-request-flash.ts`). A second layer sits behind the cookies: state-changing requests on the signed-in surfaces are refused when they come cross-site (`src/lib/security/cross-site.ts`).
 
 ## Backwards-compat 301s
 
 The middleware keeps old URLs working with permanent (301) redirects, so bookmarks and indexed links do not break. The rules live as a declarative table in `src/lib/routing/legacy-redirects.ts` (each rule is a predicate plus a target builder; the middleware evaluates the list in order and issues the first match), split into pre-rewrite and post-rewrite lists because the subdomain rewrite terminates the chain:
 
-- **Admin host move:** on `smd.services`, any `/admin` or `/admin/*` path 301s to `admin.smd.services` (the `admin-host-canonicalize` rule).
+- **Admin and portal host moves:** on `smd.services`, any `/admin` or `/admin/*` path 301s to `admin.smd.services` (the `admin-host-canonicalize` rule), and any `/portal` or `/portal/*` path 301s to `portal.smd.services` (`portal-host-canonicalize`).
 - **Legacy auth paths:** `/auth/login`, `/auth/portal-sign-in`, `/auth/portal-sign-up`, `/auth/portal-login` all 301 to the unified `/auth/sign-in` or `/auth/sign-up` (the `legacy-auth-paths` rule).
 - **Operator rename (ADR 0034):** the product was renamed "AI Employee" to "Operator." Every `/ai-employee` path - marketing, portal product surface, admin - 301s to the `/operator` equivalent. The redirect SOURCES are the legacy `/ai-employee` paths; renaming them would self-redirect into a loop.
 - **Retired lead-magnet surfaces:** `/scan`, `/scorecard`, `/outside-view`, and bare `/get-started` 301 to home. These were the Outside View surfaces, retired 2026-05-04 (PR #702/#703); they are gone, not merely hidden.
@@ -69,7 +67,7 @@ Outbound links (magic links, invitation and follow-up emails, invoice notificati
 - **`PORTAL_BASE_URL`** - the portal origin. **Falls back to `APP_BASE_URL`** when unset, since the portal is served by the same Worker under a subdomain rewrite.
 - **`ADMIN_BASE_URL`** - the admin origin (for example `https://admin.smd.services`). Used for the OAuth redirect URI and outbound admin links. It does **not** fall back to `APP_BASE_URL` - a silent fallback would emit OAuth redirect URIs on the marketing domain, producing `redirect_uri_mismatch` errors that are hard to diagnose. `requireAdminBaseUrl` throws when it is missing.
 
-> TODO(why): the doc comments in `src/lib/config/app-url.ts` still say "the same Pages project" and reference Cloudflare Pages, but the venture migrated off Pages to Cloudflare Workers in April 2026 (per `CLAUDE.md`). The behavior is unchanged (same Worker, subdomain rewrite), but the comment is stale. Flagged here rather than edited, since this handbook page is documentation-only. Checked: src/lib/config/app-url.ts lines 12-14, 113; CLAUDE.md §Deployment.
+> TODO(why): the doc comments in `src/lib/config/app-url.ts` still say "the same Pages project" and reference Cloudflare Pages, but the venture migrated off Pages to Cloudflare Workers in April 2026 (per `CLAUDE.md`). The behavior is unchanged (same Worker, subdomain rewrite), but the comment is stale. Flagged here rather than edited, since this handbook page is documentation-only. Checked: src/lib/config/app-url.ts lines 12, 46, and the `ADMIN_BASE_URL` error message at line 131, which still says "Cloudflare Pages env"; CLAUDE.md §Three-Subdomain Architecture.
 
 ## Local development
 

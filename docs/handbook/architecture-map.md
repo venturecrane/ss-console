@@ -32,7 +32,7 @@ Every request to `smd.services`, `admin.smd.services`, or `portal.smd.services` 
 1. **Browser to Cloudflare.** All three custom domains are bound to the one Worker `ss-web` (`wrangler.toml`, `[assets]` and the domain notes). Cloudflare's edge terminates TLS and routes the request to the Worker.
 2. **Worker runs first.** `run_worker_first = true` in the `[assets]` block (`wrangler.toml`) forces every request through the Worker before the static-asset binding can answer. This is load-bearing: without it, a request for `/` could be short-circuited by a prerendered asset and never reach the middleware that does subdomain routing and auth.
 3. **Astro SSR middleware.** `src/middleware.ts` runs as a `sequence()` of `clerkMiddleware` then the SS middleware. It does three things in order:
-   - **Subdomain routing.** It inspects `hostname`. On `admin.smd.services` it prepends `/admin` to the path (unless the path already starts with `/admin`, `/api/admin`, `/auth`, `/api/auth`, or `/api/oauth`); on `portal.smd.services` it prepends `/portal` with the same guard. The admin and portal source files live under `src/pages/admin/*` and `src/pages/portal/*` - the subdomain is a front door, not a separate build (`src/middleware.ts`, `handleSubdomainRewrite`). `smd.services/admin/*` and `/auth/login` 301-redirect to the admin host for backwards compatibility.
+   - **Subdomain routing.** It inspects `hostname`. On `admin.smd.services` it prepends `/admin` to the path (unless the path already starts with `/admin`, `/api/admin`, `/auth`, or `/api/auth`); on `portal.smd.services` it prepends `/portal` unless the path already starts with `/portal`, `/api/portal`, `/auth`, or `/api/auth`. The admin and portal source files live under `src/pages/admin/*` and `src/pages/portal/*` - the subdomain is a front door, not a separate build (`src/middleware.ts`, `handleSubdomainRewrite`). `smd.services/admin/*` and `smd.services/portal/*` 301-redirect to the admin and portal hosts, and legacy auth paths such as `/auth/login` redirect to `/auth/sign-in` (`src/lib/routing/legacy-redirects.ts`).
    - **Auth.** Clerk owns identity for both admin and portal. On admin paths, `resolveAdminSessionFromClerk` maps the Clerk user id to the local `users` row and gates on `role='admin'`, synthesizing the legacy session shape into `locals.session` so existing call sites keep working (`src/lib/auth/admin-session-shim.ts`). On portal paths, Clerk is primary with a legacy magic-link session accepted as a fallback during the transition (`src/middleware.ts`, `resolveLegacyPortalSession`).
    - **Observability.** The handler is wrapped by `withSentryRequestHandler` (`src/lib/observability/sentry.ts`); when `SENTRY_DSN` is unset the wrapper is a no-op.
 4. **Page or API handler.** The rewritten path resolves to an Astro page (`*.astro`) or an API route (`src/pages/api/*`). Env is read directly via `import { env } from 'cloudflare:workers'` - the v13 adapter removed `Astro.locals.runtime` (CLAUDE.md, Deployment).
@@ -41,15 +41,16 @@ Every request to `smd.services`, `admin.smd.services`, or `portal.smd.services` 
    - **R2** - three buckets: `STORAGE` (documents, transcripts, SOWs), `CONSULTANT_PHOTOS` (public consultant images), and `CUSTOMER_CONFIG` (the authoritative live Operator config and voice vaults, `smd-customer-config`).
    - **KV** - `SESSIONS` (session storage) and `BOOKING_CACHE` (booking rate-limit plus the public-assessment turn/cost ceiling).
 
-All bindings are declared in `wrangler.toml`. The canonical outbound origins (`APP_BASE_URL`, `ADMIN_BASE_URL`, `PORTAL_BASE_URL`) are built from env vars, never from the inbound request host (`src/lib/config/app-url.ts`).
+All bindings are declared in `wrangler.toml`. A separate staging Worker, `ss-web-staging` (`[env.staging]` in `wrangler.toml`), runs on a single `workers.dev` host with its own `*-staging` D1, R2, and KV resources, so nothing in it touches production data; because it has no subdomains, admin and portal are reached by path there. The canonical outbound origins (`APP_BASE_URL`, `ADMIN_BASE_URL`, `PORTAL_BASE_URL`) are built from env vars, never from the inbound request host (`src/lib/config/app-url.ts`).
 
-## Background Workers (Operator cost)
+## Background Workers
 
-Some work does not belong in the request path. Two sibling Workers live under `workers/`:
+Some work does not belong in the request path. Three sibling Workers live under `workers/`:
 
 - **Cost** - `cost-telemetry` and `cost-anomaly` handle Operator cost ingest and anomaly detection.
+- **Alerts** - `fleet-alerts` (Worker `ss-fleet-alerts`) is the pager. It reads `ss-console-db` on a 2-minute cron (plus a weekly Monday run) and mails `team@smd.services` when a seat's heartbeat goes stale, work runs overdue, a connector is down, a token nears expiry, or the public site fails its health poll (`workers/fleet-alerts/wrangler.toml`).
 
-The automated lead-gen pipelines (`job-monitor`, `review-mining`, `enrichment-workflow`, `new-business`, `scan-workflow`, `social-listening`) that used to live here, along with the `ENRICHMENT_WORKFLOW_SERVICE` service binding and the `LEAD_INGEST_API_KEY` ingest path, were retired root-and-branch on 2026-07-01 (PRs #1610/#1616). The cost workers are all that remain.
+The automated lead-gen pipelines (`job-monitor`, `review-mining`, `enrichment-workflow`, `new-business`, `scan-workflow`, `social-listening`) that used to live here, along with the `ENRICHMENT_WORKFLOW_SERVICE` service binding and the `LEAD_INGEST_API_KEY` ingest path, were retired root-and-branch on 2026-07-01 (PRs #1610/#1616). The cost workers and the pager are all that remain; `.github/workflows/deploy.yml` deploys all three.
 
 ## The Operator plane
 
