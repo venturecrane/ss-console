@@ -4,7 +4,8 @@ schema_version: 1
 # of concept of the couples role (ADR 0090, ADR 0091; ss-console#3264). Made
 # from operator/customers/_couples-template. Like The Brokery: the only
 # interface is email to and from the agent's own inbox, and only the two
-# partners' addresses reach it. Telegram is set up later. Schedules and other
+# partners' addresses reach it. Laurie is also on Telegram (bot token is a
+# Fly secret on hermes-captain-mark, never here). Schedules and other
 # settings are given to the agent in conversation, not authored here.
 
 # ---- IDENTITY ----
@@ -34,9 +35,9 @@ machine:
 people:
   - id: p1
     name: Laurie Perrin
-    telegram_id: ''
+    telegram_id: '8854529905'
     email: lsperrin.lp@gmail.com
-    channel: email
+    channel: telegram
   - id: p2
     name: Scott Durgan
     telegram_id: ''
@@ -247,6 +248,19 @@ safety:
     cost_cap_daily_cents: 500
     inbound_daily_cap: 100
     web_search_daily_cap: 200
+
+# ---- TELEGRAM ----
+# One bot for the couple (BotFather). Only bound partners reach it: Laurie today.
+# A partner's id goes on both allow lists when they bind; the shared group's chat
+# id goes in spaces.shared_telegram_chat and group_chats once the group exists.
+telegram:
+  enabled: true
+  allow_from:
+    - '8854529905'
+  group_allow_from:
+    - '8854529905'
+  group_chats: []
+  group_sessions_per_user: false
 
 # ---- VOICE LIBRARY ----
 voice_library:
