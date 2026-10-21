@@ -17,7 +17,20 @@ This Playbook is public, because the repository it lives in is public. Anything 
 
 ## Where it is
 
-The private repository **`venturecrane/engagements`**. Access is granted by the Captain, who adds you to it on GitHub. Agents read it from a local copy (usually `~/dev/engagements`); safety checks refuse to let an agent write about a client until it has read that client's dossier there, and they refuse rather than guess if the copy is missing.
+The private repository **`venturecrane/engagements`**. Access is granted by the Captain, who adds you to it on GitHub. Agents read it from a local copy (usually `~/dev/engagements`); ask the agent to update that copy first (`git pull`), because an old copy may not have the `admin/` folder. Safety checks refuse to let an agent write about a client until it has read that client's dossier there, and they refuse rather than guess if the copy is missing.
+
+## Your first day of access
+
+The Captain grants these, each to your own login (never a shared one). This is a suggested order: each step makes the next one useful. `admin/accounts.md` says how each one is granted.
+
+1. **Google Workspace:** your own `smd.services` mailbox and access to `team@`, where every alert lands.
+2. **GitHub:** membership of the `venturecrane` organization, then this private repository.
+3. **The admin console:** an `admin` role on your own sign-in, so `/admin` and this Playbook open for you.
+4. **Claude:** your own seat, so you can start agents without the Captain's login.
+5. **Fly.io, Cloudflare and Infisical:** only once an agent working for you needs them; the agent can act on seats, the website and secrets through them.
+6. **Stripe:** a team role, so you can see payments and payouts.
+
+Until steps 1 to 4 are done, you can read but not act; [Continuity](/admin/playbook/continuity) says what that means when the Captain is away.
 
 ## What it holds today
 

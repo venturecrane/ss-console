@@ -48,8 +48,12 @@ Say so plainly rather than let an absence look like coverage
 
 - restoring the main database (D1) from backup, and rolling back the web Worker (see "Bad
   deploy" below);
-- what to do if a key or credential leaks;
-- what to do if a vendor SMD depends on goes down.
+- what to do if a key or credential leaks, beyond rotating it: the rotation procedure itself
+  is written ([Secrets & Access](/admin/playbook/secrets-access), "Rotation procedure"),
+  so a leaked key is rotated by an agent at once; what is not written is how to judge what
+  the key exposed and who must be told;
+- what to do if a vendor SMD depends on goes down. The private companion lists every vendor,
+  what it is for and what stops without it (`admin/accounts.md`, `admin/crane-dependency.md`).
 
 Until they exist, an agent works these from first principles and escalates to the Captain
 at once.

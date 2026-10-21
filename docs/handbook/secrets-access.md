@@ -111,15 +111,16 @@ not secrets, and are set in the build/deploy environment - see
    downstream service before relying on it (a present key can still be stale or revoked).
 3. Push to the runtime store, one key at a time:
    - **Web app:** set the one changed key on the `ss-web` Worker with `wrangler secret put`,
-     the value piped from Infisical rather than typed. Do not use the bulk-export pattern
-     still shown in comments in `wrangler.toml` and `.github/workflows/deploy.yml`; it
-     re-sets every key under `/ss`, including ones retired from the Worker.
+     the value piped from Infisical rather than typed. Never bulk-export `/ss` into
+     `wrangler secret bulk`; it re-sets every key under the path, including ones retired
+     from the Worker.
    - **A seat's Machine credential:** `operator/bin/rotate-machine-credential.sh <slug>`
      mints a fresh per-seat key, records its hash in the console's `machine_credentials`
      table first (the previous key stays valid for 24 hours), then sets it as the seat's
-     `MACHINE_HEARTBEAT_KEY` Fly secret. Setting it restarts the Machine at once, and the
-     script runs no busy gate, so its own header requires the Captain's go before it is
-     run against a live seat.
+     `MACHINE_HEARTBEAT_KEY` Fly secret. Setting it restarts the Machine at once and the
+     script runs no busy gate, so the agent first checks the seat has no job running or
+     held, then reads the heartbeat back. Running it is agent work (Captain, 2026-09-11);
+     a Captain "not now" on that seat stands until lifted.
    - **Other Fly-side secrets:** reprovision the seat (`operator/bin/reprovision.sh <slug>`),
      which stages them and deploys behind the busy gate.
    - **A client's OAuth token:** the client re-consents in their own browser; SMD does not

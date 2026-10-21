@@ -43,6 +43,17 @@ Everything in the Captain's row of [Who Does What](/admin/playbook/who-does-what
 - raising any routine to acting on its own, and the first boot of a new client;
 - anything SMD itself would say to a client beyond routine service.
 
+## What you can do while no agent can be started
+
+Today an agent session needs the Captain's Claude login (below), so while the Captain is away and before you have your own seat, no agent can be started to fix anything. The hourly triage agent keeps investigating and reporting on its own, but it cannot change anything. What you can still do yourself, from the admin console and your email:
+
+- read team@ and the triage report, and judge severity on the [When Something Goes Wrong](/admin/playbook/when-something-goes-wrong) ladder;
+- tell a client what is happening within that ladder (a status update is routine client communication);
+- revoke a client's Claude-connector access in the admin console if a seat must not be reached;
+- acknowledge alerts and record decisions on client change requests.
+
+Pausing or rebuilding a seat, rotating a key and clearing a stop all need an agent or the Captain. Closing this gap is the first remedy in the table below.
+
 ## Where SMD still depends on one person
 
 | Dependency | What it means today | Decided remedy |

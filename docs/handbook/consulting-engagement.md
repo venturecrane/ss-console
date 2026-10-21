@@ -66,7 +66,7 @@ The proposal or SOW states scope, price, payment terms and an explicit "what's n
 
 - **A project price, not hourly.** The client sees one number, never the rate or the hours. SMD absorbs overruns up to the agreed scope; new scope is quoted separately (pricing framework).
 - **Out-of-scope asks go in a parking lot**, logged as they come and settled at the pre-handoff review: folded in, proposed as follow-on work, or dropped with a reason (Decision #11).
-- **Payment follows size**: 50/50 for smaller engagements, 40/30/30 at 40 hours or more (Decision #14; [Pricing & Economics](/admin/playbook/pricing-economics)).
+- **Payment follows size**: 50/50 by default; at 40 hours or more, consider 40/30/30 (Decision #14; [Pricing & Economics](/admin/playbook/pricing-economics)).
 - **Two weeks of included support**, async by email with a business-day response: questions about what we built, small fixes under 30 minutes, one extra walkthrough. The SOW template defaults to two weeks and allows a different window; the signed SOW is what binds (Decision #27).
 
 A signed proposal carries specific timeframes and amounts because it is a contract, not marketing. Public content never does ([Positioning & Voice](/admin/playbook/positioning-voice)).

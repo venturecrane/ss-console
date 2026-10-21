@@ -117,7 +117,7 @@ The signed SOW creates an **engagement**: scope, status, estimated and actual ho
 
 ### 7. Billing
 
-Payment follows the SOW: 50/50, or 40/30/30 for 40 hours or more (Decision #14). One-time invoices show on `/admin/billing` as invoiced, paid and outstanding; overdue ones appear in the home page's "Needs you today" list. The recurring side of billing is Operator subscriptions, which a consulting client does not have.
+Payment follows the SOW: 50/50 by default, with 40/30/30 considered for 40 hours or more (Decision #14). One-time invoices show on `/admin/billing` as invoiced, paid and outstanding; overdue ones appear in the home page's "Needs you today" list. The recurring side of billing is Operator subscriptions, which a consulting client does not have.
 
 ### 8. The client portal
 

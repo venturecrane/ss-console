@@ -51,6 +51,22 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 ## Running SMD day to day
 
+**dossier.** The private file an agent must read before touching a client's engagement: what the client asked for, what SMD has agreed, and how to talk to them. It lives at `operator/customers/<slug>/dossier.md` in the private engagements repository, and a safety check blocks writes about a client whose dossier was not read first ([Handoff Companion](/admin/playbook/handoff-companion)).
+
+**SOW.** Statement of Work: the signed scope, price and payment schedule for a consulting engagement. Signing it through SignWell creates and sends the deposit invoice ([Money](/admin/playbook/money)).
+
+**DPA.** Data Processing Addendum: the contract terms on how SMD handles a client's data, signed alongside an Operator service agreement (`docs/legal/operator-dpa-template.md`).
+
+**verify ID.** An id starting `vfy_` that names a recorded check of the live system: what was probed and what came back. A claim that something works on a real seat is accepted only with one, and the merge gate refuses runtime claims without it ([Building the Platform](/admin/playbook/building-the-platform)).
+
+**projection drift.** When the copy of a client's configuration the console shows (`customer_configs`) or the copy a seat reads no longer matches what was approved in the repository. A nightly check opens an issue when it happens ([The Administrator's Week](/admin/playbook/administrators-week)).
+
+**wake row.** The record a seat writes each time a scheduled routine is due: one saying it ran, or one saying it deliberately did not. A due time with neither means the schedule silently failed, and a nightly check reports it ([The Administrator's Week](/admin/playbook/administrators-week)).
+
+**attested.** Evidence SMD can show exists but cannot check itself, such as a filing inside a client's own system where SMD's checks hold no credential. Different from evidence a check can probe directly ([What We Owe Clients](/admin/playbook/obligation-register)).
+
+**`/eos` Check I.** The end-of-session step that asks whether the session read client correspondence and, if so, whether every promise in it was recorded in the obligation register. It records; it never blocks ([What We Owe Clients](/admin/playbook/obligation-register)).
+
 **team@.** `team@smd.services`, the shared inbox where SMD's systems send every alert and report, from "SMD Services Ops". Reading it is the first step of the daily routine ([The Administrator's Week](/admin/playbook/administrators-week)).
 
 **healthchecks.io.** An outside service that expects a regular "still running" signal from each of SMD's watchers (the 2-minute alerter, the triage agent, each ops workspace) and emails when one goes silent. It is what makes an empty inbox trustworthy ([The Administrator's Week](/admin/playbook/administrators-week)).

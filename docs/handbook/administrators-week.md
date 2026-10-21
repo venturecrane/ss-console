@@ -43,6 +43,13 @@ There is **no daily "all clear" email**. On a quiet day the team inbox is simply
 - **Monday:** the "Handbook: pages due for review" issue, when it is open. It lists pages whose sources changed after they were last checked, and pages past their review window; ask an agent to re-check each against its sources.
 - **Once a week, ask an agent to read you the obligation register** ([Clients & Commitments](/admin/playbook/clients-and-commitments)), so nothing we owe goes stale without you noticing.
 
+## Monthly
+
+- **Costs:** open `/admin/operator/costs` and check each Operator against the bands ([Money](/admin/playbook/money)). A seat in the watch band for a month is worth a word with the Captain; the kill line is the Captain's call.
+- **What we owe:** ask an agent for the obligation register again, oldest first, and check nothing has sat without movement since last month ([Clients & Commitments](/admin/playbook/clients-and-commitments)).
+- **Renewals coming up:** the domain and insurance dates in the private companion (`admin/domains.md`, `admin/insurance.md`); renewals spend SMD money, so flag anything coming up to the Captain.
+- **The Playbook:** if the weekly handbook review issue has pages waiting, clear them or hand them to an agent.
+
 ## What arrives in the inbox
 
 "You" means the administrator. "An agent" means you ask an AI agent to do it and report back.

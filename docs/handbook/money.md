@@ -60,7 +60,7 @@ Invoices are bank-debit only unless they carry the card-fee line, in which case 
 - **Signing the SOW** creates the deposit invoice in Stripe and emails it to the client, due in 3 days (`src/lib/sow/outbox-jobs.ts`).
 - **Marking a payment milestone complete** creates and emails that milestone's invoice at once (`src/lib/stripe/milestone-invoicing.ts`). Marking a milestone complete is therefore sending an invoice.
 
-Invoice types: consulting deposit, milestone, completion and assessment; the Operator's monthly retainer (created by Stripe and copied into the console); and the Operator's implementation (stand-up) invoice. Consulting is paid 50% at signing and 50% at completion, or 40/30/30 for engagements of 40 hours or more (Decision #14); the deposit invoice is created and sent when the SOW is signed.
+Invoice types: consulting deposit, milestone, completion and assessment; the Operator's monthly retainer (created by Stripe and copied into the console); and the Operator's implementation (stand-up) invoice. Consulting is paid 50% at signing and 50% at completion; for engagements of 40 hours or more, Decision #14 says to consider 40/30/30 with the mid-point named in the SOW; the deposit invoice is created and sent when the SOW is signed.
 
 Billing lives at **`/admin/billing`** (Quotes, Invoices, Recurring, with real monthly recurring revenue and any seat missing a price flagged).
 
