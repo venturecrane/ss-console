@@ -162,6 +162,14 @@ function alive(pid: number): boolean {
   }
 }
 
+/** Alive and not a zombie: a killed process its new parent has not reaped yet
+ * still answers kill(pid, 0). Same test as the supervisor's own _smd_alive. */
+function running(pid: number): boolean {
+  if (!alive(pid)) return false
+  const stat = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' }).stdout
+  return !stat.trim().startsWith('Z')
+}
+
 async function runStop(
   body: string,
   env: Record<string, string> = {},
@@ -264,7 +272,15 @@ SUPERVISOR_PID=$!
     expect(r.code, r.log).toBe(0)
     const pids = readFileSync(`${r.dir}/broker.pids`, 'utf8').trim().split('\n').map(Number)
     expect(pids, 'one broker for the whole stop: the group signal did not kill it').toHaveLength(1)
-    expect(alive(pids[0]), 'killed once the gateway exited').toBe(false)
+    // SIGKILL is asynchronous, and the broker's parent loop dies in the same
+    // kill, so the corpse is reaped by whoever inherits it. Probing the pid the
+    // instant the supervisor exits raced that (red on main 2026-10-20). Wait on
+    // the observable event, the process gone or a zombie, with a deadline far
+    // below the 120 s the broker would otherwise sleep: a supervisor that never
+    // kills it still fails here.
+    await until(() => !running(pids[0]), 5000).catch(() => {
+      throw new Error(`broker ${pids[0]} still running 5 s after the stop: never killed`)
+    })
     expect(Date.now() - started).toBeLessThan(20000)
   }, 30000)
 
