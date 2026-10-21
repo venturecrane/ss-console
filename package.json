@@ -26,6 +26,7 @@
     "handbook:drift": "node scripts/handbook-drift.mjs",
     "handbook:adr-index": "npx tsx scripts/handbook-adr-index.ts",
     "handbook:connectors": "npx tsx scripts/handbook-connector-inventory.ts",
+    "handbook:roster": "npx tsx scripts/handbook-roster.ts",
     "db:migrate:local": "wrangler d1 migrations apply ss-console-db --local",
     "prepare": "node -e \"if(process.env.CI)process.exit(0)\" && husky"
   },

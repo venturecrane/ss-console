@@ -1,7 +1,9 @@
 ---
 title: The Operator Thesis
 section: business
-order: 2
+order: 3
+owner: captain
+review_every: 180
 summary: The canonical frame for what the Operator is, what it competes with, and where we point it
 sources:
   - label: ADR 0037 - The Operator Thesis

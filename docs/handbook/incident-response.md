@@ -1,7 +1,9 @@
 ---
 title: Incident Response
-section: operations
-order: 9
+section: running
+order: 22
+owner: captain
+review_every: 30
 summary: The severity ladder, the detection surfaces, the escalation path, the client-communication commitments, and the exposure-ladder demotion rule a SEV1 triggers - ADR 0064 as a runbook.
 sources:
   - label: ADR 0064 - Operator service commitments

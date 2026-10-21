@@ -4,8 +4,10 @@ The E-Myth franchise operations manual for SMD Services. Every `.md` file here i
 rendered into the admin portal at **`/admin/playbook`** (collection defined in
 `src/content.config.ts`; routes in `src/pages/admin/playbook/`).
 
-The purpose: a newcomer with zero context can run, build, and grow this venture from these
-pages alone - what it is, why it exists, how it works, and where everything lives.
+The purpose: a new administrator who runs the business day to day, and is not an engineer,
+can run SMD from these pages, directing AI agents and contractors for the technical work.
+Everything is judged against that reader (the handbook assessment of 2026-10-21). The
+Engineering Appendix serves the agents and engineers and is reached by link.
 
 ## The maintenance contract
 
@@ -27,6 +29,9 @@ Rough "if you change X, update Y":
 | Pricing, rate ladder, payment terms | `pricing-economics.md` |
 | The Operator architecture / ceilings / memory | `operator-platform.md`, `autonomy-governance.md`, `knowledge-memory.md` |
 | A connector or delivery channel | `connectors-channels.md` |
+| A seat folder in `operator/customers/` (added, retired, or its `seat.kind` / `seat.product` / `seat.role` / `vertical` changed) | Regenerate the roster block in `clients-and-commitments.md` with `npm run handbook:roster -- --write`; `tests/handbook-integrity.test.ts` blocks merge until it matches the tree |
+| A signal sent to team@ (a new alert, a changed subject, a new scheduled control) | `administrators-week.md` and, if it needs a response, `when-something-goes-wrong.md` |
+| Who may approve or decide something | `who-does-what.md` |
 | A tool in `operator/connectors/<name>/manifest.toml` (added, removed, reclassified) or a new `*_tools.py` module | Regenerate the inventory block in `connectors-channels.md` with `npm run handbook:connectors -- --write`, and update the prose around it in the same PR; `tests/handbook-integrity.test.ts` blocks merge until the block matches the tree |
 | An admin surface | `admin-console.md`, and `customer-lifecycle.md` if the motion changed |
 | A consulting portal surface | `client-portal.md` |
@@ -43,8 +48,11 @@ Rough "if you change X, update Y":
    ```yaml
    ---
    title: <Page Title>
-   section: business | product | system | operations | reference
+   section: running | business | product | engineering
    order: <number within the section>
+   owner: captain | administrator | engineering
+   review_every: <days: running 30, product 90, engineering 90, business 180>
+   last_reviewed: "YYYY-MM-DD"   # only after a deliberate check of the body against its sources
    summary: <one-line lede>
    sources:                       # optional; the canonical docs this page mirrors
      - label: <short label>
@@ -52,8 +60,21 @@ Rough "if you change X, update Y":
    status: <optional, e.g. "draft">
    ---
    ```
-   `title` and `section` are required; the rest are optional. The slug is the filename
-   (`overview.md` -> `/admin/playbook/overview`).
+   `title`, `section`, `owner` and `review_every` are required (the schema renders a bad
+   value as unknown; `tests/handbook-integrity.test.ts` is the gate). The slug is the
+   filename (`overview.md` -> `/admin/playbook/overview`).
+
+   **`last_reviewed` means someone checked the page against its sources, not that someone
+   edited it.** Set it only after reading the body against every cited source and fixing what
+   disagreed. A page without it renders "Not yet reviewed against its sources", which is the
+   honest state; a date nobody earned is not. Each page renders its owner, its review date
+   and an overdue badge, computed when the page is read. Being overdue never fails the build.
+
+   `owner` is the role answerable for the page staying true. Running, business and product
+   pages are `captain` until an administrator is named, then `administrator` for the
+   Running SMD pages; the appendix is `engineering`.
+
+   `status` is a visible badge for a known gap, such as `Rewrite pending`.
 
 2. **Body starts at `##`.** The page `<h1>` is the title, rendered by the route.
 
@@ -71,9 +92,13 @@ Rough "if you change X, update Y":
 
 ## Sections
 
-`business` (The Business) / `product` (The Product) / `system` (The System - where
-everything lives) / `operations` (How We Work) / `reference` (Reference). Section display
-order and labels are set in `_HandbookSidebar.astro` and `index.astro`.
+`running` (Running SMD) / `business` (The Business) / `product` (The Product) /
+`engineering` (Engineering Appendix). The first three are written for the administrator; the
+appendix for engineers and agents, so a page's audience follows from its section. Keys,
+labels, blurbs and display order are defined once in `src/lib/handbook/sections.ts`, read by
+the schema, the sidebar, the landing page, the integrity test and the ADR-index generator.
+Pages read in that order (section, then `order`), and each page links to the one before and
+after it.
 
 `README.md` is excluded from the rendered collection (it is this guide, not a page).
 

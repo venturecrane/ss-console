@@ -1,7 +1,9 @@
 ---
 title: The Client Portal
-section: system
-order: 5
+section: product
+order: 2
+owner: captain
+review_every: 90
 summary: The portal.smd.services surface where a client sees what they own - engagement lifecycle, product consoles, and one billing surface - plus the auth model and the integrations behind them
 sources:
   - label: src/pages/portal/ (portal surfaces)

@@ -1,7 +1,10 @@
 ---
 title: The Decision Stack
 section: business
-order: 7
+order: 8
+owner: captain
+review_every: 180
+status: Rewrite pending
 summary: How SMD records the decisions that define the venture, and the 6-layer model that organizes them
 sources:
   - label: decision-stack.md (full reference)

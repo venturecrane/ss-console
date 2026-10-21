@@ -1,7 +1,9 @@
 ---
 title: Architecture Map
-section: system
-order: 1
+section: engineering
+order: 5
+owner: engineering
+review_every: 90
 summary: The whole stack end to end as a words-diagram - how a request flows from the browser through one Cloudflare Worker into D1, R2, and KV, and how the separate Operator plane runs one Fly.io Machine per customer
 sources:
   - label: CLAUDE.md - Tech Stack, Three-Subdomain Architecture, Deployment

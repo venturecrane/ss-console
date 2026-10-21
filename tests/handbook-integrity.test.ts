@@ -25,6 +25,14 @@ import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, existsSync } from 'fs'
 import { resolve, join } from 'path'
 import { parse as parseYaml } from 'yaml'
+import { execFileSync } from 'child_process'
+import { HANDBOOK_OWNERS, HANDBOOK_SECTION_KEYS } from '../src/lib/handbook/sections'
+import {
+  buildSeatRoster,
+  committedBlock as rosterBlock,
+  liveSeatSlugs,
+  renderSeatRoster,
+} from '../scripts/lib/handbook-seat-roster'
 import { buildAdrRows, indexSummaries, renderAdrIndex } from '../scripts/lib/handbook-adr-index'
 import {
   buildConnectorInventory,
@@ -35,7 +43,38 @@ import {
 
 const HANDBOOK = resolve('docs/handbook')
 const REPO_ROOT = resolve('.')
-const SECTIONS = ['business', 'product', 'system', 'operations', 'reference']
+const SECTIONS: readonly string[] = HANDBOOK_SECTION_KEYS
+const OWNERS: readonly string[] = HANDBOOK_OWNERS
+
+/**
+ * Freshness metadata. The content schema is deliberately forgiving (a bad value
+ * renders as unknown rather than failing the build), so this is the gate: every
+ * page names an owner and a review window, and a review date, when present, is a
+ * real calendar date. Being overdue is never an error here: CI must not go red
+ * because time passed. `last_reviewed` is optional on purpose; only a deliberate
+ * check of a page against its sources sets it.
+ */
+function freshnessErrors(file: string, fm: Record<string, unknown>): string[] {
+  const errors: string[] = []
+  if (typeof fm.owner !== 'string' || !OWNERS.includes(fm.owner))
+    errors.push(`${file}: 'owner' must be one of ${OWNERS.join(', ')} (got ${String(fm.owner)})`)
+  if (
+    typeof fm.review_every !== 'number' ||
+    !Number.isInteger(fm.review_every) ||
+    fm.review_every <= 0
+  )
+    errors.push(`${file}: 'review_every' must be a positive whole number of days`)
+  if (fm.last_reviewed !== undefined) {
+    const v = fm.last_reviewed
+    const iso = typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null
+    const parsed = iso ? new Date(`${iso}T00:00:00Z`) : null
+    if (!parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== iso)
+      errors.push(
+        `${file}: 'last_reviewed' must be a real date written YYYY-MM-DD (got ${String(v)})`
+      )
+  }
+  return errors
+}
 
 // Bare (non-URL) hrefs are treated as repo paths only when rooted here. Anything
 // else with no scheme (e.g. a crane_doc('global', ...) pseudo-ref) is skipped.
@@ -110,8 +149,21 @@ describe('handbook integrity', () => {
         )
       if (order !== undefined && typeof order !== 'number')
         errors.push(`${p.file}: 'order' must be a number when present`)
+      errors.push(...freshnessErrors(p.file, p.frontmatter))
     }
     expect(errors, errors.join('\n')).toEqual([])
+  })
+
+  it('the freshness check rejects what it should (the check can fail)', () => {
+    expect(freshnessErrors('a.md', { review_every: 30 })).toHaveLength(1)
+    expect(freshnessErrors('a.md', { owner: 'someone', review_every: 30 })).toHaveLength(1)
+    expect(freshnessErrors('a.md', { owner: 'captain' })).toHaveLength(1)
+    expect(
+      freshnessErrors('a.md', { owner: 'captain', review_every: 30, last_reviewed: '2026-13-40' })
+    ).toHaveLength(1)
+    expect(
+      freshnessErrors('a.md', { owner: 'captain', review_every: 30, last_reviewed: '2026-10-21' })
+    ).toEqual([])
   })
 
   it('every /admin/playbook/<slug> cross-link resolves to a real page', () => {
@@ -236,5 +288,45 @@ describe('generated handbook content matches the tree', () => {
     const render = (m: typeof base) =>
       renderConnectorInventory([{ dir: 'x', toolModules: [], ...m }])
     expect(render(grown)).not.toBe(render(base))
+  })
+
+  it('clients-and-commitments.md seat roster is exactly what operator/customers renders', () => {
+    const page = readFileSync(join(HANDBOOK, 'clients-and-commitments.md'), 'utf8')
+    const rendered = renderSeatRoster(buildSeatRoster(resolve('operator/customers')))
+    expect(
+      rosterBlock(page),
+      'seat roster is stale: run `npm run handbook:roster -- --write`'
+    ).toBe(rendered)
+  })
+
+  it('a changed seat changes the roster block (the check can fail)', () => {
+    const seat = {
+      slug: 'x',
+      kind: 'customer',
+      product: 'operator',
+      role: null,
+      vertical: 'law-firm',
+    }
+    expect(renderSeatRoster([seat])).not.toBe(renderSeatRoster([{ ...seat, kind: 'proving' }]))
+    expect(renderSeatRoster([seat])).not.toBe(renderSeatRoster([seat, { ...seat, slug: 'y' }]))
+  })
+
+  it('the roster counts the same seats as the fleet tooling (rings.py live_seats)', () => {
+    // live_seats() never touches yaml, but rings.py imports it at module level and
+    // the CI interpreter has no pyyaml (see boot-smoke-collects-failures.test.ts),
+    // so an empty stand-in module lets the real function run unchanged.
+    const py = execFileSync(
+      'python3',
+      [
+        '-I',
+        '-c',
+        'import sys, json, types; sys.modules.setdefault("yaml", types.ModuleType("yaml")); ' +
+          'sys.path.insert(0, "operator"); from pathlib import Path; ' +
+          'from bin.lib.fleet.rings import live_seats; ' +
+          'print(json.dumps(live_seats(Path("operator/customers"))))',
+      ],
+      { encoding: 'utf8' }
+    )
+    expect(liveSeatSlugs(resolve('operator/customers'))).toEqual(JSON.parse(py))
   })
 })

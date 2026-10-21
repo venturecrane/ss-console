@@ -1,7 +1,9 @@
 ---
 title: Deployment & Release
-section: operations
-order: 4
+section: engineering
+order: 8
+owner: engineering
+review_every: 90
 summary: The two deploy paths - the website to Cloudflare Workers, and the Operator as one image rolled out to every seat in rings
 sources:
   - label: CI - deploy.yml

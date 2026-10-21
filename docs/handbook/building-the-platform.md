@@ -1,7 +1,9 @@
 ---
 title: Building the Platform
-section: operations
-order: 3
+section: engineering
+order: 10
+owner: engineering
+review_every: 90
 summary: The dev workflow, the verify gate, worktree isolation, and the coding standards every change ships under
 sources:
   - label: CI - verify.yml

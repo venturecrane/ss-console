@@ -1,7 +1,9 @@
 ---
 title: Glossary
-section: reference
-order: 2
+section: running
+order: 25
+owner: captain
+review_every: 30
 summary: The venture's vocabulary, defined for a newcomer with zero context
 sources:
   - label: CLAUDE.md (project instructions)

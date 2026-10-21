@@ -2,6 +2,9 @@
 title: Overview
 section: business
 order: 1
+owner: captain
+review_every: 180
+status: Rewrite pending
 summary: What SMD Services is, who it serves, and how the venture runs. Start here.
 sources:
   - label: Operator Thesis (ADR 0037)

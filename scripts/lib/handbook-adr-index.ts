@@ -99,8 +99,11 @@ export function renderAdrIndex(rows: AdrRow[]): string {
   const lines = [
     '---',
     'title: ADR Index',
-    'section: reference',
-    'order: 1',
+    // Section keys and owners are defined in src/lib/handbook/sections.ts.
+    'section: engineering',
+    'order: 15',
+    'owner: engineering',
+    'review_every: 90',
     'summary: Every Architecture Decision Record, numerically, with its title, its one-line summary, and a link to the source',
     'sources:',
     '  - label: docs/adr/ directory',

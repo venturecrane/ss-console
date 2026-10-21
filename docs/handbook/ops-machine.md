@@ -1,7 +1,9 @@
 ---
 title: Client Ops Workspaces
-section: operations
-order: 12
+section: running
+order: 24
+owner: captain
+review_every: 30
 summary: Where client documents live (one Fly workspace per client, never a laptop), how to open one with a single command, how work is handed over from a laptop, what each workspace can reach, how long documents are kept, and smd-ops, SMD's own machine.
 sources:
   - label: operator/ops-machine/workspaces.json - the list of client workspaces

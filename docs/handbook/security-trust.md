@@ -1,7 +1,9 @@
 ---
 title: Security & Trust
-section: operations
-order: 6
+section: product
+order: 5
+owner: captain
+review_every: 90
 summary: The two halves of trust - content integrity (no fabricated client-facing content, enforced by tests and merge gates) and Operator runtime security (a maintained threat model verified against the running system)
 sources:
   - label: CLAUDE.md - No fabricated client-facing content

@@ -1,7 +1,10 @@
 ---
 title: Operating Model & the Fleet
-section: operations
-order: 1
+section: business
+order: 10
+owner: captain
+review_every: 180
+status: Rewrite pending
 summary: Who decides and who executes - the Captain, the fleet of agents, and the system they run
 sources:
   - label: Operating Ethos (global instruction module)

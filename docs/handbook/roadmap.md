@@ -1,7 +1,10 @@
 ---
 title: Roadmap & Current Phase
 section: business
-order: 6
+order: 9
+owner: captain
+review_every: 180
+status: Rewrite pending
 summary: Where the venture is right now, what the priorities are, and what stands between here and profitability.
 sources:
   - label: Decision Stack

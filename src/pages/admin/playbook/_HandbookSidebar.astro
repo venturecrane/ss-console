@@ -9,6 +9,7 @@
  * [...slug].astro. No client JS — on narrow screens it stacks above the article.
  */
 import { getCollection } from 'astro:content'
+import { HANDBOOK_SECTIONS } from '../../../lib/handbook/sections'
 
 interface Props {
   currentSlug?: string
@@ -16,16 +17,8 @@ interface Props {
 
 const { currentSlug } = Astro.props
 
-const SECTIONS: { key: string; label: string }[] = [
-  { key: 'business', label: 'The Business' },
-  { key: 'product', label: 'The Product' },
-  { key: 'system', label: 'The System' },
-  { key: 'operations', label: 'How We Work' },
-  { key: 'reference', label: 'Reference' },
-]
-
 const entries = await getCollection('handbook')
-const grouped = SECTIONS.map((s) => ({
+const grouped = HANDBOOK_SECTIONS.map((s) => ({
   ...s,
   items: entries
     .filter((e) => e.data.section === s.key)

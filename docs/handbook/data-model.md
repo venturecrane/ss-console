@@ -1,7 +1,9 @@
 ---
 title: Data Model
-section: system
-order: 3
+section: engineering
+order: 7
+owner: engineering
+review_every: 90
 summary: Where the venture's data lives - a Cloudflare D1 relational store whose source of truth is the migrations directory, with R2 for objects and KV for sessions
 sources:
   - label: migrations/ (D1 schema source of truth; the whole directory, so a new migration flags this page in handbook:drift)
