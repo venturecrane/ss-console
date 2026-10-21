@@ -160,6 +160,40 @@ def test_reply_status_reads_only_that_jobs_rows(tmp_path):
     ]
 
 
+def _held_row(db: str, ts: str, meta: dict) -> None:
+    import sqlite3
+
+    from workspace_broker.audit_ledger import CREATE_TABLE_SQL
+
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute(CREATE_TABLE_SQL)
+        conn.execute(
+            "INSERT INTO audit_log (id, ts, action_type, actor, metadata) VALUES (?, ?, 'REPLY_HELD', 'agent', ?)",
+            (f"h-{ts}-{len(meta)}-{meta.get('wake_job_id')}", ts, json.dumps(meta)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_reply_status_counts_the_holds_in_that_jobs_own_wake_since_the_watch(tmp_path):
+    """A held reply claims no bound row; the watch pages on this count
+    (A&P 201167, 2026-10-20). FALSIFIER: drop "holds" from the verb."""
+    broker = _broker(tmp_path)
+    db = str(broker.audit_db_path)
+    mine = {"wake_kind": "negotiation_job", "wake_job_id": "01N", "reason": "output_checklist"}
+    _held_row(db, "2026-10-20T19:33:02.942Z", mine)
+    _held_row(db, "2026-10-20T19:00:00.000Z", {**mine, "reason": "before the watch"})
+    _held_row(db, "2026-10-20T19:34:00.000Z", {**mine, "wake_job_id": "01NX"})  # another job
+    _held_row(db, "2026-10-20T19:34:01.000Z", {**mine, "wake_kind": "demand_job"})  # another lane
+    _held_row(db, "2026-10-20T19:34:02.000Z", {**mine, "held_for_release": True})  # it goes by itself
+    _held_row(db, "2026-10-20T19:34:03.000Z", {"reason": "an inbound turn's hold"})
+    out = _root(broker, "delivery_reply_status", kind="negotiation_job", job_id="01N", since="2026-10-20T19:32:00.000Z")
+    assert out["holds"] == 1
+    assert _root(broker, "delivery_reply_status", kind="negotiation_job", job_id="01N")["holds"] == 0
+
+
 def test_reply_status_names_the_key_the_reply_is_owed_under(tmp_path):
     """The daemon's own attempt counter is not the reply key's: the broker
     names the one ``reply_binding`` claims, from the job's ledger row."""

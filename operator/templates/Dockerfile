@@ -1333,7 +1333,12 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # requirements/hermes-overlay.txt), and shared/staged_send stages one exact send
 # with sha256-pinned files (docs/runbooks/operator/staged-send.md). Pairs with the
 # broker's agentmail_attachments in this PR. No tracked twin moved.
-ARG OVERLAY_REF="33b97ca3927081264d91db97f84fecc73fbff46f"
+# 2026-10-20i (3d64eda0, overlay #533): a reply held in a job's wake turn names
+# the job (wake_kind / wake_job_id) on its REPLY_HELD row, so the broker's
+# delivery_reply_status counts it and the daemon's reply watch pages within
+# minutes, not at its 20-minute deadline (A&P 201167). Pairs with this PR's
+# broker + watch change. No tracked twin moved.
+ARG OVERLAY_REF="3d64eda09b6df09fd47d2a2bc7afd2486949970e"
 
 # No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
 # across seats; the slug reaches the Machine only as fly.toml [env]

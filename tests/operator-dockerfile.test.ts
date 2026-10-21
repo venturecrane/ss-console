@@ -1576,7 +1576,8 @@ describe('Operator customer Machine Dockerfile', () => {
     // -> 184df81b (overlay#530), 2026-10-20: kill ledger read from .smd-root.
     // -> 1aa0a762 (overlay#529), 2026-10-20: a lost send answer is unknown, never "retry".
     // -> 33b97ca3 (overlay#531 + #532), 2026-10-20: ops cards to scott@; AgentMail sends carry PDFs.
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="33b97ca3927081264d91db97f84fecc73fbff46f"')
+    // -> 3d64eda0 (overlay#533), 2026-10-20: a held wake reply names its job; the watch pages on it.
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="3d64eda09b6df09fd47d2a2bc7afd2486949970e"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
