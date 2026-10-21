@@ -26,10 +26,14 @@ Two rules that follow from the table:
    is pinned to its agreement row by `tests/routine-grid-parity.test.ts` in the engagements repo,
    which reads this public repo at a SHA recorded there. This repo's CI cannot read the private
    one, which is why the gate lives on that side.
-2. **A definition change reaches the portal on merge and the seat on reprovision.** The deploy
-   workflow projects config to D1 and R2; the running Machine keeps its boot-time copy until the
-   Captain reprovisions. Until then the portal and the seat disagree, and only the seat's
-   behavior is what the client experiences.
+2. **A definition change reaches the portal on merge; the seat gets it live or on a rebuild.**
+   The deploy workflow projects config to D1 and R2. On the seat, the root config applier
+   polls R2 about every 15 seconds and applies only the fields on its allow-list (routine
+   levels and skill settings, exposure, `scope.inbound_allow_from`, `scope.admins`, and the
+   other paths in the overlay's `config_applier/safety.py`); a diff that touches any other
+   path is deferred whole and reaches the seat only when it is rebuilt. Rebuilding a seat
+   after a merge is agent work (Captain, 2026-09-11). Until the seat has it, the portal and
+   the seat disagree, and only the seat's behavior is what the client experiences.
 
 ## Onboarding (before an agreement exists)
 
