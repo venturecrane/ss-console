@@ -6,13 +6,15 @@ summary: How a single working session runs - start, end, the heartbeat, and when
 sources:
   - label: CLAUDE.md - Session Start
     href: https://github.com/venturecrane/ss-console/blob/main/CLAUDE.md
-  - label: Team Workflow (global) - Escalation Triggers
-    href: crane_doc('global', 'team-workflow.md')
   - label: Enterprise Rules (CLAUDE.md) - Escalation triggers
     href: https://github.com/venturecrane/ss-console/blob/main/CLAUDE.md
 ---
 
 ## What this page is
+
+This page describes an AI agent's working session, not the administrator's
+operating rhythm; the administrator's rhythm is a separate subject this page
+does not cover.
 
 This is how a working session actually runs, start to finish. The operating model
 (who decides versus who executes) lives in `/admin/playbook/operating-model`; this
@@ -123,9 +125,10 @@ that the wiring fires.
 Reachability is only half the question. The other half is whether the always-on
 tier changes what an agent does, and `MEMORY.md` pre-registers that experiment
 itself: on or after 2026-09-23, check whether any of the traps it lists still
-fired. `.claude/bin/trap-recurrence` is the instrument, and the review is on the
-venture schedule so it surfaces in the `/sos` briefing that morning rather than
-depending on someone remembering.
+fired. `.claude/bin/trap-recurrence` is the instrument. The review is not on the
+venture schedule: `crane_schedule` lists only Code Review and Executive Summary
+Refresh for SS (probed 2026-10-21), so the review happens only when a session
+runs the instrument.
 
 What it counts is the distinction the decision turns on. An ENCOUNTER is the
 trap condition appearing in tool output; a STUMBLE is an encounter where the
@@ -143,16 +146,22 @@ predetermined answer.
 The cadence has hard stops. An agent does not churn on a blocker; it escalates.
 These triggers are enforcement, not suggestion - they come from a post-mortem
 where an agent churned for 10-plus hours on symptoms instead of escalating
-(global `team-workflow.md`, Escalation Triggers; restated in `CLAUDE.md`
-Enterprise Rules):
+(global `team-workflow.md`, Escalation Triggers, fetched with
+`crane_doc('global', 'team-workflow.md')`; restated in `CLAUDE.md` Enterprise
+Rules):
 
 | Condition | Action |
 | --- | --- |
-| Credential not found in 2 minutes | Stop. File an issue. Ask the Captain. Do not guess or hunt. |
+| Credential not found in 2 minutes | Stop. Ask the Captain. Do not guess or hunt. |
 | Same error 3 times (different approaches) | Stop. Escalate: "I've tried X, Y, Z - all failed. Need a different approach." |
 | Network/TLS errors from a container | Stop. "Can't test from this environment." Do not try 12 curl variations. |
 | Wrong repo or venture twice | Stop the session. Investigate why the context is wrong; do not just fix and continue. |
 | Blocked more than 30 minutes on one problem | Time box expired. Escalate or pivot. Activity is not progress. |
+
+Escalating is not filing. Per `CLAUDE.md` (Scope discipline), work found
+mid-task gets done in the session when it is within reach; an issue is filed
+only when the work is blocked on something that does not yet exist or needs a
+decision only the Captain can make.
 
 The escalation format is fixed so the Captain can act on it fast:
 

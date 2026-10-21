@@ -75,5 +75,5 @@ The hard enforcement - the Pattern A / Pattern B no-fabrication policy, the forb
 ## Related pages
 
 - `/admin/playbook/security-trust` - the no-fabrication (Pattern A/B) enforcement that backs these rules in code.
-- `/admin/playbook/business-model` - the firm, the two front doors, and the solution taxonomy this voice describes.
+- `/admin/playbook/business-model` - the firm, the three front doors, and the solution taxonomy this voice describes.
 - `/admin/playbook/pricing-economics` - the internal figures behind the no-published-dollar-amounts rule.

@@ -36,18 +36,28 @@ The Decision Stack is a record of every strategic go-to-market decision, grouped
 
 There is also a venture-wide positioning standard (Decision #20) that sits above the layers and applies to all content without exception: "we / our team" voice, never "I / the consultant." See [Positioning & Voice](/admin/playbook/positioning-voice) for how that standard is enforced.
 
-The cross-layer Operator decisions (Decisions #42-#49) were added later. They map go-to-market decisions onto the Operator architecture and each cite an ADR (0001 through 0009).
+The cross-layer decisions (Decisions #42 through #56) were added later. Decisions #42-#49 map go-to-market decisions onto the Operator architecture and each cite an ADR (0001 through 0009, with #45 citing ADRs 0025 and 0035). Decisions #50-#56 followed as the Operator went into service:
+
+- **#50** Operator launch pricing: a flat monthly retainer plus a one-time stand-up fee, internal and never published (ADR 0063).
+- **#51** Hosted Agent self-serve SKU: a published-price personal agent subscription, the one page-scoped exemption to the no-published-prices rule (ADR 0067).
+- **#52** Repository visibility: `ss-console` and `hermes-smd-overlay` are public, and client material lives in the private `venturecrane/engagements` repo (ADR 0081 revision). It is recorded in the appendix index only, with no body section.
+- **#53** The compliance evidence packet is signed by SMDurgan, LLC rather than a named individual, with its public key at a stable URL on smd.services.
+- **#54** A client on the Microsoft Graph email channel registers two app registrations, a read-only one for the agent and a send-capable one for the broker, each restricted to the Operator mailbox (ADR 0078).
+- **#55** "May the Operator reply to you" and "is firm staff" are separate authored facts, and the content floor, send ceilings and taint gate move together when they change.
+- **#56** The medical chronology package is produced by an SMD-owned runner on the client's own Machine, and that runner's gates, not the agent-turn content gates, are its content control (ADR 0087).
 
 ## How decisions are recorded
 
 A decision becomes canon when the Captain authorizes it. The record then takes one of two shapes:
 
-- **A Decision Stack entry** carries the issue number, the decision in one line, the rationale, the risks accepted, and the date and context of Captain authorization. When superseded, the entry is not deleted - it is marked `SUPERSEDED` with a pointer to what replaced it, and the original text is preserved as the historical record. Decision #2 (revenue gate, superseded by ADR 0003) and Decision #12 (retainer model, superseded by ADR 0004) are the worked examples.
+- **A Decision Stack entry** carries the issue number, the decision in one line, the rationale, the risks accepted, and the date and context of Captain authorization. When superseded, the entry is not deleted - it is marked `SUPERSEDED` with a pointer to what replaced it, and the original text is preserved as the historical record. Decision #2 (revenue gate, superseded by ADR 0003), Decision #12 (retainer model, superseded by ADR 0004) and Decision #43 (Outside View unified diagnostic, superseded 2026-05-04) are the three superseded entries.
 - **A numbered ADR** captures a narrower architectural choice with its own status (`accepted`, `proposed`, `superseded`), date, and related-ADR links. ADRs amend and supersede each other in chains; the ADR Index records those relationships.
 
 Both forms follow the same discipline: the *why* is written down, supersession is explicit rather than silent, and nothing is asserted without the authorization context attached.
 
-> TODO(why): `decision-stack.md` header says "36 active decisions across 6 layers ... 2 superseded," but the body and appendix index together enumerate a different running count once the cross-layer Operator decisions (#42-#49) are included. The exact active/superseded tally is not reconcilable from the document alone; treat the layer structure and the appendix index as authoritative over the header summary number.
+## The count
+
+The source header reads 38 active decisions across 6 layers, numbered through #56, with 3 superseded (#2, #12, #43). That figure counts the decision headings in `docs/adr/decision-stack.md`, and `tests/docs-facts.test.ts` derives it from those headings and fails CI when the header, CLAUDE.md, or `docs/adr/index.md` disagree. Numbers #1, #7, #8, #31-#41 and #52 have no heading section, so they are not in the count.
 
 ## Where to go next
 

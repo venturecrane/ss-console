@@ -25,6 +25,8 @@ This is the inventory of external services the platform touches and what each is
 | **Cloudflare R2** | Object storage in three buckets: `STORAGE` (documents, transcripts, SOWs), `CONSULTANT_PHOTOS` (public consultant images), `CUSTOMER_CONFIG` (`smd-customer-config`, the authoritative live Operator config and voice vaults). | `wrangler.toml`, `[[r2_buckets]]`. |
 | **Cloudflare KV** | Session storage (`SESSIONS`) and booking rate-limit plus the public-assessment turn/cost ceiling (`BOOKING_CACHE`). | `wrangler.toml`, `[[kv_namespaces]]`. |
 | **Fly.io** | The Operator plane. One Machine per customer (`hermes-{slug}`) running Hermes plus the overlay, each with its own D1, R2, and OAuth volume. | CLAUDE.md (Operator Architecture); ADR 0007. See `/admin/playbook/operator-platform`. |
+| **Fly registry app `hermes-fleet`** | Holds the one built image per fleet release; it runs no Machines. `fleet build` pushes there and `fleet release` rolls the image out to the seats. | `operator/bin/lib/fleet/build.py`. See `/admin/playbook/deployment-release`. |
+| **healthchecks.io** | Per-customer liveness checks; a check whose grace period expires posts to the console's webhook, authenticated by a shared bearer token. Decommissioning a seat cancels its check. | `src/pages/api/webhooks/healthchecks.ts`; `operator/bin/lib/decommission.py`; ADR 0023. |
 
 ## Identity and auth
 
@@ -37,6 +39,8 @@ This is the inventory of external services the platform touches and what each is
 | Service | Used for | Grounded in |
 |---|---|---|
 | **Anthropic (Claude)** | The LLM behind the live assessment and assessment extraction (`src/lib/claude/*`). The Operator plane also runs on Claude via the per-Machine Anthropic key. | `ANTHROPIC_API_KEY` in `wrangler.toml` secrets; `src/lib/claude/*`, `src/lib/llm/models.ts`. Default to the latest, most capable Claude models. |
+| **Groq** | Speech-to-text for voice notes on Operator seats, through Hermes' Groq Whisper provider; one shared SMD key across the seats that use it. | `GROQ_API_KEY` in `operator/bin/lib/secret_custody.py`. |
+| **Brave Search** | Web search for a seat that authors a `WebSearch` connector, as the native Hermes provider `native:brave-free` on Brave's free tier; the Hosted Agent template enables it. | ADR 0070; `docs/specs/operator/customer-yaml-schema.md`. |
 | **ElevenLabs** | Voice. Used by the public assessment voice flow (`@elevenlabs/client`) and in the Operator explainer video pipeline. | `@elevenlabs/client` in `package.json`; `src/lib/claude/assessment-llm.ts`, `src/scripts/assessment-voice.ts`. |
 
 ## Billing, documents, and email
@@ -55,6 +59,13 @@ This is the inventory of external services the platform touches and what each is
 | **Google Calendar OAuth** | The booking system (the Calendly replacement): availability and event creation. | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `BOOKING_ENCRYPTION_KEY` in `wrangler.toml`; `src/lib/booking/google-calendar.ts`. |
 | **Google Workspace (managed mailbox)** | On the Operator plane, the operator manages a principal's mailbox via per-operation domain-wide-delegation, with the workspace broker as the authorization boundary. OAuth tokens live on the customer's Machine volume, not the console. | `operator/workspace_broker/`; ADR 0010. See `/admin/playbook/connectors-channels`. |
 
+## Client systems the Operator connects to
+
+| Service | Used for | Grounded in |
+|---|---|---|
+| **Smokeball** | Practice-management connector for law-firm seats (matters and their documents), through SMD's own connector with a Machine-hosted OAuth callback (ADR 0054). | `operator/connectors/smokeball/`. See `/admin/playbook/connectors-channels`. |
+| **Microsoft Graph** | The Microsoft 365 email channel for a client on Exchange, registered as two apps in the client's own tenant: read-only for the agent, send-capable for the broker (Decision #54, ADR 0078). | `operator/connectors/msgraph-mail/`. See `/admin/playbook/connectors-channels`. |
+
 ## Lead-generation data providers (retired)
 
 The automated lead-gen pipelines that called external data sources (Google Places, Outscraper, SerpAPI, Proxycurl) were retired root-and-branch on 2026-07-01 (PRs #1610/#1616): the Workers, the `NEW_BUSINESS_WORKER_URL`-style env URLs, the `LEAD_INGEST_API_KEY` ingest path, and the admin Generators surface are all gone. Some provider API keys (`GOOGLE_PLACES_API_KEY`, `OUTSCRAPER_API_KEY`, `SERPAPI_API_KEY`) may still linger in the Infisical vault and on the Worker; they are now unused. Current lead generation is hand-personalized outreach from the Captain's mailbox (ADR 0059), not an ingestion pipeline.
@@ -64,8 +75,8 @@ The automated lead-gen pipelines that called external data sources (Google Place
 | Service | Used for | Grounded in |
 |---|---|---|
 | **AgentMail** | The Operator's own inbound email channel account (allow-list gated). SMD holds one AgentMail account. | `AGENTMAIL_API_KEY` / `WEBHOOK_SECRET_AGENTMAIL`; `operator/` config. |
-| **Infisical** | The secrets vault of record. Secrets are exported from Infisical (`/ss` path) and bulk-loaded into Workers secrets and per-Machine Fly secrets. | CLAUDE.md (Deployment, Secrets); `wrangler.toml` secret-load note. See `/admin/playbook/secrets-access`. |
-| **crane MCP** | The enterprise context and control layer used by agents building and operating this repo (session context, docs, verify, memory). Not part of the web request path. | CLAUDE.md (Session Start). |
+| **Infisical** | The secrets vault of record (`/ss` path). Values are pushed from it into Workers secrets and per-Machine Fly secrets by the rotation procedure. | CLAUDE.md (Secrets). See `/admin/playbook/secrets-access`. |
+| **crane (venturecrane toolkit)** | The enterprise context and control layer used by agents building and operating this repo (session context, docs, verify, memory). Not part of the web request path, but more than session tooling: the required merge gate `runtime-ac-proof.yml` resolves every cited `vfy_` id against crane-context's verify ledger, and the ops machine clones crane-console and runs the crane MCP. | CLAUDE.md (Session Start); `.github/workflows/runtime-ac-proof.yml`; `operator/ops-machine/bin/ops-bootstrap`. |
 | **GitHub** | Source of record (`venturecrane/ss-console`) and CI. All work ships through PRs; never push to main. | CLAUDE.md (Enterprise Rules); `.github/`. See `/admin/playbook/deployment-release`. |
 | **Sentry** | Error monitoring, wired Worker-side. The integration is a no-op when `SENTRY_DSN` is unset. | `@sentry/cloudflare` in `package.json`; `src/lib/observability/sentry.ts`; `SENTRY_DSN` in `wrangler.toml`. |
 

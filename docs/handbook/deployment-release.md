@@ -63,25 +63,24 @@ The deploy steps run in this order, and the order matters:
    Migrations apply before the code that depends on them and must be
    backward-compatible with the currently deployed app.
 4. **Deploy to Cloudflare Workers** (`wrangler deploy`) - the main `ss-web` Worker.
-5. **Deploy the sub-workers** - cost-anomaly and cost-telemetry - each from its
-   own directory. (Between the root deploy and the sub-worker deploys the
-   pipeline removes `.wrangler/`, because the root deploy writes a deploy-config
-   file that makes the sub-workers' `wrangler deploy` ambiguous.) These two
-   Operator-cost workers are all that remain under `workers/`; the lead-gen
-   pipelines were retired 2026-07-01 (PRs #1610/#1616).
+5. **Deploy the sub-workers** - cost-anomaly, cost-telemetry, and fleet-alerts
+   (the `ss-fleet-alerts` pager) - each from its own directory
+   (`.github/workflows/deploy.yml`). (Between the root deploy and the sub-worker
+   deploys the pipeline removes `.wrangler/`, because the root deploy writes a
+   deploy-config file that makes the sub-workers' `wrangler deploy` ambiguous.)
+   These three are all that remain under `workers/`; the lead-gen pipelines
+   were retired 2026-07-01 (PRs #1610/#1616).
 
 **Secrets.** On Workers, secrets persist across `wrangler deploy` runs - unlike
 the Pages era, there is no post-deploy sync step and no risk of a deploy wiping
-dashboard-set secrets. Rotate them out of band from Infisical:
-
-```bash
-infisical export --env=prod --path=/ss --format=dotenv \
-  | grep -vE '^(APP_|ADMIN_|PORTAL_|MEETING_|PUBLIC_)' \
-  | npx wrangler secret bulk
-```
-
-The `grep -vE` exclusion list strips the plain-config `[vars]` (the `*_BASE_URL`
-values and the like) so only real secrets are pushed.
+dashboard-set secrets. Rotation goes through the procedure on
+[Secrets & Access](/admin/playbook/secrets-access): update the one value in
+Infisical, verify it works, push it to the runtime store, and confirm the running
+service picked it up. Do not pipe a bulk export of the whole Infisical path into
+`wrangler secret bulk`, the pattern older comments in `wrangler.toml` and
+`.github/workflows/deploy.yml` still show: the export carries every key under
+`/ss`, so a key already retired from the Worker but still present in Infisical
+is set on the Worker again.
 
 **Env vars.** The three base-URL vars are plain `[vars]` in `wrangler.toml`:
 `APP_BASE_URL` (`https://smd.services`, used by marketing and SignWell webhooks),
@@ -144,7 +143,10 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
    with the label `rel-<ss-console sha8>-<overlay sha8>-<utc minute>`, records
    the release in D1 `fleet_releases`, and uploads the image's own
    `image-manifest.json`, `image-capabilities.json` and required-env list (read
-   out of the pushed image with `crane`) plus the lane-input schema digests to
+   out of the pushed image over the registry's HTTP API by `ImageExtractor` in
+   `operator/bin/lib/fleet/build.py`; it deliberately does not shell out to
+   go-containerregistry's `crane` image tool, because on SMD laptops the name
+   `crane` is the venturecrane session launcher) plus the lane-input schema digests to
    R2 `fleet/images/<digest>/`. The apt, npm, uv and Hermes layers are cached
    across releases (the overlay and commit build-args are declared just before
    their first use), so an overlay-only release rebuilds only the tail. It

@@ -16,7 +16,7 @@ sources:
 
 ## What the consulting engagement is
 
-The consulting engagement is one of SMD's two front doors. It is a scope-based, bounded piece of work: we sit down with a business owner, understand where they are trying to go, design a solution, build it, train their team, and hand it off. One engagement, one scope, one price. It is not a retainer and not a subscription. The other front door is the [Operator](/admin/playbook/operator-thesis), a productized monthly offering; this page is about the consulting product only.
+The consulting engagement is one of SMD's three front doors. It is a scope-based, bounded piece of work: we sit down with a business owner, understand where they are trying to go, design a solution, build it, train their team, and hand it off. One engagement, one scope, one price. It is not a retainer and not a subscription. The other front door is the [Operator](/admin/playbook/operator-thesis), a productized monthly offering; this page is about the consulting product only.
 
 The shape of the buyer is an owner-led business that has outgrown how it runs today: too big for one person to hold in their head, too small to justify a full-time COO, with real operational load and the ability to pay for a solution. There is no revenue-band qualification gate (the old "$750k-$5M" band was retired per ADR 0003). Qualification happens in conversation, not by filtering on a guessed revenue figure.
 
@@ -69,10 +69,11 @@ The engagement is governed by a proposal/SOW that states scope, price, payment t
 - **Payment structure follows engagement size**, from a two-part deposit-and-handoff split on smaller engagements to a three-milestone structure on larger ones. The thresholds and percentages are owned by [Pricing & Economics](/admin/playbook/pricing-economics) (Decision #14).
 - **Two-week stabilization is included**, not an open-ended support promise. Work beyond the original scope goes through a separate conversation - a follow-on scope, or conversion to an Operator subscription if the fit is right.
 
+The window is two weeks by decision ([Decision #27](https://github.com/venturecrane/ss-console/blob/main/docs/adr/decision-stack.md)): async through a dedicated email thread, a 24-hour business-day response, covering questions about what we built, minor configuration fixes under 30 minutes, and one additional team-member walkthrough. The SOW template treats two weeks as the default and lets it be adjusted per engagement; the signed SOW is the binding term.
+
 The proposal carries specific timeframes and dollar amounts because it is a signed contract, the product of the assessment conversation, not marketing copy. Public-facing content never carries fixed timeframes or dollar amounts.
 
 ## How this maps onto the system
 
 The product motion described here is operated through the admin and client surfaces. A prospect moves through entity stages, an assessment call is captured as a meeting, solution design produces a quote/SOW, signing transitions the engagement into delivery, and billing/portal handle the money and client-facing view. That end-to-end walk-through - and which surface owns each step - is the [Customer Lifecycle](/admin/playbook/customer-lifecycle).
 
-> TODO(why): The two-week stabilization window is stated as included (Decision #27) and appears in the SOW template's post-handoff-support section, but the SOW template frames it as a default that is adjusted per engagement ("Default is two weeks, but adjust based on scope and complexity"). I could not locate the Decision #27 text itself to confirm whether two weeks is a fixed floor or a starting default. Looked in docs/collateral/proposal-sow-template.md and CLAUDE.md; the decision-stack file (docs/adr/decision-stack.md) was not read in full.

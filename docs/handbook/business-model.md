@@ -24,11 +24,13 @@ The buyer is the owner of an established, owner-led business with real operation
 
 The firm has three acquisition paths into the same firm-level identity (ADR 0004, locks 1 and 2; ADR 0067):
 
-1. **Scope-based consulting engagements.** The primary path. The prospect arrives without a fixed solution in mind; we surface their objectives through an assessment conversation, design a solution, and quote a fixed project price. This is the funnel locked in Decisions #16 and #18.
+1. **Scope-based consulting engagements.** The firm's front door: the home page leads every visitor to the assessment conversation (`src/pages/index.astro` header, "One door: the assessment"). The prospect arrives without a fixed solution in mind; we surface their objectives through an assessment conversation, design a solution, and quote a fixed project price. This is the funnel locked in Decisions #16 and #18.
 2. **The Operator SKU.** A productized flat-rate monthly retainer ([ADR 0004](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0004-productized-operator-offering.md)). The entry point for prospects who already know they want an agent and have done their own diagnosis. See `/admin/playbook/operator-thesis` for what the Operator is.
 3. **The Hosted Agent SKU.** A self-serve monthly subscription for an always-on personal Hermes agent on the Operator substrate ([ADR 0067](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0067-hosted-agent-self-serve-sku.md), Decision #51). The only SKU with published pricing and a buy CTA (page-scoped exemption to the positioning locks); checkout is self-serve, provisioning is concierge. It targets a different buyer (the individual who wants an agent and will not run a server) and doubles as the entry rung of the hosted-to-Operator ladder.
 
-Three front doors, one firm. The firm-level voice and solutions-consulting positioning are unchanged across all of them; the Operator and the Hosted Agent are productized outcomes we deliver, not the firm itself (ADR 0004, positioning guardrails). The old "$200-500/mo undefined post-delivery retainer" (Decision #12) is superseded by the Operator SKU.
+Three front doors, one firm. The firm-level voice and solutions-consulting positioning are unchanged across all of them; the Operator and the Hosted Agent are productized outcomes we deliver, not the firm itself (ADR 0004, positioning guardrails). The old undefined post-delivery retainer (Decision #12) is superseded by the Operator SKU.
+
+The Operator is the flagship: the home page is built flagship-forward around it (`src/pages/index.astro`), and as of 2026-10-21 the venture's one paying client is an Operator client (the law-firm seat in `operator/customers/`). The Hosted Agent also packages predefined jobs as **roles** (a role is a hosted-agent job with its own persona, skills, routines and privacy model, selected per seat; [ADR 0090](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0090-hosted-agent-roles.md)); the first role is `couples` (`operator/roles/`). What each client is owed is in the [obligation register](/admin/playbook/obligation-register); client-specific commercial detail lives in the private `venturecrane/engagements` repository, never in this public handbook.
 
 ## The three-layer problem framework
 
@@ -56,7 +58,7 @@ No dollar ranges are attached to solution categories. Pricing comes from scope e
 
 ### A note on the two taxonomies
 
-The six-category list above is the **delivery taxonomy** and is the marketing and doctrinal source of truth ([ADR 0001](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0001-taxonomy-two-layer-model.md)). Lead-generation code uses a separate five-category **observation taxonomy** (`process_design`, `tool_systems`, `data_visibility`, `customer_pipeline`, `team_operations`, defined in `src/portal/assessments/extraction-schema.ts`). The two layers are deliberately distinct: outreach speaks observation, marketing speaks delivery, and the assessment call is where the consultant translates between them. Do not silently change one when editing the other.
+The six-category list above is the **delivery taxonomy** and is the marketing and doctrinal source of truth ([ADR 0001](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0001-taxonomy-two-layer-model.md)). A separate five-category schema (`process_design`, `tool_systems`, `data_visibility`, `customer_pipeline`, `team_operations`, defined in `src/portal/assessments/extraction-schema.ts`) is the **client-assessment extraction taxonomy**: it structures what an assessment call captures. It began as the lead-generation observation taxonomy; that use was retired with the automated lead-gen machine ([ADR 0060](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0060-retire-automated-lead-gen-machine.md)). The two layers are deliberately distinct: assessments speak the extraction taxonomy internally, marketing speaks delivery, and the consultant translates between them. Do not silently change one when editing the other.
 
 ## The engagement phases
 
@@ -84,7 +86,7 @@ These suggest where to lead the conversation, not which problems to look for (CL
 | Contractor / trades | Estimating/quoting + scheduling + employee retention |
 | Restaurant / food service | Team communication + inventory + financial visibility |
 
-The launch verticals are home services and professional services, with contractor/trades added third (Decision #3). Any business with qualifying problem signals is eligible regardless of vertical; vertical expertise deepens with case studies, not by pre-selection.
+The consulting launch verticals were set as home services and professional services, with contractor/trades third (Decision #3). In practice the Operator went to market law-first ([ADR 0040](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0040-operator-positioning-and-why-us.md)), and its first client is a personal-injury law firm. Any business with qualifying problem signals is eligible regardless of vertical; vertical expertise deepens with case studies, not by pre-selection.
 
 ## Related pages
 

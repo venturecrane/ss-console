@@ -42,7 +42,7 @@ The Pack Production Operating Model defines a pack as five concrete artifacts, a
 | 4 | **GTM surface** (landing page + intake hook) | `src/pages/packs/<slug>.astro` + allow-lists |
 | 5 | **Delivery SOP** (honed per client) | `docs/templates/delivery-sops/` + spec notes |
 
-The vertical-specific skill **bodies** are not in this list - they live in the `venturecrane/hermes-smd-overlay` repo. The manifest in `operator/verticals/<slug>/` only declares their identifiers; the bodies are the first hand-off a pack triggers. See `/admin/playbook/operator-platform` for the overlay boundary.
+The vertical-specific skill **bodies** are not in this list. They live in this repo under `operator/skills/<skill>/SKILL.md` (72 skill directories today), not in the overlay, and are baked into the fleet image; the vertical's `operator/verticals/<slug>/vertical.yaml` declares which of them the pack uses. See `/admin/playbook/operator-platform` for the overlay boundary.
 
 ## The shared spine
 
@@ -50,7 +50,7 @@ A pack is the shared spine plus a vertical skin. Generic connective skills alrea
 
 ## The documented verticals
 
-Thirteen verticals are specified under `docs/specs/verticals/` (plus a `_template`). Law (personal-injury) is the one built end-to-end and the worked reference every later pack is skinned from.
+Twelve verticals are specified under `docs/specs/verticals/` (plus a `_template`), each with a matching `operator/verticals/<slug>/` directory. Law (personal-injury) is the one built end-to-end and the worked reference every later pack is skinned from.
 
 - `accounting`
 - `dental`
@@ -65,9 +65,9 @@ Thirteen verticals are specified under `docs/specs/verticals/` (plus a `_templat
 - `title`
 - `veterinary`
 
-A documented spec is a brief, not a shipped pack. A pack page goes live only when the pack behind it can actually be delivered - per the operating model, "a page goes live when the pack behind it can be delivered."
+A documented spec is a brief, not a shipped pack. The operating model's rule is that "a page goes live when the pack behind it can be delivered."
 
-> TODO(why): which of the thirteen specs beyond `law-firm` have status past `draft` (a shipped technical pack + GTM surface) is not reconstructable from the spec directory alone - the law-firm spec itself is marked `status: draft`. The roadmap (sequence: Law done, then Tier-A insurance and veterinary, then demand-pull) is in the operating model, but live-vs-spec'd state needs a check against `operator/verticals/` manifests and `src/pages/packs/`. Checked: docs/pm/pack-production-operating-model.md §Sequence; docs/specs/verticals/ frontmatter.
+Current state, checked against the repo: all twelve pack pages are published (`src/pages/packs/<slug>.astro` exists for every vertical above), and only the law-firm pack has a live seat (`vertical: law-firm` is the only vertical any `operator/customers/*/customer.yaml` names; the other seats are `vertical: mixed`). The published pages therefore run ahead of the rule as written, and the rule is under review.
 
 ## How a pack is built (the motion, proven on Law)
 
@@ -79,16 +79,16 @@ From the operating model:
 4. Clone `src/pages/packs/law-firm.astro`, reskin the copy (compete-with-a-hire, the seat, the connective tasks, stays-in-its-lane), and add `interest=<slug>` to the intake allow-lists and to `landing-page.test.ts`.
 5. Note the delivery specifics against the generic SOP.
 6. Verify: `npx vitest run tests/forbidden-strings.test.ts tests/landing-page.test.ts` and `npm run typecheck`.
-7. The vertical skill bodies and any `build:` adapter become the overlay hand-off.
+7. Author the vertical skill bodies in `operator/skills/`. Any connector the pack needs is an author-built MCP server in `operator/connectors/<name>/` (ADR 0053); its tools must also be classified in the overlay's `shared/action_classes.py`, which is the overlay hand-off (see `/admin/playbook/connectors-channels`).
 
 ## The repo boundary and the hand-off
 
 Two repos build a pack:
 
-- **ss-console (this repo):** the five artifacts minus skill bodies - manifest, registry edit, marketing surface plus intake allow-list, vertical spec, N=0 fixtures, delivery SOP notes.
-- **hermes-smd-overlay:** the vertical-specific skill bodies and any `build:` connector adapter. This is the first hand-off a pack triggers, and a predecessor to a live customer (not to authoring the pack or its marketing).
+- **ss-console (this repo):** the five artifacts plus the skill bodies - manifest, registry edit, marketing surface plus intake allow-list, vertical spec, N=0 fixtures, delivery SOP notes, the skills in `operator/skills/`, and any author-built connector in `operator/connectors/`.
+- **hermes-smd-overlay:** the action-class classification of any new connector tool (`shared/action_classes.py`), and any new runtime hook a pack genuinely needs. This is the hand-off a pack can trigger, and a predecessor to a live customer (not to authoring the pack or its marketing).
 
-Each pack is handed to an agent team with the target-landscape entry, the spec template, the Law pack as the worked reference, and the hand-off prompt. The team returns one ss-console PR and one overlay PR.
+Each pack is handed to an agent team with the target-landscape entry, the spec template, the Law pack as the worked reference, and the hand-off prompt. The team returns one ss-console PR, plus an overlay PR when the pack adds connector tools.
 
 **The collision warning is real:** parallel teams must not edit the shared allow-list files (`book.astro`, `api/intake/send.ts`, `types.ts`, `landing-page.test.ts`) at the same time, or they collide. Serialize those edits or assign one integrator. See `/admin/playbook/operating-model` for how the fleet coordinates parallel work.
 

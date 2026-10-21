@@ -16,6 +16,12 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0011-multi-persona-per-customer.md
   - label: ADR 0019 - customer.yaml to profile translation
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0019-customer-yaml-to-profile-config-translation.md
+  - label: ADR 0009 - Cross-machine query prohibition
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0009-cross-machine-query-prohibition.md
+  - label: ADR 0044 - R2-authoritative live reconfig
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0044-r2-authoritative-live-reconfig.md
+  - label: ADR 0062 - Operator cost plane
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0062-operator-cost-plane.md
   - label: ADR 0083 - Authorship model and output classes (format amendment 2026-08-19)
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0083-authorship-model-output-classes.md
 ---
@@ -28,13 +34,13 @@ Three principles govern all Operator work. They are not aspirational; they decid
 
 1. **Hermes is the substrate. Trust it.** Skills, memory, the tool registry, the plugin hook surface, MCP integration, and approval machinery are native and not reinvented. Teknium's (the Nous Research lead) May 2026 hard rule applies: plugins MUST NOT modify Hermes core files (per ADR 0015, citing upstream `AGENTS.md`).
 2. **Build only what Hermes won't.** Sample-driven voice transformation, compliance-grade audit emission, content-class trust ceilings, configurable send-posture routing, curated vertical skill catalogs, and the customer-facing business surface are what we build on top of Hermes. None are on its roadmap.
-3. **Mirror, don't gate.** Where Hermes' learning loop creates state, the overlay captures a parallel record in per-customer D1 with provenance, so the Captain can inspect and reverse it. No approval queue stands between the agent and its work; safety is enforced by authored entitlement ceilings (see `/admin/playbook/autonomy-governance`), not by an interposed gate.
+3. **Mirror, don't gate.** Where Hermes' learning loop creates state, the overlay captures a parallel record with provenance in Machine-local SQLite on the seat's own Fly volume (ADR 0062 records that the per-customer D1 originally named here was never built), so the Captain can inspect and reverse it. No approval queue stands between the agent and its work; safety is enforced by authored entitlement ceilings (see `/admin/playbook/autonomy-governance`), not by an interposed gate.
 
 ## The fork posture: pin, don't patch
 
-SMD does not maintain a modified Hermes. Per ADR 0015 (the plugin-only half, which stands; the fork half was superseded by ADR 0024), SMD pins Hermes at a specific upstream tag and SHA and runs it byte-for-byte. All SMD-specific code lives in a separate, open-source, MIT-licensed repo: **`venturecrane/hermes-smd-overlay`**.
+SMD does not maintain a modified Hermes. Per ADR 0015 (the plugin-only half, which stands; the fork half was superseded by ADR 0024), SMD pins Hermes at a specific upstream tag and SHA and runs it byte-for-byte. The pin lives once, as `ARG HERMES_UPSTREAM_TAG` / `HERMES_UPSTREAM_SHA` in `operator/templates/Dockerfile`, and every seat runs the shared fleet image built from it; the per-seat `hermes_ref` field was retired from `customer.yaml` in #3332 and the validator now rejects it. All SMD-specific code lives in a separate, open-source, MIT-licensed repo: **`venturecrane/hermes-smd-overlay`**.
 
-Why this matters: Hermes ships at high velocity (ADR 0015 cites 459+ PRs per week and 13 minor releases in 10 weeks). A hard fork would impose prohibitive maintenance cost on a single-Captain venture. By keeping all our code in the overlay and never touching core, a Hermes upgrade becomes a tag-bump exercise rather than a code-merge exercise, and our rebase cost approaches zero. The overlay ships as a small set of narrow Hermes plugins (audit, trust, voice, memory-mirror) plus a `shared/` support package and a `bootstrap/` CLI, each registered against Hermes' documented lifecycle hooks (`pre_tool_call`, `pre_llm_call`, `transform_tool_result`, `on_session_start`, `on_session_end`, `pre_gateway_dispatch`, and others).
+Why this matters: Hermes ships at high velocity (ADR 0015 cites 459+ PRs per week and 13 minor releases in 10 weeks). A hard fork would impose prohibitive maintenance cost on a single-Captain venture. By keeping all our code in the overlay and never touching core, a Hermes upgrade becomes a tag-bump exercise rather than a code-merge exercise, and our rebase cost approaches zero. The overlay ships as a set of narrow Hermes plugins (28 under `plugins/` on the overlay's main branch, among them audit, trust, voice, memory-mirror, peer-memory, corrections, inbound, drafting, and record-store) plus a `shared/` support package, a `bootstrap/` CLI, and the root-owned `config_applier/`. Each plugin registers against Hermes' documented lifecycle hooks (`pre_tool_call`, `pre_llm_call`, `transform_tool_result`, `on_session_start`, `on_session_end`, `pre_gateway_dispatch`, and others).
 
 The proprietary value is deliberately not in the hook code. It is in the SMD backend: the audit database, voice training, the admin console, and customer onboarding. Open-sourcing the overlay costs us nothing and signals craft (ADR 0015).
 
@@ -46,11 +52,11 @@ This is a deliberate trade against the standard SaaS pattern. For an Operator wo
 
 Each customer's Machine carries:
 
-- Dedicated D1, R2, and Vectorize bindings, all namespaced to the customer (`hermes-{slug}-d1`, `hermes-{slug}-r2`, etc.).
-- A pinned content-hash SHA of the Hermes runtime - updates do not propagate without an explicit Captain re-pin.
-- Its own audit log, memory artifact, and dashboard.
+- Its own Fly volume at `/opt/data`, which holds the seat's state as Machine-local SQLite (the broker-owned audit ledger at `/opt/data/audit/audit.db`, the agent-state database) plus OAuth tokens and profile homes. The per-customer D1 and Vectorize bindings (`hermes-{slug}-d1` and so on) in the original design were never built: no provisioning code creates them and none exist in the account (`operator/migrations/README.md`; ADR 0062).
+- A per-customer R2 bucket for agent-authored skill bodies, `ss-operator-{slug}-skills`, created by `operator/bin/provision-customer.sh`. Its `customer.yaml` lives in the shared `smd-customer-config` bucket under a per-slug key, and the nightly audit export goes to the shared, object-locked `smd-audit-archive` bucket under `audit/<slug>/` (`operator/bin/audit-chain-watch.py`).
+- The shared fleet image, so a Hermes upgrade reaches every seat through one Dockerfile pin rather than a per-seat re-pin.
 
-A **boot-time invariant** enforces this: at Machine boot, the runtime verifies its storage bindings include only its own customer's namespaces and refuses to start if it detects a binding outside its namespace (safety invariant #7; spec in `safety-invariants.md`). The accepted cost is that operational complexity scales linearly with customer count - the control plane must provision, monitor, update, and decommission one Machine per customer, and each Machine carries a baseline cost even when idle (ADR 0007).
+A **boot-time invariant** enforces this: as the last root gate before the privilege drop, `operator/templates/entrypoint.sh` runs `operator/safety_substrate/invariants/invariant_7.py`, which checks that the skill-bodies bucket, the config bucket, and the on-volume SQLite paths all resolve to this seat's own slug and volume, and exits 3 (refusing to boot) on a violation or if the module is missing (safety invariant #7; ADR 0009, wired 2026-07-13 under SEC-22). The accepted cost is that operational complexity scales linearly with customer count - the control plane must provision, monitor, update, and decommission one Machine per customer, and each Machine carries a baseline cost even when idle (ADR 0007).
 
 ## OAuth tokens live on the customer's volume
 
@@ -68,7 +74,7 @@ v1 ships at `personas[]` length 1; the validator enforces this until a v2 unlock
 
 The bridge between the SMD product surface and the Hermes runtime is a translation step. SMD authors a `customer.yaml` (storage and authoring covered in `/admin/playbook/knowledge-memory`), which speaks the product's vocabulary - customer, persona, connector, entitlement. Hermes speaks a different vocabulary - profile, model, MCP server, personality file. The `hermes-smd bootstrap` CLI in the overlay performs that translation at Machine startup (ADR 0019).
 
-For each persona, bootstrap creates the profile directory, writes `SOUL.md` (identity, tone, escalation rules) and `config.yaml` (model pin, memory config, MCP server bindings from `connectors{}`, the four overlay plugins enabled with their per-plugin config), and symlinks the enabled skills into the profile. The translation is deterministic (same input produces byte-identical output) and idempotent (re-running it changes nothing). A `customer-sync` sidecar polls R2 for config changes; non-structural changes (escalation contacts, entitlement edits such as persona exposure and skill initiation, scope edits) reload without a restart, while structural changes (adding a persona, swapping a connector backend) are logged for a Captain re-provision so that OAuth tokens on the volume are never disturbed (ADR 0019).
+For each persona, bootstrap creates the profile directory, writes `SOUL.md` (identity, tone, escalation rules) and `config.yaml` (model pin, memory config, MCP server bindings from `connectors{}`, the overlay plugins enabled with their per-plugin config), and symlinks the enabled skills into the profile. The translation is deterministic (same input produces byte-identical output) and idempotent (re-running it changes nothing). After boot, changes reach the running seat through the overlay's root-owned `config_applier`: a merged `customer.yaml` is published to R2 by the deploy workflow (`.github/workflows/deploy.yml`), and the applier polls that object every 15 seconds by default, validates it, and applies only fields on its live-writable allow-list (entitlement ceilings and similar), with no reboot (ADR 0044; overlay `config_applier/__main__.py`). Rebuild-class fields are rejected on the live path and take effect at the next boot or re-provision, so OAuth tokens on the volume are never disturbed (ADR 0019). The `customer-sync` sidecar the original design named is a Phase-2 stub (`operator/bin/sync-customer-yaml.sh`).
 
 ## Documents come back in the firm's format, and the format lives in Word
 

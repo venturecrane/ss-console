@@ -19,6 +19,8 @@ The exit path was unwritten while every other lifecycle stage was built: decommi
 
 ### 1. Voluntary cancellation
 
+> **Amended 2026-08-29 (Captain): termination is asymmetric.** See the amendment at the end of this ADR. The paragraph below is the original 2026-07-04 decision and no longer describes the client's notice period.
+
 **30 days written notice, effective at the end of the then-current billing cycle.** The retainer is otherwise month to month (ADR 0063 sets the launch price; this sets the exit). Pause is available as an alternative to cancellation: billing collection is paused (cycle invoices void — a paused seat is never charged), audit access remains, and a pause running past 60 days triggers a conversation about whether this is actually an offboarding.
 
 ### 2. Dunning ladder (payment failure)
@@ -52,3 +54,11 @@ Every step is a **human action by Captain — never a webhook side effect**. The
 - The DPA template's §4.1 and §7 blanks are filled with the standard terms (30 days each); per-engagement overrides remain possible at signing.
 - A dry run of the full sequence against the staging seat is the verification step before the first paid customer's contract carries these terms (tracked on #1684's thread).
 - Service-contract language derives from this ADR; nothing here publishes externally beyond what smd.services/security already states as mechanism.
+
+## Amendment 2026-08-29 (Captain): termination is asymmetric
+
+The client-side notice period in §1 is removed. A client cancels in the portal, or by letter with the same effect, with **no notice period**; the cancellation takes effect at the end of the month the client has already paid for. SMD's own termination still carries **30 days** notice to the client.
+
+Why: a 30-day client-side clock could only be collected by invoicing a departing firm for a month past its last paid day, and it contradicted Stripe's cancel-at-period-end behavior. The change was priced before it was made and bought a true no-lock-in term for every later client.
+
+The service agreement template carries the amended terms (`venturecrane/engagements`, agreement §9.1(a)/(b), §9.3(e), §14.4; engagements PR #97). The dunning ladder (§2), the offboarding sequence (§3), and the 30-day return-and-destruction and sub-processor windows are unchanged.

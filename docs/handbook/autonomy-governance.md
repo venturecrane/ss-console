@@ -8,6 +8,10 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0025-autonomy-ceilings-configurable-exposure-vs-initiation.md
   - label: ADR 0056 - Persona exposure + skill initiation entitlements
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0056-persona-exposure-skill-initiation-entitlements.md
+  - label: ADR 0071 - The confirm ceiling
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0071-confirm-ceiling-and-hosted-agent-tier-ladder.md
+  - label: ADR 0093 - Seat policy profiles
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0093-seat-policy-profiles.md
   - label: ADR 0037 - The Operator Thesis
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0037-operator-thesis.md
   - label: Trust-ceiling decision logging (spec)
@@ -31,7 +35,7 @@ These are orthogonal, and separating them is what lets a customer express the mo
 
 Every tool call the agent makes is classified by its blast radius into an **action class** (`trust_ceiling.py`): `READ`, `INTERNAL_WRITE`, `EXTERNAL_SEND`, `COMMITMENT`, `DESTRUCTIVE`, and `CODE_EXECUTION`. The Operator previously mixed authorization concepts across scalar per-skill ceilings, per-skill action overrides, scope-level ceilings, and mailbox-level overrides; that made exposure and initiation look like one setting and was not enforceable enough for a flag-day runtime contract. **ADR 0056** (accepted 2026-06-26, deployed fleet-wide) replaced all of it with one entitlement model in `customer.yaml`:
 
-- **Exposure is persona-level.** Each persona carries a sparse `entitlements.exposure` map from action class to a ceiling value: `autonomous` (executes), `draft_for_review` (writes for human review and notifies), or `refused` (blocks and logs the attempt). Missing action classes fail closed at runtime and render as unconfigured in the UI. `read` is deliberately not customer-authored; the enforcement layer always allows reads.
+- **Exposure is persona-level.** Each persona carries a sparse `entitlements.exposure` map from action class to a ceiling value: `autonomous` (executes), `confirm` (the agent prepares the action and performs it only after explicit approval in the current turn; ADR 0071), `draft_for_review` (writes for human review and notifies; the agent never performs the act itself), or `refused` (blocks and logs the attempt). Restrictiveness runs `autonomous` < `confirm` < `draft_for_review` < `refused`, so a vertical floor of `draft_for_review` narrows an authored `confirm`, never the reverse (ADR 0071). Missing action classes fail closed at runtime and render as unconfigured in the UI. `read` is deliberately not customer-authored; the enforcement layer always allows reads.
 - **Initiation is skill-level.** Every enabled skill declares `initiation.manual`, `initiation.scheduled`, and `initiation.webhook`. A cron entry requires `scheduled: true`, a webhook trigger requires `webhook: true`, and manual or on-demand surfaces require `manual: true`.
 
 A persona can be `autonomous` for `internal_write` and `draft_for_review` for `external_send` in the same breath. `COMMITMENT` and `DESTRUCTIVE` carry current-turn approval floors that remain hard runtime floors regardless of authored exposure - they are never autonomous without current-turn approval - and those floors are a different concern from exposure (ADR 0025; ADR 0056).
@@ -78,6 +82,14 @@ The trust gate's `enforce()` returns an allow / draft / refuse decision per tool
 
 This is what makes the governance legible rather than opaque: a human employee's judgment is a black box, but the Operator's every gated decision is a row a human can read, aggregate, and act on.
 
-Two spec caveats the handbook should carry honestly. Several of these enforcement seams are specified and unit-tested in the safety_substrate but are marked **TARGET STATE - not yet wired** into the live Hermes dispatch path: citation enforcement (`enforce_citations`), the `verify_storage_bindings` boot check, and the `log_decision` dispatch integration each note that the function exists and is tested but is not yet called from production dispatch (safety-invariants spec; trust-ceiling-logging spec). The contracts are settled; the wiring into the Hermes runtime surface is tracked separately. The live, deployed controls are the `pre_tool_call` trust gate, the inbound fence, and the taint gate.
+The specs mark several seams **TARGET STATE - not yet wired**; the code has since moved for two of them, so the current status per seam is:
 
-> TODO(why): The safety-invariants and trust-ceiling-logging specs mark several seams "TARGET STATE - not yet wired," but I could not confirm from the docs alone the current wired-vs-unwired status on the live customer-zero Machine as of this writing. The Operator security audit memory and threat model suggest the trust gate, inbound fence, and taint gate are live, but a precise per-seam current status would need a runtime check against the deployed overlay ref. Confirm before citing any specific seam as "live in production."
+- **Decision logging is live.** The overlay's `plugins/hermes-smd-trust/enforce.py` hands every decision's action class, authored ceiling, vertical floor, effective ceiling, decision, and reason to `shared.trust_decision`, so the audit row each tool call produces carries them (#2122). It is wired inside the trust plugin rather than through the spec's standalone `log_decision` wrapper, which nothing in the overlay calls.
+- **The storage-binding boot check is live.** `operator/templates/entrypoint.sh` runs `operator/safety_substrate/invariants/invariant_7.py` as the last root gate before the privilege drop and refuses boot (exit 3) on a foreign-slug binding or a missing module (ADR 0009, wired 2026-07-13 under SEC-22). The spec's "not yet wired" banner predates that.
+- **Citation enforcement (`enforce_citations`) is not wired.** Nothing in the overlay calls it.
+
+The other live, deployed controls are the `pre_tool_call` trust gate, the inbound fence, and the taint gate.
+
+## Seat policy profiles loosen outbound gates by role, with a cited reason
+
+The overlay's outbound gates (the identifier gate and the output checklist) were written with law-firm assumptions. Per ADR 0093, identifier floors (SSN, case number and similar) live in code and block on every seat; a role in `operator/roles/<role>/role.yaml` may carry a `policy:` block that loosens a narrow knob, and any loosening must name its rationale and an ADR (`tests/role-policy.test.ts`). Every seat's resulting posture is projected into a seat-by-gate matrix (`tests/policy-matrix.test.ts`) that the overlay checks, so a loosening cannot merge without a reviewed line saying which seat now passes what. Seats with no role resolve to the strict platform default.

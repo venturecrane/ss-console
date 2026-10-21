@@ -20,13 +20,23 @@ Machine health has always paged within minutes: a seat that stops reporting, a c
 
 ## What arrives, and when
 
+> **Changed 2026-10-16 (Captain).** The `work-health` workflow now runs with
+> `--pages-only` (`.github/workflows/work-health.yml`): it still sends the urgent
+> ACTION pages below, but it no longer emails the hourly digest or the daily all-clear.
+> The hourly evaluation is worked instead by the triage agent on `smd-ops`, which emails
+> one report, subject `[SMD Ops] Triage: <handled> handled, <need you> need you`
+> (`operator/ops-machine/TRIAGE.md`; see [The Ops Machine](/admin/playbook/ops-machine)).
+> If that report stops arriving, the healthchecks.io check `smd-ops-triage` pages. The
+> digest format described below is what the evaluation produces and what the triage agent
+> reads.
+
 **Since 2026-10-16 the list is worked before anyone reads it.** The triage agent on the ops machine ([The Ops Machine](/admin/playbook/ops-machine)) runs this evaluation hourly at :47 and emails team@ one report: handled, needs you, fixes to approve. The GitHub Actions run below no longer sends the list; it still sends the ACTION pages (a dead sign-in), so those arrive even if the ops machine is down. If the triage job stops running, the healthchecks.io check `smd-ops-triage` emails after 90 minutes of silence. What follows describes the evaluation both runs share.
 
 - **Hourly, only when something on a client seat needs attention.** Subject: `[SMD Ops] Work health: N need attention (M new)`. The first line says the same in a sentence; then each client seat (A&P first) with its items.
 - **NEW** lines carry a "To do". Items already reported in an earlier email are one line each with their age, "(open 2d)", so an unchanged problem never re-sends at full volume. Times are Phoenix time, marked MST.
 - **One line per problem, never per occurrence.** A send refused every few seconds for a day is one line with the attempt count, first and last time. Repeats of one routine or one tool are one line with a count. A job that failed is one line, not one per signal about it.
 - **Test seats are a count, not a list.** Seats whose `customer.yaml` says `seat.kind` is not `customer` (pilot-smokeball, smd-staging, scott) are counted on one "Test seats, not listed" line. A seat that could not be read, or a missed work-health run, is listed wherever it happens, because it usually means a pipeline every seat shares is broken. An hour with only test-seat items sends nothing; they ride on the daily all-clear.
-- **Once a day**, on the first run at or after 15:00Z (08:00 Phoenix), a run with nothing listed still sends `[SMD Ops] Work health: all clear`. If neither email arrives in a day, the check itself is broken: look at the `work-health` workflow runs.
+- **Once a day**, on the first run at or after 15:00Z (08:00 Phoenix), a run with nothing listed still sends `[SMD Ops] Work health: all clear`. (Not sent since 2026-10-16; see the note above. A silent triage agent is caught by the `smd-ops-triage` healthchecks.io check.)
 - **Open work only.** A refusal or failure followed by delivered work is history: it is counted on one "Answered by later work" line, never listed. A job that delivered while its lane flagged something of its own (a held offer on negotiation) is not "undelivered"; the lane's own alert covers the flag.
 - **A seat that could not be read is an item**, never silence. "Could not read this seat's work ledger" means nothing about that seat is known.
 - **ACTION pages.** A dead sign-in (Smokeball's token endpoint explicitly REFUSING the seat's token, SMD's mailbox sign-in check failing, a connection failing repeatedly) also gets its OWN email, subject `ACTION: <seat> Smokeball sign-in is dead` (or `mailbox sign-in is dead`), on every run while it stays dead. A Smokeball token that was renewed but not saved on the seat pages the same way, subject `ACTION: <seat> Smokeball sign-in dies at the next restart`: sign-in works until the seat restarts, then fails. The hourly Smokeball check is the only detector of a dead Smokeball token: the connector-health ledger never sees the scheduled jobs' Smokeball calls (PR #3144). A Smokeball seat whose hourly check is not scheduled, or a check that could not run (its own fault, never "dead"), is an ACTION line in the digest, not a page.
@@ -60,6 +70,6 @@ The seat's ledgers have no cancel state. When a held or failed job needs no reru
 
 ## Changing it
 
-- **The interval** is the `cron:` line of `.github/workflows/work-health.yml` and nothing else.
+- **The interval** of the page backstop is the `cron:` line of `.github/workflows/work-health.yml`. The hourly report's schedule is the triage agent's on `smd-ops` (`operator/ops-machine/`).
 - **Lane limits, windows and the all-clear hour** are in `operator/contracts/work-health.yaml`.
 - **The Smokeball sign-in check** runs on a seat when its `customer.yaml` authors a `connector-auth-check` cron row with `pre_run: pre_run.py`; it takes effect at that seat's next rebuild.

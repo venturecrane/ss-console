@@ -28,16 +28,34 @@ stop and escalate.
 
 ## Existing runbooks
 
-The written runbooks today are Operator-focused and live in `docs/runbooks/operator/`:
+The written runbooks live in `docs/runbooks/` in two subtrees: `operator/` (23 files plus
+an `incidents/` folder of incident notes) and `hosted-agent/` (2 files). Each runbook's
+first heading states its job; grouped by when you would reach for it:
 
-| Runbook | Covers |
-|---|---|
-| `first-boot.md` | Standing up a new Operator Machine for the first time |
-| `curator-supervised-consolidation.md` | Safely consolidating an Operator's skill inventory |
-| `ms-graph-azure-ad-setup.md` | Microsoft Graph / Azure AD OAuth setup for document storage |
-| `hermes-v0.18-upgrade-plan.md` | The first deliberate Hermes fleet promotion (v0.14.0 to v0.18.0, July 2026): hook-surface diff, staged rollout, bless, release-watch |
-| `hermes-v0.20-upgrade-plan.md` | The second promotion (v0.18.0 to v0.20.4, August 2026): the staged procedure to repeat at every pin bump, including the defaults-diff step and the rollback rehearsal |
-| `hermes-v0.21-upgrade-plan.md` | The third promotion (v0.20.4 to v0.21.3, September 2026): the loop-watchdog budget the 09-01 incident asked for, and the mcp 2.x tool-error defect the pilot's first live routine exposed |
+| When | Runbook (`docs/runbooks/...`) | Covers |
+|---|---|---|
+| Standing up a client | `operator/implementation-playbook.md` | The end-to-end method for taking a client from signed to live |
+| | `operator/first-boot.md` | Standing up a client's Operator Machine for the first time |
+| | `operator/keyless-build-handoff.md` | Building a seat without client keys, injecting them at handoff |
+| | `operator/ms-graph-azure-ad-setup.md` | Microsoft Graph app registration for a client's Microsoft tenant |
+| | `operator/voice-distillation.md` | Distilling a firm's voice for its Operator |
+| | `hosted-agent/concierge.md`, `hosted-agent/couples-setup.md` | Standing up a Hosted Agent seat, and the couples role |
+| Changing what a seat does | `operator/routine-lifecycle.md` | Defining, changing, adding and retiring a routine |
+| | `operator/enable-gate-checklist.md` | The checks before a routine is promoted to a higher level |
+| | `operator/lane-proof.md` | A firm asked for a kind of job its seat has never done |
+| | `operator/curator-supervised-consolidation.md` | Consolidating a seat's skill inventory safely |
+| SMD acting through a seat | `operator/smd-note.md`, `operator/staged-send.md` | Having the Operator tell a colleague something; sending SMD's exact words and files from the seat |
+| | `operator/ops-close-by-smd.md`, `operator/medchron-deliver-by-smd.md` | Closing a request SMD already answered; recording a chronology SMD filed by hand |
+| Something is wrong | `operator/sticky-stop-clear.md` | Seeing, investigating and resuming a stopped seat |
+| | `operator/msgraph-dead-letter.md` | Microsoft Graph dead letters: what pages, how to replay |
+| | `operator/hold-ledger-remediation.md` | Releasing held work that never resumed |
+| | `operator/agentmail-vendor-ask-deliverability.md` | Email deliverability controls the AgentMail vendor holds |
+| Upgrades and rehearsal | `operator/hermes-v0.18-upgrade-plan.md`, `hermes-v0.20-upgrade-plan.md`, `hermes-v0.21-upgrade-plan.md` | The staged Hermes runtime upgrades, including the defaults diff and rollback rehearsal to repeat at every bump |
+| | `operator/shadow-firm.md` | The standing adversarial rehearsal against a fake firm |
+| | `operator/cost-telemetry-enable.md` | Turning on the cost telemetry pipeline |
+
+Incident notes go in `docs/runbooks/operator/incidents/` (see
+[Incident Response](/admin/playbook/incident-response)).
 
 ## Known failure modes and recovery
 
@@ -75,20 +93,24 @@ Keys created Fly-only (written to a Machine env but never persisted to Infisical
 ### Bad deploy
 
 The web app deploys as a single Cloudflare Worker; a bad release is rolled forward with a
-corrected PR through the normal deploy pipeline. The Operator rolls back by pinning the
-prior overlay reference and reprovisioning.
+corrected PR through the normal deploy pipeline. An Operator release goes out through
+`fleet release` ring by ring, and a seat that fails its boot smoke test or heartbeat
+read-back is rolled back automatically to its recorded image and config, and the rollout
+halts (see [Deployment & Release](/admin/playbook/deployment-release)).
 
-> TODO(why): There is no written rollback runbook (web or Operator) in `docs/runbooks/`
-> yet, and no documented backup/restore procedure for the D1 database. These are real gaps
-> for a zero-context successor and should be authored. Recovery today relies on the deploy
-> pipeline (roll-forward) and overlay-ref pinning (Operator), described in
-> [Deployment & Release](/admin/playbook/deployment-release).
+> TODO(why): There is still no written rollback runbook for the web Worker and no
+> documented backup and restore procedure for the D1 database. These are real gaps for a
+> successor and should be authored. Recovery for the web app today relies on roll-forward
+> through the deploy pipeline.
 
 ## Authorization note
 
-Reprovisioning a live Operator Machine is destructive to its current state and **requires
-explicit Captain authorization in the moment** - it is never run on an agent's own
-initiative.
+Operational actions on live seats (reprovisioning after a merged change, key rotation,
+secret sets, Machine restarts) are agent work: the agent does them when they are right for
+the venture, reads the result back, and reports what changed (Captain correction,
+2026-09-11, replacing the earlier "wait for authorization" rule). Two limits hold: a
+Captain "not now" on a specific action stands until lifted, and a question such as "can you
+run that?" is a question, not a go.
 
 ## Related
 

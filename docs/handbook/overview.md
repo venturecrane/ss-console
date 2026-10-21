@@ -60,8 +60,8 @@ memory, never a single feature.
 
 The Captain decides; the fleet executes. The Captain owns scope, pricing, client
 acceptance, escalation resolution, go/kill calls, and platform direction. AI agents handle
-throughput: client communication within authored autonomy ceilings, assessment
-interviews, analysis and deliverable drafting, fleet health monitoring, and platform
+throughput: client communication within authored autonomy ceilings, analysis and
+deliverable drafting, fleet health monitoring, and platform
 maintenance through pull requests. A newcomer stepping into this system inherits a running
 operation, not a blank slate.
 

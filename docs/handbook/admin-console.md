@@ -12,6 +12,10 @@ sources:
     href: https://github.com/venturecrane/ss-console/tree/main/src/pages/api/admin
   - label: src/pages/admin/operator/ (Operator fleet)
     href: https://github.com/venturecrane/ss-console/tree/main/src/pages/admin/operator
+  - label: ADR 0077 - Admin portal mirrors the client portal
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0077-admin-portal-mirrors-client-portal.md
+  - label: src/lib/admin/nav.ts (the five-destination spine)
+    href: https://github.com/venturecrane/ss-console/blob/main/src/lib/admin/nav.ts
 ---
 
 ## What the admin console is
@@ -22,20 +26,17 @@ The console renders server-side with no client charting library and minimal clie
 
 ## Top navigation
 
-The information architecture is flow-ordered (acquire, serve, deliver, get paid, run, measure), per ADR 0046. The nine nav items are defined in `src/layouts/AdminLayout.astro` (`navItems`):
+The navigation is a fixed five-destination spine (ADR 0077, 2026-07-14, which superseded the flow-ordered nav of ADR 0046): the admin console mirrors the client portal's object graph from the guide's side. The destinations are defined in `src/lib/admin/nav.ts` (`buildAdminNav`) and rendered by `src/components/admin/AdminNav.astro`:
 
 | Section | Route | What it does |
 |---|---|---|
-| **Home** | `/admin` | The launchpad. Action-first: what needs you today, the two revenue shapes, then the three motion cards. |
-| **Leads** | `/admin/entities` | The lead working view - every business across its lifecycle, tabbed by stage. |
-| **Clients** | `/admin/clients` | The post-acceptance account directory: entities past the acceptance line. |
-| **Services** | `/admin/services` | The global, cross-client delivery list - every in-flight service, risk-sorted. |
+| **Home** | `/admin` | The cockpit. Action-first: what needs you today, the two revenue shapes, then the three motion cards. |
+| **Clients** | `/admin/clients` | The account directory; delivery, operators, and billing drill in per client. |
+| **Fleet** | `/admin/operator` | Running products across all clients: the Operator fleet cockpit and per-customer drill-ins. |
 | **Billing** | `/admin/billing` | The bi-modal money surface (ADR 0046): one-time invoices and the recurring Operator line. |
-| **Operator** | `/admin/operator` | The Operator fleet cockpit - roster and per-customer drill-ins. |
 | **Playbook** | `/admin/playbook` | This handbook. |
-| **Settings** | `/admin/settings` | The configuration hub: follow-ups and Google connect. |
 
-`assessments` and `engagements` also live under `src/pages/admin/` and are reached from within the flow (a lead's meeting, a client's engagement) rather than from a dedicated top-nav tab.
+**Settings** (`/admin/settings`) is an account affordance, an icon in the header, not a spine destination. **Leads** (`/admin/entities`), **Services** (`/admin/services`), **Hosted Agent** (`/admin/hosted-agent`), `assessments`, `engagements`, and `follow-ups` also live under `src/pages/admin/` and are reached from within the flow (a home card, a client, a lead's meeting) rather than from a top-nav tab.
 
 ## Home: the launchpad
 
@@ -118,7 +119,7 @@ These three surfaces watch the post-acceptance business.
 - **Roster** (`operator/index.astro`) - the default landing, one row per operator, built for scanning a growing fleet: is anything on fire across all my operators. It composes three console-side projections only (customer identity and posture, the runtime-summary mirror, and heartbeat) and never reads a Machine's runtime D1 directly or joins two customers (ADR 0009). The heartbeat also carries the Machine's cost-breaker level (ADR 0062): a HARD_STOP turns the seat's dot red with a note naming what stopped it, and recovery is a Captain clear, never automatic. Since 2026-09-02 that ladder is two states, OK and HARD_STOP; the yellow SOFT_STOP dot is kept only so a seat still running a pre-collapse overlay renders correctly until it is reprovisioned.
 - **Alerts** (`operator/alerts.astro`) - fleet alerts.
 - **Requests** (`operator/requests.astro`) - the change-request inbox: client-originated config-change requests awaiting Captain action. These are the requests raised by the client-facing console's Read-and-Request surfaces.
-- **Provision** (`operator/provision.astro`) - author and validate a `customer.yaml`, then record provisioning intent.
+- **Provision** (`operator/provision.astro`) - pick a vertical, author the `customer.yaml` essentials, and validate them (the shared validator plus the secret-exclusion scan). On a clean validation it emits the validated `customer.yaml` for the operator to drop into `operator/customers/<slug>/customer.yaml` before running `operator/bin/reprovision.sh <slug>`, and it logs each attempt to `operator_provisioning_intent`. It never commits to the repo or stands up a Machine: a Worker cannot write to the repo or call Fly (ADR 0012 §2).
 - **Costs** (`operator/costs/index.astro` and `operator/costs/[customer_slug].astro`) - the SMD-only economics surface, fleet summary and per-customer drill-down. Cost is deliberately not a roster column.
 - **Config history** (`operator/config-history/[customer_slug].astro`) - the per-customer `customer.yaml` materialization history, every applied version with its digest.
 
@@ -136,7 +137,12 @@ Each operator drills into `src/pages/admin/operator/[customer]/*`:
 | **People** | `people.astro` | Who at the client can reach and configure the operator. |
 | **Memory** | `memory.astro` | The relationship surface (ADR 0048): what the operator has learned about working with the client, read-only and fail-closed. See `/admin/playbook/knowledge-memory`. |
 | **Lifecycle** | `lifecycle.astro` | Provisioning, reprovision, and decommission state. |
+| **Chronology** | `chronology.astro` | The seat's medical-chronology packages this month (routine 11): counts, states, pages, cents, and the delivery folder, read live over the runtime-read seam (kind `medchron_jobs`), audited, fail-closed, never a document or page of text. |
 | **Runtime** | `runtime.astro` | Live runtime detail (audit log, drafts, activity) pulled across the read seam one customer at a time (ADR 0043 path A). |
+
+### Hosted Agent queue (`/admin/hosted-agent`)
+
+The concierge queue for the self-serve Hosted Agent (ADR 0067): one card per purchase, copy-paste-ready for authoring `customer.yaml` from `operator/customers/_hosted-template/`. Two actions live on each card: **assign slug** (names the seat and its Fly app and unlocks the customer's key form) and **activate** (marks the subscription active and the intake live and sends the authored go-live email). Activate runs after `reprovision.sh` and the boot smoke test pass; the button does not provision.
 
 All per-customer runtime detail comes through the read seam in `src/lib/operator/runtime-read.ts`: single customer per call, read-only, audited, fail-closed. The console observes a running operator; it governs what the operator may do through the authored config it writes, not by querying or mutating the Machine live. The architecture behind these surfaces is at `/admin/playbook/operator-platform` and `/admin/playbook/architecture-map`.
 
