@@ -71,6 +71,34 @@ def addresses(raw: Any) -> list[str]:
     return [a.lower() for a in _ADDR.findall(str(raw or ""))]
 
 
+#: An Exchange-internal (X500) address, ``/O=EXCHANGELABS/OU=.../CN=...``. It has
+#: no domain, so ``addresses`` finds nothing in it.
+_X500 = re.compile(r"/o=[^<>;,]*", re.I)
+INTERNAL_ADDRESS = "internal Exchange address"
+
+
+def party_text(raw: Any) -> str:
+    """A From/To/Cc value as a person reading the email sees it: display names
+    kept, an X500 address named as internal. For the TEXT a model reads only;
+    the wall decides on ``addresses``, never on this.
+
+    WHY (2026-10-21): the email head rendered only the SMTP addresses the regex
+    found, so every display name was dropped and a sender stored as an X500
+    address became a blank ``From:``. The ``.eml`` reader always rendered the
+    full header. The negotiation review's first check is who sent the email to
+    whom; on A&P it held seven ``.msg`` offers on that check in one run and
+    passed four of them on a re-read of the same text."""
+    return " ".join(_X500.sub(INTERNAL_ADDRESS, str(raw or "")).split())[:500]
+
+
+def head_parties(msg: dict[str, Any]) -> tuple[str, str]:
+    """(From, To) for an email's text head: the displayed parties, or the bare
+    addresses for a message read without them."""
+    sender = str(msg.get("from_display") or msg.get("sender") or "")
+    to = str(msg.get("to_display") or ", ".join(msg.get("recipients") or []))
+    return sender, to
+
+
 def wall_reason(
     sender: str,
     recipients: list[str],
@@ -264,6 +292,8 @@ def _read_msg(path: Path, encoding: str | None) -> dict[str, Any]:
             "subject": str(m.subject or "")[:200],
             "sender": (addresses(m.sender) or [""])[0],
             "recipients": addresses(m.to) + addresses(m.cc) + addresses(getattr(m, "bcc", "")),
+            "from_display": party_text(m.sender),
+            "to_display": "; ".join(p for p in map(party_text, (m.to, m.cc, getattr(m, "bcc", ""))) if p),
             "date": str(m.date or ""),
             "body": str(m.body or ""),
             "attachments": atts,
@@ -276,10 +306,11 @@ def _read_msg(path: Path, encoding: str | None) -> dict[str, Any]:
 
 
 def _email_text(row: dict[str, Any], msg: dict[str, Any]) -> str:
+    sender, to = head_parties(msg)
     head = [
         f"Email: {msg['subject'] or row.get('name')}",
-        f"From: {msg['sender']}",
-        f"To: {', '.join(msg['recipients'])}",
+        f"From: {sender}",
+        f"To: {to}",
         f"Date: {msg['date']}",
         "",
     ]
