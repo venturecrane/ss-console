@@ -193,11 +193,31 @@ describe('notifyShortfalls', () => {
     expect(db.prepare('SELECT COUNT(*) AS n FROM operator_shortfalls').get()).toEqual({ n: 0 })
   })
 
-  it('names lost audit writes so an undercount is visible', async () => {
+  it('names audit writes lost inside the window so an undercount is visible', async () => {
     const { env } = setup()
     const mock = stubResend()
-    await notifyShortfalls(env, [row([ev()], { audit_write_failures: 90 })], NOW)
-    expect(sent(mock)[0].html).toContain('90 lost audit write(s)')
+    const r = row([ev()], {
+      audit_write_failures: 90,
+      audit_write_failures_rose_at: '2026-10-05 14:00:00',
+    })
+    await notifyShortfalls(env, [r], NOW)
+    expect(sent(mock)[0].html).toContain('lost audit write(s) in the last 24 hours')
+    expect(sent(mock)[0].html).toContain('90 in its life')
+  })
+
+  it('does not present an old lifetime loss count as doubt about today', async () => {
+    // 2026-10-21: every ashton-price shortfall carried "22 lost audit write(s)"
+    // though no row had been lost since 10-20.
+    for (const rose of ['2026-10-03 09:00:00', null]) {
+      const { env } = setup()
+      const mock = stubResend()
+      await notifyShortfalls(
+        env,
+        [row([ev()], { audit_write_failures: 22, audit_write_failures_rose_at: rose })],
+        NOW
+      )
+      expect(sent(mock)[0].html).not.toContain('lost audit write')
+    }
   })
 
   it('escapes seat-supplied text', async () => {
