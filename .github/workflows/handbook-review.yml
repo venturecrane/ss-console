@@ -1,0 +1,104 @@
+# Which handbook pages need a person to read them again.
+#
+# WHY (handbook assessment, 2026-10-21). The Playbook is graded against a new
+# administrator who runs SMD from it. Its pages went stale silently: the old
+# drift radar compared commit times, was wired into nothing, and any edit to a
+# page reset its clock. scripts/handbook-review.ts keys on `last_reviewed`,
+# which only a deliberate check against a page's sources sets, and reports
+# pages whose sources changed after that review, pages past their review
+# window, and the never-reviewed backlog.
+#
+# WEEKLY, NOT DAILY: pages are reviewed at human cadence; a daily run buys
+# nothing a Monday read does not. The administrator's Monday routine reads this
+# issue (docs/handbook/administrators-week.md).
+#
+# ONE ROLLING ISSUE, found by a constant series marker and rewritten in place;
+# closed when nothing is due, reopened when something is. Never fails the run:
+# a page needing review is work, not a broken build.
+
+name: handbook-review
+
+on:
+  schedule:
+    # Monday 14:29 UTC (07:29 Phoenix), ahead of the 15:11 refusal digest.
+    - cron: '29 14 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  packages: read
+
+concurrency:
+  group: handbook-review
+  cancel-in-progress: false
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Every source's last commit date is the input; a shallow clone dates
+          # everything to today and reports every reviewed page as stale.
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@venturecrane'
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm ci
+
+      - name: Build the report
+        id: report
+        run: |
+          set -o pipefail
+          STATUS=0
+          npx tsx scripts/handbook-review.ts --strict > report.md || STATUS=$?
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          # 0 = nothing due, 1 = pages due; anything else is the script failing.
+          if [ "$STATUS" -gt 1 ]; then echo "handbook-review.ts failed ($STATUS)"; exit "$STATUS"; fi
+          echo "due=$([ "$STATUS" -eq 1 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the rolling issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DUE: ${{ steps.report.outputs.due }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          SERIES='handbook-review'
+          EXISTING="$(gh issue list --repo "$REPO" --state all --limit 200 \
+                       --search "\"review-series: ${SERIES}\" in:body" \
+                       --json number,state --jq 'sort_by(.number) | last | "\(.number) \(.state)"' || true)"
+          NUM="${EXISTING%% *}"; STATE="${EXISTING##* }"
+          {
+            echo "The weekly handbook review found pages that need a person to read them again."
+            echo "Read each page against its cited sources, fix what disagrees, and set \`last_reviewed\` to that day."
+            echo
+            cat report.md
+            echo
+            echo "Series key, do not edit: \`review-series: ${SERIES}\`"
+            echo "Last run: ${RUN_URL}"
+          } > body.md
+          if [ "$DUE" = "true" ]; then
+            if [ -n "$NUM" ]; then
+              [ "$STATE" = "CLOSED" ] && gh issue reopen "$NUM" --repo "$REPO"
+              gh issue edit "$NUM" --repo "$REPO" --body-file body.md
+            else
+              gh issue create --repo "$REPO" --title "Handbook: pages due for review (rolling)" \
+                --label "prio:P2" --label "type:docs" --body-file body.md
+            fi
+          elif [ -n "$NUM" ] && [ "$STATE" = "OPEN" ]; then
+            gh issue comment "$NUM" --repo "$REPO" --body "Nothing due this week. ${RUN_URL}"
+            gh issue close "$NUM" --repo "$REPO"
+          fi

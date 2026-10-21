@@ -31,9 +31,16 @@ function houseStyle(text: string): string {
   return text.replace(/\s+\u2014\s+/g, ' - ').replace(/\u2014/g, '-')
 }
 
-/** Relative ADR links in the index resolve from docs/adr/, not from the playbook. */
+/**
+ * Relative links in the index resolve from docs/adr/, not from the playbook, so
+ * every one (`./0012-x.md`, `../operator/y.md`, a bare `0012-x.md`) is resolved
+ * against docs/adr/ and rewritten to GitHub. Absolute URLs, site paths and
+ * anchors are left alone.
+ */
 function absoluteLinks(text: string): string {
-  return text.replace(/\]\(\.\/([^)]+)\)/g, (_m, target: string) => `](${BLOB}${target})`)
+  return text.replace(/\]\((?![a-z][a-z0-9+.-]*:|\/|#)([^)\s]+)\)/gi, (_m, target: string) => {
+    return `](${new URL(target, BLOB).href})`
+  })
 }
 
 /** A table cell cannot carry a raw pipe. */

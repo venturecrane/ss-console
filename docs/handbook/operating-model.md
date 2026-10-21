@@ -7,8 +7,6 @@ review_every: 180
 status: Rewrite pending
 summary: Who decides and who executes - the Captain, the fleet of agents, and the system they run
 sources:
-  - label: Operating Ethos (global instruction module)
-    href: crane_doc('global', 'operating-ethos.md')
   - label: ADR 0035 - No imposed entitlement defaults (authored ceilings)
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0035-no-imposed-entitlement-defaults.md
   - label: ADR 0030 - Control plane / human-principal surface
