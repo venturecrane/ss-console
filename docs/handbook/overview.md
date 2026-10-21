@@ -70,7 +70,8 @@ operation, not a blank slate.
 
 ## Where to go next
 
+- [Start Here](/admin/playbook/start-here) - the reading path for a new administrator, and what you should be able to do by day 30.
 - [Business Model](/admin/playbook/business-model) - the offerings, the problem framework, the engagement phases.
 - [The Operator Thesis](/admin/playbook/operator-thesis) - what the product is and why it wins.
-- [Operating Model & the Fleet](/admin/playbook/operating-model) - how the Captain and the agents divide the work.
-- [Architecture Map](/admin/playbook/architecture-map) - the whole technical stack, end to end.
+- [Who Does What](/admin/playbook/who-does-what) - every position, human and AI, and every point where a person must approve.
+- [Architecture Map](/admin/playbook/architecture-map) - the technical stack, for when an agent's report sends you there.

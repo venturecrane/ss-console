@@ -23,7 +23,7 @@ Every client the Operator serves runs on its own **seat**: an isolated machine w
 
 ## The seats
 
-The table below is generated from the seat folders in the repository, so it cannot fall out of date without the build failing. It shows what each seat is. It deliberately does not show who pays or on what terms; that is commercial detail and lives in the private engagements repository (below).
+The table below is generated from the seat folders in the repository, so it cannot fall out of date without the build failing. It shows what each seat is. It deliberately does not show who pays or on what terms; that is commercial detail and lives in the private engagements repository (see [Handoff Companion](/admin/playbook/handoff-companion)).
 
 <!-- BEGIN GENERATED: seat roster. Regenerate with `npm run handbook:roster -- --write`; tests/handbook-integrity.test.ts fails while it is stale. -->
 
@@ -83,4 +83,4 @@ Every piece of work SMD owes a client is a row in the obligation register (see [
 
 ## Where the commercial detail is
 
-Agreements, proposals, correspondence and each client's dossier live in the private `venturecrane/engagements` repository under `operator/customers/<slug>/`, the same folder name as the seat. Pricing records live there under `pricing/`. This public handbook names the client and the seat, never the terms. Access to that repository is granted by the Captain.
+Agreements, proposals, correspondence and each client's dossier live in the private `venturecrane/engagements` repository under `operator/customers/<slug>/`, the same folder name as the seat. Pricing records live there under `pricing/`. This public handbook names the client and the seat, never the terms. See [Handoff Companion](/admin/playbook/handoff-companion) for how to get access.
