@@ -4,15 +4,19 @@
  * still name `<slug>`.
  *
  * WHY THIS EXISTS. `operator/bin/decommission-customer.sh` removes a seat from
- * every runtime layer it can reach, but it does not commit, so the repo-layer
- * entries are edits a person has to make: the release ring
- * (`operator/fleet/rings.yaml`), the Fly app allow-list
- * (`src/lib/operator/fly-app-registry.ts`) and the ops workspace registry
- * (`operator/ops-machine/workspaces.json`). The live run prints each edit
- * (`decommission_inventory.repo_edits`), and a printed instruction is exactly
- * the kind of thing that gets lost between the run and the PR. This test is
- * the half that cannot be forgotten: the PR that commits the tombstone fails
- * until the three files are clean.
+ * every runtime layer it can reach, but it does not commit, so the repo layer
+ * is left to a person: the tombstone rename, then `npm run gen:seat-registries`
+ * (the release rings and the Fly app allow-list are GENERATED from each seat's
+ * `seat.yaml` since #3400, so renaming the dir takes the seat out of the
+ * inventory and the generator takes it out of both files), and by hand the
+ * ops workspace registry (`operator/ops-machine/workspaces.json`). The live run
+ * prints each step (`decommission_inventory.repo_edits`), and a printed
+ * instruction is exactly the kind of thing that gets lost between the run and
+ * the PR. `tests/seat-inventory.test.ts` already fails while a generated file is
+ * stale; this test adds the hand-kept workspace list and names the retired slug
+ * and the fix in one message, so the PR that commits the tombstone fails until
+ * all three are clean. Which dirs are live seats comes from the inventory
+ * loader (`scripts/lib/seat-inventory.ts`), the one rule.
  *
  * Each entry it catches is a real hazard, not tidiness. A registry entry
  * keeps `hermes-<slug>` targetable (ADR 0036's cross-tenant concern), and a
@@ -28,12 +32,15 @@
 
 import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import {
   REGISTERED_CUSTOMER_FLY_APPS,
   UNPROVISIONED_CUSTOMERS,
 } from '../src/lib/operator/fly-app-registry'
+import { seatSlugs } from '../scripts/lib/seat-inventory'
+
+const REGEN = 'run `npm run gen:seat-registries` after the tombstone rename'
 
 const CUSTOMERS_DIR = resolve('operator/customers')
 const RINGS_FILE = resolve('operator/fleet/rings.yaml')
@@ -69,12 +76,12 @@ function residue(
     (sources.workspaces as { workspaces?: Record<string, unknown> } | null)?.workspaces ?? {}
   const found: string[] = []
   for (const slug of retired) {
-    if (ringSeats.has(slug)) found.push(`operator/fleet/rings.yaml: ${slug}`)
+    if (ringSeats.has(slug)) found.push(`operator/fleet/rings.yaml: ${slug} (${REGEN})`)
     if (slug in sources.registry)
-      found.push(`src/lib/operator/fly-app-registry.ts CUSTOMER_FLY_APPS: ${slug}`)
+      found.push(`fly-app-registry.generated.ts CUSTOMER_FLY_APPS: ${slug} (${REGEN})`)
     if (slug in sources.unprovisioned)
-      found.push(`src/lib/operator/fly-app-registry.ts UNPROVISIONED_CUSTOMERS: ${slug}`)
-    if (slug in ws) found.push(`operator/ops-machine/workspaces.json: ${slug}`)
+      found.push(`fly-app-registry.generated.ts UNPROVISIONED_CUSTOMERS: ${slug} (${REGEN})`)
+    if (slug in ws) found.push(`operator/ops-machine/workspaces.json: ${slug} (remove the entry)`)
   }
   return found
 }
@@ -83,12 +90,7 @@ function realInputs() {
   const entries = existsSync(CUSTOMERS_DIR)
     ? readdirSync(CUSTOMERS_DIR, { withFileTypes: true }).filter((d) => d.isDirectory())
     : []
-  const live = new Set(
-    entries
-      .map((d) => d.name)
-      .filter((n) => !n.includes('.decommissioned.') && !n.startsWith('_'))
-      .filter((n) => existsSync(join(CUSTOMERS_DIR, n, 'customer.yaml')))
-  )
+  const live = new Set(seatSlugs(CUSTOMERS_DIR))
   return {
     dirNames: entries.map((d) => d.name),
     live,
@@ -110,7 +112,7 @@ describe('decommissioned seat: repo-layer residue', () => {
     expect(
       found,
       `A decommissioned seat is still named in an authored allow-list:\n  ${found.join('\n  ')}\n\n` +
-        `Remove each entry in the same PR that commits the tombstone. The live decommission ` +
+        `Fix each in the same PR that commits the tombstone. The live decommission ` +
         `printed these as "[residue] repo edit owed" lines (operator/bin/lib/decommission_inventory.py).`
     ).toEqual([])
   })
@@ -137,9 +139,9 @@ describe('decommissioned seat guard: proven to bite', () => {
     )
     expect(retired).toEqual(['acme'])
     expect(residue(retired, sources)).toEqual([
-      'operator/fleet/rings.yaml: acme',
-      'src/lib/operator/fly-app-registry.ts CUSTOMER_FLY_APPS: acme',
-      'operator/ops-machine/workspaces.json: acme',
+      `operator/fleet/rings.yaml: acme (${REGEN})`,
+      `fly-app-registry.generated.ts CUSTOMER_FLY_APPS: acme (${REGEN})`,
+      'operator/ops-machine/workspaces.json: acme (remove the entry)',
     ])
   })
 

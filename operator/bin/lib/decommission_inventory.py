@@ -18,6 +18,10 @@ resource is in exactly one of three states here:
   object-locked audit archive, Fly volume snapshots, the vault);
 * **a repo edit** the script cannot make (it does not commit), printed as the
   exact change and pinned by ``tests/decommissioned-seat-residue.test.ts``.
+  Since #3400 the release rings and the Fly app registry are generated from
+  the seat's own ``seat.yaml``, so for those two the edit is the tombstone
+  rename plus ``npm run gen:seat-registries``; ``workspaces.json`` is still
+  hand-kept.
 
 ``operator/bin/tests/test_decommission_inventory.py`` builds the console D1
 schema from ``migrations/`` and fails when a slug-keyed table is in none of
@@ -218,8 +222,14 @@ def infisical_names(slug: str, env: Mapping[str, str]) -> dict:
 # ---------------------------------------------------------------------------
 
 RINGS_FILE = "operator/fleet/rings.yaml"
-FLY_REGISTRY_FILE = "src/lib/operator/fly-app-registry.ts"
+FLY_REGISTRY_FILE = "src/lib/operator/fly-app-registry.generated.ts"
 OPS_WORKSPACES_FILE = "operator/ops-machine/workspaces.json"
+#: rings.yaml and the Fly app registry are GENERATED from each seat's
+#: operator/customers/<slug>/seat.yaml (scripts/lib/seat-inventory.ts, PR
+#: #3400). The tombstone rename takes the seat out of the inventory; this
+#: command takes it out of both files. tests/seat-inventory.test.ts fails
+#: while either is stale.
+REGEN_COMMAND = "npm run gen:seat-registries"
 
 
 def _rings_edits(slug: str, path: Path) -> list[str]:
@@ -229,7 +239,7 @@ def _rings_edits(slug: str, path: Path) -> list[str]:
 
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     return [
-        f"remove {slug} from ring {entry.get('ring')} seats"
+        f"still lists {slug} in ring {entry.get('ring')}: run `{REGEN_COMMAND}` after the tombstone rename"
         for entry in raw.get("rings") or []
         if slug in (entry.get("seats") or [])
     ]
@@ -240,7 +250,7 @@ def _registry_edits(slug: str, path: Path) -> list[str]:
         return []
     key = re.compile(r"^\s*['\"]?" + re.escape(slug) + r"['\"]?\s*:")
     return [
-        f"delete line {n}: {line.strip()}"
+        f"line {n} still maps the seat ({line.strip()}): run `{REGEN_COMMAND}` after the tombstone rename"
         for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
         if key.match(line)
     ]
@@ -271,7 +281,8 @@ def repo_edits(slug: str, repo_root: Path, customers_root: Optional[Path] = None
         out.append(
             {
                 "file": f"operator/customers/{tomb.name}/",
-                "edit": "commit the rename (with the edits above) in one PR; regenerate operator/contracts/"
+                "edit": f"commit the rename (its seat.yaml goes with it) and the `{REGEN_COMMAND}` output, with "
+                "the edits above, in one PR; regenerate operator/contracts/"
                 "gate-coverage-snapshot*.json and copy the .overlay.json into hermes-smd-overlay "
                 "tests/contract/seat_gate_binding_snapshot.json in the same change",
             }

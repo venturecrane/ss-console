@@ -131,7 +131,7 @@ def _fake_repo(tmp_path: Path) -> Path:
         "rings:\n  - ring: 0\n    seats: [staging]\n  - ring: 2\n    seats: [other, acme]\n"
     )
     (tmp_path / "src/lib/operator").mkdir(parents=True)
-    (tmp_path / "src/lib/operator/fly-app-registry.ts").write_text(
+    (tmp_path / "src/lib/operator/fly-app-registry.generated.ts").write_text(
         "const CUSTOMER_FLY_APPS = Object.freeze({\n"
         "  'acme-two': 'hermes-acme-two',\n"
         "  'acme': 'hermes-acme',\n"
@@ -149,11 +149,20 @@ def test_repo_edits_name_the_exact_change_in_each_allow_list(tmp_path):
     by_file = {}
     for e in edits:
         by_file.setdefault(e["file"], []).append(e["edit"])
-    assert by_file["operator/fleet/rings.yaml"] == ["remove acme from ring 2 seats"]
-    assert by_file["src/lib/operator/fly-app-registry.ts"] == ["delete line 3: 'acme': 'hermes-acme',"]
+    # rings.yaml and the registry are generated from seat.yaml (#3400): the
+    # edit is the generator, named exactly.
+    assert by_file["operator/fleet/rings.yaml"] == [
+        "still lists acme in ring 2: run `npm run gen:seat-registries` after the tombstone rename"
+    ]
+    assert by_file["src/lib/operator/fly-app-registry.generated.ts"] == [
+        "line 3 still maps the seat ('acme': 'hermes-acme',): run `npm run gen:seat-registries` "
+        "after the tombstone rename"
+    ]
+    # acme-two (a longer slug on line 2) is not mistaken for acme.
     assert by_file["operator/ops-machine/workspaces.json"] == ['remove .workspaces["acme"]']
     tomb = by_file["operator/customers/acme.decommissioned.2026-10-22/"][0]
-    assert "commit the rename" in tomb and "seat_gate_binding_snapshot.json" in tomb
+    assert "commit the rename" in tomb and "gen:seat-registries" in tomb
+    assert "seat_gate_binding_snapshot.json" in tomb
 
 
 def test_repo_edits_are_empty_for_a_seat_no_file_names(tmp_path):
@@ -171,3 +180,10 @@ def test_residue_report_always_states_what_is_kept_and_why(tmp_path):
 def test_the_real_repo_names_no_unknown_seat():
     """Against this checkout: a slug that was never a seat has no residue."""
     assert repo_edits("never-a-real-seat", REPO_ROOT) == []
+
+
+def test_the_real_repo_files_are_where_the_residue_report_looks():
+    """The report reads the generated registry and rings by path; a move would
+    make it silently report "no residue". A live seat must be found."""
+    files = {e["file"] for e in repo_edits("pilot-smokeball", REPO_ROOT)}
+    assert {"operator/fleet/rings.yaml", "src/lib/operator/fly-app-registry.generated.ts"} <= files
