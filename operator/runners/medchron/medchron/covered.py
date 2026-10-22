@@ -69,6 +69,13 @@ def _cited_names(slug_dir: Path, unit: str, run_dir: Path) -> set[str]:
     return {n for n, num in read_json(run_dir / "exhibit_map.json", {}).items() if num in cited_ex}
 
 
+def _orphan_names(slug_dir: Path) -> tuple[set[str], set[str]]:
+    """(every documented orphan, the ones left out at the firm's direction)."""
+    rows = (read_json(slug_dir / "orphans.json", {}) or {}).get("orphans") or []
+    named = [o for o in rows if o.get("name")]
+    return {o["name"] for o in named}, {o["name"] for o in named if o.get("reason") == WITHHELD_REASON}
+
+
 def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
     """`{"covered": [ids], "uncovered": [ids], "pulled": N}` for one unit.
 
@@ -100,11 +107,10 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
             duplicates.add(key)
         pulled[key] = row
 
-    orphan_rows = (read_json(slug_dir / "orphans.json", {}) or {}).get("orphans") or []
-    orphans = {o.get("name") for o in orphan_rows if o.get("name")}
-    # Left out at the firm's direction: accounted for by the firm's own word, so
-    # an update must not read it and ask the same question again.
-    withheld = {o.get("name") for o in orphan_rows if o.get("name") and o.get("reason") == WITHHELD_REASON}
+    orphans, withheld = _orphan_names(slug_dir)
+    # Left out at the firm's direction is accounted for by the firm's own word,
+    # the way a byte-duplicate is: an update must not read it and ask again.
+    accounted = duplicates | withheld
     billing_spec = read_json(slug_dir / "billing_docs.json", [])
     billing_names = {
         b["name"] for b in (billing_spec.get("docs") if isinstance(billing_spec, dict) else billing_spec) or []
@@ -119,15 +125,12 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
         if key in failed:
             uncovered.add(key)
             continue
-        if key in cited or key in duplicates:
+        if key in cited or key in accounted:
             covered.add(key)
             continue
         row = by_name.get(key, pulled.get(key, {}))
         if row.get("compose_skip"):
             uncovered.add(key)
-            continue
-        if key in withheld:
-            covered.add(key)
             continue
         if key in orphans:
             uncovered.add(key)

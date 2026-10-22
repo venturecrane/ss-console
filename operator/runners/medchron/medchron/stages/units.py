@@ -223,6 +223,22 @@ def _attach_transcripts(d: Path, recs: list[dict[str, Any]]) -> list[tuple[dict[
     return awaiting
 
 
+def _leave_out_withheld(d: Path, usable: list[dict[str, Any]], log) -> list[dict[str, Any]]:
+    """Drop every document the firm said to leave out (an identity decision):
+    it belongs to no unit, so no stage reads it, and decisions.orphans
+    discloses it."""
+    withheld = FI.withheld(d)
+    if not withheld:
+        return usable
+    keep, left_out = [], []
+    for r in usable:
+        (left_out if FI.matches(str(r.get("id") or ""), withheld) else keep).append(r)
+    log(f"left out at the firm's direction (identity decision): {len(left_out)}")
+    for r in left_out:
+        log(f"  - {r.get('id')}")
+    return keep
+
+
 def run(sr: StageRun) -> int:
     d = sr.slug_dir
     (d / "units").mkdir(parents=True, exist_ok=True)
@@ -241,11 +257,7 @@ def run(sr: StageRun) -> int:
             sr.log(f"   ! {(r.get('name') or '')[:60]} | text/{r['id']}.txt: {state} ({size}B)")
         return 2
     is_excluded = _excluder([str(p) for p in (sr.cfg.get("units", "exclude_name_patterns") or [])])
-    # A document the firm said to leave out (an identity decision) belongs to
-    # no unit: no stage reads it and decisions.orphans discloses it.
-    withheld = FI.withheld(d)
-    left_out = [r for r in usable if FI.matches(str(r.get("id") or ""), withheld)]
-    usable = [r for r in usable if not FI.matches(str(r.get("id") or ""), withheld)]
+    usable = _leave_out_withheld(d, usable, sr.log)
     spec = read_json(d / "units.json", None)
     units, excluded, unassigned = _route(usable, spec, sr.slug, is_excluded)
 
@@ -290,10 +302,6 @@ def run(sr: StageRun) -> int:
         )
         for u, name, pages in skipped:
             sr.log(f"  - {name[:62]:62s} {pages:>4} p  [{u}]")
-    if left_out:
-        sr.log(f"left out at the firm's direction (identity decision): {len(left_out)}")
-        for r in left_out:
-            sr.log(f"  - {str(r.get('id'))}")
     sr.log(f"excluded: {len(excluded)}")
     for e in excluded:
         sr.log(f"  - {e[:70]}")
