@@ -225,8 +225,8 @@ class FleetStore:
 
     def release_lease(self, holder: str, name: str = LEASE_NAME) -> None:
         self.d1.query(
-            f"DELETE FROM fleet_lease WHERE lease_name = {ids.sql_str(name)} AND holder = {ids.sql_str(holder)}"
-        )  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
+            f"DELETE FROM fleet_lease WHERE lease_name = {ids.sql_str(name)} AND holder = {ids.sql_str(holder)}"  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
+        )
 
 
 def seat_lease_name(seat: str) -> str:
