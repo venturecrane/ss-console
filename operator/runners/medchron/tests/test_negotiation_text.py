@@ -62,3 +62,49 @@ def test_an_empty_or_unsupported_file_is_a_failure_never_empty_text(tmp_path):
     other.write_bytes(b"data")
     with pytest.raises(T.ExtractFailure, match="unsupported"):
         T.text_of(other, ".xlsx", None)
+
+
+class _FakeMsg:
+    """An Outlook container as extract_msg presents it: header values carry
+    display names, and a sender saved inside Exchange carries an X500 address."""
+
+    def __init__(self, path, **_kw):
+        self.subject = "Offer"
+        self.sender = "Pat Paralegal </O=EXCHANGELABS/OU=EXCHANGE ADMINISTRATIVE GROUP (FYDIBOHF23SPDLT)/CN=RECIPIENTS/CN=ab12-pat>"
+        self.to = "Jane Adjuster <jadjuster@carrier.example>"
+        self.cc = ""
+        self.bcc = ""
+        self.date = "Wed, 7 Oct 2026 10:00:00 -0700"
+        self.body = "Forwarding the carrier's offer of $12,500."
+        self.attachments = []
+
+    def close(self):
+        pass
+
+
+def test_an_msg_head_shows_who_sent_it_to_whom_even_from_inside_exchange(tmp_path, monkeypatch):
+    # 2026-10-21: the head kept only regex-matched SMTP addresses, so this sender
+    # rendered as a blank "From:" and every display name was gone, while the
+    # review's first check is exactly who sent the email to whom.
+    import sys
+    import types
+
+    monkeypatch.setitem(sys.modules, "extract_msg", types.SimpleNamespace(Message=_FakeMsg))
+    p = tmp_path / "fwd.msg"
+    p.write_bytes(b"not read by the fake")
+    text, _ = T.text_of(p, ".msg", None)
+    head = dict(line.split(": ", 1) for line in text.split("\n\n", 1)[0].splitlines())
+    assert head["From"] == "Pat Paralegal <internal Exchange address>"
+    assert head["To"] == "Jane Adjuster <jadjuster@carrier.example>"
+    assert "/O=EXCHANGELABS" not in text
+
+
+def test_the_wall_still_decides_on_addresses_alone(tmp_path, monkeypatch):
+    import sys
+    import types
+
+    from medchron.demand import pull
+
+    monkeypatch.setitem(sys.modules, "extract_msg", types.SimpleNamespace(Message=_FakeMsg))
+    m = pull._open_msg(tmp_path / "x.msg")
+    assert m["sender"] == "" and m["recipients"] == ["jadjuster@carrier.example"]
