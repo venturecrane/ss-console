@@ -40,8 +40,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Every source's last commit date is the input; a shallow clone dates
-          # everything to today and reports every reviewed page as stale.
+          # The input is each page's review commit and the source commits after
+          # it; a shallow clone has neither and the report would be meaningless.
           fetch-depth: 0
 
       - name: Setup Node
@@ -77,9 +77,13 @@ jobs:
         run: |
           set -euo pipefail
           SERIES='handbook-review'
+          # Empty when no issue exists yet. `last` of an empty list is null, which
+          # jq renders as "null null"; the first manual run (2026-10-21) tried to
+          # edit issue "null" and failed instead of creating the issue.
           EXISTING="$(gh issue list --repo "$REPO" --state all --limit 200 \
                        --search "\"review-series: ${SERIES}\" in:body" \
-                       --json number,state --jq 'sort_by(.number) | last | "\(.number) \(.state)"' || true)"
+                       --json number,state \
+                       --jq 'if length == 0 then "" else (sort_by(.number) | last | "\(.number) \(.state)") end' || true)"
           NUM="${EXISTING%% *}"; STATE="${EXISTING##* }"
           {
             echo "The weekly handbook review found pages that need a person to read them again."
