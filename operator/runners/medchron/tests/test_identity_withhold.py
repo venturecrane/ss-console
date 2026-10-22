@@ -53,7 +53,14 @@ def _held_scene(data_root: Path) -> Path:
         data_root,
         [
             {"id": "f1", "name": "clinic note", "ext": ".pdf", "ok": True},
-            {"id": HELD_ID, "name": "attachment", "ext": ".pdf", "ok": True, "from_email": "e"},
+            {
+                "id": HELD_ID,
+                "name": "Kaiser records 2019",
+                "ext": ".pdf",
+                "ok": True,
+                "from_email": "RE: records",
+                "container": "FW records from Kaiser.msg",
+            },
         ],
     )
     return sd
@@ -87,6 +94,39 @@ def test_a_withheld_attachment_no_longer_holds_the_run(job_dir: Path, firm_confi
     _decide(sd, "withhold", [HELD_ID])
     log.clear()
     assert identity_stage.run(_sr(job_dir, firm_config_path, data_root, log)) == 0, log
+
+
+def test_the_hold_line_names_the_attachment_and_its_email_never_the_other_person(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    # FALSIFIER (2026-10-22): the line carried the id and "a date of birth
+    # 03/17/1948 that is not the client's"; the driver copies it into the job's
+    # reason, the Operator relayed the id as an internal tag, could name no
+    # file, and sent the attorney to search the saved emails himself.
+    sd = _held_scene(data_root)
+    log: list[str] = []
+    assert identity_stage.run(_sr(job_dir, firm_config_path, data_root, log)) == 2
+    line = log[-1]
+    assert "name a different person than the client" in line  # the classifier's token
+    assert HELD_ID in line and '"Kaiser records 2019"' in line
+    assert 'attached to the email "FW records from Kaiser.msg"' in line
+    assert "1948" not in line and "date of birth" not in line.lower()
+    detail = json.loads((sd / identity_stage.HOLDS_FILE).read_text())
+    assert detail[0]["id"] == HELD_ID and any("1948" in f for f in detail[0]["found"])  # SMD's, on the seat
+
+
+def test_an_attachment_the_manifest_cannot_name_is_held_by_id_alone(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    sd = _held_scene(data_root)
+    seed_raw_manifest(
+        data_root,
+        [{"id": HELD_ID, "ext": ".pdf", "ok": True, "from_email": "e"}],
+    )
+    log: list[str] = []
+    assert identity_stage.run(_sr(job_dir, firm_config_path, data_root, log)) == 2
+    assert HELD_ID in log[-1] and "attached to the email" not in log[-1] and '"' not in log[-1].split(HELD_ID)[1][:2]
+    assert (sd / identity_stage.HOLDS_FILE).is_file()
 
 
 # ---- build_units: nothing downstream reads it ----------------------------------
@@ -130,7 +170,7 @@ def test_a_withheld_document_is_disclosed_as_left_out_not_held_as_residue(
     _decide(sd, "withhold", [HELD_ID])
     d = decisions.orphans(job, cfg, sd, job.units[0], dry_run=False)
     assert not d.held
-    entry = {"name": "attachment.pdf", "reason": FI.WITHHELD_REASON}  # keyed as coverage keys a pulled row
+    entry = {"name": "Kaiser records 2019.pdf", "reason": FI.WITHHELD_REASON}  # keyed as coverage keys a pulled row
     assert entry in json.loads((sd / "orphans.json").read_text())["orphans"]
 
 

@@ -153,7 +153,13 @@ class _Index:
             }
         )
 
-    def add_attachment(self, subject: str, name: str, data: bytes) -> None:
+    def add_attachment(self, subject: str, name: str, data: bytes, container: str = "") -> None:
+        """One attachment: `subject` is the email's subject, `container` the
+        saved email's own file name in the matter (the .msg). The container is
+        what a person can find: when an identity hold names an attachment,
+        the requester is told "<name>, attached to the email <container>",
+        because the id alone sent an attorney looking through 350 files
+        (2026-10-22)."""
         kind = classify(name, len(data))
         self.counts[kind] = self.counts.get(kind, 0) + 1
         h = hashlib.sha256(data).hexdigest()  # hash EVERYTHING, kept or not
@@ -183,6 +189,7 @@ class _Index:
                 "already_pulled_as": self.have.get(h),
                 "names": [],
                 "emails": [],
+                "containers": [],
             }
             if kind == "image":
                 wh = image_dims(data)
@@ -194,6 +201,8 @@ class _Index:
             self.by_hash[h]["names"].append(name)
         if subject not in self.by_hash[h]["emails"]:
             self.by_hash[h]["emails"].append(subject)
+        if container and container not in self.by_hash[h]["containers"]:
+            self.by_hash[h]["containers"].append(container)
 
 
 def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str, str]) -> tuple[_Index, int]:
@@ -222,7 +231,10 @@ def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str,
                 if not isinstance(data, bytes):
                     ix.counts["other"] += 1  # a nested .msg comes back as a Message
                     continue
-                ix.add_attachment(subject, name, data)
+                # The pull keeps a document's name and extension apart; the
+                # file a person sees in the matter is the two together.
+                container = str(rec.get("name") or "") + str(rec.get("ext") or "")
+                ix.add_attachment(subject, name, data, container=container)
         finally:
             try:
                 m.close()
@@ -334,6 +346,9 @@ def run_fold(sr: StageRun) -> int:
                 "ext": ext,
                 "folder": "/(email attachment)",
                 "from_email": r["emails"][0] if r["emails"] else None,
+                # The saved email's file name in the matter: the one name a
+                # person can find it by (an identity hold says it).
+                "container": (r.get("containers") or [None])[0],
                 "size_expected": r["bytes"],
                 "size_got": r["bytes"],
                 "sha256": r["sha256"],

@@ -354,6 +354,9 @@ def test_index_msg_hashes_everything_and_fold_takes_only_the_decision(
     rows = [json.loads(line) for line in (sr.slug_dir / "raw_manifest.jsonl").read_text().splitlines()]
     folded = [r for r in rows if r["id"].startswith("msgatt-")]
     assert len(folded) == 1 and folded[0]["from_email"] == "RE: records for the file"
+    # The saved email's own file name rides along: it is what an identity hold
+    # names to the requester ("attached to the email ...", 2026-10-22).
+    assert folded[0]["container"] == "RE: records.msg"
     assert (sr.slug_dir / "raw" / f"msgatt-{new_sha12}.pdf").read_bytes() == hidden
     # extract after fold reads the folded document like any other
     assert extract_stage.run(sr) == 0
