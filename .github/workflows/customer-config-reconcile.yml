@@ -49,6 +49,9 @@ on:
       - 'scripts/ci-reconcile-r2-customer-configs.sh'
       - 'scripts/ci-sync-customer-configs.sh'
       - 'scripts/ci-publish-customer-configs.sh'
+      - 'scripts/lib/seat-image-guard.sh'
+      - 'scripts/check-config-against-image.mjs'
+      - 'operator/bin/sync-customer-yaml.sh'
       - 'tests/config-reconcile.test.ts'
       - 'tests/r2-config-reconcile.test.ts'
       - '.github/workflows/customer-config-reconcile.yml'
@@ -205,6 +208,10 @@ jobs:
           # Via env, never interpolated into the script body: a workflow_dispatch
           # input is user-supplied and would otherwise be a shell-injection seam.
           R2_RECONCILE_DRY_RUN: ${{ github.event.inputs.dry_run }}
+          # The image guard resolves each seat's CURRENT image (heartbeat
+          # image_ref -> the fleet release's manifest) through wrangler, exactly
+          # as the publisher does in deploy.yml. Same guard, same evidence.
+          FLEET_IMAGE_LOOKUP: '1'
         run: |
           set -u
           # `|| STATUS=$?` is load-bearing, not style (ss#2307). GitHub runs this
@@ -221,33 +228,74 @@ jobs:
           # not 0 is the control failing, and must fail the run.
           if [ "${STATUS}" -ne 0 ] && [ "${STATUS}" -ne 2 ]; then exit "${STATUS}"; fi
 
-      - name: Open an issue when a seat config drifted in R2
+      - name: Open an issue when a seat config drifted in R2 or the image guard held it back
         if: github.event_name != 'pull_request' && steps.reconcile.outputs.status == '2'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          {
-            echo "An R2 seat config did not match the customer.yaml main carries."
-            echo
-            echo "DRIFT means the object at \`vaults/<slug>/customer.yaml\` was not"
-            echo "byte-identical to what HEAD authored. The reconciler republished it"
-            echo "and is reporting anyway: the seat BOOTED FROM the other bytes until"
-            echo "it did, and how long that lasted is the thing worth knowing."
-            echo
-            echo "The seat adopts the republished object on its next restart;"
-            echo "live-writable fields apply sooner via the ADR 0044 poller."
-            echo
-            echo '```'
-            cat reconcile-r2.txt
-            echo '```'
-            echo
-            echo "Reconciler: \`scripts/ci-reconcile-r2-customer-configs.sh\` (ss#2305)."
-            echo "Run: ${RUN_URL}"
-          } > body.md
-          gh issue create \
-            --repo "${REPO}" \
-            --title "R2 seat config drift $(date -u +%Y-%m-%d)" \
-            --label "prio:P1" --label "type:bug" \
-            --body-file body.md
+          # Two findings, two issues. DRIFT healed itself and is a dated record.
+          # REFUSED did not heal and will not until the seat is reprovisioned, so
+          # it is ONE standing issue the nightly run comments on, never a new
+          # issue per night.
+          if grep -q '^  DRIFT  ' reconcile-r2.txt; then
+            {
+              echo "An R2 seat config did not match the customer.yaml main carries."
+              echo
+              echo "DRIFT means the object at \`vaults/<slug>/customer.yaml\` was not"
+              echo "byte-identical to what HEAD authored. The reconciler republished it"
+              echo "and is reporting anyway: the seat BOOTED FROM the other bytes until"
+              echo "it did, and how long that lasted is the thing worth knowing."
+              echo
+              echo "The seat adopts the republished object on its next restart;"
+              echo "live-writable fields apply sooner via the ADR 0044 poller."
+              echo
+              echo '```'
+              cat reconcile-r2.txt
+              echo '```'
+              echo
+              echo "Reconciler: \`scripts/ci-reconcile-r2-customer-configs.sh\` (ss#2305)."
+              echo "Run: ${RUN_URL}"
+            } > body.md
+            gh issue create \
+              --repo "${REPO}" \
+              --title "R2 seat config drift $(date -u +%Y-%m-%d)" \
+              --label "prio:P1" --label "type:bug" \
+              --body-file body.md
+          fi
+          if grep -q '^  REFUSED  ' reconcile-r2.txt; then
+            {
+              echo "A seat's R2 config differs from main, and the reconciler did NOT"
+              echo "republish it: HEAD's customer.yaml names a skill or pre_run the"
+              echo "seat's running image (plus its skills release) does not carry."
+              echo
+              echo "This is the image guard (ADR 0093, the 2026-10-13 A&P outage),"
+              echo "the same one the merge-time publisher runs. Republishing would"
+              echo "put a config on R2 that the seat adopts at its next restart and"
+              echo "cannot run. The seat keeps booting the object it has."
+              echo
+              echo "To resolve: reprovision the seat onto an image that carries what"
+              echo "the config names, or change the config to fit the running image."
+              echo "The REFUSED lines below name each missing requirement."
+              echo
+              echo '```'
+              cat reconcile-r2.txt
+              echo '```'
+              echo
+              echo "Guard: \`scripts/lib/seat-image-guard.sh\`. Run: ${RUN_URL}"
+            } > refused.md
+            TITLE="R2 seat config refused by the image guard"
+            EXISTING=$(gh issue list --repo "${REPO}" --state open \
+              --search "in:title \"${TITLE}\"" --json number,title \
+              --jq "map(select(.title == \"${TITLE}\")) | .[0].number // empty")
+            if [ -n "${EXISTING}" ]; then
+              gh issue comment "${EXISTING}" --repo "${REPO}" --body-file refused.md
+            else
+              gh issue create \
+                --repo "${REPO}" \
+                --title "${TITLE}" \
+                --label "prio:P1" --label "type:bug" \
+                --body-file refused.md
+            fi
+          fi

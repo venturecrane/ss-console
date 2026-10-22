@@ -465,9 +465,15 @@ describe('ci-reconcile-r2-customer-configs: never creates, never deletes', () =>
     expect(res.code).toBe(2)
     for (const call of res.awsCalls) {
       expect(call).not.toContain('output-classes')
-      if (call.includes('s3://')) {
+      // The image guard READS the seat's image manifest and skills pointer;
+      // every other object reference, and every write, is the customer.yaml key.
+      if (call.includes('s3://') && !call.startsWith('s3 cp s3://')) {
         expect(call).toMatch(/s3:\/\/smd-customer-config\/vaults\/[a-z0-9-]+\/customer\.yaml/)
       }
+    }
+    expect(uploads(res.awsCalls).length).toBeGreaterThan(0)
+    for (const call of uploads(res.awsCalls)) {
+      expect(call).toMatch(/ s3:\/\/smd-customer-config\/vaults\/[a-z0-9-]+\/customer\.yaml/)
     }
   })
 
@@ -585,6 +591,184 @@ describe('ci-reconcile-r2-customer-configs: cannot-evaluate is never reported as
     expect(res.out).toContain('the unauthored-object check did not run')
     expect(res.out).toContain('ashton-price DRIFTED')
   })
+})
+
+/**
+ * ADR 0093 ("config ahead of image"), the 2026-10-13 A&P outage, on the writer
+ * that reopened it. The publisher refuses a config the seat's running image
+ * cannot run and leaves the old object in place. Before this guard, the nightly
+ * reconciler then saw byte drift and republished the refused config, and the
+ * seat adopted it at its next restart. These cases run the REAL checker
+ * (scripts/check-config-against-image.mjs, via scripts/lib/seat-image-guard.sh)
+ * against fake manifests in the stand-in bucket.
+ */
+describe('ci-reconcile-r2-customer-configs: image guard (ADR 0093)', () => {
+  // The incident's shape: HEAD adds an hourly cron whose pre_run.py ships only
+  // in a newer image than the one the seat runs.
+  const withCron = [
+    'customer_id: ashton-price',
+    'vertical: law-firm',
+    'personas:',
+    '  - slug: operator',
+    '    skills:',
+    '      - name: inbox-triage',
+    '        version: pending',
+    '        enabled: true',
+    '      - name: connector-auth-check',
+    '        version: pending',
+    '        enabled: true',
+    '    cron:',
+    '      - skill: connector-auth-check',
+    "        schedule: '13 * * * *'",
+    '        pre_run: pre_run.py',
+    '        wake_policy: pre_run_decides',
+    '',
+  ].join('\n')
+  const withoutCron = [
+    'customer_id: ashton-price',
+    'vertical: law-firm',
+    'personas:',
+    '  - slug: operator',
+    '    skills:',
+    '      - name: inbox-triage',
+    '        version: pending',
+    '        enabled: true',
+    '',
+  ].join('\n')
+  const manifest = (skills: Record<string, string[]>): string =>
+    JSON.stringify({
+      schema_version: 1,
+      built_from: '7c75042c',
+      skills: Object.fromEntries(
+        Object.entries(skills).map(([name, files]) => [name, { pin: 'abc123', files }])
+      ),
+    })
+
+  /** HEAD authors `head`; R2 still holds `live`; the seat's image carries `image`. */
+  function scenario(head: string, live: string, image?: string): Fixture {
+    const fx = makeFixture()
+    writeConfig(fx.root, 'ashton-price', head)
+    git(fx.root, ['add', '-A'])
+    git(fx.root, ['commit', '-q', '-m', 'ashton-price config change'])
+    seedObject(fx, 'ashton-price', live)
+    seedObject(fx, 'pilot-law', configBody('pilot-law'))
+    if (image !== undefined) {
+      const dest = join(fx.bucketDir, 'vaults', 'ashton-price', 'image-manifest.json')
+      writeFileSync(dest, image)
+    }
+    return fx
+  }
+
+  it('refuses to republish a config naming a pre_run the running image lacks', () => {
+    const fx = scenario(withCron, withoutCron, manifest({ 'inbox-triage': ['SKILL.md'] }))
+
+    const res = run(fx)
+
+    // A finding (the workflow reports it), not a control failure.
+    expect(res.code).toBe(2)
+    expect(res.out).toContain('ashton-price: NOT republishing')
+    expect(res.out).toContain('REFUSED  ashton-price:')
+    expect(res.out).toContain('pre_run:connector-auth-check/pre_run.py')
+    expect(res.out).toContain('built from 7c75042c')
+    expect(res.out).toContain('refused (image): 1')
+    // Distinct from ordinary drift: it was not counted as healed.
+    expect(res.out).toContain('drifted:         0')
+    expect(res.out).not.toContain('  DRIFT  ashton-price')
+    // The publish did not happen, and the object the seat boots from is intact.
+    expect(uploads(res.awsCalls)).toHaveLength(0)
+    expect(readObject(fx, 'ashton-price')).toBe(withoutCron)
+  })
+
+  it('refuses when no manifest is readable and HEAD adds a requirement', () => {
+    // "Cannot determine" never passes on its own.
+    const fx = scenario(withCron, withoutCron)
+
+    const res = run(fx)
+
+    expect(res.code).toBe(2)
+    expect(res.out).toContain('REFUSED  ashton-price:')
+    expect(res.out).toContain('cannot determine')
+    expect(uploads(res.awsCalls)).toHaveLength(0)
+    expect(readObject(fx, 'ashton-price')).toBe(withoutCron)
+  })
+
+  it('reports the refusal in a dry run too, instead of "would republish"', () => {
+    const fx = scenario(withCron, withoutCron, manifest({ 'inbox-triage': ['SKILL.md'] }))
+
+    const res = run(fx, { R2_RECONCILE_DRY_RUN: '1' })
+
+    expect(res.code).toBe(2)
+    expect(res.out).toContain('REFUSED  ashton-price:')
+    expect(res.out).not.toContain('would republish ashton-price')
+    expect(uploads(res.awsCalls)).toHaveLength(0)
+  })
+
+  it('still republishes genuine drift once the running image carries what HEAD names', () => {
+    const fx = scenario(
+      withCron,
+      withoutCron,
+      manifest({ 'inbox-triage': ['SKILL.md'], 'connector-auth-check': ['SKILL.md', 'pre_run.py'] })
+    )
+
+    const res = run(fx)
+
+    expect(res.code).toBe(2)
+    expect(res.out).toContain('DRIFT  ashton-price:')
+    expect(res.out).toContain('refused (image): 0')
+    expect(uploads(res.awsCalls)).toHaveLength(1)
+    expect(readObject(fx, 'ashton-price')).toBe(withCron)
+  })
+
+  it('republishes a removal without a manifest: it cannot make the seat worse', () => {
+    // The fix-forward for a skew must never wait on a rebuild.
+    const fx = scenario(withoutCron, withCron)
+
+    const res = run(fx)
+
+    expect(res.code).toBe(2)
+    expect(res.out).toContain('DRIFT  ashton-price:')
+    expect(uploads(res.awsCalls)).toHaveLength(1)
+    expect(readObject(fx, 'ashton-price')).toBe(withoutCron)
+  })
+
+  it('a refused seat does not stop the other seats from converging', () => {
+    const fx = scenario(withCron, withoutCron, manifest({ 'inbox-triage': ['SKILL.md'] }))
+    seedObject(fx, 'pilot-law', 'customer_id: pilot-law\nstale: true\n')
+
+    const res = run(fx)
+
+    expect(res.code).toBe(2)
+    expect(res.out).toContain('REFUSED  ashton-price:')
+    expect(res.out).toContain('DRIFT  pilot-law:')
+    expect(uploads(res.awsCalls)).toHaveLength(1)
+    expect(uploads(res.awsCalls)[0]).toContain('vaults/pilot-law/customer.yaml')
+    expect(readObject(fx, 'ashton-price')).toBe(withoutCron)
+    expect(readObject(fx, 'pilot-law')).toBe(configBody('pilot-law'))
+  })
+})
+
+describe('one image guard for every writer of vaults/<slug>/customer.yaml', () => {
+  // A guard on one writer of a key is a guard on none of them: the reconciler
+  // proved it. Every script that writes this object must source the one shared
+  // implementation and call it before its upload.
+  const writers = [
+    PUBLISHER,
+    RECONCILER,
+    join(REPO_ROOT, 'operator', 'bin', 'sync-customer-yaml.sh'),
+  ]
+
+  for (const path of writers) {
+    it(`${path.slice(REPO_ROOT.length)} sources the shared guard and runs it before uploading`, () => {
+      const src = readFileSync(path, 'utf8')
+      expect(src).toMatch(/source "\$\{[A-Z_]+\}\/(scripts\/)?lib\/seat-image-guard\.sh"/)
+      const guard = src.indexOf('seat_image_guard "')
+      const upload = src.search(/r2 s3 cp "\$\{?(cfg|CUSTOMER_YAML)\}?" "s3:\/\//)
+      expect(guard).toBeGreaterThan(-1)
+      expect(upload).toBeGreaterThan(guard)
+      // No private copy of the checker invocation left behind.
+      expect(src).not.toContain('check-config-against-image.mjs"')
+    })
+  }
 })
 
 describe('the R2 reconciler is actually scheduled', () => {
@@ -707,5 +891,106 @@ describe('the R2 reconcile step reports what the reconciler found (ss#2307)', ()
     const res = runStep(regressed, 2)
     expect(res.stdout).not.toContain('REPORT: ashton-price DRIFTED')
     expect(res.outputs).not.toContain('status=2')
+  })
+})
+
+/**
+ * The REFUSED finding must reach a human distinctly from ordinary drift. DRIFT
+ * heals itself and gets a dated issue; REFUSED persists until the seat is
+ * reprovisioned, so it gets ONE standing issue the nightly run comments on.
+ * Runs the real step body from the YAML against a `gh` stub.
+ */
+describe('the R2 issue step separates REFUSED from DRIFT', () => {
+  let dir: string | undefined
+
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true })
+    dir = undefined
+  })
+
+  const issueStepBody = (): string => {
+    const source = readFileSync(WORKFLOW, 'utf8')
+    const start = source.indexOf(
+      '      - name: Open an issue when a seat config drifted in R2 or the image guard held it back'
+    )
+    expect(start).toBeGreaterThan(-1)
+    const body = source.slice(source.indexOf('run: |', start) + 'run: |\n'.length)
+    const lines: string[] = []
+    for (const line of body.split('\n')) {
+      if (line.trim() !== '' && !line.startsWith('          ')) break
+      lines.push(line.slice(10))
+    }
+    return lines.join('\n')
+  }
+
+  const runIssueStep = (report: string, existing = '') => {
+    dir = mkdtempSync(join(tmpdir(), 'r2-issue-step-'))
+    const bin = join(dir, 'bin')
+    mkdirSync(bin)
+    const log = join(dir, 'gh.log')
+    writeFileSync(
+      join(bin, 'gh'),
+      [
+        '#!/usr/bin/env bash',
+        `echo "$*" >> "${log}"`,
+        'if [ "$1 $2" = "issue list" ]; then printf "%s" "${FAKE_EXISTING:-}"; fi',
+        'exit 0',
+        '',
+      ].join('\n')
+    )
+    chmodSync(join(bin, 'gh'), 0o755)
+    writeFileSync(join(dir, 'reconcile-r2.txt'), report)
+    writeFileSync(join(dir, 'step.sh'), issueStepBody())
+    execFileSync('bash', ['-e', join(dir, 'step.sh')], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        REPO: 'venturecrane/ss-console',
+        RUN_URL: 'https://example.invalid/run',
+        FAKE_EXISTING: existing,
+      },
+    })
+    const calls = existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter(Boolean) : []
+    const refusedPath = join(dir, 'refused.md')
+    const refused = existsSync(refusedPath) ? readFileSync(refusedPath, 'utf8') : ''
+    return { calls, refused }
+  }
+
+  const REFUSED_REPORT = [
+    'refused (image): 1',
+    '  REFUSED  ashton-price: R2 aaa != git bbb (authored x); the image guard refused:',
+    '             pre_run:connector-auth-check/pre_run.py',
+    '',
+  ].join('\n')
+  const DRIFT_REPORT = 'drifted:         1\n  DRIFT  pilot-law: R2 aaa != git bbb (authored x)\n'
+
+  it('opens the standing refused-by-guard issue, not a dated drift issue', () => {
+    const res = runIssueStep(REFUSED_REPORT)
+    const creates = res.calls.filter((c) => c.startsWith('issue create'))
+    expect(creates).toHaveLength(1)
+    expect(creates[0]).toContain('R2 seat config refused by the image guard')
+    expect(res.refused).toContain('pre_run:connector-auth-check/pre_run.py')
+    expect(res.refused).toContain('reprovision the seat')
+  })
+
+  it('comments on the standing issue instead of opening a new one each night', () => {
+    const res = runIssueStep(REFUSED_REPORT, '4242')
+    expect(res.calls.filter((c) => c.startsWith('issue create'))).toHaveLength(0)
+    expect(res.calls.some((c) => c.startsWith('issue comment 4242'))).toBe(true)
+  })
+
+  it('keeps ordinary drift on its dated issue', () => {
+    const res = runIssueStep(DRIFT_REPORT)
+    const creates = res.calls.filter((c) => c.startsWith('issue create'))
+    expect(creates).toHaveLength(1)
+    expect(creates[0]).toContain('R2 seat config drift')
+    expect(res.calls.some((c) => c.startsWith('issue list'))).toBe(false)
+  })
+
+  it('reports both when one run finds both', () => {
+    const res = runIssueStep(DRIFT_REPORT + REFUSED_REPORT)
+    expect(res.calls.filter((c) => c.startsWith('issue create'))).toHaveLength(2)
   })
 })

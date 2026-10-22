@@ -24,13 +24,26 @@
 # orphan. (The seats are enumerated from HEAD's TREE and the bytes are read off
 # the checkout, with a clean-tree guard below making those the same thing.)
 #
-# ONE SIGNAL:
+# TWO SIGNALS:
 #
 #   DRIFT  — the object's bytes are not the blob's bytes. Re-published from the
 #            blob, then proven by reading the object back (the publisher's own
 #            proof). Reported even after self-healing, for the same reason
 #            #2292 reports: how long a seat enforced a config main did not
 #            author is the thing worth knowing, regardless of who fixed it.
+#
+#   REFUSED — the object drifted, but HEAD's config names a skill or pre_run
+#            the seat's running image (plus its skills release) does not carry,
+#            so it is NOT republished. This is the image guard the publisher
+#            runs (ADR 0093, the 2026-10-13 A&P outage), from the same shared
+#            implementation (scripts/lib/seat-image-guard.sh). Without it this
+#            reconciler reopened the outage every night: the publisher refused
+#            a config and left the old object in place, this job saw the byte
+#            drift and wrote the refused config anyway, and the seat adopted it
+#            on its next restart. A refusal does not heal on its own; it clears
+#            when the seat is reprovisioned onto an image that carries what the
+#            config names, so it is reported on every run until then. Checked
+#            in a dry run too: the guard only reads.
 #
 # and one warn-only observation:
 #
@@ -40,7 +53,7 @@
 # WHAT IT WILL NOT DO:
 #   - Never creates. A 404 on the object is a SKIP with a warning. The first
 #     publish binds a config to a Machine, a volume and a secret set, and stays
-#     Captain-gated (ci-publish-customer-configs.sh:193-207). Any head-object
+#     Captain-gated (ci-publish-customer-configs.sh, "NEVER CREATE"). Any head-object
 #     failure that is NOT a 404 is a hard error, never a skip: "could not tell"
 #     must not read as "no object here".
 #   - Never deletes. Retirement is manual. This is structural, not a rule to
@@ -76,10 +89,12 @@
 #   0  converged — every authored seat's object is byte-identical to its blob
 #   1  cannot evaluate, or a republish failed to land (the control itself is
 #      broken; a failed workflow run is the right noise for that)
-#   2  findings — at least one object drifted (the workflow opens an issue)
+#   2  findings — at least one object drifted, whether republished or REFUSED
+#      by the image guard (the workflow opens an issue; REFUSED gets its own)
 set -euo pipefail
 
 DRY_RUN="${R2_RECONCILE_DRY_RUN:-}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # The ONLY object name this reconciler may write, same constant as the
 # publisher's. See "never writes any other key" above.
@@ -165,6 +180,11 @@ r2() {
     aws "$@" --endpoint-url "${R2_ENDPOINT_URL}"
 }
 
+# The image guard every writer of this key runs (seat_image_guard). Sourced
+# after r2() because it reads R2 through it.
+# shellcheck source=lib/seat-image-guard.sh
+source "${SCRIPT_DIR}/lib/seat-image-guard.sh"
+
 # sha256sum on the runner, shasum on a macOS operator box.
 digest() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -202,6 +222,7 @@ checked=0
 n_drift=0
 n_missing=0
 n_unauthored=0
+n_refused=0
 findings=""
 authored_slugs=" "
 
@@ -271,6 +292,21 @@ for cfg in "${paths[@]}"; do
   authored=$(git log -1 --format='%h %ad' --date=short -- "$cfg" 2>/dev/null || true)
   echo "── ${slug} DRIFTED: R2 has ${live_sha}, HEAD carries ${want_sha} ──"
   echo "  ${cfg} was last authored at ${authored:-unknown}; the seat has been booting the other bytes since some point after that."
+
+  # IMAGE GUARD, before anything decides to write, and in a dry run too. The
+  # live object is the "what the seat boots from now" the checker compares
+  # against when it cannot read the image manifest; we already hold it.
+  guard_err="${work_dir}/${slug}.guard.err"
+  if ! seat_image_guard "$slug" "$cfg" "$work_dir" "$live" >/dev/null 2>"$guard_err"; then
+    echo "::error::${slug}: NOT republishing; the seat's running image cannot run HEAD's config. The object stays as it is until the seat is reprovisioned onto an image that carries it."
+    sed 's/^/    /' "$guard_err"
+    n_refused=$((n_refused + 1))
+    findings="${findings}  REFUSED  ${slug}: R2 ${live_sha} != git ${want_sha} (authored ${authored:-unknown}); the image guard refused:
+$(sed 's/^/             /' "$guard_err")
+"
+    continue
+  fi
+
   n_drift=$((n_drift + 1))
   findings="${findings}  DRIFT  ${slug}: R2 ${live_sha} != git ${want_sha} (authored ${authored:-unknown})
 "
@@ -355,6 +391,7 @@ echo "seats checked:   ${checked}"
 echo "drifted:         ${n_drift}"
 echo "unprovisioned:   ${n_missing}"
 echo "unauthored:      ${n_unauthored}"
+echo "refused (image): ${n_refused}"
 if [[ -n "$findings" ]]; then
   printf '%s' "$findings"
 fi
@@ -369,6 +406,11 @@ if [[ "$n_drift" -gt 0 ]]; then
   else
     echo "R2 reconcile republished the objects above; reporting because the silent divergence is itself the defect."
   fi
+fi
+if [[ "$n_refused" -gt 0 ]]; then
+  echo "R2 reconcile left ${n_refused} drifted object(s) in place: the seat's running image cannot run HEAD's config (REFUSED above). Reprovision the seat to ship it."
+fi
+if [[ "$n_drift" -gt 0 || "$n_refused" -gt 0 ]]; then
   exit 2
 fi
 echo "R2 reconcile clean: every authored seat's object is byte-identical to what HEAD carries."
