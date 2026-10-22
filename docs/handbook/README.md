@@ -104,22 +104,37 @@ after it.
 
 ## How the handbook is kept current
 
-Three mechanisms, in order of strength:
+Four mechanisms, in order of strength:
 
 1. **The maintenance contract (primary).** Update the adjacent page in the same PR that
-   changes the venture. This is the only mechanism that keeps the *meaning* true; the other
-   two only catch what it misses.
+   changes the venture. This is the only mechanism that keeps the *meaning* true; the others
+   only catch what it misses.
 
 2. **The structural gate (hard, blocks merge).** `tests/handbook-integrity.test.ts` runs in
-   `npm run verify` and CI. It fails the build on malformed frontmatter, a dead
-   `/admin/playbook/<slug>` cross-link, a cited same-repo source file that no longer exists
-   (the check that forces a doc update when a source is moved, renamed, or deleted), two pages
-   colliding on one `(section, order)` slot, or an em dash. Deterministic, so it is safe to
-   block on. It also holds the generated content to its sources: `adr-index.md` must equal
-   what `docs/adr/` renders, and the connector inventory block in `connectors-channels.md`
-   must equal what `operator/connectors/*/manifest.toml` renders.
+   `npm run verify` and CI. It fails the build on:
+   - malformed frontmatter, including a missing `owner` or `review_every` or an impossible
+     `last_reviewed` date;
+   - a dead `/admin/playbook/<slug>` cross-link, or any link the renderer cannot resolve (a
+     relative `./` or `../` path);
+   - a `sources` entry that is not a URL or a path in this repo, or a cited same-repo source
+     file that no longer exists;
+   - two pages on one `(section, order)` slot, or an em dash;
+   - a new `TODO(why)`. They only go down: resolve the gap, or write what is known as
+     content. When one is resolved, lower `TODO_CEILING` in the test in the same PR.
 
-3. **The drift radar (advisory).** `npm run handbook:drift` compares each page's last-commit
-   time to its cited sources' last-commit times and reports pages whose sources changed after
-   them. Advisory, not a gate - a source edit does not always change what the page says - so a
-   human reads the report and decides. Run it before a handbook review pass.
+3. **Generated and completeness-checked content (hard).** The facts that drifted were the
+   lists of what exists, so the tree holds them to the pages:
+   - `adr-index.md` must equal what `docs/adr/` renders (`npm run handbook:adr-index`);
+   - the connector inventory in `connectors-channels.md` (`npm run handbook:connectors`);
+   - the seat roster in `clients-and-commitments.md` (`npm run handbook:roster`);
+   - every scheduled job in `scheduled-jobs.md` (`npm run handbook:inventories`);
+   - `disaster-recovery.md` must name every runbook, `repository-map.md` every deployed
+     worker, and `data-model.md` every live table. These are not regenerated, because the
+     pages group them by hand; `npm run handbook:inventories` names what is missing.
+
+4. **The weekly review (advisory, read every Monday).** `npm run handbook:drift`
+   (`scripts/handbook-review.ts`) keys on `last_reviewed`, not on commit times, so editing a
+   page never hides that its sources moved. It reports pages whose cited sources changed after
+   their review, pages past their review window, and the never-reviewed backlog.
+   `.github/workflows/handbook-review.yml` runs it every Monday and keeps one rolling issue,
+   "Handbook: pages due for review", closed when nothing is due.

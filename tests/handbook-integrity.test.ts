@@ -15,7 +15,7 @@
  *      .astro forbidden-strings scan).
  *
  * The complementary git-mtime staleness signal (a source changed after the page)
- * is advisory and lives in scripts/handbook-drift.mjs (`npm run handbook:drift`),
+ * is advisory and lives in scripts/handbook-review.ts (`npm run handbook:drift`),
  * not here, because a source edit does not always require a doc edit.
  *
  * @see docs/handbook/README.md - the maintenance contract
@@ -26,6 +26,12 @@ import { readdirSync, readFileSync, existsSync } from 'fs'
 import { resolve, join } from 'path'
 import { parse as parseYaml } from 'yaml'
 import { execFileSync } from 'child_process'
+import {
+  committedJobsBlock,
+  inventoryOmissions,
+  renderScheduledJobs,
+  scheduledJobs,
+} from '../scripts/lib/handbook-inventories'
 import { HANDBOOK_OWNERS, HANDBOOK_SECTION_KEYS } from '../src/lib/handbook/sections'
 import {
   buildSeatRoster,
@@ -114,6 +120,24 @@ const pages: Page[] = readdirSync(HANDBOOK)
   })
 
 const slugSet = new Set(pages.map((p) => p.slug))
+
+/** The handbook-wide TODO(why) count, as of the last PR that resolved one. */
+const TODO_CEILING = 11
+
+/** Markdown link targets that are neither a URL, a site path, nor an anchor. */
+function unresolvableLinks(body: string): string[] {
+  return [...body.matchAll(/\]\(([^)\s]+)\)/g)]
+    .map((m) => m[1])
+    .filter((t) => !/^[a-z][a-z0-9+.-]*:/i.test(t) && !t.startsWith('/') && !t.startsWith('#'))
+}
+
+/** A source is a full URL or a path rooted in this repo; anything else renders as a dead link. */
+function isCitableHref(href: unknown): boolean {
+  if (typeof href !== 'string') return false
+  return (
+    /^https?:\/\//.test(href) || [...REPO_PATH_ROOTS, '.claude/'].some((r) => href.startsWith(r))
+  )
+}
 
 /** Resolve a source href to a same-repo path, or null if it is external/non-path. */
 function repoPathOf(href: string): string | null {
@@ -212,6 +236,43 @@ describe('handbook integrity', () => {
       if (p.raw.includes('—')) errors.push(`${p.file}: contains an em dash (use a spaced hyphen)`)
     }
     expect(errors, errors.join('\n')).toEqual([])
+  })
+
+  it('every link in a page resolves from /admin/playbook', () => {
+    const errors = pages.flatMap((p) => unresolvableLinks(p.body).map((t) => `${p.file}: ${t}`))
+    expect(
+      errors,
+      `relative links break when rendered; use a full URL\n${errors.join('\n')}`
+    ).toEqual([])
+  })
+
+  it('every sources href is a URL or a path in this repo', () => {
+    const errors: string[] = []
+    for (const p of pages) {
+      const sources = (p.frontmatter.sources as { href?: unknown }[]) ?? []
+      for (const s of sources)
+        if (!isCitableHref(s?.href))
+          errors.push(`${p.file}: not a URL or repo path -> ${String(s?.href)}`)
+    }
+    expect(errors, errors.join('\n')).toEqual([])
+  })
+
+  it('TODO(why) notes only go down (ratchet)', () => {
+    // A TODO(why) is an honest gap, published to the reader. The assessment found
+    // they aged in place, one already false. New gaps are written as content
+    // or resolved; when one is resolved, lower the ceiling in the same PR.
+    const count = pages.reduce((n, p) => n + (p.body.match(/TODO\(why\)/g) ?? []).length, 0)
+    expect(count, 'a TODO(why) was added; resolve it instead').toBeLessThanOrEqual(TODO_CEILING)
+    expect(count, `TODOs were resolved; lower TODO_CEILING to ${count}`).toBe(TODO_CEILING)
+  })
+
+  it('the link and source checks can fail', () => {
+    expect(unresolvableLinks('see [x](../operator/y.md) and [z](./a.md)')).toHaveLength(2)
+    expect(unresolvableLinks('[a](https://x.y) [b](/admin/playbook/overview) [c](#top)')).toEqual(
+      []
+    )
+    expect(isCitableHref("crane_doc('global', 'x.md')")).toBe(false)
+    expect(isCitableHref('src/pages/index.astro')).toBe(true)
   })
 })
 
@@ -328,5 +389,39 @@ describe('generated handbook content matches the tree', () => {
       { encoding: 'utf8' }
     )
     expect(liveSeatSlugs(resolve('operator/customers'))).toEqual(JSON.parse(py))
+  })
+})
+
+/**
+ * Pages that list what exists must name all of it (scripts/lib/handbook-inventories.ts).
+ * The 2026-10-21 assessment found the runbook table at 6 of 23, the workers list
+ * missing the pager, and about 30 tables absent from the data model. The pages
+ * keep their own grouping; these checks only fail on an omission, and name it.
+ */
+describe('pages that list what exists name all of it', () => {
+  const read = (f: string) => readFileSync(join(HANDBOOK, f), 'utf8')
+
+  it('each listing page names every runbook, deployed worker and live table', () => {
+    const errors = inventoryOmissions(REPO_ROOT)
+      .filter((o) => o.missing.length > 0)
+      .map((o) => `${o.page} does not name ${o.what}(s): ${o.missing.join(', ')}`)
+    expect(errors, errors.join('\n')).toEqual([])
+  })
+
+  it('scheduled-jobs.md is exactly what the tree renders', () => {
+    const rendered = renderScheduledJobs(scheduledJobs(REPO_ROOT))
+    expect(
+      committedJobsBlock(read('scheduled-jobs.md')),
+      'stale: run `npm run handbook:inventories -- --write`'
+    ).toBe(rendered)
+  })
+
+  it('the inventories find what they claim to, and an omission is caught', () => {
+    const blank = inventoryOmissions(REPO_ROOT, () => '')
+    const count = (what: string) => blank.find((o) => o.what === what)?.missing.length ?? 0
+    expect(count('runbook')).toBeGreaterThan(20)
+    expect(blank.find((o) => o.what === 'deployed worker')?.missing).toContain('fleet-alerts')
+    expect(blank.find((o) => o.what === 'live table')?.missing).toContain('client_obligations')
+    expect(scheduledJobs(REPO_ROOT).some((j) => j.name.includes('work-health'))).toBe(true)
   })
 })

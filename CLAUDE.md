@@ -300,11 +300,11 @@ Note the directory is load-bearing. `.claude/commands/` is written by TWO crane 
 
 ## Venture Handbook
 
-The franchise operations manual lives in `docs/handbook/` and renders in the admin console at `admin.smd.services/admin/playbook`. It is the E-Myth handoff manual: what the venture is, why it exists, how it works, and where everything lives, organized so a zero-context successor could run, build, and grow the venture. Source of truth is the markdown in `docs/handbook/` (rendered by `src/content.config.ts` + `src/pages/admin/playbook/`).
+The franchise operations manual lives in `docs/handbook/` and renders in the admin console at `admin.smd.services/admin/playbook`. It is the E-Myth handoff manual, written for a new administrator who runs the business and is not an engineer: Running SMD, The Business and The Product for that reader, an Engineering Appendix reached by link, and a private companion (`venturecrane/engagements:admin/`) for accounts, entity, insurance and client terms. Source of truth is the markdown in `docs/handbook/` (rendered by `src/content.config.ts` + `src/pages/admin/playbook/`).
 
 **Maintenance contract:** when a change to the venture changes what a handbook page says, update that page in the same PR. The docs live next to the code so each page is edited in the same breath as the thing it documents. See `docs/handbook/README.md` for the page map and the "if you change X, update Y" table.
 
-**Enforcement:** `tests/handbook-integrity.test.ts` runs in `npm run verify` and CI - it blocks merge on malformed frontmatter, a dead `/admin/playbook/<slug>` cross-link, a cited same-repo source file that no longer exists, a `(section, order)` collision, or an em dash. The advisory `npm run handbook:drift` reports pages whose cited sources changed after the page (git-mtime), for a periodic review pass. Both are documented in `docs/handbook/README.md`.
+**Enforcement:** `tests/handbook-integrity.test.ts` runs in `npm run verify` and CI - it blocks merge on malformed frontmatter (including the `owner` / `review_every` / `last_reviewed` freshness fields), a dead or unresolvable link, a source that is not a URL or repo path, a missing cited file, a `(section, order)` collision, an em dash, a new `TODO(why)`, and any generated or completeness-checked list (ADR index, connectors, seat roster, scheduled jobs, runbooks, workers, tables) that disagrees with the tree. `npm run handbook:drift` keys on `last_reviewed` and reports pages whose sources changed after their review; `.github/workflows/handbook-review.yml` runs it weekly into one rolling issue. Set `last_reviewed` only after reading a page against its sources. All documented in `docs/handbook/README.md`.
 
 ## Key Reference
 

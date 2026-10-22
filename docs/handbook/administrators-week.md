@@ -40,6 +40,7 @@ There is **no daily "all clear" email**. On a quiet day the team inbox is simply
 
 - **Monday morning:** "Weekly: what the Operator refused". Each refusal is either a scope conversation to have with the client or a setting SMD got wrong. An empty week sends nothing.
 - **Monday:** a "Hermes upstream ... available" issue when the Operator's runtime has a new release. Upgrading is a deliberate, staged release with its own plan (the Hermes upgrade plans in [Disaster Recovery](/admin/playbook/disaster-recovery)); ask an agent whether this one matters and what it would take.
+- **Monday:** the "Handbook: pages due for review" issue, when it is open. It lists pages whose sources changed after they were last checked, and pages past their review window; ask an agent to re-check each against its sources.
 - **Once a week, ask an agent to read you the obligation register** ([Clients & Commitments](/admin/playbook/clients-and-commitments)), so nothing we owe goes stale without you noticing.
 
 ## What arrives in the inbox
@@ -79,5 +80,7 @@ These nightly checks open or update a `prio:P0` or `prio:P1` issue and send no e
 | Obligation register: overdue or unverifiable work | Work we owe a client is late or cannot be proven done |
 | customer_configs projection drift / R2 seat config drift | What is running differs from what was approved |
 | Unaudited send detected / AgentMail lists suppressing rostered recipients | An email left a seat without an audit record, or a list is blocking someone it should reach |
+
+Every scheduled job, wherever it runs, is listed on [Scheduled Jobs](/admin/playbook/scheduled-jobs).
 
 When one of these checks cannot run at all, its GitHub Actions run turns red but opens no issue. An agent reviewing the Actions page once a day catches that; ask for it as part of the daily issue read.
