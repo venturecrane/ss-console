@@ -10,9 +10,13 @@ by the shell wrapper or directly via:
 Exit codes
 ----------
 
-* ``0`` — dry-run completed, or live decommission completed cleanly.
-* ``2`` — pre-flight failed (missing slug, no customer.yaml, a ``--live``
-  run without ``--confirm-slug <slug>`` matching the positional slug, etc.).
+* ``0`` — dry-run completed, or live decommission completed cleanly AND the
+  read-back of every wired layer found nothing of the seat left.
+* ``2`` — pre-flight failed (invalid slug, a ``--live`` run against a slug
+  with neither a seat dir nor a tombstone, a ``--live`` run without
+  ``--confirm-slug <slug>`` matching the positional slug, etc.). A dry run
+  against a slug with no seat dir proceeds: it only reads, and its survey is
+  how a half-retired seat's remaining cloud footprint is found.
 * ``3`` — live decommission halted mid-sequence (a step raised
   :class:`DecommissionStepFailed`). Re-run with the same slug to resume
   from the last completed step (every step is idempotent).
@@ -30,7 +34,21 @@ Exit codes
   ``operator/customers``: the flag only skips the UNWIRED backends, every
   wired one still runs, so against the real customers root it would destroy
   a real seat's Fly app while printing that the run "does NOT fully
-  decommission the customer". A fixture run lives in a fixture root.
+  decommission the customer". A fixture run lives in a fixture root. Also
+  exit 5: a wired backend's own preflight refused (a client obligation still
+  owed, which deleting ``customer_configs`` would cascade away; a ``gh`` that
+  cannot read the ops workspace's sweep secrets).
+* ``6`` — the live steps finished, but the read-back survey found the seat
+  still present on a wired layer, or could not read one. Nothing is reported
+  clean that was not observed absent (Law 14). Re-run: every step is
+  idempotent.
+
+Output, on every run: one line per step, then ``[survey]`` (dry run) or
+``[verify]`` (live) lines with what each wired layer holds of the seat right
+now, then ``[residue]`` lines: the repo edits still owed (exact file and
+change: rings.yaml, the Fly app registry, workspaces.json, the tombstone
+commit), the Infisical ``NAME__<SLUG>`` keys by name, and everything kept by
+design with its reason (``bin.lib.decommission_inventory``).
 
 Two confirmations guard a live run, both mechanical:
 
@@ -76,6 +94,7 @@ from bin.lib.decommission import (
     _load_customer_yaml,
 )
 from bin.lib.decommission_backends import BACKEND_REQUIREMENTS, backends_from_env, signing_preflight
+from bin.lib.decommission_inventory import residue_report
 from bin.lib.seam_pull import SeamAuditLogPreserver, seam_client_from_env
 
 log = logging.getLogger("aie.bin.decommission_cli")
@@ -104,8 +123,10 @@ CREATE TABLE IF NOT EXISTS audit_log (
 """
 
 
-def _build_local_audit_writer(audit_db_path: Path):
-    """Construct an AuditLogWriter against a sqlite file on disk.
+def _build_local_audit_writer(audit_db_path: Optional[Path]):
+    """Construct an AuditLogWriter against a sqlite file on disk, or in memory
+    when ``audit_db_path`` is None (a dry run, which writes no file: against a
+    slug with no seat dir the default path would CREATE that dir).
 
     The decommission script runs from Captain's workstation and writes
     its trail to a per-customer sqlite file under
@@ -117,8 +138,11 @@ def _build_local_audit_writer(audit_db_path: Path):
     """
     from adapter.audit_log import AuditLogWriter, SqliteExecutor
 
-    audit_db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(audit_db_path))
+    if audit_db_path is None:
+        conn = sqlite3.connect(":memory:")
+    else:
+        audit_db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(audit_db_path))
     conn.executescript(_AUDIT_LOCAL_SCHEMA)
     return AuditLogWriter(SqliteExecutor(conn)), conn
 
@@ -128,19 +152,24 @@ def _build_local_audit_writer(audit_db_path: Path):
 # ---------------------------------------------------------------------------
 
 
-def _print_step(result: StepResult, *, stream=sys.stdout) -> None:
+# The stream defaults to None and resolves to sys.stdout at CALL time: a
+# `stream=sys.stdout` default binds the object present at import, so any later
+# redirection (a caller's, a test's) silently missed these lines.
+
+
+def _print_step(result: StepResult, *, stream=None) -> None:
     """One step result, one line. Easy to diff between dry-run and live."""
     detail_json = json.dumps(result.detail, sort_keys=True, separators=(",", ":"))
-    print(f"[{result.status.value:>8}] {result.name}: {detail_json}", file=stream)
+    print(f"[{result.status.value:>8}] {result.name}: {detail_json}", file=stream or sys.stdout)
 
 
-def _print_header(slug: str, *, mode: str, stream=sys.stdout) -> None:
-    print(f"# decommission-customer (issue 820) customer={slug} mode={mode}", file=stream)
+def _print_header(slug: str, *, mode: str, stream=None) -> None:
+    print(f"# decommission-customer (issue 820) customer={slug} mode={mode}", file=stream or sys.stdout)
 
 
-def _print_footer(slug: str, *, mode: str, ok: bool, stream=sys.stdout) -> None:
+def _print_footer(slug: str, *, mode: str, ok: bool, stream=None) -> None:
     status = "OK" if ok else "FAILED"
-    print(f"# decommission-customer end customer={slug} mode={mode} status={status}", file=stream)
+    print(f"# decommission-customer end customer={slug} mode={mode} status={status}", file=stream or sys.stdout)
 
 
 # ---------------------------------------------------------------------------
@@ -249,24 +278,102 @@ def _resolve_paths(args: argparse.Namespace) -> tuple[Path, Path, Path]:
     return customers_root, archive_root, audit_db
 
 
-def _preflight(customers_root: Path, slug: str) -> tuple[bool, Optional[str]]:
+def _preflight(customers_root: Path, slug: str, *, live: bool = True) -> tuple[bool, Optional[str]]:
     """Returns (ok, reason). Idempotency-friendly: missing dir is OK
-    iff a tombstoned copy already exists (treat as completed)."""
+    iff a tombstoned copy already exists (treat as completed).
+
+    A DRY run proceeds without either: its survey is how a seat whose git dir
+    is already gone, but whose cloud footprint may not be, gets looked at. It
+    reads and prints; it never writes."""
     if not slug or not slug.replace("-", "").isalnum():
         return False, f"invalid slug {slug!r} (must match ^[a-z0-9-]+$)"
-    live = customers_root / slug
+    seat_dir = customers_root / slug
     tomb_glob = list(customers_root.glob(f"{slug}.decommissioned.*"))
-    if not live.exists() and not tomb_glob:
-        return False, (
-            f"customer dir not found: {live} (and no tombstone present at "
-            f"{customers_root}/{slug}.decommissioned.*); nothing to decommission"
+    if not seat_dir.exists() and not tomb_glob:
+        reason = (
+            f"customer dir not found: {seat_dir} (and no tombstone present at {customers_root}/{slug}.decommissioned.*)"
         )
+        if not live:
+            print(f"[preflight] {reason}; surveying anyway (dry run)", file=sys.stderr)
+            return True, None
+        return False, reason + "; nothing to decommission"
     return True, None
+
+
+#: Pipeline attribute -> report name, for the survey and the live read-back.
+_SURVEYED = (
+    ("r2_deleter", "r2"),
+    ("vectorize_deleter", "vectorize"),
+    ("agentmail", "agentmail"),
+    ("fly", "fly"),
+    ("observability", "console"),
+)
+
+
+def _survey(pipeline: DecommissionPipeline, slug: str, *, label: str) -> bool:
+    """One line per layer of what exists now, read from the vendor. Returns
+    True when any wired layer still holds the seat, or could not be read (an
+    unreadable layer cannot be reported absent). Unwired layers say so."""
+    residue = False
+    for attr, name in _SURVEYED:
+        survey = getattr(getattr(pipeline, attr, None), "survey", None)
+        if survey is None:
+            print(f"[{label}] {name}: not surveyed (backend unwired)")
+            continue
+        try:
+            observed = survey(slug)
+        except Exception as exc:  # noqa: BLE001 - a layer that cannot be read is reported and counted as residue, never as absent
+            print(f"[{label}] {name}: UNREADABLE {type(exc).__name__}: {exc}")
+            residue = True
+            continue
+        residue = residue or bool(observed.get("present"))
+        state = "PRESENT" if observed.get("present") else "absent"
+        print(f"[{label}] {name}: {state} {json.dumps(observed, sort_keys=True, separators=(',', ':'))}")
+    return residue
+
+
+def _backend_preflights(pipeline: DecommissionPipeline, slug: str) -> list[str]:
+    """Reasons any wired backend gives for refusing to start (an obligation
+    still owed; a gh that cannot read the sweep secrets). Asked before any
+    destructive step, so a refusal touches nothing."""
+    reasons = []
+    for attr, name in _SURVEYED:
+        check = getattr(getattr(pipeline, attr, None), "preflight", None)
+        if check is None:
+            continue
+        try:
+            problem = check(slug)
+        except Exception as exc:  # noqa: BLE001 - a preflight that cannot run is itself a reason to refuse
+            problem = f"preflight could not run: {type(exc).__name__}: {exc}"
+        if problem:
+            reasons.append(f"{name}: {problem}")
+    return reasons
+
+
+def _print_residue(slug: str, customers_root: Path) -> None:
+    """What the pipeline does not remove: repo edits owed (exact), vault names,
+    and what is kept by design with the reason."""
+    report = residue_report(slug, _default_customers_root().parents[1], customers_root)
+    for edit in report["repo_edits"]:
+        print(f"[residue] repo edit owed: {edit['file']}: {edit['edit']}")
+    if not report["repo_edits"]:
+        print("[residue] repo: no authored allow-list names the seat")
+    vault = report["infisical"]
+    print(f"[residue] {vault['target']}: {', '.join(vault['names']) or 'none found'} ({vault['reason']})")
+    if not vault["enumerated"]:
+        print(f"[residue] infisical: {vault['note']}")
+    for item in report["retained_by_design"]:
+        print(f"[residue] kept by design: {item['layer']} {item['target']}: {item['reason']}")
+    print("[residue] kept by design: console tables " + ", ".join(sorted(report["retained_d1_tables"])))
 
 
 def _live_refusal(args: argparse.Namespace, pipeline: DecommissionPipeline, wired: dict[str, bool]) -> bool:
     """True when a --live run must be refused (exit 5) before any step runs;
     the reason is printed. Prints the --allow-unwired warning otherwise."""
+    reasons = _backend_preflights(pipeline, args.slug)
+    if reasons:
+        print("[live] REFUSING before any step: " + "; ".join(reasons), file=sys.stderr)
+        return True
     if wired.get("compliance_archiver"):
         # The packet is signed at step 07, after step 06 destroys the Fly app.
         # A key that cannot sign must stop the run here, with nothing touched,
@@ -306,7 +413,7 @@ def _live_refusal(args: argparse.Namespace, pipeline: DecommissionPipeline, wire
 async def _run(args: argparse.Namespace) -> int:
     customers_root, archive_root, audit_db = _resolve_paths(args)
 
-    ok, reason = _preflight(customers_root, args.slug)
+    ok, reason = _preflight(customers_root, args.slug, live=args.live)
     if not ok:
         print(f"[preflight] FAILED: {reason}", file=sys.stderr)
         return 2
@@ -328,7 +435,8 @@ async def _run(args: argparse.Namespace) -> int:
     _print_header(args.slug, mode=mode)
 
     try:
-        audit_writer, audit_conn = _build_local_audit_writer(audit_db)
+        # A dry run writes nothing to disk, its trail included.
+        audit_writer, audit_conn = _build_local_audit_writer(audit_db if args.live else None)
     except Exception as exc:  # noqa: BLE001 - audit writer init failure is exit 4 with the reason printed; the CLI's contract is exit codes, not traces
         print(f"[preflight] audit writer init failed: {exc}", file=sys.stderr)
         return 4
@@ -354,7 +462,9 @@ async def _run(args: argparse.Namespace) -> int:
     # Every backend (the deletions and the compliance archiver, whose packet
     # row lands in this run's trail) wires from staged credentials; an absent
     # one stays a stub and the #1123 gate below refuses naming what is missing.
-    backend_kwargs, wired = backends_from_env(args.slug, customers_root, audit_writer=audit_writer, actor=args.actor)
+    backend_kwargs, wired = backends_from_env(
+        args.slug, customers_root, audit_writer=audit_writer, actor=args.actor, archive_root=archive_root
+    )
     pipeline_kwargs.update(backend_kwargs)
     for name, ok in wired.items():
         print(
@@ -405,9 +515,33 @@ async def _run(args: argparse.Namespace) -> int:
         except Exception:  # noqa: BLE001 - closing the audit connection in finally must not replace the step's own exit code
             pass
 
+    return _report(args, pipeline, results, customers_root, mode=mode)
+
+
+def _report(
+    args: argparse.Namespace,
+    pipeline: DecommissionPipeline,
+    results: list[StepResult],
+    customers_root: Path,
+    *,
+    mode: str,
+) -> int:
+    """The steps, then the vendor read-back, then what remains by design.
+
+    On a dry run the survey is the inventory: what exists now, layer by layer.
+    On a live run the same survey is the negative probe (Law 14): every wired
+    layer is read again after the pipeline, and a seat still present, or a
+    layer that cannot be read, exits 6 instead of reporting a clean run."""
     for r in results:
         _print_step(r)
-
+    residue = _survey(pipeline, args.slug, label="verify" if args.live else "survey")
+    _print_residue(args.slug, customers_root)
+    if args.live and residue:
+        print(
+            "[live] READ-BACK FOUND RESIDUE: the steps finished but a layer above still holds the seat", file=sys.stderr
+        )
+        _print_footer(args.slug, mode=mode, ok=False)
+        return 6
     _print_footer(args.slug, mode=mode, ok=True)
     return 0
 

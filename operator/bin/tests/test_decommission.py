@@ -622,6 +622,131 @@ def test_cli_dry_run_ignores_confirm_slug(tmp_path, _no_ambient_backends):
     )
     assert rc == 0
     assert _untouched(customers_root)
+    # A dry run writes nothing, its own trail included.
+    assert not (tmp_path / "audit.sqlite").exists()
+
+
+def test_cli_dry_run_on_a_slug_with_no_seat_dir_surveys_and_creates_nothing(tmp_path, _no_ambient_backends, capsys):
+    """A half-retired seat (git dir gone, cloud footprint maybe not) is exactly
+    what a dry run must be able to look at. It reads and prints; it never
+    writes, so the default audit path under customers/<slug>/ is not created."""
+    from bin.lib.decommission_cli import main
+
+    customers_root = _copy_fixture(tmp_path)
+    rc = main(["ghost-seat", "--customers-root", str(customers_root), "--archive-root", str(tmp_path / "a")])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert not (customers_root / "ghost-seat").exists()
+    assert not (tmp_path / "a").exists()
+    # The full inventory: every step, every layer's survey line, the residue.
+    assert "03_r2_namespace" in out and "ss-operator-ghost-seat-skills" in out
+    assert "customer_configs" in out
+    assert "[survey] r2: not surveyed (backend unwired)" in out
+    assert "[residue] kept by design: fly volume snapshots" in out
+    assert "[residue] repo: no authored allow-list names the seat" in out
+
+
+def test_cli_live_still_refuses_a_slug_with_neither_dir_nor_tombstone(tmp_path, _no_ambient_backends):
+    from bin.lib.decommission_cli import main
+
+    customers_root = _copy_fixture(tmp_path)
+    rc = main(
+        [
+            "ghost-seat",
+            "--live",
+            "--confirm-slug",
+            "ghost-seat",
+            "--allow-unwired",
+            "--customers-root",
+            str(customers_root),
+        ]
+    )
+    assert rc == 2
+
+
+class _SurveyedConsole:
+    """A wired console backend whose read-back and preflight the test sets."""
+
+    def __init__(self, *, present: bool = False, refuse: str | None = None) -> None:
+        self.present = present
+        self.refuse = refuse
+        self.cleaned = False
+
+    def preflight(self, slug):
+        return self.refuse
+
+    def survey(self, slug):
+        return {"present": self.present, "projection_rows": {"customer_configs": int(self.present)}}
+
+    async def cleanup(self, slug):
+        self.cleaned = True
+        return {"skipped": False}
+
+
+def _with_console(monkeypatch, console):
+    from bin.lib import decommission_cli
+
+    names = decommission_cli.BACKEND_REQUIREMENTS
+    monkeypatch.setattr(
+        decommission_cli,
+        "backends_from_env",
+        lambda slug, root, **_: ({"observability": console}, {n: n == "observability" for n in names}),
+    )
+    monkeypatch.setattr(decommission_cli, "seam_client_from_env", lambda slug: None)
+
+
+def _live_fixture_argv(tmp_path, customers_root):
+    return [
+        "smd",
+        "--live",
+        "--confirm-slug",
+        "smd",
+        "--allow-unwired",
+        "--customers-root",
+        str(customers_root),
+        "--archive-root",
+        str(tmp_path / "archive"),
+        "--audit-db",
+        str(tmp_path / "audit.sqlite"),
+    ]
+
+
+def test_cli_live_exits_6_when_the_read_back_finds_the_seat_still_present(tmp_path, monkeypatch, capsys):
+    """The steps 'succeeding' is not the claim. The claim is the read-back."""
+    from bin.lib.decommission_cli import main
+
+    customers_root = _copy_fixture(tmp_path)
+    console = _SurveyedConsole(present=True)
+    _with_console(monkeypatch, console)
+    rc = main(_live_fixture_argv(tmp_path, customers_root))
+    captured = capsys.readouterr()
+    assert rc == 6
+    assert console.cleaned is True
+    assert "[verify] console: PRESENT" in captured.out
+    assert "READ-BACK FOUND RESIDUE" in captured.err
+
+
+def test_cli_live_exits_0_only_when_the_read_back_is_clean(tmp_path, monkeypatch, capsys):
+    from bin.lib.decommission_cli import main
+
+    customers_root = _copy_fixture(tmp_path)
+    _with_console(monkeypatch, _SurveyedConsole(present=False))
+    rc = main(_live_fixture_argv(tmp_path, customers_root))
+    assert rc == 0
+    assert "[verify] console: absent" in capsys.readouterr().out
+
+
+def test_cli_live_refuses_on_a_backend_preflight_and_touches_nothing(tmp_path, monkeypatch, capsys):
+    from bin.lib.decommission_cli import main
+
+    customers_root = _copy_fixture(tmp_path)
+    console = _SurveyedConsole(refuse="1 client obligation(s) for smd are not verified, closed or cancelled")
+    _with_console(monkeypatch, console)
+    rc = main(_live_fixture_argv(tmp_path, customers_root))
+    assert rc == 5
+    assert console.cleaned is False
+    assert _untouched(customers_root)
+    assert "console: 1 client obligation(s)" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------

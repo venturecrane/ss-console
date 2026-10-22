@@ -17,6 +17,8 @@ sources:
     href: docs/adr/0065-operator-offboarding-and-dunning.md
   - label: Decommission tooling
     href: operator/bin/decommission-customer.sh
+  - label: What a seat is, layer by layer (decommission inventory)
+    href: operator/bin/lib/decommission_inventory.py
   - label: ADR 0067 - Hosted Agent self-serve SKU
     href: docs/adr/0067-hosted-agent-self-serve-sku.md
   - label: ADR 0090 - Hosted-agent roles
@@ -149,7 +151,8 @@ The exit path, set by the Captain on 2026-07-04 (ADR 0065). Every step that matt
 
 1. **Final export.** The client receives its audit record and the Operator's working memory in exportable form within 14 days of the termination date.
 2. **Access removed.** Claude-connector grants are revoked (the ADR 0057 kill switch), connector credentials revoked or returned, the Operator's mailbox closed.
-3. **Destruction.** An agent runs `operator/bin/decommission-customer.sh`, which destroys the machine, its storage and the client's stores, keeping only legal, tax and accounting records. Before the client's folder is retired, the same run builds the signed compliance evidence packet and reports its path, file count and signature check. A live run will not start without the signing key in place.
-4. **Attestation.** Destruction is confirmed in writing on request.
+3. **Destruction.** An agent first runs `operator/bin/decommission-customer.sh <slug>` as a dry run under the vault, which changes nothing and lists, layer by layer, everything the client's seat still holds. The live run then removes everything provisioning created: the machine and its storage, the client's document workspace, its file buckets, its mailbox, its monitoring checks and every console record that says the seat exists. It keeps only legal, tax, accounting and audit records, and says which and why. Before the client's folder is retired, the same run builds the signed compliance evidence packet and reports its path, file count and signature check. A live run will not start without the signing key in place, and will not start while the register still shows something owed to that client (`.claude/bin/register list --client <slug>`): retiring the seat would erase those entries, so they are delivered or cancelled first, and the run saves a copy of the register's history for that client either way. When the steps finish, the run reads every layer again and reports the job done only if the seat is gone from all of them.
+4. **Repo clean-up.** The run prints the exact changes still owed in this repository (the seat's release-ring entry, its entry in the Fly app list and in the workspace list, and the retired client folder itself). They go in one PR, and a test fails until they are all made. Vault entries for the client are listed by name for the Captain to revoke at each vendor and then delete.
+5. **Attestation.** Destruction is confirmed in writing on request.
 
 Return and destruction finish within 30 days of termination; that window and the 30-day notice of a new sub-processor are the DPA's standard terms (ADR 0065). ADR 0065 also calls for a dry run of the whole sequence on the staging seat before the first paid contract carries these terms; whether that dry run has been done is not recorded in this repository. Ending a client is the Captain's decision; once made, running the sequence is agent work, reported with proof that each layer is gone.

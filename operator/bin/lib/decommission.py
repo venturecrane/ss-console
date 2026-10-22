@@ -74,19 +74,33 @@ The steps:
      memory tables through the runtime-read seam to the archive dir
      (CSV + sqlite snapshot; the snapshot doubles as the evidence
      generator's ``--read-db`` input).
-  3. R2: delete the customer's object namespace (everything under the
-     ``{slug}/`` prefix EXCEPT the decommission-archive subtree).
+  3. R2: empty the seat's prefixes in the shared config bucket and empty and
+     delete its own ``ss-operator-{slug}-skills`` bucket (never the
+     decommission-archive subtree). Targets come from
+     ``bin.lib.decommission_inventory``, the one list of what a seat is.
   4. Vectorize: delete the per-customer vault + corrections indexes.
-  5. AgentMail: delete the seat's inbox (``AgentMailInboxDeprovisioner``).
-  6. Fly Machine: ``fly apps destroy hermes-{slug}`` (``FlyAppDestroyer``).
-     This is also the data-destruction step for ALL Machine-local state.
+  5. AgentMail: delete the seat's inbox and its webhook
+     (``AgentMailInboxDeprovisioner``).
+  6. Fly Machine: ``fly apps destroy`` for ``hermes-{slug}`` and the client's
+     ``ops-{slug}`` workspace, plus the workspace's GitHub sweep secrets
+     (``FlyAppDestroyer``). This is also the data-destruction step for ALL
+     Machine-local state.
   7. Compliance evidence packet: run the evidence builder over the step-2
      snapshot and write the signed packet under the archive dir
      (``EvidencePacketArchiver``); the manifest reports the path, file
      count and signature read back from disk.
   8. ``operator/customers/{slug}/`` tombstone: rename to
      ``{slug}.decommissioned.{iso-date}`` and write a marker file.
-  9. Observability cleanup (healthchecks.io + fleet_status row).
+  9. Console cleanup (``bin.lib.decommission_console``): the healthchecks.io
+     checks and every console D1 projection row for the slug,
+     ``customer_configs`` last; the client obligations its delete cascades
+     are exported first, and a seat with an obligation still owed is refused.
+
+What the pipeline does NOT remove (history tables, the audit archive, Fly
+volume snapshots, vault entries, the repo edits a script cannot commit) is
+printed by the CLI as the residue report
+(``decommission_inventory.residue_report``), so "complete" is never read as
+"nothing remains anywhere".
 """
 
 from __future__ import annotations
@@ -99,6 +113,14 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Awaitable, Callable, Optional, Protocol
+
+from bin.lib.decommission_inventory import (
+    SEAT_PROJECTION_TABLES,
+    r2_targets as _r2_targets,
+    seat_fly_apps,
+    seat_vectorize_indexes,
+    seat_webhook_host,
+)
 
 log = logging.getLogger("aie.bin.decommission")
 
@@ -267,12 +289,11 @@ class AuditLogPreserver(Protocol):
 
 
 class R2NamespaceDeleter(Protocol):
-    """Deletes every R2 object under ``{customer-slug}/`` EXCEPT the
-    decommission-archive subtree (which has already been moved to cold
-    storage by step 8).
+    """Deletes the seat's R2 footprint (shared-bucket prefixes and its own
+    skills bucket) EXCEPT the decommission-archive subtree.
 
-    Production calls ``wrangler r2 object delete`` in batches; tests
-    track the would-be deletions in an in-memory dict.
+    Production is ``CloudflareR2NamespaceDeleter`` (the R2 REST API); tests
+    track the would-be deletions in memory.
     """
 
     async def delete_namespace(self, customer_slug: str) -> dict: ...
@@ -730,28 +751,27 @@ class DecommissionPipeline:
             StepResult(
                 name="03_r2_namespace",
                 status=StepStatus.PLANNED,
-                detail={"namespace": f"{self.customer_slug}/", "deleter_wired": self.r2_deleter is not None},
+                detail={**_r2_targets(self.customer_slug), "deleter_wired": self.r2_deleter is not None},
             ),
             StepResult(
                 name="04_vectorize_indexes",
                 status=StepStatus.PLANNED,
                 detail={
-                    "indexes": [
-                        f"hermes-{self.customer_slug}-vault",
-                        f"hermes-{self.customer_slug}-corrections",
-                    ],
+                    "indexes": seat_vectorize_indexes(self.customer_slug),
                     "deleter_wired": self.vectorize_deleter is not None,
                 },
             ),
             StepResult(
                 name="05_agentmail",
                 status=StepStatus.PLANNED,
-                detail={"action": "deprovision inbox + forwarding rules"},
+                detail={
+                    "action": "delete the seat inbox and its webhook (" + seat_webhook_host(self.customer_slug) + ")"
+                },
             ),
             StepResult(
                 name="06_fly_machine",
                 status=StepStatus.PLANNED,
-                detail={"app": f"hermes-{self.customer_slug}"},
+                detail={"apps": seat_fly_apps(self.customer_slug), "github": "the ops workspace's sweep secrets"},
             ),
             StepResult(
                 name="07_compliance_archive",
@@ -770,7 +790,8 @@ class DecommissionPipeline:
                 name="09_observability_cleanup",
                 status=StepStatus.PLANNED,
                 detail={
-                    "action": "cancel healthchecks.io check + delete fleet_status row",
+                    "action": "cancel healthchecks.io checks + empty the seat's console rows (customer_configs last)",
+                    "tables": list(SEAT_PROJECTION_TABLES),
                     "client_wired": not isinstance(self.observability, NoOpObservabilityCleanupStub),
                 },
             ),
@@ -804,37 +825,12 @@ class DecommissionPipeline:
             )
         )
 
-        # Step 3 — R2 namespace delete
-        results.append(
-            await self._run_step(
-                "03_r2_namespace",
-                self._step_r2_namespace,
-            )
-        )
-
-        # Step 4 — Vectorize indexes delete
-        results.append(
-            await self._run_step(
-                "04_vectorize_indexes",
-                self._step_vectorize_indexes,
-            )
-        )
-
-        # Step 5 — AgentMail
-        results.append(
-            await self._run_step(
-                "05_agentmail",
-                self._step_agentmail,
-            )
-        )
-
-        # Step 6 — Fly Machine
-        results.append(
-            await self._run_step(
-                "06_fly_machine",
-                self._step_fly_machine,
-            )
-        )
+        # Steps 3 to 6: R2, Vectorize, AgentMail, Fly. Each target list comes
+        # from bin.lib.decommission_inventory.
+        results.append(await self._run_step("03_r2_namespace", self._step_r2_namespace))
+        results.append(await self._run_step("04_vectorize_indexes", self._step_vectorize_indexes))
+        results.append(await self._run_step("05_agentmail", self._step_agentmail))
+        results.append(await self._run_step("06_fly_machine", self._step_fly_machine))
 
         # Step 7 — Compliance archive
         results.append(
@@ -944,24 +940,14 @@ class DecommissionPipeline:
 
     async def _step_r2_namespace(self) -> dict:
         if self.r2_deleter is None:
-            return {
-                "skipped": True,
-                "reason": "no r2_deleter wired",
-                "namespace": f"{self.customer_slug}/",
-            }
+            return {"skipped": True, "reason": "no r2_deleter wired", **_r2_targets(self.customer_slug)}
         manifest = await self.r2_deleter.delete_namespace(self.customer_slug)
-        return {"namespace": f"{self.customer_slug}/", **manifest}
+        return {**_r2_targets(self.customer_slug), **manifest}
 
     async def _step_vectorize_indexes(self) -> dict:
         if self.vectorize_deleter is None:
-            return {
-                "skipped": True,
-                "reason": "no vectorize_deleter wired",
-                "indexes": [
-                    f"hermes-{self.customer_slug}-vault",
-                    f"hermes-{self.customer_slug}-corrections",
-                ],
-            }
+            idx = seat_vectorize_indexes(self.customer_slug)
+            return {"skipped": True, "reason": "no vectorize_deleter wired", "indexes": idx}
         manifest = await self.vectorize_deleter.delete_indexes(self.customer_slug)
         return manifest
 
