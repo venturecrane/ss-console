@@ -208,12 +208,13 @@ def _email(head: dict[str, str], body: str, atts: list[tuple[str, bytes]], ocr: 
 
 
 def msg_text(path: Path, ocr: Ocr | None) -> str:
-    from ..demand.pull import _open_msg
+    from ..demand.pull import _open_msg, head_parties
 
     m = _open_msg(path)
     if m is None:
         raise ExtractFailure("msg_unreadable: the Outlook container did not open in either encoding")
-    head = {"From": m["sender"], "To": ", ".join(m["recipients"]), "Date": m["date"], "Subject": m["subject"]}
+    sender, to = head_parties(m)
+    head = {"From": sender, "To": to, "Date": m["date"], "Subject": m["subject"]}
     return _email(head, m["body"], m["attachments"], ocr)
 
 

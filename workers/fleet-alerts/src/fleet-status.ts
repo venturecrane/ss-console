@@ -61,8 +61,13 @@ export interface FleetStatusRow {
   shortfalls?: number | null
   shortfalls_last_ts?: string | null
   shortfalls_json?: string | null
-  /** Lost audit writes; carried into the shortfall email so an undercount shows. */
+  /** Lost audit writes, cumulative for the seat's life (never reset). */
   audit_write_failures?: number | null
+  /**
+   * Migration 0132: when the count last rose, D1 `datetime('now')` form (UTC).
+   * The shortfall email names lost writes only when this falls in its window.
+   */
+  audit_write_failures_rose_at?: string | null
 }
 
 export async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]> {
@@ -78,7 +83,8 @@ export async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]>
               gateway_supervisor_state, gateway_restarts_last_hour,
               send_refusals, send_refusals_last_ts, send_refusals_json,
               tool_failures_json,
-              shortfalls, shortfalls_last_ts, shortfalls_json, audit_write_failures
+              shortfalls, shortfalls_last_ts, shortfalls_json, audit_write_failures,
+              audit_write_failures_rose_at
          FROM fleet_status`
     )
     .all<FleetStatusRow>()

@@ -140,7 +140,7 @@ def test_msg_retries_in_cp1252(tmp_path, monkeypatch):
     rec = _x(tmp_path, "m.msg", b"\xd0\xcf\x11\xe0 ole bytes")
     assert opened == [None, "cp1252"]
     t = _text(rec)
-    assert rec["ok"] and "We are settled" in t and "From: adj@carrier.example" in t
+    assert rec["ok"] and "We are settled" in t and "From: Adjuster <adj@carrier.example>" in t
 
 
 def test_msg_that_never_opens_is_a_failure(tmp_path, monkeypatch):
