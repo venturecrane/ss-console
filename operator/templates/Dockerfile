@@ -1338,7 +1338,14 @@ ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # delivery_reply_status counts it and the daemon's reply watch pages within
 # minutes, not at its 20-minute deadline (A&P 201167). Pairs with this PR's
 # broker + watch change. No tracked twin moved.
-ARG OVERLAY_REF="3d64eda09b6df09fd47d2a2bc7afd2486949970e"
+# 2026-10-22 (8c6f4b86, overlay #534): a person who writes again in the thread
+# of a request whose job is HELD posts a held_reply request card at once, with
+# their own words and the job id, so SMD hears the firm's answer to a hold the
+# minute it arrives (A&P 200530: the attorney's "just leave it out" reached SMD
+# an hour late, by his own forward). The index keeps thread_ref and
+# request_opening. Pairs with ss-console #3403 (migration 0136, the card's
+# console half; deploys before any seat posts the kind). No tracked twin moved.
+ARG OVERLAY_REF="8c6f4b865fbead8fb3a04cec8a025bcafee33b47"
 
 # No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
 # across seats; the slug reaches the Machine only as fly.toml [env]
