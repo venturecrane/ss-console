@@ -55,7 +55,7 @@ from typing import Optional
 
 import yaml
 
-from bin.lib import console_d1, cron_slots, seam_pull
+from bin.lib import console_d1, cron_slots, seam_pull, seat_dirs
 
 EXIT_CLEAN = 0
 EXIT_FINDING = 1
@@ -83,11 +83,7 @@ def customers_dir() -> Path:
 
 
 def seat_slugs() -> list[str]:
-    return sorted(
-        d.name
-        for d in customers_dir().iterdir()
-        if d.is_dir() and not d.name.startswith("_") and not d.name.startswith(".") and (d / "customer.yaml").exists()
-    )
+    return seat_dirs.seat_slugs(customers_dir())
 
 
 def _load_outcomes_module():

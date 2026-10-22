@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .html_channel import HtmlBody
+from .seat_dirs import seat_slugs
 
 GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
 GRAPH_TOKEN_HOST = "https://login.microsoftonline.com"
@@ -109,12 +110,8 @@ def msgraph_seats(customers_dir: str | None = None) -> list[MsGraphSeat]:
 
     root = customers_dir or _default_customers_dir()
     seats: list[MsGraphSeat] = []
-    for slug in sorted(os.listdir(root)):
-        if slug.startswith("_") or slug.startswith("."):
-            continue
+    for slug in seat_slugs(root):
         path = os.path.join(root, slug, "customer.yaml")
-        if not os.path.exists(path):
-            continue
         try:
             with open(path, encoding="utf-8") as handle:
                 data = yaml.safe_load(handle) or {}

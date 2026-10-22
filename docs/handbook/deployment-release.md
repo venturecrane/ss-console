@@ -212,8 +212,9 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
    pilot-smokeball`, drive the shadow firm against the rig and cite the run id
    (below), then `fleet release <release-id>` for the rings. Rings live in
    `operator/fleet/rings.yaml`: 0 `smd-staging`, 1 `pilot-smokeball`, 2 `scott`
-   `brokery` `captain-mark`, 3 `ashton-price` (always one at a time); a seat in
-   no ring joins the last. `--parallel N` widens a ring; `--dry-run` runs every
+   `brokery` `captain-mark`, 3 `ashton-price` (always one at a time). That file
+   is generated from each seat's `ring:` in `operator/customers/<slug>/seat.yaml`
+   (`npm run gen:seat-registries`); a seat in no ring would join the last. `--parallel N` widens a ring; `--dry-run` runs every
    check and touches nothing.
 
 For each seat, in order, every step recorded in D1 `fleet_rollouts`:

@@ -73,6 +73,11 @@
 #   2  findings — drift and/or orphaned provenance (the workflow opens an issue)
 set -euo pipefail
 
+# The one rule for which operator/customers/ dirs are seats (scaffolds and
+# decommissioned tombstones are not): scripts/lib/seat-dir.sh.
+# shellcheck source=lib/seat-dir.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/seat-dir.sh"
+
 DB="${DB_NAME:-ss-console-db}"
 DRY_RUN="${RECONCILE_DRY_RUN:-}"
 
@@ -135,12 +140,8 @@ while IFS=$'\t' read -r slug entity_id row_sha; do
   # BEFORE the charset guard: the leading underscore is not in the slug charset,
   # so the order decides whether `_template` reads as "skip this" or as "someone
   # put a hostile string in the database".
-  if [[ "$slug" == _* ]]; then
-    echo "::warning::${slug} looks like a template dir but holds a customer_configs row; skipping."
-    continue
-  fi
-  if [[ "$slug" == *.decommissioned.* ]]; then
-    echo "::warning::${slug} is a decommissioned seat dir but holds a customer_configs row; skipping."
+  if skip=$(seat_dir_skip_reason "$slug"); then
+    echo "::warning::${slug} is a ${skip} dir name, not a seat, but holds a customer_configs row; skipping."
     continue
   fi
   # The slug arrives from the database and becomes both a filesystem path and a

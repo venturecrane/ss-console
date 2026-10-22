@@ -24,28 +24,32 @@
  * would have inverted that, and a missing client is the failure this register
  * exists to prevent.
  *
- * WHY A MAP KEYED BY SEAT, NOT DERIVED FROM `customer_configs.entity_id`: the
+ * WHY KEYED BY SEAT, NOT DERIVED FROM `customer_configs.entity_id`: the
  * entity is not the client for this purpose. `brokery` is its own client but
  * its config sits on SMD's entity, so an entity rollup would file a client's
- * work under SMD. The keys below were checked against the seats in
- * `customer_configs` (2026-10-15); a seat added there that should roll up
- * elsewhere gets a line here in the same change.
+ * work under SMD.
+ *
+ * WHERE THE MAPPING IS AUTHORED: in each seat's own
+ * `operator/customers/<slug>/seat.yaml` as `client:` (the seat inventory,
+ * scripts/lib/seat-inventory.ts), generated into `seat-clients.generated.mjs`.
+ * It used to be a list here, kept by hand against `customer_configs`, and it
+ * carried a seat (`ashton-price-marketing`) that existed in no seat directory,
+ * no customer_configs row and no obligation row. A seat that rolls up elsewhere
+ * now says so where the seat is authored, and a client's second seat is one
+ * `client:` line in its seat.yaml.
  *
  * Shared by `scripts/ci-reconcile-obligations.ts` and
  * `.claude/hooks/lib/register.mjs`, both under the repo's pinned tsx. `.mjs`
  * because the CLI once ran under bare node.
  */
 
+import { INVENTORY_SEAT_CLIENTS } from './seat-clients.generated.mjs'
+
 /** The client slug SMD's own seats roll up to. */
 export const SMD_CLIENT = 'smd-services'
 
 /** Seat (customer_slug) -> the client its obligations belong to, for every seat that is NOT its own client. */
-const SEAT_CLIENT = new Map([
-  ['pilot-smokeball', SMD_CLIENT],
-  ['smd-staging', SMD_CLIENT],
-  ['scott', SMD_CLIENT],
-  ['ashton-price-marketing', 'ashton-price'],
-])
+const SEAT_CLIENT = new Map(INVENTORY_SEAT_CLIENTS)
 
 /**
  * Clients with no seat of their own name. SMD's seats are all named for what

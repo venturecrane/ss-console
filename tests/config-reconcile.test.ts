@@ -476,17 +476,19 @@ describe('ci-reconcile-customer-configs: never creates, never drops', () => {
     expect(readRows(fx)['in-sync-seat']).toBe(fx.shas.old)
   })
 
-  it('never projects a template dir that somehow holds a row', () => {
+  it('never projects a scaffold or tombstone dir that somehow holds a row', () => {
     const fx = makeFixture()
     seedRows(fx, [
       ['_template', 'ent_x', fx.shas.old],
+      ['gone.decommissioned.2026-10-01', 'ent_y', fx.shas.old],
       ['smd-staging', 'ent_1', fx.shas.head],
     ])
 
     const res = run(fx)
 
     expect(res.code).toBe(0)
-    expect(res.out).toContain('looks like a template dir')
+    expect(res.out).toContain('_template is a scaffold dir name, not a seat')
+    expect(res.out).toContain('gone.decommissioned.2026-10-01 is a tombstone dir name, not a seat')
     expect(projections(res.npxCalls)).toHaveLength(0)
   })
 

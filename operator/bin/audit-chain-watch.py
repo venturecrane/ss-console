@@ -73,6 +73,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
+from bin.lib import seat_dirs
 from bin.lib.chain_pin import (
     PIN_ABSENT,
     PIN_MALFORMED,
@@ -243,13 +244,8 @@ def _row_count_shrink(pin: Optional[dict], rows_now: int) -> Optional[str]:
 
 
 def authored_seats(repo_root: Path) -> list[str]:
-    """Every seat main authors a customer.yaml for. Template dirs are skipped."""
-    base = repo_root / "operator" / "customers"
-    if not base.is_dir():
-        return []
-    return sorted(
-        d.name for d in base.iterdir() if d.is_dir() and not d.name.startswith("_") and (d / "customer.yaml").exists()
-    )
+    """Every seat main authors a customer.yaml for (bin/lib/seat_dirs.py: no scaffold, no tombstone)."""
+    return seat_dirs.seat_slugs(repo_root / "operator" / "customers")
 
 
 @dataclass

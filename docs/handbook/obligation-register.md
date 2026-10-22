@@ -137,7 +137,7 @@ Check I also asks the session to move rows a letter **handed to the client** to 
 
 **What the check cannot see.** The detector reads the session's engagement read log, which is written when a file is opened with the Read tool. A letter opened through the shell, reached by a search, or pasted into the prompt leaves no trace. A client it flags is real; a quiet session proves nothing.
 
-**SMD Services is itself a client.** Obligations on our own seats (`pilot-smokeball`, `smd-staging`, `scott`) roll up to `smd-services`. There is no internal-versus-external split in the register: there is a client list, and we are on it. Identity is the default in `scripts/lib/seat-clients.mjs`, so onboarding a client needs no change there - only a new seat of our own does.
+**SMD Services is itself a client.** Obligations on our own seats (`pilot-smokeball`, `smd-staging`, `scott`) roll up to `smd-services`. There is no internal-versus-external split in the register: there is a client list, and we are on it. Identity is the default in `scripts/lib/seat-clients.mjs`, so onboarding a client needs no change there. A new seat of our own, or a client's second seat, says where it rolls up with `client:` in its own `operator/customers/<slug>/seat.yaml`, and `npm run gen:seat-registries` carries that into the rollup.
 
 ## How a row closes
 
@@ -214,5 +214,5 @@ It also skips a row that is **waiting on someone else**: any row in `awaiting_ex
 | Who captures, and when | `.claude/skills/eos/SKILL.md` Check I, `CLAUDE.md`, "Who does what with it" and "Who records what we owe" above |
 | How a row closes, or what counts as delivery evidence | `.claude/hooks/lib/register.mjs` (`deliver`), `.claude/hooks/lib/register-retire.mjs` (`cancel`, `reopen`, `retire`, `await`), `.claude/hooks/lib/register-close.mjs` (which states each command accepts and its evidence checks), `certify` in `scripts/ci-reconcile-obligations.ts`, `tests/register-deliver.test.ts`, `tests/register-cancel.test.ts`, `tests/register-reopen.test.ts`, `tests/register-retire-await.test.ts`, and "How a row closes" |
 | Which rows the undated age ladder skips | `waitsOnSomeoneElse` in `scripts/lib/obligation-reconcile/verdicts.ts`, `tests/register-retire-await.test.ts`, and "What a stalled row does now" |
-| Which seats roll up to which client | `scripts/lib/seat-clients.mjs` and "Who records what we owe" above |
+| Which seats roll up to which client | `client:` in each seat's `operator/customers/<slug>/seat.yaml`, read through `scripts/lib/seat-clients.mjs`, and "Who records what we owe" above |
 | What the session-start line says, or how rows split by whose move | `.claude/skills/sos/SKILL.md` Step 4, `whoseMove` and the `--json` allowlist in `scripts/lib/register-view.mjs`, `tests/register-cli.test.ts` |

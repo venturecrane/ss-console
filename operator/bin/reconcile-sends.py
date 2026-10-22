@@ -140,7 +140,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from bin.lib import seam_pull, seat_inbox, send_verify
+from bin.lib import seam_pull, seat_dirs, seat_inbox, send_verify
 
 #: ``_usable_ids`` -- every exact join key a row's metadata offers -- moved to
 #: lib/send_attribution.py (claims review 2026-09-04, B7) so the verifier's
@@ -817,7 +817,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.since:
         since = _parse_ts(args.since if "T" in args.since else args.since + "T00:00:00Z")
 
-    slugs = sorted(d for d in os.listdir(_customers_dir()) if not d.startswith("_") and not d.startswith("."))
+    slugs = seat_dirs.seat_slugs(_customers_dir())
 
     baseline_path = args.baseline or DEFAULT_BASELINE_PATH  # also holds verify_dispositioned (ss#3030)
     baseline = set() if args.no_baseline else load_baseline(baseline_path)

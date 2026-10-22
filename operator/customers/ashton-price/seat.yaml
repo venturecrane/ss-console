@@ -1,0 +1,15 @@
+# Seat inventory entry. CONSOLE-SIDE ONLY: read by scripts/lib/seat-inventory.ts,
+# never published to R2 and never read by the seat, so nothing here can fail a
+# seat at boot. After editing run `npm run gen:seat-registries`;
+# tests/seat-inventory.test.ts fails while a generated registry is stale.
+#
+# The production pilot firm (Smokeball Operator, ADR 0053). The last ring: it
+# always deploys one seat at a time.
+
+# The seat's Fly app (ADR 0036). Authored, never derived: confirm with
+# `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
+fly_app: hermes-ashton-price
+# Release ring (operator/bin/fleet release walks rings in order).
+ring: 3
+# The day this seat's customer.yaml first landed on main. Orders seats in a ring.
+authored: '2026-06-24'

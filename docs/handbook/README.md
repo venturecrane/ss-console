@@ -30,6 +30,7 @@ Rough "if you change X, update Y":
 | The Operator architecture / ceilings / memory | `operator-platform.md`, `autonomy-governance.md`, `knowledge-memory.md` |
 | A connector or delivery channel | `connectors-channels.md` |
 | A seat folder in `operator/customers/` (added, retired, or its `seat.kind` / `seat.product` / `seat.role` / `vertical` changed) | Regenerate the roster block in `clients-and-commitments.md` with `npm run handbook:roster -- --write`; `tests/handbook-integrity.test.ts` blocks merge until it matches the tree |
+| A seat's Fly app, release ring, or client rollup (`operator/customers/<slug>/seat.yaml`), or a seat folder added or retired | Run `npm run gen:seat-registries`: it regenerates `src/lib/operator/fly-app-registry.generated.ts`, `operator/fleet/rings.yaml` and `scripts/lib/seat-clients.generated.mjs` from the seat inventory, and `tests/seat-inventory.test.ts` blocks merge while any of them is stale. `repository-map.md` describes the inventory. |
 | A signal sent to team@ (a new alert, a changed subject, a new scheduled control) | `administrators-week.md` and, if it needs a response, `when-something-goes-wrong.md` |
 | Who may approve or decide something | `who-does-what.md` |
 | A tool in `operator/connectors/<name>/manifest.toml` (added, removed, reclassified) or a new `*_tools.py` module | Regenerate the inventory block in `connectors-channels.md` with `npm run handbook:connectors -- --write`, and update the prose around it in the same PR; `tests/handbook-integrity.test.ts` blocks merge until the block matches the tree |

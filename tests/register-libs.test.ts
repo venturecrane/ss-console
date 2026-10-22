@@ -19,6 +19,7 @@ import { resolve } from 'path'
 import { parseWranglerJson } from '../scripts/lib/wrangler-envelope.mjs'
 import { clientOf, seatsOf, SMD_CLIENT } from '../scripts/lib/seat-clients.mjs'
 import { ageInDays, sqliteUtcMs } from '../scripts/lib/sqlite-time.mjs'
+import { loadSeatInventory } from '../scripts/lib/seat-inventory'
 
 const ROOT = process.cwd()
 
@@ -102,13 +103,16 @@ describe('clientOf', () => {
     expect(seatsOf('some-firm-we-sign-next-week')).toEqual(['some-firm-we-sign-next-week'])
   })
 
-  it("rolls a client's second seat up under the client, both ways", () => {
-    // The first Operator client's marketing seat is the same client's work,
-    // not a new client's. Without the map entry the register reports it as
-    // its own client and `--client ashton-price` hides its rows.
-    expect(clientOf('ashton-price-marketing')).toBe('ashton-price')
-    expect(seatsOf('ashton-price').sort()).toEqual(['ashton-price', 'ashton-price-marketing'])
-    for (const seat of seatsOf('ashton-price')) expect(clientOf(seat)).toBe('ashton-price')
+  it('takes every rollup from the seat inventory, and only from it', () => {
+    // The mapping is authored as `client:` in each seat's seat.yaml. It used to
+    // be hand-kept here and carried `ashton-price-marketing`, a seat that
+    // existed nowhere. Every seat the inventory rolls up maps both ways; every
+    // other inventory seat is its own client.
+    for (const seat of loadSeatInventory(resolve(ROOT, 'operator/customers'))) {
+      expect(clientOf(seat.slug)).toBe(seat.client)
+      expect(seatsOf(seat.client)).toContain(seat.slug)
+    }
+    expect(clientOf('ashton-price-marketing')).toBe('ashton-price-marketing')
   })
 
   it('a seat on SMD entity that is its own client stays its own client', () => {

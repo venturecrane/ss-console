@@ -47,6 +47,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The one rule for which operator/customers/ dirs are seats (scaffolds and
+# decommissioned tombstones are not): scripts/lib/seat-dir.sh.
+# shellcheck source=lib/seat-dir.sh
+source "${SCRIPT_DIR}/lib/seat-dir.sh"
 BEFORE="${BEFORE_SHA:?BEFORE_SHA required}"
 AFTER="${AFTER_SHA:?AFTER_SHA required}"
 
@@ -197,19 +201,15 @@ fail=0
 for slug in "${slugs[@]}"; do
   cfg="operator/customers/${slug}/customer.yaml"
 
-  # Template/staging dirs are not live customers. They also carry deliberate
+  # Scaffold dirs are not live customers. They also carry deliberate
   # placeholder values that fail validation, so they must be skipped BEFORE the
-  # validator runs, not after.
-  if [[ "$slug" == _* ]]; then
-    echo "Skipping template dir: $slug"
-    continue
-  fi
-  # A decommissioned seat keeps its dir as `<slug>.decommissioned.<date>` with
-  # its customer.yaml inside (operator/bin/lib/decommission.py, step 08). It is
-  # a historical record, not a seat: never publish it, and never let its dotted
-  # name reach the slug guard below as if someone had authored it.
-  if [[ "$slug" == *.decommissioned.* ]]; then
-    echo "Skipping decommissioned seat dir: $slug"
+  # validator runs, not after. A decommissioned seat keeps its dir as
+  # `<slug>.decommissioned.<date>` with its customer.yaml inside
+  # (operator/bin/lib/decommission.py, step 08). It is a historical record, not
+  # a seat: never publish it, and never let its dotted name reach the slug
+  # guard below as if someone had authored it.
+  if skip=$(seat_dir_skip_reason "$slug"); then
+    echo "Skipping ${skip} dir: $slug"
     continue
   fi
 

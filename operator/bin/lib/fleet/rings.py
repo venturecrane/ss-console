@@ -7,6 +7,8 @@ from pathlib import Path
 
 import yaml
 
+from bin.lib.seat_dirs import seat_slugs
+
 from . import ids
 
 
@@ -18,15 +20,8 @@ class Ring:
 
 
 def live_seats(customers_dir: Path) -> list[str]:
-    """Every provisioned-shape seat dir: a customer.yaml, not a template, not decommissioned."""
-    out = []
-    for d in sorted(customers_dir.iterdir()):
-        name = d.name
-        if name.startswith("_") or ".decommissioned." in name or not (d / "customer.yaml").is_file():
-            continue
-        if ids.SLUG_RE.match(name):
-            out.append(name)
-    return out
+    """Every seat dir, by the one rule in bin/lib/seat_dirs.py (no scaffold, no tombstone)."""
+    return seat_slugs(customers_dir)
 
 
 def load_rings(rings_file: Path, customers_dir: Path) -> list[Ring]:

@@ -67,9 +67,21 @@ def test_desired_ref_missing_raises(tmp_path):
 # --- discover_slugs ---------------------------------------------------------
 
 
-def test_discover_slugs_excludes_template(tmp_path):
-    for name in ("smd", "acme", "_template", ".hidden"):
+def test_discover_slugs_excludes_scaffolds_and_tombstones(tmp_path):
+    # Every scaffold, not only `_template`: this used to count `_hosted-template`
+    # and `_couples-template` as seats. The rule is bin/lib/seat_dirs.py.
+    for name in (
+        "smd",
+        "acme",
+        "_template",
+        "_hosted-template",
+        "_couples-template",
+        ".hidden",
+        "old.decommissioned.2026-10-01",
+    ):
         (tmp_path / name).mkdir()
+        (tmp_path / name / "customer.yaml").write_text("seat: {}\n", encoding="utf-8")
+    (tmp_path / "no-yaml").mkdir()
     assert drift.discover_slugs(tmp_path) == ["acme", "smd"]
 
 

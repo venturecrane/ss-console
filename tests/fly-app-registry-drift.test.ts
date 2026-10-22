@@ -27,60 +27,51 @@
  * guard querying D1 could not run on a PR — and a guard that cannot run cannot
  * fail. The authored configs are the upstream of that very table: ADR 0012 §5
  * makes `operator/customers/<slug>/customer.yaml` the git source of truth, and
- * `scripts/ci-sync-customer-configs.sh` projects exactly the non-`_` seat dirs
- * into `customer_configs`. So the directory listing is the same population one
- * step earlier in the pipeline, checkable offline, and it catches the gap
- * BEFORE the row is projected rather than after.
+ * `scripts/ci-sync-customer-configs.sh` projects exactly the seat dirs into
+ * `customer_configs`. So the directory listing is the same population one step
+ * earlier in the pipeline, checkable offline, and it catches the gap BEFORE the
+ * row is projected rather than after.
  *
- * The `shippedSlugs()` rule below is deliberately identical to the one in
- * `tests/shipped-customer-configs.test.ts` and to the CI sync script's own
- * filter, so the three cannot diverge on what counts as a seat.
+ * Which dirs are seats, and what each seat's Fly app is, both come from the
+ * seat inventory (`scripts/lib/seat-inventory.ts`): one rule shared with the
+ * CI scripts and the Python fleet tooling, and a `fly_app:` authored in each
+ * seat's `seat.yaml`. The registry is generated from it;
+ * `tests/seat-inventory.test.ts` fails when the generated file is stale. This
+ * file keeps the guarantees that are about the registry's BEHAVIOR.
  */
 
 import { describe, it, expect } from 'vitest'
-import { readdirSync, existsSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import {
   REGISTERED_CUSTOMER_FLY_APPS,
   UNPROVISIONED_CUSTOMERS,
   resolveCustomerFlyApp,
 } from '../src/lib/operator/fly-app-registry'
+import { loadSeatInventory } from '../scripts/lib/seat-inventory'
 
-const CUSTOMERS_DIR = resolve('operator/customers')
-
-/** Seat slugs the CI sync script would project: real dirs, `_`-prefixed skipped. */
-function shippedSlugs(): string[] {
-  if (!existsSync(CUSTOMERS_DIR)) return []
-  return readdirSync(CUSTOMERS_DIR, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && !d.name.startsWith('_'))
-    .map((d) => d.name)
-    .filter((slug) => existsSync(join(CUSTOMERS_DIR, slug, 'customer.yaml')))
-    .sort()
-}
-
-const slugs = shippedSlugs()
+const seats = loadSeatInventory(resolve('operator/customers'))
+const slugs = seats.map((s) => s.slug)
 
 describe('fly-app-registry drift guard', () => {
   it('discovers the authored seats', () => {
     expect(slugs.length).toBeGreaterThan(0)
   })
 
-  it.each(slugs)('%s: is registered, or records why it has no Fly app', (slug) => {
-    const app = resolveCustomerFlyApp(slug)
-    const reason = UNPROVISIONED_CUSTOMERS[slug]
+  it.each(seats)(
+    '$slug: resolves to the app its seat.yaml authors, or records why none',
+    (seat) => {
+      const app = resolveCustomerFlyApp(seat.slug)
+      const reason = UNPROVISIONED_CUSTOMERS[seat.slug]
 
-    expect(
-      app !== null || typeof reason === 'string',
-      `Seat "${slug}" is authored at operator/customers/${slug}/customer.yaml but appears in ` +
-        `neither map in src/lib/operator/fly-app-registry.ts.\n\n` +
-        `It will fail closed SILENTLY: every runtime surface for this seat renders ` +
-        `honest-empty and nothing alerts (ss#2283).\n\n` +
-        `Decide one:\n` +
-        `  - it has a Fly app  -> add "${slug}": "<app-name>" to CUSTOMER_FLY_APPS ` +
-        `(confirm the real name with \`fly apps list\`; do NOT assume hermes-${slug})\n` +
-        `  - it has none yet   -> add "${slug}" to UNPROVISIONED_CUSTOMERS with the reason`
-    ).toBe(true)
-  })
+      expect(
+        app !== null || typeof reason === 'string',
+        `Seat "${seat.slug}" is authored at operator/customers/${seat.slug}/ but appears in ` +
+          `neither generated map. It will fail closed SILENTLY: every runtime surface for this ` +
+          `seat renders honest-empty and nothing alerts (ss#2283). Run \`npm run gen:seat-registries\`.`
+      ).toBe(true)
+      expect(app).toBe(seat.flyApp)
+    }
+  )
 
   it('never lists a seat as both registered and unprovisioned', () => {
     const both = Object.keys(UNPROVISIONED_CUSTOMERS).filter(
@@ -130,5 +121,12 @@ describe('fly-app-registry drift guard', () => {
     // with a slug that has never existed and never will, so this assertion
     // cannot be quietly satisfied by a real entry appearing later.
     expect(resolveCustomerFlyApp('never-a-real-seat')).toBeNull()
+  })
+
+  it('does not resolve Object.prototype names', () => {
+    // A bare object index hands back a function for these; none is a seat.
+    for (const name of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
+      expect(resolveCustomerFlyApp(name)).toBeNull()
+    }
   })
 })

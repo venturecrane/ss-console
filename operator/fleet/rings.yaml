@@ -1,3 +1,8 @@
+# GENERATED from operator/customers/<slug>/seat.yaml (`ring:`) by
+# scripts/gen-seat-registries.ts. Do not edit: change the seat's seat.yaml and
+# run `npm run gen:seat-registries`. tests/seat-inventory.test.ts fails while
+# this file is stale.
+#
 # Release rings: which seats take a release first. MEMBERSHIP ONLY.
 #
 # `operator/bin/fleet release` walks these in order. A ring finishes before the
@@ -10,9 +15,10 @@
 # fleet_holds and takes effect at once, without a PR (a held seat is skipped
 # and recorded as skipped_held).
 #
-# A seat that exists under operator/customers/ but is named in no ring joins the
-# LAST ring: a new seat is never in an early ring by omission.
-# tests: operator/bin/tests/test_fleet_rings.py
+# Every seat authors its ring, so none is in a ring by omission. As a backstop,
+# operator/bin/lib/fleet/rings.py still puts a seat named in no ring in the LAST
+# ring: a new seat is never in an early ring by accident.
+# tests: operator/bin/tests/test_fleet_parts.py
 rings:
   - ring: 0
     seats: [smd-staging]
