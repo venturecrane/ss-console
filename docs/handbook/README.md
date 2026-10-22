@@ -135,6 +135,9 @@ Four mechanisms, in order of strength:
 4. **The weekly review (advisory, read every Monday).** `npm run handbook:drift`
    (`scripts/handbook-review.ts`) keys on `last_reviewed`, not on commit times, so editing a
    page never hides that its sources moved. It reports pages whose cited sources changed after
-   their review, pages past their review window, and the never-reviewed backlog.
+   their review, pages past their review window, and the never-reviewed backlog. "After the
+   review" means a commit after the one that last changed the page's `last_reviewed` line, so
+   a review is recorded by changing that date; a second review on the same calendar day changes
+   nothing git can see and is recorded at the next review.
    `.github/workflows/handbook-review.yml` runs it every Monday and keeps one rolling issue,
    "Handbook: pages due for review", closed when nothing is due.
