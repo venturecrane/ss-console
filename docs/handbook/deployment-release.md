@@ -31,6 +31,8 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/boot-smoke-test.sh
   - label: scripts/check-config-against-image.mjs
     href: https://github.com/venturecrane/ss-console/blob/main/scripts/check-config-against-image.mjs
+  - label: scripts/lib/seat-image-guard.sh (the guard every R2 config writer runs)
+    href: https://github.com/venturecrane/ss-console/blob/main/scripts/lib/seat-image-guard.sh
   - label: operator/bin/overlay-ref-drift.py
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/overlay-ref-drift.py
   - label: operator/rehearsal/run.py
@@ -300,14 +302,31 @@ previous pointer back and the rollout halts. **Rolling a skill back is a
 skills release of the previous version** (`fleet release --skills
 <previous>`); `rollback-skill.sh` is gone.
 
-The config publisher (`scripts/ci-publish-customer-configs.sh`, with the check
-in `scripts/check-config-against-image.mjs`) checks every `customer.yaml`
-against what the seat runs NOW: its current image's manifest plus its current
-skills release. A config naming a skill, pin or pre_run neither carries is
-refused, because the seat re-fetches `customer.yaml` on every boot and the next
-restart would adopt it (the 2026-10-13 outage). A published config reaches the
-seat on its next boot; fields the seat applies live are picked up sooner by the
-ADR 0044 poller.
+Every writer of a seat's R2 config (`vaults/<slug>/customer.yaml`) checks the
+`customer.yaml` against what the seat runs NOW: its current image's manifest
+plus its current skills release. A config naming a skill, pin or pre_run
+neither carries is refused, because the seat re-fetches `customer.yaml` on every
+boot and the next restart would adopt it (the 2026-10-13 outage, ADR 0093). The
+check is one implementation, `scripts/lib/seat-image-guard.sh` around
+`scripts/check-config-against-image.mjs`, sourced by all three writers:
+
+- the merge-time publisher (`scripts/ci-publish-customer-configs.sh`);
+- the nightly reconciler (`scripts/ci-reconcile-r2-customer-configs.sh`, run by
+  `.github/workflows/customer-config-reconcile.yml`), which republishes main's
+  bytes when the object drifts. On a refusal it leaves the object as it is and
+  reports the seat as REFUSED, on one standing issue titled "R2 seat config
+  refused by the image guard" that each nightly run comments on, separate from
+  the dated drift issue. Before the guard reached it, this job undid every
+  refusal the publisher made;
+- the operator-run sync (`operator/bin/sync-customer-yaml.sh`), which also
+  refuses a seat with no object (the first publish is provisioning's) and uses
+  the canonical slug pattern.
+
+Provisioning (`operator/bin/provision-customer.sh`) does not run the check: it
+ships the config together with the image that carries it, which is how a
+refused config reaches its seat. A published config reaches the seat on its
+next boot; fields the seat applies live are picked up sooner by the ADR 0044
+poller.
 
 ### Driving the shadow firm (the bump's `(runtime)` proof)
 

@@ -17,6 +17,10 @@ sources:
     href: docs/runbooks/operator/lane-proof.md
   - label: Config publish on merge
     href: scripts/ci-publish-customer-configs.sh
+  - label: Nightly config reconcile
+    href: scripts/ci-reconcile-r2-customer-configs.sh
+  - label: Image guard shared by every config writer
+    href: scripts/lib/seat-image-guard.sh
   - label: Pause script
     href: operator/bin/pause-customer.sh
   - label: Sticky-stop clear runbook
@@ -68,7 +72,7 @@ You ask an agent; the agent edits the client's configuration file (`operator/cus
 
 ## 5. Confirming it landed
 
-Ask the agent for proof that it landed, not just that it merged. It can show the configuration-change record on the seat, the change in the seat's config history (`/admin/operator/config-history/<slug>`), or a live read from the seat. A nightly check also compares what is running with what was approved and opens an issue when they differ.
+Ask the agent for proof that it landed, not just that it merged. It can show the configuration-change record on the seat, the change in the seat's config history (`/admin/operator/config-history/<slug>`), or a live read from the seat. A nightly check also compares what is running with what was approved. When they differ it brings the seat back in line and opens an issue. The one exception is a change that needs a newer build of the Operator than the seat is running (a skill or routine its build does not carry yet): then the seat is left as it is, because adopting that change would stop it at its next restart, and one standing issue says so every night until the seat is rebuilt. The same rule holds the change back at merge time, so a change like this is not live until the agent rebuilds the seat ([Deployment & Release](/admin/playbook/deployment-release)).
 
 ## 6. Pausing and stopping
 
