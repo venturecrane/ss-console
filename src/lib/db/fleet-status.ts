@@ -93,9 +93,9 @@ const FLEET_STATUS_UPSERT_SQL = `INSERT INTO fleet_status (
        send_refusals, send_refusals_last_ts, send_refusals_json, tool_failures_json,
        shortfalls, shortfalls_last_ts, shortfalls_json,
        image_ref, skills_version, config_digest,
-       jobs_running, jobs_queued, wakes_pending, updated_at
+       jobs_running, jobs_queued, wakes_pending, audit_write_failures_rose_at, updated_at
      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-               ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+               ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? > 0 THEN datetime('now') END, datetime('now'))
      ON CONFLICT(customer_slug) DO UPDATE SET
        entity_id               = excluded.entity_id,
        last_heartbeat_ts       = excluded.last_heartbeat_ts,
@@ -120,6 +120,9 @@ const FLEET_STATUS_UPSERT_SQL = `INSERT INTO fleet_status (
        cron_containment        = excluded.cron_containment,
        audit_write_failures    = COALESCE(excluded.audit_write_failures, fleet_status.audit_write_failures),
        audit_write_failure_reasons_json = COALESCE(excluded.audit_write_failure_reasons_json, fleet_status.audit_write_failure_reasons_json),
+       audit_write_failures_rose_at = CASE
+         WHEN excluded.audit_write_failures > COALESCE(fleet_status.audit_write_failures, 0) THEN datetime('now')
+         ELSE fleet_status.audit_write_failures_rose_at END,
        audit_head              = COALESCE(excluded.audit_head, fleet_status.audit_head),
        audit_rows              = COALESCE(excluded.audit_rows, fleet_status.audit_rows),
        gateway_loop_ok            = excluded.gateway_loop_ok,
@@ -187,7 +190,10 @@ export async function upsertFleetStatus(db: D1Database, u: FleetStatusUpsert): P
       u.release.configDigest,
       u.release.jobsRunning,
       u.release.jobsQueued,
-      u.release.wakesPending
+      u.release.wakesPending,
+      // A first beat that already reports losses is a rise (it is how the
+      // heartbeat's own delta treats it); migration 0132.
+      u.auditWriteFailures
     )
     .run()
 }

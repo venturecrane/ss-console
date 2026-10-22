@@ -226,6 +226,44 @@ describe('#2498 a rise in lost rows reaches a person', () => {
     expect(captureWarning).not.toHaveBeenCalled()
   })
 
+  it('records WHEN the count last rose, so an alert can tell a new loss from an old one (0132)', async () => {
+    const roseAt = async () =>
+      (
+        await db
+          .prepare(
+            'SELECT audit_write_failures_rose_at AS r FROM fleet_status WHERE customer_slug = ?'
+          )
+          .bind(SLUG)
+          .first<{ r: string | null }>()
+      )?.r ?? null
+    await POST(beat({ audit_write_failures: 0 }))
+    expect(await roseAt()).toBeNull()
+    await POST(beat({ audit_write_failures: 3 }))
+    const first = await roseAt()
+    expect(first).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    await db
+      .prepare(
+        `UPDATE fleet_status SET audit_write_failures_rose_at = '2026-01-01 00:00:00' WHERE customer_slug = ?`
+      )
+      .bind(SLUG)
+      .run()
+    await POST(beat({ audit_write_failures: 3 }))
+    await POST(beat({}))
+    await POST(beat({ audit_write_failures: 1 }))
+    expect(await roseAt()).toBe('2026-01-01 00:00:00')
+    await POST(beat({ audit_write_failures: 2 }))
+    expect(await roseAt()).not.toBe('2026-01-01 00:00:00')
+  })
+
+  it('a first beat that already reports losses records the rise', async () => {
+    await POST(beat({ audit_write_failures: 5 }))
+    const r = await db
+      .prepare('SELECT audit_write_failures_rose_at AS r FROM fleet_status WHERE customer_slug = ?')
+      .bind(SLUG)
+      .first<{ r: string | null }>()
+    expect(r?.r).not.toBeNull()
+  })
+
   it('a count that went DOWN is silent rather than alarming', async () => {
     // The tally file was removed or the volume replaced. Not a rise, and
     // reporting a negative loss would be a fabricated number.

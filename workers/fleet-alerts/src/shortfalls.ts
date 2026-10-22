@@ -242,7 +242,28 @@ async function sendEmail(
   }
 }
 
-function shortfallHtml(env: Env, row: FleetStatusRow, rows: LedgerRow[]): string {
+/** The window the email's counts cover ("in the last 24 hours"). */
+const LOST_WRITES_WINDOW_MS = 24 * 60 * 60 * 1000
+
+/**
+ * The lost-writes note, only when the seat lost a row inside the email's
+ * window. `audit_write_failures` is cumulative for the seat's life, so printing
+ * it on every alert (as this did until 2026-10-21) presented an old loss as a
+ * reason to doubt today's list: ashton-price carried "22 lost audit write(s)"
+ * with no row lost since 10-20.
+ */
+function lostWritesNote(row: FleetStatusRow, nowMs: number): string {
+  const rose = row.audit_write_failures_rose_at
+  if (typeof rose !== 'string' || typeof row.audit_write_failures !== 'number') return ''
+  const roseMs = Date.parse(`${rose.replace(' ', 'T')}Z`)
+  if (Number.isNaN(roseMs) || nowMs - roseMs > LOST_WRITES_WINDOW_MS) return ''
+  return (
+    `<p>Note: this seat lost audit write(s) in the last 24 hours (most recently ${escapeHtml(rose)} UTC; ` +
+    `${row.audit_write_failures} in its life), so this list may be short.</p>`
+  )
+}
+
+function shortfallHtml(env: Env, row: FleetStatusRow, rows: LedgerRow[], nowMs: number): string {
   const meanings = [...new Set(rows.map((r) => r.class))]
     .map((c) => `<li><strong>${escapeHtml(c)}</strong>: ${escapeHtml(CLASS_MEANING[c])}</li>`)
     .join('')
@@ -250,10 +271,7 @@ function shortfallHtml(env: Env, row: FleetStatusRow, rows: LedgerRow[]): string
     typeof row.shortfalls === 'number'
       ? `<p>${row.shortfalls} shortfall(s) on this seat in the last 24 hours, all classes; ${rows.length} new here.</p>`
       : ''
-  const lost =
-    typeof row.audit_write_failures === 'number' && row.audit_write_failures > 0
-      ? `<p>Note: this seat reports ${row.audit_write_failures} lost audit write(s), so this list may be short.</p>`
-      : ''
+  const lost = lostWritesNote(row, nowMs)
   const dashboard = `${env.ADMIN_BASE_URL ?? 'https://admin.smd.services'}/operator`
   return (
     `<p><strong>SHORTFALL</strong>: the Operator on <strong>${escapeHtml(row.customer_slug)}</strong> ` +
@@ -282,7 +300,7 @@ export async function notifyShortfalls(
       if (pending.length === 0) continue
       if (await throttled(env.DB, row.customer_slug, nowMs)) continue
       const subject = `[SMD Ops] SHORTFALL ${row.customer_slug}: ${classSummary(pending)}`
-      const sent = await sendEmail(env, subject, shortfallHtml(env, row, pending))
+      const sent = await sendEmail(env, subject, shortfallHtml(env, row, pending, nowMs))
       if (sent.ok) {
         await markNotified(
           env.DB,
