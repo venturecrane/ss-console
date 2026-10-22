@@ -105,9 +105,11 @@ calendar aligned.
 
 The schedule is data in the crane context service, not a file in this repo, so
 the list below is a probe, not a contract (`crane_schedule` with action `items`,
-probed 2026-10-21). Two items are SMD's own: **Code Review (ss)** and **Executive
-Summary Refresh (ss)**, each on a roughly 30-day interval (their last completion
-and next due date are 30 days apart). The rest of the list is enterprise-wide
+probed 2026-10-21). One item is SMD's own: **Code Review (ss)**, on a roughly
+30-day interval (its last completion and next due date are 30 days apart). SMD
+no longer keeps an executive summary: the Captain retired it on 2026-10-22, its
+note was archived, and its cadence item is removed by crane-console migration
+0056, so neither appears in the start-of-session briefing. The rest of the list is enterprise-wide
 items shared with the other ventures (context refresh, skill audit, docs audit,
 memory audit, the weekly verify-ledger audit, fleet and secrets checks). Re-run
 the probe before relying on the list; it changes without a commit here.
@@ -167,8 +169,8 @@ Reachability is only half the question. The other half is whether the always-on
 tier changes what an agent does, and `MEMORY.md` pre-registers that experiment
 itself: on or after 2026-09-23, check whether any of the traps it lists still
 fired. `.claude/bin/trap-recurrence` is the instrument. The review is not on the
-venture schedule: `crane_schedule` lists only Code Review and Executive Summary
-Refresh for SS (probed 2026-10-21), so the review happens only when a session
+venture schedule: `crane_schedule` lists only Code Review for SS (see the
+schedule section above), so the review happens only when a session
 runs the instrument.
 
 What it counts is the distinction the decision turns on. An ENCOUNTER is the
