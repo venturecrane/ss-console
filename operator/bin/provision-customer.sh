@@ -690,8 +690,8 @@ _MK_COUNT=$( cd "${REPO_ROOT}" && npx --quiet wrangler d1 execute ss-console-db 
   | python3 -c 'import json, sys; print(json.load(sys.stdin)[0]["results"][0]["n"])' 2>/dev/null || echo "?")
 if [ "${_MK_COUNT}" != "1" ]; then
   log "FATAL: no machine_credentials row for ${SLUG} after the upsert (count=${_MK_COUNT})"
-  log "  The console has no customer_configs projection for this slug. Merge customer.yaml,"
-  log "  let ci-sync-customer-configs project it, then re-run provisioning."
+  log "  The console has no customer_configs projection for this slug. CI never creates a first row:"
+  log "  run scripts/project-customer-config.ts (see docs/handbook/customer-lifecycle.md), then re-run provisioning."
   exit 1
 fi
 stage_secret_from_env MACHINE_HEARTBEAT_KEY "${_MK_KEY}" "per-seat bearer for POST /api/internal/heartbeat (console holds only the hash)"

@@ -6,8 +6,8 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2154 # _seed_endpoint, CUSTOMER_SLUG and the R2_* names are set by entrypoint.sh, which sources this file
 
-# 2026-10-13: CI published a customer.yaml naming a cron whose pre_run.py shipped
-# only in a newer image; the seat rebooted onto the older image and its boot died.
+# Why this exists: CI once published a customer.yaml naming a cron whose pre_run.py
+# shipped only in a newer image; the seat rebooted onto the older image and its boot died.
 # /app/image-manifest.json (baked by gen-image-manifest.py) lists every skill,
 # its pin and its files. Uploading it on EVERY boot makes
 # vaults/<slug>/image-manifest.json describe the image that last booted, which

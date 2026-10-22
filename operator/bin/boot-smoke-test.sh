@@ -965,7 +965,7 @@ if [ "${MEDCHRON_AUTHORED}" = 1 ]; then
   ssh_exec "medchron-firm-config-present" "[ \"\$(stat -c %U:%G:%a /var/lib/smd-config/medchron-firm.yaml)\" = root:medchron:640 ]"
   ssh_exec "medchron-uid-cannot-write-config" "setpriv --reuid=medchron --regid=medchron --init-groups sh -c \"! test -w /var/lib/smd-config/medchron-firm.yaml\""
   ssh_exec "medchron-token-shared" "[ \"\$(stat -c %G:%a /run/smd-smokeball-token/refresh_token)\" = smokeball-token:660 ]"
-  # 2026-09-04: a seat that authors a firm config must also carry the
+  # A seat that authors a firm config must also carry the
   # install-level tree the entrypoint seeds from vaults/<slug>/medchron-controls/
   # — the scanned-page classifier's falsifier (controls.json + its PDFs) and
   # the ICD tables, both staged into that vault by provision-customer.sh step

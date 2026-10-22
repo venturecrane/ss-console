@@ -170,7 +170,7 @@ LEGACY_AUDIT_DB="/opt/data/audit.db"
 # hand the agent ownership of its own restart budget on the second boot onward
 # (the dir is re-created root-owned every boot, but the `kills` FILE inside it
 # would already have flipped). Same reasoning, same fix, as the audit subtree.
-# 2026-10-20: moved under root's .smd-root (smd_root_loss_dir verifies it at
+# It lives under root's .smd-root (smd_root_loss_dir verifies it at
 # boot). Directly under the agent-owned /opt/data the agent could rename it
 # aside and plant a directory whose `kills` was a symlink; root's `>>` and
 # `chmod` then wrote to, or re-moded, whatever it named. Every runtime write and
@@ -291,7 +291,7 @@ export SMD_MEDCHRON_QUEUE_DIR="${MEDCHRON_RUN_DIR}/queue"
 # shellcheck disable=SC1090 # /app/entrypoint-{fetch-inputs,demand,drafting,litigation,negotiation,lane-proofs,image-manifest}.sh
 for _lane in fetch-inputs demand drafting litigation negotiation lane-proofs image-manifest; do . "/app/entrypoint-${_lane}.sh"; done
 
-# 2026-09-04: the chronology runner's INSTALL-level artifacts — the scanned-page
+# The chronology runner's INSTALL-level artifacts — the scanned-page
 # classifier's authored control pages (`controls.json` + the PDFs it names) and
 # the vendored ICD tables (`icd/`) — ride the same vault prefix as the firm
 # config, under medchron-controls/. Every job gets a fresh data_root under

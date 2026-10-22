@@ -188,7 +188,12 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
    full pin string for provenance; this is the one Hermes pin for the fleet,
    and `customer.yaml` no longer carries one). The PR names its tracking
    issue and carries a `(runtime)` acceptance criterion: a green shadow-firm
-   run on the rig at this ref.
+   run on the rig at this ref. What the bump changes and why goes in the
+   commit message and the PR, never as a dated comment beside the pin or in
+   `overlay-pairs.json`: that history lives in git, and
+   `tests/no-history-in-file-bodies.test.ts` fails a PR that writes it into a
+   file body (until 2026-10-22 the Dockerfile carried 1,161 lines of it, and
+   every bump collided with every other session's bump on the same lines).
 3. **Build once:** `fleet build [--notes "..."]`. It refuses a tree that is
    dirty, behind origin/main, or whose `OVERLAY_REF` disagrees with
    `operator/contracts/overlay-pairs.json` (`operator/bin/lib/build-source-guard.sh`,
