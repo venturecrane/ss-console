@@ -7,12 +7,18 @@
  * without anyone checking anything. This keys on `last_reviewed` instead, which
  * only a deliberate check against the sources sets (docs/handbook/README.md):
  *
- *   source changed   a cited source's last commit is after the page's review date
+ *   source changed   a cited source has a commit after the one that set the review
  *   overdue          the page's review window has run out
  *   unreviewed       the page has never been checked against its sources
  *
  * The first two are findings; the third is the backlog, reported so it shrinks
  * rather than hides. Pure over its inputs so tests can drive it without git.
+ *
+ * "After the review" is a commit order, not a date. The first version compared
+ * calendar days, and on 2026-10-21 every page reviewed that evening (Phoenix)
+ * landed in commits dated 10-22 UTC alongside the source edits the same review
+ * made, so all 36 pages reported a changed source the moment they merged. The
+ * commit that set `last_reviewed` is the review; only commits after it count.
  */
 
 import { reviewStatus } from '../../src/lib/handbook/freshness'
@@ -33,11 +39,13 @@ export interface ReviewFindings {
 }
 
 /**
- * @param lastCommitDay the UTC calendar day (YYYY-MM-DD) of a path's last commit, or null
+ * @param changedSinceReview for a page and one of its sources, the UTC day
+ *   (YYYY-MM-DD) of the source's latest commit after the commit that set the
+ *   page's `last_reviewed`, or null when there is none
  */
 export function reviewFindings(
   pages: ReviewPage[],
-  lastCommitDay: (path: string) => string | null,
+  changedSinceReview: (page: string, source: string) => string | null,
   today: Date
 ): ReviewFindings {
   const out: ReviewFindings = { sourceChanged: [], overdue: [], unreviewed: [] }
@@ -46,11 +54,9 @@ export function reviewFindings(
       out.unreviewed.push({ file: p.file, section: p.section })
       continue
     }
-    // A source committed on the review day counts as seen: reviews are dated by
-    // day, and the reviewer had that day's tree in front of them.
     const changes = p.sources
-      .map((path) => ({ path, on: lastCommitDay(path) }))
-      .filter((c): c is { path: string; on: string } => !!c.on && c.on > p.lastReviewed!)
+      .map((path) => ({ path, on: changedSinceReview(p.file, path) }))
+      .filter((c): c is { path: string; on: string } => !!c.on)
     if (changes.length) out.sourceChanged.push({ file: p.file, reviewed: p.lastReviewed, changes })
     const status = reviewStatus(new Date(`${p.lastReviewed}T00:00:00Z`), p.reviewEvery, today)
     if (status.kind === 'overdue')
