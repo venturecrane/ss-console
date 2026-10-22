@@ -4,8 +4,9 @@ schema_version: 1
 # of concept of the couples role (ADR 0090, ADR 0091; ss-console#3264). Made
 # from operator/customers/_couples-template. Like The Brokery: the only
 # interface is email to and from the agent's own inbox, and only the two
-# partners' addresses reach it. Both partners are also on Telegram (bot token
-# is a Fly secret on hermes-captain-mark, never here). Schedules and other
+# partners' addresses reach it. Both partners are also on Telegram, by DM and in
+# one shared group (bot token is a Fly secret on hermes-captain-mark, never
+# here). Schedules and other
 # settings are given to the agent in conversation, not authored here.
 
 # ---- IDENTITY ----
@@ -45,7 +46,7 @@ people:
     channel: telegram
 
 spaces:
-  shared_telegram_chat: ''
+  shared_telegram_chat: '-5461624424'
 
 # ---- SMD OPERATOR OF THE SEAT ----
 users:
@@ -252,17 +253,26 @@ safety:
 # ---- TELEGRAM ----
 # One bot for the couple (BotFather). Only bound partners reach it: Laurie and
 # Scott. A partner's id goes on both allow lists when they bind; the shared
-# group's chat id goes in spaces.shared_telegram_chat and group_chats once the
-# group exists.
+# group's chat id goes in spaces.shared_telegram_chat and group_chats.
+#
+# In the group the agent speaks only when addressed: an @mention or a reply to
+# one of its messages (require_mention, the Captain's call 2026-10-22). BotFather
+# group privacy stays ON, so the bot never receives the couple's own talk.
+#
+# Do not change the group's settings after its id is bound here. Some changes
+# turn a basic group into a supergroup with a new -100... id, and a message from
+# a chat not on the list is dropped without a log line.
 telegram:
   enabled: true
+  require_mention: true
   allow_from:
     - '8854529905'
     - '7367659986'
   group_allow_from:
     - '8854529905'
     - '7367659986'
-  group_chats: []
+  group_chats:
+    - '-5461624424'
   group_sessions_per_user: false
 
 # ---- VOICE LIBRARY ----
