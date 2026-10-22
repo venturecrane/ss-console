@@ -398,6 +398,23 @@ export async function sendCardEmail(
 // The send ledger (operator_request_cards). Numbers and keys only.
 // ---------------------------------------------------------------------------
 
+const JOB_SUBMIT_RE = /^([a-z]+)_job_submit$/
+
+/**
+ * The job lanes a turn queued, read from its tool names (`medchron_job_submit`
+ * -> `medchron`), sorted and comma-joined; '' when it queued none (migration
+ * 0134). WHY: a `replied` card's job_lane stays null even when the request
+ * started a job, so without this a queued chronology read as no job at all.
+ */
+export function jobsQueued(tools: readonly string[]): string {
+  const lanes = new Set<string>()
+  for (const tool of tools) {
+    const lane = JOB_SUBMIT_RE.exec(tool)?.[1]
+    if (lane && (JOB_LANES as readonly string[]).includes(lane)) lanes.add(lane)
+  }
+  return [...lanes].sort().join(',')
+}
+
 /**
  * Record the card if new and report whether it has already been sent. Insert
  * only: the first post's numbers stand, a re-post changes nothing.
@@ -411,8 +428,8 @@ export async function recordCard(
     .prepare(
       `INSERT INTO operator_request_cards
          (customer_slug, card_key, kind, received_at, event_at, minutes, tools_count,
-          replies, refused, failed, job_lane, job_state, lane_key)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          replies, refused, failed, job_lane, job_state, lane_key, jobs_queued)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (customer_slug, card_key) DO NOTHING`
     )
     .bind(
@@ -428,7 +445,8 @@ export async function recordCard(
       card.failed,
       card.job?.lane ?? card.lane?.jobLane ?? null,
       card.job?.state ?? null,
-      card.lane?.key ?? null
+      card.lane?.key ?? null,
+      jobsQueued(card.tools)
     )
     .run()
   const row = await db

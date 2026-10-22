@@ -9,6 +9,10 @@
  * request that has no later `replied` card means a person asked and, as far
  * as any seat has reported, nobody answered.
  *
+ * A reply line says what the request queued (`QUEUED medchron`, `queued
+ * none`, or `queued ?` for a card recorded before migration 0134). Read that,
+ * not job_lane: job_lane fills only when a job ENDS.
+ *
  * The table holds numbers and keys only (ADR 0052 s5): who asked and what
  * they asked live in the email in team@smd.services, found by the short
  * request id this prints (the email's "Card:" line carries the full key).
@@ -44,6 +48,11 @@ export interface CardRow {
   attempts: number
   /** The lane a lane_unproven card names (migration 0125); absent before it. */
   lane_key?: string | null
+  /**
+   * The job lanes the request's turn queued (migration 0134): '' none, NULL
+   * recorded before 0134 (unknown, never "none").
+   */
+  jobs_queued?: string | null
 }
 
 export interface RequestsArgs {
@@ -90,8 +99,14 @@ export function requestIdOf(cardKey: string): string {
   return cardKey.split(':')[0] ?? cardKey
 }
 
+/** What a reply card's turn queued; unknown is said, never shown as none. */
+export function queuedLabel(row: CardRow): string {
+  if (row.jobs_queued === null || row.jobs_queued === undefined) return 'queued ?'
+  return row.jobs_queued === '' ? 'queued none' : `QUEUED ${row.jobs_queued}`
+}
+
 function outcome(row: CardRow): string {
-  if (row.kind === 'replied') return `replied in ${row.minutes}m`
+  if (row.kind === 'replied') return `replied in ${row.minutes}m, ${queuedLabel(row)}`
   if (row.kind === 'no_reply') return `NO REPLY after ${row.minutes}m`
   if (row.kind === 'lane_unproven') {
     return `NEW KIND ${row.lane_key ?? '?'} ${row.job_lane ? 'job waiting' : 'first use'}`
@@ -105,7 +120,7 @@ export function renderLine(row: CardRow): string {
   return [
     `${when}Z`,
     row.customer_slug.padEnd(16),
-    outcome(row).padEnd(26),
+    outcome(row).padEnd(40),
     `tools ${row.tools_count}`,
     `refused ${row.refused}`,
     `failed ${row.failed}`,
@@ -169,7 +184,8 @@ export async function readCards(args: RequestsArgs, nowMs: number): Promise<Card
   const result = await db
     .prepare(
       `SELECT customer_slug, card_key, kind, received_at, event_at, minutes, tools_count,
-              replies, refused, failed, job_lane, job_state, status, attempts, lane_key
+              replies, refused, failed, job_lane, job_state, status, attempts, lane_key,
+              jobs_queued
          FROM operator_request_cards
         WHERE received_at >= ?${seatFilter}
         ORDER BY received_at DESC, customer_slug, kind
