@@ -20,8 +20,9 @@ stated exclusion reason (`stages/coverage.py`) — so this module reads the same
 artifacts and reports the same two sets, keyed by document id:
 
     covered    cited in the delivered document, a byte-duplicate of something
-               cited, in the authored billing-chart set, or excluded by an
-               authored name rule: accounted for, and an update skips it.
+               cited, in the authored billing-chart set, excluded by an
+               authored name rule, or left out at the firm's direction (an
+               identity decision): accounted for, and an update skips it.
     uncovered  the composer read it and found nothing citable, the unit marked
                it `compose_skip` (a contentless or unreadable scan), retrieval
                failed, or it is a documented orphan: NOT in the delivered
@@ -38,6 +39,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .gates.foreign_identity import WITHHELD_REASON
 from .stages.base import read_json, read_jsonl
 from .stages.coverage import (
     EXT_OK,
@@ -98,9 +100,11 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
             duplicates.add(key)
         pulled[key] = row
 
-    orphans = {
-        o.get("name") for o in (read_json(slug_dir / "orphans.json", {}) or {}).get("orphans") or [] if o.get("name")
-    }
+    orphan_rows = (read_json(slug_dir / "orphans.json", {}) or {}).get("orphans") or []
+    orphans = {o.get("name") for o in orphan_rows if o.get("name")}
+    # Left out at the firm's direction: accounted for by the firm's own word, so
+    # an update must not read it and ask the same question again.
+    withheld = {o.get("name") for o in orphan_rows if o.get("name") and o.get("reason") == WITHHELD_REASON}
     billing_spec = read_json(slug_dir / "billing_docs.json", [])
     billing_names = {
         b["name"] for b in (billing_spec.get("docs") if isinstance(billing_spec, dict) else billing_spec) or []
@@ -121,6 +125,9 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
         row = by_name.get(key, pulled.get(key, {}))
         if row.get("compose_skip"):
             uncovered.add(key)
+            continue
+        if key in withheld:
+            covered.add(key)
             continue
         if key in orphans:
             uncovered.add(key)

@@ -26,6 +26,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from ..gates import foreign_identity as FI
 from .base import StageRun, read_json, read_jsonl
 from .transcript import ABSENT, CONTENTLESS, UNREAD, contentless_reason, merged, recorded_ids, transcript_state
 
@@ -240,6 +241,11 @@ def run(sr: StageRun) -> int:
             sr.log(f"   ! {(r.get('name') or '')[:60]} | text/{r['id']}.txt: {state} ({size}B)")
         return 2
     is_excluded = _excluder([str(p) for p in (sr.cfg.get("units", "exclude_name_patterns") or [])])
+    # A document the firm said to leave out (an identity decision) belongs to
+    # no unit: no stage reads it and decisions.orphans discloses it.
+    withheld = FI.withheld(d)
+    left_out = [r for r in usable if FI.matches(str(r.get("id") or ""), withheld)]
+    usable = [r for r in usable if not FI.matches(str(r.get("id") or ""), withheld)]
     spec = read_json(d / "units.json", None)
     units, excluded, unassigned = _route(usable, spec, sr.slug, is_excluded)
 
@@ -284,6 +290,10 @@ def run(sr: StageRun) -> int:
         )
         for u, name, pages in skipped:
             sr.log(f"  - {name[:62]:62s} {pages:>4} p  [{u}]")
+    if left_out:
+        sr.log(f"left out at the firm's direction (identity decision): {len(left_out)}")
+        for r in left_out:
+            sr.log(f"  - {str(r.get('id'))}")
     sr.log(f"excluded: {len(excluded)}")
     for e in excluded:
         sr.log(f"  - {e[:70]}")

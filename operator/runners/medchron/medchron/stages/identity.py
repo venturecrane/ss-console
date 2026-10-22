@@ -19,16 +19,20 @@ from .base import StageRun, read_jsonl
 
 def _foreign_folded(sr: StageRun) -> list[str]:
     surnames, dobs = FI.identities(sr.job.units)
-    free = FI.released(sr.slug_dir)
+    # Released is the client's; withheld is out of every unit (build_units)
+    # and disclosed as left out (decisions.orphans). Neither holds again.
+    decided = FI.released(sr.slug_dir) | FI.withheld(sr.slug_dir)
     out = []
     for r in read_jsonl(sr.slug_dir / "raw_manifest.jsonl"):
         if not r.get("ok") or not r.get("from_email"):
             continue
         rid = str(r.get("id") or "")
+        if FI.matches(rid, decided):
+            continue
         tp = sr.slug_dir / "text" / f"{rid}.txt"
         text = tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else ""
         found = FI.findings(text, surnames, dobs, FI.first_names(sr.job.units))
-        if found and rid not in free and rid.removeprefix("msgatt-") not in free:
+        if found:
             out.append(f"{rid}: {'; '.join(found)}")
     return out
 
@@ -38,7 +42,8 @@ def run(sr: StageRun) -> int:
     if foreign:
         sr.log(
             f"IDENTITY HOLD: {len(foreign)} folded email attachment(s) name a different person than the client: "
-            f"{foreign[:5]}; a person reads them and releases any that are the client's ({FI.RELEASE_FILE})"
+            f"{foreign[:5]}; a person reads them and releases any that are the client's, or the firm says to "
+            f"leave them out (medchron.identity_decide)"
         )
         return 2
     if not sr.job.joint:

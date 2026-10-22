@@ -94,10 +94,18 @@ def _write_pdf(src: Path, ext: str, dest: Path) -> int:
 
 
 def _candidates(sr: StageRun, delivered_sha: dict[str, str]) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
-    skipped: dict[str, list[str]] = {"byte-identical to a delivered exhibit": [], "not a PDF or an image": []}
+    skipped: dict[str, list[str]] = {
+        "byte-identical to a delivered exhibit": [],
+        "not a PDF or an image": [],
+        FI.WITHHELD_REASON: [],
+    }
+    withheld = FI.withheld(sr.slug_dir)
     out = []
     for r in read_jsonl(sr.slug_dir / "raw_manifest.jsonl"):
         if not r.get("ok") or r.get("duplicate_of") or not r.get("path"):
+            continue
+        if FI.matches(str(r["id"]), withheld):
+            skipped[FI.WITHHELD_REASON].append(str(r["id"]))
             continue
         if r.get("sha256") in delivered_sha:
             skipped["byte-identical to a delivered exhibit"].append(str(r["id"]))
@@ -114,7 +122,7 @@ def _identity_holds(sr: StageRun, rows: list[dict[str, Any]]) -> list[str]:
     free = FI.released(sr.slug_dir)
     holds = []
     for r in rows:
-        if str(r["id"]) in free:
+        if FI.matches(str(r["id"]), free):
             continue
         found = _page_findings(sr, str(r["id"]), surnames, dobs)
         if found:

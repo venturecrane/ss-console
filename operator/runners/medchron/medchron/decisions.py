@@ -210,6 +210,7 @@ def fold(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) -> Decisio
     # from there.
     index = _read_json(slug_dir / "msg_attachments.json", {})
     items = index.get("attachments") if isinstance(index, dict) else index
+    withheld = FI.withheld(slug_dir)
     keep: list[str] = []
     for a in items or []:
         sha = str(a.get("sha256") or "")[:12]
@@ -218,6 +219,8 @@ def fold(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) -> Decisio
             continue
         if ext in SKIP_EXT or ext == ".rpmsg":
             continue
+        if FI.matches(sha, withheld):
+            continue  # the firm said to leave it out: never folded, never read
         keep.append(sha)
     disclosed = [
         str(e.get("attachment") or "") for e in (index.get("encrypted") or [] if isinstance(index, dict) else [])
@@ -239,7 +242,8 @@ def fold(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) -> Decisio
         # chronology is the defect this lane must not repeat (ss#2893).
         d.holds.append(
             f"{len(foreign)} emailed attachment(s) name a different person than the client: {foreign[:5]}; "
-            f"a person reads them and releases any that are the client's ({FI.RELEASE_FILE})"
+            f"a person reads them and releases any that are the client's, or the firm says to leave them out "
+            f"(medchron.identity_decide)"
         )
         return d
     _write(d.artifact, payload, dry_run=dry_run)
@@ -251,20 +255,21 @@ def _foreign_attachments(job: Job, slug_dir: Path, items: list[dict[str, Any]], 
     someone else. Text that names no one (an image, a scan) passes here and
     is checked again after vision by the `identity` stage."""
     surnames, dobs = FI.identities(job.units)
-    free = FI.released(slug_dir)
+    free = FI.released(slug_dir) | FI.withheld(slug_dir)
     by12 = {str(a.get("sha256") or "")[:12]: a for a in items}
     out = []
     for sha in keep:
         a = by12.get(sha) or {}
         text = FI.pdf_text(slug_dir / "msg_pdfs" / str(a.get("local") or ""))
         found = FI.findings(text, surnames, dobs, FI.first_names(job.units))
-        if found and sha not in free:
+        if found and not FI.matches(sha, free):
             out.append(f"{sha}: {'; '.join(found)}")
     return out
 
 
 # ---- orphans -----------------------------------------------------------------
 TINY_IMAGE_BYTES = 8_000
+WITHHELD_REASON = FI.WITHHELD_REASON
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp"}
 
 
@@ -281,7 +286,9 @@ def _tiny_image_reason(row: dict[str, Any]) -> str | None:
 def orphans(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: bool) -> Decision:
     """`orphans.json`: a pulled file no unit owns gets a machine-written reason
     when its name matches a coverage exclusion class; any other residue is a
-    HOLD listing the files. The reason text is the config's, never invented."""
+    HOLD listing the files. The reason text is the config's, never invented,
+    with one exception: a document the firm said to leave out is disclosed as
+    exactly that (``WITHHELD_REASON``)."""
     exclusions = cfg.compiled("coverage", "exclusions")
     rows = _read_jsonl(slug_dir / "raw_manifest.jsonl")
     owned: set[str] = set()
@@ -297,13 +304,23 @@ def orphans(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: b
     unowned = [r for r in rows if r.get("ok") and not r.get("duplicate_of") and str(r.get("id")) not in owned]
     explained: list[dict[str, str]] = []
     residue: list[str] = []
+    withheld = FI.withheld(slug_dir)
     for r in unowned:
         name = str(r.get("name") or "")
+        # The entry is keyed the way its two readers key a pulled row: the
+        # coverage gate and the coverage record both look it up by name plus
+        # extension (stages/coverage.file_key). Keyed by the bare name, an
+        # orphan whose extension the pull keeps apart was never matched, so the
+        # gate called it dropped and the record called it unread (2026-10-22).
+        key = name + str(r.get("ext") or "")
+        if FI.matches(str(r.get("id") or ""), withheld):
+            explained.append({"name": key, "reason": WITHHELD_REASON})
+            continue
         reason = next((why for rx, why in exclusions if rx.search(name)), None)
         if reason is None:
             reason = _tiny_image_reason(r)
         if reason:
-            explained.append({"name": name, "reason": reason})
+            explained.append({"name": key, "reason": reason})
         else:
             residue.append(name)
     payload = {"orphans": explained, "_decided": {"by": "medchron.decisions.orphans"}}
