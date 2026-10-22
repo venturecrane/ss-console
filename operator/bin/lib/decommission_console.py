@@ -59,7 +59,7 @@ def healthchecks_check_name(slug: str) -> str:
 def _count(d1: ConsoleD1, table: str, slug: str, column: str = "customer_slug", where: str = "") -> int:
     if not (table.isidentifier() and column.isidentifier()):
         raise ValueError(f"refusing a non-identifier table or column: {table!r}.{column!r}")
-    # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
+    # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query - identifiers pass isidentifier() above and the slug is sql_text's hex blob literal; wrangler d1 execute has no binding
     sql = f"SELECT COUNT(*) AS n FROM {table} WHERE {column} = {sql_text(slug)}{where}"  # noqa: S608 - identifiers checked above; the slug is sql_text's hex blob literal; `where` is a module constant
     rows = d1.execute(sql)
     n = rows[0].get("n") if rows else None
@@ -139,7 +139,7 @@ class HealthchecksAndFleetStatusCleanup:
         return None
 
     def _export_obligations(self, slug: str) -> dict:
-        # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
+        # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query - the table is a module constant and the slug is sql_text's hex blob literal, which carries no escape sequence
         rows = self.d1.execute(f"SELECT * FROM {OBLIGATIONS_TABLE} WHERE customer_slug = {sql_text(slug)}")  # noqa: S608 - the table is a module constant; the slug is sql_text's hex blob literal
         if not rows:
             return {"rows_exported": 0, "export_path": None}
@@ -155,7 +155,7 @@ class HealthchecksAndFleetStatusCleanup:
 
     def _clear_table(self, table: str, slug: str) -> dict:
         before = _count(self.d1, table, slug)
-        # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
+        # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query - the table is a SEAT_PROJECTION_TABLES constant and the slug is sql_text's hex blob literal
         self.d1.execute(f"DELETE FROM {table} WHERE customer_slug = {sql_text(slug)}")  # noqa: S608 - table is a SEAT_PROJECTION_TABLES constant; the slug is sql_text's hex blob literal
         after = _count(self.d1, table, slug)
         return {"rows_before": before, "rows_remaining": after, "rows_deleted": before - after}
