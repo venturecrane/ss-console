@@ -18,6 +18,7 @@ enforced_by:
   - scripts/ci-publish-customer-configs.sh
   - scripts/ci-reconcile-customer-configs.sh
   - scripts/ci-reconcile-r2-customer-configs.sh
+  - scripts/lib/seat-image-guard.sh
   - .github/workflows/deploy.yml
   - .github/workflows/customer-config-reconcile.yml
   - operator/templates/entrypoint.sh

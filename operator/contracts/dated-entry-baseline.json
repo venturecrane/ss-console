@@ -1,0 +1,11 @@
+{
+  "datedEntries": {
+    "operator/customers/ashton-price/customer.yaml": 1,
+    "operator/customers/pilot-smokeball/customer.yaml": 1
+  },
+  "noteChars": {
+    "operator/contracts/audit-action-type-producers.json": 3366,
+    "operator/contracts/audit-action-vocabulary.json": 2854,
+    "operator/contracts/overlay-pairs.json": 46671
+  }
+}
