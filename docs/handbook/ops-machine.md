@@ -65,6 +65,8 @@ While the task is in progress, the two sessions talk directly over Remote Contro
 
 A handoff to a workspace that already has a session running opens at once, in a new window of it (tmux window `task`), so the Captain switches windows rather than re-running `ops`. Before 2026-10-22 a second handoff sat in the inbox until the next `ops`, because a running session never rereads it.
 
+Each handoff is its own file (`~/inbox/pending-<stamp>-<pid>.md`) and gets its own window and session, so two laptop sessions handing over at once never share one. On 2026-10-22 they did: every handoff appended to a single `pending.md`, and the session started for the Curtis chronology hold also received an already-finished facilities write, which had to be stopped by hand before it entered duplicate providers. A session claims its file by moving it, so a window opened by the handoff and a later `ops` attach cannot both take the same task.
+
 Claude on a workspace always runs through the shim `/opt/ops/bin/claude`, which keeps the client's Anthropic key away from Claude itself (Claude runs on the Captain's Max login; only the tools bill the client's key). On 2026-10-19 Claude's own auto-updater put a copy into `~/.npm-global`, ahead of the shim on PATH, and a session ran on A&P's key. The shim now turns the updater off, the last line of `.bashrc` puts the shim first on every boot, and the selftest fails if `claude` resolves anywhere else.
 
 The first time on a new workspace, `ops` walks the Captain through his GitHub sign-in and Claude's own `/login`, then sets up the repos and tools.

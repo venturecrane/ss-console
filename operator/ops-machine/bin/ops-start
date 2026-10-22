@@ -32,10 +32,21 @@ cd "$HOME/dev/ss-console" || exit 1
 rc=(--name "ops-$slug" --remote-control "ops-$slug")
 channel="Laptop sessions can message you over Remote Control and you can reply with SendMessage to the sender's address; send verdicts, codes and verify IDs only, never record text, names or amounts from client files."
 
-task="$HOME/inbox/pending.md"
-if [ -s "$task" ]; then
-  taken="$HOME/inbox/task-$(date -u +%Y%m%dT%H%M%S).md"
-  mv "$task" "$taken"
+# One handoff, one file, one session. ops-handoff writes each task to its own
+# ~/inbox/pending-<stamp>-<rand>.md and names it when it opens a window, so two
+# laptops handing over at once get two sessions. Until 2026-10-22 every handoff
+# appended to one pending.md and the next session took all of them: the Curtis
+# chronology hold and an already-finished facilities write arrived together.
+# With no argument (a plain `ops` attach), take the oldest waiting task;
+# pending.md is still read so a handoff from an older laptop install is not lost.
+task="${1:-}"
+if [ -z "$task" ]; then
+  task=$(ls -tr "$HOME"/inbox/pending*.md 2>/dev/null | head -1)
+fi
+if [ -n "$task" ] && [ -s "$task" ]; then
+  taken="$HOME/inbox/task-$(date -u +%Y%m%dT%H%M%S)-$$.md"
+  # mv is the claim: if another window took this file first, there is no task.
+  mv "$task" "$taken" 2>/dev/null || { echo "that task was already taken"; exec bash -l; }
   # The laptop that handed the task over reads the outcome back with
   # `ops-handoff <client> --results`. The outbox carries the outcome, never
   # document content: that stays here under ~/work.

@@ -2,8 +2,8 @@
 # ops-handoff <client> "<task>" [--reply-to <session>]: hand a task from a
 # laptop session to a client's ops workspace, without doing it here. What a
 # laptop agent runs when the client-data guard stops it. The task text goes to
-# the workspace's ~/inbox/pending.md (appended if one is already waiting);
-# nothing is kept on the laptop.
+# its own file in the workspace's ~/inbox (pending-<stamp>-<pid>.md), one per
+# handoff; nothing is kept on the laptop.
 #
 # --reply-to names the laptop session (its Remote Control name, the one
 # ListAgents prints as "This session is <name>"). The workspace session that
@@ -40,18 +40,21 @@ if [ "$task" = "--results" ]; then
   exit 0
 fi
 OPS_WAKE_ONLY=1 "$(dirname "$0")/ops" "$client" || exit 1
+# Each handoff is its own file, so two handed over at once become two sessions.
+# Until 2026-10-22 they appended to one pending.md and the next session took both.
+file="pending-$(date -u +%Y%m%dT%H%M%S)-$$.md"
 {
   printf '## Handed over %s from %s\n\n' "$(date -u +%FT%TZ)" "$(hostname -s)"
   [ -n "$reply_to" ] && printf 'Reply-to: %s\n\n' "$reply_to"
   printf '%s\n\n' "$task"
-} | fly ssh console -a "$app" -u ops --pty=false -C "sh -c 'mkdir -p ~/inbox && cat >> ~/inbox/pending.md'" >/dev/null 2>&1
-n=$(fly ssh console -a "$app" -u ops -C "sh -c 'wc -c < ~/inbox/pending.md'" </dev/null 2>/dev/null | tail -1 | tr -d ' \r')
+} | fly ssh console -a "$app" -u ops --pty=false -C "sh -c 'mkdir -p ~/inbox && cat > ~/inbox/$file'" >/dev/null 2>&1
+n=$(fly ssh console -a "$app" -u ops -C "sh -c 'wc -c < ~/inbox/$file'" </dev/null 2>/dev/null | tail -1 | tr -d ' \r')
 [ "${n:-0}" -gt 0 ] || { echo "handoff did not arrive on $app"; exit 1; }
-# A running workspace session never rereads the inbox, so open the task beside
-# it now. ops-start takes pending.md as it launches, so the window and a later
-# `ops` attach can never both take the same task.
+# A running workspace session never rereads the inbox, so open this task beside
+# it now, on this file only. ops-start claims the file by moving it, so this
+# window and a later `ops` attach can never both take it.
 opened=$(fly ssh console -a "$app" -u ops --pty=false \
-  -C "sh -c 'tmux has-session -t main 2>/dev/null && tmux new-window -t main -n task /opt/ops/bin/ops-start && echo opened'" </dev/null 2>/dev/null | tr -d '\r' | tail -1)
+  -C "sh -c 'tmux has-session -t main 2>/dev/null && tmux new-window -t main -n task \"/opt/ops/bin/ops-start \$HOME/inbox/$file\" && echo opened'" </dev/null 2>/dev/null | tr -d '\r' | tail -1)
 if [ "$opened" = "opened" ]; then
   echo "Handed over to $app and opened in a new window there (tmux window \"task\")."
   echo "Tell the Captain: switch to the task window in the $app terminal to approve its steps."

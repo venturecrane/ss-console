@@ -1,20 +1,23 @@
 #!/bin/bash
 # ops-attach (client workspace; what `ops <alias>` on a laptop runs over fly ssh):
 # attach to the workspace's tmux session "main", creating it if needed. A task
-# handed over from a laptop (~/inbox/pending.md, written by ops-handoff) gets a
-# new window running ops-start, so it opens in front of the Captain even when a
-# session is already running.
+# handed over from a laptop (~/inbox/pending-*.md, one file each, written by
+# ops-handoff) gets its own window running ops-start on that file, so it opens in
+# front of the Captain even when a session is already running.
 set -uo pipefail
 # fly ssh carries the laptop's TERM, and tmux refuses to start on a terminal
 # this image has no terminfo entry for ("missing or unsuitable terminal:
 # xterm-ghostty", 2026-10-21). Fall back to one every image has.
 infocmp "${TERM:-dumb}" >/dev/null 2>&1 || export TERM=xterm-256color
-if [ -s "$HOME/inbox/pending.md" ]; then
+# One window per waiting task: each handoff is its own file (ops-handoff), so a
+# task never rides along in a session started for someone else's.
+for f in $(ls -tr "$HOME"/inbox/pending*.md 2>/dev/null); do
+  [ -s "$f" ] || continue
   if tmux has-session -t main 2>/dev/null; then
-    tmux new-window -t main -n task /opt/ops/bin/ops-start
+    tmux new-window -t main -n task "/opt/ops/bin/ops-start $f"
   else
-    tmux new-session -d -s main -n task /opt/ops/bin/ops-start
+    tmux new-session -d -s main -n task "/opt/ops/bin/ops-start $f"
   fi
-fi
+done
 tmux has-session -t main 2>/dev/null || tmux new-session -d -s main /opt/ops/bin/ops-start
 exec tmux attach -t main
