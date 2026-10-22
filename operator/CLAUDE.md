@@ -31,7 +31,8 @@ Load these ADRs before any Operator architectural work:
 - **ADR 0007** — Per-customer Machine isolation
 - **ADR 0010** — Per-customer OAuth token storage on Fly volume
 - **ADR 0011** — Multi-persona per customer (persona = Hermes profile)
-- **ADR 0012** — customer.yaml storage (Git source of truth → D1+R2 materialized)
+- **ADR 0094**: Customer configuration as built (supersedes ADR 0012, which described paths, triggers and a CLI that never ran): the authoring path, the validators and their parity test, the four writers of the R2 object a seat boots from, the D1 projection, nightly reconciliation, boot adoption and the live allow-listed apply, what only reprovision applies, the portal runtime overrides, and retirement
+- **ADR 0044**: Live reconfiguration, **partially reverted**: the root `config_applier` (Decision 5) and the OP-P2-1 key strip are live; R2-as-source-of-truth, reprovision-reads-R2 and the R2-to-git reconciler were ripped 2026-07-14. Read its "Status by decision" table, not its 2026-07-14 banner
 - **ADR 0015** — Hermes fork posture (pin-only fork, plugin-only overlay)
 - **ADR 0016** — Honcho disposition (revised 2026-05-30: **deferred to Phase 2, demand-gated** — Phase 1 = flat-file memory core, no Honcho on any seat; the mirror/dismiss/TTL machinery is the Phase-2 shape)
 - **ADR 0017** — Skill Curator disposition (disable autonomous curator per-customer; keep in-conversation `skill_manage`; mirror to D1 inventory; supervised `--dry-run` consolidation only)

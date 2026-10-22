@@ -1,13 +1,35 @@
 ---
 title: R2-Authoritative Live Reconfiguration — Broker-Owned Apply
 date: 2026-06-14
-status: reverted
+status: partially-reverted
+amended-date: 2026-10-22
 captain: Scott Durgan
-related-adr: docs/adr/0012-customer-yaml-storage.md, docs/adr/0026-config-surface-is-a-security-boundary.md, docs/adr/0043-operator-runtime-read-path.md, docs/adr/0007-per-customer-machine-isolation.md
+related-adr: docs/adr/0012-customer-yaml-storage.md, docs/adr/0026-config-surface-is-a-security-boundary.md, docs/adr/0043-operator-runtime-read-path.md, docs/adr/0007-per-customer-machine-isolation.md, docs/adr/0094-customer-configuration-as-built.md
 amends: docs/adr/0012-customer-yaml-storage.md
+enforced_by:
+  - tests/customer-yaml-parity-contract.test.ts
+  - tests/config-publish-guards.test.ts
+  - tests/r2-config-reconcile.test.ts
+  - scripts/ci-publish-customer-configs.sh
+  - scripts/ci-reconcile-r2-customer-configs.sh
+  - .github/workflows/customer-config-reconcile.yml
+  - operator/templates/entrypoint.sh
+  - operator/templates/r2-account-key-strip-probe.py
+  - operator/bin/boot-smoke-test.sh
 ---
 
 # ADR 0044 — R2-Authoritative Live Reconfiguration
+
+> **AMENDED 2026-10-22: partially reverted, not reverted in full.** The
+> 2026-07-14 banner below says nothing in this ADR is wired. That was wrong
+> when it was written: the root config applier (Decision 5) had been running on
+> every seat since 2026-06-15 and still does. What the 2026-07-14 rip removed
+> was Decisions 1, 2 and 4, the parts that would have let R2 diverge from git.
+> Per-decision status, each with its evidence, is in
+> [Status by decision (2026-10-22)](#status-by-decision-2026-10-22) at the end
+> of this record; the config model as a whole is
+> [ADR 0094](./0094-customer-configuration-as-built.md), which also supersedes
+> ADR 0012. The 2026-07-14 text is kept as history.
 
 > **REVERTED 2026-07-14 (Captain decision).** The realization (#1840) — the
 > `config_divergence.py` guard, the `SS_CONFIG_SOURCE=r2` / `SS_CONFIG_FORCE_GIT`
@@ -123,3 +145,31 @@ ADR matches what runs:
 ## Out of scope
 
 Portal client self-serve apply (admin-driven first); proactive entitlement-promotion nudges.
+
+## Status by decision (2026-10-22)
+
+The 2026-07-14 rip (`eee5504b`, #1898) removed the divergence guard, the
+adopt-R2 provisioning modes, `operator/bin/reconcile-r2-config.sh` and the
+daily `r2-config-reconcile.yml`. Its rationale was that "the live-apply-to-R2
+path (Decision 5) was never built". The half of Decision 5 that was missing is
+the console writing R2; the root applier itself shipped on 2026-06-15 (overlay
+`b3294de`, launched by `operator/templates/entrypoint.sh` since ss `7b7d9b28`)
+and has applied merged config live on every seat since. Line citations are
+against ss-console `8cb62e6d` and overlay `3d64eda` (`overlay:` prefix).
+
+| Decision                                                          | Status                                                                                                                                                                                                                                                                                                                                                                                                                                              | Evidence                                                                                                                                               |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. R2 is the operational source of truth, git the reviewed record | **Reverted.** Git is the only authoring source; every writer of `vaults/<slug>/customer.yaml` copies a git file, and no console path writes it.                                                                                                                                                                                                                                                                                                     | ADR 0094 sections 1 and 3; `scripts/ci-publish-customer-configs.sh:30-37`                                                                              |
+| 2. `reprovision.sh` reads from R2                                 | **Reverted** (realized 07-13 as a divergence guard, `66cb3f6c`; ripped 07-14). Provisioning uploads the git file unconditionally.                                                                                                                                                                                                                                                                                                                   | `operator/bin/provision-customer.sh:166-168`, `:225-238`                                                                                               |
+| 3. Every apply writes an R2 byte-snapshot for undo                | **Never built.** The history row's `r2_shadow_key` is always written `NULL`; undo is a git revert, published like any merge.                                                                                                                                                                                                                                                                                                                        | `src/lib/portal/customer-config-projection.ts:231-241`                                                                                                 |
+| 4. A reconciler commits R2 back to git                            | **Reverted** (ripped 07-14). **Replaced by the opposite direction:** `scripts/ci-reconcile-r2-customer-configs.sh` (ss#2305, `7ac6f0f2`) makes R2 converge on git nightly and opens an issue on drift.                                                                                                                                                                                                                                              | `scripts/ci-reconcile-r2-customer-configs.sh:1-3`, `:27-33`; `.github/workflows/customer-config-reconcile.yml:37`, `:164`                              |
+| 5. Pull-based, root-owned applier                                 | **Live.** Forked as uid 0 before the drop to `hermes`; polls the R2 ETag every 15 s; validates with the parity validator; writes atomically to the root-owned `/var/lib/smd-config/customer.yaml` (moved off `/opt/data` by the keystone, `20544569`); best-effort `CONFIG_WRITE` audit row. The input is the git publisher, not a console write.                                                                                                   | `operator/templates/entrypoint.sh:28-29`, `:610-617`, `:677-705`; `overlay:config_applier/__main__.py:62`; `overlay:config_applier/applier.py:463-555` |
+| 6. Graceful reload via `SIGUSR1`                                  | **Not built.** v1 sends no signal; reload-class fields are held as rebuild-class and land at the next boot.                                                                                                                                                                                                                                                                                                                                         | `overlay:config_applier/__main__.py:20-24`                                                                                                             |
+| 7. Safety semantics                                               | **Partly live.** The live-writable allow-list, the rebuild-class never-list and the vertical floor check are enforced, and one held path holds the whole diff. Not wired: the tightening/widening distinction (`classify_direction` exists but `apply` never calls it, so an allow-listed widening applies immediately) and the config epoch (stamped and persisted, but nothing reads it, so the "no retroactive loosening" rule is not enforced). | `overlay:config_applier/safety.py:94-111`, `:242-291`, `:297-339`; `overlay:config_applier/applier.py:415-460`, `:533`                                 |
+| 8. Finish the account-wide R2 key strip (OP-P2-1)                 | **Built.** The strip landed in `7b7d9b28`; boot smoke proves on every provision that no agent-uid process carries the key (root processes, including the applier, keep it by design).                                                                                                                                                                                                                                                               | `operator/bin/boot-smoke-test.sh:690-698`; `operator/templates/r2-account-key-strip-probe.py`                                                          |
+
+The handbook already describes Decision 5 as live
+(`docs/handbook/operator-platform.md:91`,
+`docs/handbook/changing-a-clients-operator.md:65`,
+`docs/handbook/deployment-release.md:309-310`); with this amendment the ADR
+agrees with it.

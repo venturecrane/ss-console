@@ -137,7 +137,7 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **the overlay (hermes-smd-overlay).** SMD's own code that runs on top of Hermes, hosted in a separate repo `venturecrane/hermes-smd-overlay`. It is plugin-only: it MUST NOT modify Hermes core files. We build only what Hermes won't (CLAUDE.md, Operator Architecture; ADR 0015).
 
-**customer.yaml.** The per-customer configuration artifact that declares everything about one Operator: skills, entitlements, voice, connectors, personas, memory, schedules. Git is its source of truth, with portal D1 and per-customer R2 as materialized replicas (ADR 0012). It is also a security boundary (ADR 0026).
+**customer.yaml.** The per-customer configuration artifact that declares everything about one Operator: skills, entitlements, voice, connectors, personas, memory, schedules. Git is its source of truth, with portal D1 and per-customer R2 as materialized replicas (ADR 0094, which superseded ADR 0012). It is also a security boundary (ADR 0026).
 
 **vertical pack.** A quick-start template that configures an Operator for a specific industry (law, marketing, insurance, etc.). Packs turn the universal capability into something recognizable to a customer (ADR 0037 Tenet 5; architecture in ADR 0022). A pack is a starting point, not a claim of expertise in the client's business. See [Vertical Packs](/admin/playbook/vertical-packs).
 
