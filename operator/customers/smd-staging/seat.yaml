@@ -1,0 +1,18 @@
+# Seat inventory entry. CONSOLE-SIDE ONLY: read by scripts/lib/seat-inventory.ts,
+# never published to R2 and never read by the seat, so nothing here can fail a
+# seat at boot. After editing run `npm run gen:seat-registries`;
+# tests/seat-inventory.test.ts fails while a generated registry is stale.
+#
+# The permanent pre-production mirror of customer-zero. Ring 0: takes every
+# release first.
+
+# The seat's Fly app (ADR 0036). Authored, never derived: confirm with
+# `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
+fly_app: hermes-smd-staging
+# Release ring (operator/bin/fleet release walks rings in order).
+ring: 0
+# The day this seat's customer.yaml first landed on main. Orders seats in a ring.
+authored: '2026-06-11'
+# The client this seat's obligations roll up to (scripts/lib/seat-clients.mjs).
+# Absent means the seat is its own client.
+client: smd-services

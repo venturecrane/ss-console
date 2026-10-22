@@ -70,7 +70,7 @@ from typing import Any, Iterable, Optional
 
 import yaml
 
-from bin.lib import seam_pull
+from bin.lib import seam_pull, seat_dirs
 from bin.lib.sender_class import (
     CUSTOMERS_DIR,  # noqa: F401 - re-exported: test_reconcile_outcomes reads it as a module attribute
     SENDER_FIRM,  # noqa: F401 - re-exported: test_reconcile_outcomes reads it as a module attribute
@@ -678,11 +678,8 @@ def seat_slugs() -> list[str]:
     # provisioned slug made every run of it red; this reconciler has no D1
     # credentials to do that with, and an unreachable seat only sets that seat's
     # `held` here rather than failing the run, so it is left as-is deliberately.
-    return sorted(
-        d.name
-        for d in customers_dir().iterdir()
-        if d.is_dir() and not d.name.startswith("_") and not d.name.startswith(".")
-    )
+    # Which dirs are seats is bin/lib/seat_dirs.py (no scaffold, no tombstone).
+    return seat_dirs.seat_slugs(customers_dir())
 
 
 def main(argv: Optional[list[str]] = None) -> int:

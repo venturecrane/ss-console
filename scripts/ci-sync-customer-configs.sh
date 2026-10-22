@@ -24,6 +24,11 @@
 # Wrangler auth: CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID env vars.
 set -euo pipefail
 
+# The one rule for which operator/customers/ dirs are seats (scaffolds and
+# decommissioned tombstones are not): scripts/lib/seat-dir.sh.
+# shellcheck source=lib/seat-dir.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/seat-dir.sh"
+
 DB=ss-console-db
 BEFORE="${BEFORE_SHA:?BEFORE_SHA required}"
 AFTER="${AFTER_SHA:?AFTER_SHA required}"
@@ -76,9 +81,11 @@ for slug in "${slugs[@]}"; do
     continue
   fi
 
-  # Template/staging dirs are not live customers.
-  if [[ "$slug" == _* ]]; then
-    echo "Skipping template dir: $slug"
+  # Scaffolds and decommissioned tombstones are not live customers. Checked
+  # BEFORE the slug guard below, so a tombstone's dotted name reads as "skip
+  # this", not as a suspicious slug that fails the job.
+  if skip=$(seat_dir_skip_reason "$slug"); then
+    echo "Skipping ${skip} dir: $slug"
     continue
   fi
   # The slug becomes part of a SQL literal below; constrain it hard. Canonical

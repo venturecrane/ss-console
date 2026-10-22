@@ -12,7 +12,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
+import { seatSlugs } from '../scripts/lib/seat-inventory'
 import { resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { validate, type ValidationError } from '../src/lib/operator/customer-yaml'
@@ -449,12 +450,7 @@ describe('memory switches on a single-person seat', () => {
 
 describe('existing seats are unchanged', () => {
   const CUSTOMERS = resolve('operator/customers')
-  const seats = readdirSync(CUSTOMERS).filter(
-    (d) =>
-      !d.startsWith('_') &&
-      !d.includes('.decommissioned.') &&
-      existsSync(resolve(CUSTOMERS, d, 'customer.yaml'))
-  )
+  const seats = seatSlugs(CUSTOMERS)
 
   it('covers the five live seats', () => {
     for (const s of ['scott', 'brokery', 'ashton-price', 'pilot-smokeball', 'smd-staging']) {

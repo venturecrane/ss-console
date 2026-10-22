@@ -28,7 +28,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { readdirSync, readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
+import { seatSlugs } from '../scripts/lib/seat-inventory'
 import { join, resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { validate } from '../src/lib/operator/customer-yaml'
@@ -38,23 +39,11 @@ import { isCeiling, restrictiveness } from '../src/lib/operator/vertical-floors'
 const CUSTOMERS_DIR = resolve('operator/customers')
 
 /**
- * Seat slugs the CI sync script would project: real dirs; `_`-prefixed
- * template dirs and `<slug>.decommissioned.<date>` tombstones skipped. The rule
- * is identical to the one in scripts/ci-publish-customer-configs.sh and
- * scripts/ci-reconcile-customer-configs.sh, on purpose.
+ * Seat slugs the CI scripts would project: the one seat rule
+ * (scripts/lib/seat-inventory.ts), which scripts/lib/seat-dir.sh mirrors for
+ * the CI scripts and tests/seat-inventory.test.ts holds in parity.
  */
-function shippedSlugs(): string[] {
-  if (!existsSync(CUSTOMERS_DIR)) return []
-  return readdirSync(CUSTOMERS_DIR, { withFileTypes: true })
-    .filter(
-      (d) => d.isDirectory() && !d.name.startsWith('_') && !d.name.includes('.decommissioned.')
-    )
-    .map((d) => d.name)
-    .filter((slug) => existsSync(join(CUSTOMERS_DIR, slug, 'customer.yaml')))
-    .sort()
-}
-
-const slugs = shippedSlugs()
+const slugs = seatSlugs(CUSTOMERS_DIR)
 
 function formatErrors(errors: { code: string; path: string; message: string }[]): string {
   return errors.map((e) => `  [${e.code}] ${e.path}: ${e.message}`).join('\n')

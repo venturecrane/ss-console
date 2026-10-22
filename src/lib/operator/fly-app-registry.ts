@@ -5,9 +5,14 @@
  * Deliberately NOT a `hermes-${id}` string convention: addressing the wrong app
  * is a cross-tenant action (setting a secret on the wrong Machine, or reading
  * the wrong Machine's runtime), so an unlisted customer is **rejected** rather
- * than guessed (ADR 0036). Graduates to a customer.yaml/D1 lookup as customers
- * are added (ADR 0012). The first entry was customer-zero ("smd") →
+ * than guessed (ADR 0036). The first entry was customer-zero ("smd") →
  * `hermes-smd`, retired 2026-09-03.
+ *
+ * The map itself is authored per seat, as `fly_app:` in
+ * `operator/customers/<slug>/seat.yaml` (the seat inventory,
+ * `scripts/lib/seat-inventory.ts`), and generated into
+ * `fly-app-registry.generated.ts`. Every app name is still written by a person
+ * and reviewed; the generator copies it, it never derives one from the slug.
  *
  * Both the OAuth token relay (`src/lib/oauth/store.ts`, ADR 0036) and the
  * console→Machine runtime read transport (`runtime-read-transport.ts`, ADR
@@ -32,53 +37,31 @@
  * in this map. Every runtime surface for those seats rendered empty for weeks
  * with nothing raised.
  *
- * The structural fix is `tests/fly-app-registry-drift.test.ts`, which fails
- * when an authored seat under `operator/customers/` is in neither map below.
- * Adding a seat directory therefore forces an explicit decision here — register
- * it, or record in {@link UNPROVISIONED_CUSTOMERS} why it has no Fly app.
+ * The structural fix is the seat inventory: a seat is not loadable without a
+ * seat.yaml that authors `fly_app:` (an app name, or null with a reason), so
+ * adding a seat directory forces the decision here. `tests/seat-inventory.test.ts`
+ * fails while the generated map is stale, and
+ * `tests/fly-app-registry-drift.test.ts` keeps the fail-closed guarantees.
  */
 
-const CUSTOMER_FLY_APPS: Readonly<Record<string, string>> = Object.freeze({
-  // `smd` (customer-zero, `hermes-smd`) was retired 2026-09-03 by Captain
-  // directive: a June bring-up test with nothing running on it since 07-13,
-  // still billing as a started Machine and still holding the morning
-  // audit-chain run once stopped. Fly app, volume, D1 projection, R2 vault and
-  // the healthchecks ping are all gone; its customer.yaml stays in git history
-  // for when it is stood up again. See tests/customer-slug-pattern.test.ts.
-  // Smokeball Operator seats (ADR 0053). pilot-smokeball = our own staging
-  // rehearsal rig; ashton-price = the production pilot firm.
-  'pilot-smokeball': 'hermes-pilot-smokeball',
-  'ashton-price': 'hermes-ashton-price',
-  // Added ss#2283. Both are deployed Fly apps (`fly apps list`, 2026-08-11)
-  // that this map had never listed. scott = the hosted-agent founding seat
-  // (ADR 0067); smd-staging = the permanent pre-production mirror of
-  // customer-zero.
-  scott: 'hermes-scott',
-  'smd-staging': 'hermes-smd-staging',
-  // Hosted-agent seat for a real-estate brokerage's agent pilot, 2026-10-13.
-  brokery: 'hermes-brokery',
-  // Couples hosted-agent seat, SMD's own proof of concept (ss#3264), 2026-10-18.
-  'captain-mark': 'hermes-captain-mark',
-})
+import {
+  CUSTOMER_FLY_APPS,
+  UNPROVISIONED_CUSTOMERS as GENERATED_UNPROVISIONED,
+} from './fly-app-registry.generated'
 
 /**
  * Authored seats that deliberately resolve to NO Fly app, each with the reason.
  *
- * This is not a second registry — nothing resolves through it and membership
+ * This is not a second registry: nothing resolves through it and membership
  * still means "refuse to target any app". It exists so the drift guard can tell
  * a DECIDED absence from a FORGOTTEN one, which is the whole defect in ss#2283.
- *
- * `customer.yaml` cannot answer this question itself: it carries no lifecycle
- * field, deliberately ("a state field is a claim an agent can write, and a
- * claim an agent can write is one that rots" — `operator/customers/<slug>/
- * customer.yaml`), and `seat.kind` does not separate provisioned from not
- * (pilot-law, retired 2026-08-25, was `sandbox` with no app; pilot-smokeball is `proving` and
- * does). So the decision is authored here and reviewed like any other code.
+ * A seat lands here by authoring `fly_app: null` plus `unprovisioned_reason` in
+ * its seat.yaml.
  *
  * @public Drift-guard surface, imported by tests/fly-app-registry-drift.test.ts. No runtime
  * caller, by design: resolution goes through resolveCustomerFlyApp only.
  */
-export const UNPROVISIONED_CUSTOMERS: Readonly<Record<string, string>> = Object.freeze({})
+export const UNPROVISIONED_CUSTOMERS: Readonly<Record<string, string>> = GENERATED_UNPROVISIONED
 
 /**
  * The registry itself, for the drift guard in
@@ -97,5 +80,7 @@ export const REGISTERED_CUSTOMER_FLY_APPS: Readonly<Record<string, string>> = CU
  * — never fall back to a guessed name.
  */
 export function resolveCustomerFlyApp(customerId: string): string | null {
-  return CUSTOMER_FLY_APPS[customerId] ?? null
+  // Own keys only: `toString`, `constructor` and the rest of Object.prototype
+  // are not seats, and a bare index would hand back a function for them.
+  return Object.hasOwn(CUSTOMER_FLY_APPS, customerId) ? CUSTOMER_FLY_APPS[customerId] : null
 }

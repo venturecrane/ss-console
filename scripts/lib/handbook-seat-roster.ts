@@ -7,26 +7,25 @@
  * tests/handbook-integrity.test.ts fails when the committed block and the tree
  * disagree (the connector-inventory model, scripts/lib/handbook-connector-inventory.ts).
  *
- * Which directories count is the fleet tooling's rule, `live_seats()` in
- * operator/bin/lib/fleet/rings.py: a customer.yaml present, not a `_` template,
- * not `.decommissioned.`, and a valid slug. The integrity test runs the Python
- * function and asserts the same set, so the two cannot quietly diverge.
+ * Which directories count is the one seat rule, `seatSlugs()` in
+ * scripts/lib/seat-inventory.ts (Python twin: operator/bin/lib/seat_dirs.py): a
+ * customer.yaml present, not a `_` scaffold, not `.decommissioned.`, and a valid
+ * slug. The integrity test runs the Python fleet function and asserts the same
+ * set, so the two cannot quietly diverge.
  *
  * The block carries only what a seat IS (kind, product, role, vertical). Who
  * pays and on what terms is commercial detail and lives in the private
  * engagements repository, never here.
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
+import { seatSlugs } from './seat-inventory'
 
 export const BEGIN =
   '<!-- BEGIN GENERATED: seat roster. Regenerate with `npm run handbook:roster -- --write`; tests/handbook-integrity.test.ts fails while it is stale. -->'
 export const END = '<!-- END GENERATED: seat roster -->'
-
-/** Mirrors SLUG_RE in operator/bin/lib/fleet/ids.py. */
-const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/
 
 /** Display order: the clients first, then SMD's own seats. */
 const KIND_ORDER = ['customer', 'proving', 'preprod', 'internal', 'sandbox'] as const
@@ -46,19 +45,9 @@ export interface SeatEntry {
   vertical: string
 }
 
-/** The seat directories, by the same rule as rings.py live_seats(). */
+/** The seat directories, by the one seat rule (scripts/lib/seat-inventory.ts). */
 export function liveSeatSlugs(customersRoot: string): string[] {
-  return readdirSync(customersRoot, { withFileTypes: true })
-    .filter((d) => d.isDirectory())
-    .map((d) => d.name)
-    .filter(
-      (name) =>
-        !name.startsWith('_') &&
-        !name.includes('.decommissioned.') &&
-        existsSync(join(customersRoot, name, 'customer.yaml')) &&
-        SLUG_RE.test(name)
-    )
-    .sort()
+  return seatSlugs(customersRoot)
 }
 
 export function buildSeatRoster(customersRoot: string): SeatEntry[] {

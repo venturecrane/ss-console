@@ -20,8 +20,8 @@ Reachability needs the seam master key, so run under Infisical:
 Usage:
   overlay-ref-drift.py [SLUG ...] [--strict] [--dockerfile PATH] [--customers-dir PATH]
 
-With no SLUG args it checks every customer dir under operator/customers/
-(excluding _template). An undeployed/paused customer shows as "unreachable" —
+With no SLUG args it checks every seat under operator/customers/ (the
+bin/lib/seat_dirs.py rule: scaffolds and decommissioned tombstones excluded). An undeployed/paused customer shows as "unreachable" —
 that is informational, not drift, unless --strict.
 """
 
@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-from bin.lib import seam_pull
+from bin.lib import seam_pull, seat_dirs
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_DOCKERFILE = _REPO_ROOT / "operator" / "templates" / "Dockerfile"
@@ -62,12 +62,8 @@ def desired_ref_from_dockerfile(path: Path) -> str:
 
 
 def discover_slugs(customers_dir: Path) -> list[str]:
-    """Every customer dir under ``customers_dir`` except the template."""
-    if not customers_dir.is_dir():
-        return []
-    return sorted(
-        p.name for p in customers_dir.iterdir() if p.is_dir() and p.name != "_template" and not p.name.startswith(".")
-    )
+    """Every seat under ``customers_dir`` (bin/lib/seat_dirs.py: no scaffold, no tombstone)."""
+    return seat_dirs.seat_slugs(customers_dir)
 
 
 def refs_match(desired: str, running: Optional[str]) -> bool:

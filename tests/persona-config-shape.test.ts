@@ -16,7 +16,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
+import { seatSlugs } from '../scripts/lib/seat-inventory'
 import { resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 
@@ -27,9 +28,7 @@ import { PersonaShapeError, readPersonaConfigs } from '../src/lib/portal/persona
 
 const CTX = { entityId: 'e', orgId: 'o', gitSha: 'sha', syncedAt: '2026-09-25T00:00:00.000Z' }
 const CUSTOMERS = resolve('operator/customers')
-const SEATS = readdirSync(CUSTOMERS).filter(
-  (slug) => !slug.startsWith('_') && existsSync(resolve(CUSTOMERS, slug, 'customer.yaml'))
-)
+const SEATS = seatSlugs(CUSTOMERS)
 
 describe('personas_json read-side check: every seat round-trips', () => {
   it('finds the seats', () => {
