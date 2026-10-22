@@ -1,7 +1,7 @@
 #!/bin/bash
 # laptop/install.sh: set up a Captain laptop (mac23, m16) for client ops
 # workspaces. Idempotent; re-run after workspaces.json or the guard changes.
-#   * `ops` and `ops-handoff` into ~/.local/bin (already first on PATH);
+#   * `ops` and `ops-handoff` into ~/.local/bin (first on PATH in an interactive shell);
 #   * the workspace list to ~/.claude/smd-ops-workspaces.json;
 #   * client-data-guard.mjs registered as a USER-level PreToolUse hook, so
 #     every Claude session on this laptop, in any repo, is stopped before it
@@ -38,8 +38,10 @@ if [ -f "$HOME/.zshrc" ] && grep -q '\.smd-ops/' "$HOME/.zshrc"; then
 fi
 rm -rf "$HOME/.smd-ops"
 
-# Read back what was installed.
-command -v ops >/dev/null && echo "ops: $(command -v ops)"
+# Read back what was installed, by its installed path: an agent may run this
+# over ssh, where the shell never reads ~/.zshrc and ~/.local/bin is not on
+# PATH (mac23, 2026-10-22: "ops: command not found" after a good install).
+echo "ops: $HOME/.local/bin/ops"
 echo '{"tool_input":{"command":"python3 download.py 1"}}' | node "$HOME/.claude/hooks/smd-client-data-guard.mjs" 2>/dev/null \
   && { echo "FAIL guard did not block a test command"; exit 1; } || echo "guard: blocks a document pull (exit $?)"
-ops
+"$HOME/.local/bin/ops"
