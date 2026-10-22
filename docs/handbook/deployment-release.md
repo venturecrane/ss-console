@@ -283,7 +283,7 @@ that finishes it (`workers/fleet-alerts/src/rollout-failed.ts`, migration
 reports on its heartbeat (`image_ref`, `config_digest`, `skills_version` in
 `fleet_status`) with what was authored for it, and opens one alert per seat and
 kind of drift, with one recovery notice when the seat converges
-(`workers/fleet-alerts/src/drift.ts`, migration 0134):
+(`workers/fleet-alerts/src/drift.ts`, migration 0135):
 
 - `image_drift`: the seat runs a release older than the newest one that
   completed its last ring, although its rollout of that release finished

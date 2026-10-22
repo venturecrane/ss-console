@@ -1765,7 +1765,7 @@ describe('edge poll through runOnce (wave 8.2)', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Drift (./drift, migration 0134) through runOnce: one page, then silence,
+// Drift (./drift, migration 0135) through runOnce: one page, then silence,
 // then one recovery, on the same open/resolve rows as every level condition.
 // ---------------------------------------------------------------------------
 

@@ -1,5 +1,5 @@
 /**
- * Authored-versus-running drift (2026-10-22, migration 0134).
+ * Authored-versus-running drift (2026-10-22, migration 0135).
  *
  * WHY. Every seat tells D1 what it runs: `image_ref`, `config_digest` and
  * `skills_version` ride the heartbeat into `fleet_status` (migration 0129). The
