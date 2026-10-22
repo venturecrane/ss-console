@@ -4,7 +4,7 @@ section: running
 order: 20
 owner: captain
 review_every: 30
-last_reviewed: "2026-10-21"
+last_reviewed: "2026-10-22"
 summary: The obligation register - how every piece of work SMD owes a client gets recorded without anyone maintaining a list, how it is read from the terminal, how it gets closed only by a probe of the real system, and what it deliberately cannot see
 sources:
   - label: docs/adr/0088-obligation-register.md (the decision)
@@ -52,6 +52,8 @@ The obligation register is the one list of everything SMD owes a client, kept mo
 .claude/bin/register list --client ashton-price
 .claude/bin/register list
 ```
+
+**It says whose move each row is.** The list groups every client's rows three ways: **ours** (SMD owes the next step), **waiting on the client or a vendor** (`awaiting_external`, or a kind that waits on a third party), and **delivered** (sent, certified by the nightly run). The session-start `[owed]` line counts only ours and names the waiting count beside it. Folding them into one number made the line read "50 open" for Ashton & Price on 2026-10-22 when 15 were ours, so the split is the point, not a formatting choice. Which rows count as waiting is the same test the age alarm uses, so the list and the alarms cannot disagree.
 
 There is deliberately no web page. One shipped on 2026-09-17 and was deleted the
 same day: the Captain works in terminal sessions and does not open the admin
@@ -128,6 +130,8 @@ The exception is prose. An obligation stated in a letter exists only in that let
 ```
 
 The second form matters as much as the first. Without it, "we looked and owe nothing" is an absence, and an absence is indistinguishable from never having looked.
+
+Check I also asks the session to move rows a letter **handed to the client** to `awaiting_external` (`register await`, below). A consolidated ask is the moment that matters: one letter, many rows. Letter 395 to Ashton & Price named 25 register rows as waiting on the firm and no session moved them, so they stayed in the count of what SMD owed until 2026-10-22.
 
 **Check I records; it never blocks.** It is not part of the Ship Gate and never becomes a reason a session cannot close. Client obligations legitimately span sessions - that is what a register is for. A gate there would make every promise a blocker, and within a week people would be inventing reasons to get past it.
 
@@ -211,4 +215,4 @@ It also skips a row that is **waiting on someone else**: any row in `awaiting_ex
 | How a row closes, or what counts as delivery evidence | `.claude/hooks/lib/register.mjs` (`deliver`), `.claude/hooks/lib/register-retire.mjs` (`cancel`, `reopen`, `retire`, `await`), `.claude/hooks/lib/register-close.mjs` (which states each command accepts and its evidence checks), `certify` in `scripts/ci-reconcile-obligations.ts`, `tests/register-deliver.test.ts`, `tests/register-cancel.test.ts`, `tests/register-reopen.test.ts`, `tests/register-retire-await.test.ts`, and "How a row closes" |
 | Which rows the undated age ladder skips | `waitsOnSomeoneElse` in `scripts/lib/obligation-reconcile/verdicts.ts`, `tests/register-retire-await.test.ts`, and "What a stalled row does now" |
 | Which seats roll up to which client | `scripts/lib/seat-clients.mjs` and "Who records what we owe" above |
-| What the session-start line says | `.claude/skills/sos/SKILL.md` Step 4 and the `--json` allowlist in `.claude/hooks/lib/register.mjs` |
+| What the session-start line says, or how rows split by whose move | `.claude/skills/sos/SKILL.md` Step 4, `whoseMove` and the `--json` allowlist in `scripts/lib/register-view.mjs`, `tests/register-cli.test.ts` |

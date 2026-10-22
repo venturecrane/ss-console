@@ -637,10 +637,44 @@ describe('reading the register', () => {
     expect(text).toMatch(/ashton-price\s+\(1\)/)
     expect(text).toMatch(/smd-services\s+\(1\)/)
     expect(text).toMatch(/12d old/)
-    expect(text).toMatch(/2 open across 2 clients; 0 dated/)
+    expect(text).toMatch(
+      /2 open across 2 clients: 2 ours, 0 waiting on the client or a vendor, 0 delivered; 0 dated/
+    )
     // Only a dated row can go overdue, so an all-undated register cannot alarm
     // through that path. Saying so is the point.
     expect(text).toMatch(/none can go overdue/)
+  })
+
+  it('separates our rows from rows waiting on the client, in the table and in --json', async () => {
+    // 2026-10-22: the session-start line read "50 open" for Ashton & Price when
+    // 15 were ours; every row waiting on the firm counted as work SMD owed.
+    const { main, renderTable } = await loadLib()
+    const rows = [
+      row(),
+      row({ obligation_id: 'o2', stable_key: 'firm-answer', state: 'awaiting_external' }),
+      row({ obligation_id: 'o3', stable_key: 'vendor-gate', kind: 'external_dependency' }),
+      row({ obligation_id: 'o4', stable_key: 'sent-letter', state: 'delivered' }),
+    ]
+    const text = renderTable(rows)
+    expect(text).toMatch(/^ {2}ours \(1\)$/m)
+    expect(text).toMatch(/^ {2}waiting on the client or a vendor \(2\)$/m)
+    expect(text).toMatch(/^ {2}delivered, certifies on the nightly run \(1\)$/m)
+    expect(text).toMatch(/1 ours, 2 waiting on the client or a vendor, 1 delivered/)
+    // Our rows print first: they are the ones the reader acts on.
+    expect(text.indexOf('legacy-migration-quote')).toBeLessThan(text.indexOf('firm-answer'))
+
+    process.env.SS_REGISTER_D1_CMD = successStub(rows)
+    const out = capture()
+    await main(['list', '--json'])
+    out.restore()
+    delete process.env.SS_REGISTER_D1_CMD
+    const parsed = JSON.parse(out.lines.join('')) as { stable_key: string; move: string }[]
+    expect(Object.fromEntries(parsed.map((r) => [r.stable_key, r.move]))).toEqual({
+      'legacy-migration-quote': 'ours',
+      'firm-answer': 'theirs',
+      'vendor-gate': 'theirs',
+      'sent-letter': 'delivered',
+    })
   })
 
   it('never reports a row as younger than new', async () => {
