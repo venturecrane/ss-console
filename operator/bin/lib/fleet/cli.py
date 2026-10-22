@@ -153,14 +153,20 @@ def cmd_artifacts(ctx: Ctx, a: argparse.Namespace) -> int:
     return 0
 
 
-def _summary(ctx: Ctx, outcomes: list[Any], halted: bool, completed: bool) -> int:
+def _summary(ctx: Ctx, outcomes: list[Any], halted: bool, completed: bool, dry_run: bool) -> int:
     for o in outcomes:
         ctx.log(f"  {o.seat:<18} {o.state:<14} {o.detail}")
-    ctx.log(
-        "HALTED"
-        if halted
-        else ("completed every ring" if completed else "finished; release not yet done on every seat (fleet status)")
-    )
+    # A dry run reads no completion (it records nothing), so it must not claim
+    # anything about the release: on 2026-10-21 it said "not yet done on every
+    # seat" of a release that was done on every seat.
+    if dry_run:
+        ctx.log("dry run: nothing deployed, nothing recorded")
+    elif halted:
+        ctx.log("HALTED")
+    else:
+        ctx.log(
+            "release done on every seat" if completed else "finished; release not yet done on every seat (fleet status)"
+        )
     return 1 if halted else 0
 
 
@@ -227,7 +233,7 @@ def _run_waves(
     if result.completed and not release.get("completed_last_ring_at"):
         ctx.store.mark_completed(release["release_id"])
         ctx.log(f"{release['release_id']}: every seat is done; release marked completed")
-    return _summary(ctx, result.outcomes, result.halted, result.completed)
+    return _summary(ctx, result.outcomes, result.halted, result.completed, a.dry_run)
 
 
 def cmd_busy(ctx: Ctx, a: argparse.Namespace) -> int:

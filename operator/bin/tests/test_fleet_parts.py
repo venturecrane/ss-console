@@ -345,6 +345,24 @@ def test_cli_completion_is_stamped_once_from_the_records() -> None:
     assert store.completed == [rel["release_id"]]  # never re-stamped
 
 
+def test_cli_dry_run_summary_claims_nothing_about_the_release() -> None:
+    # 2026-10-21: a dry run of a release done on every seat printed "release
+    # not yet done on every seat". A dry run records nothing, so it reads no
+    # completion and must say only that it changed nothing.
+    import argparse
+
+    store = FakeStore()
+    rel = release(completed_last_ring_at="2026-10-22T01:33:34Z")
+    store.insert_release(rel)
+    logs: list[str] = []
+    ctx = cli.Ctx(REPO, ScriptRunner(), store, FakeR2(), FakeFly(), log=logs.append)  # type: ignore[arg-type]
+    args = argparse.Namespace(only="scott", dry_run=True, parallel=1)
+    assert cli._run_waves(ctx, args, rel, _done, "h") == 0  # type: ignore[arg-type]
+    assert logs[-1] == "dry run: nothing deployed, nothing recorded"
+    assert not any("not yet done" in line for line in logs)
+    assert store.rollouts == {} and store.completed == []
+
+
 def test_cli_busy_exit_codes() -> None:
     store = FakeStore()
     ctx = _ctx(store)
