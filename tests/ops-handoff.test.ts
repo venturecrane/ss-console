@@ -1,11 +1,12 @@
 /**
  * Tests for operator/ops-machine/laptop/ops-handoff, run against a stub `fly` so
- * no workspace is touched. What it pins is the 2026-10-22 channel fix: the
- * laptop session names itself (--reply-to) in the task file, so the workspace
- * session can message it (a task-started workspace session is renamed to an
- * auto-title and cannot be found by name), and a handoff to a workspace with a
- * session already running opens at once in a new tmux window instead of waiting
- * in the inbox for the next `ops`.
+ * no workspace is touched. What it pins is the 2026-10-22 channel fix: each
+ * handoff prints the name of the workspace session that will take it
+ * (ops-<slug>-<id>, the id also in the task file's name, which ops-start reads),
+ * so the laptop can open the conversation (the reverse fails: a laptop session's
+ * name exists only on that laptop), and a handoff to a workspace with a session
+ * already running opens at once in a new tmux window instead of waiting in the
+ * inbox for the next `ops`.
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { execFileSync } from 'node:child_process'
@@ -92,17 +93,44 @@ beforeEach(() => {
 })
 
 describe('ops-handoff', () => {
-  it('writes the reply-to session into the task, so the workspace can message the laptop', () => {
-    const out = handoff(['ap', 'check the facilities', '--reply-to', 'ss-console-03'])
-    const [task] = tasks()
-    expect(task).toMatch(/^Reply-to: ss-console-03$/m)
-    expect(task).toContain('check the facilities')
-    expect(out).toContain('It will message ss-console-03 when it starts')
+  it('prints the workspace session name, and that name carries the task file id', () => {
+    const out = handoff(['ap', 'check the facilities'])
+    const name = out.match(/Its session is ops-ashton-price-(\d+)\./)
+    expect(name).not.toBeNull()
+    // ops-start derives its --name from the id in the file name; the two must agree.
+    expect(fs.readdirSync(inbox)).toEqual([
+      expect.stringMatching(new RegExp(`^pending-\\d{8}T\\d{6}-${name?.[1]}\\.md$`)),
+    ])
+    expect(tasks()[0]).toContain('check the facilities')
   })
 
-  it('omits the Reply-to line when no session is named', () => {
-    handoff(['ap', 'check the facilities'])
-    expect(tasks()[0]).not.toMatch(/Reply-to:/)
+  it('names the workspace session what ops-handoff printed (ops-start reads the same id)', () => {
+    const out = handoff(['ap', 'check the facilities'])
+    const printed = out.match(/Its session is (ops-ashton-price-\d+)\./)?.[1]
+    const [file] = fs.readdirSync(inbox)
+    // Run ops-start's own naming lines against this handoff's file, as the workspace would.
+    const start = fs.readFileSync(
+      path.join(process.cwd(), 'operator', 'ops-machine', 'bin', 'ops-start'),
+      'utf8'
+    )
+    const lines = start.split('\n').filter((l) => /^\s*(id=|name="ops-\$slug-)/.test(l))
+    expect(lines).toHaveLength(2)
+    const named = execFileSync(
+      'bash',
+      [
+        '-c',
+        `slug=ashton-price; task="$1"; ${lines.join('; ')}; echo "$name"`,
+        '_',
+        `/x/inbox/${file}`,
+      ],
+      { encoding: 'utf8' }
+    ).trim()
+    expect(named).toBe(printed)
+  })
+
+  it('refuses the retired --reply-to flag rather than sending it as the task', () => {
+    expect(() => handoff(['ap', 'task', '--reply-to', 'ss-console-03'])).toThrow()
+    expect(tasks()).toEqual([])
   })
 
   it('opens the task in a new window when a workspace session is already running', () => {

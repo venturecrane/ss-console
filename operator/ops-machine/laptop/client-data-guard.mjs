@@ -165,9 +165,9 @@ try {
     `client-data-guard: this would put client documents on a laptop (matched "${hit}").\n` +
       `Client documents are opened only in that client's ops workspace.\n` +
       `Do not run it here. Instead:\n` +
-      `  1. hand the task over: ops-handoff ${alias} "<the task, one paragraph, everything the next session needs>" --reply-to <your session name from ListAgents>\n` +
+      `  1. hand the task over: ops-handoff ${alias} "<the task, one paragraph, everything the next session needs>"\n` +
       `  2. tell the Captain, in one line, what ops-handoff printed (switch to the task window, or type \`ops ${alias}\`).\n` +
-      `  3. the workspace session messages you when it starts; talk to it with SendMessage at that address.\n` +
+      `  3. once it is open, message the session name ops-handoff printed with SendMessage; it replies to you.\n` +
       `Known workspaces: ${known}.\n` +
       `Break-glass only (workspace down, client waiting): SS_ALLOW_CLIENT_DATA_ON_LAPTOP="<reason>" (audited); ` +
       `then offboard the laptop again (operator/ops-machine/laptop-offboard.py).\n`
