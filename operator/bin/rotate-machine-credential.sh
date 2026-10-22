@@ -6,8 +6,10 @@
 # hash is kept as prev_* for 24h), proves the row exists, then sets the
 # plaintext as the seat's MACHINE_HEARTBEAT_KEY Fly secret. `fly secrets
 # import` WITHOUT --stage applies immediately, which RESTARTS the Machine;
-# that is why this script exists separately from provision-customer.sh and
-# why running it against a live seat needs the Captain's go for that turn.
+# that is why this script exists separately from provision-customer.sh.
+# Running it is agent work (Captain, 2026-09-11): the agent checks the seat has
+# no job running or held first, because the script runs no busy gate, then reads
+# the heartbeat back and reports. A Captain "not now" on a seat stands until lifted.
 #
 # ORDER IS SAFE BY CONSTRUCTION. The D1 write lands first, and the Worker
 # honours both the new and the previous key until prev_expires_at, so a seat

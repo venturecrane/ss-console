@@ -4,78 +4,77 @@ section: business
 order: 6
 owner: captain
 review_every: 180
-summary: The scope-based consulting product - one bounded engagement that runs assessment to handoff, priced per scope, where the assessment call is the product
+last_reviewed: "2026-10-21"
+summary: The consulting offer - one bounded project from assessment to handoff, at one fixed price, where the assessment call is what we really sell.
 sources:
-  - label: Engagement Phases & "The Assessment Call Is the Product" (CLAUDE.md)
-    href: https://github.com/venturecrane/ss-console/blob/main/CLAUDE.md
-  - label: Assessment Call Script
-    href: https://github.com/venturecrane/ss-console/blob/main/docs/collateral/assessment-call-script.md
-  - label: Pricing Framework
-    href: https://github.com/venturecrane/ss-console/blob/main/docs/collateral/pricing-framework.md
-  - label: Proposal / SOW Template
-    href: https://github.com/venturecrane/ss-console/blob/main/docs/collateral/proposal-sow-template.md
+  - label: Venture model (engagement phases, the assessment call is the product)
+    href: .claude/rules/venture-model.md
+  - label: Assessment call script
+    href: docs/collateral/assessment-call-script.md
+  - label: Pricing framework
+    href: docs/collateral/pricing-framework.md
+  - label: Proposal / SOW template
+    href: docs/collateral/proposal-sow-template.md
+  - label: Decision Stack (Decisions #10, #11, #14, #18, #19, #27, #28)
+    href: docs/adr/decision-stack.md
 ---
 
-## What the consulting engagement is
+A consulting engagement is one bounded project: we learn where a business is trying to go, design the right solution, build it, train the team and hand it off, for one fixed price. This page explains how the project runs and what is and is not promised, so you can follow one through the admin console and answer a client's questions about it.
 
-The consulting engagement is one of SMD's three front doors. It is a scope-based, bounded piece of work: we sit down with a business owner, understand where they are trying to go, design a solution, build it, train their team, and hand it off. One engagement, one scope, one price. It is not a retainer and not a subscription. The other front door is the [Operator](/admin/playbook/operator-thesis), a productized monthly offering; this page is about the consulting product only.
+## What it is
 
-The shape of the buyer is an owner-led business that has outgrown how it runs today: too big for one person to hold in their head, too small to justify a full-time COO, with real operational load and the ability to pay for a solution. There is no revenue-band qualification gate (the old "$750k-$5M" band was retired per ADR 0003). Qualification happens in conversation, not by filtering on a guessed revenue figure.
+Consulting is one of SMD's three offers, beside the Operator (the flagship, a monthly managed worker; see [The Operator Thesis](/admin/playbook/operator-thesis)) and the Hosted Agent ([Business Model](/admin/playbook/business-model)). It is one project, one scope, one price; not a retainer and not a subscription. On the website a prospect reaches it through the assessment, which may end in a recommendation, a project, or an Operator (`docs/marketing/positioning-spine.md`).
 
-The work spans six solution categories, the delivery taxonomy that is SMD's source of truth for what we build: process design, custom internal tools, systems integration, operational visibility, vendor/platform selection, and AI & automation. A single engagement usually combines two or three of these. See [Business Model](/admin/playbook/business-model) for the full taxonomy.
+The buyer is an owner-led business that has outgrown how it runs today, with real operational load and the ability to pay. There is no revenue-band gate (ADR 0003); we qualify in conversation.
+
+The work draws on the six solution categories: process design, custom internal tools, systems integration, operational visibility, vendor/platform selection, and AI & automation. A single engagement usually combines two or three ([Business Model](/admin/playbook/business-model)).
+
+As of 2026-10-21 SMD's one paying client is an Operator client (`operator/customers/`), and the website's case study comes from that client (`src/pages/case-studies/personal-injury-law-firm.astro`). The consulting process below is built into the admin console and documented in the collateral; whether a consulting engagement is under way at any moment is visible in the admin console under Clients, not recorded here.
 
 ## The assessment call is the product
 
-The most important idea on this page: the value SMD sells is not configuring a tool. Anyone can configure HubSpot. The value is the assessment itself - an experienced outsider seeing the operation with fresh eyes, naming the problems the owner is too close to see, prioritizing ruthlessly ("these three things first, everything else later"), and making decisions so the owner does not research for six months.
+What SMD sells is not configuring a tool; anyone can configure a tool. It is an experienced outsider seeing the operation with fresh eyes, naming the problems the owner is too close to see, ranking them ruthlessly ("these three first, everything else later"), and deciding so the owner does not spend six months researching (`.claude/rules/venture-model.md`). If the assessment is right, the build follows; if it is wrong, no amount of configuration saves the project. That is why the assessment is a paid product after the first three (Decision #13).
 
-This reframes the whole engagement. The build is downstream of a good assessment. If the assessment is right, the deliverables almost design themselves; if it is wrong, no amount of tool configuration saves the engagement. That is why the assessment is a paid product in its own right, not free discovery (see the paid-assessment section below).
-
-The assessment call is run as a structured conversation, not an audit. It moves through opening, objectives, a day-in-the-life walkthrough, and a summary. The objectives come before the problems on purpose: the owner usually knows the pain but has not articulated the goal, and part of our value is helping them discover the real objective. We do not give them a faster horse. The script weaves in "ROI anchor" questions so the owner quantifies their own cost of inaction - when the owner says the number out loud, it is theirs, not ours. The call ends with a summary in the owner's words and one commitment: a scope and price within a couple of days. We do not quote on the call, commit to a timeline, or recommend specific tools by name. The full guide is the [assessment-call-script](https://github.com/venturecrane/ss-console/blob/main/docs/collateral/assessment-call-script.md).
+The call is a structured conversation, not an audit: opening, objectives, a walk through a normal day, then a summary in the owner's words. Objectives come before problems on purpose. Questions are woven in so the owner puts a number on what the problem costs them; when the owner says the number, it is theirs (Decision #15). The call ends with one commitment, a scope and price within a couple of days. On the call we do not quote a price, commit to a timeline, recommend tools by name, or push to close ([assessment call script](https://github.com/venturecrane/ss-console/blob/main/docs/collateral/assessment-call-script.md)).
 
 ## The five phases
 
-Every engagement includes every phase. What changes is how heavy each one is - scope determines depth, not presence. Training may be a multi-day program or a single "on Tuesdays you click this button." Implementation may be a multi-week build or a one-afternoon script. The phases (per CLAUDE.md "Engagement Phases"):
+Every engagement includes every phase; scope sets how heavy each one is (`.claude/rules/venture-model.md`).
 
-**1. Assessment call.** Walk through their day, "show me how you do X," surface the top objectives and the two or three most acute operational gaps. This is the product (above). It produces the input to solution design.
+1. **Assessment call.** Walk through their day, "show me how you do X," find the top objectives and the two or three biggest gaps.
+2. **Solution design.** Choose the simplest tools, design the workflows, estimate scope and price, and send the proposal within 48 hours of the call (Decision #18), built with the [pricing framework](https://github.com/venturecrane/ss-console/blob/main/docs/collateral/pricing-framework.md).
+3. **Implementation.** Build the templates, workflows and documents; configure tools; move data; connect systems. Most of the hours land here.
+4. **Training.** Hands-on walkthrough, practice with real data, a written how-to for every process and tool, and an internal champion who can run and troubleshoot it after we leave (Decision #28).
+5. **Handoff and polish.** Take feedback, adjust from real use, final handoff. Two weeks of async support follow (Decision #27).
 
-**2. Solution design.** Choose the simplest tools that solve the problem, design the workflows, estimate scope and price, and send the proposal. This is where the six solution categories turn into concrete deliverables. The output is a proposal/SOW sent within 48 hours of the call, derived through the [pricing framework](/admin/playbook/pricing-economics).
+If a proposal gets no answer, the follow-up is three touches over seven days, then the prospect is marked dead (Decision #19).
 
-**3. Implementation.** Build the templates, workflows, and documentation; configure tools; migrate data; connect systems. This is where most of the hours land. The deliverables are whatever closes the gaps named in the assessment - a lead-intake form and follow-up automation, a dispatch runbook, a financial dashboard, an internal tool, an integration between two systems the owner picked.
+## How the six categories show up
 
-**4. Training.** Hands-on walkthrough with the team, practice with real data, written "how-to" documentation for every process and tool set up, and identification of an internal champion who can own and troubleshoot the solution after we leave. A champion identified on the assessment call carries through to here.
+The categories are not a menu the client picks from; they are how we scope. Each gap the assessment finds maps to one or more:
 
-**5. Handoff and polish.** Handle feedback, adjust based on real use, deliver the final handoff. A two-week async stabilization period follows the final handoff (Decision #27), included in the engagement price.
+- "Leads don't get followed up" may need **process design** (a written follow-up routine), **custom internal tools** (an intake form, an automated follow-up) and **operational visibility** (a leads dashboard).
+- "Our tools don't talk to each other" is **systems integration**.
+- "I don't know if we're making money" is **operational visibility**, often after a **vendor/platform selection**, and only once the books are current (Decision #6).
+- **AI & automation** only when AI clearly beats a non-AI answer.
 
-## How the six solution categories show up in delivery
+The pricing framework carries typical hour ranges per category as starting points.
 
-The six categories are not separate products the client picks from a menu. They are the delivery taxonomy - the vocabulary we use internally to scope and price. In an engagement, the assessment surfaces operational gaps, and each gap maps to one or more categories during solution design:
+## What is and is not promised
 
-- A gap like "leads don't get followed up" pulls in **process design** (a written follow-up runbook), **custom internal tools** (an intake form, a follow-up automation), and **operational visibility** (a leads dashboard).
-- A gap like "our tools don't talk to each other" pulls in **systems integration**.
-- A gap like "I don't know if we're making money" pulls in **operational visibility**, often gated on a **vendor/platform selection** decision and clean books as a precondition.
-- **AI & automation** is a named category we reach for only when AI clearly beats a non-AI solution. We do not force an AI angle onto an engagement that does not need one.
+The proposal or SOW states scope, price, payment terms and an explicit "what's not included" list ([SOW template](https://github.com/venturecrane/ss-console/blob/main/docs/collateral/proposal-sow-template.md); Decision #10).
 
-The pricing framework carries typical hour ranges per category, used as scoping starting points. See [Pricing & Economics](/admin/playbook/pricing-economics).
+- **A project price, not hourly.** The client sees one number, never the rate or the hours. SMD absorbs overruns up to the agreed scope; new scope is quoted separately (pricing framework).
+- **Out-of-scope asks go in a parking lot**, logged as they come and settled at the pre-handoff review: folded in, proposed as follow-on work, or dropped with a reason (Decision #11).
+- **Payment follows size**: 50/50 by default; at 40 hours or more, consider 40/30/30 (Decision #14; [Pricing & Economics](/admin/playbook/pricing-economics)).
+- **Two weeks of included support**, async by email with a business-day response: questions about what we built, small fixes under 30 minutes, one extra walkthrough. The SOW template defaults to two weeks and allows a different window; the signed SOW is what binds (Decision #27).
 
-## The paid assessment entry point
+A signed proposal carries specific timeframes and amounts because it is a contract, not marketing. Public content never does ([Positioning & Voice](/admin/playbook/positioning-voice)).
 
-The assessment is a paid product, the operational expression of "the assessment call is the product." The launch-period first three are free; after that it carries a credited fee, applied against any engagement that follows. The exact figures and credit window are owned by [Pricing & Economics](/admin/playbook/pricing-economics).
+## Who decides what
 
-Pricing the assessment does two things at once: it filters for owners serious enough to pay, and it asserts that the diagnostic carries value independent of the build. The scheduling rules live in the booking flow.
+The price on a proposal, any discount, and any change to scope or terms are the Captain's. Once a SOW is signed, invoices at the agreed amounts are yours to send or present ([Who Does What](/admin/playbook/who-does-what), [Money](/admin/playbook/money)).
 
-## What is and is not committed
+## How it maps onto the admin console
 
-The engagement is governed by a proposal/SOW that states scope, price, payment terms, and an explicit "what's not included" boundary. A few rules hold across every engagement:
-
-- **Project price, not hourly.** The client sees one number. They never see the hourly rate or the hour estimate. Price is tied to the deliverable, not the time; SMD absorbs overruns up to the agreed scope boundary, and scope creep becomes a separately scoped addition.
-- **Payment structure follows engagement size**, from a two-part deposit-and-handoff split on smaller engagements to a three-milestone structure on larger ones. The thresholds and percentages are owned by [Pricing & Economics](/admin/playbook/pricing-economics) (Decision #14).
-- **Two-week stabilization is included**, not an open-ended support promise. Work beyond the original scope goes through a separate conversation - a follow-on scope, or conversion to an Operator subscription if the fit is right.
-
-The window is two weeks by decision ([Decision #27](https://github.com/venturecrane/ss-console/blob/main/docs/adr/decision-stack.md)): async through a dedicated email thread, a 24-hour business-day response, covering questions about what we built, minor configuration fixes under 30 minutes, and one additional team-member walkthrough. The SOW template treats two weeks as the default and lets it be adjusted per engagement; the signed SOW is the binding term.
-
-The proposal carries specific timeframes and dollar amounts because it is a signed contract, the product of the assessment conversation, not marketing copy. Public-facing content never carries fixed timeframes or dollar amounts.
-
-## How this maps onto the system
-
-The product motion described here is operated through the admin and client surfaces. A prospect moves through entity stages, an assessment call is captured as a meeting, solution design produces a quote/SOW, signing transitions the engagement into delivery, and billing/portal handle the money and client-facing view. That end-to-end walk-through - and which surface owns each step - is the [Customer Lifecycle](/admin/playbook/customer-lifecycle).
-
+A prospect moves through stages in the admin console; the assessment is a meeting; solution design produces a quote and SOW; signing turns the record into a client with an engagement; billing and the client portal handle money and the client's view. The step-by-step walk, including what happens automatically at signing, is [Customer Lifecycle](/admin/playbook/customer-lifecycle).

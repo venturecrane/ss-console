@@ -4,97 +4,106 @@ section: business
 order: 5
 owner: captain
 review_every: 180
-status: Rewrite pending
-summary: The internal rate ladder, engagement range, payment terms, paid assessment, and the Operator and Hosted Agent pricing postures - consulting and Operator figures internal; the Hosted Agent price is the one published exception (ADR 0067)
+last_reviewed: "2026-10-21"
+summary: How each of the three offers is priced and why, where the private Operator figures live, how new work is priced, and the cost lines the Captain watches. All consulting and Operator figures are internal; the Hosted Agent price is the one published exception (ADR 0067).
 sources:
-  - label: Decision Stack (Decisions #13, #14, #16)
-    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/decision-stack.md
-  - label: CLAUDE.md - Pricing
-    href: https://github.com/venturecrane/ss-console/blob/main/CLAUDE.md
+  - label: Decision Stack (Decisions #13, #14, #16, #25, #27, #50, #51)
+    href: docs/adr/decision-stack.md
   - label: ADR 0004 - Productized Operator Offering
-    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0004-productized-operator-offering.md
+    href: docs/adr/0004-productized-operator-offering.md
+  - label: ADR 0063 - Operator launch pricing (figures private)
+    href: docs/adr/0063-operator-launch-pricing.md
+  - label: ADR 0062 - Operator cost plane
+    href: docs/adr/0062-operator-cost-plane.md
+  - label: ADR 0067 - Hosted Agent self-serve SKU
+    href: docs/adr/0067-hosted-agent-self-serve-sku.md
+  - label: Pricing-figures guard test
+    href: tests/pricing-figures.test.ts
+  - label: Card processing fee
+    href: src/lib/pricing/card-fee.ts
 ---
+
+Each offer has its own pricing shape: consulting is a fixed project price built from an internal hourly rate, the Operator is a flat monthly fee plus a one-time stand-up fee, and the Hosted Agent has a published monthly price. Prices are the Captain's to set; you invoice at prices already set, and anything new, discounted or changed goes to the Captain ([Who Does What](/admin/playbook/who-does-what)).
 
 ## The governing rule
 
-No dollar amounts appear on the website or in marketing materials (CLAUDE.md, Pricing; Decision #16 pricing guardrails). The client sees a project price in their proposal, never on a public page, and never the hourly rate. **Every figure on this page is internal.** This page is admin-only documentation; the numbers here are for planning and quoting, not for publication. The positioning rule behind this lives in `/admin/playbook/positioning-voice`.
+No dollar amount appears on the website or in marketing (Decision #16; [Positioning & Voice](/admin/playbook/positioning-voice), rule 4). The client sees a price in their proposal or agreement, never on a public page, and never the hourly rate. The one exception is the Hosted Agent price on `/agent` (ADR 0067).
 
-## The rate ladder
+This handbook is in a public repository (Decision #52), so the Operator's figures are not written here at all. They live in the private `venturecrane/engagements` repository under `pricing/`, and `tests/pricing-figures.test.ts` fails the build if they reappear in this one. The consulting figures below are internal policy; do not quote them to a client.
 
-The internal hourly rate advances as the firm builds proof (Decision #16, internal rate schedule):
+How money is collected (subscriptions, invoices, the card fee, failed payments) is on [Money](/admin/playbook/money). This page is about what the prices are and why.
 
-| Tier | Rate | Trigger to advance |
+## Consulting
+
+### The internal rate ladder
+
+The rate rises as the firm builds proof (Decision #16). It is used to build a quote; the client never sees it.
+
+| Tier | Rate | When to move up |
 | --- | --- | --- |
 | Launch | $175/hr | Starting rate |
 | First reference | $200/hr | After the first completed engagement with a case study |
-| Established | $250/hr | Consistent pipeline plus 2-3 case studies |
-| Volume | $300/hr | Referral-driven inbound plus demonstrated results |
+| Established | $250/hr | Consistent pipeline and 2 to 3 case studies |
+| Volume | $300/hr | Referral-driven inbound and demonstrated results |
 
-The rate is internal math. The client pays for outcomes, not hours (Decision #16). The value is an experienced team that can see the problems the owner cannot, decide fast, and implement in days.
+Moving up a tier is a pricing decision, so it is the Captain's.
 
-## How quoting works
+### How a quote is built
 
-The assessment is the pricing conversation (Decision #16, Decision #18):
+The assessment is the pricing conversation (Decisions #16 and #18):
 
-1. The assessment call identifies the problems to solve.
-2. The solution design phase estimates hours per problem (tool selection, configuration, documentation, training).
+1. The assessment call finds the problems to solve.
+2. Solution design estimates the hours for each (tool selection, configuration, documentation, training).
 3. Quote = estimated hours times the current rate.
-4. The quote is presented to the client as a fixed project price - "Operations Cleanup: $X,XXX" - never an hourly breakdown.
-5. Internal tracking compares estimated versus actual hours per engagement to calibrate future quotes.
+4. The client sees one fixed project price, never an hourly breakdown.
+5. Estimated against actual hours is tracked on each engagement to improve later quotes.
 
-## Engagement range
+The smallest engagements start around $2,500 at the launch rate; below that, the assessment costs more than the work is worth. There is no ceiling (Decision #16).
 
-Scoped per engagement (CLAUDE.md, Pricing; Decision #16 guardrails):
+### The paid assessment
 
-- **Smallest engagements** start around **$2,500** at the launch rate (targeted automation scripts, AI pilots). Below that, assessment overhead exceeds delivery value.
-- **Largest engagements** have **no fixed ceiling.**
+The first three assessments are free; after that an assessment costs $250, credited in full toward the engagement if the client goes ahead. The switch to paid happens after the first delivered engagement. The free period is internal policy, never a marketing offer (Decision #13).
 
-Nothing about this range is published externally.
+### Payment terms
 
-## Paid assessment
+50% deposit at signing, 50% at completion (the handoff session). For engagements of 40 hours or more, consider 40% deposit, 30% at a mid-point milestone named in the SOW, and 30% at completion (Decision #14). See [Money](/admin/playbook/money) for how these invoices go out.
 
-The assessment is a paid entry point that converts into the engagement (Decision #13):
+### After handoff
 
-- **First 3 clients:** free. The bottleneck at launch is getting anyone on a call.
-- **After that:** **$250**, applied in full toward the engagement fee if they proceed.
-- The trigger to flip from free to paid is the first delivered engagement - once there is something to point to, the $250 is easy to justify.
-- The free period is internal policy, never a marketing offer.
-- Raising to $500 may be appropriate once brand recognition reduces friction; revisit after pipeline is established.
+Two weeks of async support are included (Decision #27). After that, more work is a new scoped project or, if it fits, an Operator subscription (ADR 0004, lock 4). The old undefined retainer (Decision #12) is superseded.
 
-## Payment terms
+### Pipeline planning model
 
-Standard terms are a 50/50 split (Decision #14):
+The planning model assumes an average engagement around $7,500 against a $200k annual target: about 27 engagements a year, or 2 to 3 closes a month. The real limit is how many assessment calls can be run, about 3 to 4 a week at steady state (Decision #25). It is a planning assumption written before the first sale, not a measured figure.
 
-- **50% deposit at signing** to book the engagement start date. The deposit protects against cancellation.
-- **50% at completion**, defined as the handoff session. The completion payment aligns with delivered value.
-- The SOW specifies the completion milestone clearly so there is no ambiguity.
+## The Operator
 
-**For larger engagements (40+ hours):** consider a three-milestone structure - **40% deposit / 30% at a mid-engagement checkpoint / 30% at completion** - with the mid-point milestone defined in the SOW against specific deliverables.
+**Shape.** A flat monthly fee: not metered, not per task, not scoped per engagement (ADR 0004, lock 1). Plus a one-time stand-up fee for provisioning, configuration and onboarding (ADR 0063).
 
-## The Operator pricing posture
+**The figures.** Locked by the Captain on 2026-07-04 and kept in `venturecrane/engagements:pricing/operator-launch-pricing.md` (ADR 0063, Decision #50). Each client's actual price is in that client's agreement in the same repository. Ask the Captain for access ([Handoff Companion](/admin/playbook/handoff-companion)).
 
-The Operator is a productized flat-rate retainer SKU ([ADR 0004](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0004-productized-operator-offering.md), lock 1). The *shape* of the pricing is locked: a fixed monthly price, not metered, not credit-based, not scoped per engagement. The customer signs up for a productized service, not a scoped engagement.
+**Why the price is what it is (ADR 0063):**
 
-The **specific price is locked and internal, never published**: **a flat monthly retainer plus a one-time stand-up fee** (figures in `venturecrane/engagements:pricing/`) ([ADR 0063](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0063-operator-launch-pricing.md), Decision #50, Captain 2026-07-04). The number prices at the salary anchor (the Operator competes with a hire; the displaced coordinator seat runs roughly $60k/yr loaded) and sits above the committed cost model's floor - the earlier working baseline turned out to be ~90% Captain labor, so pricing at it would have been break-even. At the locked MRR the cost-plane kill criterion (seat COGS above 40% of MRR for two consecutive months, ADR 0062) trips at a level, making a trip a genuine anomaly signal. The client sees the price in their proposal; no dollar amount appears on any public surface.
+- It is set against the cost of the hire it replaces, a fully loaded coordinator's salary, never against a software subscription (ADR 0037, Tenet 1).
+- It sits above the cost model's floor. The earlier working figure turned out to be that floor, mostly the Captain's own supervision time; priced there, SMD would have broken even.
+- At this price the cost alarm (below) only trips when something is genuinely wrong, not in an ordinary month.
 
-## Change requests on the Operator
+**How it is paid.** The client starts the monthly subscription themselves in the portal; the stand-up fee is a separate implementation invoice. Bank debit is the default and has no fee; card adds a 3% processing fee as its own line (`src/lib/pricing/card-fee.ts`; [Money](/admin/playbook/money)).
 
-The flat fee buys the work named in the agreement: the routines in Schedule A-1 at their recorded settings, the connectors in Exhibit A, and the ordinary questions and tasks people bring the Operator. Anything else is a change request, and the agreement's new-work clause (service agreement section 2.7, rewritten 2026-09-16) says how one is handled. We say so when we accept it. We may perform the first instances as a trial and we measure what each one costs, because a price set before measuring is a guess, and routine 11 taught what a guess costs: the July definition of the medical chronology priced a memo, and the product the firm actually needed cost twenty times more per matter. After the trial we propose terms in writing, one of three outcomes: included as ordinary work when the cost is negligible; included up to an allowance sized to the firm's measured volume, with a one-off overrun quoted before it starts, when the cost tracks records read or documents produced; or a change to the fee when the work is of a different scale, or when an allowance is exceeded on a sustained basis. Nothing becomes a regular part of the service until the firm accepts the written entry. The three drafted documents of September 2026 (a demand letter, a case-evaluation memo, a mediation brief) are the first change request under this process; their proposal follows a census of the firm's own historical volume, never a number picked from three requests.
+**New kinds of work (change requests).** The monthly fee covers the work named in the client's agreement: the routines and settings recorded for the client, the connected systems, and the ordinary questions and tasks staff bring the Operator. A request for a new kind of work is a change request. In the agreement drafted for SMD's one Operator client (section 2.7, in the private repository), SMD may do the first instances as a trial, says so when it accepts, and measures what each costs. It then proposes written terms: included as ordinary work, included up to an allowance with anything beyond it quoted first, or a change to the fee. Nothing becomes a regular part of the service until the client accepts in writing. Every open change request is a row in the [obligation register](/admin/playbook/obligation-register). Proposing terms sets a price, so it is the Captain's.
 
-## The Hosted Agent pricing posture
+## The Hosted Agent
 
-The Hosted Agent is the second recurring SKU ([ADR 0067](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0067-hosted-agent-self-serve-sku.md), Decision #51): a self-serve subscription at **$79/month**, with the first 25 founding seats at **$49/month for the life of the subscription** (enforced by a Stripe forever-coupon with a 25-redemption cap). This is the one deliberate exception to the no-published-price rule: self-serve requires a visible price, so the `/agent` product page publishes it, recorded as a page-scoped exemption in the positioning spine's decision log and in the guard tests. The Operator's price stays internal; nothing else on the site shows a dollar amount.
+The one published price: **$79 a month**, with the first 25 founding subscriptions at **$49 a month for as long as they stay active**, enforced by a Stripe coupon capped at 25 uses (ADR 0067, Decision #51; the price shows on `src/pages/agent.astro`). The customer brings their own Anthropic key with a spend limit they set, so the AI usage cost is theirs; SMD's cost is the machine and support time. A plan-retirement clause in the product terms bounds the founding-price promise. The two hosted-agent seats running today are SMD's own and SMD pays for them (ADR 0090; [Clients & Commitments](/admin/playbook/clients-and-commitments)).
 
-The customer supplies their own Anthropic API key (with a spend limit set in their own console), so inference cost is theirs by design; SMD's seat cost is the Fly Machine plus support minutes, which keeps the ADR 0062 COGS gate honest at this price point. Founding-price obligations are bounded by a plan-retirement clause in the product terms, not open-ended.
+## The cost lines the Captain watches
 
-Post-handoff support for scope-based engagements is separate from the Operator: a two-week async stabilization period is included (Decision #27). Beyond that window, the client is quoted a follow-on scope or converted to an Operator subscription if the fit is right (Decision #44 / ADR 0004, lock 4).
-
-## Pipeline economics
-
-The pipeline model assumes a $7,500 average engagement against a $200k annual target, which works out to roughly 27 engagements per year, or 2-3 closes per month (Decision #25). The real constraint is assessment-call capacity (roughly 3-4 per week at steady state), not outreach volume. The full pipeline math lives in the Decision Stack; see `/admin/playbook/decision-stack`.
+- **The kill line.** If a seat's running cost goes above 40% of its monthly price for two months in a row, the Captain reviews whether the seat still makes sense (ADR 0062). The cost dashboard at `/admin/operator/costs` shows each seat against this line; nothing acts on it automatically.
+- **Pilot and SMD-owned seats** carry the list price for this calculation while being invoiced nothing, so the dashboard still reads true (ADR 0063).
+- What SMD spends on vendors each month is on [Money](/admin/playbook/money).
 
 ## Related pages
 
-- `/admin/playbook/positioning-voice` - the no-published-dollar-amounts rule and the tone standard.
-- `/admin/playbook/business-model` - the two front doors and the engagement phases the quote is built against.
-- `/admin/playbook/operator-thesis` - why the Operator is priced against a salary, not a software seat.
+- [Money](/admin/playbook/money): how every price on this page is collected.
+- [Positioning & Voice](/admin/playbook/positioning-voice): the no-published-price rule.
+- [The Operator Thesis](/admin/playbook/operator-thesis): why the Operator is priced against a salary.

@@ -40,7 +40,7 @@ A client's Operator does exactly what its configuration says, and that configura
 
 In the portal, the client's principal can, without SMD:
 
-- move a routine's level up or down, but never above the ceiling the agreement sets; it applies right away and is logged;
+- move a routine's level up or down, but never above the ceiling the agreement sets; it applies right away and is logged. The ceiling is the client's permission to climb, not a schedule: SMD's own rule is that a routine moves up only once the evidence for the next rung exists (dated review observations, then the Captain's sign-off for acting on its own; [promotion checklist](https://github.com/venturecrane/ss-console/blob/main/docs/runbooks/operator/enable-gate-checklist.md)). When a client raises a routine before that evidence exists, tell the Captain; it is the client's call within the agreement, and SMD's job is to say what the evidence shows;
 - pause and resume their Operator, where the agreement gives them that control;
 - add and remove the people who can use the portal;
 - teach the Operator their firm's voice and output style by instructing it directly, if they are listed as one of its administrators.
@@ -53,7 +53,7 @@ A routine's level is one of: flag-only (it reads and tells someone), prepare-and
 |---|---|
 | Fixing something so it works as already agreed | You |
 | A new kind of job the agreement already covers | You, after the proof run |
-| Raising a routine to acting on its own | The Captain |
+| SMD raising a routine to acting on its own (a client may raise it themselves up to the agreed ceiling; see section 2) | The Captain |
 | Anything that adds scope, changes price or terms, or commits SMD to something new | The Captain |
 
 Record the decision on the request in `/admin/operator/requests`: acknowledge, resolve ("SMD made the change") or decline. The resolver's name and time are stamped on it.

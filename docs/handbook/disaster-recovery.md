@@ -4,35 +4,66 @@ section: running
 order: 23
 owner: captain
 review_every: 30
+last_reviewed: "2026-10-21"
 summary: What breaks, how to recover, and when to stop and escalate. The known failure modes and the runbooks that exist.
 sources:
   - label: Operator runbooks
     href: https://github.com/venturecrane/ss-console/tree/main/docs/runbooks/operator
   - label: CLAUDE.md (Enterprise Rules, Deployment)
     href: https://github.com/venturecrane/ss-console/blob/main/CLAUDE.md
+  - label: Hosted Agent runbooks
+    href: https://github.com/venturecrane/ss-console/tree/main/docs/runbooks/hosted-agent
+  - label: operator/bin/lib/fleet/rollout.py - per-seat release with automatic rollback
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/fleet/rollout.py
 ---
 
-This is the recovery map: the failure modes we have actually hit, how each was resolved,
-and where the formal runbooks live. It names procedures, never secret values or working
-exploit commands.
+When something breaks, an AI agent does the recovery and you make sure it is the right
+agent on the right problem; this page is the map they work from. It lists the failure modes
+SMD has actually hit, how each was recovered, every written runbook, and the plans that do
+not exist yet, naming procedures but never secret values or working exploit commands.
+
+Who does what in a recovery: **you** direct the agent and decide what the client is told
+([When Something Goes Wrong](/admin/playbook/when-something-goes-wrong)); **an agent** does
+the technical work and reports it with proof; **the Captain** decides anything that spends
+money, changes a promise, or is listed as the Captain's on
+[Who Does What](/admin/playbook/who-does-what).
 
 ## Escalation triggers (stop and ask)
 
-Before any recovery turns into thrashing, the enterprise rule is to **stop and escalate**
-when any of these fire:
+Before any recovery turns into thrashing, the enterprise rule (`CLAUDE.md`, Enterprise
+Rules) is that the agent **stops and escalates** when any of these fire:
 
 - A credential cannot be found within 2 minutes.
 - The same error recurs 3 times.
-- You are blocked for more than 30 minutes.
+- The work is blocked for more than 30 minutes.
 
-Escalations go to the Captain with a clear summary and the decision needed. When in doubt,
-stop and escalate.
+The escalation names a clear summary and the decision needed. Bring the Captain anything in
+the Captain's row of [Who Does What](/admin/playbook/who-does-what). When in doubt, stop and
+escalate.
+
+## Plans that are not written yet
+
+Say so plainly rather than let an absence look like coverage
+([Continuity](/admin/playbook/continuity)):
+
+- restoring the main database (D1) from backup, and rolling back the web Worker (see "Bad
+  deploy" below);
+- what to do if a key or credential leaks, beyond rotating it: the rotation procedure itself
+  is written ([Secrets & Access](/admin/playbook/secrets-access), "Rotation procedure"),
+  so a leaked key is rotated by an agent at once; what is not written is how to judge what
+  the key exposed and who must be told;
+- what to do if a vendor SMD depends on goes down. The private companion lists every vendor,
+  what it is for and what stops without it (`admin/accounts.md`, `admin/crane-dependency.md`).
+
+Until they exist, an agent works these from first principles and escalates to the Captain
+at once.
 
 ## Existing runbooks
 
 The written runbooks live in `docs/runbooks/` in two subtrees: `operator/` (23 files plus
-an `incidents/` folder of incident notes) and `hosted-agent/` (2 files). Each runbook's
-first heading states its job; grouped by when you would reach for it:
+an `incidents/` folder of incident notes) and `hosted-agent/` (2 files). They are written for
+the agent doing the work; you need to know they exist and which one applies. Each runbook's
+first heading states its job; grouped by when an agent would reach for it:
 
 | When | Runbook (`docs/runbooks/...`) | Covers |
 |---|---|---|
@@ -70,15 +101,15 @@ Running overlay code on a live Operator Machine as root (via `flyctl ssh console
 root-owned `__pycache__/*.pyc` files that break the hermes-user bootstrap's `rm -rf`,
 crash-looping the Machine. This caused a multi-hour customer outage.
 
-**Recovery / prevention:** never root-SSH a live Machine to test or inspect. Read Operator
+**Recovery / prevention (agent work):** never root-SSH a live Machine to test or inspect. Read Operator
 state through the runtime read seam (HTTPS), and test changes by deploying a new image and
 reprovisioning, not by editing the box. See [Deployment & Release](/admin/playbook/deployment-release).
 
 ### Stale OAuth token on the Fly volume
 
 A recurring 401 from a connector is usually a **stale token copy on the Fly volume**, not a
-revoked credential. Verify the token in Infisical is valid and refreshable before asking
-the Captain to recreate it - recreating a working token wastes a rotation and can mask the
+revoked credential. The agent verifies the token in Infisical is valid and refreshable before anyone asks
+the client or the Captain to recreate it - recreating a working token wastes a rotation and can mask the
 real (volume) problem.
 
 > TODO(why): The decrypt/verify and self-heal reseed procedure for connector tokens is

@@ -61,10 +61,10 @@ jobs:
           command: deploy
 
       # Secrets persist across `wrangler deploy` on Workers — no post-deploy
-      # sync step needed. Rotate out-of-band with:
-      #   infisical export --env=prod --path=/ss --format=dotenv \
-      #     | grep -vE '^(APP_|ADMIN_|PORTAL_|MEETING_|NEW_BUSINESS_|JOB_MONITOR_|REVIEW_MINING_|PUBLIC_)' \
-      #     | npx wrangler secret bulk
+      # sync step needed. Rotate one key at a time, value piped from Infisical
+      # (docs/handbook/secrets-access.md, "Rotation procedure"). Never bulk-export
+      # /ss into `wrangler secret bulk`: it re-sets every key under the path,
+      # including ones retired from the Worker.
 
       # The root `wrangler deploy` writes `.wrangler/deploy/config.json`
       # pointing at the adapter-generated `dist/server/wrangler.json`.

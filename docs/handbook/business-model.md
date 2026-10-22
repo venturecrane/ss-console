@@ -4,51 +4,60 @@ section: business
 order: 2
 owner: captain
 review_every: 180
-status: Rewrite pending
-summary: Three front doors, the three-layer problem framework, the engagement phases, and pain clusters by vertical
+last_reviewed: "2026-10-21"
+summary: The three offers and how a prospect reaches each, the problem framework we listen with, the consulting phases, and the verticals we lead with.
 sources:
-  - label: CLAUDE.md - The Business Model
-    href: https://github.com/venturecrane/ss-console/blob/main/CLAUDE.md
+  - label: Venture model (problem framework, phases, verticals)
+    href: .claude/rules/venture-model.md
+  - label: Positioning spine (one front door, firm with flagship)
+    href: docs/marketing/positioning-spine.md
   - label: ADR 0004 - Productized Operator Offering
-    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0004-productized-operator-offering.md
-  - label: ADR 0001 - Taxonomy Two-Layer Model
-    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0001-taxonomy-two-layer-model.md
+    href: docs/adr/0004-productized-operator-offering.md
+  - label: ADR 0067 - Hosted Agent self-serve SKU
+    href: docs/adr/0067-hosted-agent-self-serve-sku.md
+  - label: ADR 0090 - Hosted-agent roles
+    href: docs/adr/0090-hosted-agent-roles.md
+  - label: ADR 0040 - Operator positioning, law-first
+    href: docs/adr/0040-operator-positioning-and-why-us.md
+  - label: ADR 0001 - Taxonomy two-layer model
+    href: docs/adr/0001-taxonomy-two-layer-model.md
   - label: Decision Stack
-    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/decision-stack.md
+    href: docs/adr/decision-stack.md
 ---
 
-## What the business is
+SMD sells three things: the Operator (the flagship, a managed AI worker on a monthly fee), consulting projects at a fixed price, and the Hosted Agent (a personal AI agent at a published price). This page explains how a prospect reaches each one, the vocabulary we use to understand a business, and how a consulting project runs.
 
-SMD Services is a solutions consulting venture under SMDurgan, LLC. We sell scope-based consulting engagements to growing businesses (CLAUDE.md, About This Venture). This is not a SaaS product; it is a services business. The objective is to launch the venture and reach profitability.
+## Who buys
 
-The buyer is the owner of an established, owner-led business with real operational load and the ability to pay for a solution. There is no revenue-band qualification gate: the old "$750k-$5M" band was retired in [ADR 0003](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0003-lead-gen-pivot-actor-identity.md), and Decision #2 in the Decision Stack is superseded. We qualify in conversation, not by filtering on a guessed revenue figure. The "too big for one person, too small for a COO" framing still captures the *shape* of the buyer; it is not a filter.
+The buyer is the owner of an established, owner-led business with real operational load and the ability to pay. There is no revenue-band gate: the old "$750k to $5M" band was retired by [ADR 0003](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0003-lead-gen-pivot-actor-identity.md) and Decision #2 is superseded. We qualify in conversation. "Too big for one person, too small for a COO" describes the shape of the buyer; it is not a filter.
 
-## Three front doors, one firm
+## Three offers, one firm
 
-The firm has three acquisition paths into the same firm-level identity (ADR 0004, locks 1 and 2; ADR 0067):
+| Offer | Who it is for | How they reach it | Decision |
+|---|---|---|---|
+| **The Operator** (flagship) | A business whose people and systems leave recurring work falling through the gap between them | The assessment conversation, or directly when the prospect already knows it wants an agent | ADR 0004 (Decision #44); price ADR 0063 (Decision #50) |
+| **Consulting** | A business with a bounded need: a process, a tool, an integration, a dashboard | The assessment conversation, then a proposal | Decisions #16 and #18 |
+| **The Hosted Agent** | An individual or household who wants an always-on agent and will not run a server | Self-serve checkout on `/agent`; SMD then sets the agent up by hand | ADR 0067 (Decision #51) |
 
-1. **Scope-based consulting engagements.** The firm's front door: the home page leads every visitor to the assessment conversation (`src/pages/index.astro` header, "One door: the assessment"). The prospect arrives without a fixed solution in mind; we surface their objectives through an assessment conversation, design a solution, and quote a fixed project price. This is the funnel locked in Decisions #16 and #18.
-2. **The Operator SKU.** A productized flat-rate monthly retainer ([ADR 0004](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0004-productized-operator-offering.md)). The entry point for prospects who already know they want an agent and have done their own diagnosis. See `/admin/playbook/operator-thesis` for what the Operator is.
-3. **The Hosted Agent SKU.** A self-serve monthly subscription for an always-on personal Hermes agent on the Operator substrate ([ADR 0067](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0067-hosted-agent-self-serve-sku.md), Decision #51). The only SKU with published pricing and a buy CTA (page-scoped exemption to the positioning locks); checkout is self-serve, provisioning is concierge. It targets a different buyer (the individual who wants an agent and will not run a server) and doubles as the entry rung of the hosted-to-Operator ladder.
+**The assessment is the one front door on the website.** Every page except `/agent` leads to a single action, "start with an assessment," and the assessment leads to a recommendation, a project, or an Operator (Captain decision 2026-06-29, recorded at the top of `docs/marketing/positioning-spine.md`). The Operator is the flagship: the home page is built around it, and as of 2026-10-21 SMD's one paying client is an Operator client, a personal-injury law firm (seat `ashton-price`, `operator/customers/`).
 
-Three front doors, one firm. The firm-level voice and solutions-consulting positioning are unchanged across all of them; the Operator and the Hosted Agent are productized outcomes we deliver, not the firm itself (ADR 0004, positioning guardrails). The old undefined post-delivery retainer (Decision #12) is superseded by the Operator SKU.
+**One firm, one voice.** The Operator and the Hosted Agent are things the firm delivers, not separate identities. The firm's voice and positioning are the same across all three (ADR 0004, positioning guardrails; see [Positioning & Voice](/admin/playbook/positioning-voice)).
 
-The Operator is the flagship: the home page is built flagship-forward around it (`src/pages/index.astro`), and as of 2026-10-21 the venture's one paying client is an Operator client (the law-firm seat in `operator/customers/`). The Hosted Agent also packages predefined jobs as **roles** (a role is a hosted-agent job with its own persona, skills, routines and privacy model, selected per seat; [ADR 0090](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0090-hosted-agent-roles.md)); the first role is `couples` (`operator/roles/`). What each client is owed is in the [obligation register](/admin/playbook/obligation-register); client-specific commercial detail lives in the private `venturecrane/engagements` repository, never in this public handbook.
+**Roles.** A Hosted Agent can be sold as a **role**: a packaged job with its own persona, skills, routines and privacy rules, chosen per seat. The first role is `couples` (`operator/roles/couples/`). A role is not a **pack**: a pack tailors the Operator to an industry (`operator/verticals/`, see [Vertical Packs](/admin/playbook/vertical-packs)), a role defines a job a hosted agent does for a person or household (ADR 0090).
 
-## The three-layer problem framework
+**What replaced the old retainer.** Decision #12 (an undefined post-project retainer) is superseded. After a consulting project, the client gets two weeks of included support (Decision #27); after that, further work is a new project or, if it fits, an Operator subscription (ADR 0004, lock 4).
 
-We use a three-layer model to connect research to delivery (CLAUDE.md, The Business Model). The layers are deliberately distinct and must not be conflated.
+How each offer is priced is on [Pricing & Economics](/admin/playbook/pricing-economics); how the money moves is on [Money](/admin/playbook/money).
 
-**Layer 1 - Four root patterns** (internal, research-grounded):
+## How we listen: the three-layer problem framework
 
-- The founder ceiling
-- Invisible operational drag
-- Revenue plateau
-- Cash flow fragility
+We connect what an owner says to what we build with three layers (`.claude/rules/venture-model.md`). Keep them distinct.
 
-**Layer 2 - Owner-voiced symptoms** (external, what owners actually say): "I can't step away." "I can't find good people." "Customers slip through the cracks." "I don't know if we're making money." "Everything runs on spreadsheets." "Our systems don't talk to each other." "We've stalled." These are representative, not exhaustive; the assessment listens for whatever comes up.
+**Layer 1: four root patterns** (internal, for our own thinking): the founder ceiling; invisible operational drag; revenue plateau; cash flow fragility.
 
-**Layer 3 - Six solution categories** (the delivery taxonomy):
+**Layer 2: what owners actually say.** "I can't step away." "I can't find good people." "Customers slip through the cracks." "I don't know if we're making money." "Everything runs on spreadsheets." "Our systems don't talk to each other." "We've stalled." These are examples; the assessment listens for whatever comes up.
+
+**Layer 3: six solution categories** (what we deliver):
 
 1. Process design
 2. Custom internal tools
@@ -57,43 +66,43 @@ We use a three-layer model to connect research to delivery (CLAUDE.md, The Busin
 5. Vendor/platform selection
 6. AI & automation
 
-No dollar ranges are attached to solution categories. Pricing comes from scope estimation per engagement; see `/admin/playbook/pricing-economics`.
+No dollar ranges attach to a category. Price comes from scoping each engagement.
 
-### A note on the two taxonomies
+### Two lists that must not be merged
 
-The six-category list above is the **delivery taxonomy** and is the marketing and doctrinal source of truth ([ADR 0001](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0001-taxonomy-two-layer-model.md)). A separate five-category schema (`process_design`, `tool_systems`, `data_visibility`, `customer_pipeline`, `team_operations`, defined in `src/portal/assessments/extraction-schema.ts`) is the **client-assessment extraction taxonomy**: it structures what an assessment call captures. It began as the lead-generation observation taxonomy; that use was retired with the automated lead-gen machine ([ADR 0060](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0060-retire-automated-lead-gen-machine.md)). The two layers are deliberately distinct: assessments speak the extraction taxonomy internally, marketing speaks delivery, and the consultant translates between them. Do not silently change one when editing the other.
+The six categories above are the **delivery taxonomy**, the source of truth for marketing ([ADR 0001](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0001-taxonomy-two-layer-model.md)). A separate five-item list (`process_design`, `tool_systems`, `data_visibility`, `customer_pipeline`, `team_operations`, in `src/portal/assessments/extraction-schema.ts`) structures what the assessment captures. It began as the lead-generation list; that use was retired with the lead-gen machine (ADR 0060). If you ask an agent to change one list, tell it not to change the other.
 
-## The engagement phases
+## How a consulting project runs
 
-Every scope-based engagement runs through five phases (CLAUDE.md, Engagement Phases):
+Every consulting engagement has five phases (`.claude/rules/venture-model.md`):
 
-| Phase | Activities |
+| Phase | What happens |
 | --- | --- |
-| Assessment call | Walk through their day, "show me how you do X," identify top pain points |
-| Solution design | Choose the simplest tools, design workflows, estimate scope and price, send proposal |
-| Implementation | Build templates, workflows, and docs; configure tools; migrate data; connect systems |
-| Training | Hands-on walkthrough, practice, deliver "how to" docs, identify the internal champion |
-| Handoff + polish | Handle feedback, adjust based on real use, final handoff |
+| Assessment call | Walk through their day, "show me how you do X," find the top problems |
+| Solution design | Choose the simplest tools, design the workflows, estimate scope and price, send the proposal |
+| Implementation | Build templates, workflows and documents; configure tools; move data; connect systems |
+| Training | Hands-on walkthrough, practice, written how-to documents, name an internal champion |
+| Handoff and polish | Take feedback, adjust from real use, final handoff |
 
-**Scope sets phase depth, not phase presence.** Every engagement includes every phase. What changes is how heavy each one is. Training may be a multi-day program or a single "on Tuesdays you click this button." Implementation may be a multi-week build or a one-afternoon script. Scope determines depth, not presence. The full assessment-to-proposal flow and delivery playbook live in `/admin/playbook/consulting-engagement`.
+**Scope sets how heavy each phase is, never whether it happens.** Training might be a three-day program or one sentence ("on Tuesdays you click this button"). The detail is on [The Consulting Engagement](/admin/playbook/consulting-engagement). An Operator is stood up by a different method; see [Customer Lifecycle](/admin/playbook/customer-lifecycle).
 
-## Pain clusters by vertical
+## Where we lead the conversation, by vertical
 
-These suggest where to lead the conversation, not which problems to look for (CLAUDE.md, Pain Clusters by Vertical). The assessment listens across the full range of symptoms.
+These suggest where to start a conversation, not what to look for (`.claude/rules/venture-model.md`).
 
 | Business type | Likely entry points |
 | --- | --- |
-| Home services (plumber, HVAC) | Scheduling + lead follow-up + employee retention |
-| Professional services (accountant, attorney) | Owner bottleneck + manual communication + pipeline |
-| Retail / salon / spa | Scheduling + communication + financial visibility |
-| Contractor / trades | Estimating/quoting + scheduling + employee retention |
-| Restaurant / food service | Team communication + inventory + financial visibility |
+| Home services (plumber, HVAC) | Scheduling, lead follow-up, keeping staff |
+| Professional services (accountant, attorney) | Owner bottleneck, manual communication, pipeline |
+| Retail, salon, spa | Scheduling, communication, financial visibility |
+| Contractor, trades | Estimating and quoting, scheduling, keeping staff |
+| Restaurant, food service | Team communication, inventory, financial visibility |
 
-The consulting launch verticals were set as home services and professional services, with contractor/trades third (Decision #3). In practice the Operator went to market law-first ([ADR 0040](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0040-operator-positioning-and-why-us.md)), and its first client is a personal-injury law firm. Any business with qualifying problem signals is eligible regardless of vertical; vertical expertise deepens with case studies, not by pre-selection.
+Consulting's launch verticals were home services and professional services, with contractor and trades third (Decision #3). The Operator goes to market law firms first ([ADR 0040](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0040-operator-positioning-and-why-us.md)), and acquisition is founder-run rather than automated (ADR 0060). Any business with real problems we can solve is eligible, whatever its vertical.
 
 ## Related pages
 
-- `/admin/playbook/operator-thesis` - what the Operator is.
-- `/admin/playbook/pricing-economics` - the rate ladder, engagement range, and Operator pricing posture.
-- `/admin/playbook/consulting-engagement` - the assessment-to-handoff delivery model in depth.
-- `/admin/playbook/positioning-voice` - the tone and positioning standard that governs all client-facing language.
+- [The Operator Thesis](/admin/playbook/operator-thesis): what the flagship is.
+- [Pricing & Economics](/admin/playbook/pricing-economics): how each offer is priced.
+- [Customer Lifecycle](/admin/playbook/customer-lifecycle): how a sale becomes a live client, for each offer.
+- [Positioning & Voice](/admin/playbook/positioning-voice): how we talk about all of it.

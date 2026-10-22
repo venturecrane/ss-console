@@ -4,13 +4,30 @@ section: engineering
 order: 9
 owner: engineering
 review_every: 90
+last_reviewed: "2026-10-21"
 summary: Where credentials live, how they rotate, and the rules for handling them. Pointers and procedures only, never values.
 sources:
-  - label: CLAUDE.md (Deployment, Secrets)
+  - label: CLAUDE.md (Enterprise Rules, Contact Addresses)
     href: https://github.com/venturecrane/ss-console/blob/main/CLAUDE.md
-  - label: secrets module (crane_doc)
-    href: https://github.com/venturecrane/ss-console/blob/main/CLAUDE.md
+  - label: wrangler.toml (Worker secrets list)
+    href: https://github.com/venturecrane/ss-console/blob/main/wrangler.toml
+  - label: operator/bin/seat-probe.sh
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/seat-probe.sh
+  - label: tests/seat-probe-env-leak.test.ts
+    href: https://github.com/venturecrane/ss-console/blob/main/tests/seat-probe-env-leak.test.ts
+  - label: operator/bin/rotate-machine-credential.sh
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/rotate-machine-credential.sh
+  - label: src/lib/portal/operator/entitlement-change.ts
+    href: https://github.com/venturecrane/ss-console/blob/main/src/lib/portal/operator/entitlement-change.ts
+  - label: ADR 0010 (per-customer OAuth token storage)
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0010-per-customer-oauth-token-storage.md
+  - label: ADR 0042 (Operator credential custody)
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0042-operator-credential-custody.md
 ---
+
+Where SMD's credentials are kept, how one is rotated, and the rules every agent follows
+when handling them. An administrator needs it when an agent's report sends you here,
+usually because a key was rotated, found stale, or exposed.
 
 This page is a map and a set of rules. It deliberately contains **no secret values, no
 working credential-recovery commands, and no vault contents**. A handbook that listed those
@@ -78,8 +95,8 @@ against a fake environ holding a canary secret.
 | Store | Holds | Notes |
 |---|---|---|
 | **Infisical** (`/ss` path, `prod` env) | The canonical source for SMD secrets - Clerk, Anthropic, ElevenLabs, AgentMail, Google, billing, and the rest | Rotate here first, then push to the runtime store |
-| **Cloudflare Workers secrets** | The web app's runtime secrets, bound to the `ss-web` Worker | On Workers, secrets persist across `wrangler deploy` runs (unlike the old Pages `[vars]` trap). Bulk-rotate from Infisical with `wrangler secret bulk` |
-| **Fly.io Machine env / volume** | Per-customer Operator secrets and OAuth tokens (ADR 0010) | Per-customer isolation. Tokens stored on the Fly volume; a stale volume copy is a known failure mode (see [Disaster Recovery & Runbooks](/admin/playbook/disaster-recovery)) |
+| **Cloudflare Workers secrets** | The web app's runtime secrets, bound to the `ss-web` Worker | On Workers, secrets persist across `wrangler deploy` runs (unlike the old Pages `[vars]` trap). The expected names are listed in the secrets comment block of `wrangler.toml`. Set one key at a time; never bulk-export the `/ss` path into `wrangler secret bulk` (see [Deployment & Release](/admin/playbook/deployment-release)) |
+| **Fly.io Machine secrets / volume** | Per-customer Operator secrets (staged by `operator/bin/provision-customer.sh`, plus the per-seat `MACHINE_HEARTBEAT_KEY`) and OAuth tokens (ADR 0010) | Per-customer isolation. Tokens stored on the Fly volume; a stale volume copy is a known failure mode (see [Disaster Recovery & Runbooks](/admin/playbook/disaster-recovery)) |
 | **`.dev.vars`** (gitignored) | Local dev values, pulled from Infisical | Never committed |
 
 The build-time public keys (anything `PUBLIC_*`, the `*_BASE_URL` vars) are configuration,
@@ -92,21 +109,36 @@ not secrets, and are set in the build/deploy environment - see
    hits the transcript.
 2. Verify presence with `crane_secret_check`, and verify the value actually works against the
    downstream service before relying on it (a present key can still be stale or revoked).
-3. Push to the runtime store: Workers secrets for the web app (the Infisical export to
-   `wrangler secret bulk` pattern in `CLAUDE.md`), or reprovision the Operator Machine for
-   Fly-side secrets.
+3. Push to the runtime store, one key at a time:
+   - **Web app:** set the one changed key on the `ss-web` Worker with `wrangler secret put`,
+     the value piped from Infisical rather than typed. Never bulk-export `/ss` into
+     `wrangler secret bulk`; it re-sets every key under the path, including ones retired
+     from the Worker.
+   - **A seat's Machine credential:** `operator/bin/rotate-machine-credential.sh <slug>`
+     mints a fresh per-seat key, records its hash in the console's `machine_credentials`
+     table first (the previous key stays valid for 24 hours), then sets it as the seat's
+     `MACHINE_HEARTBEAT_KEY` Fly secret. Setting it restarts the Machine at once and the
+     script runs no busy gate, so the agent first checks the seat has no job running or
+     held, then reads the heartbeat back. Running it is agent work (Captain, 2026-09-11);
+     a Captain "not now" on that seat stands until lifted.
+   - **Other Fly-side secrets:** reprovision the seat (`operator/bin/reprovision.sh <slug>`),
+     which stages them and deploys behind the busy gate.
+   - **A client's OAuth token:** the client re-consents in their own browser; SMD does not
+     hold the secret (ADR 0010, ADR 0042).
 4. Confirm the running service picked up the new value (fresh process, live check), not just
    that the store was written.
 
-> TODO(why): There is no single written secrets-rotation runbook in `docs/` yet; this
-> procedure is synthesized from CLAUDE.md (Deployment) and the crane secret tooling. If a
-> formal runbook is desired, it should live in `docs/runbooks/` and be linked here.
+There is no separate rotation runbook in `docs/runbooks/`; this procedure and the scripts it
+names are the procedure.
 
 ## Access boundaries
 
 - **Contact identities.** Operational alerts go to `team@smd.services`; the Captain is
-  `scott@smd.services`; the Operator's allow-list-gated inbound email channel is
-  `crane@smd.services`. The `smdurgan@venturecrane.com` address that can appear in session
+  `scott@smd.services`. Each Operator seat receives email at its own AgentMail inbox
+  (`<slug>@agentmail.to` unless its `customer.yaml` authors `inbox_address`; see
+  `operator/workspace_broker/agentmail_auth.py`). Its `scope.inbound_allow_from` roster
+  decides which senders it treats as authorized; mail from anyone else is handled as
+  untrusted content behind the inbound trust boundary (ADR 0027). The `smdurgan@venturecrane.com` address that can appear in session
   context belongs to a different venture and must never be used in SMD code, config, or
   content.
 - **Admin vs portal.** Session cookies are per-host with no shared domain; an admin cookie

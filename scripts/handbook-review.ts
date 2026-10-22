@@ -47,8 +47,15 @@ function lastCommitDay(path: string): string | null {
   }
 }
 
+/**
+ * Pages that are entirely generated and held equal to their source on every
+ * build by tests/handbook-integrity.test.ts. A person reviewing them would be
+ * checking the generator, which the test already does.
+ */
+const FULLY_GENERATED = new Set(['adr-index.md'])
+
 const pages: ReviewPage[] = readdirSync(HANDBOOK)
-  .filter((f) => f.endsWith('.md') && f !== 'README.md')
+  .filter((f) => f.endsWith('.md') && f !== 'README.md' && !FULLY_GENERATED.has(f))
   .map((file) => {
     const raw = readFileSync(join(HANDBOOK, file), 'utf8')
     const m = raw.match(/^---\n([\s\S]*?)\n---/)

@@ -55,9 +55,12 @@ Use **Issue an invoice** on the client's page (`/admin/clients/<id>`). It create
 
 Invoices are bank-debit only unless they carry the card-fee line, in which case they are card only. Default terms are 30 days.
 
-**One automatic send to know about:** on a consulting engagement, marking a payment milestone complete creates **and emails** that milestone's invoice at once. Marking a milestone complete is therefore sending an invoice.
+**Two automatic sends to know about,** both on consulting engagements:
 
-Invoice types: consulting deposit, milestone, completion and assessment; the Operator's monthly retainer (created by Stripe and copied into the console); and the Operator's implementation (stand-up) invoice. Consulting is paid 50% at signing and 50% at completion, or 40/30/30 for engagements of 40 hours or more (Decision #14); the deposit invoice is drafted when the SOW is signed.
+- **Signing the SOW** creates the deposit invoice in Stripe and emails it to the client, due in 3 days (`src/lib/sow/outbox-jobs.ts`).
+- **Marking a payment milestone complete** creates and emails that milestone's invoice at once (`src/lib/stripe/milestone-invoicing.ts`). Marking a milestone complete is therefore sending an invoice.
+
+Invoice types: consulting deposit, milestone, completion and assessment; the Operator's monthly retainer (created by Stripe and copied into the console); and the Operator's implementation (stand-up) invoice. Consulting is paid 50% at signing and 50% at completion; for engagements of 40 hours or more, Decision #14 says to consider 40/30/30 with the mid-point named in the SOW; the deposit invoice is created and sent when the SOW is signed.
 
 Billing lives at **`/admin/billing`** (Quotes, Invoices, Recurring, with real monthly recurring revenue and any seat missing a price flagged).
 
@@ -76,6 +79,6 @@ A client may cancel with no notice period; it takes effect at the end of the mon
 ## What it costs to run
 
 - **Per-seat cost** (mostly AI model usage) is on **`/admin/operator/costs`**: each Operator's last 30 days of cost against its monthly price, banded healthy (under 30%), watch (30 to 40%), and kill (40% or more). The kill line comes from ADR 0062 (cost above 40% of the price for two months running); the dashboard shows it, nothing acts on it automatically, and acting on it is the Captain's call.
-- **A daily cost cap per seat** warns at 80%, slows the seat at 100% and stops it at 200%. Clearing a cost stop lets the seat spend again, so it is the Captain's call; see the [sticky-stop runbook](https://github.com/venturecrane/ss-console/blob/main/docs/runbooks/operator/sticky-stop-clear.md).
+- **A daily cost cap per seat** stops the seat when its spend for the day reaches twice the cap; there is no warning or slow-down level before that (ADR 0062, amended 2026-09-02). Clearing a cost stop lets the seat spend again, so it is the Captain's call; see the [sticky-stop runbook](https://github.com/venturecrane/ss-console/blob/main/docs/runbooks/operator/sticky-stop-clear.md).
 - **A daily cost-anomaly digest** goes to the Captain's inbox.
 - **Vendors SMD pays** include Anthropic, Fly.io, Cloudflare, Stripe, Clerk, Resend, SignWell, AgentMail, Groq, ElevenLabs, Brave Search, Sentry, healthchecks.io and Infisical (the names come from the system's own configuration). What each costs each month, the bank, the books and the tax calendar are in the private companion (`admin/vendor-billing.md`, `admin/entity.md`), where the amounts are still blank for the Captain to fill ([Handoff Companion](/admin/playbook/handoff-companion)).

@@ -4,13 +4,21 @@ section: engineering
 order: 10
 owner: engineering
 review_every: 90
+last_reviewed: "2026-10-21"
 summary: The dev workflow, the verify gate, worktree isolation, and the coding standards every change ships under
 sources:
   - label: CI - verify.yml
     href: https://github.com/venturecrane/ss-console/blob/main/.github/workflows/verify.yml
   - label: package.json - npm scripts
     href: https://github.com/venturecrane/ss-console/blob/main/package.json
+  - label: ESLint config - the enforced coding rules
+    href: https://github.com/venturecrane/ss-console/blob/main/eslint.config.js
 ---
+
+This page covers how a code change gets from an idea to a merge: the PR workflow, the checks
+that must pass, how parallel agent sessions are kept apart, and the coding rules. An
+administrator needs it when an agent's report sends you here, for example to explain why a
+PR cannot merge.
 
 ## The rule that governs everything
 
@@ -175,14 +183,17 @@ Every change is written to the enterprise coding standards (global
 - **The ceilings: 500 / 75 / 15.** Files cap at 500 lines, functions at 75,
   cyclomatic complexity at 15 (also depth 4, params 5). The driver is agent
   context arithmetic, not aesthetics: a file plus its surrounding context plus a
-  generation buffer must fit a comfortable working window. Lint-enforced; test
-  files exempt. Split at a cohesion boundary, not mid-function, when approaching
+  generation buffer must fit a comfortable working window. Lint-enforced at error
+  in `eslint.config.js`; test files are exempt, and the line ceiling alone is
+  lifted for the dev component galleries (`**/pages/dev/**/*.astro`) and the
+  `customer.yaml` type module (`src/lib/operator/customer-yaml/types.ts`). Split at a cohesion boundary, not mid-function, when approaching
   the cap.
 
 Other mechanically enforced rules from the same document: no `any` in production
 source (use `unknown` and narrow), throw `Error` instances not literals, `===`
-always, preserve `cause` on caught errors, `assertNever` on switch defaults over
-a union, and named exports only (defaults allowed only in framework positions like
+always (`== null` is the one allowed loose comparison), preserve `cause` on caught
+errors, exhaustive `switch` over a union (`switch-exhaustiveness-check`), and named
+exports only (defaults allowed only in framework positions like
 `*.astro` and the Worker entry).
 
 ## The merge gates
@@ -202,11 +213,14 @@ Beyond those, this repo carries domain-specific gates that act on policy, not
 just on tests. They enforce the no-fabricated-client-facing-content policy in
 `CLAUDE.md`:
 
-- `scope-deferred-todo.yml` - blocks a TODO-deferred acceptance criterion that
-  lacks the `scope-deferred` label.
+- `scope-deferred-todo.yml` - fails a PR whose diff adds a `TODO(#NNN)` (a
+  deferred acceptance criterion) unless the PR carries the `scope-deferred` label
+  and a `## Deferred ACs` section in its description.
 - `unmet-ac-on-close.yml` - reopens an issue closed with unchecked acceptance
   criteria.
-- `ui-drift-audit.yml` - the source-level UI anti-pattern audit.
+- `ui-drift-audit.yml` - the source-level UI anti-pattern audit, run on PRs that
+  touch `.astro`, `.tsx`, `.jsx` or `.css` files, against thresholds in
+  `.ui-drift.json`.
 - `security.yml` - the security review workflow (see `/admin/playbook/security-trust`).
 
 These exist because a violation of the content policy is a P0 in this venture, so

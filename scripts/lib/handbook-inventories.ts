@@ -52,13 +52,18 @@ function liveTables(root: string): string[] {
     .filter((x) => x.endsWith('.sql'))
     .sort()) {
     const sql = readFileSync(join(dir, f), 'utf8').replace(/--.*$/gm, '')
-    for (const m of sql.matchAll(/create\s+table\s+(?:if\s+not\s+exists\s+)?["`]?(\w+)/gi))
-      tables.add(m[1].toLowerCase())
-    for (const m of sql.matchAll(/drop\s+table\s+(?:if\s+exists\s+)?["`]?(\w+)/gi))
-      tables.delete(m[1].toLowerCase())
-    for (const m of sql.matchAll(/alter\s+table\s+["`]?(\w+)["`]?\s+rename\s+to\s+["`]?(\w+)/gi)) {
-      tables.delete(m[1].toLowerCase())
-      tables.add(m[2].toLowerCase())
+    // Statements apply in file order: a migration that drops a table and then
+    // recreates it (the 0011 rebuilds of quotes, engagements, assessments) must
+    // leave it live, which separate passes per statement kind would not.
+    const statement =
+      /create\s+table\s+(?:if\s+not\s+exists\s+)?["`]?(\w+)|drop\s+table\s+(?:if\s+exists\s+)?["`]?(\w+)|alter\s+table\s+["`]?(\w+)["`]?\s+rename\s+to\s+["`]?(\w+)/gi
+    for (const m of sql.matchAll(statement)) {
+      if (m[1]) tables.add(m[1].toLowerCase())
+      else if (m[2]) tables.delete(m[2].toLowerCase())
+      else if (m[3] && m[4]) {
+        tables.delete(m[3].toLowerCase())
+        tables.add(m[4].toLowerCase())
+      }
     }
   }
   // SQLite's copy-and-swap migrations create `<name>_new` and rename it back;

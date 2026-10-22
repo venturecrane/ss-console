@@ -4,6 +4,7 @@ section: running
 order: 20
 owner: captain
 review_every: 30
+last_reviewed: "2026-10-21"
 summary: The obligation register - how every piece of work SMD owes a client gets recorded without anyone maintaining a list, how it is read from the terminal, how it gets closed only by a probe of the real system, and what it deliberately cannot see
 sources:
   - label: docs/adr/0088-obligation-register.md (the decision)
@@ -22,13 +23,30 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/.claude/skills/sos/SKILL.md
   - label: scripts/lib/seat-clients.mjs (which seats roll up to which client)
     href: https://github.com/venturecrane/ss-console/blob/main/scripts/lib/seat-clients.mjs
+  - label: .claude/hooks/lib/register-close.mjs (what each closing command accepts)
+    href: https://github.com/venturecrane/ss-console/blob/main/.claude/hooks/lib/register-close.mjs
+  - label: .github/workflows/obligation-reconcile.yml (the nightly run)
+    href: https://github.com/venturecrane/ss-console/blob/main/.github/workflows/obligation-reconcile.yml
 ---
+
+The obligation register is the one list of everything SMD owes a client, kept mostly by machines that read GitHub, the alert store and change requests every night. You never maintain it by hand: you ask an agent to read it to you, you tell an agent when a letter promised something, and a few changes to a row are the Captain's alone.
+
+## Who does what with it
+
+| Act | Who |
+|---|---|
+| Read what we owe (`register list`) | You ask an agent, weekly at least ([The Administrator's Week](/admin/playbook/administrators-week)); every agent session also prints a one-line `[owed]` summary at start (`.claude/skills/sos/SKILL.md` Step 4) |
+| Record a promise made in a letter, or that a letter promised nothing (`register add`) | The agent session that read the letter, before it closes; if you read a client letter yourself, tell an agent what was promised |
+| Record that a sent letter kept a promise (`register deliver`) | The agent session that sent it |
+| Record that the next move is the client's or a vendor's (`register await`) | An agent, citing the letter that says so |
+| Release a promise the client withdrew (`register cancel`), take back a delivery that did not hold (`register reopen`), retire a row that was never an obligation (`register retire`) | The Captain decides; an agent runs the command |
+| Certify a row done (`verified`) | Nobody by hand: only the nightly run, by probing the real system |
 
 ## The question this answers
 
 "What do we owe Ashton & Price?" - and "what's on our plate?" across every client.
 
-**You read it from a terminal**, by asking an agent, or directly:
+**It is read from a terminal**, by an agent for you, or directly:
 
 ```
 .claude/bin/register list --client ashton-price
@@ -78,7 +96,7 @@ That gate is strict enough that in practice almost nothing carries a date, which
 
 Overdue, unverifiable and capture-gap findings are written into the existing fleet alert store, which already emails `team@smd.services` for any non-cost alert. Nothing new pages you; the register writes to the surface that was already there.
 
-Each run also opens or updates one rolling GitHub issue with its full report.
+Each run (nightly, `.github/workflows/obligation-reconcile.yml`) also opens or updates one rolling GitHub issue, "Obligation register: overdue or unverifiable work", with its full report.
 
 ## The control that watches the watchers
 
@@ -188,9 +206,9 @@ It also skips a row that is **waiting on someone else**: any row in `awaiting_ex
 | The `kind` vocabulary or the state machine | `migrations/0117`, `src/lib/db/obligations.ts`, and this page's table |
 | What a source imports | `scripts/ci-reconcile-obligations.ts` and the source table above |
 | The alert conditions | `migrations/0118` CHECK, `src/lib/admin/fleet-alerts.ts`, and "How you hear about it" |
-| The grounding rules | `.claude/hooks/lib/register.mjs` and "What makes a row trustworthy" |
-| Who captures, and when | `.claude/skills/eos/SKILL.md` Check I, `CLAUDE.md`, and "Who records what we owe" below |
-| How a row closes, or what counts as delivery evidence | `.claude/hooks/lib/register.mjs` (`deliver`), `.claude/hooks/lib/register-retire.mjs` (`cancel`, `reopen`, `retire`, `await`), `certify` in `scripts/ci-reconcile-obligations.ts`, `tests/register-deliver.test.ts`, `tests/register-cancel.test.ts`, `tests/register-reopen.test.ts`, `tests/register-retire-await.test.ts`, and "How a row closes" |
+| The grounding rules | `.claude/hooks/lib/register-grounding.mjs` (quote and date matching), `.claude/hooks/lib/register.mjs` (capture), and "What makes a row trustworthy" |
+| Who captures, and when | `.claude/skills/eos/SKILL.md` Check I, `CLAUDE.md`, "Who does what with it" and "Who records what we owe" above |
+| How a row closes, or what counts as delivery evidence | `.claude/hooks/lib/register.mjs` (`deliver`), `.claude/hooks/lib/register-retire.mjs` (`cancel`, `reopen`, `retire`, `await`), `.claude/hooks/lib/register-close.mjs` (which states each command accepts and its evidence checks), `certify` in `scripts/ci-reconcile-obligations.ts`, `tests/register-deliver.test.ts`, `tests/register-cancel.test.ts`, `tests/register-reopen.test.ts`, `tests/register-retire-await.test.ts`, and "How a row closes" |
 | Which rows the undated age ladder skips | `waitsOnSomeoneElse` in `scripts/lib/obligation-reconcile/verdicts.ts`, `tests/register-retire-await.test.ts`, and "What a stalled row does now" |
-| Which seats roll up to which client | `scripts/lib/seat-clients.mjs` and "Who records what we owe" below |
+| Which seats roll up to which client | `scripts/lib/seat-clients.mjs` and "Who records what we owe" above |
 | What the session-start line says | `.claude/skills/sos/SKILL.md` Step 4 and the `--json` allowlist in `.claude/hooks/lib/register.mjs` |

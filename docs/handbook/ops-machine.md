@@ -4,6 +4,7 @@ section: running
 order: 24
 owner: captain
 review_every: 30
+last_reviewed: "2026-10-21"
 summary: Where client documents live (one Fly workspace per client, never a laptop), how to open one with a single command, how work is handed over from a laptop, what each workspace can reach, how long documents are kept, and smd-ops, SMD's own machine.
 sources:
   - label: operator/ops-machine/workspaces.json - the list of client workspaces
@@ -20,7 +21,17 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/laptop-offboard.py
   - label: operator/ops-machine/TRIAGE.md - the smd-ops triage agent's standing orders
     href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/TRIAGE.md
+  - label: operator/ops-machine/bin/ops-triage - the hourly triage run
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/bin/ops-triage
+  - label: operator/ops-machine/crontab - smd-ops's schedule
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/crontab
+  - label: operator/ops-machine/bin/ops-idle-stop - the idle stop
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/bin/ops-idle-stop
 ---
+
+A client's documents (matter files, medical records, and everything made from them) are opened only on that client's own locked-down machine in the cloud, its ops workspace, never on a laptop. This page says what a workspace is, who opens one and how, how long documents are kept, and what `smd-ops`, SMD's own operations machine, does.
+
+Who acts: **an agent** creates, updates, sweeps and destroys workspaces and moves files off laptops; **the Captain** opens a workspace and works in it, because today every workspace runs Claude on the Captain's own login ([Continuity](/admin/playbook/continuity)); **you** need only know the rule, notice when a healthchecks.io notice names an `ops-<slug>` workspace or `smd-ops-triage`, and ask an agent to restore it.
 
 ## The line
 
@@ -40,11 +51,11 @@ Each client with document work has its own Fly app, `ops-<slug>` (A&P: `ops-asht
 - has no Infisical identity, so nothing else in the vault is reachable from it;
 - stops itself after an hour with nobody attached and nothing running, and costs nothing while stopped.
 
-`bin/ops-workspace create <slug>` builds one from a laptop: app, volume, secrets, image, health check. `update` rebuilds the image and re-mints its tokens; `status` shows its state and selftest; `destroy` deletes it and everything on it. Decommissioning a client destroys its workspace with its seat.
+An agent runs `bin/ops-workspace create <slug>` from a laptop signed in to the Captain's Fly, Infisical and GitHub accounts (the slug must first be added to `workspaces.json` in a reviewed change): app, volume, secrets, image, health check. `update` rebuilds the image and re-mints its tokens; `status` shows its state and selftest; `destroy` deletes it and everything on it. Decommissioning a client destroys its workspace with its seat.
 
 ## Opening one, and handing work over
 
-On a laptop the Captain types one command: `ops ap` (or `ops` to list the workspaces). It starts the workspace if it is stopped and puts him in its Claude session.
+On a laptop the Captain types one command: `ops ap` (or `ops` to list the workspaces). It starts the workspace if it is stopped and puts him in its Claude session. It runs on the Captain's own logins, so today no one else can open one; giving an administrator their own logins is the decided remedy on [Continuity](/admin/playbook/continuity).
 
 When a laptop agent gets a request that would pull client documents, it does not start it. It runs `ops-handoff <client> "<task>"` and tells the Captain to type `ops <client>`; the task opens in front of him there. Every laptop session carries the rule (Law 15 in the operating doctrine), and a user-level hook (`client-data-guard.mjs`) stops the common commands and prints the same instruction.
 
@@ -71,8 +82,8 @@ Once a day (`ops-workspace-sweep`) GitHub starts each workspace, runs retention 
 
 ## Removing copies from a laptop
 
-`move-to-ops.sh` and `move-by-folder.sh` copy laptop folders onto a workspace and prove every file arrived with a sha256 manifest checked on the Machine. `laptop-offboard.py` deletes a laptop file only if it is listed in a copy's manifest and still hashes to the copied value, so anything changed since the copy stays. It never deletes a whole folder, the agent memory, or `~/dev`, and it reads back that every deleted file is gone. Run it without `--execute` first to see the counts.
+This is agent work. `move-to-ops.sh` and `move-by-folder.sh` copy laptop folders onto a workspace and prove every file arrived with a sha256 manifest checked on the Machine. `laptop-offboard.py` deletes a laptop file only if it is listed in a copy's manifest and still hashes to the copied value, so anything changed since the copy stays. It never deletes a whole folder, the agent memory, or `~/dev`, and it reads back that every deleted file is gone. Run it without `--execute` first to see the counts.
 
 ## smd-ops, SMD's own machine
 
-`smd-ops` is not a client workspace. It runs SMD's own operations: the hourly work-health triage agent (`bin/ops-triage`, standing orders in `TRIAGE.md`), which reads the same evaluation as the work-health email, investigates each new item with read-only tools, and emails team@ one report. Its silence is caught by the healthchecks.io check `smd-ops-triage`. It holds the Captain's Max login, a read-only Infisical identity for `/ss` prod (`ss-env <command>`), and per-seat Fly deploy tokens for reading seats. Connect with `fly ssh console -a smd-ops -u ops`. It holds no client documents. It does keep the Claude transcripts archived from the laptops (`/home/ops/archive/<host>/transcripts`), because they mix clients and ventures and belong to no single client workspace. A daily job in its `crontab` deletes each transcript 30 days after it was last written, the same rule `cleanupPeriodDays: 30` applies on the laptops; the agent memory copies in that tree are kept.
+`smd-ops` is not a client workspace. It runs SMD's own operations: the hourly work-health triage agent (`bin/ops-triage`, at :47 Phoenix time per its `crontab`, standing orders in `TRIAGE.md`), which runs the work-health evaluation, investigates each new item with read-only tools, and emails team@ one report only when something new was found ([Work Health](/admin/playbook/work-health)). It may not change code, deploy, restart anything or message a client. Its silence is caught by the healthchecks.io check `smd-ops-triage` (hourly, 30 minutes grace). It holds the Captain's Max login, a read-only Infisical identity for `/ss` prod (`ss-env <command>`), and per-seat Fly deploy tokens for reading seats. Connect with `fly ssh console -a smd-ops -u ops`. It holds no client documents. It does keep the Claude transcripts archived from the laptops (`/home/ops/archive/<host>/transcripts`), because they mix clients and ventures and belong to no single client workspace. A daily job in its `crontab` deletes each transcript 30 days after it was last written, the same rule `cleanupPeriodDays: 30` applies on the laptops; the agent memory copies in that tree are kept.

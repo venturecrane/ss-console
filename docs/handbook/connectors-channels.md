@@ -38,7 +38,10 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/smokeball/smokeball_connector/letter_tools.py
   - label: Smokeball letterhead.py
     href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/smokeball/smokeball_connector/letterhead.py
+last_reviewed: "2026-10-21"
 ---
+
+This page explains how the Operator reaches a client's systems (email, practice management, calendars) and how people reach the Operator (email, Telegram, voice notes, the Claude connector), with a generated list of every connector tool. An administrator needs it when an agent's report about a connector, a channel or a tool sends you here.
 
 ## Two sides of the same boundary
 
@@ -59,7 +62,7 @@ The decision order for a new binding is: vendor-direct MCP first, then a vetted 
 
 ### Author-built connectors: MCP servers we write
 
-When no acceptable MCP exists, we write one. [ADR 0053](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0053-author-built-mcp-connectors-per-customer-installed.md) (accepted 2026-06-22, extends ADR 0020) settles the shape: the connector is a Python stdio **MCP server** in `operator/connectors/<name>/`, baked into the image in its own hash-locked venv, and **inert until a customer binds it** with `backend: mcp:<name>`. An unbound connector is never launched, surfaces no tools, and receives no secrets. The overlay stays substrate-only, so adding a connector one firm needs never forces an overlay release. The declarative contract (package, `manifest.toml`, conformance test, overlay registration, binding) is in [operator/connectors/README.md](https://github.com/venturecrane/ss-console/blob/main/operator/connectors/README.md).
+When no acceptable MCP exists, we write one. [ADR 0053](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0053-author-built-mcp-connectors-per-customer-installed.md) (accepted 2026-06-22, extends ADR 0020) settles the shape: the connector is a Python stdio **MCP server** in `operator/connectors/<name>/`, baked into the image in its own venv installed from hash-pinned requirements (`operator/templates/Dockerfile`), and **inert until a customer binds it** with `backend: mcp:<name>`. An unbound connector is never launched, surfaces no tools, and receives no secrets. The connector's code lives in ss-console, not the overlay; the overlay carries only its registration (one `McpConnectorSpec`) and the classification of its tools. The declarative contract (package, `manifest.toml`, conformance test, overlay registration, binding) is in [operator/connectors/README.md](https://github.com/venturecrane/ss-console/blob/main/operator/connectors/README.md).
 
 Every tool is classified twice on purpose: the manifest's `tool_classes` table is the conformance oracle, and the overlay's `shared/action_classes.py` is the enforced authority. A tool that is in one and not the other fails conformance or fails closed at boot, so a new tool is a two-repo change reviewed on both sides.
 
@@ -131,7 +134,7 @@ Generated from `operator/connectors/*/manifest.toml` and each package's `*_tools
 
 ### Composio is dropped
 
-An earlier revision of ADR 0020 reserved a fourth `composio:<connector>` backend as a long-tail fallback. As of the 2026-05-30 revision it is **removed entirely**. Brokering connections through a shared-key third party added tenancy risk, an extra API surface, and a party in the trust chain visible to compliance-audited customers, all without commensurate benefit. We connect to MCPs directly, and any long-tail vendor with no first-party MCP gets a `build:` adapter. The `composio:` prefix now fails validation.
+An earlier revision of ADR 0020 reserved a fourth `composio:<connector>` backend as a long-tail fallback. As of the 2026-05-30 revision it is **removed entirely**. Brokering connections through a shared-key third party added tenancy risk, an extra API surface, and a party in the trust chain visible to compliance-audited customers, all without commensurate benefit. We connect to MCPs directly. A long-tail vendor with no acceptable MCP was to get a `build:` adapter under that revision; since ADR 0053 we write our own MCP server instead (above). The `composio:` prefix fails validation, because `ACCEPTED_BACKEND_PREFIXES` holds only `mcp:`, `build:`, `synthetic:` and `native:`.
 
 ### What is wired today vs. planned
 
@@ -149,7 +152,7 @@ Google Workspace (Gmail, Calendar, Drive, Docs, Sheets) was originally wired as 
 
 [ADR 0021](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0021-leverage-hermes-native-primitives.md) records the decision to use what Hermes already ships rather than reinvent it. Five native primitives matter to connectors and channels:
 
-- **`execute_code`** - a Python child process with RPC tool access. Batch-loop skills (inbox triage, hours reconciliation, status assembly) that would otherwise make 10 to 100 tool calls in the conversation context collapse into a single inference call. The CLI connectors the agent shells to (where they still exist) are reached this way.
+- **`execute_code`** - a Python child process with RPC tool access. Batch-loop skills (inbox triage, hours reconciliation, status assembly) that would otherwise make 10 to 100 tool calls in the conversation context collapse into a single inference call. It is classed `CODE_EXECUTION`, which is fail-closed unless a seat authors it and refused on a tainted turn (`/admin/playbook/autonomy-governance`); no seat in `operator/customers/` authors a `code_execution` exposure today, so on the live seats this path is shut and the overlay reaches such work through mediated tools instead.
 - **No-agent cron (`{"wakeAgent": false}`)** - a cron pre-run script can do arithmetic-only polling and skip waking the LLM when nothing changed, costing zero model tokens on quiet days. The pre-run script must emit an audit row on every run (including the silent path), or the optimization is indistinguishable from "the script silently broke."
 - **`delegate_task`** - spawns up to three concurrent isolated subagents with restricted toolsets, returning only summaries to the parent. Compound research workflows parallelize their sub-tasks this way.
 - **Skill bundles** - compose multiple skills under one slash command, declared in `customer.yaml`.
@@ -171,7 +174,7 @@ A channel carries a message in and a message out. It holds none of the worker's 
 
 Beyond reaching the Operator's own mailbox, the Operator can **manage a principal's mailbox** - read, triage, and draft against a human's inbox - through a per-operation delegation subject. The broker is the authorization boundary: it validates the requested subject and sender against the mailboxes the engagement authored in `customer.yaml.google_auth.managed_mailboxes` before any operation runs. This is the same broker that serves Google generally (ADR 0045); the managed-mailbox path is one set of governed `workspace_*` operations on top of it.
 
-> TODO(why): the managed-mailbox runtime materialization (whether the broker's `workspace_*` tools are live against a real managed mailbox end to end) is verified in source/ADR but not re-confirmed against a running Machine here. Checked: ADR 0045 header and overview; operator/README.md. A live-Machine check belongs to whoever next reprovisions.
+No seat uses this path today. Of the seats in `operator/customers/`, only `smd-staging` authors `google_auth` at all, and its file states it declares no `managed_mailboxes`, so it touches no real inbox. The path is built in source (ADR 0045) and has no live consumer to observe end to end; the first seat that authors a managed mailbox is where it gets proven.
 
 ## Why the dumb-pipe rule is load-bearing
 

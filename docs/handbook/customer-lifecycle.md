@@ -4,131 +4,152 @@ section: business
 order: 7
 owner: captain
 review_every: 180
-status: Rewrite pending
-summary: The end-to-end walk of a business through the system - lead to outreach to assessment to quote to signing to delivery to billing to handoff - and which admin surface and data object owns each step
+last_reviewed: "2026-10-21"
+summary: How a prospect becomes a live client and, eventually, leaves - one track for an Operator client, one for a consulting client, a short one for the Hosted Agent - with who acts at each step and what the system does on its own.
 sources:
-  - label: Entity stages & transitions (src/lib/db/entities.ts)
-    href: https://github.com/venturecrane/ss-console/blob/main/src/lib/db/entities.ts
-  - label: SOW finalize - stage transition to engaged (src/lib/sow/service-finalize.ts)
-    href: https://github.com/venturecrane/ss-console/blob/main/src/lib/sow/service-finalize.ts
-  - label: Quote sign - SOW to SignWell (src/pages/api/admin/quotes/[id]/sign.ts)
-    href: https://github.com/venturecrane/ss-console/blob/main/src/pages/api/admin/quotes/[id]/sign.ts
-  - label: Admin home launchpad (src/pages/admin/index.astro)
-    href: https://github.com/venturecrane/ss-console/blob/main/src/pages/admin/index.astro
+  - label: Operator implementation playbook
+    href: docs/runbooks/operator/implementation-playbook.md
+  - label: Operator subscriptions (client-started checkout)
+    href: src/lib/stripe/subscriptions.ts
+  - label: Operator contract templates
+    href: docs/templates/operator/README.md
   - label: ADR 0065 - Operator offboarding and dunning
-    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0065-operator-offboarding-and-dunning.md
-  - label: Decommission tooling (operator/bin/decommission-customer.sh)
-    href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/decommission-customer.sh
+    href: docs/adr/0065-operator-offboarding-and-dunning.md
+  - label: Decommission tooling
+    href: operator/bin/decommission-customer.sh
+  - label: ADR 0067 - Hosted Agent self-serve SKU
+    href: docs/adr/0067-hosted-agent-self-serve-sku.md
+  - label: ADR 0090 - Hosted-agent roles
+    href: docs/adr/0090-hosted-agent-roles.md
+  - label: Entity stages and transitions
+    href: src/lib/db/entities.ts
+  - label: Send booking link
+    href: src/pages/api/admin/entities/[id]/send-booking-link.ts
+  - label: Draft a quote from a meeting
+    href: src/pages/api/admin/entities/[id]/meetings/[meetingId]/draft-quote.ts
+  - label: Quote sign - SOW to SignWell
+    href: src/pages/api/admin/quotes/[id]/sign.ts
+  - label: SOW finalize - stage to engaged
+    href: src/lib/sow/service-finalize.ts
+  - label: Jobs run at signing (deposit invoice, emails)
+    href: src/lib/sow/outbox-jobs.ts
+  - label: Engagement handoff and the support window
+    href: src/lib/db/engagements.ts
+  - label: Retire the automated lead-gen machine (ADR 0060)
+    href: docs/adr/0060-retire-automated-lead-gen-machine.md
 ---
 
-## The spine: one entities table, eight stages
+A prospect becomes a client by one of two main paths: an Operator client is won through letters and a proposal, signs an agreement drafted for them, and then starts paying in the portal once their Operator is stood up; a consulting client goes through an assessment, a quote and an e-signed SOW in the admin console. This page walks both, plus the short Hosted Agent path, and ends with how an Operator client leaves.
 
-Every business SMD touches is a row in the `entities` table. The lifecycle is that row moving through eight stages, defined in `src/lib/db/entities.ts` as `EntityStage`:
+## Which track you are on
 
-`signal -> prospect -> meetings -> proposing -> engaged -> delivered -> ongoing` (with `lost` as the off-ramp).
+| | Operator | Consulting | Hosted Agent |
+|---|---|---|---|
+| Has it happened? | Yes: SMD's one paying client (seat `ashton-price`) | Built and documented; see [The Consulting Engagement](/admin/playbook/consulting-engagement) | SMD's own seats only so far (ADR 0090) |
+| Where the paper lives | The private `venturecrane/engagements` repository | The admin console (quote, SOW PDF, SignWell) | Stripe checkout and the product terms |
+| How payment starts | The client starts the subscription in the portal | A deposit invoice is emailed automatically at signing | Self-serve checkout |
 
-The same table is split across two admin surfaces by stage. Pre-acceptance records (`signal`, `prospect`, `meetings`, `proposing`) live in Leads at `/admin/entities`. Post-acceptance records (`engaged`, `delivered`, `ongoing`) live in Clients at `/admin/clients`. The surface follows the record's current job; the underlying row never moves. Stage transitions are validated at the application layer (`VALID_TRANSITIONS` in `entities.ts`), so the motion below is enforced, not just conventional.
+Who may do what at each step is set in [Who Does What](/admin/playbook/who-does-what): pricing, contract terms, new commitments and taking on a client are the Captain's; routine client emails and invoices at agreed prices are yours.
 
-This page walks the row from first contact to handoff. For the business meaning of the engagement itself - the five phases, the assessment-is-the-product thesis - see [The Consulting Engagement](/admin/playbook/consulting-engagement). For the surfaces themselves, see [The Admin Console](/admin/playbook/admin-console) and [The Client Portal](/admin/playbook/client-portal).
+## Track 1: an Operator client
 
-**This walk is the consulting path.** An Operator client follows a different path from signature to live service: the service agreement and DPA are drafted per client in the private `venturecrane/engagements` repository, the client starts the subscription from the portal, and the seat is stood up by following the [Operator Implementation Playbook](https://github.com/venturecrane/ss-console/blob/main/docs/runbooks/operator/implementation-playbook.md) (Prepare, Explore, Realize, Deploy, Run), which is written for the implementation specialist rather than an engineer. Offboarding for both paths is section 11 below.
+This is the path SMD's one sale took. Everything specific to that client (letters, proposal, agreement, dossier) is in `venturecrane/engagements` under `operator/customers/<slug>/`, the same folder name as the seat ([Handoff Companion](/admin/playbook/handoff-companion)).
 
-## 1. Lead capture - stage `signal`
+**1. Conversation and letters.** The sale is founder-run (ADR 0060): the Captain leads the conversations and the letters. Each letter is archived in the client's `correspondence/` folder. Whenever a letter promises something, the session that read it records the promise in the [obligation register](/admin/playbook/obligation-register) before it closes.
 
-A lead enters as a `signal`. The automated lead-generation pipelines that used to feed this stage were retired 2026-07-01 (PRs #1610/#1616); [ADR 0060](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0060-retire-automated-lead-gen-machine.md) superseded the earlier cold-email posture (ADR 0059): acquisition is founder-run and law-first, the lead board is a manual worklist, and paid social ran as a bounded message-validation round ([ADR 0066](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0066-paid-acquisition-round-one.md)). The entity list still filters by `source_pipeline` across `review_mining`, `job_monitor`, `new_business`, and `social_listening` (`src/pages/admin/entities/index.astro`) for signals already in the system. Each signal carries the evidence that produced it (a latest signal context entry plus a last-activity timestamp), surfaced inline on the Signal tab so the operator can judge it without clicking through.
+**2. Proposal.** A written proposal for that client, kept in the client's folder. The price in it comes from the private pricing record ([Pricing & Economics](/admin/playbook/pricing-economics)).
 
-- **Surface:** `/admin/entities?stage=signal` (the Leads "Signal" tab).
-- **Data objects:** `entities` row (stage `signal`), `context` entries (the signal evidence).
+**3. Agreement.** A service agreement and a data processing addendum (DPA), plus a confidentiality addendum for a law firm, drafted for that client in the client's `agreements/` folder. The starting point is the template set in `docs/templates/operator/` (service contract, DPA, confidentiality addendum, design-partner addendum). Contract terms are the Captain's; you do not negotiate or change them.
 
-A signal that is not worth pursuing is dismissed. One that is gets promoted to `prospect`.
+**4. Stand-up.** The seat is built and proven by following the [Operator implementation playbook](https://github.com/venturecrane/ss-console/blob/main/docs/runbooks/operator/implementation-playbook.md): Prepare, Explore, Realize, Deploy, Run, each ending at a gate. It is written for an implementation specialist working with a build agent, not for an engineer. The Captain approves the first boot of a new seat ([Who Does What](/admin/playbook/who-does-what)).
 
-## 2. Enrichment (retired)
+**5. Billing starts.** In the agreement drafted for SMD's Operator client, no monthly fee accrues until SMD tells the client in writing that implementation testing is complete and the client then starts the service in the portal; that day is the billing start date. In the portal the client's principal clicks **Start subscription**, which opens Stripe Checkout and pays the first month; Stripe charges the same method monthly after that. Nobody at SMD can start a subscription for a client (`src/lib/stripe/subscriptions.ts`). The one-time stand-up fee goes out as a separate **implementation** invoice, which you may send at the agreed amount ([Money](/admin/playbook/money)). SMD's client did this on 2026-09-15 (`operator/customers/ashton-price/customer.yaml`, billing-cycle note).
 
-The automated public-data enrichment step (dossier building via `src/lib/enrichment/`: website analysis, reviews, tech stack, news, Google Places) was part of the scrape-score-enrich lead-gen machine, retired 2026-07-01 (PRs #1610/#1616). `src/lib/enrichment/`, the `/admin/entities/[id]/enrichment/` and `dossier` endpoints, and the Re-enrich action are gone. The lead detail page still renders any enrichment data left on legacy entity rows, but no new enrichment runs. A prospect now moves from signal straight into outreach.
+**6. Running.** Day to day, the client changes their own Operator within the limits agreed; anything else comes to SMD as a change request ([Changing a Client's Operator](/admin/playbook/changing-a-clients-operator)). A request for a new kind of work follows the change-request process on [Pricing & Economics](/admin/playbook/pricing-economics), and every open item is a register row.
 
-## 3. Prospect and outreach - stage `prospect`
+**7. Leaving.** See "Offboarding an Operator client" at the end of this page.
 
-A promoted lead is a `prospect`. The system drafts outreach, the operator sends it (the list hydrates a latest outreach draft and a first contact-with-email per row to power "Send outreach" and "Log reply"), and replies are logged back against the entity.
+## Track 2: a consulting client
 
-- **Surface:** `/admin/entities?stage=prospect` and the entity detail page.
-- **Data objects:** `entities` row (stage `prospect`), `contacts`, `context` (outreach drafts and logged replies).
+Every business is one row in the `entities` table, moving through eight stages (`src/lib/db/entities.ts`): `signal`, `prospect`, `meetings`, `proposing`, `engaged`, `delivered`, `ongoing`, with `lost` as the exit. Records before acceptance appear under **Leads** (`/admin/entities`); from `engaged` on they appear under **Clients** (`/admin/clients`). The row never moves; only the view changes. The allowed moves between stages are enforced in code, not left to convention.
 
-When a prospect agrees to talk, a booking link is sent and the entity moves to `meetings` once the meeting is set.
+### 1. Signal
 
-## 4. Assessment - stage `meetings`
+A lead you or the Captain add by hand. The automated lead-generation machine that once filled this stage was retired on 2026-07-01, and the board is now a manual worklist (ADR 0060). Older rows may still carry a source filter (`review_mining`, `job_monitor` and others) from that machine.
 
-The assessment call is captured as a `meeting`. (The old `/admin/assessments/[id]` route is a permanent 301 into the entity-scoped meeting page; the `assessments` table was generalized into `meetings`, preserving IDs, in migration 0025.) The meeting page captures the outcome and has a "Complete Meeting" form with an explicit next-stage picker.
+- **Where:** `/admin/entities?stage=signal`.
 
-Completing the assessment meeting is the hinge that produces the proposal: it drafts a quote and moves the entity to `proposing`. The assessment call itself - structure, the objectives-first conversation, the ROI anchors - is owned by [The Consulting Engagement](/admin/playbook/consulting-engagement).
+A signal worth pursuing is promoted to `prospect`; one that is not is dismissed or marked `lost`.
 
-- **Surface:** `/admin/entities/[id]/meetings/[meetingId]`.
-- **Data objects:** `meetings` row, `context` (capture/outcome), the drafted `quotes` row.
+### 2. Prospect and outreach
 
-## 5. Quote and SOW - stage `proposing`
+Outreach is written by a person; nothing drafts it automatically any more (ADR 0060). Once outreach text is saved on the record, the prospect row offers **Send outreach** (opens a mail draft with that text, addressed to the first contact with an email) and **Log reply** (`src/pages/admin/entities/index.astro`).
 
-In `proposing`, the entity has an active quote. A quote carries line items, total hours, rate, total price, deposit terms, schedule, and deliverables, and moves through `draft -> sent -> accepted` (with `declined`, `expired`, `superseded` as terminal states) per `QuoteStatus` in `src/lib/db/quotes.ts`. A `sent` quote expires five days after `sent_at`, so the Proposing tab orders rows oldest-sent-first to surface quotes about to lapse.
+When the prospect agrees to talk, **Send booking link** creates the meeting, moves the record to `meetings` at once, and emails the prospect a signed booking link (valid 14 days by default) through SMD's own email service, so opens and replies are tracked. With no contact email it gives you a template to send yourself (`send-booking-link.ts`).
 
-The quote is the internal pricing object; the SOW is its client-facing rendering. A SOW revision is rendered to a PDF (stored in R2) and goes through `rendered -> sent -> signed` (`SOWRevision` in `src/lib/sow/store.ts`).
+- **Where:** `/admin/entities?stage=prospect` and the record's page.
 
-- **Surface:** `/admin/entities?stage=proposing`, the entity quote page `/admin/entities/[id]/quotes/[quoteId]`, and Billing's Quotes tab (`/admin/billing`).
-- **Data objects:** `quotes`, `sow_revisions`.
+### 3. Assessment (stage `meetings`)
 
-## 6. Signing
+The assessment is a meeting on the record's page (`/admin/entities/<id>/meetings/<meetingId>`). **Complete Meeting** records the outcome notes and duration and can move the record to a stage you pick. It does not create a quote. How the call itself runs is on [The Consulting Engagement](/admin/playbook/consulting-engagement).
 
-Signing is the acceptance line. `POST /api/admin/quotes/[id]/sign` retrieves the SOW PDF from R2, snapshots the signer, records a send authorization, and creates a signature request in **SignWell** (the live e-signature provider; `provider: 'signwell'` in the store). When the customer countersigns, the SignWell webhook (`src/pages/api/webhooks/signwell.ts`) finalizes the SOW.
+### 4. Quote and SOW (stage `proposing`)
 
-Finalization is what crosses the acceptance line. `src/lib/sow/service-finalize.ts` updates the entity to `stage = 'engaged'`, writes a `stage_change` context entry ("Stage: proposing -> engaged. SOW signed via SignWell."), and provisions the client side. From this point the record lives in Clients, not Leads.
+**Draft quote** on the meeting page creates an empty draft quote and moves the record to `proposing`. The quote carries line items, hours, rate, price, deposit terms, schedule and deliverables. Its states are draft, sent, accepted, with declined, expired and superseded as endings; a sent quote expires five days after it is sent, so the Proposing tab lists the oldest-sent first (`src/lib/db/quotes.ts`).
 
-- **Surface:** triggered from the admin quote page; completed by the SignWell webhook.
-- **Data objects:** `signature_requests`, `sow_revisions` (status `signed`), `entities` (stage `engaged`), `context` (stage-change record).
+The quote is the internal pricing object; the SOW is the client-facing PDF made from it. The price on a quote is the Captain's decision.
 
-> TODO(why): The drafting-template runbook docs/templates/operator/signing-flow.md documents a DocuSign-based flow, while the live consulting-quote code path uses SignWell. These are not the same surface - signing-flow.md governs the Operator service contracts (master agreement + DPA), and the SignWell path governs consulting SOWs - but I did not find a document that states this split explicitly, so the relationship between the two signing pipelines is inferred from code, not confirmed in a source.
+- **Where:** `/admin/entities?stage=proposing`, the quote page, and the Quotes tab on `/admin/billing`.
 
-## 7. Client and engagement - stage `engaged`
+### 5. Signing
 
-An accepted SOW produces an `engagement` - the delivery container. The engagement holds scope summary, status, estimated and actual hours, milestones, contacts, files, and a parking lot for out-of-scope items surfaced during delivery (`src/pages/admin/engagements/[id].astro`). Delivery runs the implementation, training, and handoff phases of [The Consulting Engagement](/admin/playbook/consulting-engagement). The global view of work-in-motion is the Services surface (`/admin/services`), which the admin home summarizes as the "Delivery" motion card.
+Sending for signature takes the SOW PDF and creates a signature request in **SignWell**, the e-signature service for consulting SOWs (`src/pages/api/admin/quotes/[id]/sign.ts`). When the client signs, SignWell tells the system, and three things then happen on their own (`src/lib/sow/service-finalize.ts`, `src/lib/sow/outbox-jobs.ts`):
 
-- **Surface:** `/admin/clients`, the entity detail page, the engagement detail page `/admin/engagements/[id]`, and `/admin/services`.
-- **Data objects:** `engagements`, `engagement_milestones`, the bound `quotes` row, `context`.
+1. The record moves to `engaged` (with a note: "Stage: proposing -> engaged. SOW signed via SignWell.") and becomes a client.
+2. A **deposit invoice is created in Stripe and emailed** to the client's first contact, due in three days. Signing is therefore also sending an invoice.
+3. A "SOW signed" email and a portal invitation go to the client.
 
-## 8. Billing and invoicing
+SignWell is used only for consulting SOWs. Operator agreements are not produced or signed through the admin console; the templates in `docs/templates/operator/` describe a DocuSign workflow, and how a given Operator client's agreement is executed is handled by the Captain and recorded in that client's private folder.
 
-Payment follows the structure set in the SOW (50/50 under 40 hours; 40/30/30 for larger engagements). Invoices are one-time money objects, summarized on the admin home and Billing's "One-time" side as invoiced / paid / outstanding (`oneTimeTotals` in `src/lib/admin/billing-view.ts`). Overdue invoices surface in the home "Needs you today" action queue. The recurring side of Billing is Operator MRR, a separate money shape that does not apply to a consulting engagement.
+### 6. Delivery (stage `engaged`)
 
-- **Surface:** `/admin/billing` (Invoices and Recurring tabs).
-- **Data objects:** `invoices` (and, for the Operator front door, `services` with `recurring_price`).
+The signed SOW creates an **engagement**: scope, status, estimated and actual hours, milestones, contacts, files, and a parking lot for out-of-scope asks (`/admin/engagements/<id>`). Work in motion across clients is on `/admin/services`. Marking a payment milestone complete creates and emails that milestone's invoice at once ([Money](/admin/playbook/money)).
 
-## 9. Portal access
+### 7. Billing
 
-The client sees their own engagement through the [Client Portal](/admin/playbook/client-portal) at `portal.smd.services`. Portal identity is owned by Clerk; the local entity is bound on first login and is never just-in-time created - a Clerk user with no binding gets no portal (`src/lib/portal/session.ts`). The portal home is action-centric: the next invoice or next touchpoint pins above the fold, with a timeline of recent activity below. Portal-visible quote statuses are limited to `sent`, `accepted`, `declined`, `expired` (`PORTAL_VISIBLE_STATUSES` in `quotes.ts`) - drafts and superseded quotes never reach the client.
+Payment follows the SOW: 50/50 by default, with 40/30/30 considered for 40 hours or more (Decision #14). One-time invoices show on `/admin/billing` as invoiced, paid and outstanding; overdue ones appear in the home page's "Needs you today" list. The recurring side of billing is Operator subscriptions, which a consulting client does not have.
 
-- **Surface:** `portal.smd.services` (`/portal/*`): home, quotes, invoices, engagement, documents.
-- **Data objects:** the same `entities` row (as the portal `client`), `quotes`, `invoices`, `engagements`.
+### 8. The client portal
 
-## 10. Handoff and what comes after - stages `delivered`, `ongoing`
+The client sees their quotes, invoices, engagement and documents at `portal.smd.services` ([The Client Portal](/admin/playbook/client-portal)). Sign-in is through Clerk, and a person sees a client's records only once they are bound to that client; an unbound sign-in gets no portal (`src/lib/portal/session.ts`). Draft and superseded quotes never reach the client.
 
-At final handoff the engagement moves the entity to `delivered`, which the system treats as stabilization (the two-week included support window - see [The Consulting Engagement](/admin/playbook/consulting-engagement)). After stabilization, a delivered engagement can be flagged for ongoing support to move it to `ongoing`, or the relationship converts to an Operator subscription if the fit is right.
+### 9. Handoff, support, and after (stages `delivered`, `ongoing`)
 
-- **Surface:** `/admin/clients` (Delivered and Ongoing), the engagement detail page.
-- **Data objects:** `entities` (stage `delivered` then `ongoing`), `engagements`.
+Moving the engagement to **handoff** does three things on its own: it sets the handoff date and the end of the two-week support window (14 days later), schedules the follow-ups (referral ask, review request, support check-in, 30-day feedback), and moves the record to `delivered` (`src/lib/db/engagements.ts`).
 
-A prospect that does not convert at any pre-acceptance stage is marked `lost` with a structured reason, which the Lost tab surfaces inline so the operator can scan why deals fall out without clicking through.
+**Mark as Ongoing** on the record's page moves a delivered client to `ongoing`. It is refused until the completion invoice is paid, unless someone gives a written override reason, which is recorded on the client's timeline (`src/lib/db/entities.ts`). Nothing moves a client to `ongoing` automatically when the support window ends. A client who wants more work gets a new scope or, if it fits, an Operator subscription (ADR 0004, lock 4).
 
-## 11. Operator offboarding and dunning (ADR 0065)
+A prospect that falls out at any stage before signing is marked `lost` with a reason, shown on the Lost tab.
 
-The exit path for an Operator seat, locked by Captain 2026-07-04. Every consequential step is a human action; the automated system's only role is the alert.
+## Track 3: a Hosted Agent
 
-**Voluntary cancellation:** termination is asymmetric (ADR 0065, amended 2026-08-29). The client cancels in the portal, or by letter with the same effect, with no notice period, and the cancellation takes effect at the end of the month already paid for. SMD's own termination carries 30 days notice to the client. The signed agreement is the binding text; it lives in the private engagements repository. Pause is the alternative: Stripe collection paused (cycle invoices void, so a paused seat is never charged), portal shows paused with audit access retained; a pause past 60 days triggers a conversation about whether this is actually an offboarding.
+A buyer checks out on `/agent`. Checkout creates the client record, a subscription waiting to be set up, and an intake item, and emails team@. The seat is then set up by hand from a template and switched on; a payment alone never switches anything on (ADR 0067). A seat built on a role such as `couples` is written by hand from that role's template, merged and reprovisioned, and the agent then introduces itself to each person by email (ADR 0090, superseded decision 4; `docs/runbooks/hosted-agent/couples-setup.md`). Payment failures follow the same human-run steps as the Operator.
 
-**Dunning ladder (payment failure):** day 0, the automated alert lands at team@smd.services and Captain reaches out personally the same business day. Day 14 past due, pause the seat. Day 30 past due, treat as cancellation notice and begin the sequence below. Stripe's `past_due` never reduces access by itself; the webhook mirror keeps the seat active and the human ladder governs.
+## Offboarding an Operator client
 
-**Offboarding sequence (any termination):**
+The exit path, set by the Captain on 2026-07-04 (ADR 0065). Every step that matters is a person's decision; the system only raises the alert.
 
-1. **Final export** - deliver the audit record and operational memory (the `audit_export` / `memory_export` runtime-read kinds the decommission pipeline serves) within 14 days of the termination date.
-2. **Access revocation** - MCP grants revoked (the ADR 0057 kill switch), connector credentials revoked or returned per custody posture, managed mailbox closed.
-3. **Destruction** - `decommission-customer.sh` destroys the Machine, volume, and per-customer stores; residual control-plane data deleted except legal, tax, and accounting records. Before the customer directory is tombstoned, the same run builds the signed compliance evidence packet from the ledger it preserved off the Machine, and its report gives the packet's path, file count and signature check as read back from disk. A live run refuses to start without the signing key staged.
-4. **Attestation** - destruction confirmed in writing on request.
+**Termination is asymmetric** (ADR 0065, amended 2026-08-29). The client may cancel in the portal, or by letter with the same effect, with no notice period; it takes effect at the end of the month already paid for. SMD's own termination gives the client 30 days' notice. The signed agreement is the binding text.
 
-Complete return and destruction within 30 days of termination; that number and the 30-day sub-processor notice are the DPA standard terms. A dry run of the full sequence against the staging seat precedes the first paid contract carrying these terms.
+**Pause** is the alternative to cancelling: collection stops (a paused seat is never charged), the portal shows the seat paused, and the client keeps access to its audit record. A pause past 60 days prompts a conversation about whether it is really an offboarding.
 
-> TODO(why): The transition from `delivered` to `ongoing` is described in the entity list empty-state copy as "Flag a delivered engagement for ongoing support," but I did not find the action wiring that performs that flag, nor confirmation that the two-week stabilization window is what gates the delivered->ongoing move. Looked in src/pages/admin/entities/index.astro (empty-state copy) and entities.ts (transitions); did not trace the delivered->ongoing trigger.
+**When a payment fails** (the dunning ladder): day 0, team@ gets an alert and the Captain contacts the client personally the same business day; day 14 past due, the seat is paused; day 30, it is treated as a cancellation and offboarding begins. Stripe marking an invoice past due never reduces access by itself. Each step is the Captain's ([Money](/admin/playbook/money)).
+
+**The offboarding sequence** (any termination):
+
+1. **Final export.** The client receives its audit record and the Operator's working memory in exportable form within 14 days of the termination date.
+2. **Access removed.** Claude-connector grants are revoked (the ADR 0057 kill switch), connector credentials revoked or returned, the Operator's mailbox closed.
+3. **Destruction.** An agent runs `operator/bin/decommission-customer.sh`, which destroys the machine, its storage and the client's stores, keeping only legal, tax and accounting records. Before the client's folder is retired, the same run builds the signed compliance evidence packet and reports its path, file count and signature check. A live run will not start without the signing key in place.
+4. **Attestation.** Destruction is confirmed in writing on request.
+
+Return and destruction finish within 30 days of termination; that window and the 30-day notice of a new sub-processor are the DPA's standard terms (ADR 0065). ADR 0065 also calls for a dry run of the whole sequence on the staging seat before the first paid contract carries these terms; whether that dry run has been done is not recorded in this repository. Ending a client is the Captain's decision; once made, running the sequence is agent work, reported with proof that each layer is gone.

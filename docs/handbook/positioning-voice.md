@@ -4,78 +4,67 @@ section: business
 order: 4
 owner: captain
 review_every: 180
-summary: The seven tone rules, the identity-marker rule, and the client-is-hero / we-are-guide frame that govern all client-facing language
+last_reviewed: "2026-10-21"
+summary: How SMD talks to clients and prospects - the frame, the seven tone rules, the house style, and what the build enforces automatically.
 sources:
   - label: CLAUDE.md - Tone & Positioning Standard
-    href: https://github.com/venturecrane/ss-console/blob/main/CLAUDE.md
+    href: CLAUDE.md
+  - label: Positioning spine (marketing source of truth)
+    href: docs/marketing/positioning-spine.md
   - label: Decision Stack (Decision #20)
-    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/decision-stack.md
+    href: docs/adr/decision-stack.md
+  - label: ADR 0004 - positioning guardrails
+    href: docs/adr/0004-productized-operator-offering.md
+  - label: ADR 0040 - Operator positioning (law-first)
+    href: docs/adr/0040-operator-positioning-and-why-us.md
+  - label: Voice and positioning guard tests
+    href: tests/landing-page.test.ts
+  - label: Forbidden-strings guard test
+    href: tests/forbidden-strings.test.ts
 ---
 
-## The frame: client is the hero, we are the guide
+Every word SMD sends a client or prospect follows the rules on this page: the client is the hero, we are the guide, and we never claim more than we know. Use it when you approve a client email, review an agent's draft, or ask an agent to write anything public.
 
-SMD positions the client as the hero and the firm as the guide (CLAUDE.md, Positioning). The owner has the vision; we have operational experience; we figure it out together. The value is enterprise operational discipline applied to businesses that have never had access to it, delivered at speed and pricing that works for their stage.
+## The frame: the client is the hero, we are the guide
 
-The rules below apply to **all external-facing content** - website copy, outreach, proposals, collateral, and any client-facing language - and to internal content that may inform external copy (one-liners, scripts). They are the firm's voice. The no-fabrication enforcement that backs them in code is owned by `/admin/playbook/security-trust`; do not re-narrate it here.
+The owner has the vision; we bring operational experience; we work it out together (`CLAUDE.md`, About This Venture). The value is enterprise operational discipline for businesses that have never had it, at a speed and price that fits their stage.
+
+On the website the firm is "a software and AI solutions firm for small businesses," with the Operator as its flagship (`docs/marketing/positioning-spine.md`). AI is named as a capability, never as the firm's identity: no "AI-powered firm" branding (ADR 0004, positioning guardrails). As `CLAUDE.md` puts it, a chef is not hired for his knife, but he names the knife when it matters.
+
+These rules apply to all external content (website, outreach, proposals, collateral, client emails) and to internal content that may become external copy.
 
 ## The seven tone rules
 
-From CLAUDE.md, Tone & Positioning Standard.
+From `CLAUDE.md`, Tone & Positioning Standard.
 
-### 1. Objectives over problems
+**1. Objectives over problems.** Start from where the business is trying to go, not only what hurts. Do: "We start by understanding where you're trying to go, then figure out what's in the way." Don't: "We diagnose your top problems and fix them."
 
-Frame engagements around understanding business objectives, not just diagnosing problems. The owner often knows the pain but has not articulated the goal. Part of our value is helping them discover the real objective through conversation.
+**2. Collaborative, not diagnostic.** We work alongside the owner, not audit them. Do: "We work alongside you." Don't: "We audit your operations," "We tell you what to fix."
 
-- Do: "We start by understanding where you're trying to go, then figure out what's in the way."
-- Don't: "We diagnose your top problems and fix them."
+**3. No fixed timeframes in marketing.** No published durations for the call, the build, training or support. Signed documents (an SOW, an invoice, an agreement) keep the timeframes that were agreed. Do: "We start with a conversation." Don't: "1-hour call," "2-week support window."
 
-### 2. Collaborative, not diagnostic
+**4. No published dollar amounts.** The client sees a price in their proposal, never on a public page. The one exception is the Hosted Agent's price on `/agent`, a deliberate, page-only exemption (ADR 0067, Decision #51).
 
-We are a peer working alongside the owner, not an expert arriving to audit them.
+**5. "Solution," not "systems," when positioning.** "Systems" sounds like more software to learn. "System" is fine for a specific tool ("data migration and system setup").
 
-- Do: "We work alongside you," "Let's figure out what needs to change," "together."
-- Don't: "We audit your operations," "We tell you what to fix."
+**6. "We," with one exception.** Always "we" and "our team," never "I" or "the consultant" (Decision #20). The one exception is the "Who We Are" section on the home page (`About.astro`), where Scott speaks in first person because SMD is a practitioner firm and the founder is the firm (added 2026-05-03). `tests/landing-page.test.ts` excludes that file from the "we" check for this reason. Only the Captain can reverse it.
 
-### 3. No fixed timeframes in marketing
+**7. Never claim to know the prospect's business.** No copy that implies we already know what is wrong with a specific business, in first person ("I know what's wrong") or implied ("this is what your business needs"). We learn it in conversation (`CLAUDE.md`, rule 7).
 
-Timeframes are scoped per engagement, like pricing. Do not publish specific durations for any phase - the call, implementation, training, or support - in marketing content. This rule applies to marketing content only; signed contractual documents (SOW PDFs, invoices, countersigned agreements) keep the specific timeframes that were the product of the conversation.
+## Further rules
 
-- Do: "We start with a conversation," "Hands-on training with your team."
-- Don't: "1-hour call," "10-day sprint," "2-week support window."
+- **The identity-marker rule (2026-05-03).** Words that describe a quality we aspire to ("magic," "artist," "creative") shape the voice but are never stated on the page. Show the work instead.
+- **Never disparage people or software.** Both are capable; the problem is the gap between them. No "off the shelf," no AI-versus-human comparison (`docs/marketing/positioning-spine.md`, voice laws).
+- **For the Operator with law firms:** it does paralegal and coordinator work, never independent legal judgment; never say "we don't do legal work"; do not open with "AI employee" (ADR 0040).
+- **House style:** no em dashes; no "coming soon" on prospect or client pages (`CLAUDE.md`).
+- **Nothing invented.** Any timeline, price, deliverable, name or promise shown to a client must come from something authored for that client. If it is missing, show nothing or "TBD in SOW." This is the no-fabrication policy, a P0 rule; see [Security & Trust](/admin/playbook/security-trust).
 
-### 4. No published dollar amounts
+## What the build checks for you
 
-No dollar amounts appear on the website or in marketing materials. The client sees a project price in their proposal, never on a public page. The figures themselves live in `/admin/playbook/pricing-economics` (internal).
-
-### 5. "Solution" not "systems" in marketing contexts
-
-"Systems" implies software and one more thing to learn. Not all solutions are software; sometimes it is a better process, a clearer role, or a simpler workflow. Use "solution" in positioning contexts. "System" is fine when referring to a specific literal tool (e.g. "data migration and system setup").
-
-- Do: "Build the right solution," "the right solution to get you there."
-- Don't: "Build better systems," "Your systems should keep up."
-
-### 6. "We" voice, with the practitioner-firm exception
-
-Always "we" / "our team." Never "I" / "the consultant" (Decision #20). This removes the "what if you're sick" objection and positions the engagement as a capable team, not a solo operator.
-
-The one exception (added 2026-05-03) is the marketing home page's "Who We Are" / About section, where Scott speaks in first person. SMD is positioned as a practitioner firm - like a lawyer's office or a craftsman's shop - where the founder *is* the firm and there is a real team behind him. Forced "we" voice in the founder bio reads insincere, so first person is the only sincere voice there. The voice-standard test in `tests/landing-page.test.ts` excludes `About.astro` for this reason. Do not rewrite About to "we" voice without Captain explicitly reversing this call.
-
-### 7. No claim to know the prospect's business
-
-We do not write copy that implies pre-knowledge of a specific prospect's business. We are collaborators who learn the situation through conversation, not diagnosticians who arrive with answers. This covers both first-person ("I know what's wrong with your business") and implied ("This is what your business needs"). See `feedback_no_pretend_to_know_business.md`.
-
-## The identity-marker rule
-
-Added 2026-05-03. Words that describe an aspirational self-quality - Captain's examples are "magic," "artist," "creative" - must **shape** the voice without being **stated** on the page. Stating them reads as overclaim or self-flattery. Convey wonder through concrete language and what the work does, not by calling it magic. Convey creativity by showing it, not by calling it artistry. The rule applies to all marketing surfaces, not just About.
-
-## Where this lands in code
-
-The firm-level voice and the Operator SKU share one standard: Operator copy follows the same anti-fabrication and positioning rules as scope-based engagement surfaces (ADR 0004, positioning guardrails). No "AI-powered firm" branding - the firm is positioned as solutions consulting with AI & automation as a named capability, not as an identity. As CLAUDE.md puts it: a chef is not hired for his knife, but he names the knife when it matters.
-
-The hard enforcement - the Pattern A / Pattern B no-fabrication policy, the forbidden-strings test, and the merge gates that block fabricated client-facing content - is documented in `/admin/playbook/security-trust`.
+Some of these rules are enforced automatically, so an agent's change that breaks them fails before it ships: `tests/forbidden-strings.test.ts` (banned phrases, em dashes, placeholder copy) and `tests/landing-page.test.ts` (no dollar amounts except `/agent`, the "we" voice, the locked home-page structure). The checks cover the website and the code. They do not read the emails you approve, so the rules above are yours to apply there.
 
 ## Related pages
 
-- `/admin/playbook/security-trust` - the no-fabrication (Pattern A/B) enforcement that backs these rules in code.
-- `/admin/playbook/business-model` - the firm, the three front doors, and the solution taxonomy this voice describes.
-- `/admin/playbook/pricing-economics` - the internal figures behind the no-published-dollar-amounts rule.
+- [Security & Trust](/admin/playbook/security-trust): the no-fabrication policy in full.
+- [Business Model](/admin/playbook/business-model): the firm and its three offers.
+- [Pricing & Economics](/admin/playbook/pricing-economics): the internal figures behind rule 4.
