@@ -9,7 +9,8 @@ uncovered, so the next update would read them all again):
                visit the chronology does not already list (its pages billing,
                repeats, or a medical-legal report); byte-identical to
                a delivered exhibit or to another pulled document; or left out
-               by one of the firm's authored rules.
+               by one of the firm's authored rules or at the firm's direction
+               (an identity decision).
     uncovered  retrieval failed; not a PDF or an image (never read); or read
                and found to carry no text at all (an unreadable record is read
                again by the next update, as a run's contentless scan is).
@@ -20,6 +21,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ..gates.foreign_identity import WITHHELD_REASON
 from ..stages.base import read_json, read_jsonl
 from .select import BLANK
 
@@ -40,6 +42,7 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any = None) -> dict[str, Any]:
     skipped = sel.get("skipped") or {}
     covered |= {str(x) for x in skipped.get("byte-identical to a delivered exhibit") or []}
     uncovered |= {str(x) for x in skipped.get("not a PDF or an image") or []}
+    covered |= {str(x) for x in skipped.get(WITHHELD_REASON) or []}
     covered |= {str(x.get("id")) for x in sel.get("excluded_named") or [] if x.get("id")}
     for x in sel.get("exhibits") or []:
         # Only a document with NO text is read again: one whose pages are all

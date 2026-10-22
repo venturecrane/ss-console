@@ -16,11 +16,13 @@ two things a medical record labels its patient with:
   the client's surname.
 
 A hit is a HOLD at the caller, never a silent skip and never a fold: a
-person reads the document and releases it (``identity_release.json`` in the
-job's matter directory, ``{"release": [<id or sha12>, ...]}``), because a
-co-plaintiff's records inside a client's chronology is the defect class
-(ss#2893) and a record wrongly withheld is recoverable. Text that names no
-one is not evidence of anyone: it passes.
+person reads the document and releases it, or the firm says to leave it out
+(``identity_release.json`` in the job's matter directory,
+``{"release": [...], "withhold": [<id or sha12>, ...], "decisions": [...]}``,
+written by ``medchron.identity_decide``), because a co-plaintiff's records
+inside a client's chronology is the defect class (ss#2893) and a record wrongly
+withheld is recoverable. Text that names no one is not evidence of anyone: it
+passes.
 """
 
 from __future__ import annotations
@@ -52,6 +54,11 @@ NOT_NAME = frozenset(
 )
 RELATIVE = re.compile(r"(?i)\b(?:guarantor|insured|subscriber|policy ?holder|parent|mother|father|spouse|emergency)\b")
 RELEASE_FILE = "identity_release.json"
+#: How a withheld document is disclosed (orphans.json, the coverage record, an
+#: update's skip list). What happened to the file, nothing about whose it is:
+#: the person it names is another client's or a stranger's, and the chronology
+#: is the wrong place to say either.
+WITHHELD_REASON = "left out at the firm's direction"
 
 
 def _norm_dob(mo: str, dy: str, yr: str) -> str | None:
@@ -122,14 +129,60 @@ def findings(
     return sorted(set(out))
 
 
-def released(slug_dir: Path) -> set[str]:
+def _decided(slug_dir: Path, key: str) -> set[str]:
     p = slug_dir / RELEASE_FILE
     if not p.is_file():
         return set()
     try:
-        return {str(x) for x in (json.loads(p.read_text(encoding="utf-8")) or {}).get("release") or []}
+        return {str(x) for x in (json.loads(p.read_text(encoding="utf-8")) or {}).get(key) or []}
     except (OSError, ValueError, AttributeError):
         return set()
+
+
+def released(slug_dir: Path) -> set[str]:
+    """Held documents a person read and found to be the client's: folded in."""
+    return _decided(slug_dir, "release")
+
+
+def withheld(slug_dir: Path) -> set[str]:
+    """Held documents the firm said to leave out (2026-10-22: Chris Price
+    answered an identity hold with "Just leave it out of the chronology", and
+    the runner had no way to act on it). A withheld document stays out of every
+    unit, never holds the run again, and is disclosed as left out."""
+    return _decided(slug_dir, "withhold")
+
+
+def matches(rid: str, ids: set[str]) -> bool:
+    """`rid` is named in `ids` by its id or by the sha12 inside a folded
+    attachment's ``msgatt-<sha12>`` id; a decision may carry either."""
+    rid = str(rid)
+    return rid in ids or rid.removeprefix("msgatt-") in ids or f"msgatt-{rid}" in ids
+
+
+def record_decision(slug_dir: Path, *, action: str, ids: list[str], by: str, source: str, at: str) -> dict[str, Any]:
+    """Add one identity decision to `RELEASE_FILE`, keeping every earlier one.
+
+    `action` is ``release`` (the document is the client's) or ``withhold``
+    (leave it out). A document is never both: the later decision replaces the
+    earlier one, so the file always says what the next run will do. Who decided
+    and where they said it ride in ``decisions``, because a withheld record is
+    a choice about the firm's own file and has to be traceable to the person
+    who made it."""
+    if action not in ("release", "withhold"):
+        raise ValueError(f"action must be release or withhold, not {action!r}")
+    if not ids or not by.strip() or not source.strip():
+        raise ValueError("a decision needs the documents, who decided, and where they said it")
+    p = slug_dir / RELEASE_FILE
+    body: dict[str, Any] = {}
+    if p.is_file():
+        body = json.loads(p.read_text(encoding="utf-8")) or {}
+    other = "withhold" if action == "release" else "release"
+    keep = [x for x in body.get(other) or [] if not any(matches(str(x), {i}) or matches(i, {str(x)}) for i in ids)]
+    body[other] = keep
+    body[action] = sorted({*(str(x) for x in body.get(action) or []), *ids})
+    body.setdefault("decisions", []).append({"action": action, "ids": list(ids), "by": by, "source": source, "at": at})
+    p.write_text(json.dumps(body, indent=1, sort_keys=True), encoding="utf-8")
+    return body
 
 
 def identities(units: list[Any]) -> tuple[set[str], set[str]]:

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..gates.foreign_identity import WITHHELD_REASON as WITHHELD
 from .locate import vendor_name
 
 IDENTICAL = "byte-identical to a delivered exhibit"
@@ -78,7 +79,11 @@ def accounted(
     ex_of = {str(r["id"]): int(r["exhibit"]) for r in keep if r.get("id")}
     delivered = {str(e["sha256"]): int(e["exhibit"]) for e in delivered_exhibits if e.get("sha256")}
     skipped = sel.get("skipped") or {}
-    excluded = {str(x.get("id")) for x in sel.get("excluded_named") or [] if x.get("id")}
+    # The firm's own exclusions: an authored name rule, or a document the firm
+    # said to leave out (an identity decision, ``WITHHELD``).
+    excluded = {str(x.get("id")) for x in sel.get("excluded_named") or [] if x.get("id")} | {
+        str(x) for x in skipped.get(WITHHELD) or []
+    }
     copies = _copies(by_id, sel, ex_of, delivered)
     not_pages = {str(x) for x in skipped.get(NOT_PAGES) or []}
     unreadable = [vendor_name(by_id[i]) for i in by_id if i in not_pages]

@@ -20,8 +20,9 @@ stated exclusion reason (`stages/coverage.py`) — so this module reads the same
 artifacts and reports the same two sets, keyed by document id:
 
     covered    cited in the delivered document, a byte-duplicate of something
-               cited, in the authored billing-chart set, or excluded by an
-               authored name rule: accounted for, and an update skips it.
+               cited, in the authored billing-chart set, excluded by an
+               authored name rule, or left out at the firm's direction (an
+               identity decision): accounted for, and an update skips it.
     uncovered  the composer read it and found nothing citable, the unit marked
                it `compose_skip` (a contentless or unreadable scan), retrieval
                failed, or it is a documented orphan: NOT in the delivered
@@ -38,6 +39,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .gates.foreign_identity import WITHHELD_REASON
 from .stages.base import read_json, read_jsonl
 from .stages.coverage import (
     EXT_OK,
@@ -65,6 +67,13 @@ def _cited_names(slug_dir: Path, unit: str, run_dir: Path) -> set[str]:
     if page_map is not None:
         return {f["file"] for e in page_map if e["exhibit"] in cited_ex for f in e["files"]}
     return {n for n, num in read_json(run_dir / "exhibit_map.json", {}).items() if num in cited_ex}
+
+
+def _orphan_names(slug_dir: Path) -> tuple[set[str], set[str]]:
+    """(every documented orphan, the ones left out at the firm's direction)."""
+    rows = (read_json(slug_dir / "orphans.json", {}) or {}).get("orphans") or []
+    named = [o for o in rows if o.get("name")]
+    return {o["name"] for o in named}, {o["name"] for o in named if o.get("reason") == WITHHELD_REASON}
 
 
 def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
@@ -98,9 +107,10 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
             duplicates.add(key)
         pulled[key] = row
 
-    orphans = {
-        o.get("name") for o in (read_json(slug_dir / "orphans.json", {}) or {}).get("orphans") or [] if o.get("name")
-    }
+    orphans, withheld = _orphan_names(slug_dir)
+    # Left out at the firm's direction is accounted for by the firm's own word,
+    # the way a byte-duplicate is: an update must not read it and ask again.
+    accounted = duplicates | withheld
     billing_spec = read_json(slug_dir / "billing_docs.json", [])
     billing_names = {
         b["name"] for b in (billing_spec.get("docs") if isinstance(billing_spec, dict) else billing_spec) or []
@@ -115,7 +125,7 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
         if key in failed:
             uncovered.add(key)
             continue
-        if key in cited or key in duplicates:
+        if key in cited or key in accounted:
             covered.add(key)
             continue
         row = by_name.get(key, pulled.get(key, {}))
