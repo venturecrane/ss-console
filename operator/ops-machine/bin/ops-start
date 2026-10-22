@@ -41,7 +41,16 @@ if [ -s "$task" ]; then
   # document content: that stays here under ~/work.
   out="$HOME/outbox/$(basename "$taken")"
   mkdir -p "$HOME/outbox"
-  /opt/ops/bin/claude "${rc[@]}" "A task was handed to this workspace from a laptop session; it is in $taken. Read it, then do it here. Client documents for this work stay on this workspace (under ~/work); only finished deliverables leave, through the seat. When you finish (or stop), write the outcome to $out for the laptop session that handed it over: what you did, what you found (the verdict, not the documents: no quoted record text, no medical detail), and anything still open. A laptop reads that file. $channel"
+  # The laptop session that handed the task over names itself (ops-handoff
+  # --reply-to). This session contacts it, rather than the laptop finding this
+  # one: a session started with a task is renamed to an auto-title, so the
+  # ops-<slug> name above is not an address a laptop can rely on (2026-10-22).
+  reply_to=$(sed -n 's/^Reply-to: \(.*\)$/\1/p' "$taken" | sort -u | paste -sd, -)
+  contact=""
+  if [ -n "$reply_to" ]; then
+    contact=" Before starting, send one SendMessage to each laptop session named in its Reply-to lines ($reply_to): that you have the task, and your own session name from ListAgents. When you finish (or stop), send each of them the verdict and any verify IDs too. If a send fails, carry on; the outbox file is the record."
+  fi
+  /opt/ops/bin/claude "${rc[@]}" "A task was handed to this workspace from a laptop session; it is in $taken. Read it, then do it here. Client documents for this work stay on this workspace (under ~/work); only finished deliverables leave, through the seat. When you finish (or stop), write the outcome to $out for the laptop session that handed it over: what you did, what you found (the verdict, not the documents: no quoted record text, no medical detail), and anything still open. A laptop reads that file.$contact $channel"
 else
   /opt/ops/bin/claude "${rc[@]}"
 fi
