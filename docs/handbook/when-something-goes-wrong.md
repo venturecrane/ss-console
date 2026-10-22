@@ -40,6 +40,7 @@ SMD's service commitment is a severity ladder, not an uptime percentage (ADR 006
 | `SHORTFALL`, `NO REPLY`, a `failed` or `held` job | A client asked for something and did not get it | Make sure it is answered or redone; an agent finds out why | You |
 | A client says the Operator did something it should not have | Possibly acting outside authorization (SEV1) | Pause the seat, then lower the routines involved to flag-only; an agent investigates | You decide and tell the Captain; an agent pauses |
 | `Audit chain head missing`, `Unaudited send detected`, `Audit-log integrity violation` | The record of what the Operator did may be incomplete | An agent investigates the same day | You direct; the Captain decides what the client is told |
+| `Seat went back to an older image`, `matches no fleet release`, `customer.yaml other than the published one`, `skills version other than its pointer` | The seat is not running what was authored for it, so the client may be getting different behavior from what was set up | An agent finds out why the seat diverged and brings it back; the alert says what differs | You direct; an agent fixes |
 | `Web edge not answering` | The website and portal are down from outside | An agent investigates at once | You direct; an agent fixes |
 | A healthchecks.io failure notice | A watcher went silent, so other alerts may be missing | An agent restores the watcher first | You direct; an agent fixes |
 

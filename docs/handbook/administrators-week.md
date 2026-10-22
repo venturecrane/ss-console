@@ -56,7 +56,7 @@ There is **no daily "all clear" email**. On a quiet day the team inbox is simply
 
 | Email subject starts with | When | What it means | Who acts |
 |---|---|---|---|
-| `[SMD Ops] ALERT <seat>: ...` then `Re: ...` or `RECOVERED` | Checked every 2 minutes; one email when a problem starts, one when it clears | A seat stopped heartbeating, stopped itself, stopped running scheduled work, a connector is failing, or the website is down from outside | You: ask an agent to investigate and fix; see [When Something Goes Wrong](/admin/playbook/when-something-goes-wrong) |
+| `[SMD Ops] ALERT <seat>: ...` then `Re: ...` or `RECOVERED` | Checked every 2 minutes; one email when a problem starts, one when it clears | A seat stopped heartbeating, stopped itself, stopped running scheduled work, a connector is failing, a seat is running something other than what was published for it, or the website is down from outside | You: ask an agent to investigate and fix; see [When Something Goes Wrong](/admin/playbook/when-something-goes-wrong) |
 | `ALERT <seat>: Connector credential expiring`, then daily `STILL OPEN` | Before a client sign-in expires | The client must sign in again or that work stops | You: email the client to re-consent |
 | `ACTION: <seat> ... sign-in is dead` | Hourly, repeating until fixed | A sign-in already failed; that seat's work in that system has stopped | You: get the client to sign in again; an agent fixes anything on our side |
 | `[SMD Ops] Triage: N handled, M need you` | Hourly, only when something new happened | The triage agent already investigated each item. It cannot change anything itself | You: decide the "NEEDS YOU" items that are yours; the Captain approves "FIXES TO APPROVE" |

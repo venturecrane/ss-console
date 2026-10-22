@@ -80,6 +80,7 @@ import {
   type ShortfallNotification,
 } from './shortfalls'
 import { processTransition } from './transition'
+import { driftConditions } from './drift'
 import { getOpenSpecControlKeys, specControlConditions } from './spec-control'
 import { getStaleHolds } from './stale-holds'
 import {
@@ -168,6 +169,15 @@ export interface Env {
    * "unable to die silently" literally true for the watcher.
    */
   ALERTER_HEALTHCHECKS_PING_URL?: string
+  /**
+   * The bucket every seat fetches its customer.yaml and skills pointer from
+   * (smd-customer-config, the web Worker's CUSTOMER_CONFIG). Read-only here:
+   * ./drift hashes vaults/<slug>/customer.yaml and reads skills-pointer.json.
+   * Unbound = config and skills drift hold (never a false page or recovery).
+   */
+  CUSTOMER_CONFIG?: R2Bucket
+  /** Seconds after an R2 write during which a mismatch holds. Default 900. See ./drift. */
+  DRIFT_GRACE_SECONDS?: string
 }
 
 export type FleetCondition =
@@ -189,6 +199,11 @@ export type FleetCondition =
   // 2026-10-21. Event-shaped like send_refused: a marker over fleet_rollouts.
   // See ./rollout-failed.
   | 'rollout_failed'
+  // 2026-10-22. Authored-versus-running drift, standing conditions. See ./drift.
+  | 'image_drift'
+  | 'image_unknown'
+  | 'config_drift'
+  | 'skills_drift'
   // Wave 8.2. Keyed by the probe TARGET in customer_slug, not a seat.
   | 'edge_down'
   | `connector_down:${string}`
@@ -627,6 +642,18 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
     }
   }
 
+  // 2026-10-22: authored-versus-running drift (./drift). Its own reads, its
+  // own fail-soft; per-condition isolation like the edge block above.
+  const drift = await driftConditions(env, rows, nowMs, redSeconds(env))
+  for (const s of drift) {
+    try {
+      const t = await processTransition(env, s, nowMs)
+      if (t) transitions.push(t)
+    } catch (err) {
+      console.error('[fleet-alerts] drift transition failed:', s.customer_slug, s.condition, err)
+    }
+  }
+
   const staleHolds = await getStaleHolds(env.DB)
 
   // Alert-sink delivery. Runs after condition evaluation and is independently
@@ -649,7 +676,7 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
   const summary: RunSummary = {
     at: new Date(nowMs).toISOString(),
     seats: rows.length,
-    conditions,
+    conditions: [...conditions, ...drift],
     transitions,
     stale_holds: staleHolds,
     sink_notifications: sinkNotifications,

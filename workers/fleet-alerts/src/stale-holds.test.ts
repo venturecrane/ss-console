@@ -43,6 +43,9 @@ interface StatusSeed {
   gateway_restarts_last_hour?: number | null
   // ss#2793 follow-on. Same map shape and stranding rule as connectors_json.
   tool_failures_json?: string | null
+  // 2026-10-22, ./drift. Default null = the seat reports nothing.
+  image_ref?: string | null
+  config_digest?: string | null
 }
 
 /**
@@ -75,7 +78,9 @@ function runQuery(
              gateway_loop_age_seconds INTEGER,
              gateway_supervisor_state TEXT,
              gateway_restarts_last_hour INTEGER,
-             tool_failures_json TEXT)`)
+             tool_failures_json TEXT,
+             image_ref TEXT,
+             config_digest TEXT)`)
 
   const insertAlert = db.prepare(
     `INSERT INTO fleet_alert_state (customer_slug, condition, status) VALUES (?, ?, 'open')`
@@ -87,8 +92,9 @@ function runQuery(
        scheduler_ok, scheduler_max_overdue_seconds, connector_check_ok, spec_control_ok,
        webhook_surface_ok, connectors_json, connector_token_age_json, spec_control_json,
        webhook_surface_json, gateway_loop_ok, gateway_loop_age_seconds,
-       gateway_supervisor_state, gateway_restarts_last_hour, tool_failures_json)
-     VALUES (?, '2026-08-11T00:00:00Z', 'OK', 1, 0, 1, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       gateway_supervisor_state, gateway_restarts_last_hour, tool_failures_json,
+       image_ref, config_digest)
+     VALUES (?, '2026-08-11T00:00:00Z', 'OK', 1, 0, 1, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
   for (const s of statuses) {
     insertStatus.run(
@@ -101,7 +107,9 @@ function runQuery(
       s.gateway_loop_age_seconds ?? null,
       s.gateway_supervisor_state ?? null,
       s.gateway_restarts_last_hour ?? null,
-      s.tool_failures_json ?? null
+      s.tool_failures_json ?? null,
+      s.image_ref ?? null,
+      s.config_digest ?? null
     )
   }
 
@@ -344,5 +352,31 @@ describe('edge_down is never a stranded seat (wave 8.2)', () => {
       []
     )
     expect(rows).toEqual([{ customer_slug: 'pilot-smokeball', condition: 'heartbeat_red' }])
+  })
+})
+
+describe('drift conditions strand only on their reported column (2026-10-22)', () => {
+  it('lists image_drift, image_unknown and config_drift once the seat stops reporting', () => {
+    const open = ['image_drift', 'image_unknown', 'config_drift', 'skills_drift'].map((c) => ({
+      customer_slug: 'scott',
+      condition: c,
+    }))
+    const rows = runQuery(open, [{ customer_slug: 'scott' }])
+    expect(rows.map((r) => r.condition)).toEqual(['config_drift', 'image_drift', 'image_unknown'])
+  })
+
+  it('lists nothing while the seat still reports both values', () => {
+    const open = ['image_drift', 'image_unknown', 'config_drift'].map((c) => ({
+      customer_slug: 'scott',
+      condition: c,
+    }))
+    const rows = runQuery(open, [
+      {
+        customer_slug: 'scott',
+        image_ref: 'registry.fly.io/hermes-fleet:rel-x',
+        config_digest: 'a',
+      },
+    ])
+    expect(rows).toEqual([])
   })
 })

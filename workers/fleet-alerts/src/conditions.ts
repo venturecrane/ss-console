@@ -96,6 +96,11 @@ const CONDITION_LABEL: Record<string, string> = {
     "a routine's outbound send was refused by a gate, or a wake with needs-you items sent nothing",
   rollout_failed:
     'A fleet rollout did not land on this seat (failed, rolled back, or tooling error)',
+  // 2026-10-22, ./drift. What the seat runs is not what was authored.
+  image_drift: 'Seat went back to an older image after its release landed',
+  image_unknown: 'Seat runs an image that matches no fleet release',
+  config_drift: 'Seat runs a customer.yaml other than the published one',
+  skills_drift: 'Seat runs a skills version other than its pointer names',
 }
 
 /**

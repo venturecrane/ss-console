@@ -19,6 +19,7 @@ For local D1 (testing):
 ## Per-file safety notes
 
 - `0033_add_prospect_role_down.sql` — restores the original narrow `users.role CHECK (role IN ('admin', 'client'))`. The INSERT into `users_old` will fail if any `users.role = 'prospect'` rows exist (intentional safeguard). Cleanup or migrate prospect rows to `'client'` before invoking.
+- `0134_drift_conditions_down.sql`: narrows the `fleet_alert_state` CHECK back to the 0133 vocabulary and drops any `image_drift`, `image_unknown`, `config_drift` or `skills_drift` rows. Roll the fleet-alerts Worker back first: a deployed Worker that still emits them pages on every tick with nothing recorded.
 - `0131_audit_write_failure_reasons_down.sql` — drops `fleet_status.audit_write_failure_reasons_json`. Roll the web Worker back first: its heartbeat upsert names the column and fails on its absence. The seat-side reasons file is unaffected.
 - `0130_customer_configs_schedule_changed_at_down.sql` — drops `customer_configs.schedule_changed_at`. Roll the code back first: the customer.yaml projection SQL and work-health both name the column.
 - `0129_fleet_release_system_down.sql` — drops `fleet_releases`, `fleet_rollouts`, `fleet_holds`, `fleet_lease` and the six fleet-release columns on `fleet_status`. Roll the web Worker back first: its heartbeat upsert names those columns and fails on their absence. Release and rollout history is lost; export it first.

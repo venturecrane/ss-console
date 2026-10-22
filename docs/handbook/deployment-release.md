@@ -279,6 +279,34 @@ before anything ran (lease held, unknown release, source guard).
 that finishes it (`workers/fleet-alerts/src/rollout-failed.ts`, migration
 0133). On 2026-10-20 a preflight refusal on captain-mark sat unread for a day.
 
+**Drift pages.** Every 2 minutes the same Worker compares what each seat
+reports on its heartbeat (`image_ref`, `config_digest`, `skills_version` in
+`fleet_status`) with what was authored for it, and opens one alert per seat and
+kind of drift, with one recovery notice when the seat converges
+(`workers/fleet-alerts/src/drift.ts`, migration 0134):
+
+- `image_drift`: the seat runs a release older than the newest one that
+  completed its last ring, although its rollout of that release finished
+  `done`. A seat the release has not reached yet is a rollout still to run, and
+  a seat on a newer release is a rollout in progress; neither pages. The fix is
+  `operator/bin/fleet release <release> --only <seat>`.
+- `image_unknown`: the seat runs an image that no `fleet_releases` row carries,
+  so something deployed it outside the release system.
+- `config_drift`: the seat's `config_digest` is not the sha256 of R2
+  `vaults/<slug>/customer.yaml`, or R2 holds no such object. The seat hashes
+  exactly the bytes it fetched from that object, so the two differ only when a
+  live apply was refused, a rebuild-class change is waiting for a reprovision,
+  or the seat cannot reach R2.
+- `skills_drift`: the seat's `skills_version` is not the version
+  `vaults/<slug>/skills-pointer.json` names, or the seat reports skills with no
+  pointer. No pointer and no version is a seat that has never had a skills
+  release, and does not page.
+
+A mismatch within 15 minutes of the R2 write (`DRIFT_GRACE_SECONDS`) waits,
+because the appliers are still picking it up. A seat whose heartbeat is red
+holds every drift signal: its row describes the past, and the heartbeat alert
+already covers it.
+
 ### A skills release
 
 A merge touching `operator/skills/**` (or the retired-skills list,

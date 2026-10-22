@@ -103,6 +103,13 @@ export const STALE_HOLDS_SQL = `SELECT s.customer_slug AS customer_slug, s.condi
             -- the connector map, for the same reason. (The prefix is bound,
             -- never written here; see ./conditions.)
             OR ${strandedKeyClause('tool_failures_json')}
+            -- 2026-10-22, ./drift. image_drift, image_unknown and config_drift
+            -- hold on a NULL reported value, so a seat that stops reporting the
+            -- field strands its open alert. skills_drift has no clause: a NULL
+            -- skills_version is itself evaluated (no pointer resolves, a
+            -- pointer keeps it open), so it never strands on its column.
+            OR (s.condition IN ('image_drift', 'image_unknown') AND f.image_ref IS NULL)
+            OR (s.condition = 'config_drift' AND f.config_digest IS NULL)
             -- ss#2547 has NO clause here on purpose. send_refused is
             -- event-shaped: its row is written with status='resolved' the
             -- moment it pages and is never open, so the s.status = 'open'
