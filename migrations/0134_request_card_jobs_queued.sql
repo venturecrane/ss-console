@@ -1,0 +1,24 @@
+-- 0134: the jobs a request queued, on its card in operator_request_cards.
+--
+-- A `replied` card carried no job: job_lane fills only on a `job_done` card,
+-- when the job ENDS. So a request that queued a chronology read back as a
+-- request that queued nothing until the job finished, and on 2026-10-22 a
+-- watch reported "neither request started a job" for a request whose reply
+-- said the chronology was queued. The card's tool list said so all along
+-- (medchron_job_submit); the ledger dropped it.
+--
+-- jobs_queued holds the job lanes the request's turn submitted, comma-joined
+-- and sorted (`medchron`, `demand,drafting`), derived from the `<lane>_job_submit`
+-- tool names. Code-authored lane names only, never client text; ADR 0052 s5
+-- holds. Three readings, kept distinct so "not recorded" never reads as "none":
+--
+--   NULL  recorded before this migration (unknown)
+--   ''    recorded, and the turn queued no job
+--   'x'   recorded, and the turn queued these lanes
+--
+-- A plain ADD COLUMN: no CHECK changes, every existing row stays valid (NULL).
+-- Ordering is safe: deploy.yml applies migrations before the worker deploys.
+--
+-- Manual-only rollback at migrations/rollbacks/0134_request_card_jobs_queued_down.sql.
+
+ALTER TABLE operator_request_cards ADD COLUMN jobs_queued TEXT;

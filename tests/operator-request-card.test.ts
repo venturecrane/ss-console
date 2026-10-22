@@ -24,6 +24,7 @@ import {
   cardSubject,
   cardText,
   cleanText,
+  jobsQueued,
   parseRequestCard,
   type RequestCard,
 } from '../src/lib/operator/request-card'
@@ -160,6 +161,18 @@ function laneBody(overrides: Record<string, unknown> = {}): Record<string, unkno
     ...overrides,
   })
 }
+
+describe('jobsQueued', () => {
+  it('names each known lane a turn submitted, once, sorted; ignores the rest', () => {
+    expect(jobsQueued([])).toBe('')
+    expect(jobsQueued(['medchron_job_status', 'read_file'])).toBe('')
+    expect(jobsQueued(['medchron_job_submit'])).toBe('medchron')
+    expect(jobsQueued(['drafting_job_submit', 'demand_job_submit', 'drafting_job_submit'])).toBe(
+      'demand,drafting'
+    )
+    expect(jobsQueued(['unknown_job_submit', 'litigation_job_submit'])).toBe('litigation')
+  })
+})
 
 describe('parseRequestCard: the lane_unproven card (0125)', () => {
   it('accepts a held-job card and an in-turn first-use card', () => {
@@ -372,6 +385,22 @@ describe('POST /api/internal/operator-request-card', () => {
     expect(row.tools_count).toBe(2)
   })
 
+  it('a reply card records the jobs its turn queued; none is empty, never NULL (0134)', async () => {
+    // FALSIFIER: drop jobsQueued from recordCard's INSERT and the first row's
+    // jobs_queued is NULL, so a queued chronology reads as no job (2026-10-22).
+    const queuing = 'd'.repeat(64)
+    await post(
+      body({
+        card_key: `${queuing}:replied`,
+        tools: ['smokeball_get_matter', 'medchron_job_submit', 'medchron_job_status'],
+      })
+    )
+    await post(body())
+    const byKey = Object.fromEntries((await rows()).map((r) => [r.card_key, r.jobs_queued]))
+    expect(byKey[`${queuing}:replied`]).toBe('medchron')
+    expect(byKey[`${HASH}:replied`]).toBe('')
+  })
+
   it('a refused send is 502, stays pending, and the retry sends', async () => {
     fetchMock.mockResolvedValueOnce(new Response('nope', { status: 500 }))
     const failed = await post(body())
@@ -479,6 +508,7 @@ describe('POST /api/internal/operator-request-card', () => {
         'first_seen_at',
         'job_lane',
         'job_state',
+        'jobs_queued',
         'kind',
         'lane_key',
         'minutes',

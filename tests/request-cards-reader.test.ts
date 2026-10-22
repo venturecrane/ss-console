@@ -16,7 +16,13 @@ import { execFileSync } from 'child_process'
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
-import { parseArgs, renderReport, summarize, type CardRow } from '../scripts/request-cards'
+import {
+  parseArgs,
+  queuedLabel,
+  renderReport,
+  summarize,
+  type CardRow,
+} from '../scripts/request-cards'
 
 const A = 'a'.repeat(64)
 const B = 'b'.repeat(64)
@@ -86,6 +92,19 @@ describe('the footer', () => {
     expect(text).toContain('2 new kinds of ask.')
   })
 
+  it('a reply line says what the request queued; a pre-0134 card says unknown, never none', () => {
+    // FALSIFIER: render a NULL jobs_queued as 'queued none' and the third
+    // expectation fails. That conflation is the 2026-10-22 defect: a queued
+    // chronology read as "no job" because the only job field was empty.
+    expect(queuedLabel(row(A, 'replied', { jobs_queued: 'medchron' }))).toBe('QUEUED medchron')
+    expect(queuedLabel(row(A, 'replied', { jobs_queued: '' }))).toBe('queued none')
+    expect(queuedLabel(row(A, 'replied', { jobs_queued: null }))).toBe('queued ?')
+    expect(queuedLabel(row(A, 'replied'))).toBe('queued ?')
+    expect(renderReport([row(A, 'replied', { jobs_queued: 'medchron' })], 'then')).toContain(
+      'replied in 30m, QUEUED medchron'
+    )
+  })
+
   it('a card not yet emailed says so', () => {
     const text = renderReport([row(A, 'replied', { status: 'pending', attempts: 3 })], 'then')
     expect(text).toContain('NOT EMAILED (3 tries)')
@@ -139,12 +158,13 @@ process.stdout.write(JSON.stringify([{ results, success: true }]))
     const file = join(dir, 'd1.sqlite')
     const db = new DatabaseSync(file)
     // Every migration that shapes the table, in order: the reader selects the
-    // newest columns (0125's lane_key), so a database short of one fails here.
+    // newest columns (0134's jobs_queued), so a database short of one fails here.
     for (const m of [
       '0122_operator_request_cards',
       '0123_request_card_drafting_lane',
       '0124_request_card_litigation_lane',
       '0125_request_card_lane_unproven',
+      '0134_request_card_jobs_queued',
     ]) {
       db.exec(readFileSync(resolve(`migrations/${m}.sql`), 'utf8'))
     }
@@ -158,6 +178,10 @@ process.stdout.write(JSON.stringify([{ results, success: true }]))
     insert.run('ashton-price', `${A}:no_reply`, 'no_reply', recent, recent, 30)
     insert.run('pilot-smokeball', `${B}:replied`, 'replied', recent, recent, 4)
     insert.run('ashton-price', `${B}:replied`, 'replied', old, old, 4)
+    db.prepare('UPDATE operator_request_cards SET jobs_queued = ? WHERE customer_slug = ?').run(
+      'medchron',
+      'pilot-smokeball'
+    )
     db.close()
     const stub = join(dir, 'd1.cjs')
     writeFileSync(stub, SQLITE_STUB)
@@ -168,10 +192,12 @@ process.stdout.write(JSON.stringify([{ results, success: true }]))
     expect(all.code).toBe(0)
     expect(all.out).toContain('2 requests, 2 cards')
     expect(all.out).toContain('Still unanswered (an alarm with no later reply card): 1.')
+    expect(all.out).toContain('QUEUED medchron')
 
     const ours = run(['--client', 'smd-services', '--json'], env)
     expect(ours.code).toBe(0)
     const parsed = JSON.parse(ours.out) as { rows: CardRow[] }
     expect(parsed.rows.map((r) => r.customer_slug)).toEqual(['pilot-smokeball'])
+    expect(parsed.rows[0].jobs_queued).toBe('medchron')
   })
 })
