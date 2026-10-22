@@ -1,16 +1,20 @@
 ---
 title: customer.yaml Storage — Git as Source of Truth, D1/R2 as Materialized Replicas
 date: 2026-05-21
-status: accepted
+status: superseded
+superseded-date: 2026-10-22
+superseded-by: 0094-customer-configuration-as-built.md
 captain: Scott Durgan
 supersedes: none
 related-spec: docs/specs/operator/customer-yaml-schema.md
 related-issue: https://github.com/venturecrane/ss-console/issues/790, https://github.com/venturecrane/ss-console/issues/924
 ---
 
-# ADR 0012 — customer.yaml Storage
+# ADR 0012: customer.yaml Storage (SUPERSEDED)
 
-**Status:** Accepted. The storage architecture below is the durable answer to "where does `customer.yaml` live?" — a question deferred when [ADR 0011](./0011-multi-persona-per-customer.md) §4 declared the file authoritative without pinning its location. This ADR pins it.
+> **Superseded 2026-10-22 by [ADR 0094](./0094-customer-configuration-as-built.md).** Do not load this record as a description of the running system. Its git-first principle survives in 0094; almost everything else here was never built as written. The config lives at `operator/customers/<slug>/customer.yaml`, not `customer-configs/<slug>.yaml`; the R2 key is `vaults/<slug>/customer.yaml`, not `customers/<slug>/customer.yaml`; a merge never provisions a Machine (provisioning is `operator/bin/reprovision.sh`, by hand); drift is reconciled by the `customer-config-reconcile.yml` GitHub Action, which opens issues, not by a Cloudflare cron paging Sentry; retirement is `operator/bin/decommission-customer.sh`, which tombstones the directory, not a PR deletion CI acts on; there is no `smd-config sync` CLI; and `customer_configs` is keyed on `customer_slug` since migration 0090, not `entity_id`. The text below is kept unchanged as history.
+
+**Status (original):** Accepted. The storage architecture below is the durable answer to "where does `customer.yaml` live?" — a question deferred when [ADR 0011](./0011-multi-persona-per-customer.md) §4 declared the file authoritative without pinning its location. This ADR pins it.
 
 **Source:** Captain prompt 2026-05-21 — _"what is best for the long term durability of the product that does not cut corners or make assumptions?"_ — in the context of building the [#924](https://github.com/venturecrane/ss-console/issues/924) `getActivePersona()` portal resolver, which needs to read from `customer.yaml`.
 

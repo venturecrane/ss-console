@@ -19,8 +19,8 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0009-cross-machine-query-prohibition.md
   - label: docs/pm/prd.md - the portal PRD, section 11 Proposed Data Model
     href: https://github.com/venturecrane/ss-console/blob/main/docs/pm/prd.md
-  - label: ADR 0012 - customer.yaml storage
-    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0012-customer-yaml-storage.md
+  - label: ADR 0094 - customer configuration as built (supersedes ADR 0012)
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0094-customer-configuration-as-built.md
 ---
 
 This page says where SMD's records live and what each database table holds. An administrator needs it when an agent's report names a table (for example `fleet_status` or `client_obligations`) and you want to know what kind of record it is.
@@ -30,7 +30,7 @@ This page says where SMD's records live and what each database table holds. An a
 The console's data lives in three Cloudflare stores, each bound to the single `ss-web` Worker:
 
 - **D1** (SQLite at the edge) is the relational store. It holds the pipeline: leads, businesses, assessments, quotes, engagements, invoices, and the Operator control-plane tables. This is the primary store and the one most code touches.
-- **R2** (object storage) holds large or binary artifacts that do not belong in a relational row: assessment transcripts (`assessments.transcript_path` is an R2 key), generated SOW PDFs, and, in the separate `smd-customer-config` bucket, each Operator seat's published `customer.yaml` (the copy the Machine reads, per ADR 0012), the client's authored voice and format specs (`output-classes.json`, ADR 0083), and the seat's own `image-manifest.json` (see `/admin/playbook/architecture-map`).
+- **R2** (object storage) holds large or binary artifacts that do not belong in a relational row: assessment transcripts (`assessments.transcript_path` is an R2 key), generated SOW PDFs, and, in the separate `smd-customer-config` bucket, each Operator seat's published `customer.yaml` (the copy the Machine reads, per ADR 0094), the client's authored voice and format specs (`output-classes.json`, ADR 0083), and the seat's own `image-manifest.json` (see `/admin/playbook/architecture-map`).
 - **KV** has two namespaces. `SESSIONS` is a cache: in front of the D1 `sessions` table for the legacy magic-link auth path (`src/lib/auth/session.ts`), and of the Clerk-user-to-admin lookup (`src/lib/auth/admin-session-shim.ts`); `BOOKING_CACHE` holds the `/api/booking/reserve` IP rate limit and the public live assessment's per-session turn and cost ceiling (`as:turns:*` keys, `src/lib/assessment/session.ts`), per the comments in `wrangler.toml`. See `/admin/playbook/client-portal` for the auth model and `/admin/playbook/secrets-access` for how the bindings are wired.
 
 The **`migrations/` directory is the schema source of truth.** Every table and column exists because a numbered migration created it. Migrations are forward-only and additive by convention - there is no down-migration path in normal operation (`migrations/rollbacks/` holds explicit exceptions). To learn the real shape of any table, read its migration, not a model class. `src/lib/db/` is the typed data-access layer over D1; each module owns the queries for one table group (`entities.ts`, `assessments.ts`, `quotes.ts`, `engagements.ts`, `invoices.ts`, and so on).
@@ -98,9 +98,9 @@ The `operator_*` tables (and the projection/audit tables around them) are the co
 
 | Table | Purpose |
 |---|---|
-| `customer_configs` | The portal's read-only projection of each customer's `customer.yaml` (migration 0039, keyed by `customer_slug` since 0090). CI projects the git source of truth into this table on merge (`scripts/project-customer-config.ts`); portal pages read it on the hot path and never write it (ADR 0012). Since migration 0130, `schedule_changed_at` records when the parts of the config that scheduled-run grading depends on last changed, so a publish that touches nothing else does not reset grading. |
+| `customer_configs` | The portal's read-only projection of each customer's `customer.yaml` (migration 0039, keyed by `customer_slug` since 0090). CI projects the git source of truth into this table on merge (`scripts/project-customer-config.ts`); portal pages read it on the hot path and never write it (ADR 0094). Since migration 0130, `schedule_changed_at` records when the parts of the config that scheduled-run grading depends on last changed, so a publish that touches nothing else does not reset grading. |
 | `customer_config_history` / `config_change_audit` | History and audit of config changes (migrations 0045-0047). |
-| `operator_provisioning_intent` | Records each admin-console attempt to author a new Operator (migration 0067). It keys on a proposed `customer_id`, not an `entity_id`, because the customer does not exist yet - a Worker cannot itself stand up a Machine (ADR 0012 puts that out of scope). |
+| `operator_provisioning_intent` | Records each admin-console attempt to author a new Operator (migration 0067). It keys on a proposed `customer_id`, not an `entity_id`, because the customer does not exist yet - a Worker cannot itself stand up a Machine (provisioning is a manual reprovision, ADR 0094). |
 | `customer_configs.authority_json` / `operator_authority_audit` | Per-customer authority posture, held as a column on `customer_configs` (migration 0049), and the audit trail of its changes (migration 0066). |
 | `customer_configs.credential_custody_default` / `connector_secret_audit` | Credential-custody default, a column on `customer_configs` (migration 0050), and connector-secret bookkeeping (migration 0051). |
 | `operator_change_requests` | The client's "Request a change" inbox for SMD-operated domains (migration 0054, ADR 0041). |
