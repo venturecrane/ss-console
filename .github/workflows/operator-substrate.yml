@@ -26,6 +26,11 @@ on:
   # inventory exactly as it pinned the old `paths:` block, plus one new
   # invariant: this trigger must never grow a path filter again.
   pull_request:
+  # The merge queue (2026-10-21): "substrate" is required there too. A queue
+  # run carries no PR base sha, so the detect step fails closed and runs every
+  # suite, which is right for the last gate before main.
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main]
 

@@ -9,6 +9,11 @@ on:
   # merged on lightweight gates only. Running on all PRs makes stacked and
   # shallow PRs equally safe; re-adding a base filter reopens that hole.
   pull_request:
+  # The merge queue (2026-10-21) tests each queued PR on top of the ones ahead
+  # of it. "Typecheck, Lint, Format, Test" is required there too, so it must
+  # report on merge_group or every queued PR waits at "Expected" forever.
+  merge_group:
+    types: [checks_requested]
 
 # Cancel a superseded run when a newer commit lands on the SAME PR branch.
 # Measured 2026-07-27: 47% of runs on this repo were already obsolete when they

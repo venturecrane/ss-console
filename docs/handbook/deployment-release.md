@@ -130,12 +130,21 @@ outbound admin links - strict, no fallback), and `PORTAL_BASE_URL`
 ## Merge gates, and why no human approval is required
 
 Every change to main goes through a pull request, and the gate is mechanical. The
-legacy branch protection requires the verify workflow (`Typecheck, Lint, Format,
-Test`), the repository ruleset requires `Security Summary`, `substrate`, and
+`Main Branch Protection` ruleset requires four checks: the verify workflow
+(`Typecheck, Lint, Format, Test`), `Security Summary`, `substrate`, and
 `Runtime ACs carry a verification ID` (the Law 9 gate, required since
 2026-09-25; it resolves every cited `vfy_` id against the verify ledger and
-fails closed when the ledger cannot answer), and branches must be up to date
-with main, so one merge lands at a time.
+fails closed when the ledger cannot answer).
+
+Main merges through a **merge queue** (since 2026-10-21). A PR whose checks are
+green enters the queue (`gh pr merge <n> --squash`, which `/ship` runs); the
+queue tests it on top of main plus every PR ahead of it, with the same four
+checks run on the `merge_group` event, and merges it when they pass. Nobody
+rebases onto a moving main by hand. Before the queue, the legacy branch
+protection required branches to be up to date with main, and on a day with five
+sessions merging each PR re-ran its checks once for every merge that landed
+ahead of it. The four workflows carry a `merge_group` trigger for this reason; a
+required check without one leaves every queued PR waiting at "Expected".
 
 Required approving reviews are zero on both, and that is a decision rather than an
 oversight. The venture is one Captain plus agent sessions: the agents open and
@@ -145,14 +154,13 @@ every merge on the Captain or be satisfied by the same session that wrote the
 change, which is no review at all. The substitute is evidence rather than
 eyeballs: runtime claims carry `crane_verify` ids, the runtime-AC gate refuses an
 acceptance criterion marked met without one, and the doctrine's "report is a
-probe" law makes a program's own completion claim insufficient. Admin enforcement
-is off on the legacy branch protection, so a repository administrator can merge
-past the verify check; the 2026-09-10 code review records that it was left off
-deliberately on 2026-09-09. The ruleset has no bypass actors, so its three
-checks cannot be bypassed by anyone. The periodic code reviews under
-`docs/reviews/` grade zero required reviews and the admin bypass as an accepted
-gap each time, so it stays visible; revisit when a second human maintainer
-exists.
+probe" law makes a program's own completion claim insufficient. The ruleset has
+no bypass actors, so none of its four checks can be bypassed by anyone. (Until
+2026-10-21 the verify check lived on the legacy branch protection, where admin
+enforcement was off, so an administrator could merge past it; moving it into the
+ruleset with the queue closed that.) The periodic code reviews under
+`docs/reviews/` grade zero required reviews as an accepted gap each time, so it
+stays visible; revisit when a second human maintainer exists.
 
 ## Path B: the Operator (one image, rolled out in rings)
 
