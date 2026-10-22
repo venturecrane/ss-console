@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # decommission-customer.sh: per-customer off-boarding (issue #820).
 #
-# Composes the existing memory + voice ``decommission_source`` hooks with
-# substrate-deletion steps (R2 namespace, Vectorize indexes, AgentMail,
-# Fly Machine), the compliance evidence packet archive, and the
-# customers/<slug>/ tombstone.
+# Preserves the seat's Machine-local ledger and memory, then removes what
+# provision-customer.sh created (R2 config prefixes and the per-seat skills
+# bucket, Vectorize indexes, the AgentMail inbox and webhook, the Fly apps and
+# the ops workspace's sweep secrets, healthchecks.io checks, every console D1
+# projection row including customer_configs), archives the signed compliance
+# packet, and tombstones customers/<slug>/. The inventory is
+# operator/bin/lib/decommission_inventory.py. Every run ends with a read-back
+# of each wired layer and a residue report: the repo edits still owed and
+# what is kept by design, with the reason.
 #
 # Usage:
 #   operator/bin/decommission-customer.sh <slug> [--dry-run]
@@ -20,7 +25,9 @@
 # (CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID, AGENTMAIL_API_KEY,
 # FLY_API_TOKEN, HEALTHCHECKS_API_KEY). A logged-in `fly` CLI does not
 # count. With any backend unwired a --live run is refused (exit 5) and
-# nothing is touched.
+# nothing is touched. A dry run reads every wired layer and prints what the
+# seat holds now; run it under `infisical run --env=prod --path=/ss` so the
+# survey is real and the vault names are listed.
 #
 # Captain CLI integration (when bin/smd-cli lands):
 #   smd-cli decommission <slug>
@@ -90,12 +97,16 @@ fi
 # packet (step 07, adapter/evidence/signing.py): without it every live run
 # halted after step 06 had destroyed the Fly app (review 2026-10-06 N14). The
 # CLI also loads the key before any destructive step and refuses (exit 5).
+#
+# The `${A[@]+"${A[@]}"}` form is load-bearing: macOS ships bash 3.2, where
+# `set -u` treats an EMPTY array's "${A[@]}" as unbound, so every dry run
+# without --confirm-slug or extra args died here before reaching Python.
 set +e
 uv run --quiet --with pyyaml --with cryptography python3 -m bin.lib.decommission_cli \
   "${SLUG}" \
   "${MODE_FLAG}" \
-  "${CONFIRM_ARGS[@]}" \
-  "${EXTRA_ARGS[@]}"
+  ${CONFIRM_ARGS[@]+"${CONFIRM_ARGS[@]}"} \
+  ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
 EXIT_CODE=$?
 set -e
 
@@ -104,7 +115,8 @@ case "${EXIT_CODE}" in
   2)  log "preflight failed (exit 2): see stderr (a --live run also needs --confirm-slug equal to the slug)" ;;
   3)  log "decommission halted mid-sequence (exit 3): re-run with same slug to resume" ;;
   4)  log "unexpected error (exit 4): see stderr" ;;
-  5)  log "REFUSED (exit 5): nothing was touched. Either a --live run found a destructive backend unwired (stage the missing credential named on stderr; see decommission_cli.py header), or --allow-unwired was given without a fixture --customers-root" ;;
+  5)  log "REFUSED (exit 5): nothing was touched. A --live run found a destructive backend unwired (stage the missing credential named on stderr; see decommission_cli.py header), a backend preflight refused (a client obligation still owed; gh cannot read the sweep secrets), or --allow-unwired was given without a fixture --customers-root" ;;
+  6)  log "READ-BACK FOUND RESIDUE (exit 6): the steps ran but a [verify] line above shows the seat still present, or a layer that could not be read. Re-run with the same slug; every step is idempotent" ;;
   130) log "interrupted (exit 130)" ;;
   *)  log "unknown exit ${EXIT_CODE}" ;;
 esac

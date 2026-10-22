@@ -12,13 +12,18 @@ This module is the other half: one real implementation per Protocol, each
 built as the exact inverse of ``operator/bin/provision-customer.sh`` and of
 what the account actually holds (listed read-only 2026-09-10):
 
-* **R2** is NOT one bucket per customer as ``r2-vectorize-naming.md``
-  planned. Every seat's config lives under ``vaults/<slug>/`` in the shared
-  ``smd-customer-config`` bucket (written by CI and the portal), agent-authored
-  skills under ``<slug>/`` in ``ss-ai-employee-smd-skills``, and the audit
-  archive under ``audit/<slug>/`` in ``smd-audit-archive``. The deleter walks
-  the first two by prefix and never touches the third: the archive is the
-  retention copy step 02 just wrote (``audit-retention.md``).
+* **R2**: every seat's config lives under ``vaults/<slug>/`` in the shared
+  ``smd-customer-config`` bucket (written by CI and the portal); its
+  agent-authored skill bodies live in its OWN bucket, ``ss-operator-<slug>-skills``
+  (provision-customer.sh step 5b; safety invariant 7 requires that name), or
+  ``ss-ai-employee-<slug>-skills`` for a seat provisioned before the #1189
+  rename; the audit archive is ``audit/<slug>/`` in ``smd-audit-archive``. The
+  deleter empties the shared prefixes, empties and deletes the seat's own
+  bucket, and never touches the archive: it is the retention copy step 02 just
+  wrote (``audit-retention.md``). Until 2026-10-22 this deleted the prefix
+  ``<slug>/`` inside ``ss-ai-employee-smd-skills``, which is the smd seat's
+  pre-rename bucket, and never removed the per-seat bucket at all. The names
+  now come from ``decommission_inventory``, the one list of what a seat is.
 * **Vectorize**: the two indexes the naming spec reserves per customer
   (``hermes-<slug>-vault``, ``hermes-<slug>-corrections``). None exist in the
   account today; the deleter lists first and reports ``indexes_already_absent``
@@ -27,14 +32,17 @@ what the account actually holds (listed read-only 2026-09-10):
   resolves it (authored ``connectors.Email.inbox_address`` or the
   ``<slug>@agentmail.to`` convention), found in the account listing, then
   ``DELETE /v0/inboxes/{id}``. Deleting the inbox revokes its inbox-scoped keys.
+  The seat's webhook (an org-level object delivering to
+  ``hermes-<slug>.fly.dev``) does not go with the inbox, so it is deleted too.
 * **Fly**: ``fly apps destroy hermes-<slug> --yes``, which takes the Machine,
   its volume (``/opt/data``: profile homes, cron stores, the extraction cache)
-  and its secrets in one act. ``fly apps list --json`` first, so a re-run on
-  an already-destroyed seat is a clean skip.
-* **Observability**: the healthchecks.io check ``hermes-<slug>`` (found by tag,
-  deleted by uuid) and the console D1 rows in ``fleet_status`` and
-  ``operator_runtime_summary`` (through ``ConsoleD1``, the same
-  ``wrangler d1 execute`` path every console-side reconciler uses).
+  and its secrets in one act; then the same for the client's ops workspace and
+  its GitHub sweep secrets. ``fly apps list --json`` first, so a re-run on an
+  already-destroyed seat is a clean skip, and again after, so the manifest
+  reports what is observed gone. Volume snapshots outlive the app until their
+  retention ends; ``decommission_inventory.remaining_by_design`` says so.
+* **Observability** (``decommission_console``): the healthchecks.io checks and
+  every console D1 projection row for the slug, ``customer_configs`` last.
 * **Compliance packet** (not a deletion): ``EvidencePacketArchiver`` in
   ``bin/lib/decommission_archiver.py`` builds the signed evidence packet from
   the step-02 snapshot and reports what it read back from disk. Wired from
@@ -64,8 +72,22 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
 from adapter.evidence.signing import SIGNING_KEY_ENV, EvidenceSigningError, load_signer
-from bin.lib.console_d1 import ConsoleD1, sql_text
+from bin.lib.console_d1 import ConsoleD1
 from bin.lib.decommission_archiver import EvidencePacketArchiver
+from bin.lib.decommission_console import (
+    CONSOLE_SEAT_TABLES,
+    HEALTHCHECKS_API,
+    HealthchecksAndFleetStatusCleanup,
+    healthchecks_check_name,
+)
+from bin.lib.decommission_inventory import (
+    SHARED_CONFIG_BUCKET,
+    ops_sweep_github_names,
+    seat_skills_buckets,
+    seat_vectorize_indexes,
+    seat_webhook_host,
+    shared_config_prefixes,
+)
 
 # ---------------------------------------------------------------------------
 # Transports
@@ -128,39 +150,124 @@ def _parse(raw: bytes) -> Any:
 # ---------------------------------------------------------------------------
 
 CLOUDFLARE_API = "https://api.cloudflare.com/client/v4"
-CUSTOMER_CONFIG_BUCKET = "smd-customer-config"
-SKILLS_BUCKET = "ss-ai-employee-smd-skills"
+CUSTOMER_CONFIG_BUCKET = SHARED_CONFIG_BUCKET
 #: The retention copy. Never in the delete set, whatever prefix it appears under.
 ARCHIVE_SEGMENT = "decommission-archive/"
 
 
 def customer_r2_prefixes(slug: str) -> list[tuple[str, str]]:
-    """Every (bucket, prefix) a seat's objects can live under. The audit
+    """The seat's key prefixes in SHARED buckets. Its own skills bucket is not
+    a prefix: it is deleted whole (:func:`seat_skills_buckets`). The audit
     archive bucket is deliberately absent: it is the retention copy."""
-    return [
-        (CUSTOMER_CONFIG_BUCKET, f"vaults/{slug}/"),
-        (CUSTOMER_CONFIG_BUCKET, f"customers/{slug}/"),
-        (SKILLS_BUCKET, f"{slug}/"),
-    ]
+    return shared_config_prefixes(slug)
 
 
 @dataclass
 class CloudflareR2NamespaceDeleter:
-    """Deletes a seat's objects by prefix through the Cloudflare R2 API.
+    """Deletes a seat's R2 footprint through the Cloudflare R2 API.
+
+    Two shapes, both the inverse of provisioning: the seat's prefixes in the
+    shared config bucket are emptied object by object, and the seat's own
+    skill-bodies bucket (``ss-operator-<slug>-skills``, provision-customer.sh
+    step 5b, plus its pre-#1189 name) is emptied and then deleted as a bucket.
 
     ``wrangler r2 object`` cannot list, so listing goes through
     ``GET /accounts/{id}/r2/buckets/{bucket}/objects?prefix=`` with the
     cursor the API hands back; deletion is one ``DELETE .../objects/{key}``
-    per object (404 counts as already gone).
+    per object (404 counts as already gone). Every prefix is listed again and
+    every bucket fetched again after the delete, and the step raises if
+    anything but the retention copy is still there.
     """
 
     account_id: str
     api_token: str
     http: Http = http_request
     prefixes: Callable[[str], list[tuple[str, str]]] = customer_r2_prefixes
+    buckets: Callable[[str], list[str]] = seat_skills_buckets
 
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self.api_token}", "Accept": "application/json"}
+
+    def _bucket_url(self, bucket: str) -> str:
+        return f"{CLOUDFLARE_API}/accounts/{self.account_id}/r2/buckets/{urllib.parse.quote(bucket, safe='')}"
+
+    def _bucket_exists(self, bucket: str) -> bool:
+        resp = self.http("GET", self._bucket_url(bucket), self._headers(), None)
+        if resp.status == 200:
+            return True
+        if resp.status == 404:
+            return False
+        raise RuntimeError(f"r2 get bucket {bucket} failed: HTTP {resp.status}")
+
+    def _deletable(self, keys: list[str], prefix: str) -> tuple[list[str], int]:
+        keep = [k for k in keys if ARCHIVE_SEGMENT in k[len(prefix) :]]
+        return [k for k in keys if k not in keep], len(keep)
+
+    def survey(self, customer_slug: str) -> dict:
+        """Read-only: objects (excluding the retention copy) under each shared
+        prefix, and each per-seat bucket's existence and object count."""
+        prefixes = {
+            f"{bucket}/{prefix}": len(self._deletable(self._list(bucket, prefix), prefix)[0])
+            for bucket, prefix in self.prefixes(customer_slug)
+        }
+        buckets: dict[str, dict] = {}
+        for bucket in self.buckets(customer_slug):
+            exists = self._bucket_exists(bucket)
+            buckets[bucket] = {"exists": exists, "objects": len(self._list(bucket, "")) if exists else 0}
+        present = any(prefixes.values()) or any(b["exists"] for b in buckets.values())
+        return {"present": present, "prefixes": prefixes, "buckets": buckets}
+
+    async def delete_namespace(self, customer_slug: str) -> dict:
+        per_bucket: dict[str, dict[str, int]] = {}
+        deleted = 0
+        retained = 0
+        for bucket, prefix in self.prefixes(customer_slug):
+            doomed, kept = self._deletable(self._list(bucket, prefix), prefix)
+            retained += kept
+            for key in doomed:
+                if self._delete(bucket, key):
+                    deleted += 1
+                    per_bucket.setdefault(bucket, {}).setdefault(prefix, 0)
+                    per_bucket[bucket][prefix] += 1
+            left = self._deletable(self._list(bucket, prefix), prefix)[0]
+            if left:
+                raise RuntimeError(f"r2 {bucket}/{prefix} still holds {len(left)} object(s) after delete")
+        seat_buckets = {name: self._delete_bucket(name) for name in self.buckets(customer_slug)}
+        retained += sum(b.get("archive_objects_retained", 0) for b in seat_buckets.values())
+        deleted += sum(b.get("objects_deleted", 0) for b in seat_buckets.values())
+        buckets_deleted = [n for n, b in seat_buckets.items() if b.get("bucket_deleted")]
+        manifest: dict = {
+            "objects_deleted": deleted,
+            "archive_objects_retained": retained,
+            "buckets": per_bucket,
+            "seat_buckets": seat_buckets,
+            "buckets_deleted": buckets_deleted,
+        }
+        if deleted == 0 and not buckets_deleted:
+            manifest.update({"skipped": True, "reason": "namespace_already_empty"})
+        return manifest
+
+    def _delete_bucket(self, bucket: str) -> dict:
+        """Empty the seat's own bucket, delete it, fetch it again. A bucket
+        holding a retention copy is kept, and says so."""
+        if not self._bucket_exists(bucket):
+            return {"existed": False, "bucket_deleted": False}
+        doomed, kept = self._deletable(self._list(bucket, ""), "")
+        removed = sum(1 for key in doomed if self._delete(bucket, key))
+        if kept:
+            return {
+                "existed": True,
+                "bucket_deleted": False,
+                "objects_deleted": removed,
+                "archive_objects_retained": kept,
+                "reason": "bucket holds the decommission archive; kept",
+            }
+        resp = self.http("DELETE", self._bucket_url(bucket), self._headers(), None)
+        if resp.status not in (200, 204, 404):
+            raise RuntimeError(f"r2 delete bucket {bucket} failed: HTTP {resp.status}")
+        if self._bucket_exists(bucket):
+            raise RuntimeError(f"r2 bucket {bucket} still exists after delete")
+        return {"existed": True, "bucket_deleted": True, "objects_deleted": removed}
 
     def _list(self, bucket: str, prefix: str) -> list[str]:
         keys: list[str] = []
@@ -191,37 +298,13 @@ class CloudflareR2NamespaceDeleter:
             return False
         raise RuntimeError(f"r2 delete {bucket}/{key} failed: HTTP {resp.status}")
 
-    async def delete_namespace(self, customer_slug: str) -> dict:
-        per_bucket: dict[str, dict[str, int]] = {}
-        deleted = 0
-        retained = 0
-        for bucket, prefix in self.prefixes(customer_slug):
-            keys = self._list(bucket, prefix)
-            for key in keys:
-                if ARCHIVE_SEGMENT in key[len(prefix) :]:
-                    retained += 1
-                    continue
-                if self._delete(bucket, key):
-                    deleted += 1
-                    per_bucket.setdefault(bucket, {}).setdefault(prefix, 0)
-                    per_bucket[bucket][prefix] += 1
-        manifest: dict = {
-            "objects_deleted": deleted,
-            "archive_objects_retained": retained,
-            "buckets": per_bucket,
-        }
-        if deleted == 0:
-            manifest.update({"skipped": True, "reason": "namespace_already_empty"})
-        return manifest
-
 
 # ---------------------------------------------------------------------------
 # Vectorize
 # ---------------------------------------------------------------------------
 
 
-def customer_vectorize_indexes(slug: str) -> list[str]:
-    return [f"hermes-{slug}-vault", f"hermes-{slug}-corrections"]
+customer_vectorize_indexes = seat_vectorize_indexes
 
 
 @dataclass
@@ -245,6 +328,11 @@ class WranglerVectorizeIndexDeleter:
                 names.add(entry["name"])
         return names
 
+    def survey(self, customer_slug: str) -> dict:
+        existing = self._existing()
+        found = {name: name in existing for name in customer_vectorize_indexes(customer_slug)}
+        return {"present": any(found.values()), "indexes": found}
+
     async def delete_indexes(self, customer_slug: str) -> dict:
         wanted = customer_vectorize_indexes(customer_slug)
         existing = self._existing()
@@ -256,6 +344,8 @@ class WranglerVectorizeIndexDeleter:
             if proc.returncode != 0:
                 raise RuntimeError(f"vectorize delete {name} failed: {proc.stderr.strip() or proc.stdout.strip()}")
             deleted.append(name)
+        if deleted and (left := [n for n in wanted if n in self._existing()]):
+            raise RuntimeError(f"vectorize index(es) still listed after delete: {left}")
         manifest: dict = {"indexes_deleted": len(deleted), "indexes": deleted}
         if not deleted:
             manifest.update({"skipped": True, "reason": "indexes_already_absent", "checked": wanted})
@@ -301,40 +391,70 @@ class AgentMailInboxDeprovisioner:
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self.api_key}", "Accept": "application/json"}
 
-    async def deprovision(self, customer_slug: str) -> dict:
-        address = seat_inbox_address(self.customers_root / customer_slug / "customer.yaml", customer_slug)
+    def _address(self, customer_slug: str) -> str:
+        return seat_inbox_address(self.customers_root / customer_slug / "customer.yaml", customer_slug)
+
+    def _find_inbox(self, address: str) -> Optional[str]:
         listing = self.http("GET", f"{AGENTMAIL_API}/inboxes", self._headers(), None)
         if listing.status != 200 or not isinstance(listing.body, dict):
             raise RuntimeError(f"agentmail list inboxes failed: HTTP {listing.status}")
-        inbox_id: Optional[str] = None
         for entry in listing.body.get("inboxes") or []:
             candidate = entry.get("inbox_id") if isinstance(entry, dict) else None
             if isinstance(candidate, str) and candidate.lower() == address:
-                inbox_id = candidate
-                break
-        if inbox_id is None:
-            return {
-                "skipped": True,
-                "reason": "inbox_already_absent",
-                "identities_removed": 0,
-                "inbox": address,
-            }
+                return candidate
+        return None
+
+    def _seat_webhooks(self, customer_slug: str) -> list[str]:
+        """Ids of the org-level webhooks delivering to the seat's Machine."""
+        listing = self.http("GET", f"{AGENTMAIL_API}/webhooks", self._headers(), None)
+        if listing.status != 200 or not isinstance(listing.body, dict):
+            raise RuntimeError(f"agentmail list webhooks failed: HTTP {listing.status}")
+        host = seat_webhook_host(customer_slug)
+        return [
+            str(w["webhook_id"])
+            for w in listing.body.get("webhooks") or []
+            if isinstance(w, dict)
+            and w.get("webhook_id")
+            and urllib.parse.urlsplit(str(w.get("url") or "")).hostname == host
+        ]
+
+    def _delete(self, kind: str, ident: str) -> bool:
         resp = self.http(
-            "DELETE",
-            f"{AGENTMAIL_API}/inboxes/" + urllib.parse.quote(inbox_id, safe=""),
-            self._headers(),
-            None,
+            "DELETE", f"{AGENTMAIL_API}/{kind}/" + urllib.parse.quote(ident, safe=""), self._headers(), None
         )
         if resp.status in (200, 202, 204):
-            return {"skipped": False, "identities_removed": 1, "inbox_id": inbox_id}
+            return True
         if resp.status == 404:
-            return {
-                "skipped": True,
-                "reason": "inbox_already_absent",
-                "identities_removed": 0,
-                "inbox": address,
-            }
-        raise RuntimeError(f"agentmail delete inbox {inbox_id} failed: HTTP {resp.status}")
+            return False
+        raise RuntimeError(f"agentmail delete {kind} {ident} failed: HTTP {resp.status}")
+
+    def survey(self, customer_slug: str) -> dict:
+        address = self._address(customer_slug)
+        inbox = self._find_inbox(address) is not None
+        hooks = self._seat_webhooks(customer_slug)
+        return {"present": inbox or bool(hooks), "inbox": address, "inbox_present": inbox, "webhooks": hooks}
+
+    async def deprovision(self, customer_slug: str) -> dict:
+        address = self._address(customer_slug)
+        inbox_id = self._find_inbox(address)
+        removed = bool(inbox_id) and self._delete("inboxes", inbox_id)
+        hooks = [h for h in self._seat_webhooks(customer_slug) if self._delete("webhooks", h)]
+        # Read back both: a vendor that answered 2xx and kept the object is a
+        # failure, not a success.
+        if self._find_inbox(address) is not None:
+            raise RuntimeError(f"agentmail inbox {address} still listed after delete")
+        if left := self._seat_webhooks(customer_slug):
+            raise RuntimeError(f"agentmail webhook(s) for {seat_webhook_host(customer_slug)} still listed: {left}")
+        manifest: dict = {
+            "skipped": not removed and not hooks,
+            "identities_removed": int(removed),
+            "webhooks_removed": hooks,
+        }
+        if removed:
+            manifest["inbox_id"] = inbox_id
+        else:
+            manifest.update({"reason": "inbox_already_absent", "inbox": address})
+        return manifest
 
 
 # ---------------------------------------------------------------------------
@@ -351,6 +471,10 @@ def ops_workspace_app_name(slug: str) -> str:
     app that holds that client's documents. Retired with the seat, because its
     volume IS the client's documents."""
     return f"ops-{slug}"
+
+
+#: Where ``ops-workspace create`` stores the daily sweep's secrets.
+OPS_SWEEP_REPO = "venturecrane/ss-console"
 
 
 @dataclass
@@ -382,6 +506,55 @@ class FlyAppDestroyer:
         proc = self.runner(["fly", "apps", "destroy", app, "--yes"])
         if proc.returncode != 0:
             raise RuntimeError(f"fly apps destroy {app} failed: {proc.stderr.strip() or proc.stdout.strip()}")
+        if app in self._apps():
+            raise RuntimeError(f"fly apps destroy {app} reported success but the app is still listed")
+
+    def _gh_names(self, kind: str) -> set[str]:
+        """Names (never values: the API returns none) of the repo's Actions
+        secrets or variables. A gh that cannot answer raises."""
+        proc = self.runner(["gh", kind, "list", "--repo", OPS_SWEEP_REPO, "--json", "name"])
+        if proc.returncode != 0:
+            raise RuntimeError(f"gh {kind} list failed: {proc.stderr.strip() or proc.stdout.strip()}")
+        try:
+            rows = json.loads(proc.stdout or "[]")
+        except ValueError as exc:
+            raise RuntimeError(f"gh {kind} list returned non-JSON") from exc
+        return {str(r["name"]) for r in rows if isinstance(r, dict) and "name" in r}
+
+    def _sweep_names_present(self, customer_slug: str) -> dict[str, list[str]]:
+        secrets, variables = ops_sweep_github_names(customer_slug)
+        have_s, have_v = self._gh_names("secret"), self._gh_names("variable")
+        return {"secret": [n for n in secrets if n in have_s], "variable": [n for n in variables if n in have_v]}
+
+    def _remove_sweep_names(self, customer_slug: str) -> list[str]:
+        """The ops workspace's daily-sweep secrets and variable on GitHub
+        (``ops-workspace create`` sets them; ``ops-workspace destroy`` removes
+        them). Removed, then listed again."""
+        removed: list[str] = []
+        for kind, names in self._sweep_names_present(customer_slug).items():
+            for name in names:
+                proc = self.runner(["gh", kind, "delete", name, "--repo", OPS_SWEEP_REPO])
+                if proc.returncode != 0:
+                    raise RuntimeError(f"gh {kind} delete {name} failed: {proc.stderr.strip() or proc.stdout.strip()}")
+                removed.append(name)
+        if left := [n for names in self._sweep_names_present(customer_slug).values() for n in names]:
+            raise RuntimeError(f"ops sweep names still on {OPS_SWEEP_REPO}: {left}")
+        return removed
+
+    def preflight(self, customer_slug: str) -> Optional[str]:
+        """Step 06 reads GitHub between two Fly destroys; a gh that cannot
+        answer must stop the run before either, not between them."""
+        try:
+            self._sweep_names_present(customer_slug)
+        except RuntimeError as exc:
+            return f"cannot read the ops sweep secrets on {OPS_SWEEP_REPO}: {exc}"
+        return None
+
+    def survey(self, customer_slug: str) -> dict:
+        present = self._apps()
+        apps = {a: a in present for a in (fly_app_name(customer_slug), ops_workspace_app_name(customer_slug))}
+        sweep = self._sweep_names_present(customer_slug)
+        return {"present": any(apps.values()) or any(sweep.values()), "apps": apps, "ops_sweep_github": sweep}
 
     async def destroy_machine(self, customer_slug: str) -> dict:
         app = fly_app_name(customer_slug)
@@ -390,9 +563,8 @@ class FlyAppDestroyer:
         workspace: dict = {"app": ws, "existed": ws in present}
         if ws in present:
             self._destroy(ws)
-            workspace["destroyed"] = ws not in self._apps()
-            if not workspace["destroyed"]:
-                raise RuntimeError(f"fly apps destroy {ws} reported success but the app is still listed")
+            workspace["destroyed"] = True
+        workspace["github_sweep_names_removed"] = self._remove_sweep_names(customer_slug)
         if app not in present:
             return {
                 "skipped": True,
@@ -406,134 +578,6 @@ class FlyAppDestroyer:
 
 
 # ---------------------------------------------------------------------------
-# Observability: healthchecks.io + console D1 rows
-# ---------------------------------------------------------------------------
-
-HEALTHCHECKS_API = "https://healthchecks.io/api/v3"
-
-
-def healthchecks_check_name(slug: str) -> str:
-    return f"hermes-{slug}"
-
-
-#: The console D1 tables that hold a row per seat and must be empty for the
-#: slug after decommission. ``machine_credentials`` is the seat's own
-#: control-plane bearer (migration 0114): deleting the row is what revokes the
-#: key, so a retired Machine's copy stops authenticating even if the Fly
-#: destroy is the step that halted.
-CONSOLE_SEAT_TABLES: tuple[str, ...] = (
-    "operator_runtime_summary",
-    "fleet_status",
-    "machine_credentials",
-)
-
-
-def _is_missing_table(exc: Exception, table: str) -> bool:
-    return f"no such table: {table}" in str(exc)
-
-
-@dataclass
-class HealthchecksAndFleetStatusCleanup:
-    """Deletes the seat's healthchecks.io check and its console D1 rows.
-
-    The manifest reports what was OBSERVED, not what was attempted: a
-    ``DELETE`` through ``wrangler d1 execute`` returns an empty result set
-    whether it removed a row or matched nothing, so every table is counted
-    before and after and the count after is what ``*_rows_remaining`` and the
-    ``*_row_deleted`` flags are computed from. That is the negative probe the
-    venture's removal doctrine asks for, done by the pipeline instead of by
-    hand afterwards.
-    """
-
-    hc_api_key: Optional[str]
-    d1: ConsoleD1
-    http: Http = http_request
-
-    def _delete_check(
-        self, slug: str, *, tag: str = "operator", name: Optional[str] = None
-    ) -> tuple[bool, Optional[str]]:
-        if not self.hc_api_key:
-            return False, None
-        headers = {"X-Api-Key": self.hc_api_key, "Accept": "application/json"}
-        listing = self.http(
-            "GET",
-            f"{HEALTHCHECKS_API}/checks/?tag={urllib.parse.quote(tag, safe='')}&tag="
-            + urllib.parse.quote(slug, safe=""),
-            headers,
-            None,
-        )
-        if listing.status != 200 or not isinstance(listing.body, dict):
-            raise RuntimeError(f"healthchecks list failed: HTTP {listing.status}")
-        wanted = name or healthchecks_check_name(slug)
-        for check in listing.body.get("checks") or []:
-            if not isinstance(check, dict) or check.get("name") != wanted:
-                continue
-            uuid = check.get("uuid")
-            if not isinstance(uuid, str) or not uuid:
-                raise RuntimeError("healthchecks check has no uuid (read-only key?)")
-            resp = self.http("DELETE", f"{HEALTHCHECKS_API}/checks/{uuid}", headers, None)
-            if resp.status in (200, 204):
-                return True, uuid
-            if resp.status == 404:
-                return False, uuid
-            raise RuntimeError(f"healthchecks delete {uuid} failed: HTTP {resp.status}")
-        return False, None
-
-    def _clear_table(self, table: str, slug: str) -> dict:
-        """Count, delete, count again. Returns the observed numbers for one table.
-
-        ``machine_credentials`` may not exist yet on a D1 whose migrations
-        predate 0114; that is reported as ``table_present: False`` rather than
-        raised, because the absence of the table is itself the observation that
-        there is no credential row to revoke.
-        """
-        try:
-            before = self.d1.count_where_slug(table, slug)
-        except RuntimeError as exc:
-            if table == "machine_credentials" and _is_missing_table(exc, table):
-                return {"table_present": False, "rows_before": 0, "rows_remaining": 0, "rows_deleted": 0}
-            raise
-        # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query — table comes from CONSOLE_SEAT_TABLES; the slug is sql_text's hex blob literal.
-        # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query — not SQLAlchemy; the only interpolations are a module constant and a fixed-alphabet hex literal.
-        self.d1.execute(f"DELETE FROM {table} WHERE customer_slug = {sql_text(slug)}")  # noqa: S608 - table is a CONSOLE_SEAT_TABLES constant; the slug is sql_text's hex blob literal
-        after = self.d1.count_where_slug(table, slug)
-        return {
-            "table_present": True,
-            "rows_before": before,
-            "rows_remaining": after,
-            "rows_deleted": before - after,
-        }
-
-    async def cleanup(self, customer_slug: str) -> dict:
-        cancelled, uuid = self._delete_check(customer_slug)
-        # The ops workspace's daily sweep check (bin/ops-workspace creates it).
-        ws_cancelled, _ = self._delete_check(
-            customer_slug, tag="ops-workspace", name=ops_workspace_app_name(customer_slug)
-        )
-        observed = {table: self._clear_table(table, customer_slug) for table in CONSOLE_SEAT_TABLES}
-        manifest: dict = {
-            "healthchecks_check_cancelled": cancelled,
-            "healthchecks_check_uuid": uuid,
-            "healthchecks_configured": bool(self.hc_api_key),
-            "ops_workspace_check_cancelled": ws_cancelled,
-            "customer_slug": customer_slug,
-        }
-        short = {
-            "operator_runtime_summary": "runtime_summary",
-            "fleet_status": "fleet_status",
-            "machine_credentials": "machine_credentials",
-        }
-        for table, obs in observed.items():
-            key = short[table]
-            manifest[f"{key}_rows_deleted"] = obs["rows_deleted"]
-            manifest[f"{key}_rows_remaining"] = obs["rows_remaining"]
-            # True only when the table was read back empty for this slug.
-            manifest[f"{key}_row_deleted"] = obs["table_present"] and obs["rows_remaining"] == 0
-        manifest["machine_credentials_table_present"] = observed["machine_credentials"]["table_present"]
-        return manifest
-
-
-# ---------------------------------------------------------------------------
 # Environment wiring
 # ---------------------------------------------------------------------------
 
@@ -543,7 +587,10 @@ BACKEND_REQUIREMENTS: dict[str, str] = {
     "r2_deleter": "CLOUDFLARE_API_TOKEN (or CF_API_TOKEN) + CLOUDFLARE_ACCOUNT_ID (or CF_ACCOUNT_ID)",
     "vectorize_deleter": "CLOUDFLARE_API_TOKEN (wrangler reads it)",
     "agentmail": "AGENTMAIL_API_KEY (the org key, not a seat key)",
-    "fly": "FLY_API_TOKEN (a staged token; a logged-in `fly` CLI does not count)",
+    "fly": (
+        "FLY_API_TOKEN (a staged token; a logged-in `fly` CLI does not count) + an authenticated `gh` "
+        f"(removes the ops workspace's sweep secrets on {OPS_SWEEP_REPO})"
+    ),
     "compliance_archiver": (
         f"{SIGNING_KEY_ENV} (signs the packet) + CLOUDFLARE_API_TOKEN (wrangler d1 reads the chain pin)"
     ),
@@ -608,6 +655,7 @@ def backends_from_env(
     http: Http = http_request,
     audit_writer: Optional[object] = None,
     actor: str = "captain",
+    archive_root: Optional[Path] = None,
 ) -> tuple[dict, dict[str, bool]]:
     """Construct every backend whose credentials are staged.
 
@@ -619,7 +667,9 @@ def backends_from_env(
 
     ``audit_writer`` is the decommission trail the compliance archiver writes
     the packet's ``COMPLIANCE_PACKET_EXPORTED`` row to, so the record of the
-    decommission also records the packet it produced.
+    decommission also records the packet it produced. ``archive_root`` is
+    where step 09 exports the client obligations its ``customer_configs``
+    delete cascades.
     """
     env = dict(os.environ) if env is None else env
     kwargs: dict = {}
@@ -644,7 +694,9 @@ def backends_from_env(
         wired["fly"] = True
     hc_key = env.get("HEALTHCHECKS_API_KEY")
     if hc_key and wrangler_token:
-        kwargs["observability"] = HealthchecksAndFleetStatusCleanup(hc_key, ConsoleD1(runner=runner), http=http)
+        kwargs["observability"] = HealthchecksAndFleetStatusCleanup(
+            hc_key, ConsoleD1(runner=runner), http=http, archive_root=archive_root
+        )
         wired["observability"] = True
     if (env.get(SIGNING_KEY_ENV) or "").strip() and wrangler_token:
         kwargs["archiver"] = EvidencePacketArchiver(
@@ -663,7 +715,11 @@ __all__ = [
     "ARCHIVE_SEGMENT",
     "AgentMailInboxDeprovisioner",
     "BACKEND_REQUIREMENTS",
+    "CONSOLE_SEAT_TABLES",
+    "CUSTOMER_CONFIG_BUCKET",
     "CloudflareR2NamespaceDeleter",
+    "HEALTHCHECKS_API",
+    "OPS_SWEEP_REPO",
     "EvidencePacketArchiver",
     "FlyAppDestroyer",
     "HealthchecksAndFleetStatusCleanup",

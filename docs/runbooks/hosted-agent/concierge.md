@@ -40,3 +40,10 @@ On the open-house seat, a new agent needs only `inbound_allow_from`: `owner_fiel
 ## Decommission
 
 Standard offboarding (ADR 0065): `operator/bin/decommission-customer.sh <slug>` after the Stripe subscription cancels; the webhook has already marked the local row `cancelled`.
+
+1. Dry run first, under the vault: `infisical run --env=prod --path=/ss --silent -- operator/bin/decommission-customer.sh <slug>`. It changes nothing. Read the `[survey]` lines (what each layer holds now) and the `[residue]` lines (repo edits owed, vault key names, what is kept by design).
+2. Live run: add `--live`; the script asks for the slug a second time. Exit 5 means refused with nothing touched (stderr names why: a missing credential, an obligation still owed, `gh` not authenticated). Exit 6 means the steps ran but a `[verify]` line shows the seat still present somewhere; re-run, every step is idempotent. Only exit 0 is a finished decommission.
+3. Make every `[residue] repo edit owed` change, with the tombstone rename, in one PR; `tests/decommissioned-seat-residue.test.ts` fails until they are all made.
+4. Record a `crane_verify` per runtime layer citing the `[verify]` lines (CLAUDE.md, gone means gone).
+
+The full contract, including the list of what is removed and what is kept, is `docs/specs/operator/decommission-customer.md`.
