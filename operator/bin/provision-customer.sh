@@ -1149,29 +1149,17 @@ fi
 # `fly deploy` applies staged secrets as part of the NEW release — even when the
 # image digest is unchanged — so the running code and its secret contract always
 # change together. (Verified against flyctl v0.4.x docs + the staging gate.)
-# The image (2026-10-21). Reprovisioning re-applies THIS seat's config and
-# secrets; it never moves the seat's software, which is `fleet release`'s job.
-# So an existing seat is redeployed on the image its Machine runs now, read from
-# Fly (`fleet seat-image`), and nothing about any other seat can block it or
-# downgrade it. Only a NEW seat (no Machine yet, exit 1) takes the newest
-# release that completed its last ring. Fly could-not-tell (any other exit)
-# stops here: it must never be read as "new seat". --build is unchanged.
+# The image (2026-10-21): an existing seat keeps the image its Machine runs
+# now; only a new seat takes the newest completed release. Reprovisioning never
+# moves a seat's software (`fleet release` does), so no other seat can block or
+# downgrade it. The decision and its reasons: lib/select-release-image.sh.
 if [ "${BUILD_FROM_SOURCE}" = 1 ]; then
   log "Deploying ${APP_NAME} built from THIS checkout (--build; new image + staged secrets roll together)..."
   (cd "${REPO_ROOT}" && fly deploy --config "${RENDERED_DIR}/fly.toml" \
     --build-arg SS_CONSOLE_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)")
 else
-  seat_rc=0
-  RELEASE_IMAGE="$("${BIN_DIR}/fleet" seat-image "${SLUG}")" || seat_rc=$?
-  if [ "${seat_rc}" = 0 ]; then
-    log "Redeploying ${APP_NAME} on the image it runs now, ${RELEASE_IMAGE} (staged secrets roll with it)..."
-  elif [ "${seat_rc}" = 1 ]; then
-    RELEASE_IMAGE="$("${BIN_DIR}/fleet" latest-image)" \
-      || die "new seat, and no fleet release has completed its last ring (operator/bin/fleet releases). Run \`operator/bin/fleet build\` and \`fleet release\`, or pass --build to build this checkout"
-    log "New seat: deploying ${APP_NAME} on release image ${RELEASE_IMAGE} (staged secrets roll with it)..."
-  else
-    die "could not read the image ${APP_NAME} runs now (fleet seat-image exit ${seat_rc}); refusing to guess"
-  fi
+  source "${BIN_DIR}/lib/select-release-image.sh"
+  RELEASE_IMAGE="$(select_release_image "${BIN_DIR}" "${SLUG}")" || die "no image to deploy for ${APP_NAME} (reason above)"
   (cd "${REPO_ROOT}" && fly deploy --config "${RENDERED_DIR}/fly.toml" --image "${RELEASE_IMAGE}")
 fi
 

@@ -4,13 +4,15 @@ Reprovisioning an existing seat re-applies that seat's config and secrets; it
 must never move the seat's software. On 2026-10-21 it deployed `fleet
 latest-image` unconditionally, so one seat's failed rollout (no release could
 complete) blocked every seat's reprovision for a day, and a seat already on a
-newer image would have been DOWNGRADED. These tests pin the decision:
+newer image would have been DOWNGRADED. These tests pin the decision, run
+against the real lib/select-release-image.sh with a stub `fleet`:
 
-  1. an existing seat is redeployed on `fleet seat-image <slug>` (what it runs now);
-  2. `fleet latest-image` is reached only on seat-image exit 1 (no Machine: a new seat);
-  3. any other seat-image exit dies (could-not-tell is never "new seat");
-  4. the image roll is still `fly deploy --config ... --image`, ahead of the
-     staged-secret guard that test_deploy_ordering.py depends on.
+  1. an existing seat (seat-image exit 0) gets the image it runs now;
+  2. a new seat (seat-image exit 1) gets `fleet latest-image`;
+  3. any other seat-image exit refuses (could-not-tell is never "new seat");
+  4. a new seat with no completed release refuses;
+and that provision-customer.sh step 7 deploys exactly what the function chose,
+still as `fly deploy --config ... --image` (test_deploy_ordering.py depends on it).
 
 Run::
 
@@ -23,68 +25,53 @@ import re
 import subprocess
 from pathlib import Path
 
-_SCRIPT = Path(__file__).resolve().parents[2] / "bin" / "provision-customer.sh"
+_BIN = Path(__file__).resolve().parents[1]
+_LIB = _BIN / "lib" / "select-release-image.sh"
+_SCRIPT = _BIN / "provision-customer.sh"
 
 
-def _code() -> list[str]:
-    return ["" if line.lstrip().startswith("#") else line for line in _SCRIPT.read_text(encoding="utf-8").splitlines()]
+def _select(tmp_path: Path, seat_rc: int, latest_rc: int = 0) -> subprocess.CompletedProcess[str]:
+    stub = tmp_path / "fleet"
+    stub.write_text(
+        "#!/usr/bin/env bash\n"
+        'case "$1" in\n'
+        f"  seat-image) [ {seat_rc} = 0 ] && echo seat-own-image; exit {seat_rc} ;;\n"
+        f"  latest-image) [ {latest_rc} = 0 ] && echo newest-completed; exit {latest_rc} ;;\n"
+        "esac\nexit 99\n"
+    )
+    stub.chmod(0o755)
+    script = f'source "{_LIB}"; select_release_image "{tmp_path}" s'
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)  # noqa: S603 - literal bash argv; the repo's own lib plus this test's stub
 
 
-def _step7() -> str:
-    """The non-build image-selection branch of step 7, as code (comments blanked)."""
-    lines = _code()
-    start = next(i for i, line in enumerate(lines) if re.search(r"BUILD_FROM_SOURCE.*= 1 \]", line))
-    end = next(i for i in range(start, len(lines)) if lines[i].strip() == "fi" and lines[i].startswith("fi"))
-    return "\n".join(lines[start : end + 1])
+def test_existing_seat_keeps_its_own_image(tmp_path: Path) -> None:
+    out = _select(tmp_path, 0)
+    assert out.returncode == 0 and out.stdout.strip() == "seat-own-image"
 
 
-def test_existing_seat_redeploys_its_own_image() -> None:
-    block = _step7()
-    assert re.search(r'RELEASE_IMAGE="\$\("\$\{BIN_DIR\}/fleet" seat-image "\$\{SLUG\}"\)"', block), block
+def test_new_seat_gets_the_newest_completed_release(tmp_path: Path) -> None:
+    out = _select(tmp_path, 1)
+    assert out.returncode == 0 and out.stdout.strip() == "newest-completed"
 
 
-def test_latest_image_only_for_a_new_seat() -> None:
-    block = _step7()
-    latest = [i for i, line in enumerate(block.splitlines()) if 'fleet" latest-image' in line]
-    assert len(latest) == 1, "latest-image must appear exactly once, on the new-seat branch"
-    before = "\n".join(block.splitlines()[: latest[0]])
-    assert re.search(r'elif \[ "\$\{seat_rc\}" = 1 \]; then\s*$', before), "latest-image must sit under seat_rc = 1"
+def test_could_not_tell_refuses(tmp_path: Path) -> None:
+    out = _select(tmp_path, 3)
+    assert out.returncode != 0 and out.stdout == "" and "refusing to guess" in out.stderr
 
 
-def test_could_not_tell_dies() -> None:
-    block = _step7()
-    assert re.search(r"else\s*\n\s*die .*seat-image", block), "a seat-image exit other than 0/1 must die"
+def test_new_seat_without_a_completed_release_refuses(tmp_path: Path) -> None:
+    out = _select(tmp_path, 1, latest_rc=1)
+    assert out.returncode != 0 and out.stdout == "" and "no fleet release has completed" in out.stderr
 
 
-def test_roll_is_still_fly_deploy_config_image() -> None:
-    block = _step7()
-    assert re.search(r'fly deploy --config "\$\{RENDERED_DIR\}/fly.toml" --image "\$\{RELEASE_IMAGE\}"', block)
+def _code() -> str:
+    return "\n".join(
+        "" if line.lstrip().startswith("#") else line for line in _SCRIPT.read_text(encoding="utf-8").splitlines()
+    )
 
 
-def _decide(seat_rc: int, latest_rc: int = 0) -> subprocess.CompletedProcess[str]:
-    """Run the real selection branch with stub `fleet` and `fly`; report which image it deployed."""
-    stub = f"""
-die() {{ echo "DIE $*"; exit 9; }}
-log() {{ :; }}
-BUILD_FROM_SOURCE=0; SLUG=s; APP_NAME=hermes-s; REPO_ROOT=/; RENDERED_DIR=/r; BIN_DIR=/stub
-fleet_stub() {{
-  case "$1" in
-    seat-image) [ {seat_rc} = 0 ] && echo seat-own-image; return {seat_rc} ;;
-    latest-image) [ {latest_rc} = 0 ] && echo newest-completed; return {latest_rc} ;;
-  esac
-}}
-fly() {{ echo "DEPLOYED $*"; }}
-"""
-    body = _step7().replace('"${BIN_DIR}/fleet"', "fleet_stub")
-    return subprocess.run(["bash", "-c", stub + body], capture_output=True, text=True, timeout=30)  # noqa: S603 - literal bash argv; the script is this test's own text plus the repo's own step 7
-
-
-def test_selection_behaves_as_documented() -> None:
-    existing = _decide(0)
-    assert "--image seat-own-image" in existing.stdout and "newest-completed" not in existing.stdout
-    new = _decide(1)
-    assert "--image newest-completed" in new.stdout
-    unknown = _decide(3)
-    assert unknown.returncode == 9 and "DEPLOYED" not in unknown.stdout
-    new_no_release = _decide(1, latest_rc=1)
-    assert new_no_release.returncode == 9 and "DEPLOYED" not in new_no_release.stdout
+def test_step7_deploys_what_the_function_chose() -> None:
+    code = _code()
+    assert re.search(r'RELEASE_IMAGE="\$\(select_release_image "\$\{BIN_DIR\}" "\$\{SLUG\}"\)" \|\| die ', code)
+    assert re.search(r'fly deploy --config "\$\{RENDERED_DIR\}/fly.toml" --image "\$\{RELEASE_IMAGE\}"', code)
+    assert "latest-image" not in code, "provisioning must choose the image only through select_release_image"

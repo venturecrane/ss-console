@@ -52,13 +52,17 @@ CREATE TABLE fleet_alert_state_new (
   -- rollout_failed. NULL on every other condition.
   last_seen_marker TEXT,
   updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  -- The Message-ID of the alert email, so its RECOVERED notice and reminders
+  -- thread under it (0120). Carried through this rebuild.
+  alert_message_id TEXT,
   PRIMARY KEY (customer_slug, condition)
 );
 
 INSERT INTO fleet_alert_state_new (
-  customer_slug, condition, status, opened_at, resolved_at, last_alert_id, last_seen_marker, updated_at)
+  customer_slug, condition, status, opened_at, resolved_at, last_alert_id, last_seen_marker, updated_at, alert_message_id)
 SELECT
-  customer_slug, condition, status, opened_at, resolved_at, last_alert_id, last_seen_marker, updated_at
+  customer_slug, condition, status, opened_at, resolved_at, last_alert_id, last_seen_marker, updated_at,
+  alert_message_id
 FROM fleet_alert_state;
 
 DROP TABLE fleet_alert_state;
