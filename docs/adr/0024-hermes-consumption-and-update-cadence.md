@@ -182,6 +182,15 @@ Plan `zesty-gathering-axolotl`; every seat was still rebuilt from source per dep
 
 Verification items 3 and 5 below are met by the fleet system (`fly deploy --image`, `fleet status`); item 4 (an automated upstream-tracking job) is still open.
 
+## Amendment (2026-10-21): one seat never waits on the fleet
+
+Amendment 3's "one rollout at a time" and its definition of Blessed coupled every seat to every other one. On 2026-10-20 captain-mark's rollout was refused at preflight (a staged secret the release did not declare). Because completion required one full run that halted nowhere, no release could complete after that, and because provisioning deployed only a completed release, every seat's reprovision was refused for a day. Clearing it took a six-seat rollout of software every seat already ran, and the single lease meanwhile refused an `--only` restart of the one seat that needed it. Nothing paged. Four changes:
+
+1. **Reprovisioning keeps the seat's image.** An existing seat is redeployed on the image its Machine runs now (`fleet seat-image`, read from Fly). Only a new seat takes Blessed. Reprovisioning re-applies one seat's config and secrets; moving software forward is only ever `fleet release`. This also closes a latent downgrade: a seat moved ahead with `--only` would have been put back on an older Blessed image.
+2. **Completion is read from the records.** A release is Blessed when every ringed seat's latest rollout of it is `done`, however many runs that took. A seat repaired with `--only` completes the release; a seat left `waiting_idle` or held keeps it incomplete (previously those did not block completion). A release is stamped once, so re-running an old release cannot make it the newest Blessed.
+3. **Two lease scopes.** The fleet lease is held only by a full rollout. Every seat deploy, whether a rollout's, an `--only`, or a reprovision (`fleet with-seat-lease`), holds that seat's lease (`seat:<slug>` in the same `fleet_lease` table). Two deploys never land on one seat; no seat's deploy waits for another seat's.
+4. **A failed rollout pages.** The fleet-alerts Worker emails team@smd.services once per new `failed`, `rolled_back` or `tooling_error` rollout row (migration 0133, condition `rollout_failed`, marker-shaped like `send_refused`).
+
 ---
 
 ## References

@@ -11,10 +11,18 @@
   fleet busy SLUG [--wait] [--max-wait SECONDS]     exit 0 idle, 1 busy, 3 could not tell
   fleet unquiesce SLUG                                remove a quiesce marker a fleet run left
   fleet latest-image                                  print the newest completed release image
+  fleet seat-image SLUG                               print the image SLUG's Machine runs now;
+                                                      exit 1 = no Machine yet (a new seat)
+  fleet with-seat-lease SLUG -- CMD ...               run CMD holding SLUG's seat lease
+                                                      (exit = CMD's; 4 if another holder deploys SLUG)
 
 Exit codes: 0 success; 1 a seat failed / was refused / rollout halted; 2 usage;
 3 tooling error (nothing decided); 4 refused before anything ran (lease held,
 unknown release, source guard).
+
+Leases: a full release holds the fleet lease; every seat deploy (a release's,
+an --only, a reprovision through with-seat-lease) holds that seat's lease. So
+fixing one seat never queues behind a rollout of the others.
 """
 
 from __future__ import annotations
@@ -42,7 +50,7 @@ from .rollout import ImagePlan, ImageRollout
 from .runner import CommandRunner, Refusal, Runner, ToolingError
 from .skills import SkillsRollout
 from .smoke import SmokeRunner
-from .waves import Lease, Waves, holder_id
+from .waves import Lease, SeatLease, Waves, holder_id
 
 REPO = Path(__file__).resolve().parents[4]
 
@@ -119,6 +127,11 @@ def _parser() -> argparse.ArgumentParser:
     uq = sub.add_parser("unquiesce")
     uq.add_argument("slug")
     sub.add_parser("latest-image")
+    si = sub.add_parser("seat-image", help="the image a seat's Machine runs now")
+    si.add_argument("slug")
+    wl = sub.add_parser("with-seat-lease", help="run a command holding one seat's lease")
+    wl.add_argument("slug")
+    wl.add_argument("command", nargs=argparse.REMAINDER)
     return ap
 
 
@@ -144,7 +157,9 @@ def _summary(ctx: Ctx, outcomes: list[Any], halted: bool, completed: bool) -> in
     for o in outcomes:
         ctx.log(f"  {o.seat:<18} {o.state:<14} {o.detail}")
     ctx.log(
-        "HALTED" if halted else ("completed every ring" if completed else "finished (partial: --only or --dry-run)")
+        "HALTED"
+        if halted
+        else ("completed every ring" if completed else "finished; release not yet done on every seat (fleet status)")
     )
     return 1 if halted else 0
 
@@ -168,8 +183,7 @@ def cmd_release_image(ctx: Ctx, a: argparse.Namespace) -> int:
         ctx.clock,
     )
     plan = ImagePlan(release, meta.get("hermes_sha"), a.force_mid_job, a.accept_lane_inputs, a.max_idle_wait, a.dry_run)
-    lease = None if a.dry_run else Lease(ctx.store, holder, release["release_id"])
-    return _run_waves(ctx, a, release, lambda seat, ring: roll.run(seat, ring, plan), lease)
+    return _run_waves(ctx, a, release, lambda seat, ring: roll.run(seat, ring, plan), holder)
 
 
 def cmd_release_skills(ctx: Ctx, a: argparse.Namespace) -> int:
@@ -187,28 +201,32 @@ def cmd_release_skills(ctx: Ctx, a: argparse.Namespace) -> int:
         }
         if not a.dry_run:
             ctx.store.insert_release(release)
-    holder = holder_id()
-    lease = None if a.dry_run else Lease(ctx.store, holder, release["release_id"])
     return _run_waves(
-        ctx, a, release, lambda seat, ring: roll.run(seat, ring, release, manifest, key, sha, a.dry_run), lease
+        ctx, a, release, lambda seat, ring: roll.run(seat, ring, release, manifest, key, sha, a.dry_run), holder_id()
     )
 
 
 def _run_waves(
-    ctx: Ctx, a: argparse.Namespace, release: dict[str, Any], do_seat: Callable[[str, int], Any], lease: Lease | None
+    ctx: Ctx, a: argparse.Namespace, release: dict[str, Any], do_seat: Callable[[str, int], Any], holder: str
 ) -> int:
+    """Walk the rings. Only a full real run takes the fleet lease; every seat takes its own."""
     waves = Waves(ctx.store, ctx.log)
-    if lease is None:
-        result = waves.run(
-            ctx.rings(), do_seat, release=release, only=a.only, parallel=a.parallel, dry_run=a.dry_run, lease=None
-        )
+    seat_holder = None if a.dry_run else holder
+
+    def walk(lease: Lease | None) -> Any:
+        return waves.run(ctx.rings(), do_seat, release=release, only=a.only, parallel=a.parallel,
+                         dry_run=a.dry_run, lease=lease, holder=seat_holder)  # fmt: skip
+
+    if a.dry_run or a.only:
+        result = walk(None)
     else:
-        with lease:
-            result = waves.run(
-                ctx.rings(), do_seat, release=release, only=a.only, parallel=a.parallel, dry_run=a.dry_run, lease=lease
-            )
-    if result.completed:
+        with Lease(ctx.store, holder, release["release_id"]) as lease:
+            result = walk(lease)
+    # Stamp once. Re-stamping an already-completed release would move it to the
+    # front of latest_completed and hand a NEW seat an older image.
+    if result.completed and not release.get("completed_last_ring_at"):
         ctx.store.mark_completed(release["release_id"])
+        ctx.log(f"{release['release_id']}: every seat is done; release marked completed")
     return _summary(ctx, result.outcomes, result.halted, result.completed)
 
 
@@ -221,6 +239,32 @@ def cmd_busy(ctx: Ctx, a: argparse.Namespace) -> int:
     verdict = gate.wait_idle(seat, a.max_wait, ctx.log) if a.wait else gate.probe(seat)
     print(json.dumps({"seat": seat, "busy": verdict.busy, "reasons": verdict.reasons}))
     return 1 if verdict.busy else 0
+
+
+def cmd_seat_image(ctx: Ctx, a: argparse.Namespace) -> int:
+    """The image a seat's Machine runs now, read from Fly (the rollback target's source).
+
+    Exit 1 means there is no Machine yet: a new seat, which provision-customer.sh
+    deploys on the newest completed release instead. Anything Fly cannot answer
+    is a ToolingError (exit 3): "could not tell" must never read as "new seat".
+    """
+    app = ids.app_name(ids.slug(a.slug))
+    if not ctx.fly.app_exists(app) or not ctx.fly.machines(app):
+        print(f"{a.slug}: no Machine yet", file=sys.stderr)
+        return 1
+    print(ctx.fly.machine_image(app))
+    return 0
+
+
+def cmd_with_seat_lease(ctx: Ctx, a: argparse.Namespace) -> int:
+    """Run a command (a reprovision) holding one seat's lease; its exit code is ours."""
+    command = a.command[1:] if a.command[:1] == ["--"] else a.command
+    if not command:
+        raise ValueError("with-seat-lease needs a command after --")
+    seat = ids.slug(a.slug)
+    with SeatLease(ctx.store, holder_id(), seat, "reprovision"):
+        ctx.log(f"{seat}: seat lease held; running {command[0]}")
+        return subprocess.call(command)  # noqa: S603 - the Captain's own command line, run as given
 
 
 def cmd_latest_image(ctx: Ctx, _a: argparse.Namespace) -> int:
@@ -270,6 +314,10 @@ def dispatch(ctx: Ctx, a: argparse.Namespace) -> int:
     if a.cmd == "unquiesce":
         ctx.log(f"{a.slug}: {BusyGate(ctx.fly, holder_id()).clear_any_fleet(ids.slug(a.slug))}")
         return 0
+    if a.cmd == "seat-image":
+        return cmd_seat_image(ctx, a)
+    if a.cmd == "with-seat-lease":
+        return cmd_with_seat_lease(ctx, a)
     return cmd_latest_image(ctx, a)
 
 

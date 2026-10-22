@@ -329,3 +329,92 @@ def test_dry_run_touches_nothing() -> None:
     assert w.fly.deploys == [] and w.store.rollouts == {} and w.fly.quiesce_calls == []
     assert not result.completed
     assert ids.RELEASE_ID_RE.match(w.rel["release_id"])
+
+
+# -- seat leases and record-based completion (2026-10-21) -------------------------------
+# Falsifiers: drop the SeatLease wrapper in Waves._leased and the held-seat tests
+# deploy over another holder; restore `completed = not (halted or only)` and the
+# --only-completes test goes red; count waiting_idle as done and the busy-seat
+# test goes red.
+
+
+def _run(w: World, *, only: str | None = None, holder: str = "tester", fleet_lease: bool = True, **plan_kw):
+    plan = ImagePlan(w.rel, "3" * 40, **plan_kw)
+    waves = Waves(w.store, w.logs.append)  # type: ignore[arg-type]
+
+    def walk(lease):
+        return waves.run(RINGS, lambda s, r: w.roll.run(s, r, plan), release=w.rel, only=only, parallel=1,
+                         dry_run=False, lease=lease, holder=holder)  # fmt: skip
+
+    if not fleet_lease:
+        return walk(None)
+    with Lease(w.store, holder, w.rel["release_id"]) as lease:  # type: ignore[arg-type]
+        return walk(lease)
+
+
+def test_each_seat_deploy_holds_its_seat_lease_and_releases_it() -> None:
+    w = World()
+    seen: list[str] = []
+    real = w.roll.run
+
+    def spy(seat, ring, plan):
+        row = w.store.lease(f"seat:{seat}")
+        seen.append(row["holder"] if row else "")
+        return real(seat, ring, plan)
+
+    w.roll.run = spy  # type: ignore[method-assign]
+    _run(w)
+    assert seen == ["tester"] * 5
+    assert not any(k.startswith("seat:") for k in w.store.leases)
+
+
+def test_full_rollout_skips_a_seat_another_holder_is_deploying() -> None:
+    w = World()
+    w.store.leases["seat:scott"] = {"lease_name": "seat:scott", "holder": "reprovision@laptop", "release_id": "x"}
+    result = _run(w)
+    states = w.store.states()
+    assert states["scott"] == "waiting_idle"
+    scott = next(r for r in w.store.rollouts.values() if r["customer_slug"] == "scott")
+    assert "reprovision@laptop" in scott["detail"]
+    assert "hermes-scott" not in [a for a, _ in deployed_images(w)]
+    assert states["ashton-price"] == "done" and not result.halted
+    assert not result.completed  # scott never got it
+    assert w.store.leases["seat:scott"]["holder"] == "reprovision@laptop"  # never taken over
+
+
+def test_only_refuses_a_seat_another_holder_is_deploying() -> None:
+    w = World()
+    w.store.leases["seat:scott"] = {"lease_name": "seat:scott", "holder": "someone", "release_id": "x"}
+    with pytest.raises(Refusal, match="being deployed by someone"):
+        _run(w, only="scott", fleet_lease=False)
+    assert w.fly.deploys == []
+
+
+def test_only_runs_while_a_full_rollout_holds_the_fleet_lease() -> None:
+    w = World()
+    w.store.lease_row = {"lease_name": "rollout", "holder": "full-rollout", "release_id": "img-x", "expires_at": "2099"}
+    _run(w, only="scott", holder="fixer", fleet_lease=False)
+    assert w.store.states()["scott"] == "done"
+    assert w.store.lease_row["holder"] == "full-rollout"
+
+
+def test_only_fix_of_the_failed_seats_completes_the_release() -> None:
+    w = World()
+    w.fly.secrets["hermes-brokery"] = ({*REQUIRED}, {"TELEGRAM_BOT_TOKEN"})  # the 2026-10-20 refusal
+    first = _run(w)
+    assert first.halted and not first.completed
+    w.fly.secrets["hermes-brokery"] = ({*REQUIRED}, set())  # the staged secret was applied
+    assert not _run(w, only="brokery", fleet_lease=False).completed  # ashton-price was halted, never deployed
+    assert w.store.states()["brokery"] == "done"
+    assert _run(w, only="ashton-price", fleet_lease=False).completed
+
+
+def test_a_busy_seat_keeps_the_release_incomplete() -> None:
+    w = World()
+    w.fly.probe_facts["ashton-price"] = [
+        {"lanes": [], "children": [{"file": "negotiation-child.pid", "pid": "4286", "alive": True}],
+         "crons": [], "errors": []}
+    ]  # fmt: skip
+    result = _run(w, max_idle_wait=60)
+    assert w.store.states()["ashton-price"] == "waiting_idle"
+    assert not result.halted and not result.completed

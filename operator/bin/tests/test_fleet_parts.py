@@ -265,6 +265,86 @@ def test_cli_hold_unhold_and_latest_image(capsys: pytest.CaptureFixture[str]) ->
     assert capsys.readouterr().out.strip() == rel["image_ref"]
 
 
+def test_cli_seat_image_reads_the_machine_and_names_a_new_seat(capsys: pytest.CaptureFixture[str]) -> None:
+    ctx = _ctx(FakeStore())
+    assert cli.main(["seat-image", "scott"], ctx=ctx) == 0
+    assert capsys.readouterr().out.strip() == "registry.fly.io/hermes-scott:deployment-OLD"
+    ctx.fly.no_machine.add("hermes-scott")  # type: ignore[attr-defined]
+    assert cli.main(["seat-image", "scott"], ctx=ctx) == 1  # an app with no Machine yet is a new seat
+    assert capsys.readouterr().out == ""
+
+
+def test_cli_seat_image_could_not_tell_is_not_new_seat() -> None:
+    class DownFly(FakeFly):
+        def machines(self, app: str) -> list[dict]:
+            raise ToolingError("fly machines list timed out")
+
+    ctx = cli.Ctx(REPO, ScriptRunner(), FakeStore(), FakeR2(), DownFly(), log=lambda m: None)  # type: ignore[arg-type]
+    assert cli.main(["seat-image", "scott"], ctx=ctx) == 3
+
+
+def test_cli_with_seat_lease_passes_the_exit_code_and_always_releases() -> None:
+    store = FakeStore()
+    assert cli.main(["with-seat-lease", "scott", "--", "true"], ctx=_ctx(store)) == 0
+    assert cli.main(["with-seat-lease", "scott", "--", "sh", "-c", "exit 7"], ctx=_ctx(store)) == 7
+    assert "seat:scott" not in store.leases
+    store.leases["seat:scott"] = {"lease_name": "seat:scott", "holder": "a-rollout", "release_id": "img-x"}
+    assert cli.main(["with-seat-lease", "scott", "--", "true"], ctx=_ctx(store)) == 4
+    assert store.leases["seat:scott"]["holder"] == "a-rollout"
+    assert cli.main(["with-seat-lease", "scott"], ctx=_ctx(store)) == 2
+
+
+def _done(seat: str, ring: int):
+    from bin.lib.fleet.rollout import SeatOutcome
+
+    return SeatOutcome(seat, "done", "ok")
+
+
+def _waves_args(only: str | None) -> object:
+    import argparse
+
+    return argparse.Namespace(only=only, dry_run=False, parallel=1)
+
+
+def test_cli_only_runs_beside_a_full_rollout_and_never_takes_the_fleet_lease() -> None:
+    store = FakeStore()
+    rel = release()
+    store.insert_release(rel)
+    store.lease_row = {"lease_name": "rollout", "holder": "full", "release_id": "img-zzzzzzzz", "expires_at": "2099"}
+    seats: list[str] = []
+
+    def do_seat(seat: str, ring: int):
+        store.start_rollout({"rollout_id": f"r-{seat}", "release_id": rel["release_id"], "customer_slug": seat,
+                             "ring": ring})  # fmt: skip
+        store.update_rollout(f"r-{seat}", "done")
+        seats.append(seat)
+        return _done(seat, ring)
+
+    assert cli._run_waves(_ctx(store), _waves_args("scott"), rel, do_seat, "fixer") == 0  # type: ignore[arg-type]
+    assert seats == ["scott"] and store.lease_row["holder"] == "full"
+
+
+def test_cli_completion_is_stamped_once_from_the_records() -> None:
+    store = FakeStore()
+    rel = release()
+    store.insert_release(rel)
+    every = [s for r in load_rings(OPERATOR / "fleet/rings.yaml", OPERATOR / "customers") for s in r.seats]
+
+    def do_seat(seat: str, ring: int):
+        store.start_rollout({"rollout_id": f"r-{seat}-{len(store.rollouts)}", "release_id": rel["release_id"],
+                             "customer_slug": seat, "ring": ring})  # fmt: skip
+        store.update_rollout(f"r-{seat}-{len(store.rollouts) - 1}", "done")
+        return _done(seat, ring)
+
+    for seat in every[:-1]:
+        cli._run_waves(_ctx(store), _waves_args(seat), rel, do_seat, "h")  # type: ignore[arg-type]
+    assert store.completed == []
+    cli._run_waves(_ctx(store), _waves_args(every[-1]), rel, do_seat, "h")  # type: ignore[arg-type]
+    assert store.completed == [rel["release_id"]]
+    cli._run_waves(_ctx(store), _waves_args(every[0]), store.release(rel["release_id"]), do_seat, "h")  # type: ignore[arg-type]
+    assert store.completed == [rel["release_id"]]  # never re-stamped
+
+
 def test_cli_busy_exit_codes() -> None:
     store = FakeStore()
     ctx = _ctx(store)

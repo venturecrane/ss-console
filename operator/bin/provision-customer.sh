@@ -5,13 +5,15 @@
 #   operator/bin/provision-customer.sh <slug>           # deploy the fleet release image
 #   operator/bin/provision-customer.sh <slug> --build   # build this checkout from source
 #
-# DEPLOY BY IMAGE (fleet release, 2026-10-19). By default the Machine runs the
-# newest release that completed its last ring (`operator/bin/fleet latest-image`
-# reads D1 fleet_releases): one image built once by `fleet build` for every seat,
-# never a per-seat build. `--build` keeps the from-source path for a bring-up
-# before any release exists, or a deliberate one-off; it builds THIS checkout.
-# Rolling a new release out to existing seats is `fleet release`, not this
-# script.
+# DEPLOY BY IMAGE (fleet release, 2026-10-19; seat-scoped 2026-10-21). An
+# EXISTING seat is redeployed on the image its Machine runs now (`fleet
+# seat-image`), so reprovisioning re-applies this seat's config and secrets and
+# never depends on, or is blocked by, any other seat. A NEW seat gets the newest
+# release that completed its last ring (`fleet latest-image`): one image built
+# once by `fleet build` for every seat, never a per-seat build. `--build` keeps
+# the from-source path for a bring-up before any release exists, or a deliberate
+# one-off; it builds THIS checkout. Moving any seat to newer software is `fleet
+# release`, not this script.
 #
 # Reads operator/customers/<slug>/customer.yaml, validates it, uploads
 # customer.yaml to R2 (so bootstrap.sh can fetch it on first boot — no more
@@ -1147,15 +1149,17 @@ fi
 # `fly deploy` applies staged secrets as part of the NEW release — even when the
 # image digest is unchanged — so the running code and its secret contract always
 # change together. (Verified against flyctl v0.4.x docs + the staging gate.)
-# The image: the newest release that completed its last ring, unless --build.
+# The image (2026-10-21): an existing seat keeps the image its Machine runs
+# now; only a new seat takes the newest completed release. Reprovisioning never
+# moves a seat's software (`fleet release` does), so no other seat can block or
+# downgrade it. The decision and its reasons: lib/select-release-image.sh.
 if [ "${BUILD_FROM_SOURCE}" = 1 ]; then
   log "Deploying ${APP_NAME} built from THIS checkout (--build; new image + staged secrets roll together)..."
   (cd "${REPO_ROOT}" && fly deploy --config "${RENDERED_DIR}/fly.toml" \
     --build-arg SS_CONSOLE_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)")
 else
-  RELEASE_IMAGE="$("${BIN_DIR}/fleet" latest-image)" \
-    || die "no fleet release has completed its last ring (operator/bin/fleet releases). Run \`operator/bin/fleet build\` and \`fleet release\`, or pass --build to build this checkout"
-  log "Deploying ${APP_NAME} on release image ${RELEASE_IMAGE} (staged secrets roll with it)..."
+  source "${BIN_DIR}/lib/select-release-image.sh"
+  RELEASE_IMAGE="$(select_release_image "${BIN_DIR}" "${SLUG}")" || die "no image to deploy for ${APP_NAME} (reason above)"
   (cd "${REPO_ROOT}" && fly deploy --config "${RENDERED_DIR}/fly.toml" --image "${RELEASE_IMAGE}")
 fi
 

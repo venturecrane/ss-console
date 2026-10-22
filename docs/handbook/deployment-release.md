@@ -248,13 +248,28 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   back to its recorded image and toml, re-smokes it, and HALTS the rollout. A
   tooling error (ssh with no verdict, Fly agent or wrangler errors) or a timeout
   halts without touching the seat. Seats not reached are recorded `halted`.
-  A rollout that halts nowhere marks the release `completed_last_ring_at`.
+- **Complete.** After any real run, a release whose latest rollout on every
+  ringed seat is `done` is marked `completed_last_ring_at`. That is read from
+  the `fleet_rollouts` records, not from one run: a release repaired seat by
+  seat with `--only` completes when its last seat is done, and a seat left
+  `waiting_idle`, held or `halted` keeps it incomplete.
 
-One rollout runs at a time: `fleet release` takes the D1 `fleet_lease` (2-hour
-TTL, renewed per seat) and a second one is refused, naming the holder. Exit codes:
-0 success; 1 a seat failed or was refused, or the rollout halted; 2 usage; 3 a
-tooling error (nothing decided); 4 refused before anything ran (lease held,
-unknown release, source guard).
+**Leases.** Two scopes, one D1 table (`fleet_lease`, 2-hour TTL, an expired
+holder is taken over). A full `fleet release` holds the fleet lease while it
+walks the rings, so a second full rollout is refused, naming the holder. Every
+seat deploy holds that seat's lease (`seat:<slug>`): a rollout's, an `--only`,
+and a reprovision alike. So `--only <seat>` runs beside a full rollout of the
+others, and two deploys never land on one seat at once: a full rollout records
+a seat someone else is deploying as `waiting_idle` and moves on; an `--only`
+against it is refused. Exit codes: 0 success; 1 a seat failed or was refused,
+or the rollout halted; 2 usage; 3 a tooling error (nothing decided); 4 refused
+before anything ran (lease held, unknown release, source guard).
+
+**A failed rollout pages.** The fleet-alerts Worker reads `fleet_rollouts` every
+2 minutes and emails team@smd.services once per new `failed`, `rolled_back` or
+`tooling_error` row, with the release, the detail, and the `--only` command
+that finishes it (`workers/fleet-alerts/src/rollout-failed.ts`, migration
+0133). On 2026-10-20 a preflight refusal on captain-mark sat unread for a day.
 
 ### A skills release
 
@@ -316,19 +331,25 @@ suite never touches a client seat or a client-visible address
   secret list could not be read; ADR 0093). Boot smoke warns on the same lever.
   `fleet releases` lists releases. `overlay-ref-drift.py` still reads
   each seat's running overlay off the live seam.
-- **A new seat:** `operator/bin/reprovision.sh <slug>` runs `infisical run
-  --env=prod --path=/ss --silent -- operator/bin/provision-customer.sh <slug>`
-  between a busy gate and a quiesce clear (below). Provisioning deploys the
-  newest release that completed its last ring (`fleet latest-image`); `--build`
-  builds the checkout from source instead, behind the same build-source guard,
-  for a bring-up before any release exists. It ends by running the boot smoke
-  test. git is the single source of truth for
-  `customer.yaml`; provisioning projects it to R2 unconditionally. `yes s |`
-  answers "skip" to every secret paste prompt (Machine secrets persist across
-  deploy).
-- **Reprovisioning an existing seat** runs the same busy gate first (`fleet busy
-  <slug> --wait`), refuses a seat still busy (`FLEET_FORCE_MID_JOB=1` overrides),
-  and clears its quiesce marker afterwards (`fleet unquiesce <slug>`).
+- **A new seat** (no Machine yet): `operator/bin/reprovision.sh <slug>` runs
+  `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet
+  with-seat-lease <slug> -- operator/bin/provision-customer.sh <slug>` between
+  a busy gate and a quiesce clear (below). Provisioning deploys the newest
+  release that completed its last ring (`fleet latest-image`, chosen in
+  `operator/bin/lib/select-release-image.sh`); `--build` builds the checkout
+  from source instead, behind the same build-source guard, for a bring-up
+  before any release exists. It ends by running the boot smoke test. The repo
+  is the single source of truth for `customer.yaml`; provisioning projects it
+  to R2 unconditionally. `yes s |` answers "skip" to every secret paste prompt
+  (Machine secrets persist across deploy).
+- **Reprovisioning an existing seat** re-applies that seat's config and secrets
+  on the image its Machine runs now (`fleet seat-image <slug>`, read from Fly).
+  It never moves the seat's software and never depends on any other seat:
+  moving a seat to a newer image is `fleet release`. It runs the same busy gate
+  first (`fleet busy <slug> --wait`), refuses a seat still busy
+  (`FLEET_FORCE_MID_JOB=1` overrides), holds the seat's lease for the deploy
+  (refused, exit 4, while a rollout is deploying that seat), and clears its
+  quiesce marker afterwards (`fleet unquiesce <slug>`).
 - **Flip secrets** on the website side if a release changes the per-customer
   seam keys.
 

@@ -4,7 +4,9 @@
 # but paged no one. Every 2 minutes this Worker evaluates fleet_status and
 # emails team@smd.services on condition TRANSITIONS (edge-triggered via
 # fleet_alert_state, migration 0085): one alert when a seat goes red, one
-# recovery notice when it comes back. Deployed by deploy.yml alongside the
+# recovery notice when it comes back. It also reads fleet_rollouts and pages
+# once per fleet rollout that failed on a seat (src/rollout-failed.ts,
+# migration 0133). Deployed by deploy.yml alongside the
 # cost workers; RESEND_API_KEY + FLEET_ALERTS_BEARER staged via
 # `wrangler secret put` (secrets persist across deploys on Workers).
 name = "ss-fleet-alerts"
