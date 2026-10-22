@@ -2,14 +2,15 @@ import { describe, it, expect } from 'vitest'
 import { hasFindings, renderReviewReport, reviewFindings } from '../scripts/lib/handbook-review'
 
 const today = new Date('2026-11-01T12:00:00Z')
-const commits: Record<string, string> = {
-  'src/a.ts': '2026-10-20',
-  'src/b.ts': '2026-10-25',
+// What git reports: for each page, the sources with a commit after the one that
+// set its last_reviewed, and the day of the latest such commit.
+const after: Record<string, Record<string, string>> = {
+  'x.md': { 'src/b.ts': '2026-10-25' },
 }
-const lastCommitDay = (p: string) => commits[p] ?? null
+const changedSinceReview = (page: string, src: string) => after[page]?.[src] ?? null
 
 describe('handbook review findings', () => {
-  it('a source committed after the review date is a finding; on the same day it is not', () => {
+  it('a source committed after the review commit is a finding; one before or in it is not', () => {
     const f = reviewFindings(
       [
         {
@@ -27,7 +28,7 @@ describe('handbook review findings', () => {
           sources: ['src/b.ts'],
         },
       ],
-      lastCommitDay,
+      changedSinceReview,
       today
     )
     expect(f.sourceChanged).toEqual([
@@ -47,7 +48,7 @@ describe('handbook review findings', () => {
           sources: [],
         },
       ],
-      lastCommitDay,
+      changedSinceReview,
       today
     )
     expect(f.overdue).toEqual([{ file: 'z.md', reviewed: '2026-09-01', overdueByDays: 31 }])
@@ -56,7 +57,7 @@ describe('handbook review findings', () => {
   it('a never-reviewed page is backlog, not a finding, and is reported', () => {
     const f = reviewFindings(
       [{ file: 'n.md', section: 'engineering', sources: ['src/b.ts'] }],
-      lastCommitDay,
+      changedSinceReview,
       today
     )
     expect(f.unreviewed).toEqual([{ file: 'n.md', section: 'engineering' }])
@@ -64,22 +65,25 @@ describe('handbook review findings', () => {
     expect(renderReviewReport(f)).toContain('Never reviewed: 1 page(s)')
   })
 
-  it('an edit to the page itself does not clear anything (only last_reviewed does)', () => {
-    // The old radar compared commit times, so touching a page reset its clock.
-    // Here the page's own commits are not an input at all.
+  it('a review committed the day after it is dated still clears the sources it saw', () => {
+    // The 2026-10-21 regression: reviewed in Phoenix on the 21st, committed on
+    // the 22nd UTC together with the source edits the review made. Comparing
+    // days flagged it; ordering by commit does not, because git reports nothing
+    // after the review commit.
     const f = reviewFindings(
       [
         {
-          file: 'x.md',
+          file: 'evening.md',
           section: 'running',
           lastReviewed: '2026-10-21',
-          reviewEvery: 90,
+          reviewEvery: 30,
           sources: ['src/b.ts'],
         },
       ],
-      (p) => (p === 'docs/handbook/x.md' ? '2026-10-30' : lastCommitDay(p)),
-      today
+      changedSinceReview,
+      new Date('2026-10-22T02:00:00Z')
     )
-    expect(f.sourceChanged).toHaveLength(1)
+    expect(f.sourceChanged).toEqual([])
+    expect(hasFindings(f)).toBe(false)
   })
 })
