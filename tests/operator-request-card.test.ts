@@ -93,6 +93,7 @@ describe('parseRequestCard: the wire contract', () => {
     ['tools', { tools: Array.from({ length: 41 }, (_, i) => `t${i}`) }],
     ['refused', { refused: '0' }],
     ['job', { job: { lane: 'demand', state: 'delivered', reason: null } }], // job on a reply card
+    ['request_opening', { request_opening: 42 }],
   ])('refuses a bad %s', (field, overrides) => {
     const r = parseRequestCard(body(overrides))
     expect(r.ok).toBe(false)
@@ -137,6 +138,37 @@ describe('parseRequestCard: the wire contract', () => {
     }
   })
 
+  it('a held_reply card carries the requester words and a HELD job, and nothing else does (0136)', () => {
+    // FALSIFIER: before 0136 the kind is refused outright; a held_reply whose
+    // job is delivered, or that names no job, is refused on `job`.
+    const held = { lane: 'medchron', state: 'held', reason: 'identity', id: HELD }
+    const r = parseRequestCard(heldReplyBody())
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.card.kind).toBe('held_reply')
+      expect(r.card.requestOpening).toBe(WROTE)
+      expect(r.card.job).toEqual(held)
+    }
+    const bad = [
+      heldReplyBody({ job: null }),
+      heldReplyBody({ job: { ...held, state: 'delivered' } }),
+      heldReplyBody({ job: { ...held, id: 'not-a-ulid' } }),
+      body({ card_key: `${HASH}:held_reply` }), // kind replied, key held_reply
+    ]
+    for (const b of bad) expect(parseRequestCard(b).ok).toBe(false)
+    // A requester message with no words (an attachment alone) is still a card.
+    expect(parseRequestCard(heldReplyBody({ request_opening: null })).ok).toBe(true)
+    // The id is optional on every other job card; a job_done without one still parses.
+    const done = parseRequestCard(
+      body({
+        card_key: `${HASH}:job_done`,
+        kind: 'job_done',
+        job: { lane: 'medchron', state: 'held', reason: null },
+      })
+    )
+    expect(done.ok && done.card.job?.id).toBeNull()
+  })
+
   it('strips line breaks and bidi controls and caps display text', () => {
     expect(cleanText(`a\r\nBcc: x@y${String.fromCharCode(0x202e)}`, 200)).toBe('a Bcc: x@y')
     expect(cleanText('x'.repeat(500), 200)).toHaveLength(200)
@@ -147,6 +179,19 @@ describe('parseRequestCard: the wire contract', () => {
 })
 
 const HELD = '01M4RW99P9XHWPJ228MSSWEXGG'
+const WROTE = 'Just leave it out of the chronology. UNIQUEWROTEMARK'
+function heldReplyBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return body({
+    card_key: `${HASH}:held_reply`,
+    kind: 'held_reply',
+    reply_opening: null,
+    request_opening: WROTE,
+    tools: [],
+    replies: 0,
+    job: { lane: 'medchron', state: 'held', reason: 'identity', id: HELD },
+    ...overrides,
+  })
+}
 function laneBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return body({
     card_key: `${HASH}:lane_unproven:document-drafter.discovery_set`,
@@ -268,6 +313,29 @@ describe('the email', () => {
       expect(text).toContain(s)
     }
     expect(text).not.toMatch(new RegExp(String.fromCharCode(0x2014)))
+  })
+
+  it('a held_reply email leads with the requester words and tells SMD to record the decision', () => {
+    const card = parsed(heldReplyBody())
+    expect(cardSubject(SLUG, card)).toBe(
+      `[SMD Ops] ${SLUG} REQUESTER WROTE on held medchron job: ${SUBJECT}`
+    )
+    const text = cardText(SLUG, card)
+    for (const s of [
+      `Job: medchron ${HELD} is HELD (identity).`,
+      'Requester wrote:',
+      WROTE,
+      'record the',
+      'decision on the seat',
+      'will not act on it',
+    ]) {
+      expect(text).toContain(s)
+    }
+    expect(text).not.toContain('Reply opening:')
+    expect(text).not.toMatch(/—/)
+    expect(cardText(SLUG, parsed(heldReplyBody({ request_opening: null })))).toContain(
+      '(no words in the message)'
+    )
   })
 
   it('names a matter only when the seat named one (no law-firm line on other seats)', () => {
@@ -474,6 +542,22 @@ describe('POST /api/internal/operator-request-card', () => {
     expect(sent.text).toContain(`operator/bin/lane-proof.sh ${SLUG} dry-run ${HELD}`)
     expect(sent.text).toContain('QUEUED and will not run until the lane is proven')
     expect(sent.text).not.toMatch(/\u2014/)
+  })
+
+  it('a held_reply card is recorded with its held job and emailed with the requester words (0136)', async () => {
+    // FALSIFIER: drop migration 0136 and the kind CHECK rejects the INSERT
+    // (500); drop 'held_reply' from CARD_KINDS and the parse refuses (400).
+    const res = await post(heldReplyBody())
+    expect(res.status).toBe(200)
+    const [row] = await rows()
+    expect(row).toMatchObject({ kind: 'held_reply', job_lane: 'medchron', job_state: 'held' })
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const sent = JSON.parse(String(init.body)) as { subject: string; text: string }
+    expect(sent.subject).toContain('REQUESTER WROTE on held medchron job')
+    expect(sent.text).toContain(WROTE)
+    expect(sent.text).toContain(HELD)
+    // ADR 0052 s5: the words reach the email, never D1.
+    expect(JSON.stringify(await rows())).not.toContain('UNIQUEWROTEMARK')
   })
 
   it('no Resend key is a failure, never a pretend send', async () => {

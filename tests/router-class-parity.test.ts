@@ -588,3 +588,38 @@ describe('matter-inbox-router: the file work class', () => {
     expect(skill).toContain('never pick one')
   })
 })
+
+/**
+ * The chronology hold answer class (2026-10-22). A requester's reply in the
+ * thread of a held chronology job had no class, so the Operator answered as
+ * general mail and explained its machinery to an attorney. The class routes
+ * the reply to the chronology skill's ANSWER mode, whose words are fixed and
+ * whose turn moves nothing; SMD is paged by the seat.
+ */
+describe('matter-inbox-router: the chronology hold answer class', () => {
+  const bullet = () => flat(bulletFor(read(ROUTER), '**Chronology hold answer**'))
+
+  it('is reachable on the email channel and runs the ANSWER mode, never general mail', () => {
+    expect(bullet()).toContain(`/app/skills/${CHRONOLOGY}/SKILL.md`)
+    expect(bullet()).toContain('ANSWER mode')
+    expect(bullet()).toContain('`medchron_job_status`')
+    expect(flat(classTable(read(ROUTER)))).toContain('Chronology hold answer')
+    const rubric = flat(read(RUBRIC))
+    expect(rubric).toContain('**chronology hold answer**')
+    expect(rubric).toContain('ANSWER mode')
+  })
+
+  it('moves nothing, names the page that reaches SMD, and forbids the machinery', () => {
+    expect(bullet()).toContain('The job does not move on this turn.')
+    expect(bullet()).toContain('`held_reply` request card')
+    expect(bullet()).toContain('never say what you can or cannot do or from where')
+    expect(bullet()).toContain('never ask the sender to open, find or read anything in the matter')
+    expect(bullet()).toContain('submit nothing and resubmit nothing')
+  })
+
+  it('is the requester or an administrator, and a job that is not held is another class', () => {
+    expect(bullet()).toContain('INITIATION AUTHORITY')
+    expect(bullet()).toContain('a delivered chronology makes the ask an UPDATE')
+    expect(bullet()).toContain('a thread with no job is General mail')
+  })
+})

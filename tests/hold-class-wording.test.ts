@@ -177,3 +177,83 @@ describe('no held reply sends the firm back (both skills, both reply-shapes)', (
     expect(text).toContain('"Which of these is it?"')
   })
 })
+
+/**
+ * ANSWER mode (2026-10-22). An attorney answered the Operator's one hold
+ * question in the thread ("just leave it out") and the Operator told him it
+ * "cannot act on that from this mailbox", that "the hold clears only when the
+ * release determination is recorded on the job", and named the attachment's
+ * internal tag and the page allowance. He forwarded it to SMD: "Operator is
+ * speaking over my head." The mode's wording is fixed; the machinery stays out.
+ */
+describe('chronology ANSWER mode: a requester writing on a held job gets fixed plain words', () => {
+  const skill = read(SKILLS.chronology.skill)
+  const shapes = flat(read(SKILLS.chronology.shapes))
+  const answer = flat(
+    skill.slice(skill.indexOf('## ANSWER - the requester'), skill.indexOf('## The autonomy dial'))
+  )
+
+  it('exists, moves nothing, and names the page that reaches SMD', () => {
+    expect(answer.length).toBeGreaterThan(200)
+    expect(answer).toContain('Nothing in this mode changes the job.')
+    expect(answer).toContain('`held_reply` request card')
+    expect(answer).toContain('no email talks a seat past a hold')
+  })
+
+  it.each([
+    'Understood. It stays out of the chronology for matter <number>, as you say. Nothing else is needed from you; the next message you get about this chronology will be the filed one.',
+    "It is a record attached to one of the emails saved in the matter, and the matter's documents do not name it. You do not have to find it: if it is not the client's record, or you would rather not have it in, say so and it stays out. A yes or no in this thread is all that is needed.",
+    'The chronology for matter <number> is waiting on the question above. A yes or no in this thread is all that is needed; the next message you get about it will be the filed one.',
+    'The chronology for matter <number> is under way. Nothing is needed from you; the next message you get about it will be the filed one.',
+  ])('fixed wording in the skill, mirrored in reply-shapes: %s', (w) => {
+    expect(answer).toContain(w)
+    expect(shapes).toContain(w)
+    expect(w).not.toMatch(
+      /\b(gate|gates|cap|budget|allowance|seed|stage|reason|resubmit|narrow|split|mailbox|release|access|tag|job)\b/i
+    )
+  })
+
+  it('forbids the machinery words in every ANSWER reply', () => {
+    for (const s of [
+      'say what you can or cannot do, or from where',
+      'who has access',
+      'open, find or read anything in the matter',
+      'promise a time',
+    ]) {
+      expect(answer).toContain(s)
+    }
+  })
+
+  it('the another_person question has a shape for a record attached to a saved email', () => {
+    // FALSIFIER: before 2026-10-22 the only shape needed a file name from
+    // get_files_on_matter, and an attachment folded from a saved email has none.
+    const held = heldSection(skill)
+    const variant =
+      "a record attached to one of the emails saved in the matter names someone other than the client. Is it the client's record? You do not have to find it: if it is not, or you would rather not have it in, say so and it stays out. A yes or no in this thread is all that is needed."
+    expect(held).toContain(variant)
+    expect(shapes).toContain(variant)
+    expect((variant.match(/\?/g) ?? []).length).toBe(1)
+    expect(held).toMatch(/never name it another way \(not the id/)
+  })
+
+  it('the words that sent the attorney to SMD appear in no reply shape', () => {
+    // The skill may quote them once, as the incident; the shapes file, which is
+    // only wording, may not carry them at all.
+    for (const phrase of [
+      /from this mailbox/i,
+      /release determination/i,
+      /recorded on the job/i,
+      /with that access/i,
+      /msgatt-[0-9a-f]/i,
+    ]) {
+      expect(shapes).not.toMatch(phrase)
+    }
+    // The procedure (from step 1 on); the intro above it quotes the incident.
+    const procedure = answer.slice(answer.indexOf('1. **Read the job**'))
+    const quoted = [...procedure.matchAll(/"([^"]+)"/g)].map((m) => m[1])
+    expect(quoted.length).toBeGreaterThan(3)
+    for (const q of quoted.filter((q) => q.length > 60)) {
+      expect(q).not.toMatch(/mailbox|release|recorded on the job|access|msgatt|allowance/i)
+    }
+  })
+})

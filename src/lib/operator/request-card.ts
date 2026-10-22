@@ -7,8 +7,13 @@
  * window, `job_done` when a queued job the request started ends, and
  * `lane_unproven` the moment a request asks for a kind of job not proven on
  * that seat (the lane-proof gate, migration 0125; the job waits until SMD
- * proves the lane, runbook docs/runbooks/operator/lane-proof.md). ss-web turns
- * each card into one plain-text email to SMD ops. The wire contract is fixed
+ * proves the lane, runbook docs/runbooks/operator/lane-proof.md), and
+ * `held_reply` when the requester writes again in the thread of a request
+ * whose job is HELD (migration 0136): the firm's answer to the one question a
+ * hold can ask it, or a chase, and in either case SMD's to act on, because the
+ * Operator cannot record a decision on a held job. That card carries the
+ * requester's own opening words (`request_opening`) and the held job's id.
+ * ss-web turns each card into one plain-text email to SMD ops. The wire contract is fixed
  * by the seat side (hermes-smd-overlay `shared/request_cards.py`); change it
  * in both repos or neither.
  *
@@ -21,7 +26,13 @@
  * that does not match the contract is a 400, never a partial card.
  */
 
-export const CARD_KINDS = ['replied', 'no_reply', 'job_done', 'lane_unproven'] as const
+export const CARD_KINDS = [
+  'replied',
+  'no_reply',
+  'job_done',
+  'lane_unproven',
+  'held_reply',
+] as const
 export type CardKind = (typeof CARD_KINDS)[number]
 export const JOB_LANES = ['demand', 'drafting', 'litigation', 'medchron', 'negotiation'] as const
 export const JOB_STATES = ['delivered', 'failed', 'held'] as const
@@ -31,8 +42,10 @@ export const JOB_STATES = ['delivered', 'failed', 'held'] as const
 // card under the same request. The request hash prefix is what groups them.
 // A lane_unproven key carries its lane key: one card per request per lane (a
 // scheduled job's hash is of its job id; an in-turn first use's, of its lane).
+// A held_reply key hashes the FOLLOW-UP message, so each message the requester
+// writes on a held job is its own card.
 const CARD_KEY_RE =
-  /^[0-9a-f]{64}:(?:(replied|no_reply)|(job_done)(?::(?:delivered|failed|held)-[1-9]\d{0,3})?|(lane_unproven):([a-z0-9][a-z0-9-]{0,63}(?:\.[a-z0-9_]{1,40})?))$/
+  /^[0-9a-f]{64}:(?:(replied|no_reply|held_reply)|(job_done)(?::(?:delivered|failed|held)-[1-9]\d{0,3})?|(lane_unproven):([a-z0-9][a-z0-9-]{0,63}(?:\.[a-z0-9_]{1,40})?))$/
 const TOKEN_RE = /^[a-z0-9_:.-]{1,64}$/
 /** A lane key: the skill that queues the job, plus the drafting class. */
 const LANE_KEY_RE = /^[a-z0-9][a-z0-9-]{0,63}(?:\.[a-z0-9_]{1,40})?$/
@@ -53,6 +66,8 @@ export interface CardJob {
   lane: (typeof JOB_LANES)[number]
   state: (typeof JOB_STATES)[number]
   reason: string | null
+  /** The job's id (a ULID), when the seat named it; a held_reply names it so SMD can act. */
+  id: string | null
 }
 
 /**
@@ -75,6 +90,8 @@ export interface RequestCard {
   who: string
   subject: string
   replyOpening: string | null
+  /** The requester's own opening words; a held_reply card's reason to exist. */
+  requestOpening: string | null
   matter: string | null
   tools: string[]
   replies: number
@@ -140,7 +157,9 @@ function parseJob(v: unknown): CardJob | null | undefined {
   if (!lane || !state) return undefined
   const reason = job.reason ?? null
   if (reason !== null && (typeof reason !== 'string' || !TOKEN_RE.test(reason))) return undefined
-  return { lane, state, reason }
+  const id = job.id ?? null
+  if (id !== null && (typeof id !== 'string' || !JOB_ID_RE.test(id))) return undefined
+  return { lane, state, reason, id }
 }
 
 /** null for none, the lane for a known one, undefined for anything else. */
@@ -199,6 +218,7 @@ interface Content {
   who: string
   subject: string
   replyOpening: string | null
+  requestOpening: string | null
   matter: string | null
 }
 
@@ -209,9 +229,18 @@ function parseContent(body: Record<string, unknown>): Content | { field: string 
   if (typeof body.subject !== 'string') return { field: 'subject' }
   const replyOpening = parseOptionalText(body.reply_opening, CAP_OPENING)
   if (replyOpening === undefined) return { field: 'reply_opening' }
+  // Absent on every card a seat posted before 0136; null and absent read alike.
+  const requestOpening = parseOptionalText(body.request_opening, CAP_OPENING)
+  if (requestOpening === undefined) return { field: 'request_opening' }
   const matter = parseOptionalText(body.matter, CAP_MATTER)
   if (matter === undefined) return { field: 'matter' }
-  return { who, subject: cleanText(body.subject, CAP_SUBJECT), replyOpening, matter }
+  return {
+    who,
+    subject: cleanText(body.subject, CAP_SUBJECT),
+    replyOpening,
+    requestOpening,
+    matter,
+  }
 }
 
 /** Parse a card body against the wire contract. Any deviation names its field. */
@@ -226,10 +255,13 @@ export function parseRequestCard(body: Record<string, unknown>): ParseResult {
     if (!isCount(body[f], MAX_COUNT)) return { ok: false, field: f }
   }
   const job = parseJob(body.job)
-  // A job card carries its job; a reply or alarm card carries none.
-  if (job === undefined || (id.kind === 'job_done') !== (job !== null)) {
+  // A job card carries its job, and so does a held_reply (the job the
+  // requester wrote about, which must be held); a reply or alarm card carries none.
+  const wantsJob = id.kind === 'job_done' || id.kind === 'held_reply'
+  if (job === undefined || wantsJob !== (job !== null)) {
     return { ok: false, field: 'job' }
   }
+  if (id.kind === 'held_reply' && job?.state !== 'held') return { ok: false, field: 'job' }
   // A lane card carries its lane, the same lane its key names; no other does.
   const lane = parseLane(body.lane, id.laneKey)
   if (lane === undefined || (id.kind === 'lane_unproven') !== (lane !== null)) {
@@ -262,20 +294,47 @@ function subjectExcerpt(subject: string): string {
   return subject.length > SUBJECT_EXCERPT ? `${subject.slice(0, SUBJECT_EXCERPT - 3)}...` : subject
 }
 
-export function cardSubject(slug: string, card: RequestCard): string {
-  const s = subjectExcerpt(card.subject)
+/** The subject's middle: what happened, without the seat or the request's subject. */
+function cardHeadline(card: RequestCard): string {
+  const lane = card.job?.lane ?? 'job'
   switch (card.kind) {
     case 'replied':
-      return `[SMD Ops] ${slug} request: first reply in ${card.minutes}m: ${s}`
+      return `request: first reply in ${card.minutes}m`
     case 'no_reply':
-      return `[SMD Ops] ${slug} NO REPLY after ${card.minutes}m: ${s}`
+      return `NO REPLY after ${card.minutes}m`
     case 'job_done':
-      return `[SMD Ops] ${slug} ${card.job?.lane ?? 'job'} job ${card.job?.state ?? 'ended'}: ${s}`
+      return `${lane} job ${card.job?.state ?? 'ended'}`
     case 'lane_unproven':
       return card.lane?.heldJob
-        ? `[SMD Ops] ${slug} NEW KIND OF ASK, job waiting: ${card.lane.key}: ${s}`
-        : `[SMD Ops] ${slug} NEW KIND OF ASK, first use: ${card.lane?.key ?? 'unknown'}: ${s}`
+        ? `NEW KIND OF ASK, job waiting: ${card.lane.key}`
+        : `NEW KIND OF ASK, first use: ${card.lane?.key ?? 'unknown'}`
+    case 'held_reply':
+      return `REQUESTER WROTE on held ${lane} job`
   }
+}
+
+export function cardSubject(slug: string, card: RequestCard): string {
+  return `[SMD Ops] ${slug} ${cardHeadline(card)}: ${subjectExcerpt(card.subject)}`
+}
+
+/**
+ * What a held_reply card asks of SMD. The Operator has already answered the
+ * requester in plain words and cannot act on a held job (no email talks a seat
+ * past a hold); the person reading this email is the one who records the
+ * decision on the seat.
+ */
+function heldReplyLines(card: RequestCard): string[] {
+  const job = card.job
+  const reason = job?.reason ? ` (${job.reason})` : ''
+  const id = job?.id ? ` ${job.id}` : ''
+  return [
+    `Written: ${card.eventAt} (${card.minutes} min after the request it answers)`,
+    `Job: ${job?.lane ?? 'unknown'}${id} is HELD${reason}.`,
+    'The requester wrote again in the thread of a request whose job is held. If the hold',
+    "was the firm's question, their words below are its answer: read them, record the",
+    'decision on the seat, and resume the job. The Operator has acknowledged the message',
+    'and will not act on it; nothing goes to the requester until the job delivers.',
+  ]
 }
 
 const LANE_WHY_TEXT: Record<(typeof LANE_WHY)[number], string> = {
@@ -322,6 +381,8 @@ function outcomeLines(card: RequestCard): string[] {
     }
     case 'lane_unproven':
       return [`Noticed: ${card.eventAt} (${card.minutes} min after the request)`]
+    case 'held_reply':
+      return heldReplyLines(card)
   }
 }
 
@@ -338,6 +399,9 @@ export function cardText(slug: string, card: RequestCard): string {
     // and read as noise on every non-legal seat (Brokery, 2026-10-16).
     ...(card.matter ? [`Matter: ${card.matter}`] : []),
   ]
+  if (card.kind === 'held_reply') {
+    lines.push('', 'Requester wrote:', `  ${card.requestOpening ?? '(no words in the message)'}`)
+  }
   if (card.replyOpening) lines.push('', 'Reply opening:', `  ${card.replyOpening}`)
   lines.push(
     '',

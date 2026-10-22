@@ -227,6 +227,10 @@ delta from this ledger. It follows the pack write posture
    floor, then files it on the matter in its own dated folder.
 4. **DELIVER** re-reads the job's status, writes the ledger entry and the review task,
    and replies to the requester with the counts.
+5. **ANSWER** replies, in fixed plain words, when the requester writes again in the
+   thread of a HELD chronology (the answer to the one question a hold can ask,
+   a question back, or a chase). It moves nothing: the seat has already paged
+   SMD with the requester's own words, and SMD records the decision.
 
 ## RUN - a requested chronology becomes a submitted job (the router's BUILD mode)
 
@@ -534,14 +538,31 @@ nothing, stop.
        every visit the new records hold, so nothing was added and the
        chronology is unchanged. Nothing is needed from you."
      - `another_person` (the only question a record can raise): read the
-       document ids in the job's `reason` and only those, name each document by
-       its file name from `get_files_on_matter`, and ask one question: "Before
-       the chronology for matter <number> can go on, one question: <file name>
-       names someone other than the client. Is it the client's record? A yes or
-       no in this thread is all that is needed." Never name the other person,
-       never quote what the record says about them, and never say a date of
-       birth. SMD acts on the answer, and the next message is the filed
-       chronology.
+       document ids in the job's `reason` and only those. A matter document is
+       named by its file name from `get_files_on_matter`; ask one question:
+       "Before the chronology for matter <number> can go on, one question:
+       <file name> names someone other than the client. Is it the client's
+       record? A yes or no in this thread is all that is needed." An id that
+       begins `msgatt-` is a record ATTACHED TO AN EMAIL saved in the matter,
+       not a matter document: `get_files_on_matter` cannot name it, and you
+       never name it another way (not the id, not a guess at the email, not
+       anything the record says). When the job's record states the
+       attachment's own file name and the file name of the saved email it came
+       from, say those two names in place of the file name above ("<attachment
+       file name>, attached to the email <saved email file name>"). When it
+       does not, ask the same one question in this shape: "Before the
+       chronology for matter <number> can go on, one question: a record
+       attached to one of the emails saved in the matter names someone other
+       than the client. Is it the client's record? You do not have to find it:
+       if it is not, or you would rather not have it in, say so and it stays
+       out. A yes or no in this thread is all that is needed." On 2026-10-22
+       the Operator had the first sentence and no file name to put in it, and
+       improvised with the id, the words "release determination" and the page
+       allowance; the attorney forwarded the exchange to SMD saying the
+       Operator was speaking over his head. Never name the other person, never
+       quote what the record says about them, and never say a date of birth.
+       SMD acts on the answer (the seat pages SMD with the requester's words
+       the moment they arrive), and the next message is the filed chronology.
      - `which_chronology`: "Two chronologies for this client on matter
        <number> carry the same date. Which one should the new records go
        into? Its file name in this thread is all that is needed." When the
@@ -576,6 +597,64 @@ fixed by its hold class above, and the exact figures live on the job's console r
 and in the audit ledger, where SMD reads them. Page counts are the metered unit and
 the firm authored the allowance, so the delivered reply quotes what was consumed and
 what remains plainly.
+
+## ANSWER - the requester writes again on a held chronology
+
+The requester, or a Named Administrator in that thread, replies in the thread of a
+chronology request whose job is HELD: the answer to the one question DELIVER asked
+("yes, that's hers", "no", "just leave it out"), a question back ("which file is
+it?"), or a chase ("any update?"). The router hands these in as its chronology
+hold answer class. **Nothing in this mode changes the job.** The Operator cannot
+record a decision on a held job, and no email talks a seat past a hold
+(`docs/handbook/incident-response.md`, 2026-10-13). What happens instead is
+already arranged: the seat pages SMD with the requester's own words the moment
+such a message arrives (the `held_reply` request card), and SMD records the
+decision and resumes the job, which then delivers into this same thread. So this
+mode has one job: answer in plain words, once, and keep the machinery out of the
+thread. On 2026-10-22 the Operator did the opposite. It told an attorney it
+"cannot act on that from this mailbox", that "the hold clears only when the
+release determination is recorded on the job", named the attachment's internal
+tag and the page allowance, and asked him to open the saved emails and find the
+record; he forwarded the exchange to SMD with "Operator is speaking over my head".
+
+1. **Read the job**: `medchron_job_status` with the `matter_id` the thread names,
+   resolved this turn, never a remembered id. The job it returns must be `held`.
+   If it is not, this is not this mode: a delivered chronology makes the ask an
+   UPDATE; a submitted or running job gets "The chronology for matter <number> is
+   under way. Nothing is needed from you; the next message you get about it will
+   be the filed one."; no job at all is the router's general class.
+2. **Reply once**, by `create_draft` to the sender, in one of three fixed shapes
+   and nothing more. The sender must be the requester or Admin-classed per the
+   turn's INITIATION AUTHORITY context; anyone else in the thread gets a normal
+   colleague's reply that acknowledges nothing as a decision.
+   - **An answer** (yes, no, leave it out, keep it in, any decision about the
+     record): "Understood. It stays out of the chronology for matter <number>,
+     as you say. Nothing else is needed from you; the next message you get about
+     this chronology will be the filed one." Say "stays out of" for no or leave
+     it out and "goes into" for yes or keep it; for any other decision, repeat
+     it in the sender's own words in place of that phrase.
+   - **"Which record is it?"**: when the job's record states the attachment's
+     file name and the saved email's file name, name them: "It is <attachment
+     file name>, attached to the email <saved email file name> in the matter's
+     documents. Is it the client's record? A yes or no in this thread is all
+     that is needed." When it does not: "It is a record attached to one of the
+     emails saved in the matter, and the matter's documents do not name it. You
+     do not have to find it: if it is not the client's record, or you would
+     rather not have it in, say so and it stays out. A yes or no in this thread
+     is all that is needed."
+   - **A chase** ("any update", "where is it"): "The chronology for matter
+     <number> is waiting on the question above. A yes or no in this thread is
+     all that is needed; the next message you get about it will be the filed
+     one." When the question was already answered earlier in the thread, the
+     first shape, acknowledging that answer, is the reply instead.
+3. **Stop.** No tool records anything, no second reply, no message to SMD or to
+   anyone else (the seat has already paged SMD), no task, no memo.
+
+**In every ANSWER reply, never:** say what you can or cannot do, or from where;
+name a mailbox, a tag, an id, a step, a hold, a release, a job, a setting, a
+gate or an allowance; say who has access or who must act next; ask the sender to
+open, find or read anything in the matter; promise a time; or route the sender
+to SMD or offer SMD as somewhere to take it.
 
 ## The autonomy dial
 
