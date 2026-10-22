@@ -68,6 +68,14 @@ export interface FleetStatusRow {
    * The shortfall email names lost writes only when this falls in its window.
    */
   audit_write_failures_rose_at?: string | null
+  /**
+   * Migration 0129: what the seat says it runs. Read by ./drift, which compares
+   * each against what was authored. Optional on the type so a fixture that
+   * predates drift need not carry them; NULL is unknown and holds.
+   */
+  image_ref?: string | null
+  config_digest?: string | null
+  skills_version?: string | null
 }
 
 export async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]> {
@@ -84,7 +92,8 @@ export async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]>
               send_refusals, send_refusals_last_ts, send_refusals_json,
               tool_failures_json,
               shortfalls, shortfalls_last_ts, shortfalls_json, audit_write_failures,
-              audit_write_failures_rose_at
+              audit_write_failures_rose_at,
+              image_ref, config_digest, skills_version
          FROM fleet_status`
     )
     .all<FleetStatusRow>()

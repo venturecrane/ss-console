@@ -19,6 +19,7 @@ import {
   type StaleHold,
 } from './index'
 import { parseSeatLifetimes, VENDOR_LIFETIME_RULES } from './token-expiry'
+import type { ImageRelease } from './drift'
 
 const NOW = Date.parse('2026-07-04T12:00:00.000Z')
 const RED = 300
@@ -220,6 +221,10 @@ interface FakeState {
   edge?: Map<string, { consecutive_failures: number; consecutive_successes: number }>
   /** Message-ID minted for each open alert (migration 0120), by `slug:condition`. */
   messageIds?: Map<string, string>
+  /** fleet_releases image rows for ./drift. Absent = none (image drift holds). */
+  releases?: ImageRelease[]
+  /** fleet_rollouts rows of the blessed release, oldest first. */
+  rollouts?: Array<{ customer_slug: string; state: string }>
 }
 
 function sinkRow(over: Partial<FakeSinkRow> = {}): FakeSinkRow {
@@ -295,6 +300,9 @@ function makeEnv(state: FakeState, withResend = true, extra: Partial<Env> = {}):
           if (sql.includes('FROM operator_shortfalls')) {
             return Promise.resolve({ results: [] })
           }
+          if (sql.includes('FROM fleet_releases')) {
+            return Promise.resolve({ results: state.releases ?? [] })
+          }
           if (sql.includes('FROM edge_poll_state')) {
             // Retirement lists every counters row (wave 8.2 follow-up).
             return Promise.resolve({
@@ -321,6 +329,9 @@ function makeEnv(state: FakeState, withResend = true, extra: Partial<Env> = {}):
               if (sql.includes('FROM operator_shortfalls')) {
                 // The shortfall pager has its own executed suite (shortfalls.test.ts).
                 return Promise.resolve({ results: [] })
+              }
+              if (sql.includes('FROM fleet_rollouts')) {
+                return Promise.resolve({ results: state.rollouts ?? [] })
               }
               if (sql.includes('LEFT JOIN fleet_status')) {
                 return Promise.resolve({ results: computeStaleHolds(state) })
@@ -1749,6 +1760,74 @@ describe('edge poll through runOnce (wave 8.2)', () => {
     const state: FakeState = { fleet: [row({})], alertState: new Map(), writes: [] }
     const summary = await runOnce(makeEnv(state), NOW)
     expect(summary.edge_polls).toEqual([])
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Drift (./drift, migration 0135) through runOnce: one page, then silence,
+// then one recovery, on the same open/resolve rows as every level condition.
+// ---------------------------------------------------------------------------
+
+describe('runOnce drift alarm', () => {
+  const REPO = 'registry.fly.io/hermes-fleet'
+  const releases: ImageRelease[] = [
+    {
+      release_id: 'img-old',
+      image_ref: `${REPO}:rel-old`,
+      image_digest: null,
+      created_at: '2026-07-01T00:00:00Z',
+      completed_last_ring_at: '2026-07-01T06:00:00Z',
+    },
+    {
+      release_id: 'img-blessed',
+      image_ref: `${REPO}:rel-blessed`,
+      image_digest: null,
+      created_at: '2026-07-03T00:00:00Z',
+      completed_last_ring_at: '2026-07-03T06:00:00Z',
+    },
+  ]
+
+  it('pages image_drift once, stays silent while drifted, recovers once', async () => {
+    const fetchMock = stubResend()
+    const state: FakeState = {
+      fleet: [row({ image_ref: `${REPO}:rel-old` })],
+      alertState: new Map(),
+      writes: [],
+      releases,
+      rollouts: [{ customer_slug: 'smd', state: 'done' }],
+    }
+    const first = await runOnce(makeEnv(state), NOW)
+    expect(first.transitions).toEqual([
+      expect.objectContaining({ condition: 'image_drift', kind: 'opened', emailed: true }),
+    ])
+    const alert = JSON.parse(String(fetchMock.mock.calls[0][1].body))
+    expect(alert.subject).toBe(
+      '[SMD Ops] ALERT smd: Seat went back to an older image after its release landed'
+    )
+
+    const second = await runOnce(makeEnv(state), NOW + 120_000)
+    expect(second.transitions).toEqual([])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    state.fleet = [row({ image_ref: `${REPO}:rel-blessed` })]
+    const third = await runOnce(makeEnv(state), NOW + 240_000)
+    expect(third.transitions).toEqual([
+      expect.objectContaining({ condition: 'image_drift', kind: 'resolved' }),
+    ])
+  })
+
+  it('a seat the release never reached does not page', async () => {
+    const fetchMock = stubResend()
+    const state: FakeState = {
+      fleet: [row({ image_ref: `${REPO}:rel-old` })],
+      alertState: new Map(),
+      writes: [],
+      releases,
+      rollouts: [],
+    }
+    const summary = await runOnce(makeEnv(state), NOW)
+    expect(summary.transitions).toEqual([])
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })

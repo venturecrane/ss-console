@@ -24,6 +24,15 @@ binding = "DB"
 database_name = "ss-console-db"
 database_id = "65171b23-d615-42a7-84e7-a4fac20d063c"
 
+# 2026-10-22: the drift alarm (src/drift.ts) reads what each seat is SUPPOSED
+# to run from the same bucket the seats fetch from: vaults/<slug>/customer.yaml
+# (hashed and compared with the seat's config_digest) and
+# vaults/<slug>/skills-pointer.json. Read-only; same bucket as the web Worker's
+# CUSTOMER_CONFIG binding (../../wrangler.toml).
+[[r2_buckets]]
+binding = "CUSTOMER_CONFIG"
+bucket_name = "smd-customer-config"
+
 [triggers]
 # The 2-minute pager, and the Monday 08:11 Phoenix (15:11 UTC) digest of what
 # the Operator declined as not entitled. The digest string must equal
@@ -105,6 +114,11 @@ EDGE_POLL_TARGETS = "smd.services=https://smd.services/api/health"
 EDGE_POLL_FAIL_THRESHOLD = "3"
 EDGE_POLL_RECOVER_THRESHOLD = "2"
 EDGE_POLL_TIMEOUT_MS = "10000"
+# Seconds after a customer.yaml or skills-pointer write during which a seat that
+# has not picked it up yet HOLDS rather than paging config_drift / skills_drift.
+# The appliers poll every 15s and a skills rollout's read-back waits 3 minutes;
+# 15 minutes is well past both. See src/drift.ts.
+DRIFT_GRACE_SECONDS = "900"
 
 # Secret (optional), staged via `wrangler secret put ALERTER_HEALTHCHECKS_PING_URL`:
 # the alerter's own healthchecks.io check, pinged at the end of every successful
