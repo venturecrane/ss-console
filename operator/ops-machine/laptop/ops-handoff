@@ -1,16 +1,16 @@
 #!/bin/bash
-# ops-handoff <client> "<task>" [--reply-to <session>]: hand a task from a
-# laptop session to a client's ops workspace, without doing it here. What a
-# laptop agent runs when the client-data guard stops it. The task text goes to
-# its own file in the workspace's ~/inbox (pending-<stamp>-<pid>.md), one per
-# handoff; nothing is kept on the laptop.
+# ops-handoff <client> "<task>": hand a task from a laptop session to a client's
+# ops workspace, without doing it here. What a laptop agent runs when the
+# client-data guard stops it. The task text goes to its own file in the
+# workspace's ~/inbox (pending-<stamp>-<id>.md), one per handoff; nothing is
+# kept on the laptop.
 #
-# --reply-to names the laptop session (its Remote Control name, the one
-# ListAgents prints as "This session is <name>"). The workspace session that
-# takes the task messages that session first, with its own address, and sends
-# its verdict there when done. The laptop never has to find the workspace
-# session by name: a session started with a task is renamed to an auto-title,
-# so `ops-<slug>` is not a reliable address (seen 2026-10-22).
+# The workspace session that takes the task is named ops-<slug>-<id> (ops-start
+# reads the id off the file name), and this prints that name. The laptop session
+# opens the conversation with SendMessage to it; the workspace replies to the
+# address the message came from. It cannot work the other way: a laptop
+# session's ListAgents name (ss-console-03) exists only on that laptop, and over
+# Remote Control the workspace sees it under an auto-title (proven 2026-10-22).
 #
 # If a workspace session is already running (tmux "main" exists), the task opens
 # at once in a new window of it, so the Captain switches windows rather than
@@ -20,16 +20,9 @@
 # (~/outbox, newest last), so a laptop session sees what happened without the
 # Captain copying it across. Outcomes only; documents never leave ~/work.
 set -uo pipefail
-usage='usage: ops-handoff <client> "<task>" [--reply-to <session>] | ops-handoff <client> --results'
-[ -n "${1:-}" ] && [ -n "${2:-}" ] || { echo "$usage"; exit 2; }
-client="$1" task="$2" reply_to=""
-shift 2
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --reply-to) reply_to="${2:-}"; shift 2 ;;
-    *) echo "$usage"; exit 2 ;;
-  esac
-done
+usage='usage: ops-handoff <client> "<task>" | ops-handoff <client> --results'
+[ -n "${1:-}" ] && [ -n "${2:-}" ] && [ $# -eq 2 ] || { echo "$usage"; exit 2; }
+client="$1" task="$2"
 reg="$HOME/.claude/smd-ops-workspaces.json"
 app=$(jq -r --arg a "$client" '.workspaces | to_entries[] | select(.key==$a or (.value.aliases // [] | index($a))) | .value.app' "$reg" | head -1)
 [ -n "$app" ] || { echo "no workspace called $client"; exit 1; }
@@ -42,10 +35,14 @@ fi
 OPS_WAKE_ONLY=1 "$(dirname "$0")/ops" "$client" || exit 1
 # Each handoff is its own file, so two handed over at once become two sessions.
 # Until 2026-10-22 they appended to one pending.md and the next session took both.
-file="pending-$(date -u +%Y%m%dT%H%M%S)-$$.md"
+# The id names the workspace session too (ops-start: ops-<slug>-<id>), so the
+# laptop knows its address before it opens. ops-<slug> alone is ambiguous once
+# two tasks run at once.
+id=$$
+file="pending-$(date -u +%Y%m%dT%H%M%S)-$id.md"
+session="$app-$id"
 {
   printf '## Handed over %s from %s\n\n' "$(date -u +%FT%TZ)" "$(hostname -s)"
-  [ -n "$reply_to" ] && printf 'Reply-to: %s\n\n' "$reply_to"
   printf '%s\n\n' "$task"
 } | fly ssh console -a "$app" -u ops --pty=false -C "sh -c 'mkdir -p ~/inbox && cat > ~/inbox/$file'" >/dev/null 2>&1
 n=$(fly ssh console -a "$app" -u ops -C "sh -c 'wc -c < ~/inbox/$file'" </dev/null 2>/dev/null | tail -1 | tr -d ' \r')
@@ -61,5 +58,5 @@ if [ "$opened" = "opened" ]; then
 else
   echo "Handed over to $app. Tell the Captain: type \`ops $client\` to continue there."
 fi
-[ -n "$reply_to" ] && echo "It will message $reply_to when it starts, and send its verdict there."
+echo "Its session is $session. Once it is open, message it with SendMessage to $session; it replies to you and sends its verdict to you when done."
 exit 0

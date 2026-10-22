@@ -22,18 +22,22 @@ git -C "$HOME/dev/ss-console" pull -q --ff-only 2>/dev/null || true
 git -C "$HOME/dev/engagements" pull -q --ff-only 2>/dev/null || true
 cd "$HOME/dev/ss-console" || exit 1
 
-# Remote Control, named ops-<slug>, makes this session a peer the laptop
-# sessions can message and hear back from (SendMessage), so a handed-over task
-# is not driven by the Captain copying text between windows (2026-10-21). The
-# channel carries instructions and verdicts; documents stay here (the rule is
-# in the prompt below and in the handoff's own contract).
-# --name is what a peer addresses (the docs do not promise the --remote-control
-# argument sets it); both carry the same name.
-rc=(--name "ops-$slug" --remote-control "ops-$slug")
-channel="Laptop sessions can message you over Remote Control and you can reply with SendMessage to the sender's address; send verdicts, codes and verify IDs only, never record text, names or amounts from client files."
+# Remote Control makes this session a peer the laptop sessions can message and
+# hear back from (SendMessage), so a handed-over task is not driven by the
+# Captain copying text between windows (2026-10-21). The channel carries
+# instructions and verdicts; documents stay here (the rule is in the prompt
+# below and in the handoff's own contract). --name is what a peer addresses:
+# ops-<slug> for a plain session, ops-<slug>-<id> for a handed-over task, so two
+# tasks at once never share an address. The laptop opens the conversation (it
+# knows the name: ops-handoff prints it); this session replies to the sender.
+# The reverse fails: a laptop session's ListAgents name exists only on that
+# laptop, and over Remote Control this side sees it under an auto-title
+# (proven 2026-10-22).
+name="ops-$slug"
+channel="Laptop sessions can message you over Remote Control; reply with SendMessage to the address each message came from (its from attribute), never to a name written in a task. Send verdicts, codes and verify IDs only, never record text, names or amounts from client files."
 
 # One handoff, one file, one session. ops-handoff writes each task to its own
-# ~/inbox/pending-<stamp>-<rand>.md and names it when it opens a window, so two
+# ~/inbox/pending-<stamp>-<id>.md and names it when it opens a window, so two
 # laptops handing over at once get two sessions. Until 2026-10-22 every handoff
 # appended to one pending.md and the next session took all of them: the Curtis
 # chronology hold and an already-finished facilities write arrived together.
@@ -52,17 +56,13 @@ if [ -n "$task" ] && [ -s "$task" ]; then
   # document content: that stays here under ~/work.
   out="$HOME/outbox/$(basename "$taken")"
   mkdir -p "$HOME/outbox"
-  # The laptop session that handed the task over names itself (ops-handoff
-  # --reply-to). This session contacts it, rather than the laptop finding this
-  # one: a session started with a task is renamed to an auto-title, so the
-  # ops-<slug> name above is not an address a laptop can rely on (2026-10-22).
-  reply_to=$(sed -n 's/^Reply-to: \(.*\)$/\1/p' "$taken" | sort -u | paste -sd, -)
-  contact=""
-  if [ -n "$reply_to" ]; then
-    contact=" Before starting, send one SendMessage to each laptop session named in its Reply-to lines ($reply_to): that you have the task, and your own session name from ListAgents. When you finish (or stop), send each of them the verdict and any verify IDs too. If a send fails, carry on; the outbox file is the record."
-  fi
-  /opt/ops/bin/claude "${rc[@]}" "A task was handed to this workspace from a laptop session; it is in $taken. Read it, then do it here. Client documents for this work stay on this workspace (under ~/work); only finished deliverables leave, through the seat. When you finish (or stop), write the outcome to $out for the laptop session that handed it over: what you did, what you found (the verdict, not the documents: no quoted record text, no medical detail), and anything still open. A laptop reads that file.$contact $channel"
+  # The id ops-handoff put in the file name (pending-<stamp>-<id>.md) names this
+  # session, which is the address ops-handoff printed on the laptop.
+  id=$(basename "$task" .md | sed -n 's/^pending-[0-9T]*-\([0-9A-Za-z]*\)$/\1/p')
+  name="ops-$slug-${id:-$$}"
+  contact=" Your session name is $name; the laptop session that handed this over messages you there. When you finish (or stop), send the verdict and any verify IDs to every session that messaged you about this task. If a send fails, carry on; the outbox file is the record."
+  /opt/ops/bin/claude --name "$name" --remote-control "$name" "A task was handed to this workspace from a laptop session; it is in $taken. Read it, then do it here. Client documents for this work stay on this workspace (under ~/work); only finished deliverables leave, through the seat. When you finish (or stop), write the outcome to $out for the laptop session that handed it over: what you did, what you found (the verdict, not the documents: no quoted record text, no medical detail), and anything still open. A laptop reads that file.$contact $channel"
 else
-  /opt/ops/bin/claude "${rc[@]}"
+  /opt/ops/bin/claude --name "$name" --remote-control "$name"
 fi
 exec bash -l
