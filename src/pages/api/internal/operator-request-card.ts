@@ -6,7 +6,9 @@
  * alarm: nothing answered inside the seat's window), `job_done` (a queued job
  * the request started reached a terminal state), `lane_unproven` (the request
  * asked for a kind of job not proven on the seat; the job waits for SMD's proof
- * run, migration 0125, docs/runbooks/operator/lane-proof.md).
+ * run, migration 0125, docs/runbooks/operator/lane-proof.md), `held_reply`
+ * (the requester wrote again in the thread of a request whose job is held;
+ * SMD reads the words and records the decision on the seat, migration 0136).
  *
  * Auth: per-seat Bearer key + X-Tenant-Slug header, the heartbeat's
  * credential (`src/lib/auth/machine-key.ts`).

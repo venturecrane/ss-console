@@ -13,6 +13,12 @@
  * none`, or `queued ?` for a card recorded before migration 0134). Read that,
  * not job_lane: job_lane fills only when a job ENDS.
  *
+ * A `REQUESTER WROTE on held <lane> job` line (migration 0136) is a message a
+ * person sent in the thread of a request whose job is held: the firm's answer
+ * to the one question a hold can ask it, or a chase. Either way it is SMD's to
+ * act on; the Operator cannot record a decision on a held job. The words are
+ * in the email.
+ *
  * The table holds numbers and keys only (ADR 0052 s5): who asked and what
  * they asked live in the email in team@smd.services, found by the short
  * request id this prints (the email's "Card:" line carries the full key).
@@ -111,6 +117,9 @@ function outcome(row: CardRow): string {
   if (row.kind === 'lane_unproven') {
     return `NEW KIND ${row.lane_key ?? '?'} ${row.job_lane ? 'job waiting' : 'first use'}`
   }
+  if (row.kind === 'held_reply') {
+    return `REQUESTER WROTE on held ${row.job_lane ?? 'job'} job at +${row.minutes}m`
+  }
   return `${row.job_lane ?? 'job'} ${row.job_state ?? 'ended'} at +${row.minutes}m`
 }
 
@@ -136,6 +145,8 @@ export interface Summary {
   noReply: number
   jobDone: number
   laneUnproven: number
+  /** Messages a requester wrote on a held job (migration 0136): each is SMD's to act on. */
+  heldReply: number
   notEmailed: number
   stillUnanswered: number
 }
@@ -152,6 +163,7 @@ export function summarize(rows: readonly CardRow[]): Summary {
     noReply: alarms.length,
     jobDone: rows.filter((r) => r.kind === 'job_done').length,
     laneUnproven: rows.filter((r) => r.kind === 'lane_unproven').length,
+    heldReply: rows.filter((r) => r.kind === 'held_reply').length,
     notEmailed: rows.filter((r) => r.status !== 'sent').length,
     stillUnanswered: alarms.filter((r) => !answered.has(requestIdOf(r.card_key))).length,
   }
@@ -165,7 +177,7 @@ export function renderReport(rows: readonly CardRow[], sinceLabel: string): stri
     '',
     `${s.requests} requests, ${s.cards} cards since ${sinceLabel}: ` +
       `${s.replied} replied, ${s.noReply} NO REPLY alarms, ${s.jobDone} job endings, ` +
-      `${s.laneUnproven} new kinds of ask.`,
+      `${s.laneUnproven} new kinds of ask, ${s.heldReply} requester messages on held jobs.`,
     `Still unanswered (an alarm with no later reply card): ${s.stillUnanswered}.`,
     `Not emailed yet: ${s.notEmailed}.`,
   ].join('\n')

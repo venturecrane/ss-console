@@ -28,7 +28,17 @@ technical record, and every hold our side caused already paged SMD with it.
   names someone other than the client. Is it the client's record? A yes or no
   in this thread is all that is needed." The file name comes from
   `get_files_on_matter` for the document ids in the reason; the other person
-  is never named and nothing the record says is quoted.
+  is never named and nothing the record says is quoted. A `msgatt-` id is a
+  record attached to an email saved in the matter, which `get_files_on_matter`
+  cannot name: when the job's record states the attachment's file name and the
+  saved email's file name, they stand in for the file name ("<attachment file
+  name>, attached to the email <saved email file name>"); when it does not, the
+  question is: "Before the chronology for matter <number> can go on, one
+  question: a record attached to one of the emails saved in the matter names
+  someone other than the client. Is it the client's record? You do not have to
+  find it: if it is not, or you would rather not have it in, say so and it
+  stays out. A yes or no in this thread is all that is needed." Never the id,
+  never a guess at which email, never a date of birth.
 - **`which_chronology`** (a question): "Two chronologies for this client on
   matter <number> carry the same date. Which one should the new records go
   into? Its file name in this thread is all that is needed."
@@ -46,6 +56,37 @@ technical record, and every hold our side caused already paged SMD with it.
   all that is needed."
 - **Two or more matters fit.** The candidates as prose (number, client,
   status), then "Which of these is it?"
+
+## ANSWER mode, the requester writes again on a held chronology
+
+The job does not move on this turn (no email talks a seat past a hold); the
+seat has already paged SMD with the sender's own words, and SMD records the
+decision. The reply is one of these, once, and nothing else.
+
+- **An answer** (no, leave it out; yes, keep it in; any decision about the
+  record): "Understood. It stays out of the chronology for matter <number>,
+  as you say. Nothing else is needed from you; the next message you get about
+  this chronology will be the filed one." ("goes into" for yes or keep it;
+  any other decision repeated in the sender's own words.)
+- **"Which record is it?"**, when the job's record names it: "It is
+  <attachment file name>, attached to the email <saved email file name> in
+  the matter's documents. Is it the client's record? A yes or no in this
+  thread is all that is needed." When it does not: "It is a record attached
+  to one of the emails saved in the matter, and the matter's documents do not
+  name it. You do not have to find it: if it is not the client's record, or
+  you would rather not have it in, say so and it stays out. A yes or no in
+  this thread is all that is needed."
+- **A chase**: "The chronology for matter <number> is waiting on the question
+  above. A yes or no in this thread is all that is needed; the next message
+  you get about it will be the filed one."
+- **Not held** (submitted or running): "The chronology for matter <number> is
+  under way. Nothing is needed from you; the next message you get about it
+  will be the filed one." A delivered chronology makes the ask an UPDATE.
+
+Never in an ANSWER reply: what the Operator can or cannot do, or from where; a
+mailbox, a tag, an id, a step, a hold, a release, a job, a setting, a gate or
+an allowance; who has access or who must act next; an ask to open, find or
+read anything in the matter; a time; SMD as a route.
 
 ## Never, on a hold
 
