@@ -21,6 +21,14 @@
 # Run it whenever a pyproject under operator/ changes its dependencies, or to
 # take a routine currency bump; commit the result. bin/tests/test_requirements_pins.py
 # fails when a declared dependency has no pin here.
+#
+# Arguments are passed to every `uv pip compile`, so an advisory fix can move
+# one package and nothing else:
+#
+#   operator/requirements/compile.sh --upgrade-package opentelemetry-api
+#
+# That is the shape a security fix wants: the whole-tree bump Dependabot groups
+# can fail on any of twenty packages and leave the advisory unfixed meanwhile.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,6 +41,7 @@ PLATFORM=linux
 # workstation's absolute worktree path.
 ROOT="$(cd "${OPERATOR}/.." && pwd)"
 cd "${ROOT}"
+EXTRA=("$@")
 
 overrides="$(mktemp)"
 trap 'rm -f "${overrides}"' EXIT
@@ -52,6 +61,7 @@ compile() {
     --python-platform "${PLATFORM}" \
     --no-header \
     --quiet \
+    ${EXTRA[@]+"${EXTRA[@]}"} \
     -o "${HERE}/${out}"
   echo "wrote requirements/${out} ($(grep -cE '^[a-z0-9]' "${HERE}/${out}") pins)"
 }
