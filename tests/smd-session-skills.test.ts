@@ -101,6 +101,19 @@ describe('the register is wired into both skills', () => {
     expect(body).toMatch(/\[owed\]/)
   })
 
+  it('/sos leads with what is ours and never folds waiting rows into it', () => {
+    // 2026-10-22: "[owed] 53 open" read 50 for Ashton & Price when 15 were ours.
+    const body = skillBody('sos')
+    expect(body).toMatch(/counting only `ours` rows/)
+    expect(body).toMatch(/Never fold the two into one number/)
+  })
+
+  it('/eos Check I moves rows a letter handed to the client', () => {
+    const body = skillBody('eos')
+    expect(body).toMatch(/\*\*Awaited, too\.\*\*/)
+    expect(body).toMatch(/register await --client/)
+  })
+
   it('/sos never prints obligation text into the transcript', () => {
     // The line lands in a session transcript; transcripts persist under
     // ~/.claude and go to model providers, and this repo is public.

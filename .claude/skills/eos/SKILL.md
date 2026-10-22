@@ -163,6 +163,15 @@ The `--kind none` path exists precisely so that "we looked and owe nothing" is a
 
 Without this a kept promise stays on the list forever: a letter row has no other way out. The nightly reconcile run certifies it (`delivered` → `verified`).
 
+**Awaited, too.** If a letter this session sent or read puts the next step on the client or a vendor (an ask, a "once you reply", a choice only they can make) and the obligation is on the register, record that once the letter's archive has merged:
+
+```bash
+.claude/bin/register await --client <slug> --key <stable-key> \
+  --evidence <path of the letter> --quote "<verbatim: whose move it is>"
+```
+
+Do it for every row the letter hands over, not just the first. A consolidated ask ("everything still waiting on you") is the moment: one letter, many rows. Without this the row stays `open`, the `/sos` line counts it as work SMD owes, and the 30-day age alarm pages about the client's pace. On 2026-10-22 34 of Ashton & Price's 50 open rows were waiting on the firm, 25 of them named in a single letter (395) that no session followed with `await`. When the client answers, the row is ours again: `deliver` it when the work is sent.
+
 **This check RECORDS; it never BLOCKS.** It is explicitly **not** a Ship Gate item and its output never becomes an external blocker. Client obligations legitimately span sessions — that is what a register is for. Wiring them into the Ship Gate would make every promise a reason a session cannot close, and within a week people would be inventing blockers to get out of it. Surface it, act on it, move on.
 
 **Released, too.** If a client letter this session read WITHDREW an ask that is on the register, record the release on the Captain's word once that letter's archive has merged: `.claude/bin/register cancel --client <slug> --key <stable-key> --evidence <the client's letter> --quote "<verbatim from it>"`. Nothing was delivered, so the row goes to `cancelled`, never through `delivered`.
@@ -245,7 +254,7 @@ If **≤4 items pass the gate**, present them in ONE consolidated prompt using `
 | F                             | Update the file to reflect actual state (e.g., "merged in PR #N" → "proposed in open PR #N")                                            | Use `Edit` with precise `old_string`/`new_string`; do not rewrite the file.                                                                                                               |
 | G                             | `gh issue close <N> --comment "Verified resolved during session {session_id}. See handoff."`                                            | Deferral disallowed. In-session verification that isn't carried through to closure is the same incomplete-work pattern Check D catches on PRs.                                            |
 | H                             | Rewrite the handoff diagnostic section to cite the matching memory filename, or add "no matching memory found (candidate for new one)". | Forces the check to run. "Root cause unknown" with no memory check is rejected.                                                                                                           |
-| I                             | `.claude/bin/register add …` for what was promised, or `register add --kind none --client <slug> --why "…"` to record a considered pass. | RECORDS, never blocks. Never a Ship Gate item and never an external blocker — client obligations legitimately span sessions. Cannot fabricate: the quote must match the source file.      |
+| I                             | `.claude/bin/register add …` for what was promised, or `register add --kind none --client <slug> --why "…"` to record a considered pass; `register deliver` / `register await` for rows a letter kept or handed to the client. | RECORDS, never blocks. Never a Ship Gate item and never an external blocker — client obligations legitimately span sessions. Cannot fabricate: the quote must match the source file.      |
 
 #### Post-Action Verification
 

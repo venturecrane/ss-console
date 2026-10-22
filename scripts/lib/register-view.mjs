@@ -20,6 +20,7 @@
  */
 
 import { clientOf } from './seat-clients.mjs'
+import { waitsOnSomeoneElse } from './obligation-reconcile/verdicts.ts'
 import { ageInDays } from './sqlite-time.mjs'
 
 /** Whole days since a SQLite (UTC, space-separated) timestamp. */
@@ -46,7 +47,34 @@ export const JSON_FIELDS = [
   'state',
   'due_at',
   'age_days',
+  'move',
 ]
+
+/**
+ * Whose move a row is, in the three buckets a reader acts on differently.
+ *
+ *   ours       SMD owes the next step.
+ *   theirs     the client or a vendor does (awaiting_external, or a kind that
+ *              waits on a third party by definition). The same test the
+ *              nightly age ladder uses, so the list and the alarms never
+ *              disagree about which rows are ours to chase.
+ *   delivered  SMD says it is done; the nightly run has yet to certify it.
+ *
+ * Without this split the session-start line read "50 open" for Ashton & Price
+ * on 2026-10-22 when 15 were ours: every row waiting on the firm counted as
+ * work SMD owed.
+ */
+export function whoseMove(row) {
+  if (row.state === 'delivered' || row.state === 'verified') return 'delivered'
+  return waitsOnSomeoneElse(row) ? 'theirs' : 'ours'
+}
+
+const MOVE_ORDER = ['ours', 'theirs', 'delivered']
+const MOVE_HEADING = {
+  ours: 'ours',
+  theirs: 'waiting on the client or a vendor',
+  delivered: 'delivered, certifies on the nightly run',
+}
 
 /** Shape a raw row for machine consumption, dropping anything confidential. */
 export function projectRow(row, now = Date.now()) {
@@ -59,10 +87,27 @@ export function projectRow(row, now = Date.now()) {
     state: row.state,
     due_at: row.due_at ?? null,
     age_days: ageDays(row.created_at, now),
+    move: whoseMove(row),
   }
 }
 
-/** Render the human table, grouped by client. Pure so it can be tested. */
+/** One row of the human table: the identifying line, then the obligation text. */
+function renderRow(row, widest, now) {
+  const age = ageDays(row.created_at, now)
+  return [
+    [
+      '   ',
+      String(row.stable_key ?? '').padEnd(widest),
+      String(row.kind ?? '').padEnd(20),
+      String(row.state ?? '').padEnd(18),
+      (row.due_at ? `due ${row.due_at}` : 'no due date').padEnd(16),
+      age === null ? '' : `${age}d old`,
+    ].join(' '),
+    `      ${row.what ?? ''}`,
+  ]
+}
+
+/** Render the human table, grouped by client then by whose move. Pure so it can be tested. */
 export function renderTable(rows, now = Date.now()) {
   if (rows.length === 0) {
     // NEVER an empty table. A broken selector and a clean register look
@@ -81,32 +126,26 @@ export function renderTable(rows, now = Date.now()) {
     const group = byClient.get(client)
     out.push(`${client}  (${group.length})`)
     const widest = Math.max(...group.map((r) => String(r.stable_key ?? '').length), 3)
-    for (const row of group) {
-      const age = ageDays(row.created_at, now)
-      out.push(
-        [
-          '  ',
-          String(row.stable_key ?? '').padEnd(widest),
-          String(row.kind ?? '').padEnd(20),
-          String(row.state ?? '').padEnd(18),
-          (row.due_at ? `due ${row.due_at}` : 'no due date').padEnd(16),
-          age === null ? '' : `${age}d old`,
-        ].join(' ')
-      )
-      out.push(`     ${row.what ?? ''}`)
+    for (const move of MOVE_ORDER) {
+      const bucket = group.filter((r) => whoseMove(r) === move)
+      if (bucket.length === 0) continue
+      out.push(`  ${MOVE_HEADING[move]} (${bucket.length})`)
+      for (const row of bucket) out.push(...renderRow(row, widest, now))
     }
     out.push('')
   }
   const dated = rows.filter((r) => r.due_at).length
+  const counts = MOVE_ORDER.map((move) => rows.filter((r) => whoseMove(r) === move).length)
   out.push(
-    `${rows.length} open across ${byClient.size} client${byClient.size === 1 ? '' : 's'}; ${dated} dated.`
+    `${rows.length} open across ${byClient.size} client${byClient.size === 1 ? '' : 's'}: ` +
+      `${counts[0]} ours, ${counts[1]} waiting on the client or a vendor, ${counts[2]} delivered; ${dated} dated.`
   )
   if (dated === 0) {
     // Only a dated row can go overdue, so an all-undated register cannot alarm
     // through that path at all. The reconciler's stale ladder is what covers
     // it; saying so here keeps the gap visible to whoever is reading.
     out.push(
-      'No row carries a due date, so none can go overdue. Undated rows alarm at 30d instead.'
+      'No row carries a due date, so none can go overdue. Undated rows that are ours alarm at 30d instead.'
     )
   }
   return out.join('\n')

@@ -70,18 +70,20 @@ The obligation register (ADR 0088, `docs/handbook/obligation-register.md`) holds
 
 **Implementation.** Run `.claude/bin/register list --json` and compose one line from the rows.
 
-Each row is `{obligation_id, client, customer_slug, kind, stable_key, state, due_at, age_days}`. **There is no `what` field and there must not be** — this line lands in a session transcript, transcripts persist under `~/.claude` and go to model providers, and ss-console is a public repo. Counts and slugs say what is owed and to whom; reading the text is a separate deliberate act (`register list`, no flag).
+Each row is `{obligation_id, client, customer_slug, kind, stable_key, state, due_at, age_days, move}`. **There is no `what` field and there must not be** — this line lands in a session transcript, transcripts persist under `~/.claude` and go to model providers, and ss-console is a public repo. Counts and slugs say what is owed and to whom; reading the text is a separate deliberate act (`register list`, no flag).
 
 **Line composition:**
 
 - Zero rows → omit the line entirely.
-- Otherwise: `[owed] <N> open across <M> client(s) (<slug> <n>, …). Oldest <D>d.` Append ` None dated.` when no row carries a `due_at`, because only a dated row can go overdue and that is worth knowing. Append ` <K> overdue.` when any `due_at` is in the past.
+- Otherwise, lead with what is OURS. `move` says whose next step a row is: `ours` (SMD owes it), `theirs` (waiting on the client or a vendor), `delivered` (sent, certifies on the nightly run). Compose `[owed] <U> ours across <M> client(s) (<slug> <n>, …). Oldest <D>d.` counting only `ours` rows for the total, the per-client counts, and the oldest age. Then append ` <T> waiting on the client or a vendor.` and ` <V> delivered, certifying tonight.` when nonzero. Append ` None dated.` when no `ours` row carries a `due_at`, because only a dated row can go overdue and that is worth knowing. Append ` <K> overdue.` when any `due_at`, on any row, is in the past: a dated promise is ours to chase whoever holds the next step.
+- No `ours` rows but some `theirs` or `delivered` → `[owed] nothing ours. <T> waiting on the client or a vendor.` Never fold the two into one number. On 2026-10-22 the line read "50 open" for Ashton & Price when 15 were ours, and the Captain rightly read it as wrong.
 - Command exits non-zero (D1 unreachable, wrangler missing) → say so in one line: `[owed] register unreachable — <first line of stderr>`. **Do not omit it silently.** At a Captain-invoked step, a stated failure is right where a silent hook line would be wrong: an empty register and an unreachable one must never look identical.
 
 Examples:
 
-- `[owed] 11 open across 2 clients (ashton-price 7, smd-services 4). Oldest 34d. None dated.`
-- `[owed] 3 open across 1 client (ashton-price 3). Oldest 61d. 1 overdue.`
+- `[owed] 11 ours across 2 clients (ashton-price 7, smd-services 4). Oldest 34d. 34 waiting on the client or a vendor. None dated.`
+- `[owed] 3 ours across 1 client (ashton-price 3). Oldest 61d. 1 delivered, certifying tonight. 1 overdue.`
+- `[owed] nothing ours. 4 waiting on the client or a vendor.`
 - `[owed] register unreachable — wrangler: command not found`
 
 Note SMD Services is itself a client here: obligations on our own seats (`pilot-smokeball`, `smd-staging`, `scott`) roll up to `smd-services` via `scripts/lib/seat-clients.mjs`. There is no internal-versus-external split anywhere in the register.
