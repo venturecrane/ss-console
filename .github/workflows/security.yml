@@ -9,6 +9,10 @@ on:
   # npm-audit entirely and merged with no security signal. Running on all PRs
   # closes that hole; re-adding a base filter reopens it.
   pull_request:
+  # The merge queue (2026-10-21): "Security Summary" is required, so it must
+  # report on merge_group or every queued PR waits at "Expected" forever.
+  merge_group:
+    types: [checks_requested]
   schedule:
     # Daily at 13:00 UTC (06:00 Phoenix) so new advisories surface before the workday
     - cron: '0 13 * * *'
@@ -274,9 +278,14 @@ jobs:
         # so a pack update can reclassify long-standing code as blocking and
         # freeze all merges on unrelated PRs. Baselining scopes the merge gate
         # to what each change actually introduces.
+        # A merge-queue run diffs against the queue's base (main plus the PRs
+        # ahead of this one). Without this case it would get NO baseline, run
+        # a full audit, and block the whole queue on pre-existing findings,
+        # which is exactly what baselining exists to prevent.
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          QUEUE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
           PUSH_BEFORE: ${{ github.event.before }}
         run: |
           # The container runs git as root over a workspace owned by the
@@ -286,6 +295,9 @@ jobs:
           case "$EVENT_NAME" in
             pull_request)
               baseline=$(git merge-base HEAD "$PR_BASE_SHA" 2>/dev/null || true)
+              ;;
+            merge_group)
+              baseline=$(git merge-base HEAD "$QUEUE_BASE_SHA" 2>/dev/null || true)
               ;;
             push)
               case "$PUSH_BEFORE" in

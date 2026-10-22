@@ -31,6 +31,13 @@ name: Runtime AC proof
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+  # The merge queue (2026-10-21). This gate reads the PR BODY, which a queue
+  # run does not carry and which the queue cannot change: a PR enters the queue
+  # only with this check already green on its own run. So the queue run reports
+  # success without re-reading anything; it exists so the required context is
+  # never left at "Expected".
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
@@ -46,10 +53,16 @@ jobs:
     name: Runtime ACs carry a verification ID
     runs-on: ubuntu-latest
     steps:
+      - name: Merge queue run (gated on the PR's own run)
+        if: github.event_name == 'merge_group'
+        run: echo 'Queue run - the AC table was checked on the PR before it could enter the queue, nothing to re-read.'
+
       - name: Check out the parser
+        if: github.event_name == 'pull_request'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Inspect the AC status table and resolve its IDs
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           # The same relay key regression-claim-origin.yml passes to crane-console.

@@ -198,16 +198,19 @@ exports only (defaults allowed only in framework positions like
 
 ## The merge gates
 
-Four checks are required to merge to main. Branch protection requires the
-`Verify` job (`Typecheck, Lint, Format, Test`), and the `Main Branch Protection`
-ruleset requires three more: `Security Summary` (`security.yml`), `substrate`
-(`operator-substrate.yml`), and `Runtime ACs carry a verification ID`
-(`runtime-ac-proof.yml`, which refuses to mark an acceptance criterion tagged
-`(runtime)` as met without a `crane_verify` ID in the PR's Evidence column).
-Probe both surfaces when checking what is required
-(`gh api repos/venturecrane/ss-console/branches/main/protection` and
-`gh api repos/venturecrane/ss-console/rules/branches/main`); either alone gives
-half the list.
+Four checks are required to merge to main, all in the `Main Branch Protection`
+ruleset: the `Verify` job (`Typecheck, Lint, Format, Test`), `Security Summary`
+(`security.yml`), `substrate` (`operator-substrate.yml`), and `Runtime ACs carry
+a verification ID` (`runtime-ac-proof.yml`, which refuses to mark an acceptance
+criterion tagged `(runtime)` as met without a `crane_verify` ID in the PR's
+Evidence column). The same ruleset puts main behind a merge queue (2026-10-21):
+a green PR is queued and the queue re-runs the four checks on the `merge_group`
+event against main plus the PRs ahead of it, so every one of those workflows
+must keep its `merge_group` trigger. Probe the ruleset when checking what is
+required (`gh api repos/venturecrane/ss-console/rules/branches/main`), and
+confirm the legacy surface stays empty
+(`gh api repos/venturecrane/ss-console/branches/main/protection` returns 404
+once it is retired); a check on either surface is enforced.
 
 Beyond those, this repo carries domain-specific gates that act on policy, not
 just on tests. They enforce the no-fabricated-client-facing-content policy in
