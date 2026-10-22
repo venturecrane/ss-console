@@ -43,7 +43,7 @@ class FakeStore:
         self.rollouts: dict[str, dict[str, Any]] = {}
         self.holds_rows: dict[str, dict[str, Any]] = {}
         self.status: dict[str, dict[str, Any]] = {}
-        self.lease_row: dict[str, Any] | None = None
+        self.leases: dict[str, dict[str, Any]] = {}
         self.lease_expired = False
         self.completed: list[str] = []
         self.status_script: dict[str, list[dict[str, Any] | None]] = {}
@@ -69,7 +69,7 @@ class FakeStore:
 
     def latest_completed(self, kind: str) -> dict[str, Any] | None:
         done = [r for r in self.releases.values() if r["kind"] == kind and r.get("completed_last_ring_at")]
-        return done[-1] if done else None
+        return max(done, key=lambda r: r["completed_last_ring_at"]) if done else None
 
     def recent_releases(self, limit: int = 20) -> list[dict[str, Any]]:
         return list(self.releases.values())[:limit]
@@ -115,25 +115,48 @@ class FakeStore:
         row["state"] = state
         row["history"].append(state)
 
+    def release_done_seats(self, rid: str) -> set[str]:
+        latest: dict[str, str] = {}
+        for r in self.rollouts.values():  # insertion order is start order
+            if r["release_id"] == rid:
+                latest[r["customer_slug"]] = r["state"]
+        return {seat for seat, state in latest.items() if state == "done"}
+
     def states(self) -> dict[str, str]:
         return {r["customer_slug"]: r["state"] for r in self.rollouts.values()}
 
-    # lease
-    def acquire_lease(self, holder: str, rid: str) -> dict[str, Any] | None:
-        if self.lease_row is None or self.lease_expired or self.lease_row["holder"] == holder:
-            self.lease_row = {"lease_name": "rollout", "holder": holder, "release_id": rid, "expires_at": "later"}
-            self.lease_expired = False
-        return dict(self.lease_row)
+    # lease (one table, keyed by lease_name; "rollout" is the fleet lease)
+    @property
+    def lease_row(self) -> dict[str, Any] | None:
+        return self.leases.get("rollout")
 
-    def lease(self) -> dict[str, Any] | None:
-        return self.lease_row
+    @lease_row.setter
+    def lease_row(self, row: dict[str, Any] | None) -> None:
+        if row is None:
+            self.leases.pop("rollout", None)
+        else:
+            self.leases["rollout"] = row
 
-    def renew_lease(self, holder: str) -> bool:
-        return bool(self.lease_row and self.lease_row["holder"] == holder)
+    def acquire_lease(self, holder: str, rid: str, name: str = "rollout") -> dict[str, Any] | None:
+        row = self.leases.get(name)
+        expired = self.lease_expired and name == "rollout"
+        if row is None or expired or row["holder"] == holder:
+            self.leases[name] = {"lease_name": name, "holder": holder, "release_id": rid, "expires_at": "later"}
+            if expired:
+                self.lease_expired = False
+        return dict(self.leases[name])
 
-    def release_lease(self, holder: str) -> None:
-        if self.lease_row and self.lease_row["holder"] == holder:
-            self.lease_row = None
+    def lease(self, name: str = "rollout") -> dict[str, Any] | None:
+        return self.leases.get(name)
+
+    def renew_lease(self, holder: str, name: str = "rollout") -> bool:
+        row = self.leases.get(name)
+        return bool(row and row["holder"] == holder)
+
+    def release_lease(self, holder: str, name: str = "rollout") -> None:
+        row = self.leases.get(name)
+        if row and row["holder"] == holder:
+            del self.leases[name]
 
 
 class FakeR2:
@@ -184,9 +207,13 @@ class FakeFly:
         self.secrets: dict[str, tuple[set[str], set[str]]] = {}
         self.ssh_raises: set[str] = set()
         self.snapshots: list[str] = []
+        self.no_machine: set[str] = set()
 
     def app_exists(self, app: str) -> bool:
         return True
+
+    def machines(self, app: str) -> list[dict[str, Any]]:
+        return [] if app in self.no_machine else [{"config": {"image": self.machine_image(app)}}]
 
     def secret_names(self, app: str) -> tuple[set[str], set[str]]:
         return self.secrets.get(app, ({"ANTHROPIC_API_KEY", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"}, set()))

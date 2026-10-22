@@ -178,33 +178,60 @@ class FleetStore:
             sets.append(f"finished_at = {NOW_SQL}")
         self.d1.query(f"UPDATE fleet_rollouts SET {', '.join(sets)} WHERE rollout_id = {ids.sql_str(rollout_id)}")  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
 
+    def release_done_seats(self, release_id: str) -> set[str]:
+        """Seats whose latest rollout OF THIS RELEASE ended done.
+
+        Completion is read from these records, not from one run's outcome: a
+        release fixed seat by seat (``--only``) completes the moment its last
+        seat is done, and a seat left waiting_idle or held keeps it incomplete.
+        """
+        rid = ids.sql_str(ids.release_id(release_id))
+        rows = self.d1.query(
+            "SELECT r.customer_slug FROM fleet_rollouts r JOIN (SELECT customer_slug, MAX(started_at) AS m "  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
+            f"FROM fleet_rollouts WHERE release_id = {rid} GROUP BY customer_slug) x "
+            "ON r.customer_slug = x.customer_slug AND r.started_at = x.m "
+            f"WHERE r.release_id = {rid} AND r.state = 'done'"
+        )
+        return {r["customer_slug"] for r in rows}
+
     # -- lease ------------------------------------------------------------------
-    def acquire_lease(self, holder: str, release_id: str) -> dict[str, Any] | None:
-        """Take the rollout lease if free or expired. Returns the current row (ours or theirs)."""
+    # One table, two scopes. LEASE_NAME is the fleet lease a full rollout holds
+    # while it walks the rings; seat_lease_name(slug) is held for the length of
+    # one seat's deploy (a rollout's, or a reprovision's). Same conditional
+    # insert, same TTL and takeover of an expired holder.
+    def acquire_lease(self, holder: str, release_id: str, name: str = LEASE_NAME) -> dict[str, Any] | None:
+        """Take a lease if free or expired. Returns the current row (ours or theirs)."""
         self.d1.query(
             "INSERT INTO fleet_lease (lease_name, holder, release_id, acquired_at, expires_at) VALUES "  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
-            f"('{LEASE_NAME}', {ids.sql_str(holder)}, {ids.sql_str(release_id)}, {NOW_SQL}, "
+            f"({ids.sql_str(name)}, {ids.sql_str(holder)}, {ids.sql_str(release_id)}, {NOW_SQL}, "
             f"strftime('%Y-%m-%dT%H:%M:%SZ','now','{LEASE_TTL}')) "
             "ON CONFLICT(lease_name) DO UPDATE SET holder = excluded.holder, release_id = excluded.release_id, "
             "acquired_at = excluded.acquired_at, expires_at = excluded.expires_at "
             f"WHERE fleet_lease.expires_at < {NOW_SQL} OR fleet_lease.holder = excluded.holder"
         )
-        return self.lease()
+        return self.lease(name)
 
-    def lease(self) -> dict[str, Any] | None:
-        rows = self.d1.query(f"SELECT * FROM fleet_lease WHERE lease_name = '{LEASE_NAME}'")  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
+    def lease(self, name: str = LEASE_NAME) -> dict[str, Any] | None:
+        rows = self.d1.query(f"SELECT * FROM fleet_lease WHERE lease_name = {ids.sql_str(name)}")  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
         return rows[0] if rows else None
 
-    def renew_lease(self, holder: str) -> bool:
+    def renew_lease(self, holder: str, name: str = LEASE_NAME) -> bool:
         self.d1.query(
             f"UPDATE fleet_lease SET expires_at = strftime('%Y-%m-%dT%H:%M:%SZ','now','{LEASE_TTL}') "  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
-            f"WHERE lease_name = '{LEASE_NAME}' AND holder = {ids.sql_str(holder)}"
+            f"WHERE lease_name = {ids.sql_str(name)} AND holder = {ids.sql_str(holder)}"
         )
-        row = self.lease()
+        row = self.lease(name)
         return bool(row and row.get("holder") == holder)
 
-    def release_lease(self, holder: str) -> None:
-        self.d1.query(f"DELETE FROM fleet_lease WHERE lease_name = '{LEASE_NAME}' AND holder = {ids.sql_str(holder)}")  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
+    def release_lease(self, holder: str, name: str = LEASE_NAME) -> None:
+        self.d1.query(
+            f"DELETE FROM fleet_lease WHERE lease_name = {ids.sql_str(name)} AND holder = {ids.sql_str(holder)}"
+        )  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
+
+
+def seat_lease_name(seat: str) -> str:
+    """The lease one seat's deploy holds (a rollout's or a reprovision's)."""
+    return f"seat:{ids.slug(seat)}"
 
 
 def decode_json_list(text: str | None) -> list[str]:

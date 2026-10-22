@@ -72,6 +72,7 @@ import { CONNECTOR_DOWN_PREFIX } from './conditions'
 import { runEdgePolls, type EdgePollResult } from './edge-poll'
 import { notifySinkAlerts, type SinkNotification } from './sink-notify'
 import { notifySendRefusals, type SendRefusedNotification } from './send-refused'
+import { notifyRolloutFailures, type RolloutFailedNotification } from './rollout-failed'
 import {
   DIGEST_CRON,
   notifyShortfalls,
@@ -185,6 +186,9 @@ export type FleetCondition =
   // ss#2547. The one EVENT-shaped member of this union: it never goes `open`
   // and never resolves, it only carries a marker. See ./send-refused.
   | 'send_refused'
+  // 2026-10-21. Event-shaped like send_refused: a marker over fleet_rollouts.
+  // See ./rollout-failed.
+  | 'rollout_failed'
   // Wave 8.2. Keyed by the probe TARGET in customer_slug, not a seat.
   | 'edge_down'
   | `connector_down:${string}`
@@ -240,6 +244,8 @@ export interface RunSummary {
   stale_holds: StaleHold[]
   sink_notifications: SinkNotification[]
   send_refusals: SendRefusedNotification[]
+  /** 2026-10-21: fleet rollouts that did not land on a seat (./rollout-failed). */
+  rollout_failures: RolloutFailedNotification[]
   /** 2026-10-05: what the Operator could not give a client (./shortfalls). */
   shortfalls: ShortfallNotification[]
   /** One entry per configured edge target: what the probe saw and the counted run. */
@@ -556,6 +562,7 @@ function logRun(summary: RunSummary): void {
     ['transitions', summary.transitions],
     ['sink notifications', summary.sink_notifications],
     ['send refusals', summary.send_refusals],
+    ['rollout failures', summary.rollout_failures],
     ['shortfalls', summary.shortfalls],
   ]
   for (const [name, list] of lists) {
@@ -631,6 +638,10 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
   // -- see ./send-refused for why a refusal has no green state to return to.
   const sendRefusals = await notifySendRefusals(env, rows)
 
+  // 2026-10-21: a fleet rollout that did not land. Reads fleet_rollouts, not
+  // fleet_status, and is fail-soft inside; same placement as the pagers above.
+  const rolloutFailures = await notifyRolloutFailures(env, nowMs)
+
   // 2026-10-05: what the Operator could not give a client. Same placement and
   // fail-soft shape as the two pagers above.
   const shortfalls = await notifyShortfalls(env, rows, nowMs)
@@ -643,6 +654,7 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
     stale_holds: staleHolds,
     sink_notifications: sinkNotifications,
     send_refusals: sendRefusals,
+    rollout_failures: rolloutFailures,
     shortfalls,
     edge_polls: edge.polls,
   }

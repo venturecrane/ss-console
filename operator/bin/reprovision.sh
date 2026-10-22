@@ -43,7 +43,13 @@ fi
 # The busy gate above may have left a quiesce marker, and it lives on the volume
 # (/run/smd-medchron is a bind mount), so the new boot would claim no new work
 # until it expired. Clear it once provisioning is done, whatever the outcome.
+#
+# Provisioning holds this seat's lease (fleet with-seat-lease), the one a
+# `fleet release` takes for each seat it deploys: a reprovision and a rollout
+# never deploy the same seat at once, and neither waits on any OTHER seat. A
+# seat a rollout is deploying right now refuses with exit 4; re-run after it.
 rc=0
-infisical run --env=prod --path=/ss --silent -- "${HERE}/provision-customer.sh" "$@" || rc=$?
+infisical run --env=prod --path=/ss --silent -- \
+  "${HERE}/fleet" with-seat-lease "${SLUG}" -- "${HERE}/provision-customer.sh" "$@" || rc=$?
 "${HERE}/fleet" unquiesce "${SLUG}" || true
 exit "${rc}"

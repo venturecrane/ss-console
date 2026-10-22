@@ -94,6 +94,8 @@ const CONDITION_LABEL: Record<string, string> = {
   edge_down: 'Web edge not answering /api/health from outside',
   send_refused:
     "a routine's outbound send was refused by a gate, or a wake with needs-you items sent nothing",
+  rollout_failed:
+    'A fleet rollout did not land on this seat (failed, rolled back, or tooling error)',
 }
 
 /**
