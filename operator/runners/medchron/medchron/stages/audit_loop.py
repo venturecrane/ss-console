@@ -45,6 +45,7 @@ from .. import llm
 from ..audit import claims as CL, coverage, diag, repair
 from ..audit.page_text import exhibit_paths
 from ..audit.run import AuditPaths, Round
+from ..config import DEFAULT_AUDIT_WORKERS
 from .base import StageRun
 
 # Rounds converge steeply and each one is cheap: later rounds re-audit only the
@@ -130,9 +131,11 @@ def run(sr: StageRun) -> int:
         sr.log(f"levers.audit_mode must be image or text, not {mode!r}")
         return 2
     _rekey(sr, paths)
+    workers = int(sr.cfg.get("levers", "audit_workers") or DEFAULT_AUDIT_WORKERS)
+    sr.log(f"audit: {workers} claim(s) checked at once")
 
     def audit_round() -> int:
-        return Round(sr.doorway, audit_model, paths, sr.log, mode=mode).execute()
+        return Round(sr.doorway, audit_model, paths, sr.log, mode=mode, workers=workers).execute()
 
     for rnd in range(1, ROUNDS + 1):
         sr.log(f"===== ROUND {rnd}/{ROUNDS}: audit =====")

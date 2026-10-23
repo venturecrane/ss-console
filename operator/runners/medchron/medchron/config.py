@@ -105,6 +105,11 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
         # errors, 429s and 5xx (llm.Doorway.retry_budget_s). Absent means
         # deadline.NETWORK_RETRY_S; never less than that floor.
         "network_retry_s": ("float", False),
+        # Claims the audit checks at once (audit/run.Round.workers). Absent
+        # means 4. The audit waits on the model far more than on the seat, so
+        # a large matter's audit time is close to claims / workers; Curtis
+        # (2026-10-22) had 4,902 claims and a client waiting.
+        "audit_workers": ("int", False),
     },
     "chronology": {
         "treatment_gap_days": ("int", True),
@@ -145,6 +150,8 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
 
 BATCHABLE_STAGES = {"vision", "billing", "compose"}
 AUDIT_MODES = {"image", "text"}
+DEFAULT_AUDIT_WORKERS = 4
+MAX_AUDIT_WORKERS = 12
 DOS_CHECK_MODES = {"report", "hold"}
 # Models that return HTTP 400 on tool_choice {"type": "any"|"tool"} (Anthropic
 # migration notes for Claude Fable 5.1 and Claude Opus 5.5). Prefix-matched.
@@ -290,6 +297,9 @@ def _semantic_checks(data: dict[str, Any]) -> list[str]:
             out.append(f"levers.batch_stages: `{stage}` is not a batchable stage {sorted(BATCHABLE_STAGES)}")
     if levers.get("audit_mode") not in (None, *AUDIT_MODES):
         out.append(f"levers.audit_mode: expected one of {sorted(AUDIT_MODES)}")
+    workers = levers.get("audit_workers")
+    if workers is not None and not 1 <= int(workers) <= MAX_AUDIT_WORKERS:
+        out.append(f"levers.audit_workers: between 1 and {MAX_AUDIT_WORKERS}")
     if levers.get("dos_check") not in (None, *DOS_CHECK_MODES):
         out.append(f"levers.dos_check: expected one of {sorted(DOS_CHECK_MODES)}")
     retry = levers.get("network_retry_s")
