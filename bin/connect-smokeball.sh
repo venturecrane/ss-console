@@ -16,8 +16,10 @@
 #
 # This is the INITIATE half only — it prints a URL and never sends email and
 # never touches a secret value. Before minting anything it verifies the target
-# seat is running the overlay ref pinned on origin/main (#2149 — a token must
-# not land on a stale build). Requires `fly` auth for the seat probe.
+# seat is running the newest completed image release and that its gateway's
+# baked version is the one the heartbeat reports (#2149 — a token must not
+# land on a stale build). Requires `fly` auth for the seat probe and the fleet
+# D1 credentials for `operator/bin/fleet status` (both in the operator env).
 # Run under the operator env so the signing key + client id are present:
 #
 #   infisical run --env=prod --path=/ss -- bin/connect-smokeball.sh ashton-price
@@ -55,33 +57,28 @@ CUSTOMER_YAML="$REPO_ROOT/operator/customers/$CUSTOMER_SLUG/customer.yaml"
 
 # ---------------------------------------------------------------------------
 # SEAT-CURRENCY GATE (#2149, Captain-directed hard gate 2026-08-02). A refresh
-# token must never land on a seat that is not running the pinned overlay —
+# token must never land on a seat that is not running the current release —
 # stale builds are a PLAUSIBLE accident (two seats were rebuilt onto
-# already-stale pins on 2026-08-02 alone). The check reads origin/main, never
-# the local checkout — a stale checkout must not vouch for itself (the
-# 2026-07-31 wrong-image incident). No escape hatch: the fix for a refusal is
-# `yes s | operator/bin/reprovision.sh <slug>`.
+# already-stale pins on 2026-08-02 alone). Until the fold (ADR 0095) "current"
+# meant origin/main's overlay pin; there is no pin now, and `fleet status`
+# already defines current for every seat: no image drift against the newest
+# release that completed its last ring. This gate reads that verdict rather than
+# keeping a second definition, and it never trusts the local checkout to vouch
+# for itself (the 2026-07-31 wrong-image incident). No escape hatch: the fix for
+# a refusal is `operator/bin/fleet release <img id> --only <slug>`.
 #
 # Scope note (Captain, 2026-08-02): this gate guards against the accident class
 # only. It does NOT gate on readiness/enforcement state — connecting a client's
 # Smokeball is a deliberate, Captain-only, multi-step act that cannot happen by
 # accident, and readiness for it is the Captain's call, informed by evidence,
 # not enforced by scripts.
-git -C "${REPO_ROOT}" fetch origin --quiet \
-  || echo "WARN: git fetch failed; comparing against the last-known origin/main" >&2
 
-# (a) Seat currency: the running seat's SMD_OVERLAY_REF (container ENV, baked by
-# operator/templates/Dockerfile) must equal origin/main's pinned overlayRef.
-EXPECTED_REF="$(git -C "${REPO_ROOT}" show origin/main:operator/contracts/overlay-pairs.json \
-  | sed -n 's/.*"overlayRef"[[:space:]]*:[[:space:]]*"\([0-9a-f]*\)".*/\1/p' | head -1)"
-if [[ ! "${EXPECTED_REF}" =~ ^[0-9a-f]{40}$ ]]; then
-  echo "FATAL: could not read overlayRef from origin/main overlay-pairs.json" >&2
-  exit 1
-fi
-# Resolve the gateway pid INLINE on the seat (seat-probe.sh pattern — Fly's
-# PID 1 is their init and does not carry image ENV). No running gateway means
-# the seat cannot be verified, and a seat whose gateway is down should not be
-# receiving a token anyway — refuse.
+# (a1) The seat's own word: the gateway's SMD_OVERLAY_REF (container ENV, baked
+# by operator/templates/Dockerfile; the ss-console commit the image was built
+# from). Resolve the gateway pid INLINE on the seat (seat-probe.sh pattern —
+# Fly's PID 1 is their init and does not carry image ENV). No running gateway
+# means the seat cannot be verified, and a seat whose gateway is down should not
+# be receiving a token anyway — refuse.
 RUNNING_REF="$(fly ssh console -a "${APP_NAME}" -C "sh -c '
 GPID=\$(pgrep -f \"hermes.*gateway run\" | head -1)
 [ -n \"\${GPID}\" ] || exit 1
@@ -93,14 +90,44 @@ if [[ ! "${RUNNING_REF}" =~ ^[0-9a-f]{40}$ ]]; then
   echo "       Is the Machine running with a live gateway?" >&2
   exit 3
 fi
-if [ "${RUNNING_REF}" != "${EXPECTED_REF}" ]; then
-  echo "REFUSED: ${APP_NAME} runs overlay ${RUNNING_REF:0:12} but origin/main pins ${EXPECTED_REF:0:12}." >&2
-  echo "         A token must not land on a stale seat (#2149). Rebuild first:" >&2
-  echo "           yes s | operator/bin/reprovision.sh ${CUSTOMER_SLUG}" >&2
+
+# (a2) The fleet's word: this seat's row in `fleet status --json` (D1: the
+# heartbeat's reported version and image, with drift against the newest completed
+# release). SMD_FLEET_BIN exists so the test suite can stub the CLI; the default
+# is the real one.
+FLEET_BIN="${SMD_FLEET_BIN:-${REPO_ROOT}/operator/bin/fleet}"
+FLEET_ROW="$("${FLEET_BIN}" status --json 2>/dev/null | CUSTOMER_SLUG="${CUSTOMER_SLUG}" python3 -I -c '
+import json, os, sys
+try:
+    rows = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+row = next((r for r in rows if r.get("seat") == os.environ["CUSTOMER_SLUG"]), None)
+if row is None:
+    sys.exit(0)
+print(json.dumps({"overlay": row.get("overlay") or "", "drift": row.get("drift") or []}))
+')"
+if [ -z "${FLEET_ROW}" ]; then
+  echo "FATAL: fleet status has no readable row for ${CUSTOMER_SLUG} (D1 unreachable, or the seat" >&2
+  echo "       is in no ring) — cannot verify the seat is current, so refusing (fail closed)." >&2
+  exit 3
+fi
+FLEET_REF="$(printf '%s' "${FLEET_ROW}" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["overlay"])')"
+FLEET_DRIFT="$(printf '%s' "${FLEET_ROW}" | python3 -I -c 'import json,sys; print(",".join(json.load(sys.stdin)["drift"]))')"
+case ",${FLEET_DRIFT}," in
+  *,image,*)
+    echo "REFUSED: ${APP_NAME} runs ${RUNNING_REF:0:12} and fleet status reports it behind the newest completed release." >&2
+    echo "         A token must not land on a stale seat (#2149). Release first:" >&2
+    echo "           operator/bin/fleet release <img id> --only ${CUSTOMER_SLUG}" >&2
+    exit 3 ;;
+esac
+if [ "${RUNNING_REF}" != "${FLEET_REF}" ]; then
+  echo "REFUSED: ${APP_NAME}'s gateway runs ${RUNNING_REF:0:12} but its heartbeat reports ${FLEET_REF:0:12}." >&2
+  echo "         A release is mid-flight or the heartbeat is stale; retry when fleet status shows them equal." >&2
   exit 3
 fi
 
-echo "gate: ${APP_NAME} is on the pinned overlay ${EXPECTED_REF:0:12} — proceeding" >&2
+echo "gate: ${APP_NAME} runs ${RUNNING_REF:0:12}, the newest completed release (no image drift) — proceeding" >&2
 
 # Read environment + region from the smokeball connector block (defaults staging/us).
 SB_FIELDS=()
