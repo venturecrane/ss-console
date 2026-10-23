@@ -348,3 +348,59 @@ def test_overlay_job_runs_the_seat_runtime_suite() -> None:
     assert "operator/requirements/compile.sh" in runs and "hermes-overlay.txt" in runs, (
         "the overlay job must prove hermes-overlay.txt is current (compile.sh no-diff)"
     )
+
+
+def test_overlay_e2e_job_runs_the_harness_at_the_image_pin() -> None:
+    """ss W3: `overlay-e2e` runs operator/hermes-smd-overlay/tests_e2e against the
+    pinned Hermes. Pin what makes it an instrument rather than a decoration: it
+    is gated like `overlay` (detect step, every later step guarded, the scope
+    summary allowed to run after a failure, a legible skip report last); the
+    Hermes sha comes from the Dockerfile's ARG HERMES_UPSTREAM_SHA, never typed,
+    and a dispatch override is accepted only as a full 40-hex commit; Hermes is
+    installed with its [mcp,anthropic] extras on the seat interpreter; the harness runs
+    from the overlay directory with -x and a per-test timeout; and the workflow
+    can be dispatched with a candidate sha."""
+    wf = _load_workflow()
+    job = wf["jobs"].get("overlay-e2e")
+    assert job, "operator-substrate.yml has no `overlay-e2e` job"
+    steps = job["steps"]
+    names = [s.get("name") for s in steps]
+    assert names[:2] == ["Checkout", DETECT_STEP_NAME], names[:2]
+    assert (steps[0].get("with") or {}).get("fetch-depth") == 0
+    assert steps[1].get("id") == "changes"
+    assert names[-1] == SKIP_STEP_NAME and steps[-1].get("if") == "steps.changes.outputs.relevant != 'true'"
+    summary_guard = f"always() && {GUARD}"
+    ungated = [s.get("name") for s in steps[2:-1] if (s.get("if") or "").strip() not in (GUARD, summary_guard)]
+    assert not ungated, f"overlay-e2e steps must carry `if: {GUARD}`: {ungated}"
+
+    pin = next((s for s in steps if s.get("id") == "pin"), None)
+    assert pin is not None, "overlay-e2e must resolve the Hermes sha in a step with id `pin`"
+    pin_run = pin.get("run") or ""
+    assert "ARG HERMES_UPSTREAM_SHA" in pin_run and "operator/templates/Dockerfile" in pin_run, (
+        "the Hermes sha must be read from the Dockerfile's ARG, not typed into the workflow"
+    )
+    assert "[0-9a-f]{40}" in pin_run, "a dispatch override must be validated as a 40-hex commit"
+    assert "hermes_sha" in str((pin.get("env") or {}).get("CANDIDATE", ""))
+
+    runs = "\n".join(s.get("run") or "" for s in steps)
+    assert "NousResearch/hermes-agent" in runs and "steps.pin.outputs.sha" in str(steps), (
+        "Hermes must be fetched from upstream at the resolved sha"
+    )
+    assert "HERMES_AGENT_SRC=" in runs, "the harness skips without HERMES_AGENT_SRC"
+    assert "uv venv --python 3.13" in runs, "the harness runs on the seat interpreter"
+    assert '[mcp,anthropic]"' in runs and "hermes-smd-overlay[e2e]" in runs, (
+        "Hermes needs its anthropic extra: the seat adapter (anthropic_messages) imports the SDK"
+    )
+    harness = [
+        s
+        for s in steps
+        if "-m pytest tests_e2e" in (s.get("run") or "") and s.get("working-directory") == "operator/hermes-smd-overlay"
+    ]
+    assert len(harness) == 1, "exactly one step runs tests_e2e from operator/hermes-smd-overlay"
+    assert "-x" in harness[0]["run"] and "--timeout=" in harness[0]["run"]
+
+    on = _on_block(wf)
+    dispatch = on.get("workflow_dispatch") or {}
+    hermes_input = (dispatch.get("inputs") or {}).get("hermes_sha")
+    assert hermes_input is not None, "workflow_dispatch must accept a hermes_sha candidate"
+    assert hermes_input.get("required") is False, "a blank hermes_sha runs at the Dockerfile pin"

@@ -55,6 +55,39 @@ def test_every_expectation_kind_used_is_one_the_scorer_evaluates() -> None:
                 assert expectation["kind"] in EXPECT_KINDS
 
 
+def test_a_scenario_that_expects_a_proposed_rule_states_a_new_rule_every_run() -> None:
+    """The broker deduplicates a standing rule: the same sender stating a sentence
+    already open under their name gets that row back and no RULE_PROPOSED is
+    written (workspace_broker/establishment_rules.py, ss#2546), for seven days.
+    So a leg that expects RULE_PROPOSED must drive a body that is a new rule
+    every run: it carries ``{nonce}`` (drivers.render_probe_body). Run
+    ``...20261023T193222Z...4cba770fbf79-notgreen`` failed the admin leg on
+    correct behaviour before this held."""
+    from rehearsal.drivers import BODY_NONCE_PLACEHOLDER
+
+    checked = 0
+    for scenario in registry.load_scenarios():
+        wants_proposed = any(
+            expectation["kind"] == "audit_row_present"
+            and "RULE_PROPOSED" in {str(a).upper() for a in expectation.get("action_types") or []}
+            for leg in scenario["legs"]
+            for expectation in leg["expect"]
+        )
+        if not wants_proposed:
+            continue
+        for leg in scenario["legs"]:
+            drive = leg.get("drive") or {}
+            if drive.get("kind") != "email_probe":
+                continue
+            checked += 1
+            assert BODY_NONCE_PLACEHOLDER in str(drive.get("body") or ""), (
+                f"{scenario['id']}/{leg['id']}: a leg that states a rule the ledger must record "
+                f"anew needs {BODY_NONCE_PLACEHOLDER} in its body, or the broker's open-duplicate "
+                "rule hands back last run's row and writes nothing"
+            )
+    assert checked >= 2, "unauthored-sender-refusal's two legs must have been checked"
+
+
 def test_the_connector_outage_scenario_requires_a_declared_fault() -> None:
     """Otherwise it grades a healthy seat and calls the degraded path proven."""
     scenario = next(s for s in registry.load_scenarios() if s["id"] == "connector-down-mid-task")

@@ -57,6 +57,16 @@ dev = [
     # import chain needs requests, which nothing else here pulls in.
     "requests>=2.31",
 ]
+# The real-dispatch harness (tests_e2e/, the `overlay-e2e` CI job). It runs
+# against a pinned Hermes installed `-e "<checkout>[mcp,anthropic]"` (anthropic is
+# the SDK the seat adapter imports; Hermes ships it as an extra), which brings every
+# runtime dependency; this extra adds only the test runner and the per-test
+# timeout the job passes (--timeout=240), so a hung agent turn fails the job
+# instead of holding a runner. tests_e2e/ is deliberately outside `testpaths`.
+e2e = [
+    "pytest>=8.0",
+    "pytest-timeout>=2.3",
+]
 
 [project.urls]
 Homepage = "https://github.com/venturecrane/ss-console/tree/main/operator/hermes-smd-overlay"
