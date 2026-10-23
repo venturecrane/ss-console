@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from ..limits import LimitHold
 from . import extract as extract_mod, fetch as fetch_mod
 from .progress import Progress
 from .tools import dump
@@ -22,15 +23,27 @@ class RunBase:
     doorway: Any
     firm: Any
     _progress: Progress | None = None
+    #: Set while a read stage runs matters at once (``workers.in_parallel``).
+    _halt: Any = None
 
     def _plan(self) -> dict[str, Any]:
         raise NotImplementedError
 
     def _before_call(self, stage: str) -> None:
-        """Every paid call: a quiet stage speaks (counts only), then the limits."""
+        """Every paid call: a quiet stage speaks (counts only), then the limits.
+        With read workers, a sibling's stop ends this call before it starts,
+        and this call's own hold trips that stop for every sibling."""
         if self._progress is not None:
             self._progress.beat()
-        self.limits.check_each_call(self.budget.refresh(), stage)
+        halt = self._halt
+        if halt is not None:
+            halt.check()
+        try:
+            self.limits.check_each_call(self.budget.refresh(), stage)
+        except LimitHold as hold:
+            if halt is not None:
+                halt.trip(hold)
+            raise
 
     def _state(self) -> dict[str, Any]:
         p = self.data / "state.json"

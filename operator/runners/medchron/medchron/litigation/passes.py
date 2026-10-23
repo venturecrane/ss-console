@@ -1,4 +1,5 @@
-"""The three read stages over every matter, one matter at a time.
+"""The three read stages over every matter, ``read_workers`` matters at once
+(``workers.py``; 1 reads them one at a time, the shape before 2026-10-23).
 
 ONE MATTER'S FAILURE DOES NOT FAIL THE JOB (2026-10-08 seat rehearsal: one
 read hit its call cap and the whole run failed with four matters unread).
@@ -17,7 +18,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..limits import LimitHold
-from . import fetch as fetch_mod, gates, manifest, parity, read, update, vocab
+from . import fetch as fetch_mod, gates, manifest, parity, read, update, vocab, workers
 from .tools import MatterContext, ReadIncomplete, dump
 
 UNREAD = "unread.json"
@@ -36,6 +37,10 @@ def _mark_unread(r: Any, mid: str, stage: str, exc: BaseException) -> None:
 
 
 def _each(r: Any, stage: str, wants: Any, one: Any) -> None:
+    width = int(r.firm.get("read_workers"))
+    if width > 1:
+        _each_parallel(r, stage, wants, one, width)
+        return
     prog = r._reading(stage, audit=(stage == "read3"))
     for m in r._matters():
         mid, p = m["id"], r._plan()[m["id"]]
@@ -50,6 +55,33 @@ def _each(r: Any, stage: str, wants: Any, one: Any) -> None:
             raise
         except Exception as exc:  # noqa: BLE001 - one matter's failure is recorded on that matter; the run goes on
             _mark_unread(r, mid, stage, exc)
+
+
+def _each_parallel(r: Any, stage: str, wants: Any, one: Any, width: int) -> None:
+    """``_each`` with ``width`` matters at once. Every artifact is the matter's
+    own file, so the order matters finish in changes nothing downstream (the
+    gates, parity and the book read the files, in inventory order)."""
+    prog = r._reading(stage, audit=(stage == "read3"))
+    plan, todo = r._plan(), []
+    for m in r._matters():
+        mid, p = m["id"], plan[m["id"]]
+        if not wants(p):
+            continue
+        if r._mfile(mid, f"{stage}.json").is_file() or unread(r, mid):
+            prog.step()
+            continue
+        todo.append((m, mid, p))
+
+    def run_one(m: dict[str, Any], mid: str, p: dict[str, Any]) -> None:
+        prog.step()
+        try:
+            one(m, mid, p)
+        except LimitHold:
+            raise
+        except Exception as exc:  # noqa: BLE001 - one matter's failure is recorded on that matter; the run goes on
+            _mark_unread(r, mid, stage, exc)
+
+    workers.in_parallel(r, todo, run_one, width)
 
 
 def read1(r: Any) -> None:
