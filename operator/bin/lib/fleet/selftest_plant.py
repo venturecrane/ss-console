@@ -91,10 +91,12 @@ class SelftestPlant:
             self.sleep(POLL_S)
 
     def _run_after(self, seat: str, after: str, pred: Callable[[dict[str, Any]], bool], window: float):
+        floor = ids.parse_iso(after)
+
         def probe() -> dict[str, Any] | None:
             doc = selftest_doc(self.seat_status(seat))
             done = ids.parse_iso((doc or {}).get("finished_at"))
-            return doc if doc and done and done > ids.parse_iso(after) and pred(doc) else None
+            return doc if doc and done and floor and done > floor and pred(doc) else None
 
         return self._until(window, probe)
 
