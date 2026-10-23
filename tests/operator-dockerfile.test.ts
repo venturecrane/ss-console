@@ -1578,7 +1578,7 @@ describe('Operator customer Machine Dockerfile', () => {
     // -> 33b97ca3 (overlay#531 + #532), 2026-10-20: ops cards to scott@; AgentMail sends carry PDFs.
     // -> 3d64eda0 (overlay#533), 2026-10-20: a held wake reply names its job; the watch pages on it.
     // -> 8c6f4b86 (overlay#534), 2026-10-22: a requester's reply on a held job pages SMD (held_reply).
-    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="8c6f4b865fbead8fb3a04cec8a025bcafee33b47"')
+    expect(DOCKERFILE).toContain('ARG OVERLAY_REF="dfcfc28cdaad76c0e16b44caa7b747a9e30c80ad"')
   })
 
   it('does NOT swallow a failed plugin install (no fail-open `|| echo ... continuing`)', () => {
