@@ -177,6 +177,7 @@ class LitigationRun(RunBase):
         return list(dict.fromkeys([*p["candidates"], *(p.get("seed_files") or []), *whole]))
 
     def _fetch(self) -> None:
+        self._disk_preflight()
         report, retry = {}, []
         for mid in self._active():
             p = self._plan()[mid]
@@ -188,6 +189,22 @@ class LitigationRun(RunBase):
         fetch_mod.write_report(self.data, report)
         if retry:
             raise LitigationFailed(f"fetch_unfinished: {len(retry)} files are not fetched for a reason a retry can fix")
+
+    def _disk_preflight(self) -> None:
+        pending = count = 0
+        for mid in self._active():
+            b, n = fetch_mod.pending_bytes(
+                self.data, mid, inventory.files_of(self.data, mid), self._fetch_ids(self._plan()[mid])
+            )
+            pending, count = pending + b, count + n
+        fits, needed, free = fetch_mod.disk_check(self.data, pending)
+        gb = 1 << 30
+        self.log(f"[fetch] {count} files to fetch, {pending / gb:.1f} GB listed; {free / gb:.1f} GB free")
+        if not fits:
+            raise LitigationFailed(
+                f"disk_short: {count} files to fetch need {needed / gb:.1f} GB with headroom; "
+                f"the volume has {free / gb:.1f} GB free. Extend the seat's volume, then resume"
+            )
 
     def _extract(self) -> None:
         summary = {}

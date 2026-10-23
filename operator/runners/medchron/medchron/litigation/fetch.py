@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from pathlib import Path
 from typing import Any, Callable
 
@@ -34,6 +35,39 @@ REFUSED = "refused_by_smokeball"
 #: not fail the whole list: it is a finding on its own matter (2026-10-09
 #: replay: one 403 email on McHale failed a weekday run of 210 matters).
 _REFUSED = re.compile(r"HTTP 403\b")
+
+
+#: Room kept free on the volume beyond the files still to fetch: extracted
+#: text, the workbook, and the seat's own state share the same disk.
+DISK_RESERVE_BYTES = 1 << 30
+#: Headroom on the listed sizes (extracted text is written beside the raw files).
+DISK_FACTOR = 1.15
+
+
+def free_bytes(path: Path) -> int:
+    return shutil.disk_usage(path).free
+
+
+def pending_bytes(data: Path, matter_id: str, files: list[dict[str, Any]], ids: list[str]) -> tuple[int, int]:
+    """(bytes, count) of this matter's targets not yet fetched ``ok``, by the
+    sizes the listing reported. A file with no listed size counts 0 bytes."""
+    by_id = {str(f["id"]): f for f in files}
+    done = {i for i, r in pulled(data, matter_id).items() if r.get("ok")}
+    todo = [by_id[i] for i in ids if i in by_id and i not in done]
+    return sum(int(f.get("size") or 0) for f in todo), len(todo)
+
+
+def disk_check(data: Path, pending: int) -> tuple[bool, int, int]:
+    """(fits, needed, free): whether ``pending`` listed bytes fit on the job's
+    volume with the headroom and the reserve.
+
+    2026-10-23: a list over all 230 litigation matters had fetched 4.5 GB onto
+    a 10 GB volume with 87 matters to go and 1.2 GB free; the disk the seat's
+    own state lives on would have filled mid-fetch. A run that cannot fit
+    stops before it downloads and says how much it needs."""
+    needed = int(pending * DISK_FACTOR) + DISK_RESERVE_BYTES
+    free = free_bytes(data)
+    return needed <= free, needed, free
 
 
 class FetchError(RuntimeError):
