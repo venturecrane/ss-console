@@ -286,8 +286,8 @@ jobs:
   # parallel with `substrate` and so its ~2.5 minutes do not stretch the
   # substrate wall clock. Same gating shape as `substrate`: the detect step
   # decides, every suite step is gated on it, and the job always reports, which
-  # is what makes it requirable (the Captain adds `overlay` to the main ruleset's
-  # required checks; bin/tests/test_ci_coverage_conformance.py pins the shape).
+  # is what makes it requirable (`overlay` is in the main ruleset's required
+  # checks since 2026-10-23; bin/tests/test_ci_coverage_conformance.py pins the shape).
   overlay:
     runs-on: ubuntu-latest
     steps:
