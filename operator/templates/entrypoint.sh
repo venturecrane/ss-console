@@ -1259,6 +1259,16 @@ gateway_liveness_escalate() {
 ) &
 log "Root gateway liveness supervisor forked (uid 0; watches the Hermes loop heartbeat and kills container main ${SMD_GATEWAY_PID} so Fly replaces the Machine; stale>${SMD_GATEWAY_LIVENESS_STALE_SECONDS}s, max ${SMD_GATEWAY_LIVENESS_MAX_KILLS} kill(s)/${SMD_GATEWAY_LIVENESS_KILL_WINDOW_SECONDS}s)"
 
+# The in-image self-test (/app/selftest.sh): the boot smoke's own check list
+# (seat-checks.sh), run as root once the supervisor above arms and then hourly,
+# its results in /run/smd-selftest for the gate's heartbeat. Forked AFTER the
+# credential unsets and under env -i carrying only the identity it reports, so
+# it holds no secret (the vendor probes read theirs as root, as over ssh), and
+# under nice: it shares the gateway's core. Not FLY_IMAGE_REF from pid 1, which
+# is /fly/init and does not carry it; this shell does. One line, and the
+# self-test logs its own start: the shell-size ratchet holds this file.
+/usr/bin/env -i PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" HOME=/root FLY_APP_NAME="${FLY_APP_NAME:-}" FLY_IMAGE_REF="${FLY_IMAGE_REF:-}" SMD_OVERLAY_REF="${SMD_OVERLAY_REF:-}" SMD_HERMES_UPSTREAM_SHA="${SMD_HERMES_UPSTREAM_SHA:-}" nice -n 10 /app/selftest.sh --supervise &
+
 # MCP channel cross-process result/thread store (shared/mcp_result_store.py +
 # shared/mcp_thread_store.py). The webhook gate (:8643) and the agent's result-sink
 # plugin (inside the Hermes gateway) BOTH read/write here to hand a synchronous

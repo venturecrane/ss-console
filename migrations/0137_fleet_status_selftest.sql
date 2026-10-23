@@ -1,0 +1,27 @@
+-- 0137: the in-image self-test's verdict reaches fleet_status
+--
+-- The gap (2026-10-22 seat-architecture review): a seat was judged only by the
+-- boot smoke, run from a laptop at provision and release. A seat that drifted
+-- between releases was found by whoever next looked.
+--
+-- The seat image now runs the boot smoke's own check list in place, as root,
+-- at boot and hourly (operator/templates/selftest.sh), and the gate ships the
+-- verdict on every heartbeat as `selftest` (overlay shared/selftest_check.py):
+--
+--   selftest_json  {v, run_kind boot|hourly|stale, finished_at, version,
+--                  image_ref, hermes_sha, total, failed_count, warned_count,
+--                  failed_streak, failed: [id], warned: [id]}. Plain overwrite
+--                  at ingest, INCLUDING back to NULL: a stale verdict must
+--                  never outlive the beat that reported it. NULL = the seat
+--                  has nothing to say yet (no run since boot) or runs an image
+--                  without the self-test; the alerter and `fleet release` hold.
+--
+-- `fleet release --verify selftest` reads it to verify a seat from the
+-- heartbeat; the fleet-alerts worker pages `selftest_failing` from it (0138).
+--
+-- Deploy ordering is safe by construction: deploy.yml applies migrations
+-- before the Workers deploy, and only the new code names the column.
+--
+-- Manual-only rollback at migrations/rollbacks/0137_fleet_status_selftest_down.sql.
+
+ALTER TABLE fleet_status ADD COLUMN selftest_json TEXT;

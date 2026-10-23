@@ -59,6 +59,9 @@ EXTRA_TREES = ("/opt/hermes/.venv/bin",)
 
 VERB_ROW = re.compile(r'\bVerb\(\s*"([a-z0-9_]+)"')
 
+# The in-image self-test is present when both its runner and its check list are.
+SELFTEST_FILES = ("/app/selftest.sh", "/app/seat-checks.sh")
+
 
 def _skipped(path: str, skip_subtrees: Iterable[str]) -> bool:
     return any(path == s or path.startswith(s + "/") for s in skip_subtrees)
@@ -112,6 +115,11 @@ def build(paths: list[str], tools: list[str], verbs: list[str], action_classes: 
         "tools": tools,
         "verbs": verbs,
         "action_classes": action_classes,
+        # Read from the walked tree, never asserted: `fleet release --verify
+        # selftest` trusts an image's heartbeat self-test only when the image
+        # carries the runner and its check list; any other image is verified by
+        # the boot smoke over ssh.
+        "selftest": all(p in paths for p in SELFTEST_FILES),
     }
 
 

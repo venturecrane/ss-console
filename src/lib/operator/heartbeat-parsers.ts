@@ -54,6 +54,7 @@ export interface HeartbeatBody {
   jobs_running?: unknown
   jobs_queued?: unknown
   wakes_pending?: unknown
+  selftest?: unknown
 }
 
 // The breaker ladder vocabulary (overlay shared/cost_breaker.read_stop_state).
@@ -453,6 +454,75 @@ export function parseShortfallsJson(value: unknown): string | null {
   return JSON.stringify(parsed)
 }
 
+// The in-image self-test's verdict (overlay shared/selftest_check.py, migration
+// 0137). One object, validated whole: a field of the wrong shape NULLs the
+// object rather than storing a partial verdict, because `fleet release` and the
+// selftest_failing pager both act on it and a half-trusted verdict is worse than
+// none (NULL holds). Ids are check ids from operator/templates/seat-checks.sh,
+// so their shape is closed; each list carries at most 32 (the counts stay
+// exact on the seat), and the stored JSON is bounded.
+const SELFTEST_RUN_KINDS = new Set(['boot', 'hourly', 'stale'])
+const SELFTEST_ID_RE = /^[a-z0-9-]{1,80}$/
+const SELFTEST_MAX_IDS = 32
+const SELFTEST_MAX_CHARS = 8192
+const SELFTEST_SHA_RE = /^[0-9a-f]{40}$/
+
+function selftestIds(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length > SELFTEST_MAX_IDS) return null
+  const ids: string[] = []
+  for (const id of value) {
+    if (typeof id !== 'string' || !SELFTEST_ID_RE.test(id)) return null
+    ids.push(id)
+  }
+  return ids
+}
+
+/** null stays null; a string must be printable and bounded; anything else is invalid (undefined). */
+function selftestString(
+  value: unknown,
+  re: RegExp = FLEET_RELEASE_STRING_RE
+): string | null | undefined {
+  if (value === null || value === undefined) return null
+  return typeof value === 'string' && re.test(value) ? value : undefined
+}
+
+function selftestCounts(raw: Record<string, unknown>): Record<string, number> | null {
+  const counts: Record<string, number> = {}
+  for (const key of ['total', 'failed_count', 'warned_count', 'failed_streak'] as const) {
+    const n = parseNonNegInt(raw[key])
+    if (n === null) return null
+    counts[key] = n
+  }
+  return counts
+}
+
+export function parseSelftest(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const raw = value as Record<string, unknown>
+  const runKind = typeof raw.run_kind === 'string' && SELFTEST_RUN_KINDS.has(raw.run_kind)
+  const finishedAt = parseIsoInstant(raw.finished_at)
+  const failed = selftestIds(raw.failed)
+  const warned = selftestIds(raw.warned)
+  const counts = selftestCounts(raw)
+  const version = selftestString(raw.version)
+  const imageRef = selftestString(raw.image_ref)
+  const hermesSha = selftestString(raw.hermes_sha, SELFTEST_SHA_RE)
+  if (raw.v !== 1 || !runKind || finishedAt === null || !failed || !warned || !counts) return null
+  if (version === undefined || imageRef === undefined || hermesSha === undefined) return null
+  const json = JSON.stringify({
+    v: 1,
+    run_kind: raw.run_kind,
+    finished_at: finishedAt,
+    version,
+    image_ref: imageRef,
+    hermes_sha: hermesSha,
+    ...counts,
+    failed,
+    warned,
+  })
+  return json.length > SELFTEST_MAX_CHARS ? null : json
+}
+
 /**
  * Every alert-driving field, parsed-not-cast.
  *
@@ -530,6 +600,9 @@ export function parseObservability(body: HeartbeatBody) {
     shortfalls: parseNonNegInt(body.shortfalls),
     shortfallsLastTs: parseIsoInstant(body.shortfalls_last_ts),
     shortfallsJson: parseShortfallsJson(body.shortfalls_json),
+    // Migration 0137: the in-image self-test's verdict. Plain overwrite,
+    // including to NULL: a verdict must never outlive the beat that carried it.
+    selftestJson: parseSelftest(body.selftest),
   }
 }
 

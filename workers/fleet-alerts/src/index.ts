@@ -90,6 +90,7 @@ import {
   type VendorLifetimeRule,
 } from './token-expiry'
 import { toolFailingConditions } from './tool-failing'
+import { selftestConditions } from './selftest'
 import { getOpenWebhookSurfaceKeys, webhookSurfaceConditions } from './webhook-surface'
 import { gatewayLoopConditions, gatewayLoopRedSeconds } from './gateway-loop'
 import { hardStopDetail } from './conditions'
@@ -204,6 +205,8 @@ export type FleetCondition =
   | 'image_unknown'
   | 'config_drift'
   | 'skills_drift'
+  // Migration 0138. The in-image self-test reported a failed check. See ./selftest.
+  | 'selftest_failing'
   // Wave 8.2. Keyed by the probe TARGET in customer_slug, not a seat.
   | 'edge_down'
   | `connector_down:${string}`
@@ -488,6 +491,7 @@ export function evaluateConditions(
     out.push(...webhookSurfaceConditions(row, openWebhookSurfaceKeys[row.customer_slug]))
     out.push(...gatewayLoopConditions(row, loopRed))
     out.push(...toolFailingConditions(row))
+    out.push(...selftestConditions(row))
   }
   return out
 }

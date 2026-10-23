@@ -95,6 +95,16 @@ class Fly:
                 return ref
         raise ToolingError(f"{app}: no Machine reports its image")
 
+    def guest(self, app: str) -> dict[str, Any]:
+        """The running Machine's guest: {cpu_kind, cpus, memory_mb}."""
+        machines = self.machines(app)
+        if not machines:
+            raise ToolingError(f"{app} has no Machine to read a guest from")
+        guest = (machines[0].get("config") or {}).get("guest") or {}
+        if not isinstance(guest, dict) or not guest:
+            raise ToolingError(f"{app}: the Machine reports no guest")
+        return {"cpu_kind": guest.get("cpu_kind"), "cpus": guest.get("cpus"), "memory_mb": guest.get("memory_mb")}
+
     def volume_id(self, app: str, name: str = "hermes_state") -> str:
         rows = _json(self._fly("volumes", "list", "-a", app, "--json"), f"fly volumes list -a {app}")
         vols = [v for v in rows or [] if isinstance(v, dict) and v.get("name") == name]

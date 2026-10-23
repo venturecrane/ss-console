@@ -3,6 +3,10 @@
   fleet build [--notes TEXT] [--declare-secret NAME ...] [--not-volume-forward-compatible]
   fleet release <release-id> [--only SLUG] [--parallel N] [--force-mid-job]
                 [--dry-run] [--accept-lane-inputs] [--max-idle-wait SECONDS]
+                [--verify bash|selftest]
+  fleet selftest --plant CHECK_ID SLUG [--window SECONDS]
+                                                      staging only: plant one real violation, prove
+                                                      the self-test alert opens and resolves
   fleet release --skills <version> [--only SLUG] [--parallel N] [--dry-run]
   fleet status [--json]
   fleet releases [--json] [--limit N]
@@ -48,8 +52,9 @@ from .r2 import R2, image_key
 from .rings import load_rings
 from .rollout import ImagePlan, ImageRollout
 from .runner import CommandRunner, Refusal, Runner, ToolingError
+from .selftest_plant import SelftestPlant
 from .skills import SkillsRollout
-from .smoke import SmokeRunner
+from .smoke import FleetSideChecks, SmokeRunner
 from .waves import Lease, SeatLease, Waves, holder_id
 
 REPO = Path(__file__).resolve().parents[4]
@@ -110,6 +115,17 @@ def _parser() -> argparse.ArgumentParser:
     r.add_argument("--dry-run", action="store_true")
     r.add_argument("--accept-lane-inputs", action="store_true")
     r.add_argument("--max-idle-wait", type=float, default=1800.0)
+    r.add_argument(
+        "--verify",
+        choices=("bash", "selftest"),
+        default="bash",
+        help="who decides a seat: the boot smoke over ssh (the self-test's verdict is recorded beside it), "
+        "or the seat's heartbeat self-test (the boot smoke decides when no verdict arrives)",
+    )
+    st = sub.add_parser("selftest", help="staging only: re-prove the self-test alert path with a planted violation")
+    st.add_argument("--plant", required=True, metavar="CHECK_ID")
+    st.add_argument("slug")
+    st.add_argument("--window", type=float, default=15 * 60.0)
     s = sub.add_parser("status")
     s.add_argument("--json", action="store_true")
     rl = sub.add_parser("releases")
@@ -187,9 +203,48 @@ def cmd_release_image(ctx: Ctx, a: argparse.Namespace) -> int:
         ctx.log,
         ctx.sleep,
         ctx.clock,
+        FleetSideChecks(ctx.fly, str(ctx.repo), ctx.sleep, ctx.clock),
     )
-    plan = ImagePlan(release, meta.get("hermes_sha"), a.force_mid_job, a.accept_lane_inputs, a.max_idle_wait, a.dry_run)
+    capable = _image_has_selftest(ctx, release)
+    if a.verify == "selftest" and not capable:
+        ctx.log(f"{release['release_id']}: the image carries no self-test; every seat is verified by the boot smoke")
+    plan = ImagePlan(
+        release, meta.get("hermes_sha"), a.force_mid_job, a.accept_lane_inputs, a.max_idle_wait, a.dry_run,
+        verify=a.verify, selftest_capable=capable,
+    )  # fmt: skip
     return _run_waves(ctx, a, release, lambda seat, ring: roll.run(seat, ring, plan), holder)
+
+
+def _image_has_selftest(ctx: Ctx, release: dict[str, Any]) -> bool:
+    """Whether the release image carries the in-image self-test (its baked
+    capabilities say so). Unreadable reads as no: the boot smoke decides."""
+    digest = release.get("image_digest")
+    if not digest:
+        return False
+    try:
+        caps = ctx.r2.get_json(image_key(digest, "image-capabilities.json")) or {}
+    except ToolingError as exc:
+        ctx.log(f"could not read image-capabilities.json ({exc}); verifying with the boot smoke")
+        return False
+    return bool(caps.get("selftest"))
+
+
+def cmd_selftest(ctx: Ctx, a: argparse.Namespace) -> int:
+    """Plant one real violation on staging and prove the alert opens and resolves."""
+
+    def alert_status(seat: str) -> str | None:
+        rows = ctx.store.d1.query(
+            "SELECT status FROM fleet_alert_state WHERE customer_slug = "  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
+            f"{ids.sql_str(ids.slug(seat))} AND condition = 'selftest_failing'"
+        )
+        return rows[0].get("status") if rows else None
+
+    report = SelftestPlant(ctx.fly, ctx.store.seat_status, alert_status, ctx.sleep, ctx.clock).run(
+        a.slug, a.plant, a.window
+    )
+    for line in report.steps:
+        ctx.log(f"selftest --plant {a.plant} {a.slug}: {line}")
+    return 0 if report.ok else 1
 
 
 def cmd_release_skills(ctx: Ctx, a: argparse.Namespace) -> int:
@@ -317,6 +372,8 @@ def dispatch(ctx: Ctx, a: argparse.Namespace) -> int:
         return 0
     if a.cmd == "busy":
         return cmd_busy(ctx, a)
+    if a.cmd == "selftest":
+        return cmd_selftest(ctx, a)
     if a.cmd == "unquiesce":
         ctx.log(f"{a.slug}: {BusyGate(ctx.fly, holder_id()).clear_any_fleet(ids.slug(a.slug))}")
         return 0

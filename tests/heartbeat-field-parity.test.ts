@@ -291,6 +291,48 @@ describe('heartbeat field parity — every emitted field has a reader (ss#2287)'
     expect(junkCondition?.value ?? null, 'the vocabulary must stay closed').toBeNull()
   })
 
+  it('the self-test verdict is stored whole, and one malformed id NULLs the whole object', async () => {
+    // Migration 0137. `fleet release` and the selftest_failing pager both act
+    // on this object, so it is trusted whole or not at all: a verdict with one
+    // id of the wrong shape must not be stored as a partial verdict.
+    const sample = manifest.fields.find((f) => f.name === 'selftest')?.sample as Record<
+      string,
+      unknown
+    >
+    expect(sample, 'the manifest names the selftest field').toBeTruthy()
+    const read = async (): Promise<string | null> => {
+      const row = await db
+        .prepare(`SELECT selftest_json AS value FROM fleet_status WHERE customer_slug = ?`)
+        .bind(SLUG)
+        .first<{ value: string | null }>()
+      return row?.value ?? null
+    }
+    await POST(heartbeatRequest({ heartbeat_ts: '2026-08-11T00:00:00.000Z', selftest: sample }))
+    const stored = await read()
+    expect(stored).not.toBeNull()
+    expect(JSON.parse(stored as string).failed).toEqual(['retired-skills-absent'])
+
+    // NEGATIVE CONTROL: an 81-character id is one past the bound.
+    await POST(
+      heartbeatRequest({
+        heartbeat_ts: '2026-08-11T00:00:00.000Z',
+        selftest: { ...sample, failed: ['a'.repeat(81)] },
+      })
+    )
+    expect(await read(), 'an 81-char id must NULL the object').toBeNull()
+    // And an 80-character id is inside it, so the bound is the one stated.
+    await POST(
+      heartbeatRequest({
+        heartbeat_ts: '2026-08-11T00:00:00.000Z',
+        selftest: { ...sample, failed: ['a'.repeat(80)] },
+      })
+    )
+    expect(await read()).not.toBeNull()
+    // Plain overwrite including NULL: a beat without the field clears it.
+    await POST(heartbeatRequest({ heartbeat_ts: '2026-08-11T00:00:00.000Z' }))
+    expect(await read()).toBeNull()
+  })
+
   it('the ingest bounds the stop reason instead of trusting the seat', async () => {
     // The seat caps at 300, but "the writer promised" is not a bound.
     await POST(

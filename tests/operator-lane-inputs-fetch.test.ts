@@ -34,6 +34,8 @@ const HELPER = readFileSync(resolve('operator/templates/entrypoint-fetch-inputs.
 const ENTRYPOINT = code(readFileSync(resolve('operator/templates/entrypoint.sh'), 'utf8'))
 const DOCKERFILE = code(readFileSync(resolve('operator/templates/Dockerfile'), 'utf8'))
 const SMOKE = code(readFileSync(resolve('operator/bin/boot-smoke-test.sh'), 'utf8'))
+// The check list both the laptop smoke and the in-image self-test run.
+const CHECKS = code(readFileSync(resolve('operator/templates/seat-checks.sh'), 'utf8'))
 // Literal paths, one per lane: the file set is fixed and named here.
 const LANE_FILES = {
   demand: code(readFileSync(resolve('operator/templates/entrypoint-demand.sh'), 'utf8')),
@@ -86,20 +88,20 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
   }
 
   it('boot smoke asserts each authored lane has its inputs on the seat, gated on the engagements checkout', () => {
-    expect(SMOKE).toMatch(/for _lane in demand drafting litigation; do/)
-    // Expectation is the working tree OR engagements origin/main (a stale shared
-    // checkout must not turn a lane "absent"); behavior is pinned in
+    expect(CHECKS).toMatch(/for _lane in demand drafting litigation; do/)
+    // The expectation source is the transport's lane_authored. Over ssh it is
+    // the working tree OR engagements origin/main (a stale shared checkout must
+    // not turn a lane "absent"); behavior is pinned in
     // boot-smoke-collects-failures.test.ts.
-    expect(SMOKE).toMatch(
-      /if authored "operator\/customers\/\$\{SLUG\}\/\$\{_lane\}\/\$\{_lane\}-firm\.yaml"; then/
-    )
+    expect(CHECKS).toMatch(/if lane_authored "\$\{_lane\}"; then/)
+    expect(SMOKE).toMatch(/authored "operator\/customers\/\$\{SLUG\}\/\$1\/\$1-firm\.yaml"/)
     expect(SMOKE).toMatch(/cat-file -e "origin\/main:\$1"/)
-    expect(SMOKE).toMatch(
-      /ssh_exec "\$\{_lane\}-firm-inputs-present" "\[ \\"\\\$\(stat -c %U:%G:%a \/var\/lib\/smd-config\/\$\{_lane\}\/\$\{_lane\}-firm\.yaml\)\\" = root:medchron:640 \]"/
+    expect(CHECKS).toMatch(
+      /check "\$\{_lane\}-firm-inputs-present" "\[ \\"\\\$\(stat -c %U:%G:%a \$\{SEAT_ROOT\}\/var\/lib\/smd-config\/\$\{_lane\}\/\$\{_lane\}-firm\.yaml\)\\" = root:medchron:640 \]"/
     )
-    // The expectation source is defined before it is read.
+    // The expectation source is defined before the list that reads it runs.
     expect(SMOKE.indexOf('ENGAGEMENTS_DIR="${SS_ENGAGEMENTS_DIR:-')).toBeLessThan(
-      SMOKE.indexOf('for _lane in demand drafting litigation; do')
+      SMOKE.indexOf('\nseat_checks\n')
     )
   })
 })

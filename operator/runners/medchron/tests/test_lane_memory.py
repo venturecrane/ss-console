@@ -7,6 +7,7 @@ keeps its code default exactly.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -101,37 +102,29 @@ def test_built_lanes_carry_the_authored_caps(lane_mod: Any, monkeypatch: pytest.
     assert lane is not None and lane.memory_max == 512 * MIB
 
 
-# ---- boot smoke lane-memory-caps-leave-gateway-reserve, executed ----
-# The check's program is lifted from operator/bin/boot-smoke-test.sh as the
-# Machine would run it, with only its two seat paths pointed at a tmp tree.
+# ---- seat check lane-memory-caps-leave-gateway-reserve, executed ----
+# The check is operator/templates/lane-memory-caps-probe.py: the boot smoke
+# ships its text over ssh and the in-image self-test runs /app's copy. It runs
+# here as a seat would, with SMD_SEAT_ROOT pointing its seat paths at a tmp tree.
 
-_SMOKE = Path(__file__).resolve().parents[4] / "operator" / "bin" / "boot-smoke-test.sh"
-_STEP = 'ssh_exec_script "lane-memory-caps-leave-gateway-reserve" "'
-
-
-def _smoke_program() -> str:
-    text = _SMOKE.read_text()
-    body = text[text.index(_STEP) + len(_STEP) :]
-    body = body[: body.index("\n'\"\n") + 2]
-    body = body.replace('\\"', '"').replace("\\$", "$")
-    return body[body.index("-c '") + 4 : body.rindex("'")]
+_PROBE = Path(__file__).resolve().parents[4] / "operator" / "templates" / "lane-memory-caps-probe.py"
 
 
 def _run_smoke(
     tmp_path: Path, customer_yaml: str, *, live: dict[str, int] | None = None
 ) -> subprocess.CompletedProcess[str]:
-    cfg, cg = tmp_path / "smd-config", tmp_path / "cgroup"
+    cfg, cg = tmp_path / "var/lib/smd-config", tmp_path / "sys/fs/cgroup"
     (cfg / "demand").mkdir(parents=True)
-    cg.mkdir()
+    cg.mkdir(parents=True)
     (cfg / "customer.yaml").write_text(customer_yaml)
     (cfg / "medchron-firm.yaml").write_text("{}\n")
     (cfg / "demand" / "demand-firm.yaml").write_text("{}\n")
     for name, limit in (live or {}).items():
         (cg / name).mkdir()
         (cg / name / "memory.max").write_text(f"{limit}\n")
-    program = _smoke_program().replace("/var/lib/smd-config", str(cfg)).replace("/sys/fs/cgroup", str(cg))
-    # The program is this repo's own boot smoke check, not untrusted input.
-    return subprocess.run([sys.executable, "-c", program], capture_output=True, text=True)  # noqa: S603 - repo-authored program
+    env = {**os.environ, "SMD_SEAT_ROOT": str(tmp_path)}
+    # The program is this repo's own seat check, not untrusted input.
+    return subprocess.run([sys.executable, str(_PROBE)], capture_output=True, text=True, env=env)  # noqa: S603 - repo-authored program
 
 
 _PILOT = "machine:\n  memory_mb: 2048\n  lane_memory_mb: {medchron: 1024, demand: 512}\n"
