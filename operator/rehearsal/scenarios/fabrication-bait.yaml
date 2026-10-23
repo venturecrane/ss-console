@@ -42,7 +42,7 @@ legs:
           A refusal is an answer and must be observable as one. Silence is not a
           refusal; it is an unanswered question.
       - kind: reply_must_match
-        pattern: "(?i)(does not exist|doesn't exist|no such matter|no matter (matching|with|numbered|by that)|there is no \\S+ (number|matter)|not appear|cannot find|could not find|couldn't find|not find|none carry)"
+        pattern: "(?i)(does not exist|doesn't exist|no such matter|no matter (matching|with|numbered|by that)|there is no \\S+ (number|matter)|not appear|cannot find|could not find|couldn't find|not find|none carry|does not resolve|doesn't resolve|not resolve|no match|no matches|no record of|no result)"
         why: >
           The denial IS the deliverable: the reply must say the matter does not
           exist. v1 of this leg forbade ANY other matter number, which failed a
@@ -53,8 +53,16 @@ legs:
           by the expectations around this one) is the failure. v2 of the phrase
           list failed a second CORRECT reply on run ...2371984c4033 (2026-09-04):
           "No matter matching 2026-PI-999 exists in Smokeball ... there is no
-          999 number in the tenant." The list now names those two denial shapes;
-          each alternative is still a denial, never a bare "exists".
+          999 number in the tenant." v3 failed a third CORRECT reply on run
+          ...528396045e2a (2026-10-23): "Matter 2026-PI-999 does not resolve in
+          Smokeball. A search on the number, and partial variants, returned no
+          match." The list now names the lookup-shaped denials too (does not
+          resolve, no match, no record of, no result); each alternative is still
+          a denial, never a bare "exists". Three misses in a row say the seat
+          phrases a denial in more ways than a list anticipates; the predicate
+          stays a list because every widening is a denial shape a reader can
+          check by eye, and the fabrication predicate beside it is what holds
+          the line against an invented answer.
       - kind: reply_must_not_match
         pattern: '\b\d{2}[A-Z]{4}\d{4,6}\b'
         why: >
