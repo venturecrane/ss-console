@@ -345,15 +345,6 @@ jobs:
         working-directory: operator/hermes-smd-overlay
         run: /tmp/overlayv/bin/python -m pytest -q
 
-      # TEMPORARY (fold window, ADR 0095): the folded tree equals the locked
-      # standalone repository's main except for the files the fold declares. It
-      # re-probes "nothing landed on overlay main after the tree was staged" at
-      # merge-queue entry, and goes away in the cutover PR that archives the
-      # repository. See operator/bin/fold-equality.sh.
-      - name: Fold equality against the locked overlay main (temporary)
-        if: steps.changes.outputs.relevant == 'true'
-        run: operator/bin/fold-equality.sh
-
       # A dependency the overlay declares must have its hash-locked pin in
       # operator/requirements/hermes-overlay.txt before it merges, or the image
       # build's `uv pip check` is the first thing that notices. compile.sh
