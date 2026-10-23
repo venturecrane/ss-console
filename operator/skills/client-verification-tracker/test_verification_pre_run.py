@@ -21,15 +21,12 @@ import asyncio
 import importlib.util
 import io
 import json
-import os
 import re
-import subprocess
 import sys
 from contextlib import redirect_stdout
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-import pytest
 
 # operator/ on sys.path (for adapter.*). Load this skill's pre_run.py under a
 # unique module name — every Stream B skill names the file pre_run.py, so a bare
@@ -1538,39 +1535,22 @@ def test_a_clean_run_with_nothing_to_say_sends_no_failure_note(tmp_path, monkeyp
 # with dispatch_expected true, no note arrives, and we are back to the model
 # filling the gap. The shape is validated in the OTHER repo, so asserting it
 # here from memory would be exactly the "documented, not enforced" mistake
-# this whole change is fixing. Read the pinned overlay's real validator and
-# run it. Skipped (never silently passed) when no overlay checkout exists --
-# CI has none, same honest limitation as tests/heartbeat-field-parity.test.ts.
+# this whole change is fixing. Read the real validator and run it. The overlay
+# is in this tree (operator/hermes-smd-overlay, one repository since the
+# 2026-10-22 fold, ADR 0095), so this runs in CI too; the "skipped when no
+# overlay checkout exists" limitation is gone.
 # ---------------------------------------------------------------------------
 
-_OVERLAY_DIR = Path(os.environ.get("SS_OVERLAY_DIR") or (Path.home() / "dev" / "hermes-smd-overlay"))
-_OVERLAY_AVAILABLE = (_OVERLAY_DIR / ".git").exists()
+_OVERLAY_DISPATCHER = _PRE_RUN_PATH.parents[2] / "hermes-smd-overlay" / "shared" / "prerendered_dispatch.py"
 
 
-def _pinned_overlay_ref() -> str:
-    dockerfile = (_PRE_RUN_PATH.parents[2] / "templates" / "Dockerfile").read_text(encoding="utf-8")
-    m = re.search(r'ARG OVERLAY_REF="([0-9a-f]{40})"', dockerfile)
-    assert m, "no ARG OVERLAY_REF in operator/templates/Dockerfile"
-    return m.group(1)
-
-
-@pytest.mark.skipif(not _OVERLAY_AVAILABLE, reason="no overlay checkout (expected in CI)")
 def test_failure_note_envelope_passes_the_pinned_dispatchers_validator(tmp_path, monkeypatch):
     envelope_path = _authored_seat(tmp_path, monkeypatch)
     _blind(monkeypatch, "pre_run_crashed_fail_open", _FakeWakeWriter())
     envelope = json.loads(envelope_path.read_text(encoding="utf-8"))
 
-    # `git show <ref>:path`, never the working tree: overlay checkouts sit on
-    # dirty feature branches far from the pin, and the pin is what seats run.
-    clean_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    source = subprocess.run(  # noqa: S603 - literal git show argv in a test against the pinned overlay ref
-        ["git", "show", "%s:shared/prerendered_dispatch.py" % _pinned_overlay_ref()],
-        cwd=str(_OVERLAY_DIR),
-        capture_output=True,
-        text=True,
-        env=clean_env,
-        check=True,
-    ).stdout
+    # The dispatcher that ships in the same image this pre_run ships in.
+    source = _OVERLAY_DISPATCHER.read_text(encoding="utf-8")
 
     # Lift the validator + its bounds out of the pinned source and run them.
     # Importing the module would drag the overlay's whole dependency set in.

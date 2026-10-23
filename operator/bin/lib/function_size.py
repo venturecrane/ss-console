@@ -34,7 +34,9 @@ from pathlib import Path
 
 LENGTH_CEILING = 75
 COMPLEXITY_CEILING = 15
-SKIP_PARTS = {".venv", "__pycache__", ".pytest_cache", ".ruff_cache", ".rendered", "node_modules"}
+# hermes-smd-overlay (the seat runtime, in-tree since the 2026-10-22 fold, ADR
+# 0095) joins the function-size ceiling behind its own ratchet baseline, not here.
+SKIP_PARTS = {".venv", "__pycache__", ".pytest_cache", ".ruff_cache", ".rendered", "node_modules", "hermes-smd-overlay"}
 
 
 def is_test_file(rel: Path) -> bool:

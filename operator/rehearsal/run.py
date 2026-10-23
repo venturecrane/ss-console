@@ -39,11 +39,13 @@ THE RIG MUST ALREADY BE RUNNING THE CANDIDATE. A run stamps the candidate ref
 into its own id (report.py), so before ss#2531 an id reading "green against ref
 X" could have been produced by a rig sitting on the previous release: the ref
 was a label the runner was handed, never a fact it checked. With --drive the
-runner now reads the rig's RUNNING overlay ref off the same runtime seam
-``operator/bin/overlay-ref-drift.py`` uses, and refuses unless it equals the
-candidate. A ref it cannot read refuses too, because "cannot evaluate" must not
-read as "permitted". The consequence for the release order is that the rig is
-reprovisioned onto the candidate BEFORE the suite runs, not after.
+runner now reads the rig's RUNNING ref off the runtime-read seam
+(``drivers.read_running_ref``; since the 2026-10-22 fold that ref is the
+ss-console commit the seat's image was built from) and refuses unless it equals
+the candidate. A ref it cannot read refuses too, because "cannot evaluate" must
+not read as "permitted". The consequence for the release order is that the rig
+has the candidate RELEASED to it (``fleet release ... --only <rig>``) BEFORE the
+suite runs, not after.
 
 EXIT CODES
     0  green: every scenario PASSED. Only this run may be cited by a release gate.
@@ -59,6 +61,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -66,7 +69,7 @@ from pathlib import Path
 from rehearsal import drivers, registry, report, scope
 from rehearsal.scoring import FAIL, PASS, SKIPPED, LegObservation, score_scenario
 
-DOCKERFILE = Path(__file__).resolve().parents[2] / "operator" / "templates" / "Dockerfile"
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 EXIT_GREEN = 0
 EXIT_FAILED = 1
@@ -75,13 +78,21 @@ EXIT_INCOMPLETE = 3
 
 
 def pinned_overlay_ref() -> str:
-    """The ref the Dockerfile pins today, so a run defaults to certifying it."""
+    """The ref a run defaults to certifying: this checkout's commit.
+
+    Since the fold (ADR 0095) the seat runtime is built from this tree and a
+    seat's running ref IS an ss-console sha, so the candidate is the commit the
+    image under test was built from, never a value someone types in. "unknown"
+    when this is not a git checkout; the gate then refuses to drive.
+    """
     try:
-        text = DOCKERFILE.read_text()
+        out = subprocess.run(  # noqa: S603 - literal git argv against this checkout
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, check=False
+        )
     except OSError:
         return "unknown"
-    match = re.search(r"^ARG\s+OVERLAY_REF=([^\s#]+)", text, re.MULTILINE)
-    return match.group(1).strip("\"'") if match else "unknown"
+    sha = out.stdout.strip()
+    return sha if out.returncode == 0 and re.fullmatch(r"[0-9a-f]{40}", sha) else "unknown"
 
 
 def make_seam_client(slug: str):
@@ -91,7 +102,9 @@ def make_seam_client(slug: str):
     gate that touches a network, so a test can substitute a fake client and
     still exercise the real gate rather than a copy of it.
     """
-    return drivers.load_overlay_ref_drift().seam_pull.seam_client_from_env(slug)
+    from bin.lib import seam_pull
+
+    return seam_pull.seam_client_from_env(slug)
 
 
 def rig_running_ref(seat: str, candidate: str) -> str | None:
@@ -106,8 +119,7 @@ def rig_running_ref(seat: str, candidate: str) -> str | None:
     seat is current, it is the absence of the only evidence this gate exists to
     collect.
     """
-    drift = drivers.load_overlay_ref_drift()
-    observed = drift.read_running_ref(seat, make_seam_client)
+    observed = drivers.read_running_ref(seat, make_seam_client)
     if observed.status != "read" or not observed.value:
         print(
             f"REFUSED: cannot read the overlay ref `{seat}` is running "
@@ -117,11 +129,11 @@ def rig_running_ref(seat: str, candidate: str) -> str | None:
             file=sys.stderr,
         )
         return None
-    if not drift.refs_match(candidate, observed.value):
+    if not drivers.refs_match(candidate, observed.value):
         print(
             f"REFUSED: `{seat}` is running {observed.value[:12]}, and this run would "
-            f"certify {candidate[:12]}. reprovision {seat} onto {candidate[:12]} first: "
-            f"yes s | operator/bin/reprovision.sh {seat}",
+            f"certify {candidate[:12]}. Release {candidate[:12]} to {seat} first: "
+            f"operator/bin/fleet release <img id built from {candidate[:12]}> --only {seat}",
             file=sys.stderr,
         )
         return None

@@ -182,20 +182,13 @@ describe('no history in file bodies', () => {
     ).toEqual([])
   })
 
-  it('the overlay-pairs manifest holds no pin ledger', () => {
+  it('the overlay-pairs manifest carries no pin fields at all', () => {
+    // The fold (ADR 0095) removed overlayRepo/overlayRef/overlayRefNote: both
+    // twins are hashed in place now, and a pin field is where a ledger regrows.
     const manifest = JSON.parse(
       readFileSync(resolve(ROOT, 'operator/contracts/overlay-pairs.json'), 'utf-8')
-    ) as {
-      overlayRefNote: string
-    }
-    expect(
-      manifest.overlayRefNote.length,
-      'overlayRefNote is a pointer, not a ledger'
-    ).toBeLessThanOrEqual(400)
-    expect(
-      datedEntries(manifest.overlayRefNote.replace(/^/gm, '# ')),
-      'no dated entries inside overlayRefNote'
-    ).toEqual([])
+    ) as Record<string, unknown>
+    expect(Object.keys(manifest)).toEqual(['pairs'])
   })
 
   it('live seat yaml and contract note fields only tighten (regenerate after a deliberate reduction)', () => {

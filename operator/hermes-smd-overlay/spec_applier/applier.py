@@ -1,0 +1,778 @@
+"""Root-owned authored-spec install (ss ADR 0083, ss-console #2084).
+
+Five steps, every side effect injected so the module is fully unit-testable:
+
+    pull (R2) → parse → hash-verify → install root-owned → write manifest
+
+:func:`apply` never raises on a rejected document — it returns a structured
+:class:`SpecApplyResult`. It raises only on an R2 fault the caller cannot
+recover from, and even then the installed tree is untouched.
+
+THE SOURCE OBJECT. ``vaults/<slug>/output-classes.json``, written by the portal
+AND by the root-side establishment intake (``establish_intake``), which
+merge-writes the adjustments and provenance a conversational establishment
+produces, after its compiler gates pass. The git→R2 config publisher
+(ss-console #2082) writes ``customer.yaml`` and is structurally barred from this
+key: the vault object and the config object are separate key spaces, never the
+same object. That separation is why a portal edit can reach a
+seat at all without a portal actor being able to write git.
+
+WHAT THE DECLARED HASH IS AND IS NOT. Each spec body carries a ``sha256`` its
+author computed. Verifying it catches a truncated body, a torn portal write, and
+a body/hash pair that disagree with each other. It does NOT authenticate the
+document — a writer who can put bytes in the vault can put a matching hash next
+to them. Authentication comes from elsewhere and is structural: the vault object
+is writable only with an operator R2 credential the agent never holds, and the
+install target is root-owned on a box where the agent is not root. The hash is
+an integrity check on a trusted channel, not a signature, and calling it one
+would be the kind of overclaim this substrate exists to avoid.
+
+FAIL-STATIC. Any rejection installs NOTHING and leaves the previous tree exactly
+as it stood. There is no partial install and no blanking: a seat that cannot
+adopt a new spec keeps serving the spec it already had. "Refuse the update" and
+"remove the spec" are different outcomes, and only the first is ever correct
+here — the second would silently convert an authored class into an unauthored
+one, which is the precise confusion ``output_classes:`` was added to end.
+
+THE MANIFEST IS ROOT-COMPUTED, AND IS THE COMMIT POINT. ``manifest.json`` is
+written LAST, atomically, after every body has landed. Its hashes are computed
+by THIS process over the bytes it wrote — never copied from the source document
+— because the manifest is what the runtime read-mark verifies against, and a
+manifest that merely echoed the source's claims would verify the source against
+itself. A reader that catches the window between new bodies and the new manifest
+sees a hash mismatch and fails closed, which is the safe direction.
+
+TWO WAYS A PROPERTY GETS ITS TEXT (ss-console #2529). A ``body`` is distilled
+from documents the firm designated, through the compiler gates. An
+``adjustments`` list is the firm talking: one confirmed sentence at a time
+("in client letters, be more formal and shorter"), each carrying who instructed
+it, who applied it, and when. Both render into ONE installed file — body first,
+then a ``## Adjustments`` block, oldest first — because the model reads a file,
+not a vault entry, and a rule it cannot see is a rule that is not in effect. A
+property may carry either or both; adjustments alone is the ordinary state of a
+firm that has said how its letters should read without ever handing over a
+corpus. The manifest hash is computed over the RENDERED bytes, so the read mark,
+the spec gate, and the stamp need to know nothing about any of this.
+"""
+
+from __future__ import annotations
+
+import enum
+import json
+import logging
+import os
+import re
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from config_applier.applier import atomic_write
+from shared.ids import iso_utc, sha256
+
+logger = logging.getLogger(__name__)
+
+#: Schema version of both the source document and the installed manifest.
+SCHEMA_VERSION = 1
+
+#: Filename of the root-computed manifest inside ``SMD_SPEC_DIR``.
+MANIFEST_NAME = "manifest.json"
+
+#: Subdirectory holding the per-class spec bodies inside ``SMD_SPEC_DIR``.
+CLASSES_SUBDIR = "classes"
+
+#: The two spec properties an output class can carry. Gates and delivery are
+#: deliberately NOT here: they already have an authority (persona exposure
+#: ceilings and the routine grid), and a second authority over one behaviour is
+#: the drift the output-class registry exists to end.
+SPEC_PROPERTIES = ("voice", "format")
+
+#: Upper bound on a single spec body. A spec is prose a person wrote; anything
+#: past this is a mistake or an attempt to flood the drafting context, and
+#: either way the document is refused rather than truncated.
+MAX_SPEC_BYTES = 256 * 1024
+
+#: How many standing adjustments one property may carry. Past this the firm has
+#: a spec, not a list of afterthoughts, and the right move is to re-establish
+#: the property from documents rather than stack a fifty-first sentence on it.
+MAX_ADJUSTMENTS = 50
+
+#: Ceiling on one adjustment's text. It is a sentence the firm said out loud and
+#: confirmed by reply, not a document.
+MAX_ADJUSTMENT_TEXT_BYTES = 2000
+
+#: An adjustment id is the proposal id the firm confirmed: eight lowercase hex
+#: characters, short enough to quote in an email and long enough not to collide.
+_ADJUSTMENT_ID = re.compile(r"\A[0-9a-f]{8}\Z")
+
+#: Heading the rendered adjustments block opens with.
+ADJUSTMENTS_HEADING = "## Adjustments"
+
+#: The sentence that tells the reading model what the block below it is and how
+#: it ranks against the body above it. Rendered verbatim, every time, because
+#: the model reads only the file — it never sees the vault entry that produced
+#: it, so the precedence rule has to be IN the bytes.
+ADJUSTMENTS_PREAMBLE = (
+    "Standing instructions from the firm, in effect from the date shown. Each "
+    "applies on top of everything above; where an adjustment and the text above "
+    "disagree, the adjustment is the firm's later instruction and wins."
+)
+
+#: Ownership + permissions of everything this package installs. The dir is
+#: traversable and the files readable by the agent uid; NOTHING here is
+#: writable by it. That asymmetry is the whole security property.
+_DIR_MODE = 0o755
+_FILE_MODE = 0o644
+
+
+class SpecApplyError(RuntimeError):
+    """An unrecoverable fault (R2 read failure, install write failure).
+
+    A REJECTED document is not an error — it is returned in
+    :class:`SpecApplyResult`. This is raised only when the caller cannot
+    proceed. The installed tree is never left half-replaced: bodies are written
+    atomically and the manifest, which is what any reader verifies against, is
+    replaced last.
+    """
+
+
+class SpecApplyOutcome(str, enum.Enum):
+    """Terminal outcome of an apply attempt."""
+
+    APPLIED = "applied"  # installed root-owned + manifest written
+    REJECTED = "rejected"  # malformed / hash mismatch — nothing installed
+    UNCHANGED = "unchanged"  # source digest equals the installed manifest's
+
+
+@dataclass(frozen=True)
+class SpecApplyResult:
+    """Structured result of an apply attempt.
+
+    ``reasons`` carries the human-readable rejection reasons (empty on success).
+    ``installed`` lists the manifest-relative paths written this cycle;
+    ``pruned`` lists paths removed because the new document no longer declares
+    them. ``source_digest`` is the sha256 of the pulled object bytes, which is
+    also the change-detection key.
+    """
+
+    outcome: SpecApplyOutcome
+    reasons: tuple[str, ...] = ()
+    installed: tuple[str, ...] = ()
+    pruned: tuple[str, ...] = ()
+    source_digest: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def applied(self) -> bool:
+        return self.outcome is SpecApplyOutcome.APPLIED
+
+
+# ---------------------------------------------------------------------------
+# Step 1 — pull from R2
+# ---------------------------------------------------------------------------
+
+
+def spec_object_key(slug: str) -> str:
+    """The R2 object key for a customer's authored specs.
+
+    ``vaults/<slug>/output-classes.json`` — the same ``vaults/<slug>/`` isolation
+    prefix every other per-customer object uses. A blank slug is refused so a
+    pull can never address the vault root.
+    """
+    if not isinstance(slug, str) or not slug.strip():
+        raise SpecApplyError("spec_object_key: customer slug is required")
+    return f"vaults/{slug.strip()}/output-classes.json"
+
+
+class SpecObjectMissing(SpecApplyError):
+    """The vault object does not exist.
+
+    Distinguished from every other R2 fault because it is the ORDINARY state of
+    a seat whose customer has authored no spec. The caller logs it at info and
+    leaves the (empty) installed tree alone; it is not a failure.
+    """
+
+
+def pull_specs(s3_client: Any, bucket: str, slug: str) -> bytes:
+    """Read ``vaults/<slug>/output-classes.json`` from R2 and return raw bytes.
+
+    ``s3_client`` is an injected boto3-style client exposing ``get_object``.
+    Raises :class:`SpecObjectMissing` when the object is absent (an expected,
+    non-failing state) and :class:`SpecApplyError` on any other fault.
+    """
+    key = spec_object_key(slug)
+    try:
+        response = s3_client.get_object(Bucket=bucket, Key=key)
+    except Exception as exc:  # noqa: BLE001 — classified below, then wrapped
+        if _is_missing_object(exc):
+            raise SpecObjectMissing(f"no spec object at s3://{bucket}/{key}") from exc
+        raise SpecApplyError(f"pull_specs: could not read s3://{bucket}/{key}: {exc}") from exc
+
+    body = response.get("Body") if isinstance(response, dict) else getattr(response, "Body", None)
+    if body is None:
+        raise SpecApplyError(f"pull_specs: response for {key} has no Body")
+    try:
+        data = body.read()
+    except Exception as exc:  # noqa: BLE001
+        raise SpecApplyError(f"pull_specs: reading body of {key} failed: {exc}") from exc
+
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    if not isinstance(data, (bytes, bytearray)):
+        raise SpecApplyError(f"pull_specs: body of {key} is not bytes (got {type(data).__name__})")
+    return bytes(data)
+
+
+def _is_missing_object(exc: BaseException) -> bool:
+    """True when an S3 exception means 'the key does not exist'.
+
+    boto3 raises a generated ``NoSuchKey``/``404`` ClientError whose class is not
+    importable without botocore, so the check is on the shape of the error rather
+    than its type — the same posture the rest of the overlay takes toward boto3.
+    """
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        error = response.get("Error")
+        if isinstance(error, dict):
+            if str(error.get("Code", "")) in {"NoSuchKey", "404", "NotFound"}:
+                return True
+    return type(exc).__name__ in {"NoSuchKey", "NoSuchKeyError"}
+
+
+# ---------------------------------------------------------------------------
+# Steps 2 + 3 — parse and hash-verify
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ParsedSpec:
+    """One verified spec body, ready to install."""
+
+    output_class: str
+    prop: str
+    body: bytes
+    digest: str
+    #: Machine-checkable shape rules for this property, or {}. Carried verbatim
+    #: from the customer's vault object into the ROOT-OWNED manifest, which is
+    #: the only place the gate reads them from — the agent can write neither.
+    assertions: dict = field(default_factory=dict)
+    #: What this spec was learned from — document names, digests, and a count,
+    #: never text (ss-console#2339). Carried the same way and for the same
+    #: reason as ``assertions``: the answer to "what did you read to learn our
+    #: voice" must come from a surface the agent cannot author, or it is not an
+    #: answer. Empty for a spec installed before provenance existed — and that
+    #: absence must keep rendering as "I cannot name them", never as "none".
+    provenance: dict = field(default_factory=dict)
+    #: Standing one-sentence instructions the firm gave conversationally and
+    #: confirmed by reply (ss-console#2529), oldest first. Already rendered into
+    #: ``body`` by the time this leaves the parser — carried here so a caller can
+    #: see what the file says without re-parsing markdown.
+    adjustments: tuple[dict, ...] = ()
+
+    @property
+    def rel_path(self) -> str:
+        return f"{CLASSES_SUBDIR}/{self.output_class}/{self.prop}.md"
+
+
+def render_spec(body: str, adjustments: Sequence[dict]) -> str:
+    """The bytes installed for one property, assembled from its two sources.
+
+    Body, then one blank line, then the adjustments block. With no adjustments
+    the result is the body unchanged, byte for byte — which is why every spec
+    installed before this existed keeps its exact digest.
+
+    IMPORTED BY THE INTAKE, deliberately. The intake checks a proposed
+    adjustment against the byte ceiling before it writes the vault, and it has
+    to measure the same string this function produces. Two renderers would
+    drift, and the drift would show up as a seat that accepted a rule the
+    applier then refused — the firm's confirmed sentence sitting in the vault
+    and never reaching the file the model reads.
+    """
+    block = ""
+    if adjustments:
+        lines = [ADJUSTMENTS_HEADING, "", ADJUSTMENTS_PREAMBLE, ""]
+        for adj in adjustments:
+            who = f"instructed by {adj['instructed_by']}"
+            applied_by = adj.get("applied_by")
+            if applied_by:
+                who = f"{who}, applied by {applied_by}"
+            lines.append(f"- [rule {adj['id']}] ({who}, {adj['at']}): {adj['text']}")
+        block = "\n".join(lines) + "\n"
+    if not block:
+        return body
+    if not body:
+        return block
+    return body.rstrip("\n") + "\n\n" + block
+
+
+def parse_and_verify(data: bytes) -> tuple[list[ParsedSpec], list[str]]:
+    """Parse the source document and verify every declared hash.
+
+    Returns ``(specs, errors)``. A non-empty ``errors`` means the WHOLE document
+    is refused — there is no partial adoption, because a document half of which
+    failed integrity is a document whose author and whose bytes disagree, and
+    nothing in it can be trusted more than the part that failed.
+    """
+    errors: list[str] = []
+    try:
+        doc = json.loads(data.decode("utf-8"))
+    except UnicodeDecodeError as exc:
+        return [], [f"output-classes.json is not valid UTF-8: {exc}"]
+    except json.JSONDecodeError as exc:
+        return [], [f"output-classes.json is not valid JSON: {exc}"]
+
+    if not isinstance(doc, dict):
+        return [], ["output-classes.json must be a JSON object"]
+
+    version = doc.get("schema_version")
+    if version != SCHEMA_VERSION:
+        return [], [
+            f"schema_version must be {SCHEMA_VERSION}; got {version!r} "
+            "(an unknown schema is refused, never best-effort parsed)"
+        ]
+
+    classes = doc.get("classes")
+    if not isinstance(classes, dict):
+        return [], ["classes must be an object mapping class slug -> properties"]
+
+    specs: list[ParsedSpec] = []
+    for raw_slug, entry in sorted(classes.items()):
+        slug = str(raw_slug)
+        if not _safe_slug(slug):
+            errors.append(f"classes.{slug!r}: class slug must match [a-z0-9_-]+")
+            continue
+        if not isinstance(entry, dict):
+            errors.append(f"classes.{slug}: must be an object")
+            continue
+        for prop in SPEC_PROPERTIES:
+            raw = entry.get(prop)
+            if raw is None:
+                continue  # this class authors nothing for this property
+            spec, spec_errors = _parse_one(slug, prop, raw)
+            errors.extend(spec_errors)
+            if spec is not None:
+                specs.append(spec)
+
+    if not specs and not errors:
+        errors.append("output-classes.json declares no spec bodies")
+    if errors:
+        # Discard the specs that DID verify. The all-or-nothing rule is enforced
+        # here rather than only in the caller so no future caller can adopt a
+        # partial document by reading the list and ignoring the errors.
+        return [], errors
+    return specs, errors
+
+
+def _parse_adjustments(path: str, raw: Any) -> tuple[tuple[dict, ...], list[str]]:
+    """Parse the optional standing-adjustments list for one property.
+
+    Refused the same way assertions and provenance are refused: a malformed
+    item takes the WHOLE document down rather than being dropped. Dropping is
+    the worse outcome by a distance — the firm confirmed a sentence by reply and
+    was told it was in effect, so a spec that quietly installs without it makes
+    the seat's own confirmation a lie, and nothing anywhere would say so.
+    """
+    if raw is None:
+        return (), []
+    if not isinstance(raw, list):
+        return (), [f"{path}.adjustments: must be a list when present"]
+    if len(raw) > MAX_ADJUSTMENTS:
+        return (), [
+            f"{path}.adjustments: {len(raw)} entries exceeds the {MAX_ADJUSTMENTS}-entry ceiling"
+        ]
+    errors: list[str] = []
+    parsed: list[dict] = []
+    seen: set[str] = set()
+    for index, item in enumerate(raw):
+        where = f"{path}.adjustments[{index}]"
+        if not isinstance(item, dict):
+            errors.append(f"{where}: must be an object")
+            continue
+        adj_id = item.get("id")
+        if not isinstance(adj_id, str) or not _ADJUSTMENT_ID.match(adj_id):
+            errors.append(f"{where}.id: must be eight lowercase hex characters")
+            continue
+        if adj_id in seen:
+            errors.append(f"{where}.id: {adj_id!r} appears twice in this property")
+            continue
+        seen.add(adj_id)
+        item_errors: list[str] = []
+        for required in ("text", "instructed_by", "at"):
+            value = item.get(required)
+            if not isinstance(value, str) or not value.strip():
+                item_errors.append(f"{where}.{required}: must be a non-empty string")
+        applied_by = item.get("applied_by")
+        if applied_by is not None and (not isinstance(applied_by, str) or not applied_by.strip()):
+            item_errors.append(f"{where}.applied_by: must be a non-empty string when present")
+        text = item.get("text")
+        if isinstance(text, str):
+            if len(text.encode("utf-8")) > MAX_ADJUSTMENT_TEXT_BYTES:
+                item_errors.append(
+                    f"{where}.text: exceeds the {MAX_ADJUSTMENT_TEXT_BYTES}-byte ceiling"
+                )
+            if "\n" in text or "\r" in text:
+                # One adjustment renders as one bullet. A line break inside the
+                # text would produce a file whose shape does not match what this
+                # parser believes it wrote, so it is refused here as well as
+                # normalized at the broker — the two halves have to agree, and
+                # only one of them is on the seat.
+                item_errors.append(f"{where}.text: must not contain a line break")
+        if item_errors:
+            errors.extend(item_errors)
+            continue
+        entry = {
+            "id": adj_id,
+            "text": text,
+            "instructed_by": item["instructed_by"],
+            "at": item["at"],
+        }
+        if applied_by:
+            entry["applied_by"] = applied_by
+        parsed.append(entry)
+    if errors:
+        return (), errors
+    return tuple(parsed), []
+
+
+def _parse_one(slug: str, prop: str, raw: Any) -> tuple[ParsedSpec | None, list[str]]:
+    """Parse and hash-verify one ``classes.<slug>.<prop>`` entry.
+
+    A property is authored from a distilled ``body``, from a list of confirmed
+    ``adjustments``, or from both. The declared ``sha256`` covers the BODY, and
+    is checked only when there is one; the installed file is the rendered
+    combination of the two, and the manifest hashes what this process writes.
+    """
+    path = f"classes.{slug}.{prop}"
+    if not isinstance(raw, dict):
+        return None, [f"{path}: must be an object with `body` and `sha256`"]
+    adjustments, adjustment_errors = _parse_adjustments(path, raw.get("adjustments"))
+    if adjustment_errors:
+        return None, adjustment_errors
+    body = raw.get("body")
+    declared = raw.get("sha256")
+    has_body = isinstance(body, str) and bool(body.strip())
+    if not has_body:
+        if body is not None and not isinstance(body, str):
+            return None, [f"{path}.body: must be a string when present"]
+        if not adjustments:
+            return None, [f"{path}.body: must be a non-empty string"]
+        body = ""
+    if has_body and (not isinstance(declared, str) or not declared.strip()):
+        return None, [f"{path}.sha256: must be the hex sha256 of `body`"]
+    encoded = body.encode("utf-8")
+    if len(encoded) > MAX_SPEC_BYTES:
+        return None, [
+            f"{path}.body: {len(encoded)} bytes exceeds the {MAX_SPEC_BYTES}-byte ceiling"
+        ]
+    actual = sha256(encoded)
+    if has_body and actual != str(declared).strip().lower():
+        return None, [
+            f"{path}: declared sha256 {str(declared).strip().lower()!r} does not match the "
+            f"body's actual digest {actual!r} — the document and its own integrity "
+            "claim disagree, so the whole document is refused"
+        ]
+    rendered = render_spec(body, adjustments).encode("utf-8")
+    if len(rendered) > MAX_SPEC_BYTES:
+        return None, [
+            f"{path}: the body and its {len(adjustments)} adjustments render to "
+            f"{len(rendered)} bytes, over the {MAX_SPEC_BYTES}-byte ceiling"
+        ]
+    # Assertions are OPTIONAL and, when present, must be an object. A malformed
+    # value refuses the whole document rather than being dropped: silently
+    # discarding shape rules would leave the customer believing a rule is
+    # enforced while nothing checks it — worse than refusing the write.
+    assertions = raw.get("assertions", {})
+    if not isinstance(assertions, dict):
+        return None, [f"{path}.assertions: must be an object when present"]
+    # Provenance is optional for the same reason and refused the same way. A
+    # malformed value must not be dropped: the firm would then be told "I cannot
+    # name what I read" by a seat that was handed a corpus list and discarded
+    # it, which is a worse answer than the honest one AND indistinguishable
+    # from it.
+    provenance = raw.get("provenance", {})
+    if not isinstance(provenance, dict):
+        return None, [f"{path}.provenance: must be an object when present"]
+    return (
+        ParsedSpec(
+            output_class=slug,
+            prop=prop,
+            body=rendered,
+            digest=sha256(rendered) or "",
+            assertions=assertions,
+            provenance=provenance,
+            adjustments=adjustments,
+        ),
+        [],
+    )
+
+
+def _safe_slug(slug: str) -> bool:
+    """True for a class slug safe to use as a path segment.
+
+    Deliberately strict rather than sanitizing: a slug carrying ``/`` or ``..``
+    is an escape attempt or a bug, and both deserve a refusal rather than a
+    quietly-rewritten path.
+    """
+    if not slug or len(slug) > 64:
+        return False
+    return all(ch.isascii() and (ch.isalnum() or ch in "_-") for ch in slug) and slug.islower()
+
+
+# ---------------------------------------------------------------------------
+# Steps 4 + 5 — install root-owned, then commit the manifest
+# ---------------------------------------------------------------------------
+
+
+def _harden(path: Path, mode: int) -> None:
+    """Force ``root:root`` + ``mode`` onto a path this process just created.
+
+    ``atomic_write`` preserves an EXISTING target's owner/mode and, for a new
+    target, leaves ``mkstemp``'s ``root:root 0600`` — which for this tree would
+    mean the agent cannot read the spec it is required to read. So ownership and
+    mode are asserted explicitly after every write, on new and existing files
+    alike. chown failure is logged rather than raised: off-box (tests, a dev
+    run) the process is not root and cannot chown, and the boot invariant
+    — not this function — is what refuses to serve a tree with the wrong owner.
+    """
+    try:
+        os.chown(path, 0, 0)
+    except OSError as exc:
+        logger.debug("spec_applier: could not chown %s to root:root (%s)", path, exc)
+    try:
+        os.chmod(path, mode)
+    except OSError as exc:
+        logger.warning("spec_applier: could not chmod %s to %o: %s", path, mode, exc)
+
+
+def _harden_ancestors(spec_dir: Path, leaf: Path) -> None:
+    """Harden EVERY directory from ``spec_dir`` down to ``leaf``, inclusive.
+
+    WHY THIS IS NOT ``_harden(leaf)``. ``Path.mkdir(parents=True)`` creates the
+    intermediate directories with ``0o777 & ~umask`` and does not apply the
+    caller's mode to them — only the final component is the caller's business
+    as far as pathlib is concerned. Hardening the leaf alone therefore leaves
+    every directory BETWEEN the spec root and the leaf at whatever this
+    process's umask produced.
+
+    That is not cosmetic. `spec_applier` runs as root, and root's umask in the
+    customer image yields ``0o750`` — no world execute. A single un-hardened
+    intermediate directory is not traversable by the agent uid, so the spec
+    below it is unreachable no matter how correct its own mode is.
+
+    OBSERVED ON A LIVE SEAT (`hermes-smd-staging`, 2026-07-31,
+    `vfy_01KYWVR8PBBEP85W3F5SSNC9FD`). Everything downstream looked right —
+    ``classes/staff`` 0755, ``voice.md`` 0644, the manifest naming it with a
+    matching digest, the applier logging ``APPLIED`` — while ``classes/`` sat
+    at 0750 and the agent got ``Permission denied`` on the read. The gate's
+    pass condition is a VERIFIED READ this turn, so the failure mode was: every
+    ``staff`` autonomous send downgraded to draft, permanently, with a fully
+    healthy-looking spec tree and no error anywhere. Exactly the shape that
+    survives a code review, because each individual line is correct.
+
+    Root ownership is the security property (an agent-writable spec is a
+    persistent self-authored injection channel); world-READ is what makes the
+    feature exist at all. This function is where both hold for the whole path.
+    """
+    try:
+        rel = leaf.relative_to(spec_dir)
+    except ValueError:  # leaf outside the spec root — harden nothing, refuse silently
+        logger.warning(
+            "spec_applier: refusing to harden %s; it is not under the spec root %s",
+            leaf,
+            spec_dir,
+        )
+        return
+    current = spec_dir
+    _harden(current, _DIR_MODE)
+    for part in rel.parts:
+        current = current / part
+        _harden(current, _DIR_MODE)
+
+
+def _read_installed_manifest(spec_dir: Path) -> dict[str, Any]:
+    """Best-effort read of the currently installed manifest, or ``{}``.
+
+    An unreadable or corrupt manifest reads as absent: every path then looks
+    changed and is rewritten, which is the recoverable direction.
+    """
+    manifest_path = spec_dir / MANIFEST_NAME
+    try:
+        raw = json.loads(manifest_path.read_text())
+    except FileNotFoundError:
+        return {}
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning(
+            "spec_applier: installed manifest at %s unreadable (%s); treating as absent",
+            manifest_path,
+            exc,
+        )
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _install(
+    spec_dir: Path, specs: list[ParsedSpec], source_digest: str, slug: str
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Write every body, commit the manifest, then prune what is no longer declared.
+
+    Ordering is the transactional argument:
+
+    1. Bodies first. A reader in this window verifies a NEW body against the OLD
+       manifest, mismatches, and fails closed — the safe direction.
+    2. Manifest second, atomically. This is the commit point; the tree is
+       consistent the instant the rename lands.
+    3. Prune last. A file removed after the manifest stopped naming it can only
+       be read as "not in the manifest", which is also a fail-closed read.
+
+    Returns ``(installed_rel_paths, pruned_rel_paths)``.
+    """
+    spec_dir.mkdir(parents=True, exist_ok=True)
+    _harden(spec_dir, _DIR_MODE)
+
+    entries: dict[str, dict[str, Any]] = {}
+    installed: list[str] = []
+    for spec in specs:
+        target = spec_dir / spec.rel_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        _harden_ancestors(spec_dir, target.parent)
+        atomic_write(target, spec.body)
+        _harden(target, _FILE_MODE)
+        installed.append(spec.rel_path)
+        entries[spec.rel_path] = {
+            "class": spec.output_class,
+            "property": spec.prop,
+            # Computed HERE, over the bytes this process wrote — never copied
+            # from the source document. The runtime read-mark verifies against
+            # this value, so echoing the source's claim would verify the source
+            # against itself.
+            "sha256": sha256(spec.body),
+            "bytes": len(spec.body),
+            # Root-recorded beside the digest so the answer to "what did you
+            # read to learn our voice" comes from a surface the agent cannot
+            # author (ss-console#2339). Absent for specs installed before this
+            # existed — the reader must render that as "I cannot name them".
+            "provenance": spec.provenance,
+            # Root-recorded alongside the digest, so the gate reads shape rules
+            # from the same trusted surface it reads the hash from.
+            "assertions": spec.assertions,
+        }
+
+    manifest = {
+        "schema_version": SCHEMA_VERSION,
+        "customer": slug,
+        "source_digest": source_digest,
+        "installed_at": iso_utc(),
+        "specs": entries,
+    }
+    manifest_bytes = json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8") + b"\n"
+    manifest_path = spec_dir / MANIFEST_NAME
+    atomic_write(manifest_path, manifest_bytes)
+    _harden(manifest_path, _FILE_MODE)
+
+    pruned = _prune(spec_dir, set(entries))
+    return tuple(installed), pruned
+
+
+def _prune(spec_dir: Path, keep: set[str]) -> tuple[str, ...]:
+    """Remove installed spec bodies the new manifest no longer names.
+
+    Scoped to ``classes/**/*.md`` under the spec dir so a stray file elsewhere is
+    never deleted by this process. A removal failure is logged, not raised: a
+    leftover body is unreachable through the manifest anyway (an unlisted path
+    cannot be marked as read), so it is stale clutter rather than a live risk.
+    """
+    root = spec_dir / CLASSES_SUBDIR
+    if not root.is_dir():
+        return ()
+    pruned: list[str] = []
+    for path in sorted(root.rglob("*.md")):
+        rel = path.relative_to(spec_dir).as_posix()
+        if rel in keep:
+            continue
+        try:
+            path.unlink()
+            pruned.append(rel)
+        except OSError as exc:
+            logger.warning("spec_applier: could not prune stale spec %s: %s", path, exc)
+    return tuple(pruned)
+
+
+# ---------------------------------------------------------------------------
+# Orchestration
+# ---------------------------------------------------------------------------
+
+
+def apply(
+    *,
+    s3_client: Any,
+    bucket: str,
+    slug: str,
+    spec_dir: str | Path,
+) -> SpecApplyResult:
+    """Pull, verify, and install the authored specs for ``slug``.
+
+    Returns APPLIED / REJECTED / UNCHANGED. Fail-static throughout: a REJECTED
+    document leaves the installed tree exactly as it was.
+
+    Raises:
+        SpecObjectMissing: no spec object in the vault (the ordinary state of a
+            seat whose customer authored nothing). The caller treats this as a
+            non-event, not a failure.
+        SpecApplyError: an unrecoverable R2 read or install write fault.
+    """
+    target = Path(spec_dir)
+    raw = pull_specs(s3_client, bucket, slug)
+    source_digest = sha256(raw) or ""
+
+    installed_manifest = _read_installed_manifest(target)
+    if installed_manifest.get("source_digest") == source_digest and source_digest:
+        return SpecApplyResult(
+            outcome=SpecApplyOutcome.UNCHANGED,
+            source_digest=source_digest,
+        )
+
+    specs, errors = parse_and_verify(raw)
+    if errors:
+        # Fail-static. The previously installed tree stands untouched; the seat
+        # keeps serving the spec it was serving.
+        return SpecApplyResult(
+            outcome=SpecApplyOutcome.REJECTED,
+            reasons=tuple(errors),
+            source_digest=source_digest,
+        )
+
+    try:
+        installed, pruned = _install(target, specs, source_digest, slug)
+    except OSError as exc:
+        raise SpecApplyError(f"apply: installing specs into {target} failed: {exc}") from exc
+
+    return SpecApplyResult(
+        outcome=SpecApplyOutcome.APPLIED,
+        installed=installed,
+        pruned=pruned,
+        source_digest=source_digest,
+        metadata={"spec_count": len(installed)},
+    )
+
+
+__all__ = [
+    "ADJUSTMENTS_HEADING",
+    "ADJUSTMENTS_PREAMBLE",
+    "CLASSES_SUBDIR",
+    "MANIFEST_NAME",
+    "MAX_ADJUSTMENTS",
+    "MAX_ADJUSTMENT_TEXT_BYTES",
+    "MAX_SPEC_BYTES",
+    "SCHEMA_VERSION",
+    "SPEC_PROPERTIES",
+    "ParsedSpec",
+    "SpecApplyError",
+    "SpecApplyOutcome",
+    "SpecApplyResult",
+    "SpecObjectMissing",
+    "apply",
+    "parse_and_verify",
+    "pull_specs",
+    "render_spec",
+    "spec_object_key",
+]

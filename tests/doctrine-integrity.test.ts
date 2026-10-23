@@ -377,18 +377,25 @@ describe('venture repositories are declared in CLAUDE.md', () => {
   const claudeMd = readFileSync(resolve('CLAUDE.md'), 'utf8')
 
   // Every repo this venture spans. Adding one here without adding it to
-  // CLAUDE.md fails, which is the point.
-  const VENTURE_REPOS = [
-    'venturecrane/ss-console',
-    'venturecrane/hermes-smd-overlay',
-    'venturecrane/engagements',
-  ]
+  // CLAUDE.md fails, which is the point. The overlay stopped being one of them
+  // on 2026-10-22 (ADR 0095): it is a directory of this repo now.
+  const VENTURE_REPOS = ['venturecrane/ss-console', 'venturecrane/engagements']
 
   for (const repo of VENTURE_REPOS) {
     it(`names ${repo}`, () => {
       expect(claudeMd).toContain(repo)
     })
   }
+
+  it('declares where the overlay lives now that it is not a repo', () => {
+    // The 2026-08-25 agent stopped because the overlay was undeclared. After the
+    // fold the same question ("is the overlay another repo?") has a different
+    // answer, and CLAUDE.md has to give it, or an agent holding an old memory of
+    // `venturecrane/hermes-smd-overlay` goes looking for a checkout to sync.
+    expect(claudeMd).toMatch(/\*\*two\*\* repositories/)
+    expect(claudeMd).toMatch(/Operator runtime overlay at `operator\/hermes-smd-overlay\/`/)
+    expect(claudeMd).toMatch(/The overlay is a directory, not a repo \(ADR 0095/)
+  })
 
   it('states that moving between them is not a venture switch', () => {
     // The directive an agent is weighing says "repos or ventures". CLAUDE.md has

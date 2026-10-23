@@ -58,36 +58,39 @@ SMD contact addresses:
 
 ## Venture Repositories — moving between these is NOT a repo switch
 
-This venture spans **three** repositories. Work that crosses them is ordinary
+This venture spans **two** repositories. Work that crosses them is ordinary
 work inside one venture. The SOS directive "never switch repos or ventures
 without explicit Captain approval" governs moving to a **different venture**
 (vc, ke, dfg, sc...), not moving between the repos listed here.
 
-| Repo                                 | Clone at                                     | What lives there                                                                                                                                                                                                                      |
-| ------------------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `venturecrane/ss-console`            | `~/dev/ss-console`                           | This repo. Marketing site, admin console, portal, Operator skills/contracts/config, the seat `customer.yaml` set.                                                                                                                     |
-| `venturecrane/hermes-smd-overlay`    | `~/dev/hermes-smd-overlay`                   | The Operator runtime overlay: the trust plugin, gates, connectors' Python side, boot smoke, and the contract fixtures that MIRROR this repo's (`tests/contract/seat_gate_binding_snapshot.json`). Pinned into seats by `OVERLAY_REF`. |
-| `venturecrane/engagements` (private) | `~/dev/engagements` or `$SS_ENGAGEMENTS_DIR` | Client material: dossiers, correspondence, proposals, agreements. See the Law 2 guard above.                                                                                                                                          |
+| Repo                                 | Clone at                                     | What lives there                                                                                                                                                                                                                                    |
+| ------------------------------------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `venturecrane/ss-console`            | `~/dev/ss-console`                           | This repo. Marketing site, admin console, portal, Operator skills/contracts/config, the seat `customer.yaml` set, and the Operator runtime overlay at `operator/hermes-smd-overlay/` (the trust plugin, gates, connectors' Python side, bootstrap). |
+| `venturecrane/engagements` (private) | `~/dev/engagements` or `$SS_ENGAGEMENTS_DIR` | Client material: dossiers, correspondence, proposals, agreements. See the Law 2 guard above.                                                                                                                                                        |
+
+**The overlay is a directory, not a repo (ADR 0095, 2026-10-22).** Until the
+fold it was the separate repo `venturecrane/hermes-smd-overlay`, pinned into the
+seat image by `OVERLAY_REF`. It now builds from this tree, so the version a seat
+reports is the ss-console commit its image was built from, and a runtime change
+is one ordinary PR followed by `fleet build` and `fleet release`. There is no
+pin to bump and no fixture to copy across. The standalone repo is locked; it
+takes a hotfix only for a seat still held on a pre-fold image, by the lane in
+`docs/handbook/deployment-release.md`.
 
 **Why this section exists.** It was added 2026-08-25 after an agent completed a
 seat retirement across git, D1, R2 and Fly, then stopped at the overlay's
-mirrored fixture and asked permission to continue — because the venture declared
+mirrored fixture and asked permission to continue, because the venture declared
 `engagements` as a sibling repo and never declared the overlay, so "don't switch
 repos" had no repo set to check against and the conservative reading won. The
 Captain reports having explained this many times. A fact an agent has to be told
-repeatedly is a fact the repo failed to write down.
+repeatedly is a fact the repo failed to write down. The fold removes the
+boundary that agent stopped at: the mirrored fixture no longer exists, and the
+overlay tests read this repo's originals in place.
 
-**Two consequences that bite in practice.**
-
-1. **A change is not shipped until every repo it spans is shipped.** ss-console
-   and the overlay carry mirrored artifacts on purpose — the seat/gate snapshot
-   is the standing example, and `tests/gate-coverage-snapshot.test.ts` says so in
-   its own header: regenerate here, then COPY the `.overlay.json` over the
-   overlay's fixture _in the same change_. The overlay has no way to pull it.
-   Landing one side and stopping is the same defect as a merged-but-not-deployed
-   overlay fix.
-2. **A removal is not complete until it is absent from all three.** "Gone means
-   gone" enumerates runtime layers; the repo layer is plural here.
+**The consequence that remains.** Client material lives in `engagements`, never
+here (Law 2, ADR 0081). A removal is not complete until it is absent from both
+repositories as well as every runtime layer; "Gone means gone" enumerates the
+runtime layers.
 
 ## Enterprise Rules
 

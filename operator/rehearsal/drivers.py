@@ -64,15 +64,56 @@ def _load_bin_module(module_name: str, filename: str):
     return module
 
 
-def load_overlay_ref_drift():
-    """``overlay-ref-drift.py`` as a module, for its read of a seat's RUNNING ref.
+def refs_match(desired: str, running: str | None) -> bool:
+    """Match exact, or by common prefix so a short ref equals its full SHA."""
+    if not running:
+        return False
+    a, b = desired.lower(), running.lower()
+    return a == b or a.startswith(b) or b.startswith(a)
 
-    Same reason as the reconciler above: the runner's release gate has to read a
-    Machine's running overlay ref exactly the way the drift report reads it. Two
-    implementations of "what is this seat running" would drift, and the drifted
-    one would be the one nobody watched.
+
+@dataclass
+class RunningRef:
+    """One Machine's RUNNING code ref, as read off the live runtime seam.
+
+    ``status`` is ``read`` only when a value actually came back. Every other
+    status means the running ref is UNKNOWN, and the gate below must refuse rather
+    than assume current: a check that cannot fail measured nothing.
+
+    Carried here since the 2026-10-22 fold (ADR 0095). It used to be borrowed
+    from ``bin/overlay-ref-drift.py``, whose drift report `fleet status` made
+    redundant; the running-ref read is now the release gate's own.
     """
-    return _load_bin_module("overlay_ref_drift", "overlay-ref-drift.py")
+
+    slug: str
+    status: str  # read | unknown | unreachable | unconfigured
+    value: str | None
+    source: str | None = None
+    detail: str = ""
+
+
+def read_running_ref(slug: str, make_client) -> RunningRef:
+    """Resolve one slug's running ref through the runtime-read seam.
+
+    The snapshot's ``overlay_ref.value`` is the image's ``SMD_OVERLAY_REF``: the
+    ss-console commit the seat's image was built from.
+    """
+    try:
+        client = make_client(slug)
+    except Exception as exc:  # noqa: BLE001 - defensive; a factory error is unreachable
+        return RunningRef(slug, "unreachable", None, None, f"client init: {exc}")
+    if client is None:
+        return RunningRef(slug, "unconfigured", None, None, "seam env not set")
+    try:
+        snap = client.read_config()
+    except Exception as exc:  # noqa: BLE001 - paused/undeployed/unreachable Machine
+        return RunningRef(slug, "unreachable", None, None, f"{type(exc).__name__}: {exc}")
+    ref_obj = snap.get("overlay_ref") if isinstance(snap, dict) else None
+    value = ref_obj.get("value") if isinstance(ref_obj, dict) else None
+    source = ref_obj.get("source") if isinstance(ref_obj, dict) else None
+    if value is None:
+        return RunningRef(slug, "unknown", None, source, "snapshot has no overlay_ref.value")
+    return RunningRef(slug, "read", value, source)
 
 
 def load_seat_config(slug: str) -> dict:

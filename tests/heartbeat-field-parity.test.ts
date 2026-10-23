@@ -19,27 +19,19 @@
  *     the migration — all fail here. The negative control below proves the check
  *     can fail, so a green run means something (Law 12).
  *
- *  2. An OVERLAY_REF bump that lands without anyone re-reading the emitter. The
- *     manifest records the ref it was read against and this asserts it equals
- *     `ARG OVERLAY_REF` in operator/templates/Dockerfile. That pin is the ONLY
- *     path by which a new overlay field reaches a running seat (the seat image
- *     is built at the pinned commit), so every arrival of a new field is
- *     necessarily preceded by a bump — and the bump PR goes red until the
- *     manifest is re-stamped.
+ *  2. A field the emitter writes that the manifest does not name. The emitter is
+ *     operator/hermes-smd-overlay/shared/heartbeat.py in this tree (one
+ *     repository since the 2026-10-22 fold, ADR 0095), so the emitted key set is
+ *     extracted from build_payload on every run, in CI too, and the manifest
+ *     must be a superset of it. Before the fold this half ran only on a laptop
+ *     with the overlay checked out, and CI relied on a pin re-stamp forcing a
+ *     human read; both the pin and the skip are gone.
  *
- *  3. When the overlay repo happens to be checked out locally (SS_OVERLAY_DIR,
- *     or ~/dev/hermes-smd-overlay), the emitted key set at the pinned ref is
- *     extracted from build_payload and the manifest must be a superset of it.
+ *  3. Two closed vocabularies the overlay forwards (supervisor states, sticky
+ *     stop conditions) that the ingest must recognise, read from the same tree.
  *
  * WHAT IT CANNOT CATCH, equally honestly:
  *
- *  - It does not read the overlay in CI. The overlay is a separate private repo
- *    and CI has no checkout of it, so check 3 is skipped there. Check 2 is the
- *    CI-side substitute: it forces the human read at the one moment the fields
- *    can change, it does not perform the read.
- *  - A re-stamp that bumps `overlay_ref` without actually re-reading
- *    build_payload satisfies check 2 while learning nothing. The gate makes the
- *    omission deliberate rather than invisible; it cannot make it impossible.
  *  - It says nothing about whether a stored field is ALERTED on. Storage is a
  *    column; reaching a person is the fleet-alerts Worker's own suite.
  *  - It proves nothing about a running seat. Law 9: this is repo-layer until a
@@ -54,9 +46,7 @@ import {
   installWorkerdPolyfills,
 } from '@venturecrane/crane-test-harness'
 import { seedMachineCredential } from './helpers/machine-credential'
-import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
-import os from 'node:os'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { POST } from '../src/pages/api/internal/heartbeat'
 import { env as testEnv } from 'cloudflare:workers'
@@ -66,7 +56,9 @@ installWorkerdPolyfills()
 const repoRoot = path.resolve(__dirname, '..')
 const migrationsDir = path.join(repoRoot, 'migrations')
 const manifestPath = path.join(repoRoot, 'operator/observability/heartbeat-fields.json')
-const dockerfilePath = path.join(repoRoot, 'operator/templates/Dockerfile')
+/** The seat runtime, in this tree since the fold (ADR 0095). */
+const overlayRoot = path.join(repoRoot, 'operator/hermes-smd-overlay')
+const overlaySource = (rel: string): string => readFileSync(path.join(overlayRoot, rel), 'utf8')
 
 interface ManifestField {
   name: string
@@ -74,7 +66,6 @@ interface ManifestField {
   sample: unknown
 }
 interface Manifest {
-  overlay_ref: string
   fields: ManifestField[]
 }
 
@@ -173,7 +164,6 @@ describe('heartbeat field parity — every emitted field has a reader (ss#2287)'
     // A manifest that emptied itself would make every other assertion here pass
     // while measuring nothing.
     expect(manifest.fields.length).toBeGreaterThanOrEqual(16)
-    expect(manifest.overlay_ref).toMatch(/^[0-9a-f]{40}$/)
     const names = manifest.fields.map((f) => f.name)
     expect(new Set(names).size).toBe(names.length)
     expect(names).toContain('webhook_surface_ok')
@@ -315,44 +305,16 @@ describe('heartbeat field parity — every emitted field has a reader (ss#2287)'
       .first<{ value: string | null }>()
     expect(row?.value).toHaveLength(300)
   })
-
-  it('the manifest is stamped against the OVERLAY_REF the seats actually run', () => {
-    // The pin is the only path a new overlay field takes to a seat, so a bump
-    // is the one moment this list can go stale. Re-read build_payload at the new
-    // ref, add any new field with its column and sample, then re-stamp.
-    const dockerfile = readFileSync(dockerfilePath, 'utf8')
-    const match = dockerfile.match(/^ARG OVERLAY_REF="([0-9a-fA-F]{7,40})"/m)
-    expect(match, 'no ARG OVERLAY_REF in operator/templates/Dockerfile').not.toBeNull()
-    expect(match?.[1]).toBe(manifest.overlay_ref)
-  })
 })
 
 /**
- * The cross-repo half. Runs only where the overlay is checked out — which is a
- * developer machine, not CI. Never silently skipped in a way that reads as a
- * pass: the skip reason is the test name.
+ * The emitter half, read from the tree. Until the fold this ran only where the
+ * overlay repo was checked out (never in CI); the runtime is in this repository
+ * now, so the same commit that changes the emitter runs this check.
  */
-const overlayDir = process.env.SS_OVERLAY_DIR ?? path.join(os.homedir(), 'dev/hermes-smd-overlay')
-const overlayAvailable = existsSync(path.join(overlayDir, '.git'))
-
-describe.skipIf(!overlayAvailable)('heartbeat field parity vs the overlay checkout', () => {
-  it('the manifest covers every key build_payload emits at the pinned ref', () => {
-    // `git show <ref>:path` deliberately, not the working tree: overlay
-    // checkouts routinely sit on a dirty feature branch far from the pin.
-    //
-    // GIT_* is stripped from the child's environment. Under the husky pre-push
-    // hook git exports GIT_DIR / GIT_INDEX_FILE for THIS repo, and an inherited
-    // GIT_DIR beats `cwd` — the read silently retargets ss-console and fails
-    // with a confusing "path exists on disk but not in <ref>". Caught by the
-    // hook on the first push of this file.
-    const cleanEnv = Object.fromEntries(
-      Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_'))
-    )
-    const source = execFileSync('git', ['show', `${manifest.overlay_ref}:shared/heartbeat.py`], {
-      cwd: overlayDir,
-      encoding: 'utf8',
-      env: cleanEnv,
-    })
+describe('heartbeat field parity vs the overlay source', () => {
+  it('the manifest covers every key build_payload emits', () => {
+    const source = overlaySource('shared/heartbeat.py')
     const emitted = new Set(
       [...source.matchAll(/^\s*payload\["([a-z_]+)"\]\s*=/gm)].map((m) => m[1])
     )
@@ -370,18 +332,11 @@ describe.skipIf(!overlayAvailable)('heartbeat field parity vs the overlay checko
     // does not recognise; so is this repo's GATEWAY_SUPERVISOR_STATES. Two
     // closed sets in different repos, each failing silently to NULL, with
     // nothing asserting they agree — which is how overlay#339's two new words
-    // reached a five-word ingest. Anchored to the PINNED ref, not overlay main,
-    // for the same reason the audit-vocabulary gate is: main is ahead of what
-    // any Machine runs.
-    const cleanEnv = Object.fromEntries(
-      Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_'))
+    // reached a five-word ingest. One tree now: the source read here is the
+    // source the image is built from.
+    const block = /SUPERVISOR_STATES\s*=\s*frozenset\(\s*\{([^}]*)\}/.exec(
+      overlaySource('shared/gateway_loop_check.py')
     )
-    const overlaySource = execFileSync(
-      'git',
-      ['show', `${manifest.overlay_ref}:shared/gateway_loop_check.py`],
-      { cwd: overlayDir, encoding: 'utf8', env: cleanEnv }
-    )
-    const block = /SUPERVISOR_STATES\s*=\s*frozenset\(\s*\{([^}]*)\}/.exec(overlaySource)
     expect(
       block,
       'no SUPERVISOR_STATES frozenset in the pinned gateway_loop_check.py'
@@ -413,16 +368,8 @@ describe.skipIf(!overlayAvailable)('heartbeat field parity vs the overlay checko
     // supervisor states), same guard for the same reason. A meter added to the
     // ladder that this ingest has not heard of stores NULL, and the page loses
     // the cause silently -- which is the whole defect this field exists to fix.
-    const cleanEnv = Object.fromEntries(
-      Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_'))
-    )
-    const overlaySource = execFileSync(
-      'git',
-      ['show', `${manifest.overlay_ref}:shared/sticky_stop.py`],
-      { cwd: overlayDir, encoding: 'utf8', env: cleanEnv }
-    )
     const block = /class StickyStopCondition\(str, enum\.Enum\):([\s\S]*?)\n\n\n/.exec(
-      overlaySource
+      overlaySource('shared/sticky_stop.py')
     )
     expect(block, 'no StickyStopCondition enum in the pinned sticky_stop.py').not.toBeNull()
     const overlayWords = [...block![1].matchAll(/^\s+[A-Z_]+ = "(\w+)"$/gm)].map((m) => m[1]).sort()

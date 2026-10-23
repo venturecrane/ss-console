@@ -3,8 +3,28 @@
 - **Status:** Superseded in part (Decision §1 reversed 2026-08-01)
 - **Date:** 2026-07-27
 - **Revised:** 2026-08-01
+- **Amended:** 2026-10-22 by [ADR 0095](./0095-one-repository-for-the-seat-runtime.md) (Decision §2's build dependency is gone)
 - **Issue:** [#1960](https://github.com/venturecrane/ss-console/issues/1960), [#2116](https://github.com/venturecrane/ss-console/issues/2116)
 - **Builds on:** ADR 0015 (Hermes fork posture — the overlay's open-source decision)
+
+## Amendment 2026-10-22: the overlay's visibility no longer bears on any build
+
+[ADR 0095](./0095-one-repository-for-the-seat-runtime.md) moved the overlay
+into this repo at `operator/hermes-smd-overlay/`. The image now copies it from
+the local tree and fetches nothing from git, so every point Decision §2 below
+names as "provisioning depends on it" is gone: the `uv pip install` from a git
+URL, the build-time `hermes plugins install` clone, the pinned-pack fetch into
+`/app/overlay-pack`, and the `bootstrap.sh` reseed fallback (bootstrap now dies
+if the pack is missing rather than fetch it). The load-bearing reason in §2
+no longer applies, and the build-time credential path it warned about is not
+needed under any visibility. The SEC-32 gate cited in Consequences
+(`verify-overlay-pairs.py`) is also gone; twin parity is checked in this tree.
+
+The standalone `venturecrane/hermes-smd-overlay` repo stays public for now, as
+§2's first reason (ADR 0015's open-source posture) is not changed by the fold.
+Its `main` is locked at the fold, its history is kept in this repo as
+`refs/heads/overlay-history`, and it is archived once `ashton-price` runs a
+folded image. The overlay code itself is now public because `ss-console` is.
 
 ## Revision 2026-08-01 — §1 is reversed: `ss-console` is PUBLIC
 

@@ -1,0 +1,653 @@
+"""The two attachment verbs, and the plugin that puts them on the seat.
+
+THE DEFECT (live, 2026-09-18). A seat received a vendor invoice with a PDF
+attached and replied "Your message arrived without any attachments." The
+``message.received`` payload it had carried no ``attachments`` key at all, and
+the records tools it could reach all wanted a download URL the mail vendor does
+not mint. These tests pin the two halves of the fix and, for each, the direction
+that would be a defect if it flipped.
+"""
+
+from __future__ import annotations
+
+import email.message
+import hashlib
+import io
+import json
+import urllib.error
+import urllib.parse
+import urllib.request
+import urllib.response
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from shared import agentmail_broker as broker
+from shared import attachment_spool as spool
+from shared import email_adapter, msgraph_attachments
+from shared import same_origin_redirects as same_origin
+from tests.conftest import load_plugin
+
+MESSAGE = {
+    "message_id": "msg_123",
+    "subject": "FW: invoice",
+    "attachments": [
+        {
+            "attachment_id": "att_1",
+            "filename": "invoice-1001.pdf",
+            "content_type": "application/pdf",
+            "size": 1983,
+        },
+        {
+            "attachment_id": "att_2",
+            "filename": "../../etc/passwd",
+            "content_type": "application/pdf",
+            "size": 12,
+        },
+        {"filename": "no-id.pdf"},
+    ],
+}
+
+PDF = b"%PDF-1.7 vendor invoice body"
+
+# Captured before the autouse fixture below swaps it, for the one test that
+# drives _download through the real opener.
+_REAL_OPEN_DOWNLOAD = broker._open_download
+_REAL_OPEN_API = broker._open_api
+
+SEAT_INBOX = "pilot@seat.example"
+
+DOWNLOAD_URL = "https://cdn.agentmail.to/attachments/att_1?Expires=1&Signature=x"
+
+ATTACHMENT_RECORD = {
+    "attachment_id": "att_1",
+    "filename": "invoice-1001.pdf",
+    "content_type": "application/pdf",
+    "size": len(PDF),
+    "download_url": DOWNLOAD_URL,
+    "text_url": "https://cdn.agentmail.to/extracted/att_1?Expires=1&Signature=x",
+    "expires_at": "2026-09-18T20:46:23.890Z",
+}
+
+
+class _Response(io.BytesIO):
+    def __init__(self, body: bytes, content_type: str = "application/json") -> None:
+        super().__init__(body)
+        self.headers = {"Content-Type": content_type}
+
+    def __enter__(self) -> _Response:
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        self.close()
+
+
+@pytest.fixture(autouse=True)
+def _download_through_patched_urlopen(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The tests below script every fetch by patching ``urlopen``. The download
+    path and the authenticated API path each use their own opener (allowlisted
+    and same-origin redirects); route both through whatever ``urlopen`` is at
+    call time so one scripted fake still serves all. The openers themselves are
+    pinned by the redirect tests at the end of this file."""
+    for seam in ("_open_download", "_open_api"):
+        monkeypatch.setattr(
+            broker,
+            seam,
+            lambda req, *, timeout: broker.urllib.request.urlopen(req, timeout=timeout),
+        )
+
+
+@pytest.fixture
+def seat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """A seat with a read credential and an empty spool. Returns the list every
+    GET's URL is appended to, so a test can assert what was asked for."""
+    monkeypatch.setenv(broker.READ_KEY_ENV, "am_read_key")
+    monkeypatch.setenv(spool.SPOOL_DIR_ENV, str(tmp_path / "spool"))
+    # The seat's own inbox is cached per process; each test resolves it afresh.
+    monkeypatch.setattr(broker, "_own_inbox_cache", None)
+    urls: list[str] = []
+
+    def fake_urlopen(request: Any, timeout: float | None = None) -> _Response:
+        urls.append(request.full_url)
+        if "agentmail.to/v0" in request.full_url or "api.agentmail.to" in request.full_url:
+            assert request.headers.get("Authorization") == "Bearer am_read_key"
+        if "/inboxes?" in request.full_url:
+            return _Response(json.dumps({"inboxes": [{"inbox_id": SEAT_INBOX}]}).encode())
+        if request.full_url == DOWNLOAD_URL:
+            assert request.headers.get("Authorization") is None, "the signed link IS the credential"
+            return _Response(PDF, "application/pdf")
+        if request.full_url.endswith("/attachments/att_1"):
+            return _Response(json.dumps(ATTACHMENT_RECORD).encode())
+        return _Response(json.dumps(MESSAGE).encode())
+
+    monkeypatch.setattr(broker.urllib.request, "urlopen", fake_urlopen)
+    return urls
+
+
+# ---------------------------------------------------------------------------
+# list_attachments — the fact the event does not carry
+# ---------------------------------------------------------------------------
+
+
+def test_list_attachments_returns_what_the_message_carries(seat: list[str]) -> None:
+    found = broker.list_attachments("msg_123")
+    assert [a["attachment_id"] for a in found] == ["att_1", "att_2"]
+    assert found[0] == {
+        "attachment_id": "att_1",
+        "filename": "invoice-1001.pdf",
+        "content_type": "application/pdf",
+        "size": 1983,
+    }
+
+
+def test_an_attachment_with_no_id_is_dropped(seat: list[str]) -> None:
+    """It cannot be fetched, so offering it would only invite a failed call."""
+    assert all(a["attachment_id"] for a in broker.list_attachments("m"))
+
+
+def test_a_hostile_filename_is_reduced_before_the_model_sees_it(seat: list[str]) -> None:
+    found = broker.list_attachments("m")
+    assert found[1]["filename"] == "passwd"
+
+
+def test_the_message_id_cannot_contribute_a_path_segment(seat: list[str]) -> None:
+    """The message id reaches this module from a webhook payload or from the
+    model. A message id of ``../../inboxes/other`` must read as a message id,
+    not as a walk up the vendor's API."""
+    broker.list_attachments("../../other")
+    assert seat[-1] == (
+        f"https://api.agentmail.to/v0/inboxes/{urllib.parse.quote(SEAT_INBOX, safe='')}"
+        "/messages/..%2F..%2Fother"
+    )
+
+
+def test_the_inbox_is_the_seats_own_never_the_models(seat: list[str]) -> None:
+    """2026-09-18: the first live run named the SENDER's inbox, the vendor
+    answered 404, and the turn reported an unreadable file to that sender. The
+    inbox is resolved from this seat's own key, and no argument can name one."""
+    broker.list_attachments("msg_123")
+    assert seat[0].startswith("https://api.agentmail.to/v0/inboxes?")
+    assert urllib.parse.quote(SEAT_INBOX, safe="") in seat[-1]
+    assert "message_id" in broker.list_attachments.__code__.co_varnames
+    assert "inbox_id" not in broker.list_attachments.__code__.co_varnames
+
+
+def test_a_key_covering_no_single_inbox_refuses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zero or several inboxes is a configuration fault, never a guess."""
+    monkeypatch.setenv(broker.READ_KEY_ENV, "am_read_key")
+    monkeypatch.setenv(spool.SPOOL_DIR_ENV, str(tmp_path / "spool"))
+    broker._own_inbox_cache = None
+
+    def fake_urlopen(request: Any, timeout: float | None = None) -> _Response:
+        return _Response(json.dumps({"inboxes": [{"inbox_id": "a"}, {"inbox_id": "b"}]}).encode())
+
+    monkeypatch.setattr(broker.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(broker.AgentMailReadError) as exc:
+        broker.list_attachments("msg_123")
+    assert "exactly one" in str(exc.value)
+
+
+@pytest.mark.parametrize("args", ["", None])
+def test_a_missing_id_refuses_before_any_call(seat: list[str], args: Any) -> None:
+    with pytest.raises(broker.AgentMailReadError):
+        broker.list_attachments(args)
+    assert seat == []
+
+
+def test_no_credential_means_a_named_refusal_not_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv(broker.READ_KEY_ENV, raising=False)
+    with pytest.raises(broker.AgentMailReadError) as exc:
+        broker.list_attachments("m")
+    assert broker.READ_KEY_ENV in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# spool_attachment — bytes to the volume, a token to the model
+# ---------------------------------------------------------------------------
+
+
+def test_spool_attachment_returns_a_receipt_and_never_the_bytes(seat: list[str]) -> None:
+    receipt = broker.spool_attachment("msg_123", "att_1")
+    assert set(receipt) == {"spool_token", "filename", "content_type", "size", "sha256"}
+    assert receipt["sha256"] == hashlib.sha256(PDF).hexdigest()
+    assert receipt["filename"] == "invoice-1001.pdf"
+    assert receipt["content_type"] == "application/pdf"
+    assert "%PDF" not in json.dumps(receipt)
+    assert spool.read(receipt["spool_token"], expected_sha256=receipt["sha256"]) == PDF
+
+
+def test_the_spooled_name_comes_from_the_token_not_the_vendor(
+    seat: list[str], tmp_path: Path
+) -> None:
+    receipt = broker.spool_attachment("m", "att_1")
+    written = sorted(p.name for p in (tmp_path / "spool").iterdir())
+    assert written == [f"{receipt['spool_token']}.bin", f"{receipt['spool_token']}.json"]
+
+
+def test_an_oversized_attachment_is_refused_and_nothing_is_spooled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(broker.READ_KEY_ENV, "am_read_key")
+    monkeypatch.setenv(spool.SPOOL_DIR_ENV, str(tmp_path / "spool"))
+    big = b"x" * (spool.MAX_SPOOL_BYTES + 1)
+    monkeypatch.setattr(broker, "_own_inbox_cache", None)
+
+    def fake_urlopen(request: Any, timeout: float | None = None) -> _Response:
+        if "/inboxes?" in request.full_url:
+            return _Response(json.dumps({"inboxes": [{"inbox_id": SEAT_INBOX}]}).encode())
+        if request.full_url == DOWNLOAD_URL:
+            return _Response(big, "application/pdf")
+        if request.full_url.endswith("/attachments/att_1"):
+            return _Response(json.dumps({**ATTACHMENT_RECORD, "size": len(big)}).encode())
+        return _Response(json.dumps(MESSAGE).encode())
+
+    monkeypatch.setattr(broker.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(broker.AgentMailReadError, match="limit"):
+        broker.spool_attachment("m", "att_1")
+    assert not (tmp_path / "spool").exists() or list((tmp_path / "spool").iterdir()) == []
+
+
+def test_a_vendor_error_never_echoes_the_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(broker.READ_KEY_ENV, "am_secret_value")
+    monkeypatch.setenv(spool.SPOOL_DIR_ENV, str(tmp_path / "spool"))
+
+    def boom(request: Any, timeout: float | None = None) -> None:
+        raise OSError("connection reset by am_secret_value")
+
+    monkeypatch.setattr(broker.urllib.request, "urlopen", boom)
+    with pytest.raises(broker.AgentMailReadError) as exc:
+        broker.list_attachments("m")
+    assert "am_secret_value" not in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# The plugin surface
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def mail_seat(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A seat that authors an enabled Email connector on AgentMail.
+
+    The plugin's load gate asks the CAPABILITY question (does this seat have a
+    mailbox?) rather than the vendor one (is AGENTMAIL_API_KEY set?), because
+    the vendor question is what kept these tools off every Microsoft 365 seat.
+    So a test that wants the tools has to give the seat a mailbox.
+    """
+    monkeypatch.setattr(email_adapter, "email_connector_enabled", lambda *_, **__: True)
+    monkeypatch.setattr(
+        email_adapter, "email_adapter", lambda *_, **__: email_adapter.ADAPTER_AGENTMAIL
+    )
+
+
+def test_the_plugin_registers_both_tools_on_a_seat_with_mail(
+    fake_ctx: Any, mail_seat: None
+) -> None:
+    plugin = load_plugin("hermes-smd-mail-attachments")
+    plugin.register(fake_ctx)
+    assert set(fake_ctx.tools) == {
+        "mail_list_attachments",
+        "mail_spool_attachment",
+        "mail_spool_message",
+    }
+    for entry in fake_ctx.tools.values():
+        # NO requires_env, deliberately: a failing requires_env check drops the
+        # tool from the resolved surface SILENTLY, leaving a turn with no way to
+        # look and no way to know it could not. The handlers raise a named
+        # reason instead.
+        assert not entry.get("requires_env")
+        # tool_registration's function shape: parameters must be nested, or the
+        # model is advertised a tool it cannot pass an argument to.
+        assert "parameters" in entry["schema"]
+        assert entry["schema"]["parameters"]["type"] == "object"
+        assert entry["schema"]["description"]
+
+
+def test_a_seat_with_no_mail_gets_no_attachment_tools(fake_ctx: Any, monkeypatch) -> None:
+    """The gate did not disappear when it moved off the vendor key."""
+    monkeypatch.setattr(email_adapter, "email_connector_enabled", lambda *_, **__: False)
+    plugin = load_plugin("hermes-smd-mail-attachments")
+    plugin.register(fake_ctx)
+    assert fake_ctx.tools == {}
+
+
+def test_a_msgraph_seat_dispatches_to_the_graph_backend(fake_ctx: Any, monkeypatch) -> None:
+    """The two tool NAMES are the same on both channels; the backend is not.
+
+    ``vendor-invoice-intake`` and ``discovery-served-watch`` hardcode these
+    names, so a seat's transport must not reach the skills.
+    """
+    monkeypatch.setattr(email_adapter, "email_connector_enabled", lambda *_, **__: True)
+    monkeypatch.setattr(
+        email_adapter, "email_adapter", lambda *_, **__: email_adapter.ADAPTER_MSGRAPH
+    )
+    seen: list[str] = []
+    monkeypatch.setattr(msgraph_attachments, "list_attachments", lambda mid: seen.append(mid) or [])
+    plugin = load_plugin("hermes-smd-mail-attachments")
+    plugin.register(fake_ctx)
+    json.loads(fake_ctx.tools["mail_list_attachments"]["handler"]({"message_id": "graph-id"}))
+    assert seen == ["graph-id"], "a msgraph seat must not be served by the AgentMail branch"
+
+
+def test_an_unreadable_seat_config_raises_rather_than_defaulting(
+    fake_ctx: Any, monkeypatch
+) -> None:
+    """Unknown transport is a refusal, never a silent fall back to agentmail.
+
+    A Graph seat quietly dispatched to AgentMail reports that its own mailbox
+    has no attachments, which is the exact dead end these tools exist to close.
+    """
+    monkeypatch.setattr(email_adapter, "email_connector_enabled", lambda *_, **__: True)
+
+    def boom(*_: Any, **__: Any) -> str:
+        raise email_adapter.EmailAdapterUnreadable("customer.yaml is unreadable")
+
+    monkeypatch.setattr(email_adapter, "email_adapter", boom)
+    plugin = load_plugin("hermes-smd-mail-attachments")
+    plugin.register(fake_ctx)
+    with pytest.raises(email_adapter.EmailAdapterUnreadable):
+        fake_ctx.tools["mail_list_attachments"]["handler"]({"message_id": "m"})
+
+
+def test_the_spool_handler_returns_the_receipt_as_json(
+    seat: list[str], fake_ctx: Any, mail_seat: None
+) -> None:
+    """End to end through the registered handler, which is the shape the model
+    actually calls."""
+    plugin = load_plugin("hermes-smd-mail-attachments")
+    plugin.register(fake_ctx)
+    handler = fake_ctx.tools["mail_spool_attachment"]["handler"]
+    receipt = json.loads(handler({"message_id": "m", "attachment_id": "att_1"}))
+    assert spool.TOKEN_RE.match(receipt["spool_token"])
+    listed = json.loads(fake_ctx.tools["mail_list_attachments"]["handler"]({"message_id": "m"}))
+    assert listed["count"] == 2
+
+
+# ---------------------------------------------------------------------------
+# The 2026-09-18 live defect: the record was spooled in place of the document
+# ---------------------------------------------------------------------------
+
+
+def test_the_bytes_come_from_the_link_not_the_record(seat: list[str]) -> None:
+    """The vendor answers the attachment endpoint with a RECORD carrying a
+    signed link. The first live run wrote that record to the spool -- 1187
+    bytes of JSON where a 1983-byte PDF belonged -- and every later step called
+    the invoice unreadable."""
+    receipt = broker.spool_attachment("msg_123", "att_1")
+    blob = (spool.spool_dir() / f"{receipt['spool_token']}.bin").read_bytes()
+    assert blob == PDF
+    assert blob.startswith(b"%PDF")
+    assert receipt["size"] == len(PDF)
+    assert DOWNLOAD_URL in seat
+
+
+def test_a_length_that_disagrees_with_the_vendor_refuses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cheapest proof that what landed is not the document."""
+    monkeypatch.setenv(broker.READ_KEY_ENV, "am_read_key")
+    monkeypatch.setenv(spool.SPOOL_DIR_ENV, str(tmp_path / "spool"))
+    monkeypatch.setattr(broker, "_own_inbox_cache", None)
+
+    def fake_urlopen(request: Any, timeout: float | None = None) -> _Response:
+        if "/inboxes?" in request.full_url:
+            return _Response(json.dumps({"inboxes": [{"inbox_id": SEAT_INBOX}]}).encode())
+        if request.full_url == DOWNLOAD_URL:
+            return _Response(b"short", "application/pdf")
+        return _Response(json.dumps(ATTACHMENT_RECORD).encode())
+
+    monkeypatch.setattr(broker.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(broker.AgentMailReadError, match="bytes and"):
+        broker.spool_attachment("msg_123", "att_1")
+    assert not (tmp_path / "spool").exists() or list((tmp_path / "spool").iterdir()) == []
+
+
+def test_a_link_off_the_vendors_hosts_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The link arrives inside vendor-authored JSON, so its host is checked."""
+    monkeypatch.setenv(broker.READ_KEY_ENV, "am_read_key")
+    monkeypatch.setenv(spool.SPOOL_DIR_ENV, str(tmp_path / "spool"))
+    monkeypatch.setattr(broker, "_own_inbox_cache", None)
+
+    def fake_urlopen(request: Any, timeout: float | None = None) -> _Response:
+        if "/inboxes?" in request.full_url:
+            return _Response(json.dumps({"inboxes": [{"inbox_id": SEAT_INBOX}]}).encode())
+        return _Response(
+            json.dumps({**ATTACHMENT_RECORD, "download_url": "https://evil.example/x"}).encode()
+        )
+
+    monkeypatch.setattr(broker.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(broker.AgentMailReadError, match="not one the vendor serves"):
+        broker.spool_attachment("msg_123", "att_1")
+
+
+class _ScriptedHTTPS(urllib.request.BaseHandler):
+    """Stands in for the network under the REAL redirect machinery: answers each
+    https URL from a script (a redirect target, or bytes), recording every hop.
+    Ordered ahead of the default HTTPSHandler so nothing reaches the network."""
+
+    handler_order = 100
+
+    def __init__(self, script: dict[str, Any]) -> None:
+        self.script = script
+        self.hops: list[str] = []
+
+    def https_open(self, req: urllib.request.Request) -> Any:
+        url = req.full_url
+        self.hops.append(url)
+        answer = self.script[url]
+        headers = email.message.Message()
+        if isinstance(answer, str):
+            headers["Location"] = answer
+            resp = urllib.response.addinfourl(io.BytesIO(b""), headers, url, 302)
+            resp.msg = "Found"
+        else:
+            resp = urllib.response.addinfourl(io.BytesIO(answer), headers, url, 200)
+            resp.msg = "OK"
+        return resp
+
+
+def _opener_with(script: dict[str, Any]) -> tuple[Any, _ScriptedHTTPS]:
+    net = _ScriptedHTTPS(script)
+    return urllib.request.build_opener(broker._AllowlistedRedirects, net), net
+
+
+def test_the_download_opener_checks_the_host_on_every_redirect() -> None:
+    """J-f: urlopen's default handler follows a 30x anywhere, so the first-URL
+    host check could be walked around. The module's opener must carry the
+    allowlisted handler in place of the default one."""
+    handlers = broker._DOWNLOAD_OPENER.handlers
+    redirect = [h for h in handlers if isinstance(h, urllib.request.HTTPRedirectHandler)]
+    assert len(redirect) == 1 and isinstance(redirect[0], broker._AllowlistedRedirects)
+
+
+def test_a_redirect_off_the_vendors_hosts_is_refused_before_any_fetch() -> None:
+    opener, net = _opener_with({DOWNLOAD_URL: "https://evil.example/x"})
+    with pytest.raises(urllib.error.HTTPError, match="allowlist"):
+        opener.open(urllib.request.Request(DOWNLOAD_URL), timeout=5)
+    assert net.hops == [DOWNLOAD_URL]  # the off-list host was never asked
+
+
+def test_a_redirect_to_plain_http_on_a_vendor_host_is_refused() -> None:
+    opener, net = _opener_with({DOWNLOAD_URL: "http://cdn.agentmail.to/x"})
+    with pytest.raises(urllib.error.HTTPError):
+        opener.open(urllib.request.Request(DOWNLOAD_URL), timeout=5)
+    assert net.hops == [DOWNLOAD_URL]
+
+
+def test_a_redirect_between_vendor_hosts_still_fetches() -> None:
+    target = "https://download.agentmail.to/att_1?sig=y"
+    opener, net = _opener_with({DOWNLOAD_URL: target, target: PDF})
+    with opener.open(urllib.request.Request(DOWNLOAD_URL), timeout=5) as response:
+        assert response.read() == PDF
+    assert net.hops == [DOWNLOAD_URL, target]
+
+
+def test_a_refused_redirect_surfaces_as_a_read_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    opener, _net = _opener_with({DOWNLOAD_URL: "https://evil.example/x"})
+    monkeypatch.setattr(broker, "_DOWNLOAD_OPENER", opener)
+    monkeypatch.setattr(broker, "_open_download", _REAL_OPEN_DOWNLOAD)
+    with pytest.raises(broker.AgentMailReadError, match="HTTP 302"):
+        broker._download(DOWNLOAD_URL)
+
+
+API_URL = broker.API_BASE + "/inboxes?limit=10"
+
+
+class _AuthRecordingHTTPS(_ScriptedHTTPS):
+    """Also records the Authorization header each hop carried."""
+
+    def __init__(self, script: dict[str, Any]) -> None:
+        super().__init__(script)
+        self.auth: list[str | None] = []
+
+    def https_open(self, req: urllib.request.Request) -> Any:
+        self.auth.append(req.get_header("Authorization"))
+        return super().https_open(req)
+
+
+def _api_opener_with(script: dict[str, Any]) -> tuple[Any, _AuthRecordingHTTPS]:
+    net = _AuthRecordingHTTPS(script)
+    return urllib.request.build_opener(same_origin.SameOriginRedirects, net), net
+
+
+def _route_api_through(opener: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(same_origin, "SAME_ORIGIN_OPENER", opener)
+    monkeypatch.setattr(broker, "_open_api", _REAL_OPEN_API)
+
+
+def test_the_api_opener_holds_redirects_to_the_origin() -> None:
+    """The authenticated GET must not use bare urlopen, whose redirect handler
+    follows a 30x anywhere and copies Authorization onto the new request."""
+    handlers = same_origin.SAME_ORIGIN_OPENER.handlers
+    redirect = [h for h in handlers if isinstance(h, urllib.request.HTTPRedirectHandler)]
+    assert len(redirect) == 1 and isinstance(redirect[0], same_origin.SameOriginRedirects)
+
+
+def test_an_api_redirect_off_the_api_host_never_carries_the_key(
+    seat: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    opener, net = _api_opener_with({API_URL: "https://evil.example/steal"})
+    _route_api_through(opener, monkeypatch)
+    with pytest.raises(broker.AgentMailReadError, match="HTTP 302"):
+        broker._get("/inboxes?limit=10", accept="application/json")
+    assert net.hops == [API_URL]  # the other host was never asked
+    assert net.auth == ["Bearer am_read_key"]
+
+
+def test_an_api_redirect_downgrading_to_http_is_refused(
+    seat: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    opener, net = _api_opener_with({API_URL: "http://api.agentmail.to/v0/inboxes"})
+    _route_api_through(opener, monkeypatch)
+    with pytest.raises(broker.AgentMailReadError):
+        broker._get("/inboxes?limit=10", accept="application/json")
+    assert net.hops == [API_URL]
+
+
+def test_an_api_redirect_within_the_api_host_still_reads(
+    seat: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    moved = broker.API_BASE + "/inboxes?limit=10&page=1"
+    opener, net = _api_opener_with({API_URL: moved, moved: b'{"inboxes": []}'})
+    _route_api_through(opener, monkeypatch)
+    body, _ = broker._get("/inboxes?limit=10", accept="application/json")
+    assert body == b'{"inboxes": []}'
+    assert net.hops == [API_URL, moved]
+    assert net.auth == ["Bearer am_read_key", "Bearer am_read_key"]
+
+
+# ---------------------------------------------------------------------------
+# Over the size cap: a LIMIT, returned as a structured refusal, never a raise
+# (ss-console shortfall notifications: the audit plugin files it as "hit a
+# limit" with code over_size_cap instead of losing it among transport errors)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        broker.AgentMailOverSize("attachment is over the limit; it is not spooled"),
+        msgraph_attachments.MsGraphAttachmentOverSize("over the limit; it is not spooled"),
+        spool.SpoolOverSizeError("attachment is over the spool limit"),
+    ],
+)
+def test_an_over_size_spool_returns_a_refusal_not_a_raise(
+    fake_ctx: Any, mail_seat: None, monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    def over(*_: Any, **__: Any) -> dict[str, Any]:
+        raise error
+
+    monkeypatch.setattr(broker, "spool_attachment", over)
+    plugin = load_plugin("hermes-smd-mail-attachments")
+    plugin.register(fake_ctx)
+    handler = fake_ctx.tools["mail_spool_attachment"]["handler"]
+    result = json.loads(handler({"message_id": "m", "attachment_id": "att_1"}))
+    assert result["status"] == "refused"
+    assert result["reason"] == "over_size_cap"
+    assert result["max_bytes"] == spool.MAX_SPOOL_BYTES
+
+
+def test_an_over_size_spool_is_still_both_error_types() -> None:
+    """Callers that caught the vendor error keep catching it."""
+    assert issubclass(broker.AgentMailOverSize, broker.AgentMailReadError)
+    assert issubclass(
+        msgraph_attachments.MsGraphAttachmentOverSize, msgraph_attachments.MsGraphAttachmentError
+    )
+    for cls in (broker.AgentMailOverSize, msgraph_attachments.MsGraphAttachmentOverSize):
+        assert issubclass(cls, spool.SpoolOverSizeError)
+
+
+def test_any_other_spool_failure_still_raises(
+    fake_ctx: Any, mail_seat: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(*_: Any, **__: Any) -> dict[str, Any]:
+        raise broker.AgentMailReadError("attachment download failed: HTTP 500")
+
+    monkeypatch.setattr(broker, "spool_attachment", broken)
+    plugin = load_plugin("hermes-smd-mail-attachments")
+    plugin.register(fake_ctx)
+    with pytest.raises(broker.AgentMailReadError):
+        fake_ctx.tools["mail_spool_attachment"]["handler"](
+            {"message_id": "m", "attachment_id": "a"}
+        )
+
+
+def test_the_real_oversize_path_lands_as_the_refusal(
+    tmp_path: Path, fake_ctx: Any, mail_seat: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Through the real AgentMail download path, not a stub of it: the same
+    over-size fixture as the broker test above, driven through the handler."""
+    monkeypatch.setenv(broker.READ_KEY_ENV, "am_read_key")
+    monkeypatch.setenv(spool.SPOOL_DIR_ENV, str(tmp_path / "spool"))
+    big = b"x" * (spool.MAX_SPOOL_BYTES + 1)
+    monkeypatch.setattr(broker, "_own_inbox_cache", None)
+
+    def fake_urlopen(request: Any, timeout: float | None = None) -> _Response:
+        if "/inboxes?" in request.full_url:
+            return _Response(json.dumps({"inboxes": [{"inbox_id": SEAT_INBOX}]}).encode())
+        if request.full_url == DOWNLOAD_URL:
+            return _Response(big, "application/pdf")
+        if request.full_url.endswith("/attachments/att_1"):
+            return _Response(json.dumps({**ATTACHMENT_RECORD, "size": len(big)}).encode())
+        return _Response(json.dumps(MESSAGE).encode())
+
+    monkeypatch.setattr(broker.urllib.request, "urlopen", fake_urlopen)
+    plugin = load_plugin("hermes-smd-mail-attachments")
+    plugin.register(fake_ctx)
+    handler = fake_ctx.tools["mail_spool_attachment"]["handler"]
+    result = json.loads(handler({"message_id": "m", "attachment_id": "att_1"}))
+    assert result == {
+        "status": "refused",
+        "reason": "over_size_cap",
+        "max_bytes": spool.MAX_SPOOL_BYTES,
+    }
+    assert not (tmp_path / "spool").exists() or list((tmp_path / "spool").iterdir()) == []

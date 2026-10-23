@@ -67,7 +67,10 @@ GUARD = "steps.changes.outputs.relevant == 'true'"
 # (real installed artifact + live stdio MCP), never in the bare env.
 # runners/ (ss#2613, the medchron runner) runs in its own uv-venv step for the
 # same reason: it installs the connector client and needs its deps.
-PYTEST_EXEMPT_TOPDIRS = {"connectors", "runners"}
+# hermes-smd-overlay/ (the seat runtime, in-tree since the 2026-10-22 fold, ADR
+# 0095) runs as its own job, `overlay`: the seat interpreter, its own venv and
+# the pinned Hermes source; test_overlay_job_runs_the_seat_runtime_suite pins it.
+PYTEST_EXEMPT_TOPDIRS = {"connectors", "runners", "hermes-smd-overlay"}
 
 # Cache/build dirs that legitimately contain no first-class tests. `.venv` is
 # here because operator/'s own test instructions create one at operator/.venv,
@@ -308,4 +311,40 @@ def test_runner_tests_are_covered_by_their_own_step_and_trigger() -> None:
     runs = "\n".join(s.get("run") or "" for s in steps)
     assert "./runners/medchron" in runs and "runners/medchron/tests" in runs, (
         "the medchron runner venv step is missing from operator-substrate.yml"
+    )
+
+
+def test_overlay_job_runs_the_seat_runtime_suite() -> None:
+    """ADR 0095 (2026-10-22): the seat runtime is operator/hermes-smd-overlay and
+    its suite runs as the `overlay` job. hermes-smd-overlay is pytest-exempt
+    above, so pin here what makes that exemption honest: the job exists, is
+    gated the way `substrate` is (detect step, every suite step guarded, a
+    legible skip report last), runs pytest FROM the overlay directory on the
+    seat interpreter, fetches Hermes at the sha the image installs (read from
+    the Dockerfile, not typed), and a change under the overlay triggers it."""
+    wf = _load_workflow()
+    assert any(_matches(p, "operator/hermes-smd-overlay/shared/heartbeat.py") for p in _trigger_paths(wf))
+    job = wf["jobs"].get("overlay")
+    assert job, "operator-substrate.yml has no `overlay` job"
+    steps = job["steps"]
+    names = [s.get("name") for s in steps]
+    assert names[:2] == ["Checkout", DETECT_STEP_NAME], names[:2]
+    assert steps[1].get("id") == "changes"
+    assert names[-1] == SKIP_STEP_NAME and steps[-1].get("if") == "steps.changes.outputs.relevant != 'true'"
+    ungated = [s.get("name") for s in steps[2:-1] if (s.get("if") or "").strip() != GUARD]
+    assert not ungated, f"overlay job steps must carry `if: {GUARD}`: {ungated}"
+    pytest_steps = [
+        s
+        for s in steps
+        if "-m pytest" in (s.get("run") or "") and s.get("working-directory") == "operator/hermes-smd-overlay"
+    ]
+    assert len(pytest_steps) == 1, "exactly one pytest step runs from operator/hermes-smd-overlay"
+    runs = "\n".join(s.get("run") or "" for s in steps)
+    assert "uv venv --python 3.13" in runs, "the overlay suite runs on the seat interpreter"
+    assert "ARG HERMES_UPSTREAM_SHA" in runs and "NousResearch/hermes-agent" in runs, (
+        "the pinned Hermes must be read from the Dockerfile and fetched from upstream"
+    )
+    assert "HERMES_AGENT_SRC=" in runs
+    assert "operator/requirements/compile.sh" in runs and "hermes-overlay.txt" in runs, (
+        "the overlay job must prove hermes-overlay.txt is current (compile.sh no-diff)"
     )

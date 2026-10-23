@@ -70,10 +70,13 @@ To verify presence: `crane_secret_check({ path: '/ss', env: 'prod', names: ['R2_
 
 ### Overlay plugins are volume-shadowed (handled in bootstrap)
 
-The Dockerfile installs the `hermes-smd-overlay` pack under `${HERMES_HOME}` (= the
-Fly volume mount); on a **persisted** volume the build-time install is shadowed.
-`bootstrap.sh` therefore re-installs + enables it at runtime (fail-closed) before the
-gateway launches, so the trust/audit/voice safety harness always loads. The boot
+`${HERMES_HOME}` is the Fly volume mount, so anything the build put there is
+shadowed on a **persisted** volume. The Dockerfile therefore copies the overlay
+(`operator/hermes-smd-overlay/` in this repo, ADR 0095) to the non-volume path
+`/app/overlay-pack`, and `bootstrap.sh` refreshes the volume's pack from it on
+every boot before the gateway launches, so the trust/audit/voice safety harness
+always loads the code the image carries. There is no runtime install fallback:
+if the pack is missing, bootstrap dies rather than boot a harness-less Machine. The boot
 smoke test step `hermes-plugins-installed` is the live verification.
 
 ### Secrets you'll be prompted to paste (clipboard → `fly secrets`, never echoed)
@@ -100,11 +103,11 @@ operator/bin/reprovision.sh smd
 yes s | operator/bin/reprovision.sh smd
 ```
 
-That single command: validates `customer.yaml` → uploads it to R2 → renders `fly.toml` → creates the Fly app + a 10 GB volume → prompts for secrets → `fly deploy` (builds the Dockerfile: clones+asserts upstream Hermes, installs the overlay **v0.4.5**, bundles Postgres/Redis/Honcho) → runs the boot smoke test. It is idempotent — safe to re-run.
+That single command: validates `customer.yaml` → uploads it to R2 → renders `fly.toml` → creates the Fly app + a 10 GB volume → prompts for secrets → `fly deploy` (builds the Dockerfile: clones+asserts upstream Hermes, installs the overlay from this repo's tree, bundles Postgres/Redis/Honcho) → runs the boot smoke test. It is idempotent — safe to re-run.
 
-## Overlay pin (why v0.4.5 matters)
+## Overlay version
 
-The Dockerfile pins the overlay at **v0.4.5** (`OVERLAY_REF`). The runtime trust plugin imports `shared.outbound_gate`, which first shipped after v0.1.1. The build now hard-asserts the policy core is importable (`import shared.outbound_gate, shared.inbound, shared.action_classes`) — a stale pin fails the build instead of booting a harness-less Machine. If you bump the overlay, re-tag and bump `OVERLAY_REF` in lockstep. (Known follow-up: `hermes plugins install` clones the overlay's default branch and cannot pin a ref, so the _plugin surface_ tracks main HEAD at build time; for a tagged build, main == the tag.)
+There is no overlay pin. Since ADR 0095 (2026-10-22) the image builds the overlay from `operator/hermes-smd-overlay/` in the same checkout, so the overlay version is the ss-console commit the image was built from (`SMD_OVERLAY_REF` and `/app/OVERLAY_REF` in the image; the `version` a seat's heartbeat reports). The build still hard-asserts the policy core is importable (`import shared.outbound_gate, shared.inbound, shared.action_classes`), so a broken overlay fails the build instead of booting a harness-less Machine. Before the fold the Dockerfile pinned the separate `venturecrane/hermes-smd-overlay` repo by `ARG OVERLAY_REF`, and `hermes plugins install` cloned that repo at build.
 
 ## What to watch on the FIRST ever boot
 

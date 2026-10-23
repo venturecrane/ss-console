@@ -1,0 +1,2637 @@
+"""Tests for the Machine → control-plane heartbeat emitter (shared/heartbeat.py).
+
+Covers the pure pieces (payload assembly, audit-timestamp read) and the tick
+logic with injected transport, without opening a socket. The emitter's
+fail-soft contract — a failing POST or ping never escapes the thread — is the
+load-bearing property, so it gets explicit coverage.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import sqlite3
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import pytest
+
+from shared import heartbeat as hb
+from shared.connector_check import ConnectorCheck
+from shared.scheduler_check import SchedulerCheck
+from shared.spec_control_check import SpecControlCheck
+
+_KEY = "shared-fleet-key"
+_SLUG = "ashton-price"
+
+_AUDIT_DDL = (
+    "CREATE TABLE audit_log ("
+    " id TEXT PRIMARY KEY, ts TEXT NOT NULL, action_type TEXT, actor TEXT,"
+    " actor_role TEXT, skill_name TEXT, matter_ref TEXT)"
+)
+
+
+def _make_audit_db(path: str, rows: list[tuple[str, str, str | None]]) -> None:
+    """rows = [(id, ts, skill_name), ...]."""
+    conn = sqlite3.connect(path)
+    conn.execute(_AUDIT_DDL)
+    conn.executemany(
+        "INSERT INTO audit_log (id, ts, action_type, skill_name) VALUES (?, ?, 'x', ?)",
+        [(rid, ts, skill) for (rid, ts, skill) in rows],
+    )
+    conn.commit()
+    conn.close()
+
+
+# ---------------------------------------------------------------------------
+# build_payload
+# ---------------------------------------------------------------------------
+
+
+def test_payload_carries_only_heartbeat_ts_when_others_absent():
+    p = hb.build_payload(
+        heartbeat_ts="2026-07-02T00:00:00+00:00",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+    )
+    assert p == {"heartbeat_ts": "2026-07-02T00:00:00+00:00"}
+
+
+def test_payload_includes_present_optionals_and_omits_null():
+    p = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts="a",
+        last_skill_ts=None,
+        uptime_seconds=42,
+        version="abc123",
+    )
+    assert p == {
+        "heartbeat_ts": "t",
+        "last_audit_ts": "a",
+        "process_uptime_seconds": 42,
+        "version": "abc123",
+    }
+    assert "last_skill_ts" not in p
+
+
+def test_uptime_zero_is_sent_not_dropped():
+    # 0 is a legitimate value (just booted); the None-check must not treat it
+    # as absent.
+    p = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=0,
+        version=None,
+    )
+    assert p["process_uptime_seconds"] == 0
+
+
+def test_payload_carries_connector_token_age_and_omits_empty():
+    # ss#2148: token ages ride a SEPARATE field from the health map, and an
+    # empty/absent map is omitted (nothing to report is a hold, never zero).
+    p = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        connector_token_age={"smokeball": 86400},
+    )
+    assert p["connector_token_age"] == {"smokeball": 86400}
+    p2 = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        connector_token_age=None,
+    )
+    assert "connector_token_age" not in p2
+
+
+# ---------------------------------------------------------------------------
+# read_audit_timestamps
+# ---------------------------------------------------------------------------
+
+
+def test_audit_timestamps_missing_file_is_empty():
+    assert hb.read_audit_timestamps("/no/such/audit.db") == (None, None)
+    assert hb.read_audit_timestamps(None) == (None, None)
+
+
+def test_audit_timestamps_empty_table_is_empty(tmp_path):
+    db = tmp_path / "audit.db"
+    _make_audit_db(str(db), [])
+    assert hb.read_audit_timestamps(str(db)) == (None, None)
+
+
+def test_audit_timestamps_returns_newest_audit_and_newest_skill(tmp_path):
+    db = tmp_path / "audit.db"
+    # ULID-style ascending ids; newest audit row has no skill, newest skill row
+    # is older — so last_audit_ts != last_skill_ts and both must be correct.
+    _make_audit_db(
+        str(db),
+        [
+            ("01A", "2026-07-01T10:00:00+00:00", "matter_memo"),
+            ("01B", "2026-07-01T11:00:00+00:00", None),
+            ("01C", "2026-07-01T12:00:00+00:00", None),
+        ],
+    )
+    last_audit, last_skill = hb.read_audit_timestamps(str(db))
+    assert last_audit == "2026-07-01T12:00:00+00:00"
+    assert last_skill == "2026-07-01T10:00:00+00:00"
+
+
+def test_audit_timestamps_ignores_empty_string_skill(tmp_path):
+    db = tmp_path / "audit.db"
+    _make_audit_db(str(db), [("01A", "2026-07-01T10:00:00+00:00", "")])
+    _last_audit, last_skill = hb.read_audit_timestamps(str(db))
+    assert last_skill is None
+
+
+def test_audit_read_does_not_write(tmp_path):
+    # Opening ?mode=ro must reject writes — a heartbeat can never perturb audit.
+    db = tmp_path / "audit.db"
+    _make_audit_db(str(db), [("01A", "2026-07-01T10:00:00+00:00", None)])
+    hb.read_audit_timestamps(str(db))
+    # Reopen read-write and confirm the single row is intact (no side effects).
+    conn = sqlite3.connect(str(db))
+    assert conn.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0] == 1
+    conn.close()
+
+
+# ---------------------------------------------------------------------------
+# tick logic (injected transport)
+# ---------------------------------------------------------------------------
+
+
+def _emitter(**overrides):
+    calls = {"posts": [], "pings": []}
+
+    def post_fn(url, headers, body):
+        calls["posts"].append((url, headers, body))
+        return overrides.get("post_status", 200)
+
+    def ping_fn(url):
+        calls["pings"].append(url)
+
+    kwargs = dict(
+        slug=_SLUG,
+        key=_KEY,
+        ingest_url="https://smd.services/api/internal/heartbeat",
+        healthchecks_url=overrides.get("healthchecks_url"),
+        version="ref123",
+        audit_db_path_fn=overrides.get("audit_db_path_fn", lambda: None),
+        post_fn=post_fn,
+        ping_fn=ping_fn,
+        # Hermetic default: tests never run the real filesystem check.
+        scheduler_check_fn=overrides.get(
+            "scheduler_check_fn",
+            lambda: SchedulerCheck(ok=True, job_count=0, max_overdue_seconds=None),
+        ),
+        scheduler_check_debounce=overrides.get("scheduler_check_debounce", 3),
+        # Hermetic default for the connector check too (ADR 0080).
+        connector_check_fn=overrides.get(
+            "connector_check_fn",
+            lambda: ConnectorCheck(ok=True, servers={}),
+        ),
+        connector_check_debounce=overrides.get("connector_check_debounce", 3),
+        # Hermetic default for the authored-spec control check (ss-console
+        # #2234). Without this the emitter would read the real customer.yaml.
+        spec_control_check_fn=overrides.get(
+            "spec_control_check_fn",
+            lambda: SpecControlCheck(ok=True, entries={}),
+        ),
+        spec_control_check_debounce=overrides.get("spec_control_check_debounce", 3),
+        # Hermetic default for the webhook expected-tools check (#2222).
+        # ``None`` is the HOLD state (no usable boot sentinel), so the default
+        # keeps both fields off every unrelated payload assertion.
+        webhook_surface_check_fn=overrides.get("webhook_surface_check_fn", lambda: None),
+        # Hermetic default for the gateway loop check (ss-console#2488 part 2).
+        # ``None`` is the HOLD state; without it the emitter would stat the real
+        # /opt/data and /run on the developer's machine.
+        gateway_loop_check_fn=overrides.get("gateway_loop_check_fn", lambda: None),
+        gateway_loop_check_debounce=overrides.get("gateway_loop_check_debounce", 3),
+    )
+    return hb.HeartbeatEmitter(**kwargs), calls
+
+
+def test_tick_posts_with_bearer_and_tenant_slug():
+    em, calls = _emitter()
+    em._tick()
+    assert len(calls["posts"]) == 1
+    url, headers, body = calls["posts"][0]
+    assert url.endswith("/api/internal/heartbeat")
+    assert headers["Authorization"] == f"Bearer {_KEY}"
+    assert headers["X-Tenant-Slug"] == _SLUG
+    assert b"heartbeat_ts" in body
+
+
+def test_tick_pings_healthchecks_when_url_present():
+    em, calls = _emitter(healthchecks_url="https://hc-ping.com/abc")
+    em._tick()
+    assert calls["pings"] == ["https://hc-ping.com/abc"]
+
+
+def test_tick_skips_ping_when_no_url():
+    em, calls = _emitter()
+    em._tick()
+    assert calls["pings"] == []
+
+
+def test_tick_swallows_post_failure(caplog):
+    def boom(url, headers, body):
+        raise ConnectionError("network down")
+
+    em = hb.HeartbeatEmitter(
+        slug=_SLUG,
+        key=_KEY,
+        ingest_url="https://smd.services/api/internal/heartbeat",
+        healthchecks_url="https://hc-ping.com/abc",
+        version=None,
+        audit_db_path_fn=lambda: None,
+        post_fn=boom,
+        ping_fn=lambda url: None,
+    )
+    # Must not raise; the ping leg must still run despite the POST failure.
+    em._tick()
+
+
+def test_tick_swallows_ping_failure():
+    def boom(url):
+        raise ConnectionError("hc down")
+
+    em = hb.HeartbeatEmitter(
+        slug=_SLUG,
+        key=_KEY,
+        ingest_url="https://smd.services/api/internal/heartbeat",
+        healthchecks_url="https://hc-ping.com/abc",
+        version=None,
+        audit_db_path_fn=lambda: None,
+        post_fn=lambda url, headers, body: 200,
+        ping_fn=boom,
+    )
+    em._tick()  # no raise
+
+
+def test_tick_401_does_not_raise():
+    em, _calls = _emitter(post_status=401)
+    em._tick()  # logged, not raised
+
+
+# ---------------------------------------------------------------------------
+# start() gating + emitter_from_env
+# ---------------------------------------------------------------------------
+
+
+def test_start_returns_false_without_key_or_healthchecks():
+    em = hb.HeartbeatEmitter(
+        slug=None,
+        key=None,
+        ingest_url="https://smd.services/api/internal/heartbeat",
+        healthchecks_url=None,
+        version=None,
+        audit_db_path_fn=lambda: None,
+    )
+    assert em.start() is False
+
+
+def test_start_runs_for_healthchecks_only_when_key_missing():
+    em = hb.HeartbeatEmitter(
+        slug=None,
+        key=None,
+        ingest_url="https://smd.services/api/internal/heartbeat",
+        healthchecks_url="https://hc-ping.com/abc",
+        version=None,
+        audit_db_path_fn=lambda: None,
+        ping_fn=lambda url: None,
+    )
+    assert em.start() is True
+    em.stop()
+
+
+def test_emitter_from_env_reads_config(monkeypatch):
+    monkeypatch.setenv("SMD_CUSTOMER_SLUG", "pilot-smokeball")
+    monkeypatch.setenv("MACHINE_HEARTBEAT_KEY", "k")
+    monkeypatch.setenv("HEALTHCHECKS_PING_URL", "https://hc-ping.com/xyz")
+    monkeypatch.setenv("SMD_OVERLAY_REF", "deadbeef")
+    monkeypatch.delenv("HEARTBEAT_INGEST_URL", raising=False)
+    em = hb.emitter_from_env(lambda: None)
+    assert em._slug == "pilot-smokeball"
+    assert em._key == "k"
+    assert em._healthchecks_url == "https://hc-ping.com/xyz"
+    assert em._version == "deadbeef"
+    assert em._ingest_url == hb.DEFAULT_INGEST_URL
+
+
+def test_emitter_from_env_slug_falls_back_to_customer_slug(monkeypatch):
+    monkeypatch.delenv("SMD_CUSTOMER_SLUG", raising=False)
+    monkeypatch.setenv("CUSTOMER_SLUG", "fallback-slug")
+    monkeypatch.setenv("MACHINE_HEARTBEAT_KEY", "k")
+    em = hb.emitter_from_env(lambda: None)
+    assert em._slug == "fallback-slug"
+
+
+def test_payload_carries_sticky_stop_level_when_present():
+    p = hb.build_payload(
+        heartbeat_ts="2026-07-03T00:00:00Z",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        sticky_stop_level="HARD_STOP",
+    )
+    assert p["sticky_stop_level"] == "HARD_STOP"
+    # Absent/None omits the field entirely (receiver treats absence as
+    # unknown, never as OK).
+    p2 = hb.build_payload(
+        heartbeat_ts="2026-07-03T00:00:00Z",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+    )
+    assert "sticky_stop_level" not in p2
+
+
+def test_payload_carries_the_stop_cause_beside_the_level():
+    """A level alone cannot tell an operator which of the four meters tripped,
+    and the four need four different investigations."""
+    p = hb.build_payload(
+        heartbeat_ts="2026-07-03T00:00:00Z",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        sticky_stop_level="HARD_STOP",
+        sticky_stop_reason="consecutive_tool_failures=8 (window=600s, skill=mcp_x)",
+        sticky_stop_condition="consecutive_tool_failures",
+    )
+    assert p["sticky_stop_level"] == "HARD_STOP"
+    assert p["sticky_stop_condition"] == "consecutive_tool_failures"
+    assert "skill=mcp_x" in p["sticky_stop_reason"]
+
+
+def test_payload_never_sends_a_cause_without_its_level():
+    """A cause beside an absent level would let the console render "why"
+    against whatever level it already held — a stale pairing. The seat sends
+    both or neither."""
+    p = hb.build_payload(
+        heartbeat_ts="2026-07-03T00:00:00Z",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        sticky_stop_reason="orphaned reason",
+        sticky_stop_condition="cost_threshold",
+    )
+    assert "sticky_stop_reason" not in p
+    assert "sticky_stop_condition" not in p
+    # And a level with no recorded cause still ships the level.
+    p2 = hb.build_payload(
+        heartbeat_ts="2026-07-03T00:00:00Z",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        sticky_stop_level="OK",
+    )
+    assert p2["sticky_stop_level"] == "OK"
+    assert "sticky_stop_reason" not in p2
+
+
+def test_tick_carries_the_stop_cause_onto_the_wire(monkeypatch):
+    """The seam that build_payload's own tests cannot see: the emitter must
+    actually PASS what it read. Reading the cause and then dropping it before
+    the call is silent, and it is the failure mode this whole change exists to
+    close — so it gets a test at the wire, not at the helper."""
+    import json
+
+    import shared.cost_breaker as cb
+
+    monkeypatch.setattr(
+        cb,
+        "read_stop_state",
+        lambda *a, **k: cb.StopStateView(
+            level="HARD_STOP",
+            reason="consecutive_tool_failures=8 (window=600s, skill=mcp_smokeball_list_matters)",
+            condition="consecutive_tool_failures",
+        ),
+    )
+    em, calls = _emitter()
+    em._tick()
+    _url, _headers, body = calls["posts"][0]
+    sent = json.loads(body)
+    assert sent["sticky_stop_level"] == "HARD_STOP"
+    assert sent["sticky_stop_condition"] == "consecutive_tool_failures"
+    assert "skill=mcp_smokeball_list_matters" in sent["sticky_stop_reason"]
+
+
+# ---------------------------------------------------------------------------
+# scheduler self-check wiring (ss work-liveness fix)
+# ---------------------------------------------------------------------------
+
+
+def _last_payload(calls):
+    return json.loads(calls["posts"][-1][2])
+
+
+def test_payload_sends_scheduler_fields_including_falsy_values():
+    """ok=False -> 0 and job_count=0 are REAL values that must reach the
+    wire; truthiness-omission would silence exactly the states the alerter
+    exists to see."""
+    p = hb.build_payload(
+        heartbeat_ts="2026-07-24T00:00:00Z",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        scheduler_ok=False,
+        scheduler_job_count=0,
+    )
+    assert p["scheduler_ok"] == 0
+    assert p["scheduler_job_count"] == 0
+    assert "scheduler_max_overdue_seconds" not in p
+    p2 = hb.build_payload(
+        heartbeat_ts="2026-07-24T00:00:00Z",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+    )
+    assert "scheduler_ok" not in p2
+    assert "scheduler_job_count" not in p2
+
+
+def test_tick_carries_scheduler_check_result():
+    em, calls = _emitter(
+        scheduler_check_fn=lambda: SchedulerCheck(ok=True, job_count=4, max_overdue_seconds=1234)
+    )
+    em._tick()
+    p = _last_payload(calls)
+    assert p["scheduler_ok"] == 1
+    assert p["scheduler_job_count"] == 4
+    assert p["scheduler_max_overdue_seconds"] == 1234
+
+
+def test_scheduler_check_crash_debounces_then_reports_not_omits():
+    """Two failed ticks keep last-known-good; the third reports ok=0 with
+    the last-good job count. REPORTED, never omitted — an omitted field on
+    a crashed checker recreates 'monitoring green while broken'."""
+    state = {"good": True}
+
+    def flappy():
+        if not state["good"]:
+            raise RuntimeError("checker exploded")
+        return SchedulerCheck(ok=True, job_count=7, max_overdue_seconds=None)
+
+    em, calls = _emitter(scheduler_check_fn=flappy, scheduler_check_debounce=3)
+    em._tick()  # good tick establishes last-known-good
+    state["good"] = False
+    em._tick()  # failure 1 -> last-good carried
+    em._tick()  # failure 2 -> last-good carried
+    assert _last_payload(calls)["scheduler_ok"] == 1
+    em._tick()  # failure 3 -> debounce reached, report ok=0
+    p = _last_payload(calls)
+    assert p["scheduler_ok"] == 0
+    assert p["scheduler_job_count"] == 7  # last-good count carried
+    assert "scheduler_max_overdue_seconds" not in p
+
+
+def test_scheduler_check_recovery_resets_debounce():
+    state = {"good": False}
+
+    def flappy():
+        if not state["good"]:
+            raise RuntimeError("checker exploded")
+        return SchedulerCheck(ok=True, job_count=2, max_overdue_seconds=None)
+
+    em, calls = _emitter(scheduler_check_fn=flappy, scheduler_check_debounce=3)
+    em._tick()  # failure 1 (no prior good -> fields omitted entirely)
+    assert "scheduler_ok" not in _last_payload(calls)
+    state["good"] = True
+    em._tick()  # recovery
+    assert _last_payload(calls)["scheduler_ok"] == 1
+    state["good"] = False
+    em._tick()  # failure 1 again (counter was reset)
+    assert _last_payload(calls)["scheduler_ok"] == 1  # last-good, not ok=0
+
+
+def test_scheduler_check_crash_never_escapes_the_tick():
+    def boom():
+        raise RuntimeError("checker exploded")
+
+    em, calls = _emitter(scheduler_check_fn=boom, scheduler_check_debounce=1)
+    em._tick()  # must not raise; POST still happens
+    assert len(calls["posts"]) == 1
+    assert _last_payload(calls)["scheduler_ok"] == 0
+
+
+# ---------------------------------------------------------------------------
+# connector check wiring (ADR 0080)
+# ---------------------------------------------------------------------------
+
+
+def test_payload_sends_connector_fields_including_empty_map():
+    p = hb.build_payload(
+        heartbeat_ts="2026-07-25T00:00:00+00:00",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        connector_check_ok=True,
+        connectors={},
+    )
+    # An empty map is a REAL "check ran, nothing observed yet" state — it
+    # must reach the wire (truthiness-omitting it would be a silent hold).
+    assert p["connector_check_ok"] == 1
+    assert p["connectors"] == {}
+
+
+def test_payload_omits_connector_fields_when_absent():
+    p = hb.build_payload(
+        heartbeat_ts="2026-07-25T00:00:00+00:00",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+    )
+    assert "connector_check_ok" not in p
+    assert "connectors" not in p
+
+
+def test_payload_sends_spec_control_fields_including_empty_map():
+    """The empty map is the state that RESOLVES an open alert — every declared
+    spec is installed. Truthiness-omitting it would leave a repaired control
+    paging forever (ss-console #2234)."""
+    p = hb.build_payload(
+        heartbeat_ts="2026-08-10T00:00:00+00:00",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        spec_control_ok=True,
+        spec_control={},
+    )
+    assert p["spec_control_ok"] == 1
+    assert p["spec_control"] == {}
+
+
+def test_payload_omits_spec_control_fields_when_absent():
+    p = hb.build_payload(
+        heartbeat_ts="2026-08-10T00:00:00+00:00",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+    )
+    assert "spec_control_ok" not in p
+    assert "spec_control" not in p
+
+
+def test_tick_carries_spec_control_result():
+    entry = {"declared": True, "installed": False}
+    em, calls = _emitter(
+        spec_control_check_fn=lambda: SpecControlCheck(ok=True, entries={"staff.voice": entry})
+    )
+    em._tick()
+    p = _last_payload(calls)
+    assert p["spec_control_ok"] == 1
+    assert p["spec_control"] == {"staff.voice": entry}
+
+
+def test_spec_control_check_crash_debounces_then_reports_not_omits():
+    """A check that cannot run must eventually SAY so. Omitting forever would
+    make a broken alarm indistinguishable from a healthy seat — which is the
+    failure shape this whole change exists to remove."""
+
+    def boom():
+        raise RuntimeError("spec control checker exploded")
+
+    em, calls = _emitter(spec_control_check_fn=boom, spec_control_check_debounce=2)
+    em._tick()  # failure 1: no prior good -> fields omitted (console holds)
+    assert "spec_control_ok" not in _last_payload(calls)
+    em._tick()  # failure 2: debounce reached -> reported as ok=0
+    p = _last_payload(calls)
+    assert p["spec_control_ok"] == 0
+    assert "spec_control" not in p  # never emit a map you cannot trust
+
+
+def test_tick_carries_connector_check_result():
+    entry = {"consecutive_failures": 4, "run_age_seconds": 400, "conn_evidence": True}
+    em, calls = _emitter(
+        connector_check_fn=lambda: ConnectorCheck(ok=True, servers={"smokeball": entry})
+    )
+    em._tick()
+    p = _last_payload(calls)
+    assert p["connector_check_ok"] == 1
+    assert p["connectors"] == {"smokeball": entry}
+
+
+def test_connector_check_crash_debounces_then_reports_not_omits():
+    def boom():
+        raise RuntimeError("connector checker exploded")
+
+    em, calls = _emitter(connector_check_fn=boom, connector_check_debounce=3)
+    em._tick()  # failure 1: no prior good -> fields omitted (console holds)
+    assert "connector_check_ok" not in _last_payload(calls)
+    em._tick()  # failure 2: still held
+    assert "connector_check_ok" not in _last_payload(calls)
+    em._tick()  # failure 3: REPORTED as broken, map withheld
+    p = _last_payload(calls)
+    assert p["connector_check_ok"] == 0
+    assert "connectors" not in p
+
+
+def test_connector_check_recovery_resets_debounce():
+    state = {"good": False}
+
+    def flappy():
+        if not state["good"]:
+            raise RuntimeError("connector checker exploded")
+        return ConnectorCheck(ok=True, servers={"agentmail": {"consecutive_failures": 0}})
+
+    em, calls = _emitter(connector_check_fn=flappy, connector_check_debounce=3)
+    em._tick()  # failure 1
+    assert "connector_check_ok" not in _last_payload(calls)
+    state["good"] = True
+    em._tick()  # recovery
+    assert _last_payload(calls)["connector_check_ok"] == 1
+    state["good"] = False
+    em._tick()  # failure 1 again (counter reset) -> last-good reported
+    p = _last_payload(calls)
+    assert p["connector_check_ok"] == 1
+    assert p["connectors"] == {"agentmail": {"consecutive_failures": 0}}
+
+
+def test_connector_check_crash_never_escapes_the_tick():
+    def boom():
+        raise RuntimeError("connector checker exploded")
+
+    em, calls = _emitter(connector_check_fn=boom, connector_check_debounce=1)
+    em._tick()  # must not raise; POST still happens
+    assert len(calls["posts"]) == 1
+    assert _last_payload(calls)["connector_check_ok"] == 0
+
+
+# --------------------------------------------------------------------------- #
+# Webhook expected-tools surface (ss-console #2222). The heartbeat is where the
+# WARN tier becomes visible: its absence is deliberately not boot-fatal, so if
+# it did not reach a field here it would not be reported anywhere at all.
+# --------------------------------------------------------------------------- #
+
+
+def test_payload_sends_webhook_surface_fields_including_empty_map():
+    """An empty map is a REAL "checked, every expected tool is offered" state,
+    and it is what RESOLVES an open alert. Truthiness-omitting it would leave a
+    repaired surface paging forever — the same is-not-None discipline the
+    scheduler / connector / spec_control fields already carry."""
+    p = hb.build_payload(
+        heartbeat_ts="2026-08-11T00:00:00+00:00",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        webhook_surface_ok=True,
+        webhook_surface={},
+    )
+    assert p["webhook_surface_ok"] == 1
+    assert p["webhook_surface"] == {}
+
+
+def test_payload_omits_webhook_surface_fields_when_absent():
+    """Absence is a HOLD: a seat serving no webhook platform, or a boot whose
+    sentinel is stale, must not overwrite what the console last knew."""
+    p = hb.build_payload(
+        heartbeat_ts="2026-08-11T00:00:00+00:00",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+    )
+    assert "webhook_surface_ok" not in p
+    assert "webhook_surface" not in p
+
+
+def test_tick_carries_the_webhook_surface_result():
+    from shared.webhook_surface_check import WebhookSurfaceCheck
+
+    entry = {"expected": True, "offered": False}
+    em, calls = _emitter(
+        webhook_surface_check_fn=lambda: WebhookSurfaceCheck(
+            ok=True, tools={"operator_seat_facts": entry}
+        )
+    )
+    em._tick()
+    p = _last_payload(calls)
+    assert p["webhook_surface_ok"] == 1
+    assert p["webhook_surface"] == {"operator_seat_facts": entry}
+
+
+def test_a_held_webhook_surface_omits_both_fields_from_the_tick():
+    em, calls = _emitter(webhook_surface_check_fn=lambda: None)
+    em._tick()
+    p = _last_payload(calls)
+    assert "webhook_surface_ok" not in p
+    assert "webhook_surface" not in p
+
+
+def test_webhook_surface_check_crash_reports_rather_than_going_dark():
+    """No debounce here, unlike the three live-subsystem checks: this reads one
+    small local file written once per boot, which has no transient-failure mode a
+    debounce would smooth. A crash reports ok=0 on the FIRST tick — and never
+    escapes it."""
+
+    def boom():
+        raise RuntimeError("surface checker exploded")
+
+    em, calls = _emitter(webhook_surface_check_fn=boom)
+    em._tick()  # must not raise; POST still happens
+    assert len(calls["posts"]) == 1
+    p = _last_payload(calls)
+    assert p["webhook_surface_ok"] == 0
+    assert "webhook_surface" not in p, "a broken check must never emit a map it cannot trust"
+
+
+# ---------------------------------------------------------------------------
+# cron_containment field (ss-console#2276)
+# ---------------------------------------------------------------------------
+
+
+def test_payload_sends_cron_containment_including_false():
+    base = dict(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+    )
+    assert hb.build_payload(**base, cron_containment=True)["cron_containment"] == 1
+    # False is a REAL "not contained" value and must reach the wire as 0
+    assert hb.build_payload(**base, cron_containment=False)["cron_containment"] == 0
+    # None (check failed) omits — the console holds rather than resolves
+    assert "cron_containment" not in hb.build_payload(**base)
+
+
+def test_read_cron_containment_reflects_sentinel(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    assert hb._read_cron_containment() is False
+    (tmp_path / "CRON_CONTAINMENT").write_text("ss#2258 containment\n")
+    assert hb._read_cron_containment() is True
+
+
+def _payload_with_containment():
+    return hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        cron_containment=hb._read_cron_containment(),
+    )
+
+
+def test_uncontained_seat_still_reports_zero(tmp_path, monkeypatch):
+    """The negative must stay a real negative: a readable volume with no
+    sentinel is genuinely not contained and reaches the wire as 0, not as
+    'unknown' (ss-console#2291 must not trade one blind spot for another)."""
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    assert _payload_with_containment()["cron_containment"] == 0
+
+
+def test_read_cron_containment_omits_when_sentinel_unreadable(tmp_path, monkeypatch):
+    """ss-console#2291: a volume we cannot read must report UNKNOWN (field
+    omitted), never a false 'not contained'. Pre-fix this returned False and
+    the wire carried cron_containment: 0 — a contained seat indistinguishable
+    from a normal one, which is exactly what ss-console#2276 exists to prevent."""
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+
+    def _denied(self):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, "is_file", _denied)
+
+    assert hb._read_cron_containment() is None
+    assert "cron_containment" not in _payload_with_containment()
+
+
+def test_read_cron_containment_omits_when_volume_absent(tmp_path, monkeypatch):
+    """Same rule for the other half of the failure the wrapper named: if the
+    volume that would hold the sentinel is not mounted, containment state is
+    unknowable, not false."""
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "not-mounted"))
+
+    assert hb._read_cron_containment() is None
+    assert "cron_containment" not in _payload_with_containment()
+
+
+# ---------------------------------------------------------------------------
+# Gateway loop liveness (ss-console#2488 part 2)
+# ---------------------------------------------------------------------------
+
+
+def _loop(**kw):
+    from shared.gateway_loop_check import GatewayLoopCheck
+
+    base = dict(ok=True, age_seconds=None, supervisor_state=None, restarts_last_hour=None)
+    base.update(kw)
+    return GatewayLoopCheck(**base)
+
+
+def test_payload_sends_gateway_loop_fields_including_zero():
+    """age=0 and restarts=0 are REAL values and must reach the wire: a beat
+    that just landed and a supervisor that has never had to kill are both facts
+    the console resolves alerts on. Truthiness-omitting them would strand an
+    open wedge alert forever."""
+    p = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        gateway_loop_ok=True,
+        gateway_loop_age_seconds=0,
+        gateway_supervisor_state="armed",
+        gateway_restarts_last_hour=0,
+    )
+    assert p["gateway_loop_ok"] == 1
+    assert p["gateway_loop_age_seconds"] == 0
+    assert p["gateway_supervisor_state"] == "armed"
+    assert p["gateway_restarts_last_hour"] == 0
+
+
+def test_payload_omits_gateway_loop_fields_when_none():
+    p = hb.build_payload(
+        heartbeat_ts="t", last_audit_ts=None, last_skill_ts=None, uptime_seconds=None, version=None
+    )
+    for k in (
+        "gateway_loop_ok",
+        "gateway_loop_age_seconds",
+        "gateway_supervisor_state",
+        "gateway_restarts_last_hour",
+    ):
+        assert k not in p
+
+
+def test_payload_sends_gateway_loop_ok_false_as_zero():
+    p = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        gateway_loop_ok=False,
+    )
+    assert p["gateway_loop_ok"] == 0
+    assert "gateway_loop_age_seconds" not in p
+
+
+def test_tick_carries_gateway_loop_check_result():
+    import json
+
+    em, calls = _emitter(
+        gateway_loop_check_fn=lambda: _loop(
+            age_seconds=400, supervisor_state="armed", restarts_last_hour=1
+        )
+    )
+    em._tick()
+    body = json.loads(calls["posts"][0][2])
+    assert body["gateway_loop_ok"] == 1
+    assert body["gateway_loop_age_seconds"] == 400
+    assert body["gateway_supervisor_state"] == "armed"
+    assert body["gateway_restarts_last_hour"] == 1
+
+
+def test_gateway_loop_check_crash_debounces_then_reports_not_omits():
+    """Report-late beats report-never: after the debounce a crashed checker
+    ships ok=0, which pages gateway_loop_unprovable, instead of the field
+    vanishing -- which would hold an open wedge alert open and read as the
+    'monitoring green while broken' class this whole feature exists to close."""
+    import json
+
+    def boom():
+        raise RuntimeError("stat exploded")
+
+    em, calls = _emitter(gateway_loop_check_fn=boom, gateway_loop_check_debounce=2)
+    em._tick()
+    b1 = json.loads(calls["posts"][0][2])
+    assert "gateway_loop_ok" not in b1  # first crash: hold (no last-good yet)
+    em._tick()
+    b2 = json.loads(calls["posts"][1][2])
+    assert b2["gateway_loop_ok"] == 0
+    assert "gateway_loop_age_seconds" not in b2
+
+
+# ---------------------------------------------------------------------------
+# Audit-ledger facts on the wire (ss-console #2498 + #2500)
+#
+# Three fields, one purpose: make a quiet ledger distinguishable from a broken
+# one, off the Machine, without asking SMD.
+# ---------------------------------------------------------------------------
+
+_CHAINED_AUDIT_DDL = (
+    "CREATE TABLE audit_log ("
+    "  id TEXT PRIMARY KEY, ts TEXT NOT NULL, action_type TEXT NOT NULL,"
+    "  skill_name TEXT, prev_hash TEXT, row_hash TEXT)"
+)
+
+
+def _make_chained_audit_db(path: str, rows: list[tuple[str, str, str | None]]) -> None:
+    """rows = [(id, ts, row_hash), ...]; row_hash None = a pre-#1686 legacy row."""
+    conn = sqlite3.connect(path)
+    conn.execute(_CHAINED_AUDIT_DDL)
+    conn.executemany(
+        "INSERT INTO audit_log (id, ts, action_type, row_hash) VALUES (?, ?, 'x', ?)",
+        rows,
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_audit_facts_returns_head_and_count(tmp_path):
+    db = tmp_path / "audit.db"
+    _make_chained_audit_db(
+        str(db),
+        [
+            ("01A", "2026-08-01T10:00:00+00:00", "a" * 64),
+            ("01B", "2026-08-01T11:00:00+00:00", "b" * 64),
+        ],
+    )
+    facts = hb.read_audit_facts(str(db))
+    assert facts.head == "b" * 64
+    assert facts.rows == 2
+    assert facts.last_audit_ts == "2026-08-01T11:00:00+00:00"
+
+
+def test_audit_facts_head_skips_unchained_legacy_rows(tmp_path):
+    """Rows written before #1686 carry NULL row_hash and are not part of the
+    chain. Pinning a NULL head would tell the console the chain vanished."""
+    db = tmp_path / "audit.db"
+    _make_chained_audit_db(
+        str(db),
+        [
+            ("01A", "2026-08-01T10:00:00+00:00", "a" * 64),
+            ("01B", "2026-08-01T11:00:00+00:00", None),
+        ],
+    )
+    facts = hb.read_audit_facts(str(db))
+    assert facts.head == "a" * 64
+    assert facts.rows == 2  # the count is of ALL rows, chained or not
+
+
+def test_audit_facts_on_a_pre_chain_ledger_still_reports_timestamps(tmp_path):
+    """A ledger with no row_hash COLUMN at all. The chain read must degrade on
+    its own — sharing a handler with the timestamp read would let a missing
+    column report a working seat as silent, which is the #2498 confusion in
+    reverse."""
+    db = tmp_path / "audit.db"
+    _make_audit_db(str(db), [("01A", "2026-08-01T10:00:00+00:00", "matter_memo")])
+    facts = hb.read_audit_facts(str(db))
+    assert facts.last_audit_ts == "2026-08-01T10:00:00+00:00"
+    assert facts.head is None
+    assert facts.rows == 1
+
+
+def test_audit_facts_empty_ledger_counts_zero(tmp_path):
+    db = tmp_path / "audit.db"
+    _make_chained_audit_db(str(db), [])
+    facts = hb.read_audit_facts(str(db))
+    assert facts.rows == 0
+    assert facts.head is None
+
+
+def test_audit_facts_missing_file_answers_nothing(tmp_path):
+    # Compared against a CONSTRUCTED empty facts object rather than a literal
+    # tuple: every field defaults to None, so this keeps saying "the seat has no
+    # opinion about anything" as fields are added, instead of counting them.
+    assert hb.read_audit_facts("/no/such/audit.db") == hb.AuditLedgerFacts(None, None, None, None)
+
+
+def test_payload_carries_a_zero_write_failure_count():
+    """0 is the value that says 'the writer is up and has lost nothing'. It is
+    the ONLY thing that distinguishes a quiet ledger from a broken one, so
+    truthiness-omitting it would send exactly the healthy case as silence."""
+    p = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        audit_write_failures=0,
+    )
+    assert p["audit_write_failures"] == 0
+
+
+def test_payload_omits_write_failures_when_the_seat_cannot_answer():
+    p = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        audit_write_failures=None,
+    )
+    assert "audit_write_failures" not in p
+
+
+def test_payload_carries_head_and_rows():
+    p = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        audit_head="c" * 64,
+        audit_rows=0,
+    )
+    assert p["audit_head"] == "c" * 64
+    assert p["audit_rows"] == 0
+
+
+def test_payload_omits_head_on_an_unchained_ledger():
+    p = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        audit_head=None,
+        audit_rows=None,
+    )
+    assert "audit_head" not in p
+    assert "audit_rows" not in p
+
+
+# ---------------------------------------------------------------------------
+# Send refusals on the wire (ss-console#2547)
+#
+# The 2026-08-19 shape: five refusals in 26 seconds, every one an audit row
+# nobody was watching. The 08-20 shape: five needs-you items and no attempt at
+# all. From outside the seat "refused", "did not try" and "nothing to report"
+# were the same picture; these fields are what tells them apart.
+# ---------------------------------------------------------------------------
+
+_LEDGER_DDL = (
+    "CREATE TABLE audit_log ("
+    "  id TEXT PRIMARY KEY, ts TEXT NOT NULL, action_type TEXT NOT NULL,"
+    "  actor TEXT, actor_role TEXT, skill_name TEXT, matter_ref TEXT,"
+    "  metadata TEXT, prev_hash TEXT, row_hash TEXT)"
+)
+
+_NOW = datetime(2026, 8, 21, 18, 0, 0, tzinfo=timezone.utc)
+
+_CRON_SESSION = "cron_a726fd5efd24_20260820_070000"
+
+
+def _ts(hours_ago: float) -> str:
+    """An audit ``ts`` in the ledger's real spelling (millisecond + ``Z``)."""
+    at = _NOW - timedelta(hours=hours_ago)
+    return at.strftime("%Y-%m-%dT%H:%M:%S.") + f"{at.microsecond // 1000:03d}Z"
+
+
+class _Ledger:
+    """A ledger builder that speaks in the row shapes the seat actually writes."""
+
+    def __init__(self, path):
+        self.conn = sqlite3.connect(str(path))
+        self.conn.execute(_LEDGER_DDL)
+        self._n = 0
+
+    def add(self, ts, action_type, metadata, skill_name=None):
+        self._n += 1
+        self.conn.execute(
+            "INSERT INTO audit_log (id, ts, action_type, actor, actor_role,"
+            " skill_name, metadata) VALUES (?, ?, ?, 'operator', 'agent', ?, ?)",
+            (f"row{self._n:04d}", ts, action_type, skill_name, json.dumps(metadata)),
+        )
+        self.conn.commit()
+
+    def refused_tool_call(self, ts, *, skill="deadline-miss-escalator", error_type="Refused: date"):
+        self.add(
+            ts,
+            "TOOL_CALL_COMPLETED",
+            {
+                "tool": "smd_send_message",
+                "outcome": "error",
+                "error_type": error_type,
+                "resolved_action_class": "external_send_internal",
+                "cron_job_id": "a726fd5efd24",
+                "session_id": _CRON_SESSION,
+                "routine": f"op-managed:operator:{skill}",
+            },
+            skill_name=skill,
+        )
+
+    def ok_tool_call(self, ts):
+        self.add(
+            ts,
+            "TOOL_CALL_COMPLETED",
+            {
+                "tool": "smd_send_message",
+                "outcome": "ok",
+                "resolved_action_class": "external_send_internal",
+                "cron_job_id": "a726fd5efd24",
+            },
+        )
+
+    def confirm_send_failed(self, ts, *, outcome="refused", reason="recipient x@y.example"):
+        self.add(
+            ts,
+            "CONFIRM_SEND_FAILED",
+            {
+                "customer": "pilot-smokeball",
+                "verb": "msgraph_send",
+                "outcome": outcome,
+                "reason": reason,
+                "recipients": ["scott@smd.services"],
+            },
+        )
+
+    def wake(self, ts, *, needs_you, skill="deadline-miss-escalator"):
+        # NO session_id, matching the live rows: ``pre_run.py`` writes this
+        # before the turn exists, and 0 of 17 pilot rows carry one. The routine
+        # is on the ``skill_name`` COLUMN, which is what the span joins on.
+        self.add(
+            ts,
+            "EMITTED_WAKE",
+            {"decision_basis": "deadline", "digest_needs_you": needs_you},
+            skill_name=skill,
+        )
+
+    def turn(self, ts, skill="deadline-miss-escalator"):
+        self.add(ts, "LLM_TURN_COMPLETED", {"session_id": _CRON_SESSION}, skill_name=skill)
+
+    def dispatched(self, ts, recipients):
+        self.add(
+            ts,
+            "CONFIRM_SEND_DISPATCHED",
+            {"outcome": "sent", "verb": "msgraph_send", "recipients": recipients},
+        )
+
+
+_facts_seq = 0
+
+
+def _facts(tmp_path, build):
+    # A fresh DB per call: a test that builds two ledgers is comparing two
+    # worlds, and reusing one file would silently union them.
+    global _facts_seq
+    _facts_seq += 1
+    db = tmp_path / f"audit-{_facts_seq}.db"
+    ledger = _Ledger(db)
+    build(ledger)
+    ledger.conn.close()
+    conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    try:
+        return hb.count_send_refusals(conn, _NOW)
+    finally:
+        conn.close()
+
+
+def test_send_refusals_zero_reaches_the_wire(tmp_path):
+    """A ledger with nothing to report answers 0, and 0 is EMITTED.
+
+    This is the field's whole reason for existing: a seat whose routines all
+    reached their humans must be distinguishable from a seat nobody is reading.
+    Truthiness-omitting the zero would send the healthy case as silence to a
+    console that is watching for silence.
+    """
+    facts = _facts(tmp_path, lambda led: led.ok_tool_call(_ts(1)))
+    assert facts.count == 0
+    assert facts.last_ts is None
+    assert facts.events == []
+    payload = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        send_refusals=facts.count,
+        send_refusals_json=facts.events,
+    )
+    assert payload["send_refusals"] == 0
+    assert payload["send_refusals_json"] == []
+    assert "send_refusals_last_ts" not in payload
+
+
+def test_send_refusals_counts_a_cron_send_refusal(tmp_path):
+    facts = _facts(tmp_path, lambda led: led.refused_tool_call(_ts(2)))
+    assert facts.count == 1
+    assert facts.events[0]["kind"] == "refused"
+    assert facts.events[0]["routine"] == "op-managed:operator:deadline-miss-escalator"
+    assert facts.events[0]["tool"] == "smd_send_message"
+    assert facts.events[0]["reason"] == "Refused: date"
+
+
+def test_send_refusals_excludes_rows_older_than_the_window(tmp_path):
+    def build(led):
+        led.refused_tool_call(_ts(25))
+        led.refused_tool_call(_ts(23))
+
+    assert _facts(tmp_path, build).count == 1
+
+
+def test_send_refusals_excludes_rows_after_the_window(tmp_path):
+    """The window is closed at BOTH ends.
+
+    For the ticker the upper bound is "now" and never bites. For the retro
+    falsifier — the same function, asked about a day in the past — an open window
+    counts events that had not happened yet: a dry run reported 08-19's five
+    refusals against 08-18, whose known answer is zero.
+    """
+
+    def build(led):
+        led.refused_tool_call(_ts(1))
+        led.refused_tool_call(_ts(-3))  # three hours after ``now``
+
+    assert _facts(tmp_path, build).count == 1
+
+
+def test_send_refusals_ignores_a_wake_after_the_window(tmp_path):
+    def build(led):
+        led.wake(_ts(-3), needs_you=4)
+
+    assert _facts(tmp_path, build).count == 0
+
+
+def test_send_refusals_ignores_an_interactive_refusal(tmp_path):
+    """A refusal on a session a PERSON is driving is not a page.
+
+    They can see the refusal in front of them. The pager exists for refusals
+    nobody is looking at, which is what the cron-shaped-session clause selects.
+    """
+
+    def build(led):
+        led.add(
+            _ts(1),
+            "TOOL_CALL_COMPLETED",
+            {
+                "tool": "smd_send_message",
+                "outcome": "error",
+                "error_type": "Refused: date",
+                "resolved_action_class": "external_send_internal",
+                "session_id": "telegram-3391",
+            },
+        )
+
+    assert _facts(tmp_path, build).count == 0
+
+
+def test_send_refusals_ignores_a_failed_read(tmp_path):
+    """An errored READ is a connector problem, not a message nobody got."""
+
+    def build(led):
+        led.add(
+            _ts(1),
+            "TOOL_CALL_COMPLETED",
+            {
+                "tool": "mcp_smokeball_list_matters",
+                "outcome": "error",
+                "error_type": "HTTPError",
+                "resolved_action_class": "read",
+                "cron_job_id": "a726fd5efd24",
+            },
+        )
+
+    assert _facts(tmp_path, build).count == 0
+
+
+def test_send_refusals_counts_confirm_send_failed(tmp_path):
+    """The broker's own refusal counts, and its REASON is the closed vocabulary.
+
+    ``CONFIRM_SEND_FAILED.reason`` is ``str(exc)`` and can quote the address the
+    broker refused; ``outcome`` says the same thing about kind and carries no
+    address off the seat.
+    """
+    facts = _facts(
+        tmp_path,
+        lambda led: led.confirm_send_failed(_ts(3), reason="not on roster: jane@gmail.example"),
+    )
+    assert facts.count == 1
+    assert facts.events[0]["reason"] == "refused"
+    assert facts.events[0]["tool"] == "msgraph_send"
+    assert "gmail.example" not in json.dumps(facts.events)
+
+
+def test_a_participant_fence_refusal_pages_once_naming_its_fence(tmp_path):
+    """ss-console participant fence: the broker's refusal row carries ``fence``
+    from a closed vocabulary, and the page names it instead of the bare
+    outcome. One event per row: no second count.
+
+    FALSIFIER: keep ``reason = outcome`` and this reads ``refused``."""
+
+    def build(led):
+        for fence in ("participants", "participants_unverifiable", "rehearsal", "not-a-fence"):
+            led.add(
+                _ts(2),
+                "CONFIRM_SEND_FAILED",
+                {
+                    "verb": "msgraph_send",
+                    "outcome": "refused",
+                    "fence": fence,
+                    "reason": "participant fence: bruno@firm.example was not on the request",
+                    "refused": ["a" * 64],
+                },
+            )
+
+    facts = _facts(tmp_path, build)
+    assert facts.count == 4
+    assert sorted(e["reason"] for e in facts.events) == [
+        "participants",
+        "participants_unverifiable",
+        "refused",
+        "rehearsal",
+    ]
+    assert "firm.example" not in json.dumps(facts.events)
+
+
+def test_send_refusals_counts_a_wake_that_sent_nothing(tmp_path):
+    """The 2026-08-20 instance: five items waiting, no attempt, no refusal row.
+
+    Nothing refusal-shaped can see this, which is why the fact carries two kinds
+    rather than being a refusal counter.
+    """
+
+    def build(led):
+        led.wake(_ts(4), needs_you=5)
+        led.turn(_ts(3.9))
+
+    facts = _facts(tmp_path, build)
+    assert facts.count == 1
+    assert facts.events[0]["kind"] == "unsent"
+    assert facts.events[0]["needs_you"] == 5
+    assert facts.events[0]["routine"] == "deadline-miss-escalator"
+
+
+def test_send_refusals_ignores_a_wake_with_nothing_to_say(tmp_path):
+    def build(led):
+        led.wake(_ts(4), needs_you=0)
+        led.turn(_ts(3.9))
+
+    assert _facts(tmp_path, build).count == 0
+
+
+def test_send_refusals_clears_a_wake_that_reached_a_person(tmp_path):
+    def build(led):
+        led.wake(_ts(4), needs_you=3)
+        led.dispatched(_ts(3.95), ["scott@smd.services"])
+        led.turn(_ts(3.9))
+
+    assert _facts(tmp_path, build).count == 0
+
+
+def test_send_refusals_a_probe_only_dispatch_does_not_clear_a_wake(tmp_path):
+    """A send to the falsifier's own probe address is not a routine reaching a
+    human. If it cleared the fact, the instrument used to prove the pager works
+    would be the thing that silences it."""
+
+    def build(led):
+        led.wake(_ts(4), needs_you=3)
+        led.dispatched(_ts(3.95), ["ss-probe-7f2@agentmail.to"])
+        led.turn(_ts(3.9))
+
+    facts = _facts(tmp_path, build)
+    assert facts.count == 1
+    assert facts.events[0]["kind"] == "unsent"
+
+
+def test_send_refusals_span_ends_at_this_routines_own_turn(tmp_path):
+    """The span is joined on SKILL and time — neither row carries a session id.
+
+    ``EMITTED_WAKE`` is written by the pre_run child before the turn exists (0 of
+    17 pilot rows carry a session id, read live 2026-08-22), and the broker
+    writes ``CONFIRM_SEND_DISPATCHED`` without one. So another routine's turn row
+    must not close this routine's span, or a busy seat would clear every silence
+    with whatever happened to run next.
+    """
+
+    def build(led):
+        led.wake(_ts(4), needs_you=2)
+        led.turn(_ts(3.99), skill="medical-records-chaser")  # someone else's turn
+        led.dispatched(_ts(3.95), ["scott@smd.services"])  # after it, before ours
+        led.turn(_ts(3.9))
+
+    # The dispatch is inside OUR span (wake .. our turn), so the wake is cleared.
+    assert _facts(tmp_path, build).count == 0
+
+
+def test_send_refusals_a_span_stops_at_the_cap(tmp_path):
+    """A turn row four hours after the wake belongs to the next run. Borrowing
+    its dispatch would clear a silence it had nothing to do with."""
+
+    def build(led):
+        led.wake(_ts(6), needs_you=2)
+        led.dispatched(_ts(4.0), ["scott@smd.services"])  # two hours later
+        led.turn(_ts(2.0))  # the next run's turn
+
+    assert _facts(tmp_path, build).count == 1
+
+
+def test_send_refusals_a_wake_with_no_turn_row_uses_the_fixed_span(tmp_path):
+    """The routine crashed, or the ledger has a gap. The span is then a short
+    fixed window from the wake: a dispatch inside it clears the fact, one an hour
+    later belongs to somebody else."""
+
+    def build(led):
+        led.wake(_ts(4), needs_you=2)
+        led.dispatched(_ts(3.9), ["scott@smd.services"])
+
+    assert _facts(tmp_path, build).count == 0
+
+    def build_silent(led):
+        led.wake(_ts(4), needs_you=2)
+        led.dispatched(_ts(3.0), ["scott@smd.services"])
+
+    assert _facts(tmp_path, build_silent).count == 1
+
+
+def test_send_refusals_holds_a_wake_whose_turn_may_still_be_running(tmp_path):
+    """A wake five minutes ago has not yet failed to send anything."""
+    assert _facts(tmp_path, lambda led: led.wake(_ts(0.08), needs_you=2)).count == 0
+
+
+def test_send_refusals_last_ts_is_the_max_across_both_kinds(tmp_path):
+    def build(led):
+        led.refused_tool_call(_ts(6))
+        led.wake(_ts(4), needs_you=1)
+        led.turn(_ts(3.9))
+        led.confirm_send_failed(_ts(2))
+
+    facts = _facts(tmp_path, build)
+    assert facts.count == 3
+    assert (facts.refused, facts.unsent) == (2, 1)
+    assert facts.last_ts == _ts(2)
+    assert facts.events[0]["kind"] == "refused"
+
+
+def test_send_refusals_json_is_capped_at_the_newest_five(tmp_path):
+    def build(led):
+        for hours in (9, 8, 7, 6, 5, 4, 3):
+            led.refused_tool_call(_ts(hours))
+
+    facts = _facts(tmp_path, build)
+    assert facts.count == 7
+    assert [e["ts"] for e in facts.events] == [_ts(3), _ts(4), _ts(5), _ts(6), _ts(7)]
+
+
+def test_send_refusals_reason_is_bounded(tmp_path):
+    facts = _facts(
+        tmp_path, lambda led: led.refused_tool_call(_ts(1), error_type="Refused: " + "x" * 900)
+    )
+    assert len(facts.events[0]["reason"]) == 200
+
+
+def test_read_audit_facts_carries_the_refusal_fields(tmp_path):
+    """The ticker's own read, not only the pure query."""
+    db = tmp_path / "audit.db"
+    ledger = _Ledger(db)
+    ledger.refused_tool_call(datetime.now(timezone.utc).isoformat())
+    ledger.conn.close()
+    facts = hb.read_audit_facts(str(db))
+    assert facts.send_refusals == 1
+    assert facts.send_refusals_last_ts is not None
+    assert facts.send_refusals_json[0]["kind"] == "refused"
+
+
+def test_read_audit_facts_on_a_pre_metadata_ledger_still_reports_timestamps(tmp_path):
+    """A ledger with no ``metadata`` column at all. The refusal read must degrade
+    on its own — sharing a handler with the timestamp read would let a missing
+    column report a working seat as silent, the #2498 confusion again."""
+    db = tmp_path / "audit.db"
+    _make_audit_db(str(db), [("01A", "2026-08-01T10:00:00+00:00", "escalator")])
+    facts = hb.read_audit_facts(str(db))
+    assert facts.last_audit_ts == "2026-08-01T10:00:00+00:00"
+    assert facts.send_refusals is None  # cannot answer — the console HOLDS
+    assert facts.send_refusals_json is None
+
+
+def test_payload_omits_refusals_when_the_seat_cannot_answer():
+    p = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        send_refusals=None,
+        send_refusals_last_ts=None,
+        send_refusals_json=None,
+    )
+    assert "send_refusals" not in p
+    assert "send_refusals_last_ts" not in p
+    assert "send_refusals_json" not in p
+
+
+def test_ticker_puts_the_refusal_fields_on_the_wire(tmp_path):
+    """End to end through the emitter: the fields reach the POST body."""
+    db = tmp_path / "audit.db"
+    ledger = _Ledger(db)
+    ledger.refused_tool_call(datetime.now(timezone.utc).isoformat())
+    ledger.conn.close()
+    em, calls = _emitter(audit_db_path_fn=lambda: str(db))
+    em._tick()
+    body = json.loads(calls["posts"][0][2])
+    assert body["send_refusals"] == 1
+    assert body["send_refusals_last_ts"]
+    assert body["send_refusals_json"][0]["tool"] == "smd_send_message"
+
+
+# ---- the degraded kind (2026-08-24, the withheld digest) -------------------
+#
+# CROSS-REPO LITERAL PIN: the ``digest_degraded`` prefix below is written by
+# ``ss-console:operator/skills/deadline-miss-escalator/pre_run.py`` (bases
+# ``digest_degraded_suppressed`` and ``digest_degraded_audit_unavailable``) and
+# read by ``shared/heartbeat.py:_degraded_events``. Neither repo's CI can see
+# the other; these tests are the overlay-side half of the pin, and
+# ``ss-console``'s escalator tests are the writer-side half.
+
+
+def _suppressed(led, ts, basis, reason=None, skill="deadline-miss-escalator"):
+    metadata = {"decision_basis": basis, "platform": "cron-pre-run"}
+    if reason is not None:
+        metadata["degraded_reason"] = reason
+    led.add(ts, "SUPPRESSED_WAKE", metadata, skill_name=skill)
+
+
+def test_a_degraded_suppression_counts_and_moves_the_marker(tmp_path):
+    """A routine that withheld its own unfit output must page, not vanish. The
+    suppression was deliberate; the silence it creates must not be."""
+    facts = _facts(
+        tmp_path,
+        lambda led: _suppressed(
+            led,
+            _ts(3),
+            "digest_degraded_suppressed",
+            reason="12 deadlines withheld, nearest 2 days out, 12 lookups failed",
+        ),
+    )
+    assert facts.count == 1
+    assert facts.degraded == 1
+    assert facts.refused == 0 and facts.unsent == 0
+    assert facts.last_ts == _ts(3)
+    (event,) = facts.events
+    assert event["kind"] == "degraded"
+    assert "12 deadlines withheld" in event["reason"]
+
+
+def test_the_stripped_wake_basis_also_pages(tmp_path):
+    """``digest_degraded_audit_unavailable`` — the suppress row could not be
+    written so the turn woke stripped — is the SAME failure to reach a human,
+    and the prefix match is what keeps a new sibling basis paging by default."""
+    facts = _facts(
+        tmp_path, lambda led: _suppressed(led, _ts(4), "digest_degraded_audit_unavailable")
+    )
+    assert facts.degraded == 1
+    assert facts.events[0]["reason"] == "digest_degraded_audit_unavailable"
+
+
+def test_an_ordinary_suppressed_wake_is_not_degraded(tmp_path):
+    """The daily quiet tick — nothing in escalation range — is the healthy case
+    and must never page."""
+    facts = _facts(
+        tmp_path, lambda led: _suppressed(led, _ts(5), "no_deadline_in_escalation_range")
+    )
+    assert facts.count == 0
+    assert facts.degraded == 0
+
+
+def test_a_partial_degradation_on_an_emitted_wake_also_pages(tmp_path):
+    """The digest shipped (explicit absences) but lookups failed — the
+    degraded_reason the pre_run stamped on the EMITTED_WAKE row pages too."""
+
+    def build(led):
+        led.add(
+            _ts(6),
+            "EMITTED_WAKE",
+            {
+                "decision_basis": "deadline_in_escalation_range",
+                "degraded_reason": "digest sent with explicit absences: 3 of 40 matter lookup(s) failed",
+            },
+            skill_name="deadline-miss-escalator",
+        )
+
+    facts = _facts(tmp_path, build)
+    assert facts.degraded == 1
+    assert "explicit absences" in facts.events[0]["reason"]
+
+
+def test_an_ordinary_emitted_wake_is_not_degraded(tmp_path):
+    def build(led):
+        led.wake(_ts(7), needs_you=0)
+
+    facts = _facts(tmp_path, build)
+    assert facts.degraded == 0
+
+
+# ---------------------------------------------------------------------------
+# Watched-tool failure runs on the wire (ss-console#2793 follow-on)
+#
+# A rostered agent emails a voice memo; the transcriber refuses; the agent
+# reads "could not transcribe" in their own thread and nobody at SMD knows.
+# The ladder never trips on three failures a day. This field is what makes a
+# tool that keeps failing for one person visible to the people who can fix it.
+# ---------------------------------------------------------------------------
+
+VOICE = "voice_note_transcribe"
+STORE = "record_store_write"
+
+
+def _tool_call(led, ts, tool, outcome, error_type=None):
+    meta = {"tool": tool, "outcome": outcome, "resolved_action_class": "read"}
+    if error_type is not None:
+        meta["error_type"] = error_type
+    led.add(ts, "TOOL_CALL_COMPLETED", meta)
+
+
+def _tool_facts(tmp_path, build):
+    global _facts_seq
+    _facts_seq += 1
+    db = tmp_path / f"audit-tools-{_facts_seq}.db"
+    ledger = _Ledger(db)
+    build(ledger)
+    ledger.conn.close()
+    conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    try:
+        return hb.count_tool_failures(conn, _NOW)
+    finally:
+        conn.close()
+
+
+def test_watched_tools_name_the_two_open_house_tools():
+    assert VOICE in hb.WATCHED_TOOLS
+    assert STORE in hb.WATCHED_TOOLS
+
+
+def test_tool_failures_a_tool_that_never_ran_is_absent_and_the_map_is_emitted(tmp_path):
+    """Absence is a HOLD at the console; an empty map is still a real answer."""
+    facts = _tool_facts(tmp_path, lambda led: led.ok_tool_call(_ts(1)))
+    assert facts == {}
+    payload = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        tool_failures=facts,
+    )
+    assert payload["tool_failures"] == {}
+
+
+def test_tool_failures_counts_the_run_from_the_newest_call_back(tmp_path):
+    def build(led):
+        _tool_call(led, _ts(5), VOICE, "ok")
+        _tool_call(led, _ts(3), VOICE, "error", "could not transcribe memo.m4a: no provider")
+        _tool_call(led, _ts(2), VOICE, "error", "could not transcribe memo.m4a: no provider")
+        _tool_call(led, _ts(1), VOICE, "error", "could not transcribe again.m4a: no provider")
+
+    facts = _tool_facts(tmp_path, build)
+    entry = facts[VOICE]
+    assert entry["consecutive_failures"] == 3
+    assert entry["first_error_ts"] == _ts(3)
+    assert entry["last_error_ts"] == _ts(1)
+    assert entry["last_error"] == "could not transcribe again.m4a: no provider"
+
+
+def test_tool_failures_a_success_at_the_head_resolves_with_a_zero_entry(tmp_path):
+    """The zero entry is what closes an open alert; it must not be dropped."""
+
+    def build(led):
+        _tool_call(led, _ts(3), VOICE, "error", "boom")
+        _tool_call(led, _ts(2), VOICE, "error", "boom")
+        _tool_call(led, _ts(1), VOICE, "ok")
+
+    facts = _tool_facts(tmp_path, build)
+    assert facts[VOICE] == {"consecutive_failures": 0, "last_ok_ts": _ts(1)}
+
+
+def test_tool_failures_a_blocked_call_counts_as_a_failure(tmp_path):
+    """A hook refusal leaves the person without the thing just as an error does."""
+
+    def build(led):
+        _tool_call(led, _ts(2), STORE, "blocked")
+        _tool_call(led, _ts(1), STORE, "blocked")
+
+    facts = _tool_facts(tmp_path, build)
+    assert facts[STORE]["consecutive_failures"] == 2
+    assert facts[STORE]["last_error"] == "blocked"
+
+
+def test_tool_failures_rows_outside_the_window_do_not_count(tmp_path):
+    def build(led):
+        _tool_call(led, _ts(30), VOICE, "error", "old")
+        _tool_call(led, _ts(26), VOICE, "error", "old")
+
+    assert _tool_facts(tmp_path, build) == {}
+
+
+def test_tool_failures_ignores_tools_that_are_not_watched(tmp_path):
+    def build(led):
+        _tool_call(led, _ts(2), "read_file", "error", "boom")
+        _tool_call(led, _ts(1), "read_file", "error", "boom")
+
+    assert _tool_facts(tmp_path, build) == {}
+
+
+def test_tool_failures_each_watched_tool_is_counted_on_its_own(tmp_path):
+    def build(led):
+        _tool_call(led, _ts(2), VOICE, "error", "no provider")
+        _tool_call(led, _ts(1), STORE, "ok")
+
+    facts = _tool_facts(tmp_path, build)
+    assert facts[VOICE]["consecutive_failures"] == 1
+    assert facts[STORE]["consecutive_failures"] == 0
+
+
+def test_tool_failures_a_row_with_no_outcome_stops_the_walk(tmp_path):
+    """A pre-v2 row (the always-ok era) says nothing either way."""
+
+    def build(led):
+        _tool_call(led, _ts(3), VOICE, "error", "boom")
+        led.add(_ts(2), "TOOL_CALL_COMPLETED", {"tool": VOICE})
+        _tool_call(led, _ts(1), VOICE, "error", "boom")
+
+    facts = _tool_facts(tmp_path, build)
+    assert facts[VOICE]["consecutive_failures"] == 1
+    assert facts[VOICE]["first_error_ts"] == _ts(1)
+    facts = _tool_facts(
+        tmp_path, lambda led: led.add(_ts(1), "TOOL_CALL_COMPLETED", {"tool": VOICE})
+    )
+    assert facts == {}
+
+
+def test_tool_failures_last_error_is_bounded(tmp_path):
+    def build(led):
+        _tool_call(led, _ts(1), VOICE, "error", "x" * 500)
+
+    facts = _tool_facts(tmp_path, build)
+    assert len(facts[VOICE]["last_error"]) == 200
+
+
+def test_read_audit_facts_carries_the_tool_failures(tmp_path):
+    db = tmp_path / "audit.db"
+    ledger = _Ledger(db)
+    _tool_call(ledger, datetime.now(timezone.utc).isoformat(), VOICE, "error", "no provider")
+    ledger.conn.close()
+    facts = hb.read_audit_facts(str(db))
+    assert facts.tool_failures[VOICE]["consecutive_failures"] == 1
+
+
+def test_read_audit_facts_on_a_pre_metadata_ledger_holds_the_tool_failures(tmp_path):
+    db = tmp_path / "audit.db"
+    _make_audit_db(str(db), [("01A", "2026-08-01T10:00:00+00:00", "escalator")])
+    facts = hb.read_audit_facts(str(db))
+    assert facts.tool_failures is None  # cannot answer — the console HOLDS
+
+
+def test_payload_omits_tool_failures_when_the_seat_cannot_answer():
+    p = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        tool_failures=None,
+    )
+    assert "tool_failures" not in p
+
+
+# ---------------------------------------------------------------------------
+# Shortfalls (ss-console shortfall notifications): every time the Operator could
+# not give a person what they asked for, in four classes. The 2026-10-01 shape
+# is the reason the "partial" class exists: the mail routine was sent 52 pages,
+# filed none, and every call it made scored "ok".
+# ---------------------------------------------------------------------------
+
+_MAIL_SESSION = "20261001_141502_ab12cd34"
+_PERSON_SESSION = "20261001_151000_ef56ab78"
+_BUNDLE = "a" * 64
+_READ_TOOL = "mcp_smokeball_read_attachment_pages"
+_FILE_TOOL = "mcp_smokeball_file_attachment_pages_to_matter"
+
+#: CONTRACT PIN with ss-console (``workers/fleet-alerts`` + heartbeat ingest):
+#: the three payload keys and the six keys of every event. ss-console's parser
+#: accepts only this shape; a rename on either side must fail a test here.
+SHORTFALL_PAYLOAD_KEYS = ("shortfalls", "shortfalls_last_ts", "shortfalls_json")
+SHORTFALL_EVENT_KEYS = {"ts", "class", "tool", "routine", "code", "key"}
+
+#: CONTRACT PIN: ss-console's ingest refuses a zone-less ISO timestamp. This is
+#: the shape its parser accepts (``Z`` or ``+HH:MM`` at the end).
+_ZONED_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$")
+
+
+def _call(led, ts, tool, outcome, *, session=_MAIL_SESSION, **meta):
+    led.add(
+        ts,
+        "TOOL_CALL_COMPLETED",
+        {"tool": tool, "outcome": outcome, "session_id": session, **meta},
+    )
+
+
+def _mail_procedure(led, ts, session=_MAIL_SESSION):
+    _call(led, ts, "skill_view", "ok", session=session, skill_procedure="combined-post-intake")
+
+
+def _bundle_read(led, ts, pages, *, session=_MAIL_SESSION, outcome="ok", **meta):
+    _call(
+        led,
+        ts,
+        _READ_TOOL,
+        outcome,
+        session=session,
+        bundle_sha256=_BUNDLE,
+        bundle_page_count=pages,
+        **meta,
+    )
+
+
+def _session_turn(led, ts, session=_MAIL_SESSION):
+    led.add(ts, "LLM_TURN_COMPLETED", {"session_id": session})
+
+
+def _shortfalls(tmp_path, build):
+    global _facts_seq
+    _facts_seq += 1
+    db = tmp_path / f"audit-short-{_facts_seq}.db"
+    ledger = _Ledger(db)
+    build(ledger)
+    ledger.conn.close()
+    conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    try:
+        return hb.count_shortfalls(conn, _NOW)
+    finally:
+        conn.close()
+
+
+def test_shortfalls_zero_reaches_the_wire(tmp_path):
+    facts = _shortfalls(tmp_path, lambda led: _call(led, _ts(1), _READ_TOOL, "ok"))
+    assert (facts.count, facts.last_ts, facts.events) == (0, None, [])
+    payload = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        shortfalls=facts.count,
+        shortfalls_last_ts=facts.last_ts,
+        shortfalls_json=facts.events,
+    )
+    assert payload["shortfalls"] == 0
+    assert payload["shortfalls_json"] == []
+    assert "shortfalls_last_ts" not in payload
+
+
+def test_payload_pins_the_shortfall_contract_keys():
+    event = {
+        "ts": "2026-10-01T14:15:02.123Z",
+        "class": "limit",
+        "tool": _READ_TOOL,
+        "routine": None,
+        "code": "over_page_cap",
+        "key": "limit:" + "0" * 32,
+    }
+    payload = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        shortfalls=1,
+        shortfalls_last_ts="2026-10-01T14:15:02.123Z",
+        shortfalls_json=[event],
+    )
+    for key in SHORTFALL_PAYLOAD_KEYS:
+        assert key in payload
+    assert set(payload["shortfalls_json"][0]) == SHORTFALL_EVENT_KEYS
+    assert hb.SHORTFALL_CLASSES == ("not_allowed", "limit", "failed", "partial")
+
+
+def test_payload_omits_shortfalls_when_the_seat_cannot_answer():
+    p = hb.build_payload(
+        heartbeat_ts="t", last_audit_ts=None, last_skill_ts=None, uptime_seconds=None, version=None
+    )
+    for key in SHORTFALL_PAYLOAD_KEYS:
+        assert key not in p
+
+
+def test_a_trust_refusal_is_not_allowed(tmp_path):
+    facts = _shortfalls(
+        tmp_path,
+        lambda led: _call(
+            led,
+            _ts(2),
+            "smd_send_message",
+            "error",
+            session=_PERSON_SESSION,
+            trust_decision="refuse",
+            trust_reason="the ceiling for external_send_client is refused",
+            plugin_block=True,
+        ),
+    )
+    assert facts.count == 1 and facts.not_allowed == 1
+    event = facts.events[0]
+    assert set(event) == SHORTFALL_EVENT_KEYS
+    assert event["class"] == "not_allowed"
+    assert event["code"] == "trust_refuse"
+    assert event["tool"] == "smd_send_message"
+    assert event["ts"] == _ts(2)
+    assert event["key"].startswith("not_allowed:")
+    assert len(event["key"]) == len("not_allowed:") + 32
+
+
+def test_a_plugin_block_is_not_allowed_and_a_callback_timeout_is_failed(tmp_path):
+    def build(led):
+        _call(led, _ts(3), "establish_stage_document", "error", plugin_block=True)
+        _call(led, _ts(2), "mcp_smokeball_create_memo", "error", callback_timeout=True)
+
+    facts = _shortfalls(tmp_path, build)
+    assert [(e["class"], e["code"]) for e in facts.events] == [
+        ("not_allowed", "plugin_block"),
+        ("failed", "callback_timeout"),
+    ]
+
+
+def test_a_banned_tool_is_not_allowed(tmp_path):
+    facts = _shortfalls(
+        tmp_path,
+        lambda led: led.add(
+            _ts(1),
+            "INVARIANT_VIOLATION",
+            {"tool": "send_email", "banned_tool": True, "outcome": "blocked"},
+        ),
+    )
+    assert [(e["class"], e["code"]) for e in facts.events] == [("not_allowed", "banned_tool")]
+
+
+def test_a_read_volume_refusal_is_a_limit_not_a_permission(tmp_path):
+    facts = _shortfalls(
+        tmp_path,
+        lambda led: _call(
+            led,
+            _ts(1),
+            "mcp_smokeball_read_document",
+            "error",
+            trust_decision="refuse",
+            trust_reason="READ_VOLUME_GATE: at least 412 pages read",
+        ),
+    )
+    assert [(e["class"], e["code"]) for e in facts.events] == [("limit", "READ_VOLUME_GATE")]
+
+
+def test_limit_and_failed_split_on_the_code(tmp_path):
+    def build(led):
+        _call(led, _ts(5), _READ_TOOL, "shortfall", shortfall_code="over_page_cap", session="s-a")
+        _call(led, _ts(4), "mail_spool_attachment", "shortfall", shortfall_code="over_size_cap")
+        _call(led, _ts(3), "mcp_medchron_submit", "shortfall", shortfall_code="allowance_spent")
+        _call(
+            led,
+            _ts(2),
+            "mcp_smokeball_add_medicals_row",
+            "shortfall",
+            shortfall_code="needs_contact",
+        )
+        _call(led, _ts(1), "mcp_smokeball_get_matter", "error", error_type="Smokeball 503 for X")
+
+    facts = _shortfalls(tmp_path, build)
+    assert [(e["class"], e["code"]) for e in facts.events] == [
+        ("limit", "over_page_cap"),
+        ("limit", "over_size_cap"),
+        ("limit", "allowance_spent"),
+        ("failed", "needs_contact"),
+        # A prose error_type never rides: the outcome word stands in for it.
+        ("failed", "error"),
+    ]
+    assert (facts.limit, facts.failed) == (3, 2)
+    assert facts.last_ts == _ts(1)
+
+
+def test_a_refusal_retried_ok_on_the_same_object_is_no_event(tmp_path):
+    def build(led):
+        _call(led, _ts(2), _FILE_TOOL, "shortfall", shortfall_code="refused", object_digest="o1")
+        _call(led, _ts(1.9), _FILE_TOOL, "ok", object_digest="o1")
+
+    assert _shortfalls(tmp_path, build).count == 0
+
+
+def test_a_retry_on_a_different_object_or_session_does_not_clear(tmp_path):
+    def build(led):
+        _call(led, _ts(2), _FILE_TOOL, "shortfall", shortfall_code="refused", object_digest="o1")
+        _call(led, _ts(1.9), _FILE_TOOL, "ok", object_digest="o2")
+        _call(led, _ts(1.8), _FILE_TOOL, "ok", object_digest="o1", session=_PERSON_SESSION)
+
+    facts = _shortfalls(tmp_path, build)
+    assert [(e["class"], e["code"]) for e in facts.events] == [("failed", "refused")]
+
+
+def test_an_ok_call_before_the_refusal_does_not_clear_it(tmp_path):
+    def build(led):
+        _call(led, _ts(2.1), _FILE_TOOL, "ok", object_digest="o1")
+        _call(led, _ts(2), _FILE_TOOL, "shortfall", shortfall_code="refused", object_digest="o1")
+
+    assert _shortfalls(tmp_path, build).count == 1
+
+
+def test_the_october_first_shape_is_a_partial(tmp_path):
+    """The mail routine read a 52-page bundle and filed nothing."""
+
+    def build(led):
+        _mail_procedure(led, _ts(3))
+        _bundle_read(led, _ts(2.9), 52)
+        _session_turn(led, _ts(2.8))
+
+    facts = _shortfalls(tmp_path, build)
+    assert facts.partial == 1 and facts.count == 1
+    event = facts.events[0]
+    assert event["class"] == "partial"
+    assert event["code"] == "filed 0 of 52"
+    assert event["routine"] == "combined-post-intake"
+    assert event["tool"] == _READ_TOOL
+    assert event["key"] == f"partial:{_BUNDLE}"
+
+
+def test_filed_and_pending_pages_account_for_a_bundle(tmp_path):
+    def build(led):
+        _mail_procedure(led, _ts(3))
+        _bundle_read(led, _ts(2.9), 10)
+        _call(led, _ts(2.8), _FILE_TOOL, "ok", bundle_sha256=_BUNDLE, bundle_pages_filed=[[1, 4]])
+        _call(led, _ts(2.7), _FILE_TOOL, "ok", bundle_sha256=_BUNDLE, bundle_pages_pending=[[5, 7]])
+        _session_turn(led, _ts(2.6))
+
+    facts = _shortfalls(tmp_path, build)
+    assert [e["code"] for e in facts.events] == ["filed 7 of 10"]
+
+    def complete(led):
+        build(led)
+        # A held page approved and filed in a LATER turn still accounts.
+        _call(
+            led,
+            _ts(1),
+            _FILE_TOOL,
+            "ok",
+            session=_PERSON_SESSION,
+            bundle_sha256=_BUNDLE,
+            bundle_pages_filed=[[8, 10]],
+        )
+
+    assert _shortfalls(tmp_path, complete).partial == 0
+
+
+def test_a_person_reading_one_letter_is_never_a_partial(tmp_path):
+    def build(led):
+        _bundle_read(led, _ts(2), 6, session=_PERSON_SESSION)
+        _session_turn(led, _ts(1.9), session=_PERSON_SESSION)
+
+    assert _shortfalls(tmp_path, build).count == 0
+
+
+def test_a_mail_session_still_running_is_not_judged_yet(tmp_path):
+    def build(led):
+        _mail_procedure(led, _ts(0.2))
+        _bundle_read(led, _ts(0.1), 52)
+
+    assert _shortfalls(tmp_path, build).partial == 0
+
+    def idle(led):
+        _mail_procedure(led, _ts(0.9))
+        _bundle_read(led, _ts(0.8), 52)
+
+    # Thirty minutes of quiet closes it without a turn row.
+    assert _shortfalls(tmp_path, idle).partial == 1
+
+
+def test_the_mail_routine_as_a_skill_name_also_counts(tmp_path):
+    def build(led):
+        _bundle_read(led, _ts(2), 4, skill="combined-post-intake")
+
+    assert [e["code"] for e in _shortfalls(tmp_path, build).events] == ["filed 0 of 4"]
+
+
+def test_events_ride_oldest_first_capped_while_the_count_is_whole(tmp_path):
+    def build(led):
+        for n in range(25):
+            _call(
+                led,
+                _ts(20 - n * 0.5),
+                _READ_TOOL,
+                "shortfall",
+                shortfall_code="over_page_cap",
+                session=f"s{n}",
+            )
+
+    facts = _shortfalls(tmp_path, build)
+    assert facts.count == 25
+    assert len(facts.events) == 20
+    assert facts.events[0]["ts"] == _ts(20)
+    assert facts.last_ts == _ts(8)
+    assert [e["ts"] for e in facts.events] == sorted(e["ts"] for e in facts.events)
+
+
+def test_a_key_is_stable_across_beats(tmp_path):
+    def build(led):
+        _call(led, _ts(2), _READ_TOOL, "shortfall", shortfall_code="over_page_cap")
+
+    first = _shortfalls(tmp_path, build).events[0]["key"]
+    second = _shortfalls(tmp_path, build).events[0]["key"]
+    assert first == second
+
+
+def test_a_code_never_carries_prose(tmp_path):
+    def build(led):
+        _call(led, _ts(2), _READ_TOOL, "shortfall", shortfall_code="Jane Testclient's letter")
+
+    event = _shortfalls(tmp_path, build).events[0]
+    assert event["code"] == "shortfall"
+    assert "Testclient" not in json.dumps(event)
+
+
+def test_rows_outside_the_window_are_not_shortfalls(tmp_path):
+    def build(led):
+        _call(led, _ts(25), _READ_TOOL, "shortfall", shortfall_code="over_page_cap")
+        _call(led, _ts(-1), _READ_TOOL, "shortfall", shortfall_code="over_page_cap")
+
+    assert _shortfalls(tmp_path, build).count == 0
+
+
+def test_a_shortfall_is_not_a_send_refusal_or_a_tool_failure(tmp_path):
+    """``shortfall`` was ``ok`` before outcome semantics v3, and the two older
+    pagers keep the meaning they were built with."""
+
+    def build(led):
+        led.add(
+            _ts(2),
+            "TOOL_CALL_COMPLETED",
+            {
+                "tool": "smd_send_message",
+                "outcome": "shortfall",
+                "shortfall_code": "refused",
+                "resolved_action_class": "external_send_internal",
+                "cron_job_id": "a726fd5efd24",
+            },
+        )
+
+    assert _facts(tmp_path, build).count == 0
+    tools = _tool_facts(tmp_path, lambda led: _tool_call(led, _ts(1), VOICE, "shortfall"))
+    assert tools[VOICE]["consecutive_failures"] == 0
+
+
+def test_read_audit_facts_carries_the_shortfall_fields(tmp_path):
+    db = tmp_path / "audit.db"
+    ledger = _Ledger(db)
+    _call(
+        ledger,
+        datetime.now(timezone.utc).isoformat(),
+        _READ_TOOL,
+        "shortfall",
+        shortfall_code="over_page_cap",
+    )
+    ledger.conn.close()
+    facts = hb.read_audit_facts(str(db))
+    assert facts.shortfalls == 1
+    assert _ZONED_ISO.match(facts.shortfalls_last_ts)
+    assert facts.shortfalls_json[0]["class"] == "limit"
+
+
+def test_read_audit_facts_on_a_pre_metadata_ledger_holds_the_shortfalls(tmp_path):
+    db = tmp_path / "audit.db"
+    _make_audit_db(str(db), [("01A", "2026-08-01T10:00:00+00:00", "escalator")])
+    facts = hb.read_audit_facts(str(db))
+    assert facts.last_audit_ts == "2026-08-01T10:00:00+00:00"
+    assert facts.shortfalls is None
+    assert facts.shortfalls_last_ts is None
+    assert facts.shortfalls_json is None
+
+
+def test_ticker_puts_the_shortfall_fields_on_the_wire(tmp_path):
+    db = tmp_path / "audit.db"
+    ledger = _Ledger(db)
+    _call(
+        ledger,
+        datetime.now(timezone.utc).isoformat(),
+        "mail_spool_attachment",
+        "shortfall",
+        shortfall_code="over_size_cap",
+    )
+    ledger.conn.close()
+    em, calls = _emitter(audit_db_path_fn=lambda: str(db))
+    em._tick()
+    body = json.loads(calls["posts"][0][2])
+    assert body["shortfalls"] == 1
+    assert body["shortfalls_last_ts"]
+    assert body["shortfalls_json"][0]["code"] == "over_size_cap"
+    assert set(body["shortfalls_json"][0]) == SHORTFALL_EVENT_KEYS
+
+
+def test_every_shortfall_timestamp_carries_an_explicit_zone(tmp_path):
+    """CONTRACT PIN: ``shortfalls_last_ts`` and every event ``ts`` are full
+    ISO-8601 with a zone, the raw audit-row ``ts`` (the way ``send_refusals``
+    carries it), never the 19-character comparison prefix. Both live spellings
+    (``...Z`` and ``+00:00``) pass through; a row written bare is stamped Z.
+    ``tool`` is never empty; ``routine`` may be null."""
+
+    def build(led):
+        _call(led, _ts(5), _READ_TOOL, "shortfall", shortfall_code="over_page_cap", session="s-a")
+        _call(led, "2026-08-21T14:00:00+00:00", "", "error", session="s-bare-tool")
+        _call(
+            led,
+            "2026-08-21T15:00:00",
+            _READ_TOOL,
+            "shortfall",
+            shortfall_code="too_long",
+            session="s-b",
+        )
+        _mail_procedure(led, _ts(3))
+        _bundle_read(led, _ts(2.9), 52)
+        _session_turn(led, _ts(2.8))
+
+    facts = _shortfalls(tmp_path, build)
+    assert facts.count == 4
+    for event in facts.events:
+        assert _ZONED_ISO.match(event["ts"]), event["ts"]
+        assert event["tool"], event
+        assert event["routine"] is None or isinstance(event["routine"], str)
+    assert _ZONED_ISO.match(facts.last_ts)
+    by_code = {e["code"]: e for e in facts.events}
+    assert by_code["over_page_cap"]["ts"] == _ts(5)
+    assert by_code["over_page_cap"]["routine"] is None
+    assert by_code["error"]["ts"] == "2026-08-21T14:00:00+00:00"
+    assert by_code["error"]["tool"] == "unknown_tool"
+    assert by_code["too_long"]["ts"] == "2026-08-21T15:00:00Z"
+    assert by_code["filed 0 of 52"]["ts"] == _ts(2.9)
+    # Ordered by instant across spellings: +00:00 at 14:00 before Z at 15:00.
+    order = [e["code"] for e in facts.events]
+    assert order.index("error") < order.index("too_long")
+
+
+# ---------------------------------------------------------------------------
+# A held reply is a shortfall (2026-10-05). The relay held a reply on the output
+# checklist, the agent was never told, and SMD heard nothing either: the only
+# record was a REPLY_HELD row. These pin that the row now pages as ``failed``,
+# that a hold the person was made whole on does not, and that nothing the row
+# carries about the person (address, message id, text) reaches the wire.
+# ---------------------------------------------------------------------------
+
+_SYNTH_ADDRESS = "pat.example@firm.example"
+_SYNTH_MESSAGE = "<msg-held-0001@firm.example>"
+
+
+def _reply_row(led, ts, action_type, *, message_id=_SYNTH_MESSAGE, **meta):
+    led.add(
+        ts,
+        action_type,
+        {
+            "customer": "acme",
+            "reply_channel": True,
+            "recipient": _SYNTH_ADDRESS,
+            "message_id": message_id,
+            "session_id": _PERSON_SESSION,
+            **meta,
+        },
+    )
+
+
+def test_a_held_reply_is_a_failed_shortfall(tmp_path):
+    facts = _shortfalls(
+        tmp_path,
+        lambda led: _reply_row(
+            led, _ts(2), "REPLY_HELD", reason="output_checklist", rules="caps_emphasis"
+        ),
+    )
+    assert facts.count == 1 and facts.failed == 1
+    event = facts.events[0]
+    assert set(event) == SHORTFALL_EVENT_KEYS
+    assert event["class"] == "failed"
+    assert event["code"] == "reply_held:output_checklist"
+    assert event["tool"] == hb.REPLY_RELAY_TOOL
+    assert event["ts"] == _ts(2)
+    assert _ZONED_ISO.match(event["ts"])
+
+    assert event["key"] == "failed:" + hashlib.sha256(b"row0001").hexdigest()[:32]
+
+
+def test_a_reply_hold_never_puts_the_person_on_the_wire(tmp_path):
+    """Address, inbound message id, the checklist's quoted fragment and any body
+    text the row might carry: none of it reaches the payload."""
+    body = "URGENT: the Testclient hearing file needs you"
+
+    def build(led):
+        _reply_row(
+            led,
+            _ts(3),
+            "REPLY_HELD",
+            reason="output_checklist",
+            rules="caps_emphasis",
+            detail="'URGENT'",
+            body=body,
+            draft_to=[_SYNTH_ADDRESS],
+        )
+        _reply_row(led, _ts(2), "REPLY_FAILED", message_id="<m2@firm.example>", reason=body)
+
+    facts = _shortfalls(tmp_path, build)
+    assert [e["code"] for e in facts.events] == [
+        "reply_held:output_checklist",
+        "reply_failed:send_error",
+    ]
+    payload = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        shortfalls=facts.count,
+        shortfalls_last_ts=facts.last_ts,
+        shortfalls_json=facts.events,
+    )
+    wire = json.dumps(payload)
+    for leaked in (_SYNTH_ADDRESS, "firm.example", "msg-held", "m2@", "URGENT", "Testclient"):
+        assert leaked not in wire
+
+
+def test_an_unknown_hold_reason_rides_as_other_not_as_written(tmp_path):
+    facts = _shortfalls(
+        tmp_path,
+        lambda led: _reply_row(led, _ts(1), "REPLY_HELD", reason="something new: with text"),
+    )
+    assert [e["code"] for e in facts.events] == ["reply_held:other"]
+
+
+def test_reply_holds_the_person_was_made_whole_on_are_not_shortfalls(tmp_path):
+    """Queued for automatic release; a duplicate of a reply already sent; a hold
+    the agent redrafted past (a LATER REPLY_SENT for the same inbound)."""
+
+    def build(led):
+        _reply_row(led, _ts(5), "REPLY_HELD", reason="rate_limited", held_for_release=True)
+        _reply_row(led, _ts(4), "REPLY_HELD", reason="duplicate_reply", message_id="<m-dup>")
+        _reply_row(led, _ts(3), "REPLY_HELD", reason="output_checklist", message_id="<m-fix>")
+        led.add(_ts(2.9), "REPLY_SENT", {"in_reply_to": "<m-fix>", "recipient": _SYNTH_ADDRESS})
+
+    assert _shortfalls(tmp_path, build).count == 0
+
+
+def test_a_send_before_the_hold_does_not_clear_it(tmp_path):
+    def build(led):
+        led.add(_ts(4), "REPLY_SENT", {"in_reply_to": _SYNTH_MESSAGE})
+        _reply_row(led, _ts(3), "REPLY_HELD", reason="sender_not_on_roster")
+
+    facts = _shortfalls(tmp_path, build)
+    assert [e["code"] for e in facts.events] == ["reply_held:sender_not_on_roster"]
+
+
+@pytest.mark.parametrize(
+    "smd", ["scott@smd.services", "Smdurgan@SMDurgan.com ", "team@smd.services"]
+)
+def test_a_roster_hold_of_smds_own_address_is_not_a_shortfall(tmp_path, smd):
+    """FALSIFIER (2026-10-15): the Captain wrote to the A&P Operator from his
+    bare smdurgan.com mailbox; the hold was right and no client went unanswered."""
+    facts = _shortfalls(
+        tmp_path,
+        lambda led: _reply_row(
+            led, _ts(2), "REPLY_HELD", reason="sender_not_on_roster", recipient=smd
+        ),
+    )
+    assert facts.count == 0
+
+
+@pytest.mark.parametrize(
+    "other",
+    ["scott@smd.services.example", "someone@notsmd.services", "@smd.services", "x@y@smd.services"],
+)
+def test_a_roster_hold_of_any_other_address_still_pages(tmp_path, other):
+    facts = _shortfalls(
+        tmp_path,
+        lambda led: _reply_row(
+            led, _ts(2), "REPLY_HELD", reason="sender_not_on_roster", recipient=other
+        ),
+    )
+    assert [e["code"] for e in facts.events] == ["reply_held:sender_not_on_roster"]
+
+
+def test_any_other_hold_of_an_smd_address_still_pages(tmp_path):
+    """Only the roster reason is exempt: a reply to SMD that a gate held did not go out."""
+    facts = _shortfalls(
+        tmp_path,
+        lambda led: _reply_row(
+            led, _ts(2), "REPLY_HELD", reason="fabrication:blocked", recipient="scott@smd.services"
+        ),
+    )
+    assert [e["code"] for e in facts.events] == ["reply_held:fabrication:blocked"]
+
+
+def test_reply_failed_codes_are_closed(tmp_path):
+    def build(led):
+        _reply_row(led, _ts(3), "REPLY_FAILED", message_id="<a>", reason="hold_expired")
+        _reply_row(
+            led, _ts(2), "REPLY_FAILED", message_id="<b>", reason="act_line_undelivered: boom"
+        )
+
+    facts = _shortfalls(tmp_path, build)
+    assert [e["code"] for e in facts.events] == [
+        "reply_failed:hold_expired",
+        "reply_failed:act_line_undelivered",
+    ]
+    assert facts.failed == 2
+
+
+# ---------------------------------------------------------------------------
+# A prose error_type gets an informative code (2026-10-05). A Smokeball token
+# mint rejected with HTTP 400 rode as code "error" eight times: the event said
+# something broke and nothing about what. The code is now derived from the
+# prose, in a fixed order, and only the derived token ever leaves the seat.
+# ---------------------------------------------------------------------------
+
+
+def _error_codes(tmp_path, *error_types):
+    def build(led):
+        for i, error_type in enumerate(error_types):
+            _call(
+                led,
+                _ts(len(error_types) - i),
+                "mcp_smokeball_get_matter",
+                "error",
+                session=f"s-err-{i}",
+                error_type=error_type,
+            )
+
+    return [e["code"] for e in _shortfalls(tmp_path, build).events]
+
+
+def test_a_rejected_token_mint_rides_as_its_http_status(tmp_path):
+    assert _error_codes(
+        tmp_path,
+        "token mint (authorization_code) rejected with HTTP 400 at "
+        "https://auth.example.com/oauth2/token",
+    ) == ["http_400"]
+
+
+def test_prose_error_codes_follow_the_fixed_order(tmp_path):
+    assert _error_codes(
+        tmp_path,
+        "upstream returned status 503",
+        "ReadTimeout while fetching the page",
+        "call failed: ConnectionError(peer reset)",
+        "refresh token rejected by the provider",
+        "the request timed out after 30s",
+        "connection refused by the broker",
+        "Refused: something nobody mapped",
+        "ValueError",
+    ) == [
+        "http_503",
+        "ReadTimeout",
+        "ConnectionError",
+        "auth_token_rejected",
+        "timeout",
+        "connection_refused",
+        "error",
+        # Already token-shaped: rides as written, as it always has.
+        "ValueError",
+    ]
+
+
+def test_only_the_derived_token_survives_a_prose_error(tmp_path):
+    """A client's name and a URL in the error never reach the wire."""
+    facts = _shortfalls(
+        tmp_path,
+        lambda led: _call(
+            led,
+            _ts(1),
+            "mcp_smokeball_get_matter",
+            "error",
+            error_type="Testclient Sampleperson matter lookup failed with HTTP 404 at "
+            "https://api.example.com/matters/testclient",
+        ),
+    )
+    assert [e["code"] for e in facts.events] == ["http_404"]
+    wire = json.dumps(facts.events)
+    for leaked in ("Testclient", "Sampleperson", "testclient", "api.example.com", "matters"):
+        assert leaked not in wire
+
+
+# ---------------------------------------------------------------------------
+# Proven delivery (ss-console#3152): the broker's DELIVERY_PROOF_FAILED row is
+# a ``failed`` shortfall. The row is written by a root process with no agent
+# turn, so this count is the only way it pages SMD.
+# ---------------------------------------------------------------------------
+
+_PROOF_JOB_ID = "01JPROOFJOBIDXXXXXXXXXXXXX"
+_PROOF_DETAIL = "unit 3: Testclient Sampleperson draft held, the review found a false date"
+
+
+def _proof_row(led, ts, *, lane="drafting", code="review_held", attempt=1):
+    led.add(
+        ts,
+        "DELIVERY_PROOF_FAILED",
+        {
+            "lane": lane,
+            "job_id": _PROOF_JOB_ID,
+            "attempt": attempt,
+            "code": code,
+            "detail": _PROOF_DETAIL,
+        },
+    )
+
+
+def test_an_unproven_delivery_is_one_failed_shortfall(tmp_path):
+    """FALSIFIER: drop ``_proof_events`` from ``count_shortfalls`` and this
+    count is zero, which is the silence the broker row was written to end."""
+    facts = _shortfalls(tmp_path, lambda led: _proof_row(led, _ts(2)))
+    assert facts.count == 1 and facts.failed == 1
+    event = facts.events[0]
+    assert set(event) == SHORTFALL_EVENT_KEYS
+    assert event["class"] == "failed"
+    assert event["code"] == "proof:review_held"
+    assert event["tool"] == "drafting_job"
+    assert event["routine"] is None
+    assert event["ts"] == _ts(2)
+    assert _ZONED_ISO.match(event["ts"])
+    assert event["key"] == "failed:" + hashlib.sha256(b"row0001").hexdigest()[:32]
+    assert hb._CODE_TOKEN_RE.match(event["code"])
+
+
+def test_an_unproven_delivery_never_puts_the_detail_or_job_on_the_wire(tmp_path):
+    facts = _shortfalls(tmp_path, lambda led: _proof_row(led, _ts(2)))
+    payload = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        shortfalls=facts.count,
+        shortfalls_last_ts=facts.last_ts,
+        shortfalls_json=facts.events,
+    )
+    wire = json.dumps(payload)
+    for leaked in (_PROOF_JOB_ID, "01JPROOF", "Testclient", "Sampleperson", "false date", "unit 3"):
+        assert leaked not in wire
+
+
+def test_unproven_deliveries_outside_the_window_are_not_shortfalls(tmp_path):
+    def build(led):
+        _proof_row(led, _ts(25))
+        _proof_row(led, _ts(-1))
+
+    facts = _shortfalls(tmp_path, build)
+    assert facts.count == 0 and facts.failed == 0
+
+
+def test_an_unknown_proof_code_rides_as_other_not_as_written(tmp_path):
+    facts = _shortfalls(
+        tmp_path,
+        lambda led: _proof_row(led, _ts(1), code="something new: Testclient"),
+    )
+    assert [e["code"] for e in facts.events] == ["proof:other"]
+    assert "Testclient" not in json.dumps(facts.events)
+
+
+def test_every_proof_code_and_lane_rides_as_itself(tmp_path):
+    codes = sorted(hb.DELIVERY_PROOF_CODES)
+    lanes = sorted(hb.DELIVERY_PROOF_LANES)
+
+    def build(led):
+        for n, code in enumerate(codes):
+            _proof_row(led, _ts(10 - n * 0.5), code=code, lane=lanes[n % len(lanes)])
+
+    facts = _shortfalls(tmp_path, build)
+    assert facts.failed == len(codes)
+    assert [e["code"] for e in facts.events] == [f"proof:{c}" for c in codes]
+    assert [e["tool"] for e in facts.events] == [
+        f"{lanes[n % len(lanes)]}_job" for n in range(len(codes))
+    ]
+    for event in facts.events:
+        assert hb._CODE_TOKEN_RE.match(event["code"]), event["code"]
+
+
+def test_an_unknown_lane_rides_as_the_proof_tool(tmp_path):
+    facts = _shortfalls(tmp_path, lambda led: _proof_row(led, _ts(1), lane="Testclient lane"))
+    assert [e["tool"] for e in facts.events] == [hb.PROOF_TOOL]
+
+
+def test_the_proof_vocabulary_matches_the_broker_list():
+    """Pinned to ss-console ``workspace_broker/delivery_proof.py`` CODES / LANES
+    at ss-console#3152 (the six *_held/stage_refused codes at ss-console#3176). A code added there and not here rides as
+    ``proof:other`` (paged, but unnamed); update both together."""
+    assert hb.DELIVERY_PROOF_CODES == {
+        "proof_missing",
+        "readback_unproven",
+        "readback_mismatch",
+        "review_missing",
+        "review_held",
+        "dry_run_reported",
+        "wake_lost",
+        "reply_unproven",
+        "reply_not_in_sent_items",
+        "gate_held",
+        "update_held",
+        "upload_held",
+        "stage_refused",
+        "limit_held",
+        "identity_held",
+    }
+    assert hb.DELIVERY_PROOF_LANES == {
+        "medchron",
+        "demand",
+        "drafting",
+        "litigation",
+        "negotiation",
+        "note",
+    }

@@ -248,15 +248,23 @@ class Builder:
             raise Refusal("the build source guard refused (above); nothing was built")
 
     def pins(self) -> dict[str, str]:
+        """The two shas an image is built from.
+
+        ``overlay_ref`` IS ``ss_console_sha`` since the fold (ADR 0095): the overlay
+        is built from this tree, the Dockerfile bakes the commit as SMD_OVERLAY_REF,
+        and the heartbeat reports it as ``version``. The key keeps its name because
+        ``fleet_releases.overlay_ref`` is the column the smoke's heartbeat check
+        (``smoke.judge_row``) compares against; it records the code sha a seat on
+        this release must echo.
+        """
         dockerfile = (self.repo / "operator/templates/Dockerfile").read_text(encoding="utf-8")
         ss_sha = require_ok(
             self.runner.run(["git", "-C", str(self.repo), "rev-parse", "HEAD"]), "git rev-parse"
         ).stdout.strip()
-        overlay = dockerfile_arg(dockerfile, "OVERLAY_REF") or ""
         hermes = dockerfile_arg(dockerfile, "HERMES_UPSTREAM_SHA") or ""
-        if not (ids.SHA_RE.match(ss_sha) and ids.SHA_RE.match(overlay) and ids.SHA_RE.match(hermes)):
-            raise Refusal(f"could not read 40-hex pins (ss-console {ss_sha!r}, overlay {overlay!r}, hermes {hermes!r})")
-        return {"ss_console_sha": ss_sha, "overlay_ref": overlay, "hermes_sha": hermes}
+        if not (ids.SHA_RE.match(ss_sha) and ids.SHA_RE.match(hermes)):
+            raise Refusal(f"could not read 40-hex pins (ss-console {ss_sha!r}, hermes {hermes!r})")
+        return {"ss_console_sha": ss_sha, "overlay_ref": ss_sha, "hermes_sha": hermes}
 
     def ensure_registry_app(self) -> None:
         if not self.fly.app_exists(ids.FLEET_REGISTRY_APP):
@@ -269,12 +277,12 @@ class Builder:
         self.guard()
         pins = self.pins()
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
-        label = f"rel-{pins['ss_console_sha'][:8]}-{pins['overlay_ref'][:8]}-{stamp}"
+        label = f"rel-{pins['ss_console_sha'][:8]}-{stamp}"
         self.ensure_registry_app()
         toml_path = self.repo / "operator/.rendered/_fleet/fly.toml"
         toml_path.parent.mkdir(parents=True, exist_ok=True)
         toml_path.write_text(BUILD_TOML.format(app=ids.FLEET_REGISTRY_APP), encoding="utf-8")
-        self.log(f"building {label} (remote builder; cached layers make an overlay-only release short)")
+        self.log(f"building {label} (remote builder; cached layers make a code-only release short)")
         res = self.fly.build_push(str(toml_path), label, pins["ss_console_sha"])
         require_ok(res, "fly deploy --build-only --push")
         image_ref = f"{ids.FLEET_REGISTRY}:{label}"
@@ -282,7 +290,7 @@ class Builder:
         if not digest:
             raise ToolingError("could not read the pushed image digest from the build output")
         release = {
-            "release_id": f"img-{stamp}-{pins['ss_console_sha'][:8]}-{pins['overlay_ref'][:8]}",
+            "release_id": f"img-{stamp}-{pins['ss_console_sha'][:8]}",
             "kind": "image", "image_ref": image_ref, "image_digest": ids.digest(digest),
             "ss_console_sha": pins["ss_console_sha"], "overlay_ref": pins["overlay_ref"],
             "volume_forward_compatible": 1 if opts.volume_forward_compatible else 0,

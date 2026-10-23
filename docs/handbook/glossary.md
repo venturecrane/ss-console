@@ -135,7 +135,7 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **Hermes (the substrate).** The third-party agent runtime the Operator is built on: `NousResearch/hermes-agent` (MIT-licensed). The architectural posture is "Hermes is the substrate, trust it" - skills, memory, the tool registry, MCP integration, and approval machinery are native and not reinvented (CLAUDE.md, Operator Architecture; ADR 0015).
 
-**the overlay (hermes-smd-overlay).** SMD's own code that runs on top of Hermes, hosted in a separate repo `venturecrane/hermes-smd-overlay`. It is plugin-only: it MUST NOT modify Hermes core files. We build only what Hermes won't (CLAUDE.md, Operator Architecture; ADR 0015).
+**the overlay (hermes-smd-overlay).** SMD's own code that runs on top of Hermes, at `operator/hermes-smd-overlay/` in this repo and baked into every seat image. Until 2026-10-22 it was the separate repo `venturecrane/hermes-smd-overlay`, pinned by `OVERLAY_REF` (ADR 0095). It is plugin-only: it MUST NOT modify Hermes core files. We build only what Hermes won't (CLAUDE.md, Operator Architecture; ADR 0015).
 
 **customer.yaml.** The per-customer configuration artifact that declares everything about one Operator: skills, entitlements, voice, connectors, personas, memory, schedules. Git is its source of truth, with portal D1 and per-customer R2 as materialized replicas (ADR 0094, which superseded ADR 0012). It is also a security boundary (ADR 0026).
 

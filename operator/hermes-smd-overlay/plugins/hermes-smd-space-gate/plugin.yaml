@@ -1,0 +1,9 @@
+name: hermes-smd-space-gate
+version: "0.2.0"
+description: "Couples role (ADR 0091): on a seat several people share, a call that can write somewhere a person reads (a record store, a message, a calendar invite, a Google doc, an email) is refused when the turn's space cannot be resolved. Writes are otherwise not held: either partner adds to the shared space or changes a setting alone (Captain decision 2026-10-19). Reads stay fenced by space in the tools themselves. Inert on seats that author no people:."
+author: VentureCrane
+requires_env: []
+provides_hooks:
+  - pre_tool_call
+hooks:
+  - pre_tool_call

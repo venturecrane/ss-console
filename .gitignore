@@ -96,3 +96,11 @@ node_modules
 # in the repo referencing it. Ignored so the next unset run leaves a stray file
 # rather than a tracked one.
 /CUSTOMER_DB
+
+# The overlay (operator/hermes-smd-overlay, ADR 0095) leaves these behind when
+# its suite runs locally: the same CUSTOMER_DB hazard as above, sqlite test
+# artifacts, setuptools' build tree from an editable install, and a local venv.
+operator/hermes-smd-overlay/CUSTOMER_DB
+operator/hermes-smd-overlay/*.db
+operator/hermes-smd-overlay/build/
+operator/hermes-smd-overlay/.venv/

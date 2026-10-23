@@ -65,8 +65,6 @@ function git(dir: string, ...args: string[]): void {
   execFileSync('git', ['-C', dir, ...args], { env: cleanEnv(), stdio: 'pipe' })
 }
 
-const PIN = 'a'.repeat(40)
-
 /**
  * A checkout shaped like this repo, far enough for the guard to run: the real
  * script, a Dockerfile carrying a pin, a matching pair manifest, and a customer
@@ -90,11 +88,9 @@ function makeCheckout(): { root: string; script: string } {
     join(REPO_ROOT, 'operator', 'bin', 'lib', 'build-source-guard.sh'),
     join(root, 'operator', 'bin', 'lib', 'build-source-guard.sh')
   )
-  writeFileSync(join(root, 'operator', 'templates', 'Dockerfile'), `ARG OVERLAY_REF="${PIN}"\n`)
-  writeFileSync(
-    join(root, 'operator', 'contracts', 'overlay-pairs.json'),
-    `${JSON.stringify({ overlayRef: PIN, pairs: [] }, null, 2)}\n`
-  )
+  // A Dockerfile exists so the fixture has the shape of a seat source tree; the
+  // guard reads nothing from it since the fold (ADR 0095: no overlay pin).
+  writeFileSync(join(root, 'operator', 'templates', 'Dockerfile'), 'FROM debian:13.4\n')
   writeFileSync(
     join(root, 'operator', 'customers', SLUG, 'customer.yaml'),
     `customer_id: ${SLUG}\n`
@@ -163,11 +159,10 @@ describe('fleet build runs the same guard, executed directly', () => {
 })
 
 describe('provision refuses a build source that is not what you think it is', () => {
-  it('prints the resolved build source and pin on every run', () => {
+  it('prints the resolved build source on every run', () => {
     const { root, script } = checkout()
     const { out } = run(script)
     expect(out).toContain(`Build source: ${root}`)
-    expect(out).toContain(`Overlay pin: ${PIN}`)
   })
 
   it('a clean, current checkout gets PAST the guard', () => {
@@ -228,21 +223,6 @@ describe('provision refuses a build source that is not what you think it is', ()
     expect(out).toContain('behind origin/main')
     expect(out).toContain('1 commit(s)')
     expect(out).not.toContain('R2_ENDPOINT_URL not set')
-  })
-
-  it('refuses an OVERLAY_REF that disagrees with the pair manifest, naming both', () => {
-    const { root, script } = checkout()
-    const other = 'b'.repeat(40)
-    writeFileSync(join(root, 'operator', 'templates', 'Dockerfile'), `ARG OVERLAY_REF="${other}"\n`)
-    git(root, 'add', '-A')
-    git(root, 'commit', '--quiet', '-m', 'drift the pin')
-    git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
-
-    const { out, ok } = run(script)
-    expect(ok).toBe(false)
-    expect(out).toContain('OVERLAY_REF mismatch')
-    expect(out).toContain(other)
-    expect(out).toContain(PIN)
   })
 
   it('SS_ALLOW_DIVERGENT_SOURCE=1 bypasses, and says so loudly', () => {

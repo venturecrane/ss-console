@@ -94,14 +94,14 @@ From the operating model:
 6. Verify: `npx vitest run tests/forbidden-strings.test.ts tests/landing-page.test.ts` and `npm run typecheck`.
 7. Author the vertical skill bodies in `operator/skills/`. Any connector the pack needs is an author-built MCP server in `operator/connectors/<name>/` (ADR 0053); its tools must also be classified in the overlay's `shared/action_classes.py`, which is the overlay hand-off (see `/admin/playbook/connectors-channels`).
 
-## The repo boundary and the hand-off
+## The overlay boundary and the hand-off
 
-Two repos build a pack:
+A pack touches two parts of this repo:
 
-- **ss-console (this repo):** the five artifacts plus the skill bodies - manifest, registry edit, marketing surface plus intake allow-list, vertical spec, N=0 fixtures, delivery SOP notes, the skills in `operator/skills/`, and any author-built connector in `operator/connectors/`.
-- **hermes-smd-overlay:** the action-class classification of any new connector tool (`shared/action_classes.py`), and any new runtime hook a pack genuinely needs. This is the hand-off a pack can trigger, and a predecessor to a live customer (not to authoring the pack or its marketing).
+- **The pack itself:** the five artifacts plus the skill bodies - manifest, registry edit, marketing surface plus intake allow-list, vertical spec, N=0 fixtures, delivery SOP notes, the skills in `operator/skills/`, and any author-built connector in `operator/connectors/`.
+- **The overlay (`operator/hermes-smd-overlay/`):** the action-class classification of any new connector tool (`shared/action_classes.py`), and any new runtime hook a pack genuinely needs. This is the hand-off a pack can trigger, and a predecessor to a live customer (not to authoring the pack or its marketing).
 
-Each pack is handed to an agent team with the target-landscape entry, the spec template, the Law pack as the worked reference, and the hand-off prompt. The team returns one ss-console PR, plus an overlay PR when the pack adds connector tools.
+Each pack is handed to an agent team with the target-landscape entry, the spec template, the Law pack as the worked reference, and the hand-off prompt. The team returns one PR. Until 2026-10-22 the overlay was a separate repo and a pack that added connector tools needed a second PR there; ADR 0095 folded it into this repo.
 
 **The collision warning is real:** parallel teams must not edit the shared files (`src/lib/booking/config.ts`, `src/lib/operator/customer-yaml/types.ts`, `tests/landing-page.test.ts`) at the same time, or they collide. Serialize those edits or assign one integrator. See [Operating Model & the Fleet](/admin/playbook/operating-model) for how the fleet coordinates parallel work.
 

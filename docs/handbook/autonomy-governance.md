@@ -15,9 +15,9 @@ sources:
   - label: ADR 0073 - Remove the law-firm external-send floor
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0073-remove-law-external-send-floor.md
   - label: Action-class vocabulary (overlay)
-    href: https://github.com/venturecrane/hermes-smd-overlay/blob/main/shared/action_classes.py
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/hermes-smd-overlay/shared/action_classes.py
   - label: Trust gate (overlay)
-    href: https://github.com/venturecrane/hermes-smd-overlay/blob/main/plugins/hermes-smd-trust/enforce.py
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py
   - label: ADR 0093 - Seat policy profiles
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0093-seat-policy-profiles.md
   - label: ADR 0037 - The Operator Thesis

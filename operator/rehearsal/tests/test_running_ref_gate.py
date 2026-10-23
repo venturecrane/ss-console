@@ -78,7 +78,7 @@ def test_a_rig_on_a_different_ref_is_refused_and_nothing_is_driven(tmp_path, mon
     err = capsys.readouterr().err
     assert "REFUSED" in err
     assert STALE[:12] in err and CANDIDATE in err
-    assert f"reprovision {RIG}" in err
+    assert f"--only {RIG}" in err, "the refusal names the release command that fixes it"
 
 
 def test_an_unreadable_seam_is_refused_rather_than_assumed_current(tmp_path, monkeypatch, capsys) -> None:

@@ -1,0 +1,38 @@
+name: hermes-smd-reply
+version: "1.0.0"
+description: "Operator reply channel: sends the agent's GOVERNED draft back to the verified inbound sender when that sender is on the organization roster (scope.inbound_allow_from), recipient-locked, re-checking the content + fabrication floors. Defeats no agent floor (ADR 0055)."
+author: VentureCrane
+requires_env:
+  # ss#2258: AGENTMAIL_API_KEY is NO LONGER declared here. The AgentMail reply
+  # is a broker verb, so this plugin holds no credential that can transmit — the
+  # broker socket is the dependency instead. SMD_CUSTOMER_SLUG /
+  # SMD_D1_AUDIT_BINDING carry the reply-channel audit rows (observability; the
+  # relay still sends without them, and the broker writes the transmit row).
+  - SMD_WORKSPACE_BROKER_SOCKET
+  - SMD_CUSTOMER_SLUG
+  - SMD_D1_AUDIT_BINDING
+provides_hooks:
+  # The verified reply binding (binding.py): notes a job's completion wake so
+  # only it, or a scheduled turn, may bind a reply. Observes; injects nothing.
+  - pre_llm_call
+  # A demand job's wake may call no send tool: the bound reply is its only channel.
+  - pre_tool_call
+  - post_tool_call
+  # ss-console#2367: a held reply is reported to the agent on the draft tool's
+  # own result, in the same turn. post_tool_call returns are ignored by the
+  # firing site, so the hold was invisible to the model until this attachment.
+  - transform_tool_result
+  # An act line the model proposed and never sent is delivered by the seat at
+  # the end of the turn (act_delivery.py): post_llm_call for a completed turn,
+  # on_session_end for any turn. post_llm_call also delivers a rostered sender's
+  # reply the model wrote as final text and never drafted (text_delivery.py),
+  # through the trust gate and this plugin's own relay decision.
+  - post_llm_call
+  - on_session_end
+hooks:
+  - pre_llm_call
+  - pre_tool_call
+  - post_tool_call
+  - transform_tool_result
+  - post_llm_call
+  - on_session_end

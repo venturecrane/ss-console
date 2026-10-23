@@ -35,7 +35,6 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 AFTER="${AFTER_SHA:?AFTER_SHA required}"
 BEFORE="${BEFORE_SHA:-}"
 R2_BUCKET_CONFIG="${R2_BUCKET_CONFIG:-smd-customer-config}"
-OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 
 [[ "$AFTER" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::AFTER_SHA must be a 40-hex commit"; exit 1; }
 
@@ -69,14 +68,14 @@ r2() {
     aws "$@" --endpoint-url "${R2_ENDPOINT_URL}"
 }
 
-# ---------- the overlay's tool map at the pinned ref (data, not code) ----------
+# ---------- the overlay's tool map at the commit being published (data, not code) ----------
+# The overlay is operator/hermes-smd-overlay in this tree (ADR 0095), so the map
+# a skills release is checked against is the one at AFTER_SHA, read from git so a
+# dirty checkout cannot substitute its own.
 ACTION_CLASSES="${OVERLAY_ACTION_CLASSES_FILE:-}"
 if [[ -z "$ACTION_CLASSES" ]]; then
-  pin="$(sed -n 's/^ARG OVERLAY_REF="\([0-9a-f]\{40\}\)".*/\1/p' "${REPO_ROOT}/operator/templates/Dockerfile" | head -1)"
-  [[ -n "$pin" ]] || { echo "::error::no 40-hex ARG OVERLAY_REF in the Dockerfile"; exit 1; }
-  git init -q "${work}/overlay"
-  git -C "${work}/overlay" fetch -q --depth 1 "$OVERLAY_REPO" "$pin"
-  git -C "${work}/overlay" show "FETCH_HEAD:shared/action_classes.py" > "${work}/action_classes.py"
+  git -C "$REPO_ROOT" show "${AFTER}:operator/hermes-smd-overlay/shared/action_classes.py" > "${work}/action_classes.py" \
+    || { echo "::error::operator/hermes-smd-overlay/shared/action_classes.py is not in ${AFTER}"; exit 1; }
   ACTION_CLASSES="${work}/action_classes.py"
 fi
 

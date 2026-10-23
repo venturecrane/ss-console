@@ -88,11 +88,6 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/sync-primary.sh\"",
             "timeout": 45
-          },
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/sync-overlay-checkout.sh\"",
-            "timeout": 45
           }
         ]
       },

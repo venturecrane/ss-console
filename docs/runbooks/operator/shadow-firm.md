@@ -9,10 +9,16 @@ Related: `operator/bin/rehearse-card.py` (ungraded rehearsal), `operator/bin/sea
 A suite that plays the client hostile against a rig seat, replaying every
 incident class this venture has actually had, and scores each scenario from
 artifacts the seat produced rather than from how its answers read. It emits a run
-id, and an `OVERLAY_REF` bump cites that id as the proof of its runtime AC. The
-run happens after the rig has been reprovisioned onto the candidate ref, because
-that is the only point at which a rig is running it: see [Release gate:
-OVERLAY_REF bumps](#release-gate-overlay_ref-bumps) below for the whole order.
+id, and a runtime change cites that id as the proof of its runtime AC. The
+run happens after the rig has been released onto the candidate, because that is
+the only point at which a rig is running it: see [Release gate: runtime
+changes](#release-gate-runtime-changes) below for the whole order.
+
+Since ADR 0095 (2026-10-22) the overlay is built from `operator/hermes-smd-overlay/`
+in this repo, so the "overlay ref" a seat reports, and the `--overlay-ref` this
+runner checks, is the ss-console commit the seat's image was built from. Before
+the fold it was a commit of the separate `venturecrane/hermes-smd-overlay` repo,
+pinned by `OVERLAY_REF`; run ids from that period carry those refs.
 
 `rehearse-card.py` deliberately does not grade, and that is still right: it
 replays a script whose replies are prose, and prose graded by the same agent that
@@ -58,8 +64,8 @@ into a seat with no further confirmation. That happened once during development,
 inside a minute, on an invocation meant as a dry run.
 
 **The rig must already be running the candidate.** With `--drive` the runner
-reads the rig's RUNNING overlay ref off the same runtime-read seam
-`operator/bin/overlay-ref-drift.py` uses, and refuses unless it equals the ref
+reads the rig's RUNNING overlay ref off the runtime-read seam, and refuses
+unless it equals the ref
 this run would certify. A ref it cannot read (unreachable Machine, no seam
 configured, a snapshot carrying no ref) refuses too, because "cannot evaluate"
 must not read as "permitted". Before ss#2531 the candidate was a string the
@@ -68,8 +74,9 @@ runner was handed and stamped into the run id without checking, so an id reading
 release. That is why the gate sits before the first probe rather than in the
 report.
 
-Useful flags: `--only <id>[,<id>]`, `--overlay-ref <ref>` (defaults to the ref
-pinned in `operator/templates/Dockerfile`), `--inject <fault>` to declare a fault
+Useful flags: `--only <id>[,<id>]`, `--overlay-ref <ref>` (the ss-console
+commit the candidate release was built from; defaults to this checkout's HEAD,
+which is that commit when you run from the merged tree), `--inject <fault>` to declare a fault
 you have already put in place on the rig, `--out <dir>` (default
 `.stitch/shadow-firm/`).
 
@@ -116,19 +123,21 @@ proves nothing about the wiring: a seat with the capability switched off passes
 that test. `cross-matter-bait` and `unauthored-sender-refusal` are both pairs for
 this reason, and both fail if the control leg does not go through.
 
-## Release gate: OVERLAY_REF bumps
+## Release gate: runtime changes
 
-**The gate is post-reprovision.** A rig runs a candidate overlay ref only after
-someone reprovisions it onto that ref, so a green run "on the candidate" cannot
-exist before the bump merges. The runbook used to ask for one anyway, and three
+**The gate is post-release.** A rig runs a candidate only after someone releases
+it onto that rig, so a green run "on the candidate" cannot exist before the
+change merges. The runbook used to ask for one anyway, and three overlay pin
 bumps in a row (#2518, #2525, #2531) cited no id at all. The order below is the
 one that can actually be followed:
 
-1. **Cut the overlay release.** Land the change in `venturecrane/hermes-smd-overlay`
-   and take the commit to pin.
-2. **Bump `ARG OVERLAY_REF`** in `operator/templates/Dockerfile`. The PR names its
-   tracking issue and carries an acceptance criterion tagged `(runtime)`: a green
-   shadow-firm run on the rig at this ref.
+1. **Merge the change.** Since ADR 0095 a runtime change, overlay included, is
+   one ordinary ss-console PR; there is no separate overlay release and no pin
+   to bump. The PR names its tracking issue and carries an acceptance criterion
+   tagged `(runtime)`: a green shadow-firm run on the rig at the ss-console
+   commit it merged as.
+2. **Build the release** from that commit (step 3 builds it). The candidate ref
+   for the run is the ss-console commit the release was built from.
 3. **Release onto the rig only**, before any client seat: build the image once
    (`operator/bin/fleet build`), then `operator/bin/fleet release <release-id>
 --only pilot-smokeball`. Seats have run the shared fleet image since the fleet
@@ -143,20 +152,21 @@ one that can actually be followed:
    ```
 
 5. **Cite the run id**, with the report's evidence table, on the tracking issue
-   (or as a comment on the merged bump PR). That citation is the `(runtime)` AC's
+   (or as a comment on the merged PR). That citation is the `(runtime)` AC's
    proof. `.stitch/shadow-firm/` is gitignored, so the report is not committed;
    the digest is recomputable from the pasted body, which is what makes the
    citation auditable.
 6. **Only then release to the rings:** `operator/bin/fleet release <release-id>`.
 
 `/admin/playbook/deployment-release` (Path B) is the same order from the deploy
-side, and is the page someone performing a bump is actually reading.
+side, and is the page someone performing a release is actually reading.
 
-A bump that has no green run id once the rig has been released is drift, not
-a completed release. `operator/bin/overlay-ref-drift.py` reads every Machine's
-running ref off the live seam and reports which seats are behind the pin, so
-"which seats did this bump actually reach" is a surfaced fact rather than
-something to remember.
+A runtime change that has no green run id once the rig has been released is
+drift, not a completed release. `operator/bin/fleet status` shows the release
+and overlay ref every seat reports, with drift against the newest completed
+release, so "which seats did this change actually reach" is a surfaced fact
+rather than something to remember. (`operator/bin/overlay-ref-drift.py` did
+this before the fold and was removed with it, ADR 0095.)
 
 The run id is a digest over the seat, the candidate ref, and every scenario's
 outcome, and it ends in `-green` or `-notgreen`. Citing a green id for a red run

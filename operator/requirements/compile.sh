@@ -92,15 +92,16 @@ compile medchron.txt operator/runners/medchron/pyproject.toml
 # belongs to Hermes' lock, and pinning it here would let this file move a
 # Hermes package the Hermes lock did not choose.
 #
-# When to re-run: the overlay's pyproject gains or changes a dependency
-# (verify-overlay-pairs.py fails in substrate when a declared dependency has
-# neither a pin here nor a place in the Hermes set), or HERMES_UPSTREAM_SHA
-# moves. An OVERLAY_REF move alone needs nothing.
+# When to re-run: operator/hermes-smd-overlay/pyproject.toml gains or changes a
+# dependency, or HERMES_UPSTREAM_SHA moves. The `overlay` job in
+# .github/workflows/operator-substrate.yml runs this and fails on a diff, so a
+# dependency change cannot merge without its pins (the image's `uv pip check`
+# is the backstop behind that).
 DOCKERFILE="operator/templates/Dockerfile"
-overlay_ref="$(sed -n 's/^ARG OVERLAY_REF="\([0-9a-f]\{40\}\)"$/\1/p' "${DOCKERFILE}")"
+OVERLAY_PYPROJECT="operator/hermes-smd-overlay/pyproject.toml"
 hermes_sha="$(sed -n 's/^ARG HERMES_UPSTREAM_SHA=\([0-9a-f]\{40\}\)$/\1/p' "${DOCKERFILE}")"
-[ -n "${overlay_ref}" ] || { echo "compile.sh: no OVERLAY_REF in ${DOCKERFILE}" >&2; exit 1; }
 [ -n "${hermes_sha}" ] || { echo "compile.sh: no HERMES_UPSTREAM_SHA in ${DOCKERFILE}" >&2; exit 1; }
+[ -f "${OVERLAY_PYPROJECT}" ] || { echo "compile.sh: no ${OVERLAY_PYPROJECT}" >&2; exit 1; }
 
 work="$(mktemp -d)"
 trap 'rm -f "${overrides}"; rm -rf "${work}"' EXIT
@@ -109,8 +110,9 @@ curl -fsSL -o "${work}/hermes/pyproject.toml" \
   "https://raw.githubusercontent.com/NousResearch/hermes-agent/${hermes_sha}/pyproject.toml"
 curl -fsSL -o "${work}/hermes/uv.lock" \
   "https://raw.githubusercontent.com/NousResearch/hermes-agent/${hermes_sha}/uv.lock"
-curl -fsSL -o "${work}/overlay/pyproject.toml" \
-  "https://raw.githubusercontent.com/venturecrane/hermes-smd-overlay/${overlay_ref}/pyproject.toml"
+# The overlay's pyproject from this tree (ADR 0095), copied so the "# via"
+# annotation keeps reading overlay/pyproject.toml whoever runs this.
+cp "${OVERLAY_PYPROJECT}" "${work}/overlay/pyproject.toml"
 
 # The extras here are the Dockerfile's `uv sync --frozen --no-install-project`
 # extras; tests/operator-dockerfile.test.ts holds the two lists equal.

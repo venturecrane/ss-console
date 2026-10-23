@@ -4,8 +4,8 @@
  *
  * Before this, the set of Operator seats was enumerated by hand in several
  * places with different rules: the Fly app registry, the release rings, the
- * obligation register's rollup, overlay-ref-drift (which excluded only
- * `_template`, so it counted the other two scaffolds as seats), and the CI
+ * obligation register's rollup, the since-removed overlay-ref-drift (which
+ * excluded only `_template`, so it counted the other two scaffolds as seats), and the CI
  * projection scripts (one of which had no tombstone case). This file holds the
  * three guarantees that make "one inventory" true rather than aspirational:
  *

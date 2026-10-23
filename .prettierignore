@@ -37,19 +37,23 @@ docs/handbook/
 # work. The branch that owns the source is responsible for formatting it,
 # not whichever branch happens to have a worktree on disk right now.
 .worktrees/
-# Generated cross-repo fixture. Its bytes are COPIED verbatim into
-# hermes-smd-overlay tests/contract/seat_gate_binding_snapshot.json, so the
+# Generated fixture the overlay suite reads in place
+# (operator/hermes-smd-overlay/tests/test_voice_gate_binding_coverage.py). The
 # emitter (tests/gate-coverage-snapshot.test.ts, JSON.stringify with 2-space
-# indent) owns the formatting, not prettier. Prettier collapses the short
-# excluded_template_dirs array onto one line; the overlay's merged fixture has
-# it expanded, and a formatter rewriting a generated file makes the drift test
-# permanently red. The sibling gate-coverage-snapshot.json is NOT exempt — it
-# has no short arrays, so the two formatters already agree on it.
+# indent) owns the formatting, not prettier: prettier collapses the short
+# excluded_template_dirs array onto one line and a formatter rewriting a
+# generated file makes the drift test permanently red. The sibling
+# gate-coverage-snapshot.json is NOT exempt — it has no short arrays, so the two
+# formatters already agree on it.
 operator/contracts/gate-coverage-snapshot.overlay.json
 # Same reason for the policy-inputs fixture (tests/policy-matrix.test.ts, ADR
-# 0093): copied verbatim to the overlay tests/contract/policy_inputs.json, and
-# its provenance_sources list is short enough for prettier to collapse.
+# 0093), read in place by the overlay's test_policy_matrix.py; its
+# provenance_sources list is short enough for prettier to collapse.
 operator/contracts/policy-inputs.overlay.json
+# The Operator seat runtime (ADR 0095). Python project with its own formatter
+# (ruff, configured in its pyproject.toml); its markdown, JSON and YAML are
+# package data and fixtures the runtime and its tests read byte-for-byte.
+operator/hermes-smd-overlay/
 .stitch/shadow-firm/
 # Generated Settlement Closeout proving data (ss #2455). render_seed.py emits
 # both the keying sheet a person works from and the canned layout payloads the

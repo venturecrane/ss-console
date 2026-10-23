@@ -1,0 +1,235 @@
+# Hermes Plugin Hook Surface
+
+**Pinned ref:** `NousResearch/hermes-agent` at tag `v2026.5.16` (commit `a91a57fa5a13d516c38b07a141a9ce8a3daabeb0`)
+**License:** MIT
+**Verified:** 2026-05-24
+
+This document captures the exact upstream surface that the `hermes-smd-overlay` plugins attach to. The six hooks detailed below (`pre_tool_call`, `post_tool_call`, `pre_llm_call`, `post_llm_call`, `on_session_end`, plus `pre_gateway_dispatch` and `transform_tool_result` / `subagent_stop` cited in the appendix) carry file:line citations at the pinned ref. The **appendix table is the authoritative used/unused contract** — `tests/test_hook_parity.py` asserts, on the live fan-out, that every hook marked "Used by overlay? yes" is registered by some plugin and that no registered hook is marked "no" (the SEC-33 spec↔code drift guard). Re-verify at every Hermes rebase by re-running the citation grep and the `hermes-smd-hook-probe` smoke plugin.
+
+## Registration API
+
+Plugins are Python packages under `~/.hermes/plugins/<name>/` with a `plugin.yaml` manifest and an `__init__.py` that exposes a single entry point:
+
+```python
+def register(ctx) -> None:
+    ctx.register_hook("pre_tool_call", on_pre_tool_call)
+    ctx.register_hook("post_tool_call", on_post_tool_call)
+    # ...
+```
+
+The `ctx` object is a `PluginContext` instance (`hermes_cli/plugins.py:287`). Its `register_hook(name, callback)` method (`hermes_cli/plugins.py:669`) appends the callback to the manager's internal hook list. Unknown hook names log a warning but are still stored — forward-compatible plugins do not break.
+
+The canonical list of valid hook names lives at `hermes_cli/plugins.py:128-168` (`VALID_HOOKS` set). The six hooks the overlay depends on are all members.
+
+The dispatcher is `PluginManager.invoke_hook(name, **kwargs)` at `hermes_cli/plugins.py:1264`. Each callback is wrapped in its own try/except — a misbehaving plugin cannot break the agent loop (`hermes_cli/plugins.py:1287-1297`). Non-`None` return values are collected and returned to the firing site; per-hook semantics determine how the list is interpreted.
+
+Plugin manifest schema (verified against `plugins/observability/langfuse/plugin.yaml`):
+
+```yaml
+name: <plugin-name>
+version: "<semver>"
+description: "<one-line>"
+author: <author>
+requires_env:
+  - <ENV_VAR>          # gates loading
+hooks:
+  - pre_tool_call      # advertised hook list (PluginManifest.provides_hooks)
+  - post_tool_call
+```
+
+## Hook citations
+
+### 1. `pre_tool_call`
+
+**Purpose (overlay):** trust-ceiling enforcement (`hermes-smd-trust`). Blocks a tool before execution by returning `{"action": "block", "message": "<reason>"}`.
+
+**Second evaluation in the same callback (ADR 0028 — outbound provenance gate).** `hermes-smd-trust.on_pre_tool_call` runs a SECOND check after the trust-ceiling check passes, only for body-bearing draft-creating tools (`email_create_draft`, `email_update_draft`, `sms_create_draft`, `practice_management_create_note`, and the body-optional calendar/task/matter drafts — see `plugins/hermes-smd-trust/outbound.py`). It scans the draft body for banned fabrication markers (Tier-1, universal) and fabricated legal citations (Tier-2, law/indeterminate vertical) and returns the same block-directive shape if a marker or citation is found. This is NOT a new hook — `pre_tool_call` is the only hook that can block via return value, and send tools are permanently banned by the ceiling layer, so "drafted OR sent" reduces to "drafted." On block it emits a `FABRICATION_FILTER_TRIGGERED` audit row (marker ids / citation labels only — never the body). Fail-closed: an unresolvable body on a body-required tool, an unloadable marker registry, or a raising citation filter all BLOCK.
+
+**Firing site:** `hermes_cli/plugins.py:1419-1426` (inside `get_pre_tool_call_block_message`, declared at line 1396). The helper is called once per tool execution from `model_tools.py:778`.
+
+**Single-fire contract:** The helper is the only production path. `model_tools.py:763-789` documents the contract: "pre_tool_call fires exactly once per tool execution"; callers that already fired it pass `skip_pre_tool_call_hook=True` to avoid double-firing.
+
+**Kwargs:**
+
+| kwarg | type | source |
+|---|---|---|
+| `tool_name` | `str` | function being dispatched |
+| `args` | `dict` | tool arguments (`{}` if non-dict) |
+| `task_id` | `str` | per-task identifier (`""` when absent) |
+| `session_id` | `str` | per-session identifier |
+| `tool_call_id` | `str` | per-call identifier |
+
+**Return-value semantics:** First callback returning `{"action": "block", "message": "<non-empty str>"}` wins; the tool short-circuits with a JSON error. Other return shapes are ignored — observer plugins remain safe. (`hermes_cli/plugins.py:1428-1437`)
+
+### 2. `post_tool_call`
+
+**Purpose (overlay):** audit emission (`hermes-smd-audit` — one D1 row per tool invocation with duration) AND establishment read capture (`hermes-smd-establishment` — holds the raw text of every connector document read so `establish_stage_document` stages the bytes the connector returned rather than bytes the model retyped, ss#2247; `shared/read_capture.py`). The capture depends on the ordering invariant below: firing before `transform_tool_result` is what makes the held text the RAW connector output rather than the nonce-fenced wrap the model sees.
+
+**Firing site:** `model_tools.py:826-836`.
+
+**Ordering invariant:** Fires after `registry.dispatch()` returns. Always fires regardless of result (success or error). **The order relative to `transform_tool_result` is NOT an invariant.** On the agent executor's path at the pinned Hermes, the inner post hook is suppressed (`agent/tool_executor.py` ~1535) and the executor fires its own terminal `post_tool_call` AFTER `handle_function_call` has already run `transform_tool_result` (`model_tools.py` ~944-945). A plugin that records something in this hook for `transform_tool_result` to deliver will miss on that path; `hermes-smd-reply` did, and a held reply's notice never reached the agent (2026-10-05). Write order-independent code: `hermes-smd-establishment` unwraps either shape, and `hermes-smd-reply` decides in whichever hook reaches the call first (`relay.DecidedOnce`).
+
+**Kwargs:**
+
+| kwarg | type | source |
+|---|---|---|
+| `tool_name` | `str` | function dispatched |
+| `args` | `dict` | tool arguments |
+| `result` | `str` | tool output (usually JSON) |
+| `task_id` | `str` | task identifier |
+| `session_id` | `str` | session identifier |
+| `tool_call_id` | `str` | call identifier |
+| `duration_ms` | `int` | `time.monotonic()` delta in milliseconds (`model_tools.py:823`) |
+| `turn_id` | `str` | turn identifier |
+| `api_request_id` | `str` | provider request identifier |
+| `status` | `str` | dispatch outcome (`model_tools.py:895`) |
+| `error_type` | `str \| None` | failure classification, `None` on success (`model_tools.py:896`) |
+
+**Outcome kwargs are load-bearing, not telemetry.** Because this hook fires regardless of result, a plugin that acts on `tool_name` alone acts on tool calls that FAILED. That is how the reply channel emailed a client from a `create_draft` which returned "Message not found (HTTP 404)", then emailed again when the agent retried (vfy_01KYTG0B88R3B5K0D7FKPACRZT). `hermes-smd-reply` now reads `status` / `error_type` / `result` via `relay.draft_call_failed`. `status` and `error_type` are NOT in the upstream published callback signature (which documents only `tool_name`, `args`, `result`, `task_id`, `duration_ms`) — they are real at the pinned firing site, so treat them as pin-verified and re-check them at every Hermes rebase. Detection is positive-only for exactly this reason: an envelope change degrades to the old behaviour rather than silencing the channel.
+
+**Return-value semantics:** Observer only. Returns are collected but not interpreted by the firing site.
+
+**Observer-only is load-bearing, and it cost a delivery.** Anything this hook decides is invisible to the model unless some other seam carries it. `hermes-smd-reply` makes its send/hold decision here, wrote `REPLY_HELD` to D1 and Sentry, and returned `None` — so on 2026-08-13 the Operator filed a demand letter on 2026-PI-104, had its reply held on a Tier-1 marker, and the turn ended 23 seconds later with the model believing `create_draft -> ok` (ss-console#2367). The authored redraft-once recovery in `demand-letter-drafter/SKILL.md` could not fire against a signal that never arrived. The fix is `transform_tool_result` (hook #5 in the appendix), which fires for the same `tool_call_id` and CAN replace the result. It is not ordered after this hook (see the ordering note above), so the reply relay makes its decision in whichever of the two fires first and never twice.
+
+### 3. `pre_llm_call`
+
+**Purpose (overlay):** voice-sample injection (`hermes-smd-voice` — adds per-customer voice samples to the user message before the model sees it) AND untrusted-inbound quarantine (`hermes-smd-inbound`, ADR 0027 — drains the per-session pending inbound register and injects each item wrapped in a nonce-fenced quarantine block). Both are observers that contribute injected context; returns are merged (no "first wins"), so the two plugins coexist on this hook. This is the SINGLE chokepoint for inbound quarantine — it also fires for skill-triggered LLM calls, so no per-skill duplication is needed.
+
+**Firing site:** `run_agent.py:12447-12457`.
+
+**Ordering invariant:** Fires once per turn, before the model API request. Context returned from plugins is injected into the user message, **not** the system prompt — this preserves prompt-cache prefix stability across turns (`hermes_cli/plugins.py:1278-1282`). All injected context is ephemeral and is not persisted to the session DB.
+
+**Kwargs:**
+
+| kwarg | type | source |
+|---|---|---|
+| `session_id` | `str` | session identifier |
+| `user_message` | `str` | the user's input for this turn |
+| `conversation_history` | `list` | full message list (shallow copy) |
+| `is_first_turn` | `bool` | `True` when there is no prior history |
+| `model` | `str` | model identifier |
+| `platform` | `str` | `cli`, `tui`, gateway adapter, etc. |
+| `sender_id` | `str` | user identifier (`""` when unavailable) |
+
+**Return-value semantics:** Each callback may return `{"context": "<text>"}` or a plain string. Non-empty strings are joined with `\n\n` and injected into the user message (`run_agent.py:12458-12465`). All return values are merged (no "first wins" — every plugin contributes).
+
+### 4. `post_llm_call`
+
+**Purpose (overlay):** audit emission for the LLM call (`hermes-smd-audit` — per-turn LLM cost/timing row).
+
+**Firing site:** `run_agent.py:15901-15910`.
+
+**Ordering invariant:** Fires once per turn, after the tool-calling loop completes (`run_agent.py:15895-15898`). Only fires when `final_response` is non-empty AND the turn was not interrupted (`run_agent.py:15899`). Interrupted turns do not fire `post_llm_call`.
+
+**Kwargs:**
+
+| kwarg | type | source |
+|---|---|---|
+| `session_id` | `str` | session identifier |
+| `user_message` | `str` | the turn's original user input |
+| `assistant_response` | `str` | final response text |
+| `conversation_history` | `list` | full message list |
+| `model` | `str` | model identifier |
+| `platform` | `str` | platform string |
+
+**Return-value semantics:** Observer only. Returns collected but not interpreted.
+
+### 5. `on_session_end`
+
+**Purpose (overlay):** Honcho conclusion mirror trigger (`hermes-smd-memory-mirror` — poll Honcho for new conclusions and write them to per-customer D1 with provenance).
+
+**Primary firing site:** `run_agent.py:16016-16024`.
+
+**Safety-net firing site:** `cli.py:13831-13839` — only fires when an interrupted exit occurs while the agent is mid-turn (i.e., `run_conversation()`'s hook didn't fire because the turn was incomplete). `cli.py:13826-13828` documents the rule: "run_conversation() already fires this per-turn on normal completion".
+
+**Firing cadence:** **Per-turn, not per-conversation.** `on_session_end` fires at the end of every `run_conversation()` call, which is once per agent turn — not once per chat session. The overlay's memory-mirror plugin runs on every turn; this is the correct cadence given Honcho's `writeFrequency: session` (per ADR 0016) which produces new conclusions at the per-turn boundary.
+
+**Abnormal-exit risk:** Neither firing site handles `kill -9`, container OOM, or unhandled SIGSEGV. The plan §6 calls for a "periodic backup poller for sessions that end abnormally" — this risk justifies that work; the hook alone is not sufficient.
+
+**Kwargs (primary site):**
+
+| kwarg | type | source |
+|---|---|---|
+| `session_id` | `str` | session identifier |
+| `completed` | `bool` | whether the turn finished cleanly |
+| `interrupted` | `bool` | whether the turn was interrupted |
+| `model` | `str` | model identifier |
+| `platform` | `str` | platform string |
+
+**Kwargs (safety-net site):** same shape; `completed=False`, `interrupted=True` always.
+
+**Return-value semantics:** Observer only.
+
+### 6. `pre_gateway_dispatch`
+
+**Purpose (overlay):** webhook routing + inbound envelope attach (`hermes-smd-webhook-router`, ADR 0021 Stream E / ADR 0027), and — for a verified sender on the authored `scope.admins` list — the SENDER STATUS work-request paragraph inserted into the dispatched turn prompt (ss-console#2416; roster membership authorizes a reply, never the direction of the firm's work, so it is NOT the gate). Also the calendar's inbound parts (`hermes-smd-calendar`, ss-console#3264): an email that is only a METHOD:REPLY (a person's Accept/Decline) is recorded and returns `skip`, so no turn wakes. Every callback runs before the results are read (`gateway/run_inbound.py` at the pinned ref), so the calendar plugin registers ahead of the router and marks the message consumed (`shared/calendar_inbox.py`) for the router to leave alone.
+
+**Firing site:** `gateway/run.py:5796-5814` (inside `handle_message`, BEFORE authorization so plugins can handle unauthorized senders). Kwargs: `event` (a `MessageEvent`), `gateway`, `session_store`. There is no `payload` / `headers` / `raw_body` kwarg; the parsed webhook body lives at `event.raw_message`, and the rendered route prompt lives at `event.text` (`gateway/platforms/webhook.py:409-413` renders it, `:553-559` builds the `MessageEvent`).
+
+**Return-value semantics (`gateway/run.py:5816-5835`):** results are iterated in registration order; non-dict results are skipped.
+
+| `action` | effect |
+|---|---|
+| `skip` | drop the dispatch entirely (no reply) |
+| `rewrite` | `event = dataclasses.replace(event, text=result["text"])`, then stop iterating |
+| `allow` | stop iterating, normal dispatch |
+| anything else (incl. the overlay's `route_to_skill`) | ignored at this site |
+
+**The user message IS mutable here, two ways.** `MessageEvent` is a plain (non-frozen) dataclass at the pinned ref (`gateway/platforms/base.py:915`), and core itself reassigns `event.text` mid-dispatch (`gateway/run.py:6439`, `:6504`), so a plugin may edit `event.text` in place and keep returning its own directive shape; the `rewrite` action is the declared alternative. This is the ONLY seam that can change the primary user message of a webhook turn: `pre_llm_call` can only APPEND injected context to it (hook #3 above), which is why the ss#2416 verified-sender framing lives here rather than in the quarantine wrap alone. `route_to_skill` is not consumed by core at the pinned ref — the webhook route's own `skills:` list does the skill loading (`gateway/platforms/webhook.py:415-442`).
+
+## Findings — no plan branches required
+
+All six hooks the overlay design depends on exist in upstream Hermes at the pinned ref. No hook is missing; no hook is misordered relative to the overlay's needs.
+
+- The single-fire contract on `pre_tool_call` is documented (`model_tools.py:763-789`) — the overlay's trust-ceiling enforcement runs once per tool execution.
+- The post-tool seam (`post_tool_call`) is the correct location for audit emission.
+- `pre_llm_call` writes into the user message (not the system prompt) — preserves prompt-cache stability.
+- `post_llm_call` only fires on completed, non-interrupted turns. Interrupted turns will need to be captured by an alternative signal (e.g., `on_session_end` with `completed=False, interrupted=True`); the audit plugin can compensate.
+- `on_session_end` fires per-turn, not per-conversation. The memory-mirror plugin's mirror cadence aligns naturally (Honcho's `writeFrequency: session` produces new conclusions at the same per-turn boundary).
+
+The plan's three branch conditions ((a) revise plugin design, (b) propose upstream contribution, (c) accept degraded feature) are **not triggered**. Proceed to §4 (create the overlay repo) as planned.
+
+## Re-verification at rebase
+
+The set of valid hook names and their kwargs may evolve in future Hermes releases. The probe plugin (`hermes-smd-hook-probe`, scaffolded in §4 of the build plan) and this document are co-maintained:
+
+1. On any pinned-ref bump in `customer.yaml.hermes_ref` or the Machine image build, re-run the grep that produced this document:
+
+   ```bash
+   grep -rn 'invoke_hook(' --include="*.py" /path/to/hermes-agent | \
+     grep -v "^tests/"
+   ```
+
+   Verify file:line for each of the six hooks. If any have moved, update the citations.
+
+2. Run the `hermes-smd-hook-probe` smoke plugin against a stock Hermes container at the new ref. Capture probe logs. Verify hook ordering matches the invariants documented above.
+
+3. Update `VALID_HOOKS` reference (file:line) if upstream restructures the constant.
+
+4. The CI assertion in the Machine image build (`§5` of the plan: "assert the installed Hermes commit SHA matches the pinned upstream commit SHA") guarantees that this document's pinned-ref citations remain accurate for any deployed Machine.
+
+## Appendix — full `VALID_HOOKS` enumeration
+
+For reference, the complete set of hook names Hermes accepts at the pinned ref (`hermes_cli/plugins.py:128-168`):
+
+| Hook | Used by overlay? | Notes |
+|---|---|---|
+| `pre_tool_call` | yes | trust ceiling |
+| `post_tool_call` | yes | audit |
+| `transform_terminal_output` | no | terminal-output canonicalization (not relevant) |
+| `transform_tool_result` | yes | inbound quarantine of untrusted tool-result reads (`hermes-smd-inbound`, ADR 0027 / OP-P0-4 read fencing) + held-reply notification (`hermes-smd-reply`, ss-console#2367 — the only seam that can put a delivery-path hold in front of the model in the same turn). The two never contend for the single replacing return: `create_draft` is a write and is not in the fenced-read set. |
+| `transform_llm_output` | yes | Layer-2 structural voice reshape — `hermes-smd-voice` fires `transform_draft()` post-LLM; first non-empty string returned replaces the response |
+| `pre_llm_call` | yes | voice sample injection + inbound quarantine (ADR 0027); shared-group audience check (`hermes-smd-group-audience`, ADR 0091 R7) |
+| `post_llm_call` | yes | LLM audit; email delivery of a couples routine whose Telegram is unbound (`hermes-smd-space-delivery`, ADR 0091); the reply a rostered sender's email turn wrote as final text and never drafted (`hermes-smd-reply` `text_delivery`, AgentMail seats) |
+| `pre_api_request` | no | gateway-level API request (not relevant) |
+| `post_api_request` | yes | per-person token metering — `hermes-smd-usage` folds each request's `usage` into a (day, person, model) row, attributed via the session's inbound origin (ss-console #2070; kwargs verified against the pinned ref, `vfy_01KYT51JXBHNSSE99PCCXAA2M3`) |
+| `on_session_start` | no | per-turn session-start (not currently used; available if needed) |
+| `on_session_end` | yes | memory-mirror trigger; `hermes-smd-space-delivery` checks a couples routine that owed an email sent one, and `hermes-smd-reply` that a rostered email answered only in text got its reply (ERROR + page otherwise). Both plugins' end-of-turn hooks only submit to `shared.hook_worker`: Hermes skips a bounded callback still running for another session |
+| `on_session_finalize` | no | session-end finalization |
+| `on_session_reset` | no | session reset |
+| `subagent_stop` | yes | one SUBAGENT_STOPPED audit row per delegated child (`hermes-smd-audit`, ADR 0021 Stream C) |
+| `pre_gateway_dispatch` | yes | webhook routing + inbound envelope attach (ADR 0021 Stream E / ADR 0027) |
+| `pre_approval_request` | no | approval lifecycle observer |
+| `post_approval_response` | no | approval lifecycle observer |
+
+The "no" rows are documented for future agents — these hooks exist and are stable; the overlay can attach to them if a new feature requires it.

@@ -1,0 +1,784 @@
+"""Plain-word replies to a deadline digest: "got it on 1" acks item 1.
+
+THE CHANGE. A digest used to ask the reader to type an ``ACK-XXXXXX`` code per
+item. Staff do not do that, and a great case manager would never ask them to.
+The digest now numbers its items, and the reader answers in words. What this
+module guarantees is that the words resolve to ledger rows DETERMINISTICALLY:
+
+* the digest a reply answers is found by THREAD, never by what the reply says.
+  The broker stamped each raise row with the ``thread_ref`` of the message that
+  carried it (``shared/digest_reply_ref.py`` is the send-side half), and the
+  reply's verified origin carries the same thread id;
+* the numbers are read by :func:`parse_reply_items`, a pure function over the
+  reader's OWN words (``InboundOrigin.reply_text``, quoted history removed by
+  the provider). A reply of "thanks" above a quoted list parses to nothing;
+* each number maps to the raise rows the send stamped with it, in code. A group
+  number (a per-matter band) maps to every row in the group.
+
+THE MODEL SUPPLIES NOTHING. The tool schema is an empty object. The session,
+the sender, the thread, the text, the numbers and the rows all come from the
+verified inbound origin and the ledger. The 2026-07-31 incident is why: keying
+acks on model-composed identity silenced nothing (86 fired events, 83 distinct
+keys). The model's whole job is to call the tool when a rostered person replies
+to a deadline email, and to send back ``confirmation_text`` verbatim.
+
+ALL OR NOTHING. A reply naming a number the digest does not carry writes
+nothing and asks. So does a reply the parser cannot read, and a thread holding
+more than one digest. "All except 2" acks every item but 2 (the parser reads
+holds: ``parse_reply_verdicts``). Ambiguity is asked, never guessed: a wrong ack silences a
+real deadline, and a question costs one more email.
+
+WHAT AN ACK DOES is unchanged: it quiets an item until the snooze lapses. The
+acked row goes through the broker's existing ``escalation_event_append`` verb
+exactly as the legacy ``ack_token`` path writes it (which stays, so codes
+already in inboxes keep working), with ``acked_by`` from the same
+verified-sender resolution (ss#2152).
+
+WHAT A COMPLETION DOES (2026-10-01): "done with 1", "1 is done", "close 1"
+closes the task in Smokeball, in the same turn, when the digest's send raised
+that line as closable (a casework ``proposed complete`` row on the thread).
+:mod:`.digest_reply` decides per number what closes, what quiets, and what is
+asked about; the words come from :func:`parse_reply_verdicts`'s ``complete`` and
+``uncertain`` sets, clause-level and conservative (a completion word beside a
+hold or future word closes nothing).
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+from collections.abc import Callable
+from typing import Any
+
+from shared import escalation_ledger, inbound, sent_lines
+from shared.digest_reply_ref import RAISE_EVENTS, valid_digest_number, valid_snooze_days
+
+logger = logging.getLogger(__name__)
+
+STATUS_ACKED = "acked"
+NO_VERIFIED_REPLY = "no_verified_reply"
+AUTO_REPLY = "auto_reply"
+NOT_ROSTERED = "not_rostered"
+NOT_A_DIGEST_REPLY = "not_a_digest_reply"
+AMBIGUOUS_THREAD = "ambiguous_thread"
+NOTHING_PARSED = "nothing_parsed"
+UNKNOWN_NUMBERS = "unknown_numbers"
+NOT_RECORDED = "not_recorded"
+
+SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": False,
+}
+
+DESCRIPTION = (
+    "Record a person's plain-word reply to a deadline email (for example 'got it "
+    "on 1', '1 and 3', 'all'). Takes NO arguments: the reply, its sender, the "
+    "email it answers and the numbered items are all read from the verified "
+    "inbound message and the ledger, and the numbers are matched to items in "
+    "code. Call it once when a rostered person replies to a [Deadlines] email "
+    "without an ACK- code, then send the returned confirmation_text back to them "
+    "verbatim (send nothing when it is empty). Nothing is recorded unless every "
+    "number in the reply is on that email's list."
+)
+
+# ---------------------------------------------------------------------------
+# Parsing the reader's words (pure)
+# ---------------------------------------------------------------------------
+
+# A number is a standalone 1..999 token. Digits joined to other digits by
+# - . / : are a phone number, a date, a time or a decimal, never an item.
+_NUMBER = re.compile(r"(?<![\w])(?<!\d[-./:])([1-9]\d{0,2})(?![\w])(?![-./:]\d)")
+_ALL = re.compile(r"\b(all(?:\s+of\s+them)?|every\s+one|everything)\b")
+# Words that put the numbers after them on HOLD, until an approving word or
+# the end of the clause: "got 1, not 2", "leave 2 and 3", "still working on 3",
+# "all except 3", "all but 2". A hold is never an approval, so on the deadline
+# digest path a held number is simply not acked.
+_HOLD_WORDS = frozenset(
+    {
+        "not",
+        "no",
+        "except",
+        "excluding",
+        "but",
+        "without",
+        "still",
+        "yet",
+        "leave",
+        "keep",
+        "skip",
+        "hold",
+        "wait",
+        "haven't",
+        "havent",
+        "hasn't",
+        "hasnt",
+        "didn't",
+        "didnt",
+        "don't",
+        "dont",
+        "isn't",
+        "isnt",
+        "can't",
+        "cant",
+        "cannot",
+        "won't",
+        "wont",
+        "waiting",
+        "pending",
+    }
+)
+# The hold words that make "yes" mean "yes to all but these": "yes except 3".
+_EXCEPT_WORDS = frozenset({"except", "excluding", "but", "without"})
+# Words that turn a hold off again inside one clause: "leave 2 yes on 3".
+_APPROVE_WORDS = frozenset(
+    {
+        "yes",
+        "yeah",
+        "yep",
+        "ok",
+        "okay",
+        "approve",
+        "approved",
+        "go",
+        "do",
+        "got",
+        "done",
+        "fine",
+        "sure",
+        "close",
+        "agreed",
+        "confirm",
+        "confirmed",
+        "please",
+    }
+)
+_YES_WORDS = frozenset({"yes", "yeah", "yep", "ok", "okay", "approve", "approved", "sure"})
+# A person saying a task is FINISHED, as opposed to acknowledging the reminder
+# ("got it", a bare number) or approving a proposal ("yes"). On a deadline
+# digest a completion closes the task in Smokeball; everything else only quiets
+# it. Closed set, exact words; "closing" and "closer" are not in it.
+_COMPLETE_WORDS = frozenset(
+    {"done", "finished", "complete", "completed", "close", "closed", "handled", "resolved"}
+)
+# Phrases that mean handled, folded to one word before tokenizing.
+_COMPLETE_PHRASES = (("taken care of", "handled"), ("took care of", "handled"))
+# A completion word next to one of these is a promise or a plan, not a
+# completion: "will get 1 done today", "I'll close 1 after the FSC". The
+# contraction is checked by suffix ("i'll", "we'll").
+_FUTURE_WORDS = frozenset(
+    {
+        "will",
+        "going",
+        "gonna",
+        "tomorrow",
+        "later",
+        "soon",
+        "once",
+        "after",
+        "when",
+        "before",
+        "plan",
+        "planning",
+        "next",
+        "today",
+    }
+)
+# A reply that says yes and names nothing ("yes", "yes please", "sounds good").
+_BARE_YES = re.compile(
+    r"^\s*(?:yes|yeah|yep|ok|okay|sure|sounds good|go ahead|please do|do it|approved?)"
+    r"(?:[\s,]+(?:please|thanks|thank you|go ahead|do it|sounds good))*[\s.!]*$"
+)
+# A greeting, a thank-you or a closing is not "all of them": "Hi all",
+# "thanks all", "that's all", "1 is all I have".
+_ALL_GREETERS = frozenset(
+    {
+        "hi",
+        "hey",
+        "hello",
+        "thanks",
+        "thank",
+        "you",
+        "morning",
+        "afternoon",
+        "evening",
+        "at",
+        "that's",
+        "thats",
+        "is",
+        "was",
+    }
+)
+# Where the reader's words end: the standard signature delimiter, a phone
+# client's footer, or a line that is only a sign-off. A signature's phone
+# number or suite number must never read as an item.
+_SIGNOFF = re.compile(
+    r"^\s*(?:--\s*|sent from my\b.*|(?:thanks|thank you|best|regards|best regards|"
+    r"kind regards|cheers|sincerely|warmly|respectfully|talk soon)[\s,.!]*)$",
+    re.IGNORECASE,
+)
+# A clause ends at punctuation, but a period inside a number ("1.5") does not.
+_CLAUSE = re.compile(r"(?:[,;!?\n]|\.(?!\d))+")
+# A clause that ASKS rather than answers: "Who is handling 3?", "Can you move 2
+# to Monday?". A number in it is the subject of a question or a request for a
+# different act, never a yes. Read as a question when the clause ends in "?",
+# opens with an interrogative, carries a verb asking for some other change, or
+# says "can/could/would/will you".
+_INTERROGATIVES = frozenset(
+    {"who", "whom", "whose", "what", "when", "where", "why", "how", "which"}
+)
+_REQUEST_VERBS = frozenset(
+    {
+        "move",
+        "reschedule",
+        "postpone",
+        "delay",
+        "push",
+        "shift",
+        "change",
+        "reassign",
+        "assign",
+        "switch",
+        "swap",
+        "extend",
+        "update",
+    }
+)
+_ASKING_AUX = frozenset({"can", "could", "would", "will"})
+_WORD = re.compile(r"[a-z']+|\d+")
+# A list's own item line, quoted or not: the digest's ("1. matter 2026-PI-101,
+# ...") and the casework list's ("1. 2026-PI-104: ...").
+_DIGEST_ITEM_LINE = re.compile(r"^[\s>]*\d{1,3}\.\s+(?:matter\b|\d{4}-)", re.MULTILINE)
+
+
+def _own_words(text: str) -> str:
+    """The reply above its signature."""
+    kept: list[str] = []
+    for line in text.replace("\r\n", "\n").split("\n"):
+        if _SIGNOFF.match(line):
+            break
+        kept.append(line)
+    return "\n".join(kept)
+
+
+def _no_verdicts() -> dict[str, Any]:
+    return {
+        "asked": set(),
+        "approve": set(),
+        "hold": set(),
+        "all": False,
+        "conflict": False,
+        "bare_yes": False,
+        "complete": set(),
+        "uncertain": set(),
+        "all_complete": False,
+        "bare_complete": False,
+    }
+
+
+def _asking(clause: str, ends_in_question: bool) -> bool:
+    """Whether one clause is a question or a request for some other act."""
+    tokens = _WORD.findall(clause)
+    if not tokens:
+        return False
+    if ends_in_question or tokens[0] in _INTERROGATIVES:
+        return True
+    if any(t in _REQUEST_VERBS for t in tokens):
+        return True
+    return any(a in _ASKING_AUX and b == "you" for a, b in zip(tokens, tokens[1:], strict=False))
+
+
+def _selects_all(text: str) -> bool:
+    """Whether ``text`` says "all" as a selector, not a greeting or a closing."""
+    for match in _ALL.finditer(text):
+        before = _WORD.findall(text[: match.start()])[-1:]
+        if before and before[0] in _ALL_GREETERS | _HOLD_WORDS:
+            continue
+        return True
+    return False
+
+
+def _asked_about(words: str) -> set[int]:
+    """The numbers a reply asks ABOUT, with 0 standing in for "all of them".
+
+    Empty when no clause that names a number (or "all") is a question or a
+    request. Non-empty means the reply is not an answer the caller may act on.
+    """
+    asked: set[int] = set()
+    parts = re.split(f"({_CLAUSE.pattern})", words)
+    for index in range(0, len(parts), 2):
+        clause = parts[index]
+        separator = parts[index + 1] if index + 1 < len(parts) else ""
+        numbers = {int(m.group(1)) for m in _NUMBER.finditer(clause)}
+        selects_all = _selects_all(clause)
+        if not (numbers or selects_all):
+            continue
+        if _asking(clause, "?" in separator):
+            asked |= numbers or {0}
+    return asked
+
+
+def _future(token: str) -> bool:
+    return token in _FUTURE_WORDS or token.endswith("'ll")
+
+
+def _completion(clause: str, numbers: set[int]) -> tuple[set[int], set[int], bool]:
+    """What one clause says about finishing: ``(complete, uncertain, said_done)``.
+
+    Clause-level and conservative. A clause with a completion word and no
+    hold or future word marks every number in it complete ("done with 1 and
+    3", "1 is done"). A clause with a completion word AND a hold or future
+    word marks its numbers uncertain ("not done with 1", "2 not yet", "I'll
+    close 1 after the FSC"): neither closed nor quieted, asked about instead.
+    ``said_done`` is True when the clause carried a completion word at all,
+    so a bare "done" or "all done" can be told from "got it"."""
+    tokens = [m.group(0) for m in _WORD.finditer(clause)]
+    said_done = any(t in _COMPLETE_WORDS for t in tokens)
+    if not said_done:
+        return set(), set(), False
+    guarded = any(t in _HOLD_WORDS or _future(t) for t in tokens)
+    return (set(), numbers, True) if guarded else (numbers, set(), True)
+
+
+def parse_reply_verdicts(text: object) -> dict[str, Any]:
+    """The reader's verdict per number.
+
+    Returns ``{"approve": set, "hold": set, "all": bool, "conflict": bool,
+    "bare_yes": bool}``. Pure and literal, over the reader's OWN words above any
+    signature. A number is a standalone 1..999 token. Inside one clause a hold
+    word ("leave", "keep", "not", "skip", "hold", "except", "but", "still"...)
+    holds every number after it until an approving word ("yes", "ok", "done"...)
+    turns it off; every other number approves. "all" / "yes to all" / "all of
+    them" / "every one" / "everything" select every line, and the holds come off
+    ("all except 3", "all but 2"); "yes except 3" reads the same way. A greeting
+    ("Hi all") is not "all". A number both approved and held is a CONFLICT: the
+    caller writes nothing and asks. ``bare_yes`` is a reply that says yes and
+    names nothing, which only a one-line list can resolve.
+
+    A reply that ASKS about a number ("Who is handling 3?", "Can you move 2 to
+    Monday?") reads as nothing at all, with the asked numbers under ``asked``:
+    on the casework path an approval closes or reassigns a Smokeball task, so a
+    question about a line must never be taken as yes to it. The caller's empty
+    reading routes to the ask path, which costs one email.
+
+    A line shaped like the list's own item line means the quoted list leaked
+    into the text (a quote marker the provider or :mod:`shared.reply_text` did
+    not recognize). Then the reader's words cannot be told from the list, and
+    the whole reply reads as nothing: asking costs one email, acting on every
+    quoted number acts on things nobody chose."""
+    if not isinstance(text, str) or not text.strip():
+        return _no_verdicts()
+    words = _own_words(text).lower()
+    for phrase, word in _COMPLETE_PHRASES:
+        words = words.replace(phrase, word)
+    if _DIGEST_ITEM_LINE.search(words):
+        return _no_verdicts()
+    asked = _asked_about(words)
+    if asked:
+        verdicts = _no_verdicts()
+        verdicts["asked"] = asked
+        return verdicts
+    approve: set[int] = set()
+    hold: set[int] = set()
+    complete: set[int] = set()
+    uncertain: set[int] = set()
+    said_done = False
+    clean_done = False
+    saw_except = False
+    saw_yes = False
+    for clause in _CLAUSE.split(words):
+        numbers = {match.start(1) for match in _NUMBER.finditer(clause)}
+        clause_numbers: set[int] = set()
+        holding = False
+        for match in _WORD.finditer(clause):
+            token = match.group(0)
+            if token.isdigit():
+                if match.start() in numbers:
+                    (hold if holding else approve).add(int(token))
+                    clause_numbers.add(int(token))
+            elif token in _HOLD_WORDS:
+                holding = True
+                saw_except = saw_except or token in _EXCEPT_WORDS
+            elif token in _APPROVE_WORDS:
+                holding = False
+                saw_yes = saw_yes or token in _YES_WORDS
+        done_here, unsure_here, said = _completion(clause, clause_numbers)
+        complete |= done_here
+        uncertain |= unsure_here
+        said_done = said_done or said
+        clean_done = clean_done or (said and not unsure_here and not done_here) or bool(done_here)
+    select_all = _selects_all(words)
+    if saw_except and saw_yes and hold and not approve:
+        # "yes except 3": yes to every line but the named exception.
+        select_all = True
+    bare_yes = not (select_all or approve or hold) and bool(_BARE_YES.match(words))
+    # A number that is complete in one clause and uncertain in another is
+    # uncertain: the person said two things about it, so ask.
+    complete -= uncertain
+    return {
+        "asked": set(),
+        "approve": approve,
+        "hold": hold,
+        "all": select_all,
+        "conflict": bool(approve & hold),
+        "bare_yes": bare_yes,
+        "complete": complete,
+        "uncertain": uncertain,
+        # "all done" / "done with all of them": every line is finished.
+        "all_complete": select_all and clean_done,
+        # "done", "all handled, thanks" with no number and no "all": the person
+        # says something is finished and names nothing; one line resolves it.
+        "bare_complete": said_done and not (select_all or approve or hold or uncertain),
+    }
+
+
+def parse_reply_items(text: object) -> dict[str, Any]:
+    """The item numbers a reader's reply confirms: ``{"all": bool, "numbers": [...]}``.
+
+    A wrapper over :func:`parse_reply_verdicts`: the approved numbers minus the
+    held ones, or "all" with the held numbers under ``"except"`` ("all except
+    2" is ``{"all": True, "numbers": [], "except": [2]}``; the key is present
+    only when something was held). A conflicting reply reads as nothing."""
+    verdicts = parse_reply_verdicts(text)
+    if verdicts["conflict"]:
+        return {"all": False, "numbers": []}
+    if verdicts["all"]:
+        result: dict[str, Any] = {"all": True, "numbers": []}
+        if verdicts["hold"]:
+            result["except"] = sorted(verdicts["hold"])
+        return result
+    return {"all": False, "numbers": sorted(verdicts["approve"] - verdicts["hold"])}
+
+
+# ---------------------------------------------------------------------------
+# Rendering the reply (code, never the model)
+# ---------------------------------------------------------------------------
+
+
+def _join(numbers: list[int], conjunction: str = "and") -> str:
+    parts = [str(n) for n in numbers]
+    if len(parts) <= 1:
+        return "".join(parts)
+    return f"{', '.join(parts[:-1])} {conjunction} {parts[-1]}"
+
+
+def _span(numbers: list[int]) -> str:
+    if len(numbers) == 1:
+        return f"The only number was {numbers[0]}."
+    if numbers == list(range(numbers[0], numbers[-1] + 1)):
+        return f"The numbers were {numbers[0]} to {numbers[-1]}."
+    return f"The numbers were {_join(numbers)}."
+
+
+def render_confirmation(
+    status: str,
+    *,
+    acked: list[int] | None = None,
+    still_open: list[int] | None = None,
+    failed: list[int] | None = None,
+    unknown: list[int] | None = None,
+    valid: list[int] | None = None,
+    all_selected: bool = False,
+    snooze_days: int | None = None,
+    names: dict[int, str] | None = None,
+) -> str:
+    """The sentence the seat sends back. Empty means send nothing: an auto-reply,
+    an unverified sender and a sender off the roster get no answer at all.
+    ``snooze_days`` comes off the raise rows (the skill's own interval); without
+    one the sentence says "for now" rather than invent a number.
+
+    ``names`` maps a number to the label its line carried in the digest the
+    reply answers (:mod:`shared.sent_lines`), so the sentence says what went
+    quiet: "Got it: 1 (2026-PI-101 Chen: Send preservation letter, Mon Sep 21,
+    2026) is quiet for 7 days." A number with no label renders bare."""
+    acked = acked or []
+    still_open = still_open or []
+    names = names or {}
+    if status == STATUS_ACKED:
+        if valid_snooze_days(snooze_days):
+            period = f"for {snooze_days} day" + ("" if snooze_days == 1 else "s")
+        else:
+            period = "for now"
+        named = any(n in names for n in acked)
+        if all_selected and len(acked) > 1 and not failed and not named:
+            text = f"Got it: all {len(acked)} are quiet {period}."
+        else:
+            verb = "is" if len(acked) == 1 else "are"
+            text = f"Got it: {sent_lines.name_numbers(acked, names)} {verb} quiet {period}."
+        if still_open:
+            text += f" Still open: {sent_lines.name_numbers(still_open, names)}."
+        if failed:
+            pronoun = "it" if len(failed) == 1 else "them"
+            text += (
+                f" I couldn't record {sent_lines.name_numbers(failed, names)} just now; "
+                f"please send {pronoun} again."
+            )
+        return text
+    if status == NOTHING_PARSED:
+        return "Which numbers do you have? Reply with the numbers from the list, or say all."
+    if status == UNKNOWN_NUMBERS:
+        return f"I don't see {_join(unknown or [], 'or')} on that list. {_span(valid or [])}"
+    if status == NOT_A_DIGEST_REPLY:
+        return "I couldn't tell which list you're answering. Reply directly to the deadline email."
+    if status == AMBIGUOUS_THREAD:
+        return (
+            "I couldn't tell which list you're answering. Reply directly to the most "
+            "recent deadline email."
+        )
+    if status == NOT_RECORDED:
+        return (
+            "I couldn't record that just now, so nothing was marked. Please send the numbers again."
+        )
+    return ""
+
+
+def _result(
+    status: str, *, acked=None, still_open=None, session_id: str = "", **render: Any
+) -> str:
+    acked = sorted(acked or [])
+    still_open = sorted(still_open or [])
+    text = render_confirmation(status, acked=acked, still_open=still_open, **render)
+    sent_lines.seed_provenance(session_id, text, render.get("names") or {})
+    return json.dumps(
+        {
+            "status": status,
+            "acked": acked,
+            "still_open": still_open,
+            "confirmation_text": text,
+        },
+        ensure_ascii=False,
+    )
+
+
+# ---------------------------------------------------------------------------
+# The digest a thread carries (ledger read)
+# ---------------------------------------------------------------------------
+
+
+def _digest_rows(events: list[dict], thread_ref: str) -> dict[int, dict[str, dict]]:
+    """``{n: {item_key: raise_row}}`` for the numbered raises on this thread."""
+    rows: dict[int, dict[str, dict]] = {}
+    for event in events:
+        if event.get("event") not in RAISE_EVENTS:
+            continue
+        if event.get("thread_ref") != thread_ref:
+            continue
+        number = event.get("n")
+        if not valid_digest_number(number):
+            continue
+        if escalation_ledger.is_pre_identity_epoch(event):
+            continue
+        key = str(event.get("item_key") or "")
+        if key:
+            rows.setdefault(number, {})[key] = event
+    return rows
+
+
+def _dispatch_refs(events: list[dict], thread_ref: str) -> set[object]:
+    return {
+        event.get("dispatch_ref")
+        for event in events
+        if event.get("event") in RAISE_EVENTS
+        and event.get("thread_ref") == thread_ref
+        and valid_digest_number(event.get("n"))
+    }
+
+
+def render_unknown(unknown: list[int], valid: list[int]) -> str:
+    """The refusal for a number the digest does not carry (nothing written)."""
+    return _result(UNKNOWN_NUMBERS, unknown=unknown, valid=valid)
+
+
+def one_snooze(digest: dict[int, dict[str, dict]], numbers: list[int]) -> int | None:
+    return _one_snooze(digest, numbers)
+
+
+def _one_snooze(digest: dict[int, dict[str, dict]], numbers: list[int]) -> int | None:
+    """The ack snooze every acked row agrees on, or ``None``. Rows that carry
+    none, or disagree, get "for now": the sentence never states a period one of
+    the acked items does not have."""
+    values = {row.get("snooze_days") for n in numbers for row in digest[n].values()}
+    if len(values) != 1:
+        return None
+    value = values.pop()
+    return value if valid_snooze_days(value) else None
+
+
+def _quiet(state: escalation_ledger.ItemState | None) -> bool:
+    return state is not None and (state.acked or state.resolved or state.handed_off)
+
+
+# ---------------------------------------------------------------------------
+# The tool
+# ---------------------------------------------------------------------------
+
+
+def ack_numbers(
+    digest: dict[int, dict[str, dict]],
+    numbers: list[int],
+    *,
+    session_id: str,
+    acker: dict[str, str] | None,
+    broker_request: Callable[[dict], dict],
+) -> tuple[list[int], list[int]]:
+    """Write one ``acked`` row per raise row behind each number. Returns
+    ``(acked, failed)``; a number is acked only when every row behind it was."""
+    acked: list[int] = []
+    failed: list[int] = []
+    for number in numbers:
+        ok = True
+        for key, row in digest[number].items():
+            event = {
+                "v": escalation_ledger.SCHEMA_VERSION,
+                "ts": None,  # the broker stamps ts/id; nobody here can backdate
+                "skill": str(row.get("skill") or ""),
+                "matter_id": row.get("matter_id"),
+                "item_key": key,
+                "event": "acked",
+                "attempt": int(row.get("attempt") or 0),
+                "token": row.get("token"),
+                "session_id": session_id,
+            }
+            if acker is not None:
+                event["acked_by"] = acker
+            try:
+                response = broker_request({"action": "escalation_event_append", "event": event})
+            except Exception as exc:  # noqa: BLE001 — one failed row must not lose the rest
+                logger.warning("hermes-smd-escalation: reply ack append failed (%s)", exc)
+                response = None
+            if not (isinstance(response, dict) and response.get("ok")):
+                logger.warning("hermes-smd-escalation: reply ack refused (%s)", response)
+                ok = False
+        (acked if ok else failed).append(number)
+    return acked, failed
+
+
+def thread_has_digest(ledger_path: str, thread_ref: str) -> bool:
+    """Whether a thread carries a numbered deadline digest (``fired``/``chased``
+    rows). ``reply_verdicts`` asks this BEFORE reading the casework ledger: a
+    digest thread now also holds casework raises (the lines a person may say
+    are done), and a bare "1" on it must quiet, never close."""
+    if not thread_ref:
+        return False
+    try:
+        return bool(_digest_rows(escalation_ledger.read_ledger(ledger_path), thread_ref))
+    except Exception:  # noqa: BLE001 — an unreadable ledger is not a digest
+        return False
+
+
+def escalation_reply_ack(
+    *,
+    session_id: str,
+    load_config: Callable[[], Any],
+    verified_acker: Callable[[str], dict[str, str] | None],
+    broker_request: Callable[[dict], dict],
+    ledger_path: str,
+    casework_ledger_path: str | None = None,
+    casework_append: Callable[[dict], Any] | None = None,
+    acts: Any = None,
+) -> str:
+    """Resolve this turn's verified reply to its digest and act on what it says.
+
+    Every input is injected by the plugin; nothing comes from the model.
+    An acknowledgement ("got it on 1", a bare number) quiets the item for the
+    snooze window. A completion ("done with 1") closes the task in Smokeball
+    when the digest raised that line as closable (``digest_reply``). Returns
+    ``{status, acked, still_open, confirmation_text}`` as JSON, or the
+    ``writes_queued`` shape while queued task writes run."""
+    from . import digest_reply
+
+    second = digest_reply.second_call(session_id, acts) if session_id else None
+    if second is not None:
+        return second
+    origin = inbound.SESSION_INBOUND_ORIGIN.get(session_id) if session_id else None
+    if origin is None or not getattr(origin, "sender_address", ""):
+        return _result(NO_VERIFIED_REPLY)
+    if getattr(origin, "auto_submitted", False) is True:
+        return _result(AUTO_REPLY)
+    try:
+        rostered = bool(load_config().sender_on_roster(origin.sender_address))
+    except Exception:  # noqa: BLE001 — an unreadable roster authorizes nobody
+        logger.warning("hermes-smd-escalation: roster unreadable for a digest reply")
+        rostered = False
+    if not rostered:
+        return _result(NOT_ROSTERED)
+
+    thread_ref = getattr(origin, "conversation_id", "") or ""
+    events = escalation_ledger.read_ledger(ledger_path) if thread_ref else []
+    digest = _digest_rows(events, thread_ref) if thread_ref else {}
+    if not digest:
+        return _result(NOT_A_DIGEST_REPLY)
+    if len(_dispatch_refs(events, thread_ref)) > 1:
+        return _result(AMBIGUOUS_THREAD)
+
+    states = escalation_ledger.derive_state(events)
+    valid = sorted(digest)
+    open_now = [n for n in valid if not all(_quiet(states.get(k)) for k in digest[n])]
+    text = getattr(origin, "reply_text", "")
+    verdicts = parse_reply_verdicts(text)
+    # The one dispatch this thread's rows carry (two were refused above).
+    dispatch_ref = next(iter(_dispatch_refs(events, thread_ref)), None)
+    if (
+        verdicts["complete"]
+        or verdicts["uncertain"]
+        or verdicts["all_complete"]
+        or verdicts["bare_complete"]
+    ):
+        # The person said something is finished: the completion path decides
+        # per number what closes, what quiets, and what is asked about.
+        return digest_reply.handle(
+            session_id=session_id,
+            verdicts=verdicts,
+            digest=digest,
+            states=states,
+            valid=valid,
+            open_now=open_now,
+            thread_ref=thread_ref,
+            dispatch_ref=dispatch_ref,
+            acker=verified_acker(session_id),
+            broker_request=broker_request,
+            casework_ledger_path=casework_ledger_path,
+            casework_append=casework_append,
+            acts=acts,
+        )
+    parsed = parse_reply_items(text)
+    held = parsed.get("except", [])
+    selected = [n for n in valid if n not in held] if parsed["all"] else parsed["numbers"]
+    unknown = [n for n in [*selected, *held] if n not in digest]
+    if not selected and not unknown:
+        return _result(NOTHING_PARSED, still_open=open_now)
+    if unknown:
+        # All or nothing: one number off the list writes no row at all.
+        return _result(UNKNOWN_NUMBERS, still_open=open_now, unknown=unknown, valid=valid)
+
+    acker = verified_acker(session_id)
+    acked, failed = ack_numbers(
+        digest, selected, session_id=session_id, acker=acker, broker_request=broker_request
+    )
+    if not acked:
+        return _result(NOT_RECORDED, still_open=open_now)
+    still_open = sorted({n for n in open_now if n not in acked} | set(failed))
+    return _result(
+        STATUS_ACKED,
+        acked=acked,
+        still_open=still_open,
+        failed=failed,
+        all_selected=parsed["all"],
+        snooze_days=_one_snooze(digest, acked),
+        names=sent_lines.labels(dispatch_ref),
+        session_id=session_id,
+    )
+
+
+__all__ = [
+    "DESCRIPTION",
+    "SCHEMA",
+    "ack_numbers",
+    "escalation_reply_ack",
+    "parse_reply_items",
+    "parse_reply_verdicts",
+    "render_confirmation",
+    "thread_has_digest",
+]

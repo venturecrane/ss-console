@@ -11,7 +11,7 @@
  * ## Why a sidecar and not keys in customer.yaml
  *
  * customer.yaml is the object a seat boots from: it is published to R2 and the
- * overlay's validator (hermes-smd-overlay `bootstrap/validate.py`) and
+ * overlay's validator (`operator/hermes-smd-overlay/bootstrap/validate.py`) and
  * translator read it on the Machine. A new key there is a change to every
  * seat's boot input and a reason for a live-apply to fire; it can fail a boot
  * and it cannot be shipped from this repo alone. seat.yaml is read only here, by

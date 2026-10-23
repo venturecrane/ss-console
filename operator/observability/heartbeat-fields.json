@@ -15,13 +15,12 @@
     "at the real ingest handler and fails if the column stays NULL -- so a field",
     "listed here without a reader is a failing test, not a silent drop.",
     "",
-    "overlay_ref is the OVERLAY_REF this list was read against, and it must equal",
-    "ARG OVERLAY_REF in operator/templates/Dockerfile. That pin is the only way a",
-    "new overlay field reaches a seat, so bumping it fails this gate until someone",
-    "re-reads build_payload at the new ref and re-stamps this file. Read the",
-    "limits of that in the test's header before trusting it further than it goes."
+    "The emitter is operator/hermes-smd-overlay/shared/heartbeat.py in this tree",
+    "(one repository since the 2026-10-22 fold, ADR 0095), so the parity test reads",
+    "build_payload directly, in CI too, and fails when it emits a key this list",
+    "does not name. There is no pin to re-stamp. Read the limits of that in the",
+    "test's header before trusting it further than it goes."
   ],
-  "overlay_ref": "dfcfc28cdaad76c0e16b44caa7b747a9e30c80ad",
   "fields": [
     {
       "name": "heartbeat_ts",

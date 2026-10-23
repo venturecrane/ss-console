@@ -147,8 +147,10 @@ def test_r2_without_credentials_is_a_tooling_error() -> None:
 # -- build helpers ------------------------------------------------------------------------
 def test_dockerfile_pins_read_from_the_real_dockerfile() -> None:
     text = (OPERATOR / "templates/Dockerfile").read_text()
-    assert ids.SHA_RE.match(dockerfile_arg(text, "OVERLAY_REF") or "")
     assert ids.SHA_RE.match(dockerfile_arg(text, "HERMES_UPSTREAM_SHA") or "")
+    # No overlay pin since the fold (ADR 0095): the overlay is built from this tree.
+    assert dockerfile_arg(text, "OVERLAY_REF") is None
+    assert "operator/hermes-smd-overlay/" in text
 
 
 def test_required_env_from_the_real_generated_arrays() -> None:

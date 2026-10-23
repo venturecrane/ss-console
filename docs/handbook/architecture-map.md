@@ -32,7 +32,7 @@ This page is the whole system on one screen: where a web request goes, where the
 The system has two distinct planes that share a vocabulary but not a runtime.
 
 1. **The console plane** - one Astro SSR application running as a single Cloudflare Worker named `ss-web`. It serves the marketing site, the admin console, and the client portal, and it owns all structured business data (leads, clients, engagements, invoices, Operator config). This is the code in this repo.
-2. **The Operator plane** - one Fly.io Machine per customer, each running the NousResearch Hermes Agent runtime plus the SMD plugin overlay. This is where a live Operator actually works. Its code lives in a separate repo, `venturecrane/hermes-smd-overlay`, and on the Machine images. See `/admin/playbook/operator-platform`.
+2. **The Operator plane** - one Fly.io Machine per customer, each running the NousResearch Hermes Agent runtime plus the SMD plugin overlay. This is where a live Operator actually works. Its code lives in this repo, the overlay at `operator/hermes-smd-overlay/` beside the rest of `operator/` (ADR 0095; until 2026-10-22 the overlay was the separate repo `venturecrane/hermes-smd-overlay`), and reaches the Machines as one image built from this tree. See `/admin/playbook/operator-platform`.
 
 The console plane never reaches into a Machine's database directly. The only path between the planes is a narrow, read-only, audited HTTPS seam described at the end of this page. Keep the two planes separate in your head and the rest of the architecture follows.
 
@@ -82,7 +82,7 @@ It encodes four invariants and never bends them:
 3. **Audited at the console** - every read records who looked at what, separate from the operator's own runtime audit log.
 4. **Fail-closed** - a transport error resolves to an empty result with a reason, never a throw that breaks a portal render.
 
-The per-customer read key is derived `HMAC-SHA256(master, slug)` from `OPERATOR_RUNTIME_READ_SECRET`, which lives only on `ss-web` and never on a Machine (`wrangler.toml`, secrets note). The Machine-side read endpoint lives in the overlay repo (`shared/runtime_read.py`); this module is the console side of that seam, and `src/lib/operator/runtime-read-transport.ts` is its production wiring. The console reads Operator runtime; it never writes it. Governance of what the Operator may do is covered at `/admin/playbook/autonomy-governance`.
+The per-customer read key is derived `HMAC-SHA256(master, slug)` from `OPERATOR_RUNTIME_READ_SECRET`, which lives only on `ss-web` and never on a Machine (`wrangler.toml`, secrets note). The Machine-side read endpoint lives in the overlay (`operator/hermes-smd-overlay/shared/runtime_read.py`); this module is the console side of that seam, and `src/lib/operator/runtime-read-transport.ts` is its production wiring. The console reads Operator runtime; it never writes it. Governance of what the Operator may do is covered at `/admin/playbook/autonomy-governance`.
 
 ## The enterprise control layer
 

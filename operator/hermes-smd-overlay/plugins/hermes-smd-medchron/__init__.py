@@ -1,0 +1,341 @@
+"""Agent-facing tools for the chronology-package runner (routine 11, ss#2614).
+
+Three thin verbs over the capability broker's ``medchron_*`` surface
+(ss-console ``operator/workspace_broker/medchron_verbs.py``):
+
+* ``medchron_job_submit``: hand a resolved matter and its clients to the
+  runner on this Machine. The broker validates the envelope, checks the
+  firm's page allowance for the current billing cycle, checks that a Named
+  Administrator asked and that the same package is not already running, writes
+  the ledger row and the queue file,
+  and answers with a job id, or with a prose reason it was not accepted. The
+  agent relays that sentence; it never sees a path or a file.
+* ``medchron_job_status``: one job's state and counts, or the last twenty.
+* ``medchron_allowance``: the cycle's page allowance, what is used, what remains.
+
+The runner itself is a root daemon the agent cannot reach; every transition it
+reports is a broker-written audit row. Nothing here returns document content:
+the projection is states, counts, cents, and the delivery folder id.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from typing import Any
+
+from shared.medchron_client import MedchronBrokerClient
+from shared.tool_registration import register_wrapped_tool
+
+from . import demand, drafting, litigation, negotiation, note
+
+logger = logging.getLogger(__name__)
+
+STRING = {"type": "string"}
+
+
+def _schema(properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": required or [],
+        "additionalProperties": False,
+    }
+
+
+_UNIT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "client_name": {
+            "type": "string",
+            "description": "The client's full name as it appears on the matter.",
+        },
+        "surname": {
+            "type": "string",
+            "description": "The client's surname, for the cross-client check.",
+        },
+        "dob": {
+            "type": "string",
+            "description": "Date of birth, MM/DD/YYYY, read from the matter (never guessed).",
+        },
+        "folder_prefix": {
+            "type": "string",
+            "description": "On a joint matter only: the document folder that holds this client's records.",
+        },
+    },
+    "required": ["client_name", "surname", "dob"],
+    "additionalProperties": False,
+}
+
+
+def _medchron_job_submit(args: dict[str, Any], session_id: str = "", **_: Any) -> str:
+    envelope = {
+        "matter": {
+            "id": str(args.get("matter_id") or "").strip(),
+            "number": str(args.get("matter_number") or "").strip(),
+            "title": str(args.get("matter_title") or ""),
+        },
+        "units": list(args.get("units") or []),
+        "incident": {
+            "date": str(args.get("incident_date") or "").strip(),
+            "source": str(args.get("incident_source") or "").strip(),
+        },
+    }
+    for key in ("injuries", "requested_by", "request_ref"):
+        if args.get(key):
+            envelope[key] = str(args[key])
+    # Who asked comes from the verified email that opened this turn whenever
+    # there is one, never the model's arguments (2026-10-07): the completion
+    # reply binds on request_ref and requested_by, and a model-written value
+    # there is a recipient the model chose.
+    origin = demand._origin(session_id)
+    if origin is not None and origin.sender_address and origin.internet_message_id:
+        envelope["requested_by"] = origin.sender_address
+        envelope["request_ref"] = origin.internet_message_id
+    elif demand._turn_email_id(session_id):
+        # An email opened this turn and its verified origin did not bind. The
+        # model's requested_by/request_ref are NOT a substitute: they would make
+        # the completion reply go to a recipient and thread the model chose. And
+        # without them the broker refuses an unattributed package anyway. So
+        # refuse here, exactly as the demand, drafting and litigation lanes do,
+        # and say so loudly (this break was silent until 2026-10-08).
+        logger.warning(
+            "medchron_job_submit: this turn was opened by an email but its verified origin "
+            "did not bind or carries no internet message id (session=%r); refused, nothing "
+            "was queued",
+            session_id,
+        )
+        return demand._refuse(
+            "the request email's sender and message id could not be verified on this turn, so "
+            "the completion reply could not find the requester's thread; nothing was queued"
+        )
+    selection = args.get("selection")
+    if isinstance(selection, dict) and selection.get("include_file_ids"):
+        envelope["selection"] = {
+            "include_file_ids": [str(f) for f in selection["include_file_ids"]]
+        }
+    # An update INTO the delivered chronology (ss-console 2026-10-13): passed
+    # through in its one known shape; the broker validates it (one client, the
+    # documents named, a document-id shape) and refuses anything else in prose.
+    update = args.get("update")
+    if isinstance(update, dict) and update.get("into"):
+        envelope["update"] = {"into": str(update["into"])}
+        if update.get("chronology_file_id"):
+            envelope["update"]["chronology_file_id"] = str(update["chronology_file_id"])
+    resp = MedchronBrokerClient().submit(envelope)
+    if not resp.get("accepted"):
+        return json.dumps({"accepted": False, "reason": resp.get("reason")}, ensure_ascii=False)
+    logger.info("medchron_job_submit: queued %s", resp.get("job_id"))
+    return json.dumps(
+        {
+            "accepted": True,
+            "job_id": resp.get("job_id"),
+            "state": resp.get("state"),
+            "allowance_remaining_documents": resp.get("allowance_remaining_documents"),
+            # A factual ticket, no timeline promise (the no-fabricated-content rule).
+            "message": (
+                f"Chronology package {resp.get('job_id')} is queued on this Machine. "
+                "Ask for its status with this id; the delivery lands on the matter in its own dated folder."
+            ),
+        },
+        ensure_ascii=False,
+    )
+
+
+def _medchron_job_status(args: dict[str, Any], **_: Any) -> str:
+    """One job, one matter's cumulative coverage, or the recent list.
+
+    The matter path exists because an UPDATE turn holds a matter id and no job
+    id: the job id is written into the DELIVER memo, which is the wrong place
+    to have to read a delta from, and the recent-list window is bounded, so a
+    matter's delivery can fall out of it entirely.
+    """
+    job_id = str(args.get("job_id") or "").strip() or None
+    matter_id = str(args.get("matter_id") or "").strip() or None
+    resp = MedchronBrokerClient().status(job_id, matter_id)
+    if job_id:
+        job = resp.get("job")
+        out: dict[str, Any] = {"job": job}
+        if isinstance(job, dict) and job.get("state") == "failed":
+            # A failed chronology job is SMD's to resolve, never the firm's.
+            # This shape is what the audit plugin records as a shortfall (code
+            # medchron_job_failed), which raises SMD's shortfall alert, the
+            # same as the demand, drafting, litigation and negotiation lanes.
+            # Without it a failed job was an ordinary ok read and nobody at
+            # SMD heard unless the runner itself raised the proof alert.
+            out.update(
+                {
+                    "status": "refused",
+                    "reason": "medchron_job_failed",
+                    "message": (
+                        "This chronology job failed on SMD's side and SMD has been alerted. "
+                        "Send the firm nothing and end the turn."
+                    ),
+                }
+            )
+        return json.dumps(out, ensure_ascii=False)
+    if matter_id:
+        return json.dumps({"matter": resp.get("matter")}, ensure_ascii=False)
+    return json.dumps({"jobs": resp.get("jobs") or []}, ensure_ascii=False)
+
+
+def _medchron_allowance(args: dict[str, Any], **_: Any) -> str:
+    client = MedchronBrokerClient()
+    resp = client.allowance()
+    out = {k: resp.get(k) for k in ("month", "allowance", "used", "remaining", "authored")}
+    if args.get("include_recent_jobs"):
+        out["recent_jobs"] = client.status().get("jobs") or []
+    return json.dumps(out, ensure_ascii=False)
+
+
+TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
+    "medchron_job_submit": (
+        "Queue a medical chronology package for a matter on this Machine's runner, for a Named "
+        'Administrator who asked for one ("build the chronology for matter 12345", "build the '
+        'chronology package on that matter", "package the new records"). Call medchron_allowance '
+        "first. The matter and its clients must already be resolved from the practice-management "
+        "system, and requested_by must carry the requesting administrator's own email address: the "
+        "broker refuses a package it cannot attribute, refuses one from someone who is not a Named "
+        "Administrator, and refuses a second copy of a package already running. It answers with a job "
+        "id, or with a prose reason to relay as it comes back.",
+        _schema(
+            {
+                "matter_id": {
+                    "type": "string",
+                    "description": "The practice-management matter id.",
+                },
+                "matter_number": {"type": "string", "description": "The firm's matter number."},
+                "matter_title": STRING,
+                "units": {"type": "array", "items": _UNIT_SCHEMA, "minItems": 1},
+                "incident_date": {
+                    "type": "string",
+                    "description": "YYYY-MM-DD, from an authored matter field.",
+                },
+                "incident_source": {
+                    "type": "string",
+                    "enum": [
+                        "matter_layout",
+                        "intake_document",
+                        "administrator_request",
+                        "record_citation",
+                    ],
+                },
+                "injuries": {
+                    "type": "string",
+                    "description": "The claimed injuries in plain words, if authored.",
+                },
+                "requested_by": {
+                    "type": "string",
+                    "description": "Who asked (an address or a name).",
+                },
+                "request_ref": {
+                    "type": "string",
+                    "description": "The thread or message this request came from.",
+                },
+                "selection": {
+                    "type": "object",
+                    "properties": {
+                        "include_file_ids": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": (
+                                "Updates only: the document ids to read; the "
+                                "runner pulls nothing else."
+                            ),
+                        }
+                    },
+                    "additionalProperties": False,
+                },
+                "update": {
+                    "type": "object",
+                    "description": (
+                        "On a matter that already holds a delivered chronology: the update goes INTO it, "
+                        "and the runner files one complete updated chronology in its folder."
+                    ),
+                    "properties": {
+                        "into": {"type": "string", "enum": ["delivered_chronology"]},
+                        "chronology_file_id": {
+                            "type": "string",
+                            "description": (
+                                "The delivered chronology document's id on the matter, when known; "
+                                "absent, the runner finds the newest by its file name."
+                            ),
+                        },
+                    },
+                    "required": ["into"],
+                    "additionalProperties": False,
+                },
+            },
+            ["matter_id", "matter_number", "units", "incident_date", "incident_source"],
+        ),
+        _medchron_job_submit,
+    ),
+    "medchron_job_status": (
+        "Check a chronology package job by id (state, documents, pages, spend, delivery folder); "
+        "or pass matter_id for that matter's cumulative delivered coverage, which is what an "
+        "update measures its delta against; or list the last twenty when neither is given. "
+        "Pass one or the other, never both.",
+        _schema(
+            {
+                "job_id": STRING,
+                "matter_id": {
+                    "type": "string",
+                    "description": (
+                        "The practice-management matter id, resolved on this turn. Returns the "
+                        "covered and uncovered document ids accumulated across every delivered "
+                        "chronology on the matter, so an update reads only the rest."
+                    ),
+                },
+            }
+        ),
+        _medchron_job_status,
+    ),
+    "medchron_allowance": (
+        "The firm's chronology page allowance for the current billing cycle: authored, used so far "
+        "in the cycle, remaining. Pages, not documents, and the cycle is the firm's billing period "
+        "rather than the calendar month.",
+        _schema(
+            {
+                "include_recent_jobs": {
+                    "type": "boolean",
+                    "description": "Also list the last twenty jobs with their states and counts.",
+                }
+            }
+        ),
+        _medchron_allowance,
+    ),
+}
+
+
+def register(ctx: Any) -> None:
+    """Register the chronology-package, demand, drafting, litigation, negotiation and SMD note
+    tools. All require the broker socket."""
+    tools = {
+        **TOOLS,
+        **demand.TOOLS,
+        **drafting.TOOLS,
+        **litigation.TOOLS,
+        **negotiation.TOOLS,
+        **note.TOOLS,
+    }
+    for name, (description, schema, handler) in tools.items():
+        register_wrapped_tool(
+            ctx,
+            name=name,
+            toolset="medchron",
+            schema=schema,
+            handler=handler,
+            requires_env=["SMD_WORKSPACE_BROKER_SOCKET"],
+            description=description,
+            emoji="",
+        )
+    logger.info(
+        "hermes-smd-medchron registered %d chronology-package, %d demand, %d drafting, %d "
+        "litigation, %d negotiation and %d note tools",
+        len(TOOLS),
+        len(demand.TOOLS),
+        len(drafting.TOOLS),
+        len(litigation.TOOLS),
+        len(negotiation.TOOLS),
+        len(note.TOOLS),
+    )
