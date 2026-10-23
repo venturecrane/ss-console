@@ -26,6 +26,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .. import coverage_decide
 from .base import StageRun, read_json, read_jsonl
 from .units import billing_stem
 
@@ -197,7 +198,7 @@ def run(sr: StageRun) -> int:
 
     spec = read_json(d / "billing_docs.json", [])
     billing_names = {b["name"] for b in (spec.get("docs") if isinstance(spec, dict) else spec) or []}
-    said = composer_dispositions(rd, unit_files)
+    said = {**composer_dispositions(rd, unit_files), **coverage_decide.reasons(d, unit)}
     body = ""
     for cand in ("entries_scoped_final.md", "entries_scoped.md", "entries_final.md"):
         if (rd / cand).is_file():
