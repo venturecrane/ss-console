@@ -45,6 +45,12 @@ metadata:
       ]
   smd:
     vertical: law-firm
+    # What a person may ask this skill for, read by operator_seat_facts depth help
+    # (ss-console#3423). SMD-authored; the example is copyable, matters as XXXXXX.
+    help:
+      what: "Sends the firm's list of its cases in litigation, or the deadlines report on named attorneys' cases."
+      example: 'Send me a fresh litigation status list for my cases.'
+      admin_only: true
     addon: pi
     weight: light # the turn only passes attorney or paralegal names, submits a job and replies; the reading runs in the litigation job on the Machine
     action_class: read + internal_write # queues the litigation job; replies to a firm administrator. No external send of any kind.

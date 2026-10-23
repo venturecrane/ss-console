@@ -22,6 +22,12 @@ metadata:
     tags: [Law, PI, Expenses, VendorInvoice, Intake, Extractive, NeverFinalize, FailClosed]
   smd:
     vertical: law-firm
+    # What a person may ask this skill for, read by operator_seat_facts depth help
+    # (ss-console#3423). SMD-authored; the example is copyable, matters as XXXXXX.
+    help:
+      what: "Enters a vendor's invoice as an unfinalized expense on its matter."
+      example: 'Please enter the attached records invoice as an expense.'
+      admin_only: false
     addon: pi
     weight: light # per-invoice: extract four facts, resolve one matter, one write, one confirming read
     action_class: read + internal_write + one reply to the requester # stages an unfinalized expense and files the PDF; replies only to the rostered sender

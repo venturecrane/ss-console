@@ -157,7 +157,9 @@ _SEAT_FACTS_SCHEMA: dict[str, Any] = {
             "enum": list(seat_facts.DEPTHS),
             "description": (
                 "introduction = who I am, what I can see, and a one-line routine "
-                "summary. walkthrough = the full grouped routine roster. "
+                "summary. walkthrough = the full grouped routine roster. help = "
+                "how to work with me: adds the requests this seat invites, each "
+                "marked for whether this sender may ask for it. "
                 "Default introduction."
             ),
         },
@@ -176,7 +178,9 @@ _SEAT_FACTS_DESCRIPTION = (
     "manifest. Call this whenever someone on the firm's roster asks you about "
     'yourself — "introduce yourself and tell me what you can see" (use depth '
     "'introduction'), \"walk me through what you'll do each day and week\", "
-    '"what are your routines", "what\'s running" (use depth \'walkthrough\') — '
+    '"what are your routines", "what\'s running" (use depth \'walkthrough\'), '
+    '"how do we work together?", "how should I ask you for things?" (use depth '
+    "'help', and offer only the requests its 'help' section marks sender_may_ask) — "
     "and compose your reply from what it returns. Never answer these from "
     "memory: a fluent roster of a seat you are not is the failure this tool "
     "exists to prevent. Every section carries a 'read' flag; where read is "
@@ -239,19 +243,30 @@ def _seat_facts_asked(user_message: object) -> bool:
     return any(phrase in lowered for phrase in _SEAT_FACTS_PHRASES)
 
 
-def _seat_facts_handler(args: dict[str, Any] | None = None, **_: Any) -> str:
+def _seat_facts_handler(args: dict[str, Any] | None = None, session_id: Any = "", **_: Any) -> str:
     """Assemble and serialize the facts envelope. Never raises.
 
     ``build_facts`` is already fail-open per section; this wrapper exists so a
     serialization fault (which would otherwise surface to the model as an opaque
     tool error it might paraphrase into a claim) becomes an explicit, readable
     refusal instead.
+
+    Depth ``help`` filters its requests by WHO is asking, so the sender is
+    resolved here, by the same resolver the authority statement uses
+    (:func:`_resolve_attributed_sender`), from the session id Hermes hands the
+    handler. The schema has no sender field: the model can never name one. With
+    no channel-shaped id there is no claim-once handoff, so an unattributed call
+    resolves to nobody and the help section offers no request.
     """
     args = args if isinstance(args, dict) else {}
     depth = args.get("depth")
     depth = depth if isinstance(depth, str) else seat_facts.DEPTH_INTRODUCTION
     try:
-        facts = seat_facts.build_facts(depth=depth)
+        sender: str | None = None
+        if depth == seat_facts.DEPTH_HELP:
+            sid = session_id if isinstance(session_id, str) else ""
+            sender = _resolve_attributed_sender(sid, "") or None
+        facts = seat_facts.build_facts(depth=depth, sender=sender)
         return json.dumps(facts, ensure_ascii=False)
     except Exception:  # noqa: BLE001 — a tool handler must not raise into the loop
         logger.exception("%s: fact assembly failed", TOOL_SEAT_FACTS)

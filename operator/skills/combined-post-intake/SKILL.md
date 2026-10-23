@@ -25,6 +25,12 @@ metadata:
     tags: [Law, Post, Correspondence, Filing, Intake, Extractive, FailClosed, TwoTurn]
   smd:
     vertical: law-firm
+    # What a person may ask this skill for, read by operator_seat_facts depth help
+    # (ss-console#3423). SMD-authored; the example is copyable, matters as XXXXXX.
+    help:
+      what: "Files each letter in a scanned bundle of the day's post on its own matter."
+      example: "Please file today's post (scan attached)."
+      admin_only: false
     addon: pi
     weight: medium # per bundle: one page read (paper pages transcribed at about ten seconds a page, four at a time), one resolve per letter, one write per placed letter, one more per bill (a Medicals row or an expense)
     action_class: read + internal_write + one reply to the sender # files letters, Medicals rows and unfinalized expenses into the firm's own record; replies only to the rostered sender

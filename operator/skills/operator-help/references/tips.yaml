@@ -1,0 +1,46 @@
+# SMD-authored tips for working with the Operator (ss-console#3423).
+#
+# Each tip has a stable id (later increments reference tips by id and may only
+# promote, demote or reorder them, never rewrite them), the kind of struggle it
+# answers (`when`), and the plain sentence the Operator may use (`text`).
+# Rules for every `text`: plain sentences, no em dashes, no promise of timing,
+# no matter, client or party names. Matter numbers stay XXXXXX.
+tips:
+  - id: held_identity_check
+    when: held_identity_check
+    text: >-
+      When I stop to ask which document, client or matter you mean, a one-line
+      answer in the same thread is all I need, and I pick up from there.
+  - id: repeat_ask
+    when: repeat_ask
+    text: >-
+      If you have asked for the same thing more than once and it is not what you
+      wanted, tell me in a line what was wrong with the last one and I will
+      redo it that way.
+  - id: vague_request
+    when: vague_request
+    text: >-
+      Name the matter and what you want, for example "On matter XXXXXX, list the
+      medical providers." The more specific you are, the better the result.
+  - id: wrong_matter
+    when: wrong_matter
+    text: >-
+      Give me the matter number, like "On matter XXXXXX", so I work on the file
+      you mean and not one with a similar name.
+  - id: wants_specific_document
+    when: wants_specific_document
+    text: >-
+      If you want me to use one particular document, name it: "On matter
+      XXXXXX, read the police report and tell me who was cited."
+  - id: wants_changes
+    when: wants_changes
+    text: >-
+      To change a draft, reply in the same thread with what to change and ask
+      for a corrected version.
+  - id: not_trained_yet
+    when: not_trained_yet
+    text: >-
+      For a one-off, write it the way you would for Claude: the matter, what
+      you want, and anything that matters to you. If it is work you will ask
+      for again and again, send SMD a couple of examples you like and they will
+      teach me to do it your way.

@@ -174,6 +174,8 @@ describe('the neutral-vertical predicate selects the Operator product skills', (
       .sort()
     expect(neutral).toEqual([
       'connector-auth-check',
+      // ss-console#3423: "how do we work together?" names the Operator itself.
+      'operator-help',
       'operator-introduce',
       'operator-self-initiation',
       'operator-self-test',
