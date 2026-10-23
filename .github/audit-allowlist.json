@@ -3,6 +3,7 @@
   "expires": "2026-11-02",
   "tracking": "https://github.com/venturecrane/ss-console/issues/3432",
   "allow": {
-    "GHSA-mrhx-c7xc-m3w5": "zod <4.6.6, only in operator/npm/clio-mcp: @oktopeak/clio-mcp (latest 2.4.0) requires zod ^3 and no 3.x carries the fix; the Clio MCP is enabled on no seat (only _template references clio), so nothing reaches it. Root is fixed (zod 4.6.7)."
+    "GHSA-mrhx-c7xc-m3w5": "zod <4.6.6, only in operator/npm/clio-mcp: @oktopeak/clio-mcp (latest 2.4.0) requires zod ^3 and no 3.x carries the fix; the Clio MCP is enabled on no seat (only _template references clio), so nothing reaches it. Root is fixed (zod 4.6.7).",
+    "GHSA-27r3-jxmh-p828": "body-parser 2.3.0, only in operator/npm/clio-mcp (via express): the fix (2.4.0) was published 2026-10-22, inside the .npmrc 7-day min-release-age, so it cannot install before 2026-10-29; the Clio MCP is enabled on no seat, so nothing reaches it."
   }
 }
