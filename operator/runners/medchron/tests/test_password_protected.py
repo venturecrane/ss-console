@@ -129,7 +129,7 @@ def test_the_rebuild_restores_the_unstripped_exhibits_and_resumes_from_build_doc
     assert (out / "Exhibit 2 - imaging.pdf").read_bytes() == b"never stripped"
     assert not (sd / "strip_result.json").exists()
     marker = json.loads((d.queue / f"{MARKER_PREFIX}{JOB}.json").read_text())
-    assert marker["redo"] == ["build_doc", "strip_falsify", "strip_dry", "strip_apply"]
+    assert marker["redo"] == ["build_doc", "strip_falsify", "strip_dry", "strip_apply", "render", "manifest", "review"]
 
 
 def test_the_rebuild_refuses_a_job_the_daemon_is_running(tmp_path: Path, job_dir: Path) -> None:

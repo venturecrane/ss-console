@@ -19,9 +19,14 @@ This is SMD's act, as root on the seat, with the medchron venv's python::
 For each unit it puts every ``Exhibit N - ....pdf.orig`` back over its
 stripped file, removes the strip result, and asks the daemon to resume the job
 redoing ``build_doc``, ``strip_falsify``, ``strip_dry`` and ``strip_apply``
-(``build_doc`` itself reopens the audit and the gates after it). Every stage
-named is $0; the classifiers' page labels describe the exhibits, which are
-unchanged, so nothing paid re-runs.
+(``build_doc`` itself reopens the audit and the gates after it), and then
+``render``, ``manifest`` and ``review``: a rebuilt document is a new document,
+so it is rendered and reviewed again rather than shipped behind the old
+document's render or held on the old document's review (2026-10-23, Curtis:
+the review held on 45 findings and the corrected document must be reviewed
+afresh). The classifiers' page labels describe the exhibits, which are
+unchanged; the audit re-checks only claims whose text changed; the review is
+the one paid stage that runs in full again.
 """
 
 from __future__ import annotations
@@ -34,7 +39,7 @@ from typing import Any
 
 from .resume import MARKER_PREFIX
 
-REDO = ["build_doc", "strip_falsify", "strip_dry", "strip_apply"]
+REDO = ["build_doc", "strip_falsify", "strip_dry", "strip_apply", "render", "manifest", "review"]
 
 
 class Refused(RuntimeError):
