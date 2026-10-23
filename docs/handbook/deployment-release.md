@@ -146,12 +146,17 @@ fold merged; ADR 0095), and
 `Runtime ACs carry a verification ID` (the Law 9 gate, required since
 2026-09-25; it resolves every cited `vfy_` id against the verify ledger and
 fails closed when the ledger cannot answer). A second overlay job,
-`overlay-e2e`, which dispatches through a real Hermes, is planned and not yet
-built.
+`overlay-e2e`, drives the overlay through the real, pinned Hermes (a temp seat
+translated from the hosted template, one scripted model call per overlay tool
+dispatched by Hermes' own registry, a stub broker) and is required too, since
+2026-10-23; it is also the instrument for a Hermes promotion, run by hand with a
+candidate sha. The Engineering Appendix page "Building the platform" describes
+it.
 
 Main merges through a **merge queue** (since 2026-10-21). A PR whose checks are
-green enters the queue (`gh pr merge <n> --squash`, which `/ship` runs); the
-queue tests it on top of main plus every PR ahead of it, with the same five
+green enters the queue (`gh pr merge <n>`, which `/ship` runs; the queue sets
+the squash itself and refuses `--squash` and `--delete-branch`); the
+queue tests it on top of main plus every PR ahead of it, with the same six
 checks run on the `merge_group` event, and merges it when they pass. Nobody
 rebases onto a moving main by hand. Before the queue, the legacy branch
 protection required branches to be up to date with main, and on a day with five
