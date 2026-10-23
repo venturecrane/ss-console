@@ -4,16 +4,20 @@ The script's two refusal branches were live-proven at merge (#2184:
 vfy_01KZ20HF7AMCCZTT0N49WJVNAR currency-refusal, #2192 rescoped) but carried
 ZERO test coverage — a regression in the seat-currency gate would have gone
 uncaught until the next live connect attempt. These tests pin the gate
-hermetically by stubbing `fly` on PATH; `git show origin/main:...` runs
-against the real repo (CI checkouts carry origin).
+hermetically by stubbing `fly` on PATH and the fleet CLI through SMD_FLEET_BIN.
+Since the fold (ADR 0095) there is no overlay pin to compare against: "current"
+is the seat's `fleet status` row (no image drift against the newest completed
+release) and the gateway's baked SMD_OVERLAY_REF equal to the heartbeat's
+reported version.
 
 What is pinned:
   * arg validation (usage, slug shape, missing customer.yaml)
-  * currency REFUSAL: seat ref != origin/main pin -> exit 3, "REFUSED"
+  * currency REFUSAL: fleet status reports image drift -> exit 3, "REFUSED"
   * fail-closed: unreadable seat ref -> exit 3 (a seat whose gateway is down
-    must not receive a token)
+    must not receive a token); no fleet row -> exit 3
+  * gateway/heartbeat disagreement (a release mid-flight) -> exit 3
   * currency PASS falls through to the next gate (missing env -> exit 2),
-    proving the gate passes on a matching ref rather than refusing everything
+    proving the gate passes on a current seat rather than refusing everything
     (Law 12: the check must be able to pass, or the refusal tests measure
     nothing).
 """
@@ -29,19 +33,27 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "bin" / "connect-smokeball.sh"
 
-# A syntactically-valid 40-hex ref that will never equal a real pin.
+# Syntactically-valid 40-hex ss-console commits that will never be real.
+_CURRENT_REF = "a1b2c3d4" * 5
 _STALE_REF = "deadbeef" * 5
 
 
-def _origin_main_overlay_ref() -> str:
-    """Read the pin exactly the way the script does."""
-    out = subprocess.run(  # noqa: S603 - literal git argv in a test, no shell; the path is the repo root
-        ["git", "-C", str(REPO_ROOT), "show", "origin/main:operator/contracts/overlay-pairs.json"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-    return str(json.loads(out)["overlayRef"])
+def _write_fleet_stub(bin_dir: Path, overlay: str, drift: list[str]) -> Path:
+    """A fake `operator/bin/fleet` whose `status --json` reports one seat row the
+    way the real CLI does (operator/bin/lib/fleet/status.py seat_rows)."""
+    rows = [
+        {
+            "seat": "pilot-smokeball",
+            "ring": 1,
+            "image_ref": "registry.fly.io/hermes-fleet:rel-x",
+            "overlay": overlay,
+            "drift": drift,
+        }
+    ]
+    stub = bin_dir / "fleet"
+    stub.write_text("#!/usr/bin/env bash\n" + "cat <<'EOF'\n" + json.dumps(rows) + "\nEOF\n")
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+    return stub
 
 
 def _write_fly_stub(bin_dir: Path, ref_output: str | None) -> None:
@@ -95,25 +107,48 @@ def test_missing_customer_yaml_refused() -> None:
 
 def test_stale_seat_is_refused_exit_3(tmp_path: Path) -> None:
     _write_fly_stub(tmp_path, _STALE_REF)
-    result = _run(["pilot-smokeball"], bin_dir=tmp_path)
+    fleet = _write_fleet_stub(tmp_path, _STALE_REF, ["image"])
+    result = _run(["pilot-smokeball"], bin_dir=tmp_path, env_extra={"SMD_FLEET_BIN": str(fleet)})
     assert result.returncode == 3, result.stderr
     assert "REFUSED" in result.stderr
-    assert "reprovision.sh pilot-smokeball" in result.stderr  # remediation printed
+    assert "fleet release" in result.stderr and "--only pilot-smokeball" in result.stderr  # remediation printed
 
 
 def test_unreadable_seat_ref_fails_closed_exit_3(tmp_path: Path) -> None:
     _write_fly_stub(tmp_path, None)  # gateway down / env unreadable
-    result = _run(["pilot-smokeball"], bin_dir=tmp_path)
+    fleet = _write_fleet_stub(tmp_path, _CURRENT_REF, [])
+    result = _run(["pilot-smokeball"], bin_dir=tmp_path, env_extra={"SMD_FLEET_BIN": str(fleet)})
     assert result.returncode == 3, result.stderr
     assert "cannot verify" in result.stderr
 
 
+def test_missing_fleet_row_fails_closed_exit_3(tmp_path: Path) -> None:
+    """D1 unreachable or the seat in no ring reads as unknown, never as current."""
+    _write_fly_stub(tmp_path, _CURRENT_REF)
+    stub = tmp_path / "fleet"
+    stub.write_text("#!/usr/bin/env bash\necho '[]'\n")
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+    result = _run(["pilot-smokeball"], bin_dir=tmp_path, env_extra={"SMD_FLEET_BIN": str(stub)})
+    assert result.returncode == 3, result.stderr
+    assert "cannot verify" in result.stderr
+
+
+def test_gateway_and_heartbeat_disagree_exit_3(tmp_path: Path) -> None:
+    """A release mid-flight: the gateway runs one commit, the heartbeat still reports another."""
+    _write_fly_stub(tmp_path, _CURRENT_REF)
+    fleet = _write_fleet_stub(tmp_path, _STALE_REF, [])
+    result = _run(["pilot-smokeball"], bin_dir=tmp_path, env_extra={"SMD_FLEET_BIN": str(fleet)})
+    assert result.returncode == 3, result.stderr
+    assert "REFUSED" in result.stderr and "heartbeat" in result.stderr
+
+
 def test_current_seat_passes_gate_and_stops_at_env_check(tmp_path: Path) -> None:
-    """The pass direction (Law 12): a seat on the pinned ref clears the gate —
-    the run proceeds to the yaml/env stage and fails there on MISSING env
-    (exit 2), never on the currency gate (exit 3)."""
-    _write_fly_stub(tmp_path, _origin_main_overlay_ref())
-    result = _run(["pilot-smokeball"], bin_dir=tmp_path)
+    """The pass direction (Law 12): a seat with no image drift whose gateway and
+    heartbeat agree clears the gate — the run proceeds to the yaml/env stage and
+    fails there on MISSING env (exit 2), never on the currency gate (exit 3)."""
+    _write_fly_stub(tmp_path, _CURRENT_REF)
+    fleet = _write_fleet_stub(tmp_path, _CURRENT_REF, [])
+    result = _run(["pilot-smokeball"], bin_dir=tmp_path, env_extra={"SMD_FLEET_BIN": str(fleet)})
     assert "proceeding" in result.stderr  # the gate's success line
     assert result.returncode == 2, result.stderr
     assert "missing required env" in result.stderr
