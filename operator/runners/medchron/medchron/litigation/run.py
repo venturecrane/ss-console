@@ -18,6 +18,7 @@ import copy
 import datetime as dt
 import json
 import os
+import re
 import traceback
 from pathlib import Path
 from typing import Any, Callable
@@ -35,7 +36,7 @@ from . import (
     inventory,
     job as job_mod,
 )
-from . import carry, manifest, parity, passes, read, review as review_mod, seedcheck, update
+from . import carry, manifest, parity, passes, read, review as review_mod, seedcheck, update, vocab
 from .progress import Progress
 from .runbase import RunBase
 from .outcome import REASON, LitigationFailed, LitigationHold, Verdict
@@ -57,6 +58,26 @@ STAGES = (
     "file",
     "report",
 )
+
+#: The court-paper columns a person may name. A request that names one of
+#: these and no discovery is a court-only list.
+_COURT_WORDS = re.compile(r"\b(complaint|summons|serv(ed|ice)|answer(s|ed)?|default)\b", re.I)
+_DISCOVERY_WORD = re.compile(r"\bdiscovery\b", re.I)
+
+
+def court_only(trigger: str, request_text: str, discovery_rx: list[re.Pattern[str]]) -> bool:
+    """True when a person's request names court-paper columns and no discovery.
+
+    2026-10-23: Chris asked for complaint filed, service and answers on every
+    litigation file; the run read discovery on 152 matters he did not ask
+    about. A court-only run neither reads the discovery group nor shows a
+    Discovery tab; the stored discovery values stand untouched for the next
+    list that asks. The weekday list (scheduled) and a request that names no
+    columns at all read everything, as before."""
+    if trigger != "request" or not _COURT_WORDS.search(request_text or ""):
+        return False
+    text = request_text or ""
+    return not (_DISCOVERY_WORD.search(text) or any(rx.search(text) for rx in discovery_rx))
 
 
 class LitigationRun(RunBase):
@@ -155,8 +176,15 @@ class LitigationRun(RunBase):
             }
         dump(self.data / "plan.json", plan)
 
+    def _court_only(self) -> bool:
+        return court_only(self.job.trigger, self.job.request_text, self.firm.discovery_rx)
+
     def _plan(self) -> dict[str, Any]:
-        return self._json("plan.json")
+        plan = self._json("plan.json")
+        if self._court_only():  # filtered on every read, so a resumed job's stored plan obeys it too
+            for p in plan.values():
+                p["read_groups"] = [g for g in p["read_groups"] if g != vocab.GROUP_DISCOVERY]
+        return plan
 
     def _active(self) -> list[str]:
         """Matters this run opens documents for: a read, an audit, or new mail
@@ -395,7 +423,13 @@ class LitigationRun(RunBase):
         return self.data / "out" / f"Litigation status {self.today.isoformat()} (Operator {self.job.job_id[-6:]}).xlsx"
 
     def _book(self) -> None:
-        stats = book.build(self._json("final.json"), self._json("changes.json"), self._out(), self.today)
+        stats = book.build(
+            self._json("final.json"),
+            self._json("changes.json"),
+            self._out(),
+            self.today,
+            discovery=not self._court_only(),
+        )
         leaks = gates.leak_scan(self._out())
         dump(self.data / "book.json", {**stats, "leaks": leaks})
         if leaks:
