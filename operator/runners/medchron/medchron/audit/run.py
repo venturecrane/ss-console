@@ -23,6 +23,7 @@ Return codes: 0 clean, 1 problems (repair), 2 invalid, 3 guard.
 
 from __future__ import annotations
 
+import json
 import random
 import re
 import threading
@@ -107,6 +108,20 @@ class AuditPaths:
     @property
     def results(self) -> Path:
         return self.out / "audit-results.jsonl"
+
+    @property
+    def retired(self) -> Path:
+        """SMD's record of controls retired as badly chosen (``medchron.audit_decide``)."""
+        return self.out / "audit-retired-controls.json"
+
+    def retired_controls(self) -> set[str]:
+        """Keys of control rows a person found GENUINE: the control page really
+        carries the claim (a diagnosis index, a summary page), so the verifier was
+        right and the control proves nothing either way."""
+        if not self.retired.is_file():
+            return set()
+        body = json.loads(self.retired.read_text(encoding="utf-8"))
+        return {str(r["key"]) for r in body.get("retired") or [] if r.get("key") and r.get("reason")}
 
 
 @dataclass
@@ -557,7 +572,10 @@ class Round:
         # one repair no round could ever report clean and the loop always ran to
         # the cap (2026-10-07).
         real = list(CL.latest_real(allr, live_keys).values())
-        ctl = [r for r in allr if str(r.get("kind", "")).startswith("control")]
+        retired = self.paths.retired_controls()
+        ctl = [r for r in allr if str(r.get("kind", "")).startswith("control") and r.get("key") not in retired]
+        if retired:
+            self.log(f"CONTROLS retired by SMD as badly chosen (the page carries the claim): {len(retired)}")
         rev = [r for r in allr if r.get("kind") == "reverse-control"]
         tally: dict[str, int] = {}
         for r in real:

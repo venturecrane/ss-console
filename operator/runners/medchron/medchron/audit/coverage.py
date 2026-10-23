@@ -23,10 +23,15 @@ def check(paths: AuditPaths, log: Callable[[str], None]) -> tuple[bool, dict[str
     live = {c["key"] for c in CL.extract_claims(body, set(exhibit_paths(paths.out)))}
     rows = CL.read_rows(paths.results)
     latest = CL.latest_real(rows, live)
+    retired = paths.retired_controls()
     ctl_bad = [
         r
         for r in rows
-        if (str(r.get("kind", "")).startswith("control") and r.get("verdict") == "SUPPORTED")
+        if (
+            str(r.get("kind", "")).startswith("control")
+            and r.get("verdict") == "SUPPORTED"
+            and r.get("key") not in retired
+        )
         or (r.get("kind") == "reverse-control" and not r.get("agree"))
     ]
     never = live - set(latest)
