@@ -72,6 +72,7 @@ diff -rq "${work}/main" "${FOLDED}" 2>/dev/null \
       esac
     done \
   | sed -E "s#^${work}/main/##; s#^${FOLDED}/##; s#^/+##; s#//+#/#g" \
+  | grep -v -E '^(build|\.ruff_cache|\.pytest_cache|\.venv)/|__pycache__|\.egg-info/|^CUSTOMER_DB$|\.db$' \
   | sort -u > "${work}/actual.txt"
 set -o pipefail
 printf '%s\n' "${EXPECTED[@]}" | sort -u > "${work}/expected.txt"
