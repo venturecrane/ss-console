@@ -55,7 +55,7 @@ ARG HERMES_UPSTREAM_SHA=345cd2b057a452236de401d3534b8502a7465e8d
 # release; bump in lockstep with overlay-side feature work.
 ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
 # History of this pin lives in git, not here: git log -G'^ARG (OVERLAY_REF|HERMES_UPSTREAM_TAG)=' -- operator/templates/Dockerfile
-ARG OVERLAY_REF="8c6f4b865fbead8fb3a04cec8a025bcafee33b47"
+ARG OVERLAY_REF="dfcfc28cdaad76c0e16b44caa7b747a9e30c80ad"
 
 # No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
 # across seats; the slug reaches the Machine only as fly.toml [env]
