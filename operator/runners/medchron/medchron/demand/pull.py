@@ -186,8 +186,23 @@ def _fetch_one(seat: Any, d: dict[str, Any], minted: dict[str, Any], raw: Path, 
     if not url:
         return {**rec, "ok": False, "error": minted.get("error", "no url")}
     dest = raw / (str(d["id"]) + (d.get("ext") or ""))
+    changed: dict[str, Any] = {}
     try:
-        seat.fetch(url, dest, d.get("size"))
+        try:
+            seat.fetch(url, dest, d.get("size"))
+        except Exception as exc:  # noqa: BLE001 - a listed size the file no longer has is checked below
+            got = _mismatch_got(exc)
+            if got is None:
+                raise
+            # The file changed after the listing (2026-10-23: three A&P files
+            # edited mid-run failed a 230-matter list on every retry, because
+            # each re-pull was checked against the stale listed size). Pull it
+            # again unchecked: two pulls of the same new size are the file as
+            # it is now, and the row says the size changed.
+            again = seat.fetch(url, dest, None)
+            if again != got:
+                raise
+            changed = {"size_changed": {"listed": d.get("size"), "fetched": got}}
     except Exception as exc:  # noqa: BLE001 - one file's failure is one row
         dest.unlink(missing_ok=True)
         status = getattr(getattr(exc, "response", None), "status_code", None)
@@ -195,9 +210,18 @@ def _fetch_one(seat: Any, d: dict[str, Any], minted: dict[str, Any], raw: Path, 
     sha = hashlib.sha256(dest.read_bytes()).hexdigest()
     if sha in seen:
         dest.unlink()
-        return {**rec, "ok": True, "sha256": sha, "duplicate_of": seen[sha]}
+        return {**rec, "ok": True, "sha256": sha, "duplicate_of": seen[sha], **changed}
     seen[sha] = str(d["id"])
-    return {**rec, "ok": True, "sha256": sha, "path": str(dest)}
+    return {**rec, "ok": True, "sha256": sha, "path": str(dest), **changed}
+
+
+_MISMATCH = re.compile(r"size mismatch: got (\d+), expected (\d+)")
+
+
+def _mismatch_got(exc: BaseException) -> int | None:
+    """The byte count a size-mismatch refusal fetched, or None for any other failure."""
+    m = _MISMATCH.search(str(exc))
+    return int(m.group(1)) if m else None
 
 
 #: A file whose fetch failed for a reason time fixes is fetched again, after a
