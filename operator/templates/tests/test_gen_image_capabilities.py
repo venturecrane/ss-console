@@ -92,4 +92,13 @@ def test_document_shape(tmp_path: Path) -> None:
         "tools": ["t"],
         "verbs": ["v"],
         "action_classes": ["read"],
+        "selftest": False,
     }
+
+
+def test_selftest_capability_is_read_from_the_tree() -> None:
+    # FALSIFIER: an image missing either file must not claim the self-test, or
+    # `fleet release --verify selftest` would wait on a heartbeat field it never sends.
+    mod = _module()
+    assert mod.build(["/app/selftest.sh", "/app/seat-checks.sh"], ["t"], ["v"], ["read"])["selftest"] is True
+    assert mod.build(["/app/selftest.sh"], ["t"], ["v"], ["read"])["selftest"] is False

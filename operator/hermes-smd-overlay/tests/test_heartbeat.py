@@ -216,6 +216,9 @@ def _emitter(**overrides):
         # /opt/data and /run on the developer's machine.
         gateway_loop_check_fn=overrides.get("gateway_loop_check_fn", lambda: None),
         gateway_loop_check_debounce=overrides.get("gateway_loop_check_debounce", 3),
+        # Hermetic default for the self-test read: ``None`` is "nothing to say
+        # yet", so unrelated payload assertions never see the field.
+        selftest_check_fn=overrides.get("selftest_check_fn", lambda: None),
     )
     return hb.HeartbeatEmitter(**kwargs), calls
 

@@ -43,6 +43,7 @@ import os
 import re
 import sqlite3
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from typing import NamedTuple
 from urllib.parse import urlsplit
@@ -1477,6 +1478,7 @@ def build_payload(
     jobs_running: int | None = None,
     jobs_queued: int | None = None,
     wakes_pending: int | None = None,
+    selftest: dict | None = None,
 ) -> dict[str, object]:
     """Assemble the heartbeat body. ``heartbeat_ts`` is the only required
     field at the receiver; optional fields are omitted when absent rather
@@ -1643,6 +1645,12 @@ def build_payload(
         payload["jobs_queued"] = jobs_queued
     if wakes_pending is not None:
         payload["wakes_pending"] = wakes_pending
+    # The in-image self-test's verdict (shared/selftest_check.py). None is
+    # "nothing to say yet" (the boot run has not finished) and stays absent so
+    # the console holds; a dead loop or an unreadable file is not None, it ships
+    # as a synthetic failed id, because silence is the defect this closes.
+    if selftest is not None:
+        payload["selftest"] = selftest
     return payload
 
 
@@ -1727,6 +1735,7 @@ class HeartbeatEmitter:
         gateway_loop_check_debounce: int = 3,
         card_post_fn=_default_post,
         request_cards_fn=None,
+        selftest_check_fn=None,
     ) -> None:
         self._slug = slug
         self._key = key
@@ -1783,6 +1792,10 @@ class HeartbeatEmitter:
         self._card_post_fn = card_post_fn
         self._request_cards_fn = request_cards_fn or self._send_request_cards
         self._card_store = None
+        # The in-image self-test's results file (shared.selftest_check).
+        # Injectable for tests; no debounce: the file is rewritten by rename, so
+        # there is no torn read to smooth over.
+        self._selftest_check_fn = selftest_check_fn or _default_selftest_check
 
     def start(self) -> bool:
         """Launch the daemon thread. Returns False (and logs) when the
@@ -1996,6 +2009,18 @@ class HeartbeatEmitter:
             logger.warning("heartbeat: webhook surface check failed: %s", exc)
             return WebhookSurfaceCheck(ok=False, tools=None)
 
+    def _read_selftest(self) -> dict | None:
+        """The self-test verdict. A crash in the reader is our blindness: it
+        ships as the synthetic ``selftest-results-unreadable`` failure, never
+        as an absent field the console would hold on."""
+        try:
+            return self._selftest_check_fn()
+        except Exception as exc:  # noqa: BLE001 -- the check must never kill the beat
+            logger.warning("heartbeat: selftest read failed: %s", exc)
+            from shared.selftest_check import unreadable_result
+
+            return unreadable_result(time.time())
+
     def _post_control_plane(self) -> None:
         ledger = read_audit_facts(self._audit_db_path_fn())
         # ss-console #2498. Read from the volume, not from this process: the
@@ -2088,6 +2113,7 @@ class HeartbeatEmitter:
             jobs_running=fleet.jobs_running if fleet is not None else None,
             jobs_queued=fleet.jobs_queued if fleet is not None else None,
             wakes_pending=fleet.wakes_pending if fleet is not None else None,
+            selftest=self._read_selftest(),
         )
         import json
 
@@ -2176,6 +2202,13 @@ def _default_webhook_surface_check():
     from shared.webhook_surface_check import check
 
     return check()
+
+
+def _default_selftest_check():
+    """The real self-test results read (shared.selftest_check)."""
+    from shared.selftest_check import read_selftest
+
+    return read_selftest()
 
 
 def emitter_from_env(audit_db_path_fn) -> HeartbeatEmitter:

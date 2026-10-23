@@ -19,6 +19,8 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/TRIAGE.md
   - label: operator/skills/connector-auth-check/pre_run.py - the hourly Smokeball sign-in check
     href: https://github.com/venturecrane/ss-console/blob/main/operator/skills/connector-auth-check/pre_run.py
+  - label: workers/fleet-alerts/src/selftest.ts - the seat self-test page
+    href: https://github.com/venturecrane/ss-console/blob/main/workers/fleet-alerts/src/selftest.ts
 ---
 
 Every hour, a check reads every live seat and lists the work that needs a person: a request nobody answered, a job stuck or held, a scheduled run that did not happen, a broken sign-in. You do not read that list raw; an AI agent works it first and emails you only what it found and what is yours to decide, and a dead sign-in emails you directly.
@@ -63,6 +65,16 @@ A dead sign-in gets its own email on every hourly run while it stays dead, from 
 | `ACTION: <seat> Smokeball sign-in dies at the next restart` | A renewed token was not saved on the seat: it works until the seat restarts, then every Smokeball call fails | An agent fixes the saving before the seat restarts; the fix may still need the client to sign in again, which is yours to arrange |
 | `ACTION: <seat> mailbox sign-in is dead` | SMD's hourly sign-in check of the seat's mailbox failed; if the seat's own connection is healthy, SMD's copy of the secret is stale | An agent checks the mailbox's app credentials |
 | `ACTION: <seat> <connection> connection is failing` | A connection failed twice in a row, or the mail reader has not succeeded for 15 minutes | An agent checks the credentials and the vendor |
+
+### The seat self-test page
+
+Separately from this list, every seat checks ITSELF every hour: the image runs the same check list the release verify runs (`operator/templates/seat-checks.sh`, by `operator/templates/selftest.sh`) and reports the result on its heartbeat. When it finds a failed check, the fleet-alerts worker emails `[SMD Ops] ALERT <seat>: Seat self-test failed a check` (condition `selftest_failing`, `workers/fleet-alerts/src/selftest.ts`), naming the failed checks.
+
+| When it opens | When it closes |
+|---|---|
+| A boot run with a failed check: on the first report, because a seat that boots wrong must not stay quiet for an hour. A seat whose self-test stopped reporting for three hours (`selftest-loop-dead`) or whose results cannot be read: on the first report. An hourly run: when two runs in a row failed, because one hourly red is a race as often as a fault. | The next run with no failed check (a `RECOVERED` reply in the same thread). |
+
+Who acts: an agent. The email names the checks; each check's own detail is on the seat in `/run/smd-selftest/results.json`, and what each check proves is in `seat-checks.sh` beside it. A warning (a busy lane, a vendor that did not answer, the identifier-gate lever) is never a page.
 
 The hourly Smokeball check is the only detector of a dead Smokeball token: the connector-health ledger never sees the scheduled jobs' Smokeball calls (PR #3144). A Smokeball seat whose hourly check is not scheduled, or a check that could not run, is an ACTION line in the list, not a page.
 

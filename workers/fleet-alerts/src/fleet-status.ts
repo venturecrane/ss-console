@@ -76,6 +76,11 @@ export interface FleetStatusRow {
   image_ref?: string | null
   config_digest?: string | null
   skills_version?: string | null
+  /**
+   * Migration 0137: the in-image self-test verdict the seat ships. Read by
+   * ./selftest. Optional on the type for the same reason as the 0109 trio.
+   */
+  selftest_json?: string | null
 }
 
 export async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]> {
@@ -93,7 +98,7 @@ export async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]>
               tool_failures_json,
               shortfalls, shortfalls_last_ts, shortfalls_json, audit_write_failures,
               audit_write_failures_rose_at,
-              image_ref, config_digest, skills_version
+              image_ref, config_digest, skills_version, selftest_json
          FROM fleet_status`
     )
     .all<FleetStatusRow>()

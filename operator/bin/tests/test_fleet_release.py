@@ -25,7 +25,18 @@ from bin.lib.fleet.rollout import ImagePlan, ImageRollout
 from bin.lib.fleet.runner import Refusal, Result
 from bin.lib.fleet.smoke import Check
 from bin.lib.fleet.waves import Lease, Waves
-from bin.tests.fleet_fakes import DIGEST, OLD_DIGEST, FakeFly, FakeR2, FakeSmoke, FakeStore, fresh_status, release
+from bin.lib.fleet.smoke import FleetSideChecks
+from bin.tests.fleet_fakes import (
+    DIGEST,
+    OLD_DIGEST,
+    FakeFly,
+    FakeR2,
+    FakeSmoke,
+    FakeStore,
+    fresh_status,
+    release,
+    selftest_json,
+)
 
 RENDERED = """app = "hermes-x"
 kill_signal = "SIGTERM"
@@ -418,3 +429,73 @@ def test_a_busy_seat_keeps_the_release_incomplete() -> None:
     result = _run(w, max_idle_wait=60)
     assert w.store.states()["ashton-price"] == "waiting_idle"
     assert not result.halted and not result.completed
+
+
+# -- --verify: who decides a seat, the boot smoke or the seat's own self-test --------
+
+
+def _selftest_world(tmp_path, row_over: dict | None = None, *smoke_checks: Check) -> World:
+    w = World(*smoke_checks)
+    w.roll.fleet_side = FleetSideChecks(w.fly, str(tmp_path), w.clock.sleep, w.clock)  # type: ignore[arg-type]
+    if row_over is not None:
+        for seat in w.store.status:
+            w.store.status[seat] = {**fresh_status(), "selftest_json": selftest_json(**row_over)}
+    return w
+
+
+def _details(w: World) -> dict[str, str]:
+    return {r["customer_slug"]: r["detail"] for r in w.store.rollouts.values()}
+
+
+def test_bash_verify_decides_and_records_the_selftest_verdict_beside_it(tmp_path) -> None:
+    w = _selftest_world(tmp_path, {})
+    w.release_all(only="smd-staging", selftest_capable=True)
+    assert w.store.states()["smd-staging"] == "done"
+    assert w.smoke.calls  # the boot smoke ran and decided
+    assert "selftest: pass" in _details(w)["smd-staging"]
+
+
+def test_bash_verify_says_not_yet_when_no_selftest_row_arrived(tmp_path) -> None:
+    w = _selftest_world(tmp_path)
+    w.release_all(only="smd-staging", selftest_capable=True)
+    assert "selftest: not yet" in _details(w)["smd-staging"]
+
+
+def test_an_image_without_the_selftest_is_verified_by_bash_even_when_selftest_is_asked(tmp_path) -> None:
+    w = _selftest_world(tmp_path, {})
+    w.release_all(only="smd-staging", verify="selftest", selftest_capable=False)
+    assert w.smoke.calls and w.store.states()["smd-staging"] == "done"
+    assert "the image does not carry it" in _details(w)["smd-staging"]
+
+
+def test_selftest_verify_passes_from_the_heartbeat_without_the_boot_smoke(tmp_path) -> None:
+    w = _selftest_world(tmp_path, {})
+    w.release_all(only="smd-staging", verify="selftest", selftest_capable=True)
+    assert w.store.states()["smd-staging"] == "done"
+    assert w.smoke.calls == []
+
+
+def test_selftest_verify_with_a_failing_row_rolls_back(tmp_path) -> None:
+    w = _selftest_world(tmp_path, {"failed_count": 1, "failed": ["retired-skills-absent"]})
+    w.release_all(only="smd-staging", verify="selftest", selftest_capable=True)
+    assert w.store.states()["smd-staging"] == "rolled_back"
+    assert "retired-skills-absent" in _details(w)["smd-staging"]
+    # The only boot smoke is the rollback re-smoke, which always uses bash.
+    assert w.smoke.calls == [("smd-staging", None)]
+
+
+def test_selftest_verify_with_no_row_falls_back_to_bash_which_decides(tmp_path) -> None:
+    # FALSIFIER: remove the fallback and a seat whose self-test never reports
+    # times out (tooling_error) instead of being judged.
+    w = _selftest_world(tmp_path, None, Check("fail", "curator-disabled: command failed"))
+    w.release_all(only="smd-staging", verify="selftest", selftest_capable=True)
+    assert w.smoke.calls[0] == ("smd-staging", "3" * 40)
+    assert w.store.states()["smd-staging"] == "rolled_back"
+    assert "boot smoke fallback" in _details(w)["smd-staging"]
+
+
+def test_selftest_verify_holds_a_row_from_another_code_version(tmp_path) -> None:
+    w = _selftest_world(tmp_path, {"version": "9" * 40})
+    w.release_all(only="smd-staging", verify="selftest", selftest_capable=True)
+    # The mismatched row never passed; the fallback ran and decided.
+    assert w.smoke.calls and "boot smoke fallback" in _details(w)["smd-staging"]
