@@ -190,7 +190,7 @@ def _fetch_one(seat: Any, d: dict[str, Any], minted: dict[str, Any], raw: Path, 
     try:
         try:
             seat.fetch(url, dest, d.get("size"))
-        except Exception as exc:  # noqa: BLE001 - a listed size the file no longer has is checked below
+        except Exception as exc:  # a listed size the file no longer has is checked below; else re-raised
             got = _mismatch_got(exc)
             if got is None:
                 raise
