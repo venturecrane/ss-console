@@ -179,6 +179,26 @@ describe('operator-help: the skill', () => {
     expect(guide).not.toMatch(/matter \d{3,}/i)
     expect(guide).not.toMatch(/\b(within|by tomorrow|same day)\b/i)
   })
+
+  it("names the detailed example's party generically, never a real one", () => {
+    // Real party names are denied repo-wide, guide and tips included, by
+    // tests/skill-no-pilot-client-names.test.ts (REAL_PARTIES); this pins the
+    // replacement wording so the example stays a generic party.
+    expect(flat(read(`${HELP}/references/guide.md`))).toContain('to the defendant store')
+  })
+
+  it('says so when some kinds of request could not be checked, and offers only what is listed', () => {
+    const body = flat(read(`${HELP}/SKILL.md`))
+    expect(body).toContain('If `unreadable[]` carries entries for the `help` section')
+    expect(body).toContain('could not check every kind of request just now')
+  })
+
+  it('creates only its one reply, so the Never list does not forbid the reply it sends', () => {
+    const body = flat(read(`${HELP}/SKILL.md`))
+    expect(body).toContain('Never submit, queue or file work, and never change anything.')
+    expect(body).toContain('The only thing this skill creates is its one reply.')
+    expect(body).not.toMatch(/Never submit, queue, file, draft/)
+  })
 })
 
 describe('operator-help: the requests each skill invites', () => {

@@ -75,6 +75,11 @@ If the tool does not answer, or a section comes back `read: false`, you still
 answer from the guide, but you offer **no** specific trained request and make
 no claim about the voice. Never fill a gap from memory or from another seat.
 
+If `unreadable[]` carries entries for the `help` section, some kinds of request
+could not be checked this turn even though the section reads `read: true`. Say
+briefly that you could not check every kind of request just now, and offer only
+what the `help` section lists.
+
 ### 2. Read the guide and the tips
 
 Read `references/guide.md` and `references/tips.yaml` with `read_file`. Try
@@ -140,8 +145,8 @@ reply channel delivers it. One reply, nobody copied.
 - Never use an em dash.
 - Never put a real matter number, client name or party name into an example.
   Matter numbers stay XXXXXX.
-- Never submit, queue, file, draft or change anything. This is a read and one
-  reply.
+- Never submit, queue or file work, and never change anything. The only thing
+  this skill creates is its one reply.
 - Never reply to anyone but the person who asked.
 
 ## Pitfalls

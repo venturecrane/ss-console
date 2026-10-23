@@ -180,15 +180,16 @@ _SEAT_FACTS_DESCRIPTION = (
     "'introduction'), \"walk me through what you'll do each day and week\", "
     '"what are your routines", "what\'s running" (use depth \'walkthrough\'), '
     '"how do we work together?", "how should I ask you for things?" (use depth '
-    "'help', and offer only the requests its 'help' section marks sender_may_ask) — "
+    "'help', and offer only the requests its 'help' section marks sender_may_ask), "
     "and compose your reply from what it returns. Never answer these from "
     "memory: a fluent roster of a seat you are not is the failure this tool "
     "exists to prevent. Every section carries a 'read' flag; where read is "
     "false, say plainly that you could not read it and carry on with the rest. "
     "The matters and inbox counts are deliberately not read here — observe "
     "those yourself with your own connector tools this turn and report only "
-    "what you observed. Print the 'counts' line in your reply, both depths, so "
-    "a mis-parse is visible to the reader. On depth 'introduction' also state "
+    "what you observed. On depths 'introduction' and 'walkthrough', print the "
+    "'counts' line in your reply so a mis-parse is visible to the reader; a "
+    "'help' answer carries no counts line. On depth 'introduction' also state "
     "the 'working_rules' section in the firm's own words — how you send, what "
     "you refuse to make up, and that you do not give legal advice — because "
     "that section is what sets a firm's expectations before it discovers a "
@@ -212,14 +213,28 @@ _SEAT_FACTS_NUDGE = (
     "conversation."
 )
 
-#: Case-insensitive substrings that read as an ask about the seat itself.
-#: Authored here so the set is versioned by PR. NOT load-bearing for
-#: correctness: if a phrasing misses, the tool description and the email-route
-#: prompt still name the tool — three surfaces, degrading in that order.
+#: The help nudge (ss-console#3423). The router classes "how do we work
+#: together", "how should I ask you" and "what can you do for me" as a Help
+#: request, answered by the operator-help skill from depth "help". Those
+#: phrasings must not be steered to the introduction, so they carry their own
+#: nudge naming that depth and that skill.
+_SEAT_HELP_NUDGE = (
+    "When this person is asking how to work with you (how you work together, "
+    f"how to ask you for things, what you can do for them), call {TOOL_SEAT_FACTS} "
+    "with depth 'help' and follow the operator-help skill: offer only the requests "
+    "its 'help' section marks sender_may_ask. Do not answer from memory or from "
+    "this conversation."
+)
+
+#: Case-insensitive substrings that read as an ask about the seat itself: who
+#: it is, what it sees, what it does each day (depths introduction and
+#: walkthrough). Authored here so the set is versioned by PR. NOT load-bearing
+#: for correctness: if a phrasing misses, the tool description and the
+#: email-route prompt still name the tool — three surfaces, degrading in that
+#: order. "what can you do" lives in the help set below, not here.
 _SEAT_FACTS_PHRASES: tuple[str, ...] = (
     "introduce yourself",
     "who are you",
-    "what can you do",
     "what you can see",
     "walk me through what you'll do",
     "walk me through what you will do",
@@ -230,17 +245,47 @@ _SEAT_FACTS_PHRASES: tuple[str, ...] = (
     "what will you do each day",
 )
 
+#: Case-insensitive substrings that read as an ask about how to work with the
+#: seat (depth help). Checked BEFORE the introduce set, so a message carrying
+#: both is answered as help, the narrower and more useful reply.
+_SEAT_HELP_PHRASES: tuple[str, ...] = (
+    "how do we work together",
+    "how should i ask",
+    "how do i ask",
+    "what can you do",
+    "how do i use you",
+    "how to work with you",
+)
+
 #: The channel the nudge is scoped to. On CLI/TUI the model has the skills index
 #: and ``skill_view``, so the skill body is reachable and a nudge would be noise.
 _WEBHOOK_PLATFORM = "webhook"
 
 
-def _seat_facts_asked(user_message: object) -> bool:
-    """True when the turn's message reads as an ask about the seat itself."""
+def _matches(user_message: object, phrases: tuple[str, ...]) -> bool:
     if not isinstance(user_message, str) or not user_message:
         return False
     lowered = user_message.lower()
-    return any(phrase in lowered for phrase in _SEAT_FACTS_PHRASES)
+    return any(phrase in lowered for phrase in phrases)
+
+
+def _seat_facts_asked(user_message: object) -> bool:
+    """True when the turn's message reads as an ask about the seat itself."""
+    return _matches(user_message, _SEAT_FACTS_PHRASES)
+
+
+def _seat_help_asked(user_message: object) -> bool:
+    """True when the turn's message reads as an ask about how to work with the seat."""
+    return _matches(user_message, _SEAT_HELP_PHRASES)
+
+
+def _seat_nudge(user_message: object) -> str | None:
+    """The one nudge this message earns, help first, or ``None``."""
+    if _seat_help_asked(user_message):
+        return _SEAT_HELP_NUDGE
+    if _seat_facts_asked(user_message):
+        return _SEAT_FACTS_NUDGE
+    return None
 
 
 def _seat_facts_handler(args: dict[str, Any] | None = None, session_id: Any = "", **_: Any) -> str:
@@ -252,11 +297,12 @@ def _seat_facts_handler(args: dict[str, Any] | None = None, session_id: Any = ""
     refusal instead.
 
     Depth ``help`` filters its requests by WHO is asking, so the sender is
-    resolved here, by the same resolver the authority statement uses
-    (:func:`_resolve_attributed_sender`), from the session id Hermes hands the
-    handler. The schema has no sender field: the model can never name one. With
-    no channel-shaped id there is no claim-once handoff, so an unattributed call
-    resolves to nobody and the help section offers no request.
+    resolved here from the session id Hermes hands the handler, by the PER-TURN
+    resolver (:func:`_help_sender`), never the session-sticky one the authority
+    statement uses: the sticky origin is the email that OPENED the session, so a
+    later email from someone else would be offered the opener's requests. The
+    schema has no sender field: the model can never name one. A turn no single
+    email opened resolves to nobody and the help section offers no request.
     """
     args = args if isinstance(args, dict) else {}
     depth = args.get("depth")
@@ -264,8 +310,7 @@ def _seat_facts_handler(args: dict[str, Any] | None = None, session_id: Any = ""
     try:
         sender: str | None = None
         if depth == seat_facts.DEPTH_HELP:
-            sid = session_id if isinstance(session_id, str) else ""
-            sender = _resolve_attributed_sender(sid, "") or None
+            sender = _help_sender(session_id)
         facts = seat_facts.build_facts(depth=depth, sender=sender)
         return json.dumps(facts, ensure_ascii=False)
     except Exception:  # noqa: BLE001 — a tool handler must not raise into the loop
@@ -280,6 +325,28 @@ def _seat_facts_handler(args: dict[str, Any] | None = None, session_id: Any = ""
             },
             ensure_ascii=False,
         )
+
+
+def _help_sender(session_id: Any) -> str | None:
+    """The verified sender of the email that opened THIS turn, or ``None``.
+
+    ``bound_this_turn`` (the resolver demand-letter requests and the reply relay
+    use): the session's origin must be the email this turn's own trusted prompt
+    prefix named, in a session handed exactly one email. Never the session's
+    first-inbound origin (:meth:`SessionInboundOrigin.get`), which answers for
+    whoever opened the session, and never a claim-once guess. ``None`` offers
+    nothing, which is the safe reading of "I cannot say who is asking".
+    """
+    sid = session_id if isinstance(session_id, str) else ""
+    if not sid:
+        return None
+    try:
+        origin = SESSION_INBOUND_ORIGIN.bound_this_turn(sid)
+    except Exception:  # noqa: BLE001 — resolution must never break the tool
+        return None
+    if origin is None or not origin.sender_address:
+        return None
+    return origin.sender_address.strip().lower() or None
 
 
 def _load_config() -> Any | None:
@@ -363,10 +430,13 @@ def on_pre_llm_call(**kwargs: Any) -> dict[str, str] | None:
         # nothing here either), and only on the channel where the skill body is
         # unreachable. Returns from every plugin on this hook are merged, so
         # this coexists with the authority statement rather than replacing it.
-        if kwargs.get("platform") == _WEBHOOK_PLATFORM and _seat_facts_asked(
-            kwargs.get("user_message")
-        ):
-            lines.append(_SEAT_FACTS_NUDGE)
+        nudge = (
+            _seat_nudge(kwargs.get("user_message"))
+            if kwargs.get("platform") == _WEBHOOK_PLATFORM
+            else None
+        )
+        if nudge is not None:
+            lines.append(nudge)
             logger.info(
                 "hermes-smd-initiation: %s nudge injected (sender=%s)",
                 TOOL_SEAT_FACTS,

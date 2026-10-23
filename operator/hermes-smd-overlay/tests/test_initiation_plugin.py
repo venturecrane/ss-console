@@ -261,6 +261,10 @@ def test_callback_is_exception_safe(monkeypatch):
 #   * an introduce-ish ask  — NOT load-bearing for correctness (the description
 #                             and the email-route prompt still name the tool), so
 #                             a missed phrasing degrades rather than breaks.
+#   * a how-to-work-with-you ask (ss-console#3423) earns the HELP nudge instead:
+#                             the router classes those as Help, so the nudge
+#                             must name depth "help" and the operator-help skill,
+#                             never steer them to the introduction.
 # ---------------------------------------------------------------------------
 
 _ASK = "Introduce yourself and tell me what you can see."
@@ -366,7 +370,6 @@ def test_no_nudge_when_there_is_no_user_message(initiation):
         "what are your routines",
         "So, what's running right now?",
         "Show me everything you do.",
-        "Hi there. What can you do for us?",
     ],
 )
 def test_both_card_phrasings_and_their_neighbours_trigger_the_nudge(initiation, message):
@@ -394,3 +397,57 @@ def test_the_nudge_forbids_answering_from_memory(initiation):
         user_message=_ASK,
     )
     assert "Do not answer from memory" in ctx
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Hi there. What can you do for us?",
+        "How do we work together?",
+        "How should I ask you for things?",
+        "how do i ask for a chronology",
+        "How do I use you?",
+        "Can you explain how to work with you?",
+    ],
+)
+def test_help_phrasings_get_the_help_nudge_not_the_introduction(initiation, message):
+    """The router classes these as Help. FALSIFIER: leave "what can you do" in
+    the introduce set and the nudge steers a Help ask to the introduction while
+    the router steers it to operator-help."""
+    ctx = _ctx(
+        initiation,
+        session_id="s1",
+        sender_id="chris@firm.com",
+        platform="webhook",
+        user_message=message,
+    )
+    assert initiation._SEAT_HELP_NUDGE in ctx
+    assert "depth 'help'" in ctx
+    assert "operator-help" in ctx
+    assert initiation._SEAT_FACTS_NUDGE not in ctx
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["Who are you?", "Introduce yourself.", "What will you do each day?"],
+)
+def test_introduce_phrasings_keep_the_introduce_nudge(initiation, message):
+    ctx = _ctx(
+        initiation,
+        session_id="s1",
+        sender_id="chris@firm.com",
+        platform="webhook",
+        user_message=message,
+    )
+    assert initiation._SEAT_FACTS_NUDGE in ctx
+    assert initiation._SEAT_HELP_NUDGE not in ctx
+
+
+def test_help_and_introduce_phrase_sets_do_not_overlap(initiation):
+    for phrase in initiation._SEAT_HELP_PHRASES:
+        assert not initiation._seat_facts_asked(phrase), phrase
+
+
+def test_the_help_nudge_forbids_answering_from_memory_and_carries_no_em_dash(initiation):
+    assert "Do not answer from memory" in initiation._SEAT_HELP_NUDGE
+    assert "\u2014" not in initiation._SEAT_HELP_NUDGE

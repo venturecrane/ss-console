@@ -12,6 +12,12 @@
  *
  * The names come from the pilot seed itself (matter keys and the witness list),
  * so a new seed matter is covered without editing this file.
+ *
+ * REAL_PARTIES is the same rule for a live client's matters: a party named in a
+ * real request (a defendant, a carrier's insured) that once reached a skill's
+ * example text. Those cannot be read from a seed, so they are listed here, and
+ * the scan covers a skill's YAML references (operator-help's tips.yaml) as well
+ * as its Markdown, because both are read into a turn.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
@@ -22,7 +28,11 @@ const SEED = readFileSync('operator/customers/pilot-smokeball/seed/seed_data.py'
 
 const matterBlock = SEED.slice(SEED.indexOf('MATTERS'), SEED.indexOf('TASKS'))
 const surnames = [...matterBlock.matchAll(/^ {4}"[a-z]+-([a-z]+)": \{/gm)].map((m) => m[1])
-const NAMES = [...new Set([...surnames, 'natarajan', 'grand valley'])]
+// ss-console#3428 review: the operator-help guide's detailed example named a
+// real defendant from a client matter.
+const REAL_PARTIES = ['pac sun', 'pacsun']
+const NAMES = [...new Set([...surnames, 'natarajan', 'grand valley', ...REAL_PARTIES])]
+const SCANNED = ['.md', '.yaml', '.yml']
 
 function markdownFiles(dir: string, skillRoot: string): string[] {
   const out: string[] = []
@@ -31,7 +41,7 @@ function markdownFiles(dir: string, skillRoot: string): string[] {
     if (statSync(p).isDirectory()) {
       if (relative(skillRoot, p).split('/')[0] === 'tests') continue
       out.push(...markdownFiles(p, skillRoot))
-    } else if (name.endsWith('.md')) {
+    } else if (SCANNED.some((ext) => name.endsWith(ext))) {
       out.push(p)
     }
   }
@@ -50,6 +60,16 @@ describe('no skill names a pilot client in its model-facing text', () => {
   it('reads the pilot names from the seed (guards against a vacuous pass)', () => {
     expect(surnames).toEqual(expect.arrayContaining(['alvarez', 'okafor', 'whitfield']))
     expect(skills.length).toBeGreaterThan(40)
+  })
+
+  it("scans operator-help's guide and tips, both read into a turn (guards against a vacuous pass)", () => {
+    const files = markdownFiles(join(ROOT, 'operator-help'), join(ROOT, 'operator-help'))
+    expect(files).toEqual(
+      expect.arrayContaining([
+        join(ROOT, 'operator-help/references/guide.md'),
+        join(ROOT, 'operator-help/references/tips.yaml'),
+      ])
+    )
   })
 
   for (const skill of skills) {

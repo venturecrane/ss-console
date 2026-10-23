@@ -1326,11 +1326,8 @@ def test_help_sender_check_fault_offers_nothing(sf, tmp_path):
     assert any("sender unresolvable" in u["reason"] for u in facts["unreadable"])
 
 
-def test_handler_resolves_the_sender_from_the_session_never_the_args(monkeypatch):
-    """The schema has no sender field; the handler resolves it from the verified
-    inbound origin keyed by session. FALSIFIER: read a sender out of args."""
-    plugin = load_plugin("hermes-smd-initiation")
-    seen = {}
+def _capture_build(monkeypatch, plugin) -> dict:
+    seen: dict = {}
 
     def _fake_build(**kwargs):
         seen.clear()
@@ -1338,14 +1335,60 @@ def test_handler_resolves_the_sender_from_the_session_never_the_args(monkeypatch
         return {"schema": "operator.seat.facts/v1"}
 
     monkeypatch.setattr(plugin.seat_facts, "build_facts", _fake_build)
-    monkeypatch.setattr(
-        plugin, "_resolve_attributed_sender", lambda sid, fallback: _ADMIN if sid else fallback
+    return seen
+
+
+def _email_turn(session: str, sender: str, message_id: str) -> None:
+    """One verified inbound recorded, bound and named by this turn's prompt,
+    through the real registry (the path hermes-smd-inbound drives)."""
+    from shared.inbound import SESSION_INBOUND_ORIGIN, InboundOrigin
+
+    SESSION_INBOUND_ORIGIN.record(
+        "", InboundOrigin(sender_address=sender, message_id=message_id, inbox_id="op@x")
     )
+    SESSION_INBOUND_ORIGIN.note_turn_prompt(session, message_id)
+    SESSION_INBOUND_ORIGIN.bind(session, message_id)
+
+
+def test_handler_resolves_the_sender_from_this_turn_never_the_args(monkeypatch):
+    """The schema has no sender field; the handler resolves it from the verified
+    email that opened THIS turn. FALSIFIER: read a sender out of args."""
+    plugin = load_plugin("hermes-smd-initiation")
+    seen = _capture_build(monkeypatch, plugin)
+    _email_turn("s-1", _ADMIN, "graph-in-1")
     plugin._seat_facts_handler({"depth": "help", "sender": "forged@x.test"}, session_id="s-1")
     assert seen == {"depth": "help", "sender": _ADMIN}
     plugin._seat_facts_handler({"depth": "help"}, session_id="")
     assert seen["sender"] is None
+    plugin._seat_facts_handler({"depth": "help"}, session_id="never-seen")
+    assert seen["sender"] is None
     plugin._seat_facts_handler({"depth": "introduction"}, session_id="s-1")
+    assert seen["sender"] is None
+
+
+@pytest.mark.parametrize(("opener", "current"), [(_ADMIN, _STAFF), (_STAFF, _ADMIN)])
+def test_handler_never_answers_for_the_sessions_opener(monkeypatch, opener, current):
+    """A session opened by one person's email, then a later turn opened by
+    another's. The session-sticky origin (first inbound wins) still names the
+    opener; the help list must not be decided for them. FALSIFIER: resolve via
+    SESSION_INBOUND_ORIGIN.get and a paralegal is offered the partner's demand
+    request (or a partner's list is cut to a paralegal's)."""
+    from shared.inbound import SESSION_INBOUND_ORIGIN, InboundOrigin
+
+    plugin = load_plugin("hermes-smd-initiation")
+    seen = _capture_build(monkeypatch, plugin)
+    _email_turn("s-2", opener, "graph-in-a")
+    plugin._seat_facts_handler({"depth": "help"}, session_id="s-2")
+    assert seen["sender"] == opener
+
+    SESSION_INBOUND_ORIGIN.record(
+        "", InboundOrigin(sender_address=current, message_id="graph-in-b", inbox_id="op@x")
+    )
+    SESSION_INBOUND_ORIGIN.note_turn_prompt("s-2", "graph-in-b")
+    SESSION_INBOUND_ORIGIN.bind("s-2", "graph-in-b")
+    # The sticky resolver would still answer for the opener: that is the hazard.
+    assert SESSION_INBOUND_ORIGIN.get("s-2").sender_address == opener
+    plugin._seat_facts_handler({"depth": "help"}, session_id="s-2")
     assert seen["sender"] is None
 
 
@@ -1353,3 +1396,12 @@ def test_tool_description_names_the_help_phrasing():
     plugin = load_plugin("hermes-smd-initiation")
     assert "how do we work together?" in plugin._SEAT_FACTS_DESCRIPTION.lower()
     assert "sender_may_ask" in plugin._SEAT_FACTS_DESCRIPTION
+
+
+def test_tool_description_scopes_the_counts_line_to_the_self_description_depths():
+    """A help answer is the guide, not a self-description; the counts line is
+    noise there. FALSIFIER: "both depths" survives with three depths defined."""
+    plugin = load_plugin("hermes-smd-initiation")
+    desc = plugin._SEAT_FACTS_DESCRIPTION
+    assert "both depths" not in desc
+    assert "'help' answer carries no counts line" in desc

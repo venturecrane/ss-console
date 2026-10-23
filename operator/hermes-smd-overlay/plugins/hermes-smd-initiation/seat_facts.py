@@ -50,6 +50,11 @@ THREE INVARIANTS, each enforced by construction rather than by instruction:
    DO pass through verbatim — ``routine_names`` values and a job's
    ``paused_reason`` — because the firm authored them as operational labels and
    the skill is required to name them; they are pinned by test, not accidental.
+   On depth ``help`` the ``help`` section carries authored text too: each
+   request's ``what`` and ``example`` pass through verbatim from the skill's
+   SMD-authored ``metadata.smd.help`` block (an example names a matter only as
+   the placeholder ``XXXXXX``), and the section's ``note`` is fixed text
+   authored in this module. None of the three is read from a matter or a client.
 
 2. **No run history.** ``last_run_at``, ``last_status`` and ``next_run_at`` are
    dropped at the READ boundary (:func:`_read_jobs`), not filtered later. The
@@ -62,7 +67,10 @@ THREE INVARIANTS, each enforced by construction rather than by instruction:
    ``read: false`` and an entry in ``unreadable[]`` using the same vocabulary as
    ``shared.config_snapshot.degraded[]``. An omitted section reads as "nothing
    there", which is the one thing an honest self-description may never say by
-   accident. A section fault never raises out of :func:`build_facts`.
+   accident. A section fault never raises out of :func:`build_facts`. The
+   ``help`` section degrades per SKILL rather than as a whole: it may read
+   ``read: true`` while ``unreadable[]`` holds one ``help`` entry per skill file
+   that would not read, so a partial list is never mistaken for the whole one.
 
 WHY VOICE STATUS IS THREE-STATE. ``spec_manifest.load_entries`` collapses every
 failure into ``{}`` because its own consumers all fail closed on empty. Rendering

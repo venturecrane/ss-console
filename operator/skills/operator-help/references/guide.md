@@ -46,7 +46,7 @@ tell it the matter and what you need, and it pulls what it needs on its own.
 2. **One-off work.** For anything else, write it the way you would for Claude.
    Tell it the matter, what you want, and anything that matters to you. An
    example of a detailed request: "On matter XXXXXX, draft special
-   interrogatories, RFAs and RFPDs to defendant Pac Sun. Make sure we request
+   interrogatories, RFAs and RFPDs to the defendant store. Make sure we request
    all video surveillance for 60 minutes prior to the incident, all incident
    reports, all photos, the names of employees working that day, who cleaned it
    up, how long it had been there, and prior spills in that area."
