@@ -69,6 +69,7 @@ def plan(d: Any, job_id: str, *, keys: list[str], reason: str, by: str, source: 
     if (d.queue / f"{job_id}.json").exists() or (d.queue / f"{MARKER_PREFIX}{job_id}.json").exists():
         raise Refused(f"job {job_id} is already queued to run; nothing was written")
     from . import job as job_mod
+    from .audit import retired
     from .audit.run import AuditPaths
 
     job = job_mod.load(d.job_dir(job_id))
@@ -80,7 +81,7 @@ def plan(d: Any, job_id: str, *, keys: list[str], reason: str, by: str, source: 
         if not unknown:
             return {
                 "job_id": job_id,
-                "file": str(paths.retired),
+                "file": str(retired.path(paths.out)),
                 "rows": [
                     {"key": k, "reason": reason.strip(), "by": by.strip(), "source": source.strip()} for k in keys
                 ],

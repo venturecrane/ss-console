@@ -16,7 +16,7 @@ import pytest
 
 import test_upload_daemon as ud
 from medchron import audit_decide
-from medchron.audit import coverage as audit_coverage
+from medchron.audit import coverage as audit_coverage, retired
 from medchron.audit.run import AuditPaths
 from medchron.resume import MARKER_PREFIX
 
@@ -52,7 +52,7 @@ def test_a_retired_control_no_longer_invalidates_the_audit(tmp_path: Path, job_d
     d = _seat(tmp_path, job_dir)
     p = audit_decide.plan(d, JOB, keys=[BAD], reason="diagnosis index page", by="smd", source="vfy_x")
     audit_decide.apply(d, p)
-    assert paths.retired_controls() == {BAD}
+    assert retired.keys(paths.out) == {BAD}
     assert json.loads((d.queue / f"{MARKER_PREFIX}{JOB}.json").read_text())["job_id"] == JOB
 
 
@@ -65,7 +65,7 @@ def test_control_the_final_gate_counts_a_supported_control_until_it_is_retired(d
     log: list[str] = []
     _ok, summary = audit_coverage.check(paths, log.append)
     assert summary["controls_bad"] == 1
-    paths.retired.write_text(json.dumps({"retired": [{"key": BAD, "reason": "index page"}]}))
+    retired.path(paths.out).write_text(json.dumps({"retired": [{"key": BAD, "reason": "index page"}]}))
     _ok, summary = audit_coverage.check(paths, log.append)
     assert summary["controls_bad"] == 0
 
