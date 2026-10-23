@@ -19,6 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+from .. import unopened
 from .base import read_json, read_jsonl
 
 
@@ -97,6 +98,11 @@ def _unread_lines(d: Path, failed: list, log: Callable[[str], None]) -> list[str
         if enc:
             line += f" {_plural(len(enc), 'attachment')} could not be opened (listed below)."
         o += ["", line]
+    # Pulled intact, then could not be opened without its password: an ok row
+    # in raw_manifest, so `failed` never carries it (unopened.py).
+    byid = {r.get("id"): r for r in read_jsonl(d / "raw_manifest.jsonl")}
+    for fid, name in unopened.password_protected(d).items():
+        unread.append((name, str((byid.get(fid) or {}).get("folder") or ""), unopened.REASON))
     for e in m.get("encrypted") or []:
         unread.append(
             (

@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from . import unopened
 from .config import FirmConfig
 from .gates import foreign_identity as FI
 from .job import Job, Unit
@@ -305,6 +306,7 @@ def orphans(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: b
     explained: list[dict[str, str]] = []
     residue: list[str] = []
     withheld = FI.withheld(slug_dir)
+    locked = unopened.password_protected(slug_dir)
     for r in unowned:
         name = str(r.get("name") or "")
         # The entry is keyed the way its two readers key a pulled row: the
@@ -315,6 +317,9 @@ def orphans(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: b
         key = name + str(r.get("ext") or "")
         if FI.matches(str(r.get("id") or ""), withheld):
             explained.append({"name": key, "reason": WITHHELD_REASON})
+            continue
+        if str(r.get("id") or "") in locked:
+            explained.append({"name": key, "reason": unopened.REASON})
             continue
         reason = next((why for rx, why in exclusions if rx.search(name)), None)
         if reason is None:
