@@ -1,8 +1,8 @@
 """The run artifact: an id that binds to an outcome, and a report a reader can check.
 
-WHY THE ID IS A DIGEST AND NOT A TIMESTAMP. The release gate asks an
-``OVERLAY_REF`` bump PR to cite "the id of a green shadow-firm run on the
-candidate ref". If the id were a timestamp, citing a green id for a red run
+WHY THE ID IS A DIGEST AND NOT A TIMESTAMP. The release gate asks the PR that
+ships a runtime change (before ADR 0095, an ``OVERLAY_REF`` bump) to cite "the
+id of a green shadow-firm run on the candidate ref". If the id were a timestamp, citing a green id for a red run
 would be a typo away. The id hashes the seat, the candidate overlay ref, the
 scenario ids and their outcomes, so an id that ends in ``-green`` cannot have
 been produced by a run with a FAIL or a SKIP in it, and the digest can be
