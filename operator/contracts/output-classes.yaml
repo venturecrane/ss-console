@@ -712,6 +712,9 @@ skill_bindings:
   operator-introduce:
     internal: []
     outbound: derived # reactive reply to the requester, no one else
+  operator-help:
+    internal: []
+    outbound: derived # reactive how-to reply to the requester, no one else
   operator-self-test:
     internal:
       - { artifact: self_test_certificate, seam: smokeball_file, class: record }
