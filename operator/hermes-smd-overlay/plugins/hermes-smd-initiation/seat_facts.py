@@ -23,7 +23,12 @@ WHAT THIS MODULE READS, AND WHAT IT REFUSES TO.
 Config-derived and seat-local facts only:
 
 * identity, declared connections, the routine roster and its scheduler pairing,
-  installed-voice status, cohort discrepancies, and the counts line.
+  installed-voice status, cohort discrepancies, and the counts line;
+* on depth ``help`` only (ss-console#3423), the ``metadata.smd.help`` block of
+  every enabled skill that authors one, each marked for whether the turn's
+  platform-resolved sender may ask for it (roster, and ``scope.admins`` for an
+  admin-only request). SMD-authored text with a matter placeholder, never a
+  matter.
 
 Deliberately NOT read here (they stay model-driven MCP calls):
 
@@ -45,6 +50,11 @@ THREE INVARIANTS, each enforced by construction rather than by instruction:
    DO pass through verbatim — ``routine_names`` values and a job's
    ``paused_reason`` — because the firm authored them as operational labels and
    the skill is required to name them; they are pinned by test, not accidental.
+   On depth ``help`` the ``help`` section carries authored text too: each
+   request's ``what`` and ``example`` pass through verbatim from the skill's
+   SMD-authored ``metadata.smd.help`` block (an example names a matter only as
+   the placeholder ``XXXXXX``), and the section's ``note`` is fixed text
+   authored in this module. None of the three is read from a matter or a client.
 
 2. **No run history.** ``last_run_at``, ``last_status`` and ``next_run_at`` are
    dropped at the READ boundary (:func:`_read_jobs`), not filtered later. The
@@ -57,7 +67,10 @@ THREE INVARIANTS, each enforced by construction rather than by instruction:
    ``read: false`` and an entry in ``unreadable[]`` using the same vocabulary as
    ``shared.config_snapshot.degraded[]``. An omitted section reads as "nothing
    there", which is the one thing an honest self-description may never say by
-   accident. A section fault never raises out of :func:`build_facts`.
+   accident. A section fault never raises out of :func:`build_facts`. The
+   ``help`` section degrades per SKILL rather than as a whole: it may read
+   ``read: true`` while ``unreadable[]`` holds one ``help`` entry per skill file
+   that would not read, so a partial list is never mistaken for the whole one.
 
 WHY VOICE STATUS IS THREE-STATE. ``spec_manifest.load_entries`` collapses every
 failure into ``{}`` because its own consumers all fail closed on empty. Rendering
@@ -83,7 +96,15 @@ SCHEMA = "operator.seat.facts/v1"
 
 DEPTH_INTRODUCTION = "introduction"
 DEPTH_WALKTHROUGH = "walkthrough"
-DEPTHS = (DEPTH_INTRODUCTION, DEPTH_WALKTHROUGH)
+#: "How do we work together?" (ss-console#3423). Everything the other two depths
+#: carry, plus the ``help`` section: the requests this seat's enabled skills
+#: invite, each marked for whether THIS turn's sender may ask for it.
+DEPTH_HELP = "help"
+DEPTHS = (DEPTH_INTRODUCTION, DEPTH_WALKTHROUGH, DEPTH_HELP)
+
+#: The section only depth ``help`` carries. Kept out of :data:`SECTIONS` on
+#: purpose: the introduction and walkthrough envelopes are unchanged by it.
+HELP_SECTION = "help"
 
 #: Every section key the envelope always carries. An absent key would read as
 #: "nothing there"; a present key with ``read: false`` reads as "I could not
@@ -223,6 +244,16 @@ def _jobs_path(persona_slug: str, home: str | None = None) -> Path:
 
 def _cohort_root(home: str | None = None) -> Path:
     return Path(home or hermes_home()) / "voice" / "cohort"
+
+
+#: The image's read-only skill tree. A skills-only release lands under
+#: ``$HERMES_HOME/skills`` first (``skills_applier``), so that root is tried first.
+_IMAGE_SKILLS_ROOT = "/app/skills"
+
+
+def skill_roots(home: str | None = None) -> tuple[Path, ...]:
+    """Where a skill's ``SKILL.md`` is looked for, in order: the volume, then the image."""
+    return (Path(home or hermes_home()) / "skills", Path(_IMAGE_SKILLS_ROOT))
 
 
 # --------------------------------------------------------------------------- #
@@ -715,6 +746,143 @@ def _routine_items(
 
 
 # --------------------------------------------------------------------------- #
+# Help (depth "help", ss-console#3423)
+# --------------------------------------------------------------------------- #
+
+#: The three keys a skill's ``metadata.smd.help`` block must carry.
+_HELP_KEYS = ("what", "example", "admin_only")
+
+
+def _skill_frontmatter(slug: str, roots: tuple[Path, ...]) -> dict[str, Any]:
+    """The YAML frontmatter of one skill's ``SKILL.md``, from the first root that has it.
+
+    Raises when no root carries the file or the frontmatter will not parse: the
+    caller records that as an ``unreadable[]`` entry for this one skill, never as
+    "this skill invites no requests".
+    """
+    import yaml
+
+    for root in roots:
+        path = root / slug / "SKILL.md"
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if not text.startswith("---"):
+            raise ValueError("SKILL.md carries no frontmatter")
+        end = text.find("\n---", 3)
+        if end < 0:
+            raise ValueError("SKILL.md frontmatter is not closed")
+        data = yaml.safe_load(text[3:end])
+        if not isinstance(data, dict):
+            raise ValueError("SKILL.md frontmatter is not a mapping")
+        return data
+    raise FileNotFoundError("SKILL.md not found under any skill root")
+
+
+def _help_block(front: dict[str, Any]) -> dict[str, Any] | None:
+    """``metadata.smd.help`` when present and complete, else ``None``.
+
+    A skill with no block invites no request of its own (most skills: routines,
+    digests). A block missing a key is malformed and raises, so it is reported.
+    """
+    meta = front.get("metadata")
+    smd = meta.get("smd") if isinstance(meta, dict) else None
+    block = smd.get("help") if isinstance(smd, dict) else None
+    if block is None:
+        return None
+    if not isinstance(block, dict):
+        raise ValueError("metadata.smd.help is not a mapping")
+    missing = [k for k in _HELP_KEYS if k not in block]
+    if missing:
+        raise ValueError(f"metadata.smd.help lacks {', '.join(missing)}")
+    if not isinstance(block["what"], str) or not isinstance(block["example"], str):
+        raise ValueError("metadata.smd.help what/example are not text")
+    if not isinstance(block["admin_only"], bool):
+        raise ValueError("metadata.smd.help admin_only is not true/false")
+    return block
+
+
+def _help_sender(cfg: Any, sender: str | None) -> dict[str, Any]:
+    """Who is asking, as the platform resolved it. Never the message's say-so."""
+    addr = sender.strip().lower() if isinstance(sender, str) else ""
+    if not addr:
+        return {"resolved": False, "rostered": None, "admin": None}
+    return {
+        "resolved": True,
+        "rostered": bool(cfg.sender_on_roster(addr)),
+        "admin": bool(cfg.sender_is_admin(addr)),
+    }
+
+
+def _help_section(
+    cfg: Any,
+    sender: str | None,
+    roots: tuple[Path, ...],
+    unreadable: list[dict[str, str]],
+) -> dict[str, Any]:
+    """The requests this seat's enabled skills invite, filtered for this sender.
+
+    Fail-open per SKILL: one skill file that will not read adds one
+    ``unreadable[]`` entry and the rest still report. ``sender_may_ask`` is true
+    only for a rostered sender, and for an admin-only request only when the
+    sender is on ``scope.admins``. An unresolved sender may ask for nothing
+    specific: the reply then offers no request rather than guessing one.
+    """
+    persona = _persona(cfg)
+    skills = persona.get("skills")
+    skills = skills if isinstance(skills, list) else []
+    names_block = _raw_block(cfg, "routine_names")
+    firm_names = names_block if isinstance(names_block, dict) else {}
+
+    try:
+        who = _help_sender(cfg, sender)
+    except Exception as exc:  # noqa: BLE001 -- an unresolvable sender is offered nothing
+        who = {"resolved": False, "rostered": None, "admin": None}
+        unreadable.append({"section": "help", "reason": f"sender unresolvable ({exc})"})
+
+    requests: list[dict[str, Any]] = []
+    for entry in skills:
+        if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+            continue
+        if entry.get("enabled") is False:
+            continue
+        slug = entry["name"]
+        try:
+            block = _help_block(_skill_frontmatter(slug, roots))
+        except Exception as exc:  # noqa: BLE001 -- one skill degrades, never the section
+            unreadable.append(
+                {"section": "help", "reason": f"{slug}: skill file unreadable ({exc})"}
+            )
+            continue
+        if block is None:
+            continue
+        admin_only = block["admin_only"]
+        may_ask = bool(who["rostered"]) and (not admin_only or bool(who["admin"]))
+        firm_name = firm_names.get(slug)
+        requests.append(
+            {
+                "skill": slug,
+                "firm_name": firm_name if isinstance(firm_name, str) else None,
+                "what": block["what"],
+                "example": block["example"],
+                "admin_only": admin_only,
+                "sender_may_ask": may_ask,
+            }
+        )
+    return {
+        "read": True,
+        "sender": who,
+        "requests": requests,
+        "note": (
+            "Offer only requests whose sender_may_ask is true, worded like their "
+            "example. Never offer, describe or promise a request this list does not "
+            "carry. An admin_only request this sender may not ask is one an Operator "
+            "administrator at the firm can ask for."
+        ),
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Assembly
 # --------------------------------------------------------------------------- #
 
@@ -745,6 +913,7 @@ def _empty(section: str) -> dict[str, Any]:
             "scheduled": None,
             "live_jobs": None,
         },
+        "help": {"sender": None, "requests": [], "note": None},
     }
     return {"read": False, **shells.get(section, {})}
 
@@ -755,6 +924,8 @@ def build_facts(
     config_loader: Any = None,
     spec_manifest_module: Any = None,
     home: str | None = None,
+    sender: str | None = None,
+    skill_roots_override: tuple[Path, ...] | None = None,
 ) -> dict[str, Any]:
     """Assemble ``operator.seat.facts/v1``. Never raises.
 
@@ -763,8 +934,10 @@ def build_facts(
     ``read: false``, which lets the model say honestly that it could not read
     itself — a better client outcome than a tool error it would paraphrase.
 
-    ``config_loader`` / ``spec_manifest_module`` / ``home`` are injection seams
-    for tests only; production passes none of them.
+    ``config_loader`` / ``spec_manifest_module`` / ``home`` /
+    ``skill_roots_override`` are injection seams for tests only; production
+    passes none of them. ``sender`` is the turn's platform-resolved sender (the
+    handler resolves it, never the model); only depth ``help`` reads it.
     """
     if depth not in DEPTHS:
         depth = DEPTH_INTRODUCTION
@@ -791,6 +964,8 @@ def build_facts(
         facts["matters"] = _observe_marker("open_count")
         facts["inbox"] = _observe_marker("unread_count")
         unreadable.append({"section": "config", "reason": "customer.yaml unreadable"})
+        if depth == DEPTH_HELP:
+            facts[HELP_SECTION] = _empty(HELP_SECTION)
         facts["unreadable"] = unreadable
         return facts
 
@@ -893,6 +1068,15 @@ def build_facts(
         facts["working_rules"] = _empty("working_rules")
         unreadable.append({"section": "working_rules", "reason": f"exposure unreadable ({exc})"})
 
+    # help (depth "help" only) -------------------------------------------------
+    if depth == DEPTH_HELP:
+        roots = skill_roots_override if skill_roots_override is not None else skill_roots(home)
+        try:
+            facts[HELP_SECTION] = _help_section(cfg, sender, roots, unreadable)
+        except Exception as exc:  # noqa: BLE001
+            facts[HELP_SECTION] = _empty(HELP_SECTION)
+            unreadable.append({"section": "help", "reason": f"help unreadable ({exc})"})
+
     facts["unreadable"] = unreadable
     return facts
 
@@ -904,11 +1088,13 @@ def _observe_marker(field: str) -> dict[str, Any]:
 
 __all__ = [
     "DEPTHS",
+    "DEPTH_HELP",
     "DEPTH_INTRODUCTION",
     "DEPTH_WALKTHROUGH",
     "GROUP_EVENT",
     "GROUP_REQUEST",
     "GROUP_SCHEDULE",
+    "HELP_SECTION",
     "SCHEMA",
     "SECTIONS",
     "STATE_AUTHORED_LAYER_ONLY",
@@ -924,4 +1110,5 @@ __all__ = [
     "build_facts",
     "hermes_home",
     "schedule_prose",
+    "skill_roots",
 ]

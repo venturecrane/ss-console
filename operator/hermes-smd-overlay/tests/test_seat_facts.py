@@ -69,6 +69,21 @@ class _FakeConfig:
     def output_classes(self) -> dict:
         return self._raw.get("output_classes") or {}
 
+    # The two scope checks depth "help" reads. Same match rules as
+    # CustomerConfig: the roster widens on "@domain", admins are exact.
+    def sender_on_roster(self, sender: object) -> bool:
+        if not isinstance(sender, str):
+            return False
+        addr = sender.strip().lower()
+        domain = addr.rsplit("@", 1)[-1] if "@" in addr else ""
+        roster = (self._raw.get("scope") or {}).get("inbound_allow_from") or []
+        return any(e == addr or (e.startswith("@") and e == f"@{domain}") for e in roster)
+
+    def sender_is_admin(self, sender: object) -> bool:
+        if not isinstance(sender, str):
+            return False
+        return sender.strip().lower() in ((self._raw.get("scope") or {}).get("admins") or [])
+
 
 class _FakeEntry:
     def __init__(self, output_class: str, prop: str):
@@ -1118,3 +1133,275 @@ def test_a_spec_that_no_longer_verifies_names_no_corpus(sf, tmp_path):
     wp = next(c for c in voice["classes"] if c["class"] == "work_product")
     assert wp["status"] == "not_installed"
     assert wp["learned_from"] is None
+
+
+# --------------------------------------------------------------------------- #
+# Depth "help" (ss-console#3423): the requests this seat invites, per sender
+# --------------------------------------------------------------------------- #
+
+_ADMIN = "pat@example-firm.test"
+_STAFF = "lee@example-firm.test"
+
+
+def _skill_md(root, slug: str, help_block: str | None) -> None:
+    """Write ``<root>/<slug>/SKILL.md`` with an optional ``metadata.smd.help`` block."""
+    lines = ["---", f"name: {slug}", "metadata:", "  smd:", "    vertical: law-firm"]
+    if help_block is not None:
+        lines.append("    help:")
+        lines.extend(f"      {line}" for line in help_block.strip().splitlines())
+    lines += ["---", "", f"# {slug}", ""]
+    path = root / slug / "SKILL.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+_DEMAND_HELP = (
+    'what: "Prepares a draft demand on a matter."\n'
+    'example: "On matter XXXXXX, draft the demand."\n'
+    "admin_only: true"
+)
+_LETTERS_HELP = (
+    'what: "Makes the firm\'s rep letters on a matter."\n'
+    'example: "On matter XXXXXX, do the 1st and 3rd party letters."\n'
+    "admin_only: false"
+)
+
+
+def _help_raw() -> dict:
+    raw = _raw_config()
+    raw["scope"] = {"inbound_allow_from": ["@example-firm.test"], "admins": [_ADMIN]}
+    raw["personas"][0]["skills"] += [
+        {"name": "demand-letter-drafter", "enabled": True, "initiation": {"manual": True}},
+        {"name": "file-work-requests", "enabled": True, "initiation": {"manual": True}},
+        {"name": "litigation-status", "enabled": False, "initiation": {"manual": True}},
+    ]
+    raw["routine_names"]["file-work-requests"] = "File work"
+    return raw
+
+
+def _help_roots(tmp_path):
+    """Two roots in the production order: the volume first, then the image."""
+    volume = tmp_path / "vol-skills"
+    image = tmp_path / "image-skills"
+    for slug in (
+        "discovery-served-watch",
+        "daily-needs-you-digest",
+        "motion-calendar-tracker",
+        "operator-introduce",
+    ):
+        _skill_md(image, slug, None)
+    _skill_md(image, "demand-letter-drafter", _DEMAND_HELP)
+    _skill_md(image, "file-work-requests", _LETTERS_HELP)
+    _skill_md(
+        image,
+        "litigation-status",
+        'what: "x"\nexample: "Send me a fresh litigation status list."\nadmin_only: true',
+    )
+    return (volume, image)
+
+
+def _help(sf, tmp_path, *, sender, raw=None, roots=None, loader=None):
+    _write_jobs(tmp_path, [])
+    cfg = _FakeConfig(raw if raw is not None else _help_raw())
+    return sf.build_facts(
+        depth="help",
+        config_loader=loader or (lambda: cfg),
+        spec_manifest_module=_FakeManifest(),
+        home=str(tmp_path),
+        sender=sender,
+        skill_roots_override=roots if roots is not None else _help_roots(tmp_path),
+    )
+
+
+def _by_skill(facts) -> dict:
+    return {r["skill"]: r for r in facts["help"]["requests"]}
+
+
+def test_help_is_a_depth_and_the_other_depths_carry_no_help_section(sf, tmp_path):
+    """Introduction and walkthrough are unchanged. FALSIFIER: add "help" to
+    SECTIONS and every introduction grows a section its skill never reads."""
+    assert "help" in sf.DEPTHS
+    assert "help" not in sf.SECTIONS
+    _write_jobs(tmp_path, [])
+    assert "help" not in _build(sf, tmp_path, depth="introduction")
+    assert "help" not in _build(sf, tmp_path, depth="walkthrough")
+    facts = _help(sf, tmp_path, sender=_ADMIN)
+    assert facts["depth"] == "help"
+    for section in sf.SECTIONS:
+        assert section in facts, section
+
+
+def test_help_admin_may_ask_for_every_enabled_request(sf, tmp_path):
+    facts = _help(sf, tmp_path, sender=_ADMIN)
+    help_ = facts["help"]
+    assert help_["read"] is True
+    assert help_["sender"] == {"resolved": True, "rostered": True, "admin": True}
+    got = _by_skill(facts)
+    assert set(got) == {"demand-letter-drafter", "file-work-requests"}
+    assert got["demand-letter-drafter"] == {
+        "skill": "demand-letter-drafter",
+        "firm_name": None,
+        "what": "Prepares a draft demand on a matter.",
+        "example": "On matter XXXXXX, draft the demand.",
+        "admin_only": True,
+        "sender_may_ask": True,
+    }
+    assert got["file-work-requests"]["firm_name"] == "File work"
+    assert got["file-work-requests"]["sender_may_ask"] is True
+    assert facts["unreadable"] == []
+
+
+def test_help_non_admin_may_not_ask_for_an_admin_only_request(sf, tmp_path):
+    """FALSIFIER: ignore admin_only and a paralegal is told she can queue a
+    demand the router will then decline."""
+    got = _by_skill(_help(sf, tmp_path, sender=_STAFF))
+    assert got["demand-letter-drafter"]["sender_may_ask"] is False
+    assert got["demand-letter-drafter"]["admin_only"] is True
+    assert got["file-work-requests"]["sender_may_ask"] is True
+
+
+def test_help_off_roster_or_unresolved_sender_may_ask_nothing(sf, tmp_path):
+    for sender in ("someone@elsewhere.test", None, ""):
+        facts = _help(sf, tmp_path, sender=sender)
+        assert all(r["sender_may_ask"] is False for r in facts["help"]["requests"]), sender
+    assert _help(sf, tmp_path, sender=None)["help"]["sender"]["resolved"] is False
+
+
+def test_help_excludes_a_disabled_skill_even_with_a_help_block(sf, tmp_path):
+    """litigation-status authors a block but is switched off on this seat."""
+    assert "litigation-status" not in _by_skill(_help(sf, tmp_path, sender=_ADMIN))
+
+
+def test_help_prefers_the_volume_copy_of_a_skill(sf, tmp_path):
+    """A skills-only release lands on the volume first; its text wins."""
+    roots = _help_roots(tmp_path)
+    _skill_md(
+        roots[0],
+        "file-work-requests",
+        'what: "Newer words."\nexample: "On matter XXXXXX, do the letters."\nadmin_only: false',
+    )
+    got = _by_skill(_help(sf, tmp_path, sender=_ADMIN, roots=roots))
+    assert got["file-work-requests"]["what"] == "Newer words."
+
+
+def test_help_missing_or_malformed_frontmatter_is_an_unreadable_entry(sf, tmp_path):
+    """FALSIFIER: skip an unreadable skill silently and "I could not look"
+    reads as "this skill invites nothing"."""
+    roots = _help_roots(tmp_path)
+    # demand: no SKILL.md under either root.
+    (roots[1] / "demand-letter-drafter" / "SKILL.md").unlink()
+    # file-work: a help block missing admin_only.
+    _skill_md(roots[1], "file-work-requests", 'what: "x"\nexample: "y"')
+    facts = _help(sf, tmp_path, sender=_ADMIN, roots=roots)
+    assert facts["help"]["read"] is True
+    assert facts["help"]["requests"] == []
+    reasons = [u["reason"] for u in facts["unreadable"] if u["section"] == "help"]
+    assert any(r.startswith("demand-letter-drafter:") for r in reasons), reasons
+    assert any(r.startswith("file-work-requests:") and "admin_only" in r for r in reasons)
+
+
+def test_help_never_raises_and_degrades_to_an_unread_section(sf, tmp_path):
+    def _boom():
+        raise OSError("customer.yaml unreadable")
+
+    facts = _help(sf, tmp_path, sender=_ADMIN, loader=_boom)
+    assert facts["help"] == {"read": False, "sender": None, "requests": [], "note": None}
+
+    raw = _help_raw()
+    raw["personas"] = "not a list"
+    facts = _help(sf, tmp_path, sender=_ADMIN, raw=raw)
+    assert facts["help"]["read"] is False
+    assert any(u["section"] == "help" for u in facts["unreadable"])
+
+
+def test_help_sender_check_fault_offers_nothing(sf, tmp_path):
+    class _Broken(_FakeConfig):
+        def sender_on_roster(self, sender):
+            raise RuntimeError("roster unreadable")
+
+    cfg = _Broken(_help_raw())
+    facts = _help(sf, tmp_path, sender=_ADMIN, loader=lambda: cfg)
+    assert facts["help"]["sender"]["resolved"] is False
+    assert all(r["sender_may_ask"] is False for r in facts["help"]["requests"])
+    assert any("sender unresolvable" in u["reason"] for u in facts["unreadable"])
+
+
+def _capture_build(monkeypatch, plugin) -> dict:
+    seen: dict = {}
+
+    def _fake_build(**kwargs):
+        seen.clear()
+        seen.update(kwargs)
+        return {"schema": "operator.seat.facts/v1"}
+
+    monkeypatch.setattr(plugin.seat_facts, "build_facts", _fake_build)
+    return seen
+
+
+def _email_turn(session: str, sender: str, message_id: str) -> None:
+    """One verified inbound recorded, bound and named by this turn's prompt,
+    through the real registry (the path hermes-smd-inbound drives)."""
+    from shared.inbound import SESSION_INBOUND_ORIGIN, InboundOrigin
+
+    SESSION_INBOUND_ORIGIN.record(
+        "", InboundOrigin(sender_address=sender, message_id=message_id, inbox_id="op@x")
+    )
+    SESSION_INBOUND_ORIGIN.note_turn_prompt(session, message_id)
+    SESSION_INBOUND_ORIGIN.bind(session, message_id)
+
+
+def test_handler_resolves_the_sender_from_this_turn_never_the_args(monkeypatch):
+    """The schema has no sender field; the handler resolves it from the verified
+    email that opened THIS turn. FALSIFIER: read a sender out of args."""
+    plugin = load_plugin("hermes-smd-initiation")
+    seen = _capture_build(monkeypatch, plugin)
+    _email_turn("s-1", _ADMIN, "graph-in-1")
+    plugin._seat_facts_handler({"depth": "help", "sender": "forged@x.test"}, session_id="s-1")
+    assert seen == {"depth": "help", "sender": _ADMIN}
+    plugin._seat_facts_handler({"depth": "help"}, session_id="")
+    assert seen["sender"] is None
+    plugin._seat_facts_handler({"depth": "help"}, session_id="never-seen")
+    assert seen["sender"] is None
+    plugin._seat_facts_handler({"depth": "introduction"}, session_id="s-1")
+    assert seen["sender"] is None
+
+
+@pytest.mark.parametrize(("opener", "current"), [(_ADMIN, _STAFF), (_STAFF, _ADMIN)])
+def test_handler_never_answers_for_the_sessions_opener(monkeypatch, opener, current):
+    """A session opened by one person's email, then a later turn opened by
+    another's. The session-sticky origin (first inbound wins) still names the
+    opener; the help list must not be decided for them. FALSIFIER: resolve via
+    SESSION_INBOUND_ORIGIN.get and a paralegal is offered the partner's demand
+    request (or a partner's list is cut to a paralegal's)."""
+    from shared.inbound import SESSION_INBOUND_ORIGIN, InboundOrigin
+
+    plugin = load_plugin("hermes-smd-initiation")
+    seen = _capture_build(monkeypatch, plugin)
+    _email_turn("s-2", opener, "graph-in-a")
+    plugin._seat_facts_handler({"depth": "help"}, session_id="s-2")
+    assert seen["sender"] == opener
+
+    SESSION_INBOUND_ORIGIN.record(
+        "", InboundOrigin(sender_address=current, message_id="graph-in-b", inbox_id="op@x")
+    )
+    SESSION_INBOUND_ORIGIN.note_turn_prompt("s-2", "graph-in-b")
+    SESSION_INBOUND_ORIGIN.bind("s-2", "graph-in-b")
+    # The sticky resolver would still answer for the opener: that is the hazard.
+    assert SESSION_INBOUND_ORIGIN.get("s-2").sender_address == opener
+    plugin._seat_facts_handler({"depth": "help"}, session_id="s-2")
+    assert seen["sender"] is None
+
+
+def test_tool_description_names_the_help_phrasing():
+    plugin = load_plugin("hermes-smd-initiation")
+    assert "how do we work together?" in plugin._SEAT_FACTS_DESCRIPTION.lower()
+    assert "sender_may_ask" in plugin._SEAT_FACTS_DESCRIPTION
+
+
+def test_tool_description_scopes_the_counts_line_to_the_self_description_depths():
+    """A help answer is the guide, not a self-description; the counts line is
+    noise there. FALSIFIER: "both depths" survives with three depths defined."""
+    plugin = load_plugin("hermes-smd-initiation")
+    desc = plugin._SEAT_FACTS_DESCRIPTION
+    assert "both depths" not in desc
+    assert "'help' answer carries no counts line" in desc
