@@ -94,6 +94,7 @@ import json
 import logging
 from typing import Any
 
+from shared import request_index
 from shared.customer_config import CustomerConfig
 from shared.inbound import SESSION_INBOUND_ORIGIN
 from shared.tool_registration import register_wrapped_tool
@@ -342,8 +343,8 @@ def _help_origin(session_id: Any) -> Any | None:
     """The origin of the email that opened THIS turn, or ``None``.
 
     The same ``bound_this_turn`` resolution :func:`_help_sender` documents; the
-    help pointer needs the whole origin (its message id excludes the turn's own
-    email from the counts, its conversation id names the thread)."""
+    help pointer needs the origin's message id, which excludes the turn's own
+    email from the counts and finds its thread in the request index."""
     sid = session_id if isinstance(session_id, str) else ""
     if not sid:
         return None
@@ -409,8 +410,9 @@ _HELP_SIGNALS_DESCRIPTION = (
     "instructions ask you to. Act only on 'pointer_due' (one line about asking you "
     "how to work together) and 'struggle_offer_due' (one line offering help, once "
     "in this thread); every other field is context. When 'resolved' is false, or a "
-    "*_due flag is false, offer nothing. The result carries no names, addresses, "
-    "message text or matter numbers, and you must not add any."
+    "*_due flag is false, offer nothing. A *_due flag that is true is already "
+    "recorded as offered, so it is true once only. The result carries no names, "
+    "addresses, message text or matter numbers, and you must not add any."
 )
 
 _HELP_NOTE_SCHEMA: dict[str, Any] = {
@@ -420,10 +422,9 @@ _HELP_NOTE_SCHEMA: dict[str, Any] = {
             "type": "string",
             "enum": list(help_state.KINDS),
             "description": (
-                "pointer_offered = your reply carried the first-email pointer line. "
-                "struggle_offer = your reply carried the one-line help offer in this "
-                "thread. help_given = you answered this person's question about how "
-                "to work with you."
+                "help_given = you answered this person's question about how to work "
+                "with you. pointer_offered and struggle_offer are accepted and need "
+                "nothing: operator_help_signals already recorded them."
             ),
         },
     },
@@ -432,16 +433,21 @@ _HELP_NOTE_SCHEMA: dict[str, Any] = {
 }
 
 _HELP_NOTE_DESCRIPTION = (
-    "Record that you offered or gave help to the person whose email opened this "
-    "turn, so the offer is never repeated. Call it once, after composing the reply "
-    "that carried it. The person is the platform's, never yours to name."
+    "Record that you answered how to work with you for the person whose email "
+    "opened this turn (kind help_given), so they are never pointed at help again. "
+    "Call it once, after composing that answer. The person is the platform's, "
+    "never yours to name."
 )
 
 
 def _help_signals_handler(
     args: dict[str, Any] | None = None, session_id: Any = "", **_: Any
 ) -> str:
-    """The sender-scope pointer signals, or ``{"resolved": false}``. Never raises."""
+    """The sender-scope pointer signals, or ``{"resolved": false}``. Never raises.
+
+    A ``*_due`` flag it returns true is already recorded as offered
+    (``help_state.sender_signals``), so the line is due once, whatever the
+    model does next."""
     args = args if isinstance(args, dict) else {}
     scope = args.get("scope", help_state.SCOPE_SENDER)
     try:
@@ -452,13 +458,11 @@ def _help_signals_handler(
         origin = _help_origin(session_id)
         if origin is None:
             return json.dumps({"resolved": False})
-        sender = origin.sender_address.strip().lower()
+        sender = request_index.bare_sender(origin.sender_address)
         cfg = _load_config()
-        if cfg is None or not cfg.sender_on_roster(sender):
+        if sender is None or cfg is None or not cfg.sender_on_roster(sender):
             return json.dumps({"resolved": False})
-        out = help_state.sender_signals(
-            sender, origin.message_id, getattr(origin, "conversation_id", "") or None
-        )
+        out = help_state.sender_signals(sender, origin.message_id)
         return json.dumps(out)
     except Exception:  # noqa: BLE001 — a tool handler must not raise into the loop
         logger.warning("%s: signals failed; nothing offered", TOOL_HELP_SIGNALS, exc_info=True)
@@ -466,7 +470,10 @@ def _help_signals_handler(
 
 
 def _help_note_handler(args: dict[str, Any] | None = None, session_id: Any = "", **_: Any) -> str:
-    """Record one offer or help for the turn's own sender. Enum only; never raises."""
+    """Record that the turn's own sender was helped. Enum only; never raises.
+
+    ``pointer_offered`` and ``struggle_offer`` are accepted as no-ops: the
+    signals tool recorded them when it reported them due."""
     args = args if isinstance(args, dict) else {}
     kind = args.get("kind")
     try:
@@ -474,19 +481,25 @@ def _help_note_handler(args: dict[str, Any] | None = None, session_id: Any = "",
             return json.dumps(
                 {"recorded": False, "refused": f"kind must be one of {list(help_state.KINDS)}"}
             )
+        if kind in help_state.KINDS_RECORDED_BY_SIGNALS:
+            return json.dumps(
+                {
+                    "recorded": False,
+                    "accepted": True,
+                    "reason": (
+                        f"nothing to do: {TOOL_HELP_SIGNALS} records an offer at the moment "
+                        "it reports it due"
+                    ),
+                }
+            )
         origin = _help_origin(session_id)
         if origin is None:
             return json.dumps({"recorded": False, "reason": "no single email opened this turn"})
-        sender = origin.sender_address.strip().lower()
+        sender = request_index.bare_sender(origin.sender_address)
         cfg = _load_config()
-        if cfg is None or not cfg.sender_on_roster(sender):
+        if sender is None or cfg is None or not cfg.sender_on_roster(sender):
             return json.dumps({"recorded": False, "reason": "sender not on the roster"})
-        thread = None
-        if kind == help_state.KIND_STRUGGLE:
-            thread = help_state.current_thread(
-                sender, origin.message_id, getattr(origin, "conversation_id", "") or None
-            )
-        ok = help_state.record(kind, sender, thread)
+        ok = help_state.record(kind, sender)
         return json.dumps({"recorded": bool(ok)})
     except Exception:  # noqa: BLE001
         logger.warning("%s: note failed", TOOL_HELP_NOTE, exc_info=True)

@@ -791,20 +791,26 @@ _EMAIL_REPLY_PROMPTS: dict[str, str] = {
 # skill would be pointing people at an answer it cannot give. Scheduled digests
 # and reports never see it (they are cron turns, not this prompt). The
 # platform decides WHEN (``pointer_due`` / ``struggle_offer_due`` from
-# operator_help_signals); the model decides only the wording of one line.
+# operator_help_signals, which records the offer as it reports it due, so a
+# line is due once whatever the model does next); the model decides only the
+# wording of one line. A question about the Operator itself is answered first
+# from operator_seat_facts (the base prompt's instruction) and never needs the
+# signals call.
 # No braces anywhere in it: the adapter renders ``{dot.path}`` placeholders.
 _HELP_POINTER_INSTRUCTION = (
-    "Before you write the reply, call operator_help_signals with scope 'sender'. "
+    "A help line: when the sender is asking about you or how to work with you, "
+    "call operator_seat_facts first as already instructed and answer; that reply "
+    "never carries a help line, so do not call operator_help_signals for it. A "
+    "reply that delivers a draft, confirms work you queued, answers a question "
+    "about a chronology, declines an action reserved to administrators, or goes "
+    "to anyone off your roster never carries one either. Only for any other "
+    "reply, call operator_help_signals with scope 'sender' before you write it. "
     "If pointer_due is true, end your reply with one line in your own voice, for "
     "example: If you're ever unsure how to ask for something, just ask me how we "
     "can work together. If struggle_offer_due is true, end it instead with one "
     "line offering to show them how to ask for this, with at most one example "
-    "request. After a reply that carries either line, call operator_help_note "
-    "with kind pointer_offered or struggle_offer to match. Never add either line "
-    "to a reply that answers how to work with you, delivers a draft, confirms "
-    "work you queued, answers a question about a chronology, declines an action "
-    "reserved to administrators, or goes to anyone off your roster; otherwise say "
-    "nothing about help."
+    "request. A flag that is true is already recorded as offered and is true "
+    "once only. Otherwise say nothing about help."
 )
 
 #: The skill whose binding turns the pointer on.

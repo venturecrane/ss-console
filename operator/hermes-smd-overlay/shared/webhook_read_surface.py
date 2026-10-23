@@ -113,10 +113,23 @@ WEBHOOK_READ_TOOLS: tuple[str, ...] = ("read_file",)
 #: The seat is not expected to reach it — ``bootstrap.sh`` dies when that socket
 #: is unset or is not a socket — which is the argument for the warn tier rather
 #: than the fatal one.
+#:
+#: ``operator_help_signals`` (ss-console#3423): the one class of answer that dies
+#: without it is the quiet help pointer, the single line telling a first-time
+#: correspondent they can ask the Operator how to work together. On a seat that
+#: binds operator-help the inbound email prompt instructs a call to it before
+#: any reply that might carry that line; were the tool silently absent, the
+#: model would simply never see a ``pointer_due`` and the pointer would be off
+#: with nothing anywhere saying so, indistinguishable from a seat with no
+#: first-time correspondents. Its membership is unconditional because its
+#: registration is: the initiation plugin registers it on every seat with no
+#: ``check_fn`` and no ``requires_env``, whether or not operator-help is bound,
+#: so "expected" is true on every seat and the entry never alarms falsely.
 WEBHOOK_EXPECTED_TOOLS: tuple[str, ...] = (
     "operator_seat_facts",
     "medchron_allowance",
     "medchron_job_submit",
+    "operator_help_signals",
 )
 
 #: Sentinel schema + location. Relative to HERMES_HOME, written by the agent

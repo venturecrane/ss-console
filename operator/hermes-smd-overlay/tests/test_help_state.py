@@ -4,12 +4,16 @@ What these pin, each with the harm it prevents:
 
 * the turn's OWN email never counts as a prior request (else every first email
   reads as "returning" and the pointer never fires);
-* the pointer is offered once per person, the struggle offer once per thread;
+* the pointer is offered once per person, the struggle offer once per thread,
+  recorded by the signals call itself so a skipped note cannot repeat it;
+* a routine back-and-forth is not a struggle (four emails in a thread are);
+* a display-name sender is the same person as the bare address;
+* a message the index never saw (auto-submitted mail) is offered nothing;
 * it stops for a person once helped, or after ten requests;
 * an unresolved sender gets nothing, and a "could not look" never reads as
   "first time";
 * the note tool accepts its enum and nothing else;
-* no address is ever written to the state file.
+* no address is ever written to the state file, and hashes are salted per seat.
 """
 
 from __future__ import annotations
@@ -139,43 +143,100 @@ def test_the_pointer_is_offered_once(plugin, paths, roster):
     _index("m-1")
     _turn("s-1", "m-1")
     assert _signals(plugin, "s-1")["pointer_due"] is True
-    assert _note(plugin, "s-1", "pointer_offered") == {"recorded": True}
     out = _signals(plugin, "s-1")
     assert out["pointer_offered"] is True
     assert out["pointer_due"] is False
 
 
-def test_a_repeat_ask_in_a_thread_is_offered_once_per_thread(plugin, paths, roster):
+def test_the_pointer_is_recorded_by_the_signals_call_not_the_note(plugin, paths, roster):
+    """ONCE MEANS ONCE, durably. The model is never asked to remember to note
+    the offer: the signals call that reports pointer_due records it. Here no
+    note is ever called, and a week later the request index has aged out every
+    older email from this person (only the new one is indexed, so they read as
+    first-time again): the line is still not due. FALSIFIER: remove the record
+    from sender_signals and the second call returns pointer_due again."""
+    _index("m-1")
+    _turn("s-1", "m-1")
+    assert _signals(plugin, "s-1")["pointer_due"] is True
+    paths["requests"].unlink()
+    _index("m-2")
+    _turn("s-2", "m-2")
+    out = _signals(plugin, "s-2")
+    assert out["first_time"] is True
+    assert out["pointer_offered"] is True
+    assert out["pointer_due"] is False
+
+
+def test_the_note_accepts_offer_kinds_as_no_ops(plugin, paths, roster, hs):
+    """pointer_offered and struggle_offer are accepted (an older prompt or a
+    cautious model may still send them) and change nothing."""
+    _index("m-1")
+    _turn("s-1", "m-1")
+    for kind in ("pointer_offered", "struggle_offer"):
+        out = _note(plugin, "s-1", kind)
+        assert out["recorded"] is False
+        assert out["accepted"] is True
+        assert "refused" not in out
+    assert not paths["state"].exists()
+    assert _signals(plugin, "s-1")["pointer_due"] is True
+
+
+def test_a_fourth_email_in_a_thread_is_offered_once_per_thread(plugin, paths, roster):
+    """Recorded by the signals call: no note is called anywhere here."""
     now = time.time()
-    _index("m-1", at=now - 300)
-    _index("m-2", at=now - 200)
-    _index("m-3", at=now - 100)
-    _turn("s-3", "m-3")
-    out = _signals(plugin, "s-3")
+    for i in range(1, 4):
+        _index(f"m-{i}", at=now - 400 + i)
+    _index("m-4", at=now - 100)
+    _turn("s-4", "m-4")
+    out = _signals(plugin, "s-4")
     assert out["struggle_in_thread"] is True
-    assert out["struggle_basis"] == "repeat_ask_in_thread"
+    assert out["struggle_basis"] == "repeated_messages_in_thread"
     assert out["struggle_offer_due"] is True
-    assert _note(plugin, "s-3", "struggle_offer") == {"recorded": True}
-    assert _signals(plugin, "s-3")["struggle_offer_due"] is False
+    assert _signals(plugin, "s-4")["struggle_offer_due"] is False
+    # A fifth email in the same thread: still offered only the once.
+    _index("m-5", at=now - 90)
+    _turn("s-5", "m-5")
+    assert _signals(plugin, "s-5")["struggle_offer_due"] is False
 
     # A different thread is a different offer.
-    _index("m-4", thread="t-2", at=now - 50)
-    _index("m-5", thread="t-2", at=now - 40)
-    _index("m-6", thread="t-2", at=now - 30)
-    _turn("s-6", "m-6")
-    assert _signals(plugin, "s-6")["struggle_offer_due"] is True
+    for i in range(6, 10):
+        _index(f"m-{i}", thread="t-2", at=now - 60 + i)
+    _turn("s-9", "m-9")
+    assert _signals(plugin, "s-9")["struggle_offer_due"] is True
 
 
-def test_a_single_follow_up_is_not_a_struggle(plugin, paths, roster):
-    """Second message in a thread ("make it shorter") is conversation, not
-    struggle. FALSIFIER: lower REPEAT_ASK_PRIOR to 1."""
+def test_a_routine_back_and_forth_is_not_a_struggle(plugin, paths, roster):
+    """Ask, "make it shorter", "thanks": three emails in a thread are
+    conversation, not struggle. FALSIFIER: lower REPEAT_ASK_PRIOR to 2."""
     now = time.time()
     _index("m-1", at=now - 100)
     _index("m-2", at=now - 50)
-    _turn("s-2", "m-2")
-    out = _signals(plugin, "s-2")
+    _index("m-3", at=now - 10)
+    _turn("s-3", "m-3")
+    out = _signals(plugin, "s-3")
     assert out["struggle_in_thread"] is False
     assert out["struggle_offer_due"] is False
+
+
+def test_a_display_name_sender_is_the_same_person(plugin, paths, roster, hs):
+    """A writer that stored "Chris Price <Chris@Example.com>" and an origin
+    carrying the bare address are one person: in the request count, and in the
+    help state's hash. FALSIFIER: compare raw lower-cased strings and the
+    display-name rows count as somebody else, so a returning person reads as
+    first-time."""
+    display = "Chris Price <Chris@Example-Firm.test>"
+    assert request_index.record_inbound(
+        vendor_message_id="m-0", sender=display, thread_ref="t-1", received_at=time.time() - 60
+    )
+    _index("m-1")
+    _turn("s-1", "m-1")
+    out = _signals(plugin, "s-1")
+    assert out["prior_requests"] == 1
+    assert out["first_time"] is False
+    rows = request_index.read_sender_requests(display, 0)
+    assert [r["vendor_message_id"] for r in rows] == ["m-0", "m-1"]
+    assert hs.record("help_given", display) is True
+    assert hs.read_sender(_SENDER, None)["helped"] is True
 
 
 # --------------------------------------------------------------------------- #
@@ -310,7 +371,7 @@ def test_nothing_raises_on_a_broken_state_path(plugin, paths, roster, monkeypatc
     paths["state"].mkdir(parents=True)
     _index("m-1")
     _turn("s-1", "m-1")
-    assert _note(plugin, "s-1", "pointer_offered") == {"recorded": False}
+    assert _note(plugin, "s-1", "help_given") == {"recorded": False}
     assert _signals(plugin, "s-1")["pointer_due"] is False
     assert hs.record("help_given", _SENDER) is False
 
@@ -324,12 +385,14 @@ def test_nothing_raises_on_a_broken_state_path(plugin, paths, roster, monkeypatc
 def test_no_address_or_thread_is_stored(plugin, paths, roster):
     """Only hashes. FALSIFIER: key the table on the address."""
     now = time.time()
-    for i in range(3):
+    _index("m-0", at=now - 200, thread="conv-AAQkADI0")
+    _turn("s-0", "m-0")
+    assert _signals(plugin, "s-0")["pointer_due"] is True
+    for i in range(1, 4):
         _index(f"m-{i}", at=now - 100 + i, thread="conv-AAQkADI0")
-    _turn("s-2", "m-2")
-    _note(plugin, "s-2", "pointer_offered")
-    _note(plugin, "s-2", "struggle_offer")
-    _note(plugin, "s-2", "help_given")
+    _turn("s-3", "m-3")
+    assert _signals(plugin, "s-3")["struggle_offer_due"] is True
+    _note(plugin, "s-3", "help_given")
     raw = paths["state"].read_bytes().lower()
     # The raw file (the sqlite header itself carries an '@' byte, so the
     # address is searched for, not the character): no part of it anywhere.
@@ -361,7 +424,7 @@ def test_the_output_carries_no_text_or_address(plugin, paths, roster):
 def test_old_offers_expire(plugin, paths, roster, hs, monkeypatch):
     _index("m-1")
     _turn("s-1", "m-1")
-    _note(plugin, "s-1", "pointer_offered")
+    assert _signals(plugin, "s-1")["pointer_due"] is True
     conn = sqlite3.connect(paths["state"])
     old = time.time() - (hs.RETENTION_DAYS + 1) * 86400.0
     with conn:
@@ -378,14 +441,82 @@ def test_old_offers_expire(plugin, paths, roster, hs, monkeypatch):
     assert n == 1
 
 
-def test_the_thread_falls_back_to_the_origin_conversation(plugin, paths, roster, hs):
-    """No index row for this turn (not indexed): the origin's conversation id
-    names the thread, so a struggle offer can still be recorded."""
-    _turn("s-1", "m-unindexed", conversation="conv-9")
+def test_auto_submitted_mail_is_offered_nothing(plugin, paths, roster):
+    """An out-of-office from a rostered person is never indexed by the router,
+    so its turn finds no index row of its own and nothing is due, even though
+    the person reads as first-time and the thread already holds four emails.
+    FALSIFIER: drop the own-row requirement and an auto-reply gets the pointer."""
+    from shared import inbound, inbound_message
+
+    router = load_plugin("hermes-smd-webhook-router")
+    envelope = inbound.InboundEnvelope(
+        source="agentmail",
+        surface="email",
+        ingested_at="2026-10-23T00:00:00Z",
+        trust_class=inbound.TRUST_CLASS_INTERNAL,
+    )
+
+    def _dto(mid: str, auto: bool):
+        return inbound_message.InboundMessage(
+            provider="agentmail",
+            mailbox="op@x",
+            message_id=mid,
+            thread_ref="conv-9",
+            from_addr=_SENDER.lower(),
+            to=["op@x"],
+            cc=[],
+            subject="Automatic reply",
+            body_text="I am out of the office",
+            received_at="2026-10-23T00:00:00Z",
+            provider_refs={},
+            auto_submitted=auto,
+        )
+
+    router._index_request(envelope, _dto("m-auto", True))
+    assert request_index.read_sender_requests(_SENDER, 0) == []
+    _turn("s-1", "m-auto", conversation="conv-9")
     out = _signals(plugin, "s-1")
-    assert out["thread_known"] is True
-    assert _note(plugin, "s-1", "struggle_offer") == {"recorded": True}
-    assert hs.read_sender(_SENDER, "conv-9")["offered_in_thread"] is True
+    assert out["this_message_indexed"] is False
+    assert out["first_time"] is True
+    assert out["pointer_due"] is False
+
+    # Four person-written emails in the thread, then an auto-reply in it.
+    for i in range(4):
+        router._index_request(envelope, _dto(f"m-{i}", False))
+    assert len(request_index.read_sender_requests(_SENDER, 0)) == 4
+    router._index_request(envelope, _dto("m-auto-2", True))
+    _turn("s-2", "m-auto-2", conversation="conv-9")
+    out = _signals(plugin, "s-2")
+    assert out["this_message_indexed"] is False
+    assert out["struggle_offer_due"] is False
+    assert out["pointer_due"] is False
+
+
+def test_hashes_are_salted_per_seat(tmp_path, hs):
+    """Two seats' files hash the same person differently, so a hash cannot be
+    matched against a list of known addresses without the file's own salt.
+    FALSIFIER: hash without the salt and the two keys are equal."""
+    a, b = tmp_path / "a.db", tmp_path / "b.db"
+    assert hs.record("help_given", _SENDER, path=a)
+    assert hs.record("help_given", _SENDER, path=b)
+    keys = []
+    for p in (a, b):
+        conn = sqlite3.connect(p)
+        try:
+            salt = conn.execute("SELECT value FROM help_meta WHERE key='salt'").fetchone()[0]
+            keys.append(conn.execute("SELECT sender_hash FROM help_senders").fetchone()[0])
+        finally:
+            conn.close()
+        assert len(salt) == 64
+        assert hs.sender_key(_SENDER, salt) == keys[-1]
+    assert keys[0] != keys[1]
+    assert hs.read_sender(_SENDER, None, path=a)["helped"] is True
+
+
+def test_the_lookback_is_the_index_sender_custody(hs):
+    """Prior requests are counted over exactly the window the index can
+    attribute a request to a person, never a longer number it cannot honor."""
+    assert hs.LOOKBACK_DAYS == request_index.TEXT_RETENTION_DAYS
 
 
 def test_the_narrow_request_reader_returns_no_text(paths):

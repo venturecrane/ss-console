@@ -2401,7 +2401,9 @@ def test_the_pointer_is_rendered_only_when_operator_help_is_bound(monkeypatch, c
     bound = _wh._materialize_webhook_platform(_with_help(cust))
     prompt = bound["webhook"]["extra"]["routes"][route]["prompt"]
     assert _POINTER in prompt
-    assert "operator_help_note" in prompt
+    # Offers are recorded by the signals tool itself; the prompt never asks the
+    # model to remember to note one (a skipped note must not repeat a line).
+    assert "operator_help_note" not in prompt
 
     for unbound in (
         cust,
@@ -2432,6 +2434,17 @@ def test_the_pointer_text_is_brace_free_and_has_no_em_dash():
     assert "\u2014" not in text
     assert "\u2013" not in text
     assert "If you're ever unsure how to ask for something" in text
+
+
+def test_the_pointer_defers_to_seat_facts_for_questions_about_the_operator():
+    """A question about the Operator is answered from operator_seat_facts first,
+    and the help-signals call is only for replies that might carry the line."""
+    text = _wh._HELP_POINTER_INSTRUCTION
+    facts = text.index("call operator_seat_facts first")
+    signals = text.index("call operator_help_signals with scope 'sender'")
+    assert facts < signals
+    assert "do not call operator_help_signals for it" in text
+    assert "Only for any other reply" in text
 
 
 def test_the_pointer_never_reaches_a_skill_or_mcp_route(monkeypatch):
