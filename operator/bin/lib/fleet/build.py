@@ -32,6 +32,7 @@ import shutil
 import ssl
 import subprocess
 import tarfile
+import time
 import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -92,12 +93,23 @@ class BuildOptions:
 
 REGISTRY_HOST = ids.FLEET_REGISTRY.split("/", 1)[0]
 ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
+# How long a just-pushed image is given to become visible at the registry's
+# manifest endpoint before the build records no capabilities: the waits between
+# attempts, about four minutes in all. The first folded image (2026-10-23,
+# img-202610230344-b39e3bf5) came back HTTP 404 on the single GET the build made
+# seconds after the push and `fleet artifacts` had to re-read it by hand; the
+# remote builder's push and the registry's index are not one write.
+MANIFEST_RETRY_DELAYS_S: tuple[float, ...] = (15.0, 30.0, 60.0, 120.0)
 MANIFEST_ACCEPT = ", ".join(
     (
         "application/vnd.oci.image.manifest.v1+json",
         "application/vnd.docker.distribution.manifest.v2+json",
     )
 )
+
+
+class RegistryNotReady(ToolingError):
+    """The registry answered 404 for a manifest: the image is not visible there (yet)."""
 
 
 class ImageExtractor:
@@ -110,14 +122,21 @@ class ImageExtractor:
     capabilities because of it.
     """
 
-    def __init__(self, runner: Runner) -> None:
+    def __init__(
+        self,
+        runner: Runner,
+        sleep: Callable[[float], None] = time.sleep,
+        log: Callable[[str], None] | None = None,
+    ) -> None:
         self.runner = runner
+        self.sleep = sleep
+        self.log = log or (lambda _line: None)
         self._token: str | None = None
 
     def extract(self, ref: str) -> dict[str, bytes]:
         repo, digest = ref.split("@", 1)
         repo = repo.rsplit(":", 1)[0]
-        man = json.loads(self._manifest(repo, digest))
+        man = json.loads(self._manifest_when_visible(repo, digest))
         wanted = {v: k for k, v in ARTIFACT_PATHS.items()}
         found: dict[str, bytes] = {}
         for layer in reversed(man.get("layers") or []):
@@ -156,9 +175,27 @@ class ImageExtractor:
                 )
         except (OSError, http.client.HTTPException) as exc:
             raise ToolingError(f"registry GET {path} failed: {exc}") from exc
+        if status == 404:
+            raise RegistryNotReady(f"registry GET {path} returned HTTP 404 (not visible at the registry)")
         if status != 200:
             raise ToolingError(f"registry GET {path} returned HTTP {status}")
         return body
+
+    def _manifest_when_visible(self, repo: str, digest: str) -> bytes:
+        """The manifest, waiting out registry propagation: a 404 is retried on
+        MANIFEST_RETRY_DELAYS_S and only the last one is an error. Any other
+        failure is raised at once; a 404 for a digest that was never pushed
+        costs the whole schedule, which is the price of not guessing."""
+        for attempt, delay in enumerate(MANIFEST_RETRY_DELAYS_S + (None,), start=1):
+            try:
+                return self._manifest(repo, digest)
+            except RegistryNotReady as exc:
+                if delay is None:
+                    waited = int(sum(MANIFEST_RETRY_DELAYS_S))
+                    raise ToolingError(f"{exc} after {attempt} attempts over {waited}s") from exc
+                self.log(f"image not visible at the registry yet (attempt {attempt}); retrying in {int(delay)}s")
+                self.sleep(delay)
+        raise AssertionError("unreachable")
 
     @staticmethod
     def _split(repo: str) -> tuple[str, str]:

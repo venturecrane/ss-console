@@ -210,6 +210,51 @@ def test_extractor_reads_artifacts_from_small_layers_newest_first(monkeypatch: p
     assert set(found) == {"image-manifest.json", "image-capabilities.json", "_env-arrays.generated.sh"}
 
 
+def test_extractor_waits_out_registry_propagation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 404 on the manifest right after a push is propagation, not absence:
+    the build retries on the schedule and reads the image once it is visible.
+    2026-10-23: the first folded image recorded no capabilities on one GET."""
+    from bin.lib.fleet.build import MANIFEST_RETRY_DELAYS_S, RegistryNotReady
+
+    manifest = {"layers": [{"digest": "sha256:l1", "size": 10}]}
+    answers = [RegistryNotReady("registry GET /v2/x/manifests/sha256:a returned HTTP 404"), None, None]
+    slept: list[float] = []
+    logged: list[str] = []
+    ex = ImageExtractor(ScriptRunner(Result(0, "tok", "")), sleep=slept.append, log=logged.append)
+
+    def manifest_or_404(repo: str, digest: str) -> bytes:
+        exc = answers.pop(0)
+        if exc is not None:
+            raise exc
+        return json.dumps(manifest).encode()
+
+    monkeypatch.setattr(ex, "_manifest", manifest_or_404)
+    monkeypatch.setattr(ex, "_blob", lambda ref: _layer({"app/image-capabilities.json": b"{}"}))
+    found = ex.extract(f"{ids.FLEET_REGISTRY}:rel-1@sha256:" + "a" * 64)
+    assert found == {"image-capabilities.json": b"{}"}
+    assert slept == [MANIFEST_RETRY_DELAYS_S[0]] and len(logged) == 1 and "retrying" in logged[0]
+
+
+def test_extractor_gives_up_after_the_retry_schedule(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Falsifier: a digest the registry never shows exhausts the schedule and
+    raises a ToolingError (which upload_artifacts records as 'without
+    capabilities'); any non-404 failure is raised at once with no retry."""
+    from bin.lib.fleet.build import MANIFEST_RETRY_DELAYS_S, RegistryNotReady
+
+    slept: list[float] = []
+    ex = ImageExtractor(ScriptRunner(Result(0, "tok", "")), sleep=slept.append)
+    monkeypatch.setattr(ex, "_manifest", lambda repo, digest: (_ for _ in ()).throw(RegistryNotReady("HTTP 404")))
+    with pytest.raises(ToolingError, match="HTTP 404 after 5 attempts over 225s"):
+        ex.extract(f"{ids.FLEET_REGISTRY}:rel-1@sha256:" + "b" * 64)
+    assert slept == list(MANIFEST_RETRY_DELAYS_S)
+
+    slept.clear()
+    monkeypatch.setattr(ex, "_manifest", lambda repo, digest: (_ for _ in ()).throw(ToolingError("HTTP 503")))
+    with pytest.raises(ToolingError, match="HTTP 503"):
+        ex.extract(f"{ids.FLEET_REGISTRY}:rel-1@sha256:" + "b" * 64)
+    assert slept == []
+
+
 # -- render-fly-toml ------------------------------------------------------------------------
 def test_render_fly_toml_sourced_mode_renders_every_token(tmp_path: Path) -> None:
     out = tmp_path / "fly.toml"

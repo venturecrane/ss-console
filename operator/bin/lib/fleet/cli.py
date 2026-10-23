@@ -137,7 +137,9 @@ def _parser() -> argparse.ArgumentParser:
 
 def cmd_build(ctx: Ctx, a: argparse.Namespace) -> int:
     opts = BuildOptions(a.notes, tuple(a.declare_secret), not a.not_volume_forward_compatible)
-    rel = Builder(ctx.repo, ctx.runner, ctx.fly, ctx.store, ctx.r2, ImageExtractor(ctx.runner), ctx.log).build(opts)
+    rel = Builder(
+        ctx.repo, ctx.runner, ctx.fly, ctx.store, ctx.r2, ImageExtractor(ctx.runner, ctx.sleep, ctx.log), ctx.log
+    ).build(opts)
     print(rel["release_id"])
     return 0
 
@@ -148,7 +150,9 @@ def cmd_artifacts(ctx: Ctx, a: argparse.Namespace) -> int:
     if not release or release.get("kind") != "image":
         raise Refusal(f"no image release {a.release_id} in fleet_releases (fleet releases lists them)")
     meta = ctx.r2.get_json(image_key(release["image_digest"], "release.json")) or {}
-    builder = Builder(ctx.repo, ctx.runner, ctx.fly, ctx.store, ctx.r2, ImageExtractor(ctx.runner), ctx.log)
+    builder = Builder(
+        ctx.repo, ctx.runner, ctx.fly, ctx.store, ctx.r2, ImageExtractor(ctx.runner, ctx.sleep, ctx.log), ctx.log
+    )
     builder.upload_artifacts(release, {"hermes_sha": meta.get("hermes_sha") or ""})
     return 0
 
