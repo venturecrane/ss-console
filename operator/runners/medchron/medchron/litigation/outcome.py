@@ -32,6 +32,8 @@ REASON_CODES = (
     "scope_empty",
     "inventory_unreadable",
     "fetch_unfinished",
+    # 2026-10-23: the files still to fetch do not fit on the volume.
+    "disk_short",
     "read_incomplete",
     "gate_refused",
     "leak_found",

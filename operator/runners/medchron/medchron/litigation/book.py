@@ -299,8 +299,16 @@ def _changed_rows(ms: list[dict[str, Any]], changes: dict[str, list[dict[str, An
 
 
 def build(
-    ms: list[dict[str, Any]], changes: dict[str, list[dict[str, Any]]], out: Path, as_of: dt.date
+    ms: list[dict[str, Any]],
+    changes: dict[str, list[dict[str, Any]]],
+    out: Path,
+    as_of: dt.date,
+    *,
+    discovery: bool = True,
 ) -> dict[str, Any]:
+    """``discovery=False`` (a court-only request) leaves the Discovery tab out:
+    its values were not read this run, and a list never shows a stale column
+    as current."""
     from openpyxl import Workbook
 
     rows = defendant_rows(ms)
@@ -316,25 +324,26 @@ def build(
         DEF_WIDTHS,
     )
     _sheet(wb, "All defendants", DEF_HEADER, [r["cells"] for r in rows], DEF_WIDTHS)
-    _sheet(
-        wb,
-        "Discovery",
-        [
-            "Responsible (Smokeball)",
-            "Matter #",
-            "Case",
-            "Direction",
-            "Set",
-            "Party",
-            "Date served",
-            "Source",
-            "Responses served",
-            "Responses date",
-            "Responses (source)",
-        ],
-        _discovery_rows(ms),
-        [18, 10, 30, 22, 30, 26, 12, 40, 12, 12, 40],
-    )
+    if discovery:
+        _sheet(
+            wb,
+            "Discovery",
+            [
+                "Responsible (Smokeball)",
+                "Matter #",
+                "Case",
+                "Direction",
+                "Set",
+                "Party",
+                "Date served",
+                "Source",
+                "Responses served",
+                "Responses date",
+                "Responses (source)",
+            ],
+            _discovery_rows(ms),
+            [18, 10, 30, 22, 30, 26, 12, 40, 12, 12, 40],
+        )
     _notes_sheets(wb, ms)
     changed = _changed_rows(ms, changes)
     _sheet(
