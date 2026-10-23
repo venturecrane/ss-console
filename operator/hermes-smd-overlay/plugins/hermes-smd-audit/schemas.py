@@ -1,0 +1,396 @@
+"""Audit row shape and accepted action_type vocabulary.
+
+Ported from ss-console/operator/adapter/audit_log.py (the ACCEPTED_ACTION_TYPES
+frozenset + ActorRole enum + AuditEvent dataclass).
+
+The tool-action-class vocabulary (``ActionClass``, ``BANNED_TOOLS``,
+``BANNED_REASON``, ``TOOL_ACTION_CLASS_MAP``, ``BannedToolError``,
+``ToolClassification``, ``classify_tool``) lives in ``shared.action_classes``
+— the audit and trust plugins both import from there to keep one source of
+truth (consolidation: task #33). ``HookActionClass`` is preserved here as a
+deprecated alias for ``ActionClass`` so downstream audit consumers
+(``emit.py``, ``test_audit_emit.py``) keep working without churn.
+
+GEPA removal
+------------
+
+The original ACCEPTED_ACTION_TYPES carried ``GEPA_DISABLED_VERIFIED`` to record
+boot-time evidence that the GEPA self-evolution subsystem was disabled inside
+each customer Machine. ADR 0018 is superseded by ADR 0015 (pin-only fork posture)
+and the May 2026 architectural realignment: GEPA does not exist in upstream
+Hermes, so there is nothing to disable, no boot-check to emit, and no need for
+the audit row. The action_type is removed here. Boot-checks for non-existent
+subsystems were a P0 doctrine bug; not carrying the action_type forward closes
+the doctrine surface.
+
+Audit table column shape (mirrors the per-customer D1 schema):
+
+    id            TEXT PRIMARY KEY    -- ULID, sortable by time
+    ts            TEXT NOT NULL       -- ISO 8601 UTC with millisecond precision
+    action_type   TEXT NOT NULL       -- one of ACCEPTED_ACTION_TYPES
+    actor         TEXT NOT NULL       -- 'agent' | 'captain' | person_mappings.id
+    actor_role    TEXT                -- ActorRole value (string for forward-compat)
+    skill_name    TEXT                -- originating skill identifier
+    matter_ref    TEXT                -- opaque per-vertical reference
+    input_digest  TEXT                -- SHA-256 of caller-supplied input bytes
+    output_digest TEXT                -- SHA-256 of caller-supplied output bytes
+    diff_digest   TEXT                -- SHA-256 of caller-supplied diff bytes
+    trust_ceiling TEXT                -- skill ceiling at action time
+    metadata      TEXT                -- canonical JSON dict (sort_keys, no whitespace)
+"""
+
+import enum
+from dataclasses import dataclass, field
+
+from shared.action_classes import (
+    BANNED_REASON,
+    BANNED_TOOLS,
+    TOOL_ACTION_CLASS_MAP,
+    ActionClass,
+)
+
+# ---------------------------------------------------------------------------
+# Accepted action_type vocabulary
+#
+# Adding or removing an action type means updating any fabrication-filter or
+# compliance-evidence-packet consumers in the same PR; the dashboard surfaces
+# unknown action_types as warnings.
+# ---------------------------------------------------------------------------
+
+
+ACCEPTED_ACTION_TYPES: frozenset[str] = frozenset(
+    {
+        # Draft lifecycle
+        "DRAFT_CREATED",
+        "DRAFT_APPROVED",
+        "DRAFT_REJECTED",
+        "DRAFT_EXPIRED",
+        # Memory rules
+        "MEMORY_RULE_ADDED",
+        "MEMORY_RULE_EDITED",
+        "MEMORY_RULE_DELETED",
+        # Trust ceiling
+        "TRUST_PROMOTED",
+        "TRUST_DEMOTED",
+        # Skill activation
+        "SKILL_ENABLED",
+        "SKILL_DISABLED",
+        # Routine scheduling (ss-console #2498). DELIBERATELY NOT the two above.
+        # SKILL_ENABLED is a skill-catalog mutation — whether the Operator is
+        # ALLOWED to do a thing. These are whether it is SCHEDULED to. The
+        # distinction is the whole point of the issue: ashton-price has every
+        # skill enabled and, since #2332, zero routines scheduled, so a ledger
+        # that conflated them would report that seat as fully armed while it
+        # deliberately initiates nothing. Written by the audit plugin at
+        # registration from the bootstrap spool (shared.routine_change_spool),
+        # on the DELTA only — the cron materializer recreates every managed job
+        # each boot, and a row per recreation would claim a change no one made.
+        "ROUTINE_ENABLED",
+        "ROUTINE_DISABLED",
+        # Agent lifecycle
+        "AGENT_STOPPED",
+        "AGENT_RESUMED",
+        # Connector lifecycle
+        "CONNECTOR_BOUND",
+        "CONNECTOR_UNBOUND",
+        "CONNECTOR_AUTH_EXPIRED",
+        "CONNECTOR_AUTH_RESTORED",
+        "CONNECTOR_TOKEN_REFRESHED",
+        "CONNECTOR_HEALTH_PROBE_FAILED",
+        # Scope changes
+        "SCOPE_CHANGED",
+        # Safety substrate
+        "INVARIANT_VIOLATION",
+        "INVARIANT_BOOT_CHECK_FAILED",
+        # RBAC and compliance
+        "RBAC_EVENT",
+        "COMPLIANCE_PACKET_EXPORTED",
+        # Voice gate
+        "VOICE_GATE_PASSED",
+        "VOICE_GATE_NEAR_PASS",
+        "VOICE_GATE_FAILED",
+        # Fabrication and escalation
+        "FABRICATION_FILTER_TRIGGERED",
+        "IDENTIFIER_UNVERIFIED",  # A1 report-only identifier gate (tier3, non-blocking)
+        "ESCALATION_FIRED",
+        "ESCALATION_ACKNOWLEDGED",
+        # Decommission lifecycle
+        "DECOMMISSION_INITIATED",
+        "DECOMMISSION_DRAIN_COMPLETE",
+        "DECOMMISSION_FINAL",
+        # Honcho overlay (ADR 0016) — proposer-only persona observations.
+        "HONCHO_OBSERVATION",
+        "HONCHO_PROMOTION",
+        "HONCHO_DISMISSAL",
+        # Skill Curator overlay (ADR 0017) — observer-only skill drafts.
+        "CURATOR_DRAFT",
+        "CURATOR_PROMOTION",
+        "CURATOR_DISMISSAL",
+        # LLM-turn audit emitted by the post_llm_call hook.
+        "LLM_TURN_COMPLETED",
+        # Per-tool audit emitted by the post_tool_call hook.
+        "TOOL_CALL_COMPLETED",
+        # Mediated connector lifecycle. A decision row is written before grant
+        # redemption; execution is paired with broker-signed receipt evidence.
+        "BROKER_DECISION_ALLOWED",
+        "BROKER_EXECUTED",
+        # Subagent lifecycle emitted by the subagent_stop hook
+        # (ADR 0021 Stream C — one row per delegated child).
+        "SUBAGENT_STOPPED",
+        # Parent-side refusal when a subagent return fails the assembly-time
+        # schema contract (ADR 0021 Stream C — emitted by the ss-console
+        # delegate_task skills; the overlay accepts the action type so the
+        # parent's row writes through the same per-customer D1 binding).
+        "SUBAGENT_INCOMPLETE",
+        # Agent-authored skill creation observation emitted by post_tool_call
+        # when the dispatched tool is `skill_manage` (ADR 0017 §40 — mirror-
+        # don't-gate observation of the Hermes-native Skill Curator surface).
+        "AGENT_SKILL_CREATED",
+        # Inbound webhook routed to a skill by hermes-smd-webhook-router
+        # (ADR 0021 Stream E). One row per successful route; the payload
+        # source + event_type land in metadata. Observation only; the
+        # router does not gate dispatch.
+        "WEBHOOK_ROUTED",
+        # Untrusted inbound content received + attributed by
+        # hermes-smd-webhook-router (ADR 0027 inbound convergence). One row per
+        # dispatched inbound item; the provenance envelope (item_id,
+        # trust_class, source, surface, verification, content_digest) lands in
+        # metadata — never the content itself. Canonical type added ss-console-
+        # side by PR-B; mirrored here so the overlay's AuditLogWriter accepts it.
+        "INBOUND_RECEIVED",
+        # Live config apply written to the volume by the root-owned config
+        # applier (ADR 0044 WS3 — config_applier.apply). One row per applied
+        # customer.yaml; the customer slug, new config-epoch, and changed-path
+        # list/count land in metadata, with input/output digests carrying the
+        # old/new config provenance — never the config CONTENT (it can carry
+        # token_ref / secret material). If a parallel ss-console action-type
+        # registry also gates this, add CONFIG_WRITE there too.
+        "CONFIG_WRITE",
+        # ------------------------------------------------------------------
+        # Declared 2026-08-02 (ss-console #2122 vocabulary-integrity pass).
+        # Every type below was ALREADY BEING WRITTEN to live ledgers through
+        # the unvalidated writer path (shared.audit_contract.agent_event_params
+        # + raw execute — which never checks this set), so the rows exist on
+        # both seats while the vocabulary denied them. Declaring is the only
+        # correct direction: blocking would break live reply/webhook paths,
+        # and the ss-console viewer vocabulary must gain the same members in
+        # its paired PR (parity is cross-repo, human-enforced — see
+        # tests/test_audit_vocabulary_completeness.py for the in-repo guard).
+        # Producers, by file:
+        #   plugins/hermes-smd-reply/__init__.py + sweeper.py
+        "REPLY_SENT",
+        "REPLY_HELD",
+        "REPLY_FAILED",
+        # ss#2167 — a reply cited a matter whose party list this turn never
+        # read, so membership could be neither confirmed nor denied. Recorded
+        # and NOT held: get_matter fires on 8 of 86 reply turns, so holding on
+        # unresolved would withhold correct client replies at an unmeasured
+        # rate. This row IS the measurement that decides whether it should.
+        "MATTER_UNRESOLVED",
+        #   plugins/hermes-smd-trust/__init__.py (confirm-send seam)
+        "CONFIRM_SEND_DISPATCHED",
+        "CONFIRM_SEND_FAILED",
+        #   shared/spec_gate.py (authored-format gate, overlay #207)
+        "SPEC_GATE_TRIGGERED",
+        #   plugins/hermes-smd-trust/voice_gate.py (report-only voice gate)
+        "VOICE_GATE_TRIGGERED",
+        #   webhook_gate.py (suppression audit)
+        "WEBHOOK_SUPPRESSED",
+        # Broker-side writer (ss-console operator/workspace_broker/corrections.py)
+        # appends this directly to the ledger; declared here so the vocabulary
+        # names every type a ledger can contain, not only the ones this repo
+        # writes (ss-console #2091 correction capture).
+        "CORRECTION_PROPOSED",
+        # Conversational establishment, also broker-side (ss-console
+        # operator/workspace_broker/establishment.py). The two ESTABLISHMENT
+        # types have been reaching client ledgers since establishment shipped
+        # (ss-console#2161) and were declared in NEITHER vocabulary, so nothing
+        # anywhere named a type a ledger already contained. RULE_PROPOSED is the
+        # propose/read-back/confirm path (ss-console#2529). Declared here for
+        # the same reason CORRECTION_PROPOSED is: the vocabulary names every
+        # type a ledger can contain, not only the ones this repo writes.
+        "RULE_PROPOSED",
+        "ESTABLISHMENT_SUBMITTED",
+        "ESTABLISHMENT_RESULT",
+        # ss-console#2546, the loop closing round the silences #2529 left. Two
+        # of these are broker-side like the three above (an administrator's
+        # decline; a rule that lapsed unanswered and whose author has now been
+        # told). RULE_REQUEST_NOTIFIED is the one this repo WRITES: the
+        # establishment plugin emits it when a non-admin's rule has actually
+        # been emailed to the administrators the firm named on
+        # scope.rule_requests_to, carrying who was notified and never the rule's
+        # text. It is its own row rather than a field on the send's row because
+        # the two answer different questions: the send row says a message left,
+        # this says a specific request reached the people authorized to answer
+        # it.
+        "RULE_REQUEST_NOTIFIED",
+        "RULE_DECLINED",
+        "RULE_LAPSED",
+        # ss-console#2546, the operations half. All three are BROKER-written
+        # (ss-console operator/workspace_broker/establishment.py), declared here
+        # for the reason RULE_DECLINED and RULE_LAPSED are: the vocabulary names
+        # every type a client ledger can CONTAIN, not only the ones this repo
+        # writes, and a seat whose audit layer refused a type its own broker had
+        # just written would drop the row that says who decided a change.
+        #
+        # They are deliberately not the RULE_* three. A rule is a sentence an
+        # administrator of the FIRM may apply; an operations request is a change
+        # only SMD makes, and a ledger that filed both under one name would make
+        # "who decided this" unanswerable from the rows. RECORDED is the ask,
+        # RESOLVED carries SMD's answer (done, declined or withdrawn) and whether
+        # a reason was given but never the reason itself, and LAPSED is nobody at
+        # SMD having answered within the week.
+        "OPS_REQUEST_RECORDED",
+        "OPS_REQUEST_RESOLVED",
+        "OPS_REQUEST_LAPSED",
+        # ss-console#3152, proven delivery. Both BROKER-written (ss-console
+        # operator/workspace_broker/delivery_proof.py), declared for the reason
+        # the OPS_REQUEST_* three are. DELIVERY_PROOF_FAILED is a job lane's
+        # delivery that could not be proven (shared.heartbeat counts it as a
+        # ``failed`` shortfall, which pages SMD); DELIVERY_PROVEN is the
+        # evidence a delivered job's claim rests on.
+        "DELIVERY_PROOF_FAILED",
+        "DELIVERY_PROVEN",
+    }
+)
+
+
+class ActorRole(str, enum.Enum):
+    """Caller's role at the time of the audited action."""
+
+    PRINCIPAL = "principal"
+    OPERATOR = "operator"
+    COMPLIANCE = "compliance"
+    AGENT = "agent"
+    CAPTAIN = "captain"
+
+
+# ---------------------------------------------------------------------------
+# Agent-authored skill inventory — ADR 0022 Stream 2 (skill body persistence)
+#
+# Mirrors ss-console/operator/migrations/0008 + 0009 combined. Lives in
+# the per-customer D1 audit binding (SMD_D1_AUDIT_BINDING). The audit
+# plugin owns the writes; skill_capture.py implements the write-ahead
+# pattern (D1 row first with r2_status='pending', R2 PUT follows, UPDATE
+# to persisted/failed). Boot-time reconciler retries pending/failed rows.
+#
+# Schema is the authoritative copy from
+# docs/specs/operator/skill-body-persistence.md (ss-console).
+# Idempotent CREATE TABLE IF NOT EXISTS / ALTER on each Machine boot so
+# the schema converges without a separate migration tool.
+# ---------------------------------------------------------------------------
+
+
+AGENT_SKILLS_INVENTORY_DDL: str = """
+CREATE TABLE IF NOT EXISTS agent_skills_inventory (
+    customer_slug       TEXT NOT NULL,
+    persona_slug        TEXT NOT NULL,
+    skill_name          TEXT NOT NULL,
+    skill_content_hash  TEXT NOT NULL,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    source_turn_id      TEXT NOT NULL,
+    archived_at         TEXT,
+    archived_reason     TEXT,
+    removed_at          TEXT,
+    removed_by          TEXT,
+    r2_key              TEXT,
+    r2_status           TEXT NOT NULL DEFAULT 'unknown'
+        CHECK (r2_status IN ('unknown', 'pending', 'persisted', 'failed')),
+    r2_write_error      TEXT,
+    PRIMARY KEY (customer_slug, persona_slug, skill_name, skill_content_hash)
+);
+"""
+
+AGENT_SKILLS_INVENTORY_ACTIVE_INDEX_DDL: str = """
+CREATE INDEX IF NOT EXISTS agent_skills_inventory_active
+    ON agent_skills_inventory (persona_slug, created_at)
+    WHERE archived_at IS NULL AND removed_at IS NULL;
+"""
+
+AGENT_SKILLS_INVENTORY_BY_PERSONA_INDEX_DDL: str = """
+CREATE INDEX IF NOT EXISTS agent_skills_inventory_by_persona
+    ON agent_skills_inventory (persona_slug, created_at);
+"""
+
+AGENT_SKILLS_INVENTORY_BY_HASH_INDEX_DDL: str = """
+CREATE INDEX IF NOT EXISTS agent_skills_inventory_by_hash
+    ON agent_skills_inventory (skill_content_hash);
+"""
+
+AGENT_SKILLS_INVENTORY_R2_PENDING_INDEX_DDL: str = """
+CREATE INDEX IF NOT EXISTS agent_skills_inventory_r2_pending
+    ON agent_skills_inventory (r2_status, created_at)
+    WHERE r2_status IN ('pending', 'failed');
+"""
+
+
+AUDIT_PLUGIN_DDLS: tuple[str, ...] = (
+    AGENT_SKILLS_INVENTORY_DDL,
+    AGENT_SKILLS_INVENTORY_ACTIVE_INDEX_DDL,
+    AGENT_SKILLS_INVENTORY_BY_PERSONA_INDEX_DDL,
+    AGENT_SKILLS_INVENTORY_BY_HASH_INDEX_DDL,
+    AGENT_SKILLS_INVENTORY_R2_PENDING_INDEX_DDL,
+)
+
+
+# ---------------------------------------------------------------------------
+# Deprecated alias for the action-class enum.
+#
+# The vocabulary moved to ``shared.action_classes.ActionClass`` (task #33
+# consolidation). ``HookActionClass`` is retained as a module-level alias
+# so existing audit-side consumers (``emit.py``, ``test_audit_emit.py``,
+# anything that imports ``schemas.HookActionClass``) keep working without
+# touching every call site. New code should import ``ActionClass`` directly
+# from ``shared.action_classes``.
+# ---------------------------------------------------------------------------
+
+
+HookActionClass = ActionClass
+
+
+@dataclass(frozen=True)
+class AuditEvent:
+    """Strongly-typed event payload accepted by the emission helpers.
+
+    Required:
+        action_type — one of ACCEPTED_ACTION_TYPES
+        actor       — 'agent' | 'captain' | person_mappings.id
+
+    Optional:
+        actor_role     — ActorRole enum (or string for forward-compat)
+        skill_name     — name of the skill that originated the action
+        matter_ref     — opaque per-vertical reference (matter id, lead id)
+        input_payload  — bytes to digest; never stored
+        output_payload — bytes to digest; never stored
+        diff_payload   — bytes to digest; never stored
+        trust_ceiling  — value of the skill's trust_ceiling at action time
+        metadata       — JSON-serializable dict; merged then json.dumps()ed
+    """
+
+    action_type: str
+    actor: str
+    actor_role: ActorRole | None = None
+    skill_name: str | None = None
+    matter_ref: str | None = None
+    input_payload: bytes | None = None
+    output_payload: bytes | None = None
+    diff_payload: bytes | None = None
+    trust_ceiling: str | None = None
+    metadata: dict | None = field(default=None)
+
+
+# Scope keys lifted into per-tool audit metadata.
+SCOPE_KEYS: tuple[str, ...] = ("matter_id", "customer_segment")
+
+
+__all__ = [
+    "ACCEPTED_ACTION_TYPES",
+    "ActionClass",
+    "ActorRole",
+    "AuditEvent",
+    "BANNED_REASON",
+    "BANNED_TOOLS",
+    "HookActionClass",
+    "SCOPE_KEYS",
+    "TOOL_ACTION_CLASS_MAP",
+]

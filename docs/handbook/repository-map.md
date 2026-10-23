@@ -17,17 +17,16 @@ sources:
 
 This page answers "where is the code for X": which repository, which directory, which module. An administrator needs it when an agent's report names a file path or a module and you want to know what part of the business it belongs to.
 
-## The three repositories
+## The two repositories
 
-The venture spans three repositories, and moving between them is ordinary work inside one venture (CLAUDE.md, Venture Repositories):
+The venture spans two repositories, and moving between them is ordinary work inside one venture (CLAUDE.md, Venture Repositories):
 
 | Repository | Visibility | What lives there |
 |---|---|---|
-| `venturecrane/ss-console` | Public | This repo: the marketing site, admin console, client portal, Operator skills, contracts and config, and each seat's `customer.yaml`. |
-| `venturecrane/hermes-smd-overlay` | Public | The Operator runtime overlay: the trust plugin, gates, the Python side of the connectors, the boot smoke test, and contract fixtures that mirror this repo's. Seats pin it by `OVERLAY_REF`. |
+| `venturecrane/ss-console` | Public | This repo: the marketing site, admin console, client portal, Operator skills, contracts and config, each seat's `customer.yaml`, and the Operator runtime overlay at `operator/hermes-smd-overlay/` (the trust plugin, gates, the Python side of the connectors, bootstrap). |
 | `venturecrane/engagements` | Private | Client material: dossiers, correspondence, proposals, agreements, under the same `operator/customers/<slug>/` prefix used here (ADR 0081). |
 
-A change that spans more than one of them is shipped only when every repository it touches is shipped; mirrored fixtures are copied across in the same change.
+Until 2026-10-22 the overlay was a third repository, `venturecrane/hermes-smd-overlay`, pinned into the seat image by `OVERLAY_REF`, with contract fixtures copied across by hand. ADR 0095 folded it into this repo: the image is built from the local tree, a runtime change is one pull request, and the version a seat reports is the ss-console commit its image was built from. The standalone repo is locked, and is archived once every seat runs a folded image; its history is kept here as the branch `overlay-history`.
 
 ## Top-level directories
 
@@ -36,7 +35,7 @@ The repo is `venturecrane/ss-console`. From the root:
 | Path | What lives here |
 |---|---|
 | `src/` | The Astro SSR application - marketing, admin, portal, API, and all the business logic in `src/lib/`. The bulk of the console plane. |
-| `operator/` | The Operator plane's authored content and tooling: vertical skill bodies, the safety substrate, capability adapters, connectors, per-customer `customer.yaml` files, the workspace broker, provisioning scripts. Python and YAML, not the Worker. |
+| `operator/` | The Operator plane's authored content and tooling: vertical skill bodies, the safety substrate, capability adapters, connectors, per-customer `customer.yaml` files, the workspace broker, provisioning scripts, and the seat runtime overlay (`operator/hermes-smd-overlay/`, the Hermes plugins and bootstrap baked into every seat image; ADR 0095). Python and YAML, not the Worker. |
 | `workers/` | Three sibling Cloudflare Workers run outside the request path: `cost-telemetry` (`ss-cost-telemetry`, the nightly Operator cost ingest) and `cost-anomaly` (`ss-cost-anomaly`, nightly spike detection), and `fleet-alerts` (`ss-fleet-alerts`, the pager: it runs every 2 minutes and mails `team@smd.services` when a seat condition opens or clears, plus a Monday digest; `workers/fleet-alerts/wrangler.toml`). What each one watches is at `/admin/playbook/architecture-map`. The lead-gen pipelines that used to live here were retired 2026-07-01 (PRs #1610/#1616). Any other directory found under `workers/` in a local checkout holds no tracked files; it is a leftover, not live code. |
 | `migrations/` | D1 schema migrations for the console database `ss-console-db`, numbered `0001_*` upward (forward migrations, plus a `rollbacks/` directory; the directory is the count). Applied with `wrangler d1 migrations apply`. See `/admin/playbook/data-model`. |
 | `tests/` | Vitest suites, including the policy-enforcing tests cited in CLAUDE.md (`forbidden-strings.test.ts`, `intake-questionnaire.test.ts`) and the handbook gate (`handbook-integrity.test.ts`). Each worker carries its own tests beside its source. |

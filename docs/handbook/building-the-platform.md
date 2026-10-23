@@ -95,6 +95,31 @@ project installed once: `python3 -m pip install -e operator`. CI's substrate
 job and the scheduled workflows that run those CLIs do the same install; a bare
 local `pytest` gets the tree root from `pythonpath = .` in `operator/pytest.ini`.
 
+The seat runtime overlay, `operator/hermes-smd-overlay/`, is a separate Python
+project inside that tree (its own `pyproject.toml` and `uv.lock`), moved in from
+the standalone `venturecrane/hermes-smd-overlay` repo on 2026-10-22 (ADR 0095).
+The directory keeps the plugin's name on purpose: pytest's package walk stops at
+a directory whose name is not a Python identifier, so the overlay's tests
+resolve their imports (`shared`, `bootstrap`, `plugins`) from the overlay root
+exactly as they did in the standalone repo, which relied on the same stop. CI runs it as the `overlay` job of `operator-substrate.yml`: ruff
+check and format on the overlay tree, the overlay pytest suite on Python 3.13
+against the pinned Hermes (fetched shallow from `NousResearch/hermes-agent` at
+the Dockerfile's `ARG HERMES_UPSTREAM_SHA`), and a no-diff run of
+`operator/requirements/compile.sh`. The overlay tests read this repo's contract
+fixtures in place, so they run in CI with nothing copied across. To run the
+suite locally:
+
+```bash
+cd operator/hermes-smd-overlay
+uv venv --python 3.13 .venv
+uv pip install --python .venv/bin/python -e '.[dev]'
+HERMES_AGENT_SRC=<a NousResearch/hermes-agent checkout at ARG HERMES_UPSTREAM_SHA> \
+  .venv/bin/python -m pytest -q
+```
+
+An `overlay-e2e` job that dispatches turns through a real Hermes is planned and
+not yet built.
+
 ## Worktree isolation for parallel sessions
 
 Parallel sessions do not share a working tree. Each runs in its own git worktree -
@@ -198,13 +223,15 @@ exports only (defaults allowed only in framework positions like
 
 ## The merge gates
 
-Four checks are required to merge to main, all in the `Main Branch Protection`
+Five checks are required to merge to main, all in the `Main Branch Protection`
 ruleset: the `Verify` job (`Typecheck, Lint, Format, Test`), `Security Summary`
-(`security.yml`), `substrate` (`operator-substrate.yml`), and `Runtime ACs carry
+(`security.yml`), `substrate` and `overlay` (both jobs of
+`operator-substrate.yml`; `overlay` joined the required list the day the
+overlay fold merged, ADR 0095), and `Runtime ACs carry
 a verification ID` (`runtime-ac-proof.yml`, which refuses to mark an acceptance
 criterion tagged `(runtime)` as met without a `crane_verify` ID in the PR's
 Evidence column). The same ruleset puts main behind a merge queue (2026-10-21):
-a green PR is queued and the queue re-runs the four checks on the `merge_group`
+a green PR is queued and the queue re-runs the five checks on the `merge_group`
 event against main plus the PRs ahead of it, so every one of those workflows
 must keep its `merge_group` trigger. Probe the ruleset when checking what is
 required (`gh api repos/venturecrane/ss-console/rules/branches/main`), and

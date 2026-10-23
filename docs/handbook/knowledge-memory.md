@@ -19,7 +19,7 @@ sources:
   - label: ADR 0091 - Privacy by space for multi-person seats
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0091-privacy-by-space-for-multi-person-seats.md
   - label: Peer-memory plugin (overlay)
-    href: https://github.com/venturecrane/hermes-smd-overlay/blob/main/plugins/hermes-smd-peer-memory/__init__.py
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/hermes-smd-overlay/plugins/hermes-smd-peer-memory/__init__.py
   - label: ADR 0037 - The Operator Thesis
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0037-operator-thesis.md
 last_reviewed: "2026-10-21"

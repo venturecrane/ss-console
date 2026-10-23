@@ -1,0 +1,5 @@
+# iCalendar fixtures carry CRLF line endings by specification (RFC 5545 3.1);
+# the overlay's calendar tests parse them as the wire delivers them. Never
+# normalize. (Carried over from the standalone overlay repo at the 2026-10-22
+# fold, ADR 0095.)
+operator/hermes-smd-overlay/tests/fixtures/calendar/*.ics -text

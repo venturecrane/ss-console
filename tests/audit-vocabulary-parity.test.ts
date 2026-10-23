@@ -10,18 +10,18 @@
  * the resulting silence is indistinguishable from a deliberate suppression
  * (ss#2316's third state).
  *
- * WHAT THIS CATCHES. An overlay type this repo has never heard of, at the
- * moment OVERLAY_REF moves — which is the only moment an overlay change can
- * reach a seat. The snapshot is anchored to the PINNED ref rather than overlay
- * main on purpose: main is ahead of what any Machine runs, and gating on it
- * would fail for changes no client can see yet.
+ * WHAT THIS CATCHES. An overlay type this repo has never heard of, in the same
+ * commit that adds it. The overlay is operator/hermes-smd-overlay in this tree
+ * (one repository since the 2026-10-22 fold, ADR 0095), so the snapshot in the
+ * contract is compared with the LIVE ACCEPTED_ACTION_TYPES on every run; a type
+ * added to schemas.py without a contract update, or a careless transcription, is
+ * red here before it merges. Before the fold the snapshot was anchored to a
+ * pinned overlay commit and could only be refreshed by hand at a pin bump.
  *
- * WHAT IT DOES NOT CATCH. It reads a committed snapshot, not the overlay repo
- * (private, no checkout in CI). A bump that refreshes `overlayRef` while
- * transcribing `overlayTypes` carelessly satisfies it. That is the same residual
- * the overlay-pairs manifest carries, and the reason issue #2320 also names
- * write-time validation in `shared/audit_contract.py` as worth doing regardless:
- * this gate makes a divergence loud at bump time, that one makes it impossible.
+ * WHAT IT DOES NOT CATCH. `shared/audit_contract.py` still validates nothing at
+ * the INSERT (issue #2320 names write-time validation as worth doing regardless):
+ * this gate makes a divergence loud at merge time, that one would make it
+ * impossible at write time.
  */
 
 import { readFileSync } from 'node:fs'
@@ -35,10 +35,17 @@ import { MAPPED_ACTIONS, SUPPRESSED_ACTIONS } from '../src/lib/portal/operator/a
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const CONTRACT = join(REPO_ROOT, 'operator', 'contracts', 'audit-action-vocabulary.json')
-const DOCKERFILE = join(REPO_ROOT, 'operator', 'templates', 'Dockerfile')
+const SCHEMAS = join(
+  REPO_ROOT,
+  'operator',
+  'hermes-smd-overlay',
+  'plugins',
+  'hermes-smd-audit',
+  'schemas.py'
+)
 
 interface VocabularyContract {
-  overlayRef: string
+  overlaySource: string
   overlayTypes: string[]
   overlayOnly: Record<string, string>
   consoleOnly: Record<string, string>
@@ -47,18 +54,33 @@ interface VocabularyContract {
 const contract = (): VocabularyContract =>
   JSON.parse(readFileSync(CONTRACT, 'utf-8')) as VocabularyContract
 
-/** The overlay commit a customer Machine actually ships. */
-const pinnedOverlayRef = (): string => {
-  const match = /^ARG OVERLAY_REF="([0-9a-f]{40})"/m.exec(readFileSync(DOCKERFILE, 'utf-8'))
-  expect(match, 'Dockerfile has no pinned ARG OVERLAY_REF').not.toBeNull()
-  return match![1]
+/**
+ * The overlay's ACCEPTED_ACTION_TYPES as the seat runtime declares it: the
+ * frozenset literal from `ACCEPTED_ACTION_TYPES` to the first `)` at column 0,
+ * string literals only (comments stripped), so a type named in a comment does
+ * not count and a type the parser missed is a loud red, not a silent pass.
+ */
+const liveOverlayTypes = (): string[] => {
+  const lines = readFileSync(SCHEMAS, 'utf-8').split('\n')
+  const start = lines.findIndex((l) => l.startsWith('ACCEPTED_ACTION_TYPES'))
+  expect(start, 'no ACCEPTED_ACTION_TYPES in schemas.py').toBeGreaterThanOrEqual(0)
+  const end = lines.findIndex((l, i) => i > start && l === ')')
+  expect(end, 'ACCEPTED_ACTION_TYPES literal never closes').toBeGreaterThan(start)
+  const types = new Set<string>()
+  for (const line of lines.slice(start, end + 1)) {
+    const code = line.split('#', 1)[0]
+    for (const m of code.matchAll(/"([A-Z0-9_]+)"/g)) types.add(m[1])
+  }
+  expect(types.size, 'the parser found no types; the literal shape changed').toBeGreaterThan(20)
+  return [...types].sort()
 }
 
 describe('audit vocabulary parity with the shipped overlay (ss#2320)', () => {
-  it('the snapshot is taken at the overlay ref the Machine ships', () => {
-    // The load-bearing assertion. Bumping OVERLAY_REF without re-extracting the
-    // vocabulary turns this red, which is the only moment the check can matter.
-    expect(contract().overlayRef).toBe(pinnedOverlayRef())
+  it('the snapshot equals the live ACCEPTED_ACTION_TYPES in operator/hermes-smd-overlay', () => {
+    // The load-bearing assertion. Adding a type to schemas.py without updating
+    // the contract (or the other way round) turns this red in the same PR.
+    expect([...contract().overlayTypes].sort()).toEqual(liveOverlayTypes())
+    expect(contract().overlaySource).toContain('plugins/hermes-smd-audit/schemas.py')
   })
 
   it('every overlay type is known here, or declared overlay-only with a reason', () => {
@@ -122,11 +144,11 @@ describe('the parity gate can fail (ss#2320)', () => {
     expect(undeclared).toEqual(['SYNTHETIC_OVERLAY_ONLY_TYPE'])
   })
 
-  it('catches a stale overlayRef after a pin bump', () => {
+  it('catches a snapshot that drifted from the live source', () => {
     const c = withContract((x) => {
-      x.overlayRef = '0000000000000000000000000000000000000000'
+      x.overlayTypes = x.overlayTypes.filter((t) => t !== 'INBOUND_RECEIVED')
     })
-    expect(c.overlayRef).not.toBe(pinnedOverlayRef())
+    expect([...c.overlayTypes].sort()).not.toEqual(liveOverlayTypes())
   })
 
   it('catches an exemption with an empty reason', () => {

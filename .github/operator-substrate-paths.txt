@@ -45,6 +45,10 @@ operator/workspace_broker/**
 # client's deps, so it runs in its own venv step; a runner change must run it.
 operator/runners/**
 operator/tests/**
+# ADR 0095 (2026-10-22): the seat runtime, in this tree. A change here runs the
+# `overlay` job (its own lint + suite on 3.13 against the pinned Hermes) and
+# the substrate suites, several of which read overlay files in place.
+operator/hermes-smd-overlay/**
 # 2026-09-10 review, top action item 4: operator/tests/test_closeout_seed.py
 # executes operator/fixtures/law-firm/pi/lien-ledger-tracker/seed/render_seed.py
 # by subprocess, and the conformance test now walks every substrate test for

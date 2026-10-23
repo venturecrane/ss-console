@@ -1155,8 +1155,11 @@ fi
 # downgrade it. The decision and its reasons: lib/select-release-image.sh.
 if [ "${BUILD_FROM_SOURCE}" = 1 ]; then
   log "Deploying ${APP_NAME} built from THIS checkout (--build; new image + staged secrets roll together)..."
-  (cd "${REPO_ROOT}" && fly deploy --config "${RENDERED_DIR}/fly.toml" \
-    --build-arg SS_CONSOLE_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)")
+  # The commit is the image's version (ADR 0095: the overlay is built from this
+  # tree and the heartbeat reports this sha), so a checkout that cannot name it
+  # cannot build a seat image. The Dockerfile refuses anything but 40 hex too.
+  build_sha="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null)" || die "--build needs a git checkout at ${REPO_ROOT}: the image's SS_CONSOLE_SHA is its version"
+  (cd "${REPO_ROOT}" && fly deploy --config "${RENDERED_DIR}/fly.toml" --build-arg SS_CONSOLE_SHA="${build_sha}")
 else
   source "${BIN_DIR}/lib/select-release-image.sh"
   RELEASE_IMAGE="$(select_release_image "${BIN_DIR}" "${SLUG}")" || die "no image to deploy for ${APP_NAME} (reason above)"

@@ -32,7 +32,11 @@ from pathlib import Path
 MIN_REASON_CHARS = 20
 NOQA_RE = re.compile(r"#\s*noqa\b(?P<codes>:\s*[A-Z]+[0-9]+(?:\s*,\s*[A-Z]+[0-9]+)*)?(?P<rest>.*)$")
 REASON_RE = re.compile(r"^\s*(?:-{1,2}|—)\s*(?P<reason>\S.*)$")
-SKIP_PARTS = {".venv", "__pycache__", ".pytest_cache", ".ruff_cache", ".rendered", "node_modules"}
+# hermes-smd-overlay: the seat runtime, in this tree since the 2026-10-22 fold
+# (ADR 0095). It has its own ruff config and 251 reason-less noqa annotations it
+# arrived with; it joins this gate behind a ratchet baseline, not by a sweep in the
+# fold PR (the overlay CI job lints it meanwhile).
+SKIP_PARTS = {".venv", "__pycache__", ".pytest_cache", ".ruff_cache", ".rendered", "node_modules", "hermes-smd-overlay"}
 
 
 def offenders_in_text(text: str, path: str = "<text>") -> list[str]:

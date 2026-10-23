@@ -61,8 +61,20 @@ const BASELINE_FILE = join(OPERATOR_DIR, 'contracts', 'operator-module-size.json
 /** Logical-line ceiling for a non-test operator module. Mirrors eslint.config.js:20. */
 const CEILING = 500
 
-/** Directories never walked: vendored venvs, caches, build output. */
-const SKIP_DIRS = new Set(['.venv', '__pycache__', 'node_modules', '.pytest_cache', '.ruff_cache'])
+/**
+ * Directories never walked: vendored venvs, caches, build output, and the seat
+ * runtime (operator/hermes-smd-overlay, in-tree since the 2026-10-22 fold, ADR
+ * 0095), which joins the module-size ceiling behind its own baseline rather
+ * than by a sweep in the fold PR.
+ */
+const SKIP_DIRS = new Set([
+  '.venv',
+  '__pycache__',
+  'node_modules',
+  '.pytest_cache',
+  '.ruff_cache',
+  'hermes-smd-overlay',
+])
 
 interface Baseline {
   _comment: string

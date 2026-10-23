@@ -8,7 +8,17 @@ related-adr: 0020-connector-strategy.md, 0015-hermes-fork-vs-upstream.md, 0007-p
 
 # ADR 0053 — Author-Built MCP Connectors Are Per-Customer-Installed Units, Not Baked Into the Overlay
 
-**Status:** Accepted (Captain decision, 2026-06-22). **Amended 2026-06-23** — the physical mechanism was corrected during implementation; see **§ Amendment** below before reading the original Decision.
+**Status:** Accepted (Captain decision, 2026-06-22). **Amended 2026-06-23** — the physical mechanism was corrected during implementation; see **§ Amendment** below before reading the original Decision. **Amended again 2026-10-22** by [ADR 0095](./0095-one-repository-for-the-seat-runtime.md); see the amendment directly below.
+
+## Amendment (2026-10-22): the overlay is a directory of this repo
+
+[ADR 0095](./0095-one-repository-for-the-seat-runtime.md) moved the overlay from the separate repo `venturecrane/hermes-smd-overlay` into `operator/hermes-smd-overlay/`. Three statements in this record change with it:
+
+1. **Where the overlay lives.** The Context's "one pinned image" and Decision 3's "the single pinned overlay image (ADR 0015)" describe an overlay pinned into the image by `OVERLAY_REF`. There is no overlay pin now: the image is built from one ss-console commit, and the governed deploy unit named in the 2026-06-23 amendment (item 2, "`OVERLAY_REF` + image tag") is the image tag alone, whose label carries that commit.
+2. **The action-class literal map** (2026-06-23 amendment, item 4) is `operator/hermes-smd-overlay/shared/action_classes.py`. A connector and its classification now land in one PR rather than one PR per repo; the map stays the governance authority and the manifest stays an oracle.
+3. **Drift tracking** (Decision 5) cited `overlay-ref-drift.py` as the model. That script is removed; per-seat version drift is what `fleet status` shows against the newest completed release.
+
+The substrate-only boundary of Decision 3 stands: connector servers live in `operator/connectors/`, not inside the overlay directory.
 
 ## Amendment (2026-06-23) — baked into the shared image, activated on bind
 

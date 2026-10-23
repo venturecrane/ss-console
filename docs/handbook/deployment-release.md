@@ -33,8 +33,10 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/scripts/check-config-against-image.mjs
   - label: scripts/lib/seat-image-guard.sh (the guard every R2 config writer runs)
     href: https://github.com/venturecrane/ss-console/blob/main/scripts/lib/seat-image-guard.sh
-  - label: operator/bin/overlay-ref-drift.py
-    href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/overlay-ref-drift.py
+  - label: ADR 0095 (one repository for the seat runtime)
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0095-one-repository-for-the-seat-runtime.md
+  - label: operator/templates/Dockerfile
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/templates/Dockerfile
   - label: operator/rehearsal/run.py
     href: https://github.com/venturecrane/ss-console/blob/main/operator/rehearsal/run.py
   - label: docs/runbooks/operator/shadow-firm.md
@@ -132,20 +134,26 @@ outbound admin links - strict, no fallback), and `PORTAL_BASE_URL`
 ## Merge gates, and why no human approval is required
 
 Every change to main goes through a pull request, and the gate is mechanical. The
-`Main Branch Protection` ruleset requires four checks: the verify workflow
-(`Typecheck, Lint, Format, Test`), `Security Summary`, `substrate`, and
+`Main Branch Protection` ruleset (id 15555219) requires five checks: the verify workflow
+(`Typecheck, Lint, Format, Test`), `Security Summary`, `substrate`,
+`overlay` (the seat runtime's ruff, pytest and lockfile checks, a job of
+`.github/workflows/operator-substrate.yml`, required from the day the overlay
+fold merged; ADR 0095), and
 `Runtime ACs carry a verification ID` (the Law 9 gate, required since
 2026-09-25; it resolves every cited `vfy_` id against the verify ledger and
-fails closed when the ledger cannot answer).
+fails closed when the ledger cannot answer). A second overlay job,
+`overlay-e2e`, which dispatches through a real Hermes, is planned and not yet
+built.
 
 Main merges through a **merge queue** (since 2026-10-21). A PR whose checks are
 green enters the queue (`gh pr merge <n> --squash`, which `/ship` runs); the
-queue tests it on top of main plus every PR ahead of it, with the same four
+queue tests it on top of main plus every PR ahead of it, with the same five
 checks run on the `merge_group` event, and merges it when they pass. Nobody
 rebases onto a moving main by hand. Before the queue, the legacy branch
 protection required branches to be up to date with main, and on a day with five
 sessions merging each PR re-ran its checks once for every merge that landed
-ahead of it. The four workflows carry a `merge_group` trigger for this reason; a
+ahead of it. The four workflows behind those checks (`overlay` and `substrate`
+are two jobs of one workflow) carry a `merge_group` trigger for this reason; a
 required check without one leaves every queued PR waiting at "Expected".
 
 Required approving reviews are zero on both, and that is a decision rather than an
@@ -157,7 +165,7 @@ change, which is no review at all. The substitute is evidence rather than
 eyeballs: runtime claims carry `crane_verify` ids, the runtime-AC gate refuses an
 acceptance criterion marked met without one, and the doctrine's "report is a
 probe" law makes a program's own completion claim insufficient. The ruleset has
-no bypass actors, so none of its four checks can be bypassed by anyone. (Until
+no bypass actors, so none of its five checks can be bypassed by anyone. (Until
 2026-10-21 the verify check lived on the legacy branch protection, where admin
 enforcement was off, so an administrator could merge past it; moving it into the
 ruleset with the queue closed that.) The periodic code reviews under
@@ -167,9 +175,12 @@ stays visible; revisit when a second human maintainer exists.
 ## Path B: the Operator (one image, rolled out in rings)
 
 The Operator runs as a per-customer Fly.io Machine hosting the Hermes runtime;
-our code is a plugin-only overlay in a separate repo,
-`venturecrane/hermes-smd-overlay` (it must not modify Hermes core - see
-`/admin/playbook/operator-platform`). Since 2026-10-19 a release is built ONCE
+our code is a plugin-only overlay at `operator/hermes-smd-overlay/` in this
+repo (it must not modify Hermes core - see
+`/admin/playbook/operator-platform`). Until 2026-10-22 the overlay was the
+separate repo `venturecrane/hermes-smd-overlay`, pinned by `ARG OVERLAY_REF`;
+ADR 0095 folded it in, so the image is built from one tree and there is no
+overlay pin to bump. Since 2026-10-19 a release is built ONCE
 and rolled out to every seat by `operator/bin/fleet`; nothing builds per seat
 (ADR 0024, amended). A release is a pair: an **image** (one digest in the Fly
 registry app `hermes-fleet`, which has no Machines) and a **skills version** (a
@@ -181,25 +192,33 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
 
 ### An image release
 
-1. **Cut an overlay release** and land it in the overlay repo.
-2. **Bump `OVERLAY_REF`.** The overlay commit is pinned as `ARG OVERLAY_REF` in
-   `operator/templates/Dockerfile`, beside the Hermes pin (`ARG
-   HERMES_UPSTREAM_TAG` / `HERMES_UPSTREAM_SHA`, with `HERMES_REF` holding the
-   full pin string for provenance; this is the one Hermes pin for the fleet,
-   and `customer.yaml` no longer carries one). The PR names its tracking
-   issue and carries a `(runtime)` acceptance criterion: a green shadow-firm
-   run on the rig at this ref. What the bump changes and why goes in the
-   commit message and the PR, never as a dated comment beside the pin or in
-   `overlay-pairs.json`: that history lives in git, and
-   `tests/no-history-in-file-bodies.test.ts` fails a PR that writes it into a
-   file body (until 2026-10-22 the Dockerfile carried 1,161 lines of it, and
-   every bump collided with every other session's bump on the same lines).
-3. **Build once:** `fleet build [--notes "..."]`. It refuses a tree that is
-   dirty, behind origin/main, or whose `OVERLAY_REF` disagrees with
-   `operator/contracts/overlay-pairs.json` (`operator/bin/lib/build-source-guard.sh`,
+1. **Merge the change.** A runtime change is one ordinary PR, whether it
+   touches `operator/hermes-smd-overlay/`, the rest of `operator/`, or both
+   (ADR 0095). The image is built from the local tree: the Dockerfile copies
+   `operator/hermes-smd-overlay/` in, installs it into the Hermes venv without
+   dependencies (the third-party ones are hash-locked in
+   `operator/requirements/hermes-overlay.txt`), and copies it a second time to
+   `/app/overlay-pack`, which `bootstrap.sh` refreshes onto the volume on every
+   boot. Nothing is fetched from git at build or at boot. The one pin left is
+   Hermes (`ARG HERMES_UPSTREAM_TAG` / `HERMES_UPSTREAM_SHA` in
+   `operator/templates/Dockerfile`, with `HERMES_REF` holding the full pin
+   string for provenance; `customer.yaml` no longer carries one). A PR that
+   changes seat behavior names its tracking issue and carries a `(runtime)`
+   acceptance criterion: a green shadow-firm run on the rig running a release
+   built from it. What a change does and why goes in the commit message and
+   the PR, never as a dated comment in a file body:
+   `tests/no-history-in-file-bodies.test.ts` fails a PR that writes it there.
+   The overlay's own CI is the `overlay` job of
+   `.github/workflows/operator-substrate.yml` (ruff, the overlay pytest suite
+   against the pinned Hermes, and a no-diff check of
+   `operator/requirements/compile.sh`).
+2. **Build once:** `fleet build [--notes "..."]`. It refuses a tree that is
+   dirty or behind origin/main (`operator/bin/lib/build-source-guard.sh`,
    the same guard a from-source provision runs), builds on Fly's remote builder
-   with the label `rel-<ss-console sha8>-<overlay sha8>-<yyyymmddHHMM UTC>`, records
-   the release in D1 `fleet_releases`, and uploads the image's own
+   with the label `rel-<ss-console sha8>-<yyyymmddHHMM UTC>` and the release id
+   `img-<yyyymmddHHMM UTC>-<ss-console sha8>`, records
+   the release in D1 `fleet_releases` (its `overlay_ref` column holds the
+   ss-console commit, which the seat's heartbeat must echo), and uploads the image's own
    `image-manifest.json`, `image-capabilities.json` and required-env list (read
    out of the pushed image over the registry's HTTP API by `ImageExtractor` in
    `operator/bin/lib/fleet/build.py`; it deliberately does not shell out to
@@ -209,13 +228,13 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
    recorded without capabilities: image releases still work, but a skills
    release to that image is refused; `fleet artifacts <release-id>` re-reads
    them later. The apt, npm, uv and Hermes layers are cached
-   across releases (the overlay and commit build-args are declared just before
-   their first use), so an overlay-only release rebuilds only the tail. It
+   across releases (the overlay copy and the commit build-arg come after
+   them), so an overlay-only release rebuilds only the tail. It
    prints the release id. Flags: `--declare-secret NAME` when the release
    needs a newly staged secret, `--not-volume-forward-compatible` when the new
    image changes the volume in a way the old image cannot read (a failing seat
    then halts instead of rolling back).
-4. **Prove it on the rig, then release:** `fleet release <release-id> --only
+3. **Prove it on the rig, then release:** `fleet release <release-id> --only
    pilot-smokeball`, drive the shadow firm against the rig and cite the run id
    (below), then `fleet release <release-id>` for the rings. Rings live in
    `operator/fleet/rings.yaml`: 0 `smd-staging`, 1 `pilot-smokeball`, 2 `scott`
@@ -223,6 +242,10 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
    is generated from each seat's `ring:` in `operator/customers/<slug>/seat.yaml`
    (`npm run gen:seat-registries`); a seat in no ring would join the last. `--parallel N` widens a ring; `--dry-run` runs every
    check and touches nothing.
+
+**Rolling back** a seat or the fleet is `fleet release <previous img id>`:
+the earlier image is still in the registry and its release row is still in
+D1, so going back is a release like any other.
 
 For each seat, in order, every step recorded in D1 `fleet_rollouts`:
 
@@ -315,6 +338,33 @@ because the appliers are still picking it up. A seat whose heartbeat is red
 holds every drift signal: its row describes the past, and the heartbeat alert
 already covers it.
 
+### Hotfix lanes
+
+Two lanes, depending on what the seat runs.
+
+- **A seat on a folded image** (built after ADR 0095): an ordinary PR, then
+  `fleet build` and `fleet release <id> --only <seat>` (or the rings). There is
+  nothing else to update.
+- **`ashton-price` while it is held on a pre-fold image.** That image was built
+  from the standalone overlay at `8c6f4b86`, so a fix for it cannot come from
+  main without also moving the seat onto the folded build. Land the overlay fix
+  on a hotfix branch off `8c6f4b86` in the locked `venturecrane/hermes-smd-overlay`
+  (unlock `main`, land, relock), bump the pin on the ss-console branch
+  `release/pre-fold`, build that branch with
+  `SS_ALLOW_DIVERGENT_SOURCE=1 operator/bin/fleet build` (the build-source guard
+  otherwise refuses a tree that is not origin/main), and release it with
+  `fleet release <id> --only ashton-price`. Record the lane in the release
+  notes. The lane closes when `ashton-price` runs a folded image; the standalone
+  repo is then archived.
+
+### The overlay cutover
+
+Seats move to folded images seat by seat in ring order: `smd-staging`,
+`pilot-smokeball`, then `scott`, `brokery` and `captain-mark`, and
+`ashton-price` last. The fold changes what the heartbeat's `version` field
+reports (the ss-console commit instead of an overlay commit), so the
+read-back compares it with the ss-console commit the release recorded.
+
 ### A skills release
 
 A merge touching `operator/skills/**` (or the retired-skills list,
@@ -362,7 +412,7 @@ refused config reaches its seat. A published config reaches the seat on its
 next boot; fields the seat applies live are picked up sooner by the ADR 0044
 poller.
 
-### Driving the shadow firm (the bump's `(runtime)` proof)
+### Driving the shadow firm (a runtime change's `(runtime)` proof)
 
 The shadow firm (`operator/rehearsal/`, runbook `docs/runbooks/operator/shadow-firm.md`)
 replays every incident class this venture has had - an unaudited direct-API
@@ -371,11 +421,13 @@ instruction injected through inbound mail, a dead connector mid-task, a
 privileged instruction from an unauthored sender - against the rig seat, and
 scores each from audit rows and mailbox observations rather than from how the
 answers read. Once the rig runs the release, run
-`infisical run --env=prod --path=/ss -- operator/rehearsal/run.py --seat pilot-smokeball --overlay-ref <candidate> --drive`.
+`infisical run --env=prod --path=/ss -- operator/rehearsal/run.py --seat pilot-smokeball --overlay-ref <candidate> --drive`,
+where the candidate is the ss-console commit the release was built from (since
+ADR 0095 that is the overlay version a seat reports).
 The runner reads the rig's running overlay ref off the live seam and refuses to
 drive unless it equals the candidate, and a ref it cannot read refuses too.
 Cite the run id, with the report's evidence table, on the tracking issue or the
-merged bump PR. `.stitch/shadow-firm/` is gitignored (the build-source guard
+merged PR. `.stitch/shadow-firm/` is gitignored (the build-source guard
 refuses a dirty tree), so the report is NOT committed; the digest-shaped run id
 is recomputable from the pasted report body. A run id ending in `-notgreen`
 does not satisfy the AC, and neither does a run with skipped scenarios. The
@@ -390,8 +442,10 @@ suite never touches a client seat or a client-visible address
   release, and `id-lever` (`SET` when the incident-only
   `SMD_IDENTIFIER_GATE_MODE` rollback is a Fly secret on the seat, `?` when the
   secret list could not be read; ADR 0093). Boot smoke warns on the same lever.
-  `fleet releases` lists releases. `overlay-ref-drift.py` still reads
-  each seat's running overlay off the live seam.
+  `fleet releases` lists releases. The overlay ref column is the ss-console
+  commit each seat's image was built from; image drift is how a seat behind
+  the fleet shows (the separate `overlay-ref-drift.py` was removed with the
+  fold, ADR 0095).
 - **A new seat** (no Machine yet): `operator/bin/reprovision.sh <slug>` runs
   `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet
   with-seat-lease <slug> -- operator/bin/provision-customer.sh <slug>` between

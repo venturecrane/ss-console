@@ -17,13 +17,15 @@ from bin.lib.fleet.smoke import Check
 
 DIGEST = "sha256:" + "a" * 64
 OLD_DIGEST = "sha256:" + "b" * 64
-TARGET_REF = f"{ids.FLEET_REGISTRY}:rel-11111111-22222222-202610190000"
-OVERLAY = "2" * 40
+TARGET_REF = f"{ids.FLEET_REGISTRY}:rel-11111111-202610190000"
+# Since the fold (ADR 0095) a release's overlay_ref IS its ss_console_sha: the
+# heartbeat `version` the smoke compares against is the commit the image is from.
+OVERLAY = "1" * 40
 
 
 def release(**over: Any) -> dict[str, Any]:
     base = {
-        "release_id": "img-202610190000-11111111-22222222",
+        "release_id": "img-202610190000-11111111",
         "kind": "image",
         "image_ref": TARGET_REF,
         "image_digest": DIGEST,

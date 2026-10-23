@@ -1,0 +1,723 @@
+"""Gateway-startup activation gate for the SMD overlay (ss-console#1285).
+
+THE BUG THIS CLOSES (World 1, confirmed at runtime). The overlay's agent-plugins
+(audit, trust, voice, memory-mirror, webhook-router) register their hooks into the
+PluginManager *singleton* that the agent fire sites dispatch from
+(``model_tools``/``run_agent`` -> ``invoke_hook`` -> ``get_plugin_manager()._hooks``).
+But Hermes discovers plugins idempotently: ``discover_and_load`` early-returns once
+``_discovered`` is set (hermes_cli/plugins.py), and on the live gateway that first
+discovery ran at import time — BEFORE the overlay was present+enabled on the volume —
+so the gateway's singleton ended up WITHOUT the overlay. Every registered hook was
+inert on live turns: a proven real tool call wrote zero ``audit_log`` rows and the
+trust ceiling never fired (ss-console#1285 Q2 confirmation).
+
+WHY A gateway:startup HOOK, AND NOT A HERMES-CORE PATCH. The fix must run IN the
+gateway process, after the overlay is present+enabled, to repopulate THAT process's
+singleton — and it must be overlay-side only, because a carried patch against the
+pinned Hermes ref is exactly the fork-maintenance trap ADR 0024 (pin-only) / ADR 0015
+(plugin-only overlay) closed. Hermes' own HookRegistry (gateway/hooks.py) loads
+``async def handle`` handlers from ``$HERMES_HOME/hooks/`` and emits ``gateway:startup``
+inside the startup coroutine (gateway/run.py:3730), in the gateway's event loop,
+before steady-state turns. So this handler — installed on the volume by bootstrap.sh,
+NOT a core file — is the overlay using Hermes' public API:
+
+  1. ``discover_plugins(force=True)`` (plugins.py:1363): ``force`` CLEARS the singleton's
+     ``_hooks`` then reloads from disk (discover_and_load force branch), so the
+     now-present+enabled overlay registers into the LIVE singleton. force=True is
+     Hermes' own supported "make plugin changes visible in a long-lived session" path,
+     and it is idempotent — re-running yields the same registration, no double-load.
+  2. A synchronous-contract check over every callback in the live manager. Hermes'
+     dispatcher calls callbacks directly and never awaits them, so any coroutine
+     callback would load successfully but silently do nothing.
+  3. A LIVE trust self-check: drive ``get_pre_tool_call_block_message`` with
+     ``tool_name="email_send"`` — the EXACT pre-execution interpreter model_tools uses —
+     and require a refusal message. This asserts the property that actually matters:
+     trust FIRES through the live turn-path singleton and its result is recognized by
+     the executor. The probe is a permanently-banned tool, so it is deterministic and
+     READ-ONLY.
+  4. A LIVE audit self-check (ss-console#1285 Q2, made self-proving at boot): drive
+     ``invoke_hook("post_llm_call", ...)`` and confirm a row actually lands in
+     ``audit_log``. This proves the audit WRITE path works live in the gateway process —
+     the literal Q2 question ("does a real turn write audit") answered at boot instead of
+     by inference. The row carries a distinct session id so it is separable from
+     real-turn rows when read back via the runtime seam. Degrades to skipped only when
+     the audit DB cannot be resolved; a definitive "wrote nothing" fails closed.
+  5. A WEBHOOK READ-SURFACE assertion (ss-console#2145): resolve the webhook platform's
+     tool surface the way a real webhook turn does and require ``read_file``. Inbound
+     email arrives on the webhook platform, whose default toolset deliberately excludes
+     ``file`` — so the trust plugin's spec read-mark could never be set there and
+     ``spec_gate`` refused every voice-gated delivery. The fix has a half in this process
+     (the webhook-router plugin creates a one-tool custom toolset) and a half in the
+     provisioning process (``bootstrap/translate.py`` names it in ``platform_toolsets``),
+     and shipping the config half alone is SILENT: the unknown name survives
+     ``explicit_passthrough``, ``validate_toolset`` returns False, and the warning is
+     suppressed under ``quiet_mode=True``. Only a resolved-surface check catches that.
+     Skipped on seats that do not serve the webhook platform.
+  6. FAIL-CLOSED: HookRegistry swallows handler exceptions (gateway/hooks.py:19), so a
+     failed self-check cannot rely on raising — the handler calls ``os._exit(1)``.
+     ``gateway:startup`` fires before steady-state turns, so exiting prevents the gateway
+     from ever serving ungoverned. Better visibly down (crash-loop; Fly restarts) than
+     silently ungoverned.
+
+This handler IS the authoritative live boot gate. The pre-gateway safety_substrate
+invariant (operator/safety_substrate) runs in a DIFFERENT process and can only assert
+the gate is WIRED (handler installed) + the registration LOGIC is sound — it
+structurally cannot assert the live-turn property. The two are complementary.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import inspect
+import logging
+import os
+from typing import Any
+
+logger = logging.getLogger("hermes_smd.overlay.activation")
+
+# The hook types the overlay must have in the live singleton for the governance
+# layer to be complete (union across the five functional plugins). Mirrors the
+# pre-gateway invariant's _REQUIRED_HOOKS so the two gates assert the same surface.
+_REQUIRED_HOOKS = {
+    "pre_tool_call",  # trust ceiling gate — the safety-critical one
+    "post_tool_call",  # audit + trust provenance
+    "post_llm_call",  # audit + voice
+    "pre_llm_call",  # voice
+    "subagent_stop",  # audit
+    "on_session_end",  # memory-mirror
+    "pre_gateway_dispatch",  # webhook-router
+}
+
+# A permanently-banned tool (BANNED_TOOLS, ADR 0035). The trust
+# ceiling must refuse it regardless of the customer's authored ceiling, so it is a
+# deterministic "this MUST be gated" probe — and a READ-ONLY one (no audit write).
+_BANNED_PROBE_TOOL = "email_send"
+
+# The distinct session id for the boot self-check dispatches lives in
+# ``shared.selfcheck`` and is imported inside ``handle()``. It is a CONTRACT, not
+# a local label: the audit probe drives the REAL post_llm_call fan-out, so every
+# consumer that must not mistake the probe for a real turn — the interactive cost
+# meter above all — recognizes it by this exact id. Two copies of the string
+# would drift, and the drift looks exactly like the bug the shared constant
+# fixes: a synthetic model priced as a turn, alarming INVARIANT_VIOLATION on
+# every boot until the signal means nothing.
+#
+# Imported lazily (like every other shared import here) rather than at module
+# scope, because HookRegistry swallows a load-time failure: a top-level import
+# that raised would leave this gate silently unloaded, which is the one outcome
+# the whole file exists to prevent. Lazily, an import fault reaches ``_die``.
+
+_REQUIRED_WORKSPACE_TOOLS = {
+    "workspace_gmail_search",
+    "workspace_gmail_get",
+    "workspace_gmail_create_draft",
+    "workspace_gmail_modify",
+    "workspace_gmail_archive",
+    "workspace_calendar_list",
+    "workspace_calendar_get",
+    "workspace_calendar_create_draft",
+    "workspace_calendar_update_draft",
+    "workspace_drive_list",
+    "workspace_drive_get",
+    "workspace_drive_export",
+    "workspace_docs_create",
+    "workspace_docs_get",
+    "workspace_docs_append",
+    "workspace_sheets_create",
+    "workspace_sheets_get_values",
+    "workspace_sheets_update_values",
+}
+
+
+def _audit_db_path() -> str | None:
+    """Resolve the local audit sqlite path from SMD_D1_AUDIT_BINDING, mirroring
+    d1_client's binding indirection: a value starting with '/' is a direct path;
+    otherwise it names the env var that holds the path. Returns None if it cannot
+    be resolved to a local path (e.g. a non-file binding) — the audit self-check
+    then degrades to skipped rather than failing the boot on an unreadable handle."""
+    b = os.environ.get("SMD_D1_AUDIT_BINDING", "")
+    if not b:
+        return None
+    if b.startswith("/"):
+        return b
+    return os.environ.get(b)
+
+
+def _audit_row_count(db_path: str) -> int | None:
+    """Best-effort COUNT(*) of audit_log via a fresh read-only connection. None on
+    any failure (DB/table absent or unreadable) so the caller degrades gracefully."""
+    import sqlite3
+
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        try:
+            return int(conn.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0])
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+#: Outcome of one boot gate. The completion line reports these verbatim, so a
+#: boot where a gate was skipped cannot print a line claiming it was proven.
+GATE_PROVEN = "PROVEN"
+GATE_SKIPPED = "SKIPPED"
+GATE_UNPROVEN = "UNPROVEN"
+
+#: Seconds any single boot probe may take. Generous — the probes do a handful of
+#: sqlite writes on a throwaway file — but finite, because the alternative is a
+#: gateway that hangs in startup forever. A hang is WORSE than a crash-loop: a
+#: crash-loop is visible in the restart count, a hang reads as a slow boot.
+_GATE_TIMEOUT_S = 10.0
+
+
+async def _run_gate(name: str, probe, *, fatal: bool) -> str:
+    """Run one boot probe under a uniform guard and report its OUTCOME.
+
+    WHY THIS EXISTS. On 2026-08-25 a boot gate I added took hermes-smd-staging
+    down for 29 minutes, and the post-mortem found the same two holes in the
+    gate NEXT DOOR (``_cost_breaker_self_check``): an ``await`` outside any
+    try, and no timeout. Patching one function would have left the class alive
+    in the check that currently earns ``sticky_stop_cost_cap`` its enforced
+    status. Every async gate goes through here instead.
+
+    THREE OUTCOMES, and the distinction is the whole lesson of that outage:
+
+      * PROVEN   — the probe ran and the control fired.
+      * UNPROVEN — the probe ran and the control did NOT fire. A real finding.
+      * SKIPPED  — the probe could not be evaluated: absent, raised, or timed
+                   out. NOT a finding about the control.
+
+    Conflating SKIPPED with UNPROVEN is what killed the seat: a lookup miss was
+    treated as a proven-broken brake. "Cannot evaluate" is not "broken".
+
+    ``fatal`` decides only what an UNPROVEN outcome does. A SKIPPED gate never
+    dies, whatever its tier — the checker must not be able to take a seat down
+    by being wrong about itself.
+    """
+    try:
+        ok, reason = await asyncio.wait_for(probe(), timeout=_GATE_TIMEOUT_S)
+    except TimeoutError:
+        logger.critical(
+            "%s UNPROVEN on this boot: probe exceeded %.0fs and was cancelled. Boot "
+            "CONTINUES — a slow or wedged checker is not evidence the control is "
+            "broken, and a startup that never finishes is worse than one that fails "
+            "loudly.",
+            name,
+            _GATE_TIMEOUT_S,
+        )
+        return GATE_SKIPPED
+    except Exception as e:  # noqa: BLE001 — a probe fault is not a finding
+        logger.critical(
+            "%s UNPROVEN on this boot: probe raised %s: %s. Boot CONTINUES.",
+            name,
+            type(e).__name__,
+            e,
+        )
+        return GATE_SKIPPED
+
+    if ok:
+        return GATE_PROVEN
+
+    if fatal:
+        _die(f"{name} INERT on this boot: {reason}")
+    else:
+        logger.critical(
+            "%s UNPROVEN on this boot: %s. Boot CONTINUES — see the tier note on "
+            "this gate for why this is not fatal.",
+            name,
+            reason,
+        )
+    return GATE_UNPROVEN
+
+
+async def _cost_breaker_self_check() -> str:
+    """Negative-fire probe (ADR 0062 §6, ss-console #1701): prove the cost
+    breaker actually HALTS — at every boot, in a THROWAWAY state file that never
+    touches the real ``/opt/data/smd/sticky_stop.db``. The probe records spend
+    far past a 1-cent cap and asserts the ladder trips HARD_STOP and the guard
+    refuses; ``_die`` on either miss — an operator whose spend breaker cannot
+    fire must not serve. This is the recurring ``prod-boot`` probe that earns
+    ``sticky_stop_cost_cap`` its enforced status (manually trip-proven
+    2026-07-04; this makes it self-proving on every boot). Async because the
+    activation handler runs inside the gateway's event loop."""
+    try:
+        from shared.cost_breaker import run_boot_probe
+    except Exception as e:  # noqa: BLE001
+        _die(f"cost-breaker self-check import failed: {type(e).__name__}: {e}")
+        return GATE_SKIPPED
+
+    # Through _run_gate: this check had the same unguarded await and the same
+    # missing timeout as the one that took a seat down. fatal=True is correct
+    # HERE — an operator whose SPEND breaker cannot fire must not serve.
+    return await _run_gate("COST BREAKER", run_boot_probe, fatal=True)
+
+
+def _gateway_config() -> dict:
+    """The config dict a webhook TURN resolves its tools from.
+
+    The gateway does not use ``hermes_cli.config.load_config``: every turn-path
+    call site reads ``gateway.run._load_gateway_config()``
+    (``gateway/run.py:12577``), which overlays administrator-pinned managed
+    scope on top of ``$HERMES_HOME/config.yaml``. The two normally agree, and a
+    check built on "normally agree" is a check that can be right about the wrong
+    dict — so prefer the gateway's own loader (this handler runs inside that
+    process, so the module is already imported) and fall back only if it moves.
+    """
+    try:
+        from gateway.run import _load_gateway_config
+
+        return _load_gateway_config()
+    except Exception:  # noqa: BLE001
+        from hermes_cli.config import load_config
+
+        return load_config()
+
+
+def _couples_surface_check() -> str:
+    """Refuse to serve a couples persona that would be offered a write, search
+    or code tool, or whose read_file would be unfenced (``shared.couples_surface``).
+    Returns the outcome for the completion line; ``not applicable`` elsewhere."""
+    try:
+        from shared.couples_surface import (
+            CouplesSurfaceError,
+            assert_no_forbidden_tools,
+            assert_read_fence_armed,
+            is_couples_config,
+        )
+
+        config = _gateway_config()
+    except Exception as e:  # noqa: BLE001
+        _die(f"cannot check the couples file surface: {type(e).__name__}: {e}")
+        return "failed"
+    if not is_couples_config(config):
+        return "not applicable"
+    try:
+        assert_no_forbidden_tools(config)
+        assert_read_fence_armed()
+    except CouplesSurfaceError as e:
+        _die(f"COUPLES PERSONA FILE SURFACE UNSAFE: {e}")
+        return "failed"
+    except Exception as e:  # noqa: BLE001
+        _die(f"couples file-surface check raised: {type(e).__name__}: {e}")
+        return "failed"
+    logger.info("couples file-surface check passed: read_file fenced, no write/search/code tool")
+    return "proven"
+
+
+def _webhook_read_self_check() -> None:
+    """Prove ``read_file`` reaches webhook turns, or refuse to serve (#2145).
+
+    Runs AFTER ``discover_plugins(force=True)``, so the webhook-router plugin
+    has already created the custom toolset in this process — this reads the
+    result of that registration rather than assuming it. Skipped on seats whose
+    config does not enable the webhook platform: they have no webhook surface to
+    be wrong about. Synchronous (no I/O beyond reading the config Hermes has
+    already loaded)."""
+    try:
+        from shared.webhook_read_surface import (
+            WebhookReadSurfaceError,
+            assert_read_file_on_webhook,
+            webhook_platform_enabled,
+        )
+    except Exception as e:  # noqa: BLE001
+        _die(
+            f"cannot import the webhook read-surface contract ({type(e).__name__}: {e}) "
+            "— whether inbound turns can read files is unverifiable (ss-console#2145)"
+        )
+        return
+
+    try:
+        config = _gateway_config()
+    except Exception as e:  # noqa: BLE001
+        _die(f"cannot load config for the webhook read-surface check: {type(e).__name__}: {e}")
+        return
+
+    if not webhook_platform_enabled(config):
+        logger.info(
+            "webhook read-surface check skipped: this seat does not serve the webhook platform"
+        )
+        return
+
+    try:
+        assert_read_file_on_webhook(config)
+    except WebhookReadSurfaceError as e:
+        _die(f"WEBHOOK TURNS CANNOT READ FILES: {e}")
+        return
+    except Exception as e:  # noqa: BLE001
+        _die(f"webhook read-surface check raised: {type(e).__name__}: {e}")
+        return
+
+    logger.info(
+        "webhook read-surface check passed: read_file is offered on webhook turns "
+        "(config half + toolset registration both live)"
+    )
+
+
+def _webhook_expected_tools_check() -> None:
+    """Report the WARN-tier webhook surface. Never ``_die``s (ss-console#2222).
+
+    ``WEBHOOK_EXPECTED_TOOLS`` names tools whose absence degrades one class of
+    answer rather than the seat — ``operator_seat_facts`` today. So the posture
+    is deliberately the opposite of the ``read_file`` assertion above: log
+    CRITICAL, write the sentinel the gate's heartbeat reads, and KEEP BOOTING. A
+    seat that would improvise an introduction is worse than one that would not;
+    a seat that refuses to serve at all is worse than both, and that cost lands
+    on the paid client.
+
+    The sentinel splits "an expected tool is missing" from "the check could not
+    run", because identical silence would hide the second behind the first.
+    Skipped entirely on seats that do not serve the webhook platform: nothing is
+    written, so the heartbeat holds rather than reporting a green for a surface
+    that does not exist.
+    """
+    try:
+        from shared.webhook_read_surface import (
+            expected_tool_report,
+            webhook_platform_enabled,
+            write_webhook_surface_status,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.critical(
+            "SMD OVERLAY WEBHOOK SURFACE UNPROVABLE: cannot import the expected-tools "
+            "contract (%s: %s) — boot CONTINUES, but nothing can tell you whether the "
+            "seat's grounded self-description is reachable (ss-console#2222)",
+            type(e).__name__,
+            e,
+        )
+        return
+
+    try:
+        config = _gateway_config()
+        if not webhook_platform_enabled(config):
+            logger.info(
+                "webhook expected-tools check skipped: this seat does not serve "
+                "the webhook platform"
+            )
+            return
+        report = expected_tool_report(config)
+    except Exception as e:  # noqa: BLE001
+        logger.critical(
+            "SMD OVERLAY WEBHOOK SURFACE UNPROVABLE: expected-tools check raised "
+            "(%s: %s) — boot CONTINUES; heartbeat will report webhook_surface_ok=0",
+            type(e).__name__,
+            e,
+        )
+        try:
+            write_webhook_surface_status(ok=False, tools=None)
+        except Exception:  # noqa: BLE001 — observability must never block boot
+            logger.warning("webhook expected-tools: sentinel write failed", exc_info=True)
+        return
+
+    missing = sorted(tool for tool, entry in report.items() if not entry["offered"])
+    if missing:
+        logger.critical(
+            "SMD OVERLAY WEBHOOK SURFACE DEGRADED: expected tool(s) %s are NOT offered "
+            "on webhook turns — the plugin did not register them, or a check_fn dropped "
+            "them silently (gateway callers pass quiet_mode=True). Boot CONTINUES: their "
+            "absence degrades one class of answer, not the seat. Asks about this seat "
+            "will be answered from memory instead of from what was read (ss-console#2222).",
+            missing,
+        )
+    else:
+        logger.info(
+            "webhook expected-tools check passed: %s offered on webhook turns",
+            sorted(report),
+        )
+    try:
+        write_webhook_surface_status(ok=True, tools=report)
+    except Exception:  # noqa: BLE001 — observability must never block boot
+        logger.warning("webhook expected-tools: sentinel write failed", exc_info=True)
+
+
+def _unknown_dm_check() -> str:
+    """Refuse to serve a space-mode seat whose Telegram answers strangers.
+
+    A seat that authors ``people:`` (ss-console ADR 0091) must drop every DM
+    from a sender who is not an authored person, with no reply. Translate
+    authors ``telegram.unauthorized_dm_behavior: ignore`` on such a seat, which
+    is Hermes' own drop (``gateway/run_inbound.py`` ``_hm_admit_event``). Hermes'
+    Telegram DEFAULT is ``pair``, which answers a stranger with a pairing code,
+    so an absent value counts as ``pair`` here. Fail-closed: a seat that cannot
+    tell whether it is in space mode does not serve either."""
+    try:
+        from shared import space
+
+        in_space = space.space_mode()
+    except Exception as e:  # noqa: BLE001
+        _die(f"cannot tell whether this seat authors people: ({type(e).__name__}: {e})")
+        return "unverified"
+    if not in_space:
+        return "not applicable (no people: authored)"
+    try:
+        config = _gateway_config()
+    except Exception as e:  # noqa: BLE001
+        _die(f"cannot load config for the unknown-DM check: {type(e).__name__}: {e}")
+        return "unverified"
+    tg = config.get("telegram") if isinstance(config, dict) else None
+    if not isinstance(tg, dict):
+        return "not applicable (Telegram not configured)"
+    behavior = str(tg.get("unauthorized_dm_behavior") or "pair").strip().lower()
+    if behavior != "ignore":
+        _die(
+            f"telegram.unauthorized_dm_behavior is {behavior!r} on a seat that authors "
+            "people:; a DM from a non-person would be answered instead of dropped"
+        )
+        return "missing"
+    logger.info("unknown-DM check passed: Telegram drops DMs from non-people natively")
+    return "enforced"
+
+
+def _die(reason: str) -> None:
+    """Fail closed: an operator that cannot prove it governs live turns must not
+    serve. Log CRITICAL with the SPECIFIC reason (so the failure is diagnosable —
+    the in-process visibility the live gateway has lacked), flush, then terminate
+    the gateway process. HookRegistry would swallow a ``raise``, so exit directly."""
+    logger.critical(
+        "SMD OVERLAY ACTIVATION FAILED — refusing to serve an ungoverned operator. %s",
+        reason,
+    )
+    # Best-effort flush so the reason reaches the logs before the hard exit.
+    for h in list(logging.getLogger().handlers):
+        try:
+            h.flush()
+        except Exception:  # noqa: BLE001
+            pass
+    os._exit(1)
+
+
+def _async_callbacks(manager: Any) -> list[str]:
+    """Return labels for callbacks incompatible with Hermes' sync dispatcher."""
+    found: list[str] = []
+    for hook_name, callbacks in (getattr(manager, "_hooks", {}) or {}).items():
+        for callback in callbacks:
+            call = callback.__call__ if callable(callback) else None
+            if not inspect.iscoroutinefunction(callback) and not inspect.iscoroutinefunction(call):
+                continue
+            module = getattr(callback, "__module__", type(callback).__module__)
+            name = getattr(callback, "__qualname__", type(callback).__qualname__)
+            found.append(f"{hook_name}:{module}.{name}")
+    return sorted(found)
+
+
+async def handle(event_type: str, context: dict | None = None) -> None:
+    """Fire at ``gateway:startup``: force-load the overlay into the live singleton,
+    then prove it governs the live turn-path or fail closed."""
+    # TOP-LEVEL GUARD (2026-08-25). HookRegistry swallows handler exceptions
+    # (gateway/hooks.py:19, and see this module's docstring §6), so ANY
+    # unguarded raise in the gates below would abort the rest of them silently:
+    # no _die, no completion line, and a seat serving with the remaining gates
+    # never run. Every gate is individually wrapped, but "every gate is wrapped"
+    # is a property that decays with the next edit; this does not.
+    #
+    # A fault in the checking machinery is not evidence about the controls, so
+    # this dies rather than continuing: unlike a single gate reporting UNPROVEN,
+    # reaching here means we do not know what ran.
+    try:
+        await _handle_inner(event_type, context)
+    except BaseException as e:  # noqa: BLE001 — the whole point is to catch all
+        _die(f"activation handler raised out of its gates: {type(e).__name__}: {e}")
+
+
+async def _handle_inner(event_type: str, context: dict | None = None) -> None:
+    """The activation sequence proper. See ``handle`` for the guard around it."""
+    # ADR 0023 Wave 1: Sentry error monitoring for the gateway (agent) process.
+    # Disabled-safe (no SENTRY_DSN -> no-op) and best-effort so it never blocks
+    # activation. Init first so the governance self-checks below — and any _die()
+    # here — are captured in Sentry too.
+    try:
+        from shared.sentry_init import init_sentry
+
+        init_sentry("gateway")
+    except Exception:  # noqa: BLE001 — observability must never block boot
+        logger.warning("sentry: gateway init skipped (import/init error)", exc_info=True)
+
+    try:
+        from hermes_cli.plugins import (
+            discover_plugins,
+            get_plugin_manager,
+            get_pre_tool_call_block_message,
+            invoke_hook,
+        )
+    except Exception as e:  # noqa: BLE001
+        _die(
+            f"cannot import hermes_cli.plugins ({type(e).__name__}: {e}) — "
+            "governance cannot be verified"
+        )
+        return
+
+    try:
+        from shared.selfcheck import SELFCHECK_SESSION_ID
+    except Exception as e:  # noqa: BLE001
+        _die(
+            f"cannot import shared.selfcheck ({type(e).__name__}: {e}) — the "
+            "self-check probes cannot identify themselves to the consumers that "
+            "must not score them as real turns"
+        )
+        return
+
+    # 1. Force the live gateway singleton to (re)load plugins from disk, now that
+    #    bootstrap has placed + enabled the overlay on the volume. force=True clears
+    #    _hooks first, so this is idempotent (no double-registration on re-runs).
+    try:
+        discover_plugins(force=True)
+    except Exception as e:  # noqa: BLE001
+        _die(f"discover_plugins(force=True) raised: {type(e).__name__}: {e}")
+        return
+
+    mgr = get_plugin_manager()
+    present = set(getattr(mgr, "_hooks", {}) or {})
+    missing = _REQUIRED_HOOKS - present
+    if missing:
+        _die(
+            "overlay hooks absent from the live gateway singleton after force-discover: "
+            f"missing {sorted(missing)} (present: {sorted(present)}) — the overlay is "
+            "installed/enabled but did not register into the live process"
+        )
+        return
+
+    incompatible = _async_callbacks(mgr)
+    if incompatible:
+        _die(
+            "async callbacks registered in Hermes' synchronous hook dispatcher: "
+            f"{incompatible} — these hooks would load but silently return unawaited "
+            "coroutines instead of enforcing or observing"
+        )
+        return
+
+    try:
+        from tools.registry import registry
+
+        registered_tools = set(registry.get_all_tool_names())
+    except Exception as e:  # noqa: BLE001
+        _die(f"cannot inspect the live tool registry: {type(e).__name__}: {e}")
+        return
+    missing_tools = _REQUIRED_WORKSPACE_TOOLS - registered_tools
+    if missing_tools:
+        _die(
+            "mediated Workspace tools absent from the live registry after force-discover: "
+            f"missing {sorted(missing_tools)}"
+        )
+        return
+
+    # 2. LIVE self-check: drive the REAL dispatch fn + singleton with a banned tool
+    #    through the same block-message interpreter model_tools calls immediately
+    #    before execution. Read-only: a banned tool is gated before any audit write.
+    try:
+        block_message = get_pre_tool_call_block_message(
+            tool_name=_BANNED_PROBE_TOOL,
+            args={},
+            session_id=SELFCHECK_SESSION_ID,
+            tool_call_id=SELFCHECK_SESSION_ID,
+        )
+    except Exception as e:  # noqa: BLE001
+        _die(f"get_pre_tool_call_block_message self-check raised: {type(e).__name__}: {e}")
+        return
+
+    if not isinstance(block_message, str) or not block_message:
+        _die(
+            f"TRUST NOT ENFORCING on the live gateway: banned tool {_BANNED_PROBE_TOOL!r} "
+            "was not blocked by the production pre-tool-call interpreter "
+            f"(got {block_message!r})"
+        )
+        return
+
+    # 3. AUDIT self-check (ss-console#1285 Q2, made self-proving at boot): drive the
+    #    REAL post_llm_call dispatch and confirm a row actually lands in audit_log.
+    #    This proves the audit WRITE path works live in the gateway process — not
+    #    merely that the audit hook is registered (invariant 8) or that dispatch
+    #    reaches a hook (the trust probe above). The row carries a distinct session
+    #    id so it is trivially separable from real-turn rows when read back via the
+    #    runtime seam. Degrades to skipped (not fatal) only when the audit DB path
+    #    cannot be resolved/read at all; a definitive "dispatch wrote nothing" fails
+    #    closed — an operator whose audit is inert must not serve.
+    db = _audit_db_path()
+    before = _audit_row_count(db) if db else None
+    try:
+        invoke_hook(
+            "post_llm_call",
+            session_id=SELFCHECK_SESSION_ID,
+            user_message="overlay activation self-check",
+            assistant_response="overlay active",
+            model="boot-selfcheck",
+            platform="boot",
+        )
+    except Exception as e:  # noqa: BLE001
+        _die(f"invoke_hook(post_llm_call) audit self-check raised: {type(e).__name__}: {e}")
+        return
+
+    after = _audit_row_count(db) if db else None
+    if before is not None and after is not None and after <= before:
+        _die(
+            "AUDIT NOT WRITING on the live gateway: a post_llm_call dispatch wrote no "
+            f"audit_log row (before={before}, after={after}) — the overlay is loaded and "
+            "trust fires, but the audit write path is inert (ss-console#1285 Q2)"
+        )
+        return
+
+    # 4. COST-BREAKER negative-fire self-check (ADR 0062 §6, #1701): prove the
+    #    spend circuit breaker actually HALTS. Runs in a throwaway state file, so
+    #    it never touches real breaker state; _die if the ladder does not trip or
+    #    the guard does not refuse. This is the recurring prod-boot probe that
+    #    earns sticky_stop_cost_cap its enforced status.
+    cost_outcome = await _cost_breaker_self_check()
+
+    # 5. WEBHOOK READ-SURFACE assertion (ss-console#2145). `read_file` reaches
+    #    webhook turns only when TWO halves in TWO processes both shipped: the
+    #    platform_toolsets block bootstrap/translate.py writes, and the custom
+    #    toolset the webhook-router plugin creates at load. Config-half-only
+    #    fails SILENTLY — _get_platform_tools keeps the unknown name via
+    #    explicit_passthrough, validate_toolset returns False, and gateway
+    #    callers pass quiet_mode=True so even the warning is suppressed. This
+    #    re-derives the surface exactly as a webhook turn does and fails closed,
+    #    so the only way to be wrong about it is to be visibly down. Scoped to
+    #    seats that actually serve the webhook platform.
+    _webhook_read_self_check()
+
+    # 5a. COUPLES file surface (ss-console #3264): a couples persona keeps
+    #     read_file (fenced) but must never be offered write_file, patch,
+    #     search_files, terminal or execute_code. Fails closed.
+    couples_outcome = _couples_surface_check()
+
+    # 5b. WEBHOOK EXPECTED-TOOLS check (ss-console#2222), the WARN tier of the
+    #     same surface. Same resolution, opposite posture: absence logs CRITICAL
+    #     and lands in a heartbeat field, and the boot CONTINUES. See the
+    #     function's docstring and shared/webhook_read_surface.py for why the two
+    #     tiers answer different orders of harm.
+    _webhook_expected_tools_check()
+
+    # 6. UNKNOWN-DM drop (ss-console ADR 0091 s5): a seat that authors people:
+    #    must drop Telegram DMs from non-people natively (``ignore``).
+    unknown_dm_outcome = _unknown_dm_check()
+
+    # This line is the surface an operator reads to learn what was PROVEN at
+    # boot, so it reports each gate's actual OUTCOME rather than asserting one.
+    #
+    # It previously said "runaway-loop arms proven fed" unconditionally. Once
+    # that gate became non-fatal, a boot where the probe was skipped would have
+    # printed a line claiming the brake was proven — the completion line lying
+    # about the one thing it exists to report. tests/test_activation_completion_log.py
+    # is a regex over THIS source and structurally cannot see a runtime return,
+    # so the honesty has to live in the interpolation, not in the test.
+    logger.info(
+        # Each claim term is kept CONTIGUOUS in this source string on purpose:
+        # test_activation_completion_log.py greps this text, and a term split
+        # across a Python string continuation ("| webhook " "read surface") is
+        # invisible to it. The test was right and the wrapping was wrong.
+        "SMD overlay ACTIVE + AUDITING on the live gateway: %d hook type(s) in the "
+        "live singleton, trust gate fired on banned %r, audit row written "
+        "(before=%s after=%s)"
+        " | cost breaker: %s"
+        " | webhook read surface: resolved"
+        " | couples surface: %s"
+        " | unknown-DM drop: %s"
+        " — each gate's outcome above is what was observed on THIS boot, not a "
+        "claim about what the gate would do.",
+        len(present),
+        _BANNED_PROBE_TOOL,
+        before,
+        after,
+        cost_outcome,
+        couples_outcome,
+        unknown_dm_outcome,
+    )

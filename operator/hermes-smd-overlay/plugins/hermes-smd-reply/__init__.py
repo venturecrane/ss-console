@@ -1,0 +1,2084 @@
+"""hermes-smd-reply — the Operator replies to a colleague WITHOUT weakening any floor.
+
+The Operator is an employee (ADR 0055). When someone on the organization roster
+emails its inbox, the employee reads, drafts a governed reply, and — because the
+sender is a colleague on the roster — actually sends it. This plugin is that
+last step: it relays the agent's already-governed draft back to the verified
+inbound sender, OUTSIDE the model's governed tool path, with fixed behavior.
+
+Attaches to two hooks at the pinned Hermes ref (v2026.5.16):
+
+- ``post_tool_call`` (``model_tools.py:826-836``) — fires after every tool
+  dispatch. The relay acts only on the AgentMail draft-creation tool, which
+  reaches the hook under its live Hermes MCP runtime name
+  ``mcp_agentmail_create_draft`` (``mcp_<server>_<tool>``).
+- ``transform_tool_result`` (``model_tools.py:847-857``) — fires for the SAME
+  ``tool_call_id``, and its first ``str`` return REPLACES the tool result. This
+  is how a hold becomes something the agent can act on (ss-console#2367):
+  ``post_tool_call`` returns are collected and ignored by the firing site, so
+  before this the agent's turn saw ``create_draft -> ok`` while the reply sat
+  undelivered, and no authored recovery could fire against a signal that never
+  arrived.
+
+THE TWO HOOKS' ORDER IS NOT AN INVARIANT (2026-10-05). The relay used to decide
+in ``post_tool_call`` on the premise that it fires first. At the pinned Hermes
+the agent executor suppresses the inner post hook and fires its own terminal
+``post_tool_call`` AFTER ``transform_tool_result`` (``agent/tool_executor.py``
+~1535, ``model_tools.py`` ~944-945), so a held reply's notice was recorded after
+the seam that carries it had passed and the agent was told nothing. The relay
+now decides in whichever hook reaches the call first, once per ``tool_call_id``
+(:class:`relay.DecidedOnce`). Do not reintroduce an ordering assumption.
+
+What it does:
+
+  1. **Roster authorization, read live.** Sends only when the verified inbound
+     sender is on the organization roster (``scope.inbound_allow_from``), re-read
+     from customer.yaml on every call (ADR 0044) so authoring the roster takes
+     effect on the next draft with no restart. Empty / unauthored roster ⇒ the
+     hook no-ops (fail-closed: the employee drafts, does not autonomously reply
+     to a stranger).
+  2. **Recipient-lock.** Sends only to the recorded inbound sender
+     (``SESSION_INBOUND_ORIGIN``, first-inbound-wins), keyed on the recorded
+     inbox + message id — an injected/substituted recipient cannot redirect it.
+     Roster membership authorizes; the recipient-lock structurally bounds.
+  3. **Re-applied floors, recipient-aware (ADR 0072 / ss #1932).** Re-runs the
+     same floors the autonomous-send path would have applied: the fabrication
+     gate (``outbound_gate.evaluate``) on EVERY reply, and the content floor
+     (``content_floor.classify``) only when the locked recipient does NOT
+     classify INTERNAL under ``recipient_classifier`` (the send path
+     deliberately does not content-floor internal sends — firm coordination
+     legitimately names deadlines, signatures, attorneys).
+  4. **Matter identity (ss#2167).** Holds a reply that cites a matter the locked
+     recipient is provably not a party to. This check has to live HERE: it sits
+     in ``enforce.evaluate_tool_call`` behind ``is_send``, which is true only for
+     EXTERNAL_SEND* classes, and the tool this lane calls is ``create_draft`` —
+     INTERNAL_WRITE. So the matter gate never ran on this path while this
+     function relayed the draft out as real email
+     (vfy_01KZRRW066Y70TFEYKGQX6ME76). Note the exemption is NOT
+     ``recipient_class is INTERNAL``: an inbound-roster match classifies INTERNAL
+     before the typed roster is consulted, so that spelling would exempt 100% of
+     this lane. See the comment at the call site.
+  5. **Rate-limit.** Per-sender + global rolling-window bound.
+  6. **Audit.** Emits ``REPLY_SENT`` on send, ``REPLY_HELD`` on a reply held
+     back to draft (reason only — never the body), ``REPLY_FAILED`` on a send
+     error, ``MATTER_UNRESOLVED`` when membership could be neither confirmed nor
+     denied. Digest + recipient + message id only; never the content.
+  7. **The hold is told to the agent (ss-console#2367).** A hold that means the
+     reply is NOT being delivered is appended to the draft tool's own result at
+     ``transform_tool_result``, in the same turn, naming the reason and the
+     recovery. A rate-hold durably queued for automatic release says nothing:
+     that reply IS going out, and announcing it would provoke a duplicate.
+
+It defeats NO agent floor — the trust gate, taint-gate, content floor, and
+fabrication gate are byte-for-byte unchanged. "Autonomous reply" lives in this
+trusted code, not in a loosened model capability. Reaching anyone OUTSIDE the
+roster is not this plugin's job; that requires explicit authorization and goes
+through the model's governed (drafting) path (ADR 0055 §3).
+
+Hook callbacks are exception-safe per AGENTS.md hard rule #3.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import threading
+from pathlib import Path
+from typing import Any
+
+from shared import (
+    answered_messages,
+    hook_worker,
+    inbound,
+    matter_gate,
+    msgraph_broker,
+    output_checklist,
+    policy_profile,
+    provenance,
+    report_render,
+    request_index,
+    send_policy,
+    silence,
+    space,
+    spec_gate,
+    tool_gate,
+)
+from shared.action_classes import ActionClass, BannedToolError, classify_tool
+from shared.audit_client import audit_client_from_env
+from shared.audit_contract import INSERT_SQL as _INSERT_SQL
+from shared.audit_contract import agent_event_params, sender_key
+from shared.customer_config import CustomerConfig, CustomerConfigError
+from shared.pending_acts import PENDING_ACTS
+from shared.recipient_classifier import RecipientClass, classify_recipients_typed
+from shared.secrets import get_secret
+from shared.tool_registration import register_wrapped_tool
+
+from . import (
+    act_delivery,
+    binding,
+    held_store,
+    notice,
+    relay,  # noqa: F401 - surface for tests
+    sweeper,
+    text_delivery,
+    working_drafts,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# The tools the relay acts on. Draft creation is INTERNAL_WRITE
+# (shared/action_classes.py) — it passes the taint-gate by design (drafting is
+# the safe behavior); the relay turns that governed draft into a sent reply. Both
+# email adapters (ADR 0078) surface draft creation, so both trigger the relay;
+# the actual transport is chosen per-seat by the Email adapter below.
+#
+# Hermes registers MCP tools as ``mcp_<server>_<tool>``, so the live runtime
+# names are ``mcp_agentmail_create_draft`` / ``mcp_msgraph_mail_create_draft`` —
+# the ONLY forms the agent emits. The colon spelling is retained as an accepted
+# alias (capability-contract / tests).
+_CREATE_DRAFT_TOOLS = frozenset(
+    {"mcp_agentmail_create_draft", "agentmail:create_draft", "mcp_msgraph_mail_create_draft"}
+)
+
+# Email adapters (customer.yaml connectors.Email.adapter, ADR 0078). The relay is
+# provider-neutral: roster/recipient-lock/floors/rate-limit are shared; only the
+# transport differs. msgraph replies in-thread via Graph; agentmail via REST.
+_ADAPTER_MSGRAPH = "msgraph"
+
+
+def _email_adapter(cfg: CustomerConfig) -> str:
+    """The seat's Email connector adapter (``agentmail`` default). Read live so a
+    seat that swaps providers is dispatched correctly without a code change."""
+    try:
+        record = cfg.connectors.get("Email")
+    except CustomerConfigError:
+        return "agentmail"
+    if isinstance(record, dict):
+        adapter = record.get("adapter")
+        if isinstance(adapter, str) and adapter:
+            return adapter
+    return "agentmail"
+
+
+_DEFAULT_CUSTOMER_YAML_PATH = "/opt/data/customer.yaml"
+
+
+# Module-level state — populated by ``register()``. ``_INFRA_READY`` is the
+# register-time gate: True only when the relay CAN send (AgentMail key resolved
+# and the rate-limiter built). It does NOT mean a given reply is authorized —
+# that is the live roster check, re-read from customer.yaml on every call
+# (ADR 0044). Splitting "can send" (infra, register-bound: env secrets + process
+# objects that only change on a restart) from "may reply" (roster, live) is what
+# lets authoring the roster take effect without a restart while keeping the send
+# credential off the hot path.
+_INFRA_READY: bool = False
+_CUSTOMER_SLUG: str | None = None
+_D1_CLIENT: Any | None = None
+_LIMITER: relay.RateLimiter | None = None
+_YAML_PATH: Path = Path(_DEFAULT_CUSTOMER_YAML_PATH)
+# One reply per inbound message id. Process-wide and register-independent: the
+# invariant holds for every reply this Machine transmits, and a bounded ring
+# keeps it cheap. Not a rate limit — the send policy owns pacing; this owns
+# "the same email is never answered twice".
+_REPLIED: relay.RepliedOnce = relay.RepliedOnce()
+
+
+def _reply_guard_key(
+    session_id: str, bound: binding.Binding | None, origin: inbound.InboundOrigin
+) -> str:
+    """The ``_REPLIED`` key this draft is checked against.
+
+    An email-opened turn: the email's id (one email in, one reply out). A bound
+    turn: its binding in THIS session, so the guard lives exactly as long as the
+    turn it protects (binding.py: "``RepliedOnce`` is only the in-turn guard").
+    Never the bound email's id: an ack or failure reply to the request email
+    must not suppress the job's delivery, and the broker's durable claim already
+    keeps a bound reply to one per job, attempt and outcome."""
+    if bound is None:
+        return origin.message_id
+    request = "&".join(f"{k}={v}" for k, v in bound.request)
+    return f"bound:{session_id}:{request}:{bound.graph_message_id}"
+
+
+# The agent's working drafts on a Graph seat, discarded once their reply is
+# transmitted (working_drafts.py: the Drafts-folder leak, ashton-price 10-12).
+_WORKING_DRAFTS: working_drafts.WorkingDrafts = working_drafts.WorkingDrafts()
+
+
+def _discard_drafts(draft_ids: list[str]) -> None:
+    working_drafts.discard(draft_ids, msgraph_broker.discard_draft)
+
+
+def _commit_reply(reply_key: str, origin: inbound.InboundOrigin) -> None:
+    """Commit the reply's own key, and the email's id too: a bound reply has
+    answered that email, so an ordinary turn it reopens still holds a second
+    answer exactly as before."""
+    _REPLIED.commit(reply_key)
+    if reply_key != origin.message_id:
+        _REPLIED.commit(origin.message_id)
+
+
+# Held-reply auto-release (#2070). The store is register-time infra; whether
+# release is ON is a live per-call/per-pass question (send_policy), so the
+# sweeper thread starts unconditionally and no-ops while release is unauthored.
+_HELD_STORE: held_store.HeldReplyStore | None = None
+_SWEEPER: Any | None = None
+
+
+def _msgraph_reply_html(text: str, html: str) -> str:
+    """The HTML body Graph is handed for a reply: composer-authored wins, else rendered.
+
+    Lifted out of :func:`_send_msgraph_reply` so ONE function decides what
+    reaches the wire and the audit digest is computed over that same value
+    (ss-console#2501). The reasoning for rendering unconditionally here is in
+    that function's docstring; this is only where it happens.
+
+    IDEMPOTENT, which is what lets the caller compose the body once and pass the
+    result through the existing ``html`` parameter: a non-blank ``html`` is
+    returned unchanged, so ``f(text, f(text, html)) == f(text, html)``.
+    """
+    if html.strip():
+        return html
+    return report_render.render_markdown(text) if text.strip() else ""
+
+
+def _transmitted_body(adapter: str, send_text: str, send_html: str) -> tuple[str, str]:
+    """Exactly the ``(text, html)`` bytes ``adapter`` is handed for a reply.
+
+    The two transports are asymmetric (see ``tests/test_transport_render_parity.py``
+    for why that asymmetry is intended rather than drift), so "the authored body"
+    is a different pair of strings on each. Computing it HERE, once, is what
+    makes ``body_digest_authored`` checkable: the digest covers the same values
+    the send call is given, not a reconstruction of them.
+    """
+    if adapter == _ADAPTER_MSGRAPH:
+        text = send_text or send_html
+        return text, _msgraph_reply_html(text, send_html)
+    return send_text, send_html
+
+
+def _send_msgraph_reply(
+    graph_message_id: str,
+    text: str,
+    html: str = "",
+    *,
+    session_id: str = "",
+    matter_ref: str | None = None,
+    to: str | None = None,
+) -> str:
+    """Reply in-thread via Microsoft Graph, keyed on the recorded message id.
+
+    ``to`` is set only for a DEVICE redirect (``scope.device_senders``): the
+    source message came from a scanner nobody reads, and the reply goes to the
+    person the seat's config names for it. The broker re-checks that pairing
+    against the source message it fetches itself, so this process asking for a
+    different ``to`` gets a refusal, not a send.
+
+    Graph derives the recipients from the original message (POST
+    /messages/{id}/reply), so the reply is structurally locked to the inbound
+    thread — the same recipient-lock property the AgentMail transport has.
+
+    ss#2258: this goes through the broker now. The lock above says the reply
+    cannot be REDIRECTED; it says nothing about whether this seat should be
+    answering that sender at all, and anyone on the internet can email the
+    operator mailbox. So the broker re-fetches the source message itself and
+    checks its sender against ``inbound_allow_from`` before replying — a check
+    this process cannot make credibly, since a caller that names the sender can
+    name any sender. It also writes the audit row, so a reply that left no trace
+    is no longer reachable.
+
+    Fail-closed as before: no broker path raises :class:`RelaySendError` (audited
+    REPLY_FAILED) and NEVER falls back to another transport. Graph returns 202
+    with no id; ss-console#2499 has the broker resolve one afterwards, and the
+    placeholder is surfaced only when it could not.
+
+    ss#2489 — WHY AN HTML BODY IS NOT COSMETIC HERE. Graph's ``/reply`` action
+    composes the reply message IN HTML (the reference says so where it explains
+    the ``Prefer: outlook.timezone`` header), so a plain-text ``comment`` lands
+    inside an HTML body and every newline in it collapses under HTML whitespace
+    rules. Live on hermes-ashton-price 2026-08-20: four replies arrived as one
+    unbroken block, sections and lists gone. The raw MIME shows the cause —
+    the text/html part carries the model's text inline with ZERO ``<br>``, and
+    the text/plain alternative is that HTML with the tags stripped, which is why
+    both halves were equally unreadable.
+
+    So the body is rendered here, unconditionally, rather than gated on
+    ``looks_like_report``. That gate exists on the AgentMail path to keep prose
+    sends byte-identical, and it is right there: AgentMail delivers a real
+    text/plain part, so prose already renders. On this transport there is no
+    such part — an unrendered prose reply is the wall. ``render_markdown`` turns
+    blank-line-separated prose into paragraphs, which is the floor we need.
+
+    The renderer runs AFTER the gates, on the text they scanned, which is sound
+    for the same reason it is sound in ``hermes-smd-trust``: the transform is
+    pure and presentational, adding no token of content the fabrication scan,
+    the content floor, and the matter gate have not already evaluated. A
+    composer-authored ``html`` wins, exactly as it does there.
+
+    ``session_id`` / ``matter_ref`` (ss-console#2497) are forwarded so the
+    CONFIRM_SEND_DISPATCHED row the BROKER writes carries the same two joins as
+    the REPLY_SENT row this plugin writes. Without them the two rows describing
+    one reply could only be matched by their timestamps."""
+    body_html = _msgraph_reply_html(text, html)
+    try:
+        sent_id = msgraph_broker.send_reply(
+            graph_message_id,
+            text,
+            html=body_html,
+            session_id=session_id,
+            matter_ref=matter_ref,
+            # Passed only when set, so a reply that is not a redirect makes
+            # exactly the call it made before device senders existed.
+            **({"to": to} if to else {}),
+            # The participant fence: a reply's anchor is the email it answers,
+            # which every caller took from a verified origin (never a guess).
+            anchor={"kind": "graph_message", "graph_message_id": graph_message_id},
+        )
+    except (msgraph_broker.BrokerError, msgraph_broker.MsGraphBrokerUnavailable) as exc:
+        raise relay.reply_failure(exc, "msgraph reply") from exc
+    # ss-console#2499. Every REPLY_SENT row on the live A&P ledger read
+    # "(sent via msgraph, id unavailable)" — 8 of 8 — because Graph's 202 carries
+    # no id. The broker now stamps an audit header on the reply and resolves the
+    # message's RFC2822 id out of Sent Items, so this row can name the message a
+    # firm would find in its own mailbox.
+    #
+    # The placeholder stays for the case where that lookup could not run. It is
+    # honest there: the broker's own row records why, and inventing an id would
+    # name a message the mailbox does not contain.
+    return sent_id or "(sent via msgraph, id unavailable)"
+
+
+def _send_bound_reply(
+    bound: binding.Binding,
+    text: str,
+    html: str = "",
+    *,
+    session_id: str = "",
+    matter_ref: str | None = None,
+) -> str:
+    """Send a bound reply through ``msgraph_reply_bound`` (see binding.py).
+
+    The broker verifies the binding again, takes its durable once-only claim
+    and replies on the Graph id it resolved, so this process names no
+    recipient and no message. Same body rendering and same error mapping as
+    :func:`_send_msgraph_reply`.
+    """
+    body_html = _msgraph_reply_html(text, html)
+    try:
+        sent_id = msgraph_broker.send_bound_reply(
+            bound.as_request(),
+            text,
+            html=body_html,
+            session_id=session_id,
+            matter_ref=matter_ref,
+        )
+    except (msgraph_broker.BrokerError, msgraph_broker.MsGraphBrokerUnavailable) as exc:
+        raise relay.reply_failure(exc, "bound reply") from exc
+    return sent_id or "(sent via msgraph, id unavailable)"
+
+
+# Holds the agent is told about (ss-console#2367). Populated by ``_held`` under
+# the tool_call_id of the dispatch being processed, drained ONCE by
+# ``on_transform_tool_result``. Module-level like every other piece of this
+# plugin's register-time state; bounded and thread-safe (see notice.py).
+_HOLD_NOTICES = notice.HoldNoticeStore()
+
+# Which draft calls the relay has already decided, so the decision happens in
+# whichever of post_tool_call / transform_tool_result fires first and never
+# twice (see relay.DecidedOnce for the hook-order defect this closes).
+_DECIDED = relay.DecidedOnce()
+
+# The tool_call_id of the dispatch this thread is inside. ``_held`` is called
+# from eight sites with a signature that predates the notice, so the id rides
+# a thread-local rather than eight touched call sites. Set at hook entry and
+# cleared on the way out; an absent id degrades to the empty key, which the
+# transform hook still matches for the very next drained call in the same turn.
+#
+# ss-console#2497 puts the SESSION on the same thread-local, for the identical
+# reason: ``_held`` is reached from a dozen sites and every one of the rows it
+# writes needs the session, so the value travels with the turn rather than
+# through a dozen touched signatures.
+_CURRENT_CALL = threading.local()
+
+
+def _session_tainted(session_id: str) -> bool:
+    """Whether this session ingested outside content. Fails toward tainted."""
+    try:
+        return bool(inbound.SESSION_TAINT.is_tainted(session_id))
+    except Exception:  # noqa: BLE001 - an unreadable taint register floors the reply
+        return True
+
+
+def _current_session_id() -> str:
+    """The session this thread's dispatch belongs to, or "" when unresolved."""
+    value = getattr(_CURRENT_CALL, "session_id", "")
+    return value if isinstance(value, str) else ""
+
+
+def _emit_reply_event(
+    *,
+    action_type: str,
+    metadata: dict,
+    session_id: str | None = None,
+    matter_ref: str | None = None,
+) -> None:
+    """Write one reply-channel audit row directly via D1Client (mirror-don't-gate).
+
+    Shares the ``shared.audit_contract`` row shape with the audit plugin so the
+    two can never desync. Metadata carries digest + recipient + message id +
+    reason ONLY — never the draft body. Best-effort: a failed emission is logged
+    and swallowed (the reply decision already happened).
+
+    THE TWO JOINS (ss-console#2497). Every row this function wrote carried
+    neither the session nor the matter: 0 of 8 REPLY_SENT rows on the A&P ledger
+    had a ``session_id`` and none of 207 on the pilot did, and ``matter_ref`` was
+    NULL on every send row on both seats. A reply row that cannot say what it was
+    about is the gap a disputed-communication question falls into.
+
+    Both are resolved HERE rather than at each call site, because the sites that
+    most need them are the early holds — roster, recipient-lock, empty body —
+    which return before any matter work happens:
+
+    * ``session_id`` defaults to the turn's session off ``_CURRENT_CALL``;
+    * ``matter_ref`` defaults to ``matter_gate.matter_ref_for``, which names the
+      single matter this session read and returns ``None`` on ambiguity rather
+      than picking one.
+
+    A caller with better evidence (the send path, which has the verdict's own
+    resolved matters) passes it explicitly and wins.
+    """
+    if _D1_CLIENT is None or _CUSTOMER_SLUG is None:
+        return
+    try:
+        resolved_session = session_id if session_id is not None else _current_session_id()
+        resolved_matter = (
+            matter_ref if matter_ref is not None else matter_gate.matter_ref_for(resolved_session)
+        )
+        # A reply the seat built from the turn's final text (text_delivery)
+        # says so on every row it writes, held, failed or sent.
+        seat_text = (
+            {"seat_delivered_text": True} if getattr(_CURRENT_CALL, "seat_text", False) else {}
+        )
+        params = agent_event_params(
+            action_type=action_type,
+            metadata={"customer": _CUSTOMER_SLUG, "reply_channel": True, **metadata, **seat_text},
+            session_id=resolved_session or None,
+            matter_ref=resolved_matter,
+        )
+        _D1_CLIENT.execute(_INSERT_SQL, *params)
+    except Exception as exc:  # noqa: BLE001 — audit must never break the hook
+        logger.warning("hermes-smd-reply: %s emission failed (%s)", action_type, exc)
+
+
+def _held(reason: str, origin: inbound.InboundOrigin, **extra: Any) -> None:
+    # ``_matter_ref`` is a CONTROL argument, not metadata: an underscore-prefixed
+    # key so it cannot collide with a real metadata field, popped before the rest
+    # of ``extra`` becomes the row's metadata. Callers that know the matter the
+    # body cites pass it; everyone else lets ``_emit_reply_event`` resolve the
+    # session's own (ss-console#2497).
+    matter_ref = extra.pop("_matter_ref", None)
+    # ``_detail`` is the same kind of control argument: the model-facing text of
+    # what to correct, fragments included. It goes to the hold notice the model
+    # reads and NEVER into the row, which records rule names only.
+    detail = extra.pop("_detail", "")
+    recipient, device = _reply_recipient(origin)
+    # ss-console 2026-10-20 (A&P 201167): a job's wake turn whose reply is held
+    # names the job, so the daemon's reply watch can page on the hold itself
+    # instead of twenty minutes later on the absence of a send. The session id
+    # alone is hermes' own and cannot be traced back to the wake.
+    wake = binding.TURN_SOURCES.wake_job(_current_session_id())
+    job = {"wake_kind": wake[0], "wake_job_id": wake[1]} if wake else {}
+    _emit_reply_event(
+        action_type="REPLY_HELD",
+        metadata={
+            "reason": reason,
+            "recipient": recipient,
+            "message_id": origin.message_id,
+            **device,
+            **job,
+            **extra,
+        },
+        matter_ref=matter_ref,
+    )
+    # ss-console#2367: the audit row is the record, not the telling. Record the
+    # hold so ``on_transform_tool_result`` can put it in front of the model in
+    # this same turn. A reply durably enqueued for automatic release is NOT
+    # silence and gets no notice: it is going out on its own, and a redraft
+    # would duplicate it.
+    if extra.get("held_for_release"):
+        return
+    try:
+        _HOLD_NOTICES.record(
+            tool_call_id=getattr(_CURRENT_CALL, "tool_call_id", "") or "",
+            reason=reason,
+            recipient=recipient,
+            message_id=origin.message_id,
+            detail=detail if isinstance(detail, str) else "",
+        )
+    except Exception as exc:  # noqa: BLE001 — telling must never break the hook
+        logger.warning("hermes-smd-reply: hold notice not recorded (%s)", exc)
+
+
+# The notice/page reason for a reply whose transmit failed. One closed value:
+# the transport's own error text stays in the audit row, never in the model's
+# context or the monitoring tags.
+_SEND_FAILED_REASON = "send_failed"
+
+
+def _send_failed(
+    why: str,
+    origin: inbound.InboundOrigin,
+    *,
+    adapter: str = "",
+    sender_class: str = "unclassified",
+    body_digest: str = "",
+    matter_ref: str | None = None,
+) -> None:
+    """A reply that did not go out: the row, the telling, and the page.
+
+    Until this existed a failed transmit wrote ``REPLY_FAILED`` and nothing
+    else, so the agent read ``create_draft -> ok`` and the person who wrote in
+    heard nothing: the ss-console#2367 silence, reached through the transport
+    instead of a gate. A failure is told exactly as a hold is (the notice the
+    transform hook appends to the draft's result) and paged through the same
+    notifier holds use. Never raises.
+    """
+    try:
+        recipient, device = _reply_recipient(origin)
+        _emit_reply_event(
+            action_type="REPLY_FAILED",
+            metadata={
+                "reason": why,
+                "adapter": adapter,
+                "recipient": recipient,
+                "message_id": origin.message_id,
+                **device,
+            },
+            matter_ref=matter_ref,
+        )
+        _HOLD_NOTICES.record(
+            tool_call_id=getattr(_CURRENT_CALL, "tool_call_id", "") or "",
+            reason=_SEND_FAILED_REASON,
+            recipient=recipient,
+            message_id=origin.message_id,
+        )
+        _notify_hold(
+            reason=_SEND_FAILED_REASON,
+            sender=recipient,
+            sender_class=sender_class,
+            adapter=adapter,
+            message_id=origin.message_id,
+            body_digest=body_digest,
+        )
+    except Exception as exc:  # noqa: BLE001 — telling must never break the hook
+        logger.warning("hermes-smd-reply: send failure not surfaced (%s)", exc)
+
+
+def _checklist_violations(
+    text: str, *, internal: bool, tool_name: str, session_id: str
+) -> tuple[str, str] | None:
+    """``(rule names, model-facing detail)`` when the checklist holds the reply.
+
+    Report-only rules write their ``SPEC_GATE_TRIGGERED`` row and let the reply
+    go. A scanner fault lets it go too: the safety floors above already passed
+    it, and a quality check that cannot run is not evidence about the text.
+    """
+    surface = output_checklist.STAFF_SEND if internal else output_checklist.EXTERNAL_REPLY
+    try:
+        # The seat role's profile (shared/policy_profile); paralegal by default.
+        profile = policy_profile.current().checklist_profile
+        found = output_checklist.check(text or "", surface, profile)
+    except Exception:  # noqa: BLE001 - see docstring
+        logger.exception("hermes-smd-reply: output checklist raised; relaying unchecked")
+        return None
+    if not found:
+        return None
+    rules = output_checklist.rule_names(found)
+    blocking = output_checklist.refusing(found)
+    if not blocking:
+        spec_gate.audit_output_checklist(
+            tool_name=tool_name,
+            output_class="staff" if internal else output_checklist.EXTERNAL_REPLY,
+            rules=rules,
+            session_id=session_id,
+        )
+        return None
+    return rules, output_checklist.describe(blocking)
+
+
+#: :func:`_shared_reply_people` result for a shared turn this transport cannot answer.
+_SHARED_UNSUPPORTED: tuple[str, ...] = ("<unsupported>",)
+
+
+def _shared_reply_people(
+    cfg: CustomerConfig,
+    session_id: str,
+    origin: inbound.InboundOrigin,
+    bound: Any,
+    redirected: bool,
+) -> tuple[str, ...]:
+    """The people a shared reply reaches, ``()`` for an ordinary reply, or
+    :data:`_SHARED_UNSUPPORTED`.
+
+    ``()`` on every seat without ``people:`` and on every turn the space
+    resolver does not put in ``shared`` from email (a person-space turn stays a
+    single-recipient reply). A shared turn the AgentMail inbound reply cannot
+    carry (a Graph seat, a bound reply, a device redirect, or a sender who is
+    not one of the people) is unsupported and held, never sent to one person.
+    A space that cannot be resolved at all is unsupported too: on a space-mode
+    seat an undecidable turn is held rather than answered privately."""
+    try:
+        spaces = space.space_config(cfg)
+    except Exception:  # noqa: BLE001 - unreadable people block: not space mode here
+        logger.warning("hermes-smd-reply: people block unreadable", exc_info=True)
+        return ()
+    if spaces is None:
+        return ()
+    try:
+        turn = space.resolve_space(session_id, config=spaces)
+    except Exception:  # noqa: BLE001 - an undecidable space-mode turn is held
+        logger.warning("hermes-smd-reply: space unresolved for this reply", exc_info=True)
+        return _SHARED_UNSUPPORTED
+    if turn is None or turn.kind != "shared" or turn.source != space.SOURCE_EMAIL_JOINT:
+        return ()
+    people = tuple(p.email for p in spaces.people if p.email)
+    sender = (origin.sender_address or "").strip().lower()
+    if (
+        _email_adapter(cfg) != "agentmail"
+        or bound is not None
+        or redirected
+        or sender not in people
+        or len(people) < 2
+    ):
+        return _SHARED_UNSUPPORTED
+    return people
+
+
+def _current_reply_to() -> str:
+    """The redirect target resolved for this dispatch, or "" when there is none."""
+    value = getattr(_CURRENT_CALL, "reply_to", "")
+    return value if isinstance(value, str) else ""
+
+
+def _reply_recipient(origin: inbound.InboundOrigin) -> tuple[str, dict[str, Any]]:
+    """Who this dispatch's reply is for, plus the redirect's audit fields.
+
+    ``(origin.sender_address, {})`` for every ordinary reply. For a device
+    redirect (``scope.device_senders``) the recipient is the person the config
+    names, and the row also says which device wrote in, so an auditor reading
+    "this person got a reply" can see it answered the scanner's email.
+    Addresses and a flag only; never the body.
+    """
+    reply_to = _current_reply_to()
+    if not reply_to or reply_to == origin.sender_address.strip().lower():
+        return origin.sender_address, {}
+    return reply_to, {"device_sender": origin.sender_address, "redirected_from_device": True}
+
+
+def _notify_hold(
+    *,
+    reason: str,
+    sender: str,
+    sender_class: str,
+    adapter: str,
+    message_id: str,
+    body_digest: str,
+    pending: int | None = None,
+) -> None:
+    """Report a held/expired reply to Sentry — silence is never the failure mode.
+
+    Ops-only by design (#2070): the audit row is the record, this is the page.
+    Never carries the body or the raw address — the recipient rides as a digest
+    prefix, enough to correlate two events as the same person without putting a
+    client address in the monitoring stream.
+    """
+    try:
+        import hashlib
+
+        import sentry_sdk
+
+        digest = hashlib.sha256(sender.encode()).hexdigest()[:8] if sender else ""
+        with sentry_sdk.new_scope() as scope:
+            scope.set_tag("reason", reason)
+            scope.set_tag("sender_class", sender_class or "unclassified")
+            scope.set_tag("adapter", adapter)
+            scope.set_extra("message_id", message_id)
+            scope.set_extra("body_digest", body_digest)
+            scope.set_extra("recipient_digest", digest)
+            if pending is not None:
+                scope.set_extra("pending_count", pending)
+            sentry_sdk.capture_message(f"reply_held: {reason}", level="warning")
+    except Exception as exc:  # noqa: BLE001 — monitoring must never break the hook
+        logger.debug("hermes-smd-reply: hold notification skipped (%s)", exc)
+
+
+def _held_pending_for(sender: str, policy: send_policy.SendPolicy) -> bool:
+    """True iff this sender has a reply already waiting for release."""
+    if not policy.held_release_enabled or _HELD_STORE is None:
+        return False
+    try:
+        return _HELD_STORE.has_pending(sender)
+    except Exception as exc:  # noqa: BLE001 — a broken store never blocks a send
+        logger.warning("hermes-smd-reply: held-reply pending check failed (%s)", exc)
+        return False
+
+
+def _pending_count() -> int | None:
+    if _HELD_STORE is None:
+        return None
+    try:
+        return _HELD_STORE.pending_count()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _enqueue_hold(
+    *,
+    reason: str,
+    origin: inbound.InboundOrigin,
+    sender_class: str,
+    adapter: str,
+    send_text: str,
+    send_html: str,
+    body_digest: str,
+    policy: send_policy.SendPolicy,
+) -> bool:
+    """Persist a rate-held reply for auto-release. True iff it was stored.
+
+    Only mechanical holds reach here (the caller decides): a rate window or a
+    queued-behind-held ordering hold clears with time, so the reply is still
+    wanted. Semantic refusals are decisions and stay dropped.
+    """
+    if not policy.held_release_enabled or _HELD_STORE is None:
+        return False
+    if origin.inbox_id == binding.BOUND_INBOX:
+        # A bound reply is never queued for release: the release path replies on
+        # a Graph id through the ordinary verb, which would skip the broker's
+        # once-only claim. It is held and the agent is told, like any refusal.
+        return False
+    try:
+        _HELD_STORE.enqueue(
+            sender=origin.sender_address,
+            sender_class=sender_class,
+            adapter=adapter,
+            inbox_id=origin.inbox_id,
+            message_id=origin.message_id,
+            send_text=send_text,
+            send_html=send_html,
+            body_digest=body_digest,
+            hold_reason=reason,
+            # A device redirect's target rides the row so the sweeper releases
+            # to the person, not back to the scanner (empty otherwise).
+            reply_to=_current_reply_to(),
+        )
+        return True
+    except Exception as exc:  # noqa: BLE001 — a broken store degrades to drop
+        logger.warning("hermes-smd-reply: held-reply enqueue failed (%s)", exc)
+        return False
+
+
+def on_post_tool_call(**kwargs: Any) -> None:
+    """Relay the draft here unless ``transform_tool_result`` already did.
+
+    Returns ``None`` always — ``post_tool_call`` cannot block (the draft is
+    already created) and its return is ignored. Under the pinned Hermes this
+    hook fires AFTER ``transform_tool_result`` for the same call, so on the live
+    path the relay has normally already decided and this is a no-op; it still
+    decides when it is first (an older or future Hermes, or a call whose
+    transform never fired) or when the call carries no id. See
+    :class:`relay.DecidedOnce`.
+    """
+    _note_turn_send(kwargs.get("tool_name"), kwargs.get("session_id"))
+    if (kwargs.get("tool_name") or "") == binding.TOOL_NAME:
+        _record_binding(kwargs)
+        return
+    if (kwargs.get("tool_name") or "") not in _CREATE_DRAFT_TOOLS:
+        return
+    if _DECIDED.claim(kwargs.get("tool_call_id")) is False:
+        return
+    _relay_draft(**kwargs)
+
+
+def on_pre_tool_call(**kwargs: Any) -> dict[str, Any] | None:
+    """Block every send in a job's completion wake (binding.py). The bound reply
+    is that turn's only channel (for a scheduled litigation run, a bound NEW
+    message the broker addresses). Exception-safe."""
+    # Core drops session_id on this fire site (overlay #141); resolve it the
+    # way the trust gate does. post_tool_call notes it again under the real id.
+    try:
+        _note_turn_send(
+            kwargs.get("tool_name"), provenance.resolve_session(kwargs.get("session_id") or "")
+        )
+    except Exception:  # noqa: BLE001 - noting never blocks a call
+        logger.debug("hermes-smd-reply: turn-send note failed", exc_info=True)
+    try:
+        session_id = kwargs.get("session_id")
+        message = binding.wake_send_refusal(
+            session_id if isinstance(session_id, str) else "",
+            str(kwargs.get("tool_name") or ""),
+            kwargs.get("args"),
+        )
+    except Exception:  # noqa: BLE001 - never raise out of a hook
+        logger.exception("hermes-smd-reply: wake send guard failed; not blocking")
+        return None
+    return {"action": "block", "message": message} if message else None
+
+
+def on_pre_llm_call(**kwargs: Any) -> None:
+    """Note a job's completion wake (binding.py), so only such a turn, or a
+    scheduled one, may bind a reply, and a job's wake only to its own job.
+    Observes; injects nothing. Exception-safe."""
+    try:
+        session_id = kwargs.get("session_id")
+        # A new turn: no draft or send attempted in it yet (text_delivery).
+        _TURN_SENDS.reset(session_id if isinstance(session_id, str) else "")
+        binding.TURN_SOURCES.note(
+            session_id if isinstance(session_id, str) else "",
+            kwargs.get("sender_id"),
+            kwargs.get("user_message"),
+        )
+    except Exception as exc:  # noqa: BLE001 - never raise out of a hook
+        logger.warning("hermes-smd-reply: noting the turn's source failed (%s)", exc)
+
+
+def _record_binding(kwargs: dict[str, Any]) -> str | None:
+    """Record a ``reply_bind`` verdict for the session (binding.py).
+
+    Runs from both hooks; recording is first-wins and the checks are the same
+    each time, so the order does not matter. Returns the replacement result
+    when the binding was not taken. Exception-safe: a failure takes nothing.
+    """
+    try:
+        session_id = kwargs.get("session_id")
+        store = _HELD_STORE
+        return binding.record_from_result(
+            session_id if isinstance(session_id, str) else "",
+            kwargs.get("result"),
+            held_pending=store.has_pending_for_message if store is not None else None,
+        )
+    except Exception as exc:  # noqa: BLE001 - never raise out of a hook
+        logger.warning(
+            "hermes-smd-reply: recording a reply binding failed (%s); nothing bound", exc
+        )
+        return None
+
+
+def _relay_draft(**kwargs: Any) -> None:
+    """Relay the agent's governed draft back to a verified, rostered inbound sender.
+
+    The single relay decision for one draft call. Reached from whichever of
+    ``post_tool_call`` / ``transform_tool_result`` claims the call first, never
+    from both. A hold records its notice under the call id; the transform hook
+    drains it, so when the transform hook is the decider the notice it takes is
+    the one this call just recorded. Never alters the tool result itself.
+    Exception-safe: any failure is logged and swallowed.
+    """
+    if not _INFRA_READY:
+        return
+    try:
+        if (kwargs.get("tool_name") or "") not in _CREATE_DRAFT_TOOLS:
+            return
+
+        # Bind this dispatch's id so any hold below is recorded against the call
+        # whose result the agent is about to read (ss-console#2367).
+        tool_call_id = kwargs.get("tool_call_id")
+        _CURRENT_CALL.tool_call_id = tool_call_id if isinstance(tool_call_id, str) else ""
+        # ss-console#2497: bind the session at the SAME point, before any hold can
+        # fire. The early holds — roster, recipient-lock, empty body — return long
+        # before the send path resolves anything, and they are the rows an auditor
+        # asking "why did this person get no answer" reads first.
+        raw_session_id = kwargs.get("session_id")
+        _CURRENT_CALL.session_id = raw_session_id if isinstance(raw_session_id, str) else ""
+        # The device-redirect target, resolved after the roster check below.
+        # Empty until then, so an early hold is recorded against the sender.
+        _CURRENT_CALL.reply_to = ""
+        # Which email this call answers, and whether its bytes reached the
+        # transport. The catch-all below reads both: an unexpected fault after
+        # the origin resolved and before a transmit is a reply nobody got, and
+        # the agent must be told so (ss-console#2367), never left reading "ok".
+        _CURRENT_CALL.origin = None
+        _CURRENT_CALL.transmitted = False
+
+        # (0) The draft must actually exist. ``post_tool_call`` fires after every
+        # dispatch, including one that returned an error, and the relay used to
+        # act on the tool NAME alone — so a create_draft that failed still put a
+        # real email in the sender's inbox, and the agent's retry sent the same
+        # answer again (leg-1 turn 2, vfy_01KYTG0B88R3B5K0D7FKPACRZT). Reply
+        # transmission is now strictly downstream of a draft the tool confirmed.
+        if relay.draft_call_failed(
+            result=kwargs.get("result"),
+            status=kwargs.get("status"),
+            error_type=kwargs.get("error_type"),
+        ):
+            logger.info(
+                "hermes-smd-reply: draft tool call reported failure; not relaying "
+                "(the agent's retry, if any, relays instead)"
+            )
+            return
+
+        # Config is read LIVE (ADR 0044): the roster can be authored without a
+        # restart, so the relay re-reads it here. Fail closed if customer.yaml is
+        # unreadable — a relay that cannot confirm the roster never sends.
+        try:
+            cfg = CustomerConfig.from_volume(str(_YAML_PATH))
+        except (CustomerConfigError, OSError) as exc:
+            logger.warning(
+                "hermes-smd-reply: customer.yaml live-read failed (%s); not replying this call",
+                exc,
+            )
+            return
+        vertical = cfg.vertical or None
+
+        session_id = kwargs.get("session_id") or ""
+        args = kwargs.get("args") if isinstance(kwargs.get("args"), dict) else {}
+
+        # THIS turn's own email only (ss-console participant fence, 2026-10-07):
+        # the origin the inbound plugin bound from this turn's trusted prompt
+        # prefix. Not the sticky session origin, and no longer the address-keyed
+        # recovery (``find_for_recipient`` is deleted): a draft addressed to
+        # someone who once wrote in found their most recent email and answered
+        # it, which is a reply to a request nobody made in this turn.
+        origin = inbound.SESSION_INBOUND_ORIGIN.bound_this_turn(session_id)
+        # The verified reply binding (binding.py): a turn no email opened, bound
+        # through the broker to ONE earlier email.
+        bound = binding.SESSION_BINDINGS.get(session_id) if origin is None else None
+        if bound is not None:
+            origin = bound.origin()
+        if origin is None:
+            # Fail closed: no email opened this turn and no binding was taken,
+            # so there is nobody to reply to. A create_draft that did NOT
+            # originate from this turn's inbound email never relays.
+            return
+        _CURRENT_CALL.origin = origin
+
+        # (0b) One inbound message, at most one reply out. The hook fires per
+        # tool CALL, so an agent that drafts twice in a turn arrives here twice
+        # for the SAME email. The (0) outcome check catches the retry-after-error
+        # shape; this catches every other way a second draft could reach the
+        # transport, including shapes no result envelope would reveal. Committed
+        # only on a real send or a durable enqueue, so a gated reply stays
+        # deliverable by the release path.
+        #
+        # A BOUND reply is keyed on its binding in THIS session, never on the
+        # email's id (2026-10-12, A&P drafting job 01M4RXQV...): the request
+        # email's earlier failure reply had committed its id, so the job's
+        # delivery, bound correctly hours later, was held as a duplicate and
+        # dropped until a gateway restart cleared the guard. The broker's
+        # durable claim is the once-only rule across turns for a bound reply
+        # (one per job, attempt and outcome); this guard only collapses two
+        # drafts in one bound turn.
+        reply_key = _reply_guard_key(session_id, bound, origin)
+        # The Graph draft this call made: the agent's working copy of the reply
+        # (working_drafts.py). Only a Graph seat's draft is ever discarded.
+        draft_id = (
+            working_drafts.draft_id_of(kwargs.get("result"))
+            if _email_adapter(cfg) == _ADAPTER_MSGRAPH
+            else ""
+        )
+        if _REPLIED.committed(reply_key):
+            _held("duplicate_reply", origin)
+            # The reply already went out (or is queued): this draft is a copy of
+            # an answer the person has, not something left for review.
+            _discard_drafts([draft_id])
+            return
+
+        # (a) Roster authorization — the Operator replies autonomously only to a
+        # colleague on the organization roster (ADR 0055). A verified inbound
+        # sender NOT on the roster gets a drafted (not sent) reply: reaching
+        # outside the roster needs explicit authorization. Held, not an error.
+        # That draft is the one left for staff, so it is never tracked.
+        if not cfg.sender_on_roster(origin.sender_address):
+            _held("sender_not_on_roster", origin)
+            return
+        # From here a held draft is one the agent redrafts; it is discarded with
+        # the others once this reply is actually transmitted, and kept otherwise.
+        _WORKING_DRAFTS.track(session_id, reply_key, draft_id)
+
+        # (a2) Device redirect. A sender authored under ``scope.device_senders``
+        # is a machine (an office scanner emailing its scans), and a reply sent
+        # back to it reaches nobody. The reply goes to the person the config
+        # names instead, and EVERYTHING below keys on that person: the lock,
+        # the content floor's classification, the matter gate, the rate limit,
+        # the held-reply row and the audit. The roster check above stays on the
+        # device, because the device is who wrote in. The target is authored
+        # config (validator: on scope.admins), never anything the draft said.
+        # Unmapped, ``reply_to`` IS ``origin.sender_address``, byte for byte, so
+        # every ordinary reply keys its limiter, queue and rows exactly as before.
+        device_target = cfg.device_reply_target(origin.sender_address)
+        redirected = bool(device_target) and (
+            device_target != origin.sender_address.strip().lower()
+        )
+        reply_to = device_target if redirected and device_target else origin.sender_address
+        _CURRENT_CALL.reply_to = reply_to if redirected else ""
+        if redirected:
+            logger.info(
+                "hermes-smd-reply: sender is an authored device; the reply is "
+                "redirected to its authored person (message=%s)",
+                origin.message_id,
+            )
+
+        # (b0) A SHARED reply (ADR 0091): on a space-mode seat, a turn the space
+        # resolver puts in ``shared`` from a joint email thread is answered to
+        # every authored person, not just the one who wrote last. The set is the
+        # seat's ``people[].email``, never anything the draft said, and only an
+        # AgentMail inbound reply can carry it (the broker copies the other
+        # people from the thread itself and re-checks every condition).
+        shared_people = _shared_reply_people(cfg, session_id, origin, bound, redirected)
+        if shared_people == _SHARED_UNSUPPORTED:
+            _held("shared_reply_unsupported", origin)
+            return
+
+        # (b) Recipient-lock — the reply can go ONLY to the address that emailed
+        # in (or, for a device, to the person answering for it; or, for a shared
+        # reply, to the seat's people). An injected extra/substituted recipient
+        # fails the lock here.
+        locked = (
+            relay.shared_recipients_locked(args, origin.sender_address, shared_people)
+            if shared_people
+            else relay.recipient_locked(args, origin.sender_address, reply_to)
+        )
+        if not locked:
+            _held("recipient_mismatch", origin, draft_to=sorted(relay.draft_recipients(args)))
+            return
+        if not origin.inbox_id:
+            # No inbox to thread the reply into — fail closed.
+            _held("no_inbox_id", origin)
+            return
+        if bound is not None and (redirected or _email_adapter(cfg) != _ADAPTER_MSGRAPH):
+            # The binding is a Graph-broker verb and answers the email's own
+            # sender only; a device redirect or another transport has no bound
+            # path, so the reply is held rather than sent some other way.
+            _held("bound_reply_unsupported", origin)
+            return
+        if redirected and _email_adapter(cfg) != _ADAPTER_MSGRAPH:
+            # Only the Graph broker can aim a reply at someone other than the
+            # source message's sender (and re-checks the pairing itself). On any
+            # other transport the reply would go back to the device, which is
+            # the silence this redirect exists to end, so it is held instead.
+            _held("device_redirect_unsupported", origin)
+            return
+
+        scan_text, send_text, send_html = relay.draft_body(args)
+
+        # (c) Re-apply the outbound floors to the draft body. ADR 0072 carve-out
+        # (ss #1932): the send path deliberately does NOT content-floor a send
+        # whose recipients all classify INTERNAL (enforce.py evaluate_tool_call —
+        # firm-internal coordination legitimately names deadlines, signatures,
+        # attorneys; flooring it held ack confirmations in drafts). Mirror it
+        # with the SAME classifier and the SAME rosters the send path resolves.
+        #
+        # INTERNAL is an AUTHORED fact as of ss#2263, not one inferred from the
+        # reply list. Before that split this line exempted every relayed reply by
+        # construction — including a reply to the firm's own client, whom the firm
+        # had put on `inbound_allow_from` for the sole purpose of enabling replies.
+        # The floor is the larger of the two exposures the split moves (the matter
+        # gate is the other); they move together, in one release, because they
+        # read this one `recipient_class`.
+        # ``from_tainted`` stays False deliberately: taint guards MODEL-CHOSEN
+        # recipients, but this recipient is structurally pinned to the
+        # Svix-verified inbound sender by the recipient-lock above — an injected
+        # body cannot redirect the reply. The fabrication gate still applies to
+        # every reply. Classification faults fail toward floored, never open.
+        try:
+            # ``reply_to``: the person who actually receives this reply, which is
+            # the sender unless the sender is an authored device.
+            recipient_class = classify_recipients_typed(
+                [reply_to], cfg.inbound_roster, cfg.outbound_roster
+            )
+        except Exception:  # noqa: BLE001 — unclassifiable recipient keeps the floor
+            logger.exception(
+                "hermes-smd-reply: recipient classification raised; keeping the content floor"
+            )
+            recipient_class = None
+        internal = recipient_class is RecipientClass.INTERNAL
+        if bound is not None and internal and _session_tainted(session_id):
+            # A bound turn that ingested outside content (a wake carrying a
+            # document's words, a cron that read the mailbox) gets the content
+            # floor even for a colleague: the recipient is pinned, but the
+            # body may carry what the turn read, and no inbound fence wrapped it.
+            internal = False
+        # Provenance exemption — the SAME one the drafting path applies
+        # (hermes-smd-trust/outbound.py). Case captions the agent READ from a
+        # system of record this session are quotable; without them the two
+        # channels disagreed, and the trust gate's approval of a draft naming
+        # matters read from Smokeball was overturned here as
+        # fabrication:tier2_citation, leaving the sender with silence. A fault
+        # degrades to the empty register — no exemption, today's behaviour.
+        #
+        # ss-console#2367 adds the MONEY half of the same register. ss#2258 gave
+        # ``specific-dollar-amount`` a provenance-scoped exemption on the
+        # drafting path only, so this path still refused what the skill permits:
+        # a demand letter was filed on 2026-PI-104 and the reply naming it was
+        # held on the Kaiser lien and the MedFin payoff, both read this session
+        # off the firm's own records and both cited to their source in the
+        # sentence that carried them. The firm asked for a letter and got
+        # silence. One register, read once, feeding both exemptions.
+        try:
+            _register = provenance.register_for(provenance.resolve_session(session_id))
+            allowed_captions = _register.captions()
+            allowed_money = _register.money()
+        except Exception:  # noqa: BLE001 — an unreadable register grants nothing
+            logger.debug(
+                "hermes-smd-reply: provenance register unavailable; no caption exemption",
+                exc_info=True,
+            )
+            allowed_captions = frozenset()
+            allowed_money = frozenset()
+        gate = relay.gate_body(
+            scan_text,
+            vertical=vertical,
+            cohort=_CUSTOMER_SLUG,
+            internal_recipient=internal,
+            allowed_case_names=allowed_captions,
+            allowed_money=allowed_money,
+        )
+        if not gate.allowed:
+            _held(gate.reason, origin, categories=list(gate.categories))
+            return
+
+        # (c1) The output checklist (ss-console Option B, 2026-09-29): would a
+        # good paralegal have sent this reply as is? A colleague's reply meets
+        # the staff set; a reply to anyone outside the firm meets ids and ISO/UTC
+        # times only, so a client's own words quoted back cannot hold it. HELD,
+        # not refused: the draft stands, and the notice tells the model exactly
+        # what to correct.
+        checklist_hold = _checklist_violations(
+            send_text or report_render.html_text_content(send_html),
+            internal=internal,
+            tool_name=str(kwargs.get("tool_name") or ""),
+            session_id=session_id,
+        )
+        if checklist_hold is not None:
+            _held(
+                spec_gate.REASON_OUTPUT_CHECKLIST,
+                origin,
+                rules=checklist_hold[0],
+                _detail=checklist_hold[1],
+            )
+            return
+
+        if not (send_text or send_html):
+            # Subject-only draft — nothing to relay (the gate scans the subject,
+            # but a reply transmits only the body). Fail closed.
+            _held("empty_body", origin)
+            return
+
+        # (c2) Matter identity — is this recipient a party to the matter this
+        # reply is about? (ss#2167)
+        #
+        # WHY IT HAS TO BE HERE AND NOT IN THE TRUST GATE. The matter check lives
+        # in enforce.evaluate_tool_call, guarded by `is_send`, which is true only
+        # for EXTERNAL_SEND* action classes. The tool this lane calls is
+        # ``create_draft`` — INTERNAL_WRITE (shared/action_classes.py) — and
+        # ``_reclassify_send`` returns a non-EXTERNAL_SEND base class unchanged.
+        # So on the reply lane the matter gate never ran at all, while THIS
+        # function relayed the same draft out as a real email a few lines below.
+        # That was 86 of the pilot's replies, and ~74% of all sends, with no
+        # matter-identity check of any kind (vfy_01KZRRW066Y70TFEYKGQX6ME76).
+        # It was recorded on the issue as the gate being *blind* here; it was
+        # absent, which is why widening membership capture alone would have
+        # changed nothing and reported the lane closed.
+        #
+        # The recipient is structurally pinned to the verified inbound sender by
+        # the recipient-lock at (b), so `origin.sender_address` IS the recipient
+        # set — no model-chosen address participates.
+        # The exemption used to be unable to say `recipient_class is INTERNAL` on
+        # this lane, and getting that wrong would have shipped a control that can
+        # never fire. `sender_on_roster` above IS `scope.inbound_allow_from`, and
+        # `_classify_one_typed` USED TO return INTERNAL on an inbound-roster match
+        # BEFORE consulting the typed roster ("a rostered internal recipient
+        # outranks a typed class"). So every relayed reply classified INTERNAL by
+        # construction, and an INTERNAL exemption would have skipped 100% of this
+        # lane.
+        #
+        # That conflation is fixed at the source as of ss#2263, and this call site
+        # got simpler because of it. `inbound_allow_from` answers "may I reply to
+        # you"; `scope.outbound_roster` answers "what are you to this firm", and
+        # `_classify_one_typed` now reads the typed roster FIRST. So the single
+        # `recipient_class` computed for the content floor above is already the
+        # right input here: a reply-authorized address the firm typed as a client
+        # classifies CLIENT — floored AND gated — instead of INTERNAL.
+        #
+        # This block used to reclassify against an EMPTY internal roster to route
+        # around the old precedence. That workaround is deleted rather than kept:
+        # it could only ever have fired for a config the validators rejected
+        # ("a recipient cannot be both internal and a typed outbound class"), so
+        # it protected nothing, and leaving two classifications on one path is how
+        # the floor and the gate drift apart again. One classifier, one verdict.
+        #
+        # A classification FAULT above leaves `recipient_class` None, which is in
+        # neither exempt class, so the gate RUNS. A classification we could not
+        # perform is not evidence that this recipient is firm staff.
+        matter_verdict = matter_gate.evaluate(
+            session_id=session_id,
+            body=scan_text,
+            # The person receiving it: a device redirect is gated on the person,
+            # since the device is never a party to anything.
+            recipients={reply_to},
+            # Firm staff and records vendors are not expected to be parties
+            # (ADR 0072, the same carve-out enforce.py applies).
+            recipient_is_exempt=recipient_class in (RecipientClass.INTERNAL, RecipientClass.VENDOR),
+        )
+        # The verdict's own cited-and-resolved tokens are better evidence of what
+        # this reply is ABOUT than the session's read set, so from here down the
+        # rows carry the matter the body actually names (ss-console#2497). Still
+        # ``None`` when the body cites two matters — see ``matter_ref_for``.
+        cited_matter_ref = matter_gate.matter_ref_for(session_id, matter_verdict.matters)
+        if matter_verdict.should_withhold and matter_gate.mode() == "block":
+            _held(
+                "matter_mismatch",
+                origin,
+                matters=list(matter_verdict.matters),
+                detail=matter_verdict.reason,
+                _matter_ref=cited_matter_ref,
+            )
+            return
+        if matter_verdict.status == "unresolved" and matter_verdict.matters:
+            # Recorded, NOT held (Captain call, 2026-08-11). A reply citing a
+            # matter whose party list this turn never read is the common case
+            # today — get_matter fires on 8 of 86 reply turns — so holding it
+            # would withhold correct client replies at a rate nobody has
+            # measured, and a control that blocks correct work gets removed
+            # rather than fixed. This row is that measurement.
+            _emit_reply_event(
+                action_type="MATTER_UNRESOLVED",
+                metadata={
+                    "recipient": reply_to,
+                    "message_id": origin.message_id,
+                    **_reply_recipient(origin)[1],
+                    "matters": list(matter_verdict.matters),
+                    "detail": matter_verdict.reason,
+                },
+                session_id=session_id,
+                matter_ref=cited_matter_ref,
+            )
+
+        # (d) Rate-limit under the authored send policy (#2070). Resolved LIVE
+        # per call (ADR 0044): authoring `send_policy` — e.g. exempting rostered
+        # INTERNAL senders so a sustained dialogue never rate-holds — applies on
+        # the next reply without a restart. Unauthored/malformed resolves to the
+        # platform defaults (today's exact caps), never fail-open. INTERNAL
+        # classification comes from step (c)'s classifier — the same rosters the
+        # content floor trusts.
+        policy = send_policy.live_send_policy(str(_YAML_PATH))
+        sender_class = recipient_class.value if recipient_class else "unclassified"
+        adapter = _email_adapter(cfg)
+        body_digest = inbound.content_digest(scan_text)
+        if _LIMITER is None:
+            _held("rate_limited", origin)
+            return
+
+        # Ordering guard (#2070): if this sender ALREADY has a reply waiting for
+        # release, this one queues behind it — otherwise a later reply whose
+        # window has cleared would overtake the earlier held one (the client
+        # reads answer 5 before answer 4), and under sustained traffic the live
+        # path would keep eating the freed slots so the held row never releases.
+        # Keyed on ``reply_to``: a device's replies count against the person who
+        # receives them, so a scanner batch cannot flood that person unbounded.
+        if _held_pending_for(reply_to, policy):
+            decision = relay.RateDecision(False, "queued_behind_held")
+        else:
+            decision = _LIMITER.check(reply_to, internal=internal, policy=policy)
+        if not decision.allowed and shared_people:
+            # The held-reply queue releases to the source's sender alone, so a
+            # shared reply is never queued: it is held, and the agent is told.
+            _held("shared_reply_rate_limited", origin)
+            return
+        if not decision.allowed:
+            reason = decision.reason or "rate_limited"
+            enqueued = _enqueue_hold(
+                reason=reason,
+                origin=origin,
+                sender_class=sender_class,
+                adapter=adapter,
+                send_text=send_text,
+                send_html=send_html,
+                body_digest=body_digest,
+                policy=policy,
+            )
+            if enqueued:
+                # Durably queued for release — the reply for this inbound is
+                # committed. Without this a retry in the same turn would enqueue
+                # a SECOND row and the sweeper would deliver the answer twice.
+                _commit_reply(reply_key, origin)
+                # It WILL go out, so an act line it carries is not owed again.
+                _ACT_BODIES.note(session_id, send_text, send_html)
+            _held(
+                reason,
+                origin,
+                sender_class=sender_class,
+                held_for_release=enqueued,
+            )
+            _notify_hold(
+                reason=reason,
+                sender=reply_to,
+                sender_class=sender_class,
+                adapter=adapter,
+                message_id=origin.message_id,
+                body_digest=body_digest,
+                pending=_pending_count(),
+            )
+            return
+
+        # (e) Send the threaded reply, keyed on the recorded message id (structural
+        # recipient-lock), via the seat's Email transport. Provider dispatch (ADR
+        # 0078): msgraph replies in-thread through Graph (Graph derives the
+        # recipients from the original message id — the reply cannot be
+        # redirected, except to a device's AUTHORED person, which the broker
+        # re-verifies from its own copy of customer.yaml against the sender it
+        # fetches); agentmail via its REST reply endpoint. Fail-closed: a
+        # msgraph seat with no MSGRAPH_* creds REFUSES (audited REPLY_FAILED),
+        # never falls back to AgentMail.
+        # The bytes this transport is handed, resolved once so the audit row's
+        # authored digests cover the very strings the send call receives
+        # (ss-console#2501) rather than a second reconstruction of them.
+        wire_text, wire_html = _transmitted_body(adapter, send_text, send_html)
+        try:
+            if bound is not None:
+                sent_id = _send_bound_reply(
+                    bound,
+                    wire_text,
+                    wire_html,
+                    session_id=session_id,
+                    matter_ref=cited_matter_ref,
+                )
+            elif adapter == _ADAPTER_MSGRAPH:
+                sent_id = _send_msgraph_reply(
+                    origin.message_id,
+                    wire_text,
+                    wire_html,
+                    session_id=session_id,
+                    matter_ref=cited_matter_ref,
+                    to=reply_to if redirected else None,
+                )
+            else:
+                sent_id = relay.send_reply(
+                    message_id=origin.message_id,
+                    text=wire_text,
+                    html=wire_html,
+                    session_id=session_id,
+                    matter_ref=cited_matter_ref,
+                    # Only when set, so every ordinary reply makes today's call.
+                    **({"shared": True} if shared_people else {}),
+                )
+        except Exception as exc:  # noqa: BLE001 - RelaySendError or a fault: not confirmed
+            why = str(exc) if isinstance(exc, relay.RelaySendError) else type(exc).__name__
+            if isinstance(exc, relay.RelayOutcomeUnknown):
+                # It may be in their inbox. Treat it as carried for everything
+                # that could send it again: the inbound counts as answered, so a
+                # redraft relays nothing, and an act line it carried is not owed
+                # again at end of turn. The failure is still told and paged
+                # below, because delivery is not confirmed.
+                _commit_reply(reply_key, origin)
+                _ACT_BODIES.note(session_id, wire_text, wire_html)
+            _send_failed(
+                why,
+                origin,
+                adapter=adapter,
+                sender_class=sender_class,
+                body_digest=body_digest,
+                matter_ref=cited_matter_ref,
+            )
+            return
+        _CURRENT_CALL.transmitted = True
+
+        # (f) The reply for this inbound is now committed — record it before the
+        # audit emission so a retry cannot race between the send and the mark.
+        _commit_reply(reply_key, origin)
+        # The only evidence the end-of-turn act delivery trusts: bytes the
+        # transport was actually handed (act_delivery module docstring).
+        _ACT_BODIES.note(session_id, wire_text, wire_html)
+
+        # (g) Audit the send — digest + recipient + message ids, never the body.
+        inbound_sender_key = sender_key(origin.sender_address)
+        sender_key_metadata = {"sender_key": inbound_sender_key} if inbound_sender_key else {}
+        _emit_reply_event(
+            action_type="REPLY_SENT",
+            metadata={
+                "recipient": reply_to,
+                # For a device redirect: which device wrote in. Absent otherwise.
+                **_reply_recipient(origin)[1],
+                "recipient_class": recipient_class.value if recipient_class else "unclassified",
+                "content_floor_applied": not internal,
+                "adapter": adapter,
+                "in_reply_to": origin.message_id,
+                "inbox_id": origin.inbox_id,
+                "sent_message_id": sent_id,
+                "body_digest": inbound.content_digest(scan_text),
+                # The digests an OUTSIDER can recompute (ss-console#2501). The
+                # line above stays what it has always been: sha256 of the string
+                # the floors scanned, which folds in a subject the wire never
+                # carries and is therefore only checkable inside this system.
+                # These two cover exactly the bytes handed to the transport, so
+                # counsel holding the firm's own Sent Items copy can verify the
+                # body without taking SMD's word for it. Recipe, per transport,
+                # is in ``relay.authored_digests``.
+                **relay.authored_digests(text=wire_text, html=wire_html),
+                # Which PERSON this answered, as a key rather than an address
+                # (ss-console#2497). ``recipient`` above is the raw address and
+                # predates this issue; ``sender_key`` is what joins this row to
+                # the INBOUND_RECEIVED row that opened the turn, without a second
+                # address leaving the Machine in an export.
+                **sender_key_metadata,
+            },
+            session_id=session_id,
+            matter_ref=cited_matter_ref,
+        )
+        # Request cards: the opening of the first reply, seat-local only (the
+        # audit row above carries digests, never words). Never raises.
+        request_index.record_reply_opening(origin.message_id, wire_text)
+        # (h) The reply is out: its working drafts (this one, and any held ones
+        # it superseded in this turn) leave the Drafts folder. Never raises.
+        _discard_drafts(_WORKING_DRAFTS.take(session_id, reply_key))
+    except Exception as exc:  # noqa: BLE001 — never raise out of a hook
+        logger.warning("hermes-smd-reply: post_tool_call handler error: %s", exc)
+        # A fault between resolving the email and handing bytes to the
+        # transport is a reply nobody received. Tell the turn and page, unless
+        # this call already recorded a hold the agent will read.
+        origin = getattr(_CURRENT_CALL, "origin", None)
+        call_id = getattr(_CURRENT_CALL, "tool_call_id", "") or ""
+        if (
+            origin is not None
+            and not getattr(_CURRENT_CALL, "transmitted", False)
+            and not _HOLD_NOTICES.pending(call_id)
+        ):
+            _send_failed(f"relay_error: {type(exc).__name__}", origin)
+    finally:
+        _CURRENT_CALL.tool_call_id = ""
+        _CURRENT_CALL.session_id = ""
+        _CURRENT_CALL.reply_to = ""
+        _CURRENT_CALL.origin = None
+        _CURRENT_CALL.transmitted = False
+
+
+def on_transform_tool_result(**kwargs: Any) -> str | None:
+    """Tell the agent, in this turn, that its reply was held (ss-console#2367).
+
+    Hermes contract (``model_tools.py:847-861``): the first hook return that is
+    a ``str`` REPLACES the tool result. This hook makes the relay decision
+    itself when it is the first hook to reach the call (the pinned Hermes fires
+    it BEFORE the terminal ``post_tool_call``), then drains whatever hold that
+    decision, or an earlier ``post_tool_call``'s, recorded for this call. So the
+    hold reaches the model attached to the very call that produced it, in-band,
+    before the turn can end, under either hook order.
+
+    Returns ``None`` — leaving the result untouched — for every tool that is not
+    a draft creation and for every draft that was relayed, held for automatic
+    release, or never reached the relay at all. The only str this returns is the
+    draft's own result with the hold appended; the draft id is preserved because
+    the agent needs it to update the draft it is about to redraft.
+
+    ``hermes-smd-inbound`` also registers this hook, but ``create_draft`` is not
+    in its fenced-read set (it is a write), so it returns ``None`` here and the
+    two never contend for the single replacing return.
+    """
+    try:
+        if (kwargs.get("tool_name") or "") == binding.TOOL_NAME:
+            return _record_binding(kwargs)
+        if (kwargs.get("tool_name") or "") not in _CREATE_DRAFT_TOOLS:
+            return None
+        tool_call_id = kwargs.get("tool_call_id")
+        # Decide here when this hook is first for the call. At the pinned Hermes
+        # it always is: the executor's terminal post_tool_call fires after this
+        # hook, so a relay that waited for it recorded its hold notice after the
+        # only seam that could carry it had already passed (REPLY_HELD with the
+        # agent told nothing). The claim keeps it to one decision per call under
+        # either order. A call with no id keeps the legacy shape (post decides),
+        # because without a key a second call is indistinguishable from the
+        # second hook of the first.
+        if _DECIDED.claim(tool_call_id) is True:
+            _relay_draft(**kwargs)
+        held = _HOLD_NOTICES.take(tool_call_id if isinstance(tool_call_id, str) else "")
+        if held is None:
+            return None
+        result = kwargs.get("result")
+        return notice.append_notice(result if isinstance(result, str) else "", held)
+    except Exception as exc:  # noqa: BLE001 — hook callbacks must be exception-safe
+        logger.warning(
+            "hermes-smd-reply: transform_tool_result raised (%s); the hold stands, "
+            "the agent is simply not told about it",
+            exc,
+        )
+        return None
+
+
+def _release_send(row: held_store.HeldReply) -> str:
+    """Transmit one released reply through the same transports the live path uses.
+
+    NO SESSION AND NO MATTER, deliberately (ss-console#2497). This runs on the
+    sweeper thread minutes or hours after the turn that composed the reply; the
+    held-reply store persists the body, the sender and the adapter, and never
+    persisted either join. Writing the sweeper's own (absent) session onto the
+    row would be a fabricated attribution, so the released rows carry neither and
+    are found instead by ``in_reply_to`` plus ``released_from_hold``. Persisting
+    the two on the held row at enqueue time is the fix and is not this change.
+    """
+    wire_text, wire_html = _transmitted_body(row.adapter, row.send_text, row.send_html)
+    if row.adapter == _ADAPTER_MSGRAPH:
+        # ``reply_to`` is set only on a device redirect's row (empty on every
+        # older row), and the broker re-checks it against the source message.
+        return _send_msgraph_reply(row.message_id, wire_text, wire_html, to=row.reply_to or None)
+    if row.reply_to:
+        # The live path never enqueues a redirect on another transport; a row
+        # that claims one is refused rather than sent back to the device.
+        raise relay.RelaySendError("device redirect requires the msgraph transport")
+    return relay.send_reply(
+        message_id=row.message_id,
+        text=wire_text,
+        html=wire_html,
+    )
+
+
+def _release_authored_digests(row: held_store.HeldReply) -> dict[str, str]:
+    """The checkable digests for a RELEASED reply (ss-console#2501).
+
+    Computed at release time from the same stored body :func:`_release_send`
+    transmits, through the same ``_transmitted_body``, so a released row carries
+    the identical guarantee a live one does. Deliberately NOT read back from the
+    held row: the held store keeps ``body_digest`` (the scan digest) and nothing
+    else, and persisting two more columns would mean a schema migration on every
+    seat to record something the release pass can derive exactly.
+    """
+    wire_text, wire_html = _transmitted_body(row.adapter, row.send_text, row.send_html)
+    return relay.authored_digests(text=wire_text, html=wire_html)
+
+
+def _sender_is_internal(sender: str) -> bool:
+    """Re-apply the live roster classification at release time.
+
+    Read fresh (ADR 0044): a sender removed from the roster between hold and
+    release loses the exemption, and one added gains it — the release decision
+    is never made against a stale snapshot.
+    """
+    try:
+        cfg = CustomerConfig.from_volume(str(_YAML_PATH))
+        return (
+            classify_recipients_typed([sender], cfg.inbound_roster, cfg.outbound_roster)
+            is RecipientClass.INTERNAL
+        )
+    except Exception:  # noqa: BLE001 — unclassifiable is never exempt (fail closed)
+        return False
+
+
+def _sweep_once() -> sweeper.SweepResult:
+    """One release pass, with the policy resolved live."""
+    if _HELD_STORE is None or _LIMITER is None:
+        return sweeper.SweepResult()
+    return sweeper.run_sweep_once(
+        store=_HELD_STORE,
+        limiter=_LIMITER,
+        policy=send_policy.live_send_policy(str(_YAML_PATH)),
+        send_fn=_release_send,
+        authored_digest_fn=_release_authored_digests,
+        emit_fn=_emit_reply_event,
+        notify_fn=_notify_hold,
+        internal_senders=_sender_is_internal,
+    )
+
+
+def _start_held_release() -> None:
+    """Open the held-reply store and start the sweeper (#2070).
+
+    Guarded end to end: if the store cannot be opened or the thread cannot
+    start, the relay degrades to the pre-#2070 behavior (rate holds are audited
+    and dropped) rather than failing registration — a broken release path must
+    never take the reply channel down with it.
+    """
+    global _HELD_STORE, _SWEEPER
+
+    _HELD_STORE = None
+    _SWEEPER = None
+    try:
+        store = held_store.HeldReplyStore(
+            os.environ.get("SMD_HELD_REPLY_DB_PATH") or held_store.DEFAULT_HELD_DB_PATH
+        )
+        interrupted = store.fail_interrupted_on_boot()
+        _HELD_STORE = store
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "hermes-smd-reply: held-reply store unavailable (%s); rate holds will drop", exc
+        )
+        return
+
+    if interrupted:
+        # A reply was mid-transmit when the process died. It is NOT resent (the
+        # send may have completed) — report it so a lost release is visible.
+        logger.warning(
+            "hermes-smd-reply: %d held repl(ies) were interrupted mid-send and will "
+            "not be auto-resent (rows %s)",
+            len(interrupted),
+            interrupted,
+        )
+        _notify_hold(
+            reason="hold_interrupted",
+            sender="",
+            sender_class="unclassified",
+            adapter="unknown",
+            message_id="",
+            body_digest="",
+            pending=len(interrupted),
+        )
+
+    try:
+        _SWEEPER = sweeper.start_sweeper_thread(sweep=_sweep_once)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("hermes-smd-reply: held-reply sweeper failed to start (%s)", exc)
+
+
+# Act lines this plugin transmitted, per session (act_delivery). Module-level
+# like the other register-time state; bounded and thread-safe.
+_ACT_BODIES = act_delivery.TransmittedBodies()
+
+
+#: "Not snapshotted by the hook; read it now" (the synchronous callers, tests).
+_UNSET: Any = object()
+
+
+def _deliver_owed_act(session_id: str, *, pending: Any = _UNSET, origin: Any = _UNSET) -> str:
+    """End of turn: send an act line the model proposed and did not send.
+
+    See ``act_delivery``. ``pending`` / ``origin`` are the turn's state as the
+    hook snapshotted it (the worker runs later); unset, they are read now.
+    Returns the outcome word for tests and logs. Never raises out of a hook."""
+    if not session_id:
+        return "none"
+    if pending is _UNSET:
+        pending = PENDING_ACTS.peek(session_id)
+    if act_delivery.owed_line(pending) is None:
+        return "none"
+    # This turn's own email only (participant fence): the act line answers it.
+    if origin is _UNSET:
+        origin = inbound.SESSION_INBOUND_ORIGIN.bound_this_turn(session_id)
+    try:
+        adapter = _email_adapter(CustomerConfig.from_volume(str(_YAML_PATH)))
+    except Exception:  # noqa: BLE001 - an unreadable config still gets the default transport
+        adapter = "agentmail"
+
+    def _send(message_id: str, body: str) -> str:
+        text, html = _transmitted_body(adapter, body, "")
+        if adapter == _ADAPTER_MSGRAPH:
+            return _send_msgraph_reply(message_id, text, html, session_id=session_id)
+        return relay.send_reply(message_id=message_id, text=text, html=html, session_id=session_id)
+
+    proposal_id = str(getattr(pending, "proposal_id", "") or "")
+    recipient = str(getattr(origin, "sender_address", "") or "") if origin is not None else ""
+
+    def _sent(line: str, sent_id: str) -> None:
+        PENDING_ACTS.mark_delivered(session_id, line)
+        _emit_reply_event(
+            action_type="REPLY_SENT",
+            metadata={
+                "recipient": recipient,
+                "adapter": adapter,
+                "in_reply_to": str(getattr(origin, "message_id", "") or ""),
+                "sent_message_id": sent_id,
+                "body_digest": inbound.content_digest(act_delivery.body_for(line)),
+                # Why this row exists: the model withheld nothing and sent
+                # nothing, so the seat delivered the act line itself.
+                "seat_delivered_act": proposal_id,
+            },
+            session_id=session_id,
+        )
+        request_index.record_reply_opening(
+            str(getattr(origin, "message_id", "") or ""), act_delivery.body_for(line)
+        )
+        logger.warning(
+            "hermes-smd-reply: act %s line was not sent by the turn; the seat delivered it (%s)",
+            proposal_id,
+            sent_id,
+        )
+
+    def _failed(line: str, why: str) -> None:
+        _emit_reply_event(
+            action_type="REPLY_FAILED",
+            metadata={
+                "reason": f"act_line_undelivered: {why}",
+                "adapter": adapter,
+                "recipient": recipient,
+                "seat_delivered_act": proposal_id,
+            },
+            session_id=session_id,
+        )
+        logger.error(
+            "hermes-smd-reply: act %s line is owed to the administrator and could not be delivered: %s",
+            proposal_id,
+            why,
+        )
+        try:
+            import sentry_sdk
+
+            with sentry_sdk.new_scope() as scope:
+                scope.set_tag("reason", "act_line_undelivered")
+                scope.set_tag("adapter", adapter)
+                scope.set_extra("proposal_id", proposal_id)
+                sentry_sdk.capture_message("act_line_undelivered", level="error")
+        except Exception as exc:  # noqa: BLE001 - monitoring must never break the hook
+            logger.debug("hermes-smd-reply: act delivery page skipped (%s)", exc)
+
+    return act_delivery.deliver_if_owed(
+        session_id,
+        pending=pending,
+        origin=origin,
+        ledger=_ACT_BODIES,
+        send=_send,
+        on_sent=_sent,
+        on_failed=_failed,
+    )
+
+
+# THE END-OF-TURN HOOKS ONLY HAND OFF (hermes-captain-mark, 2026-10-19). Pinned
+# Hermes skips a bounded hook callback that is still running for ANOTHER session
+# (``hermes_cli/plugins_dispatch.py`` ``_run_hook_callback_bounded`` keys the
+# running slot on ``(hook_name, id(callback))`` for the whole process). This
+# plugin's end-of-turn work sends email (a broker round trip), so two rostered
+# emails whose turns ended together lost the second reply with one WARNING.
+# ``on_post_llm_call`` / ``on_turn_end`` now snapshot the turn's state (the
+# email that opened it, whether it tried to send, the pending act) and submit
+# the work to a ``shared.hook_worker`` worker, which runs it in the turn's own
+# context; the callbacks return in microseconds.
+_END_OF_TURN = hook_worker.HookWorker("smd-reply-end-of-turn")
+
+# Inbound message ids whose turn's final text reached the worker (post_llm_call
+# ran). A rostered email whose turn ended without one is the lost-reply shape.
+_TEXT_SEEN = text_delivery.DeliveredOnce()
+
+
+def _turn_snapshot(session_id: str) -> tuple[Any, bool, Any]:
+    """The turn-scoped state the worker needs, read now (dict lookups only):
+    the email that opened this turn, whether the turn tried to send, the
+    pending act. A later turn of the session cannot change what the worker
+    acts on."""
+    return (
+        inbound.SESSION_INBOUND_ORIGIN.bound_this_turn(session_id),
+        _TURN_SENDS.attempted(session_id),
+        PENDING_ACTS.peek(session_id),
+    )
+
+
+def _text_reply_lost(session_id: str, origin: Any, attempted: bool, status: dict) -> bool:
+    """At a turn's end, with no act owed: True (and logged ERROR + paged) when
+    the turn opened on a rostered sender's email that nothing answered and the
+    turn's final text never reached delivery (its ``post_llm_call`` was skipped,
+    or never fired). Never raises."""
+    try:
+        if not _INFRA_READY or origin is None:
+            return False
+        message_id = str(getattr(origin, "message_id", "") or "")
+        sender = str(getattr(origin, "sender_address", "") or "")
+        if not message_id or not sender or _TEXT_SEEN.seen(message_id):
+            return False
+        if attempted or _REPLIED.committed(message_id) or answered_messages.answered(message_id):
+            return False
+        try:
+            cfg = CustomerConfig.from_volume(str(_YAML_PATH))
+        except (CustomerConfigError, OSError):
+            return False
+        if _email_adapter(cfg) not in text_delivery.ADAPTERS or not cfg.sender_on_roster(sender):
+            return False
+        logger.error(
+            "hermes-smd-reply: the email %s from a rostered sender got NO reply: the turn's "
+            "final text never reached delivery (session=%s completed=%s failed=%s "
+            "interrupted=%s). If Hermes logged \"Hook 'post_llm_call' ... skipped\" for "
+            "this turn, the hook dispatcher dropped it.",
+            message_id,
+            session_id,
+            status.get("completed"),
+            status.get("failed"),
+            status.get("interrupted"),
+        )
+        _page_text_hold("no_response_captured")
+        return True
+    except Exception:  # noqa: BLE001 - never raises
+        logger.error("hermes-smd-reply: lost-reply check failed", exc_info=True)
+        return False
+
+
+def _end_of_turn_text(
+    session_id: str, response: Any, origin: Any, attempted: bool, pending: Any
+) -> None:
+    """Worker: ``post_llm_call``'s work: an owed act line, else the text reply."""
+    if origin is not None and getattr(origin, "message_id", ""):
+        _TEXT_SEEN.claim(origin.message_id)
+    try:
+        act = _deliver_owed_act(session_id, pending=pending, origin=origin)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("hermes-smd-reply: end-of-turn act delivery failed (%s)", exc)
+        return
+    if act != "none":
+        return
+    try:
+        _deliver_text_reply(session_id, response, origin=origin, attempted=attempted)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("hermes-smd-reply: end-of-turn text delivery failed (%s)", exc)
+
+
+def _end_of_turn_settle(
+    session_id: str, origin: Any, attempted: bool, pending: Any, status: dict
+) -> None:
+    """Worker: ``on_session_end``'s work: an owed act line; with none owed, a
+    rostered email whose text never arrived is made loud."""
+    try:
+        _deliver_owed_act(session_id, pending=pending, origin=origin)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("hermes-smd-reply: end-of-turn act delivery failed (%s)", exc)
+    if act_delivery.owed_line(pending) is None:
+        _text_reply_lost(session_id, origin, attempted, status)
+
+
+def on_turn_end(**kwargs: Any) -> None:
+    """``on_session_end``: hand the turn's end to the worker (an owed act line;
+    a lost text reply made loud). Returns at once."""
+    try:
+        session_id = kwargs.get("session_id")
+        sid = session_id if isinstance(session_id, str) else ""
+        if not sid:
+            return
+        origin, attempted, pending = _turn_snapshot(sid)
+        status = {k: kwargs.get(k) for k in ("completed", "failed", "interrupted")}
+        _END_OF_TURN.submit(_end_of_turn_settle, sid, origin, attempted, pending, status)
+    except Exception as exc:  # noqa: BLE001 - never raise out of a hook
+        logger.error("hermes-smd-reply: end-of-turn hand-off failed (%s)", exc)
+
+
+# Sessions whose current turn attempted a draft or a send, and the inbound
+# messages whose final text the seat already put on the relay (text_delivery).
+_TURN_SENDS = text_delivery.TurnSends()
+_TEXT_DELIVERED = text_delivery.DeliveredOnce()
+
+_SEND_CLASSES = frozenset(
+    {
+        ActionClass.EXTERNAL_SEND,
+        ActionClass.EXTERNAL_SEND_INTERNAL,
+        ActionClass.EXTERNAL_SEND_CLIENT,
+        ActionClass.EXTERNAL_SEND_VENDOR,
+        ActionClass.EXTERNAL_SEND_AS_STAFF,
+    }
+)
+
+
+def _is_send_shaped(tool_name: str) -> bool:
+    """A draft, a bound reply, or anything the registry classes as a send."""
+    if tool_name in _CREATE_DRAFT_TOOLS or tool_name == binding.TOOL_NAME:
+        return True
+    try:
+        return classify_tool(tool_name).action_class in _SEND_CLASSES
+    except BannedToolError:
+        return True  # a banned send is still an attempt to send
+    except Exception:  # noqa: BLE001 - an unclassifiable name is not a known send
+        return False
+
+
+def _note_turn_send(tool_name: Any, session_id: Any) -> None:
+    """Mark this turn as one that tried to answer by itself. Never raises."""
+    try:
+        if isinstance(tool_name, str) and isinstance(session_id, str) and session_id:
+            if _is_send_shaped(tool_name):
+                _TURN_SENDS.note(session_id)
+    except Exception:  # noqa: BLE001 - observation only
+        logger.debug("hermes-smd-reply: turn-send note failed", exc_info=True)
+
+
+def _deliver_text_reply(
+    session_id: str, response: Any, *, origin: Any = _UNSET, attempted: Any = None
+) -> str:
+    """End of turn: send the final text as the reply the model did not draft.
+
+    See ``text_delivery``. Returns the outcome word for tests and logs:
+    ``none`` (nothing owed), ``answered`` (the email was already answered or
+    the turn tried to), ``silent``, ``not_rostered``, ``adapter``, ``blocked``
+    (the trust gate refused it), ``held`` (the relay held it), or ``sent``
+    (sent, or durably queued for release). Never raises."""
+    if not _INFRA_READY or not session_id:
+        return "none"
+    # THIS turn's own email only (participant fence). A cron, a wake, a
+    # Telegram or MCP turn has none and is never answered by email from here.
+    if origin is _UNSET:
+        origin = inbound.SESSION_INBOUND_ORIGIN.bound_this_turn(session_id)
+    if origin is None or not origin.message_id or not origin.sender_address:
+        return "none"
+    text = response if isinstance(response, str) else ""
+    if silence.is_silent(text):
+        return "silent"
+    message_id = origin.message_id
+    if attempted is None:
+        attempted = _TURN_SENDS.attempted(session_id)
+    if attempted or _REPLIED.committed(message_id) or answered_messages.answered(message_id):
+        return "answered"
+    try:
+        cfg = CustomerConfig.from_volume(str(_YAML_PATH))
+    except (CustomerConfigError, OSError) as exc:
+        logger.warning("hermes-smd-reply: customer.yaml unreadable (%s); no text reply", exc)
+        return "none"
+    if _email_adapter(cfg) not in text_delivery.ADAPTERS:
+        return "adapter"
+    # Checked here as well as in the relay so a stranger's turn writes no trust
+    # decision and no hold row: their mail was quarantined, and its final text
+    # going nowhere is the designed behavior, not a held reply.
+    if not cfg.sender_on_roster(origin.sender_address):
+        return "not_rostered"
+    if not _TEXT_DELIVERED.claim(message_id):
+        return "answered"
+
+    call_id = f"{text_delivery.CALL_ID_PREFIX}{message_id}"
+    args = text_delivery.draft_args(origin.sender_address, text_delivery.scrub(text))
+    verdict = tool_gate.evaluate(
+        text_delivery.DRAFT_TOOL, args, session_id=session_id, tool_call_id=call_id
+    )
+    _CURRENT_CALL.seat_text = True
+    try:
+        if verdict is not None:
+            # The refusal's wording stays in the log, never the row: rows carry
+            # reason codes only.
+            _CURRENT_CALL.session_id = session_id
+            _CURRENT_CALL.tool_call_id = call_id
+            _held("trust_gate_refused", origin)
+            _HOLD_NOTICES.take(call_id)
+            _CURRENT_CALL.tool_call_id = ""
+            logger.warning(
+                "hermes-smd-reply: the turn's text reply to %s was refused by the trust gate",
+                message_id,
+            )
+            _page_text_hold("trust_gate_refused")
+            return "blocked"
+        _relay_draft(
+            tool_name=text_delivery.DRAFT_TOOL,
+            args=args,
+            session_id=session_id,
+            tool_call_id=call_id,
+        )
+    finally:
+        _CURRENT_CALL.seat_text = False
+        _CURRENT_CALL.session_id = ""
+    # No model reads this call's result, so a hold notice has nobody to reach;
+    # the REPLY_HELD row is the record.
+    notice_left = _HOLD_NOTICES.take(call_id)
+    if _REPLIED.committed(message_id):
+        logger.warning(
+            "hermes-smd-reply: the turn ended in text and drafted nothing; the seat "
+            "delivered the text as the reply to %s",
+            message_id,
+        )
+        return "sent"
+    reason = str(getattr(notice_left, "reason", "") or "held")
+    logger.warning(
+        "hermes-smd-reply: the turn's text reply to %s was not delivered (%s)",
+        message_id,
+        reason,
+    )
+    _page_text_hold(reason)
+    return "held"
+
+
+def _page_text_hold(reason: str) -> None:
+    """A rostered sender's email got no answer and no model will be told: page.
+
+    A drafted reply's hold reaches the model in its turn; this one's turn is
+    over, so the page is the only telling. Reason code only. Never raises."""
+    try:
+        import sentry_sdk
+
+        with sentry_sdk.new_scope() as scope:
+            scope.set_tag("reason", reason)
+            scope.set_tag("customer", _CUSTOMER_SLUG or "")
+            sentry_sdk.capture_message("seat_text_reply_held", level="error")
+    except Exception as exc:  # noqa: BLE001 - monitoring must never break the hook
+        logger.debug("hermes-smd-reply: text hold page skipped (%s)", exc)
+
+
+def on_post_llm_call(**kwargs: Any) -> None:
+    """``post_llm_call``: hand the turn's end to the worker, which delivers an
+    owed act line, else the turn's text reply. Returns at once.
+
+    An owed act line is the turn's answer when there is one, so the text is
+    considered only when no act was owed (``text_delivery``)."""
+    try:
+        session_id = kwargs.get("session_id")
+        sid = session_id if isinstance(session_id, str) else ""
+        if not sid:
+            return
+        origin, attempted, pending = _turn_snapshot(sid)
+        _END_OF_TURN.submit(
+            _end_of_turn_text, sid, kwargs.get("assistant_response"), origin, attempted, pending
+        )
+    except Exception as exc:  # noqa: BLE001 - never raise out of a hook
+        logger.error("hermes-smd-reply: end-of-turn hand-off failed (%s)", exc)
+
+
+def register(ctx) -> None:
+    """Plugin entry point. Wires ``post_tool_call`` + ``transform_tool_result``.
+
+    Resolves the send infrastructure at register time — the AgentMail API key,
+    the customer slug, the audit binding, the rate-limiter — and sets
+    ``_INFRA_READY`` accordingly. The roster authorization is deliberately NOT
+    bound here: it is re-read from customer.yaml on every call
+    (``on_post_tool_call``) so authoring the roster takes effect on the next
+    draft with no restart (ADR 0044). The hook is registered unconditionally so
+    the plugin set is uniform across customers; it no-ops whenever the relay is
+    not infra-ready or the sender is not on the live roster.
+    """
+    global _INFRA_READY, _CUSTOMER_SLUG, _D1_CLIENT, _LIMITER, _YAML_PATH
+
+    _INFRA_READY = False  # fail closed until the send infra resolves
+    _YAML_PATH = Path(os.environ.get("SMD_CUSTOMER_YAML_PATH") or _DEFAULT_CUSTOMER_YAML_PATH)
+
+    # ss#2258: NO AgentMail credential is resolved here anymore. The AgentMail
+    # reply goes through a broker verb, so this process holds nothing that could
+    # transmit — which is the fix, not a side effect. Keeping a key here "just in
+    # case" would restore exactly the reachable-credential the incident exploited.
+    # The msgraph path still mints its own Graph token per send (ADR 0078); the
+    # two never cross-fall.
+
+    try:
+        _CUSTOMER_SLUG = get_secret("SMD_CUSTOMER_SLUG")
+        # Audit MUST go through the broker-aware factory (OP-P1-4): when the
+        # broker is configured this returns a BrokerAuditClient so the agent
+        # cannot write its own tamper-resistant ledger directly; otherwise it
+        # falls back to a D1 client. Same ``.execute(sql, *params)`` seam.
+        _D1_CLIENT = audit_client_from_env(customer_slug=_CUSTOMER_SLUG)
+    except KeyError as exc:
+        # Audit is observability, not a gate — the relay can still send. Run
+        # without it rather than disabling a working channel for a missing binding.
+        _CUSTOMER_SLUG = None
+        _D1_CLIENT = None
+        logger.warning(
+            "hermes-smd-reply: audit binding unconfigured (%s); reply channel will "
+            "send without emitting audit rows",
+            exc,
+        )
+
+    _LIMITER = relay.RateLimiter()
+    _start_held_release()
+    _INFRA_READY = True
+    # The verified reply binding's one tool (binding.py). It names an email,
+    # never a person; the broker decides who that is.
+    register_wrapped_tool(
+        ctx,
+        name=binding.TOOL_NAME,
+        toolset="reply",
+        schema=binding.TOOL_SCHEMA,
+        handler=binding.handle_tool,
+        requires_env=["SMD_WORKSPACE_BROKER_SOCKET"],
+        description=binding.TOOL_DESCRIPTION,
+        emoji="",
+    )
+    ctx.register_hook("pre_llm_call", on_pre_llm_call)
+    ctx.register_hook("pre_tool_call", on_pre_tool_call)
+    ctx.register_hook("post_tool_call", on_post_tool_call)
+    # ss-console#2367: a hold the agent is never told about is silence to the
+    # person who wrote in. This is the seam that tells it, in the same turn.
+    ctx.register_hook("transform_tool_result", on_transform_tool_result)
+    # An act line the model proposed and never sent is delivered by the seat at
+    # the end of the turn (act_delivery). Both hooks: post_llm_call fires only
+    # on a completed turn, on_session_end on every turn; the ledger's claim keeps
+    # the line from going out twice.
+    # post_llm_call also carries the turn's final text: a rostered sender's
+    # email answered only in text gets that text as its reply (text_delivery).
+    ctx.register_hook("post_llm_call", on_post_llm_call)
+    ctx.register_hook("on_session_end", on_turn_end)
+    logger.info(
+        "hermes-smd-reply registered (infra_ready=True, customer=%s); "
+        "replies gated on the live organization roster (scope.inbound_allow_from); "
+        "held replies reported to the agent at transform_tool_result",
+        _CUSTOMER_SLUG,
+    )

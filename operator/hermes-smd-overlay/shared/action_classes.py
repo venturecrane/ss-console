@@ -1,0 +1,1152 @@
+"""Action-class vocabulary shared by the audit and trust plugins.
+
+Both ``hermes-smd-audit`` and ``hermes-smd-trust`` need the same closed-vocabulary
+view of every Hermes tool call: the action class (read / internal_write /
+external_send / commitment / destructive), the banned-tool set (Pattern A / B
+forbidden capabilities), and the tool-name → action-class registry. This module
+is the single source of truth.
+
+Layering:
+
+  - The plugins import these names. Plugins never redefine them. Drift between
+    plugins is the failure mode this consolidation prevents (filed as task #33,
+    follow-on to the §7 adapter port).
+  - Tests assert the registry is closed-vocabulary, disjoint from
+    ``BANNED_TOOLS``, and runtime-immutable (``MappingProxyType`` raises
+    ``TypeError`` on any mutation attempt).
+  - Audit tags every per-tool row with the action class; trust uses the action
+    class to decide whether the call clears the resolved ceiling.
+
+Banned reasons:
+
+  ``BANNED_REASON`` maps each banned tool name to a closed-vocabulary category
+  code (e.g. ``"banned_tool_pattern_a"``, ``"banned_tool_destructive"``). This
+  is the substrate-level classification — audit rows persist it verbatim in
+  ``metadata.banned_reason``. The trust plugin renders its own user-visible
+  refusal sentence at the policy boundary; it does NOT consume the categorical
+  code as message text.
+"""
+
+import enum
+import logging
+from collections.abc import Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Closed-vocabulary action class
+#
+# String values match the ss-console adapter exactly so the two enforcement
+# surfaces (TS validators on the authoring side, Python enforcement here)
+# round-trip through their string representations.
+# ---------------------------------------------------------------------------
+
+
+class ActionClass(str, enum.Enum):
+    """Categorization of every tool call by reversibility / blast radius."""
+
+    READ = "read"  # Always allowed
+    INTERNAL_WRITE = "internal_write"  # Notes, drafts, internal state — autonomous OK
+    EXTERNAL_SEND = "external_send"  # Send to a NON-roster (outside) recipient — gated
+    # Send to a human-rostered INTERNAL recipient (own staff). Its own authored,
+    # fail-closed ceiling. The recipient axis is resolved in evaluate_tool_call via
+    # recipient_classifier; an unclassifiable recipient is forced OUTSIDE (draft),
+    # never INTERNAL — a send is never promoted to autonomous on an unknown recipient.
+    EXTERNAL_SEND_INTERNAL = "external_send_internal"
+    # Send to a firm's own rostered CLIENT / RECORDS VENDOR (scope.outbound_roster).
+    # Each carries its own authored, fail-closed ceiling — graduatable to autonomous
+    # independently of the outside class (ADR 0075). The recipient axis is resolved
+    # in evaluate_tool_call via recipient_classifier.classify_recipients_typed; an
+    # unclassifiable recipient is forced OUTSIDE (draft), never CLIENT/VENDOR.
+    EXTERNAL_SEND_CLIENT = "external_send_client"
+    EXTERNAL_SEND_VENDOR = "external_send_vendor"
+    # Send FROM a rostered staff member's address (``scope.staff_send_as``), on
+    # that staff member's own emailed approval (ss ADR 0089). No tool maps to it
+    # statically: ``evaluate_tool_call`` resolves it when a send carries ``from``.
+    # Its only defined posture is ``confirm`` -- the send is PROPOSED here and
+    # transmitted by the broker when the named approver replies ``[draft X] send``.
+    # Deliberately NOT taint-gated: a proposal is a draft, and nothing leaves
+    # until that person has read the exact text.
+    EXTERNAL_SEND_AS_STAFF = "external_send_as_staff"
+    COMMITMENT = "commitment"  # Sign, accept terms, agree to dates — never autonomous
+    DESTRUCTIVE = "destructive"  # Delete, drop, irreversible — explicit per-call approval
+    CODE_EXECUTION = (
+        "code_execution"  # Arbitrary code / shell / subagent — authored-only, fail-closed
+    )
+    REFUSED = "refused"  # Unknown / unmapped tool — fail-closed terminal class, never executes
+
+
+# ---------------------------------------------------------------------------
+# Vertical-pack safety floors (ADR 0022 / ADR 0037 Tenet 3) — SOURCE OF TRUTH
+#
+# A vertical pack declares non-raisable safety floors in its manifest
+# (``operator/verticals/<vertical>/vertical.yaml`` -> ``compliance:``). A floor
+# can only *narrow* a customer's authored ceiling, never raise it. The floor
+# SEMANTICS are encoded here keyed by vertical slug -> {action_class -> ceiling},
+# both as the closed-vocabulary STRINGS (the ``ActionClass`` values above and the
+# ADR 0035 ceiling strings ``refused`` / ``draft_for_review`` / ``autonomous``).
+#
+# This lives in ``shared/`` — the lowest layer both enforcement surfaces import
+# downward — so there is ONE definition:
+#   * ``hermes-smd-trust/enforce.py`` derives its enum-keyed runtime map from
+#     this (the live ``pre_tool_call`` ceiling resolver), and
+#   * ``config_applier/safety.py`` reads it directly (the apply-time floor check)
+#     so a config that widens past a floor is rejected before it is written.
+# A copy in either consumer would silently drift; this is the single source.
+#
+# No vertical currently declares a ceiling floor. The law-firm
+# ``external-send-draft-floor`` (external_send pinned to draft_for_review) was
+# removed 2026-07 by Captain decision: outside-send is a firm-authored dial per
+# ADR 0035, and supervision (ABA 512) is held by the audit journal +
+# attribution + fail-closed entitlement, not by a non-raisable send gate. The
+# machinery stays: a future vertical with a genuinely regulation-compelled
+# floor (one a customer must not be able to raise) declares it here. Note the
+# law wedge's hard BANS (trust-account writes, principal-identity sends) are
+# NOT floors and live in ``BANNED_TOOLS`` below — those are unchanged.
+# ---------------------------------------------------------------------------
+
+
+VERTICAL_FLOORS: dict[str, dict[str, str]] = {}
+
+
+# ---------------------------------------------------------------------------
+# Banned tools — Pattern A / Pattern B forbidden capabilities
+#
+# A tool name in this set NEVER reaches trust-ceiling enforcement. The
+# ``classify_tool()`` helper raises ``BannedToolError`` immediately; both
+# plugins translate that into a refusal at their respective seams.
+# ---------------------------------------------------------------------------
+
+
+BANNED_TOOLS: frozenset[str] = frozenset(
+    {
+        # Principal-identity sends — the Email connector wired to a human
+        # principal's own mailbox. The Operator never sends AS a human: a send
+        # from the principal's mailbox is indistinguishable from the human
+        # having written it, which forges authorship and breaks the
+        # attribution the audit journal's supervision record depends on
+        # (ABA 512 posture). Drafting INTO the principal's mailbox is allowed
+        # (DRAFT_CREATE); the send path is a hard identity-integrity ban, not
+        # a configurable ceiling. Autonomous sending happens only from the
+        # Operator's own identity (see the AgentMail note below).
+        # AgentMail's agent_attach_human (surfaced by the vendor, seen unclassified
+        # on the scott seat's tool-surface sweep 2026-09-29). It hands a
+        # conversation to a human on the VENDOR's side. The people who speak
+        # for a seat are its authored roster and admins, never a vendor's
+        # operator, so this is a hard ban rather than a ceiling: nothing an
+        # engagement could author makes it right.
+        "mcp_agentmail_agent_attach_human",
+        # AgentMail's "apps" verbs (seen unclassified on the pilot seat's sweep,
+        # SMD-OPERATOR-26, through 2026-10-06). ``connect_app`` grants a
+        # third-party app standing access through the seat's mailbox: a
+        # persistent integration no engagement authors and no ceiling governs,
+        # the same reason agent_attach_human is a ban and not a dial. The three
+        # reads browse the vendor's app catalog and serve nothing but that
+        # connect, so they are banned with it rather than left as a READ the
+        # agent could use to go shopping for one.
+        "mcp_agentmail_connect_app",
+        "mcp_agentmail_get_app",
+        "mcp_agentmail_list_apps",
+        "mcp_agentmail_search_apps",
+        "email_send",
+        "email_send_message",
+        "email_reply",
+        "email_reply_all",
+        "email_forward",
+        # SMS / messaging — same principal-identity rationale as email_send.
+        "sms_send",
+        "sms_send_message",
+        # Money movement — never autonomous.
+        "payments_initiate_transfer",
+        "payments_send_payment",
+        "payments_refund",
+        "payments_authorize_charge",
+        "payments_void_authorization",
+        # Smokeball trust-account writes — IOLTA fund movement. The law wedge is
+        # trust-funds-read-only (vertical floor); these are a HARD BAN, never a
+        # configurable ceiling. Runtime names are mcp_smokeball_<tool> (server key
+        # "smokeball"). Without these explicit bans they would hit the
+        # fail-closed unmapped path; before issue #1327 that path defaulted to
+        # READ and slipped every ceiling — the Risk-3 footgun the threat model
+        # named.
+        "mcp_smokeball_create_transaction",
+        "mcp_smokeball_protect_funds",
+        "mcp_smokeball_unprotect_funds",
+        # Calendar / matter destructive — irreversible state changes.
+        "calendar_delete_event",
+        "practice_management_delete_matter",
+        "practice_management_close_matter_permanent",
+        # Connector-level destructive operations.
+        "connector_revoke_oauth",
+        "connector_unbind_permanent",
+        #
+        # NOTE on AgentMail sends (`agentmail:send_message`, `send_draft`,
+        # `reply_to_message`, `forward_message`): these are NO LONGER banned.
+        # ADR 0025 (Captain decision 2026-05-29) overturned the hardcoded
+        # autonomous-send refusal — exposure is now a CONFIGURABLE per-action
+        # ceiling, not a permanent ban. The agentmail sends are classified
+        # ``EXTERNAL_SEND`` in TOOL_ACTION_CLASS_MAP below and governed by the
+        # resolved ceiling. Per ADR 0035 there is no default posture: unauthored
+        # ``external_send`` is fail-closed (``refused`` — no send, no draft);
+        # the authored values are ``autonomous`` / ``confirm`` /
+        # ``draft_for_review`` / ``refused``. The content-sensitivity floor
+        # (``shared.content_floor``) additionally forces money / contract /
+        # scope / legal content to draft even under an autonomous ceiling.
+        # The PRINCIPAL-identity sends (`email_send`, `email_reply`, ...) stay
+        # banned above — the agent sends only from its OWN identity, never
+        # from a human principal's mailbox.
+        #
+        # NOTE on staff send-as (ss ADR 0089): that ban is UNCHANGED. Sending
+        # from a staff member's address is not these tools and not the model's
+        # act: a send carrying ``from`` is classified EXTERNAL_SEND_AS_STAFF,
+        # only PROPOSED on the turn, and transmitted by the broker after the
+        # named staff member replies "send" to the exact text. Authorship is
+        # theirs, by their own written approval of that text, which is the
+        # attribution this ban protects.
+    }
+)
+
+
+# Reason classification for BANNED tool names. Closed vocabulary of category
+# codes. The audit plugin persists this verbatim in ``metadata.banned_reason``;
+# the trust plugin renders its own sentence-form message at the policy
+# boundary and does not consume this code as message text.
+BANNED_REASON: Mapping[str, str] = MappingProxyType(
+    {
+        "email_send": "banned_tool_pattern_a",
+        "email_send_message": "banned_tool_pattern_a",
+        "email_reply": "banned_tool_pattern_a",
+        "email_reply_all": "banned_tool_pattern_a",
+        "email_forward": "banned_tool_pattern_a",
+        "sms_send": "banned_tool_pattern_a",
+        "sms_send_message": "banned_tool_pattern_a",
+        "payments_initiate_transfer": "banned_tool_destructive",
+        "payments_send_payment": "banned_tool_destructive",
+        "payments_refund": "banned_tool_destructive",
+        "payments_authorize_charge": "banned_tool_destructive",
+        "payments_void_authorization": "banned_tool_destructive",
+        "calendar_delete_event": "banned_tool_destructive",
+        "practice_management_delete_matter": "banned_tool_destructive",
+        "practice_management_close_matter_permanent": "banned_tool_destructive",
+        "connector_revoke_oauth": "banned_tool_destructive",
+        "connector_unbind_permanent": "banned_tool_destructive",
+        "mcp_smokeball_create_transaction": "banned_tool_destructive",
+        "mcp_smokeball_protect_funds": "banned_tool_destructive",
+        "mcp_smokeball_unprotect_funds": "banned_tool_destructive",
+        # agentmail sends are NOT banned (ADR 0025) — see the note in
+        # BANNED_TOOLS above. They are EXTERNAL_SEND, ceiling-governed.
+    }
+)
+
+
+# ---------------------------------------------------------------------------
+# Tool-name → action_class registry
+#
+# Keys: every tool name the v1 capability surface exposes (read /
+# internal-write / commitment). Email send + money movement are DELIBERATELY
+# ABSENT from this map and present in BANNED_TOOLS instead — adding them here
+# is a P0 doctrine violation.
+# ---------------------------------------------------------------------------
+
+
+_RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
+    # AgentMail MCP — the persona's OWN mailbox (not the principal's Gmail).
+    #
+    # RUNTIME NAMING (2026-06-12, verified against the live server). Hermes
+    # registers MCP tools as ``mcp_<server>_<tool>`` — underscore-joined, with
+    # dashes in the server name folded to underscores. The agentmail server key
+    # is ``agentmail`` (see bootstrap.mcp_registry), so every tool reaches the
+    # classifier as ``mcp_agentmail_<tool>``. The earlier ``agentmail:<tool>``
+    # colon spelling was an unverified guess: it matched NOTHING at runtime, so
+    # every agentmail send classified READ and slipped the trust ceiling +
+    # taint-gate (the 2026-06-12 demo-law live-test P0 — the agent sent a reply
+    # autonomously on an inbound-tainted turn). The full 24-tool surface is
+    # enumerated below from a live ``tools/list`` so no agentmail tool defaults
+    # to READ. The colon spellings are retained ONLY as capability-contract
+    # aliases (audit prose / TS-side references); they never occur at runtime.
+    #
+    # Sends are EXTERNAL_SEND, governed by the resolved per-action ceiling (ADR
+    # 0025/0035): unauthored is fail-closed (refused — no send, no draft);
+    # draft_for_review and autonomous are both authored in action_ceilings;
+    # vertical floor narrows; the content-sensitivity floor (shared.content_floor)
+    # forces sensitive content to draft even under autonomous. Drafting
+    # (create_draft / update_draft) is INTERNAL_WRITE — the agent's own job.
+    # delete_inbox / delete_thread are DESTRUCTIVE (irreversible loss of received
+    # mail); delete_draft is INTERNAL_WRITE (discarding the agent's own unsent
+    # draft, matching email_delete_draft).
+    #
+    # --- live runtime names (mcp_agentmail_*) — the ONLY form the agent emits
+    "mcp_agentmail_send_message": ActionClass.EXTERNAL_SEND,
+    # ss#2258: the broker-mediated replacement for the MCP send. Same action
+    # class, so the SAME exposure ceiling governs it — draft_for_review still
+    # withholds and routes through the confirm round-trip, autonomous still
+    # sends. What changed is only WHO executes: the broker, which fences the
+    # recipient against the seat's authored config and writes the audit row.
+    # An unmapped tool is REFUSED, so this entry is what keeps the authored
+    # `external_send_internal: autonomous` tier alive after the MCP send tools
+    # left the menu.
+    "smd_send_message": ActionClass.EXTERNAL_SEND,
+    "mcp_agentmail_send_draft": ActionClass.EXTERNAL_SEND,
+    "mcp_agentmail_reply_to_message": ActionClass.EXTERNAL_SEND,
+    "mcp_agentmail_forward_message": ActionClass.EXTERNAL_SEND,
+    "mcp_agentmail_create_draft": ActionClass.INTERNAL_WRITE,
+    "mcp_agentmail_update_draft": ActionClass.INTERNAL_WRITE,
+    # Inbox provisioning / inbox settings: account config, not drafting. Both are
+    # off the menu (bootstrap/mcp_registry.py agentmail blocked_tools); COMMITMENT
+    # keeps them taint-gated if they ever come back (overlay review OS-2, the same
+    # reason create_webhook_subscription is COMMITMENT).
+    "mcp_agentmail_create_inbox": ActionClass.COMMITMENT,
+    "mcp_agentmail_update_inbox": ActionClass.COMMITMENT,
+    "mcp_agentmail_update_thread": ActionClass.INTERNAL_WRITE,
+    "mcp_agentmail_update_message": ActionClass.INTERNAL_WRITE,
+    "mcp_agentmail_delete_draft": ActionClass.INTERNAL_WRITE,
+    "mcp_agentmail_delete_inbox": ActionClass.DESTRUCTIVE,
+    "mcp_agentmail_delete_thread": ActionClass.DESTRUCTIVE,
+    "mcp_agentmail_list_inboxes": ActionClass.READ,
+    "mcp_agentmail_get_inbox": ActionClass.READ,
+    "mcp_agentmail_list_threads": ActionClass.READ,
+    "mcp_agentmail_search_threads": ActionClass.READ,
+    "mcp_agentmail_get_thread": ActionClass.READ,
+    "mcp_agentmail_get_attachment": ActionClass.READ,
+    "mcp_agentmail_list_messages": ActionClass.READ,
+    "mcp_agentmail_search_messages": ActionClass.READ,
+    "mcp_agentmail_list_drafts": ActionClass.READ,
+    "mcp_agentmail_get_draft": ActionClass.READ,
+    "mcp_agentmail_auth_me": ActionClass.READ,
+    # Added 2026-09-19 (overlay#365-#368). Both were offered by the vendor and
+    # classified by nobody, so both REFUSED on every call. ``get_message`` is
+    # the single-message read — the exact peer of ``get_thread`` above, same
+    # sender-authored body text, same mailbox. ``search_inboxes`` is READ on
+    # either reading of its name (inbox objects, or messages across inboxes);
+    # the fence side is where that ambiguity actually costs something, and
+    # plugins/hermes-smd-inbound records how it was resolved.
+    "mcp_agentmail_get_message": ActionClass.READ,
+    "mcp_agentmail_search_inboxes": ActionClass.READ,
+    # The overlay's own attachment pair (plugins/hermes-smd-mail-attachments,
+    # 2026-09-18). Both READ: one asks the vendor what a message carries — the
+    # inbound event has no ``attachments`` key, so nothing else can tell a turn
+    # an attachment exists — and one fetches those bytes with the seat's
+    # inbox-scoped key and leaves them in the seat-local spool, returning a
+    # token. The spool write is a scratch file on the seat's own volume, not a
+    # write into anyone's record: nothing is created in a tenant system, nothing
+    # is sent, and the entry expires. Classing it INTERNAL_WRITE would put
+    # reading one's own mail behind an entitlement ceiling a seat need not have
+    # authored, which is how a tool ships dead. Both are fenced+tainting in
+    # hermes-smd-inbound._FENCED_READ_TOOLS: a filename is sender-chosen text.
+    "mail_list_attachments": ActionClass.READ,
+    "mail_spool_attachment": ActionClass.READ,
+    # The whole email as an .eml, into the same seat-local spool (2026-09-23).
+    # READ for the same reason: a scratch file on the seat's own volume, and
+    # the matter write it enables is file_attachment_to_matter's, classed there.
+    "mail_spool_message": ActionClass.READ,
+    # The overlay's record-store trio (plugins/hermes-smd-record-store,
+    # 2026-09-29, ss-console#2793). A seat authors ``record_stores`` in
+    # customer.yaml, and these are the only way an inbound-email turn can keep
+    # a record: the model names a store and a file, never a path, and the
+    # write lands inside the authored directory or is refused. list/read are
+    # READ; the write is INTERNAL_WRITE, so it sits behind the same ceiling as
+    # any other write into the seat's own records, and the plugin's own
+    # pre_tool_call hook refuses it on a tainted turn. Registered only on a
+    # seat that authors a store; every other seat's surface is unchanged.
+    "record_store_list": ActionClass.READ,
+    "record_store_read": ActionClass.READ,
+    "record_store_write": ActionClass.INTERNAL_WRITE,
+    # The seat's own calendar (plugins/hermes-smd-calendar, ss-console#3264).
+    # The three changes are INTERNAL_WRITE: each writes an event into the seat's
+    # calendar store, and the invitation it sends is NOT this call's send. It
+    # goes out through the trust plugin's out-of-turn sender, which classifies
+    # and gates THAT message as ``smd_send_message`` against its recipients (the
+    # exposure ceiling, taint gate, content floor and scans), and the broker
+    # fences it again. Classing the tool a send would gate the same message
+    # twice under two different classes. The list is READ, unfenced by design
+    # (tests/test_inbound_fence_completeness.py says why).
+    "calendar_invite_create": ActionClass.INTERNAL_WRITE,
+    "calendar_invite_update": ActionClass.INTERNAL_WRITE,
+    "calendar_invite_cancel": ActionClass.INTERNAL_WRITE,
+    "calendar_invite_list": ActionClass.READ,
+    # A couple's schedule and settings, set by conversation
+    # (plugins/hermes-smd-couples-settings, ss-console #3264). The couples persona
+    # has no cronjob tool (CODE_EXECUTION, below), so this is the ONLY way a
+    # schedule changes on such a seat, and it is narrow by construction: it
+    # writes one validated JSON document on the seat's volume, never a cron job,
+    # a path or an address (delivery is a person id or ``shared``, resolved in
+    # code). The change is INTERNAL_WRITE: a write into the seat's own state,
+    # behind the same ceiling as a record write. What it can SEND is not this
+    # call's send: a joint change's notice to the other partner goes through
+    # shared.send_dispatch on the roster lane, which the broker fences to the
+    # seat's people. The read is READ, unfenced by design
+    # (tests/test_inbound_fence_completeness.py says why).
+    "couples_settings_read": ActionClass.READ,
+    "couples_settings_change": ActionClass.INTERNAL_WRITE,
+    # A rostered sender's voice memo as text (plugins/hermes-smd-voice-notes,
+    # 2026-09-29, ss-console#2793). READ: it spools the seat's own mail
+    # attachment to the scratch spool and runs the seat's speech-to-text on
+    # it; nothing is created in a tenant system and nothing is sent. Unlike
+    # the attachment pair it is NOT fenced: the tool refuses any sender who is
+    # not on the roster before reading a byte, so its result can only ever be
+    # the words of a person the seat already treats as internal.
+    "voice_note_transcribe": ActionClass.READ,
+    # Native web search (WebSearch capability, ADR 0070). Hermes' bundled web
+    # providers (plugins/web/*, e.g. brave-free) expose ONE native tool,
+    # `web_search` (tools/web_tools.py) — NOT an MCP tool, so the runtime name is
+    # bare `web_search` with no mcp_<server>_ prefix. Selected per customer.yaml
+    # via connectors.WebSearch.backend: native:<provider> -> Hermes config
+    # `web.search_backend`. Read-only: no writes, no sends, nothing irreversible —
+    # always allowed even on an inbound-tainted turn. Unmapped => REFUSED
+    # (fail-closed), so this entry is what keeps native web search from being dead
+    # on arrival (superseded the mcp:brave connector, whose whole layer was the
+    # redundant wrapper that MCP-wrapped a native Hermes feature).
+    "web_search": ActionClass.READ,
+    # msgraph-mail author-built connector (ss #1978 / ADR 0078 slice 1 — the
+    # COORDINATED CHANGE its manifest.toml names). Runtime names are
+    # mcp_msgraph_mail_<tool>. Classes mirror the manifest's tool_classes
+    # oracle exactly; the boot-time connector-classification probe FATALs the
+    # seat when a baked connector's manifest disagrees with this map (which is
+    # how the missing half of #1986 crashlooped the first post-merge
+    # reprovision, 2026-07-24). Mapping is classification, not authorization:
+    # the send tools sit behind the authored external_send ceiling (fail-closed
+    # when unauthored) and the ADR 0072 recipient-aware machinery; the
+    # connector's arg surface is deliberately flat (to/cc plain addresses) so
+    # governance sees recipients directly, and an unresolvable recipient never
+    # classifies INTERNAL.
+    "mcp_msgraph_mail_list_messages": ActionClass.READ,
+    "mcp_msgraph_mail_read_message": ActionClass.READ,
+    "mcp_msgraph_mail_poll_delta": ActionClass.READ,
+    # The two staff-mailbox reads (ss-console, 2026-09-23). READ: they take a
+    # mailbox, but the connector refuses every mailbox the firm has not authored
+    # in customer.yaml ``staff_mailbox_reads`` before calling Graph, and no send,
+    # draft, move or delete reaches a staff mailbox.
+    "mcp_msgraph_mail_list_staff_messages": ActionClass.READ,
+    "mcp_msgraph_mail_read_staff_message": ActionClass.READ,
+    "mcp_msgraph_mail_create_draft": ActionClass.INTERNAL_WRITE,
+    "mcp_msgraph_mail_send_message": ActionClass.EXTERNAL_SEND,
+    "mcp_msgraph_mail_reply_message": ActionClass.EXTERNAL_SEND,
+    # The four MCP protocol primitives the Hermes client synthesizes from the
+    # msgraph-mail server's prompts/resources capabilities. Same shape as the
+    # Smokeball four below (overlay#365-#368): not connector verbs, absent from
+    # the connector source and from its manifest tool_classes, so the manifest
+    # conformance probe (declared subset of map) is untouched by their presence
+    # here. They read the server's own catalog, which this connector does not
+    # populate, so they answer empty.
+    #
+    # Classified rather than left refusing for the reason the Smokeball block
+    # records: the tool-surface sweep logs an unclassified tool at ERROR, and
+    # since 2026-09-19 every boot of the ashton-price seat has fired a Sentry
+    # event naming exactly these four (the top issue in the 09-18..09-25 weekly
+    # report, 21 events). A safety signal that fires on a known-good boot is one
+    # people learn to ignore.
+    #
+    # NOT added to TENANT_SOURCE_READ_TOOLS: server metadata, not firm mail. If
+    # the connector ever declares a resource carrying mailbox content,
+    # read_resource becomes a tenant-source read and must move in the same
+    # change that declares it.
+    "mcp_msgraph_mail_get_prompt": ActionClass.READ,
+    "mcp_msgraph_mail_list_prompts": ActionClass.READ,
+    "mcp_msgraph_mail_list_resources": ActionClass.READ,
+    "mcp_msgraph_mail_read_resource": ActionClass.READ,
+    # --- capability-contract aliases (colon form) — never emitted at runtime,
+    #     retained so audit prose / TS-side references still resolve.
+    "agentmail:send_message": ActionClass.EXTERNAL_SEND,
+    "agentmail:send_draft": ActionClass.EXTERNAL_SEND,
+    "agentmail:reply_to_message": ActionClass.EXTERNAL_SEND,
+    "agentmail:forward_message": ActionClass.EXTERNAL_SEND,
+    "agentmail:create_draft": ActionClass.INTERNAL_WRITE,
+    "agentmail:update_draft": ActionClass.INTERNAL_WRITE,
+    # Email — read-only + draft-creation only. PRINCIPAL-identity SEND is BANNED.
+    "email_list_messages": ActionClass.READ,
+    "email_get_message": ActionClass.READ,
+    "email_search": ActionClass.READ,
+    "email_get_thread": ActionClass.READ,
+    "email_list_labels": ActionClass.READ,
+    "email_create_draft": ActionClass.INTERNAL_WRITE,
+    "email_update_draft": ActionClass.INTERNAL_WRITE,
+    "email_delete_draft": ActionClass.INTERNAL_WRITE,
+    # SMS — read-only + draft-creation only. SEND is BANNED.
+    "sms_list_messages": ActionClass.READ,
+    "sms_get_message": ActionClass.READ,
+    "sms_create_draft": ActionClass.INTERNAL_WRITE,
+    # Calendar — read + non-destructive scheduling state changes.
+    "calendar_list_events": ActionClass.READ,
+    "calendar_get_event": ActionClass.READ,
+    "calendar_search_events": ActionClass.READ,
+    "calendar_check_availability": ActionClass.READ,
+    "calendar_create_event_draft": ActionClass.INTERNAL_WRITE,
+    "calendar_propose_time": ActionClass.COMMITMENT,
+    "calendar_respond_invitation_draft": ActionClass.INTERNAL_WRITE,
+    # Practice management — read + non-destructive matter updates.
+    "practice_management_search_matters": ActionClass.READ,
+    "practice_management_get_matter": ActionClass.READ,
+    "practice_management_list_documents": ActionClass.READ,
+    "practice_management_get_document": ActionClass.READ,
+    "practice_management_list_tasks": ActionClass.READ,
+    "practice_management_create_note": ActionClass.INTERNAL_WRITE,
+    "practice_management_create_task_draft": ActionClass.INTERNAL_WRITE,
+    "practice_management_update_matter_field": ActionClass.INTERNAL_WRITE,
+    "practice_management_open_matter_draft": ActionClass.COMMITMENT,
+    # ----------------------------------------------------------------------
+    # Smokeball MCP — the law wedge's system of record. Server key "smokeball",
+    # so Hermes registers every tool as mcp_smokeball_<tool>. Native surface from
+    # operator/verticals/law-firm/smokeball-surface.md. Reads → READ; the one
+    # wedge write is create_memo (INTERNAL_WRITE); create_matter is COMMITMENT
+    # (never autonomous — gated draft); contact/task/file/calendar-event/folder
+    # writes INTERNAL_WRITE;
+    # file delete DESTRUCTIVE. Trust-account writes (create_transaction /
+    # protect_funds / unprotect_funds) are NOT here — they are hard-BANNED above.
+    # Every Smokeball tool the server exposes MUST appear here or in BANNED_TOOLS;
+    # an omission is unreachable until policy classifies it.
+    #
+    # The four MCP PROTOCOL PRIMITIVES below are not Smokeball verbs and are not
+    # ours: they appear nowhere in operator/connectors/smokeball and are absent
+    # from its manifest's [connector.tool_classes]. The Hermes client synthesizes
+    # them from the FastMCP server's prompts/resources CAPABILITIES. That is why
+    # overlay#366's attempt to exclude them by name did nothing -- blocked_tools
+    # filters the server's DECLARED tool surface, and these are not in it. The
+    # seat said so itself: the sweep went 14 unclassified -> 4, and these were
+    # the four left standing (vfy recorded 2026-09-19).
+    #
+    # Classified rather than left refusing, because the sweep logs drift at
+    # ERROR: four permanently unclassified tools would fire a Sentry event on
+    # every boot of every seat, and a safety signal that fires on a known-good
+    # boot is one people learn to ignore. Leaving them would have cost the
+    # instrument its meaning.
+    #
+    # READ is safe here in both directions. The conformance probe checks the
+    # manifest's DECLARED classes against this map (declared subset of map), and
+    # the ss-console side checks the server's LIVE tool_surface() -- these four
+    # are in neither set, so an entry here cannot phantom and cannot FATAL a
+    # seat. And they read the server's own prompt/resource catalog, which the
+    # Smokeball connector does not populate: they answer empty.
+    #
+    # NOT added to TENANT_SOURCE_READ_TOOLS: they return server metadata, not
+    # firm records. If the connector ever declares a resource carrying matter
+    # data, read_resource becomes a tenant-source read and that decision must be
+    # revisited here in the same change.
+    "mcp_smokeball_get_prompt": ActionClass.READ,
+    "mcp_smokeball_list_prompts": ActionClass.READ,
+    "mcp_smokeball_list_resources": ActionClass.READ,
+    "mcp_smokeball_read_resource": ActionClass.READ,
+    "mcp_smokeball_auth_status": ActionClass.READ,
+    "mcp_smokeball_list_matters": ActionClass.READ,
+    "mcp_smokeball_get_matter": ActionClass.READ,
+    # Every layout item on a matter (the custom tabs: negotiation, insurance,
+    # case details), as a section index or one section's fields, sensitive
+    # identifiers masked (ss-console layout_tools.py, 2026-10-09).
+    "mcp_smokeball_get_matter_layouts": ActionClass.READ,
+    "mcp_smokeball_list_matter_types": ActionClass.READ,
+    "mcp_smokeball_get_stage_sets": ActionClass.READ,
+    "mcp_smokeball_get_stage_to_matter_mappings": ActionClass.READ,
+    "mcp_smokeball_get_contacts": ActionClass.READ,
+    "mcp_smokeball_get_contact": ActionClass.READ,
+    "mcp_smokeball_get_contact_relations": ActionClass.READ,
+    "mcp_smokeball_list_tasks": ActionClass.READ,
+    "mcp_smokeball_get_task": ActionClass.READ,
+    "mcp_smokeball_search_staff": ActionClass.READ,
+    "mcp_smokeball_get_staff": ActionClass.READ,
+    "mcp_smokeball_get_roles_on_matter": ActionClass.READ,
+    "mcp_smokeball_get_relationships_on_matter": ActionClass.READ,
+    "mcp_smokeball_get_files_on_matter": ActionClass.READ,
+    "mcp_smokeball_get_file": ActionClass.READ,
+    "mcp_smokeball_get_download_url": ActionClass.READ,
+    # Server-side presigned fetch + text extraction (PDF/DOCX/text). The FIRST
+    # content-bearing Smokeball read: it returns externally-authored document
+    # text (opposing counsel, providers), so it is fenced+tainting in
+    # hermes-smd-inbound._FENCED_READ_TOOLS — unlike the metadata-only reads
+    # around it. Added 2026-07-05 (L2 DISC-1: get_download_url minted URLs no
+    # tool could fetch).
+    "mcp_smokeball_read_document": ActionClass.READ,
+    # Server-side fetch + text extraction of an EMAIL ATTACHMENT from a
+    # host-allowlisted vendor download URL (never vision). Content-bearing like
+    # read_document, and the content is vendor-authored (an invoice PDF), so it
+    # is fenced+tainting in hermes-smd-inbound._FENCED_READ_TOOLS. It is NOT a
+    # tenant-source read (shared.provenance): an invoice is not the firm's
+    # record, so a figure read from it never counts as tenant-sourced.
+    "mcp_smokeball_read_attachment_text": ActionClass.READ,
+    "mcp_smokeball_get_memos_on_matter": ActionClass.READ,
+    "mcp_smokeball_get_bank_accounts": ActionClass.READ,
+    "mcp_smokeball_get_matter_balances": ActionClass.READ,
+    "mcp_smokeball_get_matter_billing_config": ActionClass.READ,
+    "mcp_smokeball_get_fees": ActionClass.READ,
+    "mcp_smokeball_get_expenses": ActionClass.READ,
+    # ss#2842: resolves an invoice's matter and returns a CLOSED verdict --
+    # unique / ambiguous / none / search_failed. A firm-record read: it reads
+    # the tenant's own matters and contacts, so it is not inbound-fenced. The
+    # staging write refuses without the resolution this mints, so leaving it
+    # unclassified fails the whole intake path closed rather than open.
+    "mcp_smokeball_resolve_invoice_matter": ActionClass.READ,
+    # Combined post intake (ss-console, 2026-09-22): a firm scans the day's post
+    # as ONE PDF holding several letters for different matters. This reads it
+    # PAGE BY PAGE, transcribing when a page is paper, and returns page-marked
+    # text so each letter can be cut out as its own range. Fenced+tainting in
+    # hermes-smd-inbound._FENCED_READ_TOOLS for exactly read_attachment_text's
+    # reason and more strongly: every word is written by an outside party, and a
+    # transcription reproduces "file this under the Alvarez matter" faithfully.
+    # It is NOT a tenant-source read (shared.provenance): a letter the firm
+    # received is not the firm's own record.
+    "mcp_smokeball_read_attachment_pages": ActionClass.READ,
+    "mcp_smokeball_get_webhook_subscriptions": ActionClass.READ,
+    "mcp_smokeball_get_event_types": ActionClass.READ,
+    "mcp_smokeball_list_events": ActionClass.READ,
+    "mcp_smokeball_list_folders": ActionClass.READ,
+    "mcp_smokeball_create_memo": ActionClass.INTERNAL_WRITE,
+    # The in-place twin of create_memo (ss-console Option B, 2026-09-29): one
+    # file note per routine per matter, updated rather than appended, so a
+    # paralegal reads one current note instead of a stack of dated repeats. The
+    # same write to the same record as create_memo, so the same class.
+    "mcp_smokeball_update_memo": ActionClass.INTERNAL_WRITE,
+    "mcp_smokeball_patch_matter": ActionClass.INTERNAL_WRITE,
+    "mcp_smokeball_create_contact": ActionClass.INTERNAL_WRITE,
+    "mcp_smokeball_create_task": ActionClass.INTERNAL_WRITE,
+    "mcp_smokeball_update_task": ActionClass.INTERNAL_WRITE,
+    "mcp_smokeball_add_file": ActionClass.INTERNAL_WRITE,
+    # Server-side cross-connector transfer (ss-console #1744): fetches an
+    # AgentMail-minted time-limited attachment download_url (host-allowlisted,
+    # https-only, size-capped, no redirects) and runs the two-stage matter
+    # upload. A matter-file write; returns metadata only (no content) so it is
+    # NOT a fenced read — the filed copy is read later via read_document,
+    # which fences and taints.
+    "mcp_smokeball_file_attachment_to_matter": ActionClass.INTERNAL_WRITE,
+    # Vendor invoice intake: creates an UNFINALIZED expense on a matter (the
+    # connector hard-codes finalized=false; no parameter can change it) and
+    # files the invoice PDF beside it. A draft entry in the firm's own record
+    # that a human finalizes; it moves no money, touches no trust account, and
+    # sends nothing outside, so it is an internal write, not a commitment.
+    "mcp_smokeball_stage_vendor_invoice": ActionClass.INTERNAL_WRITE,
+    # Combined post intake (ss-console, 2026-09-22): cuts ONE page range out of
+    # an emailed bundle and files it as its own document on the matter a
+    # resolution token opened. Internal write for file_attachment_to_matter's
+    # reason -- the firm's own record, metadata back, nothing sent outside --
+    # and it is deliberately the page-range shape rather than a second whole-file
+    # write: filing a bundle of several clients' letters as one document on one
+    # client's matter is a confidentiality event the filing turn cannot undo.
+    "mcp_smokeball_file_attachment_pages_to_matter": ActionClass.INTERNAL_WRITE,
+    # The Medicals tab write (ss-console, 2026-10-01): one provider row on the
+    # matter's personal-injury settlement layout, from a medical bill the SAME
+    # run filed on that matter from a page range of the scanned post. Opened
+    # by the connector's filed-document ledger (the fileId the filing
+    # returned), not by a resolution token, so a row cannot be written on a
+    # matter the run did not file the bill on. Internal write for
+    # file_attachment_pages_to_matter's reason: the firm's own record, nothing
+    # sent outside. It never creates a contact and never changes a row already
+    # on the tab; the connector refuses both. Carries no prose argument (the
+    # row's note is composed in the connector), so the draft gate's scan has
+    # nothing to read and allows it, which is the intended posture.
+    "mcp_smokeball_add_medicals_row": ActionClass.INTERNAL_WRITE,
+    # A treating facility on the Medicals tab without a bill (ss-console,
+    # 2026-10-05, a paralegal's emailed list of a client's prior and current
+    # providers): finds the facility's contact by its one exact name, or adds it
+    # as a company when the firm's contacts hold none, links it as a provider
+    # row and writes only the row's description. No money field exists on the
+    # tool. Internal write for add_medicals_row's reason: the firm's own record,
+    # nothing sent outside. Several possible contacts write nothing.
+    "mcp_smokeball_add_medicals_provider": ActionClass.INTERNAL_WRITE,
+    # The firm's own rep-letter form, filled (ss-console, 2026-10-05): the 1st or
+    # 3rd party representation letter rendered from the firm's form in its
+    # Document Library, every value read in the connector from the matter's own
+    # record, and filed on that matter. Internal write for render_docx_draft's
+    # reason: work product saved into the firm's record. Mailing or faxing the
+    # letter stays a person's act; this tool sends nothing.
+    "mcp_smokeball_render_firm_form_letter": ActionClass.INTERNAL_WRITE,
+    # The state DMV SR1 prefilled from the matter (values off the client's
+    # license and estimate accepted only beside their labels) and filed on
+    # the matter for the client to complete and sign (ss-console sr1_form.py,
+    # 2026-10-06). Internal write: the firm's record; it never signs, mails
+    # or sends.
+    "mcp_smokeball_render_sr1": ActionClass.INTERNAL_WRITE,
+    # The state DMV SR 19C (the other driver's insurance information),
+    # prefilled and filed for the firm's signer (ss-console sr19_form.py,
+    # 2026-10-06). Internal write: never signed, mailed or paid.
+    "mcp_smokeball_render_sr19": ActionClass.INTERNAL_WRITE,
+    # A litigation-funding case evaluation form (the firm's copy in its
+    # Document Library) prefilled from the matter's record and filed on the
+    # matter for the firm to finish (ss-console funding_case_eval.py,
+    # 2026-10-06). Internal write: never signed, sent or submitted.
+    "mcp_smokeball_render_funding_case_eval": ActionClass.INTERNAL_WRITE,
+    # Demand and offer rows on a matter's Negotiation Details tab, written
+    # only into EMPTY fields and confirmed by read-back (ss-console
+    # layout_tools.py, 2026-10-09). Internal write: the firm's own record,
+    # it never sends, signs or settles anything.
+    "mcp_smokeball_add_negotiation_rows": ActionClass.INTERNAL_WRITE,
+    # The .docx producer (ss#2222, Captain directive 2026-08-10): renders a
+    # content-gated markdown skeleton server-side and files it into the matter
+    # via the same two-stage upload as add_file. Internal write: it reaches
+    # the firm's own record, never an outside recipient.
+    "mcp_smokeball_render_docx_template": ActionClass.INTERNAL_WRITE,
+    # The FILLED-DRAFT producer (ss-console#2258). Its sibling above renders a
+    # TEMPLATE and refuses case content, because content in a template reaches
+    # every future matter the template is filled for. A filled draft is the
+    # opposite artifact — the case content IS the letter — so it needed its own
+    # tool with the inverted content gate. Without that, a demand letter could
+    # not become a .docx at all and was filed as .txt, which an attorney cannot
+    # edit in Word.
+    #
+    # SAME CLASS AS THE TEMPLATE TOOL, deliberately: both save the Operator's
+    # own work product into the firm's own record and send nothing outside. The
+    # two differ only in which artifact their content gate is written for, never
+    # in what they are permitted to do. Delivery to anyone outside the firm
+    # remains a separate act under a separate class.
+    "mcp_smokeball_render_docx_draft": ActionClass.INTERNAL_WRITE,
+    # The .xlsx producer: builds a workbook from structured sheets (headers,
+    # rows, totals) and files it on the matter through the same upload as
+    # add_file. Same class and same reason as the two render tools above: the
+    # agent saving its own work product into the firm's own record. Draft-gated
+    # like add_file, and identifier-scanned through its `sheets` cells.
+    "mcp_smokeball_add_workbook": ActionClass.INTERNAL_WRITE,
+    "mcp_smokeball_get_upload_url": ActionClass.INTERNAL_WRITE,
+    # COMMITMENT, not INTERNAL_WRITE (overlay review OS-2, 2026-10-17). A webhook
+    # subscription is a PERSISTENT registration that makes Smokeball push firm
+    # matter events to a caller-supplied URL from then on. That is provisioning
+    # config, not the agent's own work product, and no routine needs it at
+    # runtime. As INTERNAL_WRITE it was outside the taint gate
+    # (_TAINT_GATED_CLASSES in plugins/hermes-smd-trust/enforce.py) and allowed
+    # at A&P's authored `internal_write: draft_for_review`, so an injected inbound
+    # email could have the seat register a standing feed of client data to an
+    # attacker's endpoint. It is now OFF THE MENU (bootstrap/mcp_registry.py
+    # smokeball blocked_tools); this class is the second wall if it ever comes
+    # back: taint-gated and never autonomous. Not BANNED because ss-console's
+    # boot classification probe resolves every manifest-declared tool through
+    # classify_tool(), and a banned name raises there. COORDINATED CHANGE: the
+    # connector manifest (ss-console operator/connectors/smokeball/manifest.toml)
+    # must declare create_webhook_subscription = "commitment" in the same change
+    # as the OVERLAY_REF bump, or the seat's boot probe fails on the drift.
+    "mcp_smokeball_create_webhook_subscription": ActionClass.COMMITMENT,
+    "mcp_smokeball_create_event": ActionClass.INTERNAL_WRITE,
+    "mcp_smokeball_update_event": ActionClass.INTERNAL_WRITE,
+    "mcp_smokeball_create_event_reminder": ActionClass.INTERNAL_WRITE,
+    "mcp_smokeball_create_folder": ActionClass.INTERNAL_WRITE,
+    "mcp_smokeball_create_matter": ActionClass.COMMITMENT,
+    "mcp_smokeball_delete_file": ActionClass.DESTRUCTIVE,
+    # Calendar-event deletion as an ADMIN-CONFIRMED ACT (ss-console, 2026-09-25).
+    # prepare_event_deletion READS the matters' live calendars and returns the
+    # manifest (event id, matter id, matter number, subject, date, as the vendor
+    # holds them). delete_events takes it and is DESTRUCTIVE: at an authored
+    # `destructive: confirm` the trust gate withholds it as an act proposal
+    # (shared/act_broker.py CALL_PAYLOAD_ACTS), the broker renders every event
+    # into the [act ...] line, and only an administrator's emailed yes replays
+    # the stored list. The connector then deletes an event only if it still
+    # matches what the administrator read. It is the ONLY destructive tool with
+    # an act shape; any other destructive tool at confirm still refuses.
+    # Distinct from the generic `calendar_delete_event` hard ban above, which
+    # governs an unconfirmed calendar capability, not this act.
+    "mcp_smokeball_prepare_event_deletion": ActionClass.READ,
+    "mcp_smokeball_delete_events": ActionClass.DESTRUCTIVE,
+    # A medical-records order as an ADMIN-CONFIRMED ACT (ss-console,
+    # 2026-10-05; smokeball_connector/records_*.py). prepare_order READS: it
+    # resolves each facility against the vendor's own custodian directory, finds
+    # the signed HIPAA authorization on the matter, and returns the order (no
+    # client identifier beyond the SSN's last four). place_order is COMMITMENT
+    # with a call-payload act shape (shared/act_broker.py CALL_PAYLOAD_ACTS): at
+    # an authored `commitment: confirm` the gate withholds it, the broker
+    # renders the whole order into the [act ...] line, and only an
+    # administrator's emailed yes replays the stored order. The connector then
+    # re-checks it against Smokeball and reads the client's identifiers in
+    # process. orders_for_matter READS what the vendor holds for the matter.
+    "mcp_smokeball_prepare_records_order": ActionClass.READ,
+    "mcp_smokeball_place_records_order": ActionClass.COMMITMENT,
+    "mcp_smokeball_records_orders_for_matter": ActionClass.READ,
+    # ----------------------------------------------------------------------
+    # Clio MCP (oktopeak/clio-mcp v2.0.0) — the law wedge's ORIGINAL
+    # practice-management system of record. It was bound as `mcp:clio-oktopeak`
+    # by pilot-law and demo-law; NEITHER SEAT EXISTS ANY MORE (pilot-law was the
+    # Clio sandbox, authored 2026-06-05, never provisioned, retired in full
+    # 2026-08-25; demo-law has no seat directory either), and as of that date no
+    # customer.yaml binds Clio at all — the only remaining mention is the option
+    # menu in operator/customers/_template/customer.yaml.
+    #
+    # An earlier version of this comment read "bound by pilot-law (Ashton &
+    # Price)". That was wrong and worth correcting rather than deleting: Ashton
+    # & Price is the paying firm and runs SMOKEBALL, not Clio. Conflating a
+    # disposable sandbox with a real client in a trust-layer comment is how a
+    # reader ends up reasoning about the wrong seat.
+    #
+    # THE CLASSIFICATIONS BELOW STAY ANYWAY. They are fail-closed mappings, and
+    # their value is exactly that they are in place BEFORE a binding returns.
+    # Deleting them because nothing binds Clio today would restore EFF-07 the
+    # moment one does: unmapped tools fall through to READ -> autonomous.
+    # Hermes sanitizes the server key
+    # `clio-oktopeak` -> `clio_oktopeak` (sanitize_mcp_name_component: every
+    # non-[A-Za-z0-9_] char -> `_`), so every tool registers as
+    # mcp_clio_oktopeak_<tool>. Surface pinned in
+    # ss-console operator/verticals/law-firm/clio-surface.md (23 tools, read
+    # against the connector source 2026-06-05).
+    #
+    # THIS BLOCK CLOSES A LIVE FAIL-OPEN (EFF-07): the connector materializes
+    # and is bound on two running Machines, but had ZERO classified tools — so
+    # every Clio write went unmapped->READ->autonomous, fired even on an
+    # injection-tainted turn. The retired pilot-law config's comment claiming
+    # create_matter / create_calendar_entry were "GATED / fail-closed" described
+    # only the SKILL authoring posture (draft-and-surface), which injection
+    # bypasses; nothing in the trust layer enforced it. That config is gone, but
+    # the lesson is the reason this block exists: a claim in a customer.yaml
+    # comment is not a control. Mirrors the Smokeball classification exactly:
+    # reads -> READ; note/task/document writes -> INTERNAL_WRITE; the
+    # system-of-record / financial / scheduling commitments (create_matter,
+    # create_calendar_entry, log_time_entry, create_activity) -> COMMITMENT
+    # (never autonomous). Clio exposes no IOLTA/trust-account tool and no delete
+    # (clio-surface.md), so there is nothing to hard-BAN here.
+    "mcp_clio_oktopeak_list_matters": ActionClass.READ,
+    "mcp_clio_oktopeak_get_matter": ActionClass.READ,
+    "mcp_clio_oktopeak_search_contacts": ActionClass.READ,
+    "mcp_clio_oktopeak_get_contact": ActionClass.READ,
+    "mcp_clio_oktopeak_list_documents": ActionClass.READ,
+    "mcp_clio_oktopeak_get_document": ActionClass.READ,
+    "mcp_clio_oktopeak_list_tasks": ActionClass.READ,
+    "mcp_clio_oktopeak_list_calendars": ActionClass.READ,
+    "mcp_clio_oktopeak_list_calendar_entries": ActionClass.READ,
+    "mcp_clio_oktopeak_list_time_entries": ActionClass.READ,
+    "mcp_clio_oktopeak_get_billing_summary": ActionClass.READ,
+    "mcp_clio_oktopeak_list_users": ActionClass.READ,
+    "mcp_clio_oktopeak_get_user": ActionClass.READ,
+    "mcp_clio_oktopeak_export_audit_log": ActionClass.READ,
+    "mcp_clio_oktopeak_create_note": ActionClass.INTERNAL_WRITE,
+    "mcp_clio_oktopeak_create_task": ActionClass.INTERNAL_WRITE,
+    "mcp_clio_oktopeak_update_task": ActionClass.INTERNAL_WRITE,
+    "mcp_clio_oktopeak_complete_task": ActionClass.INTERNAL_WRITE,
+    "mcp_clio_oktopeak_upload_document": ActionClass.INTERNAL_WRITE,
+    "mcp_clio_oktopeak_create_matter": ActionClass.COMMITMENT,
+    "mcp_clio_oktopeak_create_calendar_entry": ActionClass.COMMITMENT,
+    "mcp_clio_oktopeak_log_time_entry": ActionClass.COMMITMENT,
+    "mcp_clio_oktopeak_create_activity": ActionClass.COMMITMENT,
+    # Reference connector (mcp:reference) — the SYNTHETIC author-built connector
+    # platform self-test fixture (ss-console operator/connectors/_reference;
+    # ADR 0053). echo is a pure read, record an internal write. `surprise` is
+    # DELIBERATELY absent here (and from PINNED_CONNECTOR_SURFACES): it is the
+    # platform's fail-closed proof — bound on a test seat, mcp_reference_surprise
+    # must classify REFUSED and never execute. Runtime prefix mcp_reference_
+    # (no dash to fold). These two lines ARE the trust copy; the connector's
+    # manifest.toml tool_classes is only the oracle checked against this map.
+    "mcp_reference_echo": ActionClass.READ,
+    "mcp_reference_record": ActionClass.INTERNAL_WRITE,
+    # Memory — read-only via this registry.
+    "memory_search": ActionClass.READ,
+    "memory_get_rule": ActionClass.READ,
+    "memory_list_rules": ActionClass.READ,
+    # Native Hermes orientation reads. These must stay reachable under the
+    # default non-REFUSED ceiling so the Operator can inspect authored files,
+    # search local context, load skills, recall prior sessions, and inspect
+    # images without reaching for code or terminal.
+    "read_file": ActionClass.READ,
+    "search_files": ActionClass.READ,
+    "skills_list": ActionClass.READ,
+    "skill_view": ActionClass.READ,
+    "session_search": ActionClass.READ,
+    # Voice gate — read-only against the voice corpus.
+    "voice_score_draft": ActionClass.READ,
+    "voice_list_judge_history": ActionClass.READ,
+    "vision_analyze": ActionClass.READ,
+    # Connector lifecycle — read-only here.
+    "connector_get_status": ActionClass.READ,
+    "connector_list_bindings": ActionClass.READ,
+    # The drafting lane's declared exit (ss ADR 0083). READ by blast radius, and
+    # the classification is the point rather than an afterthought: this tool
+    # writes nothing, sends nothing, and touches no provider. It DECIDES whether
+    # a draft the lane already composed may be delivered, and the skill performs
+    # the write afterwards through its own already-classified connector call.
+    # Classing it anything heavier would put a ceiling between the lane and its
+    # own safety check — a seat could then be configured such that the gate
+    # cannot run, which is the inverse of what it is for. Unmapped would be
+    # worse still: an unmapped tool resolves to REFUSED, so the gate would fail
+    # closed by never executing, and every draft would route around it.
+    "smd_deliver_draft": ActionClass.READ,
+    # Mediated Google Workspace tools. Every privileged provider operation is
+    # explicit and classified; no general-purpose tool receives a credential.
+    "workspace_gmail_search": ActionClass.READ,
+    "workspace_gmail_get": ActionClass.READ,
+    "workspace_gmail_create_draft": ActionClass.INTERNAL_WRITE,
+    # modify/archive mutate the principal's REAL mailbox (apply/remove INBOX,
+    # TRASH, labels) — not internal drafts. DESTRUCTIVE so they require explicit
+    # current-turn approval and are refused under a draft_for_review ceiling and
+    # on any turn tainted by untrusted inbound content (OP-P0-5). An EA triage
+    # run SUGGESTS filing; a human acts on it. (Recoverable from All Mail/Trash,
+    # but "silently buried real client mail" is the harm we gate.)
+    "workspace_gmail_modify": ActionClass.DESTRUCTIVE,
+    "workspace_gmail_archive": ActionClass.DESTRUCTIVE,
+    "workspace_calendar_list": ActionClass.READ,
+    "workspace_calendar_get": ActionClass.READ,
+    "workspace_calendar_create_draft": ActionClass.INTERNAL_WRITE,
+    "workspace_calendar_update_draft": ActionClass.INTERNAL_WRITE,
+    "workspace_drive_list": ActionClass.READ,
+    "workspace_drive_get": ActionClass.READ,
+    "workspace_drive_export": ActionClass.READ,
+    "workspace_docs_create": ActionClass.INTERNAL_WRITE,
+    "workspace_docs_get": ActionClass.READ,
+    "workspace_docs_append": ActionClass.INTERNAL_WRITE,
+    "workspace_sheets_create": ActionClass.INTERNAL_WRITE,
+    "workspace_sheets_get_values": ActionClass.READ,
+    "workspace_sheets_update_values": ActionClass.INTERNAL_WRITE,
+    # ----------------------------------------------------------------------
+    # Hermes CORE high-capability tools (OP-P0-1). These are the agent's own
+    # back-door capabilities: arbitrary code, shell, subagent spawn, OS
+    # process control, computer/browser automation, self-scheduling, and
+    # self-authoring of executable skills. Before this they were UNMAPPED →
+    # classified READ → waved through every ceiling (the systemic footgun the
+    # threat model named). They are CODE_EXECUTION: fail-closed unless the
+    # engagement authors a ``code_execution`` ceiling (ADR 0035), refused on
+    # any turn tainted by untrusted inbound content (the taint-gate), and
+    # never reachable by a draft_for_review skill. Legitimate use (e.g.
+    # ar-chaser's ADR-0021 fetch loop) is authored at the customer level and
+    # runs only on untainted turns. NOTE: the broader unmapped→READ default
+    # for unknown CORE tools was the residual footgun; it is now closed (issue
+    # #1327). ``classify_tool`` fails closed to ``REFUSED`` for any name not in
+    # this map, so this map IS the core read-allowlist: a legitimately
+    # read-safe core tool must be enumerated here to be reachable.
+    "execute_code": ActionClass.CODE_EXECUTION,
+    "terminal": ActionClass.CODE_EXECUTION,
+    "process": ActionClass.CODE_EXECUTION,
+    "delegate_task": ActionClass.CODE_EXECUTION,
+    "computer_use": ActionClass.CODE_EXECUTION,
+    "cronjob": ActionClass.CODE_EXECUTION,
+    "skill_manage": ActionClass.CODE_EXECUTION,
+    # In-band session state / prompts. `clarify` asks the current operator
+    # through the active session callback; it is not arbitrary external send.
+    "todo": ActionClass.INTERNAL_WRITE,
+    "record_peer_preference": ActionClass.INTERNAL_WRITE,
+    # Space memory (hermes-smd-peer-memory, ADR 0091): a fact kept in the turn's
+    # own space, never an argument-chosen one. Registered only on a seat that
+    # authors people:.
+    "remember": ActionClass.INTERNAL_WRITE,
+    "clarify": ActionClass.INTERNAL_WRITE,
+    # File mutation — internal write (not code-exec, but not read either).
+    "write_file": ActionClass.INTERNAL_WRITE,
+    "patch": ActionClass.INTERNAL_WRITE,
+    # Escalation-ledger tools (hermes-smd-escalation, ss #1915). The append is
+    # operator communication telemetry through the broker's validated verb —
+    # internal state, never client-facing content; the state read folds the
+    # read-only ledger twin. These replaced the execute_code append snippet so
+    # skills never need a code_execution exposure to run the escalation loop.
+    "escalation_append": ActionClass.INTERNAL_WRITE,
+    "escalation_state": ActionClass.READ,
+    # Plain-word digest replies (reply_items.py): writes `acked` rows through the
+    # same broker verb as escalation_append, from the verified reply's thread and
+    # words; no model-supplied arguments. Internal state, never client-facing.
+    "escalation_reply_ack": ActionClass.INTERNAL_WRITE,
+    # Case-manager tools (hermes-smd-escalation/casework.py). Each writes rows
+    # through the broker's casework_event_append verb and loads the task-write
+    # replay queue; any mail they send goes through send_dispatch, which
+    # re-authorizes it through the full gate as its own send class, and every
+    # task write they queue is gated again as update_task. Internal state only.
+    "casework_finish": ActionClass.INTERNAL_WRITE,
+    "casework_brief": ActionClass.INTERNAL_WRITE,
+    "reply_verdicts": ActionClass.INTERNAL_WRITE,
+    # A date-prep step the turn ran at "handles", recorded as a step_ran row
+    # (casework_steps.py): no arguments, backed by the step's own memo call.
+    "casework_step_done": ActionClass.INTERNAL_WRITE,
+    # Correction capture (hermes-smd-corrections, ss-console #2091, ADR 0083 §4).
+    # INTERNAL_WRITE for the same reason the escalation append is: it appends one
+    # validated row to the broker's append-only ledger and reaches nothing
+    # client-facing. That class matters — every seat authors `internal_write` at
+    # `draft_for_review` or better, and an internal write at draft_for_review is
+    # ALLOWED (enforce._enforce_resolved), so capture works on every seat with no
+    # entitlement widening. It cannot be READ: it writes. And leaving it unmapped
+    # would make it REFUSED by design, which is exactly how the execute_code gap
+    # this plugin closes stayed invisible until a live probe (ss #1915).
+    "correction_capture": ActionClass.INTERNAL_WRITE,
+    # Conversational establishment (hermes-smd-establishment, ss ADR 0085).
+    # Stage + submit are INTERNAL_WRITE on the correction_capture argument: each
+    # is one broker-validated write into a spool the agent uid cannot open, and
+    # nothing client-facing happens directly — the install is performed root-side
+    # behind the compiler gates, and the AUTHORIZATION gate is the admin hook
+    # (pre_tool_call), never the exposure ceiling. That class is load-bearing:
+    # every seat authors `internal_write` at draft_for_review or better, so
+    # establishment works on every seat with no entitlement widening, and an
+    # unmapped name would be REFUSED terminally (the ss #1915 invisibility).
+    # Status is READ: root-authored run metadata only, no corpus text.
+    "establish_stage_document": ActionClass.INTERNAL_WRITE,
+    "establish_submit": ActionClass.INTERNAL_WRITE,
+    "establish_status": ActionClass.READ,
+    # ss-console#2529. INTERNAL_WRITE rather than READ: a proposal writes a row
+    # the firm can be shown and later acts on, even though it installs nothing.
+    # establish_pending reads and is classed as a read.
+    "establish_propose": ActionClass.INTERNAL_WRITE,
+    "establish_pending": ActionClass.READ,
+    # ss-console#2546. INTERNAL_WRITE on the same argument establish_propose
+    # carries: the tool itself writes nothing client-facing and reaches no
+    # tenant surface, and every seat authors internal_write at draft_for_review
+    # or better, so passing a request to SMD works on every seat with no
+    # entitlement widening. The SEND it performs is separately and fully gated
+    # as an external_send_internal through evaluate_tool_call, which is where a
+    # tainted turn refuses it. An unmapped name would be REFUSED terminally
+    # (the ss#1915 invisibility), so this mapping is part of the change rather
+    # than a follow-up.
+    "operations_request": ActionClass.INTERNAL_WRITE,
+    # Seat self-description (hermes-smd-initiation, ss-console #2222 card rows
+    # 1+7). READ, and nothing subtler: it opens the seat's own customer.yaml, its
+    # own scheduler store, and the root-owned spec manifest, writes nothing, and
+    # reaches no tenant surface. The classification is a COORDINATED part of the
+    # change, never a follow-up — an unmapped name fails closed to REFUSED and
+    # never executes, which would leave the introduce ask improvising exactly as
+    # it does today while every unit test stayed green.
+    "operator_seat_facts": ActionClass.READ,
+    # Durable-job tools (hermes-smd-jobs, ss #1916 — these were unmapped, so the
+    # fail-closed REFUSED default made durable jobs inert at runtime).
+    # start_background_job launches a budgeted background agent turn with tools:
+    # CODE_EXECUTION, consistent with delegate_task (the background turn taints
+    # ITSELF when it ingests; see _CODE_NO_INGEST_BY_DESIGN in
+    # tests/test_code_execution_taint.py for the parent-turn disposition).
+    # job_status is READ over broker-authored metadata only — its projection
+    # deliberately excludes the free-text error column (see _job_status), which
+    # is the one field a failed job could launder untrusted content through.
+    "start_background_job": ActionClass.CODE_EXECUTION,
+    "job_status": ActionClass.READ,
+    "job_cancel": ActionClass.INTERNAL_WRITE,
+    "job_record_sideeffect": ActionClass.INTERNAL_WRITE,
+    # Chronology-package tools (hermes-smd-medchron, ss-console #2614). Submit
+    # queues a job on the Machine's own runner through the broker: the agent
+    # hands over a resolved matter and its clients, and the work that follows
+    # (reading the matter, calling the model, filing the folder) happens in a
+    # root-supervised process under the firm's cents cap and monthly allowance,
+    # with its own registered gates. INTERNAL_WRITE, not COMMITMENT: the act
+    # is a request to the firm's own system of record, the same class as the
+    # create_folder/add_file the runner ends with. The two reads return
+    # broker-authored counts and states only, never a page of a record.
+    "medchron_job_submit": ActionClass.INTERNAL_WRITE,
+    "medchron_job_status": ActionClass.READ,
+    "medchron_allowance": ActionClass.READ,
+    # The verified reply binding (hermes-smd-reply/binding.py, ss-console
+    # workspace_broker/reply_binding.py). It names an email, never a person;
+    # the broker resolves the sender from the mailbox and the reply that
+    # follows still goes through create_draft and every reply floor.
+    # INTERNAL_WRITE: it changes what this turn's reply lane may answer.
+    "reply_bind": ActionClass.INTERNAL_WRITE,
+    # The demand job (hermes-smd-medchron/demand.py, ss-console demand_verbs.py):
+    # the same shape as the chronology. Submit queues a job on the Machine's own
+    # runner, which files the gap audit and draft demand on the firm's matter:
+    # INTERNAL_WRITE, never sent outside the firm. The requester and request are
+    # the turn's verified inbound, not tool arguments. The reads return
+    # broker-authored states, counts and file names only.
+    "demand_job_submit": ActionClass.INTERNAL_WRITE,
+    "demand_job_status": ActionClass.READ,
+    "demand_allowance": ActionClass.READ,
+    # The drafting job (hermes-smd-medchron/drafting.py, ss-console
+    # drafting_verbs.py): the demand job's shape for five litigation document
+    # classes. Submit queues a job on the Machine's own runner, which files the
+    # draft on the firm's matter: INTERNAL_WRITE. The requester and request are
+    # the turn's verified inbound, not tool arguments. The reads return
+    # broker-authored states, counts and file roles only.
+    "drafting_job_submit": ActionClass.INTERNAL_WRITE,
+    "drafting_job_status": ActionClass.READ,
+    "drafting_allowance": ActionClass.READ,
+    # The litigation status job (hermes-smd-medchron/litigation.py, ss-console
+    # litigation_verbs.py). Submit queues a job on the Machine's own runner,
+    # which files the status workbook on the firm's filing matter:
+    # INTERNAL_WRITE. The requester and request are the turn's verified
+    # inbound, not tool arguments. Status returns states and counts only.
+    "litigation_job_submit": ActionClass.INTERNAL_WRITE,
+    "litigation_job_status": ActionClass.READ,
+    # The negotiation watch (hermes-smd-medchron/negotiation.py, ss-console
+    # negotiation_verbs.py). Scheduled only: no submit tool exists (the cron's
+    # pre_run submits to the broker directly). Status returns a notice's
+    # broker-held message (composed in code on the runner) or a job's counts.
+    "negotiation_job_status": ActionClass.READ,
+    # An SMD note (hermes-smd-medchron/note.py, ss-console note_verbs.py). No
+    # submit tool exists: root records the note on SMD's command. Status
+    # returns the job's state and the recorded text the wake sends verbatim.
+    "note_job_status": ActionClass.READ,
+}
+
+
+# Public read-only view. Callers must not mutate the registry at runtime;
+# changes ship as a PR + test + spec update. MappingProxyType raises
+# TypeError on any mutation attempt, making the constraint enforceable.
+TOOL_ACTION_CLASS_MAP: Mapping[str, ActionClass] = MappingProxyType(_RAW_TOOL_ACTION_CLASS_MAP)
+
+
+# ---------------------------------------------------------------------------
+# Refusal types
+# ---------------------------------------------------------------------------
+
+
+class BannedToolError(Exception):
+    """Raised when a tool name appears in ``BANNED_TOOLS``.
+
+    Never reaches policy. The dispatch path catches this and translates to a
+    refusal audit row via the per-tool emit helper. ``tool_name`` carries the
+    offending name for metadata; ``reason`` is the closed-set category code
+    from ``BANNED_REASON`` (``"banned_tool_pattern_a"`` /
+    ``"banned_tool_destructive"``).
+    """
+
+    def __init__(self, *, tool_name: str, reason: str = "banned_tool") -> None:
+        super().__init__(f"tool {tool_name!r} is banned: {reason}")
+        self.tool_name = tool_name
+        self.reason = reason
+
+
+@dataclass(frozen=True)
+class ToolClassification:
+    """Outcome of ``classify_tool()``.
+
+    ``action_class`` is the action class the trust-ceiling enforcer should
+    use for this tool call. ``unmapped`` is True if the tool name was not
+    in ``TOOL_ACTION_CLASS_MAP`` (the helper returned the fail-closed
+    ``REFUSED`` default). The flag is retained for audit telemetry even
+    though the action class itself now blocks the call.
+    """
+
+    action_class: ActionClass
+    unmapped: bool
+
+
+def classify_tool(tool_name: str) -> ToolClassification:
+    """Map a tool name to its ``ActionClass``.
+
+    - Empty / missing tool name → ``ValueError``.
+    - ``tool_name`` in ``BANNED_TOOLS`` → ``BannedToolError`` (the exception
+      carries the categorical ``reason`` code from ``BANNED_REASON``).
+    - ``tool_name`` in registry → mapped action class, ``unmapped=False``.
+    - Otherwise → ``ActionClass.REFUSED``, ``unmapped=True``.
+
+    The unmapped fallback is fail-closed: an unmapped tool is an UNKNOWN
+    capability, not a benign read. The prior READ default (issue #1327)
+    silently waved every unregistered tool through every ceiling — any new
+    Hermes-core tool, any newly surfaced MCP verb, any rename would slip the
+    trust gate as "read". ``REFUSED`` is a terminal class: ``enforce()`` blocks
+    it outright and it is deliberately NOT routed through ``resolve_ceiling``,
+    so an authored ceiling (even ``code_execution: autonomous``) can never
+    widen it. The ``unmapped=True`` flag is preserved so the audit row still
+    carries ``metadata.unmapped_tool=true`` — the telemetry that surfaces the
+    gap so the registry gets the new name added (the intended remediation,
+    versus a silent allow). Legitimately read-safe tools must be enumerated in
+    ``TOOL_ACTION_CLASS_MAP`` above; that map IS the core read-allowlist.
+
+    Lookups run against a normalized (trimmed, lowercased) form of the
+    name: the registry and ``BANNED_TOOLS`` are all-lowercase, so without
+    normalization a runtime surfacing ``Execute_Code`` or ``TERMINAL``
+    would miss the CODE_EXECUTION mapping and fall to the READ default —
+    a case-sensitivity ceiling bypass (2026-06-12 code review).
+    """
+    if not tool_name:
+        raise ValueError("tool_name is required")
+
+    normalized = tool_name.strip().lower()
+    if not normalized:
+        raise ValueError("tool_name is required")
+
+    if normalized in BANNED_TOOLS:
+        reason = BANNED_REASON.get(normalized, "banned_tool")
+        raise BannedToolError(tool_name=normalized, reason=reason)
+
+    mapped = _RAW_TOOL_ACTION_CLASS_MAP.get(normalized)
+    if mapped is not None:
+        return ToolClassification(action_class=mapped, unmapped=False)
+
+    logger.warning(
+        "classify_tool: tool_name=%s not in TOOL_ACTION_CLASS_MAP; "
+        "failing closed to REFUSED and tagging metadata.unmapped_tool=true",
+        tool_name,
+    )
+    return ToolClassification(action_class=ActionClass.REFUSED, unmapped=True)
+
+
+__all__ = [
+    "ActionClass",
+    "BANNED_REASON",
+    "BANNED_TOOLS",
+    "BannedToolError",
+    "TOOL_ACTION_CLASS_MAP",
+    "VERTICAL_FLOORS",
+    "ToolClassification",
+    "classify_tool",
+]

@@ -23,7 +23,7 @@
 # `rehearsal` joined the package list for the same reason.
 #
 # STAGE 3 (2026-09-14): bin/lib's bare-name family is imported as
-# `bin.lib.*` everywhere (the reconcilers, overlay-ref-drift, gen-env-arrays,
+# `bin.lib.*` everywhere (the reconcilers, gen-env-arrays,
 # seed-staging-matter, sender_class via `workspace_broker.recipient_policy`,
 # send_verify's siblings by relative import), the tests import the same
 # names, and the three scheduled workflows that run a reconciler install the

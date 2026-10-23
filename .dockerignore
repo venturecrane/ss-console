@@ -38,3 +38,15 @@ operator/.rendered
 # tracks zero .pyc files; the image should agree.
 **/__pycache__
 **/*.py[cod]
+
+# The overlay is COPYed from operator/hermes-smd-overlay (ADR 0095). Keep out
+# what a local test run or editable install leaves there: none of it is the
+# plugin, and a venv alone is hundreds of megabytes of context upload.
+operator/hermes-smd-overlay/.venv
+operator/hermes-smd-overlay/build
+operator/hermes-smd-overlay/*.egg-info
+operator/hermes-smd-overlay/.pytest_cache
+operator/hermes-smd-overlay/.ruff_cache
+operator/hermes-smd-overlay/CUSTOMER_DB
+operator/hermes-smd-overlay/*.db
+operator/hermes-smd-overlay/.worktrees

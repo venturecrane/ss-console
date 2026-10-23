@@ -41,7 +41,7 @@ assert_build_source_is_current() {
     return 0
   fi
 
-  local head_sha upstream_sha dirty behind pin manifest_pin
+  local head_sha upstream_sha dirty behind
   head_sha="$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
   log "Build source HEAD: ${head_sha}"
 
@@ -98,16 +98,9 @@ Update it, or set SS_ALLOW_DIVERGENT_SOURCE=1 to build this ref on purpose."
     fi
   fi
 
-  # The vitest drift gate proves these agree at MERGE time. Nothing proved it at
-  # BUILD time, which is the only moment it protects an actual image.
-  pin="$(sed -n 's/^ARG OVERLAY_REF="\([0-9a-f]*\)".*/\1/p' "${TEMPLATE_DIR}/Dockerfile" | head -1)"
-  manifest_pin="$(sed -n 's/.*"overlayRef"[[:space:]]*:[[:space:]]*"\([0-9a-f]*\)".*/\1/p' \
-    "${REPO_ROOT}/operator/contracts/overlay-pairs.json" | head -1)"
-  if [ -n "${pin}" ] && [ -n "${manifest_pin}" ] && [ "${pin}" != "${manifest_pin}" ]; then
-    die "OVERLAY_REF mismatch: Dockerfile pins ${pin}, overlay-pairs.json pins ${manifest_pin}. \
-The image would ship an overlay the pair manifest does not describe."
-  fi
-  [ -n "${pin}" ] && log "Overlay pin: ${pin}"
+  # No overlay pin to cross-check since the fold (ADR 0095): the overlay is
+  # operator/hermes-smd-overlay in this same tree, so the currency checks above
+  # cover it exactly as they cover every other file the image is built from.
 
   if [ "${SS_ALLOW_DIVERGENT_SOURCE:-}" = "1" ]; then
     log "WARN: SS_ALLOW_DIVERGENT_SOURCE=1 — source currency checks bypassed BY REQUEST. \
@@ -118,7 +111,6 @@ The image is being built from ${REPO_ROOT} at ${head_sha} exactly as it stands."
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   set -euo pipefail
   REPO_ROOT="$(cd "${1:?Usage: build-source-guard.sh <repo-root>}" && pwd)"
-  TEMPLATE_DIR="${REPO_ROOT}/operator/templates"
   log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [build-source] $*" >&2; }
   die() { log "FATAL: $*"; exit 1; }
   assert_build_source_is_current

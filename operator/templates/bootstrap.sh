@@ -804,58 +804,51 @@ PROFILE_HERMES_HOME="${HERMES_HOME}/profiles/${ACTIVE_PROFILE}"
 mkdir -p "${HERMES_HOME}/logs" "${PROFILE_HERMES_HOME}/logs"
 
 # ---------- Ensure overlay plugins are PRESENT on the volume (before gateway) ----------
-# The Dockerfile's `hermes plugins install` lands the overlay pack under
-# ${HERMES_HOME} (= /opt/data) — the Fly VOLUME mountpoint. On a persisted volume
-# the build-time install is SHADOWED, so the overlay pack (trust / inbound / audit
-# / voice hooks — the safety harness) is ABSENT at runtime and the gateway would
-# boot WITHOUT it. Re-install here, idempotently, as the hermes user, after the
-# volume mount and before the gateway launches.
+# The image carries the overlay pack at /app/overlay-pack (a COPY of this repo's
+# operator/hermes-smd-overlay, ADR 0095). Hermes loads plugins from
+# ${HERMES_HOME}/plugins (= /opt/data, the Fly VOLUME mountpoint), and a persisted
+# volume keeps whatever a past boot put there, so the overlay pack (trust /
+# inbound / audit / voice hooks — the safety harness) must be refreshed here,
+# idempotently, as the hermes user, after the volume mount and before the
+# gateway launches.
 #
 # Use a deterministic DIRECTORY check, NOT `hermes plugins list` — the list does
 # not report an installed-but-not-yet-loaded pack before the gateway starts (that
 # false-negative previously dragged a healthy install into a fail-closed abort).
-# FAIL-CLOSED on a genuine install failure: a Machine whose overlay pack cannot be
-# installed MUST NOT serve (matches the Dockerfile build-time hard gate).
-# The dir check is a no-op skip on the common path: a fresh volume receives the
-# build-time-installed pack via Fly's empty-volume copy, and a persisted volume
-# keeps it across deploys — so the slow `git clone` only runs in the rare reseed
-# case and does not normally delay the public :8643 listener below.
+# FAIL-CLOSED: a Machine whose overlay pack is missing or will not enable MUST NOT
+# serve (matches the Dockerfile build-time hard gate). The pack is the image's
+# COPY of operator/hermes-smd-overlay/ (ADR 0095); since 2026-10-22 there is no
+# runtime install fallback and no "older image without a pack" branch: an image
+# without /app/overlay-pack is not a seat image.
 OVERLAY_PLUGIN_DIR="${HERMES_HOME}/plugins/hermes-smd-overlay"
 OVERLAY_PACK="/app/overlay-pack"
-# REFRESH the volume's overlay from the image-pinned pack on EVERY boot — do NOT
-# skip when a dir is merely present. The volume (/opt/data) persists across
-# deploys and shadows the build-time install, so a presence-only check kept a
-# STALE overlay forever: every OVERLAY_REF bump rebuilt the image but the running
-# gateway kept loading the old volume copy, and the overlay sat inert — no audit,
-# no trust enforcement (ss-console#1285). Refreshing from the pinned, non-volume
-# pack makes a bump actually take effect, and is idempotent on a steady-state
-# boot (same bytes).
-if [ -d "${OVERLAY_PACK}" ]; then
-  log "Refreshing overlay on the volume from the image-pinned pack (${OVERLAY_PACK})..."
-  mkdir -p "${HERMES_HOME}/plugins"
-  # replace_dir_tolerant (mv-aside, not rm -rf) so a stray root-owned file in the
-  # old overlay dir can't crash-loop the boot under set -e. cp (not cp -a): the
-  # copies are owned by the running hermes user, not the root-owned image source —
-  # a root-owned volume file would break a later hermes-user write (the
-  # .skills_prompt_snapshot.json FATAL we hit).
-  replace_dir_tolerant "${OVERLAY_PACK}" "${OVERLAY_PLUGIN_DIR}"
-  /opt/hermes/.venv/bin/hermes plugins enable hermes-smd-overlay >/dev/null 2>&1 || true
-  [ -f "${OVERLAY_PLUGIN_DIR}/__init__.py" ] \
-    || die "overlay fan-out __init__.py missing after refresh — refusing to launch an ungoverned gateway"
-  log "Overlay refreshed on the volume (fan-out register present)"
-elif [ -d "${OVERLAY_PLUGIN_DIR}" ]; then
-  # No staged pack (older image) but a volume copy exists — leave it; the
-  # activation invariant is the backstop that halts boot if it is inert.
-  log "Overlay present on the volume; no image pack to refresh from (${OVERLAY_PLUGIN_DIR})"
-else
-  log "Overlay absent and no image pack; installing at runtime (unpinned fallback)..."
-  rm -rf "${HERMES_HOME}/plugins" 2>/dev/null || true
-  /opt/hermes/.venv/bin/hermes plugins install venturecrane/hermes-smd-overlay --enable \
-    || die "runtime overlay plugin install failed — refusing to launch a harness-less gateway"
-  [ -d "${OVERLAY_PLUGIN_DIR}" ] \
-    || die "overlay plugin dir missing after install — refusing to launch a harness-less gateway"
-  log "Overlay plugin installed + enabled at runtime"
-fi
+# REFRESH the volume's overlay from the image's pack on EVERY boot — do NOT skip
+# when a dir is merely present. The volume (/opt/data) persists across deploys and
+# shadows anything installed at build time, so a presence-only check kept a STALE
+# overlay forever: every release rebuilt the image but the running gateway kept
+# loading the old volume copy, and the overlay sat inert — no audit, no trust
+# enforcement (ss-console#1285). Refreshing from the non-volume pack makes a
+# release actually take effect, and is idempotent on a steady-state boot (same
+# bytes).
+[ -d "${OVERLAY_PACK}" ] \
+  || die "overlay pack missing from the image (${OVERLAY_PACK}) — refusing to launch an ungoverned gateway"
+log "Refreshing overlay on the volume from the image pack (${OVERLAY_PACK})..."
+mkdir -p "${HERMES_HOME}/plugins"
+# replace_dir_tolerant (mv-aside, not rm -rf) so a stray root-owned file in the
+# old overlay dir can't crash-loop the boot under set -e. cp (not cp -a): the
+# copies are owned by the running hermes user, not the root-owned image source —
+# a root-owned volume file would break a later hermes-user write (the
+# .skills_prompt_snapshot.json FATAL we hit).
+replace_dir_tolerant "${OVERLAY_PACK}" "${OVERLAY_PLUGIN_DIR}"
+# Enable in the root home the same way the profile home is enabled below: a
+# failure is a boot failure, not a `|| true`. The former swallow dated from the
+# build-time `hermes plugins install` doing the enabling; the pack is a plain
+# COPY now, so this line is the only root-home enable there is.
+/opt/hermes/.venv/bin/hermes plugins enable hermes-smd-overlay >/dev/null \
+  || die "failed to enable hermes-smd-overlay in the root Hermes home — refusing to launch an ungoverned gateway"
+[ -f "${OVERLAY_PLUGIN_DIR}/__init__.py" ] \
+  || die "overlay fan-out __init__.py missing after refresh — refusing to launch an ungoverned gateway"
+log "Overlay refreshed on the volume (fan-out register present)"
 
 # `hermes -p <profile>` rewrites HERMES_HOME to the profile directory before
 # importing Hermes modules. Plugin discovery therefore scans the profile's
@@ -863,15 +856,8 @@ fi
 # the same pinned pack into the active profile and enable it in that profile's
 # config so force-discovery from the gateway process can load it.
 PROFILE_OVERLAY_PLUGIN_DIR="${PROFILE_HERMES_HOME}/plugins/hermes-smd-overlay"
-if [ -d "${OVERLAY_PACK}" ]; then
-  mkdir -p "${PROFILE_HERMES_HOME}/plugins"
-  replace_dir_tolerant "${OVERLAY_PACK}" "${PROFILE_OVERLAY_PLUGIN_DIR}"
-elif [ -d "${OVERLAY_PLUGIN_DIR}" ]; then
-  mkdir -p "${PROFILE_HERMES_HOME}/plugins"
-  replace_dir_tolerant "${OVERLAY_PLUGIN_DIR}" "${PROFILE_OVERLAY_PLUGIN_DIR}"
-else
-  die "overlay source missing before profile materialization — refusing to launch an ungoverned gateway"
-fi
+mkdir -p "${PROFILE_HERMES_HOME}/plugins"
+replace_dir_tolerant "${OVERLAY_PACK}" "${PROFILE_OVERLAY_PLUGIN_DIR}"
 [ -f "${PROFILE_OVERLAY_PLUGIN_DIR}/__init__.py" ] \
   || die "profile overlay fan-out missing (${PROFILE_OVERLAY_PLUGIN_DIR}) — refusing to launch an ungoverned gateway"
 /opt/hermes/.venv/bin/hermes -p "${ACTIVE_PROFILE}" plugins enable hermes-smd-overlay >/dev/null \
@@ -891,8 +877,8 @@ log "Overlay materialized + enabled in active profile"
 # Hermes' `-p <profile>` handling rewrites HERMES_HOME before gateway/hooks.py
 # defines its module-level HOOKS_DIR. The live gateway therefore loads handlers
 # from ${PROFILE_HERMES_HOME}/hooks, not the root volume's hooks directory. Seed
-# the selected profile directly. Refresh on every boot so an OVERLAY_REF bump
-# takes effect. Uses cp -r (not -a) so files land hermes-owned.
+# the selected profile directly. Refresh on every boot so a release takes
+# effect. Uses cp -r (not -a) so files land hermes-owned.
 if [ -d "${OVERLAY_PACK}/hooks" ]; then
   _HOOKS_SRC="${OVERLAY_PACK}/hooks"
 elif [ -d "${OVERLAY_PLUGIN_DIR}/hooks" ]; then
@@ -947,7 +933,7 @@ log "Safety substrate invariants PASSED"
 # assert every declared tool_class agrees with the overlay's enforced
 # classify_tool() under the runtime-prefixed name mcp_<server>_<tool>. This is the
 # manifest<=map check run where both artifacts exist (it cannot run in either
-# repo's unit CI alone). A drift — including an OVERLAY_REF that does not classify
+# repo's unit CI alone). A drift — including an overlay build that does not classify
 # a baked connector's tools — fails the boot rather than shipping a governance
 # disagreement.
 log "Running connector classification probe (ADR 0053)..."

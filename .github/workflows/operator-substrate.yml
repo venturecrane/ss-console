@@ -187,24 +187,10 @@ jobs:
         # covers every test_*.py under operator/ (connectors excepted).
         run: python3 -m pytest adapter/tests adapter/evidence/tests adapter/voice/tests safety_substrate/tests bin/tests rehearsal/tests workspace_broker/tests templates/tests templates/drafting/tests tests skills -q
 
-      # SEC-32: overlay-RUNTIME side of the adapter <-> overlay drift gate.
-      #
-      # The vitest gate (tests/operator-overlay-pairs.test.ts) runs in the
-      # hermetic `verify` workflow and can only hash the dormant ss-console-side
-      # `operator/adapter/*` copies. That left a hole: a neutered RUNTIME file
-      # (e.g. a no-op audit emitter in the overlay) shipped green because the
-      # adapter copy was untouched and its hash still matched.
-      #
-      # This step closes it. The overlay is a PUBLIC repo pinned at the
-      # manifest's overlayRef (which the vitest gate asserts equals the
-      # Dockerfile ARG OVERLAY_REF). Here — where network is available — we
-      # fetch it at that ref and assert every runtime twin's sha256 equals the
-      # manifest's overlaySha256. A runtime change with no matching manifest
-      # bump FAILS. Fail-closed: mismatch/missing/malformed -> exit 1; a genuine
-      # fetch failure -> exit 2 (env), and the workflow still fails.
-      - name: Verify overlay runtime hashes (SEC-32 drift gate)
-        if: steps.changes.outputs.relevant == 'true'
-        run: python3 operator/bin/verify-overlay-pairs.py
+      # (The SEC-32 "fetch the overlay at its pin and hash the runtime twins" step
+      # that stood here until 2026-10-22 is gone with the pin: the overlay is
+      # operator/hermes-smd-overlay in this tree, and the hermetic vitest gate
+      # tests/operator-overlay-pairs.test.ts hashes both twins in place.)
 
       # Author-built MCP connector conformance. The bare pytest env above
       # deliberately installs only pytest+pyyaml; the connector conformance suite
@@ -292,4 +278,97 @@ jobs:
         run: >-
           echo "No file under .github/operator-substrate-paths.txt changed;
           the substrate suites did not need to run. This job still reports so
+          the required check is satisfied."
+
+  # The seat runtime's own suite (operator/hermes-smd-overlay, ADR 0095). Until
+  # 2026-10-22 this ran as the standalone overlay repo's CI (Python 3.11, Hermes
+  # fetched from a retired fork); it is a separate job here so it runs in
+  # parallel with `substrate` and so its ~2.5 minutes do not stretch the
+  # substrate wall clock. Same gating shape as `substrate`: the detect step
+  # decides, every suite step is gated on it, and the job always reports, which
+  # is what makes it requirable (the Captain adds `overlay` to the main ruleset's
+  # required checks; bin/tests/test_ci_coverage_conformance.py pins the shape).
+  overlay:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Detect substrate-relevant changes
+        id: changes
+        run: >-
+          python3 operator/bin/substrate-paths-changed.py
+          --base "${{ github.event.pull_request.base.sha }}"
+          --head "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Set up uv
+        if: steps.changes.outputs.relevant == 'true'
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+
+      # The seat interpreter (Debian 13 ships 3.13), not the 3.11 the standalone
+      # repo tested on. ruff is pinned to the same version as the substrate job.
+      - name: Install the overlay with its dev extras
+        if: steps.changes.outputs.relevant == 'true'
+        run: |
+          set -euo pipefail
+          uv venv --python 3.13 /tmp/overlayv
+          uv pip install --python /tmp/overlayv/bin/python -e "./operator/hermes-smd-overlay[dev]" ruff==0.15.17
+
+      - name: ruff check + format (overlay)
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator/hermes-smd-overlay
+        run: |
+          set -euo pipefail
+          /tmp/overlayv/bin/ruff check .
+          /tmp/overlayv/bin/ruff format --check .
+
+      # The title-model falsifier (tests/test_title_generation_model.py) builds
+      # the seat's title request with the REAL Hermes Anthropic adapter, so it
+      # needs the fleet's pinned Hermes source: the sha the image installs,
+      # read from the Dockerfile so the two cannot drift, fetched shallow from
+      # upstream (a non-tip sha is reachable by fetch though not by ls-remote).
+      - name: Check out pinned Hermes (read-only, outside the workspace)
+        if: steps.changes.outputs.relevant == 'true'
+        run: |
+          set -euo pipefail
+          sha="$(sed -n 's/^ARG HERMES_UPSTREAM_SHA=\([0-9a-f]\{40\}\)$/\1/p' operator/templates/Dockerfile)"
+          [ -n "$sha" ] || { echo "::error::no 40-hex ARG HERMES_UPSTREAM_SHA in operator/templates/Dockerfile"; exit 1; }
+          git init -q "$RUNNER_TEMP/hermes-agent"
+          git -C "$RUNNER_TEMP/hermes-agent" fetch -q --depth 1 https://github.com/NousResearch/hermes-agent.git "$sha"
+          git -C "$RUNNER_TEMP/hermes-agent" checkout -q FETCH_HEAD
+          echo "HERMES_AGENT_SRC=$RUNNER_TEMP/hermes-agent" >> "$GITHUB_ENV"
+
+      - name: Overlay pytest
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator/hermes-smd-overlay
+        run: /tmp/overlayv/bin/python -m pytest -q
+
+      # TEMPORARY (fold window, ADR 0095): the folded tree equals the locked
+      # standalone repository's main except for the files the fold declares. It
+      # re-probes "nothing landed on overlay main after the tree was staged" at
+      # merge-queue entry, and goes away in the cutover PR that archives the
+      # repository. See operator/bin/fold-equality.sh.
+      - name: Fold equality against the locked overlay main (temporary)
+        if: steps.changes.outputs.relevant == 'true'
+        run: operator/bin/fold-equality.sh
+
+      # A dependency the overlay declares must have its hash-locked pin in
+      # operator/requirements/hermes-overlay.txt before it merges, or the image
+      # build's `uv pip check` is the first thing that notices. compile.sh
+      # derives that file from the overlay's pyproject and Hermes' lock; a diff
+      # here means the pins were not regenerated.
+      - name: hermes-overlay.txt is current (compile.sh no-diff)
+        if: steps.changes.outputs.relevant == 'true'
+        run: |
+          set -euo pipefail
+          operator/requirements/compile.sh
+          git diff --exit-code -- operator/requirements/hermes-overlay.txt
+
+      - name: No substrate paths changed
+        if: steps.changes.outputs.relevant != 'true'
+        run: >-
+          echo "No file under .github/operator-substrate-paths.txt changed;
+          the overlay suite did not need to run. This job still reports so
           the required check is satisfied."

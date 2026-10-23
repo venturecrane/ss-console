@@ -210,78 +210,48 @@ def check_connector_credentials(rep: Report, cfg: dict, staged: set[str] | None)
 
 # ------------------------------------------------------------------- currency
 def check_currency(rep: Report, app: str, no_seat: bool) -> None:
-    """The running overlay ref must equal origin/main's pin.
+    """The seat must run the newest completed image release (no drift).
 
-    Same property `bin/connect-smokeball.sh` gates on (#2149) — a token must not
-    land on a stale seat. Reported here so it is visible BEFORE connect day
-    rather than as a bare non-zero exit from the connect script.
+    A token must not land on a stale seat (#2149). Since the fold (ADR 0095) the
+    seat's version is the ss-console commit its image was built from and `fleet
+    status` already compares each seat's reported image against the newest
+    release that completed its last ring; this row reads that verdict rather than
+    keeping a second definition of "current".
     """
-    code, out = _run(["git", "-C", str(REPO_ROOT), "show", "origin/main:operator/contracts/overlay-pairs.json"])
-    expected = ""
-    if code == 0:
-        m = re.search(r'"overlayRef"\s*:\s*"([0-9a-f]{40})"', out)
-        expected = m.group(1) if m else ""
-    if not expected:
-        rep.add(
-            "currency",
-            "seat runs origin/main's pinned overlay",
-            UNKNOWN,
-            "could not read overlayRef from origin/main",
-            "a readable pin that differs from the seat's",
-        )
-        return
-
+    title = "seat runs the newest completed release"
     if no_seat:
+        rep.add("currency", title, UNKNOWN, "--no-seat", "a fleet status row showing image drift")
+        return
+    slug = app.removeprefix("hermes-")
+    code, out = _run([str(REPO_ROOT / "operator" / "bin" / "fleet"), "status", "--json"], timeout=120)
+    if code != 0:
+        rep.add("currency", title, UNKNOWN, "fleet status --json failed (D1 unreachable?)", "a readable fleet status")
+        return
+    try:
+        rows = json.loads(out)
+        row = next((r for r in rows if r.get("seat") == slug), None)
+    except (json.JSONDecodeError, TypeError, AttributeError):
+        rep.add("currency", title, UNKNOWN, "unparseable fleet status", "a parseable status")
+        return
+    if row is None:
         rep.add(
-            "currency",
-            "seat runs origin/main's pinned overlay",
-            UNKNOWN,
-            f"--no-seat; pin is {expected[:12]}",
-            "a seat probe showing a different ref",
+            "currency", title, UNKNOWN, f"{slug} is not in fleet status (no ring, no heartbeat)", "a row for the seat"
         )
         return
-
-    code, out = _run(
-        [
-            "flyctl",
-            "ssh",
-            "console",
-            "-a",
-            app,
-            "-C",
-            'sh -c \'GPID=$(pgrep -f "hermes.*gateway run" | head -1); [ -n "$GPID" ] || exit 1; '
-            'tr "\\0" "\\n" < /proc/$GPID/environ | grep ^SMD_OVERLAY_REF= | cut -d= -f2\'',
-        ],
-        timeout=120,
-    )
-    running = "".join(re.findall(r"[0-9a-f]{40}", out))[:40]
-    if len(running) != 40:
-        rep.add(
-            "currency",
-            "seat runs origin/main's pinned overlay",
-            UNKNOWN,
-            f"no gateway to read SMD_OVERLAY_REF from (machine stopped or gateway down); pin is {expected[:12]}",
-            "a running gateway whose ref differs from the pin",
-        )
+    running = (row.get("overlay") or "?")[:12]
+    if not row.get("image_ref"):
+        rep.add("currency", title, UNKNOWN, "no heartbeat has reported an image yet", "a reported image that drifts")
         return
-    if running != expected:
+    if "image" in (row.get("drift") or []):
         rep.add(
             "currency",
-            "seat runs origin/main's pinned overlay",
+            title,
             FAIL,
-            f"seat runs {running[:12]}, origin/main pins {expected[:12]} — "
-            f"connect-smokeball.sh will refuse (#2149). Fix: "
-            f"yes s | operator/bin/reprovision.sh <slug>",
-            "the two refs matching",
+            f"seat runs {running} and is behind the newest completed release. Fix: operator/bin/fleet release <img id> --only {slug}",
+            "the seat's image matching the newest completed release",
         )
     else:
-        rep.add(
-            "currency",
-            "seat runs origin/main's pinned overlay",
-            PASS,
-            f"both {expected[:12]}",
-            "a seat ref differing from the pin",
-        )
+        rep.add("currency", title, PASS, f"running {running}, no image drift", "a fleet status row showing image drift")
 
 
 def check_machine(rep: Report, app: str, no_seat: bool) -> None:

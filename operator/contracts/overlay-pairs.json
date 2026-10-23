@@ -1,7 +1,4 @@
 {
-  "overlayRepo": "https://github.com/venturecrane/hermes-smd-overlay.git",
-  "overlayRef": "dfcfc28cdaad76c0e16b44caa7b747a9e30c80ad",
-  "overlayRefNote": "Pin history is not kept in this field. Read it from the repository history of this file (the overlayRef key) and from the overlay repo at each ref. A bump records WHY in its commit and PR; tests/no-history-in-file-bodies.test.ts caps this field so the ledger cannot regrow here.",
   "pairs": [
     {
       "adapterPath": "operator/adapter/voice/transform.py",

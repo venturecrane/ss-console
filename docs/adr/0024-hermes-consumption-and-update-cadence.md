@@ -14,6 +14,8 @@ related-issue: https://github.com/venturecrane/ss-console/issues/1133 (migration
 
 **Implemented with amendments (2026-10-19).** Decisions 2, 3, 6 and 7 are built as the fleet release system (`operator/bin/fleet`), with four amendments recorded in [the amendment section](#amendment-2026-10-19-implemented-as-the-fleet-release-system) below: the Fly registry app `hermes-fleet` instead of GHCR, rings instead of a single canary, skills as their own release artifact, and a supervisor drain so a deploy never kills a running job. The Hermes pin moved from `customer.yaml.hermes_ref` to the Dockerfile's own `ARG` defaults (one image, so one pin).
 
+**Amended 2026-10-22 by [ADR 0095](./0095-one-repository-for-the-seat-runtime.md):** the overlay is built from `operator/hermes-smd-overlay/` in this repo, so a release is one repo at one sha; see [the amendment](#amendment-2026-10-22-one-repo-one-sha).
+
 **Source:** A first-principles audit on 2026-05-28 of two coupled questions: (1) why `venturecrane/hermes-agent` exists, and (2) whether we have a real strategy for keeping current with Hermes given upstream's weekly release train. The audit found the fork to be a retrofitted relic of the pre-2026-05-24 "code-in-fork" posture, with a supply-chain-mirror justification that does not survive scrutiny, and found the update strategy to be a quarterly-clock posture bolted onto a weekly-shipping dependency. This ADR replaces the fork posture of ADR 0015 and adds the update-cadence strategy ADR 0015 never contained.
 
 ---
@@ -190,6 +192,15 @@ Amendment 3's "one rollout at a time" and its definition of Blessed coupled ever
 2. **Completion is read from the records.** A release is Blessed when every ringed seat's latest rollout of it is `done`, however many runs that took. A seat repaired with `--only` completes the release; a seat left `waiting_idle` or held keeps it incomplete (previously those did not block completion). A release is stamped once, so re-running an old release cannot make it the newest Blessed.
 3. **Two lease scopes.** The fleet lease is held only by a full rollout. Every seat deploy, whether a rollout's, an `--only`, or a reprovision (`fleet with-seat-lease`), holds that seat's lease (`seat:<slug>` in the same `fleet_lease` table). Two deploys never land on one seat; no seat's deploy waits for another seat's.
 4. **A failed rollout pages.** The fleet-alerts Worker emails team@smd.services once per new `failed`, `rolled_back` or `tooling_error` rollout row (migration 0133, condition `rollout_failed`, marker-shaped like `send_refused`).
+
+## Amendment (2026-10-22): one repo, one sha
+
+[ADR 0095](./0095-one-repository-for-the-seat-runtime.md) moved the overlay into this repo at `operator/hermes-smd-overlay/`. What changes here:
+
+1. **One repo, one sha.** A release is built from one ss-console commit. The Dockerfile no longer declares `OVERLAY_REF` or `OVERLAY_REPO`; it copies the overlay tree in, path-installs it into the Hermes venv with `--no-deps` (third-party dependencies still hash-locked in `operator/requirements/hermes-overlay.txt`), and copies it again to `/app/overlay-pack`. `SMD_OVERLAY_REF` and `/app/OVERLAY_REF` carry the ss-console commit, and that is the overlay version the heartbeat reports. Amendment 2026-10-19 item 1's "declares `OVERLAY_REF` and `SS_CONSOLE_SHA` immediately before their first use" now reads: the overlay copy and `SS_CONSOLE_SHA` come after the cached apt, npm, uv and Hermes layers, so an overlay-only release still rebuilds only the tail.
+2. **The label format.** `fleet build` labels images `rel-<ss-console sha8>-<yyyymmddHHMM UTC>` (was `rel-<ss8>-<overlay sha8>-<stamp>`) and release ids `img-<stamp>-<ss8>`. `fleet_releases.overlay_ref` records the ss-console commit, which the rollout's heartbeat read-back requires the seat to echo. `fleet status` drift compares image refs as before.
+3. **The boot-fetch rejection stands, and is now structural.** The rejection above of fetching the overlay at boot holds for the same reasons (image identity, twin parity, the tamper boundary, negligible gain). The pack is copied into the image at build, `bootstrap.sh` refreshes the volume from the image's copy, and there is no runtime install fallback: bootstrap dies if the pack is missing. Reason (b) changes form: twin parity is now checked in the tree by `tests/operator-overlay-pairs.test.ts`, not against the image's baked overlay.
+4. **Rollback and the pre-fold lane.** Rollback is `fleet release <previous img id>`, as for any release. While `ashton-price` is held on a pre-fold image, its hotfixes come from the locked standalone repo and the ss-console branch `release/pre-fold` (ADR 0095 section 8).
 
 ---
 

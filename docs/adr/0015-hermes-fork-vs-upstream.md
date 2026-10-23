@@ -3,7 +3,7 @@ title: Hermes Fork Posture — Pin-Only Fork, Plugin-Only Overlay, No Core-File 
 date: 2026-05-24
 status: partially-superseded
 captain: Scott Durgan
-superseded-by: 0024-hermes-consumption-and-update-cadence.md (fork half only)
+superseded-by: 0024-hermes-consumption-and-update-cadence.md (fork half only); 0095-one-repository-for-the-seat-runtime.md (separate-repo half only)
 supersedes: 0015-hermes-fork-vs-upstream.md (prior version of this file; see `git log docs/adr/0015-hermes-fork-vs-upstream.md`)
 related-issue: https://github.com/venturecrane/ss-console/issues/844
 ---
@@ -12,7 +12,9 @@ related-issue: https://github.com/venturecrane/ss-console/issues/844
 
 > **Partially superseded 2026-05-28 by [ADR 0024](./0024-hermes-consumption-and-update-cadence.md).** The **fork half** of this ADR (the pin-only `venturecrane/hermes-agent` fork, the `v{upstream}-smd.N` tag scheme, and the security-patch escape valve hosted on the fork) is retired: a first-principles audit found the fork to be a retrofitted relic whose immutability benefit was redundant with SHA-pinning and whose availability benefit was defeated by the provision-time `git ls-remote` to upstream. SMD now pins `NousResearch/hermes-agent` directly by `v{date}@{sha}`. The **plugin-only-overlay half** of this ADR (all SMD code in `venturecrane/hermes-smd-overlay`, no core-file modifications) stands unchanged and is the durable, verified decision. Read this ADR for the overlay posture; read ADR 0024 for how Hermes is pinned, built, and updated.
 
-**Status:** Accepted 2026-05-24; fork half superseded by ADR 0024 on 2026-05-28.
+> **Amended 2026-10-22 by [ADR 0095](./0095-one-repository-for-the-seat-runtime.md).** The overlay no longer lives in a separate repo: it is `operator/hermes-smd-overlay/` in `venturecrane/ss-console`. The plugin-only rule (no core-file modifications, documented extension surface only) stands. See [the amendment](#amendment-2026-10-22-the-overlay-moves-into-ss-console) below.
+
+**Status:** Accepted 2026-05-24; fork half superseded by ADR 0024 on 2026-05-28; separate-repo half superseded by ADR 0095 on 2026-10-22.
 
 **Source:** The locked Hermes-alignment build plan dated 2026-05-24, following Teknium's (Nous Research lead) May 2026 policy statement and PR #5295 enforcement. This rewrite replaces the prior version which proposed a "thin vendored fork with SMD overlay layer" — a posture that, on first-source review of Hermes' plugin policy, puts SMD's overlay on the wrong side of upstream rules and creates fork-divergence costs we accepted under a false assumption about how the integration would land.
 
@@ -118,6 +120,14 @@ How we know we are following this decision:
 3. **All SMD plugin code lives in `venturecrane/hermes-smd-overlay`.** No `smd/`, `aie/`, or similar subdirectory inside the Hermes fork.
 4. **No core-file edits on any pinned tag.** Verification via `git diff v2026.5.16 venturecrane/hermes-agent:v2026.5.16-smd.0` returns empty for all pinned tags (unless a `security.N` tag is in play, in which case the diff is constrained to the patched files and documented in CHANGELOG).
 5. **The `hermes_ref` validator enforces the tag pattern.** A `customer.yaml` with `hermes_ref: v2026.5.16` (raw upstream) fails validation; `v2026.5.16-smd.0` passes; `v2026.5.16-smd.security.0` passes.
+
+## Amendment (2026-10-22): the overlay moves into ss-console
+
+[ADR 0095](./0095-one-repository-for-the-seat-runtime.md) supersedes the separate-repo half of this decision. "All SMD-specific code lives in a separate open-source plugin repo" (Decision) and "All SMD plugin code lives in `venturecrane/hermes-smd-overlay`" (Verification item 3) no longer hold: the overlay is `operator/hermes-smd-overlay/` in `venturecrane/ss-console`, moved there unchanged at pin `8c6f4b86`, and the image builds it from that tree. Distribution is no longer `hermes plugins install venturecrane/hermes-smd-overlay`; the Dockerfile copies the tree in and installs it with `--no-deps`.
+
+What stands, unchanged: the overlay is plugin code only. It MUST NOT modify Hermes core files, it extends Hermes only through the documented plugin surface, and Hermes runs byte-for-byte at its pinned tag and SHA (ADR 0024). Verification item 3 now reads: all SMD plugin code lives under `operator/hermes-smd-overlay/`, and nothing in this repo patches a Hermes file. The separate repo was a packaging choice made alongside the plugin-only rule, not a consequence of it; the rule is what kept Hermes upgrades a tag bump, and it does so from either location.
+
+The standalone repo's `main` is locked at the fold and the repo is archived once every seat runs a folded image. Its open-source posture was argued here; the reasons that kept it public in ADR 0081 are amended there.
 
 ## References
 

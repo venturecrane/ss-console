@@ -1,0 +1,657 @@
+# ============================================================================
+# Overlay env-consumption declaration — what the hermes-smd-overlay code READS
+# from the environment. The consumer-side twin of ss-console's
+# operator/contracts/env-consumption.yaml (which owns provisioning disposition:
+# who PROVIDES/STRIPS/REQUIRES each var). This file owns ONE fact: "the overlay
+# reads this var, here, for this."
+#
+# WHY THIS EXISTS. OP-P0-2: a security pass stripped the account-wide R2 key
+# from the agent env, not knowing the voice plugin read it — voice went silent.
+# The fact "what reads this var" lived only in someone's head. This file makes
+# it explicit and machine-checkable so the next such drift is a failed check,
+# not a live incident.
+#
+# ENFORCEMENT (all derived from THIS file by shared/consumes_conformance.py):
+#   1. CI, fail-closed (tests/test_consumes_conformance.py): every env var the
+#      overlay reads with a STRING LITERAL (os.environ["X"], os.getenv("X"),
+#      secrets.require("X"), get_secret("X")) MUST appear in `vars` below.
+#      An undeclared literal read fails the build — the voice-break guard.
+#      And every `vars` entry marked `discovery: static` MUST actually be read
+#      (no stale declarations).
+#   2. Boot-time, WARN-only (umbrella __init__.register): the same
+#      reconciliation runs at gateway start and logger.warning()s any
+#      undeclared read. It NEVER fails boot — per the Phase A reframe, boot
+#      fails only on a liveness check, never on a conformance check (a
+#      boot-time grep gate is itself a brick vector). CI is the hard gate.
+#
+# DISCOVERY CLASSES (the `discovery` field on each var):
+#   static   - read with a string literal at the call site; the conformance
+#              test finds it by AST and REQUIRES it here.
+#   indirect - the var NAME is held in a module constant (e.g. SOCKET_ENV);
+#              a real read, but not a literal at the read call, so the AST scan
+#              can't tie it to a name. Declared here; exempt from the "must be
+#              statically found" stale check.
+# Names that are CONSTRUCTED or INDIRECTED at runtime (no single literal name)
+# are documented under `dynamic_reads` instead — they cannot be a `vars` key.
+#
+# Adding a consumer? Add the var here FIRST. If you read a new env var with a
+# literal and forget to declare it, CI goes red on the author, not the Captain.
+
+vars:
+  SMOKEBALL_REFRESH_TOKEN_FILE:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: >-
+      ADR 0054. Override for where the Machine-hosted Smokeball OAuth callback
+      writes the firm-delegated refresh token (and the connector reads it).
+      Defaults to /opt/data/.smokeball-mcp/refresh_token when unset. Also read
+      by connector_check.token_ages (ss#2148): the file's mtime age rides the
+      heartbeat as connector_token_age.smokeball for pre-expiry alerting.
+  # ---- Required: the overlay genuinely needs these (no graceful degradation) ----
+  SMD_CUSTOMER_SLUG:
+    discovery: static
+    stage: agent
+    requirement: required
+    consumed_by: [voice, audit, trust, webhook-router, memory-mirror, workspace, peer-memory]
+    note: per-customer identity; read directly and via secrets.require across plugins
+  SMD_D1_AUDIT_BINDING:
+    discovery: static
+    stage: agent
+    requirement: required
+    consumed_by: [webhook-gate, audit, trust, webhook-router, workspace, overlay-activation-hook, peer-memory]
+    note: per-customer audit D1 binding (a path, or the NAME of an env var holding the path)
+
+  SMD_D1_AGENT_STATE_BINDING:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [audit, peer-memory]
+    note: per-customer MUTABLE agent-state D1 binding (agent_skills_inventory + peer_preferences); falls back to SMD_D1_AUDIT_BINDING when unset (OP-P1-4 ledger/state split)
+
+  # ---- Indirect: var name held in a module constant, not a literal at the read ----
+  SMD_WORKSPACE_BROKER_SOCKET:
+    discovery: indirect
+    stage: broker
+    requirement: required
+    consumed_by: [workspace]
+    note: "read via os.environ.get(SOCKET_ENV) where SOCKET_ENV = 'SMD_WORKSPACE_BROKER_SOCKET' (shared/workspace_broker.py:10); broker raises if unset"
+
+  SMD_AUDIT_BROKER_SOCKET:
+    discovery: indirect
+    stage: agent
+    requirement: optional
+    consumed_by: [audit, trust, webhook-router]
+    note: "read via os.environ.get(SOCKET_ENV) where SOCKET_ENV = 'SMD_AUDIT_BROKER_SOCKET' (shared/audit_client.py); set => audit writes route through the broker's append-only audit_append (OP-P1-4); unset => direct D1 write"
+
+  SMD_GATEWAY_PID:
+    discovery: indirect
+    stage: agent
+    requirement: optional
+    consumed_by: [trust]
+    note: "read via os.environ.get(GATEWAY_PID_ENV) (shared/gateway_identity.py); exported by the entrypoint for the container main that becomes the gateway. Fallback only: the broker's health `caller_is_gateway` decides first. With SMD_AUDIT_BROKER_SOCKET set and the broker unable to answer, unset or different from os.getpid() refuses every tool (a second Hermes runtime's audit rows are refused, so it may not act)"
+
+  # ---- Optional: plugin no-ops cleanly / a default applies when absent ----
+  AGENTMAIL_API_KEY:
+    # ss#2258 made this indirect: the ``secret_env`` FIELD VALUE on the
+    # agentmail MCP connector spec, materialized into the profile config, and
+    # read by nothing. 2026-09-18 made it a real read again, in ONE place —
+    # ``shared/agentmail_broker.py``'s attachment verbs. Scope the change
+    # honestly: what ss#2258 moved out was authority to TRANSMIT, and this key
+    # has none (the vendor refuses it). The mailbox it reads is the agent's own.
+    # Still INDIRECT, now for the other reason: the name is held in a module
+    # constant (``READ_KEY_ENV``), which the AST scan cannot tie to a read.
+    discovery: indirect
+    stage: agent
+    requirement: optional
+    consumed_by: [mcp_registry, mail-attachments]
+    note: "AgentMail READ/DRAFT credential — the secret_env of the agentmail MCP connector (bootstrap/mcp_registry.py), AND, since 2026-09-18, the Bearer credential shared/agentmail_broker.py's list_attachments/spool_attachment use against api.agentmail.to. Inbox-scoped with message_send/draft_send WITHHELD since ss#2258, so it cannot transmit: the vendor refuses. Transmit remains a broker verb keyed on AGENTMAIL_SEND_API_KEY, which never enters this process's environment. Unset on a seat that authors adapter: agentmail, the two attachment tools still REGISTER and raise a named reason when called — until 0.2.0 they were dropped by requires_env, which is silent, so a turn had no way to look and no way to know it could not. A seat that authors a different adapter does not read this key at all."
+  SMD_ATTACHMENT_SPOOL_DIR:
+    # Name held in ``attachment_spool.SPOOL_DIR_ENV``; see the note above.
+    discovery: indirect
+    stage: agent
+    requirement: optional
+    consumed_by: [mail-attachments]
+    note: "where shared/attachment_spool.py writes an emailed attachment's bytes for the records connector to read back by token, on the same machine. Defaults to /opt/data/attachment-spool (the hermes-owned volume root the entrypoint already sweeps to the agent uid, so no ownership change is needed). Entries are 0600, owner-only, pruned on write after SPOOL_TTL_SECONDS."
+  ANTHROPIC_API_KEY:
+    # Indirect, the pre-2026-09-18 AGENTMAIL_API_KEY shape: no overlay plugin
+    # reads this name.
+    # It is the SOURCE secret of an optional row on the smokeball MCP connector
+    # spec (bootstrap/mcp_registry.py), which the translator resolves via
+    # get_secret and materializes into that subprocess's env block.
+    discovery: indirect
+    stage: agent
+    requirement: optional
+    consumed_by: [mcp_registry]
+    note: >-
+      ss-console#2464. NEW EGRESS, optional: with a key staged, the smokeball
+      connector subprocess makes outbound HTTPS calls to the Anthropic Messages
+      API to transcribe scanned documents that carry no text layer. The call is
+      READ-classified — it sends document bytes already fetched from Smokeball
+      and returns a transcription; it writes nothing anywhere. Unstaged, the
+      connector keeps returning the scanned-and-unreadable marker and makes no
+      such call, so absence changes no seat behavior. The credential is the
+      SEAT's own Anthropic workspace key (provisioning prefers
+      ANTHROPIC_API_KEY__<CUSTOMER_ID> from /ss, ADR 0062 section 2) — the same
+      one already at rest in the profile's auth.json on the same volume, so
+      passing it to the connector adds no exposure class. Four non-secret tuning
+      vars ride the same optional block and have connector-side defaults —
+      SMOKEBALL_VISION_MODEL, SMOKEBALL_VISION_PAGE_CAP,
+      SMOKEBALL_VISION_MAX_BYTES, and the per-seat kill switch
+      SMOKEBALL_VISION_DISABLED.
+  SMD_MCP_STORE_DIR:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate, mcp-result-sink]
+    note: "directory for the MCP channel's cross-process result store (shared/mcp_result_store.py); the agent-side result-sink writes, the gate's /mcp long-poll reads. Defaults to /run/smd-mcp (tmpfs) when unset."
+  WEBHOOK_SECRET_MCP:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [bootstrap-translate, webhook-gate]
+    note: "the mcp channel's HMAC secret. Read as a literal by translate (route materialization, fail-closed/omitted when unset) and via the WEBHOOK_SECRET_<ROUTE> family by the gate's loopback-forward signing. Also the console-proxy bearer for the console-sole door (ADR 0057 amendment): the gate's /mcp/turn and /webhooks/handoff require Bearer WEBHOOK_SECRET_MCP. Gates the webhook-gate launch in bootstrap.sh (AGENTMAIL or MCP secret)."
+  # ---- ADR 0023 Wave 1: Machine → control-plane heartbeat (shared/heartbeat.py, in the gate) ----
+  MACHINE_HEARTBEAT_KEY:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "shared fleet bearer for POST /api/internal/heartbeat (ADR 0023 #10). Read by the heartbeat emitter in the gate; absent => control-plane POST disabled (admin fleet view stays 'no signal yet'), gate otherwise unaffected. bootstrap.sh STRIPS it from the agent (hermes gateway) env before the exec so a code-executing agent cannot forge heartbeats for another tenant's slug — the gate keeps its inherited copy."
+  HEALTHCHECKS_PING_URL:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "per-customer healthchecks.io ping URL staged at provision (ADR 0023 #8). The gate's emitter pings it each tick; grace expiration fires the console /api/webhooks/healthchecks alert. Absent => external dead-man switch disabled, control-plane POST still runs. Stripped from the agent alongside MACHINE_HEARTBEAT_KEY."
+  # ---- ADR 0023 Wave 1 (#10): Sentry error monitoring on Machines ----
+  SENTRY_DSN:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate, overlay-activation-hook]
+    note: "shared smd-operator Sentry project DSN, staged at provision UNCONDITIONALLY per-Machine (ADR 0023 #11) — no customer.yaml key gates it; no seat authors observability.sentry.enabled and the provisioner never reads one (reconciled with shipped behavior 2026-08-02, audit 2026-07-31 §3.12). Both boot processes init from shared/sentry_init.py: the gate (component=gate) and the gateway activation hook (component=gateway), each tagged tenant=<slug>. Absent => Sentry disabled-safe (init is a no-op); errors go unreported but boot is unaffected. PII scrub (send_default_pii=False + before_send/before_breadcrumb) is locked in sentry_init.py and gated by tests/test_sentry_scrub.py. A DSN alone is NOT sufficient to report — see FLY_MACHINE_ID (seat-only gate)."
+  FLY_MACHINE_ID:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate, overlay-activation-hook]
+    note: "platform-set inside every Fly Machine; the value Sentry already records as server_name. shared/sentry_init.py._is_real_seat() gates ALL reporting on its presence, so a laptop or CI box carrying SENTRY_DSN cannot write to the shared production project. Added 2026-07-27 after an audit found 919 of the project's 6,994 lifetime events (13%) came from one dev laptop tagged environment=prod — including the loudest-looking issues in the project (a 276-event activation failure and unit-test fixtures reporting as 'RuntimeError: kaboom'), which both trained the reader to ignore Sentry mail and competed for a 5,000-event monthly budget. Absent => Sentry disabled-safe. Override with SMD_SENTRY_FORCE=1."
+  PYTEST_CURRENT_TEST:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate, overlay-activation-hook]
+    note: "pytest-set, never present in production. shared/sentry_init.py._is_real_seat() treats its presence as 'not a seat' so a test run executing ON a Machine still cannot pollute the shared Sentry project. Belt-and-braces alongside FLY_MACHINE_ID."
+  SMD_SENTRY_FORCE:
+    discovery: indirect
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate, overlay-activation-hook]
+    note: "escape hatch for the seat-only gate: '1' forces Sentry init off a Fly Machine, for deliberately reproducing a reporting bug locally. Never set it in a dev loop or CI — that re-opens the laptop-noise defect FLY_MACHINE_ID closed."
+  SMD_ENV:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate, overlay-activation-hook]
+    note: "Sentry `environment` tag (shared/sentry_init.py); defaults to 'prod' when unset. These are prod Machines, so the default is correct — the override exists for staging seats."
+  SENTRY_ENVIRONMENT:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate, overlay-activation-hook]
+    note: "fallback source for the Sentry `environment` tag when SMD_ENV is unset (shared/sentry_init.py), matching the conventional sentry-sdk env var name. Absent => 'prod'."
+  # ---- ADR 0062 (ss-console #1661): cost breaker + inbound wake guard ----
+  SMD_STICKY_STOP_DB_PATH:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [job-worker, webhook-gate]
+    note: "test/dev override for the Machine-local sticky_stop state file; defaults to /opt/data/smd/sticky_stop.db (shared/cost_breaker.py). The job worker writes it (record_cost_cents ladder, agent uid); the gate and heartbeat read it read-only (HARD_STOP park + sticky_stop_level field)."
+  # ---- ss-console #2003 Q7: the entitlement dial (runtime exposure overrides) ----
+  SMD_EXPOSURE_OVERRIDE_DB_PATH:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate, hermes-smd-trust]
+    note: "test/dev override for the Machine-local exposure_override state file; defaults to /opt/data/smd/exposure_override.db (shared/exposure_override.py). The gate writes it (POST /entitlement/set, console-proxy bearer); the trust plugin reads it per tool call (effective exposure = authored overlaid by overrides, clamped to the authored exposure_ceiling)."
+  # ---- ss-console #2164: mailbox-possession ceremony (ADR 0085 §5) ----
+  SMD_ADMIN_POSSESSION_DB_PATH:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [hermes-smd-establishment]
+    note: "test/dev override for the Machine-local admin_possession state file; defaults to /opt/data/smd/admin_possession.db (shared/admin_possession.py). The establishment plugin writes it (challenge mint at the establish_* withhold, confirm at pre_llm_call) and reads it per gated call; restart-durable by design (one-time-per-admin ceremony on AgentMail-custody seats)."
+  SMD_GATE_CAP_DB_PATH:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "test/dev override for the gate-owned inbound wake counter; defaults to /opt/data/smd-gate/wake_counter.db (shared/gate_inbound_cap.py). Root-owned; counts verified routed wakes per UTC day against the authored safety.sticky_stop.inbound_daily_cap (platform default 200)."
+  HEARTBEAT_INGEST_URL:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "override for the control-plane heartbeat endpoint; defaults to https://smd.services/api/internal/heartbeat (the apex console — NOT the admin subdomain, which would trigger the /admin rewrite). All Machines report to the one console."
+  HEARTBEAT_PERIOD_SECONDS:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "heartbeat tick cadence; defaults to 60 (matches customer.yaml.observability.health.period_seconds). Floored at 5 by the emitter."
+  SCHEDULER_CHECK_DEBOUNCE:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "consecutive scheduler self-check crashes before the heartbeat reports scheduler_ok=0 (ss work-liveness fix; report-late beats report-never). Default 3; set 1 on a staging seat to tighten the kill-test window."
+  CONNECTOR_CHECK_DEBOUNCE:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "consecutive connector self-check crashes before the heartbeat reports connector_check_ok=0 (ADR 0080; a map has no natural degraded value — the boolean is the reported failure state). Default 3."
+  SPEC_CONTROL_CHECK_DEBOUNCE:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "consecutive authored-spec control self-check crashes before the heartbeat reports spec_control_ok=0 (ss-console #2234; same shape as the connector check — the boolean is the reported failure state, and it means 'cannot read config or manifest', never 'no spec installed'). Default 3."
+  GATEWAY_LOOP_CHECK_DEBOUNCE:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "consecutive gateway loop-liveness self-check crashes before the heartbeat reports gateway_loop_ok=0 (ss-console#2488 part 2; the boolean is the reported failure state and means 'this check could not look', never 'the loop is fine'). Default 3."
+  SMD_CONNECTOR_LEDGER_PATH:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [connector-health, webhook-gate]
+    note: "path of the per-server connector call-outcome ledger (shared/connector_ledger.py); the agent-side connector-health plugin writes, the gate's heartbeat connector_check reads — the SMD_MCP_STORE_DIR two-process shape. Defaults to /run/smd-connector-health/ledger.json (tmpfs; wiped on restart BY DESIGN — console holds open alerts until post-restart calls rebuild the run)."
+  SMD_OVERLAY_REF:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "baked overlay git ref (Dockerfile ENV SMD_OVERLAY_REF=${OVERLAY_REF}); reported as the heartbeat `version` field so the fleet view shows which overlay each Machine runs. Absent => version omitted."
+  HERMES_HOME:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [audit, bootstrap-cli]
+    note: Hermes home dir; defaults to /opt/data. Also read by the boot-helper CLI.
+  HERMES_ACTIVE_PROFILE:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [audit, peer-memory, trust]
+    note: active persona slug (Hermes-native); first in the persona-resolution chain. Trust reads it to resolve the active persona's authored exposure (ADR 0056).
+  SMD_ACTIVE_PERSONA:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [audit, peer-memory, trust]
+    note: persona-slug fallback when HERMES_ACTIVE_PROFILE is unset
+  # SMD_TRUST_CEILING retired (ADR 0056): autonomy is no longer a process-env
+  # scalar — exposure is authored per persona in customer.yaml and read from the
+  # trusted volume. No env override remains.
+  SMD_VERTICAL:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [trust]
+    note: vertical/pack identifier; selects the non-raisable vertical floor and the provenance gate's law tier
+  SMD_COHORT:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [trust]
+    note: cohort identifier used in the provenance gate
+  SMD_IDENTIFIER_GATE_MODE:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [trust]
+    note: >-
+      incident-only fleet rollback for the A1 identifier gate (ss #2171); per-seat
+      posture comes from role policy (shared/policy_profile.py, ss-console ADR
+      0093 docs/adr/0093-seat-policy-profiles.md), never from this var. Unset =
+      BLOCK (the enforcing state).
+      Only the literal "report" downgrades every kind, floors included, to
+      report-only; any other value blocks (fail-closed). Seat facts report it and
+      `python3 -m shared.policy_profile` prints `lever=set` so the boot smoke
+      flags any seat where it is set. Never client-authorable — integrity
+      controls do not appear in customer.yaml.
+  SMD_MATTER_GATE_MODE:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [trust]
+    note: >-
+      operator-only rollback lever for the outbound matter-identity gate (ss
+      #2167). Same shape as SMD_IDENTIFIER_GATE_MODE: unset = BLOCK, only the
+      literal "report" downgrades to report-only, any other value blocks
+      (fail-closed, so an operator typo cannot silently disable a safety
+      control). Never client-authorable — integrity controls do not appear in
+      customer.yaml. BLOCK here means a proven cross-matter send is downgraded
+      to a human draft; it never refuses outright, and an UNRESOLVED membership
+      is reported rather than enforced.
+  SMD_READ_VOLUME_GATE_MODE:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [trust, webhook-router]
+    note: >-
+      operator-only lever for the read-volume gate (agreement §2.8, routine 5;
+      ss#2603 family). Values: off | report | block. Unset or unrecognized =
+      block (fail-closed against operator typos). The THRESHOLD itself is
+      client-authored in customer.yaml
+      (personas[].skills[opposing-response-deficiency-review].settings
+      .review_threshold_pages) because it is a commercial contract term;
+      unauthored = gate inert. BLOCK refuses the document read that would carry
+      an opposing-response review past the authored page threshold and directs
+      the model to write the surface-only internal note ("at least N pages
+      across M documents; review suspended"). REPORT accumulates and records
+      one allowed report-class audit row at the crossing, never blocks. Scoped
+      to sessions marked as reviews by the webhook route or by the session
+      reading the gated skill's SKILL.md (the spine path); all other sessions
+      are never fenced.
+  SMD_MULTI_MATTER_MODE:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [trust]
+    note: >-
+      operator-only lever for the matter-MIXING signal (ss#2167), which is a
+      different control from SMD_MATTER_GATE_MODE beside it: that one governs
+      whether a proven cross-matter CITATION withholds a send, this one governs
+      whether a session may read a SECOND matter's content at all. Values: off |
+      report | block. Unset or unrecognized = block (fail-closed). BLOCK refuses
+      the second memo/document read outright, so a draft carrying two clients'
+      facts is never composed — the send-time controls beside it all fire after
+      composition, by which point the mixed draft is already in a paralegal's
+      queue, and a firm finding it there is the event the engagement does not
+      survive whether or not it was sent. REPORT keeps the send-time annotation
+      without the read fence. Metadata reads (get_matter, list_matters,
+      list_tasks) are never fenced, which is what makes the refusal affordable.
+      Never client-authorable — integrity controls do not appear in
+      customer.yaml.
+  CUSTOMER_SLUG:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [voice, shared-d1-env]
+    note: legacy fallback for SMD_CUSTOMER_SLUG
+  SMD_VOICE_VAULT_DIR:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [voice]
+    note: local voice-vault dir (bootstrap Step 2a); preferred so the agent holds NO R2 credential (OP-P0-2)
+  SMD_ESCALATION_LEDGER_PATH:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [escalation]
+    note: "override for the escalation-ledger twin path read by escalation_state and escalation_reply_ack (plugins/hermes-smd-escalation); unset => the Machine default /opt/data/audit/escalation-ledger.jsonl (shared/escalation_ledger.DEFAULT_LEDGER_PATH). Tests set it to a tmp file."
+  SMD_CASEWORK_LEDGER_PATH:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [escalation]
+    note: "override for the casework-ledger twin path read by reply_verdicts (plugins/hermes-smd-escalation/casework.py); unset => the Machine default /opt/data/audit/casework-ledger.jsonl. Tests set it to a tmp file."
+  R2_ENDPOINT_URL:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [voice, audit]
+    note: R2 S3 endpoint URL (NOT a credential); voice R2-fallback path + skill_capture
+  R2_ACCESS_KEY_ID:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [voice]
+    note: account-wide R2 key — voice R2-FALLBACK only; stripped from the agent env in bootstrap (OP-P0-2), so absent in practice
+  R2_SECRET_ACCESS_KEY:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [voice]
+    note: paired with R2_ACCESS_KEY_ID; voice R2-fallback only; stripped from the agent env
+  R2_BUCKET_CONFIG:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [voice]
+    note: config-bucket NAME (not a credential); voice R2-fallback path
+  R2_SKILL_BODIES_BUCKET:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [audit]
+    note: bucket NAME for agent-authored skill-body persistence (ADR 0022 Stream 2)
+  R2_SKILL_BODIES_ACCESS_KEY_ID:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [audit]
+    note: bucket-SCOPED token for skill-body persistence; capture no-ops when unset
+  R2_SKILL_BODIES_SECRET_ACCESS_KEY:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [audit]
+    note: paired with R2_SKILL_BODIES_ACCESS_KEY_ID
+  SMD_CUSTOMER_YAML_PATH:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-router]
+    note: customer.yaml path; defaults to /opt/data/customer.yaml
+  SMD_HELD_REPLY_DB_PATH:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [reply]
+    note: held-reply queue db (#2070); defaults to /opt/data/held_replies.db
+  SMD_REQUEST_INDEX_DB_PATH:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-router, reply, webhook-gate]
+    note: "test/dev override for the seat-local request index; defaults to /opt/data/requests.db (shared/request_index.py). The agent writes it (router at intake, reply plugin + held-reply sweeper at each send); the gate's heartbeat reads it read-only for the request cards. Holds sender/subject/reply opening, nulled after 7 days, rows deleted after 30."
+  SMD_REQUEST_CARDS_DB_PATH:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "test/dev override for the gate-owned request-card state; defaults to /opt/data/smd-gate/request_cards.db (shared/request_cards.py). Card keys (sha256 of the vendor message id + kind) and attempt/done times only; no text."
+  SMD_SPEC_DIR:
+    # indirect: shared/spec_manifest.py reads it through the module constant
+    # SPEC_DIR_ENV (exported so translate.py and the trust plugin name the same
+    # thing once), so the AST scan cannot tie the read to a literal.
+    discovery: indirect
+    stage: agent
+    requirement: optional
+    consumed_by: [trust]
+    note: >-
+      ss ADR 0083 / ss-console #2084. The ROOT-OWNED directory holding the
+      customer's authored per-output-class specs and root's manifest of them,
+      installed by the spec_applier before the privilege drop. Read-only to the
+      agent uid by construction: read_file is unfenced and does not taint, so an
+      agent-WRITABLE spec would be a persistent, untainted, self-authored
+      prompt-injection channel surviving restarts. Consumed by the trust
+      plugin's read-mark (verifies a spec read against root's manifest) and by
+      bootstrap/translate.py (renders the per-profile SKILL.md pointer stamp).
+      Unset ⇒ no installed spec tree ⇒ nothing verifiable, which every caller
+      reads as fail-closed, never as a pass.
+  SMD_WEBHOOK_SIGNING_SECRET:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-router]
+    note: HMAC secret verifying inbound webhooks; when unset the router disables routing (fail-closed) rather than trusting unsigned events
+  CUSTOMER_DB:
+    discovery: indirect
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "audit D1 path fallback when SMD_D1_AUDIT_BINDING does not resolve; read via os.environ.get(fallback_env) in webhook_gate._db_path_from_binding (#1355 export kinds generalized the resolver)"
+  OPERATOR_RUNTIME_READ_KEY:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: per-customer ADR 0043 read-seam auth key (HMAC(master, slug)); the seam is inert when unset
+  WEBHOOK_GATE_LOG_LEVEL:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: log level for the webhook gate; defaults to INFO
+  WEBHOOK_GATE_PORT:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: webhook gate listen port
+  WEBHOOK_GATEWAY_HOST:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: upstream Hermes gateway host; defaults to 127.0.0.1
+  WEBHOOK_GATEWAY_PORT:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: upstream Hermes gateway port; defaults to 8644
+  # ---- ADR 0078 email-channel-seam D1: the msgraph delta poller (shared/msgraph_poller.py, in the gate) ----
+  WEBHOOK_SECRET_MSGRAPH:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [bootstrap-translate, webhook-gate]
+    note: "the msgraph inbound route's HMAC secret. Read as a literal by translate (materializes the loopback `msgraph` route, fail-closed/omitted when unset) and by the delta poller to sign its loopback POST so Hermes' webhook adapter re-verifies. The MSGRAPH_TENANT_ID/CLIENT_ID/CLIENT_SECRET/MAILBOX creds are read via shared.secrets.get_secret (the declared dynamic seam), not as static literals."
+  MSGRAPH_POLL_SECONDS:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "poller cadence fallback (seconds) when customer.yaml connectors.Email.poll_seconds is absent; defaults to 45. The authored per-seat value wins."
+  MSGRAPH_MAILBOX:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "read statically ONLY by the dead-letter replay tool (shared/msgraph_replay.py) as the --mailbox default for DTO normalization. The poller/client read the full MSGRAPH_* credential set via shared.secrets.get_secret with non-literal names (the dynamic seam noted under WEBHOOK_SECRET_MSGRAPH)."
+  SMD_MSGRAPH_STATE_PATH:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "override for the poller's durable delta-cursor + seen-id ledger file; defaults to $HERMES_HOME/msgraph/delta-state.json."
+  WEBHOOK_SMOKEBALL_CLIENT_ID:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-gate]
+    note: "our Smokeball API ClientId — fed into the Smokeball webhook HMAC ({Timestamp}|{RequestId}|{ClientId}); it is NOT delivered by Smokeball. Required when the smokeball webhook route is enabled; the route fail-closes (401) when unset. The route HMAC secret rides the WEBHOOK_SECRET_<ROUTE> family (WEBHOOK_SECRET_SMOKEBALL)."
+  SKILLS_DIR:
+    discovery: static
+    stage: boot-helper
+    requirement: optional
+    consumed_by: [bootstrap-translate]
+    note: skills-dir override during customer.yaml translation
+  ROLES_DIR:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [bootstrap-translate, trust]
+    note: >-
+      role-package root override (ss ADR 0090); defaults to /app/roles, which the
+      seat image copies from ss-console operator/roles/. Read only when the seat
+      sets seat.role: at boot for the persona (translate), and per gate decision
+      by shared/policy_profile.py for the role's `policy:` block.
+  TELEGRAM_BOT_TOKEN:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [bootstrap-translate, group-audience]
+    note: >-
+      Two readers. shared/group_audience.py reads the VALUE in the agent process
+      (ss-console env-consumption marks it agent_env: held) to call the Bot API
+      getChatMemberCount / sendMessage for the couples shared group (ADR 0091
+      R7); the token rides only in the request path, never a log. On the boot
+      side, PRESENCE only, never the value: translate._materialize_telegram_platform
+      treats a customer.yaml telegram block that authors the deprecated
+      `allowed_users` alias with no `enabled` key as enabled only when the seat
+      has a bot token, so token-less seats stay byte-identical. Provisioning
+      disposition lives in ss-console operator/contracts/env-consumption.yaml.
+  SMD_D1_OBSERVATIONS_BINDING:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [memory-mirror]
+    note: Honcho observations mirror binding; inert in Phase 1 (ADR 0016 revised)
+  HONCHO_BASE_URL:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [memory-mirror]
+    note: local Honcho sidecar base URL; inert in Phase 1
+  HONCHO_API_KEY:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [memory-mirror]
+    note: Honcho API key; inert in Phase 1
+
+  # ---- B1 durable task-execution substrate (ADR 0051; consumed_by: jobs) ----
+  HERMES_MODEL:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [jobs]
+    note: Hermes-native active model; start_background_job records it on the job row at intake (worker resolves/validates authoritatively at claim time)
+  HERMES_PERSONA_SLUG:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [jobs]
+    note: advisory persona slug for the job row at intake; worker resolves the authoritative persona
+  SMD_JOB_DEFAULT_BUDGET_CENTS:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [jobs]
+    note: authored default per-job budget (materialized from customer.yaml); conservative fallback applies when unset
+  HERMES_JOB_ID:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [jobs]
+    note: set by the worker around a background segment; read by job_record_sideeffect to scope the idempotency journal. Unset outside a background job (no-op proceed)
+  HERMES_JOB_LEASE_EPOCH:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [jobs]
+    note: set by the worker around a background segment; the lease epoch idempotency writes are fenced on. Unset outside a background job
+
+# Names CONSTRUCTED or INDIRECTED at runtime — no single literal name, so they
+# cannot be a `vars` key. Documented here so a NEW such site is a reviewable
+# diff, and so the conformance scan can legitimately ignore the indirection
+# plumbing (it reads only names already declared above, or per-route names).
+dynamic_reads:
+  - site: webhook_gate.py::_route_secret
+    family: WEBHOOK_SECRET_<ROUTE>
+    note: per-route inbound-webhook HMAC secret; the suffix is the adapter slug, constructed at runtime
+  - site: shared/secrets.py::get_secret / require
+    note: the single env accessor; reads the literal names its callers pass (every such literal is declared in `vars`)
+  - sites: [shared/d1_client.py, webhook_gate.py::_audit_db_path, hooks/smd-overlay-activation/handler.py]
+    note: binding indirection — reads the env var NAMED BY the value of SMD_D1_AUDIT_BINDING when that value is a var name rather than a path

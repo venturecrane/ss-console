@@ -164,10 +164,16 @@ describe('the register is wired into both skills', () => {
 describe('/code-review covers the Operator and ends in fixes (fork, 2026-10-17)', () => {
   it('reviews the overlay, not only the repo it runs in', () => {
     // The inherited skill reviewed ss-console only; the overlay, the Operator's
-    // runtime on every seat, had never been reviewed.
+    // runtime on every seat, had never been reviewed. Since ADR 0095 the overlay
+    // is a path in this repo, so the skill must name that path as an area of the
+    // review, and must not send the reviewer to clone a second repo or bump a pin
+    // that no longer exists.
     const body = skillBody('code-review')
-    expect(body).toMatch(/venturecrane\/hermes-smd-overlay/)
-    expect(body).toMatch(/OVERLAY_REF/)
+    expect(body).toMatch(
+      /`operator\/hermes-smd-overlay\/` \| the Operator and hosted agent runtime/
+    )
+    expect(body).not.toMatch(/gh repo clone/)
+    expect(body).not.toMatch(/OVERLAY_REF/)
   })
 
   it('tells a probe to look where the code runs', () => {

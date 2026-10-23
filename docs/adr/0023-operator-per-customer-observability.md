@@ -66,7 +66,7 @@ The per-customer observability stack is composed from existing specs (cited, not
 
 **1. Sentry on Operator Machines.** One shared `smd-operator` Sentry project; DSN pushed as a Fly secret at provision time (same mechanism as Anthropic / Composio per [ADR 0010](./0010-per-customer-oauth-token-storage.md)). The Operator bootstrap reads `customer.yaml` (via the same path used by `hermes-smd bootstrap` per [ADR 0019](./0019-customer-yaml-to-profile-config-translation.md)) and initializes the Sentry SDK with a scope tag `tenant=<slug>`.
 
-The marketing-site reference pattern is `src/lib/observability/sentry.ts` (a `withSentryRequestHandler` wrapper using `@sentry/cloudflare@^10.51.0`), invoked from `src/middleware.ts:255`. **That is a TypeScript-for-Workers pattern; the Operator Machines are Python, so the implementation uses the `sentry-sdk` Python package, not `@sentry/cloudflare`.** The marketing site is conceptual reference, not code reuse. The Python init lives in `venturecrane/hermes-smd-overlay` per [ADR 0015](./0015-hermes-fork-vs-upstream.md) — that repo is not in the `ss-console` workspace; implementation lands in a separate PR there.
+The marketing-site reference pattern is `src/lib/observability/sentry.ts` (a `withSentryRequestHandler` wrapper using `@sentry/cloudflare@^10.51.0`), invoked from `src/middleware.ts:255`. **That is a TypeScript-for-Workers pattern; the Operator Machines are Python, so the implementation uses the `sentry-sdk` Python package, not `@sentry/cloudflare`.** The marketing site is conceptual reference, not code reuse. The Python init lives in the overlay per [ADR 0015](./0015-hermes-fork-vs-upstream.md). When this ADR was written the overlay was the separate repo `venturecrane/hermes-smd-overlay` and the init landed in a PR there; since [ADR 0095](./0095-one-repository-for-the-seat-runtime.md) (2026-10-22) it is `operator/hermes-smd-overlay/` in this repo.
 
 SMD ops configures Sentry alert rules in Sentry UI per customer. No auto-provisioning from `customer.yaml` in v1.
 
@@ -177,7 +177,7 @@ No customer-owned vendor fields. Adding them is a follow-on ADR.
 - Cost telemetry schema, drivers, COGS/MRR computation — owned by `cost-telemetry-events.md` and `cost-attribution-rollup.md`.
 - Audit log immutability or retention — owned by `audit-log-immutability.md` (post-rehome) and `audit-retention.md`.
 - Dashboard role / permission matrix — owned by `dashboard-roles.md`.
-- Audit-log-immutability rehome to `hermes-smd-audit` — prerequisite, separate spec rewrite + PR in the overlay repo.
+- Audit-log-immutability rehome to `hermes-smd-audit` — prerequisite, separate spec rewrite + PR in the overlay.
 - Logpush mirror implementation (#892) — prerequisite, lands with the rehome.
 - Customer-owned vendor accounts (premium / compliance tier) — follow-on ADR triggered by real demand.
 - Cost enforcement / auto-disable mechanisms — Captain decision is alert-only.
@@ -193,7 +193,7 @@ No customer-owned vendor fields. Adding them is a follow-on ADR.
 
 - `docs/specs/operator/customer-yaml-schema.md` — add the `observability:` block above (parallel to existing `logging:`).
 
-**Overlay repo (`venturecrane/hermes-smd-overlay`):**
+**Overlay (`venturecrane/hermes-smd-overlay` at the time; `operator/hermes-smd-overlay/` in this repo since ADR 0095):**
 
 - `sentry-sdk` (Python) init at boot with `tenant=<slug>` scope tag.
 - Internal `/health` endpoint exposing `{ last_audit_ts, last_skill_ts, heartbeat_ts, process_uptime_seconds, version }`.

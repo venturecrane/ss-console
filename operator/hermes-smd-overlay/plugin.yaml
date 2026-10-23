@@ -1,0 +1,43 @@
+name: hermes-smd-overlay
+version: "0.4.0"
+description: "Plugin overlay for the Nous Hermes Agent — adds audit emission, trust ceilings, sample-driven voice transformation, and memory mirroring without modifying Hermes core."
+author: VentureCrane
+plugins:
+  - plugins/hermes-smd-audit
+  # space-gate refuses a write from a turn whose couples space is unresolved,
+  # before any other gate spends work on it.
+  - plugins/hermes-smd-space-gate
+  - plugins/hermes-smd-trust
+  - plugins/hermes-smd-voice
+  - plugins/hermes-smd-memory-mirror
+  # calendar registers BEFORE webhook-router: its pre_gateway_dispatch marks a
+  # calendar response consumed (shared/calendar_inbox.py) so the router, which
+  # Hermes runs on the same email regardless of the skip, leaves it alone.
+  - plugins/hermes-smd-calendar
+  - plugins/hermes-smd-webhook-router
+  - plugins/hermes-smd-inbound
+  - plugins/hermes-smd-hook-probe
+  - plugins/hermes-smd-workspace
+  - plugins/hermes-smd-mail-attachments
+  - plugins/hermes-smd-record-store
+  - plugins/hermes-smd-voice-notes
+  - plugins/hermes-smd-reply
+  # initiation MUST register before peer-memory: both resolve the turn's
+  # verified sender through SESSION_INBOUND_ORIGIN's claim-once unbound
+  # handoff on the live email path, and initiation re-keys the claimed origin
+  # under the turn's session id so peer-memory (and any later resolver) finds
+  # it via get() instead of starving on an already-claimed entry.
+  - plugins/hermes-smd-initiation
+  - plugins/hermes-smd-peer-memory
+  - plugins/hermes-smd-mcp-result-sink
+  - plugins/hermes-smd-jobs
+  - plugins/hermes-smd-escalation
+  - plugins/hermes-smd-corrections
+  - plugins/hermes-smd-connector-health
+  - plugins/hermes-smd-usage
+  - plugins/hermes-smd-group-audience
+  - plugins/hermes-smd-space-delivery
+  - plugins/hermes-smd-couples-settings
+  - plugins/hermes-smd-drafting
+  - plugins/hermes-smd-establishment
+  - plugins/hermes-smd-medchron

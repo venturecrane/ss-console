@@ -49,13 +49,10 @@ ARG HERMES_UPSTREAM_TAG=v2026.9.14
 # upstream Hermes.
 ARG HERMES_UPSTREAM_SHA=345cd2b057a452236de401d3534b8502a7465e8d
 
-# hermes-smd overlay (venturecrane/hermes-smd-overlay): plugin pack + CLI
-# (`hermes-smd bootstrap`, `hermes-smd customer-sync`) + the importable
-# `shared` policy core the runtime plugins depend on. Pinned to a tagged
-# release; bump in lockstep with overlay-side feature work.
-ARG OVERLAY_REPO="https://github.com/venturecrane/hermes-smd-overlay.git"
-# History of this pin lives in git, not here: git log -G'^ARG (OVERLAY_REF|HERMES_UPSTREAM_TAG)=' -- operator/templates/Dockerfile
-ARG OVERLAY_REF="dfcfc28cdaad76c0e16b44caa7b747a9e30c80ad"
+# The hermes-smd overlay (plugin pack + the `hermes-smd` CLI + the importable
+# `shared` policy core) is this repo's operator/hermes-smd-overlay/, built from the
+# build context below (ADR 0095). There is no overlay pin: the ss-console commit
+# the image is built from (SS_CONSOLE_SHA, declared late) is its version.
 
 # No CUSTOMER_SLUG build-arg (2026-10-19, fleet release). The image is identical
 # across seats; the slug reaches the Machine only as fly.toml [env]
@@ -99,10 +96,9 @@ FROM debian:13.4
 
 # LAYER CACHE ORDER IS LOAD-BEARING (fleet release, 2026-10-19). Every RUN after
 # an ARG declaration in a stage sees that ARG and is invalidated when its value
-# changes. OVERLAY_REF changes with every overlay pin (several a day) and
-# SS_CONSOLE_SHA with every release, so both are declared immediately before
-# their first use below, never here: apt, npm, uv and the Hermes build stay
-# cached across releases and an overlay-only release rebuilds only the layers
+# changes. SS_CONSOLE_SHA changes with every release, so it is declared
+# immediately before its first use below, never here: apt, npm, uv and the
+# Hermes build stay cached across releases and a code-only release rebuilds only the layers
 # from the overlay install down. tests/operator-dockerfile.test.ts pins this.
 ENV PYTHONUNBUFFERED=1
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/hermes/.playwright
@@ -278,37 +274,37 @@ RUN uv pip install --no-cache-dir --no-deps --python /opt/hermes/.venv/bin/pytho
 COPY operator/requirements/ /app/requirements/
 
 # ---------- hermes-smd overlay (plugins + CLI) ----------
-# Pip-install the overlay (provides `hermes-smd` console script for the
-# bootstrap translator and customer-sync sidecar) and then register the
-# plugin pack with Hermes. Plugins land under ~/.hermes/plugins/ where the
-# Hermes plugin loader discovers them at runtime.
+# Pip-install the overlay from the build context (operator/hermes-smd-overlay/,
+# ADR 0095: one repository for the seat runtime; until 2026-10-22 this was a
+# pinned git URL). It provides the `hermes-smd` console script (the bootstrap
+# translator and the customer-sync sidecar) and the importable `shared` policy
+# core the runtime plugins depend on. The pack Hermes LOADS is the separate
+# COPY further down; this source copy is removed once installed.
 #
-# Three steps, so nothing here resolves from PyPI at build time (2026-09-25
-# code review, Dependencies 3; before it this line let uv pick boto3 and
-# sentry-sdk on every build, outside any lock and outside pip_audit_gate.py):
+# Three steps, so no RUNTIME package resolves from PyPI at build time
+# (2026-09-25 code review, Dependencies 3; before it this line let uv pick boto3
+# and sentry-sdk on every build, outside any lock and outside pip_audit_gate.py):
 #   1. the overlay's third-party dependencies that Hermes' own lock does not
 #      already install, hash-locked in hermes-overlay.txt (compile.sh derives
-#      it from the overlay's pyproject at OVERLAY_REF, constrained to Hermes'
+#      it from operator/hermes-smd-overlay/pyproject.toml, constrained to Hermes'
 #      uv.lock at HERMES_UPSTREAM_SHA, so no Hermes-locked version moves).
 #      --no-config for the same reason as the broker venv below: this runs in
 #      /opt/hermes, whose [tool.uv] overrides cannot carry a hash;
-#   2. the overlay itself at the OVERLAY_REF commit, --no-deps (a git URL
-#      cannot carry a hash; the commit SHA is the pin);
+#   2. the overlay itself, a path install, --no-deps. Its build backend
+#      (setuptools, wheel) resolves from PyPI under build isolation, exactly as
+#      the Hermes install above does; `--no-build-isolation` for both is the
+#      filed follow-up;
 #   3. `uv pip check`, which fails the BUILD, not a seat, if any requirement
 #      the overlay (or anything else in the venv) declares is unmet. That is
 #      the backstop for an overlay that grows a dependency before compile.sh
-#      is re-run; substrate's verify-overlay-pairs.py catches it earlier.
-ARG OVERLAY_REPO
-ARG OVERLAY_REF
-# ADR 0023 Wave 1: expose the baked overlay ref at runtime so the gate's
-# heartbeat emitter reports it as the fleet-view `version` — the boot-time
-# overlay refresh pins /opt/data to this exact ref, so it is the running code.
-ENV SMD_OVERLAY_REF=${OVERLAY_REF}
+#      is re-run; the `overlay` CI job runs compile.sh and fails on a diff.
+COPY operator/hermes-smd-overlay/ /app/overlay-src/
 RUN uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
       --no-config --require-hashes --no-deps -r /app/requirements/hermes-overlay.txt \
  && uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
-      --no-deps "git+${OVERLAY_REPO}@${OVERLAY_REF}" \
- && uv pip check --python /opt/hermes/.venv/bin/python
+      --no-deps /app/overlay-src \
+ && uv pip check --python /opt/hermes/.venv/bin/python \
+ && rm -rf /app/overlay-src
 
 # ---------- Workspace capability broker ----------
 # Google libraries and credentials live in a broker-only venv. The Hermes venv
@@ -362,62 +358,40 @@ RUN cd /opt/clio-mcp && npm ci --omit=dev --no-audit --no-fund \
 # was removed with the ADR 0070 native cut (2026-07-08) — MCP-wrapping a native
 # feature was the redundant layer.
 
-# Register the plugin pack with Hermes' loader. As of Hermes v2026.8.18
-# `hermes plugins install` accepts `--ref`, so the install is pinned to the same
-# OVERLAY_REF the pack below is staged at (the old "cannot be pinned through
-# this command" caveat is retired). The pip install above is also pinned and
-# provides the importable `shared` policy core the runtime plugins `import`.
-#
-# Build-step scan opt-out (Hermes 0.20.4 promotion, ss-console#2444): v2026.8.18
-# security-scans a plugin tree at install (hermes_cli/plugins_cmd.py
-# `_scan_plugin_tree`, tools/plugin_guard.py); a `dangerous` verdict is a hard
-# fail that `--force` does NOT override. The overlay is OUR plugin, and its own
-# security TEST fixtures (prompt-injection strings, fake keys, /etc/passwd in
-# gate tests, an AGENTS.md filename) trip the pattern set. So the scan is
-# disabled in the build-time root $HERMES_HOME/config.yaml (the install then
-# merges its `plugins.enabled` record into that same file, exactly as before).
-# At runtime /opt/data is the volume mount and shadows this file on every
-# persisted seat; on a fresh volume Fly's empty-volume copy carries it over,
-# where it also covers bootstrap.sh's rare runtime-install fallback (which
-# would otherwise hit the same scan). The pack is pinned and import-gated two
-# steps below; that is the real integrity check for our own code.
-#
-# FAIL-CLOSED: the prior `|| echo "WARN ...; continuing"` swallowed an install
-# failure and booted a silently harness-less Machine — the exact fail-open
-# defect the venture forbids. Both the install and the policy-core import below
-# are hard build gates: a Machine whose trust/inbound plugins cannot load
-# their own policy core MUST NOT build green.
-RUN mkdir -p "${HERMES_HOME}" \
- && printf 'plugins:\n  scan_on_install: false\n' > "${HERMES_HOME}/config.yaml" \
- && /opt/hermes/.venv/bin/hermes plugins install \
-      venturecrane/hermes-smd-overlay --enable --ref "${OVERLAY_REF}"
-
-# Stage a PINNED copy of the overlay at a NON-VOLUME path (/app/overlay-pack) so
-# bootstrap.sh can refresh the per-customer volume's overlay to this exact
-# OVERLAY_REF on EVERY boot. /opt/data is the Fly volume mount and SHADOWS the
-# build-time `hermes plugins install` above, so without this the volume keeps
-# whatever overlay a past provision left behind — an OVERLAY_REF bump never
-# reaches the running gateway (the ss-console#1285 delivery bug: the overlay was
-# inert because the volume's copy was stale and bootstrap only checked presence,
-# never freshness). Cloned at the PINNED ref (unlike the unpinned install above), and
-# hard-gated on BOTH the fan-out __init__.py and the gateway:startup activation gate
-# (the live boot check, ss-console#1285) so a mis-pinned ref lacking either fails the
+# Stage the overlay pack at a NON-VOLUME path (/app/overlay-pack) so bootstrap.sh
+# can refresh the per-customer volume's overlay from it on EVERY boot. /opt/data
+# is the Fly volume mount and SHADOWS anything installed at build time, so
+# without this the volume keeps whatever overlay a past provision left behind
+# and a release never reaches the running gateway (the ss-console#1285 delivery
+# bug: the overlay was inert because the volume's copy was stale and bootstrap
+# only checked presence, never freshness). A SECOND copy of the same tree,
+# deliberately: the pack is never the directory the pip install above ran in.
+# Hard-gated on BOTH the fan-out __init__.py and the gateway:startup activation
+# gate (the live boot check, ss-console#1285) so a tree lacking either fails the
 # build instead of shipping a Machine with no live governance gate.
-RUN git init /app/overlay-pack \
-      && cd /app/overlay-pack \
-      && git remote add origin "${OVERLAY_REPO}" \
-      && git fetch --depth 1 origin "${OVERLAY_REF}" \
-      && git checkout --detach FETCH_HEAD \
-      && rm -rf /app/overlay-pack/.git \
-      && test -f /app/overlay-pack/__init__.py \
-      && test -f /app/overlay-pack/hooks/smd-overlay-activation/handler.py
+#
+# No `hermes plugins install` here any more (2026-10-22): Hermes discovers a
+# plugin as a directory under $HERMES_HOME/plugins, and bootstrap.sh enables it
+# in the root and profile homes at boot. Proven on smd-staging from a scratch
+# home with no prior install: `plugins enable` writes plugins.enabled and
+# `plugins list` shows the pack enabled. The install step's scan opt-out
+# (plugins.scan_on_install) went with it; nothing scans a pack it did not clone.
+#
+# FAIL-CLOSED: a `|| echo "WARN ...; continuing"` once swallowed an install
+# failure and booted a silently harness-less Machine — the exact fail-open
+# defect the venture forbids. The pack gate here and the policy-core import
+# below are hard build gates: a Machine whose trust/inbound plugins cannot load
+# their own policy core MUST NOT build green.
+COPY operator/hermes-smd-overlay/ /app/overlay-pack/
+RUN test -f /app/overlay-pack/__init__.py \
+ && test -f /app/overlay-pack/hooks/smd-overlay-activation/handler.py
 
-# Deterministic build-time assertion that the pinned `shared` policy core is
-# importable in the venv. This catches a stale/mis-pinned OVERLAY_REF (the exact
-# v0.1.1 `ModuleNotFoundError: shared.outbound_gate`) at BUILD time rather than
-# as a runtime plugin-load failure. Runtime plugin REGISTRATION (Hermes actually
-# loaded the pack) is verified live by boot-smoke-test.sh step 7, which runs
-# `hermes plugins list | grep hermes-smd-` inside the booted Machine where a
+# Deterministic build-time assertion that the `shared` policy core is importable
+# in the venv. This catches a tree whose install did not land (the shape of the
+# 2026-05-29 `ModuleNotFoundError: shared.outbound_gate`) at BUILD time rather
+# than as a runtime plugin-load failure. Runtime plugin REGISTRATION (Hermes
+# actually loaded the pack) is verified live by boot-smoke-test.sh step 7, which
+# runs `hermes plugins list | grep hermes-smd-` inside the booted Machine where a
 # profile exists.
 RUN /opt/hermes/.venv/bin/python3 -c \
       "import shared.outbound_gate, shared.inbound, shared.action_classes; \
@@ -630,7 +604,20 @@ COPY operator/templates/entrypoint-lane-proofs.sh /app/entrypoint-lane-proofs.sh
 # both are in place; a failure here fails the build rather than ship no manifest.
 COPY operator/templates/entrypoint-image-manifest.sh /app/entrypoint-image-manifest.sh
 COPY operator/templates/gen-image-manifest.py /app/gen-image-manifest.py
+# The ss-console commit this image is built from, declared this late so every
+# layer above caches across releases (each RUN after an ARG is invalidated when
+# the ARG changes). Since the fold (ADR 0095) it is also the overlay's version:
+# the gate's heartbeat reports it as the fleet-view `version`, `fleet release`
+# requires the heartbeat to echo the release's recorded sha, and the overlay's
+# resolve_overlay_ref() reads the sentinel file when pip's direct_url.json
+# carries no commit (a path install never does). 40-hex only: `fleet build` and
+# provision-customer.sh pass `git rev-parse HEAD`; an empty or short value would
+# bake an image no heartbeat can ever be matched to.
 ARG SS_CONSOLE_SHA=""
+RUN printf '%s' "${SS_CONSOLE_SHA}" | grep -Eq '^[0-9a-f]{40}$' \
+      || { echo "FATAL: SS_CONSOLE_SHA must be the 40-hex ss-console commit (got '${SS_CONSOLE_SHA}')" >&2; exit 1; } \
+ && printf '%s\n' "${SS_CONSOLE_SHA}" > /app/OVERLAY_REF
+ENV SMD_OVERLAY_REF=${SS_CONSOLE_SHA}
 RUN /opt/hermes/.venv/bin/python3 -I /app/gen-image-manifest.py /app/skills /app/image-manifest.json "${SS_CONSOLE_SHA}"
 # REQUIRED_ENV / OPTIONAL_ENV, generated from operator/contracts/env-consumption.yaml
 # (operator/bin/gen-env-arrays.py); bootstrap.sh sources this instead of hardcoding them.
@@ -735,6 +722,7 @@ RUN chown -R root:root \
       /app/overlay-pack \
       /app/operator/templates/drafting \
       /app/_env-arrays.generated.sh \
+      /app/OVERLAY_REF \
  && chown root:root /app/*.sh /app/*.py \
  && chmod -R a+rX /app/overlay-pack /app/operator/templates/drafting
 

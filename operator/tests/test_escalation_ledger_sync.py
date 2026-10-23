@@ -5,11 +5,11 @@ carry a byte-identical copy in their own dir so a stdlib-only ``pre_run.py`` and
 the agent's ``execute_code`` turn can import it without a package install. Edit
 the canonical, restamp the copies — never edit a copy.
 
-The module has a FIFTH copy: ``shared/escalation_ledger.py`` in
-venturecrane/hermes-smd-overlay, which is what the agent's escalation tools
-import on a live seat. It is cross-repo, so the byte-comparison above cannot
-reach it; ``operator/contracts/overlay-pairs.json`` pins it instead. This file
-also gates that pin — see ``test_overlay_copy_is_pinned_byte_identical``.
+The overlay's copy, ``operator/hermes-smd-overlay/shared/escalation_ledger.py``,
+is what the agent's escalation tools import on a live seat. Since the 2026-10-22
+fold (ADR 0095) it is in this tree, so it is byte-compared like every other copy
+(``test_overlay_copy_is_byte_identical``); ``operator/contracts/overlay-pairs.json``
+still records both hashes so an edit to either side is a conscious act.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ def test_vendored_copies_are_byte_identical() -> None:
 
 
 # ---------------------------------------------------------------------------
-# The fifth copy (cross-repo) — ss #2289 fix 4
+# The overlay's copy — ss #2289 fix 4, in-tree since the 2026-10-22 fold
 # ---------------------------------------------------------------------------
 
 
@@ -79,49 +79,25 @@ def test_manifest_records_the_canonical_hash() -> None:
     )
 
 
-def test_overlay_copy_is_pinned_byte_identical() -> None:
-    """The overlay's ``shared/escalation_ledger.py`` is declared a byte-identical
-    twin of the canonical — the agent must compute the item_key the broker
-    validates and pre_run joins against, or the join forks exactly as it did
-    before ss #2151. Nothing enforced that: the manifest records the two hashes
-    INDEPENDENTLY, so an overlay-side edit could be shipped green by recording
-    its own new ``overlaySha256`` while the two repos silently diverged.
+def test_overlay_copy_is_byte_identical() -> None:
+    """The overlay's ``shared/escalation_ledger.py`` is a byte-identical twin of
+    the canonical: the agent must compute the item_key the broker validates and
+    pre_run joins against, or the join forks exactly as it did before ss #2151.
 
-    This asserts they are the same number. The one legitimate exception is the
-    paired-PR window: the console half merges first (that is the established
-    order — ss #2151 shipped d2e0f7cb before overlay#239), and until the pin
-    moves past the overlay half, ``overlaySha256`` MUST keep naming the file at
-    the currently pinned ``overlayRef`` or the SEC-32 network gate fails. During
-    that window the split must be DECLARED, not silent: the pair carries
-    ``pendingOverlayPR`` naming the open overlay PR, and closing the window is
-    the same act that removes the field.
-
-    What this catches: an overlay copy that diverges from the canonical with no
-    declared pairing. What it does NOT catch: a ``pendingOverlayPR`` left parked
-    open forever, and drift in the overlay between pin bumps — that one belongs
-    to ``operator/bin/verify-overlay-pairs.py``, which hashes the real overlay
-    file at the pinned ref in the ``operator-substrate`` workflow.
+    Before the fold the two files lived in different repositories and the pair
+    manifest recorded their hashes INDEPENDENTLY, so a one-sided edit could ship
+    green behind a declared ``pendingOverlayPR`` window. There is no window any
+    more: one repository, one commit, and this compares the bytes.
     """
+    overlay_copy = _OPERATOR_ROOT / "hermes-smd-overlay" / "shared" / "escalation_ledger.py"
+    assert overlay_copy.is_file(), f"overlay copy missing at {overlay_copy}"
+    assert overlay_copy.read_bytes() == _CANONICAL.read_bytes(), (
+        f"{_OVERLAY_REL} (under operator/hermes-smd-overlay) differs from {_CANONICAL_REL}. "
+        "Edit the canonical and restamp the overlay copy in the same change; the "
+        "item_key the agent computes must be the one the broker validates."
+    )
     pair = _escalation_pair()
-    pending = pair.get("pendingOverlayPR")
-    if pair["sha256"] == pair["overlaySha256"]:
-        assert not pending, (
-            "pendingOverlayPR is still set but the hashes already agree — the "
-            "paired-PR window is closed; drop the field so the next split is "
-            "visible as a split."
-        )
-        return
-    assert pending, (
-        f"{_CANONICAL_REL} and {_OVERLAY_REL} are pinned to DIFFERENT content and "
-        f"nothing says why.\n"
-        f"  sha256        {pair['sha256']}\n"
-        f"  overlaySha256 {pair['overlaySha256']}\n"
-        f"These two are byte-identical twins: the overlay computes the item_key "
-        f"the broker receives. If this is the paired-PR window, add "
-        f"`pendingOverlayPR` naming the overlay PR. If it is not, restamp the "
-        f"overlay copy from the canonical."
+    assert pair["overlaySha256"] == hashlib.sha256(overlay_copy.read_bytes()).hexdigest(), (
+        f"overlay-pairs.json overlaySha256 for {_OVERLAY_REL} is stale"
     )
-    assert isinstance(pending, str) and "hermes-smd-overlay" in pending, (
-        f"pendingOverlayPR must name the overlay PR that closes the split "
-        f"(a venturecrane/hermes-smd-overlay URL); got {pending!r}"
-    )
+    assert "pendingOverlayPR" not in pair, "the paired-PR window no longer exists; drop the field"

@@ -1,0 +1,119 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-smd-overlay"
+version = "0.4.0"
+description = "Plugin overlay for the Nous Hermes Agent — adds audit, trust ceilings, voice transformation, and memory mirroring without modifying Hermes core."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [
+    { name = "SMD Services", email = "team@smd.services" },
+]
+keywords = ["hermes", "ai-agent", "plugin", "nous-research"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "pyyaml>=6.0",
+    # ADR 0022 Stream 2 — S3-compatible R2 PUT for agent-authored skill
+    # bodies. boto3 is already on the customer Machine (used by awscli in
+    # bootstrap.sh); declared here so the plugin import path works in
+    # dev environments and the wheel resolves cleanly.
+    "boto3>=1.34",
+    # Clerk OAuth validation for the Machine-hosted MCP front door
+    # (shared/mcp_auth.py). Hermes already pins PyJWT[crypto]==2.12.1, so this
+    # resolves to the same wheel on the customer Machine; declared here so the
+    # import path works in dev environments too.
+    "PyJWT[crypto]>=2.12",
+    # ADR 0023 Wave 1 — Sentry error monitoring on Operator Machines
+    # (shared/sentry_init.py). Errors-only, PII-scrubbed at SDK init; the
+    # gate + gateway processes both init from this dependency.
+    "sentry-sdk>=2.0,<3",
+    # The outbound PDF reader (shared/outbound_attachment.py): the send gate
+    # reads what a PDF attachment says, and refuses one it cannot read. Pure
+    # Python, no dependencies; Hermes' own lock carries no PDF parser.
+    "pypdf>=6.1,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5",
+    "setuptools>=68",
+    # botocore.exceptions imports exercised by the skill_capture tests.
+    # boto3 already lands botocore as a transitive dep; pinned here so
+    # the dev extra is self-contained.
+    "botocore>=1.34",
+    # The record-store path-fence falsifier (tests/test_record_store_path_fence.py)
+    # reads through the REAL pinned Hermes read_file_tool; Hermes' file-tool
+    # import chain needs requests, which nothing else here pulls in.
+    "requests>=2.31",
+]
+
+[project.urls]
+Homepage = "https://github.com/venturecrane/ss-console/tree/main/operator/hermes-smd-overlay"
+Issues = "https://github.com/venturecrane/ss-console/issues"
+
+[project.scripts]
+hermes-smd = "bootstrap.cli:main"
+hermes-smd-webhook-gate = "webhook_gate:main"
+
+[tool.setuptools]
+py-modules = ["webhook_gate"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "plugins*",
+    "shared*",
+    "bootstrap*",
+    "contracts*",
+    "config_applier*",
+    # ss ADR 0083 / ss-console #2084 — the root-owned authored-spec applier.
+    # Must ship in the wheel: entrypoint.sh runs `python -m spec_applier --once`
+    # as root before the privilege drop, and an absent module would mean the
+    # seat boots with no spec tree and the pointer stamps name nothing.
+    "spec_applier*",
+    # ss ADR 0085 — the root-side establishment intake. Must ship in the wheel:
+    # entrypoint.sh launches `python -m establish_intake` as root (gated on the
+    # import succeeding, so an absent module degrades to a LOUD not-launched).
+    "establish_intake*",
+    # ss seat fleet scaling — the root skills applier and the hermes-side
+    # volume sync bootstrap.sh calls (`python -m skills_applier.sync`). An
+    # absent module would leave a skills release with no way onto the seat.
+    "skills_applier*",
+]
+
+[tool.setuptools.package-data]
+shared = ["fabrication_markers.json", "anthropic_pricing.json"]
+# consumes.yaml must ship in the wheel: the env-presence allow-list (config
+# snapshot) and the boot-time conformance WARN both read it at runtime, where
+# only installed package data — not the repo tree — is present.
+contracts = ["*.yaml"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+# E501 line-too-long: handled by formatter at 100 cols; long URL/citation strings exist.
+# UP042 enum.StrEnum: codebase uses `(str, enum.Enum)` mixin pattern intentionally;
+#   StrEnum changes __str__ semantics (returns value vs Name.MEMBER) which would
+#   silently break audit-row serialization and log-string assumptions. Migration
+#   would be a separate intentional refactor with explicit test coverage.
+# UP017 datetime.UTC: codebase uses `timezone.utc` consistently across audit
+#   timestamps and test fixtures; mass-rewrite to the 3.11+ alias is style churn.
+ignore = ["E501", "UP042", "UP017"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

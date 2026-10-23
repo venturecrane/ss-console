@@ -1,0 +1,225 @@
+"""One seam through which a NON-model process can send the seat's own mail.
+
+WHY THIS EXISTS, and it is a layout problem before it is a design one. The send
+machinery lives in ``plugins/hermes-smd-trust`` — ``enforce.evaluate_tool_call``
+(the ceiling, the taint gate, the content floor, the fabrication scan) and
+``outbound_send`` (the two broker-backed transports). Plugin directories are
+hyphenated, so they are not importable module paths: ``hermes-smd-establishment``
+cannot import them, and neither can anything under ``shared/``. Every plugin is
+loaded from its file location under a sanitized name (``tests/conftest.py``).
+
+The rule-request loop (ss-console#2546) needs a send from three places that are
+not the trust plugin: the moment a paralegal's rule is recorded, the moment an
+administrator answers it, and a background sweeper that finds a rule nobody
+answered. So the trust plugin publishes ITS sender here at ``register()`` time
+and the others call it.
+
+WHAT THIS IS NOT. It is not a way around the gate. The registered callable
+re-authorizes every payload through the same ``evaluate_tool_call`` a model's
+own send goes through, on the same session, with the same taint state — that is
+the whole reason the sender is published from the plugin that owns the gate
+rather than reimplemented here against the raw transports (which ARE importable
+from ``shared``, and which is precisely the shortcut this module exists to
+foreclose).
+
+UNREGISTERED IS A FIRST-CLASS ANSWER, not an error. If the trust plugin has not
+registered — a stripped seat, a boot ordering nobody predicted, a test — every
+caller gets ``DispatchResult(sent=False, reason=...)`` and must SAY so. The
+failure mode this forecloses is the one that matters on this feature: an
+Operator telling a paralegal that an administrator has been asked, when nothing
+left the building.
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class DispatchResult:
+    """What one out-of-turn send did.
+
+    ``sent`` is the only field a caller may treat as a promise, and it means the
+    transport accepted the message — never that anyone read it. ``reason`` is
+    written to be quoted to a person: on a refusal it is what the gate said, so
+    the Operator can tell somebody why their request did not go rather than
+    inventing a cause.
+    """
+
+    sent: bool
+    message_id: str = ""
+    reason: str = ""
+    recipients: tuple[str, ...] = field(default_factory=tuple)
+    #: True only when the send was refused BECAUSE of its attachment (the
+    #: attachment scan, or a transport that refused the attachment). The one
+    #: refusal after which the same message may go again without it.
+    attachment_refused: bool = False
+    #: True when the request reached the broker, or may have, and the answer
+    #: was lost: the message may be out. ``sent`` stays False because nothing
+    #: confirmed it, but a caller must not send the same message again on this
+    #: result, and must not tell anyone it did not go. ``reason`` says so.
+    outcome_unknown: bool = False
+
+
+@dataclass(frozen=True)
+class CodeFixedRecipients:
+    """A caller's statement that CODE, not a model, fixed this send's recipients.
+
+    Captain decision 2026-09-28: the date-prep brief may send on a turn tainted
+    by reading the matter's documents, because its recipients are written by
+    ss-console's pre_run into the tamper-fenced brief envelope before the turn
+    starts and the model cannot supply or change them. The attack the taint
+    gate defends against, injected text redirecting mail outward, cannot happen
+    through that path.
+
+    This is a Python object handed to :func:`dispatch` as a keyword, never a
+    payload key and never a tool argument, so nothing a model-callable tool
+    passes can carry it. Its only minter is ``casework_brief``, from the
+    envelope ``brief_state`` loaded and validated. The trust plugin's sender
+    honours it only when ``to`` and ``cc`` equal the payload's exactly, only to
+    set aside the TAINT gate (every ceiling, scan and floor still runs), and
+    only for a send whose recipients classify as the firm's own staff.
+    ``source`` names the envelope, for the log.
+    """
+
+    to: tuple[str, ...]
+    cc: tuple[str, ...] = ()
+    source: str = ""
+
+    def matches(self, to: list[str] | tuple[str, ...], cc: list[str] | tuple[str, ...]) -> bool:
+        """True only when ``to`` and ``cc`` are exactly this capability's lists."""
+        return (
+            bool(self.to)
+            and tuple(to or ()) == tuple(self.to)
+            and tuple(cc or ()) == tuple(self.cc)
+        )
+
+
+#: The payload key a calendar invitation rides from the out-of-turn sender to
+#: the AgentMail transport (``hermes-smd-calendar``, ss-console#3264). In the
+#: PAYLOAD rather than only a keyword so a send the gate holds for approval is
+#: captured with its invitation and replays with it. Set only by the trust
+#: plugin's internal sender; the trust plugin's pre_tool_call strips it from
+#: every model tool call, exactly as it strips the templated-body key, so a
+#: model cannot name an invitation of its own.
+CALENDAR_ARG = "_smd_calendar"
+
+#: ``(payload, session_id) -> DispatchResult``. Published by the trust plugin.
+Sender = Callable[..., DispatchResult]
+
+_LOCK = threading.Lock()
+_SENDER: Sender | None = None
+
+
+def set_sender(sender: Sender | None) -> None:
+    """Publish the seat's gated internal sender. Called once, at register.
+
+    Idempotent and last-writer-wins. A second registration is a re-register of
+    the same plugin (tests do this constantly) rather than a second seat, so it
+    replaces rather than raising: raising inside ``register`` would take the
+    whole plugin down over a duplicate wiring.
+    """
+    global _SENDER
+    with _LOCK:
+        _SENDER = sender
+
+
+def available() -> bool:
+    """Whether anything can send right now. Cheap, and safe to ask per turn."""
+    with _LOCK:
+        return _SENDER is not None
+
+
+def dispatch(
+    *,
+    to: list[str],
+    subject: str,
+    text: str,
+    anchor: dict[str, str] | None,
+    lane: str | None,
+    session_id: str = "",
+    cc: list[str] | None = None,
+    templated: bool = True,
+    attachments: list[dict[str, str]] | None = None,
+    calendar: dict[str, str] | None = None,
+    **extra: Any,
+) -> DispatchResult:
+    """Send one message through the seat's own gate. Never raises.
+
+    ``attachments`` (statute-watch v2) is a keyword from code, never a payload
+    key: see :mod:`shared.outbound_attachment`. Forwarded only when non-empty,
+    so a sender that predates it is called exactly as before on every send
+    that carries none.
+
+    ``calendar`` (ss-console#3264) is one invitation, ``{"method": "REQUEST" |
+    "CANCEL", "ics": <calendar text>}``, from ``hermes-smd-calendar``'s code,
+    never from a payload. The broker validates it and builds the only part an
+    AgentMail send carries. Forwarded only when set, like ``attachments``.
+
+    ``anchor`` and ``lane`` are REQUIRED and keyword-only, ``None`` included, so
+    a call site that never decided them fails in tests rather than on a seat
+    (ss-console participant fence, 2026-10-07). ``anchor`` is the request this
+    message answers (``shared.send_anchor``); ``lane`` is the authored key the
+    calling code path owns (``rule_dispatch``, ``escalation``,
+    ``skill:<name>``). The broker allows a firm person only when they were on
+    the anchor or the lane names them; SMD and outside recipients are unchanged.
+
+    ``templated`` says the body is a FIXED template this repo authored, not
+    prose a model composed. It reaches ``shared.spec_gate`` and skips exactly
+    one branch there (see ``check_spec_gate``); every other gate runs unchanged.
+
+    Exception-safety is load-bearing rather than tidy: two of the three callers
+    are hooks and the third is a daemon thread, and a raise from any of them
+    would cost a turn or kill the sweeper. A failure here costs one
+    notification, and the caller is required to say the notification did not go.
+    """
+    with _LOCK:
+        sender = _SENDER
+    if sender is None:
+        return DispatchResult(
+            sent=False,
+            reason="this seat has no send path wired",
+            recipients=tuple(to or ()),
+        )
+    if not to:
+        return DispatchResult(sent=False, reason="no recipient")
+    if attachments:
+        extra["attachments"] = list(attachments)
+    if calendar:
+        extra["calendar"] = dict(calendar)
+    try:
+        return sender(
+            to=list(to),
+            subject=subject,
+            text=text,
+            anchor=anchor,
+            lane=lane,
+            session_id=session_id,
+            cc=list(cc or []),
+            templated=templated,
+            **extra,
+        )
+    except Exception as exc:  # noqa: BLE001 — a hook and a daemon call this
+        logger.warning("send_dispatch: out-of-turn send raised (%s)", exc, exc_info=True)
+        return DispatchResult(
+            sent=False,
+            reason=f"the send could not be attempted ({exc})",
+            recipients=tuple(to),
+        )
+
+
+__all__ = [
+    "CALENDAR_ARG",
+    "CodeFixedRecipients",
+    "DispatchResult",
+    "Sender",
+    "available",
+    "dispatch",
+    "set_sender",
+]
