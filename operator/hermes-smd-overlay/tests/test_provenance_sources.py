@@ -357,6 +357,9 @@ _EXPECTED_NON_SEEDING: frozenset[str] = frozenset(
         "web_search",
         # The seat's own description of itself and of its runs.
         "operator_seat_facts",
+        # ss-console#3423. Booleans and counts about whether to point a person
+        # at the Operator's own help: nothing read from the firm's records.
+        "operator_help_signals",
         "establish_status",
         # ss-console#2529. A pending rule is a sentence the Operator composed
         # and the firm has not yet agreed to, so reading it back must not

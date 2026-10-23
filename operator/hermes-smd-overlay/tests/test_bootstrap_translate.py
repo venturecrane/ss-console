@@ -2364,6 +2364,110 @@ def test_the_email_prompts_still_end_in_the_untrusted_data_fence():
 
 
 # ---------------------------------------------------------------------------
+# The quiet help pointer (ss-console#3423, increment 2). Rendered into the two
+# email-reply prompts ONLY on a seat that binds operator-help and enables it; a
+# seat without the help skill must never point people at an answer it cannot
+# give, and a vendor or MCP route must never see it.
+# ---------------------------------------------------------------------------
+
+_POINTER = "call operator_help_signals"
+
+
+def _with_help(cust, *, enabled=True, name="operator-help"):
+    return {
+        **cust,
+        "personas": [
+            {
+                "slug": "operator",
+                "skills": [
+                    {"name": "matter-inbox-router", "enabled": True},
+                    {"name": name, "enabled": enabled},
+                ],
+            }
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    ("cust", "secret", "route"),
+    [
+        (_WH_CUSTOMER, "WEBHOOK_SECRET_AGENTMAIL", "agentmail"),
+        (_WH_MSGRAPH_CUSTOMER, "WEBHOOK_SECRET_MSGRAPH", "msgraph"),
+    ],
+)
+def test_the_pointer_is_rendered_only_when_operator_help_is_bound(monkeypatch, cust, secret, route):
+    """FALSIFIER: render it unconditionally and the unbound case fails."""
+    monkeypatch.setenv(secret, "shh")
+    bound = _wh._materialize_webhook_platform(_with_help(cust))
+    prompt = bound["webhook"]["extra"]["routes"][route]["prompt"]
+    assert _POINTER in prompt
+    assert "operator_help_note" in prompt
+
+    for unbound in (
+        cust,
+        _with_help(cust, enabled=False),
+        _with_help(cust, name="operator-introduce"),
+    ):
+        out = _wh._materialize_webhook_platform(unbound)
+        assert _POINTER not in out["webhook"]["extra"]["routes"][route]["prompt"]
+
+
+def test_the_pointer_sits_before_the_trusted_headers_and_the_fence(monkeypatch):
+    """message_id must stay the last trusted field (the origin binder reads the
+    last match above the delimiter) and the untrusted fence the final word."""
+    monkeypatch.setenv("WEBHOOK_SECRET_AGENTMAIL", "shh")
+    out = _wh._materialize_webhook_platform(_with_help(_WH_CUSTOMER))
+    prompt = out["webhook"]["extra"]["routes"]["agentmail"]["prompt"]
+    assert prompt.index(_POINTER) < prompt.index("\nfrom: {message.from}")
+    assert prompt.index(_POINTER) < prompt.index("message_id: {message.message_id}")
+    assert prompt.index(_POINTER) < prompt.index("untrusted email body below")
+    assert prompt.endswith("{message.text}")
+
+
+def test_the_pointer_text_is_brace_free_and_has_no_em_dash():
+    """The adapter renders {dot.path} placeholders; a brace in the instruction
+    would be read as one. And no em dash on anything the model echoes."""
+    text = _wh._HELP_POINTER_INSTRUCTION
+    assert "{" not in text and "}" not in text
+    assert "\u2014" not in text
+    assert "\u2013" not in text
+    assert "If you're ever unsure how to ask for something" in text
+
+
+def test_the_pointer_never_reaches_a_skill_or_mcp_route(monkeypatch):
+    from bootstrap.translate import _INBOUND_MCP_PROMPT, _webhook_skill_prompt
+
+    assert _POINTER not in _webhook_skill_prompt(["matter-inbox-router"])
+    assert _POINTER not in _INBOUND_MCP_PROMPT
+    monkeypatch.setenv("WEBHOOK_SECRET_SMOKEBALL", "x")
+    monkeypatch.setenv("WEBHOOK_SECRET_AGENTMAIL", "y")
+    cust = _with_help(
+        {
+            "connectors": {
+                **_WH_CUSTOMER["connectors"],
+                "PracticeManagement": {
+                    "adapter": "smokeball",
+                    "enabled": True,
+                    "webhook_url": "https://h.fly.dev/webhooks/smokeball",
+                },
+            },
+            "webhook_triggers": [
+                *_WH_CUSTOMER["webhook_triggers"],
+                {
+                    "source": "smokeball",
+                    "event_type": "matter.updated",
+                    "skill": "m",
+                    "persona": "o",
+                },
+            ],
+        }
+    )
+    routes = _wh._materialize_webhook_platform(cust)["webhook"]["extra"]["routes"]
+    assert _POINTER in routes["agentmail"]["prompt"]
+    assert _POINTER not in routes["smokeball"]["prompt"]
+
+
+# ---------------------------------------------------------------------------
 # Cron containment sentinel at the translate layer (ss-console#2276)
 # ---------------------------------------------------------------------------
 

@@ -319,9 +319,51 @@ def read_requests(since: float, *, path: str | None = None) -> list[dict]:
         conn.close()
 
 
+def read_sender_requests(sender: str, since: float, *, path: str | None = None) -> list[dict]:
+    """One sender's indexed requests since ``since``: ids, times and thread only.
+
+    The narrow read the help pointer uses (ss-console#3423): no subject, no
+    opening, no address leaves this function. Matched on the lower-cased
+    ``sender`` column, so it sees only rows whose sender text custody has not
+    yet nulled (:data:`TEXT_RETENTION_DAYS`); an older request from this
+    person is invisible here, by design of that custody. READ-ONLY, and the
+    same contract as :func:`read_requests`: ``[]`` when the file or table does
+    not exist yet, a column the writer has not added reads as None, and a file
+    that exists but cannot be read RAISES so the caller can tell "none" from
+    "could not look"."""
+    target = path or db_path()
+    if not isinstance(sender, str) or not sender.strip():
+        return []
+    if not os.path.exists(target):
+        return []
+    conn = sqlite3.connect(f"file:{target}?mode=ro", uri=True, timeout=5)
+    try:
+        conn.execute("PRAGMA busy_timeout=2000")
+        conn.execute("BEGIN")
+        present = {row[1] for row in conn.execute("PRAGMA table_info(requests)").fetchall()}
+        if not present:
+            return []
+        wanted = ("vendor_message_id", "received_at", "thread_ref")
+        selected = [c for c in wanted if c in present]
+        rows = conn.execute(
+            f"SELECT {', '.join(selected)} FROM requests "
+            "WHERE received_at >= ? AND lower(sender) = ? ORDER BY received_at",
+            (since, sender.strip().lower()),
+        ).fetchall()
+        out = []
+        for row in rows:
+            record = dict.fromkeys(wanted)
+            record.update(zip(selected, row, strict=True))
+            out.append(record)
+        return out
+    finally:
+        conn.close()
+
+
 __all__ = [
     "DEFAULT_DB_PATH",
     "converge",
+    "read_sender_requests",
     "ROW_RETENTION_DAYS",
     "TEXT_RETENTION_DAYS",
     "db_path",

@@ -98,18 +98,29 @@ from shared.customer_config import CustomerConfig
 from shared.inbound import SESSION_INBOUND_ORIGIN
 from shared.tool_registration import register_wrapped_tool
 
-from . import seat_facts, skill_fence
+from . import help_state, seat_facts, skill_fence
 
 logger = logging.getLogger(__name__)
 
 TOOL_SEAT_FACTS = "operator_seat_facts"
+TOOL_HELP_SIGNALS = "operator_help_signals"
+TOOL_HELP_NOTE = "operator_help_note"
 
-__all__ = ["TOOL_SEAT_FACTS", "TOOLS", "register", "on_pre_llm_call", "seat_facts"]
+__all__ = [
+    "TOOL_HELP_NOTE",
+    "TOOL_HELP_SIGNALS",
+    "TOOL_SEAT_FACTS",
+    "TOOLS",
+    "help_state",
+    "on_pre_llm_call",
+    "register",
+    "seat_facts",
+]
 
 #: Every tool this plugin registers. The classification-completeness suite reads
 #: this so the next tool added here cannot ship undecided — an unmapped tool
 #: fails closed to ``REFUSED`` and never executes.
-TOOLS: tuple[str, ...] = (TOOL_SEAT_FACTS,)
+TOOLS: tuple[str, ...] = (TOOL_SEAT_FACTS, TOOL_HELP_SIGNALS, TOOL_HELP_NOTE)
 
 
 # The authored policy statement. ``{admin_line}`` and ``{sender}`` are the only
@@ -327,6 +338,24 @@ def _seat_facts_handler(args: dict[str, Any] | None = None, session_id: Any = ""
         )
 
 
+def _help_origin(session_id: Any) -> Any | None:
+    """The origin of the email that opened THIS turn, or ``None``.
+
+    The same ``bound_this_turn`` resolution :func:`_help_sender` documents; the
+    help pointer needs the whole origin (its message id excludes the turn's own
+    email from the counts, its conversation id names the thread)."""
+    sid = session_id if isinstance(session_id, str) else ""
+    if not sid:
+        return None
+    try:
+        origin = SESSION_INBOUND_ORIGIN.bound_this_turn(sid)
+    except Exception:  # noqa: BLE001 — resolution must never break the tool
+        return None
+    if origin is None or not origin.sender_address or not origin.message_id:
+        return None
+    return origin
+
+
 def _help_sender(session_id: Any) -> str | None:
     """The verified sender of the email that opened THIS turn, or ``None``.
 
@@ -347,6 +376,121 @@ def _help_sender(session_id: Any) -> str | None:
     if origin is None or not origin.sender_address:
         return None
     return origin.sender_address.strip().lower() or None
+
+
+# --------------------------------------------------------------------------- #
+# The quiet help pointer (ss-console#3423, increment 2)
+# --------------------------------------------------------------------------- #
+#
+# Two tools, both resolving WHO from the turn's own verified email (never from
+# an argument, so the model cannot name a person), both answering in booleans
+# and counts (no address, no text, no matter). The rules for when to speak are
+# authored once, in the inbound email prompt (``bootstrap/translate.py``,
+# rendered only on a seat that binds operator-help); these tools only supply the
+# platform's facts and record what was offered.
+
+_HELP_SIGNALS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "scope": {
+            "type": "string",
+            "enum": list(help_state.SCOPES),
+            "description": "sender = the person whose email opened this turn.",
+        },
+    },
+    "required": ["scope"],
+    "additionalProperties": False,
+}
+
+_HELP_SIGNALS_DESCRIPTION = (
+    "Whether to point the person who emailed you at your help, decided by the "
+    "platform from this seat's own records. Call with scope 'sender' at the start "
+    "of an email turn from someone on the firm's roster, when the inbound email "
+    "instructions ask you to. Act only on 'pointer_due' (one line about asking you "
+    "how to work together) and 'struggle_offer_due' (one line offering help, once "
+    "in this thread); every other field is context. When 'resolved' is false, or a "
+    "*_due flag is false, offer nothing. The result carries no names, addresses, "
+    "message text or matter numbers, and you must not add any."
+)
+
+_HELP_NOTE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "kind": {
+            "type": "string",
+            "enum": list(help_state.KINDS),
+            "description": (
+                "pointer_offered = your reply carried the first-email pointer line. "
+                "struggle_offer = your reply carried the one-line help offer in this "
+                "thread. help_given = you answered this person's question about how "
+                "to work with you."
+            ),
+        },
+    },
+    "required": ["kind"],
+    "additionalProperties": False,
+}
+
+_HELP_NOTE_DESCRIPTION = (
+    "Record that you offered or gave help to the person whose email opened this "
+    "turn, so the offer is never repeated. Call it once, after composing the reply "
+    "that carried it. The person is the platform's, never yours to name."
+)
+
+
+def _help_signals_handler(
+    args: dict[str, Any] | None = None, session_id: Any = "", **_: Any
+) -> str:
+    """The sender-scope pointer signals, or ``{"resolved": false}``. Never raises."""
+    args = args if isinstance(args, dict) else {}
+    scope = args.get("scope", help_state.SCOPE_SENDER)
+    try:
+        if scope not in help_state.SCOPES:
+            return json.dumps(
+                {"resolved": False, "refused": f"unknown scope (one of {list(help_state.SCOPES)})"}
+            )
+        origin = _help_origin(session_id)
+        if origin is None:
+            return json.dumps({"resolved": False})
+        sender = origin.sender_address.strip().lower()
+        cfg = _load_config()
+        if cfg is None or not cfg.sender_on_roster(sender):
+            return json.dumps({"resolved": False})
+        out = help_state.sender_signals(
+            sender, origin.message_id, getattr(origin, "conversation_id", "") or None
+        )
+        return json.dumps(out)
+    except Exception:  # noqa: BLE001 — a tool handler must not raise into the loop
+        logger.warning("%s: signals failed; nothing offered", TOOL_HELP_SIGNALS, exc_info=True)
+        return json.dumps({"resolved": False})
+
+
+def _help_note_handler(args: dict[str, Any] | None = None, session_id: Any = "", **_: Any) -> str:
+    """Record one offer or help for the turn's own sender. Enum only; never raises."""
+    args = args if isinstance(args, dict) else {}
+    kind = args.get("kind")
+    try:
+        if kind not in help_state.KINDS:
+            return json.dumps(
+                {"recorded": False, "refused": f"kind must be one of {list(help_state.KINDS)}"}
+            )
+        origin = _help_origin(session_id)
+        if origin is None:
+            return json.dumps({"recorded": False, "reason": "no single email opened this turn"})
+        sender = origin.sender_address.strip().lower()
+        cfg = _load_config()
+        if cfg is None or not cfg.sender_on_roster(sender):
+            return json.dumps({"recorded": False, "reason": "sender not on the roster"})
+        thread = None
+        if kind == help_state.KIND_STRUGGLE:
+            thread = help_state.current_thread(
+                sender, origin.message_id, getattr(origin, "conversation_id", "") or None
+            )
+        ok = help_state.record(kind, sender, thread)
+        return json.dumps({"recorded": bool(ok)})
+    except Exception:  # noqa: BLE001
+        logger.warning("%s: note failed", TOOL_HELP_NOTE, exc_info=True)
+        return json.dumps({"recorded": False})
 
 
 def _load_config() -> Any | None:
@@ -486,6 +630,27 @@ def register(ctx: Any) -> None:
         schema=_SEAT_FACTS_SCHEMA,
         handler=_seat_facts_handler,
         description=_SEAT_FACTS_DESCRIPTION,
+        emoji="",
+    )
+    # The quiet help pointer (ss-console#3423). Same no-check_fn, no-env posture
+    # as the facts tool, for the same reason: a tool that silently is not there
+    # cannot be told from one the model chose not to call.
+    register_wrapped_tool(
+        ctx,
+        name=TOOL_HELP_SIGNALS,
+        toolset="initiation",
+        schema=_HELP_SIGNALS_SCHEMA,
+        handler=_help_signals_handler,
+        description=_HELP_SIGNALS_DESCRIPTION,
+        emoji="",
+    )
+    register_wrapped_tool(
+        ctx,
+        name=TOOL_HELP_NOTE,
+        toolset="initiation",
+        schema=_HELP_NOTE_SCHEMA,
+        handler=_help_note_handler,
+        description=_HELP_NOTE_DESCRIPTION,
         emoji="",
     )
     ctx.register_hook("pre_llm_call", on_pre_llm_call)

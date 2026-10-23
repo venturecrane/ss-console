@@ -144,6 +144,7 @@ Per `references/routing-rubric.md` and `references/algorithm.md`:
    - **Conflict signal** → **HALT**: create the fixed-shape clearance task, then stop (never respond, never route).
    - **Legal-substance question** → do **not** answer; acknowledge and defer to the attorney. Reading or entering a matter's recorded field values (negotiation demands and offers, insurance, case details) is file data, not a legal-substance question. Only advice about them ("should we accept?", "what is it worth?") is legal substance.
 5. **Surface** the run as a list for the team - what came in, what you answered, where each matter item routed, and any held/deferred ones called out separately.
+6. **Help pointer.** Whether a colleague's reply ends with a one-line pointer to how to work with you is decided by the inbound email instructions, the single place those rules live (rendered only on a seat that carries `operator-help`). Add no help offer on your own.
 
 ## Trust Ceiling
 

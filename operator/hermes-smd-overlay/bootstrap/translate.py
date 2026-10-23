@@ -783,6 +783,60 @@ _EMAIL_REPLY_PROMPTS: dict[str, str] = {
 }
 
 
+# The quiet help pointer (ss-console#3423, increment 2). THE SINGLE SOURCE of the
+# pointer rules: the router skill and the operator-help skill point here rather
+# than restating them, so the rules cannot drift between two places. Rendered
+# into the two email-reply prompts ONLY on a seat whose persona binds
+# operator-help and enables it (``_help_pointer_bound``): a seat without the help
+# skill would be pointing people at an answer it cannot give. Scheduled digests
+# and reports never see it (they are cron turns, not this prompt). The
+# platform decides WHEN (``pointer_due`` / ``struggle_offer_due`` from
+# operator_help_signals); the model decides only the wording of one line.
+# No braces anywhere in it: the adapter renders ``{dot.path}`` placeholders.
+_HELP_POINTER_INSTRUCTION = (
+    "Before you write the reply, call operator_help_signals with scope 'sender'. "
+    "If pointer_due is true, end your reply with one line in your own voice, for "
+    "example: If you're ever unsure how to ask for something, just ask me how we "
+    "can work together. If struggle_offer_due is true, end it instead with one "
+    "line offering to show them how to ask for this, with at most one example "
+    "request. After a reply that carries either line, call operator_help_note "
+    "with kind pointer_offered or struggle_offer to match. Never add either line "
+    "to a reply that answers how to work with you, delivers a draft, confirms "
+    "work you queued, answers a question about a chronology, declines an action "
+    "reserved to administrators, or goes to anyone off your roster; otherwise say "
+    "nothing about help."
+)
+
+#: The skill whose binding turns the pointer on.
+_HELP_SKILL = "operator-help"
+
+
+def _help_pointer_bound(customer: dict[str, Any]) -> bool:
+    """True when any persona binds operator-help and enables it."""
+    for persona in customer.get("personas") or []:
+        if not isinstance(persona, dict):
+            continue
+        for skill in persona.get("skills") or []:
+            if (
+                isinstance(skill, dict)
+                and skill.get("name") == _HELP_SKILL
+                and skill.get("enabled")
+            ):
+                return True
+    return False
+
+
+def _with_help_pointer(prompt: str) -> str:
+    """``prompt`` with the pointer instruction placed after the reply
+    instructions and BEFORE the trusted headers, so ``message_id:`` stays the
+    last trusted field and the untrusted-data fence stays the final word."""
+    marker = "\nfrom: "
+    at = prompt.find(marker)
+    if at < 0:
+        return prompt
+    return prompt[:at] + " " + _HELP_POINTER_INSTRUCTION + prompt[at:]
+
+
 def _webhook_skill_prompt(skills: list[str]) -> str:
     """Prompt for a vendor webhook route that drives an authored skill (i.e. NOT
     the AgentMail email-reply channel).
@@ -1033,6 +1087,12 @@ def _materialize_webhook_platform(customer: dict[str, Any]) -> dict[str, Any]:
             continue
         if route_cfg.get("skills"):
             route_cfg["prompt"] = _webhook_skill_prompt(route_cfg["skills"])
+
+    # The help pointer rides the email-reply routes only, and only when the seat
+    # binds operator-help (ss-console#3423).
+    if _help_pointer_bound(customer):
+        for route_name in email_routes:
+            routes[route_name]["prompt"] = _with_help_pointer(routes[route_name]["prompt"])
 
     if not routes:
         return {}
