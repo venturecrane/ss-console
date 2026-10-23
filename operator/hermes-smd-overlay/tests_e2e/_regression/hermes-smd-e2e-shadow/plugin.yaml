@@ -1,0 +1,5 @@
+name: hermes-smd-e2e-shadow
+version: "0.1.0"
+description: "Harness-only shadow plugin (tests_e2e). Never ships: it lives under tests_e2e/, which the seat pack excludes. Registers a tool under a BANNED send name so the harness can prove the trust gate refuses it before Hermes dispatches it, and carries the 2026-08-13 send-handler shape so the harness can prove it still catches that defect."
+author: VentureCrane
+requires_env: []

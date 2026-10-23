@@ -117,8 +117,67 @@ HERMES_AGENT_SRC=<a NousResearch/hermes-agent checkout at ARG HERMES_UPSTREAM_SH
   .venv/bin/python -m pytest -q
 ```
 
-An `overlay-e2e` job that dispatches turns through a real Hermes is planned and
-not yet built.
+### The real-dispatch harness (`overlay-e2e`)
+
+The overlay suite tests the seat runtime's parts. The `overlay-e2e` job of
+`operator-substrate.yml` runs them together, through the real Hermes, the way a
+seat does: `operator/hermes-smd-overlay/tests_e2e/` translates
+`operator/customers/_hosted-template/customer.yaml` into a temporary seat with
+the real `bootstrap.translate`, lets Hermes' own plugin loader discover the
+overlay, builds the agent the way the seat's job worker builds it, and then, for
+every tool the overlay registers, has a scripted model call that tool once and
+lets Hermes' own registry dispatch it. Only the edges are stand-ins: the model is
+a local server speaking the Anthropic Messages API (the adapter every seat
+runs), with a second pass over Hermes' default chat-completions path, and the
+capability broker is a stub socket that records what reaches it.
+
+What it catches before merge:
+
+- a tool handler Hermes cannot call. This is the 2026-08-13 incident
+  (`docs/runbooks/operator/incidents/2026-08-13-send-tool-dispatch-shape.md`),
+  when the only send tool raised `TypeError` on every call. A committed copy of
+  that handler lives in `tests_e2e/_regression/`, and one test asserts the
+  harness still fails on it, so "the harness still bites" is checked on every
+  run;
+- a broker-backed tool that is called but sends the broker an empty or partial
+  payload, the second half of the same incident;
+- a gate refusing a tool it should not, or a tool that is supposed to be refused
+  starting to go through (the refused set is frozen, with the reason each one
+  must give);
+- the overlay's `pre_tool_call` gates registering in a different order from
+  `plugin.yaml`, a banned send reaching the broker, a finished turn missing from
+  the audit ledger, or one of the hook-probe plugin's six hooks not firing.
+
+What it does not cover, printed in the job's summary on every run: the gateway
+process and its platforms (so `pre_gateway_dispatch` and anything that depends
+on a verified sender from an inbound email), MCP connectors, the broker's own
+logic, the non-gateway tool wall, and the session-title side call. The temporary
+seat starts from a scrubbed environment and refuses any network connection that
+is not to its own local stand-ins, so it cannot pick up or send a real
+credential. It takes well under a minute once Hermes is installed; the job's
+budget is five.
+
+The same job is how a Hermes upgrade is tried before the pin moves. Run the
+`operator-substrate` workflow by hand (Actions, then "Run workflow") and put the
+candidate's full 40-character commit in `hermes_sha`; left blank, it uses the
+Dockerfile's `ARG HERMES_UPSTREAM_SHA`. The job summary names the commit it ran
+against, so a promotion PR can cite that run. Whether `overlay-e2e` is a
+required check is read from the ruleset, as described under "The merge gates"
+below.
+
+To run the harness locally, with a Hermes checkout at the pin (or a candidate):
+
+```bash
+cd operator/hermes-smd-overlay
+uv venv --python 3.13 .venv
+uv pip install --python .venv/bin/python -e '<hermes checkout>[mcp,anthropic]'
+uv pip install --python .venv/bin/python -e '.[e2e]'
+HERMES_AGENT_SRC=<hermes checkout> .venv/bin/python -m pytest tests_e2e -x -q --timeout=240
+```
+
+Without `HERMES_AGENT_SRC` the harness skips locally and refuses to run in CI.
+`tests_e2e/` is outside the overlay's `testpaths`, so a plain `pytest` in that
+directory never collects it.
 
 ## Worktree isolation for parallel sessions
 

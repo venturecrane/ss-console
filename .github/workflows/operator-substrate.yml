@@ -33,6 +33,16 @@ on:
     types: [checks_requested]
   push:
     branches: [main]
+  # A Hermes promotion is proven here before the Dockerfile pin moves: run the
+  # workflow by hand with a candidate sha and the `overlay-e2e` job drives the
+  # overlay through that Hermes instead of the pinned one. With no base sha the
+  # detect step fails closed, so every job runs.
+  workflow_dispatch:
+    inputs:
+      hermes_sha:
+        description: 'Candidate Hermes commit (40-hex) for overlay-e2e; blank = the Dockerfile pin'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -372,3 +382,144 @@ jobs:
           echo "No file under .github/operator-substrate-paths.txt changed;
           the overlay suite did not need to run. This job still reports so
           the required check is satisfied."
+
+  # The real-dispatch harness (operator/hermes-smd-overlay/tests_e2e, ss W3).
+  # The `overlay` job tests the seat runtime's parts; this one runs them
+  # together: a temp seat translated from the hosted template by the real
+  # bootstrap, the overlay discovered by Hermes' own plugin loader, and one
+  # model tool call per overlay tool dispatched by Hermes' own registry, with a
+  # scripted model (a local Anthropic Messages server, plus the patched OpenAI
+  # client) and a stub broker. It is what catches a handler Hermes cannot call
+  # (SMD-OPERATOR-1B, 2026-08-13) and a hook-order defect before merge, and it
+  # is the instrument for a Hermes promotion: `workflow_dispatch` with
+  # `hermes_sha` runs it at a candidate. Same gating shape as `overlay`;
+  # bin/tests/test_ci_coverage_conformance.py pins it. Budget: under 5 minutes.
+  overlay-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Detect substrate-relevant changes
+        id: changes
+        run: >-
+          python3 operator/bin/substrate-paths-changed.py
+          --base "${{ github.event.pull_request.base.sha }}"
+          --head "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      # The sha the image installs, read from the Dockerfile so the two cannot
+      # drift; a dispatch may override it with a candidate, which must be a
+      # full 40-hex commit (a branch name would make the run unrepeatable).
+      - name: Resolve the Hermes sha
+        id: pin
+        if: steps.changes.outputs.relevant == 'true'
+        env:
+          CANDIDATE: ${{ github.event.inputs.hermes_sha }}
+        run: |
+          set -euo pipefail
+          pinned="$(sed -n 's/^ARG HERMES_UPSTREAM_SHA=\([0-9a-f]\{40\}\)$/\1/p' operator/templates/Dockerfile)"
+          [ -n "$pinned" ] || { echo "::error::no 40-hex ARG HERMES_UPSTREAM_SHA in operator/templates/Dockerfile"; exit 1; }
+          if [ -n "${CANDIDATE:-}" ]; then
+            printf '%s' "$CANDIDATE" | grep -Eqx '[0-9a-f]{40}' \
+              || { echo "::error::hermes_sha must be a 40-hex commit"; exit 1; }
+            sha="$CANDIDATE"; source="workflow_dispatch candidate"
+          else
+            sha="$pinned"; source="operator/templates/Dockerfile ARG HERMES_UPSTREAM_SHA"
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+
+      # uv's cache, keyed on the Hermes sha and the seat interpreter: Hermes'
+      # dependency closure is what is slow to resolve, and it moves only with
+      # the sha. Not pruned, so the built wheels survive between runs.
+      - name: Set up uv (cache hermes-deps-<sha>-py3.13)
+        if: steps.changes.outputs.relevant == 'true'
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: true
+          cache-suffix: hermes-deps-${{ steps.pin.outputs.sha }}-py3.13
+          cache-dependency-glob: operator/hermes-smd-overlay/pyproject.toml
+          prune-cache: false
+
+      - name: Check out Hermes at the resolved sha (outside the workspace)
+        if: steps.changes.outputs.relevant == 'true'
+        env:
+          SHA: ${{ steps.pin.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git init -q "$RUNNER_TEMP/hermes-agent"
+          git -C "$RUNNER_TEMP/hermes-agent" fetch -q --depth 1 https://github.com/NousResearch/hermes-agent.git "$SHA"
+          git -C "$RUNNER_TEMP/hermes-agent" checkout -q FETCH_HEAD
+          echo "HERMES_AGENT_SRC=$RUNNER_TEMP/hermes-agent" >> "$GITHUB_ENV"
+
+      - name: Install Hermes [mcp,anthropic] and the overlay [e2e] on the seat interpreter
+        if: steps.changes.outputs.relevant == 'true'
+        run: |
+          set -euo pipefail
+          uv venv --python 3.13 /tmp/e2ev
+          uv pip install --python /tmp/e2ev/bin/python -e "${HERMES_AGENT_SRC}[mcp,anthropic]"
+          uv pip install --python /tmp/e2ev/bin/python -e "./operator/hermes-smd-overlay[e2e]"
+
+      - name: Real-dispatch harness (pytest tests_e2e)
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator/hermes-smd-overlay
+        env:
+          E2E_SUMMARY_PATH: ${{ runner.temp }}/e2e-summary.json
+        run: /tmp/e2ev/bin/python -m pytest tests_e2e -x -q --timeout=240
+
+      # Always, when the harness ran: a promotion PR cites what this run covered
+      # and, as plainly, what it did not.
+      - name: Harness scope summary
+        if: always() && steps.changes.outputs.relevant == 'true'
+        env:
+          E2E_SUMMARY_PATH: ${{ runner.temp }}/e2e-summary.json
+          HERMES_SHA: ${{ steps.pin.outputs.sha }}
+          HERMES_SOURCE: ${{ steps.pin.outputs.source }}
+          HERMES_PINNED: ${{ steps.pin.outputs.pinned }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          lines = [
+              "## overlay-e2e scope",
+              "",
+              f"- Hermes: `{os.environ.get('HERMES_SHA') or 'unresolved'}` "
+              f"({os.environ.get('HERMES_SOURCE') or 'unknown'}; the image pins "
+              f"`{os.environ.get('HERMES_PINNED') or 'unknown'}`)",
+          ]
+          path = Path(os.environ["E2E_SUMMARY_PATH"])
+          if not path.exists():
+              lines.append("- The harness wrote no summary: it failed before its session ended.")
+          else:
+              s = json.loads(path.read_text())
+              lines += [
+                  f"- Overlay tools registered through Hermes' loader: {s['registered_overlay_tools']}",
+                  f"- Overlay tools dispatched by Hermes' registry: {s['dispatched_overlay_tools']}",
+                  "- Refused before dispatch by design (dispatch NOT exercised): "
+                  + ", ".join(s["gated_not_dispatched"]),
+                  "- pre_tool_call order: " + " > ".join(s["pre_tool_call_order"]),
+                  "- Overlay hooks fired: " + ", ".join(s["overlay_hooks_fired"]),
+                  "- Overlay hooks NOT exercised: " + (", ".join(s["overlay_hooks_not_fired"]) or "none"),
+                  "- Surfaces NOT exercised:",
+              ]
+              lines += [f"  - {item}" for item in s["surfaces_not_exercised"]]
+          text = "\n".join(lines) + "\n"
+          print(text)
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as fh:
+                  fh.write(text)
+          PY
+
+      - name: No substrate paths changed
+        if: steps.changes.outputs.relevant != 'true'
+        run: >-
+          echo "No file under .github/operator-substrate-paths.txt changed;
+          the real-dispatch harness did not need to run. This job still
+          reports so the required check is satisfied."
