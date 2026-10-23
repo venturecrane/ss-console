@@ -34,6 +34,8 @@ The schema::
     tool_iterations:       int >= 4        the extract read's call cap (10); verify and audit get half
     fetch_caps:            {court, server, discovery, email, total: int}   per matter
     concurrency:           int >= 1        parallel model calls in extract (5)
+    read_workers:          int 1..8        matters read at once in read1/read2/read3 (4);
+                                           1 reads them one at a time
     context_chars:         int >= 5000     document text a read is handed up front (60000)
     doc_context_chars:     int >= 1        of which one document at most (6000)
     chunk_chars:           int >= 5000     one fetch_doc page (20000)
@@ -82,6 +84,7 @@ OPTIONAL: dict[str, tuple[str, Any]] = {
     "timezone": ("str", "America/Los_Angeles"),
     "fetch_caps": ("caps", {}),
     "concurrency": ("int1", 5),
+    "read_workers": ("workers", 4),
     "context_chars": ("int5000", 60000),
     "doc_context_chars": ("int1", 6000),
 }
@@ -89,6 +92,11 @@ MODEL_KEYS = ("read", "verify", "audit")
 #: transcription: the vision OCR model (defaults to models.read).
 OPTIONAL_MODELS = ("transcription",)
 FETCH_CAP_KEYS = ("court", "server", "discovery", "email", "total")
+#: The most matters the read passes run at once (``read_workers``). Each one is
+#: a model tool loop that waits on the model, so a list's read time is close to
+#: matters / workers; the ceiling bounds how many calls can be in flight when a
+#: cost line is crossed (each finishes and is paid; none starts after).
+MAX_READ_WORKERS = 8
 
 
 class LitigationConfigError(ValueError):
@@ -134,6 +142,9 @@ def _check_scalar(key: str, v: Any, kind: str) -> list[str]:
         return [] if _is_int(v) and v >= floor else [f"{key}: expected an integer >= {floor}"]
     if kind == "str":
         return [] if isinstance(v, str) and v.strip() else [f"{key}: expected a string"]
+    if kind == "workers":
+        ok = _is_int(v) and 1 <= v <= MAX_READ_WORKERS
+        return [] if ok else [f"{key}: expected an integer between 1 and {MAX_READ_WORKERS}"]
     return []
 
 
@@ -165,7 +176,7 @@ def _check_collection(key: str, v: Any, kind: str) -> list[str]:
 def _check(key: str, v: Any, kind: str) -> list[str]:
     if kind in ("firm", "models", "caps"):
         return _check_struct(key, v, kind)
-    if kind in ("pos", "int1", "int4", "int5000", "str"):
+    if kind in ("pos", "int1", "int4", "int5000", "str", "workers"):
         return _check_scalar(key, v, kind)
     if kind in ("strs", "regexes", "strmap", "attorneys"):
         return _check_collection(key, v, kind)
