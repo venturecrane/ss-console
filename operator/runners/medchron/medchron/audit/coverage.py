@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from . import claims as CL
+from . import claims as CL, retired
 from .page_text import exhibit_paths
 from .run import AuditPaths
 
@@ -23,10 +23,17 @@ def check(paths: AuditPaths, log: Callable[[str], None]) -> tuple[bool, dict[str
     live = {c["key"] for c in CL.extract_claims(body, set(exhibit_paths(paths.out)))}
     rows = CL.read_rows(paths.results)
     latest = CL.latest_real(rows, live)
+    gone = retired.keys(paths.out)
+    if gone:
+        log(f"CONTROLS retired by SMD as badly chosen (the page carries the claim): {len(gone)}")
     ctl_bad = [
         r
         for r in rows
-        if (str(r.get("kind", "")).startswith("control") and r.get("verdict") == "SUPPORTED")
+        if (
+            str(r.get("kind", "")).startswith("control")
+            and r.get("verdict") == "SUPPORTED"
+            and r.get("key") not in gone
+        )
         or (r.get("kind") == "reverse-control" and not r.get("agree"))
     ]
     never = live - set(latest)

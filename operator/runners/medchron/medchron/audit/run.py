@@ -34,7 +34,7 @@ from typing import Any, Callable
 
 from .. import llm
 from ..limits import LimitHold
-from . import anchors as AN, claims as CL, negation as NG, verify as VF
+from . import anchors as AN, claims as CL, negation as NG, retired, verify as VF
 from .handwritten_evidence import statements_for
 from .page_text import PageIndex, exhibit_paths
 from .render import img_block, render
@@ -557,7 +557,7 @@ class Round:
         # one repair no round could ever report clean and the loop always ran to
         # the cap (2026-10-07).
         real = list(CL.latest_real(allr, live_keys).values())
-        ctl = [r for r in allr if str(r.get("kind", "")).startswith("control")]
+        ctl = retired.live_controls(allr, self.paths.out)
         rev = [r for r in allr if r.get("kind") == "reverse-control"]
         tally: dict[str, int] = {}
         for r in real:
