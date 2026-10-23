@@ -101,6 +101,8 @@ const CONDITION_LABEL: Record<string, string> = {
   image_unknown: 'Seat runs an image that matches no fleet release',
   config_drift: 'Seat runs a customer.yaml other than the published one',
   skills_drift: 'Seat runs a skills version other than its pointer names',
+  // Migration 0138, ./selftest. The seat's own boot-and-hourly check list.
+  selftest_failing: 'Seat self-test failed a check',
 }
 
 /**

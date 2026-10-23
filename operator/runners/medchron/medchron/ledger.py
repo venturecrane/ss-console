@@ -19,12 +19,18 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .budget import BudgetError, Pricing
+
+#: One row is one ``write``; concurrent callers (the audit's claim workers, the
+#: litigation read workers) take turns, so a row is never interleaved with
+#: another and ``budget.refresh`` never prices a spliced line.
+_APPEND = threading.Lock()
 
 
 def usage_dict(usage: Any) -> dict[str, int]:
@@ -78,9 +84,11 @@ class Ledger:
                 rec["custom_id"] = custom_id
             if error is not None:
                 rec["error"] = error
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with self.path.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(rec) + "\n")
+            line = json.dumps(rec) + "\n"
+            with _APPEND:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                with self.path.open("a", encoding="utf-8") as fh:
+                    fh.write(line)
         except Exception as exc:  # noqa: BLE001 - never kill a paid call over its receipt
             # The receipt is how spend is reconciled against the budget; a
             # lost one is an undercount, so it is never lost silently.

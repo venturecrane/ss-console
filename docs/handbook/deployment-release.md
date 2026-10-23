@@ -29,6 +29,10 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/fleet/smoke.py
   - label: operator/bin/boot-smoke-test.sh
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/boot-smoke-test.sh
+  - label: operator/templates/seat-checks.sh (the one check list)
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/templates/seat-checks.sh
+  - label: operator/templates/selftest.sh (the in-image self-test)
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/templates/selftest.sh
   - label: scripts/check-config-against-image.mjs
     href: https://github.com/venturecrane/ss-console/blob/main/scripts/check-config-against-image.mjs
   - label: scripts/lib/seat-image-guard.sh (the guard every R2 config writer runs)
@@ -286,7 +290,10 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   the release's Hermes commit, 45-minute budget), then a heartbeat read-back
   from D1 `fleet_status`: within 6 minutes the seat must report the release
   image and overlay (`operator/bin/lib/fleet/smoke.py`). What the smoke test
-  checks is under "What the verify step checks" below.
+  checks is under "What the verify step checks" below. With
+  `--verify selftest` the seat's own self-test decides instead (the same check
+  list, run on the Machine, read back from the heartbeat); see "The self-test
+  as the verifier" below. The default is `--verify bash`.
 - **Classify.** Only a real seat failure (a smoke check that ran and said no, a
   Machine that never started, a heartbeat naming another image) rolls the seat
   back to its recorded image and toml, re-smokes it, and HALTS the rollout. A
@@ -490,6 +497,11 @@ against the running Machine.
 
 ## What the verify step checks
 
+The checks themselves live in one list, `operator/templates/seat-checks.sh`,
+which two transports run: the boot smoke test over ssh from a laptop, and the
+seat's own self-test inside the image (`operator/templates/selftest.sh`, below).
+A change to what a seat must pass is an edit to that list, and both get it.
+
 The boot smoke test (`operator/bin/boot-smoke-test.sh`) is the verify gate for
 both a fleet release and a provision. It is a smoke test, not an end-to-end
 test: it proves the seat's startup chain came up, and makes no real agent turn,
@@ -516,6 +528,59 @@ lever) is listed but never fails the run. Only a failed precondition (the
 Machine never started, or the pin cannot be parsed) stops the run early. The
 fleet reads that output into the four classes above
 (`operator/bin/lib/fleet/smoke.py`), and only `fail` rolls a seat back.
+
+Two expectation sources differ by transport, and the list asks each transport
+for them rather than knowing either. Whether a seat authors a runner lane
+(medchron, demand, drafting, litigation): over ssh, the engagements checkout,
+as provisioning reads it; in the image, whether the live `customer.yaml`
+enables the lane's skill. The Hermes pin the running Hermes must equal: over
+ssh, the release's pin or this checkout's Dockerfile; in the image, the pin the
+image was built at (`SMD_HERMES_UPSTREAM_SHA`), and the fleet then compares the
+self-test's reported Hermes with the release's. The retired-skill list is read
+on the Machine (`/app/retired-skills.txt`) by both, and an empty list fails.
+
+### The in-image self-test
+
+Every seat image from this change on runs the list itself, as root:
+`entrypoint.sh` forks `/app/selftest.sh --supervise` (after the credential
+strips, under `env -i`, at low priority), which runs once the gateway
+supervisor arms (a boot run) and then hourly (hourly runs). Results go to
+`/run/smd-selftest/results.json` (0644, written by rename), and the gate ships
+the verdict on every heartbeat as `selftest`, stored in `fleet_status.selftest_json`
+(migration 0137). Two classes are judged by run kind: a lane-is-idle check and
+a check that asks a vendor (AgentMail, Microsoft Graph) FAIL at boot and WARN
+hourly, because a job may be running and vendor weather must not page every
+seat every hour. A results file older than three hours, or none on a Machine up
+longer than that, ships as the failed check `selftest-loop-dead`; the
+supervisor restarts a crashed loop with backoff and records
+`selftest-crashlooping` as a warning. The fleet-alerts worker pages
+`selftest_failing` from the verdict (Work Health).
+
+### The self-test as the verifier
+
+`fleet release <id> --verify selftest` verifies each seat from its heartbeat:
+first the two things only the fleet can see (the Machine started, on the guest
+size `customer.yaml` authors), then up to 20 minutes for a self-test verdict
+that is the RELEASE's run: finished after the deploy, on the release image and
+the release's code version, so a late green row from the previous image can
+never pass. A failed check or the wrong Hermes is a `fail` and rolls the seat
+back. No verdict in the window falls back to the boot smoke, which then decides,
+and both are recorded in `fleet_rollouts.detail`. An image whose
+`image-capabilities.json` lacks `selftest` is always verified by the boot
+smoke, and a rollback's re-smoke always uses the boot smoke.
+
+Under the default `--verify bash` the boot smoke decides, and the self-test's
+verdict as of that moment is appended to the detail (`selftest: pass ...`,
+`selftest: fail ...`, or `selftest: not yet`), at no extra wait. The rollout
+order is: one release with `--verify bash` across every ring, every
+disagreement between the two verdicts fixed as a self-test bug, then the
+default flips to `selftest`.
+
+`fleet selftest --plant retired-skills-absent smd-staging` re-proves the alert
+path after any change to the self-test: it plants one real violation as root,
+asks the seat's loop for two runs (through its root-only trigger), waits for
+`selftest_failing` to open, clears the violation (always, even after a timeout),
+and waits for the alert to resolve. It refuses any seat but `smd-staging`.
 
 ## Build commands reference
 

@@ -210,12 +210,21 @@ class FakeFly:
         self.ssh_raises: set[str] = set()
         self.snapshots: list[str] = []
         self.no_machine: set[str] = set()
+        self.machine_state = "started"
+        self.guest_value: dict[str, Any] = {"cpu_kind": "shared", "cpus": 1, "memory_mb": 2048}
+        self.plant_calls: list[tuple[str, str]] = []
+        self.plant_answer = "ok"
 
     def app_exists(self, app: str) -> bool:
         return True
 
     def machines(self, app: str) -> list[dict[str, Any]]:
-        return [] if app in self.no_machine else [{"config": {"image": self.machine_image(app)}}]
+        if app in self.no_machine:
+            return []
+        return [{"state": self.machine_state, "config": {"image": self.machine_image(app), "guest": self.guest_value}}]
+
+    def guest(self, app: str) -> dict[str, Any]:
+        return dict(self.guest_value)
 
     def secret_names(self, app: str) -> tuple[set[str], set[str]]:
         return self.secrets.get(app, ({"ANTHROPIC_API_KEY", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"}, set()))
@@ -242,6 +251,10 @@ class FakeFly:
         seat = app.removeprefix("hermes-")
         if seat in self.ssh_raises:
             raise ToolingError(f"ssh to {app} hung")
+        if "SMD_SELFTEST_PLANT" in source:
+            action = json.loads(json.loads(source.split("json.loads(", 2)[1].split(")\n", 1)[0]))["action"]
+            self.plant_calls.append((seat, action))
+            return Result(0, f"SMD_SELFTEST_PLANT {self.plant_answer} {action} old-tracker", "")
         if "SMD_QUIESCE" in source and "ARGS = json.loads" in source:
             action = "set" if '\\"action\\": \\"set\\"' in source else "clear"
             self.quiesce_calls.append((seat, action))
@@ -270,3 +283,26 @@ def fresh_status(
         "version": overlay,
         "skills_version": skills,
     }
+
+
+HERMES_SHA = "3" * 40
+
+
+def selftest_json(**over: Any) -> str:
+    """A heartbeat `selftest` object, as stored in fleet_status.selftest_json."""
+    doc = {
+        "v": 1,
+        "run_kind": "boot",
+        "finished_at": "2099-01-01T00:00:00Z",
+        "version": OVERLAY,
+        "image_ref": TARGET_REF + "@" + DIGEST,
+        "hermes_sha": HERMES_SHA,
+        "total": 74,
+        "failed_count": 0,
+        "warned_count": 0,
+        "failed_streak": 0,
+        "failed": [],
+        "warned": [],
+    }
+    doc.update(over)
+    return json.dumps(doc)

@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Callable
 
 from . import ids, smoke
@@ -47,6 +48,13 @@ class ImagePlan:
     accept_lane_inputs: bool = False
     max_idle_wait: float = 1800.0
     dry_run: bool = False
+    # Which verifier decides the seat (see _verify). "bash": the boot smoke over
+    # ssh decides and the self-test's verdict, when one has arrived, is recorded
+    # beside it. "selftest": the seat's own heartbeat self-test decides, after
+    # the fleet-side checks, falling back to the boot smoke when no verdict
+    # arrives. An image that does not carry the self-test is always "bash".
+    verify: str = "bash"
+    selftest_capable: bool = False
 
 
 class ImageRollout:
@@ -61,9 +69,11 @@ class ImageRollout:
         log: Callable[[str], None],
         sleep: Callable[[float], None],
         clock: Callable[[], float],
+        fleet_side: smoke.FleetSideChecks | None = None,
     ) -> None:
         self.store, self.fly, self.gate, self.preflight, self.smoker = store, fly, gate, preflight, smoker
         self.render, self.log, self.sleep, self.clock = render, log, sleep, clock
+        self.fleet_side = fleet_side
 
     # -- helpers ---------------------------------------------------------------
     def _current_digest(self, seat: str) -> str | None:
@@ -85,15 +95,53 @@ class ImageRollout:
             return classify_deploy(self.fly.deploy(ids.app_name(seat), image, path))
 
     def _verify(self, seat: str, plan: ImagePlan, since_iso: str) -> Check:
+        since = ids.parse_iso(since_iso)
+        assert since is not None
+        if plan.verify == "selftest" and plan.selftest_capable and self.fleet_side is not None:
+            return self._verify_selftest(seat, plan, since)
+        check = self._verify_bash(seat, plan, since)
+        return Check(check.cls, f"{check.detail} | {self._selftest_note(seat, plan, since)}")
+
+    def _verify_bash(self, seat: str, plan: ImagePlan, since: datetime) -> Check:
         check = self.smoker.run(seat, plan.hermes_sha)
         if check.cls != "pass":
             return check
-        since = ids.parse_iso(since_iso)
-        assert since is not None
         return smoke.read_back(
             self.store, seat, lambda row: smoke.judge_image_row(row, since, plan.release),
             smoke.READBACK_WINDOW_S, self.sleep, self.clock,
         )  # fmt: skip
+
+    def _selftest_note(self, seat: str, plan: ImagePlan, since: datetime) -> str:
+        """The self-test's verdict as of now, recorded beside the bash verdict. No wait."""
+        if not plan.selftest_capable:
+            return "selftest: the image does not carry it"
+        try:
+            row = self.store.seat_status(seat)
+        except ToolingError as exc:
+            return f"selftest: unread ({exc})"
+        return smoke.selftest_note(row, since, plan.release, plan.hermes_sha)
+
+    def _verify_selftest(self, seat: str, plan: ImagePlan, since: datetime) -> Check:
+        assert self.fleet_side is not None
+        side = self.fleet_side.run(seat)
+        if side.cls != "pass":
+            return side
+        got = smoke.read_back(
+            self.store, seat, lambda row: smoke.judge_selftest_row(row, since, plan.release, plan.hermes_sha),
+            smoke.SELFTEST_WINDOW_S, self.sleep, self.clock,
+        )  # fmt: skip
+        if got.cls == "timeout":
+            # The instrument must not grade itself into silence: no verdict
+            # from the seat means the boot smoke decides, and both are recorded.
+            bash = self._verify_bash(seat, plan, since)
+            return Check(bash.cls, f"selftest: no verdict ({got.detail}); boot smoke fallback: {bash.detail}")
+        if got.cls != "pass":
+            return got
+        image = smoke.read_back(
+            self.store, seat, lambda row: smoke.judge_image_row(row, since, plan.release),
+            smoke.READBACK_WINDOW_S, self.sleep, self.clock,
+        )  # fmt: skip
+        return Check(image.cls, f"{side.detail}; {got.detail}; {image.detail}")
 
     # -- the seat ------------------------------------------------------------------
     def run(self, seat: str, ring: int, plan: ImagePlan) -> SeatOutcome:

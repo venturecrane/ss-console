@@ -15,6 +15,7 @@ offset and running totals per file and re-reads from there.
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -123,8 +124,17 @@ class Budget:
     ledgers: list[Path]
     usd_per_million_chars: float
     _cursors: dict[Path, _Cursor] = field(default_factory=dict)
+    #: ``refresh`` advances shared cursors; two threads reading the same new
+    #: rows at once would both price them (a doubled spend). Workers that check
+    #: the limits before every call (litigation read workers, audit workers)
+    #: take turns here.
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def refresh(self) -> float:
+        with self._lock:
+            return self._refresh()
+
+    def _refresh(self) -> float:
         for path in self.ledgers:
             cur = self._cursors.setdefault(path, _Cursor())
             if not path.is_file():

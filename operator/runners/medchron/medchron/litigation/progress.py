@@ -62,10 +62,13 @@ class Progress:
             self.log(self.line())
 
     def step(self, n: int = 1) -> None:
-        """One more item finished."""
-        before = self.done
-        self.done += n
-        if self.done // self.every != before // self.every or self.done >= self.total:
+        """One more item finished (or started: the read passes count starts,
+        from several workers at once, hence the lock)."""
+        with self._lock:
+            before = self.done
+            self.done += n
+            speak = self.done // self.every != before // self.every or self.done >= self.total
+        if speak:
             self._emit()
         else:
             self.beat()

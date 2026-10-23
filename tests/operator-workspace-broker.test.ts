@@ -10,7 +10,8 @@ const supervisor = readFileSync(
   'utf8'
 )
 const bootstrap = readFileSync(resolve('operator/templates/bootstrap.sh'), 'utf8')
-const bootSmoke = readFileSync(resolve('operator/bin/boot-smoke-test.sh'), 'utf8')
+// The seat check list (both the laptop smoke and the in-image self-test run it).
+const bootSmoke = readFileSync(resolve('operator/templates/seat-checks.sh'), 'utf8')
 const workspaceSkill = readFileSync(resolve('operator/skills/workspace/SKILL.md'), 'utf8')
 const inboxTriageSkill = readFileSync(resolve('operator/skills/inbox-triage/SKILL.md'), 'utf8')
 const emailReplySkill = readFileSync(resolve('operator/skills/email-reply/SKILL.md'), 'utf8')

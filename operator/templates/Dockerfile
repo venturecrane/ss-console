@@ -618,6 +618,11 @@ RUN printf '%s' "${SS_CONSOLE_SHA}" | grep -Eq '^[0-9a-f]{40}$' \
       || { echo "FATAL: SS_CONSOLE_SHA must be the 40-hex ss-console commit (got '${SS_CONSOLE_SHA}')" >&2; exit 1; } \
  && printf '%s\n' "${SS_CONSOLE_SHA}" > /app/OVERLAY_REF
 ENV SMD_OVERLAY_REF=${SS_CONSOLE_SHA}
+# The Hermes pin this image was built at, for the in-image self-test's
+# hermes-sha-matches-pin check (/app/selftest.sh). Re-declared here because a
+# global ARG is not visible inside a stage until it is named again.
+ARG HERMES_UPSTREAM_SHA
+ENV SMD_HERMES_UPSTREAM_SHA=${HERMES_UPSTREAM_SHA}
 RUN /opt/hermes/.venv/bin/python3 -I /app/gen-image-manifest.py /app/skills /app/image-manifest.json "${SS_CONSOLE_SHA}"
 # REQUIRED_ENV / OPTIONAL_ENV, generated from operator/contracts/env-consumption.yaml
 # (operator/bin/gen-env-arrays.py); bootstrap.sh sources this instead of hardcoding them.
@@ -662,6 +667,12 @@ COPY operator/templates/connector-classification-probe.py /app/connector-classif
 # indistinguishable from a clean fleet — no error, no alert, sends simply stop
 # being checked.
 COPY operator/templates/matter-mixing-fence-probe.py /app/matter-mixing-fence-probe.py
+# The in-image self-test: the boot smoke's own check list, run here as root
+# at boot and hourly by selftest.sh (forked from entrypoint.sh), its results read
+# by the heartbeat. Root-owned with the probes above (the /app/*.sh, *.py chown).
+COPY operator/templates/seat-checks.sh /app/seat-checks.sh
+COPY --chmod=0755 operator/templates/selftest.sh /app/selftest.sh
+COPY operator/templates/lane-memory-caps-probe.py /app/lane-memory-caps-probe.py
 
 # What this image can do for a skill (fleet release, 2026-10-19). Skills now
 # reach seats separately from the image (`fleet release --skills`), so a skill
