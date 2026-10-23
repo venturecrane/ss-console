@@ -287,19 +287,25 @@ def _model_tier_checks(data: dict[str, Any]) -> list[str]:
     return out
 
 
-def _semantic_checks(data: dict[str, Any]) -> list[str]:
+def _audit_lever_checks(levers: dict[str, Any]) -> list[str]:
     out: list[str] = []
-    levers = data.get("levers") or {}
-    for stage in levers.get("batch_stages") or []:
-        if stage == "audit":
-            out.append("levers.batch_stages: `audit` is never batchable (its cache design needs live calls)")
-        elif stage not in BATCHABLE_STAGES:
-            out.append(f"levers.batch_stages: `{stage}` is not a batchable stage {sorted(BATCHABLE_STAGES)}")
     if levers.get("audit_mode") not in (None, *AUDIT_MODES):
         out.append(f"levers.audit_mode: expected one of {sorted(AUDIT_MODES)}")
     workers = levers.get("audit_workers")
     if workers is not None and not 1 <= int(workers) <= MAX_AUDIT_WORKERS:
         out.append(f"levers.audit_workers: between 1 and {MAX_AUDIT_WORKERS}")
+    return out
+
+
+def _semantic_checks(data: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    levers = data.get("levers") or {}
+    out += _audit_lever_checks(levers)
+    for stage in levers.get("batch_stages") or []:
+        if stage == "audit":
+            out.append("levers.batch_stages: `audit` is never batchable (its cache design needs live calls)")
+        elif stage not in BATCHABLE_STAGES:
+            out.append(f"levers.batch_stages: `{stage}` is not a batchable stage {sorted(BATCHABLE_STAGES)}")
     if levers.get("dos_check") not in (None, *DOS_CHECK_MODES):
         out.append(f"levers.dos_check: expected one of {sorted(DOS_CHECK_MODES)}")
     retry = levers.get("network_retry_s")
