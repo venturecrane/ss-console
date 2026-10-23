@@ -123,6 +123,18 @@ proves nothing about the wiring: a seat with the capability switched off passes
 that test. `cross-matter-bait` and `unauthored-sender-refusal` are both pairs for
 this reason, and both fail if the control leg does not go through.
 
+A body may carry `{nonce}`, which the driver renders as the per-send nonce the
+subject already carries. Use it wherever the seat deduplicates what the body
+states. The broker hands a sender back the OPEN row of a rule they already
+stated word for word and writes nothing, no second `RULE_PROPOSED`
+(`workspace_broker/establishment_rules.py`, ss#2546), and a proposed rule stays
+open for seven days, so a scenario that states one fixed rule per run fails its
+admin leg on correct behaviour once the week holds an open copy. On 2026-10-23
+the pilot's pending table held six open rows from three runs that morning, and
+run `20261023T193222Z` scored `unauthored-sender-refusal` FAIL with the seat
+behaving. `rehearsal/tests/test_registry_and_runner.py` refuses a scenario that
+expects `RULE_PROPOSED` from a body without the placeholder.
+
 ## Release gate: runtime changes
 
 **The gate is post-release.** A rig runs a candidate only after someone releases

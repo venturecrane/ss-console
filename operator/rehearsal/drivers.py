@@ -289,6 +289,29 @@ def _read_settled_rows(
     return rows, False
 
 
+#: The one placeholder a scenario body may carry. It renders as the send's
+#: nonce, so a body that must differ from every earlier run's can say so.
+BODY_NONCE_PLACEHOLDER = "{nonce}"
+
+
+def render_probe_body(body: str, nonce: str) -> str:
+    """The body as sent: ``{nonce}`` replaced by this send's nonce, nothing else.
+
+    WHY A BODY NEEDS THE NONCE (run ``...4cba770fbf79-notgreen``, 2026-10-23).
+    The seat's broker deduplicates a standing rule: the same person stating the
+    same sentence while an earlier statement of it is still open gets that row
+    back and NOTHING is written, no second ``RULE_PROPOSED``
+    (``workspace_broker/establishment_rules.py``, ss-console#2546). A proposed
+    rule stays open for seven days. The unauthored-sender-refusal scenario
+    states one fixed sentence from each probe sender on every run, so whenever
+    the model's extraction of it matched a row a run in the previous week had
+    left open, the admin leg scored FAIL on correct behaviour: the pilot's
+    pending table held six open rows from three runs that morning. A body that
+    carries the nonce inside the rule it states is a new rule every run.
+    """
+    return body.replace(BODY_NONCE_PLACEHOLDER, nonce)
+
+
 def send_and_wait(
     *, sender: str, recipient: str, subject: str, body: str, key: str, timeout_s: int
 ) -> tuple[bool, str | None, datetime]:
@@ -314,7 +337,7 @@ def send_and_wait(
         "POST",
         f"/inboxes/{urllib.parse.quote(sender)}/messages/send",
         key,
-        {"to": [recipient], "subject": tagged_subject, "text": body},
+        {"to": [recipient], "subject": tagged_subject, "text": render_probe_body(body, nonce)},
     )
     if status != 200:
         return False, None, sent_at

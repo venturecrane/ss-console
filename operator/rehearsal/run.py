@@ -31,7 +31,7 @@ USAGE
     --only ID[,ID...]      run a subset
     --overlay-ref REF      the candidate ref this run certifies; the rig must
                            already be RUNNING it or the run is refused
-                           (default: ARG OVERLAY_REF in operator/templates/Dockerfile)
+                           (default: the commit this checkout is at; ADR 0095)
     --inject NAME          declare a fault you have already injected on the rig
     --out DIR              where the report lands (default .stitch/shadow-firm/)
 
@@ -246,10 +246,10 @@ def run_suite(args: argparse.Namespace) -> int:
     print(f"json:   {json_path}")
     print(f"{counts.get(PASS, 0)} pass / {counts.get(FAIL, 0)} fail / {counts.get(SKIPPED, 0)} skipped")
     if run.is_green:
-        print("GREEN. This id may be cited by an OVERLAY_REF bump PR.")
+        print("GREEN. This id may be cited by the release that ships this ref (fleet build, fleet release).")
         return EXIT_GREEN
     if counts.get(FAIL, 0):
-        print("NOT GREEN: a scenario failed. Do not bump OVERLAY_REF on this ref.")
+        print("NOT GREEN: a scenario failed. Do not release this ref.")
         return EXIT_FAILED
     print(
         "NOT GREEN: scenarios were skipped, so the suite is incomplete. A skipped scenario "
