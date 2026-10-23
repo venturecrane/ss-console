@@ -205,9 +205,39 @@ class _Index:
             self.by_hash[h]["containers"].append(container)
 
 
-def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str, str]) -> tuple[_Index, int]:
+#: The code page a legacy Outlook message is retried in when its strings do
+#: not decode as declared (2026-10-23, A&P matter 202098: one email's text
+#: carried a cp1252 en dash, byte 0x96, and the whole chronology job died at
+#: index_msg). ``demand/pull._open_msg`` reads emails the same way.
+FALLBACK_ENCODING = "cp1252"
+
+
+def _read_one(rec: dict[str, Any], encoding: str | None) -> tuple[str, list[tuple[str, Any]], list[dict[str, Any]]]:
+    """One email in full before anything is indexed: (subject, [(name, data)],
+    attachment errors). Reading it whole first means a retry in another
+    encoding never indexes half an email twice."""
     import extract_msg
 
+    m = extract_msg.Message(rec["path"], **({"overrideEncoding": encoding} if encoding else {}))
+    try:
+        subject = (m.subject or rec["name"])[:120]
+        atts: list[tuple[str, Any]] = []
+        errs: list[dict[str, Any]] = []
+        for att in m.attachments:
+            name = att.longFilename or att.shortFilename or "unnamed"
+            try:
+                atts.append((name, att.data))
+            except Exception as exc:  # noqa: BLE001 - an attachment whose payload cannot be read is recorded as that attachment's error; the rest are still indexed
+                errs.append({"email": subject, "attachment": name, "error": str(exc)[:120]})
+        return subject, atts, errs
+    finally:
+        try:
+            m.close()
+        except Exception:  # noqa: BLE001 - closing the message in finally must not mask an error already recorded for it
+            pass
+
+
+def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str, str]) -> tuple[_Index, int]:
     ix = _Index(sr.slug_dir, have)
     msgs = [r for r in pulled if r.get("ok") and r.get("path")]
     for n, rec in enumerate(msgs, 1):
@@ -215,31 +245,22 @@ def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str,
             ix.add_standalone_encrypted(rec)  # not OLE2; extract_msg cannot open it
             continue
         try:
-            m = extract_msg.Message(rec["path"])
-        except Exception as exc:  # noqa: BLE001 - extract_msg raising on a container is recorded as that email's error; the loop continues
+            try:
+                subject, atts, errs = _read_one(rec, None)
+            except UnicodeDecodeError:
+                subject, atts, errs = _read_one(rec, FALLBACK_ENCODING)
+        except Exception as exc:  # noqa: BLE001 - an email extract_msg cannot read in either encoding is recorded as that email's error; the loop continues
             ix.errors.append({"email": rec["name"], "error": str(exc)[:160]})
             continue
-        try:
-            subject = (m.subject or rec["name"])[:120]
-            for att in m.attachments:
-                name = att.longFilename or att.shortFilename or "unnamed"
-                try:
-                    data = att.data
-                except Exception as exc:  # noqa: BLE001 - an attachment whose payload cannot be read is recorded as that attachment's error; the rest are still indexed
-                    ix.errors.append({"email": subject, "attachment": name, "error": str(exc)[:120]})
-                    continue
-                if not isinstance(data, bytes):
-                    ix.counts["other"] += 1  # a nested .msg comes back as a Message
-                    continue
-                # The pull keeps a document's name and extension apart; the
-                # file a person sees in the matter is the two together.
-                container = str(rec.get("name") or "") + str(rec.get("ext") or "")
-                ix.add_attachment(subject, name, data, container=container)
-        finally:
-            try:
-                m.close()
-            except Exception:  # noqa: BLE001 - closing the message in finally must not mask an error already recorded for it
-                pass
+        ix.errors.extend(errs)
+        # The pull keeps a document's name and extension apart; the file a
+        # person sees in the matter is the two together.
+        container = str(rec.get("name") or "") + str(rec.get("ext") or "")
+        for name, data in atts:
+            if not isinstance(data, bytes):
+                ix.counts["other"] += 1  # a nested .msg comes back as a Message
+                continue
+            ix.add_attachment(subject, name, data, container=container)
         if n % 25 == 0:
             sr.log(f"  opened {n}/{len(msgs)}, distinct attachments so far: {len(ix.by_hash)}")
     return ix, len(msgs)
