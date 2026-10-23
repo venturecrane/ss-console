@@ -23,6 +23,10 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0010-per-customer-oauth-token-storage.md
   - label: ADR 0042 (Operator credential custody)
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0042-operator-credential-custody.md
+  - label: workers/cost-anomaly/wrangler.toml (Sentry read token)
+    href: https://github.com/venturecrane/ss-console/blob/main/workers/cost-anomaly/wrangler.toml
+  - label: src/pages/api/webhooks/sentry.ts (the integration's inbound half)
+    href: https://github.com/venturecrane/ss-console/blob/main/src/pages/api/webhooks/sentry.ts
 ---
 
 Where SMD's credentials are kept, how one is rotated, and the rules every agent follows
@@ -155,6 +159,38 @@ names are the procedure.
   credential cannot raise the Operator above the letter commitment. (The
   fine-grained `OPERATOR_CONFIG_PR_TOKEN` this section previously described
   belonged to the superseded PR-based delivery leg and was never minted.)
+
+## Third-party API identities: the integration, never a person
+
+When an agent needs to act on a vendor's API (resolve a Sentry issue, create an alert
+rule), it acts as a **named integration owned by SMD**, not as the Captain. A personal
+token acts as the person who minted it, carries that person's reach, and keeps the scopes
+it was born with for life, so it can neither be narrowed nor widened later. An
+integration is named for its job, scoped to it, and revocable without touching anyone's
+account.
+
+**Sentry, as of 2026-10-23.** Three credentials, three jobs, and the lesson that put
+this section here:
+
+| Vault key | Identity | Scopes | Used for |
+|---|---|---|---|
+| `SENTRY_WEBHOOK_SECRET` | The internal integration "SMD Ops Alert Bridge" (its client secret) | n/a | Verifying the alerts Sentry POSTs to `/api/webhooks/sentry` |
+| `SENTRY_ADMIN_TOKEN` | The same integration (its API token) | Issue & Event read and write, Alerts read and write, Project read, Organization read | Agent work against Sentry: resolving issues after a proven fix, alert rules |
+| `SENTRY_AUTH_TOKEN` | A personal read-only token, `ss-console-fleet-monitor` | event, org, project read | The cost-anomaly Worker's 24-hour error-count sync |
+
+Until 2026-10-23 `SENTRY_ADMIN_TOKEN` was a personal token (`smd-admin-automation`,
+org:admin and project:admin) that appeared in no PR, ADR, note or memory: minted ad hoc
+for one repair and left in the vault with far more reach than any agent task needed, and
+still unable to resolve an issue, because its fixed scopes lacked `event:write`. It was
+revoked the day the integration token replaced it. The read-only personal token stays
+until the Worker is moved onto the integration in its own change.
+
+**The rule.** An agent that finds a vendor API call refused for a missing scope does not
+ask for a new personal token. It names the integration that should own the act, asks
+the Captain to grant that integration the one permission, and, if the integration has no
+token in the vault, asks for that token once, stored with `crane_secret_set` from the
+clipboard. A permission change on an integration does not reach a token already minted
+from it; the token is re-minted and the old one revoked in the same sitting.
 
 ## Related
 
