@@ -193,7 +193,7 @@ function rowsTable(rows: LedgerRow[], withSeat?: string): string {
       (r) =>
         `<tr>${withSeat !== undefined ? `<td>${escapeHtml(withSeat)}</td>` : ''}` +
         `<td>${escapeHtml(r.ts)}</td><td>${escapeHtml(r.class)}</td>` +
-        `<td>${escapeHtml(r.tool)}</td><td>${escapeHtml(r.routine ?? 'person request')}</td>` +
+        `<td>${escapeHtml(r.tool)}</td><td>${escapeHtml(r.routine || 'not recorded')}</td>` +
         `<td>${escapeHtml(r.code)}</td></tr>`
     )
     .join('')

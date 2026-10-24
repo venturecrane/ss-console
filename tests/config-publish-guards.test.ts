@@ -224,9 +224,13 @@ function runPublisher(fx: Fixture, env: Record<string, string> = {}): RunResult 
   // an inherited GIT_DIR points it at the parent repository and it reports the
   // real repo's changed files instead of the fixture's. `cwd` does not override
   // those variables, and git exports them to every hook, which is why this only
-  // failed under `git push`.
+  // failed under `git push`. SEAT_SPEC_* goes too: a shell holding the real
+  // signing key turns on spec publishing, so a fixture expecting one upload saw
+  // three. Tests that sign pass their own key in `env`.
   const inherited = Object.fromEntries(
-    Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_'))
+    Object.entries(process.env).filter(
+      ([k]) => !k.startsWith('GIT_') && !k.startsWith('SEAT_SPEC_')
+    )
   ) as Record<string, string>
   const childEnv = {
     ...inherited,

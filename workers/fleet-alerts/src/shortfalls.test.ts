@@ -123,6 +123,27 @@ describe('notifyShortfalls', () => {
     expect(stored[0].notified_at).not.toBeNull()
   })
 
+  // 2026-10-24: a missing routine says only that the seat named none. Job-lane
+  // delivery failures carry no routine whether a person or a schedule started
+  // them, so the cell must not claim a person asked.
+  it('labels an event with no routine "not recorded", never "person request"', async () => {
+    const { env } = setup()
+    const mock = stubResend()
+    await notifyShortfalls(
+      env,
+      [
+        row([
+          ev({ routine: null, class: 'failed', code: 'proof:review_held', key: 'failed:1' }),
+          ev({ routine: '', class: 'failed', code: 'proof:gate_held', key: 'failed:2' }),
+        ]),
+      ],
+      NOW
+    )
+    const [mail] = sent(mock)
+    expect(mail.html.match(/<td>not recorded<\/td>/g)).toHaveLength(2)
+    expect(mail.html).not.toContain('person request')
+  })
+
   it('pages an event once though it rides every heartbeat for a day', async () => {
     const { env } = setup()
     const mock = stubResend()
