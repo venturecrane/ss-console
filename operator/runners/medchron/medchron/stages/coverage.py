@@ -338,13 +338,21 @@ def run(sr: StageRun) -> int:
         cited_files = {f["file"] for e in pm if e["exhibit"] in cited_ex for f in e["files"]}
     else:
         cited_files = {n for n, num in read_json(rd / "exhibit_map.json", {}).items() if num in cited_ex}
-    counts = entry_counts(rd, unit_files)
+    return _account(sr, unit_files, cited_files, raw_by_id, (rules, billing_names, said))
+
+
+def _account(
+    sr: StageRun, unit_files: list[dict[str, Any]], cited_files: set[str], raw_by_id: dict[str, dict], known: tuple
+) -> int:
+    """Every uncited unit file: explained (by its account, size, or the
+    entries: 0 rule, which is recorded) or lost. The exit code."""
+    rules, billing_names, said = known
+    in_unit = {file_key(f): f for f in unit_files}
+    counts = entry_counts(sr.slug_dir / "runs" / sr.unit.unit, unit_files)
     unexplained: list[str] = []
     explained: list[tuple[str, str]] = []
     by_rule: list[dict[str, str]] = []
-    for name in sorted(in_unit):
-        if name in cited_files:
-            continue
+    for name in sorted(set(in_unit) - cited_files):
         f = in_unit[name]
         reason = _settled(name, f, billing_names, rules, said) or _tiny_image(raw_by_id, f)
         if reason is None and counts.get(name) == 0:
@@ -355,31 +363,36 @@ def run(sr: StageRun) -> int:
     if by_rule:
         _record_rules(sr, by_rule)
         sr.log(f"  explained by rule (entries: 0), recorded in {coverage_decide.FILE}: {len(by_rule)}")
-    cited_n = len(cited_files & set(in_unit))
     sr.log(
-        f"{unit}: {len(in_unit)} file(s); cited {cited_n}; excluded with reason {len(explained)}; UNEXPLAINED {len(unexplained)}"
+        f"{sr.unit.unit}: {len(in_unit)} file(s); cited {len(cited_files & set(in_unit))}; excluded with reason "
+        f"{len(explained)}; UNEXPLAINED {len(unexplained)}"
     )
     for name, reason in explained:
         sr.log(f"    ~ {name[:62]:62s} {reason[:48]}")
     if unexplained:
-        # Every file left here is LOSS: entries above zero that the document
-        # does not cite, or a file the composer never accounted for. Never a
-        # disclosure; one rebuild from build_doc, then an integrity stop.
-        for name in unexplained[:25]:
-            n = counts.get(name)
-            seen = "no FILES-SEEN line" if n is None else f"entries: {n}"
-            sr.log(f"  - {name[:56]:56s} {f'{seen}, uncited':>26} {in_unit[name].get('chars') or 0:>8} chars")
-        (rd / "coverage_unexplained.json").write_text(json.dumps(unexplained, indent=1), encoding="utf-8")
-        if _rewind_once(sr, unexplained):
-            sr.log(
-                f"COVERAGE GATE: {len(unexplained)} file(s) the composer drew from are not cited; rebuilding the "
-                f"document once from build_doc"
-            )
-            return REWIND
-        sr.log(
-            f"COVERAGE GATE HOLD (integrity): {len(unexplained)} file(s) the composer drew entries from, or never "
-            f"accounted for, are still not cited after one rebuild of the document"
-        )
-        return 1
+        return _lost(sr, unexplained, counts, in_unit)
     sr.log("COVERAGE GATE PASS: every source file is cited or explained")
     return 0
+
+
+def _lost(sr: StageRun, unexplained: list[str], counts: dict[str, int], in_unit: dict[str, dict]) -> int:
+    """Every file left is LOSS: entries above zero that the document does not
+    cite, or a file the composer never accounted for. Never a disclosure; one
+    rebuild from build_doc, then an integrity stop."""
+    for name in unexplained[:25]:
+        n = counts.get(name)
+        seen = "no FILES-SEEN line" if n is None else f"entries: {n}"
+        sr.log(f"  - {name[:56]:56s} {f'{seen}, uncited':>26} {in_unit[name].get('chars') or 0:>8} chars")
+    rd = sr.slug_dir / "runs" / sr.unit.unit
+    (rd / "coverage_unexplained.json").write_text(json.dumps(unexplained, indent=1), encoding="utf-8")
+    if _rewind_once(sr, unexplained):
+        sr.log(
+            f"COVERAGE GATE: {len(unexplained)} file(s) the composer drew from are not cited; rebuilding the "
+            f"document once from build_doc"
+        )
+        return REWIND
+    sr.log(
+        f"COVERAGE GATE HOLD (integrity): {len(unexplained)} file(s) the composer drew entries from, or never "
+        f"accounted for, are still not cited after one rebuild of the document"
+    )
+    return 1
