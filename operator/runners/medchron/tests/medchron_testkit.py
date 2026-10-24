@@ -122,7 +122,7 @@ class FakeSeat:
         self.fail_mint = fail_mint or set()
         # Ids whose mint succeeds and whose GET 404s: the vendor's index still
         # carries the file row, its storage no longer carries the object. Two
-        # of Ashton & Price's 196 were in exactly this state on 2026-09-14.
+        # of one firm's 196 were in exactly this state on 2026-09-14.
         self.gone: set[str] = set()
         self.mints: list[list[str]] = []
         # ss#2614 upload: folders created and files sent by the runner; a

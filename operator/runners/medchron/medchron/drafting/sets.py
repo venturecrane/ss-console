@@ -9,7 +9,7 @@ therefore drafts each requested set as its own unit (``run.py``), and
 2026-10-12 one compose wrote all three into one Word file with one proof of
 service after the last, and a declaration that belonged to none of them.
 
-**Defined terms.** Chris's rule D6: "Include a Definitions section with
+**Defined terms.** An attorney's rule D6: "Include a Definitions section with
 capitalized defined terms used throughout." A model defines INCIDENT LOCATION
 and then writes "the incident location" three requests later; ``enforce_caps``
 writes every use of a defined term in capitals, by code, outside quotations

@@ -130,9 +130,18 @@ def _cells(d):
     return dict(zip(book.DEF_HEADER, book.defendant_rows([m])[0]["cells"]))
 
 
-def test_the_sent_out_columns_follow_served_and_leave_the_sort_keys_alone():
+def test_the_sent_out_columns_come_before_served_and_leave_the_sort_keys_alone():
+    """The attorney's request order and the order events happen in."""
     h = book.DEF_HEADER
-    assert h[9:13] == ["Served", "Served (source)", "Sent out for service", "Sent out for service (source)"]
+    assert h[5] == "Complaint filed"
+    assert h[9:15] == [
+        "Sent out for service",
+        "Sent out for service (source)",
+        "Served",
+        "Served (source)",
+        "Answered",
+        "Answered (source)",
+    ]
     assert h[:3] == ["Responsible (Smokeball)", "Next court date", "Matter #"]
     assert len(book.DEF_WIDTHS) == len(h)
 

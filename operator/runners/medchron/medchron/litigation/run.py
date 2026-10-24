@@ -68,7 +68,7 @@ _DISCOVERY_WORD = re.compile(r"\bdiscovery\b", re.I)
 def court_only(trigger: str, request_text: str, discovery_rx: list[re.Pattern[str]]) -> bool:
     """True when a person's request names court-paper columns and no discovery.
 
-    2026-10-23: Chris asked for complaint filed, service and answers on every
+    2026-10-23: an attorney asked for complaint filed, service and answers on every
     litigation file; the run read discovery on 152 matters he did not ask
     about. A court-only run neither reads the discovery group nor shows a
     Discovery tab; the stored discovery values stand untouched for the next

@@ -9,7 +9,7 @@ one already entered.
 Structured output (``output_config.format``, a JSON schema) through the doorway,
 the one paid path in the runner: the model can only answer in ``SCHEMA``. Not a
 forced tool call: claude-opus-5-5 refuses ``tool_choice`` of type tool or any
-(the ashton-price dry run, 2026-10-10, failed every read on it). ``amount_confirmed``
+(a firm seat's dry run, 2026-10-10, failed every read on it). ``amount_confirmed``
 is the backfill's audit pass folded into the read: an amount is entered only
 when the reader saw that exact figure printed in the document.
 """

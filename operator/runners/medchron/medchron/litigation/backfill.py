@@ -21,7 +21,10 @@ from .baseline import merge_sent_for_service
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m medchron.litigation.backfill", description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(
+        prog="python -m medchron.litigation.backfill",
+        description="Backfill the sent-out-for-service date onto a lane's stored state.",
+    )
     ap.add_argument("--state", required=True, type=Path, help="the lane's state dir (holds matters/<id>.json)")
     ap.add_argument("--rows", required=True, type=Path, help="a JSON list of rows")
     ap.add_argument("--dry-run", action="store_true", help="count only; write nothing")

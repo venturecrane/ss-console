@@ -1,8 +1,8 @@
 """An identity hold can be answered "leave it out", and the answer moves the job.
 
-WHY (2026-10-22). A chronology on matter 200530 held because a folded email
+WHY (2026-10-22). A chronology on one matter held because a folded email
 attachment carried a date of birth that was not the client's. The requester,
-Chris Price, answered "Just leave it out of the chronology." Nothing could act
+an attorney, answered "Just leave it out of the chronology." Nothing could act
 on that: the gate read only a release file nobody wrote, there was no withhold
 at all, and ``medchron_job_resume`` refused every hold but the audit gate's. So
 the Operator told him it had no way to act, and he forwarded the exchange to
@@ -72,7 +72,9 @@ def _held_scene(data_root: Path) -> Path:
 
 
 def _decide(sd: Path, action: str, ids: list[str]) -> None:
-    FI.record_decision(sd, action=action, ids=ids, by="chris@firm.example", source="msg-1", at="2026-10-22T19:03:00Z")
+    FI.record_decision(
+        sd, action=action, ids=ids, by="attorney@firm.example", source="msg-1", at="2026-10-22T19:03:00Z"
+    )
 
 
 # ---- the decision file --------------------------------------------------------
@@ -83,7 +85,7 @@ def test_a_decision_records_who_decided_and_a_later_one_replaces_it(data_root: P
     assert FI.withheld(sd) == {"92add4c914d8"} and FI.released(sd) == set()
     body = json.loads((sd / FI.RELEASE_FILE).read_text())
     assert [x["action"] for x in body["decisions"]] == ["release", "withhold"]
-    assert body["decisions"][-1]["by"] == "chris@firm.example" and body["decisions"][-1]["source"] == "msg-1"
+    assert body["decisions"][-1]["by"] == "attorney@firm.example" and body["decisions"][-1]["source"] == "msg-1"
 
 
 def test_a_decision_without_who_or_where_is_refused(data_root: Path) -> None:
@@ -313,11 +315,11 @@ def test_the_command_records_the_firms_withhold_and_resumes_through_the_daemon(
 ) -> None:
     sd = _held_scene(data_root)
     d = _seat(tmp_path, job_dir)
-    p = identity_decide.plan(d, JOB, action="withhold", ids=[HELD_ID], by="chris@firm.example", source="msg-1")
+    p = identity_decide.plan(d, JOB, action="withhold", ids=[HELD_ID], by="attorney@firm.example", source="msg-1")
     identity_decide.apply(d, p)
     assert FI.withheld(sd) == {HELD_ID}
     marker = json.loads((d.queue / f"{MARKER_PREFIX}{JOB}.json").read_text())
-    assert marker["job_id"] == JOB and marker["redo"] == ["build_units"] and "chris@firm.example" in marker["reason"]
+    assert marker["job_id"] == JOB and marker["redo"] == ["build_units"] and "attorney@firm.example" in marker["reason"]
 
 
 def test_a_release_reopens_nothing_upstream(tmp_path: Path, job_dir: Path, data_root: Path) -> None:
@@ -341,7 +343,7 @@ def test_the_command_refuses_what_it_cannot_record(
     _held_scene(data_root)
     d = _seat(tmp_path, job_dir, **kw)
     with pytest.raises(identity_decide.Refused, match=needle):
-        identity_decide.plan(d, JOB, action="withhold", ids=ids, by="chris@firm.example", source="msg-1")
+        identity_decide.plan(d, JOB, action="withhold", ids=ids, by="attorney@firm.example", source="msg-1")
     assert not (d.queue / f"{MARKER_PREFIX}{JOB}.json").exists()
 
 

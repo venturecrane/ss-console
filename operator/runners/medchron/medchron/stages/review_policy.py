@@ -6,7 +6,7 @@ Curtis chronology (3CH59XBY, 22h29m, eight stops) three holds were the review
 grading wording the writer prompts REQUIRE, and every MUST-FIX on checks 2 and
 4 was a stop for SMD to clear by hand, though each was a defect the lane could
 settle itself by deleting what no entry supports or correcting one sentence
-against its page. Chris's Pamplona chronology must run from one restart to
+against its page. A chronology must run from one restart to
 delivery with no SMD touch. So, in order:
 
 1. A model finding on check 3 (the system's own language) whose subject is

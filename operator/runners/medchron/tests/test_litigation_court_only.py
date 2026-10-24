@@ -1,5 +1,5 @@
 """A request that names court-paper columns and no discovery reads no discovery
-and shows no Discovery tab (2026-10-23: Chris asked for complaint, service and
+and shows no Discovery tab (2026-10-23: an attorney asked for complaint, service and
 answers on every litigation file; the run read discovery on 152 matters)."""
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from medchron.litigation.firm import load
 from medchron.litigation.run import LitigationRun, court_only
 
 TODAY = dt.date(2026, 10, 7)
-CHRIS = (
+REQUEST = (
     "For all files that are in litigation and for which a complaint has been filed, please do the following: "
     "Note the date the complaint was filed. Note the date the defendants were served. "
     "Note the date each of the defendants filed an answer or indicate they have not filed an answer."
@@ -36,11 +36,11 @@ def _rx(tmp_path: Path) -> list[re.Pattern[str]]:
 @pytest.mark.parametrize(
     ("trigger", "text", "expected"),
     [
-        ("request", CHRIS, True),
-        ("request", CHRIS + " Also the discovery we propounded.", False),
-        ("request", CHRIS + " And any interrogatories served on us.", False),
+        ("request", REQUEST, True),
+        ("request", REQUEST + " Also the discovery we propounded.", False),
+        ("request", REQUEST + " And any interrogatories served on us.", False),
         ("request", "Send me a fresh litigation status list.", False),  # names no columns: everything
-        ("scheduled", CHRIS, False),  # the weekday list always reads everything
+        ("scheduled", REQUEST, False),  # the weekday list always reads everything
     ],
 )
 def test_court_only_is_a_request_naming_court_columns_and_no_discovery(tmp_path, trigger, text, expected):
@@ -63,7 +63,7 @@ def _run(tmp_path: Path, text: str) -> LitigationRun:
 
 
 def test_a_court_only_run_reads_no_discovery_and_shows_no_discovery_tab(tmp_path):
-    r = _run(tmp_path, CHRIS)
+    r = _run(tmp_path, REQUEST)
     v = r.run()
     assert v.verdict == "delivered", v.reason
     st = manifest.load_prior(tmp_path / "state", M1)
@@ -96,7 +96,7 @@ def _discovery_divergence(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_a_court_only_list_does_not_hold_on_discovery_it_did_not_read(tmp_path, monkeypatch):
     _discovery_divergence(monkeypatch)
-    v = _run(tmp_path, CHRIS).run()
+    v = _run(tmp_path, REQUEST).run()
     assert v.verdict == "delivered", v.reason
 
 

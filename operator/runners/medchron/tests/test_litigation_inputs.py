@@ -84,7 +84,7 @@ def test_assisting_ids_reads_every_shape_once():
         ({"requester": "nobody"}, "email"),
         ({"scope": {"attorney_staff_ids": []}}, "scope"),
         ({"scope": {"all": False}}, "scope"),
-        ({"scope": {"attorney_staff_ids": ["Chris"]}}, "scope"),
+        ({"scope": {"attorney_staff_ids": ["Carl"]}}, "scope"),
         ({"scope": {"paralegal_staff_ids": []}}, "scope"),
         ({"scope": {"paralegal_staff_ids": ["Irma"]}}, "scope"),
         ({"scope": {"all": True, "paralegal_staff_ids": [STAFF_A]}}, "scope"),

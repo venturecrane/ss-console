@@ -95,6 +95,12 @@ def date_forms(iso: str) -> list[str]:
         f"{mo3} {d.day}, {d.year}",
         f"{mo3}. {d.day}, {d.year}",
         f"{d.day} {mon} {d.year}",
+        # An email header's day-first abbreviation ("Mon, 12 Jan 2026"), and
+        # the dashed form some forms print, 2026-10-24.
+        f"{d.day} {mo3} {d.year}",
+        f"{d.day:02d} {mo3} {d.year}",
+        f"{d.day}-{mo3}-{d.year}",
+        f"{d.day:02d}-{mo3}-{d.year}",
     ]
 
 

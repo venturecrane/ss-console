@@ -34,15 +34,15 @@ DEF_HEADER = [
     "Case status",
     "Defendant",
     "Defendant status",
-    "Served",
-    "Served (source)",
     "Sent out for service",
     "Sent out for service (source)",
+    "Served",
+    "Served (source)",
     "Answered",
     "Answered (source)",
     "Notes",
 ]
-DEF_WIDTHS = [18, 24, 10, 32, 28, 14, 24, 28, 24, 22, 40, 16, 40, 14, 40, 60]
+DEF_WIDTHS = [18, 24, 10, 32, 28, 14, 24, 28, 24, 16, 40, 22, 40, 14, 40, 60]
 #: The sent-out cell for a defendant no pass has read for it, and for one a
 #: pass read and found no request to a process server (with the reason in its
 #: source cell). An unread value is never shown as a finding.
@@ -137,9 +137,9 @@ def defendant_rows(ms: list[dict[str, Any]]) -> list[dict[str, Any]]:
                         _status(m),
                         d.get("name"),
                         d.get("status"),
+                        *sent_cells(d),
                         _date(d.get("served")),
                         _src(d.get("served")),
-                        *sent_cells(d),
                         _date(d.get("answered")),
                         _src(d.get("answered")),
                         _flags(d, "flags"),

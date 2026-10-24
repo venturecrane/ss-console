@@ -270,6 +270,10 @@ def test_a_court_only_list_does_not_judge_discovery_it_did_not_read():
         ("Dated: 4/21/2026", "2026-04-21", True),
         ("Executed on January 12 20261", "2026-01-12", False),  # a digit runs on: not this date
         ("Executed on January 13, 2026", "2026-01-12", False),
+        ("Date: Mon, 12 Jan 2026 09:14:03 -0800", "2026-01-12", True),  # an email header
+        ("Sent: 05 Mar 2026", "2026-03-05", True),
+        ("Received 12-Jan-2026 by the server", "2026-01-12", True),
+        ("Date: Mon, 12 Jan 2027", "2026-01-12", False),
     ],
 )
 def test_text_carries_a_hand_filled_or_comma_dropped_date(text, iso, expected):
