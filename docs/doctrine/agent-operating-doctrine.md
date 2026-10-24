@@ -405,6 +405,37 @@ It is `primer` rather than `gate` on purpose. The hook is a habit-breaker, not a
 
 ---
 
+### Law 16: Prove the path before you run it
+
+```yaml
+id: prove-the-path-before-running
+primer_line: 'Prove the path before you run it: before a paid run, restart, release or handoff on a client deliverable or long-running Operator job, write the whole path to delivery with every step proven by a probe (what runs, what it costs, what can stop it, what the client sees). An unproven step is a question, never a try; a defect found mid-run means re-prove the rest, not fix, redeploy and retry.'
+cost: medium
+tier: primer
+enforcement:
+  - .claude/hooks/reflex-primer.sh
+  - .claude/hooks/plan-premise-gate.mjs
+  - tests/doctrine-integrity.test.ts
+incidents:
+  - date: 2026-10-23
+    ref: 'A&P chronology 3CH59XBY (22h29m, $211.59, eight stops, seven of them cleared by code merged mid-job, #3402 to #3421; the client heard nothing for 21 hours)'
+  - date: 2026-10-23
+    ref: 'A&P litigation list (8+ hours of guess-and-fail: a full-cost run with no cost check, resumes, a disk near-fill, a release misreported as not released, a memory cap reset by a restart, then a hold at the gates); Captain: "There will be no moving forward until we know what we are doing."'
+  - date: 2026-09-16
+    ref: 'A&P chronology post-mortem of 2026-09-16 ("the paid production run was the only test harness": eight gate defects, about ten reprovisions; one of its seven remedies was built)'
+escalation: none pending
+```
+
+The pattern this law ends has one shape every time. A long-running job starts on the client's real file. It stops on a defect nobody checked for. An agent fixes that one defect, merges, rebuilds, redeploys and resumes, and the job runs until it stops on the next one. Each cycle costs about an hour, and the client's job is the only test the pipeline ever gets. Across the A&P chronologies from 2026-08-27 on, every run found between four and twelve new defects this way; the 2026-10-22 chronology took 22 and a half hours, most of it waiting on fixes written mid-job. The Captain called it after the 2026-10-23 litigation list: no more guessing, no more blind alleys.
+
+So the rule: before a paid run, a restart, a release, or a handoff on a client deliverable or a long-running Operator job (a chronology, a litigation list, a demand), write down the whole path to delivery, and prove every step of it with a probe: what runs and where, what it costs against the authored limits, every place it can stop and who clears each one, what the client sees, and what the Captain must do, named as a command verified by reading the tool that runs it. An unproven step is a question to answer by reading code or probing, never a thing to try. When a defect does surface mid-run, the next action is not the fix and the retry; it is re-proving the rest of the path, so the defects that would have surfaced one per hour surface together.
+
+This is SMD's rule for building and running its products. It describes how we work, so it never encodes one client's or one client staff member's preferences; what a particular request asked for is checked against the deliverable (memory `feedback_check_deliverable_against_the_request_line_by_line`), not written into law.
+
+It is `primer` rather than `gate` because no hook can see that a path was proven rather than assumed; the plan-premise gate enforces the same discipline wherever plan mode runs, and this line carries it outside plan mode. The cost is `medium`: minutes of probing before every long job, against hours of cycling during it.
+
+---
+
 ## Mechanisms under review
 
 ```yaml
