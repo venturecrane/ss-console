@@ -32,7 +32,8 @@
 #
 # bash 3.2 compatible (exercised on macOS operator boxes).
 #
-# Inputs (env): R2_BUCKET_CONFIG (default smd-customer-config); FLEET_IMAGE_LOOKUP=1
+# Inputs (env): SEAT_SPEC_ENABLED=true to judge the signed spec (SPEC findings);
+# R2_BUCKET_CONFIG (default smd-customer-config); FLEET_IMAGE_LOOKUP=1
 # to resolve each seat's image through D1. R2_RECONCILE_DRY_RUN is accepted and
 # changes nothing: every run is read-only. R2 auth: scripts/lib/r2-creds.sh.
 #
@@ -141,6 +142,14 @@ $(sed 's/^/             /' "${work_dir}/${slug}.compile")"
       return 0
       ;;
   esac
+  # Signal, not volume: until signing is enabled (SEAT_SPEC_ENABLED, the same
+  # repository variable that gates the publisher's key) there is no signed spec
+  # to expect, so its absence or staleness is not a finding. The image guard
+  # above (REFUSED) and the customer.yaml byte comparison run either way.
+  if [[ "${SEAT_SPEC_ENABLED:-}" != "true" ]]; then
+    echo "${slug}: seat-spec signing is not enabled (SEAT_SPEC_ENABLED); the signed spec is not judged"
+    return 0
+  fi
   if [[ -z "$why" && -f "${inputs}/spec-pointer.json" ]]; then
     if ! why=$(_seat_tsx "$SEAT_SPEC_COMPILER" verify --pointer "${inputs}/spec-pointer.json" --spec "${inputs}/current-spec.json" 2>&1 >/dev/null); then
       why="the published spec does not verify: ${why}"

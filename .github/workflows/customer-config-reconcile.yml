@@ -218,6 +218,9 @@ jobs:
           # image_ref -> the fleet release's manifest) through wrangler, exactly
           # as the publisher does in deploy.yml. Same compiler, same evidence.
           FLEET_IMAGE_LOOKUP: '1'
+          # SPEC findings only once seat-spec signing is enabled: the same
+          # repository variable gates the publisher's key in deploy.yml.
+          SEAT_SPEC_ENABLED: ${{ vars.SEAT_SPEC_ENABLED }}
         run: |
           set -u
           # `|| STATUS=$?` is load-bearing, not style (ss#2307). GitHub runs this

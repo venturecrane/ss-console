@@ -115,6 +115,7 @@ function readObject(fx: Fixture, key: string): string | undefined {
 function run(fx: Fixture, env: Record<string, string> = {}) {
   return runScript(RECONCILER, fx.root, fx, {
     SEAT_SPEC_PUBKEY: fx.signing.SEAT_SPEC_PUBKEY,
+    SEAT_SPEC_ENABLED: 'true',
     ...env,
   })
 }
@@ -213,6 +214,43 @@ describe('the reconciler is read-only against R2', () => {
     const res = run(fx, { R2_RECONCILE_DRY_RUN: '1' })
     expect(res.code).toBe(2)
     expect(writes(res.awsCalls)).toEqual([])
+  })
+})
+
+describe('SPEC findings wait for seat-spec signing to be enabled (signal, not volume)', () => {
+  it('disabled: customer.yaml drift is still reported, an absent spec is not', () => {
+    const fx = makeFixture()
+    seedConfig(fx, 'seat-alpha', 'customer_id: seat-alpha\nformat_spec: none\n')
+    seedConfig(fx, 'seat-beta', configBody('seat-beta'))
+
+    const res = run(fx, { SEAT_SPEC_ENABLED: '' })
+
+    expect(res.code).toBe(2)
+    expect(res.out).toContain('DRIFT  seat-alpha:')
+    expect(res.out).not.toContain('SPEC  ')
+    expect(res.out).toContain('seat-spec signing is not enabled')
+  })
+
+  it('disabled: a seat whose customer.yaml is in sync is clean without any spec', () => {
+    const fx = makeFixture()
+    seedConfig(fx, 'seat-alpha', configBody('seat-alpha'))
+    seedConfig(fx, 'seat-beta', configBody('seat-beta'))
+    const res = run(fx, { SEAT_SPEC_ENABLED: '' })
+    expect(res.code, res.out).toBe(0)
+  })
+
+  it('enabled: the same absent spec is a SPEC finding', () => {
+    const fx = makeFixture()
+    seedConfig(fx, 'seat-alpha', configBody('seat-alpha'))
+    seedConfig(fx, 'seat-beta', configBody('seat-beta'))
+    const res = run(fx, { SEAT_SPEC_ENABLED: 'true' })
+    expect(res.code).toBe(2)
+    expect(res.out).toContain('SPEC  seat-alpha:')
+  })
+
+  it('the workflow passes the variable through to the reconciler', () => {
+    const src = readFileSync(WORKFLOW, 'utf8')
+    expect(src).toContain('SEAT_SPEC_ENABLED: ${{ vars.SEAT_SPEC_ENABLED }}')
   })
 })
 

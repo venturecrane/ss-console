@@ -519,7 +519,8 @@ fails the job for a seat the push changed and is a warning for any other seat.
 The nightly reconciler (`scripts/ci-reconcile-r2-customer-configs.sh`, run by
 `.github/workflows/customer-config-reconcile.yml`) is read-only. It compares
 every seat's `customer.yaml` bytes and signed spec with what main compiles and
-pages on a mismatch: DRIFT and SPEC findings on a dated issue (the next push to
+pages on a mismatch: DRIFT and SPEC findings on a dated issue (SPEC only once
+`SEAT_SPEC_ENABLED` is `true`, since before then no signed spec is expected) (the next push to
 main converges them), REFUSED on one standing issue titled "R2 seat config
 refused by the image guard" that each nightly run comments on.
 

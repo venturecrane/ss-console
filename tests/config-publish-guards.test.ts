@@ -737,6 +737,68 @@ describe('ci-publish-customer-configs: the signed seat spec (Wave 2 W4)', () => 
     expect(res.stdout).toContain('already holds these bytes')
   })
 
+  // Signing disabled (SEAT_SPEC_ENABLED unset, so deploy.yml passes no key):
+  // the compiler still runs before the customer.yaml write, unsigned but
+  // checked. The image guard is not part of the signing path.
+  it('signing disabled: a config naming a skill the image lacks is refused before customer.yaml is written', () => {
+    const fx = makeFixture(['seat-alpha'])
+    writeFileSync(
+      join(fx.root, 'operator', 'customers', 'seat-alpha', 'customer.yaml'),
+      'personas:\n  - slug: operator\n    skills:\n      - name: new-skill\n        enabled: true\n'
+    )
+    git(fx.root, ['commit', '-qam', 'enable a skill the image lacks'])
+    fx.after = git(fx.root, ['rev-parse', 'HEAD']).trim()
+    seedObject(fx, 'vaults/seat-alpha/customer.yaml', 'personas: []\n')
+    seedObject(
+      fx,
+      'vaults/seat-alpha/image-manifest.json',
+      JSON.stringify({ schema_version: 1, built_from: 'x', skills: {} })
+    )
+
+    const res = runPublisher(fx, { SEAT_SPEC_ENABLED: '', SEAT_SPEC_SIGNING_KEY: '' })
+
+    expect(res.code).not.toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(0)
+    expect(res.stdout + res.stderr).toContain('skill:new-skill')
+    expect(objectAt(fx, 'vaults/seat-alpha/customer.yaml')).toBe('personas: []\n')
+  })
+
+  it('signing disabled: a capability need the image cannot be shown to provide is refused too', () => {
+    const fx = makeFixture(['seat-alpha'])
+    writeFileSync(
+      join(fx.root, 'operator', 'customers', 'seat-alpha', 'customer.yaml'),
+      'personas:\n  - slug: operator\n    skills:\n      - name: reader\n        enabled: true\n'
+    )
+    git(fx.root, ['commit', '-qam', 'enable reader'])
+    fx.after = git(fx.root, ['rev-parse', 'HEAD']).trim()
+    seedObject(fx, 'vaults/seat-alpha/customer.yaml', 'personas: []\n')
+    const version = '202610230000-abcdef12'
+    seedObject(
+      fx,
+      `fleet/skills/${version}.json`,
+      JSON.stringify({
+        version,
+        files: { 'reader/SKILL.md': { sha256: 'd'.repeat(64), size: 1 } },
+        needs: { reader: { paths: [], tools: [], verbs: ['matter_read'], action_classes: [] } },
+      })
+    )
+    seedObject(
+      fx,
+      'vaults/seat-alpha/skills-pointer.json',
+      JSON.stringify({
+        version,
+        manifest_key: `fleet/skills/${version}.json`,
+        manifest_sha256: '0'.repeat(64),
+      })
+    )
+
+    const res = runPublisher(fx, { SEAT_SPEC_ENABLED: '', SEAT_SPEC_SIGNING_KEY: '' })
+
+    expect(res.code).not.toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(0)
+    expect(res.stdout + res.stderr).toContain('verb:matter_read')
+  })
+
   it('re-signs a published spec whose pointer no longer verifies', () => {
     const fx = makeFixture(['seat-alpha'])
     seedObject(fx, 'vaults/seat-alpha/customer.yaml', 'stale: true\n')
