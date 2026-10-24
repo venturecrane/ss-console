@@ -11,7 +11,11 @@ chunks" for $0; it repairs at the same window as composition, so a repair
 cannot truncate where the original did not. A part that ends cleanly having
 produced almost nothing is not repaired, it is EMPTIED (one part returned 112
 bytes for 126k chars of input, twenty files including MRI reports), and the
-split escalates 2 -> 3 -> 5 rather than leaving the chunk unrepaired.
+split escalates 2 -> 3 -> 5 rather than leaving the chunk unrepaired. A short
+part that answers in the house shape is NOT emptied: a part of fax covers
+and legal papers honestly yields almost nothing, and below MIN_YIELD it was
+re-split until the stage failed (2026-10-24 audit, row 16). Only a part that
+still truncates, errors, or answers in no shape at every split fails it.
 """
 
 from __future__ import annotations
@@ -22,7 +26,7 @@ from .. import llm, prompts
 from ..limits import LimitHold
 from .base import StageRun, append_jsonl
 from .chunking import MIN_YIELD, split_chunk
-from .compose import read_usage
+from .compose import read_usage, well_formed
 
 
 def _run_part(
@@ -90,9 +94,14 @@ def run(sr: StageRun) -> int:
                 if body is None or stop == "max_tokens":
                     ok = False
                     sr.log(f"  part {c}.{k} still not clean (stop={stop})")
-                elif len(body) < len(p) * MIN_YIELD:
+                elif len(body) < len(p) * MIN_YIELD and not well_formed(body):
                     ok = False
                     sr.log(f"  part {c}.{k} produced {len(body)}B from {len(p)}B of source; implausibly empty")
+                elif len(body) < len(p) * MIN_YIELD:
+                    # Fax covers and legal papers honestly yield nothing: a short
+                    # answer in the house shape is the part's account, kept
+                    # (2026-10-24 audit, row 16; compose keeps the same).
+                    sr.log(f"  part {c}.{k} short ({len(body)}B from {len(p)}B) but complete; kept")
                 bodies.append((k, body, stop))
             if ok:
                 break

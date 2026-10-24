@@ -12,6 +12,17 @@ holes, folded records). Two optional slug-level files carry observations a
 run authored from measured facts (`text_duplicates.json`, `file_observations.json`);
 their shapes are pinned, and a file whose rows all fail the shape warns
 loudly rather than rendering an empty disclosure.
+
+Decided-by-rule disclosures (2026-10-24 stop-path audit), each read only when
+present: ``runs/<unit>/unread_pages.json`` (pages the map never read,
+stages/compose.py), ``out/<unit>/page_map.json`` rows with
+``rendered_from_text`` (stages/exhibits.py), ``runs/<unit>/
+prior_history_itemized.json`` (stages/summarize.py), ``dropped_unkept`` in
+msg_attachments.json (email attachments found and not opened), and the
+billing stages' ``billing_gaps[-<unit>].json`` and
+``billing_dropped_rows[-<unit>].json`` at the slug level. Each is a plain
+factual sentence; no figure is ever shown from a billing row the page did
+not confirm, and a record the map read is never named away.
 """
 
 from __future__ import annotations
@@ -310,6 +321,169 @@ def _not_used_lines(d: Path, byid: dict, unit: str | None, cfg: Any) -> list[str
     return o
 
 
+def _pages(pages: list[int]) -> str:
+    """'p. 4' or 'pp. 1-3, 7': a page list as a reader writes it."""
+    ps = sorted(set(pages))
+    runs: list[str] = []
+    start = prev = ps[0]
+    for p in ps[1:] + [None]:
+        if p is not None and p == prev + 1:
+            prev = p
+            continue
+        runs.append(str(start) if start == prev else f"{start}-{prev}")
+        if p is not None:
+            start = prev = p
+    return ("p. " if len(ps) == 1 else "pp. ") + ", ".join(runs)
+
+
+def _unit_files(d: Path, unit: str | None, sub: str, name: str) -> list[Path]:
+    """The per-unit artifact `name` under `sub/<unit>/`, or every unit's when
+    the section is written for the whole matter."""
+    if unit is not None:
+        p = d / sub / unit / name
+        return [p] if p.is_file() else []
+    return sorted((d / sub).glob(f"*/{name}")) if (d / sub).is_dir() else []
+
+
+#: How each reason the map named a page unread reads to the firm
+#: (stages/compose.py UNREAD_REASONS writes the codes).
+_UNREAD_SAY = {
+    "refused": "The following pages were not read: the automated reading declined to process them on every "
+    "attempt, including on a second, stronger model. Nothing from those pages appears in this chronology:\n",
+    "empty": "The following pages were not read: the automated reading returned no account of them on every "
+    "attempt. Nothing from those pages appears in this chronology:\n",
+}
+
+
+def _map_unread_lines(d: Path, unit: str | None) -> list[str]:
+    """Pages the map never read (stages/compose.py, unread_pages.json). Only a
+    page nothing read is here: a record the map read is never named away."""
+    by: dict[str, dict[str, set[int] | None]] = {}
+    for p in _unit_files(d, unit, "runs", "unread_pages.json"):
+        for r in read_json(p, []) or []:
+            if not isinstance(r, dict) or not r.get("file") or r.get("reason") not in _UNREAD_SAY:
+                continue
+            files = by.setdefault(r["reason"], {})
+            have = files.get(r["file"], set())
+            files[r["file"]] = None if have is None or not r.get("pages") else have | set(r["pages"])
+    o: list[str] = []
+    for reason, files in by.items():
+        o += ["", _UNREAD_SAY[reason]]
+        o += [
+            f'* "{_shown(name)}"' + (f" - {_pages(sorted(ps))}" if ps else " - the whole document")
+            for name, ps in sorted(files.items())
+        ]
+    return o
+
+
+def _rendered_lines(d: Path, unit: str | None) -> list[str]:
+    """Exhibit pages made from a document's extracted text (stages/exhibits.py
+    ``rendered_from_text``): a word-processing file, or a PDF no reader could
+    page. The words are the document's; the layout is not."""
+    names: set[str] = set()
+    for p in _unit_files(d, unit, "out", "page_map.json"):
+        for ex in read_json(p, []) or []:
+            for f in (ex.get("files") or []) if isinstance(ex, dict) else []:
+                if isinstance(f, dict) and f.get("rendered_from_text") and f.get("file"):
+                    names.add(str(f["file"]))
+    if not names:
+        return []
+    return [
+        "",
+        "The following documents could not be included in the exhibits as their original pages (a word-processing "
+        "file, or a file no PDF reader could open). Their exhibit pages are rendered from the document's text, "
+        "without its original layout:\n",
+    ] + [f'* "{_shown(n)}"' for n in sorted(names)]
+
+
+def _prior_history_lines(d: Path, unit: str | None) -> list[str]:
+    """stages/summarize.py could not write a Prior Medical History summary
+    that cites only pages the entries cite, so it itemized them instead."""
+    if not _unit_files(d, unit, "runs", "prior_history_itemized.json"):
+        return []
+    return [
+        "",
+        "The pre-incident records are itemized entry by entry in the chronology; no separate summary of the "
+        "prior medical history is included.",
+    ]
+
+
+#: Attachment kinds the email index drops that could hold a record: a kind it
+#: does not open (an archive, a nested email), or a small non-image file.
+_NOT_OPENED_IMAGE = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif"}
+
+
+def _attachments_not_opened(d: Path) -> list[str]:
+    """Email attachments found and not opened (stages/msg.py `dropped_unkept`).
+    The never-a-record kinds (calendar files, signatures, logos) stay out; an
+    archive, an attached email, or a small document is named, because nothing
+    inside it was read."""
+    m = read_json(d / "msg_attachments.json", {}) or {}
+    rows: set[tuple[str, str, str]] = set()
+    for a in m.get("dropped_unkept") or []:
+        if not isinstance(a, dict) or a.get("already_pulled_as"):
+            continue
+        name = str(a.get("attachment") or "")
+        ext = ("." + name.rsplit(".", 1)[1].lower()) if "." in name else ""
+        if a.get("kind") == "other":
+            why = "a kind of file this review does not open"
+        elif a.get("kind") == "skipped-tiny" and ext not in _NOT_OPENED_IMAGE:
+            why = "under 20 KB, treated as an inline graphic and not opened"
+        else:
+            continue
+        rows.add((name, str(a.get("email") or ""), why))
+    if not rows:
+        return []
+    return [
+        "",
+        "The following email attachments were found and not opened, and nothing inside them appears in this "
+        "chronology:\n",
+    ] + [f'* "{n}"' + (f' (attached to the email "{e}")' if e else "") + f" - {w}" for n, e, w in sorted(rows)]
+
+
+def _billing_rows(d: Path, unit: str | None, name: str, log: Callable[[str], None]) -> list[tuple[str, int, str]]:
+    """Rows of a billing disclosure file as (file, page, reason). The billing
+    stages write them at the slug level, suffixed per unit on a joint matter
+    (`billing_gaps-<unit>.json`, the billing_chart convention), so the unit's
+    own file wins and the plain one is the single-unit case. Never an amount:
+    an amount the page did not confirm is what these files keep out."""
+    stem = name[: -len(".json")]
+    own = d / f"{stem}-{unit}.json" if unit is not None else None
+    paths = [own] if own is not None and own.is_file() else ([d / name] if (d / name).is_file() else [])
+    out: set[tuple[str, int, str]] = set()
+    raw = 0
+    for p in paths:
+        rows = read_json(p, [])
+        raw += len(rows) if isinstance(rows, list) else 0
+        for r in rows if isinstance(rows, list) else []:
+            if isinstance(r, dict) and r.get("file") and str(r.get("page") or "").isdigit():
+                out.add((str(r["file"]), int(r["page"]), str(r.get("reason") or "").strip()))
+    if raw and not out:
+        log(f"WARNING: {name} rows carry no file+page; schema drift, disclosure would be silently empty")
+    return sorted(out)
+
+
+def _billing_lines(d: Path, unit: str | None, log: Callable[[str], None]) -> list[str]:
+    o: list[str] = []
+    gaps = _billing_rows(d, unit, "billing_gaps.json", log)
+    if gaps:
+        o += [
+            "",
+            "The following billing pages were identified but could not be read, and no amount from them appears "
+            "in the billing summary:\n",
+        ]
+        o += [f'* "{f}" - p. {p}' + (f" ({r})" if r else "") for f, p, r in gaps]
+    dropped = _billing_rows(d, unit, "billing_dropped_rows.json", log)
+    if dropped:
+        o += [
+            "",
+            "The following billing rows were left out of the billing summary because their amount could not be "
+            "confirmed against the page:\n",
+        ]
+        o += [f'* "{f}" - p. {p}' + (f" ({r})" if r else "") for f, p, r in dropped]
+    return o
+
+
 def section(slug_dir: Path, unit: str | None, log: Callable[[str], None], cfg: Any = None) -> list[str]:
     o = ["", "## Records Reviewed and Limitations\n"]
     raw = read_jsonl(slug_dir / "raw_manifest.jsonl")
@@ -320,6 +494,11 @@ def section(slug_dir: Path, unit: str | None, log: Callable[[str], None], cfg: A
     folded = [r for r in ok if str(r.get("id", "")).startswith("msgatt-")]
     o += _scope_lines(slug_dir, byid, ok, folded, failed)
     o += _unread_lines(slug_dir, failed, log)
+    o += _map_unread_lines(slug_dir, unit)
+    o += _attachments_not_opened(slug_dir)
+    o += _rendered_lines(slug_dir, unit)
+    o += _billing_lines(slug_dir, unit, log)
+    o += _prior_history_lines(slug_dir, unit)
     o += _not_used_lines(slug_dir, byid, unit, cfg)
     o += _duplicate_lines(slug_dir, byid, dupes, unit, log)
     if len(o) == 2:

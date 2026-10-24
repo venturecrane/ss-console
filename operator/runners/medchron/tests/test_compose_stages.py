@@ -177,18 +177,25 @@ def test_compose_streams_resumes_by_hash_and_records_usage(job_dir: Path, firm_h
     assert compose_stage.run(sr) == 0 and len(client.calls) == 1
 
 
-def test_compose_retries_a_refusal_then_gives_up_and_exits_1(
+def test_compose_retries_a_refusal_then_names_the_pages_unread_and_exits_0(
     job_dir: Path, firm_headings: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Three refusals, then the judgment tier once; a single file still
+    declined has its pages named as unread (2026-10-24 audit, row 6), and
+    the map file carries that account in the house shape."""
     client = Scripted(lambda p, n: _msg("nope", stop="refusal"))
     log: list[str] = []
     sr = _sr(job_dir, firm_headings, data_root, client, log=log)
     _unit_files(sr, {"clinic note": "[p.1] text"})
     monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
-    assert compose_stage.run(sr) == 1
-    assert len(client.calls) == 3
-    assert (sr.slug_dir / "runs" / "alpha" / "map-01.md").read_text() == "## REFUSED\n"
-    assert any("REFUSED after 3 attempts" in line for line in log)
+    assert compose_stage.run(sr) == 0
+    assert len(client.calls) == 4
+    d = sr.slug_dir / "runs" / "alpha"
+    assert compose_stage.well_formed((d / "map-01.md").read_text())
+    assert json.loads((d / "unread_pages.json").read_text())[0]["pages"] == [1]
+    assert any("named as unread" in line for line in log)
+    # assemble reads the account: no entries, no refusal
+    assert assemble_stage.run(sr) == 0
 
 
 def test_compose_splits_an_emptied_chunk_once(
@@ -234,13 +241,18 @@ def test_compose_keeps_a_short_but_complete_half_after_the_split(
     d = sr.slug_dir / "runs" / "alpha"
     assert (d / "map-01-1.md").read_text() == short, "the short half is kept as the file's account"
     assert (d / "map-01-2.md").is_file() and len(client.calls) == 3
-    # a half that is short AND shapeless is still dropped
+    # a half that is short AND shapeless is never taken as an account: its
+    # pages are named as unread instead (2026-10-24 audit, row 6)
     client2 = Scripted(lambda p, n: _msg("x"))
     sr2 = _sr(job_dir, firm_headings, data_root, client2)
     for p in d.glob("*"):
         p.unlink()
-    assert compose_stage.run(sr2) == 1
-    assert not (d / "map-01-1.md").exists()
+    assert compose_stage.run(sr2) == 0
+    assert "x" != (d / "map-01-1.md").read_text() and "not read" in (d / "map-01-1.md").read_text()
+    assert sorted(u["file"] for u in json.loads((d / "unread_pages.json").read_text())) == [
+        "inspection report.pdf",
+        "mri report.pdf",
+    ]
 
 
 # ---- repair ----------------------------------------------------------------------

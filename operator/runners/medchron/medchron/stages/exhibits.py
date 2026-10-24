@@ -15,6 +15,14 @@ in the exemplar, and the firm asked why two providers had been split).
 Exhibits are built only for provider groups the chronology actually cites;
 a citation in the text overrides the undated-lane presumption, a cited
 sentinel lane refuses, and a citation that cannot be remapped is exit 1.
+
+Every cited record gets pages (2026-10-24 audit, rows 7 and 8). A cited
+.docx/.doc narrative report has no pages of its own, and a PDF pypdf cannot
+page (encrypted, damaged) is tried with pymupdf; either way, when no reader
+pages the file, its exhibit pages are rendered from the extracted text the
+map read (``rendered_from_text`` in page_map.json), and Records Reviewed and
+Limitations names each such file. A file nothing can page is recorded as its
+error in the page map, never a crash.
 """
 
 from __future__ import annotations
@@ -53,6 +61,86 @@ def _reader(path: str, ext: str) -> Any:
 
     with pymupdf.open(path) as img:
         return PdfReader(BytesIO(img.convert_to_pdf()))
+
+
+#: Word-processing files: extract reads their text (stages/extract.py
+#: WORD_EXTS), and a cited one becomes exhibit pages rendered from that text.
+WORD_EXTS = {".docx", ".doc"}
+PAGE_MARK = re.compile(r"\[p\.(\d+)\]")
+_PAGE_W, _PAGE_H, _MARGIN = 612, 792, 54
+
+
+def _text_reader(text: str) -> Any:
+    """Exhibit pages made from a document's extracted text. Text that carries
+    page marks becomes one page per marked page, scaled to fit, so a citation
+    to page N lands on page N; text without marks flows onto as many pages as
+    it needs. The words are the document's own, never composed; the layout is
+    not, and the limitations say so."""
+    import html
+
+    import pymupdf
+    from pypdf import PdfReader
+
+    marks = list(PAGE_MARK.finditer(text))
+    if marks:
+        segs = [text[m.end() : marks[k + 1].start() if k + 1 < len(marks) else len(text)] for k, m in enumerate(marks)]
+    else:
+        segs = []
+    rect = pymupdf.Rect(_MARGIN, _MARGIN, _PAGE_W - _MARGIN, _PAGE_H - _MARGIN)
+    css = "body { font-family: sans-serif; font-size: 10pt; } p { white-space: pre-wrap; margin: 0; }"
+    doc = pymupdf.open()
+    try:
+        if segs:
+            for seg in segs:
+                page = doc.new_page(width=_PAGE_W, height=_PAGE_H)
+                page.insert_htmlbox(rect, f"<p>{html.escape(seg.strip())}</p>", css=css, scale_low=0)
+        else:
+            story = pymupdf.Story(html=f"<p>{html.escape(text.strip())}</p>", user_css=css)
+            buf = BytesIO()
+            writer = pymupdf.DocumentWriter(buf)
+            more = True
+            while more:
+                dev = writer.begin_page(pymupdf.Rect(0, 0, _PAGE_W, _PAGE_H))
+                more, _ = story.place(rect)
+                story.draw(dev)
+                writer.end_page()
+            writer.close()
+            return PdfReader(BytesIO(buf.getvalue()))
+        return PdfReader(BytesIO(doc.tobytes()))
+    finally:
+        doc.close()
+
+
+def _pages_of(path: str, ext: str, text_path: str | None) -> tuple[list[Any], bool]:
+    """(pages, rendered_from_text) for one source file. A PDF is paged by
+    pypdf, then by pymupdf (it opens files pypdf cannot, an encrypted Kaiser
+    production among them), then from its extracted text; a word file from
+    its text. pypdf reads lazily, so `.pages` is touched INSIDE each attempt:
+    outside it, the first encrypted PDF crashed the stage (2026-10-24 audit,
+    row 8). Raises when nothing could page the file."""
+    errors: list[str] = []
+    if ext in PAGE_SOURCES:
+        try:
+            r = _reader(path, ext)
+            return list(r.pages), False
+        except Exception as exc:  # noqa: BLE001 - one reader failing falls through to the next
+            errors.append(f"{type(exc).__name__}: {exc}")
+        if ext == ".pdf":
+            try:
+                import pymupdf
+                from pypdf import PdfReader
+
+                with pymupdf.open(path) as doc:
+                    if doc.needs_pass:
+                        raise ValueError("the file needs a password to open")
+                    return list(PdfReader(BytesIO(doc.convert_to_pdf())).pages), False
+            except Exception as exc:  # noqa: BLE001 - recorded, and the text is tried next
+                errors.append(f"{type(exc).__name__}: {exc}")
+    if text_path and Path(text_path).is_file():
+        text = Path(text_path).read_text(encoding="utf-8", errors="replace")
+        if text.strip():
+            return list(_text_reader(text).pages), True
+    raise ValueError("; ".join(errors) or f"no pages and no extracted text for a {ext or 'extensionless'} file")
 
 
 BILL = re.compile(r"(?i)\bbill|ledger|invoice|statement|charges\b")
@@ -156,18 +244,24 @@ def run(sr: StageRun) -> int:
         cursor = 1
         for _first, name, old, f in gfiles:
             rec = raw.get(f["id"])
-            if not rec or (f.get("ext") or "").lower() not in PAGE_SOURCES:
+            ext = (f.get("ext") or "").lower()
+            if not rec or ext not in PAGE_SOURCES | WORD_EXTS:
                 continue
             try:
-                r = _reader(rec["path"], (f.get("ext") or "").lower())
+                pages, rendered = _pages_of(rec["path"], ext, f.get("text_path"))
+                for pg in pages:
+                    w.add_page(pg)
             except Exception as exc:  # noqa: BLE001 - an unreadable file is recorded as that file's error in the exhibit list and the loop continues
-                entries.append({"file": name, "error": str(exc)[:100]})
+                entries.append({"file": name, "error": str(exc)[:200]})
+                sr.log(f"  !! {name}: could not be paged: {str(exc)[:120]}")
                 continue
-            for pg in r.pages:
-                w.add_page(pg)
             remap[old] = (n, cursor)
-            entries.append({"file": name, "old_exhibit": old, "start_page": cursor, "pages": len(r.pages)})
-            cursor += len(r.pages)
+            row: dict[str, Any] = {"file": name, "old_exhibit": old, "start_page": cursor, "pages": len(pages)}
+            if rendered:
+                row["rendered_from_text"] = True
+                sr.log(f"  {name}: exhibit pages rendered from its extracted text ({len(pages)} pp.)")
+            entries.append(row)
+            cursor += len(pages)
         if cursor == 1:
             n -= 1
             continue
