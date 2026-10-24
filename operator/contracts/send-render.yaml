@@ -259,6 +259,18 @@ skills:
       body_without_attachment rung between the full body and the skeleton.
       Stamps: body_sha256 entries on EMITTED_WAKE (full, skeleton, and
       without_attachment when the workbook rides).
+  operator-help:
+    render: templated
+    template: operator/skills/operator-help/pre_run.py
+    note: >-
+      The weekly help note to SMD (ss-console#3423 increment 3) is rendered
+      deterministically in pre_run (render_note) from the seat's help state:
+      the tip emphasis changes of the last seven days with their counts, the
+      last review's counts, proposed tips, and how to undo. Dispatched out of
+      turn by the overlay's prerendered-dispatch hook to the recipient authored
+      in the skill's settings; the model composes nothing, and the envelope's
+      in_turn declares the skeleton as the only body the woken review turn may
+      send. Stamps: body_sha256 entries on EMITTED_WAKE (full and skeleton).
   negotiation-watch:
     render: compositional
     note: >-
