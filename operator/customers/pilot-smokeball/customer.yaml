@@ -269,12 +269,9 @@ personas:
         version: pending
         initiation:
           manual: true
-          scheduled: true # the daily help review (ss-console#3423 increment 3)
+          scheduled: false
           webhook: false
         enabled: true
-        settings:
-          # The weekly help note goes to SMD only (ss-console#3423).
-          recipient: scott@smd.services
       - name: operator-self-test
         version: pending
         initiation:
@@ -785,14 +782,6 @@ personas:
         wake_policy: pre_run_decides
       - skill: task-list-keeper
         schedule: '37 6 * * 1' # weekly Mon 0637 seat-local: staggered off :00, and ahead of the 0700 escalator so its "in Monday's task review" line points at a proposal already sent
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      # ss-console#3423 increment 3: the daily help review (the Operator may
-      # reorder SMD's own tips, at most 3 changes a week) and, on Mondays, the
-      # weekly note to SMD with what changed and how to undo it. SMD ops, not a
-      # firm routine: nothing reaches the firm.
-      - skill: operator-help
-        schedule: '17 14 * * *' # daily 1417 seat-local (off :13, the hourly auth check); the pre_run adds the note on Mondays
         pre_run: pre_run.py
         wake_policy: pre_run_decides
       - skill: date-prep-brief
