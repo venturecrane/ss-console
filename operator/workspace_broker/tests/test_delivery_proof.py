@@ -361,10 +361,12 @@ def test_a_chronology_resume_refuses_both_decisions_and_writes_nothing(tmp_path)
     assert not (queue / f".resume-{j}.json").exists()
 
 
-def test_an_ordinary_hold_is_still_not_resumable(tmp_path):
+def test_a_review_release_on_a_hold_that_is_not_the_reviews_is_refused(tmp_path):
+    """A stage-refusal hold resumes (2026-10-24), but ``release_review`` files
+    past review findings, and a stage refusal has none to release past."""
     mt, v, queue = _medchron(tmp_path)
     j = mt._held_job(v, "refused: the firm must decide which folder")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="release_review does not apply"):
         mt.call(v, "medchron_job_resume", peer_uid=ROOT, job_id=j, reason="x", redo=[], release_review=True)
 
 
