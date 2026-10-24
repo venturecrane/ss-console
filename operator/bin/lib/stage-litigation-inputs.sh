@@ -41,5 +41,7 @@ if [ -f "${LITIGATION_INPUTS_DIR}/litigation-firm.yaml" ]; then
       --endpoint-url "${R2_ENDPOINT_URL}" --only-show-errors \
     || die "R2 sync of the litigation firm inputs failed"
   log "R2 upload OK (litigation firm inputs)"
+else
+  assert_lane_not_on_main "operator/customers/${SLUG}/litigation/litigation-firm.yaml"
 fi
 # <<< litigation-inputs-stage

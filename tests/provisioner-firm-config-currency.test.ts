@@ -208,3 +208,56 @@ describe('firm config currency guard', () => {
     expect(gate).toBeLessThan(src.indexOf('# >>> medchron-firm-validate'))
   })
 })
+
+// 2026-10-23: the reverse gap. A lane's firm file on engagements main but MISSING
+// from a stale checkout made provisioning log "No <lane> firm inputs" and skip
+// staging with exit zero, so the seat deferred that lane's jobs forever (the
+// pilot's demand inputs, engagements#293). assert_lane_not_on_main runs on every
+// lane's no-inputs path and treats that state as cannot-evaluate.
+describe('a lane file on engagements main is never read as absent', () => {
+  function runAbsent(
+    clone: string,
+    extraEnv: Record<string, string> = {}
+  ): { code: number; out: string } {
+    const script = `
+set -u
+log() { echo "LOG: $*"; }
+die() { echo "DIE: $*"; exit 3; }
+SLUG=acme
+MEDCHRON_FIRM_YAML="${join(clone, REL)}"
+${block()}
+assert_lane_not_on_main "${REL}"
+echo PASSED
+`
+    try {
+      const out = execFileSync('bash', ['-c', script], {
+        env: { ...cleanEnv(), SS_ENGAGEMENTS_DIR: clone, ...extraEnv },
+        encoding: 'utf8',
+      })
+      return { code: 0, out }
+    } catch (e) {
+      const err = e as { status: number; stdout: string }
+      return { code: err.status, out: err.stdout }
+    }
+  }
+
+  it('refuses when main carries the file and the checkout does not', () => {
+    const r = runAbsent(scene(null))
+    expect(r.code).toBe(3)
+    expect(r.out).toContain('is on engagements origin/main but not in the checkout')
+    expect(r.out).not.toContain('PASSED')
+  })
+
+  it('passes when the file is on neither (the seat genuinely authors no such lane)', () => {
+    // The control: main carries a DIFFERENT file, so the lane is truly absent.
+    const r = runAbsent(scene(null, 'operator/customers/acme/other/other.yaml'))
+    expect(r.code).toBe(0)
+    expect(r.out).toContain('PASSED')
+  })
+
+  it('yields to SS_ALLOW_DIVERGENT_SOURCE=1, and says so', () => {
+    const r = runAbsent(scene(null), { SS_ALLOW_DIVERGENT_SOURCE: '1' })
+    expect(r.code).toBe(0)
+    expect(r.out).toContain('BY REQUEST')
+  })
+})
