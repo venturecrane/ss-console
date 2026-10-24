@@ -94,14 +94,23 @@ def _audit_gate_hold(row: dict[str, Any]) -> bool:
 
     That hold is OURS: the loop left a claim it exists to weaken or drop, which
     is a pipeline defect, and once the fix ships the audit stage re-runs from its
-    cached verdicts for the price of the handful of claims still open. Every
-    other hold stays out: a refusal (`refused: ...`) needs the firm's decision,
-    a limit hold lifts through the limit, and a seat-pause hold self-resumes."""
+    cached verdicts for the price of the handful of claims still open. A limit
+    hold lifts through the limit, a seat-pause hold self-resumes, and a question
+    for the firm (``identity:``) waits for the firm, so none of those resumes."""
     # The pre-delivery review's hold (proof/review.py, 2026-10-13) is the same
     # kind: resumable by SMD, as a redo of the review or a release past it; and
     # so is a dry run that reached the ledger (nothing was filed).
     reason = str(row.get("reason") or "")
-    return row.get("state") == "held" and reason.startswith((AUDIT_GATE_HOLD_PREFIX, "review_held", "dry_run_reported"))
+    if row.get("state") != "held":
+        return False
+    if reason.startswith((AUDIT_GATE_HOLD_PREFIX, "review_held", "dry_run_reported")):
+        return True
+    # A stage refusal is a pipeline integrity stop the hold classifier already
+    # pages to SMD as ours (``stage_refused``); once the fix ships, SMD resumes
+    # it. 2026-10-24: Pamplona held at strip_falsify on a cited page the
+    # classifier called non-record (#3460) and this rule, which still read
+    # every refusal as the firm's decision, refused the resume.
+    return hold_class.classify("medchron", reason) == (hold_class.SMD_FINISHING, "stage_refused")
 
 
 def _with_hold_class(job: dict[str, Any], lane: str) -> dict[str, Any]:
@@ -349,6 +358,12 @@ class MedchronVerbs:
         self._db.queue_dir.mkdir(parents=True, exist_ok=True)
         marker = self._db.queue_dir / f".resume-{job_id}.json"
         extras = delivery_proof.resume_extras(request)
+        if extras.get("release_review") and not str(row.get("reason") or "").startswith(
+            ("review_held", "dry_run_reported")
+        ):
+            # A release files the work past the pre-delivery review's findings
+            # (or past a dry run); a stage refusal has nothing to release past.
+            raise ValueError(f"job {job_id} is not held by the pre-delivery review; release_review does not apply")
         stages = [s.strip() for s in redo] + [s for s in extras.pop("redo", []) if s not in redo]
         payload = {"job_id": job_id, "reason": reason[:500], "redo": stages, **extras}
         marker.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
