@@ -129,13 +129,32 @@ describe('operator-help: the skill', () => {
     expect(lede.length).toBeLessThanOrEqual(57)
   })
 
-  it('ships the guide and the tips it reads, from the volume first, then the image', () => {
+  it('ships the guide and the tips, which the seat facts tool delivers, volume first', () => {
     const body = flat(read(`${HELP}/SKILL.md`))
     expect(body).toContain('`operator_seat_facts` with `depth: "help"`')
-    expect(body).toContain('/opt/data/skills/operator-help/references/guide.md')
-    expect(body).toContain('/app/skills/operator-help/references/guide.md')
+    expect(body).toContain('/opt/data/skills/operator-help/references/')
+    expect(body).toContain('/app/skills/operator-help/references/')
+    // ss-console#3423: the tool carries the guide; the skill says so.
+    expect(body).toContain('You need not read either file with `read_file`.')
+    expect(body).toContain('`answer_shape`')
+    expect(body).toContain('`answer_rules`')
     expect(existsSync(`${HELP}/references/guide.md`)).toBe(true)
     expect(existsSync(`${HELP}/references/tips.yaml`)).toBe(true)
+  })
+
+  it('keeps the guide in the two-part shape the seat facts tool reads, and small', () => {
+    // The tool returns everything under "## The guide" and never the Notes block
+    // above it (operator/hermes-smd-overlay/plugins/hermes-smd-initiation/help_guide.py).
+    const guide = read(`${HELP}/references/guide.md`)
+    const notes = guide.indexOf('## Notes for the Operator')
+    const body = guide.indexOf('## The guide')
+    expect(notes).toBeGreaterThan(-1)
+    expect(body).toBeGreaterThan(notes)
+    expect(guide.slice(body).length).toBeLessThan(4500)
+  })
+
+  it('never lets the answer describe the Operator by what it is not', () => {
+    expect(flat(read(`${HELP}/SKILL.md`))).toContain('Never describe yourself by what you are not')
   })
 
   it('offers only what the seat lists for this sender, and never its machinery or a time', () => {
@@ -249,6 +268,21 @@ describe('operator-help: the router Help class', () => {
     const rubric = flat(read(RUBRIC))
     expect(rubric).toContain('**help request**')
     expect(rubric).toContain('/app/skills/operator-help/SKILL.md')
+  })
+
+  it('composes from the tool result, whatever the wording of the help question', () => {
+    const b = bullet('Help request')
+    expect(b).toContain(
+      'asks how to prompt, ask, direct or work with the Operator, or whether to upload or point it at documents'
+    )
+    expect(b).toContain('compose the reply from its `help` section')
+    expect(b).toContain('`answer_shape`')
+    expect(b).toContain('is optional, never a step the answer waits on')
+    const rubric = flat(read(RUBRIC))
+    expect(rubric).toContain(
+      'asks how to prompt, ask, direct or work with the Operator, or whether to upload or point it at documents'
+    )
+    expect(rubric).toContain('`answer_shape`')
   })
 
   it('reads the skill at runtime paths and says what to do when it will not load', () => {

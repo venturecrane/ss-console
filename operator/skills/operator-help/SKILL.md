@@ -34,7 +34,10 @@ the answer a good colleague would give: direct, specific to what this seat can
 do for them, and short. This skill is that answer. The words come from a guide
 SMD wrote (`references/guide.md`) and a set of SMD-authored tips
 (`references/tips.yaml`); what this seat can do for this person comes from the
-seat's own facts, read this turn. Nothing comes from memory.
+seat's own facts, read this turn. Nothing comes from memory. All of it arrives
+in one tool result: `operator_seat_facts` with `depth: "help"` returns the
+guide's body, the tips, the ordered `answer_shape` and the `answer_rules`, so a
+help answer never depends on reading this file or the references mid-turn.
 
 ## Who may invoke
 
@@ -62,10 +65,12 @@ This skill answers questions about **how to ask**: "how do we work together?",
 
 ## Procedure
 
-### 1. Read this seat's facts
+### 1. Read this seat's facts, the guide and the tips
 
-Call `operator_seat_facts` with `depth: "help"`. Its `help` section lists the
-requests this seat invites. For each one it gives `what`, `example`,
+Call `operator_seat_facts` with `depth: "help"`. Its `help` section carries the
+guide's body (`guide`), the tips (`tips`), the ordered parts of a good answer
+(`answer_shape`) and the guide's notes compacted into `answer_rules`. It also
+lists the requests this seat invites. For each one it gives `what`, `example`,
 `admin_only` and `sender_may_ask` (already decided from the roster and the
 firm's administrators; you never re-judge it). Its `voice` section says which
 kinds of writing have a learned voice. Its `identity` and `connections`
@@ -80,20 +85,23 @@ could not be checked this turn even though the section reads `read: true`. Say
 briefly that you could not check every kind of request just now, and offer only
 what the `help` section lists.
 
-### 2. Read the guide and the tips
+### 2. The guide and the tips come with the facts
 
-Read `references/guide.md` and `references/tips.yaml` with `read_file`. Try
-`/opt/data/skills/operator-help/references/guide.md` first, then
-`/app/skills/operator-help/references/guide.md`; the same two places, in the
-same order, for `tips.yaml`. The guide's own "Notes for the Operator" section
-binds you; never quote it or mention it.
+The tool reads `references/guide.md` and `references/tips.yaml` itself, from
+`/opt/data/skills/operator-help/references/` first, then
+`/app/skills/operator-help/references/`, and returns the guide's body without
+its "Notes for the Operator" section, which reaches you as `answer_rules`
+instead. Those rules bind you; never quote them or mention them. You need not
+read either file with `read_file`.
 
-If neither copy of the guide will read, answer from the shape below using only
-what the seat facts say, keep it short, and do not improvise a guide.
+If `guide` comes back null (an `unreadable[]` entry says why), answer from the
+shape below using only what the seat facts say, keep it short, and do not
+improvise a guide.
 
 ### 3. Answer in this shape
 
-Short by default. Go deeper only if they asked for more, or asked a specific
+The tool's `answer_shape` is this list, in this order; compose from it. Short
+by default. Go deeper only if they asked for more, or asked a specific
 follow-up. Prose, no headings, no tables. Plain sentences.
 
 1. **The direct answer to what they asked**, in one paragraph. If they asked
@@ -121,7 +129,7 @@ follow-up. Prose, no headings, no tables. Plain sentences.
    training: send SMD a couple of examples they like.
 7. **Close** by inviting questions, in one line.
 
-Use a tip from `references/tips.yaml` when it fits what the person asked or the
+Use a tip from the `tips` the tool returned when it fits what the person asked or the
 trouble they describe (for example `held_identity_check` when they mention it
 stopped to ask which document they meant). Use the tip's own words.
 
@@ -145,6 +153,8 @@ this question never carries that pointer itself.
   with `sender_may_ask: true` for this sender, and never describe a capability
   the seat facts do not support. The guide's examples are examples, not a
   roster.
+- Never describe yourself by what you are not ("I'm not a general-purpose
+  assistant" reads as a correction). Say what you do for them.
 - Never promise a time of any kind ("within the hour", "by tomorrow", "right
   away").
 - Never use an em dash.
