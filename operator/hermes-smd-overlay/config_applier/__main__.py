@@ -128,6 +128,11 @@ class PollLoop:
     epoch_file: Path
     audit_client: Any
     poll_seconds: float = _DEFAULT_POLL_SECONDS
+    # Wave 2 W4, shadow mode: the signed seat spec is verified and reported on
+    # every tick it is due (config_applier.spec_verifier), and NOTHING it finds
+    # changes what this loop applies. None disables it (tests, a seat whose
+    # image carries no verifier dependency).
+    spec_verifier: Any = None
     _last_etag: str | None = None
     _seeded: bool = False
 
@@ -179,6 +184,7 @@ class PollLoop:
         running Machine is a successful APPLIED write; everything else leaves the
         current config in place.
         """
+        self._verify_spec()
         if not self._seeded:
             self._seed_cache()
 
@@ -232,6 +238,16 @@ class PollLoop:
         # Mark this object handled (applied or refused) so it is not re-processed.
         self._last_etag = etag
         return result.outcome
+
+    def _verify_spec(self) -> None:
+        """One spec-verifier step. Isolated: a verifier fault is logged and the
+        config apply below runs exactly as it would without the verifier."""
+        if self.spec_verifier is None:
+            return
+        try:
+            self.spec_verifier.step()
+        except Exception:  # noqa: BLE001 -- shadow mode must never cost the apply path
+            logger.exception("applier: spec verifier step failed; config apply unaffected")
 
     def run_forever(self, stop) -> None:
         """Poll until ``stop()`` returns True (set by the signal handler).
@@ -310,15 +326,27 @@ def build_loop() -> PollLoop:
     bucket = _require_env(_ENV_R2_BUCKET)
     volume = Path(os.environ.get(_ENV_VOLUME) or _DEFAULT_VOLUME)
     epoch_file = Path(os.environ.get(_ENV_EPOCH_FILE) or _DEFAULT_EPOCH_FILE)
+    s3_client = _build_s3_client()
     return PollLoop(
-        s3_client=_build_s3_client(),
+        s3_client=s3_client,
         bucket=bucket,
         slug=slug,
         volume_path=volume,
         epoch_file=epoch_file,
         audit_client=audit_client_from_env(customer_slug=slug),
         poll_seconds=_poll_seconds_from_env(),
+        spec_verifier=_build_spec_verifier(s3_client, bucket, slug, volume),
     )
+
+
+def _build_spec_verifier(s3_client: Any, bucket: str, slug: str, volume: Path) -> Any:
+    """The shadow-mode spec verifier, or None (logged) when it cannot load."""
+    try:
+        from config_applier.spec_verifier import SpecVerifier
+    except ImportError as exc:
+        logger.error("applier: spec verifier unavailable (%s); seat specs go unverified", exc)
+        return None
+    return SpecVerifier(s3_client=s3_client, bucket=bucket, slug=slug, running_yaml_path=volume)
 
 
 def main(argv: list[str] | None = None) -> int:

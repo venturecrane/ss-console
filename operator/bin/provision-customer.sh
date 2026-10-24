@@ -222,20 +222,9 @@ log "App: ${APP_NAME} · region: ${FLY_REGION} · machine: ${MACHINE_SIZE}/${MEM
 # HERMES_UPSTREAM_TAG / HERMES_UPSTREAM_SHA ARG defaults are the one pin, baked
 # into the release image every seat runs. Nothing to read from customer.yaml.
 
-# ---------- Step 2: upload customer.yaml to R2 ----------
-# bootstrap.sh fetches this from R2 on first boot and writes it to
-# /opt/data/customer.yaml. Doing the upload BEFORE the Fly deploy means the
-# first Machine boot can succeed (otherwise the boot would race against a
-# missing config). The customer-sync sidecar (from the overlay bootstrap/
-# package) polls this same key for non-structural updates.
-log "Uploading customer.yaml to R2: s3://${R2_BUCKET_CONFIG}/${R2_CONFIG_KEY}"
-AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" \
-AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-  aws s3 cp "${CUSTOMER_YAML}" "s3://${R2_BUCKET_CONFIG}/${R2_CONFIG_KEY}" \
-    --endpoint-url "${R2_ENDPOINT_URL}" \
-    --only-show-errors \
-  || die "R2 upload failed; bootstrap.sh would not be able to fetch customer.yaml"
-log "R2 upload OK"
+# ---------- Step 2: customer.yaml to R2, through the seat-spec compiler ----------
+# shellcheck source=lib/stage-seat-spec.sh
+source "${BIN_DIR}/lib/stage-seat-spec.sh"
 
 # ---------- Step 2b: upload the chronology runner's firm config (ss#2614) ----------
 # The runner's per-firm posture (provider tables, exclusions, caps) lives in

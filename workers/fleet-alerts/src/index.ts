@@ -80,7 +80,8 @@ import {
   type ShortfallNotification,
 } from './shortfalls'
 import { processTransition } from './transition'
-import { driftConditions } from './drift'
+import { driftConditions, driftGraceSeconds } from './drift'
+import { specConditions } from './spec'
 import { getOpenSpecControlKeys, specControlConditions } from './spec-control'
 import { getStaleHolds } from './stale-holds'
 import {
@@ -207,6 +208,9 @@ export type FleetCondition =
   | 'skills_drift'
   // Migration 0138. The in-image self-test reported a failed check. See ./selftest.
   | 'selftest_failing'
+  // Migration 0140. The seat cannot verify its signed spec, or holds an older
+  // one than the published pointer names. See ./spec.
+  | 'spec_unverified'
   // Wave 8.2. Keyed by the probe TARGET in customer_slug, not a seat.
   | 'edge_down'
   | `connector_down:${string}`
@@ -592,6 +596,27 @@ function logRun(summary: RunSummary): void {
   }
 }
 
+/**
+ * Push each state through the open-once / recover-once machinery, one at a
+ * time, so one failing transition cannot suppress the others.
+ */
+async function transitionEach(
+  env: Env,
+  states: ConditionState[],
+  nowMs: number,
+  label: string,
+  transitions: Transition[]
+): Promise<void> {
+  for (const s of states) {
+    try {
+      const t = await processTransition(env, s, nowMs)
+      if (t) transitions.push(t)
+    } catch (err) {
+      console.error(`[fleet-alerts] ${label} transition failed:`, s.customer_slug, s.condition, err)
+    }
+  }
+}
+
 /** One evaluation pass: read fleet, compute conditions, fire edge transitions. */
 export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<RunSummary> {
   const rows = await listFleetStatus(env.DB)
@@ -637,26 +662,21 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
   // pager and a seat problem can never suppress the edge pager. The counted
   // runs go through the same open-once / recover-once machinery.
   const edge = await runEdgePolls(env, nowMs)
-  for (const s of edge.conditions) {
-    try {
-      const t = await processTransition(env, s, nowMs)
-      if (t) transitions.push(t)
-    } catch (err) {
-      console.error('[fleet-alerts] edge transition failed:', s.customer_slug, err)
-    }
-  }
+  await transitionEach(env, edge.conditions, nowMs, 'edge', transitions)
 
   // 2026-10-22: authored-versus-running drift (./drift). Its own reads, its
   // own fail-soft; per-condition isolation like the edge block above.
   const drift = await driftConditions(env, rows, nowMs, redSeconds(env))
-  for (const s of drift) {
-    try {
-      const t = await processTransition(env, s, nowMs)
-      if (t) transitions.push(t)
-    } catch (err) {
-      console.error('[fleet-alerts] drift transition failed:', s.customer_slug, s.condition, err)
-    }
-  }
+  await transitionEach(env, drift, nowMs, 'drift', transitions)
+
+  // Wave 2 W4: the signed seat spec (./spec). Its own R2 reads, its own
+  // fail-soft, per-condition isolation like the drift block above.
+  const spec = await specConditions(env, rows, {
+    nowMs,
+    redSeconds: redSeconds(env),
+    graceSeconds: driftGraceSeconds(env.DRIFT_GRACE_SECONDS),
+  })
+  await transitionEach(env, spec, nowMs, 'spec', transitions)
 
   const staleHolds = await getStaleHolds(env.DB)
 
@@ -680,7 +700,7 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
   const summary: RunSummary = {
     at: new Date(nowMs).toISOString(),
     seats: rows.length,
-    conditions: [...conditions, ...drift],
+    conditions: [...conditions, ...drift, ...spec],
     transitions,
     stale_holds: staleHolds,
     sink_notifications: sinkNotifications,

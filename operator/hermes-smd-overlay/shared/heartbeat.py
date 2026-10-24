@@ -1479,6 +1479,7 @@ def build_payload(
     jobs_queued: int | None = None,
     wakes_pending: int | None = None,
     selftest: dict | None = None,
+    spec: dict | None = None,
 ) -> dict[str, object]:
     """Assemble the heartbeat body. ``heartbeat_ts`` is the only required
     field at the receiver; optional fields are omitted when absent rather
@@ -1651,6 +1652,11 @@ def build_payload(
     # as a synthetic failed id, because silence is the defect this closes.
     if selftest is not None:
         payload["selftest"] = selftest
+    # The seat-spec verifier's verdict (shared/spec_check.py, ss-console Wave 2
+    # W4, shadow mode). Same None rule as selftest: absent until there is
+    # something to say; a dead verifier ships verdict `stale`, never silence.
+    if spec is not None:
+        payload["spec"] = spec
     return payload
 
 
@@ -1736,6 +1742,7 @@ class HeartbeatEmitter:
         card_post_fn=_default_post,
         request_cards_fn=None,
         selftest_check_fn=None,
+        spec_check_fn=None,
     ) -> None:
         self._slug = slug
         self._key = key
@@ -1796,6 +1803,8 @@ class HeartbeatEmitter:
         # Injectable for tests; no debounce: the file is rewritten by rename, so
         # there is no torn read to smooth over.
         self._selftest_check_fn = selftest_check_fn or _default_selftest_check
+        # The root spec verifier's state file (shared.spec_check), same shape.
+        self._spec_check_fn = spec_check_fn or _default_spec_check
 
     def start(self) -> bool:
         """Launch the daemon thread. Returns False (and logs) when the
@@ -2021,6 +2030,17 @@ class HeartbeatEmitter:
 
             return unreadable_result(time.time())
 
+    def _read_spec(self) -> dict | None:
+        """The seat-spec verdict. A crash in the reader ships verdict
+        ``unreadable``, never an absent field the console would hold on."""
+        try:
+            return self._spec_check_fn()
+        except Exception as exc:  # noqa: BLE001 -- the check must never kill the beat
+            logger.warning("heartbeat: spec read failed: %s", exc)
+            from shared.spec_check import unreadable_result
+
+            return unreadable_result(time.time())
+
     def _post_control_plane(self) -> None:
         ledger = read_audit_facts(self._audit_db_path_fn())
         # ss-console #2498. Read from the volume, not from this process: the
@@ -2114,6 +2134,7 @@ class HeartbeatEmitter:
             jobs_queued=fleet.jobs_queued if fleet is not None else None,
             wakes_pending=fleet.wakes_pending if fleet is not None else None,
             selftest=self._read_selftest(),
+            spec=self._read_spec(),
         )
         import json
 
@@ -2202,6 +2223,13 @@ def _default_webhook_surface_check():
     from shared.webhook_surface_check import check
 
     return check()
+
+
+def _default_spec_check():
+    """The real seat-spec state read (shared.spec_check)."""
+    from shared.spec_check import read_spec
+
+    return read_spec()
 
 
 def _default_selftest_check():

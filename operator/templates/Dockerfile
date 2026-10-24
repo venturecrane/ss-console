@@ -673,6 +673,12 @@ COPY operator/templates/matter-mixing-fence-probe.py /app/matter-mixing-fence-pr
 COPY operator/templates/seat-checks.sh /app/seat-checks.sh
 COPY --chmod=0755 operator/templates/selftest.sh /app/selftest.sh
 COPY operator/templates/lane-memory-caps-probe.py /app/lane-memory-caps-probe.py
+# The seat-spec public key the root config_applier verifies every signed spec
+# pointer against (ADR 0094 amendment). Re-owned root below with the other
+# governance files, as are the image manifest and capabilities it checks a
+# spec's requirements against: an agent that could replace the key could sign
+# its own config, and one that could edit the manifests could pass it.
+COPY operator/templates/seat-spec.pub /app/seat-spec.pub
 
 # What this image can do for a skill (fleet release, 2026-10-19). Skills now
 # reach seats separately from the image (`fleet release --skills`), so a skill
@@ -734,6 +740,7 @@ RUN chown -R root:root \
       /app/operator/templates/drafting \
       /app/_env-arrays.generated.sh \
       /app/OVERLAY_REF \
+      /app/seat-spec.pub /app/image-manifest.json /app/image-capabilities.json \
  && chown root:root /app/*.sh /app/*.py \
  && chmod -R a+rX /app/overlay-pack /app/operator/templates/drafting
 

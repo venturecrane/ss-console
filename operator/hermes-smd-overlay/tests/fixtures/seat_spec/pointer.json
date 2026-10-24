@@ -1,0 +1,9 @@
+{
+ "schema_version": 1,
+ "slug": "seat-alpha",
+ "spec_sha256": "c0148f2bc16b80bf6a70138a59d753a7a5eccb96023bd385dd8f977e1d5d5cda",
+ "spec_key": "fleet/specs/seat-alpha/c0148f2bc16b80bf6a70138a59d753a7a5eccb96023bd385dd8f977e1d5d5cda.json",
+ "compiled_from": "1111111111111111111111111111111111111111",
+ "key_id": "1b66f9664a6fa568",
+ "signature": "/DUs7TbbXto3Y0j75BL/P75oFID+tyu7r62oiOWJvT0CxX8klPZGDgMCvWhr+TnFU6gsnzP7jsvJGOPfs/igAA=="
+}

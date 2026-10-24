@@ -103,6 +103,8 @@ const CONDITION_LABEL: Record<string, string> = {
   skills_drift: 'Seat runs a skills version other than its pointer names',
   // Migration 0138, ./selftest. The seat's own boot-and-hourly check list.
   selftest_failing: 'Seat self-test failed a check',
+  // Migration 0140, ./spec. Wave 2 W4, shadow mode.
+  spec_unverified: 'Seat cannot verify its signed config spec',
 }
 
 /**

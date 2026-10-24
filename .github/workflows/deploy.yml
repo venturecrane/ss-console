@@ -162,10 +162,15 @@ jobs:
   # side should never be the reason a merged persona register fails to reach a
   # running Machine.
   publish-customer-configs:
-    name: Publish customer.yaml → R2 (seat source of truth)
+    name: Publish customer.yaml + signed seat spec → R2 (seat source of truth)
     runs-on: ubuntu-latest
     needs: deploy
     if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    # The seat-spec signing key (Ed25519, ADR 0094 amendment) is a secret of the
+    # protected `seat-spec` environment and of nothing else, so only this job,
+    # on main, can sign. Absent, the publisher still publishes customer.yaml and
+    # skips the spec with a loud warning: main stays deployable.
+    environment: seat-spec
     permissions:
       contents: read
       packages: read
@@ -191,7 +196,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm ci
 
-      - name: Publish changed customer configs to R2
+      - name: Publish customer configs and seat specs to R2
         env:
           # No R2_* secrets: the R2 S3 credentials are derived from these two
           # inside the script. R2's S3 API accepts a Cloudflare API token
@@ -205,6 +210,8 @@ jobs:
           # fleet release's manifest) through wrangler; off by default so a
           # local run needs no D1.
           FLEET_IMAGE_LOOKUP: '1'
+          # PKCS#8 PEM, read by scripts/compile-seat-spec.ts; never echoed.
+          SEAT_SPEC_SIGNING_KEY: ${{ secrets.SEAT_SPEC_SIGNING_KEY }}
         run: bash scripts/ci-publish-customer-configs.sh
 
   # Skills as a release artifact (fleet release, 2026-10-19). A merge touching

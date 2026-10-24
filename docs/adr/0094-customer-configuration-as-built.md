@@ -18,7 +18,16 @@ enforced_by:
   - scripts/ci-publish-customer-configs.sh
   - scripts/ci-reconcile-customer-configs.sh
   - scripts/ci-reconcile-r2-customer-configs.sh
-  - scripts/lib/seat-image-guard.sh
+  - scripts/compile-seat-spec.ts
+  - scripts/lib/seat-spec.ts
+  - scripts/lib/seat-spec-compile.ts
+  - scripts/lib/seat-spec-inputs.sh
+  - tests/compile-seat-spec.test.ts
+  - operator/bin/lib/stage-seat-spec.sh
+  - operator/templates/seat-spec.pub
+  - operator/hermes-smd-overlay/config_applier/spec_verifier.py
+  - operator/hermes-smd-overlay/shared/spec_check.py
+  - workers/fleet-alerts/src/spec.ts
   - .github/workflows/deploy.yml
   - .github/workflows/customer-config-reconcile.yml
   - operator/templates/entrypoint.sh
@@ -32,7 +41,25 @@ enforced_by:
 
 **Why this record exists.** Agents load ADRs as ground truth, and `operator/CLAUDE.md` put 0012 on the load-first list. An architecture review on 2026-10-22 found that 0012 described a different system: a `customer-configs/<slug>.yaml` path, an R2 key under `customers/`, a merge that provisions the Machine, a Cloudflare drift cron paging Sentry, a PR-deletion offboarding, an `smd-config sync` CLI, and a D1 table keyed on `entity_id`. None of those is what runs. This ADR describes what does, with a citation for every claim, so the next agent reasons from the code and not from the plan.
 
-Every `file:line` below is against `origin/main` at `8cb62e6d` for this repo and `3d64eda` for `venturecrane/hermes-smd-overlay`. Overlay paths are prefixed `overlay:`.
+Every `file:line` below is against `origin/main` at `8cb62e6d` for this repo and `3d64eda` for `venturecrane/hermes-smd-overlay`. Overlay paths are prefixed `overlay:`. The amendment that follows changes sections 2, 3 and 5; where they disagree, the amendment is what runs.
+
+## Amendment (Wave 2 W4): one writer, a signed seat spec, shadow verification
+
+**Accepted 2026-10-23** (the architect's call; the Captain ruled engineering placement an agent decision the same day). Workstream W4 of the 2026-10-22 seat-architecture review.
+
+**Why.** Section 3 below records four writers of `vaults/<slug>/customer.yaml`, three of them carrying a copy of the image guard (#3397), and nothing in the path was signed: every check was a sha256 over a channel we trusted. A guard on one writer of a key is a guard on none of them, which is how the nightly reconciler undid the publisher's refusals (Known gap 1).
+
+**What changed.**
+
+1. **One writer.** `scripts/ci-publish-customer-configs.sh`, the deploy job `publish-customer-configs`, is the only automated writer of `vaults/<slug>/customer.yaml`, and the only writer of the two new keys below. On every push to main it publishes the slugs the push changed and converges every other seat whose R2 state differs from what that commit compiles, so a push range that was never processed is healed by the next push. A refusal fails the job for a changed slug and is a warning for any other seat.
+2. **The compiled, signed seat spec.** `scripts/compile-seat-spec.ts` (logic in `scripts/lib/seat-spec.ts` and `scripts/lib/seat-spec-compile.ts`) compiles one canonical JSON spec per seat: `schema_version`, `slug`, `compiled_from` (the ss-console commit), the `customer.yaml` key and sha256, the lane-proofs seed reference, each staged lane's firm-input manifest by vault key and sha256 (digests only: firm inputs live in the private engagements repo and in the vault, never in this repo), the skills release reference, and `requires` (`skills`, the image requirements `skill:`/`pin:`/`pre_run:`, the enabled skills' capability `needs`, and per lane the schema module path and digest). It is stored content-addressed at `fleet/specs/<slug>/<sha256>.json`; the pointer `vaults/<slug>/spec-pointer.json` names it and carries an Ed25519 signature over its exact bytes. The private key is a secret of the protected GitHub environment `seat-spec` only; the public key is committed at `operator/templates/seat-spec.pub` and baked root-owned into the image at `/app/seat-spec.pub`; `key_id` is the first 16 hex of sha256 over the raw 32-byte public key. Without the key the publisher still publishes `customer.yaml` and skips the spec with a warning.
+3. **The image guard is the compiler.** It refuses a config naming a skill, pin, pre_run or capability need the seat's running image (plus its skills release) lacks, and the spec alone when a staged lane's schema module differs from the one the image's `lane-inputs.json` records. `scripts/lib/seat-image-guard.sh` and `scripts/check-config-against-image.mjs` are gone; `scripts/lib/seat-spec-inputs.sh` resolves what the seat runs now (read-only) for every caller.
+4. **The reconciler is read-only.** `scripts/ci-reconcile-r2-customer-configs.sh` never writes R2. It compares each seat's `customer.yaml` bytes and signed spec (present, verifying against the committed key, equal to what HEAD compiles but for `compiled_from`) and pages through its existing `prio:P1` issue path: DRIFT and SPEC on a dated issue, REFUSED on the standing one. `tests/r2-config-reconcile.test.ts` asserts no aws call a run makes writes. Section 5's "self-heals" now describes the publisher's convergence on the next push, not this job.
+5. **`operator/bin/sync-customer-yaml.sh` is deleted**, with its test and every reference.
+6. **Provisioning uploads through the compiler** (`operator/bin/provision-customer.sh` step 2, `operator/bin/lib/stage-seat-spec.sh`) with `--provisioning`: the requirements are recorded, not checked, because the image that carries them ships in the same run. It signs and publishes the spec only when `SEAT_SPEC_SIGNING_KEY` is present.
+7. **Shadow verification on the seat.** The root `config_applier` loop runs `overlay:config_applier/spec_verifier.py`: it fetches the pointer and spec, verifies the digest and the signature with `cryptography` (the Hermes venv's pin) against `/app/seat-spec.pub`, checks `requires` against `/app/image-manifest.json`, the skills release the spec names, the image's real tree and `/app/image-capabilities.json`, and the lane schema modules under `/app/runners/`, and writes `/run/smd-spec/state.json` (0644, by rename). The heartbeat ships it as `spec` (`overlay:shared/spec_check.py`) into `fleet_status.spec_json` (migration 0139), and the fleet-alerts worker pages `spec_unverified` (migration 0140, `workers/fleet-alerts/src/spec.ts`) on a bad signature or digest, an unknown key, a spec for another seat, a missing spec, an unmet requirement, a verifier that stopped reporting, or a seat still holding an older spec than the published pointer 15 minutes after it was written. **`config_applier` still applies `customer.yaml` exactly as section 6 describes**, and `config_drift` is unchanged.
+
+**Not yet.** Applying only verified spec bytes, and `config_drift` comparing spec digests, wait until every seat has reported a verified spec equal to the published one for a full release cycle. Machine size and region, secret values, the image and the section 8 portal overrides stay outside the spec.
 
 ## Decision
 
@@ -50,7 +77,7 @@ Client material does not live here. Dossiers and correspondence are in the priva
 - **Python, on the seat.** `overlay:bootstrap/validate.py` (`validate_customer_yaml` at line 202). The boot fetch runs it on the candidate before adopting it (`operator/templates/entrypoint.sh:66-82`, `:95-104`) and the live applier runs it before every apply (`overlay:config_applier/applier.py:503-510`).
 - **Parity.** `tests/customer-yaml-parity-contract.test.ts` classifies a shared fixture manifest with the TS validator and pins a content hash that must equal the overlay's `test_validator_parity_contract.py` (`tests/customer-yaml-parity-contract.test.ts:1-19`, `:38-40`). A one-sided fixture change fails one repo or the other.
 
-### 3. The R2 object a seat boots from, and its four writers
+### 3. The R2 object a seat boots from, and its four writers (superseded by the amendment: one writer)
 
 The seat reads `s3://${R2_BUCKET_CONFIG}/vaults/<slug>/customer.yaml` (bucket default `smd-customer-config`). Four things write it, all from git, none from a portal:
 

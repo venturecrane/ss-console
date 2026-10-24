@@ -333,6 +333,43 @@ describe('heartbeat field parity — every emitted field has a reader (ss#2287)'
     expect(await read()).toBeNull()
   })
 
+  it('the seat-spec verdict is stored whole; an unknown verdict or one long id NULLs it', async () => {
+    // Migration 0139. The spec_unverified pager acts on this object, so a
+    // verdict word outside the vocabulary, or one requirement id past its
+    // bound, must not be stored as a partial verdict.
+    const sample = manifest.fields.find((f) => f.name === 'spec')?.sample as Record<string, unknown>
+    expect(sample, 'the manifest names the spec field').toBeTruthy()
+    const read = async (): Promise<string | null> => {
+      const row = await db
+        .prepare(`SELECT spec_json AS value FROM fleet_status WHERE customer_slug = ?`)
+        .bind(SLUG)
+        .first<{ value: string | null }>()
+      return row?.value ?? null
+    }
+    const beat = (spec: unknown) =>
+      POST(heartbeatRequest({ heartbeat_ts: '2026-08-11T00:00:00.000Z', spec }))
+    await beat(sample)
+    const stored = await read()
+    expect(stored).not.toBeNull()
+    expect(JSON.parse(stored as string)).toMatchObject({
+      verdict: 'unmet_requirement',
+      unmet: ['lane:demand'],
+      key_id: '15850dd6829dc7ee',
+    })
+
+    // NEGATIVE CONTROLS: a verdict outside the vocabulary, a 201-char id.
+    await beat({ ...sample, verdict: 'trust-me' })
+    expect(await read(), 'an unknown verdict must NULL the object').toBeNull()
+    await beat({ ...sample, unmet: ['a'.repeat(201)] })
+    expect(await read(), 'a 201-char id must NULL the object').toBeNull()
+    // And a 200-character id is inside the bound.
+    await beat({ ...sample, unmet: ['a'.repeat(200)] })
+    expect(await read()).not.toBeNull()
+    // Plain overwrite including NULL.
+    await POST(heartbeatRequest({ heartbeat_ts: '2026-08-11T00:00:00.000Z' }))
+    expect(await read()).toBeNull()
+  })
+
   it('the ingest bounds the stop reason instead of trusting the seat', async () => {
     // The seat caps at 300, but "the writer promised" is not a bound.
     await POST(

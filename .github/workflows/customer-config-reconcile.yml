@@ -49,9 +49,11 @@ on:
       - 'scripts/ci-reconcile-r2-customer-configs.sh'
       - 'scripts/ci-sync-customer-configs.sh'
       - 'scripts/ci-publish-customer-configs.sh'
-      - 'scripts/lib/seat-image-guard.sh'
-      - 'scripts/check-config-against-image.mjs'
-      - 'operator/bin/sync-customer-yaml.sh'
+      - 'scripts/lib/seat-spec-inputs.sh'
+      - 'scripts/lib/seat-spec.ts'
+      - 'scripts/lib/seat-spec-compile.ts'
+      - 'scripts/compile-seat-spec.ts'
+      - 'tests/fixtures/fake-r2.ts'
       - 'tests/config-reconcile.test.ts'
       - 'tests/r2-config-reconcile.test.ts'
       - '.github/workflows/customer-config-reconcile.yml'
@@ -163,7 +165,10 @@ jobs:
 
   # ss#2305. Same defect, the other projection — and the one with the higher
   # stakes: a stale D1 row means the portal SHOWS the wrong posture, a stale R2
-  # object means the seat ENFORCES it.
+  # object means the seat ENFORCES it. READ-ONLY against R2 since Wave 2 W4: the
+  # deploy job's publisher is the one writer and converges every seat on every
+  # push; this job verifies the customer.yaml bytes and the signed seat spec and
+  # pages on a mismatch. It needs no signing key and holds none.
   reconcile-r2:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -205,12 +210,13 @@ jobs:
           # the script, exactly as the publisher derives them.
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Via env, never interpolated into the script body: a workflow_dispatch
-          # input is user-supplied and would otherwise be a shell-injection seam.
+          # Accepted for the D1 job's sake; the R2 reconciler is read-only on
+          # every run. Via env, never interpolated into the script body: a
+          # workflow_dispatch input is user-supplied.
           R2_RECONCILE_DRY_RUN: ${{ github.event.inputs.dry_run }}
           # The image guard resolves each seat's CURRENT image (heartbeat
           # image_ref -> the fleet release's manifest) through wrangler, exactly
-          # as the publisher does in deploy.yml. Same guard, same evidence.
+          # as the publisher does in deploy.yml. Same compiler, same evidence.
           FLEET_IMAGE_LOOKUP: '1'
         run: |
           set -u
@@ -235,21 +241,24 @@ jobs:
           REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          # Two findings, two issues. DRIFT healed itself and is a dated record.
-          # REFUSED did not heal and will not until the seat is reprovisioned, so
-          # it is ONE standing issue the nightly run comments on, never a new
-          # issue per night.
-          if grep -q '^  DRIFT  ' reconcile-r2.txt; then
+          # Two kinds of finding, two issues. DRIFT and SPEC are a dated record:
+          # the next push to main converges them (the publisher is the one
+          # writer; this job only reads). REFUSED will not converge until the
+          # seat runs an image that carries what the config names, so it is ONE
+          # standing issue the nightly run comments on, never a new issue a night.
+          if grep -qE '^  (DRIFT|SPEC)  ' reconcile-r2.txt; then
             {
-              echo "An R2 seat config did not match the customer.yaml main carries."
+              echo "A seat's R2 state did not match what main authors."
               echo
-              echo "DRIFT means the object at \`vaults/<slug>/customer.yaml\` was not"
-              echo "byte-identical to what HEAD authored. The reconciler republished it"
-              echo "and is reporting anyway: the seat BOOTED FROM the other bytes until"
-              echo "it did, and how long that lasted is the thing worth knowing."
+              echo "DRIFT means \`vaults/<slug>/customer.yaml\` was not byte-identical"
+              echo "to what HEAD carries. SPEC means the signed seat spec is missing,"
+              echo "stale against HEAD, or does not verify against the committed key."
+              echo "The reconciler is read-only and wrote nothing; the seat keeps"
+              echo "booting the object it has until the publisher converges it."
               echo
-              echo "The seat adopts the republished object on its next restart;"
-              echo "live-writable fields apply sooner via the ADR 0044 poller."
+              echo "To resolve: the next push to main republishes every out-of-step"
+              echo "seat (scripts/ci-publish-customer-configs.sh). To converge now,"
+              echo "re-run the Deploy workflow's publish-customer-configs job."
               echo
               echo '```'
               cat reconcile-r2.txt
@@ -266,14 +275,15 @@ jobs:
           fi
           if grep -q '^  REFUSED  ' reconcile-r2.txt; then
             {
-              echo "A seat's R2 config differs from main, and the reconciler did NOT"
-              echo "republish it: HEAD's customer.yaml names a skill or pre_run the"
-              echo "seat's running image (plus its skills release) does not carry."
+              echo "A seat's R2 config is held back from main: HEAD's customer.yaml"
+              echo "names a skill or pre_run the seat's running image (plus its skills"
+              echo "release) does not carry, so no push will publish it."
               echo
               echo "This is the image guard (ADR 0093, the 2026-10-13 A&P outage),"
-              echo "the same one the merge-time publisher runs. Republishing would"
-              echo "put a config on R2 that the seat adopts at its next restart and"
-              echo "cannot run. The seat keeps booting the object it has."
+              echo "the same compiler the merge-time publisher runs, which refuses"
+              echo "the same config. Publishing it would put a config on R2 that the"
+              echo "seat adopts at its next restart and cannot run. The seat keeps"
+              echo "booting the object it has."
               echo
               echo "To resolve: reprovision the seat onto an image that carries what"
               echo "the config names, or change the config to fit the running image."
@@ -283,7 +293,7 @@ jobs:
               cat reconcile-r2.txt
               echo '```'
               echo
-              echo "Guard: \`scripts/lib/seat-image-guard.sh\`. Run: ${RUN_URL}"
+              echo "Guard: \`scripts/compile-seat-spec.ts\` (scripts/lib/seat-spec.ts). Run: ${RUN_URL}"
             } > refused.md
             TITLE="R2 seat config refused by the image guard"
             EXISTING=$(gh issue list --repo "${REPO}" --state open \

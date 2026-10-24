@@ -81,6 +81,11 @@ export interface FleetStatusRow {
    * ./selftest. Optional on the type for the same reason as the 0109 trio.
    */
   selftest_json?: string | null
+  /**
+   * Migration 0139: the seat-spec verifier's verdict. Read by ./spec. Optional
+   * on the type for the same reason as selftest_json.
+   */
+  spec_json?: string | null
 }
 
 export async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]> {
@@ -98,7 +103,7 @@ export async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]>
               tool_failures_json,
               shortfalls, shortfalls_last_ts, shortfalls_json, audit_write_failures,
               audit_write_failures_rose_at,
-              image_ref, config_digest, skills_version, selftest_json
+              image_ref, config_digest, skills_version, selftest_json, spec_json
          FROM fleet_status`
     )
     .all<FleetStatusRow>()
