@@ -21,7 +21,6 @@
     "rehearsal/run.py::run_suite": 91,
     "runners/medchron/medchron/audit/repair.py::run": 80,
     "runners/medchron/medchron/audit/run.py::Round.execute": 85,
-    "runners/medchron/medchron/audit/run.py::Round.run_cluster": 91,
     "runners/medchron/medchron/llm.py::Doorway._round": 105,
     "runners/medchron/medchron/llm.py::Doorway.batch_call": 87,
     "runners/medchron/medchron/stages/billing_chart.py::run": 158,

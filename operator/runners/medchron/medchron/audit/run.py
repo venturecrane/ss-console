@@ -266,45 +266,7 @@ class Round:
                 CL.append_row(self.paths.results, rec)
                 self.report_line(c, v)
                 if v["verdict"] == "SUPPORTED" and not rec["text_then_image"]:
-                    with self._lock:
-                        self.counter["text_ok"] += 1
-                        do_rev = self.counter["text_ok"] % REVERSE_EVERY == 0
-                    if do_rev:
-                        iv, widened = self.image_verdict(c, pdfs)
-                        agree = iv["verdict"] == "SUPPORTED"
-                        if not agree:
-                            with self._lock:
-                                self.counter["reverse_bad"] += 1
-                        CL.append_row(
-                            self.paths.results,
-                            {
-                                "key": c["key"] + "-rev",
-                                "kind": "reverse-control",
-                                "exhibit": ex,
-                                "page_spec": c["page_spec"],
-                                "pages": c["pages"],
-                                "claim": c["claim"][:200],
-                                **iv,
-                                "mode": "image",
-                                "text_verdict": "SUPPORTED",
-                                "agree": agree,
-                                "widened": widened,
-                                "doc_sha": doc_sha,
-                                "ts": ts,
-                            },
-                        )
-                        self.log(
-                            f"  -- REVERSE Ex{ex} p.{c['page_spec'] or '1'}: {'agree' if agree else '!! DISAGREE'}"
-                        )
-                        if not agree:
-                            # The claim takes the image verdict (2026-10-24):
-                            # the repair rounds correct or drop it, and the
-                            # round is INVALID only at the rate in ``controls``.
-                            override = {**rec, **iv, "mode": "image", "reverse_override": True}
-                            if widened:
-                                override["widened"] = widened
-                            CL.append_row(self.paths.results, override)
-                            self.report_line(c, iv)
+                    self.reverse_control(c, ex, rec, pdfs, doc_sha, ts)
                 CR.control_for(self, c, pdfs, index, doc_sha, ts)
             except LimitHold:
                 raise  # a limit stops the round; an ERROR row here would read as audited (N10)
@@ -326,6 +288,50 @@ class Round:
                         "ts": ts,
                     },
                 )
+
+    def reverse_control(
+        self, c: dict[str, Any], ex: int, rec: dict[str, Any], pdfs: dict[int, Path], doc_sha: str, ts: str
+    ) -> None:
+        """Every REVERSE_EVERY-th text-SUPPORTED claim re-read on its page
+        images. A disagreement hands the claim the image verdict (2026-10-24):
+        the repair corrects or drops it; ``controls`` rates the disagreements."""
+        with self._lock:
+            self.counter["text_ok"] += 1
+            do_rev = self.counter["text_ok"] % REVERSE_EVERY == 0
+        if do_rev:
+            iv, widened = self.image_verdict(c, pdfs)
+            agree = iv["verdict"] == "SUPPORTED"
+            if not agree:
+                with self._lock:
+                    self.counter["reverse_bad"] += 1
+            CL.append_row(
+                self.paths.results,
+                {
+                    "key": c["key"] + "-rev",
+                    "kind": "reverse-control",
+                    "exhibit": ex,
+                    "page_spec": c["page_spec"],
+                    "pages": c["pages"],
+                    "claim": c["claim"][:200],
+                    **iv,
+                    "mode": "image",
+                    "text_verdict": "SUPPORTED",
+                    "agree": agree,
+                    "widened": widened,
+                    "doc_sha": doc_sha,
+                    "ts": ts,
+                },
+            )
+            self.log(f"  -- REVERSE Ex{ex} p.{c['page_spec'] or '1'}: {'agree' if agree else '!! DISAGREE'}")
+            if not agree:
+                # The claim takes the image verdict (2026-10-24):
+                # the repair rounds correct or drop it, and the
+                # round is INVALID only at the rate in ``controls``.
+                override = {**rec, **iv, "mode": "image", "reverse_override": True}
+                if widened:
+                    override["widened"] = widened
+                CL.append_row(self.paths.results, override)
+                self.report_line(c, iv)
 
     # ---- the round ---------------------------------------------------------
     def plan_text(self, live: list[dict[str, Any]], index: PageIndex) -> tuple[list[dict], list[dict], dict[str, int]]:
