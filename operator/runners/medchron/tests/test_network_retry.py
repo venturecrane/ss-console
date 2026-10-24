@@ -415,7 +415,9 @@ def test_a_stage_exit_of_75_is_infrastructure_and_retried(tmp_path) -> None:
     is failed at once."""
     from medchron import requeue
 
-    assert requeue.INFRA_EXIT == 75
+    from medchron.stages import compose
+
+    assert requeue.INFRA_EXIT == compose.INFRA_EXIT == 75, "one number, the stage's and the daemon's"
     d, broker = _daemon(tmp_path, INFRA_RUNNER % {"code": 75, "sha": "a" * 64})
     _submit(d, broker, "01A")
     assert d.tick() == "requeued" and "model API error at map" in broker.records[-1][2]["reason"]
