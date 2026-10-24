@@ -330,7 +330,11 @@ def test_strip_falsifies_dry_runs_and_applies_with_a_verified_remap(job_dir: Pat
     assert strip.run_apply(sr) == 1  # never twice
 
 
-def test_strip_refuses_when_every_cited_page_is_dropped(job_dir: Path, firm: Path, data_root: Path) -> None:
+def test_strip_keeps_a_cited_page_the_classifier_calls_non_record(job_dir: Path, firm: Path, data_root: Path) -> None:
+    """Pamplona 2026-10-24: one cited page called non-record held a 4,418-page
+    job. The citation's paper stays; an authored drop of it still refuses."""
+    import pymupdf
+
     sr = _sr(job_dir, firm, data_root)
     _exhibit(sr, [ORDER_PAGE, PROSE])
     _doc(
@@ -340,7 +344,17 @@ def test_strip_refuses_when_every_cited_page_is_dropped(job_dir: Path, firm: Pat
         ),
     )
     assert classify.run_nonrecord(sr) == 0
+    assert json.loads((sr.slug_dir / "nonrecord.json").read_text())["1"]["cited_collision"] == [1]
+    authored = sr.slug_dir / "drops.json"
+    authored.write_text(json.dumps({"manual_drops": {"1": [[1, "authored"]]}, "citation_edits": []}))
     assert strip.run_dry(sr) == 1
+    assert strip.run_falsify(sr) == 2
+    authored.unlink()
+    assert strip.run_dry(sr) == 0
+    assert strip.run_apply(sr) == 0
+    [path] = classify.resolve_exhibit_files(sr.slug_dir / "out" / sr.unit.unit).values()
+    with pymupdf.open(str(path)) as doc:
+        assert len(doc) == 2
 
 
 # ---- coverage gate --------------------------------------------------------------------------

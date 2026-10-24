@@ -182,9 +182,9 @@ def probe_claim_audit(tmp: Path) -> tuple[bool, str]:
 
 
 def probe_extractive(tmp: Path) -> tuple[bool, str]:
-    """The strip falsifier: every cited page classified as droppable means the
-    classifier would strip the evidence the document rests on; the dry run
-    must refuse to apply."""
+    """The strip guard: a cited page the classifier calls droppable is KEPT
+    (the dry run passes with the page in place), and an authored drop of every
+    page a citation rests on refuses."""
     sr, d, log = _scene(tmp)
     (d / "runs" / "alpha").mkdir(parents=True)
     (d / "runs" / "alpha" / "final-chronology.md").write_text(
@@ -195,8 +195,10 @@ def probe_extractive(tmp: Path) -> tuple[bool, str]:
     (d / "nonrecord.json").write_text(
         json.dumps({"1": {"pages": 1, "blocks": [], "drop_pages": [1], "unknown": [], "cited_collision": [1]}})
     )
-    code = extractive.dry_run(sr)
-    return code == 1, f"exit {code}; " + " | ".join(log)[-300:]
+    kept = extractive.dry_run(sr)
+    (d / "drops.json").write_text(json.dumps({"manual_drops": {"1": [[1, "authored"]]}, "citation_edits": []}))
+    refused = extractive.dry_run(sr)
+    return (kept, refused) == (0, 1), f"kept {kept}, authored {refused}; " + " | ".join(log)[-300:]
 
 
 def probe_cross_client(tmp: Path) -> tuple[bool, str]:

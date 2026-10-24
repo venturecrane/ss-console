@@ -211,4 +211,10 @@ def test_gate_modules_delegate_to_the_stages(job_dir: Path, firm_config_path: Pa
     (d / "nonrecord.json").write_text(
         json.dumps({"1": {"pages": 1, "blocks": [], "drop_pages": [1], "unknown": [], "cited_collision": [1]}})
     )
-    assert extractive.dry_run(sr) == 1  # every cited page dropped
+    strip_log: list[str] = []
+    sr = _sr(job_dir, firm_config_path, data_root, strip_log)
+    assert extractive.dry_run(sr) == 0  # the classifier's drop of a cited page is kept, not obeyed
+    assert any("kept 1 cited page(s) the classifier called non-record: 1" in line for line in strip_log)
+    (d / "drops.json").write_text(json.dumps({"manual_drops": {"1": [[1, "authored"]]}, "citation_edits": []}))
+    assert extractive.dry_run(sr) == 1  # an authored drop of every cited page refuses
+    assert extractive.falsify(sr) == 2  # and under falsify it is not mislabelled "cannot fail"
