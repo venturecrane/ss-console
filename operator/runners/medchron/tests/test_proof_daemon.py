@@ -386,6 +386,23 @@ def test_the_broker_named_reply_key_is_what_the_watch_matches(tmp_path):
     assert _codes(broker2) == ["reply_unproven"]
 
 
+def test_a_held_chronologys_reply_is_matched_by_its_reason_key(tmp_path):
+    """2026-10-23: a held chronology's key carries a digest of the hold's reason,
+    so a reply for an earlier hold (another reason) does not satisfy the watch."""
+    d, broker = _watching(tmp_path)
+    broker.expected_key = "medchron_job:01A:1:held:aaaaaaaaaaaa"
+    broker.replies = [_row("medchron_job:01A:1:held:aaaaaaaaaaaa")]
+    d.dispatch_wakes()
+    assert _codes(broker) == [] and d._daemon_state("01A")["reply_watch"]["done"] is True
+
+    d2, broker2 = _watching(tmp_path / "second")
+    broker2.expected_key = "medchron_job:01A:1:held:bbbbbbbbbbbb"
+    broker2.replies = [_row("medchron_job:01A:1:held:aaaaaaaaaaaa")]
+    d2._now["t"] += watch.REPLY_DEADLINE_SECONDS + 1
+    d2.dispatch_wakes()
+    assert _codes(broker2) == ["reply_unproven"]
+
+
 class AgentMailBroker(ReplyBroker):
     """An AgentMail seat: no bound replies, a count of dispatched sends."""
 

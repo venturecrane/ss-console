@@ -75,6 +75,7 @@ Every verdict, bound or refused, writes a ``REPLY_BINDING`` audit row.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import logging
 import os
@@ -334,7 +335,18 @@ def reply_key(kind: str, ident: str, row: dict[str, Any]) -> str:
     """The bound-reply key a job's reply is claimed under. One reply per
     (attempt, outcome): a resumed job (attempt + 1) that ends again is owed a
     reply for its new outcome. Also what the runner daemon's reply watch
-    matches (``delivery_proof.reply_status_verb``), so the two never disagree."""
+    matches (``delivery_proof.reply_status_verb``), so the two never disagree.
+
+    A held chronology is keyed by its REASON as well (2026-10-23). The medchron
+    ledger has no attempt column, so every hold of job 3CH59XBY shared the key
+    ``medchron_job:ID:1:held``: the first hold's reply claimed it, and every
+    later hold, each for a different reason, was refused as "already had its
+    reply", so the firm heard nothing for 21 hours. A distinct reason is a new
+    outcome the requester is owed one reply for; the same reason repeated (a
+    re-recorded hold keeps its reason, medchron_ledger) is not."""
+    if kind == "medchron_job" and row["state"] == "held":
+        digest = hashlib.sha256(str(row.get("reason") or "").encode("utf-8")).hexdigest()[:12]
+        return f"{kind}:{ident}:1:held:{digest}"
     return f"{kind}:{ident}:{row.get('attempt') or 1}:{row['state']}"
 
 
