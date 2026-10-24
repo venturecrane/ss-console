@@ -16,6 +16,7 @@ Each test runs the whole DAG and names the stop it stands against.
 
 from __future__ import annotations
 
+import functools
 import json
 import sys
 import types
@@ -142,7 +143,7 @@ def test_a_file_the_composer_drew_entries_from_is_rebuilt_once_then_held_never_d
     model = _Model(
         _map(f"=== FILE: {INTAKE} (fileId f5) === entries: 0", "=== FILE: f3.pdf (fileId f3) === entries: 2")
     )
-    seat = lambda: _seat([("f3", "f3.pdf", f3)])  # noqa: E731
+    seat = functools.partial(_seat, [("f3", "f3.pdf", f3)])
     o = _driver(job_dir, firm_config_path, pricing_path, client=model, seat_factory=seat).run()[0]
     assert o.outcome == "held" and o.stage == "coverage_gate", o
     assert o.reason.startswith("coverage gate:") and "integrity" in o.reason
@@ -189,7 +190,7 @@ def test_an_attachment_naming_another_person_is_asked_of_the_firm(
     assert len(foreign) > 20_000
     monkeypatch.setitem(sys.modules, "extract_msg", _fake_extract_msg(foreign))
     msg = b"not really ole2; the fake reader opens it"
-    seat = lambda: _seat([("m1", "FW records.msg", msg)])  # noqa: E731
+    seat = functools.partial(_seat, [("m1", "FW records.msg", msg)])
     o = _driver(job_dir, firm_config_path, pricing_path, client=_Model(_map()), seat_factory=seat).run()[0]
     assert o.outcome == "held" and o.stage == "decide_fold", o
     assert o.reason.startswith("identity: 1 emailed attachment(s) name a different person than the client")
