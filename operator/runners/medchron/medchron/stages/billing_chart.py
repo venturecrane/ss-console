@@ -4,9 +4,13 @@ provider list. $0.
 A billing label is not a provider (a first version built 18 rows from
 whatever name appeared on a bill and a grand total 3x the firm's own lien
 report). The chronology's Treatment Timeline is the spine; billing documents
-are matched onto it through the firm's `billing.provider_match` table plus a
-head-substring fallback, and anything that will not match is REPORTED, never
-dropped. Per provider the chart prefers the provider's own account-wide
+are matched onto it through the firm's `billing.provider_match` table, a
+head-substring fallback, and then by rule through the facility the provider
+cell names (`billing_match.py`, stop audit row 28: a clinician-named spine
+with no authored table once matched nothing and rendered a $0.00 worksheet).
+One clinician listed twice is one row. A label that still matches nothing is
+its own row, titled as printed on the bill and marked so, in the total, and
+still REPORTED under "unmatched"; nothing is dropped. Per provider the chart prefers the provider's own account-wide
 printed total (a LEDGER's) over a sum of claim forms, which double-counts.
 When no ledger exists the total is NOT DERIVABLE and says so: inventing one
 is exactly the fabricated figure this pipeline exists to prevent. Money is
@@ -28,6 +32,7 @@ import re
 from collections import defaultdict
 from typing import Any
 
+from . import billing_match as BM
 from .base import StageRun, read_json, read_jsonl
 
 NON_PROVIDER = {"VENDOR_INVOICE", "CERTIFICATE", "RECORDS_ONLY", "OTHER"}
@@ -38,6 +43,7 @@ LEDGER_TOTAL = [
     (re.compile(r"^overall$|total\s*charges?$|account\s*total|total\s*billed", re.I), 2),
     (re.compile(r"^charge$|balance|amount\s*due|self.pay", re.I), 1),
 ]
+NO_LABEL = "(no provider printed on the bill)"
 FORM_BOX = re.compile(r"^\s*\d{1,2}\s*[.)]")
 SPLIT_COLUMN = re.compile(r"^(\d{1,3}(?:,\d{3})*|\d+)(?:\s+|\s*[Il|!¦]\s*)(\d{2})$")
 
@@ -179,7 +185,8 @@ class Matcher:
             out.append(merged)
         return sorted(out, key=lambda r: r["first"] or "9999")
 
-    def provider(self, label: str | None, spine: list[dict[str, Any]]) -> str | None:
+    def authored(self, label: str | None, spine: list[dict[str, Any]]) -> str | None:
+        """The firm's provider_match table, then a head-substring of the cell."""
         lab = (label or "").lower()
         for row in spine:
             if any(re.search(pat, lab, re.I) for pat in self.match.get(row["provider"], [])):
@@ -189,6 +196,18 @@ class Matcher:
             if len(head) > 5 and head in lab:
                 return row["provider"]
         return None
+
+    def provider(self, label: str | None, spine: list[dict[str, Any]]) -> str | None:
+        """Authored first, then the facility rule (billing_match, row 28)."""
+        got = self.authored(label, spine)
+        if got or not (label or "").strip():
+            return got
+        hit = BM.hits(str(label), spine)
+        return hit[0]["provider"] if hit else None
+
+    def spine(self, text: str, labels: list[str]) -> list[dict[str, Any]]:
+        rows = BM.collapse_clinicians(self.collapse(self.timeline(text)))
+        return BM.merge_by_labels(rows, labels, lambda lab: self.authored(lab, rows))
 
 
 def run(sr: StageRun) -> int:
@@ -202,17 +221,30 @@ def run(sr: StageRun) -> int:
     pages = PageText(d)
     dropped: list[dict[str, Any]] = []
     dropped_for: dict[str, int] = {}
-    spine = matcher.collapse(matcher.timeline((d / "runs" / unit / "final-chronology.md").read_text(encoding="utf-8")))
+    records = read_jsonl(d / "billing_extract.jsonl")
+    labels = sorted(
+        {
+            str(c.get("provider") or "").strip()
+            for r in records
+            for c in r.get("chunks") or []
+            if isinstance(c, dict)
+            and c.get("doc_type") not in NON_PROVIDER | {"LIEN_SUBROGATION", None}
+            and not quarantined(c, patient)
+        }
+    )
+    spine = matcher.spine((d / "runs" / unit / "final-chronology.md").read_text(encoding="utf-8"), labels)
     bills: dict[str, dict[str, Any]] = defaultdict(
         lambda: {"totals": [], "docs": set(), "bdates": [], "adjustments": []}
     )
-    unmatched: dict[str, dict[str, Any]] = defaultdict(lambda: {"totals": [], "docs": set()})
+    unmatched: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"totals": [], "docs": set(), "bdates": [], "adjustments": []}
+    )
     vendor: list = []
     subro: list = []
     quarantine: list = []
     failed: list = []
     inherited: list = []
-    for r in read_jsonl(d / "billing_extract.jsonl"):
+    for r in records:
         carry = None
         for c in r.get("chunks") or []:
             if "FAILED_PAGE" in c:
@@ -245,7 +277,8 @@ def run(sr: StageRun) -> int:
                 # blank, never when a name simply failed to match.
                 tgt = carry
                 inherited.append((r["file"], c.get("page_first"), carry))
-            e = bills[tgt] if tgt else unmatched[str(c.get("provider"))[:44]]
+            key = tgt or raw_provider or NO_LABEL
+            e = bills[tgt] if tgt else unmatched[key]
             e["docs"].add(r["file"])
             for t in c.get("printed_totals") or []:
                 flagged: list[tuple[str, float]] = []
@@ -265,16 +298,14 @@ def run(sr: StageRun) -> int:
                                 f"left out of every total",
                             }
                         )
-                        if tgt:
-                            dropped_for[tgt] = dropped_for.get(tgt, 0) + 1
+                        dropped_for[key] = dropped_for.get(key, 0) + 1
                         continue
                     sr.log(f"  {t.get('amount')} on {str(r['file'])[:40]} p.{page}: printed on the page, accepted")
                 e["totals"].append((a, t.get("label"), r["file"], t.get("page"), kind))
                 lab = str(t.get("label") or "")
                 if tgt and direct and ADJ_LABEL.search(lab) and matcher.provider(lab, spine) in (None, tgt):
                     e.setdefault("adjustments", []).append((abs(a), lab, r["file"], t.get("page")))
-            if tgt:
-                e["bdates"].extend(v for k in ("date_first", "date_last") if (v := dt(c.get(k))))
+            e["bdates"].extend(v for k in ("date_first", "date_last") if (v := dt(c.get(k))))
     lien: dict[str, float] = {}
     lp = read_json(d / "lien_report.json", None)
     if lp:
@@ -283,8 +314,23 @@ def run(sr: StageRun) -> int:
                 lien[matcher.provider(r["provider"], spine) or r["provider"]] = r["total_claim"]
     grand = 0.0
     rows: list[dict[str, Any]] = []
-    for row in spine:
-        e = bills.get(row["provider"], {"totals": [], "docs": set(), "bdates": [], "adjustments": []})
+    blank = {"totals": [], "docs": set(), "bdates": [], "adjustments": []}
+    # (b) of row 28: a label that matches no chronology provider is its own
+    # row, as printed on the bill, by the same ledger-over-claims rule, and in
+    # the total. It is still listed under "unmatched" in the report.
+    own = [
+        (
+            {
+                "provider": k,
+                "first": min(v["bdates"]) if v["bdates"] else None,
+                "last": max(v["bdates"]) if v["bdates"] else None,
+                "as_printed": True,
+            },
+            v,
+        )
+        for k, v in sorted(unmatched.items())
+    ]
+    for row, e in [(row, bills.get(row["provider"], blank)) for row in spine] + own:
         ranked = sorted(
             ((total_rank(lab) if kd == "LEDGER" else 0, a, lab, fl, pg) for a, lab, fl, pg, kd in e["totals"]),
             key=lambda t: (t[0], t[1]),
@@ -351,7 +397,10 @@ def run(sr: StageRun) -> int:
         + (f"  INCOMPLETE: {len(gaps)} provider(s) have no derivable total" if gaps else "")
     )
     if unmatched:
-        sr.log(f"!! {len(unmatched)} billing document label(s) not matched to a chronology provider; NOT in the total")
+        sr.log(
+            f"{len(unmatched)} billing document label(s) not matched to a chronology provider; each is its own "
+            f"row, as printed on the bill"
+        )
     (d / f"billing_chart{sfx}.json").write_text(
         json.dumps(
             {

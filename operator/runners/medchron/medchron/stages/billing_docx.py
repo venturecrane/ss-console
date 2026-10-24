@@ -134,13 +134,15 @@ def run(sr: StageRun) -> int:
         )
     doc.add_paragraph("Billing by Provider", style="Heading 1")
     body: list[list[str]] = []
-    grand, orphan = 0.0, False
+    grand, orphan, printed = 0.0, False, False
     for r in rows:
         if r["total"] is not None:
             grand += r["total"]
         name = r["provider"]
         if r["first"] is None and r["last"] is None and r.get("lien"):
             name, orphan = name + " *", True
+        if r.get("as_printed"):
+            name, printed = name + " †", True
         body.append([name, dshow(r["first"]), dshow(r["last"]), r["basis"], money(r["total"])])
     table(
         doc,
@@ -156,6 +158,13 @@ def run(sr: StageRun) -> int:
             "* This line appears on the firm's lien report with no provider name printed, and no matching provider or "
             "treatment appears in the medical chronology. It is included so this summary reconciles to the firm's "
             "own report, but it cannot be attributed to a provider from the documents on file.",
+            size=9,
+        )
+    if printed:
+        para(
+            doc,
+            "† Provider named as printed on the bill. The bill could not be matched to a provider in the medical "
+            "chronology, so it is shown on its own line; its amount is included in the total above.",
             size=9,
         )
     alts = [r for r in rows if r.get("alternates")]

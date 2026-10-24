@@ -43,7 +43,7 @@ from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
 from . import child as child_mod, config as config_mod, job as job_mod, lane_proof, proof_run, quiesce, requeue
 from . import resume as resume_mod, retention
-from . import rewake, upload_wait, verdict as verdict_mod, wake_grace
+from . import rewake, verdict as verdict_mod, wake_grace
 from .proof import holds as proof_holds, watch as proof_watch
 
 logger = logging.getLogger("medchron.daemon")
@@ -407,16 +407,14 @@ class Daemon:
                 # The delivery's own fields, including the covered/uncovered
                 # document id sets a later UPDATE reads its delta from.
                 fields.update(delivery_fields(worst, outcomes))
-        live = not proof_watch.in_proof_run(self)
-        # A slow index is a wait, not a hold (upload_wait.py): before settle,
-        # so a re-run is not a page.
-        if live and upload_wait.maybe_requeue(self, job_id, outcomes, state, fields, stage):
+        # An infrastructure ending (network, model API, a slow index, a runner
+        # killed by a signal) is retried after a delay, bounded (requeue.py):
+        # before settle, so a retry is not a page.
+        if not proof_watch.in_proof_run(self) and requeue.maybe_requeue(self, job_id, outcomes, state, fields, stage):
             return "requeued"
         # Proven delivery: a dry run is never a delivery, a delivered claim
         # without its proof is a failure, and a hold or read-back failure pages.
         state, fields = proof_watch.settle(self, job_id, outcomes, state, fields)
-        if live and requeue.maybe_requeue(self, job_id, outcomes, state, fields, stage):
-            return "requeued"
         try:
             self.broker.record(job_id, state, fields)
         except BrokerError as exc:

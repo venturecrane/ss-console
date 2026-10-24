@@ -841,3 +841,95 @@ def test_the_worksheet_names_each_unread_billing_page_as_not_totalled(
     text = _worksheet_text(sr)
     assert "Pages Not Read" in text and "not totalled" in text
     assert "Example Clinic ledger" in text and "p. 2" in text
+
+
+# ---- stop audit row 28: a clinician-named spine and facility-labelled bills ----
+CLINICIAN_DOC = (
+    "Alpha Example - Medical Chronology\n\n## Treatment Timeline\n\n"
+    "| Medical Provider | Treatment Period | Visits | Reference |\n"
+    "| Priya Rao, PA-C (NVRH 9W Laboratory) | 01/05/2026 | 1 | Exhibit 1 - p. 1 |\n"
+    "| Mark Hale, MD (NVRH Ophthalmology) | 01/07/2026 - 01/20/2026 | 2 | Exhibit 1 - p. 2 |\n"
+    "| Eva Ramos, M.D. | 02/01/2026 | 1 | Exhibit 2 - p. 1 |\n"
+    "| Eva M Ramos, MD | 02/10/2026 | 1 | Exhibit 2 - p. 4 |\n"
+    "| Joan Kerr, RN (Valley Care at Home) | 03/01/2026 - 03/09/2026 | 3 | Exhibit 3 - p. 1 |\n\n"
+    "## Diagnostic Highlights\n\n| ICD Code | Description | First Diagnosed | Reference |\n\n"
+    "## Medical Chronology\n\n01/05/2026\nPriya Rao, PA-C (NVRH 9W Laboratory) | Labs\n\nCBC drawn. "
+    "(Exhibit 1 - p. 1)\n\n## Exhibit List\n\n| Exhibit No. | Description |\n"
+)
+
+
+def _ledger(file: str, provider: str, amount: str, label: str = "Total Charges") -> dict:
+    return {
+        "file": file,
+        "pages": 1,
+        "failures": [],
+        "chunks": [
+            {
+                "doc_type": "LEDGER",
+                "provider": provider,
+                "patient": "Alpha Example",
+                "date_first": "01/05/2026",
+                "date_last": "03/09/2026",
+                "printed_totals": [{"label": label, "amount": amount, "page": 1}],
+            }
+        ],
+    }
+
+
+def test_the_facility_rule_matches_by_words_and_initials_and_not_by_generic_words() -> None:
+    from medchron.stages import billing_match as BM
+
+    assert BM.acronym("NV Ridge Health") == "nvrh" and BM.acronym("NV Ridge Medical Center") == "nvrmc"
+    assert BM.facility_hit("NV Ridge Health", "NVRH 9W Laboratory")
+    assert BM.facility_hit("Valley Care at Home, Inc.", "Valley Care at Home")
+    assert not BM.facility_hit("Oakmont Health", "Valley Health"), "a shared generic word is not a match"
+    assert not BM.facility_hit("Medical Center", "Valley Medical Center Hospital")
+    assert BM.person_key("Eva Ramos, M.D.") == BM.person_key("Eva M Ramos, MD") == ("eva", "ramos")
+    assert BM.person_key("Example Clinic") is None, "an uncredentialed name pair is not read as a person"
+    assert BM.person_key("Joan Kerr, RN (Valley Care at Home)") == ("joan", "kerr")
+    assert BM.facilities("Joan Kerr, RN (Valley Care at Home)") == ["Valley Care at Home"]
+    assert BM.facilities("Example Clinic") == ["Example Clinic"]
+
+
+def test_facility_bills_total_against_a_clinician_named_spine(job_dir: Path, data_root: Path, tmp_path: Path) -> None:
+    """The seat replay shape (row 28): the Treatment Timeline lists
+    clinicians, the bills are labelled by facility, and the firm authored no
+    provider_match patterns for this matter. The old matcher matched nothing
+    and the worksheet read SUBTOTAL $0.00 with every provider a gap. Now a
+    bill matches through the facility in the provider cell (its own initials:
+    "NV Ridge Health" is NVRH), one clinician listed twice is one row, and a
+    bill that matches no provider is its own row, as printed, in the total."""
+    cfg = json.loads(json.dumps(FIRM_CONFIG))
+    cfg["billing"]["provider_match"] = {}
+    firm = tmp_path / "bare-firm.yaml"
+    firm.write_text(yaml.safe_dump(cfg))
+    log: list[str] = []
+    sr = _sr(job_dir, firm, data_root, log=log)
+    _doc(sr, CLINICIAN_DOC)
+    rows = [
+        _ledger("NVRH statement", "NV Ridge Health", "$12,345.67", "Overall - Total"),
+        _ledger("Valley home care ledger", "Valley Care at Home", "$2,000.00"),
+        _ledger("Ramos ledger", "Eva Ramos MD", "$300.00"),
+        _ledger("Ambulance invoice", "Sierra Ambulance Authority", "$1,500.00"),
+    ]
+    (sr.slug_dir / "billing_extract.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    assert billing_chart.run(sr) == 0
+    chart = json.loads((sr.slug_dir / "billing_chart.json").read_text())
+    by = {r["provider"]: r for r in chart["rows"]}
+    assert chart["grand_total"] == 16145.67, (by, log)
+    nvrh = next(r for r in chart["rows"] if r.get("merged_from") and r["total"] == 12345.67)
+    assert sorted(nvrh["merged_from"]) == [
+        "Mark Hale, MD (NVRH Ophthalmology)",
+        "Priya Rao, PA-C (NVRH 9W Laboratory)",
+    ]
+    ramos = [r for r in chart["rows"] if "Ramos" in r["provider"]]
+    assert len(ramos) == 1 and ramos[0]["total"] == 300.0, "one clinician is one row"
+    assert (ramos[0]["first"], ramos[0]["last"]) == ("2026-02-01", "2026-02-10")
+    assert by["Joan Kerr, RN (Valley Care at Home)"]["total"] == 2000.0
+    own = by["Sierra Ambulance Authority"]
+    assert own["total"] == 1500.0 and own["as_printed"] is True
+    assert chart["unmatched"] == {"Sierra Ambulance Authority": [1500.0]}, "still listed in the report"
+    assert billing_docx.run(sr) == 0
+    text = _worksheet_text(sr)
+    assert "$16,145.67" in text and "GRAND TOTAL" in text and "Sierra Ambulance Authority" in text
+    assert "as printed on the bill" in text

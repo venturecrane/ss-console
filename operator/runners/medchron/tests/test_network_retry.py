@@ -220,7 +220,7 @@ def test_a_network_failure_requeues_the_job_once_and_it_is_never_marked_failed(t
     assert "failed" not in [s for _, s, _ in broker.records]
     note = broker.records[-1]
     assert note[1] == "running" and note[2]["reason"] == "retried after network error at update_review"
-    assert d._daemon_state("01A")["network_requeues"] == 1
+    assert d._daemon_state("01A")["infra_requeues"] == 1
     assert (d._daemon_state("01A").get("wake") or {}).get("pending") is not True, "no deliver turn for a requeue"
     # Not before its delay: the next tick runs nothing.
     assert d.tick() is None and (d.job_dir("01A") / "ran").read_text() == "1"
@@ -229,18 +229,22 @@ def test_a_network_failure_requeues_the_job_once_and_it_is_never_marked_failed(t
     assert [s for _, s, _ in broker.records] == ["running", "running", "running", "delivered"]
 
 
-def test_a_second_network_failure_is_terminal_and_says_it_was_retried(tmp_path) -> None:
-    d, broker = _daemon(tmp_path, _runner(5))
+def test_a_network_failure_past_the_retries_is_terminal_and_says_it_was_retried(tmp_path) -> None:
+    from medchron import requeue
+
+    d, broker = _daemon(tmp_path, _runner(99))
     _submit(d, broker, "01A")
-    d.tick()
-    d._now["t"] += 301  # type: ignore[attr-defined]
+    for _ in range(requeue.MAX_REQUEUES):
+        assert d.tick() == "requeued"
+        d._now["t"] += requeue.REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
     assert d.tick() == "failed"
     job, state, fields = broker.records[-1]
     assert state == "failed" and fields["reason"].startswith(
-        "retried after network error at update_review, failed again"
+        f"retried after network error at update_review {requeue.MAX_REQUEUES} time(s), failed again"
     )
     d._now["t"] += 10_000  # type: ignore[attr-defined]
-    assert d.tick() is None and (d.job_dir("01A") / "ran").read_text() == "2", "terminal: never run a third time"
+    ran = int((d.job_dir("01A") / "ran").read_text())
+    assert d.tick() is None and ran == requeue.MAX_REQUEUES + 1, "terminal: bounded"
 
 
 def test_a_failure_that_is_not_the_network_is_failed_at_once(tmp_path) -> None:
@@ -279,39 +283,108 @@ def _upload_runner(short_runs: int, *, stage: str = "upload", reason: str = SHOR
 
 
 def test_a_short_upload_read_back_runs_the_upload_again_after_a_delay(tmp_path) -> None:
-    from medchron import upload_wait
+    from medchron import requeue
 
     d, broker = _daemon(tmp_path, _upload_runner(2))
     _submit(d, broker, "01A")
     assert d.tick() == "requeued"
     st = d._daemon_state("01A")
-    assert st["state"] == "running" and st["upload_requeues"] == 1
+    assert st["state"] == "running" and st["infra_requeues"] == 1
     assert "held" not in [s for _, s, _ in broker.records], "a slow index is not parked as a hold"
     assert broker.records[-1][1] == "running" and "read back short" in broker.records[-1][2]["reason"]
     # Not before its delay.
     assert d.tick() is None and (d.job_dir("01A") / "ran").read_text() == "1"
-    d._now["t"] += upload_wait.UPLOAD_REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
-    assert d.tick() == "requeued" and d._daemon_state("01A")["upload_requeues"] == 2
-    d._now["t"] += upload_wait.UPLOAD_REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
+    d._now["t"] += requeue.UPLOAD_DELAY_S + 1  # type: ignore[attr-defined]
+    assert d.tick() == "requeued" and d._daemon_state("01A")["infra_requeues"] == 2
+    d._now["t"] += requeue.UPLOAD_DELAY_S + 1  # type: ignore[attr-defined]
     assert d.tick() == "delivered"
     assert "held" not in [s for _, s, _ in broker.records]
 
 
 def test_a_read_back_still_short_after_the_retries_parks_the_hold(tmp_path) -> None:
-    from medchron import upload_wait
+    from medchron import requeue
 
     d, broker = _daemon(tmp_path, _upload_runner(99))
     _submit(d, broker, "01A")
-    for _ in range(upload_wait.MAX_UPLOAD_REQUEUES):
+    for _ in range(requeue.MAX_REQUEUES):
         assert d.tick() == "requeued"
-        d._now["t"] += upload_wait.UPLOAD_REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
+        d._now["t"] += requeue.UPLOAD_DELAY_S + 1  # type: ignore[attr-defined]
     assert d.tick() == "held"
     job, state, fields = broker.records[-1]
-    assert state == "held" and "re-ran the upload" in fields["reason"]
-    d._now["t"] += 10 * upload_wait.UPLOAD_REQUEUE_DELAY_S  # type: ignore[attr-defined]
+    assert (
+        state == "held"
+        and fields["reason"].startswith("upload: the folder read back short")
+        and "retried after upload read back short" in fields["reason"]
+    )
+    d._now["t"] += 10 * requeue.UPLOAD_DELAY_S  # type: ignore[attr-defined]
     ran = (d.job_dir("01A") / "ran").read_text()
     assert d.tick() is None and (d.job_dir("01A") / "ran").read_text() == ran, "parked: bounded"
-    assert int(ran) == upload_wait.MAX_UPLOAD_REQUEUES + 1
+    assert int(ran) == requeue.MAX_REQUEUES + 1
+
+
+SIGNAL_RUNNER = """
+import json, os, signal, sys, pathlib
+jd = pathlib.Path(sys.argv[1])
+marker = jd / 'ran'
+n = int(marker.read_text()) + 1 if marker.exists() else 1
+marker.write_text(str(n))
+if n <= {killed}:
+    os.kill(os.getpid(), signal.SIGTERM)
+print(json.dumps([{{"unit": "alpha", "outcome": "delivered", "reason": None, "stage": None, "dollars": 31.0,
+    "pages": 300, "documents": 40, "folder_id": "folder-9",
+    "files": [{{"name": "A.docx", "sha256": "ab", "bytes": 10, "confirmed": True}}],
+    "proof": {{"readback": "confirmed", "files": [{{"name": "x.docx", "file_id": "f1", "size": 10,
+        "sha256": "{sha}"}}], "review": "passed", "review_cents": 0}}}}]))
+"""
+
+
+def test_the_runner_exited_minus_15_without_a_verdict_is_retried_not_failed(tmp_path) -> None:
+    """The history case (09-22, 10-13, 10-23): the child died of SIGTERM with
+    the daemon still running (no Machine stop), and the job recorded "failed:
+    the runner exited -15 without a verdict", terminal. It is now retried."""
+    from medchron import requeue
+
+    d, broker = _daemon(tmp_path, SIGNAL_RUNNER.format(killed=1, sha="a" * 64))
+    _submit(d, broker, "01A")
+    assert d.tick() == "requeued"
+    assert "failed" not in [s for _, s, _ in broker.records]
+    assert broker.records[-1][2]["reason"] == "retried after runner killed by a signal at an unnamed stage"
+    d._now["t"] += requeue.REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
+    assert d.tick() == "delivered"
+
+
+def test_a_runner_killed_on_every_retry_lands_failed_as_before(tmp_path) -> None:
+    from medchron import requeue
+
+    d, broker = _daemon(tmp_path, SIGNAL_RUNNER.format(killed=99, sha="a" * 64))
+    _submit(d, broker, "01A")
+    for _ in range(requeue.MAX_REQUEUES):
+        assert d.tick() == "requeued"
+        d._now["t"] += requeue.REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
+    assert d.tick() == "failed"
+    assert "the runner exited -15 without a verdict" in broker.records[-1][2]["reason"]
+
+
+def test_a_model_api_crash_is_retried_and_a_defect_crash_is_not(tmp_path) -> None:
+    from medchron import requeue
+
+    api = (
+        "map: exit 1; last output: Traceback ... anthropic.InternalServerError: Error code: 500 - "
+        "{'type': 'error', 'error': {'type': 'api_error', 'message': 'Internal server error'}}"
+    )
+    script = (
+        _runner(1)
+        .replace('"transient": True', '"transient": False')
+        .replace("update_review: a part of the update's review did not finish; a rerun reviews again", api)
+    )
+    d, broker = _daemon(tmp_path, script)
+    _submit(d, broker, "01A")
+    assert d.tick() == "requeued" and "model API error" in broker.records[-1][2]["reason"]
+    d._now["t"] += requeue.REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
+    assert d.tick() == "delivered"
+    assert requeue.cause([{"outcome": "failed", "reason": "map: KeyError: 'p'"}], "failed", {}, "map") is None
+    assert requeue.cause([], "failed", {"reason": "the runner exited 137 without a verdict"}, None) is None
+    assert requeue.cause([{"outcome": "held"}], "held", {"reason": "per_job_cap_usd: over"}, "vision") is None
 
 
 def test_other_holds_are_not_re_run(tmp_path) -> None:
