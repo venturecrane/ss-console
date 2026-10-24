@@ -115,6 +115,33 @@ def test_a_check1_on_another_persons_page_leaves_the_entry_out_and_discloses_it(
     assert "Continue therapy." not in review.docx_text(chron), "the delivered chronology was re-rendered"
 
 
+def test_leaving_an_entry_out_re_derives_the_summary_tables_from_the_entries_left(job_dir, firm_config_path, data_root):
+    """Decision (4), 2026-10-24: the Treatment Timeline counted the removed
+    visit (2 visits, 01/20-03/30) and the Diagnostic Highlights kept a code
+    only the removed entry carried. Both are computed again with build_doc's
+    own functions over the entries that remain."""
+    doc = DOC.replace(
+        "| S13.4XXA | Sprain of ligaments of cervical spine | 01/20/2026 | Exhibit 1 - p. 2 |",
+        "| S13.4XXA | Sprain of ligaments of cervical spine | 01/20/2026 | Exhibit 1 - p. 2 |\n"
+        "| M54.2 | Cervicalgia | 03/30/2026 | Exhibit 1 - p. 3 |\n"
+        "| Z99.9 | Not in the index | 03/30/2026 | Exhibit 1 - p. 3 |",
+    )
+    sr, log = _package(job_dir, firm_config_path, data_root, doc)
+    (sr.slug_dir / "runs" / "alpha" / "map-1.md").write_text(
+        "## INDEX\n2026-01-20 | Example Clinic | S13.4XXA | clinic.pdf\n2026-03-30 | Example Clinic | M54.2 | clinic.pdf\n"
+    )
+    _pages(sr, "Patient: Beta Roe DOB: 02/02/1980. Continue therapy.")
+    assert "| Example Clinic | 01/20/2026 - 03/30/2026 | 2 |" in _md(sr)
+    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1))) == 0, log
+    md = _md(sr)
+    assert "| Example Clinic | 01/20/2026 | 1 | Exhibit 1 - p. 2 |" in md, md
+    assert "03/30/2026 | 2" not in md
+    assert "M54.2" not in md, "only the removed entry carried it"
+    assert "| S13.4XXA | Sprain of ligaments of cervical spine | 01/20/2026 | Exhibit 1 - p. 2 |" in md
+    assert "Z99.9" in md, "a code the index cannot derive is kept as it stands"
+    assert any("re-derived" in ln for ln in log)
+
+
 def test_a_check1_on_a_page_that_names_no_one_leaves_the_entry_out(job_dir, firm_config_path, data_root):
     sr, log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, "Plan: continue therapy.")

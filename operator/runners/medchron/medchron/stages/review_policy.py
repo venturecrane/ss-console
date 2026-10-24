@@ -306,7 +306,7 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
       out by rule and disclosed (never naming that person)."""
     from . import review_evidence as EV
 
-    md = doc.read_text(encoding="utf-8")
+    md = before = doc.read_text(encoding="utf-8")
     for k, f in enumerate(out.findings):
         if f.grade != review.MUST:
             continue
@@ -340,6 +340,12 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
             )
             stats["identity_left_out"] += 1
             sr.log(f"review: the {date_line} entry left out by rule (its cited page: {kind})")
+    if stats["identity_left_out"]:
+        # The summary tables count the entries: computed again from those left.
+        from . import review_tables
+
+        doc.write_text(review_tables.rederive(sr, before, md), encoding="utf-8")
+        sr.log("review: Treatment Timeline and Diagnostic Highlights re-derived from the remaining entries")
 
 
 def _future_still(md: str, f: review.Finding, today: date | None) -> bool:

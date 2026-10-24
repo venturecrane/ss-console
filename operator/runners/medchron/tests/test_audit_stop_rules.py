@@ -168,6 +168,50 @@ def test_a_control_supported_twice_stands_but_one_is_not_a_rubber_stamp_at_the_c
     assert not ok and summary["controls_bad"] == 3
 
 
+def _proof5(rows: list[dict]) -> list[str]:
+    from medchron.update import proofs as P
+
+    r = P.Result()
+    P._audit(P.Inputs([], [], "", "", [], [], rows, [], [], set()), r)
+    return [f for f in r.fails if f.startswith("5")]
+
+
+def test_the_update_proof_5_applies_the_rounds_own_control_rule() -> None:
+    """Decision (3), 2026-10-24: proof 5 judged every un-retired SUPPORTED
+    control row a failure, re-test rows included, so an update could fail on
+    a control the round itself had passed. 76 controls with 2 SUPPORTED twice
+    passes; 3 fails; a lone control SUPPORTED twice fails (every control)."""
+
+    def rows(bad: int, n: int = 76) -> list[dict]:
+        out: list[dict] = []
+        for i in range(n):
+            out.append(
+                {"key": f"c{i}-ctl2", "kind": "control(vs Ex2)", "verdict": "SUPPORTED" if i < bad else "UNSUPPORTED"}
+            )
+            if i < bad:
+                out.append(
+                    {
+                        "key": f"c{i}-ctl3",
+                        "kind": "control-retest(vs Ex3)",
+                        "retest_of": f"c{i}-ctl2",
+                        "verdict": "SUPPORTED",
+                    }
+                )
+        return out
+
+    assert _proof5(rows(2)) == []
+    assert _proof5(rows(3))
+    assert _proof5(rows(1, n=1))
+
+
+def test_every_control_bad_is_logged_as_the_rubber_stamp() -> None:
+    log: list[str] = []
+    a = controls.assess_rows([{"key": "c-ctl2", "kind": "control(vs Ex2)", "verdict": "SUPPORTED"}], set())
+    controls.describe(a, log.append)
+    assert a["invalid"] and a["invalid_by"] == "every control"
+    assert any("EVERY CONTROL RUN (1)" in ln and "rubber-stamp" in ln for ln in log), log
+
+
 def test_threshold_arithmetic() -> None:
     assert controls.threshold(76) == 3 and controls.threshold(612) == 7 and controls.threshold(10) == 3
     assert not controls.is_invalid(2, 76) and controls.is_invalid(3, 76)

@@ -67,7 +67,12 @@ def originals(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def assess(rows: list[dict[str, Any]], out: Path) -> dict[str, Any]:
     """The controls' and reverse controls' standing over every row on file."""
-    gone = retired.keys(out)
+    return assess_rows(rows, retired.keys(out))
+
+
+def assess_rows(rows: list[dict[str, Any]], gone: set[str]) -> dict[str, Any]:
+    """``assess`` with the retired control keys given (the update's proof 5
+    carries them in its inputs)."""
     first = originals(rows)
     retests: dict[str, dict[str, Any]] = {str(r["retest_of"]): r for r in rows if is_control(r) and r.get("retest_of")}
     bad = []
@@ -98,8 +103,10 @@ def assess(rows: list[dict[str, Any]], out: Path) -> dict[str, Any]:
     ]
     n, nr = len(first), len(rev)
     ctl_invalid, rev_invalid = is_invalid(len(bad), n), is_invalid(len(rev_bad), nr, every=False)
+    by_every = ctl_invalid and len(bad) < threshold(n)
     return {
         "controls": n,
+        "invalid_by": ("every control" if by_every else "rate") if ctl_invalid else None,
         "controls_retired": sum(1 for r in first if r.get("key") in gone),
         "retests": len(retests),
         "bad": bad,
@@ -121,6 +128,12 @@ def describe(a: dict[str, Any], log: Callable[[str], None]) -> None:
         f"{nb} still SUPPORTED after the re-test; INVALID at >= max({FLOOR}, ceil({RATE:.0%} x {a['controls']})) = "
         f"{a['threshold']} or all {a['controls']} -> {'!! INVALID' if a['controls_invalid'] else 'DISCRIMINATES'}"
     )
+    if a.get("invalid_by") == "every control":
+        log(
+            f"!! EVERY CONTROL RUN ({a['controls']}) came back SUPPORTED, each after its re-test where one was "
+            f"possible: below the rate floor of {a['threshold']}, but this is the rubber-stamp signature itself "
+            "-> INVALID"
+        )
     for b in a["bad"]:
         log(
             f"  control SUPPORTED twice: {b['key']} Ex{b['exhibit']} {b['control']} / "
