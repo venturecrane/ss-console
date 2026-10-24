@@ -100,7 +100,19 @@ _REASON_HINTS: dict[str, str] = {
         "arrived and reaches them if it did not."
     ),
     "no_inbox_id": "No inbox was recorded for the original message, so there is nothing to thread into.",
+    "held_wording": (
+        "This job is held, and a held job's reply is its fixed wording and nothing "
+        "else. Nothing was sent and the one reply is still yours. Draft the reply "
+        "again with exactly the text below as the whole body: no greeting, no "
+        "sign-off, no other sentence."
+    ),
 }
+
+#: Holds whose guidance stands on every attempt: the redraft that clears them is
+#: named exactly, so "do not redraft" on a second hold would be the wrong advice.
+_EXACT_REDRAFT_REASONS = frozenset({"held_wording"})
+#: The broker's quoted wording can list two or three sentences.
+_MAX_EXACT_DETAIL_LEN = 2000
 
 _GENERIC_HINT = (
     "The draft was not transmitted, and no automatic release is queued for it. "
@@ -139,7 +151,10 @@ def render(notice: HoldNotice) -> str:
     """The model-facing text for one hold. No em dashes (house style)."""
     reason = _sanitize(notice.reason, _MAX_REASON_LEN) or "unspecified"
     recipient = _sanitize(notice.recipient, _MAX_RECIPIENT_LEN) or "the inbound sender"
-    if notice.attempt >= 2:
+    exact = reason in _EXACT_REDRAFT_REASONS
+    if exact:
+        guidance = _REASON_HINTS[reason]
+    elif notice.attempt >= 2:
         guidance = _SECOND_HOLD_GUIDANCE.format(n=notice.attempt)
     elif reason.startswith(_CONTENT_REASON_PREFIXES):
         guidance = _REDRAFT_GUIDANCE
@@ -150,9 +165,9 @@ def render(notice: HoldNotice) -> str:
         f"reply channel held it: {reason}. Nobody has been told, and {recipient} "
         f"is still waiting. {guidance}"
     )
-    detail = _sanitize(notice.detail, _MAX_DETAIL_LEN)
+    detail = _sanitize(notice.detail, _MAX_EXACT_DETAIL_LEN if exact else _MAX_DETAIL_LEN)
     if detail:
-        text += f" What to correct: {detail}"
+        text += f" {'The broker says' if exact else 'What to correct'}: {detail}"
     return text
 
 

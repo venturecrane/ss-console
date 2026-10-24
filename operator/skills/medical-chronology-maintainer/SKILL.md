@@ -522,17 +522,26 @@ nothing, stop.
      paraphrase or summarize the reason, a gate, a stage, a setting, a code or a
      figure from it.** The same token comes back as `hold_class` on the job from `medchron_job_status`;
      when the two differ, the job's `hold_class` wins. Each class has fixed wording; use it, with the matter
-     number from the wake, and add nothing:
+     number from the wake, and add nothing. **The broker enforces this**: on a held job
+     `reply_bind` answers with the exact text as `held_wording` (the matter number already
+     in it), and the send refuses any other words (a greeting, a sign-off, one changed
+     word, another matter's number), sends nothing, and quotes the text to send. The
+     reply's whole body is that text; the only thing you fill is `<file name>` in the
+     question about a record that names someone else.
      - `smd_finishing` (our side: a gate or check, the final citation check
        `audit coverage:`, the independent review `review_held:`, a refused
        stage, a delivered chronology our renderer could not prove, a filing or
        read-back that did not finish, the job's cost cap `per_job_cap_usd`, the
        cycle's page allowance `chronology_package_page_allowance_per_month` or
        its cost budget `monthly_budget_usd`): "The chronology for matter
-       <number> is not filed yet, and nothing new has been put on the matter
-       (on an update: the chronology already there is unchanged). Nothing is
-       needed from you; SMD is finishing it, and the next message you get
-       about this chronology will be the filed one." **This is SMD's failure,
+       <number> is not filed yet, and nothing new has been put on the matter.
+       Nothing is needed from you; SMD is finishing it, and the next message
+       you get about this chronology will be the filed one." On an update
+       (the wake says `Request: update into the delivered chronology.`): "The
+       chronology for matter <number> is not filed yet, and nothing new has
+       been put on the matter; the chronology already there is unchanged.
+       Nothing is needed from you; SMD is finishing it, and the next message
+       you get about this chronology will be the filed one." **This is SMD's failure,
        never the firm's decision.** Do not list sentences, findings or pages,
        do not say what stopped it, and do not ask anyone to review, confirm or
        determine anything.

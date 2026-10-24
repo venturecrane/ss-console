@@ -524,6 +524,8 @@ def _held(reason: str, origin: inbound.InboundOrigin, **extra: Any) -> None:
 # the transport's own error text stays in the audit row, never in the model's
 # context or the monitoring tags.
 _SEND_FAILED_REASON = "send_failed"
+# A held job's bound reply the broker refused for its words (held_wording).
+_HELD_WORDING_REASON = "held_wording"
 
 
 def _send_failed(
@@ -1362,6 +1364,14 @@ def _relay_draft(**kwargs: Any) -> None:
                     # Only when set, so every ordinary reply makes today's call.
                     **({"shared": True} if shared_people else {}),
                 )
+        except relay.HeldWordingRefused as exc:
+            # A held job's reply in words other than its fixed wording: the
+            # broker sent nothing and quotes the exact text. A hold the model
+            # redrafts from, never a transport failure to escalate (2026-10-24).
+            # The REPLY_HELD row names the wake's job, so SMD is paged only if
+            # no reply follows within the reply watch's grace.
+            _held(_HELD_WORDING_REASON, origin, _detail=str(exc), _matter_ref=cited_matter_ref)
+            return
         except Exception as exc:  # noqa: BLE001 - RelaySendError or a fault: not confirmed
             why = str(exc) if isinstance(exc, relay.RelaySendError) else type(exc).__name__
             if isinstance(exc, relay.RelayOutcomeUnknown):

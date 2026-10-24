@@ -198,8 +198,24 @@ def _call(broker: Broker, action: str, binding: dict, **extra) -> dict:
     return broker.handle({"action": action, "binding": binding, **extra}, peer_pid=GATEWAY_PID, peer_uid=AGENT_UID)
 
 
+def _body_for(broker: Broker, binding: dict) -> str:
+    """ "Received.", or for a HELD litigation/chronology job its fixed wording
+    (held_wording refuses any other words there; test_held_wording)."""
+    from workspace_broker import held_wording, reply_binding
+
+    kind = binding.get("kind")
+    if kind not in held_wording.KIND_LANE:
+        return "Received."
+    row = reply_binding.job_ledger(broker, kind).read(binding["job_id"])
+    if not row or row.get("state") != "held":
+        return "Received."
+    return next(t for t in held_wording.allowed(kind, row) if "<" not in t)
+
+
 def _send(broker: Broker, binding: dict) -> dict:
-    return _call(broker, "msgraph_reply_bound", binding, payload={"comment": "Received."}, session_id="sess-1")
+    return _call(
+        broker, "msgraph_reply_bound", binding, payload={"comment": _body_for(broker, binding)}, session_id="sess-1"
+    )
 
 
 MSG = {"kind": "message", "internet_message_id": IMID}

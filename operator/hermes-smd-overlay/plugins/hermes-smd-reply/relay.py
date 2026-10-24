@@ -516,6 +516,18 @@ class RelaySendError(RuntimeError):
     """The AgentMail reply POST failed (HTTP error, unreachable, or timeout)."""
 
 
+class HeldWordingRefused(RelaySendError):
+    """The broker refused a held job's bound reply because its words were not
+    the hold class's fixed wording (ss-console ``workspace_broker/held_wording``,
+    2026-10-24). Nothing was sent and the one reply is unspent. The message is
+    the broker's sentence quoting the exact text, which the model is told so its
+    retry succeeds: a hold to redraft, never a transport failure to escalate."""
+
+
+#: The broker's error code for that refusal (the exception's class name).
+HELD_WORDING_CODE = "HeldWordingRefused"
+
+
 class RelayOutcomeUnknown(RelaySendError):
     """The reply reached the broker, or may have, and its answer was lost, so it
     may already be in the person's inbox. A caller must treat it as carried for
@@ -537,6 +549,8 @@ def reply_failure(exc: Exception, what: str) -> RelaySendError:
     anything that may have gone out is a :class:`RelayOutcomeUnknown`.
     """
     if isinstance(exc, BrokerError):
+        if getattr(exc, "code", "") == HELD_WORDING_CODE:
+            return HeldWordingRefused(str(exc))
         if send_outcome_unknown(exc):
             return RelayOutcomeUnknown(f"{what}: outcome unknown, it may have been sent: {exc}")
         return RelaySendError(f"broker refused the {what}: {exc}")
