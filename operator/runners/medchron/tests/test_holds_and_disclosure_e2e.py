@@ -339,7 +339,8 @@ def test_a_joint_matters_file_no_client_owns_is_left_out_by_rule_and_the_job_del
 def test_the_coverage_gate_holds_at_once_and_never_asks_for_a_no_op_rebuild() -> None:
     # 2026-10-24: the rebuild from build_doc could not change the gate's answer
     # (it reads entries_scoped_final.md and page_map.json, both written before
-    # build_doc), so it was removed rather than left to look like a remedy.
-    assert dag.BY_NAME["coverage_gate"].rewind == {}
+    # build_doc), so it was removed rather than left to look like a remedy, and
+    # the in-run rewind it was the only user of went with it.
+    assert not hasattr(dag.BY_NAME["coverage_gate"], "rewind")
     assert dag.ORDER.index("decide_orphans") < dag.ORDER.index("map") < dag.ORDER.index("build_doc")
     assert dag.validate_dag() == []

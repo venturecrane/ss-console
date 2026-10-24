@@ -136,6 +136,32 @@ def test_group_attributes_by_index_then_folder_then_sentinel(job_dir: Path, firm
     assert groups["Carrier (Policy) 250"]["file_ids"] == ["e"]  # the numeric leaf "500" is skipped
 
 
+def test_group_never_names_a_lane_after_the_clients_renamed_folder(tmp_path: Path, firm: Path, data_root: Path) -> None:
+    """Row 22 follow-up (2026-10-24): when the firm renames the client's folder
+    ("Alpha_Example" became "ALPHA EXAMPLE"), decide_selection resolves it and
+    units.json carries the real name. group compared folder segments against
+    the job's original prefix, so a file filed straight under the client folder
+    got a lane, and an exhibit title, named after the client's folder."""
+    from medchron_testkit import job_yaml
+
+    jd = tmp_path / "job"
+    jd.mkdir()
+    (jd / "job.yaml").write_text(job_yaml(data_root, joint=True))
+    sr = _sr(jd, firm, data_root)
+    (sr.slug_dir / "units.json").write_text(
+        json.dumps(
+            {
+                "alpha": {"folder_prefix": "/ALPHA EXAMPLE", "surname": "Example"},
+                "beta": {"folder_prefix": "/Beta_Example", "surname": "Example"},
+            }
+        )
+    )
+    _seed_unit(sr, [{"id": "a", "name": "clinic note", "ext": ".pdf", "folder": "/ALPHA EXAMPLE/MEDICAL"}], [])
+    assert group_stage.run(sr) == 0
+    groups = {g["provider"] for g in json.loads((sr.slug_dir / "groups" / "alpha.json").read_text())}
+    assert groups == {"(unattributed)"}, groups
+
+
 def test_a_lane_is_never_named_by_the_composers_placeholder_and_a_tie_goes_to_the_first_row(
     job_dir: Path, firm: Path, data_root: Path
 ) -> None:

@@ -99,12 +99,6 @@ class Stage:
     # answered for free instead of at the price of reaching them.
     external: bool = False
     rehearse: Callable[..., list[str]] | None = None
-    # Exit code -> stages to reopen; the run then resumes at the earliest of
-    # them, in the same process, instead of ending (2026-10-23). No stage uses
-    # it since 2026-10-24: its one user, the coverage gate's rebuild from
-    # build_doc, could not change the gate's answer (the gate reads artifacts
-    # written before build_doc) and was removed. The driver bounds it (rewind.py).
-    rewind: dict[int, tuple[str, ...]] = field(default_factory=dict)
 
 
 def _slug(ctx: Ctx) -> list[str]:
@@ -567,14 +561,6 @@ def _validate(seq: tuple[Stage, ...]) -> list[str]:
                 problems.append(f"{s.name}: invalidates unknown stage {inv!r}")
             elif pos[inv] <= pos[s.name]:
                 problems.append(f"{s.name}: invalidates {inv!r} which comes earlier")
-        for code, names in s.rewind.items():
-            if code == 0 or code in s.exit_map:
-                problems.append(f"{s.name}: rewind code {code} is also success or an exit_map outcome")
-            known = [n for n in names if n in pos]
-            if len(known) != len(names):
-                problems.append(f"{s.name}: rewind names unknown stage(s) {sorted(set(names) - set(known))}")
-            elif not any(pos[n] < pos[s.name] for n in known):
-                problems.append(f"{s.name}: rewind {code} reopens nothing before it, so nothing would re-run")
     for s in seq:
         if s.paid and s.external:
             problems.append(f"{s.name}: paid and external (a rehearsal must know which it is)")

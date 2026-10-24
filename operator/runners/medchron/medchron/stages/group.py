@@ -225,6 +225,17 @@ def _folder_provider(f: dict[str, Any], canon: Canon, unit_prefixes: list[str]) 
     return canon.brand(f.get("name") or "") or canon.unresolved
 
 
+def _unit_folders(sr: StageRun) -> list[str]:
+    """Every client folder on the matter, as decide_units resolved it into
+    ``units.json`` (a renamed folder is matched there, decisions.resolve_prefix),
+    plus the job's own prefixes. Comparing only the job's prefixes named a lane
+    after the client's folder once the firm had renamed it (2026-10-24)."""
+    spec = read_json(sr.slug_dir / "units.json", {}) or {}
+    resolved = [str(v["folder_prefix"]) for v in spec.values() if isinstance(v, dict) and v.get("folder_prefix")]
+    asked = [u.folder_prefix for u in sr.job.units if getattr(u, "folder_prefix", None)]
+    return list(dict.fromkeys(resolved + asked))
+
+
 def run(sr: StageRun) -> int:
     d = sr.slug_dir
     (d / "groups").mkdir(parents=True, exist_ok=True)
@@ -233,7 +244,7 @@ def run(sr: StageRun) -> int:
     idx_dates, idx_prov = index_rows(
         d / "runs" / sr.unit.unit, {f["id"]: f["name"] + (f.get("ext") or "") for f in files}
     )
-    unit_prefixes = [u.folder_prefix for u in sr.job.units if getattr(u, "folder_prefix", None)]
+    unit_prefixes = _unit_folders(sr)
     groups: dict[str, dict[str, list]] = defaultdict(lambda: {"file_ids": [], "dates": []})
     unattributed: list[str] = []
     for f in files:

@@ -37,7 +37,6 @@ from . import (
     projection,
     proof_mode,
     rehearsal,
-    rewind as rewind_mod,
     seat as seat_mod,
     stop_request,
     unit_proof,
@@ -269,9 +268,6 @@ class Driver:
         self._first_paid_checked = False
         self.date_stamp = time.strftime("%m-%d-%y")
         self.decided: dict[str, Any] = {}
-        # Set by a stage whose exit code is in its dag rewind map; read and
-        # cleared by run_unit right after that stage returns.
-        self._rewind: tuple[str, ...] | None = None
         problems = dag.validate_dag()
         if problems:
             raise DriverError("DAG invalid: " + "; ".join(problems))
@@ -369,11 +365,7 @@ class Driver:
         update = self.job.update is not None
         seq = dag.stages_from(self.start, update=update)
         honor_done = self.start is None
-        rewinds = 0
-        i = 0
-        while i < len(seq):
-            stage = seq[i]
-            i += 1
+        for stage in seq:
             if stage.scope == "slug" and stage.name in slug_done:
                 continue
             if st.is_done(stage.name) and honor_done:
@@ -386,11 +378,6 @@ class Driver:
                 out = self._decide(stage, unit, st, notes)
             else:
                 out = self._execute(stage, ctx, st, extracted, notes)
-            rewind, self._rewind = self._rewind, None
-            if rewind is not None:  # dag.Stage.rewind: resume at the earliest reopened stage (rewind.py)
-                rewinds += 1
-                seq, i, honor_done = rewind_mod.restart(stage, rewind, update, rewinds, notes, self.log), 0, True
-                continue
             if stage.scope == "slug" and out is None:
                 slug_done.add(stage.name)
             if out is not None:
@@ -611,9 +598,6 @@ class Driver:
             st.finish(stage.name, status="done", exit_code=0, dollars=dollars, pages=pages)
             if stage.invalidates:
                 st.invalidate(list(stage.invalidates))
-            return None
-        if refusal is None and rewind_mod.open_stages(stage, code, st, dollars, pages):
-            self._rewind = stage.rewind[code]  # not an outcome; run_unit resumes earlier
             return None
         if refusal is not None:
             outcome, reason = "refused", refusal
