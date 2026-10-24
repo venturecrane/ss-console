@@ -144,7 +144,7 @@ Per `references/routing-rubric.md` and `references/algorithm.md`:
    - **Conflict signal** → **HALT**: create the fixed-shape clearance task, then stop (never respond, never route).
    - **Legal-substance question** → do **not** answer; acknowledge and defer to the attorney. Reading or entering a matter's recorded field values (negotiation demands and offers, insurance, case details) is file data, not a legal-substance question. Only advice about them ("should we accept?", "what is it worth?") is legal substance.
 5. **Surface** the run as a list for the team - what came in, what you answered, where each matter item routed, and any held/deferred ones called out separately.
-6. **Help pointer.** Whether a colleague's reply ends with a one-line pointer to how to work with you is decided by the inbound email instructions, the single place those rules live (rendered only on a seat that carries `operator-help`). Add no help offer on your own.
+6. **Help pointer.** Whether a colleague's reply ends with a one-line pointer to how to work with you is decided by the platform, not by you: on a seat that carries `operator-help`, when a line is due this turn's context gives you the exact line under `HELP LINE`, with the replies it never goes on. End the reply with that line as written, or leave it out if the context says this reply is excluded. When no such line was given, none is due. Add no help offer on your own, and never call a tool to ask.
 
 ## Trust Ceiling
 

@@ -229,7 +229,7 @@ vars:
     stage: agent
     requirement: optional
     consumed_by: [initiation]
-    note: "test/dev override for the Machine-local help-pointer state file; defaults to /opt/data/smd/help_state.db (plugins/hermes-smd-initiation/help_state.py). The initiation plugin is its only reader and writer (operator_help_signals records an offer as it reports it due; operator_help_note records help_given). Holds one random per-seat salt and salted sha256 hashes of a person's bare address and a thread reference, with offer/help times; no address, subject or text. Rows deleted after 90 days."
+    note: "test/dev override for the Machine-local help-pointer state file; defaults to /opt/data/smd/help_state.db (plugins/hermes-smd-initiation/help_state.py). The initiation plugin is its only reader and writer (its per-turn pre_llm_call hook records an offer as it reports it due, and the diagnostic operator_help_signals tool does the same; operator_help_note records help_given). Holds one random per-seat salt and salted sha256 hashes of a person's bare address and a thread reference, with offer/help times; no address, subject or text. Rows deleted after 90 days."
   SMD_GATE_CAP_DB_PATH:
     discovery: static
     stage: agent
@@ -469,7 +469,7 @@ vars:
     stage: agent
     requirement: optional
     consumed_by: [webhook-router, reply, webhook-gate, initiation]
-    note: "test/dev override for the seat-local request index; defaults to /opt/data/requests.db (shared/request_index.py). The agent writes it (router at intake, reply plugin + held-reply sweeper at each send). Two read-only readers: the gate's heartbeat (request cards), and since ss-console #3423 the agent-side initiation plugin (operator_help_signals counts one sender's recent requests via read_sender_requests, ids/times/thread only). Holds sender/subject/reply opening, nulled after 7 days, rows deleted after 30."
+    note: "test/dev override for the seat-local request index; defaults to /opt/data/requests.db (shared/request_index.py). The agent writes it (router at intake, reply plugin + held-reply sweeper at each send). Two read-only readers: the gate's heartbeat (request cards), and since ss-console #3423 the agent-side initiation plugin (its per-turn help-pointer hook and the diagnostic operator_help_signals tool count one sender's recent requests via read_sender_requests, ids/times/thread only). Holds sender/subject/reply opening, nulled after 7 days, rows deleted after 30."
   SMD_REQUEST_CARDS_DB_PATH:
     discovery: static
     stage: agent

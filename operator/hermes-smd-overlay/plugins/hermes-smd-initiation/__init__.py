@@ -92,11 +92,12 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import OrderedDict
 from typing import Any
 
-from shared import request_index
+from shared import inbound, request_index
 from shared.customer_config import CustomerConfig
-from shared.inbound import SESSION_INBOUND_ORIGIN
+from shared.inbound import SESSION_INBOUND_ORIGIN, UNTRUSTED_EMAIL_DELIMITER
 from shared.tool_registration import register_wrapped_tool
 
 from . import help_guide, help_state, seat_facts, skill_fence
@@ -338,10 +339,25 @@ def _normalize(message: str) -> str:
     return text
 
 
+def _asked_text(user_message: str) -> str:
+    """The words the PERSON wrote: on an email turn, only what follows the
+    untrusted-body delimiter.
+
+    The rendered email prompt is the turn's ``user_message``, and its own trusted
+    instructions say "who you are, what you can see", which matched the facts
+    set on every email turn whatever the person asked. A message with no
+    delimiter (a CLI turn, a test) is read whole."""
+    at = user_message.find(UNTRUSTED_EMAIL_DELIMITER)
+    if at < 0:
+        return user_message
+    newline = user_message.find("\n", at)
+    return "" if newline < 0 else user_message[newline + 1 :]
+
+
 def _matches(user_message: object, phrases: tuple[str, ...]) -> bool:
     if not isinstance(user_message, str) or not user_message:
         return False
-    text = _normalize(user_message)
+    text = _normalize(_asked_text(user_message))
     return any(phrase in text for phrase in phrases)
 
 
@@ -447,12 +463,21 @@ def _help_sender(session_id: Any) -> str | None:
 # The quiet help pointer (ss-console#3423, increment 2)
 # --------------------------------------------------------------------------- #
 #
-# Two tools, both resolving WHO from the turn's own verified email (never from
-# an argument, so the model cannot name a person), both answering in booleans
-# and counts (no address, no text, no matter). The rules for when to speak are
-# authored once, in the inbound email prompt (``bootstrap/translate.py``,
-# rendered only on a seat that binds operator-help); these tools only supply the
-# platform's facts and record what was offered.
+# THE PLATFORM DECIDES AND SUPPLIES THE LINE. On a seat that binds and enables
+# operator-help, ``on_pre_llm_call`` computes the sender signals itself on the
+# turn's first model call for an inbound email (:func:`_help_pointer_block`)
+# and, only when a line is due, injects the exact line for the reply to end
+# with. The first increment told the model, in the email prompt, to call
+# ``operator_help_signals`` before every reply; on pilot-smokeball a rostered
+# admin's ordinary question ("How many open matters can you see right now?")
+# was answered "11." with no call and no line. A prompt instruction to call a
+# tool on every turn is not followed reliably, so the decision moved here.
+#
+# The two tools stay registered: ``operator_help_note`` records help_given from
+# the operator-help skill, and ``operator_help_signals`` answers for
+# diagnostics. Both resolve WHO from the turn's own verified email (never from
+# an argument, so the model cannot name a person) and answer in booleans and
+# counts (no address, no text, no matter).
 
 _HELP_SIGNALS_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -468,15 +493,13 @@ _HELP_SIGNALS_SCHEMA: dict[str, Any] = {
 }
 
 _HELP_SIGNALS_DESCRIPTION = (
-    "Whether to point the person who emailed you at your help, decided by the "
-    "platform from this seat's own records. Call with scope 'sender' at the start "
-    "of an email turn from someone on the firm's roster, when the inbound email "
-    "instructions ask you to. Act only on 'pointer_due' (one line about asking you "
-    "how to work together) and 'struggle_offer_due' (one line offering help, once "
-    "in this thread); every other field is context. When 'resolved' is false, or a "
-    "*_due flag is false, offer nothing. A *_due flag that is true is already "
-    "recorded as offered, so it is true once only. The result carries no names, "
-    "addresses, message text or matter numbers, and you must not add any."
+    "Diagnostic only: this seat's help-pointer facts for the person whose email "
+    "opened this turn. You never need it to write a reply: when a help line is "
+    "due, the platform has already given it to you with this turn's context, and "
+    "when none was given, none is due. A *_due flag is true once only, and the "
+    "platform has normally consumed it before you could call this. The result "
+    "carries no names, addresses, message text or matter numbers, and you must "
+    "not add any."
 )
 
 _HELP_NOTE_SCHEMA: dict[str, Any] = {
@@ -568,6 +591,105 @@ def _help_note_handler(args: dict[str, Any] | None = None, session_id: Any = "",
     except Exception:  # noqa: BLE001
         logger.warning("%s: note failed", TOOL_HELP_NOTE, exc_info=True)
         return json.dumps({"recorded": False})
+
+
+#: The skill whose binding and enablement turns the help pointer on. A seat
+#: without it would be pointing people at an answer it cannot give.
+_HELP_SKILL = "operator-help"
+
+#: The block header the reply's line arrives under. Grep-able.
+_HELP_LINE_HEADER = "HELP LINE (platform-decided for this email)"
+
+#: Message ids whose pointer was already evaluated in this process. The hook can
+#: fire more than once for one inbound (skill-triggered model calls), and the
+#: evaluation records an offer, so it runs on the FIRST call only. Bounded; a
+#: restart forgets it, and then the durable record in help_state still answers
+#: "already offered".
+_POINTER_EVALUATED: OrderedDict[str, None] = OrderedDict()
+_POINTER_EVALUATED_MAX = 1024
+
+
+def _help_bound(cfg: Any) -> bool:
+    """True when a persona binds operator-help AND enables it (the reading
+    translate used to render the old prompt instruction: ``enabled`` truthy)."""
+    for persona in cfg.personas:
+        if not isinstance(persona, dict):
+            continue
+        skills = persona.get("skills")
+        for skill in skills if isinstance(skills, list) else []:
+            if (
+                isinstance(skill, dict)
+                and skill.get("name") == _HELP_SKILL
+                and skill.get("enabled")
+            ):
+                return True
+    return False
+
+
+def _first_evaluation(message_id: str) -> bool:
+    """Mark ``message_id`` evaluated; True only the first time it is seen."""
+    if message_id in _POINTER_EVALUATED:
+        _POINTER_EVALUATED.move_to_end(message_id)
+        return False
+    _POINTER_EVALUATED[message_id] = None
+    while len(_POINTER_EVALUATED) > _POINTER_EVALUATED_MAX:
+        _POINTER_EVALUATED.popitem(last=False)
+    return True
+
+
+def _help_line_block(line: str) -> str:
+    return (
+        f"{_HELP_LINE_HEADER}: end your reply with this line, exactly as written, "
+        f"as its own last line:\n{line}\n"
+        "Leave it out only if this reply answers how to work with you, delivers a "
+        "draft or confirms work you queued, answers a question about a chronology, "
+        "declines an action reserved to administrators, or goes to anyone not on "
+        "your roster; if you leave it out, say nothing about help. It is already "
+        "recorded as offered: do not call operator_help_signals."
+    )
+
+
+def _help_pointer_block(session_id: str, user_message: object, cfg: Any) -> str | None:
+    """The help line this email's reply should end with, or ``None``. Never raises.
+
+    ``None`` (no block at all) unless every gate holds: the seat binds and
+    enables operator-help; the person did not ask about the Operator or how to
+    work with it (that reply is the help answer and never carries the line);
+    exactly this turn's verified email resolves (``bound_this_turn``); this is
+    the first evaluation of that message in this process; the sender is on the
+    live roster; and ``help_state.sender_signals`` reports a line due. That call
+    records the offer in the same transaction, so a later email, or a second
+    evaluation after a restart, is never told again.
+    """
+    try:
+        if not session_id or not _help_bound(cfg):
+            return None
+        if _seat_nudge(user_message) is not None:
+            return None
+        # This turn's provenance mark and binding are normally made by
+        # hermes-smd-inbound's own pre_llm_call, which may run after this one.
+        # Idempotent: the same id is noted and a session's first binding wins.
+        inbound.bind_origin_from_prompt(session_id, user_message)
+        origin = _help_origin(session_id)
+        if origin is None:
+            return None
+        if not _first_evaluation(origin.message_id):
+            return None
+        sender = request_index.bare_sender(origin.sender_address)
+        if sender is None or not cfg.sender_on_roster(sender):
+            return None
+        signals = help_state.sender_signals(sender, origin.message_id)
+        if signals.get("pointer_due") is True:
+            line = help_state.POINTER_LINE
+        elif signals.get("struggle_offer_due") is True:
+            line = help_state.STRUGGLE_LINE
+        else:
+            return None
+        logger.info("hermes-smd-initiation: help line injected (sender=%s)", sender)
+        return _help_line_block(line)
+    except Exception:  # noqa: BLE001 — a fault costs the line, never the reply
+        logger.warning("hermes-smd-initiation: help pointer failed; no line", exc_info=True)
+        return None
 
 
 def _load_config() -> Any | None:
@@ -663,6 +785,13 @@ def on_pre_llm_call(**kwargs: Any) -> dict[str, str] | None:
                 TOOL_SEAT_FACTS,
                 sender,
             )
+        elif kwargs.get("platform") == _WEBHOOK_PLATFORM:
+            # The quiet help pointer (ss-console#3423): decided here, never by
+            # the model. Exclusive with the nudge, so a help answer never
+            # carries the pointer.
+            pointer = _help_pointer_block(session_id, kwargs.get("user_message"), cfg)
+            if pointer is not None:
+                lines.append(pointer)
         logger.info(
             "hermes-smd-initiation: authority injected (sender=%s, admin=%s)",
             sender,

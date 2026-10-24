@@ -4,11 +4,14 @@ THE INTENT. The Operator should help people discover that they can ask it for
 help, without being noisy or repetitive. One line on a person's FIRST email to
 the seat; after that, only on an objective struggle in a thread, once per
 thread; never again for someone who has asked for help or has made ten
-requests. The rules are authored in the inbound email prompt
-(``bootstrap/translate.py``); this module holds the only state they need and
-computes the signals, so the model applies booleans the platform decided
-instead of judging "is this their first time?" from a conversation it cannot
-see.
+requests. This module holds the only state those rules need, computes the
+signals, and owns the exact words of the two lines (:data:`POINTER_LINE`,
+:data:`STRUGGLE_LINE`). The initiation plugin's per-turn hook calls
+:func:`sender_signals` itself on a seat that binds operator-help and, when a
+line is due, hands the reply that line verbatim. The model never decides WHEN
+and never has to remember to ask: the first live increment told the model to
+call a tool on every email turn, and on pilot-smokeball an ordinary question
+was answered with no call and no line (ss-console#3423).
 
 ONCE MEANS ONCE, DURABLY. The moment :func:`sender_signals` reports
 ``pointer_due`` (or ``struggle_offer_due`` for a thread), it records the offer
@@ -103,6 +106,16 @@ STOP_AFTER_REQUESTS = 10
 REPEAT_ASK_PRIOR = 3
 #: What the struggle signal is computed from, said plainly in the output.
 STRUGGLE_BASIS = "repeated_messages_in_thread"
+
+#: The one line appended to a person's first email reply. THE ONLY copy of it:
+#: the per-turn hook hands it to the reply verbatim. No em dash, no braces.
+POINTER_LINE = (
+    "If you're ever unsure how to ask me for something, just ask me how we can work together."
+)
+#: The one line appended, once per thread, when a person is visibly struggling.
+STRUGGLE_LINE = (
+    "If it would help, ask me how to phrase this kind of request and I'll walk you through it."
+)
 
 KIND_POINTER = "pointer_offered"
 KIND_STRUGGLE = "struggle_offer"
@@ -422,12 +435,14 @@ __all__ = [
     "KIND_POINTER",
     "KIND_STRUGGLE",
     "LOOKBACK_DAYS",
+    "POINTER_LINE",
     "REPEAT_ASK_PRIOR",
     "RETENTION_DAYS",
     "SCOPES",
     "SCOPE_SENDER",
     "STOP_AFTER_REQUESTS",
     "STRUGGLE_BASIS",
+    "STRUGGLE_LINE",
     "db_path",
     "read_sender",
     "record",
