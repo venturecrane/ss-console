@@ -262,7 +262,14 @@ STAGES: tuple[Stage, ...] = (
         paid=True,
         requires=("map",),
         runner=_repair.run,
-        exit_map={1: (FAILED, "a truncated chunk could not be repaired at 2, 3 or 5 parts")},
+        exit_map={
+            1: (FAILED, "a truncated chunk could not be repaired at 2, 3 or 5 parts"),
+            75: (
+                FAILED,
+                "repair incomplete (infrastructure): an API error outlived its retries; nothing was disclosed, "
+                "and a later rerun repairs it",
+            ),
+        },
     ),
     Stage(
         "assemble",

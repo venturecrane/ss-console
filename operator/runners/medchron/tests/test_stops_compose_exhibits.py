@@ -468,6 +468,50 @@ def test_repair_accepts_a_low_yield_part_that_answers_in_the_house_shape(
     assert len(client.calls) == 2 and (d / "map-01-1.md").read_text() == short
 
 
+def test_a_compose_half_that_truncates_is_repaired_and_assembles(
+    job_dir: Path, tmp_path: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An emptied chunk is halved by compose; one half then truncates. Repair
+    looked only at whole-chunk labels, so the half "1.1" was never repaired
+    and assemble refused over it."""
+    from medchron.stages import assemble as assemble_stage
+
+    phase = {"repair": False}
+
+    def reply(p: dict, n: int) -> NS:
+        c = _content(p)
+        if n == 1:
+            return _msg("x")  # the whole chunk empties: compose halves it
+        if "ALPHA" in c and not phase["repair"]:
+            return _msg(_map_for("alpha.pdf", "alpha"), stop="max_tokens")
+        if "ALPHA" in c:
+            return _msg(_map_for("alpha.pdf", "alpha"))
+        return _msg(_map_for("beta.pdf", "beta"))
+
+    client = Scripted(reply)
+    sr = _sr(job_dir, _firm(tmp_path), data_root, client)
+    page = "record text " * 40
+    _unit_files(
+        sr,
+        {
+            "alpha": "".join(f"[p.{k}] ALPHA {page}\n" for k in range(1, 9)),
+            "beta": "".join(f"[p.{k}] BETA {page}\n" for k in range(1, 9)),
+        },
+    )
+    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    assert compose_stage.run(sr) == 0
+    d = sr.slug_dir / "runs" / "alpha"
+    assert (d / "map-01-1.md").is_file() and (d / "map-01-2.md").is_file()
+    phase["repair"] = True
+    assert repair_stage.run(sr) == 0
+    assert (d / "map-01-1.md.truncated").is_file() and not (d / "map-01-1.md").exists()
+    assert (d / "map-01-2.md").is_file(), "the sibling half compose wrote is never touched"
+    assert (d / "map-01-3.md").is_file() and (d / "map-01-4.md").is_file()
+    assert assemble_stage.run(sr) == 0
+    client.calls.clear()
+    assert repair_stage.run(sr) == 0 and client.calls == []  # nothing left to repair
+
+
 def _truncated_chunk(sr: StageRun, text: str) -> Path:
     d = sr.slug_dir / "runs" / "alpha"
     d.mkdir(parents=True)
