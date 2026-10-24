@@ -225,8 +225,15 @@ function runPublisher(fx: Fixture, env: Record<string, string> = {}): RunResult 
   // real repo's changed files instead of the fixture's. `cwd` does not override
   // those variables, and git exports them to every hook, which is why this only
   // failed under `git push`.
+  // SEAT_SPEC_* too: a shell with the real signing key exported (a Captain
+  // machine under `infisical run`) made the publisher sign and upload the spec,
+  // so every upload-count assertion failed locally and in pre-push while CI,
+  // which has no key, stayed green (found 2026-10-24). Tests that want the
+  // spec path pass these explicitly through `env`.
   const inherited = Object.fromEntries(
-    Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_'))
+    Object.entries(process.env).filter(
+      ([k]) => !k.startsWith('GIT_') && !k.startsWith('SEAT_SPEC_')
+    )
   ) as Record<string, string>
   const childEnv = {
     ...inherited,
