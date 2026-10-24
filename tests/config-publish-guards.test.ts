@@ -21,12 +21,19 @@
  * uploaded.
  */
 import { execFileSync } from 'node:child_process'
+import { createHash, createPublicKey, verify } from 'node:crypto'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { testSigningEnv } from './fixtures/fake-r2'
+
+// Each publisher or reconciler run spawns the spec compiler (tsx) once per
+// seat, so a run takes seconds, not milliseconds, under a parallel suite.
+vi.setConfig({ testTimeout: 60_000 })
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const PUBLISHER = join(REPO_ROOT, 'scripts', 'ci-publish-customer-configs.sh')
@@ -263,6 +270,10 @@ function runPublisher(fx: Fixture, env: Record<string, string> = {}): RunResult 
   return { ...outcome, awsCalls: readLog(fx.awsLog), npxCalls: readLog(fx.npxLog) }
 }
 
+/** The three keys the publisher may write, as an upload's destination. */
+const OWNED_WRITE =
+  / s3:\/\/smd-customer-config\/(vaults\/[a-z0-9-]+\/(customer\.yaml|spec-pointer\.json)|fleet\/specs\/[a-z0-9-]+\/[0-9a-f]{64}\.json) /
+
 /** Writes only. `s3 cp s3://... <local>` is the publisher's read-back verify. */
 const uploads = (calls: string[]): string[] =>
   calls.filter((c) => c.startsWith('s3 cp ') && !c.startsWith('s3 cp s3://'))
@@ -331,24 +342,22 @@ describe('ci-publish-customer-configs: never-create guard', () => {
 })
 
 describe('ci-publish-customer-configs: one key space', () => {
-  it('writes only vaults/<slug>/customer.yaml, never a neighbouring key', () => {
+  it('writes only the customer.yaml and seat-spec keys, never a neighbouring key', () => {
     const fx = makeFixture(['ashton-price', 'pilot-law'])
     seedObject(fx, 'vaults/ashton-price/customer.yaml', 'a\n')
     seedObject(fx, 'vaults/pilot-law/customer.yaml', 'b\n')
 
-    const res = runPublisher(fx)
+    const res = runPublisher(fx, testSigningEnv(fx.root))
+    expect(uploads(res.awsCalls)).toHaveLength(6)
 
     expect(res.code).toBe(0)
     for (const call of res.awsCalls) {
       expect(call).not.toContain('output-classes')
-      // The image guard READS the seat's image-manifest.json; every other
-      // object reference, and every write, is the customer.yaml key.
-      if (call.includes('s3://') && !call.startsWith('s3 cp s3://')) {
-        expect(call).toMatch(/s3:\/\/smd-customer-config\/vaults\/[a-z0-9-]+\/customer\.yaml/)
-      }
     }
+    // Every write is one of the three keys this publisher owns: the
+    // customer.yaml, the content-addressed spec, the spec pointer.
     for (const call of uploads(res.awsCalls)) {
-      expect(call).toMatch(/ s3:\/\/smd-customer-config\/vaults\/[a-z0-9-]+\/customer\.yaml/)
+      expect(call).toMatch(OWNED_WRITE)
     }
   })
 
@@ -656,6 +665,214 @@ describe('ci-publish-customer-configs: image guard (2026-10-13 A&P outage)', () 
 
     expect(res.code).not.toBe(0)
     expect(uploads(res.awsCalls)).toHaveLength(0)
+  })
+})
+
+describe('ci-publish-customer-configs: the signed seat spec (Wave 2 W4)', () => {
+  const objectAt = (fx: Fixture, key: string): string =>
+    readFileSync(join(fx.bucketDir, key), 'utf8')
+
+  /** Commit a new seat at the fixture's HEAD; returns the new HEAD. */
+  function addSeat(fx: Fixture, slug: string, body: string): string {
+    mkdirSync(join(fx.root, 'operator', 'customers', slug), { recursive: true })
+    writeFileSync(join(fx.root, 'operator', 'customers', slug, 'customer.yaml'), body)
+    git(fx.root, ['add', '-A'])
+    git(fx.root, ['commit', '-q', '-m', `add ${slug}`])
+    return git(fx.root, ['rev-parse', 'HEAD']).trim()
+  }
+
+  it('signs and publishes customer.yaml, then the spec, then the pointer last', () => {
+    const fx = makeFixture(['seat-alpha'])
+    seedObject(fx, 'vaults/seat-alpha/customer.yaml', 'stale: true\n')
+    const signing = testSigningEnv(fx.root)
+
+    const res = runPublisher(fx, signing)
+
+    expect(res.code, res.stdout + res.stderr).toBe(0)
+    const writes = uploads(res.awsCalls).map((c) => c.split(' ')[3])
+    expect(writes).toHaveLength(3)
+    expect(writes[0]).toBe('s3://smd-customer-config/vaults/seat-alpha/customer.yaml')
+    expect(writes[1]).toMatch(
+      /^s3:\/\/smd-customer-config\/fleet\/specs\/seat-alpha\/[0-9a-f]{64}\.json$/
+    )
+    expect(writes[2]).toBe('s3://smd-customer-config/vaults/seat-alpha/spec-pointer.json')
+    const pointer = JSON.parse(objectAt(fx, 'vaults/seat-alpha/spec-pointer.json')) as Record<
+      string,
+      string
+    >
+    const specBytes = readFileSync(join(fx.bucketDir, pointer.spec_key))
+    expect(createHash('sha256').update(specBytes).digest('hex')).toBe(pointer.spec_sha256)
+    const pub = createPublicKey(readFileSync(signing.SEAT_SPEC_PUBKEY))
+    expect(verify(null, specBytes, pub, Buffer.from(pointer.signature, 'base64'))).toBe(true)
+    const spec = JSON.parse(specBytes.toString()) as Record<string, Record<string, string>>
+    expect(spec.customer_yaml.sha256).toBe(
+      createHash('sha256').update(configBody('seat-alpha')).digest('hex')
+    )
+    expect(spec.compiled_from).toBe(fx.after)
+  })
+
+  it('publishes customer.yaml and skips the spec loudly when no signing key is available', () => {
+    const fx = makeFixture(['seat-alpha'])
+    seedObject(fx, 'vaults/seat-alpha/customer.yaml', 'stale: true\n')
+
+    const res = runPublisher(fx)
+
+    expect(res.code).toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(1)
+    expect(res.stdout).toContain('the seat spec was compiled but NOT published')
+  })
+
+  it('a second run on the same tree writes nothing: the spec is current', () => {
+    const fx = makeFixture(['seat-alpha'])
+    seedObject(fx, 'vaults/seat-alpha/customer.yaml', 'stale: true\n')
+    const signing = testSigningEnv(fx.root)
+    runPublisher(fx, signing)
+    rmSync(fx.awsLog)
+
+    const res = runPublisher(fx, signing)
+
+    expect(res.code).toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(0)
+    expect(res.stdout).toContain('the published seat spec is current')
+    expect(res.stdout).toContain('already holds these bytes')
+  })
+
+  // Signing disabled (SEAT_SPEC_ENABLED unset, so deploy.yml passes no key):
+  // the compiler still runs before the customer.yaml write, unsigned but
+  // checked. The image guard is not part of the signing path.
+  it('signing disabled: a config naming a skill the image lacks is refused before customer.yaml is written', () => {
+    const fx = makeFixture(['seat-alpha'])
+    writeFileSync(
+      join(fx.root, 'operator', 'customers', 'seat-alpha', 'customer.yaml'),
+      'personas:\n  - slug: operator\n    skills:\n      - name: new-skill\n        enabled: true\n'
+    )
+    git(fx.root, ['commit', '-qam', 'enable a skill the image lacks'])
+    fx.after = git(fx.root, ['rev-parse', 'HEAD']).trim()
+    seedObject(fx, 'vaults/seat-alpha/customer.yaml', 'personas: []\n')
+    seedObject(
+      fx,
+      'vaults/seat-alpha/image-manifest.json',
+      JSON.stringify({ schema_version: 1, built_from: 'x', skills: {} })
+    )
+
+    const res = runPublisher(fx, { SEAT_SPEC_ENABLED: '', SEAT_SPEC_SIGNING_KEY: '' })
+
+    expect(res.code).not.toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(0)
+    expect(res.stdout + res.stderr).toContain('skill:new-skill')
+    expect(objectAt(fx, 'vaults/seat-alpha/customer.yaml')).toBe('personas: []\n')
+  })
+
+  it('signing disabled: a capability need the image cannot be shown to provide is refused too', () => {
+    const fx = makeFixture(['seat-alpha'])
+    writeFileSync(
+      join(fx.root, 'operator', 'customers', 'seat-alpha', 'customer.yaml'),
+      'personas:\n  - slug: operator\n    skills:\n      - name: reader\n        enabled: true\n'
+    )
+    git(fx.root, ['commit', '-qam', 'enable reader'])
+    fx.after = git(fx.root, ['rev-parse', 'HEAD']).trim()
+    seedObject(fx, 'vaults/seat-alpha/customer.yaml', 'personas: []\n')
+    const version = '202610230000-abcdef12'
+    seedObject(
+      fx,
+      `fleet/skills/${version}.json`,
+      JSON.stringify({
+        version,
+        files: { 'reader/SKILL.md': { sha256: 'd'.repeat(64), size: 1 } },
+        needs: { reader: { paths: [], tools: [], verbs: ['matter_read'], action_classes: [] } },
+      })
+    )
+    seedObject(
+      fx,
+      'vaults/seat-alpha/skills-pointer.json',
+      JSON.stringify({
+        version,
+        manifest_key: `fleet/skills/${version}.json`,
+        manifest_sha256: '0'.repeat(64),
+      })
+    )
+
+    const res = runPublisher(fx, { SEAT_SPEC_ENABLED: '', SEAT_SPEC_SIGNING_KEY: '' })
+
+    expect(res.code).not.toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(0)
+    expect(res.stdout + res.stderr).toContain('verb:matter_read')
+  })
+
+  it('re-signs a published spec whose pointer no longer verifies', () => {
+    const fx = makeFixture(['seat-alpha'])
+    seedObject(fx, 'vaults/seat-alpha/customer.yaml', 'stale: true\n')
+    const signing = testSigningEnv(fx.root)
+    runPublisher(fx, signing)
+    const key = 'vaults/seat-alpha/spec-pointer.json'
+    const pointer = JSON.parse(objectAt(fx, key)) as Record<string, string>
+    seedObject(
+      fx,
+      key,
+      JSON.stringify({ ...pointer, signature: 'AAAA' + pointer.signature.slice(4) })
+    )
+    rmSync(fx.awsLog)
+
+    const res = runPublisher(fx, signing)
+
+    expect(res.code, res.stdout + res.stderr).toBe(0)
+    expect(res.stdout).toContain('does not verify against the committed key; re-signing it')
+    const healed = JSON.parse(objectAt(fx, key)) as Record<string, string>
+    expect(healed.signature).toBe(pointer.signature)
+  })
+
+  it('converges a seat outside the push range whose R2 bytes drifted', () => {
+    const fx = makeFixture(['seat-alpha'])
+    fx.before = addSeat(fx, 'seat-beta', configBody('seat-beta'))
+    writeFileSync(
+      join(fx.root, 'operator', 'customers', 'seat-alpha', 'customer.yaml'),
+      'changed: 1\n'
+    )
+    git(fx.root, ['commit', '-qam', 'change seat-alpha only'])
+    fx.after = git(fx.root, ['rev-parse', 'HEAD']).trim()
+    seedObject(fx, 'vaults/seat-alpha/customer.yaml', 'old\n')
+    seedObject(fx, 'vaults/seat-beta/customer.yaml', 'drifted out of band\n')
+
+    const res = runPublisher(fx, testSigningEnv(fx.root))
+
+    expect(res.code, res.stdout + res.stderr).toBe(0)
+    expect(objectAt(fx, 'vaults/seat-beta/customer.yaml')).toBe(configBody('seat-beta'))
+    expect(objectAt(fx, 'vaults/seat-beta/spec-pointer.json')).toContain('spec_sha256')
+  })
+
+  it('a refusal for a seat outside the push range is a warning, not a red deploy', () => {
+    const fx = makeFixture([])
+    const head = addSeat(
+      fx,
+      'seat-beta',
+      'personas:\n  - slug: operator\n    skills:\n      - name: new-skill\n        enabled: true\n'
+    )
+    fx.before = head
+    fx.after = head
+    seedObject(fx, 'vaults/seat-beta/customer.yaml', 'personas: []\n')
+
+    const res = runPublisher(fx, testSigningEnv(fx.root))
+
+    expect(res.code).toBe(0)
+    expect(uploads(res.awsCalls)).toHaveLength(0)
+    expect(res.stdout).toContain('not changed in this push; the nightly reconciler pages it')
+  })
+
+  it('refuses to sign with a key that is not the committed public key', () => {
+    const fx = makeFixture(['seat-alpha'])
+    seedObject(fx, 'vaults/seat-alpha/customer.yaml', 'stale: true\n')
+    const signing = testSigningEnv(fx.root)
+    const other = mkdtempSync(join(tmpdir(), 'other-key-'))
+    fixtures.push(other)
+
+    const res = runPublisher(fx, {
+      ...signing,
+      SEAT_SPEC_PUBKEY: testSigningEnv(other).SEAT_SPEC_PUBKEY,
+    })
+
+    expect(res.code).not.toBe(0)
+    expect(res.stdout + res.stderr).toContain('is not the committed seat-spec key')
+    expect(uploads(res.awsCalls).some((c) => c.includes('spec-pointer'))).toBe(false)
   })
 })
 

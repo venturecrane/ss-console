@@ -33,10 +33,12 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/templates/seat-checks.sh
   - label: operator/templates/selftest.sh (the in-image self-test)
     href: https://github.com/venturecrane/ss-console/blob/main/operator/templates/selftest.sh
-  - label: scripts/check-config-against-image.mjs
-    href: https://github.com/venturecrane/ss-console/blob/main/scripts/check-config-against-image.mjs
-  - label: scripts/lib/seat-image-guard.sh (the guard every R2 config writer runs)
-    href: https://github.com/venturecrane/ss-console/blob/main/scripts/lib/seat-image-guard.sh
+  - label: scripts/compile-seat-spec.ts (the seat-spec compiler and image guard)
+    href: https://github.com/venturecrane/ss-console/blob/main/scripts/compile-seat-spec.ts
+  - label: scripts/ci-publish-customer-configs.sh (the one writer of a seat's config)
+    href: https://github.com/venturecrane/ss-console/blob/main/scripts/ci-publish-customer-configs.sh
+  - label: operator/hermes-smd-overlay/config_applier/spec_verifier.py (the seat's verifier)
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/hermes-smd-overlay/config_applier/spec_verifier.py
   - label: ADR 0095 (one repository for the seat runtime)
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0095-one-repository-for-the-seat-runtime.md
   - label: operator/templates/Dockerfile
@@ -489,31 +491,56 @@ previous pointer back and the rollout halts. **Rolling a skill back is a
 skills release of the previous version** (`fleet release --skills
 <previous>`); `rollback-skill.sh` is gone.
 
-Every writer of a seat's R2 config (`vaults/<slug>/customer.yaml`) checks the
-`customer.yaml` against what the seat runs NOW: its current image's manifest
-plus its current skills release. A config naming a skill, pin or pre_run
-neither carries is refused, because the seat re-fetches `customer.yaml` on every
-boot and the next restart would adopt it (the 2026-10-13 outage, ADR 0093). The
-check is one implementation, `scripts/lib/seat-image-guard.sh` around
-`scripts/check-config-against-image.mjs`, sourced by all three writers:
+A seat's config reaches R2 by one writer, the deploy job's publisher
+(`scripts/ci-publish-customer-configs.sh`, job `publish-customer-configs`). On
+every push to main it compiles each seat's config into a **signed seat spec**
+(`scripts/compile-seat-spec.ts`): one canonical description of what the seat is
+configured to run (the `customer.yaml` digest, the lane-proofs seed, each lane's
+firm-input manifest digest, the skills release) and what that requires of the
+seat's image. It writes `vaults/<slug>/customer.yaml`, the spec at
+`fleet/specs/<slug>/<sha256>.json`, and last the pointer
+`vaults/<slug>/spec-pointer.json`, which carries an Ed25519 signature over the
+spec's bytes. The signing key is a secret of the protected `seat-spec` GitHub
+environment and of nothing else, read only when the repository variable
+`SEAT_SPEC_ENABLED` is `true`; without it the publisher still publishes
+`customer.yaml` and skips the spec with a warning. Seats whose `customer.yaml`
+did not change in the push are converged too, so a push range that was never
+processed is healed by the next one.
 
-- the merge-time publisher (`scripts/ci-publish-customer-configs.sh`);
-- the nightly reconciler (`scripts/ci-reconcile-r2-customer-configs.sh`, run by
-  `.github/workflows/customer-config-reconcile.yml`), which republishes main's
-  bytes when the object drifts. On a refusal it leaves the object as it is and
-  reports the seat as REFUSED, on one standing issue titled "R2 seat config
-  refused by the image guard" that each nightly run comments on, separate from
-  the dated drift issue. Before the guard reached it, this job undid every
-  refusal the publisher made;
-- the operator-run sync (`operator/bin/sync-customer-yaml.sh`), which also
-  refuses a seat with no object (the first publish is provisioning's) and uses
-  the canonical slug pattern.
+The compiler refuses a config the seat's running image cannot run: a skill,
+pin or pre_run neither the image's manifest nor its skills release carries, or
+a capability (path, tool, broker verb, action class) an enabled skill needs and
+the image lacks. A refusal leaves the object as it is, because the seat
+re-fetches `customer.yaml` on every boot and the next restart would adopt it
+(the 2026-10-13 outage, ADR 0093). A lane whose image validates firm inputs
+against a schema other than this checkout's refuses the spec only. A refusal
+fails the job for a seat the push changed and is a warning for any other seat.
 
-Provisioning (`operator/bin/provision-customer.sh`) does not run the check: it
-ships the config together with the image that carries it, which is how a
-refused config reaches its seat. A published config reaches the seat on its
-next boot; fields the seat applies live are picked up sooner by the ADR 0044
-poller.
+The nightly reconciler (`scripts/ci-reconcile-r2-customer-configs.sh`, run by
+`.github/workflows/customer-config-reconcile.yml`) is read-only. It compares
+every seat's `customer.yaml` bytes and signed spec with what main compiles and
+pages on a mismatch: DRIFT and SPEC findings on a dated issue (SPEC only once
+`SEAT_SPEC_ENABLED` is `true`, since before then no signed spec is expected) (the next push to
+main converges them), REFUSED on one standing issue titled "R2 seat config
+refused by the image guard" that each nightly run comments on.
+
+Provisioning (`operator/bin/provision-customer.sh` step 2,
+`operator/bin/lib/stage-seat-spec.sh`) uploads through the same compiler with
+`--provisioning`: it records the config's requirements without checking them,
+because it ships the image that carries them in the same run. It signs and
+publishes the spec only when `SEAT_SPEC_SIGNING_KEY` is set; otherwise the next
+push to main does.
+
+On the seat, the root `config_applier` loop runs a spec verifier
+(`config_applier/spec_verifier.py`) in **shadow mode**: it verifies the
+pointer's signature against `/app/seat-spec.pub`, baked into the image, and the
+spec's requirements against that image, writes its verdict to
+`/run/smd-spec/state.json`, and the heartbeat carries it as `spec`. The seat
+still applies `customer.yaml` exactly as before. The fleet-alerts worker pages
+`spec_unverified` on a verdict that fails, or when a seat still holds an older
+spec than the published pointer 15 minutes after it was written. A published
+config reaches the seat on its next boot; fields the seat applies live are
+picked up sooner by the ADR 0044 poller.
 
 ### Driving the shadow firm (a runtime change's `(runtime)` proof)
 

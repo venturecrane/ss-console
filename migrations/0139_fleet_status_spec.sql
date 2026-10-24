@@ -1,0 +1,26 @@
+-- 0139: the seat-spec verifier's verdict reaches fleet_status
+--
+-- Wave 2 W4 of the seat-architecture review. Every seat's authored config is
+-- now compiled into one signed spec (scripts/compile-seat-spec.ts), published by
+-- the deploy job's publisher as fleet/specs/<slug>/<sha256>.json plus the
+-- pointer vaults/<slug>/spec-pointer.json. The root config_applier on the seat
+-- verifies the signature against the key baked into its image and the spec's
+-- requirements against that image (config_applier/spec_verifier.py), in SHADOW
+-- mode: it reports, it does not yet apply. The gate ships the verdict on every
+-- heartbeat as `spec` (overlay shared/spec_check.py):
+--
+--   spec_json  {v, verdict, checked_at, spec_sha256, key_id, compiled_from,
+--              unmet_count, unmet: [id], customer_yaml_match}. Plain overwrite
+--              at ingest, INCLUDING back to NULL: a verdict must never outlive
+--              the beat that reported it. NULL = nothing to say yet (the first
+--              half hour of uptime) or an image without the verifier; the
+--              alerter holds.
+--
+-- The fleet-alerts worker pages `spec_unverified` from it (0140).
+--
+-- Deploy ordering is safe by construction: deploy.yml applies migrations
+-- before the Workers deploy, and only the new code names the column.
+--
+-- Manual-only rollback at migrations/rollbacks/0139_fleet_status_spec_down.sql.
+
+ALTER TABLE fleet_status ADD COLUMN spec_json TEXT;

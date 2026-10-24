@@ -55,6 +55,7 @@ export interface HeartbeatBody {
   jobs_queued?: unknown
   wakes_pending?: unknown
   selftest?: unknown
+  spec?: unknown
 }
 
 // The breaker ladder vocabulary (overlay shared/cost_breaker.read_stop_state).
@@ -523,6 +524,72 @@ export function parseSelftest(value: unknown): string | null {
   return json.length > SELFTEST_MAX_CHARS ? null : json
 }
 
+// The seat-spec verifier's verdict (overlay shared/spec_check.py, migration
+// 0139; ss-console Wave 2 W4). Validated whole, like the self-test's: the
+// spec_unverified pager acts on it, so a field of the wrong shape NULLs the
+// object (NULL holds) rather than storing half a verdict. The verdict word is a
+// closed vocabulary; requirement ids are bounded in shape and count.
+const SPEC_VERDICTS = new Set([
+  'verified',
+  'absent',
+  'fetch_error',
+  'malformed',
+  'unknown_key',
+  'bad_digest',
+  'bad_signature',
+  'wrong_seat',
+  'spec_missing',
+  'unmet_requirement',
+  'stale',
+  'unreadable',
+])
+const SPEC_UNMET_RE = /^[A-Za-z0-9:@/._-]{1,200}$/
+const SPEC_MAX_UNMET = 32
+const SPEC_MAX_CHARS = 8192
+
+function specHex(value: unknown, length: number): string | null | undefined {
+  if (value === null || value === undefined) return null
+  return typeof value === 'string' && new RegExp(`^[0-9a-f]{${length}}$`).test(value)
+    ? value
+    : undefined
+}
+
+function specUnmet(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length > SPEC_MAX_UNMET) return null
+  return value.every((v) => typeof v === 'string' && SPEC_UNMET_RE.test(v))
+    ? (value as string[])
+    : null
+}
+
+export function parseSpec(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const raw = value as Record<string, unknown>
+  const checkedAt = parseIsoInstant(raw.checked_at)
+  const unmet = specUnmet(raw.unmet)
+  const unmetCount = parseNonNegInt(raw.unmet_count)
+  const hex = [
+    specHex(raw.spec_sha256, 64),
+    specHex(raw.key_id, 16),
+    specHex(raw.compiled_from, 40),
+  ]
+  const match = raw.customer_yaml_match
+  if (raw.v !== 1 || typeof raw.verdict !== 'string' || !SPEC_VERDICTS.has(raw.verdict)) return null
+  if (checkedAt === null || unmet === null || unmetCount === null) return null
+  if (hex.includes(undefined) || !(match === null || typeof match === 'boolean')) return null
+  const json = JSON.stringify({
+    v: 1,
+    verdict: raw.verdict,
+    checked_at: checkedAt,
+    spec_sha256: hex[0],
+    key_id: hex[1],
+    compiled_from: hex[2],
+    unmet_count: unmetCount,
+    unmet,
+    customer_yaml_match: match,
+  })
+  return json.length > SPEC_MAX_CHARS ? null : json
+}
+
 /**
  * Every alert-driving field, parsed-not-cast.
  *
@@ -603,6 +670,9 @@ export function parseObservability(body: HeartbeatBody) {
     // Migration 0137: the in-image self-test's verdict. Plain overwrite,
     // including to NULL: a verdict must never outlive the beat that carried it.
     selftestJson: parseSelftest(body.selftest),
+    // Migration 0139: the seat-spec verifier's verdict. Plain overwrite,
+    // including to NULL, for the same reason as the self-test's.
+    specJson: parseSpec(body.spec),
   }
 }
 

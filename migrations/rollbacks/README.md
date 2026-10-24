@@ -19,6 +19,8 @@ For local D1 (testing):
 ## Per-file safety notes
 
 - `0033_add_prospect_role_down.sql` — restores the original narrow `users.role CHECK (role IN ('admin', 'client'))`. The INSERT into `users_old` will fail if any `users.role = 'prospect'` rows exist (intentional safeguard). Cleanup or migrate prospect rows to `'client'` before invoking.
+- `0140_spec_unverified_condition_down.sql`: narrows the `fleet_alert_state` CHECK back to the 0138 vocabulary and drops any `spec_unverified` rows. Roll the fleet-alerts Worker back first: a deployed Worker that still emits it pages on every tick with nothing recorded.
+- `0139_fleet_status_spec_down.sql`: drops `fleet_status.spec_json`. Roll the web Worker and the fleet-alerts Worker back first: the heartbeat upsert and the worker's SELECT both name the column. The seats keep their state files.
 - `0138_selftest_failing_condition_down.sql`: narrows the `fleet_alert_state` CHECK back to the 0135 vocabulary and drops any `selftest_failing` rows. Roll the fleet-alerts Worker back first: a deployed Worker that still emits it pages on every tick with nothing recorded.
 - `0137_fleet_status_selftest_down.sql`: drops `fleet_status.selftest_json`. Roll the web Worker and the fleet-alerts Worker back first: the heartbeat upsert and the worker's SELECT both name the column. The seats keep their results files.
 - `0135_drift_conditions_down.sql`: narrows the `fleet_alert_state` CHECK back to the 0133 vocabulary and drops any `image_drift`, `image_unknown`, `config_drift` or `skills_drift` rows. Roll the fleet-alerts Worker back first: a deployed Worker that still emits them pages on every tick with nothing recorded.

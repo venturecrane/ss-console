@@ -219,6 +219,7 @@ def _emitter(**overrides):
         # Hermetic default for the self-test read: ``None`` is "nothing to say
         # yet", so unrelated payload assertions never see the field.
         selftest_check_fn=overrides.get("selftest_check_fn", lambda: None),
+        spec_check_fn=overrides.get("spec_check_fn", lambda: None),
     )
     return hb.HeartbeatEmitter(**kwargs), calls
 

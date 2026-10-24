@@ -8,8 +8,9 @@ the overlay is installed. Writes /app/image-manifest.json:
 
 The entrypoint uploads it to R2 (vaults/<slug>/image-manifest.json) on every
 boot, and the CI config publisher (scripts/ci-publish-customer-configs.sh ->
-scripts/check-config-against-image.mjs) refuses a customer.yaml that names a
-skill, pin or pre_run script missing from it.
+scripts/compile-seat-spec.ts) refuses a customer.yaml that names a skill, pin
+or pre_run script missing from it. The root spec verifier on the seat reads the
+baked copy, /app/image-manifest.json, to check a signed spec's requirements.
 
 ``pin`` comes from the overlay's own boot hash (``bootstrap.translate.
 _skill_content_hash``), imported rather than re-implemented so the manifest can

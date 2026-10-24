@@ -63,6 +63,8 @@ export interface FleetStatusUpsert {
   shortfallsJson: string | null
   /** Migration 0137. The in-image self-test verdict; plain overwrite, NULL holds. */
   selftestJson: string | null
+  /** Migration 0139. The seat-spec verifier's verdict; plain overwrite, NULL holds. */
+  specJson: string | null
   /** Migration 0129. Plain overwrite, including to NULL (absent = unknown). */
   release: ParsedFleetRelease
 }
@@ -95,9 +97,9 @@ const FLEET_STATUS_UPSERT_SQL = `INSERT INTO fleet_status (
        send_refusals, send_refusals_last_ts, send_refusals_json, tool_failures_json,
        shortfalls, shortfalls_last_ts, shortfalls_json,
        image_ref, skills_version, config_digest,
-       jobs_running, jobs_queued, wakes_pending, selftest_json, audit_write_failures_rose_at, updated_at
+       jobs_running, jobs_queued, wakes_pending, selftest_json, spec_json, audit_write_failures_rose_at, updated_at
      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-               ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? > 0 THEN datetime('now') END, datetime('now'))
+               ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? > 0 THEN datetime('now') END, datetime('now'))
      ON CONFLICT(customer_slug) DO UPDATE SET
        entity_id               = excluded.entity_id,
        last_heartbeat_ts       = excluded.last_heartbeat_ts,
@@ -145,6 +147,7 @@ const FLEET_STATUS_UPSERT_SQL = `INSERT INTO fleet_status (
        jobs_queued             = excluded.jobs_queued,
        wakes_pending           = excluded.wakes_pending,
        selftest_json           = excluded.selftest_json,
+       spec_json               = excluded.spec_json,
        updated_at              = datetime('now')`
 
 export async function upsertFleetStatus(db: D1Database, u: FleetStatusUpsert): Promise<void> {
@@ -195,6 +198,7 @@ export async function upsertFleetStatus(db: D1Database, u: FleetStatusUpsert): P
       u.release.jobsQueued,
       u.release.wakesPending,
       u.selftestJson,
+      u.specJson,
       // A first beat that already reports losses is a rise (it is how the
       // heartbeat's own delta treats it); migration 0132.
       u.auditWriteFailures

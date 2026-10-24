@@ -67,7 +67,7 @@ For each persona in `customer.yaml.personas[]`:
 
 ### customer-sync sidecar (non-structural change detection and reload)
 
-> **Deferred — not launched in Phase 1 (note added 2026-07-13).** The `customer-sync` R2-polling sidecar described in this section was **not launched** (`operator/templates/bootstrap.sh:16` marks it "NOT launched in Phase 1"; `operator/bin/sync-customer-yaml.sh` is a manual push-to-R2-then-restart stand-in, not the poller). Its live-reconfiguration role was taken over by [ADR 0044](./0044-r2-authoritative-live-reconfig.md) (R2-authoritative live reconfiguration via a root-owned `config_applier` poll loop). Phase-1 reloads happen via full Machine restart, which preserves the volume and its OAuth tokens (per ADR 0010). Read the rest of this section as the original design intent, superseded by 0044.
+> **Deferred — not launched in Phase 1 (note added 2026-07-13).** The `customer-sync` R2-polling sidecar described in this section was **not launched** (`operator/templates/bootstrap.sh:16` marks it "NOT launched in Phase 1"; the manual push-to-R2-then-restart stand-in that followed was deleted by the [ADR 0094](./0094-customer-configuration-as-built.md) amendment, which leaves one writer). Its live-reconfiguration role was taken over by [ADR 0044](./0044-r2-authoritative-live-reconfig.md) (R2-authoritative live reconfiguration via a root-owned `config_applier` poll loop). Phase-1 reloads happen via full Machine restart, which preserves the volume and its OAuth tokens (per ADR 0010). Read the rest of this section as the original design intent, superseded by 0044.
 
 A separate process (`hermes-smd customer-sync`) polls R2 for the customer.yaml file at a configurable cadence (default 5 minutes). On detected change:
 

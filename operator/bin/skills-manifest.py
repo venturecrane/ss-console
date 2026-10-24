@@ -13,7 +13,7 @@ Writes the manifest the seat's skills_applier verifies (overlay WS2 contract):
      "files": {"<skill>/<relpath>": {"sha256", "size", "mode"?}},
      "retired": [...],
      "needs": {"<skill>": {"paths", "tools", "verbs", "action_classes"}},
-     "pins": {"<skill>": "<6hex>"}}     # what scripts/check-config-against-image.mjs reads
+     "pins": {"<skill>": "<6hex>"}}     # what scripts/lib/seat-spec.ts providedBySkills reads
 
 ``mode`` is present only for an executable file ("0755"). With --objects-dir,
 each file is also copied to DIR/<sha256> (the content-addressed object the

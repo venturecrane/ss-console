@@ -68,7 +68,7 @@ A dead sign-in gets its own email on every hourly run while it stays dead, from 
 
 ### The seat self-test page
 
-Separately from this list, every seat checks ITSELF every hour: the image runs the same check list the release verify runs (`operator/templates/seat-checks.sh`, by `operator/templates/selftest.sh`) and reports the result on its heartbeat. When it finds a failed check, the fleet-alerts worker emails `[SMD Ops] ALERT <seat>: Seat self-test failed a check` (condition `selftest_failing`, `workers/fleet-alerts/src/selftest.ts`), naming the failed checks.
+Separately from this list, every seat checks ITSELF every hour: the image runs the same check list the release verify runs (`operator/templates/seat-checks.sh`, by `operator/templates/selftest.sh`) and reports the result on its heartbeat. When it finds a failed check, the fleet-alerts worker emails `[SMD Ops] ALERT <seat>: Seat self-test failed a check` (condition `selftest_failing`, `workers/fleet-alerts/src/selftest.ts`), naming the failed checks. Each seat also checks the signed spec its configuration is published as: when the seat cannot verify it, or is still holding an older one 15 minutes after a newer one was published, the worker emails `[SMD Ops] ALERT <seat>: Seat cannot verify its signed config spec` (condition `spec_unverified`, `workers/fleet-alerts/src/spec.ts`). While this runs in shadow mode the seat keeps applying its configuration as before, so the email is about the check, not about a seat that stopped.
 
 | When it opens | When it closes |
 |---|---|
