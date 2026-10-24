@@ -14,6 +14,13 @@ Two outcomes are kept apart because the 2026-10-07 hand run confused them:
 
 Reads can fetch more (``read.py``'s ``fetch_doc`` tool calls ``fetch_one``),
 so a document a verifier names is opened, not reported as missing.
+
+**Filled from the text cache** (``textcache.py``, 2026-10-24). A file whose
+listing still shows the ``(modified, size)`` it had when an earlier job read
+it, and whose text the cache holds, is not downloaded: its text goes to
+``txt/<id>.txt`` and its ``pulled.jsonl`` row is ``{ok, sha256, cached: true}``
+with no ``path``. Its raw bytes are fetched only if something needs them (a
+page image: ``fetch_one``).
 """
 
 from __future__ import annotations
@@ -24,8 +31,8 @@ import shutil
 from pathlib import Path
 from typing import Any, Callable
 
-from ..demand.pull import fetch_all
-from ..stages.base import read_jsonl
+from ..demand.pull import _pull, fetch_all
+from ..stages.base import append_jsonl, read_jsonl
 
 HTTP_ABSENT = 404
 MISSING = "missing_in_smokeball"
@@ -126,9 +133,56 @@ def fetch_matter(
 
 
 def fetch_one(seat: Any, matter_id: str, f: dict[str, Any], data: Path, log: Callable[[str], None]) -> dict[str, Any]:
-    """One more file, on a read's request; the row ``fetch_all`` recorded."""
-    rows = fetch_all(seat, matter_id, [_target(f)], matter_dir(data, matter_id), log)
-    return rows[0]
+    """One more file, on a read's request; the row ``fetch_all`` recorded. A
+    row filled from the text cache has no bytes on disk: it is downloaded now."""
+    d = matter_dir(data, matter_id)
+    rows = pulled(data, matter_id)
+    row = rows.get(str(f["id"])) or {}
+    if row.get("ok") and row.get("cached") and not row.get("path"):
+        seen = {r["sha256"]: r["id"] for r in rows.values() if r.get("ok") and r.get("path")}
+        (d / "raw").mkdir(parents=True, exist_ok=True)
+        return _pull(seat, matter_id, [_target(f)], d / "raw", seen, d / "pulled.jsonl", log)[str(f["id"])]
+    return fetch_all(seat, matter_id, [_target(f)], d, log)[0]
+
+
+def fill_one(cache: Any, data: Path, matter_id: str, f: dict[str, Any]) -> bool:
+    """A listed file's text from the cache, with no download: True if filled."""
+    hit = cache.text_for(f) if cache is not None else None
+    if hit is None:
+        return False
+    sha, text = hit
+    d = matter_dir(data, matter_id)
+    (d / "txt").mkdir(parents=True, exist_ok=True)
+    (d / "txt" / f"{f['id']}.txt").write_text(text, encoding="utf-8")
+    t = _target(f)
+    row = {k: t[k] for k in ("id", "name", "ext", "folder")}
+    append_jsonl(d / "pulled.jsonl", {**row, "ok": True, "sha256": sha, "cached": True})
+    return True
+
+
+def fill_from_cache(cache: Any, data: Path, matter_id: str, files: list[dict[str, Any]], ids: list[str]) -> int:
+    """Every target not yet fetched ``ok`` that the cache can fill; the count."""
+    if cache is None:
+        return 0
+    by_id = {str(f["id"]): f for f in files}
+    done = {i for i, r in pulled(data, matter_id).items() if r.get("ok")}
+    return sum(1 for i in ids if i in by_id and i not in done and fill_one(cache, data, matter_id, by_id[i]))
+
+
+def index_downloads(cache: Any, data: Path, matter_id: str, files: list[dict[str, Any]]) -> int:
+    """Record each downloaded file's listing against its content in the
+    cache's file index, so the next job can skip the download. A file that
+    changed after the listing (``size_changed``) is not recorded: the listing
+    no longer describes those bytes."""
+    if cache is None:
+        return 0
+    by_id = {str(f["id"]): f for f in files}
+    n = 0
+    for fid, r in pulled(data, matter_id).items():
+        f = by_id.get(fid)
+        if f and r.get("ok") and r.get("sha256") and not r.get("cached") and not r.get("size_changed"):
+            n += bool(cache.put_file(fid, f.get("modified"), f.get("size"), r["sha256"], matter_id))
+    return n
 
 
 def pulled(data: Path, matter_id: str) -> dict[str, dict[str, Any]]:

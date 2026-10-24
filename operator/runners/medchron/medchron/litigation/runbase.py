@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..limits import LimitHold
-from . import extract as extract_mod, fetch as fetch_mod
+from . import extract as extract_mod, fetch as fetch_mod, inventory
+from .outcome import LitigationFailed
 from .progress import Progress
 from .tools import dump
 
@@ -22,12 +23,49 @@ class RunBase:
     budget: Any
     doorway: Any
     firm: Any
+    cache: Any = None
     _progress: Progress | None = None
     #: Set while a read stage runs matters at once (``workers.in_parallel``).
     _halt: Any = None
 
     def _plan(self) -> dict[str, Any]:
         raise NotImplementedError
+
+    def _active(self) -> list[str]:
+        raise NotImplementedError
+
+    @staticmethod
+    def _fetch_ids(p: dict[str, Any]) -> list[str]:
+        raise NotImplementedError
+
+    # ---- before the fetch: what the text cache already holds, and the disk -------------
+    def _fill_from_cache(self) -> dict[str, int]:
+        """{matter: files filled from the text cache instead of downloaded}."""
+        filled = {
+            mid: fetch_mod.fill_from_cache(
+                self.cache, self.data, mid, inventory.files_of(self.data, mid), self._fetch_ids(self._plan()[mid])
+            )
+            for mid in self._active()
+        }
+        if sum(filled.values()):
+            self.log(f"[fetch] {sum(filled.values())} files filled from the text cache, not downloaded")
+        return filled
+
+    def _disk_preflight(self) -> None:
+        pending = count = 0
+        for mid in self._active():
+            b, n = fetch_mod.pending_bytes(
+                self.data, mid, inventory.files_of(self.data, mid), self._fetch_ids(self._plan()[mid])
+            )
+            pending, count = pending + b, count + n
+        fits, needed, free = fetch_mod.disk_check(self.data, pending)
+        gb = 1 << 30
+        self.log(f"[fetch] {count} files to fetch, {pending / gb:.1f} GB listed; {free / gb:.1f} GB free")
+        if not fits:
+            raise LitigationFailed(
+                f"disk_short: {count} files to fetch need {needed / gb:.1f} GB with headroom; "
+                f"the volume has {free / gb:.1f} GB free. Extend the seat's volume, then resume"
+            )
 
     def _before_call(self, stage: str) -> None:
         """Every paid call: a quiet stage speaks (counts only), then the limits.

@@ -360,7 +360,12 @@ def extract_file(path: Path, ext: str, out: Path, ocr: Ocr | None) -> dict[str, 
 
 
 def extract_matter(
-    mdir: Path, rows: list[dict[str, Any]], ocr: Ocr | None, progress: Any = None, concurrency: int = 1
+    mdir: Path,
+    rows: list[dict[str, Any]],
+    ocr: Ocr | None,
+    progress: Any = None,
+    concurrency: int = 1,
+    cache: Any = None,
 ) -> list[dict[str, Any]]:
     """Every ok pulled row of one matter; resumable through extracted.jsonl.
     Documents are read ``concurrency`` at a time (each one's vision calls in
@@ -368,18 +373,19 @@ def extract_matter(
     finishes. At most ``concurrency`` documents are in flight: a slow scan at
     the head never lets finished work pile up behind it (``pool.map`` submits
     every document at once and holds each result until the head is done).
-    ``progress`` (a ``progress.Progress``) is stepped once per document."""
+    ``progress`` (a ``progress.Progress``) is stepped once per document.
+    ``cache`` (a ``textcache.TextCache``) is read before a document is
+    extracted and written after it is (``extract_cached``)."""
     log = mdir / "extracted.jsonl"
     done = _recorded(log)
-    todo = [r for r in rows if str(r["id"]) not in done and r.get("ok") and r.get("path")]
+    todo = [r for r in rows if str(r["id"]) not in done and r.get("ok") and (r.get("path") or r.get("cached"))]
     for r in rows:
         if str(r["id"]) in done and progress is not None:
             progress.step()
 
     def one(r: dict[str, Any]) -> dict[str, Any]:
         fid = str(r["id"])
-        rec = extract_file(Path(r["path"]), r.get("ext") or "", mdir / "txt" / f"{fid}.txt", ocr)
-        return {"file_id": fid, "name": r.get("name"), **rec}
+        return {"file_id": fid, "name": r.get("name"), **extract_cached(mdir, r, ocr, cache)}
 
     def record(rec: dict[str, Any]) -> None:
         append_jsonl(log, rec)
@@ -391,6 +397,33 @@ def extract_matter(
 
     _in_flight(todo, one, record, max(1, concurrency))
     return [done[str(r["id"])] for r in rows if str(r["id"]) in done]
+
+
+def extract_cached(mdir: Path, r: dict[str, Any], ocr: Ocr | None, cache: Any = None) -> dict[str, Any]:
+    """One pulled row's record, reusing paid text where the cache has it.
+
+    * a row ``fetch`` filled from the cache (``cached``, no raw bytes): its
+      text is already in ``txt/``; it is recorded, never extracted;
+    * a downloaded row whose content (sha256) the cache holds: the text is
+      copied, no vision call is made;
+    * anything else is extracted, and a success is written to the cache (a
+      failure never is: the next job tries the file again)."""
+    fid = str(r["id"])
+    out = mdir / "txt" / f"{fid}.txt"
+    hit = None if r.get("cached") or cache is None else cache.get_text(r.get("sha256"))
+    if hit is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(hit, encoding="utf-8")
+    if r.get("cached") or hit is not None:
+        if not out.is_file():
+            return {"ok": False, "problem": "cache_text_missing: the cached text is not on disk"}
+        chars = len(out.read_text(encoding="utf-8", errors="replace"))
+        return {"ok": True, "chars": chars, "scanned_pages": 0, "text_path": str(out), "cached": True}
+    rec = extract_file(Path(r["path"]), r.get("ext") or "", out, ocr)
+    if rec.get("ok") and cache is not None:
+        text = out.read_text(encoding="utf-8")
+        cache.put_text(r.get("sha256"), text, scanned_pages=int(rec["scanned_pages"]), matter_id=mdir.name)
+    return rec
 
 
 def _recorded(log: Path) -> dict[str, dict[str, Any]]:

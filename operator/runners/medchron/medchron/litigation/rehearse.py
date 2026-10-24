@@ -15,7 +15,17 @@ What a rehearsal guarantees, each pinned by a test:
   committed to it: ``report`` does not run.
 * **Bounded spend.** ``--read-limit N`` reads N matters (the named ones first,
   then those with the most candidate files); inventory, manifest and diff
-  still cover every matter, so the counts and the projection are whole.
+  still cover every matter, so the counts and the projection are whole. Fetch
+  and extract cover every matter the unlimited run would read, too, so the
+  OCR count below is the whole run's.
+* **No vision call, and an exact OCR count** (2026-10-24). ``_ocr`` is a
+  counting stub: each scanned page extract would send to vision is recorded
+  (``ocr-needed.jsonl``: page, model) and answered with a marked placeholder,
+  so ``--read-limit 0`` finishes extract at $0 and ``counts.ocr_pages_needed``
+  is the pages the real run would pay for (text-cache misses only).
+* **No write to the text cache.** It is opened read-only: its hits are
+  counted as hits, and nothing a rehearsal read (placeholders included)
+  reaches it.
 
 Gates, parity and the workbook's leak scan run and are RECORDED, not obeyed:
 a rehearsal exists to see what they would say. The verdict is always
@@ -30,12 +40,14 @@ import json
 import resource
 import shutil
 import sys
+import threading
 from collections import Counter
 from pathlib import Path
 from typing import Any, Callable
 
 from ..seat import SeatError
-from . import fetch as fetch_mod, inventory, manifest, passes, vocab
+from ..stages.base import append_jsonl, read_jsonl
+from . import fetch as fetch_mod, inventory, manifest, passes, textcache, vocab
 from .outcome import LitigationFailed, LitigationHold, Verdict
 from .run import STAGES, LitigationRun
 from .tools import dump
@@ -45,6 +57,8 @@ WEEKDAYS_PER_MONTH = 21.7
 PROJECTION_DAYS = 5
 SYNTHETIC_JOB_ID = "01REHEARSA0000000000000000"
 NOWHERE = "00000000-0000-4000-8000-000000000000"
+OCR_LOG = "ocr-needed.jsonl"
+OCR_STUB = textcache.REHEARSAL_MARK + " a scanned page this rehearsal counted and did not transcribe]"
 REPORT_KEYS = (
     "rehearsal",
     "stages",
@@ -135,6 +149,15 @@ def _reads(p: dict[str, Any]) -> bool:
     return bool(p["read_groups"]) or p["audit"] == "all"
 
 
+def _limit(p: dict[str, Any]) -> dict[str, Any]:
+    """A plan a limited rehearsal does not read: what it would have read is
+    kept in ``limited_out`` (the widest seen, when limited twice)."""
+    lo = p.get("limited_out") or {"read_groups": [], "audit": "none"}
+    groups = [g for g in vocab.GROUPS if g in {*lo["read_groups"], *p["read_groups"]}]
+    audit = "all" if "all" in (lo["audit"], p["audit"]) else p["audit"] if p["audit"] != "none" else lo["audit"]
+    return {**p, "limited_out": {"read_groups": groups, "audit": audit}, "read_groups": [], "audit": "none"}
+
+
 def pick(plan: dict[str, Any], limit: int, named: list[str]) -> list[str]:
     """The matters a limited rehearsal reads: named first, then the most candidates."""
     want = [mid for mid, p in plan.items() if _reads(p)]
@@ -173,6 +196,24 @@ class RehearsalRun(LitigationRun):
         self.read_limit = read_limit
         self.read_matters = list(read_matters or [])
         self.seeded = seed_state(self.state, self.firm.root)
+        self.cache.read_only = True
+        self._ocr_lock = threading.Lock()
+
+    def _ocr(self, png: bytes) -> str:
+        """The counting stub: never a paid call, never a cached text."""
+        with self._ocr_lock:
+            append_jsonl(self.data / OCR_LOG, {"model": self.firm.model("transcription"), "bytes": len(png)})
+        if self._progress is not None:
+            self._progress.add("vision pages counted")
+        return OCR_STUB
+
+    def _active(self) -> list[str]:
+        """The matters a limited rehearsal fetches and extracts: every one the
+        unlimited run would read, so the OCR count is whole."""
+        if self.read_limit is None:
+            return super()._active()
+        act = set(super()._active())
+        return [m for m, p in self._plan().items() if m in act or _reads(p.get("limited_out") or p)]
 
     def _stage(self, name: str, fn: Callable[[], Any]) -> None:
         before = self.budget.refresh()
@@ -193,12 +234,17 @@ class RehearsalRun(LitigationRun):
             return
         plan = self._plan()
         keep = set(pick(plan, self.read_limit, self.read_matters))
-        for mid, p in plan.items():
-            if mid in keep:
-                continue
-            p["limited_out"] = {"read_groups": p["read_groups"], "audit": p["audit"]}
-            p["read_groups"], p["audit"] = [], "none"
-        dump(self.data / "plan.json", plan)
+        dump(self.data / "plan.json", {mid: p if mid in keep else _limit(p) for mid, p in plan.items()})
+
+    def _screen(self) -> None:
+        """The screen settles seed gaps and can hand a limited-out matter its
+        read groups back (2026-10-24: ``--read-limit 0`` still read one
+        matter); the limit is applied again after it."""
+        super()._screen()
+        if self.read_limit is None:
+            return
+        plan = self._plan()
+        dump(self.data / "plan.json", {mid: _limit(p) if "limited_out" in p else p for mid, p in plan.items()})
 
     def run(self) -> Verdict:
         """The report is written on EVERY exit path, a failed run included:
@@ -279,6 +325,7 @@ def _counts(r: RehearsalRun) -> dict[str, Any]:
             fails[str(rec.get("problem") or "").split(":")[0]] += 1
     read = [m for m, p in plan.items() if _reads(p)]
     inv = r._json("inventory.json")
+    ocr = read_jsonl(r.data / OCR_LOG)
     return {
         "matters_listed_in_scope": inv.get("listed"),
         "matters_inventoried": len(plan),
@@ -293,6 +340,9 @@ def _counts(r: RehearsalRun) -> dict[str, Any]:
         "matters_unread": [u["number"] for u in passes.unread_matters(r)],
         "extraction_failures_by_type": dict(fails),
         "state_seeded_from_inputs": r.seeded,
+        "ocr_pages_needed": len(ocr),
+        "ocr_pages_by_model": dict(Counter(str(x.get("model")) for x in ocr)),
+        "files_from_text_cache": sum(int(v.get("cached") or 0) for v in r._fetch_report().values()),
         "seat_writes_refused": getattr(r._seat, "writes_refused", 0),
     }
 
