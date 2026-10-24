@@ -159,8 +159,8 @@ def tag_staff_ids(payload: Any) -> list[str] | None:
     for t in tags:
         if not isinstance(t, dict) or str(t.get("type") or "").lower() != "staff":
             continue
-        staff = t.get("staff") if isinstance(t.get("staff"), dict) else {}
-        sid = staff.get("id") or t.get("id")
+        staff = t.get("staff")
+        sid = (staff.get("id") if isinstance(staff, dict) else None) or t.get("id")
         if isinstance(sid, str) and sid.strip():
             out.append(sid.strip().lower())
     return list(dict.fromkeys(out))
