@@ -28,8 +28,19 @@ delivery with no SMD touch. So, in order:
    settled is a NOTE ("corrected before delivery"); one it did not stays
    MUST and the job holds (an integrity stop).
 
-Check 1 (another person's records) and code integrity findings (an empty
-chronology, a cited exhibit not delivered) are never touched: they hold.
+BEFORE those (2026-10-24, the stop audit rows 11 to 13), on the cited page
+(``review_evidence``): a check 3 MUST-FIX whose quoted words the cited page
+prints verbatim is the record's own wording, a NOTE; a model check 1 MUST-FIX
+on one entry is decided by the cited page's patient identifiers: the
+client's, a NOTE; another person's, or no one's, the entry is left out by
+rule and disclosed (``review-left-out.json`` and the Review Notes), never
+naming that person. Code's entry dated after today joins step 4, where the
+finisher re-reads the date on its page; it settles only when no entry is
+dated after today any more. ``review-policy.json`` counts every step (row 14:
+the residual check 2/4 after the repair is measured on replays).
+
+Code integrity findings (an empty chronology, a cited exhibit not delivered)
+are never touched: they hold.
 Nothing here invents client text: steps 1-3 only delete or re-grade, and step
 4's sentences are the update lane's grounded, audited corrections.
 """
@@ -39,6 +50,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field, replace
+from datetime import date
 from pathlib import Path
 from typing import Any, Callable
 
@@ -53,6 +65,10 @@ _DATE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
 _EXHIBIT_PAGE = re.compile(r"(?i)\bExhibit\s+(\d+)(?:\s*[,-]?\s*p(?:age|p)?\.?\s*(\d+))?")
 _DATED = re.compile(r"^\d{2}/\d{2}/\d{4}")
 _CHECK = re.compile(r"^\s*(\d{1,2})\b")
+#: Any double-quoted span (check 3 quotes short words: "the auditor").
+_ANY_QUOTE = re.compile(r"\"([^\"]{3,})\"|“([^”]{3,})”")
+#: The policy's counts per review (``_record``).
+POLICY_RECORD = "review-policy.json"
 
 
 def check_no(f: review.Finding) -> int | None:
@@ -193,8 +209,8 @@ def repair_round(
     sentences are graded on their pages and reverted when unsupported; the
     audit loop then runs to its gate. Nothing settles on a grading refusal or
     an audit that does not pass."""
-    from ..update import finisher as FN, review_repair as RR
-    from . import audit_loop, update_review as UR
+    from ..update import review_repair as RR
+    from . import update_review as UR
     from .update_base import headings
 
     keep, heads = UR._keep(sr), headings(sr.cfg)
@@ -212,8 +228,34 @@ def repair_round(
         idx.append(i)
     if not todo:
         return set(), "no finding names one entry to correct"
-    c = UR._ctx(sr, images, lambda _x, _p: None, verify)
+    from . import review_evidence as EV
+
+    # The page text a redate is checked against (2026-10-24: an entry dated
+    # after today is re-read on its page; with no text, no date moves).
+    pages = EV.Pages(sr)
+    c = UR._ctx(sr, images, lambda x, p: pages.text(x, p) or None, verify)
     c.rnd = 1
+    try:
+        return _finish(sr, doc, md, musts, todo, idx, ents, c, audit)
+    finally:
+        pages.close()
+
+
+def _finish(
+    sr: StageRun,
+    doc: Path,
+    md: str,
+    musts: list[review.Finding],
+    todo: list[Any],
+    idx: list[int],
+    ents: list[Any],
+    c: Any,
+    audit: Audit | None,
+) -> tuple[set[int], str]:
+    """The finisher's edits on the document, graded, then the audit loop."""
+    from ..update import finisher as FN
+    from . import audit_loop, update_review as UR
+
     try:
         edits, left = UR._finish_calls(c, todo, ents, [])
         new_md, _ = UR._apply(c, md, edits, [])
@@ -241,6 +283,98 @@ def repair_round(
     return done, f"{len(done)} of {len(musts)} settled by the finisher, {c.calls} call(s)"
 
 
+def _phrases(f: review.Finding) -> list[str]:
+    """The words a check 3 finding says are the system's: the quoted span of
+    a code finding, every quoted span of a model finding."""
+    if f.by == "code":
+        if "system marker" in f.finding:
+            return []
+        m = re.search(r'"([^"]+)"', f.finding)
+        return [m.group(1)] if m else []
+    return [a or b for a, b in _ANY_QUOTE.findall(_text(f))]
+
+
+def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str, int]) -> None:
+    """Steps 0a and 0b (2026-10-24, the stop audit rows 11 and 12), on the
+    cited pages (``review_evidence``):
+
+    * a check 3 MUST-FIX (code or model) whose every quoted phrase is printed
+      verbatim on the page each sentence carrying it cites is the record's
+      wording: a NOTE;
+    * a model check 1 MUST-FIX on one entry: the client's page makes it a
+      NOTE; a page naming another person, or naming no one, has the entry left
+      out by rule and disclosed (never naming that person)."""
+    from . import review_evidence as EV
+
+    md = before = doc.read_text(encoding="utf-8")
+    for k, f in enumerate(out.findings):
+        if f.grade != review.MUST:
+            continue
+        n = check_no(f)
+        if n == 3 and (f.by == "model" or f.cite == "the chronology"):
+            ph = _phrases(f)
+            if ph and all(EV.verbatim_on_record(md, p, pages) for p in ph):
+                out.findings[k] = replace(
+                    f, grade=review.NOTE, finding=f"the record's own wording, printed on the cited page: {f.finding}"
+                )
+                stats["system_words_on_record"] += 1
+        elif n == 1 and f.by == "model":
+            block = EV.entry_for(md, _text(f))
+            if block is None:
+                continue
+            cited = EV.cited_pages(block[2], _text(f))
+            kind = EV.whose(sr, [pages.text(ex, pg) for ex, pg in cited])
+            if kind == "client":
+                out.findings[k] = replace(
+                    f, grade=review.NOTE, finding=f"checked against the cited page, which is the client's: {f.finding}"
+                )
+                stats["identity_client"] += 1
+                continue
+            reason = EV.LEFT_OUT_REASON if kind == "other" else EV.UNNAMED_REASON
+            EV.leave_out(sr, doc, block, cited, reason)
+            md = doc.read_text(encoding="utf-8")
+            out.changed = True
+            date_line = block[2].split("\n", 1)[0].strip()
+            out.findings[k] = replace(
+                f, grade=review.NOTE, finding=f"left out before delivery by rule: the entry dated {date_line} {reason}"
+            )
+            stats["identity_left_out"] += 1
+            sr.log(f"review: the {date_line} entry left out by rule (its cited page: {kind})")
+    if stats["identity_left_out"]:
+        # The summary tables count the entries: computed again from those left.
+        from . import review_tables
+
+        doc.write_text(review_tables.rederive(sr, before, md), encoding="utf-8")
+        sr.log("review: Treatment Timeline and Diagnostic Highlights re-derived from the remaining entries")
+
+
+def _future_still(md: str, f: review.Finding, today: date | None) -> bool:
+    """True when the entry a future-date finding names is still dated after
+    today: its date still heads an entry and that date is after today."""
+    if today is None:
+        return False
+    for d in _DATE.findall(f.finding + " " + f.cite):
+        mo, dy, yr = (int(x) for x in d.split("/"))
+        try:
+            when = date(yr, mo, dy)
+        except ValueError:
+            continue
+        if when > today and any(ln.strip() == d for ln in md.splitlines()):
+            return True
+    return False
+
+
+def _repairable(f: review.Finding) -> bool:
+    """A MUST-FIX the one repair round may settle: the model's check 2 or 4,
+    and code's entry dated after today (a misread year the finisher re-reads
+    on the page, 2026-10-24)."""
+    if f.grade != review.MUST:
+        return False
+    if f.by == "model":
+        return check_no(f) in (2, 4)
+    return check_no(f) == 5 and "future date" in f.check
+
+
 def settle(
     sr: StageRun,
     doc: Path | None,
@@ -250,6 +384,7 @@ def settle(
     verify: Any = None,
     images: Any = None,
     audit: Audit | None = None,
+    today: date | None = None,
 ) -> Outcome:
     """Every step in order. ``doc`` is the full build's ``final-chronology.md``
     (None on an update, which has its own repair before this review and only
@@ -258,6 +393,16 @@ def settle(
     out = Outcome(kept, dropped)
     if doc is None or not doc.is_file():
         return out
+    stats: dict[str, int] = dict.fromkeys(
+        ("system_words_on_record", "identity_client", "identity_left_out", "summary_deleted"), 0
+    )
+    from . import review_evidence as EV
+
+    pages = EV.Pages(sr)
+    try:
+        on_record(sr, doc, out, pages, stats)
+    finally:
+        pages.close()
     md = doc.read_text(encoding="utf-8")
     for k, f in enumerate(out.findings):
         if f.by == "model" and f.grade == review.MUST and check_no(f) == 4:
@@ -271,21 +416,54 @@ def settle(
         doc.write_text(md, encoding="utf-8")
         out.changed = True
         _sync_entries(sr, out.deleted_lines)
+        stats["summary_deleted"] = len(out.deleted_lines)
         sr.log(f"review: {len(out.deleted_lines)} summary line(s) no entry supports, deleted")
-    pend = [
-        k for k, f in enumerate(out.findings) if f.by == "model" and f.grade == review.MUST and check_no(f) in (2, 4)
-    ]
+    pend = [k for k, f in enumerate(out.findings) if _repairable(f)]
+    before_rounds = {str(check_no(out.findings[k])): 0 for k in pend}
+    for k in pend:
+        before_rounds[str(check_no(out.findings[k]))] += 1
     if repair and pend:
         before = doc.read_text(encoding="utf-8")
         done, why = repair_round(sr, doc, [out.findings[k] for k in pend], verify=verify, images=images, audit=audit)
         sr.log(f"review repair round: {why}")
+        after = doc.read_text(encoding="utf-8")
         for j in done:
             k = pend[j]
             f = out.findings[k]
+            if f.by == "code" and _future_still(after, f, today):
+                continue  # the date is still after today: unsettled, it holds
             out.findings[k] = replace(f, grade=review.NOTE, finding=f"corrected before delivery: {f.finding}")
-        out.repaired = len(done)
-        out.changed = out.changed or doc.read_text(encoding="utf-8") != before
+            out.repaired += 1
+        out.changed = out.changed or after != before
+    _record(sr, out, pend, before_rounds, stats)
     return out
+
+
+def _record(sr: StageRun, out: Outcome, pend: list[int], before: dict[str, int], stats: dict[str, int]) -> None:
+    """What the policy did, counted (the stop audit row 14: the residual
+    check 2/4 MUST-FIX after the one repair round is measured on replays
+    before the rule changes). Logged, and written to ``review-policy.json``
+    in the run dir."""
+    residual: dict[str, int] = {}
+    for k in pend:
+        f = out.findings[k]
+        if f.grade == review.MUST:
+            residual[str(check_no(f))] = residual.get(str(check_no(f)), 0) + 1
+    rec = {
+        **stats,
+        "repair_pending_by_check": before,
+        "repair_settled": out.repaired,
+        "repair_residual_by_check": residual,
+        "must_fix_left": sum(1 for f in out.findings if f.grade == review.MUST),
+    }
+    sr.log(
+        "review policy: "
+        + ", ".join(f"{k}={v}" for k, v in stats.items())
+        + f"; repair pending {before}, settled {out.repaired}, residual {residual}"
+    )
+    rd = sr.slug_dir / "runs" / sr.unit.unit
+    rd.mkdir(parents=True, exist_ok=True)
+    (rd / POLICY_RECORD).write_text(json.dumps(rec, indent=1), encoding="utf-8")
 
 
 def _sync_entries(sr: StageRun, gone: list[str]) -> None:
@@ -315,7 +493,7 @@ def package(
     and the manifest rows the review decides on: re-rendered and re-manifested
     when the chronology changed, so what is filed is what was settled. Rows
     None when the re-render fails (nothing is filed; a rerun reviews again)."""
-    from . import manifest as _manifest, render as _render
+    from . import limitations as _limitations, manifest as _manifest, render as _render
 
     doc = None if update else rd / "final-chronology.md"
     pol = settle(sr, doc, found, repair=True, **inject)
@@ -324,6 +502,14 @@ def package(
             f"review: {len(pol.dropped)} finding(s) on the firm's required wording dropped: "
             + "; ".join(f.finding[:80] for f in pol.dropped)
         )
+    # build_doc wrote Records Reviewed and Limitations before this review; an
+    # entry the review left out (``review-left-out.json``) is disclosed there
+    # only once the section is written again from the files as they stand.
+    # Full build only (an update has no ``doc``); a refresh that changes the
+    # section re-renders even when nothing else changed.
+    if doc is not None and doc.is_file() and _limitations.refresh(doc, sr.slug_dir, sr.unit.unit, sr.log, sr.cfg):
+        sr.log("review: Records Reviewed and Limitations rewritten from the files as they stand")
+        pol.changed = True
     if not pol.changed:
         return pol.findings, rows
     if _render.run(sr) != 0 or _manifest.run(sr) != 0:

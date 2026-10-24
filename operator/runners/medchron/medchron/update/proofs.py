@@ -39,6 +39,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .. import meta_markers
+from ..audit import controls
 from . import body as B
 from .values import numbers
 
@@ -184,10 +185,18 @@ def _audit(x: Inputs, r: Result) -> None:
     new = [c for c in x.updated_claims if c["key"] not in base_keys]
     unsup = [c for c in new if latest.get(c["key"]) != "SUPPORTED" and latest.get(_as_audited(c, x)) != "SUPPORTED"]
     r.check("4", not unsup and x.gate_passed, f"new claims {len(new)}; not finally SUPPORTED {len(unsup)}")
-    ctl = [row for row in x.audit_rows if str(row.get("kind", "")).startswith("control")]
-    bad = [row for row in ctl if row.get("verdict") == "SUPPORTED" and row.get("key") not in x.retired_controls]
+    # The round's own rule (``audit/controls``, 2026-10-24): a control is bad
+    # only when still SUPPORTED after its re-test on another institution, and
+    # the audit fails only at the rate, or when every control is bad.
+    a = controls.assess_rows(x.audit_rows, x.retired_controls)
     need = len(new) >= CONTROL_EVERY
-    r.check("5", not bad and (bool(ctl) or not need), f"controls planted {len(ctl)}; wrongly SUPPORTED {len(bad)}")
+    r.check(
+        "5",
+        not a["invalid"] and (bool(a["controls"]) or not need),
+        f"controls planted {a['controls']}; still SUPPORTED after the re-test {len(a['bad'])} "
+        f"(fails at {a['threshold']}); reverse controls disagreeing {len(a['reverse_bad'])} "
+        f"(fails at {a['reverse_threshold']})",
+    )
 
 
 def _added(x: Inputs, r: Result) -> None:

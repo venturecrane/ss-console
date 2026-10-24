@@ -6,14 +6,14 @@ once shipped with 181 of 658 claims never audited in their final form
 because nothing forced this intersection. This gate does, and it can fail:
 any live claim with NO verdict, any live claim whose last verdict is not
 SUPPORTED (a live SUPPORTED_WIDENED means the citation rewrite was skipped),
-or any control wrongly SUPPORTED.
+or controls wrongly SUPPORTED at the rate ``controls`` calls INVALID.
 """
 
 from __future__ import annotations
 
 from typing import Any, Callable
 
-from . import claims as CL, retired
+from . import claims as CL, controls, retired
 from .page_text import exhibit_paths
 from .run import AuditPaths
 
@@ -25,17 +25,16 @@ def check(paths: AuditPaths, log: Callable[[str], None]) -> tuple[bool, dict[str
     latest = CL.latest_real(rows, live)
     gone = retired.keys(paths.out)
     if gone:
-        log(f"CONTROLS retired by SMD as badly chosen (the page carries the claim): {len(gone)}")
-    ctl_bad = [
-        r
-        for r in rows
-        if (
-            str(r.get("kind", "")).startswith("control")
-            and r.get("verdict") == "SUPPORTED"
-            and r.get("key") not in gone
-        )
-        or (r.get("kind") == "reverse-control" and not r.get("agree"))
-    ]
+        log(f"CONTROLS retired as badly chosen (by SMD or by rule): {len(gone)}")
+    # The same rate the round applies (``controls``): one generic claim
+    # SUPPORTED on two institutions is not a rubber stamp.
+    standing = controls.assess(rows, paths.out)
+    ctl_bad = (standing["bad"] if standing["controls_invalid"] else []) + (
+        standing["reverse_bad"] if standing["reverse_invalid"] else []
+    )
+    tolerated = len(standing["bad"]) + len(standing["reverse_bad"]) - len(ctl_bad)
+    if tolerated:
+        log(f"CONTROLS below the INVALID threshold, recorded in {controls.FILE}: {tolerated}")
     never = live - set(latest)
     bad = {k: r for k, r in latest.items() if r["verdict"] != "SUPPORTED"}
     tally: dict[str, int] = {}
