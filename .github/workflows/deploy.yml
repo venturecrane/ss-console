@@ -168,9 +168,13 @@ jobs:
     if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     # The seat-spec signing key (Ed25519, ADR 0094 amendment) is a secret of the
     # protected `seat-spec` environment and of nothing else, so only this job,
-    # on main, can sign. Absent, the publisher still publishes customer.yaml and
-    # skips the spec with a loud warning: main stays deployable.
-    environment: seat-spec
+    # on main, can sign. The reference is gated on vars.SEAT_SPEC_ENABLED:
+    # GitHub auto-creates a referenced environment on first run with NO branch
+    # protection, so until the protected environment exists and the variable is
+    # set, this job names no environment, reads no key, and publishes
+    # customer.yaml exactly as before (the spec is skipped with a warning).
+    # tests/deploy-seat-spec-gate.test.ts pins the gate.
+    environment: ${{ vars.SEAT_SPEC_ENABLED == 'true' && 'seat-spec' || '' }}
     permissions:
       contents: read
       packages: read
@@ -211,7 +215,7 @@ jobs:
           # local run needs no D1.
           FLEET_IMAGE_LOOKUP: '1'
           # PKCS#8 PEM, read by scripts/compile-seat-spec.ts; never echoed.
-          SEAT_SPEC_SIGNING_KEY: ${{ secrets.SEAT_SPEC_SIGNING_KEY }}
+          SEAT_SPEC_SIGNING_KEY: ${{ vars.SEAT_SPEC_ENABLED == 'true' && secrets.SEAT_SPEC_SIGNING_KEY || '' }}
         run: bash scripts/ci-publish-customer-configs.sh
 
   # Skills as a release artifact (fleet release, 2026-10-19). A merge touching

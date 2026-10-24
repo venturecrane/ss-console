@@ -501,7 +501,8 @@ seat's image. It writes `vaults/<slug>/customer.yaml`, the spec at
 `fleet/specs/<slug>/<sha256>.json`, and last the pointer
 `vaults/<slug>/spec-pointer.json`, which carries an Ed25519 signature over the
 spec's bytes. The signing key is a secret of the protected `seat-spec` GitHub
-environment and of nothing else; without it the publisher still publishes
+environment and of nothing else, read only when the repository variable
+`SEAT_SPEC_ENABLED` is `true`; without it the publisher still publishes
 `customer.yaml` and skips the spec with a warning. Seats whose `customer.yaml`
 did not change in the push are converged too, so a push range that was never
 processed is healed by the next one.
