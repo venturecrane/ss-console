@@ -206,13 +206,7 @@ STAGES: tuple[Stage, ...] = (
         scope="slug",
         requires=("decide_billing_docs",),
         runner=_billing.run,
-        exit_map={
-            1: (
-                FAILED,
-                "billing_extract exited 1: a pipeline defect (a page no read could transcribe is a named gap in "
-                "billing_gaps.json, never this exit)",
-            )
-        },
+        exit_map={1: (FAILED, "billing_extract: a pipeline defect (an unread page is a named gap, never this exit)")},
     ),
     Stage("decide_units", "", _slug, scope="slug", requires=("billing_extract",), decision="units"),
     Stage(
