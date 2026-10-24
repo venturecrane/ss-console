@@ -9,7 +9,9 @@ import pytest
 
 from litigation_testkit import LIBRARY, STAFF_A, STAFF_B, envelope, firm_data, make_inputs
 from medchron import arrivals
-from medchron.litigation import baseline, firm as firm_mod, inventory, job as job_mod, manifest, vocab
+from types import SimpleNamespace
+
+from medchron.litigation import baseline, firm as firm_mod, job as job_mod, manifest, people, vocab
 
 
 def _job(**over):
@@ -52,7 +54,8 @@ def test_the_scope_filter_ands_attorney_and_paralegal():
     }
 
     def kept(staff=(), assist=(), everything=False):
-        return sorted(k for k, m in rows.items() if inventory.in_scope(m, staff, everything, assist))
+        job = SimpleNamespace(scope_all=everything, attorney_staff_ids=staff, paralegal_staff_ids=assist, people=None)
+        return sorted(k for k, m in rows.items() if people.in_scope(m, job))
 
     assert kept(everything=True) == sorted(rows)
     assert kept(staff=(a,)) == ["a-p", "a-q"]

@@ -44,6 +44,7 @@ ANOTHER_PERSON = "another_person"  # a record in the file names someone other th
 WHICH_CHRONOLOGY = "which_chronology"  # two chronologies could each be the current one (ask)
 REROUTED_TO_UPDATE = "rerouted_to_update"  # a RUN on a delivered matter; the agent resubmits it as the UPDATE
 STAFF_UNRESOLVED = "staff_unresolved"  # a staff reassignment names someone the staff list cannot settle (ask)
+REQUESTER_UNRESOLVED = "requester_unresolved"  # "my cases" from an address no staff record carries (ask)
 
 CLASSES = frozenset(
     {
@@ -55,11 +56,12 @@ CLASSES = frozenset(
         WHICH_CHRONOLOGY,
         REROUTED_TO_UPDATE,
         STAFF_UNRESOLVED,
+        REQUESTER_UNRESOLVED,
     }
 )
 
 #: Classes whose answer is the firm's. Every other class is ours or an answer.
-FIRM_QUESTION = frozenset({ANOTHER_PERSON, WHICH_CHRONOLOGY, STAFF_UNRESOLVED})
+FIRM_QUESTION = frozenset({ANOTHER_PERSON, WHICH_CHRONOLOGY, STAFF_UNRESOLVED, REQUESTER_UNRESOLVED})
 
 #: Reasons already paged under their own code by ``watch.settle``.
 PROOF_PREFIXES = ("review_held", "readback_mismatch", "readback_unproven", "dry_run_reported")
@@ -80,6 +82,9 @@ _UPDATE_HELD = (
 _LITIGATION = {
     "scope_empty": (NOTHING_IN_SCOPE, None),
     "staff_unresolved": (STAFF_UNRESOLVED, None),
+    # 2026-10-24: "my cases" from an address that matches no staff record in
+    # Smokeball. Whose files to list is the firm's answer; nothing pages.
+    "requester_unresolved": (REQUESTER_UNRESOLVED, None),
     "gate_refused": (SMD_FINISHING, "gate_held"),
     "parity_hold": (SMD_FINISHING, "gate_held"),
     "leak_found": (SMD_FINISHING, "gate_held"),
@@ -144,6 +149,7 @@ __all__ = [
     "CLASSES",
     "FIRM_QUESTION",
     "NOTHING_IN_SCOPE",
+    "REQUESTER_UNRESOLVED",
     "REROUTED_TO_UPDATE",
     "SMD_FINISHING",
     "SMD_FINISHING_FILED",

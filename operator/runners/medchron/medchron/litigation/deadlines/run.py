@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ... import proof_mode
-from .. import deliver, firm as firm_mod, job as job_mod
+from .. import deliver, firm as firm_mod, job as job_mod, people
 from ..outcome import REASON, LitigationFailed, LitigationHold, Verdict
 from ..tools import dump
 from . import book, pull
@@ -129,7 +129,7 @@ class DeadlinesRun:
 
     # ---- stages -------------------------------------------------------------------
     def _pull(self) -> None:
-        pull.run(self.seat, self.job, self.data, self.log)
+        pull.run(self.seat, self.job, self.data, self.log, people.firm_roster(self.firm))
 
     def _book(self) -> None:
         d = self._pulled()

@@ -429,6 +429,7 @@ class LitigationRun(RunBase):
             self._out(),
             self.today,
             discovery=not self._court_only(),
+            tagged=self._tagged(),
         )
         leaks = gates.leak_scan(self._out())
         dump(self.data / "book.json", {**stats, "leaks": leaks})
@@ -439,8 +440,19 @@ class LitigationRun(RunBase):
                 + "; ".join(f"{c} {w}" for c, w, _ in leaks)[:300]
             )
 
+    def _tagged(self) -> tuple[list[str], list[list[Any]]] | None:
+        """A people scope's "Litigated files tagged on" (header, rows), built
+        from the inventory's people and roles and the final values; None for
+        every other scope."""
+        if self.job.people is None:
+            return None
+        who = list(self._json("inventory.json").get("people") or [])
+        return book.tagged_header(len(who) > 1), book.tagged_rows(self._json("final.json"), self._matters(), who)
+
     def _review(self) -> None:
-        status = review_mod.run(self.data, self.job.job_dir, self._out(), self._json("final.json"), self._matters())
+        status = review_mod.run(
+            self.data, self.job.job_dir, self._out(), self._json("final.json"), self._matters(), tagged=self._tagged()
+        )
         self._put("review_status", status)
 
     def _file(self) -> None:

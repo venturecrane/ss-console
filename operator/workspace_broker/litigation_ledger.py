@@ -44,7 +44,10 @@ THE QUEUE FILE (``<queue>/<job_id>.json``) is the runner's input, exactly::
 
 with ``scope`` one of ``{"all": true}``, ``{"attorney_staff_ids": [...]}``,
 ``{"paralegal_staff_ids": [...]}`` (a paralegal's files: the matter's Person
-Assisting) or both id lists together (a matter must match each).
+Assisting) or both id lists together (a matter must match each), or
+``{"people": {"names": [...], "requester": <email or null>}}``: every matter
+the named people (and, for "my cases", the requester, found by email) hold any
+staff role on, resolved by the runner against Smokeball's staff list.
 
 THE RUNNER'S REPORT is counts and file metadata only (``REPORT_FIELDS``):
 nothing in this ledger names a matter, a party or a date from a file.
@@ -60,6 +63,7 @@ from pathlib import Path
 from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
+from .litigation_scope import SCOPE_ID_KEYS, normalize as normalize_scope, scope_key
 from .litigation_report import EnvelopeError, counts as _counts, report_keys as _report_keys, writes as _writes
 
 STATES = ("queued", "running", "held", "delivered", "failed")
@@ -176,45 +180,6 @@ def digest(obj: Any) -> str:
     return hashlib.sha256(json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-#: The id lists a scope may carry, in the order ``scope_key`` writes them.
-SCOPE_ID_KEYS = ("attorney_staff_ids", "paralegal_staff_ids")
-
-
-def _ids(raw: Any) -> list[str] | None:
-    if isinstance(raw, list) and 0 < len(raw) <= 50 and all(isinstance(i, str) and _UUID.match(i) for i in raw):
-        return sorted({i.strip().lower() for i in raw})
-    return None
-
-
-def _scope(raw: Any) -> dict[str, Any]:
-    if raw == {"all": True}:
-        return {"all": True}
-    if isinstance(raw, dict) and raw and set(raw) <= set(SCOPE_ID_KEYS):
-        got = {k: _ids(raw[k]) for k in SCOPE_ID_KEYS if k in raw}
-        if all(v is not None for v in got.values()):
-            return got
-    raise EnvelopeError(
-        'scope must be {"all": true} or staff id lists under "attorney_staff_ids", "paralegal_staff_ids" or both'
-    )
-
-
-def scope_key(scope: dict[str, Any]) -> str:
-    """One string per distinct scope, so a job underway for one scope never
-    blocks a different one: ``all``; ``staff:<ids>`` (attorneys, the key every
-    earlier row carries); ``paralegal:<ids>``; ``staff:<ids>|paralegal:<ids>``."""
-    report = scope.get("report")
-    if report in ("deadlines", "reassign"):  # never blocks (or is blocked by) a status list for the same people
-        return f"{report}:" + scope_key({k: v for k, v in scope.items() if k != "report"})
-    if scope.get("all") is True:
-        return "all"
-    parts = []
-    if scope.get("attorney_staff_ids"):
-        parts.append("staff:" + ",".join(scope["attorney_staff_ids"]))
-    if scope.get("paralegal_staff_ids"):
-        parts.append("paralegal:" + ",".join(scope["paralegal_staff_ids"]))
-    return "|".join(parts)
-
-
 def validate_envelope(req: Any) -> dict[str, Any]:
     """The RESOLVED envelope (the broker's, after requester fill-in and
     attorney resolution), normalized, or ``EnvelopeError``."""
@@ -262,7 +227,7 @@ def validate_envelope(req: Any) -> dict[str, Any]:
         "requester": who.strip().lower(),
         "message_ref": ref,
         "request_text": text,
-        "scope": _scope(req["scope"]),
+        "scope": normalize_scope(req["scope"]),
         "file_to_matter_id": mid.strip().lower(),
         "file_to_matter_number": number,
         "folder_name": folder.strip(),
@@ -636,6 +601,7 @@ __all__ = [
     "TRIGGERS",
     "EnvelopeError",
     "LitigationLedger",
+    "SCOPE_ID_KEYS",
     "SubmitRefused",
     "queue_record",
     "scope_key",

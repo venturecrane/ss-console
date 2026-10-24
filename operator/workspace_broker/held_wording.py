@@ -96,6 +96,13 @@ WORDING: dict[str, dict[str, Any]] = {
                 "request again with their full name as Smokeball shows it; that is all that is needed."
             ),
         },
+        # 2026-10-24: "my cases" from an address no staff record in Smokeball
+        # carries (a status list or a deadlines report); whose files is the firm's.
+        hold_class.REQUESTER_UNRESOLVED: (
+            "I could not match your email address to a staff member in Smokeball, so I did not guess whose "
+            "files to list. Which attorney did you mean? Reply with their name as Smokeball shows it; that is "
+            "all that is needed."
+        ),
     },
 }
 

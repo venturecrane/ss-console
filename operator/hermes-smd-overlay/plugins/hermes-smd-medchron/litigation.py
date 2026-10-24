@@ -9,11 +9,12 @@ A turn no email opened submits nothing. The scheduled run is not submitted
 here at all: the seat's pre_run peer submits it to the broker directly, with
 the requester the firm authored.
 
-The model chooses only the scope: the attorneys whose matters the list covers
-and/or the paralegals whose files it covers (the matter's Person Assisting),
-by name (the broker resolves each against the firm's authored lists and
-refuses a name it cannot), or the whole firm. Both named: only the matters
-where both hold. The broker checks the rest (the skill enabled,
+The model chooses only the scope: ``mine`` (the asker's own files; who that is
+comes from the email, never the model), the attorneys or paralegals whose
+files the list covers, by name (the broker resolves each against the firm's
+authored lists and refuses a name it cannot; one side named covers every
+matter they hold any staff role on), or the whole firm. Both sides named: only
+the matters where both hold. The broker checks the rest (the skill enabled,
 the requester on scope.admins, the filing target, no unfinished litigation job
 for that scope, the monthly cap) and answers with a job id or a reason to relay
 as it comes back.
@@ -55,15 +56,24 @@ def _names(key: str, names: Any, cap: int) -> list[str] | str:
 
 def _scope(args: dict[str, Any]) -> dict[str, Any] | str:
     """The broker scope for the tool's arguments, or a refusal sentence.
-    Attorneys and paralegals may be named together: the broker keeps only the
+
+    ``mine`` ("my cases", "every file I'm tagged on") is the requester's own
+    files: the broker passes the verified sender, never a name the model
+    chose, and the runner finds them in the firm's staff list by email. One
+    side named, or ``mine``, is every matter those people hold any staff role
+    on. Attorneys and paralegals named together: the broker keeps only the
     matters where both hold (one of the paralegals assisting, one of the
     attorneys responsible)."""
     given = {key: args.get(key) for key, _cap in _NAMED if args.get(key) not in (None, [])}
-    if not given:
+    mine = args.get("mine") is True
+    if args.get("all") and (given or mine):
+        return (
+            "ask for your own cases, name attorneys or paralegals, or ask for all of the firm's "
+            "cases, not more than one; nothing was queued"
+        )
+    if not given and not mine:
         return {"all": True}
-    if args.get("all"):
-        return "name attorneys or paralegals, or ask for all of the firm's cases, not both; nothing was queued"
-    out: dict[str, Any] = {}
+    out: dict[str, Any] = {"mine": True} if mine else {}
     for key, cap in _NAMED:
         if key in given:
             names = _names(key, given[key], cap)
@@ -165,9 +175,10 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
     "litigation_job_submit": (
         "Queue the firm's litigation status list for the Named Administrator whose email opened "
         "this turn. Never compile the list in the turn: this queues a job that re-reads the "
-        "litigated matters on the Machine's runner and files the workbook. Name the attorneys "
-        "whose matters it covers and/or the paralegals whose files it covers (both named: only "
-        "the matters where both hold, e.g. a paralegal's files on two attorneys' cases), or leave "
+        "litigated matters on the Machine's runner and files the workbook. Pass mine for the "
+        'asker\'s own files ("my cases"). Name the attorneys or the paralegals whose files it '
+        "covers (one side named: every matter they hold any staff role on; both named: only the "
+        "matters where both hold, e.g. a paralegal's files on two attorneys' cases), or leave "
         "them out (or pass all) for the whole firm. Who asked, "
         "the email's id and the request's words are taken from the email itself, never from you. "
         "It answers with a job id, or a reason to relay as it comes back.",
@@ -189,9 +200,21 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
                         "paralegal list resolves them."
                     ),
                 },
+                "mine": {
+                    "type": "boolean",
+                    "description": (
+                        'The asker\'s own files ("my cases", "every litigated file I\'m tagged on"): every '
+                        "matter the person who sent the email holds any staff role on. Who that is comes "
+                        "from the email itself, never from you. May be combined with attorneys or "
+                        "paralegals to add those people's files."
+                    ),
+                },
                 "all": {
                     "type": "boolean",
-                    "description": "Every litigated matter in the firm (the default when no attorney or paralegal is named).",
+                    "description": (
+                        "Every litigated matter in the firm (the default when no one is named and mine is "
+                        'not set). Never "my cases": that is mine.'
+                    ),
                 },
             }
         ),

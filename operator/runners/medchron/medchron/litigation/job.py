@@ -9,7 +9,8 @@ The envelope (the broker's ``litigation_job_submit`` writes exactly this)::
      "scope": {"all": true}
             | {"attorney_staff_ids": [uuid, ...]}
             | {"paralegal_staff_ids": [uuid, ...]}
-            | {"attorney_staff_ids": [...], "paralegal_staff_ids": [...]},
+            | {"attorney_staff_ids": [...], "paralegal_staff_ids": [...]}
+            | {"people": {"names": [str, ...], "requester": email | null}},
      "file_to_matter_id": uuid, "file_to_matter_number": str, "folder_name": str}
 
 plus, for the deadlines report only (a $0 kind with its own runner,
@@ -50,6 +51,17 @@ class LitigationJobError(ValueError):
 
 
 @dataclass(frozen=True)
+class People:
+    """A people scope (2026-10-24): every matter these people hold ANY staff
+    role on. ``names`` are the firm roster's names the broker placed;
+    ``requester`` is the verified sender's address when the request said "my
+    cases", else None. ``people.py`` resolves both against Smokeball's staff."""
+
+    names: tuple[str, ...]
+    requester: str | None
+
+
+@dataclass(frozen=True)
 class LitigationJob:
     job_dir: Path
     job_id: str
@@ -76,6 +88,8 @@ class LitigationJob:
     workbooks: tuple[str, ...] = ()
     #: A staff reassignment's request (``reassign/spec.py``); None otherwise.
     reassign: dict[str, Any] | None = None
+    #: A people scope (any staff role); None for the other scopes.
+    people: People | None = None
 
     @property
     def data(self) -> Path:
@@ -98,17 +112,40 @@ def _ids(raw: Any) -> tuple[str, ...] | None:
     return None
 
 
-def _scope(raw: Any) -> tuple[tuple[str, ...], bool, tuple[str, ...]]:
-    """(attorney ids, every matter, paralegal ids)."""
+MAX_PEOPLE = 20
+MAX_PERSON_CHARS = 100
+
+
+def _people(raw: Any) -> People | None:
+    if not (isinstance(raw, dict) and set(raw) == {"names", "requester"}):
+        return None
+    names, who = raw["names"], raw["requester"]
+    if not isinstance(names, list) or len(names) > MAX_PEOPLE or not all(isinstance(n, str) for n in names):
+        return None
+    clean = tuple(dict.fromkeys(" ".join(n.split()) for n in names))
+    if any(not n or len(n) > MAX_PERSON_CHARS for n in clean):
+        return None
+    if who is not None and not (isinstance(who, str) and _EMAIL.match(who.strip())):
+        return None
+    who = who.strip().lower() if isinstance(who, str) else None
+    return People(clean, who) if clean or who else None
+
+
+def _scope(raw: Any) -> tuple[tuple[str, ...], bool, tuple[str, ...], People | None]:
+    """(attorney ids, every matter, paralegal ids, people)."""
     if raw == {"all": True}:
-        return (), True, ()
-    if isinstance(raw, dict) and raw and set(raw) <= set(SCOPE_ID_KEYS):
+        return (), True, (), None
+    if isinstance(raw, dict) and set(raw) == {"people"}:
+        people = _people(raw["people"])
+        if people is not None:
+            return (), False, (), people
+    elif isinstance(raw, dict) and raw and set(raw) <= set(SCOPE_ID_KEYS):
         got = {k: _ids(raw[k]) for k in raw}
         if all(v is not None for v in got.values()):
-            return got.get("attorney_staff_ids") or (), False, got.get("paralegal_staff_ids") or ()
+            return got.get("attorney_staff_ids") or (), False, got.get("paralegal_staff_ids") or (), None
     raise LitigationJobError(
-        'scope must be {"all": true} or non-empty staff id lists under "attorney_staff_ids", '
-        '"paralegal_staff_ids" or both'
+        'scope must be {"all": true}, non-empty staff id lists under "attorney_staff_ids", '
+        '"paralegal_staff_ids" or both, or {"people": {"names": [...], "requester": <email or null>}}'
     )
 
 
@@ -162,7 +199,7 @@ def parse(data: Any, job_dir: Path) -> LitigationJob:
     if trigger == "scheduled" and not _SCHEDULED_REF.match(ref):
         raise LitigationJobError("a scheduled job's message_ref is scheduled:<YYYY-MM-DD>")
     text = _str(data, "request_text", empty_ok=(trigger == "scheduled"))
-    ids, everything, paralegals = _scope(data.get("scope"))
+    ids, everything, paralegals, people = _scope(data.get("scope"))
     fid, fnum = data.get("file_to_matter_id"), data.get("file_to_matter_number")
     if not (isinstance(fid, str) and _UUID.match(fid) and isinstance(fnum, str) and _NUMBER.match(fnum)):
         raise LitigationJobError("file_to_matter_id and file_to_matter_number must name the filing matter")
@@ -195,6 +232,7 @@ def parse(data: Any, job_dir: Path) -> LitigationJob:
         report=report,
         workbooks=workbooks,
         reassign=reassign,
+        people=people,
     )
 
 

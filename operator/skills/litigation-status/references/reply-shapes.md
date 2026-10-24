@@ -70,7 +70,13 @@ not move (never a name or a date with them).
   - `staff_unresolved` (a staff reassignment): "Nothing was changed: <name>
     <why>, so I did not guess. Which person did you mean? Send the request again
     with their full name as Smokeball shows it; that is all that is needed."
-    `<why>` by the `Unresolved:` kind, as the skill words it. The one hold whose
+    `<why>` by the `Unresolved:` kind, as the skill words it. One of the two
+    holds whose answer is the firm's.
+  - `requester_unresolved` (the sender's own files, from an address no staff
+    member in Smokeball carries; the status list or the deadlines report): "I
+    could not match your email address to a staff member in Smokeball, so I did
+    not guess whose files to list. Which attorney did you mean? Reply with their
+    name as Smokeball shows it; that is all that is needed." The other hold whose
     answer is the firm's.
   - `smd_finishing` on a staff reassignment: "The cases have not all been moved
     yet. Nothing is needed from you; SMD is finishing it, and the next message
@@ -94,7 +100,7 @@ not move (never a name or a date with them).
 
 - A list of cases, a matter number, a name or a date in the body (a staff
   reassignment's not-moved matter numbers excepted).
-- On a hold other than `staff_unresolved`: a request to resubmit, repeat, narrow, split or change the
+- On a hold other than `staff_unresolved` or `requester_unresolved`: a request to resubmit, repeat, narrow, split or change the
   request; SMD offered as a route; a gate, a code, a stage or anything from the
   job's reason; a time.
 - A second message, a follow-up, a task or a memo.

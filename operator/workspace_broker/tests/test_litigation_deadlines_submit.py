@@ -71,7 +71,8 @@ def test_a_deadlines_ask_queues_the_deadlines_report_to_its_own_folder(seat) -> 
     assert (out["report"], out["workbooks"]) == ("deadlines", ["deadlines", "statute"])
     env = json.loads(queued(queue)[0].read_text())
     assert env["report"] == "deadlines" and env["folder_name"] == "Deadlines"
-    assert env["scope"] == {"attorney_staff_ids": sorted([ATTORNEY_A, ATTORNEY_B])}
+    # One side named: a people scope (any staff role), resolved by the runner (2026-10-24).
+    assert env["scope"] == {"people": {"names": ["Avery Stone", "Blake Stone"], "requester": None}}
 
 
 def test_the_deadlines_folder_is_authored_never_defaulted(seat) -> None:

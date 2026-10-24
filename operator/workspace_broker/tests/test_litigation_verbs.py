@@ -168,13 +168,66 @@ def test_an_admin_request_is_queued_in_the_runners_shape_and_audited(seat) -> No
     assert "request_text" not in meta
 
 
-def test_named_attorneys_resolve_to_staff_ids_by_full_or_unique_name(seat) -> None:
+def _people(names, requester=None):
+    return {"people": {"names": names, "requester": requester}}
+
+
+def test_named_attorneys_resolve_to_roster_names_by_full_or_unique_name(seat) -> None:
     broker, _, _, queue, _ = seat
     out = submit(broker, scope={"attorneys": ["avery stone"]})
     assert out["accepted"] is True
-    assert json.loads(queued(queue)[0].read_text())["scope"] == {"attorney_staff_ids": [ATTORNEY_A]}
+    assert json.loads(queued(queue)[0].read_text())["scope"] == _people(["Avery Stone"])
     out = submit(broker, scope={"attorneys": ["Blake"]}, message_ref="<two@mail.firm.example>")
     assert out["accepted"] is True
+
+
+def test_my_cases_is_the_requesters_own_files_never_the_whole_firm(seat) -> None:
+    """2026-10-23: "my cases" ran firm-wide (230 matters). ``mine`` carries the
+    verified sender to the runner, which finds them in the staff list by email."""
+    broker, db, _, queue, _ = seat
+    out = submit(broker, scope={"mine": True})
+    assert out["accepted"] is True, out
+    scope = json.loads(queued(queue)[0].read_text())["scope"]
+    assert scope == _people([], ADMIN) and scope != {"all": True}
+    out = submit(broker, scope={"mine": True, "paralegals": ["Dana"]}, message_ref="<plus@mail.firm.example>")
+    assert out["accepted"] is True, out
+    scopes = [json.loads(p.read_text())["scope"] for p in queued(queue)]
+    assert _people(["Dana Field"], ADMIN) in scopes
+    metas = [m for k, m in audit_rows(db) if k == "LITIGATION_JOB_SUBMITTED"]
+    assert [(m["scope"], m["people_count"], m["mine"]) for m in metas] == [("people", 0, True), ("people", 1, True)]
+
+
+def test_mine_with_all_or_with_both_sides_is_refused(seat) -> None:
+    broker, _, _, queue, _ = seat
+    out = submit(broker, scope={"mine": True, "all": True})
+    assert out["accepted"] is False and "not both" in out["reason"]
+    out = submit(broker, scope={"mine": True, "attorneys": ["Avery"], "paralegals": ["Dana"]})
+    assert out["accepted"] is False and "cannot be combined" in out["reason"]
+    out = submit(broker, scope={"mine": True, "attorneys": ["Nobody"]})
+    assert out["accepted"] is False and "not an attorney" in out["reason"]
+    assert queued(queue) == []
+
+
+def test_a_turn_may_not_pass_a_people_scope_itself(seat) -> None:
+    """The requester in a people scope is the broker's verified sender; a turn
+    naming another address would read someone else's files."""
+    broker, _, _, _, _ = seat
+    with pytest.raises(PermissionError):
+        submit(broker, scope=_people([], "second@firm.example"))
+    out = submit(broker, pid=1, uid=0, scope=_people(["Avery Stone"]))
+    assert out["accepted"] is True
+
+
+def test_two_requesters_my_cases_do_not_block_each_other(seat) -> None:
+    broker, _, _, queue, _ = seat
+    assert submit(broker, scope={"mine": True})["accepted"] is True
+    out = submit(
+        broker, scope={"mine": True}, requester="second@firm.example", message_ref="<second@mail.firm.example>"
+    )
+    assert out["accepted"] is True, out
+    out = submit(broker, scope={"mine": True}, message_ref="<again@mail.firm.example>")
+    assert out["accepted"] is False and "already underway" in out["reason"]
+    assert len(queued(queue)) == 2
 
 
 def test_an_ambiguous_or_unknown_attorney_is_refused(seat) -> None:
@@ -190,7 +243,7 @@ def test_a_named_paralegal_alone_and_with_attorneys_resolves(seat) -> None:
     broker, db, _, queue, _ = seat
     out = submit(broker, scope={"paralegals": ["Dana's"]})
     assert out["accepted"] is True
-    assert json.loads(queued(queue)[0].read_text())["scope"] == {"paralegal_staff_ids": [PARALEGAL_P]}
+    assert json.loads(queued(queue)[0].read_text())["scope"] == _people(["Dana Field"])
     out = submit(
         broker,
         scope={"paralegals": ["Dana"], "attorneys": ["Avery", "Blake"]},
@@ -201,7 +254,7 @@ def test_a_named_paralegal_alone_and_with_attorneys_resolves(seat) -> None:
     assert {"attorney_staff_ids": sorted([ATTORNEY_A, ATTORNEY_B]), "paralegal_staff_ids": [PARALEGAL_P]} in scopes
     metas = [m for k, m in audit_rows(db) if k == "LITIGATION_JOB_SUBMITTED"]
     assert [(m["scope"], m["attorney_count"], m["paralegal_count"]) for m in metas] == [
-        ("paralegals", 0, 1),
+        ("people", 0, 0),
         ("attorneys+paralegals", 2, 1),
     ]
 
@@ -213,9 +266,7 @@ def test_a_name_on_only_the_other_roster_lands_on_that_side(seat) -> None:
     out = submit(broker, scope={"paralegals": ["Avery"]}, message_ref="<swapped@mail.firm.example>")
     assert out["accepted"] is True
     scopes = sorted(json.dumps(json.loads(p.read_text())["scope"]) for p in queued(queue))
-    assert scopes == sorted(
-        [json.dumps({"paralegal_staff_ids": [PARALEGAL_P]}), json.dumps({"attorney_staff_ids": [ATTORNEY_A]})]
-    )
+    assert scopes == sorted([json.dumps(_people(["Dana Field"])), json.dumps(_people(["Avery Stone"]))])
 
 
 def test_an_unknown_paralegal_is_refused_in_a_sentence(seat) -> None:

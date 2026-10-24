@@ -15,6 +15,8 @@ on the firm's matter says what the data it was built from says.
 * the All defendants tab, re-read from the .xlsx bytes, agrees row for row
   and cell for cell with the rows built from ``final.json`` (a writer bug, a
   sort that lost a row, a truncated save);
+* a people-scoped list's "Litigated files tagged on" tab agrees row for row
+  with the rows built from the data, and no other list carries the tab;
 * no cell carries the system's own words or a sentinel (``proof.checks``; the
   gates' ``leak_scan`` covers internal process wording and ids, this covers
   the shared system vocabulary every lane now refuses).
@@ -138,23 +140,67 @@ def _vocabulary(sheets: dict[str, list[list[str]]]) -> list[proof_review.Finding
     return out
 
 
-def findings(xlsx: bytes, finals: list[dict[str, Any]], in_scope: list[dict[str, Any]]) -> list[proof_review.Finding]:
+def _tagged(got: list[list[str]] | None, want: tuple[list[str], list[list[Any]]] | None) -> list[proof_review.Finding]:
+    """A people-scoped list's "Litigated files tagged on" tab equals the rows
+    built from the data (and no other list carries the tab)."""
+    if want is None:
+        if got is not None:
+            return [
+                proof_review.code(proof_review.MUST, "tagged", f"the {book.TAGGED} tab is in a list with no people")
+            ]
+        return []
+    if got is None:
+        return [proof_review.code(proof_review.MUST, "tagged", f"the {book.TAGGED} tab is missing")]
+    built = [_trim([_norm(book.clean(v)) for v in r]) for r in want[1]]
+    got = [_trim(r) for r in got]
+    if got == built:
+        return []
+    return [
+        proof_review.code(
+            proof_review.MUST,
+            "tagged",
+            f"{book.TAGGED} has {len(got)} rows in the file and {len(built)} in the data it was built from"
+            if len(got) != len(built)
+            else f"a {book.TAGGED} row differs from the data it was built from",
+        )
+    ]
+
+
+def findings(
+    xlsx: bytes,
+    finals: list[dict[str, Any]],
+    in_scope: list[dict[str, Any]],
+    tagged: tuple[list[str], list[list[Any]]] | None = None,
+) -> list[proof_review.Finding]:
     """The code review of one built workbook. Empty means it may be filed."""
     try:
         sheets = read_sheets(xlsx)
     except Exception as exc:  # noqa: BLE001 - an unreadable workbook is the finding
         return [proof_review.code(proof_review.MUST, "workbook", f"the built workbook does not open: {exc}"[:300])]
-    return _matters(sheets.get(CASE_NOTES), in_scope) + _rows(sheets.get(ALL_DEFENDANTS), finals) + _vocabulary(sheets)
+    return (
+        _matters(sheets.get(CASE_NOTES), in_scope)
+        + _rows(sheets.get(ALL_DEFENDANTS), finals)
+        + _tagged(sheets.get(book.TAGGED), tagged)
+        + _vocabulary(sheets)
+    )
 
 
-def run(data: Path, job_dir: Path, xlsx: Path, finals: list[dict[str, Any]], in_scope: list[dict[str, Any]]) -> str:
+def run(
+    data: Path,
+    job_dir: Path,
+    xlsx: Path,
+    finals: list[dict[str, Any]],
+    in_scope: list[dict[str, Any]],
+    *,
+    tagged: tuple[list[str], list[list[Any]]] | None = None,
+) -> str:
     """Review, record and decide. Returns ``code_only`` or ``released``;
     raises ``LitigationFailed`` (``review_held: ...``) on a hold."""
     from .outcome import LitigationFailed
 
     if not xlsx.is_file():
         raise LitigationFailed("stage_unfinished: review: the built workbook is not on disk; the book stage reruns")
-    fs = findings(xlsx.read_bytes(), finals, in_scope)
+    fs = findings(xlsx.read_bytes(), finals, in_scope, tagged)
     proof_review.save(data, fs, model="", lane="litigation")
     # The code review is re-run on every attempt, so a redo needs nothing
     # forgotten; consuming it here would forget the record just saved and
