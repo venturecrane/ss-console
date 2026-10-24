@@ -987,6 +987,14 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # only argument is an enum. Unmapped, both would fail closed to REFUSED.
     "operator_help_signals": ActionClass.READ,
     "operator_help_note": ActionClass.INTERNAL_WRITE,
+    # The self-improving guide (ss-console#3423 increment 3). Both are
+    # INTERNAL_WRITE: they reorder SMD-authored tip ids in the seat's own
+    # help_state.db (an emphasis list plus a snapshot row per change) and reach
+    # no tenant surface, send nothing, and accept no free text (an action enum,
+    # a tip id checked against tips.yaml, a position). The handlers gate WHO:
+    # the scheduled operator-help review or an SMD admin's own email turn.
+    "operator_help_guide_update": ActionClass.INTERNAL_WRITE,
+    "operator_help_guide_undo": ActionClass.INTERNAL_WRITE,
     # Durable-job tools (hermes-smd-jobs, ss #1916 — these were unmapped, so the
     # fail-closed REFUSED default made durable jobs inert at runtime).
     # start_background_job launches a budgeted background agent turn with tools:

@@ -193,6 +193,9 @@ def guide_fields(
     fields: dict[str, Any] = {
         "guide": None,
         "tips": [],
+        # ss-console#3423 increment 3: the tip ids the review has emphasized,
+        # in order. The help answer leads with these tips' own words.
+        "emphasis": [],
         "answer_shape": [dict(p) for p in ANSWER_SHAPE],
         "answer_rules": list(ANSWER_RULES),
     }
@@ -206,7 +209,21 @@ def guide_fields(
         fields["tips"] = read_tips(roots)
     except Exception as exc:  # noqa: BLE001
         unreadable.append({"section": "help", "reason": f"{SKILL} tips unreadable ({exc})"})
+    fields["emphasis"] = _emphasis(fields["tips"], unreadable)
     return fields
+
+
+def _emphasis(tips: list[dict[str, str]], unreadable: list[dict[str, str]]) -> list[str]:
+    """The emphasized tip ids that are still authored, in order. Fail-open: a
+    state file that cannot be read is one ``unreadable`` entry and no emphasis."""
+    from . import help_review
+
+    state = help_review.read_emphasis()
+    if not state["read"]:
+        unreadable.append({"section": "help", "reason": "tip emphasis unreadable"})
+        return []
+    known = {t["id"] for t in tips}
+    return [t for t in state["emphasis"] if t in known]
 
 
 __all__ = [

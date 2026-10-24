@@ -23,13 +23,20 @@ the line is due and leaves it out, the person is not offered it again. A write
 that fails reports nothing due.
 
 WHAT IS STORED, AND WHAT IS NOT. A seat-local sqlite file
-(``/opt/data/smd/help_state.db``) with three tables:
+(``/opt/data/smd/help_state.db``) with these tables:
 
 * ``help_meta``: one random salt, generated on the first write and never
   leaving the file;
 * ``help_senders``: per person, when the first-email pointer was offered and
   when they were helped;
-* ``help_threads``: per (person, thread), when a struggle offer was made.
+* ``help_threads``: per (person, thread), when a struggle offer was made;
+* ``help_events`` (increment 3): one row per recorded kind (an offer, a
+  help, or a struggle the model noted), hash and time, so the help review
+  can count recurrences and distinct people;
+* ``help_snapshots`` (increment 3, written by ``help_review``): each change
+  to the tip emphasis, with the list before and after and the counts that
+  justified it. ``help_meta`` also holds the emphasis list and the last
+  review's counts.
 
 The person and the thread are stored only as sha256 hashes taken with that
 per-seat salt (the person's bare lower-cased address, the thread's provider
@@ -61,10 +68,10 @@ auto-submitted mail (an out-of-office, a vendor notice), nor anything from off
 the roster. When the turn's own message is not in the index, nothing is due:
 an auto-reply is not a person to point at anything.
 
-JOB STATE IS NOT READ. A held or failed job would be a stronger struggle signal,
-but the job ledgers live in the gate's audit file and behind the broker socket,
-neither readable from the agent's tool context without content. The struggle
-signal here is repetition only: at least :data:`REPEAT_ASK_PRIOR` earlier
+JOB STATE IS NOT READ HERE. The per-turn pointer reads no job state: the job
+ledgers live in the broker's audit file. Increment 3's weekly review reads them
+through the broker's narrow ``help_job_signals`` verb (``help_review``), counts
+only; the pointer's struggle signal stays repetition only: at least :data:`REPEAT_ASK_PRIOR` earlier
 emails from this person in this thread (so the current one is at least the
 fourth), and the output names that basis (``struggle_basis``). A routine
 back-and-forth (ask, "shorter please", "thanks") does not reach it.
@@ -120,17 +127,30 @@ STRUGGLE_LINE = (
 KIND_POINTER = "pointer_offered"
 KIND_STRUGGLE = "struggle_offer"
 KIND_HELPED = "help_given"
+#: The kinds of trouble the model may note against the turn's own sender
+#: (increment 3, the self-improving guide). Each is a tip's ``when`` in
+#: ``operator-help/references/tips.yaml`` (pinned by test), so a recurring one
+#: maps to an SMD-authored tip. ``repeat_ask`` and ``held_identity_check`` are
+#: NOT here: those are measured, never noted (``help_review``).
+NOTE_STRUGGLE_KINDS: tuple[str, ...] = (
+    "vague_request",
+    "wrong_matter",
+    "wants_specific_document",
+    "wants_changes",
+    "not_trained_yet",
+)
 #: The only kinds the note tool accepts.
-KINDS: tuple[str, ...] = (KIND_POINTER, KIND_STRUGGLE, KIND_HELPED)
+KINDS: tuple[str, ...] = (KIND_POINTER, KIND_STRUGGLE, KIND_HELPED, *NOTE_STRUGGLE_KINDS)
 #: The kinds :func:`sender_signals` records itself, at the moment it reports
 #: them due. The note tool accepts them as no-ops.
 KINDS_RECORDED_BY_SIGNALS: tuple[str, ...] = (KIND_POINTER, KIND_STRUGGLE)
 
 SCOPE_SENDER = "sender"
-#: Scopes the signals tool answers. Increment 3 adds "review" (seat-wide counts
-#: for the self-improving guide); it is a new branch in :func:`signals`, never a
-#: change to the sender scope's shape.
-SCOPES: tuple[str, ...] = (SCOPE_SENDER,)
+#: Seat-wide counts for the self-improving guide (increment 3, ``help_review``).
+#: A new branch in the signals tool, never a change to the sender scope's shape.
+SCOPE_REVIEW = "review"
+#: Scopes the signals tool answers.
+SCOPES: tuple[str, ...] = (SCOPE_SENDER, SCOPE_REVIEW)
 
 _SCHEMA = (
     "CREATE TABLE IF NOT EXISTS help_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
@@ -144,6 +164,21 @@ _SCHEMA = (
     " thread_hash TEXT NOT NULL,"
     " offered_at REAL NOT NULL,"
     " PRIMARY KEY (sender_hash, thread_hash))",
+    # Increment 3: one row per recorded kind, so the review can count how often
+    # each recurs and from how many people. Hash and kind only.
+    "CREATE TABLE IF NOT EXISTS help_events ("
+    " ts REAL NOT NULL, kind TEXT NOT NULL, sender_hash TEXT NOT NULL)",
+    # Increment 3: every emphasis change, with the state before it, so an
+    # SMD "undo" can restore it. Tip ids, counts and times only.
+    "CREATE TABLE IF NOT EXISTS help_snapshots ("
+    " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+    " ts REAL NOT NULL,"
+    " action TEXT NOT NULL,"
+    " tip_id TEXT NOT NULL,"
+    " prior_json TEXT NOT NULL,"
+    " after_json TEXT NOT NULL,"
+    " reason_json TEXT NOT NULL,"
+    " undone_at REAL)",
 )
 
 _SALT_KEY = "salt"
@@ -205,6 +240,8 @@ def _retain(conn: sqlite3.Connection, now: float) -> None:
     cutoff = now - RETENTION_DAYS * 86400.0
     conn.execute("DELETE FROM help_threads WHERE offered_at < ?", (cutoff,))
     conn.execute("DELETE FROM help_senders WHERE updated_at < ?", (cutoff,))
+    conn.execute("DELETE FROM help_events WHERE ts < ?", (cutoff,))
+    conn.execute("DELETE FROM help_snapshots WHERE ts < ?", (cutoff,))
 
 
 def _state(conn: sqlite3.Connection, skey: str, tkey: str | None, now: float) -> dict:
@@ -229,6 +266,11 @@ def _state(conn: sqlite3.Connection, skey: str, tkey: str | None, now: float) ->
 
 
 def _write(conn: sqlite3.Connection, kind: str, skey: str, tkey: str | None, now: float) -> None:
+    conn.execute(
+        "INSERT INTO help_events (ts, kind, sender_hash) VALUES (?, ?, ?)", (now, kind, skey)
+    )
+    if kind in NOTE_STRUGGLE_KINDS:
+        return
     conn.execute(
         "INSERT INTO help_senders (sender_hash, updated_at) VALUES (?, ?) "
         "ON CONFLICT(sender_hash) DO UPDATE SET updated_at = excluded.updated_at",
@@ -431,6 +473,7 @@ __all__ = [
     "DEFAULT_DB_PATH",
     "KINDS",
     "KINDS_RECORDED_BY_SIGNALS",
+    "NOTE_STRUGGLE_KINDS",
     "KIND_HELPED",
     "KIND_POINTER",
     "KIND_STRUGGLE",
@@ -439,6 +482,7 @@ __all__ = [
     "REPEAT_ASK_PRIOR",
     "RETENTION_DAYS",
     "SCOPES",
+    "SCOPE_REVIEW",
     "SCOPE_SENDER",
     "STOP_AFTER_REQUESTS",
     "STRUGGLE_BASIS",

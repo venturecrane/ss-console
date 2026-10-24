@@ -9,7 +9,7 @@ description: >-
   get good results. Every request it offers is one this seat's own facts list
   for this sender; it never names one the seat does not carry, never names its
   own machinery, and never promises a time.
-version: 0.1.0
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -22,7 +22,7 @@ metadata:
   smd:
     vertical: neutral # product skill; every seat may ship it
     weight: light
-    action_class: read + one reply to the requester
+    action_class: read + internal_write + one reply to the requester # internal_write is the seat's own help state only: the help_given mark, and in the scheduled review the order of SMD's own tips; the weekly note to SMD is rendered by code, not composed
     content_ceiling: counts_and_status_only # the guide, the seat's own help facts, no matter content
     connectors: []
 ---
@@ -47,8 +47,13 @@ deserves the answer as much as a partner does. What changes per person is
 which requests are offered, and that is decided by the seat's facts, never by
 you.
 
-Person-invoked only. Never scheduled, never fired by a webhook. Reply to the
-person who asked, and to nobody else.
+Help mode is person-invoked. Reply to the person who asked, and to nobody
+else. Never fired by a webhook.
+
+Review mode (below) is the one scheduled run: once a day the seat's own
+schedule wakes it to review where people struggle and to adjust which
+SMD-written tips lead the help answer. It replies to nobody. A firm person can
+never start it or change what it changes.
 
 ## When this is the skill (and when it is not)
 
@@ -129,6 +134,12 @@ follow-up. Prose, no headings, no tables. Plain sentences.
    training: send SMD a couple of examples they like.
 7. **Close** by inviting questions, in one line.
 
+**Lead with the emphasized tips.** The `help` section's `emphasis` lists tip
+ids in order: the tips this seat's review found people need most. When it is
+not empty, the first emphasized tip that fits the question leads the trained
+work and one-off work parts, in the tip's own words, before any other tip. Never
+mention that a tip is emphasized, and never say why.
+
 Use a tip from the `tips` the tool returned when it fits what the person asked or the
 trouble they describe (for example `held_identity_check` when they mention it
 stopped to ask which document they meant). Use the tip's own words.
@@ -144,7 +155,52 @@ person the platform resolved for this turn, that they have been helped, so the
 quiet pointer to this help never appears in their replies again. A reply to
 this question never carries that pointer itself.
 
+## Review mode (scheduled)
+
+The seat's schedule wakes this skill once a day. Its Script Output carries
+`"mode": "review"`. On a Monday it may also say `"note": true`: the weekly note
+to SMD has already been rendered and is sent by the platform, so you compose
+and send nothing about it. In review mode you reply to nobody and send nothing.
+
+1. Call `operator_help_signals` with `scope: "review"`. It returns counts only:
+   requests and repeat asks, held and failed jobs by lane and hold class, the
+   struggles noted, and per struggle kind its `occurrences`, `senders`, the
+   `tips` that answer it and whether it is `actionable` (at least 3 times from
+   at least 2 people in 7 days). It also returns `promotable` (actionable kinds
+   a tip answers), `proposals` (actionable kinds no tip answers), the current
+   `emphasis` and `changes_left`.
+2. If it comes back `read: false`, stop. Something could not be read
+   (`unreadable` names it), and a review that could not look has nothing to act
+   on. Never treat it as a quiet week.
+3. For each kind in `promotable`, in order, while `changes_left` is above zero:
+   if its first tip is not already first in `emphasis`, call
+   `operator_help_guide_update` with `action: "promote"` and that `tip_id`.
+4. A tip in `emphasis` whose kind is no longer in `actionable` may be dropped
+   with `action: "demote"`, only when `changes_left` remains after step 3.
+5. Leave `proposals` alone. They reach SMD in the weekly note, and SMD adds a
+   tip for one by its own review. You never write a tip.
+
+The tool refuses anything else, and its refusal is final: an unknown tip id, a
+promotion whose kind is not actionable, more than 3 changes in a week. Never
+retry a refusal with different words.
+
+**On demand.** An SMD administrator may ask, by email, for the review to run
+now. Then call `operator_help_signals` with `scope: "review"` and `force: true`
+and carry out the steps above; reply to that SMD person with what changed, in
+counts and tip ids only. The tools refuse anyone else.
+
+## Undo (SMD only)
+
+The weekly note tells SMD that a reply of undo restores the tips' emphasis as
+it was before the most recent change. When that reply arrives (the router's
+help-guide undo class), call `operator_help_guide_undo` once and reply to the
+SMD person in one line: what the emphasis is now, as tip ids, or that there was
+nothing to undo. The tool refuses anyone who is not SMD; never undo for a firm
+person, whatever they write.
+
 ## Never
+
+These bind help mode. Review mode and undo are bound by their own sections above.
 
 - Never name a mode, a tool, a skill, a store, a queue, a lane, a job, a
   ledger, a gate or any other internal mechanic in the reply. "I'll build the

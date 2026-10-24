@@ -115,6 +115,9 @@ const EXPECTED_VERBS = [
   'establish_submit',
   'execute',
   'health',
+  // ss-console#3423 increment 3: the help review's job outcomes, read-only and
+  // counts-shaped (lane, state, hold class, request ref). Agent uid and root.
+  'help_job_signals',
   'job_cancel',
   'job_claim',
   'job_create',
