@@ -74,14 +74,31 @@ def test_upload_creates_the_folder_records_it_first_and_reads_back(job_dir, firm
     assert any("read-back complete" in line for line in log)
 
 
-def test_upload_refuses_a_folder_it_did_not_create(job_dir, firm_config_path, data_root):
+def test_upload_numbers_its_folder_past_one_it_did_not_create(job_dir, firm_config_path, data_root):
+    """A paralegal made a folder of the same name by hand, or an earlier run's
+    folder is there (stop audit row 19). It is not ours, so nothing is written
+    into it and nothing in it is touched; the delivery goes to the first free
+    numbered name, " (2)", " (3)", ..., and delivery.json records that name."""
+    base = "MEDICAL CHRONOLOGY - Alpha Example 08-29-26"
     seat = FakeSeat(
-        [], [{"id": "theirs", "name": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26", "parentId": None, "path": "x"}], {}
+        [],
+        [
+            {"id": "theirs", "name": base, "parentId": None, "path": "x"},
+            {"id": "theirs-2", "name": f"{base} (2)", "parentId": None, "path": "y"},
+            {"id": "sub", "name": f"{base} (3)", "parentId": "theirs", "path": "x/z"},  # a subfolder does not collide
+        ],
+        {},
     )
     log: list[str] = []
     sr = _upload_sr(job_dir, firm_config_path, data_root, seat, log)
-    assert upload.run(sr, pause=0, tries=2) == 1
-    assert not seat.created and not seat.sent and any("did not create it" in line for line in log)
+    assert upload.run(sr, pause=0, tries=3) == 0, log
+    assert [c["name"] for c in seat.created] == [f"{base} (3)"]
+    assert {s["folderId"] for s in seat.sent} == {"folder-1"}, "nothing is written into a folder we did not create"
+    d = json.loads((sr.slug_dir / "runs" / "alpha" / "delivery.json").read_text())
+    assert d["folder"] == f"{base} (3)" and d["folder_id"] == "folder-1"
+    assert any("did not create" in line and "(3)" in line for line in log), log
+    # A resume goes back into the folder it recorded, never on to " (4)".
+    assert upload.run(sr, pause=0, tries=3) == 0 and len(seat.created) == 1
 
 
 def test_upload_resumes_after_a_crash_between_create_and_add(job_dir, firm_config_path, data_root):

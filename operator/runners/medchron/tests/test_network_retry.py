@@ -250,6 +250,80 @@ def test_a_failure_that_is_not_the_network_is_failed_at_once(tmp_path) -> None:
     assert d.tick() == "failed" and broker.records[-1][1] == "failed"
 
 
+# ---- stop audit row 20: a slow read-back re-runs the upload before it parks ----------
+SHORT_REASON = (
+    "upload: the folder read back short after the retries; the files may still be materializing, nothing was deleted"
+)
+
+
+def _upload_runner(short_runs: int, *, stage: str = "upload", reason: str = SHORT_REASON) -> str:
+    """A fake runner whose upload reads back short for its first `short_runs`
+    runs (Smokeball indexing slowly, the 2026-09-24 shape), then delivers."""
+    held = json.dumps(
+        [
+            {
+                "unit": "alpha",
+                "outcome": "held",
+                "stage": stage,
+                "dollars": 31.0,
+                "pages": 300,
+                "documents": 40,
+                "reason": reason,
+            }
+        ]
+    )
+    return _runner(0).replace(
+        "if n <= 0:",
+        f"if n <= {short_runs}:\n    print({held!r})\n    sys.exit(0)\nif False:",
+    )
+
+
+def test_a_short_upload_read_back_runs_the_upload_again_after_a_delay(tmp_path) -> None:
+    from medchron import upload_wait
+
+    d, broker = _daemon(tmp_path, _upload_runner(2))
+    _submit(d, broker, "01A")
+    assert d.tick() == "requeued"
+    st = d._daemon_state("01A")
+    assert st["state"] == "running" and st["upload_requeues"] == 1
+    assert "held" not in [s for _, s, _ in broker.records], "a slow index is not parked as a hold"
+    assert broker.records[-1][1] == "running" and "read back short" in broker.records[-1][2]["reason"]
+    # Not before its delay.
+    assert d.tick() is None and (d.job_dir("01A") / "ran").read_text() == "1"
+    d._now["t"] += upload_wait.UPLOAD_REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
+    assert d.tick() == "requeued" and d._daemon_state("01A")["upload_requeues"] == 2
+    d._now["t"] += upload_wait.UPLOAD_REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
+    assert d.tick() == "delivered"
+    assert "held" not in [s for _, s, _ in broker.records]
+
+
+def test_a_read_back_still_short_after_the_retries_parks_the_hold(tmp_path) -> None:
+    from medchron import upload_wait
+
+    d, broker = _daemon(tmp_path, _upload_runner(99))
+    _submit(d, broker, "01A")
+    for _ in range(upload_wait.MAX_UPLOAD_REQUEUES):
+        assert d.tick() == "requeued"
+        d._now["t"] += upload_wait.UPLOAD_REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
+    assert d.tick() == "held"
+    job, state, fields = broker.records[-1]
+    assert state == "held" and "re-ran the upload" in fields["reason"]
+    d._now["t"] += 10 * upload_wait.UPLOAD_REQUEUE_DELAY_S  # type: ignore[attr-defined]
+    ran = (d.job_dir("01A") / "ran").read_text()
+    assert d.tick() is None and (d.job_dir("01A") / "ran").read_text() == ran, "parked: bounded"
+    assert int(ran) == upload_wait.MAX_UPLOAD_REQUEUES + 1
+
+
+def test_other_holds_are_not_re_run(tmp_path) -> None:
+    """Only the read-back-short hold is a wait; a review hold, or the upload's
+    refusal over bytes that changed, is not re-run by the daemon."""
+    d, broker = _daemon(
+        tmp_path, _upload_runner(9, stage="review", reason="review_held: the pre-delivery review found a must-fix")
+    )
+    _submit(d, broker, "01A")
+    assert d.tick() == "held" and broker.records[-1][1] == "held"
+
+
 def test_a_mixed_attempt_is_a_real_failure() -> None:
     from medchron import requeue
 

@@ -738,3 +738,106 @@ def test_billing_docx_refuses_a_suspect_amount(job_dir: Path, firm: Path, data_r
         json.dumps({"rows": [], "suspect_amounts": [["1,000,000", 1000000.0]]})
     )
     assert billing_docx.run(sr) == 1
+
+
+# ---- stop audit rows 17 and 18: an unread page and a large amount are disclosed, never a stop ----
+def _ledger_with(sr: StageRun, amount: str, page_text: str) -> None:
+    """A ledger whose page 1 prints `page_text` (empty = a scan, no text
+    layer) and whose transcription read `amount` as the account total."""
+    raw = sr.slug_dir / "raw"
+    raw.mkdir(parents=True, exist_ok=True)
+    p = raw / "Example Clinic ledger.pdf"
+    p.write_bytes(make_pdf([page_text]))
+    (sr.slug_dir / "billing_docs.json").write_text(
+        json.dumps({"docs": [{"id": "b1", "name": "Example Clinic ledger", "path": str(p)}]})
+    )
+    rec = {
+        "file": "Example Clinic ledger",
+        "pages": 1,
+        "failures": [],
+        "chunks": [
+            {
+                "doc_type": "LEDGER",
+                "provider": "Example Clinic",
+                "patient": "Alpha Example",
+                "date_first": "01/02/2026",
+                "date_last": "01/09/2026",
+                "printed_totals": [{"label": "Total Charges", "amount": amount, "page": 1}],
+            }
+        ],
+    }
+    (sr.slug_dir / "billing_extract.jsonl").write_text(json.dumps(rec) + "\n")
+
+
+def _worksheet_text(sr: StageRun) -> str:
+    from docx import Document
+
+    out = list((sr.slug_dir / "out" / "alpha").glob("* - Medical Billing Worksheet *.docx"))
+    assert len(out) == 1
+    d = Document(str(out[0]))
+    cells = [c.text for t in d.tables for r in t.rows for c in r.cells]
+    return "\n".join([p.text for p in d.paragraphs] + cells)
+
+
+def test_a_large_amount_the_page_prints_with_its_decimal_is_accepted(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """A spinal-fusion ledger can legitimately total over the $500k suspect
+    threshold. When the page's own text prints that figure with its decimal
+    point, it is not a lost decimal: the worksheet renders (row 18)."""
+    sr = _sr(job_dir, firm, data_root)
+    _doc(sr, DOC_3)
+    _ledger_with(sr, "$612,345.67", "Example Clinic\nTotal Charges   $612,345.67\n")
+    assert billing_chart.run(sr) == 0
+    chart = json.loads((sr.slug_dir / "billing_chart.json").read_text())
+    assert chart["suspect_amounts"] == [] and chart["rows"][0]["total"] == 612345.67
+    assert billing_docx.run(sr) == 0
+    assert json.loads((sr.slug_dir / "billing_dropped_rows.json").read_text()) == []
+    assert "$612,345.67" in _worksheet_text(sr)
+
+
+@pytest.mark.parametrize(
+    "page_text",
+    ["Example Clinic\nTotal Charges   $6,123.45\n", ""],
+    ids=["page-prints-another-figure", "scan-no-text-layer"],
+)
+def test_a_large_amount_the_page_does_not_print_is_dropped_and_disclosed(
+    job_dir: Path, firm: Path, data_root: Path, page_text: str
+) -> None:
+    """A transcription that lost its decimal ("612345" for $6,123.45), or a
+    figure on a scan with nothing to check it against, is not put in the
+    total and is not guessed at either: the row is left out, recorded in
+    billing_dropped_rows.json, and named on the worksheet (row 18)."""
+    sr = _sr(job_dir, firm, data_root)
+    _doc(sr, DOC_3)
+    _ledger_with(sr, "612345", page_text)
+    assert billing_chart.run(sr) == 0
+    chart = json.loads((sr.slug_dir / "billing_chart.json").read_text())
+    assert chart["suspect_amounts"] == [] and chart["rows"][0]["total"] is None
+    assert chart["grand_total"] == 0.0, "no amount is invented for the dropped row"
+    dropped = json.loads((sr.slug_dir / "billing_dropped_rows.json").read_text())
+    assert [(r["file"], r["page"], r["amount_text"]) for r in dropped] == [("Example Clinic ledger", 1, "612345")]
+    assert set(dropped[0]) == {"file", "page", "amount_text", "reason"} and dropped[0]["reason"]
+    assert billing_docx.run(sr) == 0
+    text = _worksheet_text(sr)
+    assert "Amounts Left Out" in text and "Example Clinic ledger" in text and "p. 1" in text
+    assert "612345" not in text and "612,345" not in text, "an unconfirmed figure is never shown as a figure"
+
+
+def test_the_worksheet_names_each_unread_billing_page_as_not_totalled(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """Row 17's worksheet half: a FAILED_PAGE is named by file and page, and
+    the worksheet says plainly its amount is not in the total."""
+    sr = _sr(job_dir, firm, data_root)
+    _doc(sr, DOC_3)
+    _ledger_with(sr, "$1,800.00", "Total Charges $1,800.00")
+    rec = json.loads((sr.slug_dir / "billing_extract.jsonl").read_text())
+    rec["chunks"].append({"FAILED_PAGE": 2})
+    rec["failures"] = [2]
+    (sr.slug_dir / "billing_extract.jsonl").write_text(json.dumps(rec) + "\n")
+    assert billing_chart.run(sr) == 0
+    assert billing_docx.run(sr) == 0
+    text = _worksheet_text(sr)
+    assert "Pages Not Read" in text and "not totalled" in text
+    assert "Example Clinic ledger" in text and "p. 2" in text

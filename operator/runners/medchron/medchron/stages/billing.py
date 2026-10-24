@@ -12,8 +12,17 @@ done in Python afterwards, so every number can be traced to a page and every
 total recomputed. Three pages per call (an eight-page chunk of itemised
 charges generates output until it hits max_tokens); a chunk that will not
 parse is halved and retried, a single dense page gets a larger budget and
-then a totals-only read, and a page that still fails is a hard gap: the run
-exits 1 rather than report a complete total over missing money.
+then a totals-only read, and a page that still fails is a named gap.
+
+A page that fails every read is a legitimate record (a handwritten ledger, a
+fax too faint to read), not a pipeline defect, so it does not stop the job
+(stop audit row 17, 2026-10-24). It is written to `billing_gaps.json` as
+{file, page, reason}, which the Limitations section names, and the worksheet
+lists it under "Pages Not Read" as not totalled. No amount is ever invented
+for it: its chunk stays a FAILED_PAGE marker, and every total built from this
+extraction is labelled a floor while a gap exists. On a joint matter each
+unit gets its own copy (`billing_gaps-<unit>.json`): a page nobody could read
+cannot be attributed to either plaintiff, so each unit's document names it.
 """
 
 from __future__ import annotations
@@ -289,8 +298,38 @@ def run(sr: StageRun) -> int:
                 sr.log(f"[{i}/{len(todo)}] {n:>3}pp  {t['name'][:56]}")
                 finish(i, t, reader.read_doc(t["name"], imgs, n, first=first[i]))
     sr.log(f"{tin:,} input / {tout:,} output tokens")
-    if hard:
-        sr.log(f"!! {hard} page(s) could not be transcribed; the totals from this run are INCOMPLETE")
-        return 1
+    gaps = write_gaps(sr, read_jsonl(outp))
+    if gaps:
+        sr.log(
+            f"!! {len(gaps)} billing page(s) could not be transcribed by any read; each is named in "
+            f"billing_gaps.json and on the worksheet as not totalled, and no amount is taken from it"
+        )
+        return 0
     sr.log("every page transcribed")
     return 0
+
+
+GAP_REASON = (
+    "the page could not be read: a three-page read, a single-page read with a larger budget, "
+    "and a totals-only read all returned nothing usable"
+)
+
+
+def write_gaps(sr: StageRun, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Every page of every document on file that failed every read, as
+    {file, page, reason}. Built from the whole extraction file, so a rerun
+    that skipped documents done earlier still names their gaps."""
+    gaps: list[dict[str, Any]] = []
+    seen: set[tuple[str, int]] = set()
+    for r in records:
+        for p in r.get("failures") or []:
+            key = (str(r.get("file")), int(p))
+            if key not in seen:
+                seen.add(key)
+                gaps.append({"file": key[0], "page": key[1], "reason": GAP_REASON})
+    body = json.dumps(gaps, indent=1)
+    (sr.slug_dir / "billing_gaps.json").write_text(body, encoding="utf-8")
+    if sr.job.joint:
+        for u in sr.job.units:
+            (sr.slug_dir / f"billing_gaps-{u.unit}.json").write_text(body, encoding="utf-8")
+    return gaps

@@ -10,10 +10,15 @@ dropped. Per provider the chart prefers the provider's own account-wide
 printed total (a LEDGER's) over a sum of claim forms, which double-counts.
 When no ledger exists the total is NOT DERIVABLE and says so: inventing one
 is exactly the fabricated figure this pipeline exists to prevent. Money is
-parsed, never computed by the model; an amount at or above
-`billing.suspect_amount_cents` is a lost decimal until a person looks, and
-the worksheet refuses to render over one. On a joint matter the patient
-filter quarantines the other plaintiff's bills.
+parsed, never computed by the model. An amount at or above
+`billing.suspect_amount_cents` may be a lost decimal, and it is settled by a
+rule rather than by a person (stop audit row 18, 2026-10-24): when the cited
+page's own text prints that figure WITH its decimal point it is accepted (a
+spinal fusion can legitimately bill past the threshold); otherwise the row is
+left out of every total and recorded in `billing_dropped_rows.json` as
+{file, page, amount_text, reason}, which the worksheet and the Limitations
+section name. No figure is ever guessed in its place. On a joint matter the
+patient filter quarantines the other plaintiff's bills.
 """
 
 from __future__ import annotations
@@ -65,6 +70,55 @@ def money(s: Any, suspect: list[tuple[str, float]], suspect_at: float) -> float 
     if v >= suspect_at:
         suspect.append((str(s), v))
     return v
+
+
+PRINTED_DECIMAL = re.compile(r"(?<![\d,.])(\d{1,3}(?:,\d{3})+|\d+)\.(\d{2})(?!\d)")
+
+
+class PageText:
+    """The text layer of billing pages, read once per document, for the one
+    question a suspect amount raises: does the page print this figure with
+    its decimal point?"""
+
+    def __init__(self, slug_dir: Any) -> None:
+        spec = read_json(slug_dir / "billing_docs.json", []) or []
+        docs = spec.get("docs") if isinstance(spec, dict) else spec
+        self.path = {str(t.get("name")): str(t.get("path")) for t in docs or [] if isinstance(t, dict)}
+        self._pages: dict[str, list[str]] = {}
+
+    def text(self, name: str, page: int) -> str:
+        if name not in self._pages:
+            pages: list[str] = []
+            if name in self.path:
+                import pymupdf
+
+                try:
+                    with pymupdf.open(self.path[name]) as doc:
+                        pages = [pg.get_text() for pg in doc]
+                except (OSError, RuntimeError, ValueError):
+                    pages = []
+            self._pages[name] = pages
+        pages = self._pages[name]
+        return pages[page - 1] if 1 <= page <= len(pages) else ""
+
+    def prints(self, name: str, page: int, value: float) -> tuple[bool, str]:
+        """(confirmed, why not)."""
+        if page < 1:
+            return False, "the transcription named no page to confirm the figure against"
+        txt = self.text(name, page)
+        if not txt.strip():
+            return False, "the page has no text layer to confirm the figure against"
+        for m in PRINTED_DECIMAL.finditer(txt):
+            if round(float(m.group(1).replace(",", "") + "." + m.group(2)), 2) == round(value, 2):
+                return True, ""
+        return False, "the page's text does not print that figure with its decimal point (likely a lost decimal)"
+
+
+def _page_no(v: Any) -> int:
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return 0
 
 
 def dt(s: Any) -> str | None:
@@ -145,6 +199,9 @@ def run(sr: StageRun) -> int:
     suspect_at = int(sr.cfg.get("billing", "suspect_amount_cents") or 50_000_000) / 100.0
     suspect: list[tuple[str, float]] = []
     matcher = Matcher(sr.cfg, d)
+    pages = PageText(d)
+    dropped: list[dict[str, Any]] = []
+    dropped_for: dict[str, int] = {}
     spine = matcher.collapse(matcher.timeline((d / "runs" / unit / "final-chronology.md").read_text(encoding="utf-8")))
     bills: dict[str, dict[str, Any]] = defaultdict(
         lambda: {"totals": [], "docs": set(), "bdates": [], "adjustments": []}
@@ -191,9 +248,27 @@ def run(sr: StageRun) -> int:
             e = bills[tgt] if tgt else unmatched[str(c.get("provider"))[:44]]
             e["docs"].add(r["file"])
             for t in c.get("printed_totals") or []:
-                a = money(t.get("amount"), suspect, suspect_at)
+                flagged: list[tuple[str, float]] = []
+                a = money(t.get("amount"), flagged, suspect_at)
                 if a is None:
                     continue
+                if flagged:
+                    page = _page_no(t.get("page"))
+                    ok, why = pages.prints(str(r["file"]), page, a)
+                    if not ok:
+                        dropped.append(
+                            {
+                                "file": str(r["file"]),
+                                "page": page,
+                                "amount_text": str(t.get("amount")),
+                                "reason": f"at or above the ${suspect_at:,.2f} check, and {why}; "
+                                f"left out of every total",
+                            }
+                        )
+                        if tgt:
+                            dropped_for[tgt] = dropped_for.get(tgt, 0) + 1
+                        continue
+                    sr.log(f"  {t.get('amount')} on {str(r['file'])[:40]} p.{page}: printed on the page, accepted")
                 e["totals"].append((a, t.get("label"), r["file"], t.get("page"), kind))
                 lab = str(t.get("label") or "")
                 if tgt and direct and ADJ_LABEL.search(lab) and matcher.provider(lab, spine) in (None, tgt):
@@ -222,7 +297,11 @@ def run(sr: StageRun) -> int:
             claims = {(fl, pg, a) for a, lab, fl, pg, kd in e["totals"] if a > 0}
             ours, obasis = None, f"NOT DERIVABLE - no ledger; {len(claims)} claim form(s) on file, overlapping"
         else:
-            ours, obasis = None, "no bill located"
+            ours, obasis = (
+                (None, "NOT DERIVABLE - the amount read could not be confirmed on the page; see Amounts Left Out")
+                if dropped_for.get(row["provider"])
+                else (None, "no bill located")
+            )
         amt, basis = (lien[row["provider"]], "Firm lien report") if row["provider"] in lien else (ours, obasis)
         grand += amt or 0.0
         alternates = [
@@ -290,11 +369,18 @@ def run(sr: StageRun) -> int:
                 "unit": unit,
                 "patient_filter": patient,
                 "suspect_amounts": [[str(a), b] for a, b in suspect],
+                "dropped_rows": dropped,
             },
             indent=1,
         ),
         encoding="utf-8",
     )
+    (d / f"billing_dropped_rows{sfx}.json").write_text(json.dumps(dropped, indent=1), encoding="utf-8")
+    if dropped:
+        sr.log(
+            f"!! {len(dropped)} amount(s) at or above the suspect threshold could not be confirmed on the page; "
+            f"left out of every total and named in billing_dropped_rows{sfx}.json and on the worksheet"
+        )
     if suspect:
         sr.log(f"!! {len(suspect)} amount(s) at or above the suspect threshold; likely a LOST DECIMAL in transcription")
     return 0

@@ -7,7 +7,13 @@ not derivable says so instead of carrying a plausible number; the grand
 total is labelled SUBTOTAL, with a warning, whenever any row is missing. A
 worksheet is where a misattributed figure does damage, because it reads as
 the specials number: it refuses (exit 1) a chart built without the patient
-filter on a joint matter, or one carrying a suspect (lost-decimal) amount.
+filter on a joint matter, or one still carrying a suspect (lost-decimal)
+amount. The second is now an integrity falsifier only: billing_chart settles
+every suspect amount by rule (accepted when the page prints it with its
+decimal, otherwise left out and named), so a chart that still carries one
+was built by a defect (stop audit row 18, 2026-10-24). The amounts left out
+and the pages no read could transcribe are each named here by document and
+page, as not in the total.
 """
 
 from __future__ import annotations
@@ -123,8 +129,8 @@ def run(sr: StageRun) -> int:
         para(
             doc,
             f"INCOMPLETE: {len(gaps)} of {len(rows)} providers have no total that can be supported from the documents "
-            f'on file. The subtotal below is therefore NOT this case\'s medical specials figure. See "What Is Needed" '
-            f"at the end.",
+            f"on file. The subtotal below is therefore NOT this case's medical specials figure. The sections at the "
+            f"end say what is missing for each.",
         )
     doc.add_paragraph("Billing by Provider", style="Heading 1")
     body: list[list[str]] = []
@@ -208,7 +214,24 @@ def run(sr: StageRun) -> int:
                 seen3.add(k)
                 qrows.append([str(wh)[:26], str(pv)[:28], fl[:36]])
         table(doc, ["Patient Named", "Provider", "Source Document"], qrows[:16], [1.8, 2.2, 3.2])
-    if gaps:
+    left_out = [r for r in data.get("dropped_rows") or [] if isinstance(r, dict)]
+    if left_out:
+        doc.add_paragraph("Amounts Left Out", style="Heading 1")
+        para(
+            doc,
+            "An amount was read from each page below but could not be confirmed against the page itself (the figure "
+            "is large enough that a missing decimal point would change it, and the page does not show it with its "
+            "decimal point). Each was left out of every figure above rather than estimated, and an unconfirmed "
+            "figure is not repeated here.",
+        )
+        table(
+            doc,
+            ["Source Document", "Page"],
+            [[str(r.get("file"))[:56], f"p. {r.get('page')}"] for r in left_out[:24]],
+            [6.2, 1.0],
+        )
+    needed = [r for r in gaps if "Amounts Left Out" not in str(r.get("basis"))]
+    if needed:
         doc.add_paragraph("What Is Needed", style="Heading 1")
         para(
             doc,
@@ -217,13 +240,21 @@ def run(sr: StageRun) -> int:
             "and inside compiled record sets, so a sum would count them twice. A current ledger from each provider, "
             "or a Lienholder and Balances report for this matter, would complete the chart.",
         )
-        table(doc, ["Provider", "What is on file"], [[r["provider"], r["basis"]] for r in gaps], [2.6, 4.6])
+        table(doc, ["Provider", "What is on file"], [[r["provider"], r["basis"]] for r in needed], [2.6, 4.6])
     if data.get("failed_pages"):
         doc.add_paragraph("Pages Not Read", style="Heading 1")
         para(
             doc,
-            f"{len(data['failed_pages'])} page(s) could not be read. Figures above are a floor until they are resolved.",
+            f"{len(data['failed_pages'])} billing page(s) could not be read. No amount from them is in any figure "
+            f"above (not totalled), so the figures above are a floor until these pages are read.",
         )
+        seen4: set = set()
+        frows = []
+        for fl, pg in data["failed_pages"]:
+            if (fl, pg) not in seen4:
+                seen4.add((fl, pg))
+                frows.append([str(fl)[:56], f"p. {pg}"])
+        table(doc, ["Source Document", "Page"], frows[:40], [6.2, 1.0])
     stamp = sr.date_stamp or date.today().strftime("%m-%d-%y")
     glob = str(sr.cfg.get("delivery", "worksheet_glob") or "* - Medical Billing Worksheet *.docx")
     out = d / "out" / unit / glob.replace("*", who, 1).replace("*", stamp, 1)

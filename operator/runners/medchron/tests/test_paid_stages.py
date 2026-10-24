@@ -231,16 +231,61 @@ def test_billing_transcribes_ranges_and_splits_a_range_that_will_not_parse(
     assert billing_stage.run(sr) == 0 and client.calls == []
 
 
-def test_billing_exits_1_over_a_page_that_never_parses(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+def test_a_billing_page_that_never_parses_is_a_named_gap_not_a_stop(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """A handwritten ledger page matches the billing pattern and fails every
+    read. That is a legitimate record, not a pipeline defect: the job no longer
+    fails on it (stop audit row 17). The page goes to billing_gaps.json, which
+    the Limitations section names, the stage exits 0, and no amount is
+    invented for it: its chunk stays a FAILED_PAGE marker."""
     client = Scripted(lambda p: _msg("garbage"))
-    sr = _sr(job_dir, firm_config_path, data_root, client)
-    _billing_docs(sr, {"dense lien": make_pdf([""])})
-    assert billing_stage.run(sr) == 1
-    rec = json.loads((sr.slug_dir / "billing_extract.jsonl").read_text().splitlines()[-1])
-    assert rec["failures"] == [1] and rec["chunks"] == [{"FAILED_PAGE": 1}]
-    caps = [p["max_tokens"] for p in client.calls]
+    log: list[str] = []
+    sr = _sr(job_dir, firm_config_path, data_root, client, log=log)
+    _billing_docs(sr, {"dense lien": make_pdf([""]), "handwritten ledger": make_pdf([""])})
+    assert billing_stage.run(sr) == 0
+    recs = [json.loads(x) for x in (sr.slug_dir / "billing_extract.jsonl").read_text().splitlines()]
+    rec = next(r for r in recs if r["file"] == "dense lien")
+    assert rec["failures"] == [1] and rec["chunks"] == [{"FAILED_PAGE": 1}], "no amount is invented for the page"
+    caps = [p["max_tokens"] for p in client.calls[:3]]
     assert caps == [8000, 32000, 8000]  # first, the large budget, then totals-only
-    assert "line_items_omitted" in client.calls[-1]["messages"][0]["content"][0]["text"]
+    assert "line_items_omitted" in client.calls[2]["messages"][0]["content"][0]["text"]
+    gaps = json.loads((sr.slug_dir / "billing_gaps.json").read_text())
+    assert sorted((g["file"], g["page"]) for g in gaps) == [("dense lien", 1), ("handwritten ledger", 1)]
+    assert all(isinstance(g["reason"], str) and g["reason"] for g in gaps)
+    assert set(gaps[0]) == {"file", "page", "reason"}
+    assert any("not totalled" in line for line in log), log
+    # A rerun skips the done documents and still reports every gap on file.
+    client.calls.clear()
+    assert billing_stage.run(sr) == 0 and client.calls == []
+    assert len(json.loads((sr.slug_dir / "billing_gaps.json").read_text())) == 2
+
+
+def test_a_joint_matter_names_the_unread_billing_page_for_every_unit(
+    tmp_path: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """billing_extract runs once for the job; a page nobody could read cannot
+    be attributed to either plaintiff, so each unit's file names it."""
+    from medchron_testkit import job_yaml
+
+    jd = tmp_path / "joint-job"
+    jd.mkdir()
+    (jd / "job.yaml").write_text(job_yaml(data_root, joint=True), encoding="utf-8")
+    sr = _sr(jd, firm_config_path, data_root, Scripted(lambda p: _msg("garbage")))
+    _billing_docs(sr, {"handwritten ledger": make_pdf([""])})
+    assert billing_stage.run(sr) == 0
+    whole = json.loads((sr.slug_dir / "billing_gaps.json").read_text())
+    assert [(g["file"], g["page"]) for g in whole] == [("handwritten ledger", 1)]
+    for unit in ("alpha", "beta"):
+        assert json.loads((sr.slug_dir / f"billing_gaps-{unit}.json").read_text()) == whole
+
+
+def test_a_clean_billing_run_writes_an_empty_gap_list(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+    client = Scripted(lambda p: _msg(json.dumps(BILL)))
+    sr = _sr(job_dir, firm_config_path, data_root, client)
+    _billing_docs(sr, {"Example Clinic bill": make_pdf([""])})
+    assert billing_stage.run(sr) == 0
+    assert json.loads((sr.slug_dir / "billing_gaps.json").read_text()) == []
 
 
 # ---- build_units --------------------------------------------------------------------
