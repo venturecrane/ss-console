@@ -163,9 +163,19 @@ def check_roles_listed(job: Any, originating: Iterable[bool], listed: int) -> No
 
 def _load_tags(path: Path | None) -> dict[str, Any]:
     if path is None or not path.is_file():
-        return {"read": [], "tags": {}, "listed": False}
+        return {"read": [], "tags": {}, "listed": False, "not_found": []}
     got = json.loads(path.read_text(encoding="utf-8"))
-    return {"read": list(got["read"]), "tags": dict(got["tags"]), "listed": bool(got["listed"])}
+    return {
+        "read": list(got["read"]),
+        "tags": dict(got["tags"]),
+        "listed": bool(got["listed"]),
+        "not_found": list(got.get("not_found") or []),
+    }
+
+
+def tags_not_found(path: Path) -> list[str]:
+    """The matter ids whose tag read answered 404 (gone since the list was read)."""
+    return list(_load_tags(path)["not_found"])
 
 
 def _save_tags(path: Path | None, kept: dict[str, Any]) -> None:
@@ -183,8 +193,10 @@ def staff_tags(job: Any, get: Callable[..., Any], matter_ids: Iterable[str], pat
     otherwise invisible); ``{}`` for any other scope, with no call made.
 
     What was read is kept at ``path``: a resumed job reads only the matters it
-    has not read yet. Holds ``staff_tags_unlisted`` when a matter's tags stay
-    unread after every retry, or when no matter read carries a tags list."""
+    has not read yet. A matter answering 404 is gone since the list was read,
+    so it is no one's open file: kept under ``not_found``, never a hold. Holds
+    ``staff_tags_unlisted`` when any other matter's tags stay unread after
+    every retry, or when no matter read carries a tags list."""
     if getattr(job, "people", None) is None:
         return {}
     ids = list(dict.fromkeys(str(m) for m in matter_ids))
@@ -192,16 +204,18 @@ def staff_tags(job: Any, get: Callable[..., Any], matter_ids: Iterable[str], pat
     todo = [m for m in ids if m not in set(kept["read"])]
     if todo:
         try:
-            got = arrivals.staff_tags(get, todo)
+            got, gone = arrivals.staff_tags(get, todo)
         except arrivals.StaffTagsError as exc:
             raise LitigationHold(f"staff_tags_unlisted: {exc}; a person's files would be under-counted") from exc
         kept["read"] = list(dict.fromkeys(kept["read"] + todo))
         kept["tags"].update({m: v for m, v in got.items() if v})
         kept["listed"] = kept["listed"] or any(v is not None for v in got.values())
+        kept["not_found"] = list(dict.fromkeys(kept["not_found"] + gone))
         _save_tags(path, kept)
-    if ids and not kept["listed"]:
+    readable = [m for m in ids if m not in set(kept["not_found"])]
+    if readable and not kept["listed"]:
         raise LitigationHold(
-            f"staff_tags_unlisted: none of the {len(ids)} matters read carries a tags list; "
+            f"staff_tags_unlisted: none of the {len(readable)} matters read carries a tags list; "
             "a person's files would be under-counted"
         )
     return {m: list(kept["tags"][m]) for m in ids if m in kept["tags"]}
@@ -233,5 +247,6 @@ __all__ = [
     "resolve",
     "role_labels",
     "staff_tags",
+    "tags_not_found",
     "with_staff_tags",
 ]

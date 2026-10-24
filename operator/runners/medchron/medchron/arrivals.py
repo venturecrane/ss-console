@@ -26,7 +26,6 @@ import json
 import os
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -133,10 +132,17 @@ def staff_roles(row: dict[str, Any]) -> dict[str, list[str]]:
 #: entry names a staff member (``{"id", "type", "staff": {"id", ...}}``) and a
 #: ``type: "Custom"`` entry is a coloured label, ignored. One person's files
 #: count every matter they are tagged on, so a people scope reads them.
+#:
+#: The reads are SEQUENTIAL, one at a time with a pause between, never a
+#: thread pool: the Smokeball client has no lock around its token refresh, and
+#: Smokeball can rotate the refresh token, so two threads refreshing at once
+#: could leave the durable token file holding an invalidated token and take
+#: the seat's Smokeball access down until the firm re-consents (ADR 0054).
+#: About 576 reads run in about 5 minutes this way.
 STAFF = "Staff"
-TAG_CONCURRENCY = 4
 TAG_ATTEMPTS = 4
 TAG_BACKOFF_SECONDS = 2.0
+TAG_PAUSE_SECONDS = 0.2
 
 
 class StaffTagsError(ArrivalsError):
@@ -180,36 +186,45 @@ def _matter(get: Callable[..., Any], mid: str, attempts: int, backoff: float, sl
     raise StaffTagsError(f"/matters/{mid}: no attempt was made")
 
 
+def _not_found(exc: BaseException) -> bool:
+    return (getattr(exc, "status", None) or getattr(exc, "status_code", None)) == 404
+
+
 def staff_tags(
     get: Callable[..., Any],
     matter_ids: Iterable[str],
-    concurrency: int = TAG_CONCURRENCY,
     attempts: int = TAG_ATTEMPTS,
     backoff: float | None = None,
+    pause: float | None = None,
     sleep: Callable[[float], Any] = time.sleep,
-) -> dict[str, list[str] | None]:
-    """``{matter_id: [tagged staff ids] | None}`` from ``GET /matters/{id}``,
-    ``concurrency`` at a time, each retried with backoff (``TAG_BACKOFF_SECONDS``
-    doubling) through 429s, 5xx and dropped connections. Any matter still
+) -> tuple[dict[str, list[str] | None], list[str]]:
+    """(``{matter_id: [tagged staff ids] | None}``, matter ids answering 404)
+    from ``GET /matters/{id}``, one at a time (see ``TAG_PAUSE_SECONDS``), each
+    retried with backoff (``TAG_BACKOFF_SECONDS`` doubling) through 429s, 5xx
+    and dropped connections. A 404 is a matter gone since the list was read,
+    so it is no one's open file: counted, not raised. Any other matter still
     unread raises ``StaffTagsError`` once every other matter is read: a failed
     read never reads as no tags."""
     backoff = TAG_BACKOFF_SECONDS if backoff is None else backoff
+    pause = TAG_PAUSE_SECONDS if pause is None else pause
     ids = list(dict.fromkeys(str(m) for m in matter_ids))
     out: dict[str, list[str] | None] = {}
+    gone: list[str] = []
     failed: list[str] = []
-
-    def one(mid: str) -> None:
+    for i, mid in enumerate(ids):
+        if i and pause:
+            sleep(pause)
         try:
             out[mid] = tag_staff_ids(_matter(get, mid, attempts, backoff, sleep))
         except Exception as exc:  # noqa: BLE001 - counted; raised once the others are read
-            failed.append(type(exc).__name__)
-
-    with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
-        list(pool.map(one, ids))
+            if _not_found(exc):
+                gone.append(mid)
+            else:
+                failed.append(type(exc).__name__)
     if failed:
         kinds = ", ".join(sorted(set(failed)))
         raise StaffTagsError(f"{len(failed)} of {len(ids)} matters' staff tags could not be read ({kinds})")
-    return out
+    return out, gone
 
 
 def originating_listed(row: dict[str, Any]) -> bool:

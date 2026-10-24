@@ -62,11 +62,29 @@ def test_a_429_then_a_200_is_retried_and_succeeds():
             raise ApiError(429)
         return {"id": M1, "tags": [staff_tag(STAFF_B)]}
 
-    assert arrivals.staff_tags(get, [M1], sleep=slept.append) == {M1: [STAFF_B]}
+    assert arrivals.staff_tags(get, [M1], sleep=slept.append) == ({M1: [STAFF_B]}, [])
     assert calls == [f"/matters/{M1}"] * 2 and slept == [arrivals.TAG_BACKOFF_SECONDS]
 
 
-def test_a_4xx_is_not_retried_and_a_persistent_failure_raises_after_the_others_are_read():
+def test_the_reads_are_sequential_with_a_pause_between_and_no_thread_pool():
+    """The Smokeball client has no lock around its token refresh: one read at a time."""
+    import threading
+
+    events, threads = [], set()
+
+    def get(path):
+        threads.add(threading.get_ident())
+        events.append(("get", path))
+        return {"tags": []}
+
+    arrivals.staff_tags(get, [M1, M2, "m3"], sleep=lambda s: events.append(("sleep", s)))
+    assert threads == {threading.get_ident()}
+    p = ("sleep", arrivals.TAG_PAUSE_SECONDS)
+    assert events == [("get", f"/matters/{M1}"), p, ("get", f"/matters/{M2}"), p, ("get", "/matters/m3")]
+    assert 0.15 <= arrivals.TAG_PAUSE_SECONDS <= 0.3
+
+
+def test_a_404_is_counted_not_raised_and_another_4xx_is_not_retried():
     calls = []
 
     def get(path):
@@ -75,12 +93,31 @@ def test_a_4xx_is_not_retried_and_a_persistent_failure_raises_after_the_others_a
             raise ApiError(503)
         if path.endswith(M2):
             raise ApiError(404)
-        return {"id": "m3", "tags": []}
+        if path.endswith("m3"):
+            raise ApiError(403)
+        return {"id": "m4", "tags": []}
 
-    with pytest.raises(arrivals.StaffTagsError, match=r"^2 of 3 matters"):
-        arrivals.staff_tags(get, [M1, M2, "m3"], sleep=lambda s: None)
+    with pytest.raises(arrivals.StaffTagsError, match=r"^2 of 4 matters"):
+        arrivals.staff_tags(get, [M1, M2, "m3", "m4"], sleep=lambda s: None)
     assert calls.count(f"/matters/{M1}") == arrivals.TAG_ATTEMPTS
-    assert calls.count(f"/matters/{M2}") == 1 and calls.count("/matters/m3") == 1
+    assert calls.count(f"/matters/{M2}") == 1 and calls.count("/matters/m3") == 1 and calls.count("/matters/m4") == 1
+    calls.clear()
+    got = arrivals.staff_tags(lambda p: get(p) if p.endswith(M2) else {"tags": []}, [M2, "m4"], sleep=lambda s: None)
+    assert got == ({"m4": []}, [M2])
+
+
+def test_a_404_on_a_people_scope_is_recorded_and_does_not_hold(tmp_path):
+    def get(path):
+        if path.endswith(M2):
+            raise ApiError(404)
+        return {"tags": [staff_tag(STAFF_A)]}
+
+    path = tmp_path / "t.json"
+    assert people.staff_tags(PEOPLE, get, [M1, M2], path) == {M1: [STAFF_A]}
+    assert people.tags_not_found(path) == [M2]
+    assert json.loads(path.read_text())["not_found"] == [M2]
+    # every matter gone is not a list without tags: nothing to hold on
+    assert people.staff_tags(PEOPLE, lambda p: get(f"/matters/{M2}"), [M2], tmp_path / "u.json") == {}
 
 
 # ---- the hold, the cache, the non-people scope ------------------------------------------------------
@@ -132,7 +169,7 @@ def test_a_matter_i_am_only_tagged_on_is_in_scope_with_role_staff(tmp_path):
     assert v.verdict == "delivered", v.reason
     inv = json.loads((r.data / "inventory.json").read_text())
     assert sorted(m["id"] for m in inv["matters"]) == sorted([M1, M2])
-    assert inv["people_scope"] == {"roles_only": 1, "with_staff_tags": 2}
+    assert inv["people_scope"] == {"roles_only": 1, "with_staff_tags": 2, "tags_not_found": 0}
     tab = review.read_sheets(r._out().read_bytes())[book.TAGGED]
     assert [(row[0], row[2]) for row in tab] == [("100001", "Responsible"), ("100002", "Staff")]
     assert sorted(seat.matter_reads) == sorted([M1, M2])
@@ -147,6 +184,16 @@ def test_without_the_tag_the_matter_is_not_in_scope(tmp_path):
     r = _run(tmp_path, seat, {"people": {"names": [], "requester": ME}})
     assert r.run().verdict == "delivered"
     assert [m["id"] for m in json.loads((r.data / "inventory.json").read_text())["matters"]] == [M1]
+
+
+def test_a_matter_gone_since_the_list_is_counted_and_the_job_delivers(tmp_path):
+    seat = _tag_only_seat()
+    seat.tag_errors[M2] = [ApiError(404)]
+    r = _run(tmp_path, seat, {"people": {"names": [], "requester": ME}})
+    v = r.run()
+    assert v.verdict == "delivered", v.reason
+    inv = json.loads((r.data / "inventory.json").read_text())
+    assert inv["people_scope"] == {"roles_only": 1, "with_staff_tags": 1, "tags_not_found": 1}
 
 
 def test_a_tag_read_that_keeps_failing_holds_the_job_and_files_nothing(tmp_path, monkeypatch):

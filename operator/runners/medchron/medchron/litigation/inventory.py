@@ -98,7 +98,11 @@ def build(
     log(f"{len(kept)} litigation matters kept")
     out = {"matters": kept, "staff": roster, "listed": len(listed), "people": [p.as_dict() for p in who]}
     if scope is not None:
-        out["people_scope"] = {"roles_only": roles_only, "with_staff_tags": len(listed)}
+        out["people_scope"] = {
+            "roles_only": roles_only,
+            "with_staff_tags": len(listed),
+            "tags_not_found": len(people.tags_not_found(data / people.TAGS_FILE)),
+        }
     return out
 
 
