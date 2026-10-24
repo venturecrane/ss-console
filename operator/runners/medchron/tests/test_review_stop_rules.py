@@ -115,6 +115,22 @@ def test_a_check1_on_another_persons_page_leaves_the_entry_out_and_discloses_it(
     assert "Continue therapy." not in review.docx_text(chron), "the delivered chronology was re-rendered"
 
 
+def test_the_left_out_disclosure_is_in_the_rendered_chronologys_limitations(job_dir, firm_config_path, data_root):
+    """Limitations is written by build_doc before the review; the review
+    refreshes it (``limitations.refresh``, #3464) before re-rendering, so the
+    delivered Word file itself says which entry was left out and why."""
+    sr, log = _package(job_dir, firm_config_path, data_root)
+    _pages(sr, "Patient: Beta Roe DOB: 02/02/1980. Continue therapy.")
+    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1))) == 0, log
+    md = _md(sr)
+    lim = md[md.index("## Records Reviewed and Limitations") :]
+    assert "The entry dated 03/30/2026 (Example Clinic, Exhibit 1" in lim, lim
+    chron = sr.slug_dir / "out" / "alpha" / "Alpha Example - Medical Chronology 10-13-26.docx"
+    text = review.docx_text(chron)
+    assert "The entry dated 03/30/2026" in text and review_evidence.LEFT_OUT_REASON in text
+    assert "Beta" not in text
+
+
 def test_leaving_an_entry_out_re_derives_the_summary_tables_from_the_entries_left(job_dir, firm_config_path, data_root):
     """Decision (4), 2026-10-24: the Treatment Timeline counted the removed
     visit (2 visits, 01/20-03/30) and the Diagnostic Highlights kept a code

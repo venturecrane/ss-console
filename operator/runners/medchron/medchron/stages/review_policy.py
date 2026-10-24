@@ -493,7 +493,7 @@ def package(
     and the manifest rows the review decides on: re-rendered and re-manifested
     when the chronology changed, so what is filed is what was settled. Rows
     None when the re-render fails (nothing is filed; a rerun reviews again)."""
-    from . import manifest as _manifest, render as _render
+    from . import limitations as _limitations, manifest as _manifest, render as _render
 
     doc = None if update else rd / "final-chronology.md"
     pol = settle(sr, doc, found, repair=True, **inject)
@@ -502,6 +502,14 @@ def package(
             f"review: {len(pol.dropped)} finding(s) on the firm's required wording dropped: "
             + "; ".join(f.finding[:80] for f in pol.dropped)
         )
+    # build_doc wrote Records Reviewed and Limitations before this review; an
+    # entry the review left out (``review-left-out.json``) is disclosed there
+    # only once the section is written again from the files as they stand.
+    # Full build only (an update has no ``doc``); a refresh that changes the
+    # section re-renders even when nothing else changed.
+    if doc is not None and doc.is_file() and _limitations.refresh(doc, sr.slug_dir, sr.unit.unit, sr.log, sr.cfg):
+        sr.log("review: Records Reviewed and Limitations rewritten from the files as they stand")
+        pol.changed = True
     if not pol.changed:
         return pol.findings, rows
     if _render.run(sr) != 0 or _manifest.run(sr) != 0:
